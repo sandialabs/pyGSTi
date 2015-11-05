@@ -1,0 +1,6 @@
+GST.ReportGeneration.getDatasetOverviewTable
+============================================
+
+.. currentmodule:: GST.ReportGeneration
+
+.. autofunction:: getDatasetOverviewTable

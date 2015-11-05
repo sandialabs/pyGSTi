@@ -1,0 +1,6 @@
+GST.GateStringTools.compressGateLabelTuple
+==========================================
+
+.. currentmodule:: GST.GateStringTools
+
+.. autofunction:: compressGateLabelTuple

@@ -1,0 +1,25 @@
+GST.GramMatrix
+==============
+
+.. automodule:: GST.GramMatrix
+
+   
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+      :toctree:
+
+   
+      getMaxGramBasis
+      maxGramRankAndEvals
+   
+   
+
+   
+   
+   
+
+   
+   
+   

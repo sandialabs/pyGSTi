@@ -1,0 +1,6 @@
+GST.AnalysisTools.TotalChiSquared
+=================================
+
+.. currentmodule:: GST.AnalysisTools
+
+.. autofunction:: TotalChiSquared

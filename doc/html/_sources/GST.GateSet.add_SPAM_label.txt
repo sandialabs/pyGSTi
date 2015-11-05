@@ -1,0 +1,6 @@
+GST.GateSet.add_SPAM_label
+==========================
+
+.. currentmodule:: GST
+
+.. automethod:: GateSet.add_SPAM_label

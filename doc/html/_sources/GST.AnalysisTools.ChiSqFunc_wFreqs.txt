@@ -1,0 +1,6 @@
+GST.AnalysisTools.ChiSqFunc_wFreqs
+==================================
+
+.. currentmodule:: GST.AnalysisTools
+
+.. autofunction:: ChiSqFunc_wFreqs

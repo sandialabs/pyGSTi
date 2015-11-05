@@ -1,0 +1,6 @@
+GST.GateSetTools.randomKickGateset
+==================================
+
+.. currentmodule:: GST.GateSetTools
+
+.. autofunction:: randomKickGateset

@@ -1,0 +1,6 @@
+GST.GateSet.pop
+===============
+
+.. currentmodule:: GST
+
+.. automethod:: GateSet.pop

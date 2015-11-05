@@ -1,0 +1,6 @@
+GST.printMx
+===========
+
+.. currentmodule:: GST
+
+.. autofunction:: printMx

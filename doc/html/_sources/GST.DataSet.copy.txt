@@ -1,0 +1,6 @@
+GST.DataSet.copy
+================
+
+.. currentmodule:: GST
+
+.. automethod:: DataSet.copy

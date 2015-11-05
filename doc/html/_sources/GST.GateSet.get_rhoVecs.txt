@@ -1,0 +1,6 @@
+GST.GateSet.get_rhoVecs
+=======================
+
+.. currentmodule:: GST
+
+.. automethod:: GateSet.get_rhoVecs

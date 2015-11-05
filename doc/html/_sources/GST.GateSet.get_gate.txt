@@ -1,0 +1,6 @@
+GST.GateSet.get_gate
+====================
+
+.. currentmodule:: GST
+
+.. automethod:: GateSet.get_gate

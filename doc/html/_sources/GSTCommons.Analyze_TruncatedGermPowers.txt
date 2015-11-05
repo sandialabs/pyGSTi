@@ -1,0 +1,29 @@
+GSTCommons.Analyze_TruncatedGermPowers
+======================================
+
+.. automodule:: GSTCommons.Analyze_TruncatedGermPowers
+
+   
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+      :toctree:
+
+   
+      doLSGSTAnalysis
+      doMLEAnalysis
+      getSufficientFiducialPairs
+      make_elgst_lists
+      make_lsgst_lists
+      make_lsgst_lists_asymmetric_fids
+   
+   
+
+   
+   
+   
+
+   
+   
+   

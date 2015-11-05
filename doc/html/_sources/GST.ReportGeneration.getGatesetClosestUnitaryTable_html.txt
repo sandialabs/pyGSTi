@@ -1,0 +1,6 @@
+GST.ReportGeneration.getGatesetClosestUnitaryTable_html
+=======================================================
+
+.. currentmodule:: GST.ReportGeneration
+
+.. autofunction:: getGatesetClosestUnitaryTable_html

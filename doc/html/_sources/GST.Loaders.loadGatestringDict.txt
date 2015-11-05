@@ -1,0 +1,6 @@
+GST.Loaders.loadGatestringDict
+==============================
+
+.. currentmodule:: GST.Loaders
+
+.. autofunction:: loadGatestringDict

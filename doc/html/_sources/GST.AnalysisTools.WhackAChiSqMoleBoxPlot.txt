@@ -1,0 +1,6 @@
+GST.AnalysisTools.WhackAChiSqMoleBoxPlot
+========================================
+
+.. currentmodule:: GST.AnalysisTools
+
+.. autofunction:: WhackAChiSqMoleBoxPlot

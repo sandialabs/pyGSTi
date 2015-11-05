@@ -1,0 +1,6 @@
+GST.GateSet.iterall
+===================
+
+.. currentmodule:: GST
+
+.. automethod:: GateSet.iterall

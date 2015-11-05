@@ -1,0 +1,6 @@
+GST.doLSGST
+===========
+
+.. currentmodule:: GST
+
+.. autofunction:: doLSGST

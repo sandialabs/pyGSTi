@@ -1,0 +1,6 @@
+GST.HtmlUtil.html_matrix
+========================
+
+.. currentmodule:: GST.HtmlUtil
+
+.. autofunction:: html_matrix

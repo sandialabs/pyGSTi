@@ -1,0 +1,6 @@
+GST.GateSet.fromVector
+======================
+
+.. currentmodule:: GST
+
+.. automethod:: GateSet.fromVector

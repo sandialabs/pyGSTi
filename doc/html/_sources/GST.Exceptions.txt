@@ -1,0 +1,25 @@
+GST.Exceptions
+==============
+
+.. automodule:: GST.Exceptions
+
+   
+   
+   
+
+   
+   
+   
+
+   
+   
+   .. rubric:: Exceptions
+
+   .. autosummary::
+      :toctree:
+
+   
+      GSTRuntimeError
+      GSTValueError
+   
+   

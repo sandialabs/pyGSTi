@@ -1,0 +1,6 @@
+GST.AnalysisTools.DirectChiSqMatrix
+===================================
+
+.. currentmodule:: GST.AnalysisTools
+
+.. autofunction:: DirectChiSqMatrix

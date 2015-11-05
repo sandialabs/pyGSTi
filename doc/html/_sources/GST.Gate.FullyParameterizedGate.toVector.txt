@@ -1,0 +1,6 @@
+GST.Gate.FullyParameterizedGate.toVector
+========================================
+
+.. currentmodule:: GST.Gate
+
+.. automethod:: FullyParameterizedGate.toVector

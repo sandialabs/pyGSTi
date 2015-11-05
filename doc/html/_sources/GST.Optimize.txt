@@ -1,0 +1,31 @@
+GST.Optimize
+============
+
+.. automodule:: GST.Optimize
+
+   
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+      :toctree:
+
+   
+      check_jac
+      createObjFuncPrinter
+      fmax_cg
+      fmin_evolutionary
+      fmin_particle_swarm
+      fmin_simplex
+      fmin_supersimplex
+      minimize
+   
+   
+
+   
+   
+   
+
+   
+   
+   

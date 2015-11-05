@@ -1,0 +1,6 @@
+GST.GateSet.Bulk_fillhProbs
+===========================
+
+.. currentmodule:: GST
+
+.. automethod:: GateSet.Bulk_fillhProbs

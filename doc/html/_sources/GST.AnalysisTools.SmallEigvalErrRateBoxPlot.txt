@@ -1,0 +1,6 @@
+GST.AnalysisTools.SmallEigvalErrRateBoxPlot
+===========================================
+
+.. currentmodule:: GST.AnalysisTools
+
+.. autofunction:: SmallEigvalErrRateBoxPlot

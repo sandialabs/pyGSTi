@@ -1,0 +1,6 @@
+GST.GateStringTools.expandGateLabelTuple
+========================================
+
+.. currentmodule:: GST.GateStringTools
+
+.. autofunction:: expandGateLabelTuple

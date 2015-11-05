@@ -1,0 +1,6 @@
+GST.OutputData.has_dataset
+==========================
+
+.. currentmodule:: GST
+
+.. automethod:: OutputData.has_dataset

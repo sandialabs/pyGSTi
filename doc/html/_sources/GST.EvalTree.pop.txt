@@ -1,0 +1,6 @@
+GST.EvalTree.pop
+================
+
+.. currentmodule:: GST
+
+.. automethod:: EvalTree.pop

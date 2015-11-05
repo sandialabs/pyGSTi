@@ -1,0 +1,6 @@
+GST.GateSetConstruction.buildIdentityVector
+===========================================
+
+.. currentmodule:: GST.GateSetConstruction
+
+.. autofunction:: buildIdentityVector

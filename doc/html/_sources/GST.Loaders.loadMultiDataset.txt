@@ -1,0 +1,6 @@
+GST.Loaders.loadMultiDataset
+============================
+
+.. currentmodule:: GST.Loaders
+
+.. autofunction:: loadMultiDataset

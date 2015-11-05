@@ -1,0 +1,6 @@
+GST.GateSet.get_SPAM_label_dict
+===============================
+
+.. currentmodule:: GST
+
+.. automethod:: GateSet.get_SPAM_label_dict

@@ -1,0 +1,116 @@
+GST
+===
+
+.. automodule:: GST
+
+   .. rubric:: Sub-modules
+
+   .. 
+     This list needs to be manually updated with all
+     the GST modules you want documented
+
+   .. autosummary::
+       :template: my_autosummary_module.rst
+       :toctree:
+       
+       GST.AnalysisTools
+       GST.BasisTools
+       GST.ComputeMetrics
+       GST.Core
+       GST.Exceptions
+       GST.Gate
+       GST.GateOps
+       GST.GateSetConstruction
+       GST.GateSetTools
+       GST.GateStringTools
+       GST.GramMatrix
+       GST.HtmlUtil
+       GST.JamiolkowskiOps
+       GST.LatexUtil
+       GST.LikelihoodFunctions
+       GST.ListTools
+       GST.Loaders
+       GST.MatrixOps
+       GST.Optimize
+       GST.ReportGeneration
+       GST.StdInputParser
+       GST.Writers
+
+   ..  Don't document these modules separately
+       GST.dataset
+       GST.evaltree
+       GST.gateset
+       GST.gatestring
+       GST.multidataset
+       GST.outputdata
+
+
+
+   
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+      :toctree:
+
+   
+      Fidelity
+      JTraceDistance
+      buildGate
+      buildGateset
+      buildIdentityVector
+      buildVector
+      contract
+      createGateStringList
+      doExLGST
+      doIterativeExLGST
+      doIterativeLSGST
+      doIterativeLSGSTwithModelSelection
+      doIterativeMLEGST
+      doLGST
+      doLSGST
+      doLSGSTwithModelSelection
+      doMLEGST
+      gateStringList
+      generateFakeData
+      getRhoAndESpecs
+      getRhoAndEStrs
+      listLGSTGateStrings
+      loadDataset
+      loadGateset
+      loadGatestringDict
+      loadGatestringList
+      loadMultiDataset
+      optimizeGauge
+      printGatesetInfo
+      printMx
+      writeDatasetFile
+      writeEmptyDatasetFile
+      writeGateset
+      writeGatestringList
+   
+   
+
+   
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+      :template: my_autosummary_class.rst
+      :toctree:
+
+   
+      DataSet
+      EvalTree
+      GateSet
+      GateString
+      MultiDataSet
+      OutputData
+      WeightedGateString
+   
+   
+
+
+   
+   
+   

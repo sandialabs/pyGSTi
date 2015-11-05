@@ -1,0 +1,6 @@
+GST.EvalTree.append
+===================
+
+.. currentmodule:: GST
+
+.. automethod:: EvalTree.append

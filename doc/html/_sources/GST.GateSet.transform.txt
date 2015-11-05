@@ -1,0 +1,6 @@
+GST.GateSet.transform
+=====================
+
+.. currentmodule:: GST
+
+.. automethod:: GateSet.transform

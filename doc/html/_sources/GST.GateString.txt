@@ -1,0 +1,24 @@
+GST.GateString
+==============
+
+.. currentmodule:: GST
+
+.. autoclass:: GateString
+
+   
+   .. automethod:: __init__
+       :noindex:
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree:
+   
+      ~GateString.__init__
+   
+   
+
+   
+   
+   

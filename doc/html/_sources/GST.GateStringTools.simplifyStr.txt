@@ -1,0 +1,6 @@
+GST.GateStringTools.simplifyStr
+===============================
+
+.. currentmodule:: GST.GateStringTools
+
+.. autofunction:: simplifyStr

@@ -1,0 +1,6 @@
+GST.GateString.__init__
+=======================
+
+.. currentmodule:: GST
+
+.. automethod:: GateString.__init__

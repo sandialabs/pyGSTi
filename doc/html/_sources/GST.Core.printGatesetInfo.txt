@@ -1,0 +1,6 @@
+GST.Core.printGatesetInfo
+=========================
+
+.. currentmodule:: GST.Core
+
+.. autofunction:: printGatesetInfo

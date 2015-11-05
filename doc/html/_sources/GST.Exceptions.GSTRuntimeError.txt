@@ -1,0 +1,6 @@
+GST.Exceptions.GSTRuntimeError
+==============================
+
+.. currentmodule:: GST.Exceptions
+
+.. autoexception:: GSTRuntimeError

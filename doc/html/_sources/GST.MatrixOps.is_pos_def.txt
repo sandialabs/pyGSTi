@@ -1,0 +1,6 @@
+GST.MatrixOps.is_pos_def
+========================
+
+.. currentmodule:: GST.MatrixOps
+
+.. autofunction:: is_pos_def

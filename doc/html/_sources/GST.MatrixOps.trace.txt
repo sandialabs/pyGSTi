@@ -1,0 +1,6 @@
+GST.MatrixOps.trace
+===================
+
+.. currentmodule:: GST.MatrixOps
+
+.. autofunction:: trace

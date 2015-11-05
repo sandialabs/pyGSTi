@@ -1,0 +1,36 @@
+\documentclass[convert={density=300,outext=.png},border=2pt]{standalone}
+\usepackage{amsmath}
+\usepackage{amssymb}
+%\usepackage{varwidth}
+\usepackage{longtable}
+\usepackage{graphicx}
+\usepackage{units}
+\usepackage{multirow}
+
+\newcommand{\rrangle}{\rangle\!\rangle} \newcommand{\llangle}{\langle\!\langle}
+\newcommand{\ket}[1]{\ensuremath{\left|#1\right\rangle}}
+\newcommand{\bra}[1]{\ensuremath{\left\langle#1\right|}}
+\newcommand{\braket}[2]{\ensuremath{\left\langle#1|#2\right\rangle}}
+\newcommand{\expec}[1]{\ensuremath{\left\langle#1\right\rangle}}
+\newcommand{\ketbra}[2]{\ket{#1}\!\!\bra{#2}}
+\newcommand{\braopket}[3]{\ensuremath{\bra{#1}#2\ket{#3}}}
+\newcommand{\proj}[1]{\ketbra{#1}{#1}}
+\newcommand{\sket}[1]{\ensuremath{\left|#1\right\rrangle}}
+\newcommand{\sbra}[1]{\ensuremath{\left\llangle#1\right|}}
+\newcommand{\sbraket}[2]{\ensuremath{\left\llangle#1|#2\right\rrangle}}
+\newcommand{\sketbra}[2]{\sket{#1}\!\!\sbra{#2}}
+\newcommand{\sbraopket}[3]{\ensuremath{\sbra{#1}#2\sket{#3}}}
+\newcommand{\sproj}[1]{\sketbra{#1}{#1}}
+\newcommand{\norm}[1]{\left\lVert#1\right\rVert}
+\def\Id{1\!\mathrm{l}}
+\newcommand{\Tr}[0]{\mathrm{Tr}}
+\providecommand{\e}[1]{\ensuremath{\times 10^{#1}}}
+
+%Command used for python automatic substitution
+\newcommand{\putfield}[2]{#2}
+
+\begin{document}
+%\begin{varwidth}{\linewidth}
+\putfield{toLatex}{XXX}
+%\end{varwidth}
+\end{document}

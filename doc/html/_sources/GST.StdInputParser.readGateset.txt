@@ -1,0 +1,6 @@
+GST.StdInputParser.readGateset
+==============================
+
+.. currentmodule:: GST.StdInputParser
+
+.. autofunction:: readGateset

@@ -1,0 +1,6 @@
+GST.LikelihoodFunctions.cptpPenalty
+===================================
+
+.. currentmodule:: GST.LikelihoodFunctions
+
+.. autofunction:: cptpPenalty

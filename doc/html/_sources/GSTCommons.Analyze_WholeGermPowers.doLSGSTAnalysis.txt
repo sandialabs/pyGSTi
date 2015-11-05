@@ -1,0 +1,6 @@
+GSTCommons.Analyze_WholeGermPowers.doLSGSTAnalysis
+==================================================
+
+.. currentmodule:: GSTCommons.Analyze_WholeGermPowers
+
+.. autofunction:: doLSGSTAnalysis

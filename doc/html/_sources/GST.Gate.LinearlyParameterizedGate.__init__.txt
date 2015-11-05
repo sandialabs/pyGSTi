@@ -1,0 +1,6 @@
+GST.Gate.LinearlyParameterizedGate.__init__
+===========================================
+
+.. currentmodule:: GST.Gate
+
+.. automethod:: LinearlyParameterizedGate.__init__

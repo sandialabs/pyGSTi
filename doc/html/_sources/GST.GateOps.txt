@@ -1,0 +1,28 @@
+GST.GateOps
+===========
+
+.. automodule:: GST.GateOps
+
+   
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+      :toctree:
+
+   
+      DiamondNorm
+      Fidelity
+      decomposeGateMatrix
+      getClosestUnitaryGateMx
+      getFidelityUpperBound
+   
+   
+
+   
+   
+   
+
+   
+   
+   

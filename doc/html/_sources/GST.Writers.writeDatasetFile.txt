@@ -1,0 +1,6 @@
+GST.Writers.writeDatasetFile
+============================
+
+.. currentmodule:: GST.Writers
+
+.. autofunction:: writeDatasetFile

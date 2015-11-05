@@ -1,0 +1,6 @@
+GST.GateSet.derivWRTparams
+==========================
+
+.. currentmodule:: GST
+
+.. automethod:: GateSet.derivWRTparams

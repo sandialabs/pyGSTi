@@ -1,0 +1,32 @@
+GST.MatrixOps
+=============
+
+.. automodule:: GST.MatrixOps
+
+   
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+      :toctree:
+
+   
+      complexMxToString
+      frobeniusNorm
+      frobeniusNorm2
+      is_hermitian
+      is_pos_def
+      is_valid_density_mx
+      mxToString
+      printMx
+      trace
+   
+   
+
+   
+   
+   
+
+   
+   
+   

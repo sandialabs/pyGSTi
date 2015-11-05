@@ -1,0 +1,6 @@
+GST.doIterativeMLEGST
+=====================
+
+.. currentmodule:: GST
+
+.. autofunction:: doIterativeMLEGST

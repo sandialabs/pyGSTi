@@ -1,0 +1,6 @@
+GSTCommons.MakeLists_TruncatedGermPowers.getSufficientFiducialPairs
+===================================================================
+
+.. currentmodule:: GSTCommons.MakeLists_TruncatedGermPowers
+
+.. autofunction:: getSufficientFiducialPairs

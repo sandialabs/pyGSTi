@@ -1,0 +1,6 @@
+GST.DataSet.has_key
+===================
+
+.. currentmodule:: GST
+
+.. automethod:: DataSet.has_key

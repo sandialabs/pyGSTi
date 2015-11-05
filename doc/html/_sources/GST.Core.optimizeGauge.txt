@@ -1,0 +1,6 @@
+GST.Core.optimizeGauge
+======================
+
+.. currentmodule:: GST.Core
+
+.. autofunction:: optimizeGauge

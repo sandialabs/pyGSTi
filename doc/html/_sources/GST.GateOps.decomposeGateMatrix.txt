@@ -1,0 +1,6 @@
+GST.GateOps.decomposeGateMatrix
+===============================
+
+.. currentmodule:: GST.GateOps
+
+.. autofunction:: decomposeGateMatrix

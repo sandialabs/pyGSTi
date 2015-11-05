@@ -1,0 +1,6 @@
+GST.EvalTree.printAnalysis
+==========================
+
+.. currentmodule:: GST
+
+.. automethod:: EvalTree.printAnalysis

@@ -1,0 +1,6 @@
+GST.GateSetConstruction.buildVector
+===================================
+
+.. currentmodule:: GST.GateSetConstruction
+
+.. autofunction:: buildVector

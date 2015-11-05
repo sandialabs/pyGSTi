@@ -1,0 +1,6 @@
+GST.GateOps.getClosestUnitaryGateMx
+===================================
+
+.. currentmodule:: GST.GateOps
+
+.. autofunction:: getClosestUnitaryGateMx

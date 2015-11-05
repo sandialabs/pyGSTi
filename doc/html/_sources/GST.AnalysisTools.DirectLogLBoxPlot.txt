@@ -1,0 +1,6 @@
+GST.AnalysisTools.DirectLogLBoxPlot
+===================================
+
+.. currentmodule:: GST.AnalysisTools
+
+.. autofunction:: DirectLogLBoxPlot

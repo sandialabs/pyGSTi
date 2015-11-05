@@ -1,0 +1,6 @@
+GST.GateSet.get_EVec
+====================
+
+.. currentmodule:: GST
+
+.. automethod:: GateSet.get_EVec

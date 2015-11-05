@@ -1,0 +1,6 @@
+GST.Fidelity
+============
+
+.. currentmodule:: GST
+
+.. autofunction:: Fidelity

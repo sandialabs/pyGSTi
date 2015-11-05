@@ -1,0 +1,6 @@
+GST.AnalysisTools.FocusedLSGSTGatesets
+======================================
+
+.. currentmodule:: GST.AnalysisTools
+
+.. autofunction:: FocusedLSGSTGatesets

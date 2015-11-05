@@ -1,0 +1,6 @@
+GST.Optimize.check_jac
+======================
+
+.. currentmodule:: GST.Optimize
+
+.. autofunction:: check_jac

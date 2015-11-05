@@ -1,0 +1,6 @@
+GST.BasisTools.stateUnitaryToPauliDensityMxOp_2Q
+================================================
+
+.. currentmodule:: GST.BasisTools
+
+.. autofunction:: stateUnitaryToPauliDensityMxOp_2Q

@@ -1,0 +1,6 @@
+GST.BasisTools.expandFromStdDirectSumMx
+=======================================
+
+.. currentmodule:: GST.BasisTools
+
+.. autofunction:: expandFromStdDirectSumMx

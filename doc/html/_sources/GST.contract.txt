@@ -1,0 +1,6 @@
+GST.contract
+============
+
+.. currentmodule:: GST
+
+.. autofunction:: contract

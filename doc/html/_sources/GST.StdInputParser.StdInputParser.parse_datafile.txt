@@ -1,0 +1,6 @@
+GST.StdInputParser.StdInputParser.parse_datafile
+================================================
+
+.. currentmodule:: GST.StdInputParser
+
+.. automethod:: StdInputParser.parse_datafile

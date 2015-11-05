@@ -1,0 +1,6 @@
+GST.ReportGeneration.getGatestringMultiTable
+============================================
+
+.. currentmodule:: GST.ReportGeneration
+
+.. autofunction:: getGatestringMultiTable

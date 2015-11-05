@@ -1,0 +1,6 @@
+GST.ReportGeneration.getUnitaryGatesetGatesTable_html
+=====================================================
+
+.. currentmodule:: GST.ReportGeneration
+
+.. autofunction:: getUnitaryGatesetGatesTable_html

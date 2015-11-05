@@ -1,0 +1,6 @@
+GST.GateSet.getNumGaugeParams
+=============================
+
+.. currentmodule:: GST
+
+.. automethod:: GateSet.getNumGaugeParams

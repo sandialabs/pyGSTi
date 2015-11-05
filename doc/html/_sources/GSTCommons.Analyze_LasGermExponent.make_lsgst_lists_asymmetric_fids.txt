@@ -1,0 +1,6 @@
+GSTCommons.Analyze_LasGermExponent.make_lsgst_lists_asymmetric_fids
+===================================================================
+
+.. currentmodule:: GSTCommons.Analyze_LasGermExponent
+
+.. autofunction:: make_lsgst_lists_asymmetric_fids

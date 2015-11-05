@@ -1,0 +1,6 @@
+GST.GateSet.Bulk_dProduct
+=========================
+
+.. currentmodule:: GST
+
+.. automethod:: GateSet.Bulk_dProduct

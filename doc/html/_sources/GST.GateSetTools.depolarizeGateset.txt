@@ -1,0 +1,6 @@
+GST.GateSetTools.depolarizeGateset
+==================================
+
+.. currentmodule:: GST.GateSetTools
+
+.. autofunction:: depolarizeGateset

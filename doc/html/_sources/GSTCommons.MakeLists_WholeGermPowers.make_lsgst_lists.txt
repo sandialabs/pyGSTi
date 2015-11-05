@@ -1,0 +1,6 @@
+GSTCommons.MakeLists_WholeGermPowers.make_lsgst_lists
+=====================================================
+
+.. currentmodule:: GSTCommons.MakeLists_WholeGermPowers
+
+.. autofunction:: make_lsgst_lists

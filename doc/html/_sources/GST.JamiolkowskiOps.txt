@@ -1,0 +1,30 @@
+GST.JamiolkowskiOps
+===================
+
+.. automodule:: GST.JamiolkowskiOps
+
+   
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+      :toctree:
+
+   
+      JTraceDistance
+      ProcessFidelity
+      magsOfNegativeJEvals
+      opWithInvJamiolkowskiIsomorphism
+      opWithJamiolkowskiIsomorphism
+      sumOfNegativeJEvals
+      sumsOfNegativeJEvals
+   
+   
+
+   
+   
+   
+
+   
+   
+   

@@ -1,0 +1,6 @@
+GST.Gate.optimizeGate
+=====================
+
+.. currentmodule:: GST.Gate
+
+.. autofunction:: optimizeGate

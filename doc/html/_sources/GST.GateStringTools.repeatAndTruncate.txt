@@ -1,0 +1,6 @@
+GST.GateStringTools.repeatAndTruncate
+=====================================
+
+.. currentmodule:: GST.GateStringTools
+
+.. autofunction:: repeatAndTruncate

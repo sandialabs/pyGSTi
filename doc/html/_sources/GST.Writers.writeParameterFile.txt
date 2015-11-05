@@ -1,0 +1,6 @@
+GST.Writers.writeParameterFile
+==============================
+
+.. currentmodule:: GST.Writers
+
+.. autofunction:: writeParameterFile

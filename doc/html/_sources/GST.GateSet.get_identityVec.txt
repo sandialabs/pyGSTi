@@ -1,0 +1,6 @@
+GST.GateSet.get_identityVec
+===========================
+
+.. currentmodule:: GST
+
+.. automethod:: GateSet.get_identityVec

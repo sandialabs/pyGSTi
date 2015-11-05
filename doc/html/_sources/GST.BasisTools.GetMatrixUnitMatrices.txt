@@ -1,0 +1,6 @@
+GST.BasisTools.GetMatrixUnitMatrices
+====================================
+
+.. currentmodule:: GST.BasisTools
+
+.. autofunction:: GetMatrixUnitMatrices

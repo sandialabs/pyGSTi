@@ -1,0 +1,6 @@
+GST.EvalTree.getInitLabels
+==========================
+
+.. currentmodule:: GST
+
+.. automethod:: EvalTree.getInitLabels

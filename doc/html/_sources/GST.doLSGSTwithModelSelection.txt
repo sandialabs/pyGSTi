@@ -1,0 +1,6 @@
+GST.doLSGSTwithModelSelection
+=============================
+
+.. currentmodule:: GST
+
+.. autofunction:: doLSGSTwithModelSelection

@@ -1,0 +1,6 @@
+GST.AnalysisTools.generateBoxPlot
+=================================
+
+.. currentmodule:: GST.AnalysisTools
+
+.. autofunction:: generateBoxPlot

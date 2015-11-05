@@ -1,0 +1,6 @@
+GST.EvalTree.initialize
+=======================
+
+.. currentmodule:: GST
+
+.. automethod:: EvalTree.initialize

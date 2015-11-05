@@ -1,0 +1,44 @@
+GST.EvalTree
+============
+
+.. currentmodule:: GST
+
+.. autoclass:: EvalTree
+
+   
+   .. automethod:: __init__
+       :noindex:
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree:
+   
+      ~EvalTree.__init__
+      ~EvalTree.append
+      ~EvalTree.count
+      ~EvalTree.extend
+      ~EvalTree.generateGateStringList
+      ~EvalTree.getAnalysisPlotInfos
+      ~EvalTree.getInitLabels
+      ~EvalTree.getListOfFinalValueTreeIndices
+      ~EvalTree.getNumFinalStrings
+      ~EvalTree.getSubTrees
+      ~EvalTree.getTreeIndexOfFinalValue
+      ~EvalTree.index
+      ~EvalTree.initialize
+      ~EvalTree.insert
+      ~EvalTree.isSplit
+      ~EvalTree.pop
+      ~EvalTree.printAnalysis
+      ~EvalTree.remove
+      ~EvalTree.reverse
+      ~EvalTree.sort
+      ~EvalTree.split
+   
+   
+
+   
+   
+   

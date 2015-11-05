@@ -1,0 +1,6 @@
+GST.AnalysisTools.WhackALogLMoleBoxPlot
+=======================================
+
+.. currentmodule:: GST.AnalysisTools
+
+.. autofunction:: WhackALogLMoleBoxPlot

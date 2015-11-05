@@ -1,0 +1,6 @@
+GST.Core.doIterativeLSGSTwithModelSelection
+===========================================
+
+.. currentmodule:: GST.Core
+
+.. autofunction:: doIterativeLSGSTwithModelSelection

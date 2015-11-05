@@ -1,0 +1,6 @@
+GST.OutputData.__init__
+=======================
+
+.. currentmodule:: GST
+
+.. automethod:: OutputData.__init__

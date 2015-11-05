@@ -1,0 +1,6 @@
+GST.ComputeMetrics.compute_GateSet_Quantity
+===========================================
+
+.. currentmodule:: GST.ComputeMetrics
+
+.. autofunction:: compute_GateSet_Quantity

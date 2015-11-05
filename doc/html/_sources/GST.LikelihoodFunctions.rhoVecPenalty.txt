@@ -1,0 +1,6 @@
+GST.LikelihoodFunctions.rhoVecPenalty
+=====================================
+
+.. currentmodule:: GST.LikelihoodFunctions
+
+.. autofunction:: rhoVecPenalty

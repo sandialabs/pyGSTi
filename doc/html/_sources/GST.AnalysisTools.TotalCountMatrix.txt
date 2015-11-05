@@ -1,0 +1,6 @@
+GST.AnalysisTools.TotalCountMatrix
+==================================
+
+.. currentmodule:: GST.AnalysisTools
+
+.. autofunction:: TotalCountMatrix

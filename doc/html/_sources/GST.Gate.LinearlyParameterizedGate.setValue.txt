@@ -1,0 +1,6 @@
+GST.Gate.LinearlyParameterizedGate.setValue
+===========================================
+
+.. currentmodule:: GST.Gate
+
+.. automethod:: LinearlyParameterizedGate.setValue

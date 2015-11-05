@@ -1,0 +1,6 @@
+GST.EvalTree.sort
+=================
+
+.. currentmodule:: GST
+
+.. automethod:: EvalTree.sort

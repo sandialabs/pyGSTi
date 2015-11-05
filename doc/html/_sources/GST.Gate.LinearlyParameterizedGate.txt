@@ -1,0 +1,32 @@
+GST.Gate.LinearlyParameterizedGate
+==================================
+
+.. currentmodule:: GST.Gate
+
+.. autoclass:: LinearlyParameterizedGate
+
+   
+   .. automethod:: __init__
+       :noindex:
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree:
+   
+      ~LinearlyParameterizedGate.__init__
+      ~LinearlyParameterizedGate.copy
+      ~LinearlyParameterizedGate.derivWRTparams
+      ~LinearlyParameterizedGate.fromVector
+      ~LinearlyParameterizedGate.getNumParams
+      ~LinearlyParameterizedGate.setValue
+      ~LinearlyParameterizedGate.toVector
+      ~LinearlyParameterizedGate.transform
+      ~LinearlyParameterizedGate.valueDimension
+   
+   
+
+   
+   
+   

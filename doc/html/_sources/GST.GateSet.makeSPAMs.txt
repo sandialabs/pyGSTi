@@ -1,0 +1,6 @@
+GST.GateSet.makeSPAMs
+=====================
+
+.. currentmodule:: GST
+
+.. automethod:: GateSet.makeSPAMs

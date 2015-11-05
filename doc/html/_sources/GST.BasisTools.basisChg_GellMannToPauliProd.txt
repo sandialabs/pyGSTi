@@ -1,0 +1,6 @@
+GST.BasisTools.basisChg_GellMannToPauliProd
+===========================================
+
+.. currentmodule:: GST.BasisTools
+
+.. autofunction:: basisChg_GellMannToPauliProd

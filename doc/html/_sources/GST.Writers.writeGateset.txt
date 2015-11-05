@@ -1,0 +1,6 @@
+GST.Writers.writeGateset
+========================
+
+.. currentmodule:: GST.Writers
+
+.. autofunction:: writeGateset

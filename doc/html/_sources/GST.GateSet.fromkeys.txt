@@ -1,0 +1,6 @@
+GST.GateSet.fromkeys
+====================
+
+.. currentmodule:: GST
+
+.. automethod:: GateSet.fromkeys

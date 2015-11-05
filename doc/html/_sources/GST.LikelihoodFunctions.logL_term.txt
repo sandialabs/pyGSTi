@@ -1,0 +1,6 @@
+GST.LikelihoodFunctions.logL_term
+=================================
+
+.. currentmodule:: GST.LikelihoodFunctions
+
+.. autofunction:: logL_term

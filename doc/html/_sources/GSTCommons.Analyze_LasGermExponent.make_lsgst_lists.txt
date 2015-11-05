@@ -1,0 +1,6 @@
+GSTCommons.Analyze_LasGermExponent.make_lsgst_lists
+===================================================
+
+.. currentmodule:: GSTCommons.Analyze_LasGermExponent
+
+.. autofunction:: make_lsgst_lists

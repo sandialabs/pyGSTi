@@ -1,0 +1,6 @@
+GST.EvalTree.__init__
+=====================
+
+.. currentmodule:: GST
+
+.. automethod:: EvalTree.__init__

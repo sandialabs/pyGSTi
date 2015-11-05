@@ -1,0 +1,6 @@
+GST.LikelihoodFunctions.fillCountVecs
+=====================================
+
+.. currentmodule:: GST.LikelihoodFunctions
+
+.. autofunction:: fillCountVecs

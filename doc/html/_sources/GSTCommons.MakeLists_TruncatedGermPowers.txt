@@ -1,0 +1,27 @@
+GSTCommons.MakeLists_TruncatedGermPowers
+========================================
+
+.. automodule:: GSTCommons.MakeLists_TruncatedGermPowers
+
+   
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+      :toctree:
+
+   
+      getSufficientFiducialPairs
+      make_elgst_lists
+      make_lsgst_lists
+      make_lsgst_lists_asymmetric_fids
+   
+   
+
+   
+   
+   
+
+   
+   
+   

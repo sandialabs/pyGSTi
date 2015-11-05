@@ -1,0 +1,6 @@
+GST.MatrixOps.is_valid_density_mx
+=================================
+
+.. currentmodule:: GST.MatrixOps
+
+.. autofunction:: is_valid_density_mx

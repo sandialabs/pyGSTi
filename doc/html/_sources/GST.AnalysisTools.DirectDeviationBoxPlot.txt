@@ -1,0 +1,6 @@
+GST.AnalysisTools.DirectDeviationBoxPlot
+========================================
+
+.. currentmodule:: GST.AnalysisTools
+
+.. autofunction:: DirectDeviationBoxPlot

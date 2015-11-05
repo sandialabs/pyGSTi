@@ -1,0 +1,6 @@
+GSTCommons.MakeLists_LasGermExponent.make_elgst_lists
+=====================================================
+
+.. currentmodule:: GSTCommons.MakeLists_LasGermExponent
+
+.. autofunction:: make_elgst_lists

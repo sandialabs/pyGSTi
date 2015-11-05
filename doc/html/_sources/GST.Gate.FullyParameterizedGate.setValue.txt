@@ -1,0 +1,6 @@
+GST.Gate.FullyParameterizedGate.setValue
+========================================
+
+.. currentmodule:: GST.Gate
+
+.. automethod:: FullyParameterizedGate.setValue

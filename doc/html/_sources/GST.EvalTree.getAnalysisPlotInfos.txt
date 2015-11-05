@@ -1,0 +1,6 @@
+GST.EvalTree.getAnalysisPlotInfos
+=================================
+
+.. currentmodule:: GST
+
+.. automethod:: EvalTree.getAnalysisPlotInfos

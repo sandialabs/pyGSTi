@@ -1,0 +1,6 @@
+GST.Gate.LinearlyParameterizedGate.derivWRTparams
+=================================================
+
+.. currentmodule:: GST.Gate
+
+.. automethod:: LinearlyParameterizedGate.derivWRTparams

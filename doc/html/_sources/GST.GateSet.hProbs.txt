@@ -1,0 +1,6 @@
+GST.GateSet.hProbs
+==================
+
+.. currentmodule:: GST
+
+.. automethod:: GateSet.hProbs

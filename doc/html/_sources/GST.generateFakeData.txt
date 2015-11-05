@@ -1,0 +1,6 @@
+GST.generateFakeData
+====================
+
+.. currentmodule:: GST
+
+.. autofunction:: generateFakeData

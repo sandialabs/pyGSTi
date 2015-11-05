@@ -1,0 +1,26 @@
+GSTCommons.MakeLists_WholeGermPowers
+====================================
+
+.. automodule:: GSTCommons.MakeLists_WholeGermPowers
+
+   
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+      :toctree:
+
+   
+      make_elgst_lists
+      make_lsgst_lists
+      make_lsgst_lists_asymmetric_fids
+   
+   
+
+   
+   
+   
+
+   
+   
+   

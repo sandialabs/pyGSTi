@@ -1,0 +1,6 @@
+GST.EvalTree.getNumFinalStrings
+===============================
+
+.. currentmodule:: GST
+
+.. automethod:: EvalTree.getNumFinalStrings

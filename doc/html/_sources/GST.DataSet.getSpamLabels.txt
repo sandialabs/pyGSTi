@@ -1,0 +1,6 @@
+GST.DataSet.getSpamLabels
+=========================
+
+.. currentmodule:: GST
+
+.. automethod:: DataSet.getSpamLabels

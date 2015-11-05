@@ -1,0 +1,6 @@
+GST.MultiDataSet.getDatasetsSum
+===============================
+
+.. currentmodule:: GST
+
+.. automethod:: MultiDataSet.getDatasetsSum

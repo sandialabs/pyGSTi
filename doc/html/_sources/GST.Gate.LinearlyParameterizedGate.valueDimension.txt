@@ -1,0 +1,6 @@
+GST.Gate.LinearlyParameterizedGate.valueDimension
+=================================================
+
+.. currentmodule:: GST.Gate
+
+.. automethod:: LinearlyParameterizedGate.valueDimension

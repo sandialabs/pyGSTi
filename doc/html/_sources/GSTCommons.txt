@@ -1,0 +1,38 @@
+GSTCommons
+==========
+
+.. automodule:: GSTCommons
+
+   .. rubric:: Sub-modules
+
+   .. 
+     This list needs to be manually updated with all
+     the GSTCommons modules you want documented
+
+   .. autosummary::
+       :template: my_autosummary_module.rst
+       :toctree:
+       
+       GSTCommons.Analyze_LasGermExponent
+       GSTCommons.Analyze_TruncatedGermPowers
+       GSTCommons.Analyze_WholeGermPowers
+       GSTCommons.FiducialPairReduction
+       GSTCommons.MakeLists_LasGermExponent
+       GSTCommons.MakeLists_TruncatedGermPowers
+       GSTCommons.MakeLists_WholeGermPowers
+       GSTCommons.Std1Q_XYI
+       GSTCommons.Std1Q_XY
+
+
+   
+   
+   
+
+   
+   
+   
+
+
+   
+   
+   

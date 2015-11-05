@@ -1,0 +1,6 @@
+GST.EvalTree.getListOfFinalValueTreeIndices
+===========================================
+
+.. currentmodule:: GST
+
+.. automethod:: EvalTree.getListOfFinalValueTreeIndices

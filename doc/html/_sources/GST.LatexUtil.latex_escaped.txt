@@ -1,0 +1,6 @@
+GST.LatexUtil.latex_escaped
+===========================
+
+.. currentmodule:: GST.LatexUtil
+
+.. autofunction:: latex_escaped

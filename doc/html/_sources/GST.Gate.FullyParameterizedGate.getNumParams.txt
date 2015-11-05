@@ -1,0 +1,6 @@
+GST.Gate.FullyParameterizedGate.getNumParams
+============================================
+
+.. currentmodule:: GST.Gate
+
+.. automethod:: FullyParameterizedGate.getNumParams

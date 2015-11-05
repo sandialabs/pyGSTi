@@ -1,0 +1,6 @@
+GST.Writers.writeGatestringList
+===============================
+
+.. currentmodule:: GST.Writers
+
+.. autofunction:: writeGatestringList

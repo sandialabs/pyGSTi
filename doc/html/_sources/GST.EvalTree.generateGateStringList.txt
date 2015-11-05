@@ -1,0 +1,6 @@
+GST.EvalTree.generateGateStringList
+===================================
+
+.. currentmodule:: GST
+
+.. automethod:: EvalTree.generateGateStringList

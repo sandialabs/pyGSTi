@@ -1,0 +1,51 @@
+GST.ReportGeneration
+====================
+
+.. automodule:: GST.ReportGeneration
+
+   
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+      :toctree:
+
+   
+      getChi2ProgressTable
+      getChi2ProgressTable_html
+      getDatasetOverviewTable
+      getDatasetOverviewTable_html
+      getGatesetChoiTable
+      getGatesetChoiTable_html
+      getGatesetClosestUnitaryTable
+      getGatesetClosestUnitaryTable_html
+      getGatesetDecompTables
+      getGatesetDecompTables_html
+      getGatesetGatesTable
+      getGatesetGatesTable_html
+      getGatesetSPAMParametersTable
+      getGatesetSPAMParametersTable_html
+      getGatesetSPAMTable
+      getGatesetSPAMTable_html
+      getGatesetVsTargetTable
+      getGatesetVsTargetTable_html
+      getGatestringMultiTable
+      getGatestringMultiTable_html
+      getGatestringTable
+      getGatestringTable_html
+      getHtmlQuantities
+      getLogLProgressTable
+      getLogLProgressTable_html
+      getUnitaryGatesetGatesTable
+      getUnitaryGatesetGatesTable_html
+      writeReport_LsAndGerms
+   
+   
+
+   
+   
+   
+
+   
+   
+   

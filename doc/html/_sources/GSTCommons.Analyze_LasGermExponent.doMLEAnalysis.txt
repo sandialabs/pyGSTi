@@ -1,0 +1,6 @@
+GSTCommons.Analyze_LasGermExponent.doMLEAnalysis
+================================================
+
+.. currentmodule:: GSTCommons.Analyze_LasGermExponent
+
+.. autofunction:: doMLEAnalysis

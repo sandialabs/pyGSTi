@@ -1,0 +1,6 @@
+GST.Optimize.fmax_cg
+====================
+
+.. currentmodule:: GST.Optimize
+
+.. autofunction:: fmax_cg

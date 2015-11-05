@@ -1,0 +1,6 @@
+GST.Optimize.fmin_homebrew
+==========================
+
+.. currentmodule:: GST.Optimize
+
+.. autofunction:: fmin_homebrew

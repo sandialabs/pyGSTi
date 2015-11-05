@@ -1,0 +1,39 @@
+GST.Core
+========
+
+.. automodule:: GST.Core
+
+   
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+      :toctree:
+
+   
+      contract
+      doExLGST
+      doIterativeExLGST
+      doIterativeLSGST
+      doIterativeLSGSTwithModelSelection
+      doIterativeMLEGST
+      doLGST
+      doLSGST
+      doLSGSTwithModelSelection
+      doMLEGST
+      getRhoAndESpecs
+      getRhoAndEStrs
+      gramRankAndEvals
+      listStringsLGSTcanEstimate
+      optimizeGauge
+      printGatesetInfo
+   
+   
+
+   
+   
+   
+
+   
+   
+   

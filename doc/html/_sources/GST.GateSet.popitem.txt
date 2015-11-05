@@ -1,0 +1,6 @@
+GST.GateSet.popitem
+===================
+
+.. currentmodule:: GST
+
+.. automethod:: GateSet.popitem

@@ -1,0 +1,35 @@
+GST.Gate
+========
+
+.. automodule:: GST.Gate
+
+   
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+      :toctree:
+
+   
+      compose
+      optimizeGate
+   
+   
+
+   
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+      :template: my_autosummary_class.rst
+      :toctree:
+
+   
+      FullyParameterizedGate
+      LinearlyParameterizedGate
+   
+   
+
+   
+   
+   

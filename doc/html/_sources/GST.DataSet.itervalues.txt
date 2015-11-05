@@ -1,0 +1,6 @@
+GST.DataSet.itervalues
+======================
+
+.. currentmodule:: GST
+
+.. automethod:: DataSet.itervalues

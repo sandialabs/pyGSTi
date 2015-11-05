@@ -1,0 +1,6 @@
+GST.LikelihoodFunctions.forbiddenProb
+=====================================
+
+.. currentmodule:: GST.LikelihoodFunctions
+
+.. autofunction:: forbiddenProb

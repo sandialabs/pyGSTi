@@ -1,0 +1,6 @@
+GST.GateSet.has_key
+===================
+
+.. currentmodule:: GST
+
+.. automethod:: GateSet.has_key

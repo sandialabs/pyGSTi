@@ -1,0 +1,6 @@
+GST.gateStringList
+==================
+
+.. currentmodule:: GST
+
+.. autofunction:: gateStringList

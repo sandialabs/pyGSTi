@@ -1,0 +1,6 @@
+GST.Optimize.fmin_evolutionary
+==============================
+
+.. currentmodule:: GST.Optimize
+
+.. autofunction:: fmin_evolutionary

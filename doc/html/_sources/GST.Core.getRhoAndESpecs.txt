@@ -1,0 +1,6 @@
+GST.Core.getRhoAndESpecs
+========================
+
+.. currentmodule:: GST.Core
+
+.. autofunction:: getRhoAndESpecs

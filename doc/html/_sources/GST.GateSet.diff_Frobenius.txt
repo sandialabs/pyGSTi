@@ -1,0 +1,6 @@
+GST.GateSet.diff_Frobenius
+==========================
+
+.. currentmodule:: GST
+
+.. automethod:: GateSet.diff_Frobenius

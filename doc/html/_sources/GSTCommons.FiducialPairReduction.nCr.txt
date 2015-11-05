@@ -1,0 +1,6 @@
+GSTCommons.FiducialPairReduction.nCr
+====================================
+
+.. currentmodule:: GSTCommons.FiducialPairReduction
+
+.. autofunction:: nCr

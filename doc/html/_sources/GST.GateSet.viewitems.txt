@@ -1,0 +1,6 @@
+GST.GateSet.viewitems
+=====================
+
+.. currentmodule:: GST
+
+.. automethod:: GateSet.viewitems

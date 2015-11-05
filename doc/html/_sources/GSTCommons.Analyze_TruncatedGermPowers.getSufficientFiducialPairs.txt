@@ -1,0 +1,6 @@
+GSTCommons.Analyze_TruncatedGermPowers.getSufficientFiducialPairs
+=================================================================
+
+.. currentmodule:: GSTCommons.Analyze_TruncatedGermPowers
+
+.. autofunction:: getSufficientFiducialPairs

@@ -1,0 +1,6 @@
+GST.GateStringTools.repeatRemainderForTruncation
+================================================
+
+.. currentmodule:: GST.GateStringTools
+
+.. autofunction:: repeatRemainderForTruncation

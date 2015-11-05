@@ -1,0 +1,6 @@
+GST.DataSet.truncate
+====================
+
+.. currentmodule:: GST
+
+.. automethod:: DataSet.truncate

@@ -1,0 +1,6 @@
+GST.Gate.FullyParameterizedGate.transform
+=========================================
+
+.. currentmodule:: GST.Gate
+
+.. automethod:: FullyParameterizedGate.transform

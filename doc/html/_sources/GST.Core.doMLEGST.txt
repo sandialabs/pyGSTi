@@ -1,0 +1,6 @@
+GST.Core.doMLEGST
+=================
+
+.. currentmodule:: GST.Core
+
+.. autofunction:: doMLEGST

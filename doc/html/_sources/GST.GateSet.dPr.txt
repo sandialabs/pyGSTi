@@ -1,0 +1,6 @@
+GST.GateSet.dPr
+===============
+
+.. currentmodule:: GST
+
+.. automethod:: GateSet.dPr

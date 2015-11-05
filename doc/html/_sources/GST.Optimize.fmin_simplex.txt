@@ -1,0 +1,6 @@
+GST.Optimize.fmin_simplex
+=========================
+
+.. currentmodule:: GST.Optimize
+
+.. autofunction:: fmin_simplex

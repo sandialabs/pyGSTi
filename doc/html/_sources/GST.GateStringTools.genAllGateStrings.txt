@@ -1,0 +1,6 @@
+GST.GateStringTools.genAllGateStrings
+=====================================
+
+.. currentmodule:: GST.GateStringTools
+
+.. autofunction:: genAllGateStrings

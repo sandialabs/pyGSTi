@@ -1,0 +1,6 @@
+GST.GateSet.product
+===================
+
+.. currentmodule:: GST
+
+.. automethod:: GateSet.product

@@ -1,0 +1,6 @@
+GST.GateSet.clear
+=================
+
+.. currentmodule:: GST
+
+.. automethod:: GateSet.clear

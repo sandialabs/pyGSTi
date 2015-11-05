@@ -1,0 +1,28 @@
+GSTCommons.Analyze_LasGermExponent
+==================================
+
+.. automodule:: GSTCommons.Analyze_LasGermExponent
+
+   
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+      :toctree:
+
+   
+      doLSGSTAnalysis
+      doMLEAnalysis
+      make_elgst_lists
+      make_lsgst_lists
+      make_lsgst_lists_asymmetric_fids
+   
+   
+
+   
+   
+   
+
+   
+   
+   
