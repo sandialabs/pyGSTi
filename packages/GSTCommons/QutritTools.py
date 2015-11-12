@@ -73,7 +73,7 @@ def randomRot(scale,arrType = np.array, seed=None):
     randU = scipy.linalg.expm(-1j * randH)
     return arrType(randU)
     
-def makeQutritGS(errorScale,arrType = np.array,similarity=False,seed=None):
+def makeQutritGS(errorScale,Xangle = np.pi/2, Yangle = np.pi/2, MSglobal = np.pi/2, MSlocal = 0, arrType = np.array,similarity=False,seed=None):
 
     arrType = np.array#Are we casting gates as matrices or arrays?
 
@@ -90,9 +90,9 @@ def makeQutritGS(errorScale,arrType = np.array,similarity=False,seed=None):
 
     #Define gates as unitary ops on Hilbert space
     gateImx = arrType(identity3)
-    gateXmx = arrType(XX3(pi/2))
-    gateYmx = arrType(YY3(pi/2))
-    gateMmx = arrType(MS3(pi/2,0))
+    gateXmx = arrType(XX3(Xangle))
+    gateYmx = arrType(YY3(Yangle))
+    gateMmx = arrType(MS3(MSglobal,MSlocal))
 
     #Now introduce unitary noise.
 

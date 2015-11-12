@@ -104,7 +104,7 @@ def doLSGSTAnalysis(dataFilenameOrSet, targetGateFilenameOrSet,
 def doMLEAnalysis(dataFilenameOrSet, targetGateFilenameOrSet, 
                   rhoStrsListOrFilename, EStrsListOrFilename, germsListOrFilename, maxLengths,
                   gateLabelsInStrings=None, weightsDict=None, rhoEPairs=None, constrainToTP=False,
-                  gaugeOptToCPTP=False, gaugeOptRatio=1e-4, advancedOptions={}):
+                  gaugeOptToCPTP=False, gaugeOptRatio=1e-4, lsgstLists=None, advancedOptions={}):
     """
     Perform end-to-end maximum-likelihood  analysis using Ls and germs, with L as a maximum length.
 
@@ -179,7 +179,11 @@ def doMLEAnalysis(dataFilenameOrSet, targetGateFilenameOrSet,
         
     gaugeOptRatio : float, optional
         The ratio spamWeight/gateWeight used for gauge optimizing to the target gate set.
-
+    
+    lsgstLists : list of gate string lists, optional
+        Provides explicit list of gate string lists to be used in analysis; to be given if
+        the dataset uses "incomplete" or "reduced" sets of gate string.  Default is None.
+    
     advancedOptions : dict, optional
         Specifies advanced options most of which deal with numerical details of the
         objective function.   The 'verbosity' option is an integer specifying the level
@@ -193,4 +197,4 @@ def doMLEAnalysis(dataFilenameOrSet, targetGateFilenameOrSet,
     return _base.doLongSequenceGST("logL", dataFilenameOrSet, targetGateFilenameOrSet, rhoStrsListOrFilename,
                                    EStrsListOrFilename, germsListOrFilename, maxLengths, gateLabelsInStrings,
                                    weightsDict, make_lsgst_lists_asymmetric_fids, _GST.GateStringTools.repeatWithMaxLength,
-                                   rhoEPairs, constrainToTP, gaugeOptToCPTP, gaugeOptRatio, advancedOptions)
+                                   rhoEPairs, constrainToTP, gaugeOptToCPTP, gaugeOptRatio, advancedOptions, lsgstLists)

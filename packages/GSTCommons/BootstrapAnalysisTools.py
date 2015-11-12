@@ -44,7 +44,7 @@ def makeBootstrapDataset(inputDataSet,generationMethod,inputGateSet=None,seed=No
 
 def makeBootstrapGatesets(numIterations,inputDataSet,generationMethod,inputGateSet=None,gs_target=None,startSeed=0,
                           spamLabels=['plus','minus'],GSTMethod="MLE",constrainToTP=False,returnData=False,
-                          fiducials=Std1Q_XYI.fiducials,germs=Std1Q_XYI.germs,maxLengths=None,**kwargs):
+                          fiducialPrep=Std1Q_XYI.fiducials,fiducialMeasure=Std1Q_XYI.fiducials,germs=Std1Q_XYI.germs,maxLengths=None,verbosity=2,**kwargs):
     if maxLengths == None:
         print "No maxLengths value specified; using [0,1,24,...,1024]"
         maxLengths = [0]+[2**k for k in range(10)]
@@ -61,10 +61,11 @@ def makeBootstrapGatesets(numIterations,inputDataSet,generationMethod,inputGateS
     gatesetList = []
     for run in xrange(numIterations):
         print "Run", run
-        result = Analyze.doMLEAnalysis(datasetList[run], gs_target, 
-                                fiducials, fiducials, germs, maxLengths, makeReport=False, 
-                                appendices=False, constrainToTP=constrainToTP, confidenceLevel=95)
-        gatesetList.append(result['MLEGST gatesets'][-1])
+        result = Analyze.doMLEAnalysis(datasetList[run],gs_target,fiducialPrep,fiducialMeasure,germs,maxLengths,constrainToTP=True,advancedOptions={'verbosity':verbosity})
+#        result = Analyze.doMLEAnalysis(datasetList[run], gs_target, 
+#                                fiducials, fiducials, germs, maxLengths, makeReport=False, 
+#                                appendices=False, constrainToTP=constrainToTP, confidenceLevel=95)
+        gatesetList.append(result.gatesets[-1])
     if not returnData:
         return gatesetList
     else:

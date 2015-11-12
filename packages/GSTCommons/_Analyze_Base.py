@@ -9,7 +9,7 @@ def doLongSequenceGST(longSequenceObjective,
                       rhoStrsListOrFilename, EStrsListOrFilename,
                       germsListOrFilename, maxLengths, gateLabels, weightsDict,
                       makeListsFn, truncFn, rhoEPairs, constrainToTP, 
-                      gaugeOptToCPTP, gaugeOptRatio, advancedOptions):
+                      gaugeOptToCPTP, gaugeOptRatio, advancedOptions,lsgstLists = None):
                     
     cwd = _os.getcwd()
 
@@ -46,8 +46,8 @@ def doLongSequenceGST(longSequenceObjective,
     if isinstance(germsListOrFilename, str):
         germs = _GST.loadGatestringList(germsListOrFilename)
     else: germs = germsListOrFilename
-
-    lsgstLists = makeListsFn(gateLabels, rhoStrs, EStrs, germs, maxLengths, rhoEPairs)
+    if lsgstLists is None:
+        lsgstLists = makeListsFn(gateLabels, rhoStrs, EStrs, germs, maxLengths, rhoEPairs)
 
     #Starting Point = LGST
     gate_dim = gs_target.get_dimension()
