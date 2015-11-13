@@ -7,9 +7,26 @@ import Core as _Core
 import GateOps as _GateOps
 import gatestring as _gatestring
 import os as _os
+import pickle as _pickle
 from matplotlib.ticker import AutoMinorLocator as _AutoMinorLocator
 from matplotlib.ticker import FixedLocator as _FixedLocator
 
+class GSTFigure(object):
+    def __init__(self, axes, extraInfo=None):
+        self.pickledAxes = _pickle.dumps(axes)
+        self.extraInfo = extraInfo
+
+    def saveTo(self, filename):
+        if filename is not None and len(filename) > 0:
+            axes = _pickle.loads(self.pickledAxes) #this creates a new (current) figure in matplotlib
+            _plt.savefig(filename, bbox_extra_artists=(axes,), bbox_inches='tight') #need extra artists otherwise axis labels get clipped
+            _plt.close(_plt.gcf()) # gcf == "get current figure"; closes the figure created by unpickling
+
+    def setExtraInfo(self, extraInfo):
+        self.extraInfo = extraInfo
+
+    def getExtraInfo(self):
+        return self.extraInfo
 
 def ChiSqFunc_2outcome( N, p, f, minProbClipForWeighting=1e-4 ):
     """ 
@@ -721,7 +738,8 @@ def ColorBoxPlot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, y
     
     Returns
     -------
-    None
+    GSTFigure
+        The encapsulated matplotlib figure that was generated
     """
     if axes is None: fig,axes = _plt.subplots()  # create a new figure if no axes are given
 
@@ -822,10 +840,14 @@ def ColorBoxPlot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, y
     if colorbar:
         _plt.colorbar(heatmap)
 
+    gstFig = GSTFigure(axes)
+
     if saveTo is not None:
-        _plt.savefig(saveTo, bbox_extra_artists=(axes,), bbox_inches='tight') #need extra artists otherwise axis labels get clipped
+        if len(saveTo) > 0: #So you can pass saveTo="" and figure will be closed but not saved to a file
+            _plt.savefig(saveTo, bbox_extra_artists=(axes,), bbox_inches='tight') #need extra artists otherwise axis labels get clipped
         if fig is not None: _plt.close(fig) #close the figure if we're saving it to a file
-    return
+
+    return gstFig
 
 
 
@@ -891,7 +913,8 @@ def NestedColorBoxPlot(plt_data_list_of_lists, title=None, xlabels=None, ylabels
     
     Returns
     -------
-    None
+    GSTFigure
+        The encapsulated matplotlib figure that was generated
     """
 
     #Assume a complete 2D rectangular list of lists, and that each element is a numpy array of the same size
@@ -914,9 +937,9 @@ def NestedColorBoxPlot(plt_data_list_of_lists, title=None, xlabels=None, ylabels
     for i in range(nRows):   ytics.append( float((elRows+1)*(i+0.5)) )
     for j in range(nCols):   xtics.append( float((elCols+1)*(j+0.5)) )
 
-    ColorBoxPlot(data,title, xlabels, ylabels, _np.array(xtics), _np.array(ytics),
-                 vmin, vmax, colorbar, fig, axes, size, prec, boxLabels, xlabel, ylabel,
-                 saveTo, ticSize, grid)
+    return ColorBoxPlot(data,title, xlabels, ylabels, _np.array(xtics), _np.array(ytics),
+                        vmin, vmax, colorbar, fig, axes, size, prec, boxLabels, xlabel, ylabel,
+                        saveTo, ticSize, grid)
 
 def _computeSubMxs(xvals, yvals, xyGateStringDict, subMxCreationFn):
     subMxs = [ [ subMxCreationFn( xyGateStringDict[(x,y)] ) for x in xvals ] for y in yvals]
@@ -1020,10 +1043,14 @@ def generateBoxPlot( xvals, yvals, xyGateStringDict, subMxCreationFn, xlabel="",
 
     Returns
     -------
-    nUsedXs : int
-        The number of used X-values, proportional to the overall final figure width
-    nUsedYs : int
-        The number of used Y-values, proportional to the overall final figure height
+    gstFig : GSTFigure
+        The encapsulated matplotlib figure that was generated.  Note that 
+        figure extra info is a dict with keys:
+
+        nUsedXs : int
+            The number of used X-values, proportional to the overall final figure width
+        nUsedYs : int
+            The number of used Y-values, proportional to the overall final figure height
     """
 
     init_min_clip = m
@@ -1076,10 +1103,12 @@ def generateBoxPlot( xvals, yvals, xyGateStringDict, subMxCreationFn, xlabel="",
             minclip = strToFloat( min_clip )
             maxclip = strToFloat( max_clip )
             fig,ax = _plt.subplots( 1, 1, figsize=(nXs*scale, nYs*scale))
-            ColorBoxPlot( subMxSums, fig=fig, axes=ax, title=title,
-                          xlabels=valFilter(used_xvals), ylabels=valFilter(used_yvals),
-                          vmin=minclip, vmax=maxclip, colorbar=False, prec=prec, xlabel=xlabel, ylabel=ylabel,
-                          saveTo=saveTo, ticSize=ticSize, grid=grid)
+            gstFig = ColorBoxPlot( subMxSums, fig=fig, axes=ax, title=title,
+                                   xlabels=valFilter(used_xvals), ylabels=valFilter(used_yvals),
+                                   vmin=minclip, vmax=maxclip, colorbar=False, prec=prec, xlabel=xlabel, ylabel=ylabel,
+                                   ticSize=ticSize, grid=grid)
+            gstFig.saveTo(saveTo)
+
             if histogram:
                 fig = _plt.figure()
                 histdata = subMxSums.flatten()
@@ -1090,7 +1119,8 @@ def generateBoxPlot( xvals, yvals, xyGateStringDict, subMxCreationFn, xlabel="",
                           range=[histMin, histMax], facecolor='gray', align='mid')
                 if saveTo is not None:
                     _plt.savefig( _makeHistFilename(saveTo) )
-                    _plt.close(fig)
+                    _plt.close(fig)                    
+            return gstFig
 
 
         if interactive:
@@ -1098,7 +1128,7 @@ def generateBoxPlot( xvals, yvals, xyGateStringDict, subMxCreationFn, xlabel="",
                      min_clip=str(init_min_clip) if init_min_clip is not None else str(0),
                      max_clip=str(init_max_clip) if init_max_clip is not None else str(10) )
         else:
-            makeplot(init_min_clip, init_max_clip)
+            gstFig = makeplot(init_min_clip, init_max_clip)
 
     else: #not summing up
 
@@ -1130,9 +1160,10 @@ def generateBoxPlot( xvals, yvals, xyGateStringDict, subMxCreationFn, xlabel="",
             maxclip = strToFloat( max_clip )
             #print "data = ",subMxs
             fig,ax = _plt.subplots( 1, 1, figsize=(nXs*nIXs*scale*0.4, nYs*nIYs*scale*0.4))
-            NestedColorBoxPlot(subMxs, fig=fig, axes=ax, title=title,vmin=minclip, vmax=maxclip, prec=prec, 
-                               ylabels=valFilter(used_yvals), xlabels=valFilter(used_xvals), boxLabels=labels,
-                               colorbar=False, ylabel=ylabel, xlabel=xlabel, saveTo=saveTo, ticSize=ticSize, grid=grid)
+            gstFig = NestedColorBoxPlot(subMxs, fig=fig, axes=ax, title=title,vmin=minclip, vmax=maxclip, prec=prec, 
+                                        ylabels=valFilter(used_yvals), xlabels=valFilter(used_xvals), boxLabels=labels,
+                                        colorbar=False, ylabel=ylabel, xlabel=xlabel, ticSize=ticSize, grid=grid)
+            gstFig.saveTo(saveTo)
 
             if histogram:
                 fig = _plt.figure()
@@ -1145,6 +1176,7 @@ def generateBoxPlot( xvals, yvals, xyGateStringDict, subMxCreationFn, xlabel="",
                 if saveTo is not None:
                     _plt.savefig( _makeHistFilename(saveTo) )
                     _plt.close(fig)
+            return gstFig
 
 
         if interactive:
@@ -1153,9 +1185,11 @@ def generateBoxPlot( xvals, yvals, xyGateStringDict, subMxCreationFn, xlabel="",
                      max_clip=str(init_max_clip) if init_max_clip is not None else str(10),
                      labels=boxLabels)
         else:
-            makeplot(init_min_clip, init_max_clip, boxLabels)
+            gstFig = makeplot(init_min_clip, init_max_clip, boxLabels)
 
-    return len(used_xvals),len(used_yvals)
+    gstFig.setExtraInfo( { 'nUsedXs': len(used_xvals),
+                           'nUsedYs': len(used_yvals) } )                     
+    return gstFig
 
 
 def generateZoomedBoxPlot(xvals, yvals, xyGateStringDict, subMxCreationFn, strs, 
@@ -1363,10 +1397,14 @@ def ChiSqBoxPlot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
 
     Returns
     -------
-    nUsedXs : int
-        The number of used X-values, proportional to the overall final figure width
-    nUsedYs : int
-        The number of used Y-values, proportional to the overall final figure height
+    gstFig : GSTFigure
+        The encapsulated matplotlib figure that was generated.  Extra figure
+        info is a dict with keys:
+
+        nUsedXs : int
+            The number of used X-values, proportional to the overall final figure width
+        nUsedYs : int
+            The number of used Y-values, proportional to the overall final figure height
     """
 
     rhoStrs, EStrs = strs
@@ -1466,10 +1504,14 @@ def LogLBoxPlot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
 
     Returns
     -------
-    nUsedXs : int
-        The number of used X-values, proportional to the overall final figure width
-    nUsedYs : int
-        The number of used Y-values, proportional to the overall final figure height
+    gstFig : GSTFigure
+        The encapsulated matplotlib figure that was generated.  Extra figure
+        info is a dict with keys:
+
+        nUsedXs : int
+            The number of used X-values, proportional to the overall final figure width
+        nUsedYs : int
+            The number of used Y-values, proportional to the overall final figure height
     """
 
     rhoStrs, EStrs = strs
@@ -1532,10 +1574,14 @@ def BlankBoxPlot( xvals, yvals, xy_gatestring_dict, strs, xlabel="", ylabel="",
 
     Returns
     -------
-    nUsedXs : int
-        The number of used X-values, proportional to the overall final figure width
-    nUsedYs : int
-        The number of used Y-values, proportional to the overall final figure height
+    gstFig : GSTFigure
+        The encapsulated matplotlib figure that was generated.  Extra figure
+        info is a dict with keys:
+
+        nUsedXs : int
+            The number of used X-values, proportional to the overall final figure width
+        nUsedYs : int
+            The number of used Y-values, proportional to the overall final figure height
     """
     rhoStrs, EStrs = strs
     def mxFn(gateStr):
@@ -1683,10 +1729,14 @@ def SmallEigvalErrRateBoxPlot( xvals, yvals, xy_gatestring_dict, dataset, direct
 
     Returns
     -------
-    nUsedXs : int
-        The number of used X-values, proportional to the overall final figure width
-    nUsedYs : int
-        The number of used Y-values, proportional to the overall final figure height
+    gstFig : GSTFigure
+        The encapsulated matplotlib figure that was generated.  Extra figure
+        info is a dict with keys:
+
+        nUsedXs : int
+            The number of used X-values, proportional to the overall final figure width
+        nUsedYs : int
+            The number of used Y-values, proportional to the overall final figure height
     """
 
     def mxFn(gateStr): #error rate as 1x1 matrix which we have plotting function sum up
@@ -2362,10 +2412,14 @@ def DirectChiSqBoxPlot( xvals, yvals, xy_gatestring_dict, dataset, directGateset
 
     Returns
     -------
-    nUsedXs : int
-        The number of used X-values, proportional to the overall final figure width
-    nUsedYs : int
-        The number of used Y-values, proportional to the overall final figure height
+    gstFig : GSTFigure
+        The encapsulated matplotlib figure that was generated.  Extra figure
+        info is a dict with keys:
+
+        nUsedXs : int
+            The number of used X-values, proportional to the overall final figure width
+        nUsedYs : int
+            The number of used Y-values, proportional to the overall final figure height
     """
     rhoStrs, EStrs = strs
     def mxFn(gateStr):
@@ -2585,10 +2639,14 @@ def DirectLogLBoxPlot( xvals, yvals, xy_gatestring_dict, dataset, directGatesets
 
     Returns
     -------
-    nUsedXs : int
-        The number of used X-values, proportional to the overall final figure width
-    nUsedYs : int
-        The number of used Y-values, proportional to the overall final figure height
+    gstFig : GSTFigure
+        The encapsulated matplotlib figure that was generated.  Extra figure
+        info is a dict with keys:
+
+        nUsedXs : int
+            The number of used X-values, proportional to the overall final figure width
+        nUsedYs : int
+            The number of used Y-values, proportional to the overall final figure height
     """
     rhoStrs, EStrs = strs
     def mxFn(gateStr):
@@ -2696,10 +2754,14 @@ def Direct2xCompBoxPlot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
 
     Returns
     -------
-    nUsedXs : int
-        The number of used X-values, proportional to the overall final figure width
-    nUsedYs : int
-        The number of used Y-values, proportional to the overall final figure height
+    gstFig : GSTFigure
+        The encapsulated matplotlib figure that was generated.   Extra figure
+        info is a dict with keys:
+
+        nUsedXs : int
+            The number of used X-values, proportional to the overall final figure width
+        nUsedYs : int
+            The number of used Y-values, proportional to the overall final figure height
     """
     rhoStrs, EStrs = strs
     def mxFn(gateStr):
@@ -2816,10 +2878,14 @@ def DirectDeviationBoxPlot( xvals, yvals, xy_gatestring_dict, dataset, gateset, 
 
     Returns
     -------
-    nUsedXs : int
-        The number of used X-values, proportional to the overall final figure width
-    nUsedYs : int
-        The number of used Y-values, proportional to the overall final figure height
+    gstFig : GSTFigure
+        The encapsulated matplotlib figure that was generated.  Extra figure
+        info is a dict with keys:
+
+        nUsedXs : int
+            The number of used X-values, proportional to the overall final figure width
+        nUsedYs : int
+            The number of used Y-values, proportional to the overall final figure height
     """
     def mxFn(gateStr):
         if gateStr is None: return _np.nan * _np.zeros( (1,1), 'd')
@@ -2943,10 +3009,14 @@ def WhackAChiSqMoleBoxPlot( gatestringToWhack, allGatestringsUsedInChi2Opt,
 
     Returns
     -------
-    nUsedXs : int
-        The number of used X-values, proportional to the overall final figure width
-    nUsedYs : int
-        The number of used Y-values, proportional to the overall final figure height
+    gstFig : GSTFigure
+        The encapsulated matplotlib figure that was generated.  Extra figure
+        info is a dict with keys:
+
+        nUsedXs : int
+            The number of used X-values, proportional to the overall final figure width
+        nUsedYs : int
+            The number of used Y-values, proportional to the overall final figure height
     """
 
 
@@ -3120,10 +3190,14 @@ def WhackALogLMoleBoxPlot( gatestringToWhack, allGatestringsUsedInLogLOpt,
 
     Returns
     -------
-    nUsedXs : int
-        The number of used X-values, proportional to the overall final figure width
-    nUsedYs : int
-        The number of used Y-values, proportional to the overall final figure height
+    gstFig : GSTFigure
+        The encapsulated matplotlib figure that was generated.  Extra figure
+        info is a dict with keys:
+
+        nUsedXs : int
+            The number of used X-values, proportional to the overall final figure width
+        nUsedYs : int
+            The number of used Y-values, proportional to the overall final figure height
     """
 
     #We want the derivative of 2*Delta_LogL = 2 * sum_i N_i*(f_i*log(f_i/p_i) + (p_i-f_i))  (i over gatestrings & spam labels)

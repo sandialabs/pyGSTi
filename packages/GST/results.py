@@ -8,6 +8,7 @@ import matplotlib as _matplotlib
 import AnalysisTools as _AT
 import ReportGeneration as _RG
 import LatexUtil as _LU
+import gatestring as _gatestring
 from Core import getRhoAndESpecs as _getRhoAndESpecs
 from Core import getRhoAndEStrs as _getRhoAndEStrs
 from Core import optimizeGauge as _optimizeGauge
@@ -42,8 +43,9 @@ class Results(object):
             is almost always what you want.
         """
         self.confidenceRegions = {} # key == confidence level, val = ConfidenceRegion
-        self.derivedResults = {} #dict of dicts.  Outer dict key is confidence level
-        self.specials = {}
+        self.tables = {} #dict of dicts.  Outer dict key is confidence level
+        self.figures = {} #plain dict.  Key is figure name (a figure applies to all confidence levels)
+        self.specials = {} #plain dict.  Key is name of "special" object
 
         if restrictToFormats is not None:
             self.formatsToCompute = restrictToFormats
@@ -366,11 +368,11 @@ class Results(object):
            tables are objects, 'html' and 'latex' tables are strings.
         """
         assert(self.bEssentialResultsSet)
-        if self.derivedResults.has_key(confidenceLevel) == False:
-            self.derivedResults[confidenceLevel] = {}
-        if tableName not in self.derivedResults[confidenceLevel]:
-            self.derivedResults[confidenceLevel][tableName] = self._generateTable(tableName, confidenceLevel, verbosity)
-        return self.derivedResults[confidenceLevel][tableName][fmt]
+        if self.tables.has_key(confidenceLevel) == False:
+            self.tables[confidenceLevel] = {}
+        if tableName not in self.tables[confidenceLevel]:
+            self.tables[confidenceLevel][tableName] = self._generateTable(tableName, confidenceLevel, verbosity)
+        return self.tables[confidenceLevel][tableName][fmt]
 
     def _generateTable(self, tableName, confidenceLevel, verbosity):
         """ 
@@ -453,6 +455,153 @@ class Results(object):
                                         self.formatsToCompute, self.tableClass, self.longTables)        
         else:
             raise ValueError("Invalid table name: %s" % tableName)
+
+    def getFigure(self, figureName, verbosity=0):
+        """
+        Get a report figure.  Figures are created on the first
+        request then cached for later requests for the same figure.
+        This method is typically used internally by other Results methods.
+
+        Parameters
+        ----------
+        figureName : string
+           The name of the figure.
+
+        verbosity : int, optional
+           How much detail to send to stdout.
+
+        Returns
+        -------
+        GSTFigure
+            The requested figure object.
+        """
+        assert(self.bEssentialResultsSet)
+        if figureName not in self.figures:
+            self.figures[figureName] = self._generateFigure(figureName, verbosity)
+        return self.figures[figureName]
+
+    def _generateFigure(self, figureName, verbosity):
+        """ 
+        Switchboard method for actually creating a figure (including computation
+        of its values.
+        """
+        assert(self.bEssentialResultsSet)
+        assert(self.LsAndGermInfoSet)
+
+        if verbosity > 0:
+            print "Generating %s figure..." % figureName; _sys.stdout.flush()
+
+        if self.objective == "chi2":
+            plotFn = _AT.ChiSqBoxPlot
+            directPlotFn = _AT.DirectChiSqBoxPlot
+            whackAMolePlotFn = _AT.WhackAChiSqMoleBoxPlot
+            #plotFnName,plotFnLatex = "Chi2", "$\chi^2$"
+            mpc = self.additionalInfo['minProbClipForWeighting']
+        elif self.objective == "logL":
+            plotFn = _AT.LogLBoxPlot
+            directPlotFn = _AT.DirectLogLBoxPlot
+            whackAMolePlotFn = _AT.WhackALogLMoleBoxPlot
+            #plotFnName,plotFnLatex = "LogL", "$\\log(\\mathcal{L})$"
+            mpc = self.additionalInfo['minProbClip']
+        else: 
+            raise ValueError("Invalid objective value: %s" % self.objective)
+
+
+        m = 0
+        M = 10
+        baseStr_dict = self._getBaseStrDict()
+        strs  = self.rhoStrs, self.EStrs
+        st = 1 if self.Ls[0] == 0 else 0 #start index: skips LGST column in report color box plots        
+
+        if figureName == "bestEstimateColorBoxPlot":
+            fig = plotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, self.gsBestEstimate, strs,
+                          "L", "germ", M=M, m=m, scale=1.0, sumUp=False, histogram=True, title="", rhoEPairs=self.rhoEPairs,
+                          minProbClipForWeighting=mpc, saveTo="", ticSize=20)
+
+        elif figureName == "invertedBestEstimateColorBoxPlot":
+            fig = plotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, self.gsBestEstimate, strs,
+                          "L", "germ", M=M, m=m, scale=1.0, sumUp=False, histogram=True, title="", rhoEPairs=self.rhoEPairs,
+                          saveTo="", ticSize=20, minProbClipForWeighting=mpc, invert=True)
+
+        elif figureName == "bestEstimateSummedColorBoxPlot":
+            sumScale = len(self.rhoStrs)*len(self.EStrs) if self.rhoEPairs is None else len(self.rhoEPairs)
+            fig = plotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, self.gsBestEstimate, strs,
+                          "L", "germ", M=M*sumScale, m=m*sumScale, scale=1.0, sumUp=True, histogram=False,
+                          title="", rhoEPairs=self.rhoEPairs, minProbClipForWeighting=mpc, saveTo="", ticSize=14)    
+            
+        elif figureName.startswith("estimateForLIndex") and figureName.endswith("ColorBoxPlot"):
+            i = int(figureName[len("estimateForLIndex"):-len("ColorBoxPlot")])
+            fig = plotFn( self.Ls[st:i+1], self.germs, baseStr_dict, self.dataset, self.gatesets[i],
+                          strs, "L", "germ", M=M, m=m, scale=1.0, sumUp=False, histogram=False, title="",
+                          rhoEPairs=self.rhoEPairs, saveTo="", minProbClipForWeighting=mpc, ticSize=20 )
+
+        elif figureName == "blankBoxPlot":
+            #TODO - have BlankBoxPlot return a GSTFigure object
+            raise ValueError("not implemented")
+            fig = _AT.BlankBoxPlot( self.Ls, self.germs, baseStr_dict, strs, "L", "germ", scale=1.0, title="",
+                              sumUp=False, saveTo="", ticSize=20)
+
+        elif figureName == "blankSummedBoxPlot":
+            #TODO - have BlankBoxPlot return a GSTFigure object
+            raise ValueError("not implemented")
+            fig = _AT.BlankBoxPlot( self.Ls, self.germs, baseStr_dict, strs, "L", "germ", scale=1.0, title="",
+                              sumUp=True, saveTo="", ticSize=20)
+
+        elif figureName == "directLGSTColorBoxPlot":
+            directLGST  = self.getSpecial('DirectLGSTGatesets')
+            fig = directPlotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, directLGST, strs,
+                                "L", "germ", M=M, m=m, scale=1.0, sumUp=False, title="", minProbClipForWeighting=mpc,
+                                rhoEPairs=self.rhoEPairs, saveTo="", ticSize=20)
+
+        elif figureName == "directLongSeqGSTColorBoxPlot":
+            directLongSeqGST = self.getSpecial('DirectLongSeqGatesets')
+            fig = directPlotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, directLongSeqGST, strs,
+                          "L", "germ", M=M, m=m, scale=1.0, sumUp=False, title="",minProbClipForWeighting=mpc,
+                          rhoEPairs=self.rhoEPairs, saveTo="", ticSize=20)
+
+        elif figureName == "directLGSTDeviationColorBoxPlot":
+            directLGST  = self.getSpecial('DirectLGSTGatesets')
+            fig = _AT.DirectDeviationBoxPlot( self.Ls[st:], self.germs, baseStr_dict, self.dataset, self.gsBestEstimate, directLGST, 
+                                        "L", "germ", m=0, scale=1.0, prec=-1, title="", saveTo="", ticSize=20)
+
+        elif figureName == "directLongSeqGSTDeviationColorBoxPlot":
+            directLongSeqGST = self.getSpecial('DirectLongSeqGatesets')
+            fig = _AT.DirectDeviationBoxPlot( self.Ls[st:], self.germs, baseStr_dict, self.dataset, self.gsBestEstimate, directLongSeqGST,
+                                              "L", "germ", m=0, scale=1.0, prec=-1, title="", saveTo="", ticSize=20)
+
+        elif figureName == "smallEigvalErrRateColorBoxPlot":
+            directLongSeqGST = self.getSpecial('DirectLongSeqGatesets')
+            fig = _AT.SmallEigvalErrRateBoxPlot( self.Ls[st:], self.germs, baseStr_dict, self.dataset, directLongSeqGST,
+                                                 "L", "germ", m=0, scale=1.0, title="", saveTo="", ticSize=20)
+
+        elif figureName.startswith("whack") and figureName.endswith("MoleBoxes"):
+            gateLabel = figureName[len("whack"):-len("MoleBoxes")]
+
+            highestL = self.Ls[-1]; allGateStrings = self.gateStringLists[-1]; hammerWeight = 10.0
+            len1GermFirstEls = [ g[0] for g in self.germs if len(g) == 1 ]
+            assert(gateLabel in len1GermFirstEls) #only these whack-a-mole plots are available
+            strToWhack = _gatestring.GateString( (gateLabel,)*highestL )
+
+            fig = whackAMolePlotFn( strToWhack, allGateStrings, self.Ls[st:], self.germs, baseStr_dict, self.dataset,
+                                    self.gsBestEstimate, strs, "L", "germ", scale=1.0, sumUp=False, title="", whackWith=hammerWeight,
+                                    saveTo="", minProbClipForWeighting=mpc, ticSize=20, rhoEPairs=self.rhoEPairs, m=0)
+
+        elif figureName.startswith("whack") and figureName.endswith("MoleBoxesSummed"):
+            gateLabel = figureName[len("whack"):-len("MoleBoxesSummed")]
+
+            highestL = self.Ls[-1]; allGateStrings = self.gateStringLists[-1]; hammerWeight = 10.0
+            len1GermFirstEls = [ g[0] for g in self.germs if len(g) == 1 ]
+            assert(gateLabel in len1GermFirstEls) #only these whack-a-mole plots are available
+            strToWhack = _gatestring.GateString( (gateLabel,)*highestL )
+
+            fig = whackAMolePlotFn( strToWhack, allGateStrings, self.Ls[st:], self.germs, baseStr_dict, self.dataset,
+                                    self.gsBestEstimate, strs, "L", "germ", scale=1.0, sumUp=True, title="", whackWith=hammerWeight,
+                                    saveTo="", minProbClipForWeighting=mpc, ticSize=20, rhoEPairs=self.rhoEPairs, m=0)
+
+        else:
+            raise ValueError("Invalid figure name: %s" % figureName)
+
+        return fig
 
 
     def getSpecial(self, specialName, verbosity=0):
@@ -802,57 +951,41 @@ class Results(object):
         if self.LsAndGermInfoSet:
             st = 1 if self.Ls[0] == 0 else 0 #start index: skips LGST column in report color box plots        
             nPlots = (len(self.Ls[st:])-1)+2 if pixelPlotAppendix else 2
+
             if self.objective == "chi2":
-                plotFn = _AT.ChiSqBoxPlot
-                directPlotFn = _AT.DirectChiSqBoxPlot
-                whackAMolePlotFn = _AT.WhackAChiSqMoleBoxPlot
                 plotFnName,plotFnLatex = "Chi2", "$\chi^2$"
-                mpc = self.additionalInfo['minProbClipForWeighting']
             elif self.objective == "logL":
-                plotFn = _AT.LogLBoxPlot
-                directPlotFn = _AT.DirectLogLBoxPlot
-                whackAMolePlotFn = _AT.WhackALogLMoleBoxPlot
                 plotFnName,plotFnLatex = "LogL", "$\\log(\\mathcal{L})$"
-                mpc = self.additionalInfo['minProbClip']
             else: 
                 raise ValueError("Invalid objective value: %s" % self.objective)
             
             if verbosity > 0: 
                 print " -- %s plots (%d): " % (plotFnName, nPlots),; _sys.stdout.flush()
-            maxX,maxY = plotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, best_gs, strs,
-                                "L", "germ", M=M, m=m, scale=1.0, sumUp=False, histogram=True, title="", rhoEPairs=self.rhoEPairs,
-                                minProbClipForWeighting=mpc, saveTo=_os.path.join(report_dir, D,"best%sBoxes.pdf" % plotFnName), ticSize=20)
+
             if verbosity > 0: 
                 print "1 ",; _sys.stdout.flush()
-    
-            #UNUSED
-            ## scale min/max of summed up plots by this to make color scale consistent w/non-summed
-            #sumScale = len(rhoStrs)*len(EStrs) if rhoEPairs is None else len(rhoEPairs)
-            #plotFn( Ls, germs, baseStr_dict, dataset, best_gs, strs,
-            #        "L", "germ", M=M*sumScale, m=m*sumScale, scale=1.0, sumUp=True, histogram=False, title="", rhoEPairs=rhoEPairs,
-            #        minProbClipForWeighting=1e-4, saveTo=_os.path.join(report_dir, D,"best%sBoxes_summed.pdf" % plotFnName), ticSize=14)    
-            #
-            #if verbosity > 0: 
-            #    print "2 ",; _sys.stdout.flush()
-        
-            plotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, best_gs, strs,
-                    "L", "germ", M=M, m=m, scale=1.0, sumUp=False, histogram=True, title="", rhoEPairs=self.rhoEPairs,
-                    saveTo=_os.path.join(report_dir, D,"best%sBoxes_inverted.pdf" % plotFnName), ticSize=20,
-                    minProbClipForWeighting=mpc, invert=True)
+            fig = self.getFigure("bestEstimateColorBoxPlot",verbosity)
+            fig.saveTo(_os.path.join(report_dir, D,"best%sBoxes.pdf" % plotFnName))
+            maxX = fig.getExtraInfo()['nUsedXs']; maxY = fig.getExtraInfo()['nUsedYs']
+
             if verbosity > 0: 
                 print "2 ",; _sys.stdout.flush()
+            fig = self.getFigure("invertedBestEstimateColorBoxPlot",verbosity)
+            fig.saveTo(_os.path.join(report_dir, D,"best%sBoxes_inverted.pdf" % plotFnName))
     
         pixplots = ""
         if pixelPlotAppendix:
             for i in range(st,len(self.Ls)-1):
-                lx,ly = plotFn( self.Ls[st:i+1], self.germs, baseStr_dict, self.dataset, self.gatesets[i],
-                                strs, "L", "germ", M=M, m=m, scale=1.0, sumUp=False, histogram=False, title="",
-                                rhoEPairs=self.rhoEPairs, saveTo=_os.path.join(report_dir, D,"L%d_%sBoxes.pdf" % (i,plotFnName)), 
-                                minProbClipForWeighting=mpc, ticSize=20 )
+
+                if verbosity > 0: 
+                    print "%d " % (i-st+3),; _sys.stdout.flush()
+
+                fig = self.getFigure("estimateForLIndex%dColorBoxPlot" % i, verbosity)
+                fig.saveTo( _os.path.join(report_dir, D,"L%d_%sBoxes.pdf" % (i,plotFnName)) )
+                lx = fig.getExtraInfo()['nUsedXs']; ly = fig.getExtraInfo()['nUsedYs']
+
                 W = float(lx+1)/float(maxX+1) * maxW #scale figure size according to number of rows 
                 H = float(ly)  /float(maxY)   * maxH # and columns+1 (+1 for labels ~ another col) relative to initial plot
-                if verbosity > 0: 
-                    print "%d " % (i+4),; _sys.stdout.flush()
             
                 pixplots += "\n"
                 pixplots += "\\begin{figure}\n"
@@ -864,57 +997,42 @@ class Results(object):
     
         if verbosity > 0: 
             print ""; _sys.stdout.flush()
-    
-        #UNUSED - put in a different type of report?
-        #if verbosity > 0: 
-        #    print " -- Blank Box plots..."; _sys.stdout.flush()
-        #_AT.BlankBoxPlot( Ls, germs, baseStr_dict, strs, "L", "germ", scale=1.0, title="",
-        #                  sumUp=False, saveTo=_os.path.join(report_dir, D,"blankBoxes.pdf"), ticSize=20)
-        #_AT.BlankBoxPlot( Ls, germs, baseStr_dict, strs, "L", "germ", scale=1.0, title="",
-        #                  sumUp=True, saveTo=_os.path.join(report_dir, D,"blankBoxes_summed.pdf"), ticSize=20)
-    
+        
         if debugAidsAppendix:
             #DirectLGST and deviation
             if verbosity > 0: 
                 print " -- Direct-X plots ",; _sys.stdout.flush()
-    
-            directLGST  = self.getSpecial('DirectLGSTGatesets')
-            directLongSeqGST = self.getSpecial('DirectLongSeqGatesets')
-        
+                print "(2):"; _sys.stdout.flush()    
+
+            #if verbosity > 0: 
+            #    print " ?",; _sys.stdout.flush()        
+            #fig = self.getFigure("directLGSTColorBoxPlot",verbosity)
+            #fig.saveTo(_os.path.join(report_dir, D,"directLGST%sBoxes.pdf" % plotFnName))
+
             if verbosity > 0: 
-                print "(4):"; _sys.stdout.flush()
-        
-            directPlotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, directLGST, strs,
-                          "L", "germ", M=M, m=m, scale=1.0, sumUp=False, title="", minProbClipForWeighting=mpc,
-                          rhoEPairs=self.rhoEPairs, saveTo=_os.path.join(report_dir, D,"directLGST%sBoxes.pdf" % plotFnName), ticSize=20)
-            if verbosity > 0: 
-                print " 1",; _sys.stdout.flush()
-        
-            directPlotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, directLongSeqGST, strs,
-                          "L", "germ", M=M, m=m, scale=1.0, sumUp=False, title="",minProbClipForWeighting=mpc,
-                          rhoEPairs=self.rhoEPairs, saveTo=_os.path.join(report_dir, D,"directLongSeqGST%sBoxes.pdf" % plotFnName), ticSize=20)
+                print " 1",; _sys.stdout.flush()        
+            fig = self.getFigure("directLongSeqGSTColorBoxPlot",verbosity)
+            fig.saveTo(_os.path.join(report_dir, D,"directLongSeqGST%sBoxes.pdf" % plotFnName))
+
+            #if verbosity > 0: 
+            #    print " ?",; _sys.stdout.flush()        
+            #fig = self.getFigure("directLGSTDeviationColorBoxPlot",verbosity)
+            #fig.saveTo(_os.path.join(report_dir, D,"directLGSTDeviationBoxes.pdf"))
+
             if verbosity > 0: 
                 print " 2",; _sys.stdout.flush()
-        
-            _AT.DirectDeviationBoxPlot( self.Ls[st:], self.germs, baseStr_dict, self.dataset, best_gs, directLGST, 
-                                        "L", "germ", m=0, scale=1.0, prec=-1, title="",
-                                        saveTo=_os.path.join(report_dir, D,"directLGSTDeviationBoxes.pdf"), ticSize=20)
+            fig = self.getFigure("directLongSeqGSTDeviationColorBoxPlot",verbosity)
+            fig.saveTo(_os.path.join(report_dir, D,"directLongSeqGSTDeviationBoxes.pdf"))
+
             if verbosity > 0: 
-                print " 3",; _sys.stdout.flush()
-        
-            _AT.DirectDeviationBoxPlot( self.Ls[st:], self.germs, baseStr_dict, self.dataset, best_gs, directLongSeqGST,
-                                        "L", "germ", m=0, scale=1.0, prec=-1, title="",
-                                        saveTo=_os.path.join(report_dir, D,"directLongSeqGSTDeviationBoxes.pdf"), ticSize=20)
-            if verbosity > 0: 
-                print " 4"; _sys.stdout.flush()
-    
-    
+                print ""; _sys.stdout.flush()
+
+
             #Small eigenvalue error rate
             if verbosity > 0: 
                 print " -- Error rate plots..."; _sys.stdout.flush()
-            _AT.SmallEigvalErrRateBoxPlot( self.Ls[st:], self.germs, baseStr_dict, self.dataset, directLongSeqGST,
-                                           "L", "germ", m=0, scale=1.0, title="",
-                                           saveTo=_os.path.join(report_dir, D,"smallEigvalErrRateBoxes.pdf"), ticSize=20)
+            fig = self.getFigure("smallEigvalErrRateColorBoxPlot",verbosity)
+            fig.saveTo(_os.path.join(report_dir, D,"smallEigvalErrRateBoxes.pdf"))
     
 
         whackamoleplots = ""
@@ -927,12 +1045,11 @@ class Results(object):
                 print " -- Whack-a-mole plots (%d): " % (2*len(len1Germs)),; _sys.stdout.flush()
 
             for i,germ in enumerate(len1Germs):
-                whackAMolePlotFn( germ*highestL, allGateStrings, self.Ls[st:], self.germs, baseStr_dict, self.dataset,
-                                  best_gs, strs, "L", "germ", scale=1.0, sumUp=False, title="", whackWith=hammerWeight,
-                                  saveTo=_os.path.join(report_dir, D,"whack%sMoleBoxes.pdf" % germ[0]), 
-                                  minProbClipForWeighting=mpc, ticSize=20, rhoEPairs=self.rhoEPairs)
                 if verbosity > 0: 
                     print "%d " % (i+1),; _sys.stdout.flush()
+
+                fig = self.getFigure("whack%sMoleBoxes" % germ[0],verbosity)
+                fig.saveTo(_os.path.join(report_dir, D,"whack%sMoleBoxes.pdf" % germ[0]))
         
                 whackamoleplots += "\n"
                 whackamoleplots += "\\begin{figure}\n"
@@ -944,12 +1061,11 @@ class Results(object):
                 whackamoleplots += "\\end{figure}\n"
         
             for i,germ in enumerate(len1Germs):
-                whackAMolePlotFn( germ*highestL, allGateStrings, self.Ls[st:], self.germs, baseStr_dict, self.dataset,
-                                  best_gs, strs, "L", "germ", scale=1.0, sumUp=True, title="", whackWith=hammerWeight,
-                                  saveTo=_os.path.join(report_dir, D,"whack%sMoleBoxesSummed.pdf" % germ[0]), 
-                                  minProbClipForWeighting=mpc, ticSize=20, rhoEPairs=self.rhoEPairs)
                 if verbosity > 0: 
                     print "%d " % (len(len1Germs)+i+1),; _sys.stdout.flush()
+
+                fig = self.getFigure("whack%sMoleBoxesSummed" % germ[0], verbosity)
+                fig.saveTo(_os.path.join(report_dir, D,"whack%sMoleBoxesSummed.pdf" % germ[0]))
     
                 whackamoleplots += "\n"
                 whackamoleplots += "\\begin{figure}\n"
@@ -1187,24 +1303,21 @@ class Results(object):
         #    #Chi2 or logL plot
         #    nPlots = 1
         #    if self.objective == "chi2":
-        #        plotFn = _AT.ChiSqBoxPlot
         #        plotFnName,plotFnLatex = "Chi2", "$\chi^2$"
-        #        mpc = self.additionalInfo['minProbClipForWeighting']
         #    elif self.objective == "logL":
-        #        plotFn = _AT.LogLBoxPlot
         #        plotFnName,plotFnLatex = "LogL", "$\\log(\\mathcal{L})$"
-        #        mpc = self.additionalInfo['minProbClip']
         #    else: 
         #        raise ValueError("Invalid objective value: %s" % self.objective)
         #
         #    if verbosity > 0: 
         #        print " -- %s plots (%d): " % (plotFnName, nPlots),; _sys.stdout.flush()
-        #        maxX,maxY = plotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, best_gs, strs,
-        #                            "L", "germ", M=M, m=m, scale=1.0, sumUp=False, histogram=False, title="", rhoEPairs=self.rhoEPairs, boxLabels=False,
-        #                            minProbClipForWeighting=mpc, saveTo=_os.path.join(report_dir, D,"best%sBoxes.pdf" % plotFnName), ticSize=20)
-        #        maxW,maxH = 6.5,9.0 #max width and height of graphic in latex document (in inches)
-        #        if verbosity > 0: 
-        #            print "1 ",; _sys.stdout.flush()
+        #
+        #    if verbosity > 0: 
+        #        print "1 ",; _sys.stdout.flush()
+        #    fig = self.getFigure("bestEstimateColorBoxPlot",verbosity)
+        #    fig.saveTo(_os.path.join(report_dir, D,"best%sBoxes.pdf" % plotFnName))
+        #    maxX = fig.getExtraInfo()['nUsedXs']; maxY = fig.getExtraInfo()['nUsedYs']
+        #    maxW,maxH = 6.5,9.0 #max width and height of graphic in latex document (in inches)
         #
         #    if verbosity > 0: 
         #        print ""; _sys.stdout.flush()    
@@ -1425,57 +1538,36 @@ class Results(object):
 
             st = 1 if self.Ls[0] == 0 else 0 #start index: skips LGST column in report color box plots        
             nPlots = (len(self.Ls[st:])-1)+1 if pixelPlotAppendix else 1
+
             if self.objective == "chi2":
-                plotFn = _AT.ChiSqBoxPlot
-                directPlotFn = _AT.DirectChiSqBoxPlot
-                whackAMolePlotFn = _AT.WhackAChiSqMoleBoxPlot
                 plotFnName,plotFnLatex = "Chi2", "$\chi^2$"
-                mpc = self.additionalInfo['minProbClipForWeighting']
             elif self.objective == "logL":
-                plotFn = _AT.LogLBoxPlot
-                directPlotFn = _AT.DirectLogLBoxPlot
-                whackAMolePlotFn = _AT.WhackALogLMoleBoxPlot
                 plotFnName,plotFnLatex = "LogL", "$\\log(\\mathcal{L})$"
-                mpc = self.additionalInfo['minProbClip']
             else: 
                 raise ValueError("Invalid objective value: %s" % self.objective)
             
             if verbosity > 0: 
                 print " -- %s plots (%d): " % (plotFnName, nPlots),; _sys.stdout.flush()
-            maxX,maxY = plotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, best_gs, strs,
-                                "L", "germ", M=M, m=m, scale=1.0, sumUp=False, histogram=False, title="", rhoEPairs=self.rhoEPairs,
-                                minProbClipForWeighting=mpc, saveTo=_os.path.join(report_dir, D,"best%sBoxes.pdf" % plotFnName), ticSize=20)
+
             if verbosity > 0: 
                 print "1 ",; _sys.stdout.flush()
-    
-            #UNUSED
-            ## scale min/max of summed up plots by this to make color scale consistent w/non-summed
-            #sumScale = len(rhoStrs)*len(EStrs) if rhoEPairs is None else len(rhoEPairs)
-            #plotFn( Ls, germs, baseStr_dict, dataset, best_gs, strs,
-            #        "L", "germ", M=M*sumScale, m=m*sumScale, scale=1.0, sumUp=True, histogram=False, title="", rhoEPairs=rhoEPairs,
-            #        minProbClipForWeighting=1e-4, saveTo=_os.path.join(report_dir, D,"best%sBoxes_summed.pdf" % plotFnName), ticSize=14)    
-            #
-            #if verbosity > 0: 
-            #    print "2 ",; _sys.stdout.flush()
+            fig = self.getFigure("bestEstimateColorBoxPlot",verbosity)
+            fig.saveTo(_os.path.join(report_dir, D,"best%sBoxes.pdf" % plotFnName))
+            maxX = fig.getExtraInfo()['nUsedXs']; maxY = fig.getExtraInfo()['nUsedYs']
         
-            #plotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, best_gs, strs,
-            #        "L", "germ", M=M, m=m, scale=1.0, sumUp=False, histogram=True, title="", rhoEPairs=self.rhoEPairs,
-            #        saveTo=_os.path.join(report_dir, D,"best%sBoxes_inverted.pdf" % plotFnName), ticSize=20,
-            #        minProbClipForWeighting=mpc, invert=True)
-            #if verbosity > 0: 
-            #    print "2 ",; _sys.stdout.flush()
-    
         pixplots = ""
         if pixelPlotAppendix:
             for i in range(st,len(self.Ls)-1):
-                lx,ly = plotFn( self.Ls[st:i+1], self.germs, baseStr_dict, self.dataset, self.gatesets[i],
-                                strs, "L", "germ", M=M, m=m, scale=1.0, sumUp=False, histogram=False, title="",
-                                rhoEPairs=self.rhoEPairs, saveTo=_os.path.join(report_dir, D,"L%d_%sBoxes.pdf" % (i,plotFnName)), 
-                                minProbClipForWeighting=mpc, ticSize=20 )
+
+                if verbosity > 0: 
+                    print "%d " % (i-st+2),; _sys.stdout.flush()
+
+                fig = self.getFigure("estimateForLIndex%dColorBoxPlot" % i, verbosity)
+                fig.saveTo( _os.path.join(report_dir, D,"L%d_%sBoxes.pdf" % (i,plotFnName)) )
+                lx = fig.getExtraInfo()['nUsedXs']; ly = fig.getExtraInfo()['nUsedYs']
+
                 W = float(lx+1)/float(maxX+1) * maxW #scale figure size according to number of rows 
                 H = float(ly)  /float(maxY)   * maxH # and columns+1 (+1 for labels ~ another col) relative to initial plot
-                if verbosity > 0: 
-                    print "%d " % (i+4),; _sys.stdout.flush()
             
                 pixplots += "\n"
                 pixplots += "\\begin{frame}\n"
@@ -1494,34 +1586,28 @@ class Results(object):
         if debugAidsAppendix:
             #Direct-GST and deviation
             if verbosity > 0: 
-                print " -- Direct-X plots ",; _sys.stdout.flush()
-    
-            #directLGST  = self.getSpecial('DirectLGSTGatesets')
-            directLongSeqGST = self.getSpecial('DirectLongSeqGatesets')
-        
+                print " -- Direct-X plots (2)",; _sys.stdout.flush()
+
             if verbosity > 0: 
-                print "(2):"; _sys.stdout.flush()
-                
-            directPlotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, directLongSeqGST, strs,
-                          "L", "germ", M=M, m=m, scale=1.0, sumUp=False, title="",minProbClipForWeighting=mpc,
-                          rhoEPairs=self.rhoEPairs, saveTo=_os.path.join(report_dir, D,"directLongSeqGST%sBoxes.pdf" % plotFnName), ticSize=20)
+                print " 1",; _sys.stdout.flush()        
+            fig = self.getFigure("directLongSeqGSTColorBoxPlot",verbosity)
+            fig.saveTo(_os.path.join(report_dir, D,"directLongSeqGST%sBoxes.pdf" % plotFnName))
+
             if verbosity > 0: 
-                print " 1",; _sys.stdout.flush()
-                
-            _AT.DirectDeviationBoxPlot( self.Ls[st:], self.germs, baseStr_dict, self.dataset, best_gs, directLongSeqGST,
-                                        "L", "germ", m=0, scale=1.0, prec=-1, title="",
-                                        saveTo=_os.path.join(report_dir, D,"directLongSeqGSTDeviationBoxes.pdf"), ticSize=20)
+                print " 2",; _sys.stdout.flush()
+            fig = self.getFigure("directLongSeqGSTDeviationColorBoxPlot",verbosity)
+            fig.saveTo(_os.path.join(report_dir, D,"directLongSeqGSTDeviationBoxes.pdf"))
+
             if verbosity > 0: 
-                print " 2"; _sys.stdout.flush()
-    
+                print ""; _sys.stdout.flush()
+
     
             #Small eigenvalue error rate
             if verbosity > 0: 
                 print " -- Error rate plots..."; _sys.stdout.flush()
-            _AT.SmallEigvalErrRateBoxPlot( self.Ls[st:], self.germs, baseStr_dict, self.dataset, directLongSeqGST,
-                                           "L", "germ", m=0, scale=1.0, title="",
-                                           saveTo=_os.path.join(report_dir, D,"smallEigvalErrRateBoxes.pdf"), ticSize=20)
-    
+            fig = self.getFigure("smallEigvalErrRateColorBoxPlot",verbosity)
+            fig.saveTo(_os.path.join(report_dir, D,"smallEigvalErrRateBoxes.pdf"))
+
 
         whackamoleplots = ""
         if whackamoleAppendix:    
@@ -1533,12 +1619,11 @@ class Results(object):
                 print " -- Whack-a-mole plots (%d): " % (2*len(len1Germs)),; _sys.stdout.flush()
 
             for i,germ in enumerate(len1Germs):
-                whackAMolePlotFn( germ*highestL, allGateStrings, self.Ls[st:], self.germs, baseStr_dict, self.dataset,
-                                  best_gs, strs, "L", "germ", scale=1.0, m=0, sumUp=False, title="", whackWith=hammerWeight,
-                                  saveTo=_os.path.join(report_dir, D,"whack%sMoleBoxes.pdf" % germ[0]), 
-                                  minProbClipForWeighting=mpc, ticSize=20, rhoEPairs=self.rhoEPairs)
                 if verbosity > 0: 
                     print "%d " % (i+1),; _sys.stdout.flush()
+
+                fig = self.getFigure("whack%sMoleBoxes" % germ[0],verbosity)
+                fig.saveTo(_os.path.join(report_dir, D,"whack%sMoleBoxes.pdf" % germ[0]))
         
                 whackamoleplots += "\n"
                 whackamoleplots += "\\begin{frame}\n"
@@ -1552,13 +1637,12 @@ class Results(object):
                 whackamoleplots += "\\end{frame}\n"
         
             for i,germ in enumerate(len1Germs):
-                whackAMolePlotFn( germ*highestL, allGateStrings, self.Ls[st:], self.germs, baseStr_dict, self.dataset,
-                                  best_gs, strs, "L", "germ", scale=1.0, m=0, sumUp=True, title="", whackWith=hammerWeight,
-                                  saveTo=_os.path.join(report_dir, D,"whack%sMoleBoxesSummed.pdf" % germ[0]), 
-                                  minProbClipForWeighting=mpc, ticSize=20, rhoEPairs=self.rhoEPairs)
                 if verbosity > 0: 
                     print "%d " % (len(len1Germs)+i+1),; _sys.stdout.flush()
     
+                fig = self.getFigure("whack%sMoleBoxesSummed" % germ[0], verbosity)
+                fig.saveTo(_os.path.join(report_dir, D,"whack%sMoleBoxesSummed.pdf" % germ[0]))
+
                 whackamoleplots += "\n"
                 whackamoleplots += "\\begin{frame}\n"
                 whackamoleplots += "\\frametitle{Summed whack-a-%s-mole plot for $\mathrm{%s}^{%d}$}" % (plotFnLatex,germ[0],highestL)
@@ -1819,40 +1903,36 @@ class Results(object):
 
             st = 1 if self.Ls[0] == 0 else 0 #start index: skips LGST column in report color box plots        
             nPlots = (len(self.Ls[st:])-1)+1 if pixelPlotAppendix else 1
+
             if self.objective == "chi2":
-                plotFn = _AT.ChiSqBoxPlot
-                directPlotFn = _AT.DirectChiSqBoxPlot
-                whackAMolePlotFn = _AT.WhackAChiSqMoleBoxPlot
                 plotFnName,plotFnLatex = "Chi2", "$\chi^2$"
-                mpc = self.additionalInfo['minProbClipForWeighting']
             elif self.objective == "logL":
-                plotFn = _AT.LogLBoxPlot
-                directPlotFn = _AT.DirectLogLBoxPlot
-                whackAMolePlotFn = _AT.WhackALogLMoleBoxPlot
                 plotFnName,plotFnLatex = "LogL", "$\\log(\\mathcal{L})$"
-                mpc = self.additionalInfo['minProbClip']
             else: 
                 raise ValueError("Invalid objective value: %s" % self.objective)
             
             if verbosity > 0: 
                 print " -- %s plots (%d): " % (plotFnName, nPlots),; _sys.stdout.flush()
-            maxX,maxY = plotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, best_gs, strs,
-                                "L", "germ", M=M, m=m, scale=1.0, sumUp=False, histogram=False, title="", rhoEPairs=self.rhoEPairs,
-                                minProbClipForWeighting=mpc, saveTo=_os.path.join(report_dir, D,"best%sBoxes.png" % plotFnName), ticSize=20)
+
             if verbosity > 0: 
                 print "1 ",; _sys.stdout.flush()
-        
+            fig = self.getFigure("bestEstimateColorBoxPlot",verbosity)
+            fig.saveTo(_os.path.join(report_dir, D,"best%sBoxes.png" % plotFnName))
+            maxX = fig.getExtraInfo()['nUsedXs']; maxY = fig.getExtraInfo()['nUsedYs']
+
         pixplots = []
         if pixelPlotAppendix:
             for i in range(st,len(self.Ls)-1):
-                lx,ly = plotFn( self.Ls[st:i+1], self.germs, baseStr_dict, self.dataset, self.gatesets[i],
-                                strs, "L", "germ", M=M, m=m, scale=1.0, sumUp=False, histogram=False, title="",
-                                rhoEPairs=self.rhoEPairs, saveTo=_os.path.join(report_dir, D,"L%d_%sBoxes.png" % (i,plotFnName)), 
-                                minProbClipForWeighting=mpc, ticSize=20 )
+
+                if verbosity > 0: 
+                    print "%d " % (i-st+2),; _sys.stdout.flush()
+
+                fig = self.getFigure("estimateForLIndex%dColorBoxPlot" % i, verbosity)
+                fig.saveTo( _os.path.join(report_dir, D,"L%d_%sBoxes.png" % (i,plotFnName)) )
+                lx = fig.getExtraInfo()['nUsedXs']; ly = fig.getExtraInfo()['nUsedYs']
+
                 W = float(lx+1)/float(maxX+1) * maxW #scale figure size according to number of rows 
                 H = float(ly)  /float(maxY)   * maxH # and columns+1 (+1 for labels ~ another col) relative to initial plot
-                if verbosity > 0: 
-                    print "%d " % (i+4),; _sys.stdout.flush()
             
                 pixplots.append( _os.path.join(report_dir, D,"L%d_%sBoxes.png" % (i,plotFnName)) )
     
@@ -1862,35 +1942,28 @@ class Results(object):
         if debugAidsAppendix:
             #Direct-GST and deviation
             if verbosity > 0: 
-                print " -- Direct-X plots ",; _sys.stdout.flush()
-    
-            #directLGST  = self.getSpecial('DirectLGSTGatesets')
-            directLongSeqGST = self.getSpecial('DirectLongSeqGatesets')
-        
+                print " -- Direct-X plots (2)",; _sys.stdout.flush()
+
             if verbosity > 0: 
-                print "(2):"; _sys.stdout.flush()
-                
-            directPlotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, directLongSeqGST, strs,
-                          "L", "germ", M=M, m=m, scale=1.0, sumUp=False, title="",minProbClipForWeighting=mpc,
-                          rhoEPairs=self.rhoEPairs, saveTo=_os.path.join(report_dir, D,"directLongSeqGST%sBoxes.png" % plotFnName), ticSize=20)
+                print " 1",; _sys.stdout.flush()        
+            fig = self.getFigure("directLongSeqGSTColorBoxPlot",verbosity)
+            fig.saveTo(_os.path.join(report_dir, D,"directLongSeqGST%sBoxes.png" % plotFnName))
+
             if verbosity > 0: 
-                print " 1",; _sys.stdout.flush()
-                
-            _AT.DirectDeviationBoxPlot( self.Ls[st:], self.germs, baseStr_dict, self.dataset, best_gs, directLongSeqGST,
-                                        "L", "germ", m=0, scale=1.0, prec=-1, title="",
-                                        saveTo=_os.path.join(report_dir, D,"directLongSeqGSTDeviationBoxes.png"), ticSize=20)
+                print " 2",; _sys.stdout.flush()
+            fig = self.getFigure("directLongSeqGSTDeviationColorBoxPlot",verbosity)
+            fig.saveTo(_os.path.join(report_dir, D,"directLongSeqGSTDeviationBoxes.png"))
+
             if verbosity > 0: 
-                print " 2"; _sys.stdout.flush()
-    
+                print ""; _sys.stdout.flush()
     
             #Small eigenvalue error rate
             if verbosity > 0: 
                 print " -- Error rate plots..."; _sys.stdout.flush()
-            _AT.SmallEigvalErrRateBoxPlot( self.Ls[st:], self.germs, baseStr_dict, self.dataset, directLongSeqGST,
-                                           "L", "germ", m=0, scale=1.0, title="",
-                                           saveTo=_os.path.join(report_dir, D,"smallEigvalErrRateBoxes.png"), ticSize=20)
+            fig = self.getFigure("smallEigvalErrRateColorBoxPlot",verbosity)
+            fig.saveTo(_os.path.join(report_dir, D,"smallEigvalErrRateBoxes.png"))
+                
     
-
         whackamoleplots = []
         if whackamoleAppendix:    
             #Whack-a-mole plots for highest L of each length-1 germ
@@ -1901,23 +1974,19 @@ class Results(object):
                 print " -- Whack-a-mole plots (%d): " % (2*len(len1Germs)),; _sys.stdout.flush()
 
             for i,germ in enumerate(len1Germs):
-                whackAMolePlotFn( germ*highestL, allGateStrings, self.Ls[st:], self.germs, baseStr_dict, self.dataset,
-                                  best_gs, strs, "L", "germ", scale=1.0, m=0, sumUp=False, title="", whackWith=hammerWeight,
-                                  saveTo=_os.path.join(report_dir, D,"whack%sMoleBoxes.png" % germ[0]), 
-                                  minProbClipForWeighting=mpc, ticSize=20, rhoEPairs=self.rhoEPairs)
                 if verbosity > 0: 
                     print "%d " % (i+1),; _sys.stdout.flush()
 
+                fig = self.getFigure("whack%sMoleBoxes" % germ[0],verbosity)
+                fig.saveTo(_os.path.join(report_dir, D,"whack%sMoleBoxes.png" % germ[0]))
                 whackamoleplots.append( _os.path.join(report_dir, D,"whack%sMoleBoxes.png" % germ[0]) )
         
             for i,germ in enumerate(len1Germs):
-                whackAMolePlotFn( germ*highestL, allGateStrings, self.Ls[st:], self.germs, baseStr_dict, self.dataset,
-                                  best_gs, strs, "L", "germ", scale=1.0, m=0, sumUp=True, title="", whackWith=hammerWeight,
-                                  saveTo=_os.path.join(report_dir, D,"whack%sMoleBoxesSummed.png" % germ[0]), 
-                                  minProbClipForWeighting=mpc, ticSize=20, rhoEPairs=self.rhoEPairs)
                 if verbosity > 0: 
                     print "%d " % (len(len1Germs)+i+1),; _sys.stdout.flush()
 
+                fig = self.getFigure("whack%sMoleBoxesSummed" % germ[0],verbosity)
+                fig.saveTo(_os.path.join(report_dir, D,"whack%sMoleBoxesSummed.png" % germ[0]))
                 whackamoleplots.append( _os.path.join(report_dir, D,"whack%sMoleBoxesSummed.png" % germ[0]) )
     
             if verbosity > 0: 
