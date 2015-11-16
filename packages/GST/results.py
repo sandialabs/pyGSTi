@@ -720,11 +720,11 @@ class Results(object):
                         baseStrs.append( self.L_germ_tuple_to_baseStr_dict[(L,germ)] )
 
             if self.objective == "chi2":
-                return _AT.DirectLSGSTGatesets(baseStrs, self.dataset, direct_specs, self.gsTarget, svdTruncateTo=4, 
+                return _AT.DirectLSGSTGatesets(baseStrs, self.dataset, direct_specs, self.gsTarget, svdTruncateTo=self.gsTarget.get_dimension(), 
                                                minProbClipForWeighting=self.additionalInfo['minProbClipForWeighting'],
                                                probClipInterval=self.additionalInfo['probClipInterval'], verbosity=0)
             elif self.objective == "logL":
-                return _AT.DirectMLEGSTGatesets(baseStrs, self.dataset, direct_specs, self.gsTarget, svdTruncateTo=4,
+                return _AT.DirectMLEGSTGatesets(baseStrs, self.dataset, direct_specs, self.gsTarget, svdTruncateTo=self.gsTarget.get_dimension(),
                                                   minProbClip=self.additionalInfo['minProbClip'],
                                                   probClipInterval=self.additionalInfo['probClipInterval'], verbosity=0)
             else:
@@ -1226,7 +1226,7 @@ class Results(object):
 
         if datasetLabel == "auto":
             if default_base is not None:
-                datasetLabel = _GST.LatexUtil.latex_escaped( default_base )
+                datasetLabel = _LU.latex_escaped( default_base )
             else:
                 datasetLabel = "$\\mathcal{D}$"
 
@@ -1454,7 +1454,7 @@ class Results(object):
 
         if datasetLabel == "auto":
             if default_base is not None:
-                datasetLabel = _GST.LatexUtil.latex_escaped( default_base )
+                datasetLabel = _LU.latex_escaped( default_base )
             else:
                 datasetLabel = "$\\mathcal{D}$"
 
@@ -1665,8 +1665,8 @@ class Results(object):
             qtys['directLongSeqGSTBoxPlot'] = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/directLongSeqGSTChi2Boxes.pdf}" % (maxW,maxHc,D)
     
         elif self.objective == "logL":
-            qtys['bestGatesetLogLBoxPlot']      = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/bestLogLBoxes.pdf}" % (maxW,maxH,D)
-            qtys['directLongSeqGSTLogLBoxPlot'] = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/directLongSeqGSTLogLBoxes.pdf}" % (maxW,maxHc,D)
+            qtys['bestGatesetBoxPlot']      = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/bestLogLBoxes.pdf}" % (maxW,maxH,D)
+            qtys['directLongSeqGSTBoxPlot'] = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/directLongSeqGSTLogLBoxes.pdf}" % (maxW,maxHc,D)
         else: 
             raise ValueError("Invalid objective value: %s" % self.objective)
     
@@ -2001,7 +2001,7 @@ class Results(object):
             qtys['directLongSeqGSTBoxPlot'] = "%s/directLongSeqGSTChi2Boxes.png" % fileDir
     
         elif self.objective == "logL":
-            qtys['bestGatesetBoxPlot']      = "%s/bestLogLBoxes.pdf" % fileDir
+            qtys['bestGatesetBoxPlot']      = "%s/bestLogLBoxes.png" % fileDir
             qtys['directLongSeqGSTBoxPlot'] = "%s/directLongSeqGSTLogLBoxes.png" % fileDir
         else: 
             raise ValueError("Invalid objective value: %s" % self.objective)

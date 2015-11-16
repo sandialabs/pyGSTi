@@ -18,7 +18,12 @@ class GSTFigure(object):
 
     def saveTo(self, filename):
         if filename is not None and len(filename) > 0:
-            axes = _pickle.loads(self.pickledAxes) #this creates a new (current) figure in matplotlib
+            try:
+                axes = _pickle.loads(self.pickledAxes) #this creates a new (current) figure in matplotlib
+            except:
+                raise ValueError("GSTFigure unpickling error!  This could be caused by using matplotlib or pylab" +
+                                 " magic functions ('%pylab inline' or '%matplotlib inline') within an iPython" +
+                                 " notebook, so if you used either of these please remove it and all should be well.")
             _plt.savefig(filename, bbox_extra_artists=(axes,), bbox_inches='tight') #need extra artists otherwise axis labels get clipped
             _plt.close(_plt.gcf()) # gcf == "get current figure"; closes the figure created by unpickling
 
@@ -27,6 +32,11 @@ class GSTFigure(object):
 
     def getExtraInfo(self):
         return self.extraInfo
+    
+    def check(self):
+        axes = _pickle.loads(self.pickledAxes) #this creates a new (current) figure in matplotlib
+        _plt.close(_plt.gcf()) # gcf == "get current figure"; closes the figure created by unpickling
+        
 
 def ChiSqFunc_2outcome( N, p, f, minProbClipForWeighting=1e-4 ):
     """ 
@@ -266,11 +276,20 @@ def TotalCountMatrix( gateString, dataset, strs, rhoEPairs=None):
     """
     rhoStrs, EStrs = strs # LEXICOGRAPHICAL VS MATRIX ORDER
     if rhoEPairs is None:
-        return _np.array( [ [ dataset[ rhoStr + gateString + EStr].total() for rhoStr in rhoStrs ] for EStr in EStrs ] )
+        mxlst = []
+        for EStr in EStrs:
+            rowLst = []
+            for rhoStr in rhoStrs:
+                gstr = rhoStr + gateString + EStr
+                if gstr in dataset: rowLst.append( dataset[gstr].total() )
+                else: rowLst.append( _np.nan )
+            mxlst.append(rowLst)
+        return _np.array( mxlst )
     else:
         ret = _np.nan * _np.ones( (len(EStrs),len(rhoStrs)), 'd')
         for i,j in rhoEPairs:
-            ret[j,i] = dataset[ rhoStrs[i] + gateString + EStrs[j] ].total()
+            gstr = rhoStrs[i] + gateString + EStrs[j]
+            if gstr in dataset: ret[j,i] = dataset[ gstr ].total()
         return ret
 
 
@@ -304,11 +323,20 @@ def CountMatrix( gateString, dataset, spamlabel, strs, rhoEPairs=None ):
     """
     rhoStrs, EStrs = strs # LEXICOGRAPHICAL VS MATRIX ORDER
     if rhoEPairs is None:
-        return _np.array( [ [ dataset[ rhoStr + gateString + EStr ][spamlabel] for rhoStr in rhoStrs ] for EStr in EStrs ] )
+        mxlst = []
+        for EStr in EStrs:
+            rowLst = []
+            for rhoStr in rhoStrs:
+                gstr = rhoStr + gateString + EStr
+                if gstr in dataset: rowLst.append( dataset[gstr][spamlabel] )
+                else: rowLst.append( _np.nan )
+            mxlst.append(rowLst)
+        return _np.array( mxlst )
     else:
         ret = _np.nan * _np.ones( (len(EStrs),len(rhoStrs)), 'd')
         for i,j in rhoEPairs:
-            ret[j,i] = dataset[ rhoStrs[i] + gateString + EStrs[j] ][spamlabel]
+            gstr = rhoStrs[i] + gateString + EStrs[j]
+            if gstr in dataset: ret[j,i] = dataset[ gstr ][spamlabel]
         return ret
 
 
@@ -1189,6 +1217,7 @@ def generateBoxPlot( xvals, yvals, xyGateStringDict, subMxCreationFn, xlabel="",
 
     gstFig.setExtraInfo( { 'nUsedXs': len(used_xvals),
                            'nUsedYs': len(used_yvals) } )                     
+    # gstFig.check() #DEBUG - test that figure can unpickle correctly -- if not, probably used magic matplotlib (don't do that)
     return gstFig
 
 
@@ -3266,4 +3295,6 @@ def WhackALogLMoleBoxPlot( gatestringToWhack, allGatestringsUsedInLogLOpt,
 
 def _makeHistFilename(mainFilename):
     #Insert "_hist" before extension, e.g. /one/two.txt ==> /one/two_hist.txt
-    return "_hist".join(_os.path.splitext(mainFilename))    
+    if len(mainFilename) > 0:
+        return "_hist".join(_os.path.splitext(mainFilename))    
+    else: return "" #keep empty string empty, as this signals not actually saving any files

@@ -53,7 +53,9 @@ def _fmtPi_latex(x):
     else: return _LU.latex(x) + "$\\pi$"
 def _fmtPi_py(x):
     if x == "" or x == "--": return ""
-    else: return x * _np.pi
+    else: 
+        try: return x * _np.pi #but sometimes can't take product b/c x isn't a number
+        except: return None
 def _fmtPi_ppt(x):
     if x == "" or x == "--": return ""
     else: return _PU.ppt(x) + "pi"

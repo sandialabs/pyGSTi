@@ -33,7 +33,7 @@ def getBlankTable(formats):
     return tables
     
 
-def getGatesetSPAMTable(gateset, formats, tableclass, longtable, confidenceRegionInfo=None):
+def getGatesetSPAMTable(gateset, formats, tableclass, longtable, confidenceRegionInfo=None, basis="gm"):
     """ 
     Create an HTML table for gateset's SPAM vectors.
     
@@ -48,6 +48,10 @@ def getGatesetSPAMTable(gateset, formats, tableclass, longtable, confidenceRegio
     confidenceRegionInfo : ConfidenceRegion, optional
         If not None, specifies a confidence-region
         used to display error intervals.
+
+    basis : {'gm','pp'}
+        Which basis the gateset is represented in.  Allowed
+        options are Gell-Mann (gm) and Pauli-product (pp).
 
     Returns
     -------
@@ -69,25 +73,28 @@ def getGatesetSPAMTable(gateset, formats, tableclass, longtable, confidenceRegio
     _F.CreateTable(formats, tables, colHeadings, formatters, tableclass, longtable)
 
     for i,rhoVec in enumerate(gateset.rhoVecs):
+        if basis == "pp":   rhoMx = _BT.pauliProdVectorToMatrixInStdBasis(rhoVec)
+        elif basis == "gm": rhoMx = _BT.gellMannVectorToMatrixInStdBasis(rhoVec)
+        else: raise ValueError("Invalid basis specifier: %s" % basis)
+
         if confidenceRegionInfo is None:
-            _F.AddTableRow(formats, tables, (i, rhoVec, _BT.pauliProdVectorToMatrixInStdBasis(rhoVec)),
-                        (_F.Rho,_F.Nml,_F.Brk))
+            _F.AddTableRow(formats, tables, (i, rhoVec, rhoMx), (_F.Rho,_F.Nml,_F.Brk))
         else:
             intervalVec = confidenceRegionInfo.getProfileLikelihoodConfidenceIntervals("rho%d" % i)[:,None]
             if intervalVec.shape[0] == gateset.get_dimension()-1: #TP constrained, so pad with zero top row
                 intervalVec = _np.concatenate( (_np.zeros((1,1),'d'),intervalVec), axis=0 )
-
-            _F.AddTableRow(formats, tables, (i, rhoVec, intervalVec, _BT.pauliProdVectorToMatrixInStdBasis(rhoVec)),
-                        (_F.Rho,_F.Nml,_F.Nml,_F.Brk))
+            _F.AddTableRow(formats, tables, (i, rhoVec, intervalVec, rhoMx), (_F.Rho,_F.Nml,_F.Nml,_F.Brk))
 
     for i,EVec in enumerate(gateset.EVecs):
+        if basis == "pp":   EMx = _BT.pauliProdVectorToMatrixInStdBasis(EVec)
+        elif basis == "gm": EMx = _BT.gellMannVectorToMatrixInStdBasis(EVec)
+        else: raise ValueError("Invalid basis specifier: %s" % basis)
+
         if confidenceRegionInfo is None:
-            _F.AddTableRow(formats, tables, (i, EVec, _BT.pauliProdVectorToMatrixInStdBasis(EVec)),
-                        (_F.E,_F.Nml,_F.Brk))
+            _F.AddTableRow(formats, tables, (i, EVec, EMx), (_F.E,_F.Nml,_F.Brk))
         else:
             intervalVec = confidenceRegionInfo.getProfileLikelihoodConfidenceIntervals("E%d" % i)[:,None]
-            _F.AddTableRow(formats, tables, (i, EVec, intervalVec, _BT.pauliProdVectorToMatrixInStdBasis(EVec)),
-                        (_F.Rho,_F.Nml,_F.Nml,_F.Brk))
+            _F.AddTableRow(formats, tables, (i, EVec, intervalVec, EMx), (_F.Rho,_F.Nml,_F.Nml,_F.Brk))
             
     _F.FinishTable(formats, tables, longtable)
     return tables
@@ -410,6 +417,12 @@ def getGatesetClosestUnitaryTable(gateset, formats, tableclass, longtable, confi
     colHeadings = ('Gate','Process|Infidelity','1/2 Trace|Distance','Rotation|Axis','Rotation|Angle','Sanity Check')
     formatters = (None,_F.TxtCnv,_F.TxtCnv,_F.TxtCnv,_F.TxtCnv,_F.TxtCnv)
 
+    if gateset.get_dimension() != 4:
+        tables = {}
+        _F.CreateTable(formats, tables, colHeadings, formatters, tableclass, longtable)
+        _F.FinishTable(formats, tables, longtable)
+        return tables
+
     qtyNames = ('max fidelity with unitary', 'max trace dist with unitary',
                 'closest unitary decomposition', 'upper bound on fidelity with unitary')
     qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames for gl in gateLabels ]
@@ -719,7 +732,7 @@ def getLogLProgressTable(Ls, gatesetsByL, gateStringsByL, dataset, TPconstrained
         logL = _LF.logL( gs, dataset, gstrs )
         if(logL_upperbound < logL):
             raise ValueError("LogL upper bound = %g but logL = %g!!" % (logL_upperbound, logL))
-        Ns = len(gstrs)
+        Ns = len(gstrs)*(len(dataset.getSpamLabels())-1) #number of independent parameters in dataset
 
         #Get number of gateset parameters - this should match algorithm used
         if TPconstrained:

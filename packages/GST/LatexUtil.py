@@ -198,10 +198,13 @@ def latex_value(el,ROUND=6,complexAsPolar=True):
             else:
                 s = "0"
     except:
-        if abs(el) > TOL:
-            s = "%s" % render(el.real)
-        else:
-            s = "0"
+        try:
+            if abs(el) > TOL: #throws error if el is not a number
+                s = "%s" % render(el.real)
+            else:
+                s = "0"
+        except:
+            s = str(el)
 
     return s
             

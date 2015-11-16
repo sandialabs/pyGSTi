@@ -920,6 +920,31 @@ def pauliProdVectorToMatrixInStdBasis(v):
     return ret
 
 
+def gellMannVectorToMatrixInStdBasis(v):
+    """
+    Convert a vector in the Gell-Mann basis to a matrix
+     in the standard basis.
+
+    Parameters
+    ----------
+    v : numpy array
+        The vector (length must be a perfect square, e.g. 4, 9, 16, ...)
+
+    Returns
+    -------
+    numpy array
+        The matrix, shape (2,2) or (4,4) respectively.
+    """
+
+    dim = int(_np.sqrt( len(v) )) # len(v) = dim^2, where dim is matrix dimension of Pauli-prod mxs
+    gmMxs = GetNormalizedGellMannMatrices(dim)
+
+    ret = _np.zeros( (dim,dim), 'complex' )
+    for i,gmMx in enumerate(gmMxs):
+        ret += v[i]*gmMx
+    return ret
+
+
 def matrixInStdBasisToPauliProdVector(m):
     """
     Convert a matrix in the standard basis to
@@ -943,5 +968,31 @@ def matrixInStdBasisToPauliProdVector(m):
     v = _np.empty((dim**2,1))
     for i,ppMx in enumerate(ppMxs):
         v[i,0] = _np.real(_MOps.trace(_np.dot(ppMx,m)))
+
+    return v
+
+def matrixInStdBasisToGellMannVector(m):
+    """
+    Convert a matrix in the standard basis to
+     a vector in the Gell-Mann basis.
+
+    Parameters
+    ----------
+    m : numpy array
+        The matrix, must be square.
+
+    Returns
+    -------
+    numpy array
+        The vector, length == number of elements in m
+    """
+
+    assert(len(m.shape) == 2 and m.shape[0] == m.shape[1])
+    dim = m.shape[0]
+    gmMxs = GetNormalizedGellMannMatrices(dim)
+
+    v = _np.empty((dim**2,1))
+    for i,gmMx in enumerate(gmMxs):
+        v[i,0] = _np.real(_MOps.trace(_np.dot(gmMx,m)))
 
     return v

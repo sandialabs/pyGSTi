@@ -722,7 +722,7 @@ def rhoVecPenalty(rhoVec):
     float
     """
     # rhoVec must be positive semidefinite and trace = 1
-    rhoMx = _BT.pauliProdVectorToMatrixInStdBasis(rhoVec)
+    rhoMx = _BT.gellMannVectorToMatrixInStdBasis(rhoVec)
     evals = _np.linalg.eigvals( rhoMx )  #could use eigvalsh, but wary of this since eigh can be wrong...
     sumOfNeg = sum( [ -ev.real for ev in evals if ev.real < 0 ] )
     nQubits = _np.log2(len(rhoVec)) / 2
@@ -748,7 +748,7 @@ def EVecPenalty(EVec):
     float
     """
     # EVec must have eigenvalues between 0 and 1
-    EMx = _BT.pauliProdVectorToMatrixInStdBasis(EVec)
+    EMx = _BT.gellMannVectorToMatrixInStdBasis(EVec)
     evals = _np.linalg.eigvals( EMx )  #could use eigvalsh, but wary of this since eigh can be wrong...
     sumOfPen = 0
     for ev in evals:
