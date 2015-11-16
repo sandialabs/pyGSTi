@@ -1162,7 +1162,7 @@ class Results(object):
         return
 
 
-    def createBriefReportPDF(self, confidenceLevel, 
+    def createBriefReportPDF(self, confidenceLevel=None, 
                              filename="auto", title="auto", datasetLabel="auto",
                              suffix="", m=0, M=10, verbosity=0):
         """

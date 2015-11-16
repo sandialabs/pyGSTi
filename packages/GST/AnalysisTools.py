@@ -1146,7 +1146,8 @@ def generateBoxPlot( xvals, yvals, xyGateStringDict, subMxCreationFn, xlabel="",
                 _plt.hist(_np.clip(histdata_finite,histMin,histMax), histBins,
                           range=[histMin, histMax], facecolor='gray', align='mid')
                 if saveTo is not None:
-                    _plt.savefig( _makeHistFilename(saveTo) )
+                    if len(saveTo) > 0:
+                        _plt.savefig( _makeHistFilename(saveTo) )
                     _plt.close(fig)                    
             return gstFig
 
@@ -1202,7 +1203,8 @@ def generateBoxPlot( xvals, yvals, xyGateStringDict, subMxCreationFn, xlabel="",
                 _plt.hist(_np.clip(histdata_finite,histMin,histMax), histBins,
                           range=[histMin, histMax], facecolor='gray', align='mid')
                 if saveTo is not None:
-                    _plt.savefig( _makeHistFilename(saveTo) )
+                    if len(saveTo) > 0:
+                        _plt.savefig( _makeHistFilename(saveTo) )
                     _plt.close(fig)
             return gstFig
 
