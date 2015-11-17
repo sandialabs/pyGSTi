@@ -10,6 +10,7 @@
 \usepackage{etoolbox}
 \usepackage{units}
 \usepackage{multirow}
+\usepackage{adjustbox}
 
 \setcounter{topnumber}{3}
 \setcounter{bottomnumber}{3}
@@ -146,12 +147,16 @@ This table also contains one derived quantity, the spectrum of the largest \emph
 \begin{center}
 \begin{minipage}[b]{0.40\linewidth}
 \centering
+\adjustbox{max width=\linewidth}{
 \putfield{fiducialListTable}{List of fiducials table will be placed here}
+}
 %putfield{rhoStrListTable}{List of state prep fiducials table will be placed here}
 %putfield{EStrListTable}{List of effect fiducials table will be placed here}
 \end{minipage}
 \begin{minipage}[b]{0.40\linewidth}
+\adjustbox{max width=\linewidth}{
 \putfield{germListTable}{List of germs table will be placed here}
+}
 \end{minipage}
 \caption{\textbf{Fiducial sequences and germs.}  See discussion in text.\label{fiducialAndGermListTables}}
 \end{center}
