@@ -12,10 +12,10 @@ fiducials = _GST.gateStringList( [ (), ('Gx',), ('Gy',), ('Gx','Gx'),
 #                              ('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy')] )
 #These germs are not correct
 
-germs = _GST.gateStringList([('Gx',), ('Gy',), ('Gy','Gx','Gx'), ('Gy','Gy','Gx')]
+germs = _GST.gateStringList([('Gx',), ('Gy',), ('Gy','Gx','Gx'), ('Gy','Gy','Gx')])
 
 #Construct a target gateset:  X(pi/2), Y(pi/2)
-gs_target = _GST.buildGateset([2],[('Q0',)], ['Gx','Gy'], 
+gs_target = _GST.buildGateset([2],[('Q0',)], ['Gx','Gy'],
                               [ "X(pi/2,Q0)", "Y(pi/2,Q0)"],
                               rhoExpressions=["0"], EExpressions=["1"], 
                               spamLabelDict={'plus': (0,0), 'minus': (0,-1) } )
