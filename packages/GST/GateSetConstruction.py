@@ -188,7 +188,7 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
         elif gateName in ('X','Y','Z'): #single-qubit gate names
             assert(len(args) == 2) # theta, qubit-index
             theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
-            label = args[1]; assert(label.startswith('Q'))
+            label = args[1].strip(); assert(label.startswith('Q'))
 
             if gateName == 'X': ex = -1j * theta*_BT.sigmax/2
             elif gateName == 'Y': ex = -1j * theta*_BT.sigmay/2
@@ -635,7 +635,7 @@ def buildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameteri
     exprTerms = gateExpr.split(':')
     for exprTerm in exprTerms:
 
-        l = exprTerm.index('('); r = exprTerm.index(')')
+        l = exprTerm.index('('); r = exprTerm.rindex(')')
         gateName = exprTerm[0:l]
         argsStr = exprTerm[l+1:r]
         args = argsStr.split(',')
@@ -659,7 +659,7 @@ def buildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameteri
         elif gateName in ('X','Y','Z'): #single-qubit gate names
             assert(len(args) == 2) # theta, qubit-index
             theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
-            label = args[1]; assert(label.startswith('Q'))
+            label = args[1].strip(); assert(label.startswith('Q'))
 
             if gateName == 'X': ex = -1j * theta*_BT.sigmax/2
             elif gateName == 'Y': ex = -1j * theta*_BT.sigmay/2
@@ -674,16 +674,33 @@ def buildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameteri
                 pp_gateMx = _BT.basisChg_StdToPauliProd(gateMx) # *real* 4x4 mx in Pauli-product basis -- better for parameterization
                 gateTermInFinalBasis = embedGate(pp_gateMx, (label,)) # pp_gateMx assumed to be in the Pauli-product basis
 
+        elif gateName == 'N': #more general single-qubit gate
+            assert(len(args) == 5) # theta, sigmaX-coeff, sigmaY-coeff, sigmaZ-coeff, qubit-index
+            theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi, 'sqrt': _np.sqrt})
+            sxCoeff = eval( args[1], {"__builtins__":None}, {'pi': _np.pi, 'sqrt': _np.sqrt})
+            syCoeff = eval( args[2], {"__builtins__":None}, {'pi': _np.pi, 'sqrt': _np.sqrt})
+            szCoeff = eval( args[3], {"__builtins__":None}, {'pi': _np.pi, 'sqrt': _np.sqrt})
+            label = args[4].strip(); assert(label.startswith('Q'))
+
+            ex = -1j * theta * ( sxCoeff * _BT.sigmax/2. + syCoeff * _BT.sigmay/2. + szCoeff * _BT.sigmaz/2.)
+            Ugate = _spl.expm(ex) # 2x2 unitary matrix operating on single qubit in [0,1] basis
+            if unitaryEmbedding:
+                gateTermInFinalBasis = embedGateUnitary(Ugate, (label,)) #Ugate assumed to be in std basis (really the only option)
+            else:
+                Ugatec = Ugate.conjugate()
+                gateMx = _np.kron(Ugate,Ugatec) # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
+                pp_gateMx = _BT.basisChg_StdToPauliProd(gateMx) # *real* 4x4 mx in Pauli-product basis -- better for parameterization
+                gateTermInFinalBasis = embedGate(pp_gateMx, (label,)) # pp_gateMx assumed to be in the Pauli-product basis
             
         elif gateName in ('CX','CY','CZ'): #two-qubit gate names
             assert(len(args) == 3) # theta, qubit-label1, qubit-label2
             theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
-            label1 = args[1]; assert(label1.startswith('Q'))
-            label2 = args[2]; assert(label2.startswith('Q'))
+            label1 = args[1].strip(); assert(label1.startswith('Q'))
+            label2 = args[2].strip(); assert(label2.startswith('Q'))
 
-            if gateName == 'CX': ex = -1j * theta*_BT.sigmax/2
-            elif gateName == 'CY': ex = -1j * theta*_BT.sigmay/2
-            elif gateName == 'CZ': ex = -1j * theta*_BT.sigmaz/2
+            if gateName == 'CX': ex = -1j * theta*_BT.sigmax/2.
+            elif gateName == 'CY': ex = -1j * theta*_BT.sigmay/2.
+            elif gateName == 'CZ': ex = -1j * theta*_BT.sigmaz/2.
             Utarget = _spl.expm(ex) # 2x2 unitary matrix operating on target qubit
             Ugate = _np.identity(4, 'complex'); Ugate[2:,2:] = Utarget #4x4 unitary matrix operating on isolated two-qubit space
 
