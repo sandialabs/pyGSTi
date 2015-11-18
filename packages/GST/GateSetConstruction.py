@@ -543,10 +543,11 @@ def buildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameteri
         labelIndices = [ tensorProdBlkLabels.index(label) for label in labels ]
         for labelIndex in sorted(labelIndices,reverse=True):
             del basisInds_noop[labelIndex]
-        tensorBlkEls_noop = list(_itertools.product(*basisInds_noop))
+        tensorBlkEls_noop = list(_itertools.product(*basisInds_noop)) #dm-space basis for noop-indices only
         parameterToBaseIndicesMap = {}
 
-        def decomp_gate_index(indx): #decompose index of a Pauli-product matrix into indices of each Pauli in the product
+        def decomp_gate_index(indx): 
+            """ Decompose index of a Pauli-product matrix into indices of each Pauli in the product """
             ret = []; divisor = 1; divisors = []
             #print "Decomp %d" % indx,
             for l in labels: 
@@ -559,10 +560,19 @@ def buildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameteri
             #print " => %s (div = %s)" % (str(ret), str(divisors))
             return ret
 
-        def insert_gate_basis(gate_b, base_b):
-            ret = list(base_b[:])
+        def merge_gate_and_noop_bases(gate_b, noop_b): 
+            """ 
+            Merge the Pauli basis indices for the "gate"-parts of the total basis
+            contained in gate_b (i.e. of the components of the tensor product space
+            that are operated on) and the "noop"-parts contained in noop_b.  Thus,
+            len(gate_b) + len(noop_b) == len(basisInds), and this function merges
+            together basis indices for the operated-on and not-operated-on tensor
+            product components.  
+            Note: return value always have length == len(basisInds) == number of components
+            """
+            ret = list(noop_b[:])    #start with noop part...
             for li,b_el in sorted( zip(labelIndices,gate_b), key=lambda x: x[0]):
-                ret.insert(li, b_el)
+                ret.insert(li, b_el) #... and insert gate parts at proper points
             return ret
 
         for gate_i in range(gatemx.shape[0]):     # rows ~ "output" of the gate map
@@ -573,8 +583,8 @@ def buildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameteri
 
                 for i,b_noop in enumerate(tensorBlkEls_noop): #loop over all state configurations we don't operate on - so really a loop over diagonal dm elements        
                     
-                    b_out = insert_gate_basis(gate_b1, b_noop)  # using same b_noop for in and out says we're acting
-                    b_in  = insert_gate_basis(gate_b2, b_noop)  #  as the identity on the no-op state space
+                    b_out = merge_gate_and_noop_bases(gate_b1, b_noop)  # using same b_noop for in and out says we're acting
+                    b_in  = merge_gate_and_noop_bases(gate_b2, b_noop)  #  as the identity on the no-op state space
                     out_vec_index = lookup_blkElIndex[ tuple(b_out) ] # index of output dm basis el within vec(tensor block basis)
                     in_vec_index  = lookup_blkElIndex[ tuple(b_in) ]  # index of input dm basis el within vec(tensor block basis)
 
@@ -585,8 +595,8 @@ def buildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameteri
         #Map gateBlk's basis into final gate basis (shift basis indices due to the composition of different direct-sum
         # blocks along diagonal of final gate mx)
         offset = sum( [ blockDims[i]**2 for i in range(0,iTensorProdBlk) ] ) #number of basis elements preceding our block's elements
-        finalGate = _np.identity( gateDim, 'd' )               # operates on entire state space (direct sum of tensor prod. blocks)
-        finalGate[offset:offset+N,offset:offset+N] = gateBlk  # gateBlk gets offset along diagonal by the numer of preceding basis elements
+        finalGate = _np.identity( gateDim, 'd' )              # operates on entire state space (direct sum of tensor prod. blocks)
+        finalGate[offset:offset+N,offset:offset+N] = gateBlk  # gateBlk gets offset along diagonal by the number of preceding basis elements
         # Note: final is a *real* matrix whose basis is the pauli-product basis in the iTensorProdBlk-th block, concatenated with
         #   bases for the other blocks - say the "std" basis (which one does't matter since the identity is the same for std, gm, and pp)
 

@@ -71,12 +71,14 @@ def compose(gate1, gate2):
     Gate
        The composed gate.
     """
-    #TODO: allow for composition while maintaining parameters 
-    #  -- probably need a new ComposedGate class that can contain
-    #     multiple parameterized gate instances
-    return FullyParameterizedGate( _np.dot( gate1.matrix, gate2.matrix ) )
 
-class FullyParameterizedGate:
+    if isinstance(gate1, NEWLinearlyParameterizedGate) and isinstance(gate2, NEWLinearlyParameterizedGate):
+        #Construct a new linearly parameterized gate that is the dot product of gate1 and gate2
+        return gate1.compose(gate2)
+    else:
+        return FullyParameterizedGate( _np.dot( gate1.matrix, gate2.matrix ) )
+
+class FullyParameterizedGate(object):
     """ 
     Encapsulates a gate matrix that is fully paramterized, that is,
       each element of the gate matrix is an independent parameter.
@@ -260,7 +262,7 @@ class FullyParameterizedGate:
 
 #FUTURE class UnitaryParameterizedGate: ??
 
-class LinearlyParameterizedGate:
+class LinearlyParameterizedGate(object):
     """ 
     Encapsulates a gate matrix that is paramterized such that each
     element of the gate matrix depends only linearly on any paramter.
@@ -354,7 +356,7 @@ class LinearlyParameterizedGate:
     def setValue(self, value):
         """
         Sets the value of the gate.  In general, the "value" of a gate means a 
-          floating point number for each paramter.  In this case when all gate
+          floating point number for each parameter.  In this case when all gate
           matrix element are parameters, the value is a 2D array of parameters.
 
         Parameters
@@ -506,6 +508,284 @@ class LinearlyParameterizedGate:
         s = "Linearly Parameterized gate with shape %s, param shape %s\n" % (str(self.matrix.shape), self.parameterShape)
         s += _MOps.mxToString(self.matrix, width=5, prec=1)
         return s
+
+
+
+class LinearlyParameterizedElementTerm(object):
+    def __init__(self, coeff=1.0, paramIndexTuples=[]):
+        self.coeff = coeff
+        self.paramIndices = paramIndices
+
+
+class NEWLinearlyParameterizedGate(object):
+    """ 
+    Encapsulates a gate matrix that is paramterized such that each
+    element of the gate matrix depends only linearly on any paramter.
+    """
+    def __init__(self, baseMatrix, parameterArray, parameterToBaseIndicesMap, leftTransform=None, rightTransform=None, real=False):
+        """ 
+        Initialize a LinearlyParameterizedGate object.
+
+        Parameters
+        ----------
+        basematrix : numpy array
+            a square 2D numpy array that acts as the starting point when
+            constructin the gate's matrix.  The shape of this array sets
+            the dimension of the gate.
+
+        parameterArray : numpy array
+            a 1D numpy array that holds the all the parameters for this
+            gate.  The shape of this array sets is what is returned by
+            valueDimension(...).
+
+        parameterToBaseIndicesMap : dict
+            A dictionary with keys == index of a parameter
+            (i.e. in parameterArray) and values == list of 2-tuples
+            indexing potentially multiple gate matrix coordinates 
+            which should be set equal to this parameter.  
+
+        leftTransform : numpy array or None, optional
+            A 2D array of the same shape as basematrix which left-multiplies
+            the base matrix after parameters have been evaluated.  Defaults to 
+            no tranform.
+
+        rightTransform : numpy array or None, optional
+            A 2D array of the same shape as basematrix which right-multiplies
+            the base matrix after parameters have been evaluated.  Defaults to 
+            no tranform.
+
+        real : bool, optional
+            Whether or not the resulting gate matrix, after all
+            parameter evaluation and left & right transforms have
+            been performed, should be real.  If True, ValueError will
+            be raised if the matrix contains any complex or imaginary
+            elements.
+        """ 
+
+        self.baseMatrix = baseMatrix
+        self.parameterArray = parameterArray
+        self.numParams = len(parameterArray)
+
+        self.elementExpressions = {}
+        for p,(i,j) in parameterToBaseIndicesMap.iteritems():
+            assert((i,j) not in self.elementExpressions) #only one parameter allowed per base index pair
+            self.elementExpressions[(i,j)] = [ LinearlyParameterizedElementTerm(1.0, [p]) ]
+
+        self.leftTrans = leftTransform
+        self.rightTrans = rightTransform
+        self.enforceReal = real
+
+        assert(len(self.baseMatrix.shape) == 2)
+        assert(self.baseMatrix.shape[0] == self.baseMatrix.shape[1])
+        assert(len(self.parameterShape) == 2)
+        
+        self._computeMatrix()
+        self.dim = self.matrix.shape[0]
+        self.derivMx = self._computeDerivs()
+
+    def _computeMatrix(self):
+        self.matrix = self.baseMatrix.copy()
+        for (i,j),terms in self.elementExpressions.iteritems():
+            for term in terms:
+                param_prod = _np.prod( [ self.parameterArray[p] for p in term.paramIndices ] )
+                self.matrix[i,j] += term.coeff * param_prod
+        self.matrix = _np.dot(self.leftTrans, _np.dot(self.matrix, self.rightTrans))
+
+        if self.enforceReal:
+            if _np.linalg.norm(_np.imag(self.matrix)) > 1e-8:
+                raise ValueError("Linearly parameterized matrix has non-zero imaginary part (%g)!" % 
+                                 _np.linalg.norm(_np.imag(self.matrix)))
+            self.matrix = _np.real(self.matrix)
+
+
+    def _computeDerivs(self):
+        k = 0
+        derivMx = _np.zeros( (self.dim**2, self.numParams), 'd' )
+        for (i,j),terms in self.elementExpressions.iteritems():
+            vec_ij = i*self.dim + j
+            for term in terms:
+                params_product = _np.prod([ self.parameterArray[p] for p in term.paramIndices ])
+                for i,p in enumerate(term.paramIndices):
+                    param_partial_prod = params_product / self.parameterArray[p] # exclude i-th factor by dividing it out
+                    derivMx[vec_ij, p] += term.coeff * param_partial_prod
+        return derivMx
+
+
+    def setValue(self, value):
+        """
+        Sets the value of the gate.  In general, the "value" of a gate means a 
+          floating point number for each parameter.  In this case when all gate
+          matrix element are parameters, the value is a 2D array of parameters.
+
+        Parameters
+        ----------
+        value : numpy array
+            A numpy array of shape equal to that of the parameterMatrix 
+            passed upon construction.
+
+        Returns
+        -------
+        None
+        """
+        if( len(value) != self.numParams):
+            raise ValueError("You cannot set the value of this linearly-parameterized gate with a length-%d object.  Length must be %d"  \
+                                 % (len(value), self.numParams))
+        self.parameterArray = _np.array(value)
+        self._computeMatrix()
+
+#    def valueDimension(self):
+#        """ 
+#        Get the dimensions of the parameterized "value" of
+#        this gate which can be set using setValue(...).
+#
+#        Returns
+#        -------
+#        tuple of ints
+#            The dimension of the parameterized "value" of this gate.
+#        """
+#        return self.numParams
+
+    def getNumParams(self, bG0=True):
+        """
+        Get the number of independent parameters which specify this gate.
+
+        Parameters
+        ----------
+        bG0 : bool
+            Whether or not the first row of the gate matrix should be 
+            parameterized.  This is significant in that in the Pauli or 
+            Gell-Mann bases a the first row determines whether the 
+            gate is trace-preserving (TP).
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        # if bG0 == True, need to subtract the number of parameters which *only*
+        #  parameterize the first row of the final gate matrix
+        if bG0:
+            return self.numParams
+        else:
+            raise ValueError("Linearly parameterized gate with first gate row *not* parameterized is not implemented yet!")
+
+    def toVector(self, bG0=True):
+        """
+        Extract a vector of the underlying gate parameters from this gate.
+
+        Parameters
+        ----------
+        bG0 : bool
+            Whether or not the first row of the gate matrix should be 
+            parameterized.
+
+        Returns
+        -------
+        numpy array
+            a 1D numpy array with length == getNumParams(bG0).
+        """
+        if bG0:
+            return self.parameterArray #.real in case of complex matrices
+        else:
+            raise ValueError("Linearly parameterized gate with first gate row *not* parameterized is not implemented yet!")
+
+    def fromVector(self, v, bG0=True):
+        """
+        Initialize the gate using a vector of its gate parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length 
+            must == getNumParams(bG0).
+
+        bG0 : bool
+            Whether or not the first row of the gate matrix 
+            should be parameterized.
+
+        Returns
+        -------
+        None
+        """
+        if bG0:
+            self.parameterArray = v
+            self._computeMatrix()
+        else:
+            raise ValueError("Linearly parameterized gate with first gate row *not* parameterized is not implemented yet!")
+
+    def transform(self, Si, S):
+        """ 
+        Transform this gate, so that:
+          gate matrix => Si * gate matrix * S
+
+        Parameters
+        ----------
+        Si : numpy array
+            The matrix which left-multiplies the gate matrix.
+
+        S : numpy array
+            The matrix which right-multiplies the gate matrix.
+
+        Returns
+        -------
+        None
+        """
+        self.leftTrans = _np.dot(Si, self.leftTrans)
+        self.rightTrans = _np.dot(self.rightTrans,S)
+        # update self.enforceReal to False if Si or S is imaginary?
+        self._computeMatrix()
+            
+    def derivWRTparams(self, bG0=True):
+        """ 
+        Construct a matrix whose columns are the vectorized
+        derivatives of the gate matrix with respect to a
+        single param.  Thus, each column is of length gate_dim^2
+        and there is one column per gate parameter.
+
+        Parameters
+        ----------
+        bG0 : bool
+            Whether or not the first row of the gate matrix 
+            should be parameterized.
+
+        Returns
+        -------
+        numpy array 
+            Array of derivatives, shape == (gate_dim^2, nGateParams)
+        """
+        if bG0:
+            return self.derivMx
+        else:
+            raise ValueError("Linearly parameterized gate with first gate row *not* parameterized is not implemented yet!")
+        
+    def copy(self):
+        return NEWLinearlyParameterizedGate(self.baseMatrix, self.parameterMatrix, self.parameterMap,
+                                         self.leftTrans, self.rightTrans, self.enforceReal)
+
+    def __str__(self):
+        s = "Linearly Parameterized gate with shape %s, num params = %d\n" % (str(self.matrix.shape), self.numParams)
+        s += _MOps.mxToString(self.matrix, width=5, prec=1)
+        return s
+
+    def compose(self, otherGate):
+        """
+        Create and return a new linearly parameterized gate that is the composition
+        of this gate followed by otherGate.  That is, returned gate ~= dot(this, otherGate)
+
+        Parameters
+        ----------
+        otherGate : LinearlyParameterizedGate
+            The gate to compose to the right of this one.
+
+        Returns
+        -------
+        LinearlyParameterizedGate
+        """
+        
+        real = self.enforceReal and otherGate.enforceReal
+        # baseMx = HERE
+        composedGate = NEWLinearlyParameterizedGate(baseMx, paramArray, {}, leftTrans, rightTrans, real)
+        pass 
 
         
 #Currently unused, but perhaps useful later, so keep it around...

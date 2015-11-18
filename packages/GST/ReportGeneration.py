@@ -551,7 +551,7 @@ def getGatesetRotnAxisTable(gateset, formats, tableclass, longtable, confidenceR
     tables = {}
     _F.CreateTable(formats, tables, colHeadings, formatters, tableclass, longtable, customHeader={'latex': latex_head} )
 
-    formatters = [None, _F.EB] + [ _F.Pi ] * len(gateLabels)
+    formatters = [None, _F.EBPi] + [ _F.Pi ] * len(gateLabels)
 
     for gl in gateLabels:
         decomp, decompEB = qtys['%s decomposition' % gl].getValueAndErrBar()
