@@ -515,8 +515,8 @@ def buildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameteri
             raise ValueError("Invalid 'basis' parameter: %s (must by 'std', 'gm', or 'pp')" % basis)
 
 
-    def embedGate(gatemx, labels):
-        #print "DEBUG: gatemx = \n", gatemx
+    def embedGate(gatemx, labels, indicesToParameterize="all"):
+        #print "DEBUG: embedGate gatemx = \n", gatemx
         iTensorProdBlks = [ tensorBlkIndices[label] for label in labels ] # index of tensor product block (of state space) a bit label is part of
         if len(set(iTensorProdBlks)) > 1:
             raise ValueError("All qubit labels of a multi-qubit gate must correspond to the same tensor-product-block of the state space")
@@ -575,22 +575,32 @@ def buildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameteri
                 ret.insert(li, b_el) #... and insert gate parts at proper points
             return ret
 
+        
         for gate_i in range(gatemx.shape[0]):     # rows ~ "output" of the gate map
             for gate_j in range(gatemx.shape[1]): # cols ~ "input"  of the gate map
+                if indicesToParameterize == "all":
+                    iParam = gate_i*gatemx.shape[1] + gate_j #index of (i,j) gate parameter in 1D array of parameters (flatten gatemx)
+                    parameterToBaseIndicesMap[ iParam ] = []
+                elif (gate_i,gate_j) in indicesToParameterize:
+                    iParam = indicesToParameterize.index( (gate_i,gate_j) )
+                    parameterToBaseIndicesMap[ iParam ] = []
+                else: 
+                    iParam = None #so we don't parameterize below
+
                 gate_b1 = decomp_gate_index(gate_i) # gate_b? are lists of dm basis indices, one index per
                 gate_b2 = decomp_gate_index(gate_j) #  tensor product component that the gate operates on (2 components for a 2-qubit gate)
-                parameterToBaseIndicesMap[ (gate_i, gate_j) ] = []
 
-                for i,b_noop in enumerate(tensorBlkEls_noop): #loop over all state configurations we don't operate on - so really a loop over diagonal dm elements        
-                    
+                for i,b_noop in enumerate(tensorBlkEls_noop): #loop over all state configurations we don't operate on - so really a loop over diagonal dm elements
                     b_out = merge_gate_and_noop_bases(gate_b1, b_noop)  # using same b_noop for in and out says we're acting
                     b_in  = merge_gate_and_noop_bases(gate_b2, b_noop)  #  as the identity on the no-op state space
                     out_vec_index = lookup_blkElIndex[ tuple(b_out) ] # index of output dm basis el within vec(tensor block basis)
                     in_vec_index  = lookup_blkElIndex[ tuple(b_in) ]  # index of input dm basis el within vec(tensor block basis)
 
                     gateBlk[ out_vec_index, in_vec_index ] = gatemx[ gate_i, gate_j ]
-                    parameterToBaseIndicesMap[ (gate_i, gate_j) ].append( (out_vec_index, in_vec_index) )
-                    # keep track of what gateBlk <-> gatemx elements for parameterization here
+                    if iParam is not None: 
+                        # keep track of what gateBlk <-> gatemx elements for parameterization
+                        parameterToBaseIndicesMap[ iParam ].append( (out_vec_index, in_vec_index) )
+
 
         #Map gateBlk's basis into final gate basis (shift basis indices due to the composition of different direct-sum
         # blocks along diagonal of final gate mx)
@@ -600,7 +610,7 @@ def buildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameteri
         # Note: final is a *real* matrix whose basis is the pauli-product basis in the iTensorProdBlk-th block, concatenated with
         #   bases for the other blocks - say the "std" basis (which one does't matter since the identity is the same for std, gm, and pp)
 
-        #print "DEBUG: gateBlk = \n", gateBlk
+        #print "DEBUG: embedGate gateBlk = \n", gateBlk
         full_finalToPP = _np.identity( gateDim, 'complex' )
         full_ppToFinal = _np.identity( gateDim, 'complex' )
 
@@ -624,11 +634,17 @@ def buildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameteri
 
         else: raise ValueError("Invalid 'basis' parameter: %s (must by 'std', 'gm', or 'pp')" % basis)
 
-        if parameterization == "full" or gatemx.shape == gateBlk.shape: 
+        if parameterization == "full" or gatemx.shape == gateBlk.shape:
             finalGateInFinalBasis = _np.dot(full_ppToFinal, _np.dot( finalGate, full_finalToPP))
             return _Gate.FullyParameterizedGate( _np.real(finalGateInFinalBasis) if realMx else finalGateInFinalBasis )
         elif parameterization == "linear":
-            return _Gate.LinearlyParameterizedGate( finalGate, gatemx, parameterToBaseIndicesMap,
+            #OLD (INCORRECT) -- but could give this as paramArray if gave zeros as base matrix instead of finalGate
+            # paramArray = gatemx.flatten() if indicesToParameterize == "all" else _np.array([gatemx[t] for t in indicesToParameterize])
+
+            #Set all params to *zero* since base matrix contains all initial elements -- parameters just give deviation
+            paramArray = _np.zeros( gatemx.size if indicesToParameterize == "all" else len(indicesToParameterize), 'd' )
+
+            return _Gate.LinearlyParameterizedGate( finalGate, paramArray, parameterToBaseIndicesMap,
                                                     full_ppToFinal, full_finalToPP, realMx )
         else:
             raise ValueError("Invalid 'parameterization' parameter: %s (must by 'full' or 'linear')" % parameterization)
@@ -664,6 +680,21 @@ def buildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameteri
             else:
                 pp_gateMx = _np.identity(stateSpaceDim**2, 'd') # *real* 4x4 mx in Pauli-product basis -- still just the identity!
                 gateTermInFinalBasis = embedGate(pp_gateMx, tuple(labels)) # pp_gateMx assumed to be in the Pauli-product basis
+
+        elif gateName == "D":  #like 'I', but only parameterize the diagonal elements - so can be a depolarization-type map
+            labels = args # qubit labels (TODO: what about 'L' labels? -- not sure if they work with this...)
+            stateSpaceDim = 1
+            for l in labels:
+                if s.startswith('Q'): stateSpaceDim *= 2   
+                elif s.startswith('L'): stateSpaceDim *= 1
+                else: raise ValueError("Invalid state space label: %s" % l)
+
+            if unitaryEmbedding or parameterization != "linear":
+                raise ValueError("'D' gate only makes sense to use when unitaryEmbedding is False and parameterization == 'linear'")
+            
+            indicesToParameterize = [ (i,i) for i in range(1,stateSpaceDim**2) ] #parameterize only the diagonals els after the first
+            pp_gateMx = _np.identity(stateSpaceDim**2, 'd') # *real* 4x4 mx in Pauli-product basis -- still just the identity!
+            gateTermInFinalBasis = embedGate(pp_gateMx, tuple(labels), indicesToParameterize) # pp_gateMx assumed to be in the Pauli-product basis
 
 
         elif gateName in ('X','Y','Z'): #single-qubit gate names
@@ -749,7 +780,7 @@ def buildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameteri
                 raise ValueError("Invalid 'basis' parameter: %s (must by 'std', 'gm', or 'pp')" % basis)
 
         else: raise ValueError("Invalid gate name: %s" % gateName)
-        
+
         if gateInFinalBasis is None:
             gateInFinalBasis = gateTermInFinalBasis
         else:
