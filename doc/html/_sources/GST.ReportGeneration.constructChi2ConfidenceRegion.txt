@@ -1,0 +1,6 @@
+GST.ReportGeneration.constructChi2ConfidenceRegion
+==================================================
+
+.. currentmodule:: GST.ReportGeneration
+
+.. autofunction:: constructChi2ConfidenceRegion

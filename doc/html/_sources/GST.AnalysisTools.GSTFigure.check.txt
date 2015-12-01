@@ -1,0 +1,6 @@
+GST.AnalysisTools.GSTFigure.check
+=================================
+
+.. currentmodule:: GST.AnalysisTools
+
+.. automethod:: GSTFigure.check

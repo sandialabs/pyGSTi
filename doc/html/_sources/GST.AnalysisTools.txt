@@ -58,6 +58,15 @@ GST.AnalysisTools
 
    
    
+   .. rubric:: Classes
+
+   .. autosummary::
+      :template: my_autosummary_class.rst
+      :toctree:
+
+   
+      GSTFigure
+   
    
 
    

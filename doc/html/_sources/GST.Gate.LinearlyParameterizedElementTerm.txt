@@ -1,0 +1,25 @@
+GST.Gate.LinearlyParameterizedElementTerm
+=========================================
+
+.. currentmodule:: GST.Gate
+
+.. autoclass:: LinearlyParameterizedElementTerm
+
+   
+   .. automethod:: __init__
+       :noindex:
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree:
+   
+      ~LinearlyParameterizedElementTerm.__init__
+      ~LinearlyParameterizedElementTerm.copy
+   
+   
+
+   
+   
+   

@@ -1,0 +1,6 @@
+GST.BasisTools.matrixInStdBasisToGellMannVector
+===============================================
+
+.. currentmodule:: GST.BasisTools
+
+.. autofunction:: matrixInStdBasisToGellMannVector

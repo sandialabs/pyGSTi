@@ -1,0 +1,6 @@
+GST.Results.getTable
+====================
+
+.. currentmodule:: GST
+
+.. automethod:: Results.getTable

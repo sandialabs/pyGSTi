@@ -1,0 +1,28 @@
+GST.AnalysisTools.GSTFigure
+===========================
+
+.. currentmodule:: GST.AnalysisTools
+
+.. autoclass:: GSTFigure
+
+   
+   .. automethod:: __init__
+       :noindex:
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree:
+   
+      ~GSTFigure.__init__
+      ~GSTFigure.check
+      ~GSTFigure.getExtraInfo
+      ~GSTFigure.saveTo
+      ~GSTFigure.setExtraInfo
+   
+   
+
+   
+   
+   

@@ -1,0 +1,6 @@
+GST.PPTUtil.ppt
+===============
+
+.. currentmodule:: GST.PPTUtil
+
+.. autofunction:: ppt

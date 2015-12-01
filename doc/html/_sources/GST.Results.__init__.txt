@@ -1,0 +1,6 @@
+GST.Results.__init__
+====================
+
+.. currentmodule:: GST
+
+.. automethod:: Results.__init__

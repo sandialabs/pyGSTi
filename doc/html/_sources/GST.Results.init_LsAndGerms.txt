@@ -1,0 +1,6 @@
+GST.Results.init_LsAndGerms
+===========================
+
+.. currentmodule:: GST
+
+.. automethod:: Results.init_LsAndGerms

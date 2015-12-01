@@ -1,0 +1,6 @@
+GST.Results.getSpecial
+======================
+
+.. currentmodule:: GST
+
+.. automethod:: Results.getSpecial

@@ -1,0 +1,6 @@
+GST.ReportGeneration.constructLogLConfidenceRegion
+==================================================
+
+.. currentmodule:: GST.ReportGeneration
+
+.. autofunction:: constructLogLConfidenceRegion

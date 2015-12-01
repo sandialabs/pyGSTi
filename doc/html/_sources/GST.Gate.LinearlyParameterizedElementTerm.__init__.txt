@@ -1,0 +1,6 @@
+GST.Gate.LinearlyParameterizedElementTerm.__init__
+==================================================
+
+.. currentmodule:: GST.Gate
+
+.. automethod:: LinearlyParameterizedElementTerm.__init__

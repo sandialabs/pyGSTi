@@ -16,6 +16,7 @@ GST.Gate.LinearlyParameterizedGate
       :toctree:
    
       ~LinearlyParameterizedGate.__init__
+      ~LinearlyParameterizedGate.compose
       ~LinearlyParameterizedGate.copy
       ~LinearlyParameterizedGate.derivWRTparams
       ~LinearlyParameterizedGate.fromVector
@@ -23,7 +24,6 @@ GST.Gate.LinearlyParameterizedGate
       ~LinearlyParameterizedGate.setValue
       ~LinearlyParameterizedGate.toVector
       ~LinearlyParameterizedGate.transform
-      ~LinearlyParameterizedGate.valueDimension
    
    
 

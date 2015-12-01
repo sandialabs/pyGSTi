@@ -32,17 +32,20 @@
        GST.Loaders
        GST.MatrixOps
        GST.Optimize
+       GST.PPTUtil
        GST.ReportGeneration
        GST.StdInputParser
        GST.Writers
 
    ..  Don't document these modules separately
+       GST.confidenceregion
        GST.dataset
        GST.evaltree
        GST.gateset
        GST.gatestring
        GST.multidataset
        GST.outputdata
+       GST.results
 
 
 

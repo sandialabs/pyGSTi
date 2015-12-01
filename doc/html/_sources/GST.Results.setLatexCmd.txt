@@ -1,0 +1,6 @@
+GST.Results.setLatexCmd
+=======================
+
+.. currentmodule:: GST
+
+.. automethod:: Results.setLatexCmd

@@ -1,0 +1,6 @@
+GST.Results.init_single
+=======================
+
+.. currentmodule:: GST
+
+.. automethod:: Results.init_single

@@ -11,34 +11,24 @@ GST.ReportGeneration
       :toctree:
 
    
+      constructChi2ConfidenceRegion
+      constructLogLConfidenceRegion
+      getBlankTable
       getChi2ProgressTable
-      getChi2ProgressTable_html
       getDatasetOverviewTable
-      getDatasetOverviewTable_html
       getGatesetChoiTable
-      getGatesetChoiTable_html
       getGatesetClosestUnitaryTable
-      getGatesetClosestUnitaryTable_html
-      getGatesetDecompTables
-      getGatesetDecompTables_html
+      getGatesetDecompTable
       getGatesetGatesTable
-      getGatesetGatesTable_html
+      getGatesetRotnAxisTable
       getGatesetSPAMParametersTable
-      getGatesetSPAMParametersTable_html
       getGatesetSPAMTable
-      getGatesetSPAMTable_html
+      getGatesetVsTargetErrGenTable
       getGatesetVsTargetTable
-      getGatesetVsTargetTable_html
       getGatestringMultiTable
-      getGatestringMultiTable_html
       getGatestringTable
-      getGatestringTable_html
-      getHtmlQuantities
       getLogLProgressTable
-      getLogLProgressTable_html
       getUnitaryGatesetGatesTable
-      getUnitaryGatesetGatesTable_html
-      writeReport_LsAndGerms
    
    
 

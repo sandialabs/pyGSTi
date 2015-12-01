@@ -1,0 +1,6 @@
+GST.AnalysisTools.GSTFigure.__init__
+====================================
+
+.. currentmodule:: GST.AnalysisTools
+
+.. automethod:: GSTFigure.__init__

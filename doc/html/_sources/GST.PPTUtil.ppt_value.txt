@@ -1,0 +1,6 @@
+GST.PPTUtil.ppt_value
+=====================
+
+.. currentmodule:: GST.PPTUtil
+
+.. autofunction:: ppt_value

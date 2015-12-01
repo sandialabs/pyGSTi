@@ -25,6 +25,8 @@ GST.BasisTools
       basisChg_StdToPauliProd
       contractToStdDirectSumMx
       expandFromStdDirectSumMx
+      gellMannVectorToMatrixInStdBasis
+      matrixInStdBasisToGellMannVector
       matrixInStdBasisToPauliProdVector
       pauliProdVectorToMatrixInStdBasis
       stateToPauliDensityVec

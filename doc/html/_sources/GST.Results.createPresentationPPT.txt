@@ -1,0 +1,6 @@
+GST.Results.createPresentationPPT
+=================================
+
+.. currentmodule:: GST
+
+.. automethod:: Results.createPresentationPPT

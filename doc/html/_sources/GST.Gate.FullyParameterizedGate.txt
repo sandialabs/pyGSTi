@@ -16,6 +16,7 @@ GST.Gate.FullyParameterizedGate
       :toctree:
    
       ~FullyParameterizedGate.__init__
+      ~FullyParameterizedGate.compose
       ~FullyParameterizedGate.copy
       ~FullyParameterizedGate.derivWRTparams
       ~FullyParameterizedGate.fromVector

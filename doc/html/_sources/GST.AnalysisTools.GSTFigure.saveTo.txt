@@ -1,0 +1,6 @@
+GST.AnalysisTools.GSTFigure.saveTo
+==================================
+
+.. currentmodule:: GST.AnalysisTools
+
+.. automethod:: GSTFigure.saveTo

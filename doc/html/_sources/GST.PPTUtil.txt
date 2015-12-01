@@ -1,0 +1,29 @@
+GST.PPTUtil
+===========
+
+.. automodule:: GST.PPTUtil
+
+   
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+      :toctree:
+
+   
+      ppt
+      ppt_escaped
+      ppt_list
+      ppt_matrix
+      ppt_value
+      ppt_vector
+   
+   
+
+   
+   
+   
+
+   
+   
+   

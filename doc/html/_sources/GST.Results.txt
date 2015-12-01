@@ -1,0 +1,37 @@
+GST.Results
+===========
+
+.. currentmodule:: GST
+
+.. autoclass:: Results
+
+   
+   .. automethod:: __init__
+       :noindex:
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree:
+   
+      ~Results.__init__
+      ~Results.createBriefReportPDF
+      ~Results.createFullReportPDF
+      ~Results.createPresentationPDF
+      ~Results.createPresentationPPT
+      ~Results.getConfidenceRegion
+      ~Results.getFigure
+      ~Results.getSpecial
+      ~Results.getTable
+      ~Results.init_LsAndGerms
+      ~Results.init_single
+      ~Results.setAdditionalInfo
+      ~Results.setLatexCmd
+      ~Results.setTemplatePath
+   
+   
+
+   
+   
+   

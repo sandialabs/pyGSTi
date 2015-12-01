@@ -1,0 +1,6 @@
+GST.Results.getConfidenceRegion
+===============================
+
+.. currentmodule:: GST
+
+.. automethod:: Results.getConfidenceRegion

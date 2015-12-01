@@ -1,0 +1,6 @@
+GST.Gate.LinearlyParameterizedGate.compose
+==========================================
+
+.. currentmodule:: GST.Gate
+
+.. automethod:: LinearlyParameterizedGate.compose
