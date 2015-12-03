@@ -74,7 +74,7 @@ def compose(gate1, gate2):
     return gate1.compose(gate2)
 
 
-class FullyParameterizedGate:
+class FullyParameterizedGate(object):
     """ 
     Encapsulates a gate matrix that is fully paramterized, that is,
       each element of the gate matrix is an independent parameter.
