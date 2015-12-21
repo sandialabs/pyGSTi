@@ -207,6 +207,91 @@ def rotateGateset(gateset, rotate=None, max_rotate=None, seed=None):
     else: raise ValueError("Must specify either 'rotate' or 'max_rotate' -- neither was non-None")
     return newGateset
 
+def rotate2QGateset(gateset, rotate=None, max_rotate=None, seed=None):
+    """
+    Apply rotation uniformly or randomly to a two-qubut gateset.
+    You must specify either 'rotate' or 'max_rotate'. 
+
+    Parameters
+    ----------
+    gateset : GateSet
+      the gate set to rotate
+
+    rotate : float or 15-tuple of floats, optional
+      if a single float, apply rotation of rotate radians along
+      each of the 15 axes of all gates in the gateset.
+      if a 15-tuple of floats, apply the values as ix,...,zz rotations
+      (in radians) to all of the gates in the gateset.
+
+    max_rotate : float, optional
+      specified instead of 'rotate'; apply a random rotation with
+      maximum max_rotate radians along each of the ix,...,zz axes
+      of each each gate in the gateset.  That is, rotations of a 
+      particular gate around different axes are different random amounts.
+
+    seed : int, optional
+      if not None, seed numpy's random number generator with this value
+      before generating random depolarizations.
+    
+    Returns
+    -------
+    GateSet
+        the rotated GateSet
+    """
+    newGateset = gateset.copy() # start by just copying gateset
+    # nothing is applied to rhoVec or EVec
+
+    for (i,rhoVec) in enumerate(gateset.rhoVecs):
+        newGateset.set_rhoVec( rhoVec, i )  
+    for (i,EVec) in enumerate(gateset.EVecs):
+        newGateset.set_EVec( EVec, i )
+
+    if gateset.get_dimension() != 16:
+        raise ValueError("Gateset rotation can only be performed on a *two-qubit* gateset")
+
+    if seed is not None:
+        _rndm.seed(seed)
+
+    if max_rotate is not None:
+        if rotate is not None: 
+            raise ValueError("Must specify exactly one of 'rotate' and 'max_rotate' NOT both")
+
+        #Apply random rotation to each gate
+        r = max_rotate * _rndm.random( len(gateset) * 15 )
+        for (i,label) in enumerate(gateset):
+            rot = r[15*i:15*(i+1)]
+            newGateset.set_gate(label, _Gate.FullyParameterizedGate( _np.dot( 
+                        _GSC.twoQubitGate(rot[0]/2.0,rot[1]/2.0,rot[2]/2.0,
+                                             rot[3]/2.0,rot[4]/2.0,rot[5]/2.0,
+                                             rot[6]/2.0,rot[7]/2.0,rot[8]/2.0,
+                                             rot[9]/2.0,rot[10]/2.0,rot[11]/2.0,
+                                             rot[12]/2.0,rot[13]/2.0,rot[14]/2.0,
+                                             ), gateset[label]) ))
+            
+    elif rotate is not None:
+        #Apply the same rotation to each gate
+        #Specify rotation by a single value (to mean this rotation along each axis) or a 3-tuple
+        if type(rotate) in (float,int): 
+            rix,riy,riz = rotate,rotate,rotate
+            rxi,rxx,rxy,rxz = rotate,rotate,rotate,rotate
+            ryi,ryx,ryy,ryz = rotate,rotate,rotate,rotate
+            rzi,rzx,rzy,rzz = rotate,rotate,rotate,rotate
+        elif type(rotate) in (tuple,list):
+            if len(rotate) != 15:
+                raise ValueError("Rotation, when specified as a tuple must be of length 15, not: %s" % rotate)
+            (rix,riy,riz,rxi,rxx,rxy,rxz,ryi,ryx,ryy,ryz,rzi,rzx,rzy,rzz) = rotate
+        else: raise ValueError("Rotation must be specifed as a single number or as a lenght-15 list, not: %s" % rotate)
+            
+        for (i,label) in enumerate(gateset):
+            newGateset.set_gate(label, _Gate.FullyParameterizedGate( _np.dot( 
+                        _GSC.twoQubitGate(rix/2.0,riy/2.0,riz/2.0,
+                                             rxi/2.0,rxx/2.0,rxy/2.0,rxz/2.0,
+                                             ryi/2.0,ryx/2.0,ryy/2.0,ryz/2.0,
+                                             rzi/2.0,rzx/2.0,rzy/2.0,rzz/2.0,), gateset[label]) ))
+
+    else: raise ValueError("Must specify either 'rotate' or 'max_rotate' -- neither was non-None")
+    return newGateset
+
 
 def randomizeGatesetWithUnitary(gatesetInPauliProdBasis,scale,seed=None):
     """
