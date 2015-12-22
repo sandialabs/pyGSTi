@@ -907,7 +907,7 @@ def singleQubitGate(hx, hy, hz, noise=0):
     D = _np.diag( [1]+[1-noise]*(4-1) )
     return _np.dot(D, _BT.stateUnitaryToPauliDensityMxOp( _spl.expm(ex) ))
 
-def twoQubitGate(xx=0, xy=0, xz=0, yy=0, yz=0, zz=0):
+def twoQubitGate(ix=0, iy=0, iz=0, xi=0, xx=0, xy=0, xz=0, yi=0, yx=0, yy=0, yz=0, zi=0, zx=0, zy=0, zz=0):
     """
     Construct the single-qubit gate matrix.
 
@@ -916,6 +916,18 @@ def twoQubitGate(xx=0, xy=0, xz=0, yy=0, yz=0, zz=0):
 
     Parameters
     ----------
+    ix : float, optional
+        Coefficient of IX matrix in exponent.
+
+    iy : float, optional
+        Coefficient of IY matrix in exponent.
+
+    iz : float, optional
+        Coefficient of IZ matrix in exponent.
+
+    xi : float, optional
+        Coefficient of XI matrix in exponent.
+
     xx : float, optional
         Coefficient of XX matrix in exponent.
 
@@ -925,11 +937,26 @@ def twoQubitGate(xx=0, xy=0, xz=0, yy=0, yz=0, zz=0):
     xz : float, optional
         Coefficient of XZ matrix in exponent.
 
+    yi : float, optional
+        Coefficient of YI matrix in exponent.
+
+    yx : float, optional
+        Coefficient of YX matrix in exponent.
+
     yy : float, optional
         Coefficient of YY matrix in exponent.
 
     yz : float, optional
         Coefficient of YZ matrix in exponent.
+
+    zi : float, optional
+        Coefficient of ZI matrix in exponent.
+
+    zx : float, optional
+        Coefficient of ZX matrix in exponent.
+
+    zy : float, optional
+        Coefficient of ZY matrix in exponent.
 
     zz : float, optional
         Coefficient of ZZ matrix in exponent.
@@ -942,11 +969,20 @@ def twoQubitGate(xx=0, xy=0, xz=0, yy=0, yz=0, zz=0):
         Pauli-Product basis.
     """
     ex = _np.zeros( (4,4), 'complex' )
+    ex += ix * _BT.sigmaix
+    ex += iy * _BT.sigmaiy
+    ex += iz * _BT.sigmaiz
+    ex += xi * _BT.sigmaxi
     ex += xx * _BT.sigmaxx
     ex += xy * _BT.sigmaxy
     ex += xz * _BT.sigmaxz
+    ex += yi * _BT.sigmayi
+    ex += yx * _BT.sigmayx
     ex += yy * _BT.sigmayy
     ex += yz * _BT.sigmayz
+    ex += zi * _BT.sigmazi
+    ex += zx * _BT.sigmazx
+    ex += zy * _BT.sigmazy
     ex += zz * _BT.sigmazz
     return _BT.stateUnitaryToPauliDensityMxOp_2Q( _spl.expm(-1j * ex) )  #TODO: fix noise op to depolarizing
 
