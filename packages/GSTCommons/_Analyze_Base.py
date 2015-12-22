@@ -77,14 +77,16 @@ def doLongSequenceGST(longSequenceObjective,
                                               minProbClipForWeighting=advancedOptions.get('minProbClipForWeighting',1e-4),
                                               probClipInterval = advancedOptions.get('probClipInterval',(-1e6,1e6)),
                                               returnAll=True, opt_G0=(not constrainToTP), opt_SP0=(not constrainToTP),
-                                              gatestringWeightsDict=weightsDict, verbosity=advancedOptions.get('verbosity',2) )
+                                              gatestringWeightsDict=weightsDict, verbosity=advancedOptions.get('verbosity',2),
+                                              memLimit=advancedOptions.get('memoryLimitInBytes',None))
     elif longSequenceObjective == "logL":
         gs_lsgst_list = _GST.doIterativeMLEGST(ds, gs_after_gauge_opt, lsgstLists,
                                                minProbClip = advancedOptions.get('minProbClip',1e-4),
                                                probClipInterval = advancedOptions.get('probClipInterval',(-1e6,1e6)),
                                                radius=advancedOptions.get('radius',1e-4), 
                                                returnAll=True, opt_G0=(not constrainToTP), opt_SP0=(not constrainToTP),
-                                               verbosity=advancedOptions.get('verbosity',2) )
+                                               verbosity=advancedOptions.get('verbosity',2),
+                                               memLimit=advancedOptions.get('memoryLimitInBytes',None))
     else:
         raise ValueError("Invalid longSequenceObjective: %s" % longSequenceObjective)
 
