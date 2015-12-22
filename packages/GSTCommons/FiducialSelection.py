@@ -1,0 +1,280 @@
+""" Functions for selecting a complete set of fiducials for a GST analysis."""
+import GST as _GST
+import numpy as _np
+import itertools as _itertools
+import math as _math
+import sys as _sys
+
+def boolListToIndList(boolList):
+    output = _np.array([])
+    for i, boolVal in boolList:
+        if boolVal == 1:
+            output = _np.append(i)
+    return output
+
+def makePrepMxs(gs,prepFidList):
+    dimRho = gs.rhoVecs[0].shape[0]
+    numRho = len(gs.rhoVecs)
+    numFid = len(prepFidList)
+    outputMatList = []
+    for rho in gs.rhoVecs:
+        outputMat = _np.zeros([dimRho,numFid],float)
+        counter = 0
+        for prepFid in prepFidList:
+            outputMat[:,counter] = _np.dot(gs.product(prepFid),rho).T[0]
+            counter += 1
+        outputMatList.append(outputMat)
+    return outputMatList
+
+def makeMeasMxs(gs,prepMeasList):
+    dimE = gs.EVecs[0].shape[0]
+    numE = len(gs.EVecs)
+    numFid = len(prepMeasList)
+    outputMatList = []
+    for E in gs.EVecs:
+        outputMat = _np.zeros([dimE,numFid],float)
+        counter = 0
+        for measFid in prepMeasList:
+            outputMat[:,counter] = _np.dot(E.T,gs.product(measFid))[0]
+            counter += 1
+        outputMatList.append(outputMat)
+    return outputMatList
+
+
+            
+#    outputMat = _np.zeros([dimRho,numRho*numFid],float)
+#    counter = 0
+#    for prepFid in prepFidList:
+#        for rho in gs.rhoVecs:
+#            outputMat[:,counter] = _np.dot(gs.product(prepFid),rho).T[0]
+#            counter += 1
+#    return outputMat
+#    SqOutputMat = _np.dot(outputMat,outputMat.T)
+#    return SqOutputMat
+
+# def makeMeasMxs(gs,measFidList):
+#     dimE = gs.EVecs[0].shape[0]
+#     numE = len(gs.EVecs)
+#     numFid = len(measFidList)
+#     outputMat = _np.zeros([dimE,numE*numFid],float)
+#     counter = 0
+#     for measFid in measFidList:
+#         for E in gs.EVecs:
+#             outputMat[:,counter] = _np.dot(E.T,gs.product(measFid))[0]
+#             counter += 1
+#     SqOutputMat = _np.dot(outputMat,outputMat.T)
+#     return SqOutputMat
+
+def scoreFidList(gs,fidList,kind=None):
+    if kind not in ('prep', 'meas'):
+        raise ValueError("Need to specify 'prep' or 'meas' for kind!")
+    if kind == 'prep':
+        matToScore = makePrepMxs(gs,fidList)
+    else:
+        matToScore = makeMeasMxs(gs,fidList)
+    score = len(fidList) * _np.sum(1./_np.linalg.eigvalsh(matToScore))
+    return score
+
+def optimizeIntegerFidsSlack(gateset, fidList, 
+                              prepOrMeas = None,
+                              initialWeights=None, 
+#                              gates=True, G0=True, 
+                              maxIter=100, 
+                              fixedSlack=False, slackFrac=False, 
+                              returnAll=False, tol=1e-6, verbosity=1):
+    """
+    Find a locally optimal subset of the fiducials in fidList.
+
+    Locally optimal here means that no single fid can be excluded
+    without making the smallest non-gauge eigenvalue of the 
+    Jacobian.H*Jacobian matrix smaller, i.e. less amplified,
+    by more than a fixed or variable amount of "slack", as
+    specified by fixedSlack or slackFrac.
+
+    Parameters
+    ----------
+    gateset : GateSet
+        The gate set (associates gate matrices with gate labels).
+
+    fidList : list of GateStrings
+        List of all fiducials gate sequences to consider.
+
+    initialWeights : list-like
+        List or array of either booleans or (0 or 1) integers
+        specifying which fiducials in fidList comprise the initial
+        fiduial set.  If None, then starting point includes all
+        fiducials.
+
+    gates : bool or list, optional
+        Whether/which gates' parameters should be included as gateset
+        parameters *and* considered as part of the gateset space.
+
+      - True = all gates
+      - False = no gates
+      - list of gate labels = those particular gates.
+
+    G0 : bool, optional
+        Whether the first row of gate matrices should be included
+        as gateset parameters.
+
+    maxIter : int, optional
+        The maximum number of iterations before giving up.
+
+    fixedSlack : float, optional
+        If not None, a floating point number which specifies that excluding a 
+        fiducial is allowed to increase 1.0/smallest-non-gauge-eigenvalue by
+        fixedSlack.  You must specify *either* fixedSlack or slackFrac.
+
+    slackFrac : float, optional
+        If not None, a floating point number which specifies that excluding a 
+        fiducial is allowed to increase 1.0/smallest-non-gauge-eigenvalue by
+        fixedFrac*100 percent.  You must specify *either* fixedSlack or slackFrac.
+
+    returnAll : bool, optional
+        If True, return the final "weights" vector and score dictionary
+        in addition to the optimal fiducial list (see below).
+
+    tol : float, optional
+        Tolerance used for eigenvector degeneracy testing in twirling operation.
+
+    verbosity : int, optional
+        Integer >= 0 indicating the amount of detail to print.
+
+
+    Returns
+    -------
+    finalFidList : list
+        Sublist of fidList specifying the final, optimal, set of fiducials.
+
+    weights : array
+        Integer array, of length len(fidList), containing 0s and 1s to
+        indicate which elements of fidList were chosen as finalFidList.
+        Only returned when returnAll == True.
+
+    scoreDictionary : dict
+        Dictionary with keys == tuples of 0s and 1s of length len(fidList),
+        specifying a subset of fiducials, and values == 1.0/smallest-non-gauge-
+        eigenvalue "scores".  
+    """
+    if (fixedSlack and slackFrac) or (not fixedSlack and not slackFrac):
+        raise ValueError("Either fixedSlack *or* slackFrac should be specified")
+    lessWeightOnly = False  #Initially allow adding to weight. -- maybe make this an argument??
+
+#    nGaugeParams = gateset.getNumGaugeParams(gates, G0, SPAM=False)
+#    nGerms = len(germsList)
+    nFids = len(fidList)
+
+    dimRho = gateset.rhoVecs[0].shape[0]
+
+    if verbosity > 0:
+        print "Starting fiducial set optimization. Lower score is better."
+#        print "Gateset has %d gauge params." % nGaugeParams
+
+    #score dictionary:
+    #  keys = tuple-ized weight vector of 1's and 0's only
+    #  values = 1.0/critical_eval
+    scoreD = {} 
+
+    #twirledDerivDaggerDeriv == array J.H*J contributions from each germ (J=Jacobian)
+    # indexed by (iGerm, iGatesetParam1, iGatesetParam2)
+    # size (nGerms, vec_gateset_dim, vec_gateset_dim)
+    fidLengths = _np.array( map(len,fidList), 'i')
+    if prepOrMeas == 'prep':
+        fidArrayList = makePrepMxs(gateset,fidList)
+    elif prepOrMeas == 'meas':
+        fidArrayList = makeMeasMxs(gateset,fidList)
+    numMxs = len(fidArrayList)
+        
+    def computeScore(wts):
+        numFids = _np.sum(wts)
+        scoreMx = _np.zeros([dimRho,numFids *  numMxs],float)
+        colInd = 0
+        wts = _np.array(wts)
+        wtsLoc = _np.where(wts)[0]
+        for fidArray in fidArrayList:
+            scoreMx[:,colInd:colInd+numFids] = fidArray[:,wtsLoc]
+            colInd += numFids
+        scoreSqMx = _np.dot(scoreMx,scoreMx.T)
+        score = numFids * _np.sum(1./_np.linalg.eigvalsh(scoreSqMx))
+        if score <= 0:
+            score = 1e10
+        scoreD[tuple(wts)] = score
+        return score
+
+    def getNeighbors(boolVec):
+        for i in xrange(nFids):
+            v = boolVec.copy()
+            v[i] = (v[i] + 1) % 2 #toggle v[i] btwn 0 and 1
+            yield v
+
+    if initialWeights is not None:
+        weights = _np.array( [1 if x else 0 for x in initialWeights ] )
+    else:
+        weights = _np.ones( nFids, 'i' ) #default: start with all germs
+        lessWeightOnly = True #we're starting at the max-weight vector
+
+    score = computeScore(weights)
+    L1 = sum(weights) # ~ L1 norm of weights
+
+    for iIter in xrange(maxIter):
+        scoreD_keys = scoreD.keys() #list of weight tuples already computed
+
+        if verbosity > 0:
+            print "Iteration %d: score=%g, nFids=%d" % (iIter, score, L1)
+        
+        bFoundBetterNeighbor = False
+        for neighborNum, neighbor in enumerate(getNeighbors(weights)):
+            if tuple(neighbor) not in scoreD_keys:
+                neighborL1 = sum(neighbor)
+                neighborScore = computeScore(neighbor)
+            else:
+                neighborL1 = sum(neighbor)
+                neighborScore = scoreD[tuple(neighbor)]
+
+            #Move if we've found better position; if we've relaxed, we only move when L1 is improved.
+            if neighborScore <= score and (neighborL1 < L1 or lessWeightOnly == False):
+                weights, score, L1 = neighbor, neighborScore, neighborL1
+                bFoundBetterNeighbor = True
+                if verbosity > 1: print "Found better neighbor: nFids = %d score = %g" % (L1,score)
+
+
+        if not bFoundBetterNeighbor: # Time to relax our search.
+            lessWeightOnly=True #from now on, don't allow increasing weight L1
+
+            if fixedSlack==False:
+                slack = score*slackFrac #Note score is positive (for sum of 1/lambda)
+            else:
+                slack = fixedSlack
+            assert(slack > 0)
+
+            if verbosity > 1:
+                print "No better neighbor. Relaxing score w/slack: %g => %g" % (score, score+slack)
+            score += slack #artificially increase score and see if any neighbor is better now...
+
+            for neighborNum, neighbor in enumerate(getNeighbors(weights)):
+                if sum(neighbor) < L1 and scoreD[tuple(neighbor)] < score:
+                    weights, score, L1 = neighbor, scoreD[tuple(neighbor)], sum(neighbor)
+                    bFoundBetterNeighbor = True
+                    if verbosity > 1: print "Found better neighbor: nFids = %d score = %g" % (L1,score)
+
+            if not bFoundBetterNeighbor: #Relaxing didn't help!
+                print "Stationary point found!";
+                break #end main for loop
+        
+        print "Moving to better neighbor"
+    else:
+        print "Hit max. iterations"
+    
+    print "score = ", score
+    print "weights = ",weights
+    print "L1(weights) = ",sum(weights)
+
+    goodFidList = []
+    for index,val in enumerate(weights):
+        if val==1:
+            goodFidList.append(fidList[index])
+
+    if returnAll:
+        return goodFidList, weights, scoreD
+    else:
+        return goodFidList
