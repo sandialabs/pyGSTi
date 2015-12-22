@@ -692,7 +692,8 @@ def buildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameteri
             if unitaryEmbedding or parameterization != "linear":
                 raise ValueError("'D' gate only makes sense to use when unitaryEmbedding is False and parameterization == 'linear'")
             
-            indicesToParameterize = [ (i,i) for i in range(1,stateSpaceDim**2) ] #parameterize only the diagonals els after the first
+            #indicesToParameterize = [ (i,i) for i in range(1,stateSpaceDim**2) ] #parameterize only the diagonals els after the first
+            indicesToParameterize = [ (i,i) for i in range(0,stateSpaceDim**2) ] #parameterize only the diagonals els
             pp_gateMx = _np.identity(stateSpaceDim**2, 'd') # *real* 4x4 mx in Pauli-product basis -- still just the identity!
             gateTermInFinalBasis = embedGate(pp_gateMx, tuple(labels), indicesToParameterize) # pp_gateMx assumed to be in the Pauli-product basis
 

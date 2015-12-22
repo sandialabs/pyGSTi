@@ -965,7 +965,7 @@ class GateSet(_collections.OrderedDict):
             return G
 
 
-    #Vectorizing Identities.
+    #Vectorizing Identities. (Vectorization)
     # Note when vectorizing op uses numpy.flatten rows are kept contiguous, so the first identity below is valid.
     # Below we use E(i,j) to denote the elementary matrix where all entries are zero except the (i,j) entry == 1
     
@@ -3701,7 +3701,7 @@ class GateSet(_collections.OrderedDict):
         for i in xrange(dim): #Note: always range over all rows: this is *generator* mx, not gauge mx itself
             for j in xrange(dim):
                 unitMx = _BT._mut(i,j,dim)
-                gsDeriv = self.copy()
+                #DEBUG: gsDeriv = self.copy() -- should delete this after debugging is done since doesn't work for parameterized gates
                 if SPAM:
                     for k,rhoVec in enumerate(self.rhoVecs):
                         gsDeriv.set_rhoVec( _np.dot(unitMx, rhoVec), k)
