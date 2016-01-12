@@ -19,7 +19,7 @@ class GateString(object):
     testing for equality, indexing,  slicing, multiplying).
     """
 
-    def __init__(self, tupleOfGateLabels, stringRepresentation=None, bCheck=False):
+    def __init__(self, tupleOfGateLabels, stringRepresentation=None, bCheck=True):
         """ 
         Create a new GateString object 
 
