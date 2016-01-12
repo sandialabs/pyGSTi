@@ -132,7 +132,8 @@ def ChiSqFunc( N, p, f, minProbClipForWeighting=1e-4 ):
         where cp is the value of p clipped to the interval
         (minProbClipForWeighting, 1-minProbClipForWeighting)        
     """
-    cp = _np.clip(p,minProbClipForWeighting,1-minProbClipForWeighting)
+    #cp = _np.clip(p,minProbClipForWeighting,1-minProbClipForWeighting)
+    cp = _np.clip(p,minProbClipForWeighting,1e10) #effectively no upper bound
     return N*(p-f)**2/cp
 
 
@@ -611,7 +612,8 @@ def TotalChiSquared(dataset, gateset, gateStrings=None,
       gateset.Bulk_fillProbs(probs, spam_lbl_rows, evTree, clipTo, check)
 
 
-    cprobs = _np.clip(probs,minProbClipForWeighting,1-minProbClipForWeighting) #clipped probabilities (also clip derivs to 0?)
+    #cprobs = _np.clip(probs,minProbClipForWeighting,1-minProbClipForWeighting) #clipped probabilities (also clip derivs to 0?)
+    cprobs = _np.clip(probs,minProbClipForWeighting,1e10) #effectively no upper bound
     chi2 = _np.sum( N[None,:] * ((probs - f)**2/cprobs), axis=(0,1) ) # Note (0,1) are all axes in this case
     #TODO: try to replace final N[...] multiplication with dot or einsum, or do summing sooner to reduce memory
 

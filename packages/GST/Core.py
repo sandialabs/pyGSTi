@@ -3022,12 +3022,13 @@ def _contractToCP_direct(gateset,verbosity,TPalso=False,maxiter=100000,tol=1e-8)
 
         #Make trace preserving by zeroing out real parts of off diagonal blocks and imaginary parts
         #  within diagaonal 1x1 and 3x3 block (so really just the 3x3 block's off diag elements)
-        assert(new_Jmx.shape == (4,4)) #NOTE: only works for 1-qubit case so far
-        for k in range(1,4):
+        #assert(new_Jmx.shape == (4,4)) #NOTE: only works for 1-qubit case so far
+        kmax = new_Jmx.shape[0]
+        for k in range(1,kmax):
           new_Jmx[0,k] = 1j*new_Jmx[0,k].imag
           new_Jmx[k,0] = 1j*new_Jmx[k,0].imag
-        for i in range(1,4):
-          for j in range(1,4):
+        for i in range(1,kmax):
+          for j in range(1,kmax):
             new_Jmx[i,j] = new_Jmx[i,j].real
           
         evals,evecs = _np.linalg.eig(new_Jmx)
