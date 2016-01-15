@@ -1,10 +1,15 @@
 """ Gate Set Tomography Python Package """
 #Import the most important/useful routines of each module/sub-package
 # into the package namespace
+
 import algorithms as alg
-import construction as cstn
+import construction as cst
 import objects as obj
+
+from algorithms.core import *
+from algorithms.grammatrix import *
 from tools import *
+from drivers import *
 
 
 #OLD

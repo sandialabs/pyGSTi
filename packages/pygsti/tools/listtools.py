@@ -1,5 +1,4 @@
 """ Utility functions for working with lists """
-from .. import objects as _objs
 
 def remove_duplicates_in_place(l,indexToTest=None):
     """ 
@@ -27,14 +26,16 @@ def remove_duplicates_in_place(l,indexToTest=None):
     for x in l:
         t = x if indexToTest is None else x[indexToTest]
 
+        #TODO: create a special duplicate removal function for use with
+        #  WeighedGateStrings and include the below commented block:
         #Special case of weighted gate strings: if collisions
         # keep the hightest weight string
-        if isinstance(t, _objs.WeightedGateString) and t in s:
-            for gs in l[0:n]:
-                if gs == t: 
-                    if isinstance(gs, _objs.WeightedGateString):
-                        gs.weight = max(gs.weight, t.weight)
-                    break
+        #if isinstance(t, _WeightedGateString) and t in s:
+        #    for gs in l[0:n]:
+        #        if gs == t: 
+        #            if isinstance(gs, _WeightedGateString):
+        #                gs.weight = max(gs.weight, t.weight)
+        #            break
 
         if t not in s: 
             s.add(t)

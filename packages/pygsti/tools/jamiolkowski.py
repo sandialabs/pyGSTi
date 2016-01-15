@@ -2,7 +2,6 @@
 import numpy as _np
 import basistools as _bt
 import matrixtools as _mt
-import gatetools as _gt
 
 # Gate Mx G:      rho  --> G rho                    where G and rho are in the Pauli basis (by definition/convention)
 #            vec(rhoS) --> GStd vec(rhoS)           where GS and rhoS are in the std basis, GS = PtoS * G * StoP
@@ -301,53 +300,6 @@ def opWithInvJamiolkowskiIsomorphism(choiMx, choiMxBasis="gm", gateMxBasis="gm",
 #    #return gateMxInPauliBasis #for debugging -- should always be real
 #    return _np.real(gateMxInPauliBasis)
 
-
-def JTraceDistance(A, B, mxBasis="gm"): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)|)
-    """
-    Compute the Jamiolkowski trace distance between gate matrices A and B,
-    given by:
-
-      D = 0.5 * Tr( sqrt{ (J(A)-J(B))^2 } ) 
-      
-    where J(.) is the Jamiolkowski isomorphism map that maps a gate matrix
-    to it's corresponding Choi Matrix.
-
-    Parameters
-    ----------
-    A, B : numpy array
-        The matrices to compute the distance between.
-
-    mxBasis : {"std","gm","pp"}, optional
-        the basis of the gate matrices A and B : standard (matrix units),
-        Gell-Mann, or Pauli-product, respectively.
-    """
-    JA = opWithJamiolkowskiIsomorphism(A, gateMxBasis=mxBasis)
-    JB = opWithJamiolkowskiIsomorphism(B, gateMxBasis=mxBasis)
-    evals = _np.linalg.eigvals( JA-JB )
-    return 0.5 * sum( [abs(ev) for ev in evals] )
-
-def ProcessFidelity(A, B, mxBasis="gm"):
-    """
-    Returns the process fidelity between gate
-      matrices A and B given by :
-
-      F = Tr( sqrt{ sqrt(J(A)) * J(B) * sqrt(J(A)) } )^2
-      
-    where J(.) is the Jamiolkowski isomorphism map that maps a gate matrix
-    to it's corresponding Choi Matrix.
-
-    Parameters
-    ----------
-    A, B : numpy array
-        The matrices to compute the fidelity between.
-
-    mxBasis : {"std","gm","pp"}, optional
-        the basis of the gate matrices A and B : standard (matrix units),
-        Gell-Mann, or Pauli-product, respectively.
-    """
-    JA = opWithJamiolkowskiIsomorphism(A, gateMxBasis=mxBasis)
-    JB = opWithJamiolkowskiIsomorphism(B, gateMxBasis=mxBasis)
-    return _gt.Fidelity(JA,JB)
 
 
 def sumOfNegativeJEvals(gateset):

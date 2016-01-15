@@ -3,10 +3,12 @@ import numpy as _np
 import scipy as _scipy
 import numpy.random as _rndm
 
-import basistools as _bt
-from .. import construction as _ctn
-from .. import objects as _objs
+from ..tools import basistools as _bt
+from .. import tools as _tools
 
+import gatestring as _gs
+import gate as _gate
+import dataset as _ds
 
 #################################################
 # GateSet Tools
@@ -120,13 +122,13 @@ def depolarizeGateset(gateset,noise=None,max_noise=None,seed=None):
         r = max_noise * _rndm.random( len(gateset) )
         for (i,label) in enumerate(gateset):
             D = _np.diag( [1]+[1-r[i]]*(gateDim-1) )
-            newGateset.set_gate(label, _objs.FullyParameterizedGate( _np.dot(D,gateset[label]) ))
+            newGateset.set_gate(label, _gate.FullyParameterizedGate( _np.dot(D,gateset[label]) ))
             
     elif noise is not None:
         #Apply the same depolarization to each gate
         D = _np.diag( [1]+[1-noise]*(gateDim-1) )
         for (i,label) in enumerate(gateset):
-            newGateset.set_gate(label, _objs.FullyParameterizedGate( _np.dot(D,gateset[label]) ))
+            newGateset.set_gate(label, _gate.FullyParameterizedGate( _np.dot(D,gateset[label]) ))
     
     else: raise ValueError("Must specify either 'noise' or 'max_noise' -- neither was non-None")
     return newGateset
@@ -187,8 +189,8 @@ def rotateGateset(gateset, rotate=None, max_rotate=None, seed=None):
         r = max_rotate * _rndm.random( len(gateset) * 3 )
         for (i,label) in enumerate(gateset):
             rot = r[3*i:3*(i+1)]
-            newGateset.set_gate(label, _objs.FullyParameterizedGate( _np.dot( 
-                        _ctn.singleQubitGate(rot[0]/2.0,rot[1]/2.0,rot[2]/2.0), gateset[label]) ))
+            newGateset.set_gate(label, _gate.FullyParameterizedGate( _np.dot( 
+                        _bt.singleQubitGate(rot[0]/2.0,rot[1]/2.0,rot[2]/2.0), gateset[label]) ))
             
     elif rotate is not None:
         #Apply the same rotation to each gate
@@ -201,8 +203,8 @@ def rotateGateset(gateset, rotate=None, max_rotate=None, seed=None):
         else: raise ValueError("Rotation must be specifed as a single number or as a lenght-3 list, not: %s" % rotate)
             
         for (i,label) in enumerate(gateset):
-            newGateset.set_gate(label, _objs.FullyParameterizedGate( _np.dot( 
-                        _ctn.singleQubitGate(rx/2.0,ry/2.0,rz/2.0), gateset[label]) ))
+            newGateset.set_gate(label, _gate.FullyParameterizedGate( _np.dot( 
+                        _bt.singleQubitGate(rx/2.0,ry/2.0,rz/2.0), gateset[label]) ))
 
     else: raise ValueError("Must specify either 'rotate' or 'max_rotate' -- neither was non-None")
     return newGateset
@@ -260,13 +262,13 @@ def rotate2QGateset(gateset, rotate=None, max_rotate=None, seed=None):
         r = max_rotate * _rndm.random( len(gateset) * 15 )
         for (i,label) in enumerate(gateset):
             rot = r[15*i:15*(i+1)]
-            newGateset.set_gate(label, _objs.FullyParameterizedGate( _np.dot( 
-                        _ctn.twoQubitGate(rot[0]/2.0,rot[1]/2.0,rot[2]/2.0,
-                                             rot[3]/2.0,rot[4]/2.0,rot[5]/2.0,
-                                             rot[6]/2.0,rot[7]/2.0,rot[8]/2.0,
-                                             rot[9]/2.0,rot[10]/2.0,rot[11]/2.0,
-                                             rot[12]/2.0,rot[13]/2.0,rot[14]/2.0,
-                                             ), gateset[label]) ))
+            newGateset.set_gate(label, _gate.FullyParameterizedGate( _np.dot( 
+                        _bt.twoQubitGate(rot[0]/2.0,rot[1]/2.0,rot[2]/2.0,
+                                         rot[3]/2.0,rot[4]/2.0,rot[5]/2.0,
+                                         rot[6]/2.0,rot[7]/2.0,rot[8]/2.0,
+                                         rot[9]/2.0,rot[10]/2.0,rot[11]/2.0,
+                                         rot[12]/2.0,rot[13]/2.0,rot[14]/2.0,
+                                         ), gateset[label]) ))
             
     elif rotate is not None:
         #Apply the same rotation to each gate
@@ -283,11 +285,11 @@ def rotate2QGateset(gateset, rotate=None, max_rotate=None, seed=None):
         else: raise ValueError("Rotation must be specifed as a single number or as a lenght-15 list, not: %s" % rotate)
             
         for (i,label) in enumerate(gateset):
-            newGateset.set_gate(label, _objs.FullyParameterizedGate( _np.dot( 
-                        _ctn.twoQubitGate(rix/2.0,riy/2.0,riz/2.0,
-                                             rxi/2.0,rxx/2.0,rxy/2.0,rxz/2.0,
-                                             ryi/2.0,ryx/2.0,ryy/2.0,ryz/2.0,
-                                             rzi/2.0,rzx/2.0,rzy/2.0,rzz/2.0,), gateset[label]) ))
+            newGateset.set_gate(label, _gate.FullyParameterizedGate( _np.dot( 
+                        _bt.twoQubitGate(rix/2.0,riy/2.0,riz/2.0,
+                                         rxi/2.0,rxx/2.0,rxy/2.0,rxz/2.0,
+                                         ryi/2.0,ryx/2.0,ryy/2.0,ryz/2.0,
+                                         rzi/2.0,rzx/2.0,rzy/2.0,rzz/2.0,), gateset[label]) ))
 
     else: raise ValueError("Must specify either 'rotate' or 'max_rotate' -- neither was non-None")
     return newGateset
@@ -337,7 +339,7 @@ def randomizeGatesetWithUnitary(gatesetInPauliProdBasis,scale,seed=None):
             randUPP = _bt.stateUnitaryToPauliDensityMxOp_2Q(randU)
         else: raise ValueError("Gateset dimension must be either 4 (single-qubit) or 16 (two-qubit)")
 
-        gs_pauli.set_gate(gateLabel, _objs.FullyParameterizedGate(_np.dot(randUPP,gs_pauli[gateLabel])))
+        gs_pauli.set_gate(gateLabel, _gate.FullyParameterizedGate(_np.dot(randUPP,gs_pauli[gateLabel])))
 
     return gs_pauli
 
@@ -394,7 +396,7 @@ def increaseGatesetDimension(gateset, newDimension):
         newGate = _np.zeros( (newDimension,newDimension) )
         newGate[ 0:curDim, 0:curDim ] = gate[:,:]
         for i in xrange(curDim,newDimension): newGate[i,i] = 1.0
-        new_gateset.set_gate(gateLabel, _objs.FullyParameterizedGate(newGate))
+        new_gateset.set_gate(gateLabel, _gate.FullyParameterizedGate(newGate))
 
     new_gateset.makeSPAMs()
     return new_gateset
@@ -446,7 +448,7 @@ def decreaseGatesetDimension(gateset, newDimension):
         assert( gate.shape == (curDim,curDim) )
         newGate = _np.zeros( (newDimension,newDimension) )
         newGate[ :, : ] = gate[0:newDimension,0:newDimension]
-        new_gateset.set_gate(gateLabel, _objs.FullyParameterizedGate(newGate))
+        new_gateset.set_gate(gateLabel, _gate.FullyParameterizedGate(newGate))
 
     new_gateset.makeSPAMs()
     return new_gateset
@@ -476,7 +478,7 @@ def randomKickGateset(gateset, absmag=1.0, bias=0):
     kicked_gs = gateset.copy()
     for gateLabel,gate in gateset.iteritems():
         delta = absmag * 2.0*(_rndm.random(gate.shape)-0.5) + bias
-        kicked_gs.set_gate(gateLabel, _objs.FullyParameterizedGate(kicked_gs[gateLabel] + delta))
+        kicked_gs.set_gate(gateLabel, _gate.FullyParameterizedGate(kicked_gs[gateLabel] + delta))
     #kicked_gs.makeSPAMs() #if we modify rhoVecs or EVecs
     return kicked_gs
 
@@ -532,14 +534,14 @@ def generateFakeData(gatesetOrDataset, gateStringList, nSamples, sampleError="no
        A static data set filled with counts for the specified gate strings.
 
     """
-    if isinstance(gatesetOrDataset, _objs.DataSet):
+    if isinstance(gatesetOrDataset, _ds.DataSet):
         dsGen = gatesetOrDataset #dataset
         gsGen = None
-        dataset = _objs.DataSet( spamLabels=dsGen.getSpamLabels() )
+        dataset = _ds.DataSet( spamLabels=dsGen.getSpamLabels() )
     else:
         gsGen = gatesetOrDataset #dataset
         dsGen = None
-        dataset = _objs.DataSet( spamLabels=gsGen.get_SPAM_labels() )
+        dataset = _ds.DataSet( spamLabels=gsGen.get_SPAM_labels() )
 
     if seed is not None: _rndm.seed(seed)
 
@@ -558,7 +560,7 @@ def generateFakeData(gatesetOrDataset, gateStringList, nSamples, sampleError="no
               N = nSamples #if not indexable, nSamples should be a single number
       
       #Weight the number of samples according to a WeightedGateString
-      if isinstance(s, _objs.WeightedGateString):
+      if isinstance(s, _gs.WeightedGateString):
           nWeightedSamples = int(round(s.weight * N))
       else:
           nWeightedSamples = N
@@ -593,4 +595,47 @@ def generateFakeData(gatesetOrDataset, gateStringList, nSamples, sampleError="no
 
 
 
+def printGatesetInfo(gateset):
+    """
+    Print to stdout relevant information about a gateset, 
+      including the Choi matrices and their eigenvalues.
+    
+    Parameters
+    ----------
+    gateset : GateSet
+        The gate set to print information about.
 
+    Returns
+    -------
+    None
+    """
+    print gateset
+    print "\n"
+    print "Choi Matrices:"
+    for (label,gate) in gateset.iteritems():
+        print "Choi(%s) in pauli basis = \n" % label, 
+        _tools.complexMxToString(_tools.opWithJamiolkowskiIsomorphism(gate))
+        print "  --eigenvals = ", sorted( 
+            [ev.real for ev in _np.linalg.eigvals(
+                    _tools.opWithJamiolkowskiIsomorphism(gate))] ),"\n"
+    print "Sum of negative Choi eigenvalues = ", _tools.sumOfNegativeJEvals(gateset)
+
+    #OLD, and requires likelihoodfunctions...
+    #rhoVecPenalty = sum( [ _lf.rhoVecPenalty(rhoVec) for rhoVec in gateset.rhoVecs ] )
+    #EVecPenalty   = sum( [ _lf.EVecPenalty(EVec)     for EVec   in gateset.EVecs ] )
+    #print "rhoVec Penalty (>0 if invalid rhoVecs) = ", rhoVecPenalty
+    #print "EVec Penalty (>0 if invalid EVecs) = ", EVecPenalty
+
+
+#def interpretGatesetInfo(gateset):
+#    print "\n"
+#    print "Interpeted Info:"
+#    for (label,gate) in gateset.iteritems():
+#        gate_evals,gate_evecs = _np.linalg.eig(gate)
+#        choi = _tools.opWithJamiolkowskiIsomorphism(gate)
+#        choi_evals = [ ev.real for ev in _np.linalg.eigvals(choi) ]
+#        print "Gate: ", label
+#        print " -- eigenvals = ", gate_evals
+#        print " -- eigenvecs = "; _MOps.printMx(gate_evecs)
+#        print " -- choi eigenvals = ", sorted(choi_evals)
+#        print " -- choi trace = ", _MOps.trace(choi)

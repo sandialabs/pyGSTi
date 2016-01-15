@@ -2,7 +2,7 @@ import numpy as _np
 from numpy import pi
 from scipy import linalg as _linalg
 
-from .. import tools as _tools
+from ..tools import basistools as _bt
 
 #Define 2 qubit to symmetric (+) antisymmetric space transformation A:
 A = _np.matrix([[1,0,0,0],
@@ -79,7 +79,7 @@ def makeQutritGS(errorScale,Xangle = _np.pi/2, Yangle = _np.pi/2, MSglobal = _np
                      [0,0,0]]))
 
     identity3 = arrType(_np.identity(3))
-    identity3gm = _tools.basisChg_StdToGellMann(_np.reshape(identity3,(9,1)))
+    identity3gm = _bt.basisChg_StdToGellMann(_np.reshape(identity3,(9,1)))
 
     E0 = arrType(_np.diag([1,0,0]))
     E1 = arrType(_np.diag([0,1,0]))
@@ -116,19 +116,19 @@ def makeQutritGS(errorScale,Xangle = _np.pi/2, Yangle = _np.pi/2, MSglobal = _np
 
     #Change gate representation to superoperator in Gell-Mann basis
     gateISO = _np.kron(_np.conj(gateImx),gateImx)
-    gateISOgm = _tools.basisChg_StdToGellMann(gateISO)
+    gateISOgm = _bt.basisChg_StdToGellMann(gateISO)
     gateXSO = _np.kron(_np.conj(gateXmx),gateXmx)
-    gateXSOgm = _tools.basisChg_StdToGellMann(gateXSO)
+    gateXSOgm = _bt.basisChg_StdToGellMann(gateXSO)
     gateYSO = _np.kron(_np.conj(gateYmx),gateYmx)
-    gateYSOgm = _tools.basisChg_StdToGellMann(gateYSO)
+    gateYSOgm = _bt.basisChg_StdToGellMann(gateYSO)
     gateMSO = _np.kron(_np.conj(gateMmx),gateMmx)
-    gateMSOgm = _tools.basisChg_StdToGellMann(gateMSO)
+    gateMSOgm = _bt.basisChg_StdToGellMann(gateMSO)
 
 
-    rho0gm = _tools.basisChg_StdToGellMann(_np.reshape(rho0,(9,1)))
-    E0gm =  _tools.basisChg_StdToGellMann(_np.reshape(E0,(9,1)))
-    E1gm = _tools.basisChg_StdToGellMann(_np.reshape(E1,(9,1)))
-    E2gm = _tools.basisChg_StdToGellMann(_np.reshape(E2,(9,1)))
+    rho0gm = _bt.basisChg_StdToGellMann(_np.reshape(rho0,(9,1)))
+    E0gm =  _bt.basisChg_StdToGellMann(_np.reshape(E0,(9,1)))
+    E1gm = _bt.basisChg_StdToGellMann(_np.reshape(E1,(9,1)))
+    E2gm = _bt.basisChg_StdToGellMann(_np.reshape(E2,(9,1)))
 
     qutritGS = _objs.GateSet()
     qutritGS.set_rhoVec(rho0gm)

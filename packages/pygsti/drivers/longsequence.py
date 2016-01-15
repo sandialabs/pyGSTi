@@ -8,7 +8,6 @@ from .. import io as _io
 from .. import objects as _objs
 from .. import tools as _tools
 
-
 def doLongSequenceGST(dataFilenameOrSet, targetGateFilenameOrSet,
                       rhoStrsListOrFilename, EStrsListOrFilename,
                       germsListOrFilename, maxLengths, gateLabels, 
@@ -124,9 +123,6 @@ def doLongSequenceGST(dataFilenameOrSet, targetGateFilenameOrSet,
     """
                     
     cwd = _os.getcwd()
-
-    if truncScheme == "whole germ powers":
-        truncFn = _construction.repeatWithMaxLength
 
     #Get target gateset
     if isinstance(targetGateFilenameOrSet, str):

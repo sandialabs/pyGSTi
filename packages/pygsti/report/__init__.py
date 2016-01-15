@@ -3,3 +3,4 @@
 # the package namespace
 from generation import *
 from plotting import *
+from results import Results

@@ -3,7 +3,8 @@ import numpy as _np
 import itertools as _itertools
 import math as _math
 import sys as _sys
-from .. import construction as _construction
+from ..construction import gatestringconstruction as _gsc
+
 
 def _nCr(n,r):
     """Number of combinations of r items out of a set of n.  Equals n!/(r!(n-r)!)"""
@@ -29,8 +30,8 @@ def getSufficientFiducialPairs(targetGateset, rhoStrs, EStrs, germList,
            #indexed by [iGerm,iSpamLabel,iFiducialPair,iGatesetParam] : gives d(<SP|f0+exp_iGerm+f1|AM>)/d(iGatesetParam)
 
         for iGerm,germ in enumerate(germList):
-            expGerm = _construction.repeatWithMaxLength(germ,L) # could pass exponent and set to germ**exp here
-            lst = _construction.createGateStringList("f0+expGerm+f1", f0=rhoStrs, f1=EStrs,
+            expGerm = _gsc.repeatWithMaxLength(germ,L) # could pass exponent and set to germ**exp here
+            lst = _gsc.createGateStringList("f0+expGerm+f1", f0=rhoStrs, f1=EStrs,
                                                          expGerm=expGerm, order=('f0','f1'))
             evTree = targetGateset.Bulk_evalTree(lst)
             dProbs = targetGateset.Bulk_dProbs(evTree,SPAM=True)
@@ -52,7 +53,7 @@ def getSufficientFiducialPairs(targetGateset, rhoStrs, EStrs, germList,
             print "Amplified parameter test: matrices are %s and %s." % (M0.shape, M1.shape)
             print "Index : SV(L=%d)  SV(L=%d)  AmpTest ( > %g ?)" % (L0,L1,tol)
         for i,(v0,v1) in enumerate(zip(sorted(s0,reverse=True),sorted(s1,reverse=True))):
-            If Abs(v0) > 0.1 and (v1/v0)/L_ratio > tol: 
+            if abs(v0) > 0.1 and (v1/v0)/L_ratio > tol: 
                 numAmplified += 1
                 if verb > 3: print "%d: %g  %g  %g YES" % (i,v0,v1, (v1/v0)/L_ratio )
             elif verb > 3: print "%d: %g  %g  %g NO" % (i,v0,v1, (v1/v0)/L_ratio )
@@ -145,8 +146,8 @@ def getSufficientFiducialPairs(targetGateset, rhoStrs, EStrs, germList,
 #
 #    dProbs = []
 #    for iGerm,germ in enumerate(germList):
-#        expGerm = _construction.repeatWithMaxLength(germ,L)
-#        lst = _construction.createGateStringList("f0+expGerm+f1", f0=fiducialList, f1=fiducialList,
+#        expGerm = _gsc.repeatWithMaxLength(germ,L)
+#        lst = _gsc.createGateStringList("f0+expGerm+f1", f0=fiducialList, f1=fiducialList,
 #                                        expGerm=expGerm, order=('f0','f1'))
 #        evTree = targetGateset.Bulk_evalTree(lst)
 #        dProbs.append( targetGateset.Bulk_dProbs(evTree,SPAM=True) )

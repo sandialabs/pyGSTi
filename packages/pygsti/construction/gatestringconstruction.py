@@ -2,95 +2,9 @@
 import itertools as _itertools
 import numpy as _np
 import numpy.random as _rndm
-from .. import tools.listtools as _LT
-from .. import objects as _objs
 
-def _getNumPeriods(gateString, periodLen):
-    n = 0
-    if len(gateString) < periodLen: return 0
-    while gateString[0:periodLen] == gateString[n*periodLen:(n+1)*periodLen]: 
-        n += 1
-    return n
-
-def compressGateLabelTuple(gateString, minLenToCompress=20, maxPeriodToLookFor=20):
-    """
-    Compress a gate string.  The result is tuple with a special compressed-
-    gate-string form form that is not useable by other GST methods but is
-    typically shorter (especially for long gate strings with a repetative
-    structure) than the original gate string tuple.
-
-    Parameters
-    ----------
-    gateString : tuple of gate labels or GateString
-        The gate string to compress.
-
-    minLenToCompress : int, optional
-        The minimum length string to compress.  If len(gateString)
-        is less than this amount its tuple is returned.
-        
-    maxPeriodToLookFor : int, optional
-        The maximum period length to use when searching for periodic
-        structure within gateString.  Larger values mean the method
-        takes more time but could result in better compressing.
-
-    Returns
-    -------
-    tuple
-        The compressed (or raw) gate string tuple.
-    """
-    gateString = tuple(gateString) # converts from GateString or list to tuple if needed
-    L = len(gateString)
-    if L < minLenToCompress: return tuple(gateString)
-    compressed = ["CCC"] #list for appending, then make into tuple at the end
-    start = 0
-    while start < L:
-        #print "Start = ",start
-        score = _np.zeros( maxPeriodToLookFor+1, 'd' )
-        numperiods = _np.zeros( maxPeriodToLookFor+1, 'i' )
-        for periodLen in range(1,maxPeriodToLookFor+1):
-            n = _getNumPeriods( gateString[start:], periodLen )
-            if n == 0: score[periodLen] = 0
-            elif n == 1: score[periodLen] = 4.1/periodLen
-            else: score[periodLen] = _np.sqrt(periodLen)*n
-            numperiods[periodLen] = n
-        bestPeriodLen = _np.argmax(score)
-        n = numperiods[bestPeriodLen]
-        bestPeriod = gateString[start:start+bestPeriodLen]
-        #print "Scores = ",score
-        #print "num per = ",numperiods
-        #print "best = %s ^ %d" % (str(bestPeriod), n)
-        assert(n > 0 and bestPeriodLen > 0)
-        if start > 0 and n == 1 and compressed[-1][1] == 1:
-            compressed[-1] = (compressed[-1][0]+bestPeriod, 1)
-        else:
-            compressed.append( (bestPeriod, n) )
-        start = start+bestPeriodLen*n
-            
-    return tuple(compressed)
-
-def expandGateLabelTuple(compressedGateString):
-    """
-    Expand a compressed tuple created with compressGateLabelTuple(...)
-    into a tuple of gate labels.
-
-    Parameters
-    ----------
-    compressedGateString : tuple
-        a tuple in the compressed form created by
-        compressGateLabelTuple(...).
-
-    Returns
-    -------
-    tuple
-        A tuple of gate labels specifying the uncompressed gate string.
-    """
-    
-    if len(compressedGateString) == 0: return ()
-    if compressedGateString[0] != "CCC": return compressedGateString
-    expandedString = []
-    for (period,n) in compressedGateString[1:]:
-        expandedString += period*n
-    return tuple(expandedString)    
+from ..tools import listtools as _lt
+from ..objects import gatestring as _gs
 
 
 def _runExpression(str_expression, myLocals):
@@ -144,12 +58,12 @@ def createGateStringList(*args,**kwargs):
                 result = _runExpression(str_expression, myLocals)
             except AssertionError: continue #just don't append
 
-            if isinstance(result,_objs.GateString):
+            if isinstance(result,_gs.GateString):
                 gateStr = result
             elif isinstance(result,list) or isinstance(result,tuple):
-                gateStr = _objs.GateString(result)
+                gateStr = _gs.GateString(result)
             elif isinstance(result,str):
-                gateStr = _objs.GateString(None, result)
+                gateStr = _gs.GateString(None, result)
             lst.append(gateStr)
             
     return lst
@@ -369,22 +283,22 @@ def listAllGateStringsOfLength(gateLabels, length):
     list
         A list of GateString objects.
     """
-    if length == 0: return [ _objs.GateString( () ) ]
-    if length == 1: return [ _objs.GateString( (g,) ) for g in gateLabels ]
+    if length == 0: return [ _gs.GateString( () ) ]
+    if length == 1: return [ _gs.GateString( (g,) ) for g in gateLabels ]
     m1StrList = listAllGateStringsOfLength(gateLabels, length-1)
-    return [ _objs.GateString( (g,) ) + s for g in gateLabels for s in m1StrList ]
+    return [ _gs.GateString( (g,) ) + s for g in gateLabels for s in m1StrList ]
 
 
 def genAllGateStringsOfLength(gateLabels, length):
     """Generator version of listAllGateStringsOfLength"""
-    if length == 0: yield _objs.GateString( () )
+    if length == 0: yield _gs.GateString( () )
     elif length == 1: 
         for g in gateLabels:
-            yield _objs.GateString( (g,) )
+            yield _gs.GateString( (g,) )
     else:
         for g in gateLabels:
             for s in genAllGateStringsOfLength(gateLabels, length-1):
-                yield _objs.GateString( (g,) ) + s
+                yield _gs.GateString( (g,) ) + s
 
 
 def listAllGateStringsWithoutPowersAndCycles(gateLabels, maxLength):
@@ -446,7 +360,7 @@ def listRandomGateStringsOfLength(gateLabels, length, count):
     ret = [ ]
     for i in range(count):
         r = _rndm.random(length) * len(gateLabels)
-        ret.append( _objs.GateString( [gateLabels[int(k)] for k in r]) )
+        ret.append( _gs.GateString( [gateLabels[int(k)] for k in r]) )
     return ret
 
 def listPartialStrings(gateString):
@@ -489,79 +403,58 @@ def listLGSTGateStrings(specs, gateLabels):
     """
     from Core import getRhoAndEStrs as _getRhoAndEStrs #move this to the top when this fn is split off of Core.py
     rStrings, eStrings = _getRhoAndEStrs(specs)
-    singleGates = [ _objs.GateString( (gl,), "(%s)" % gl ) for gl in gateLabels ]
+    singleGates = [ _gs.GateString( (gl,), "(%s)" % gl ) for gl in gateLabels ]
     ret = createGateStringList('eStr','rhoStr','rhoStr+eStr','rhoStr+g+eStr',
                                eStr=eStrings, rhoStr=rStrings, g=singleGates,
                                order=['g','rhoStr','eStr'] ) # LEXICOGRAPHICAL VS MATRIX ORDER
-    return _LT.remove_duplicates(ret)
+    return _lt.remove_duplicates(ret)
 
 
-
-#For evalTree usage
-def gateStringToPythonString(gateString,gateLabels):
-    """
-    Convert a gate string into a python string, where each gate label is
-    represented as a **single** character, starting with 'A' and contining
-    down the alphabet.  This can be useful for processing gate strings 
-    using python's string tools (regex in particular).
+def listStringsLGSTcanEstimate(dataset, specs):
+  """ 
+    Compute the gate strings that LGST is able to estimate
+    given a set of fiducial strings or rhoSpecs and ESpecs.
 
     Parameters
     ----------
-    gateString : tuple or GateString
-        the gate label sequence that is converted to a string.
-    
-    gateLabels : tuple
-       tuple containing all the gate labels that will be mapped to alphabet
-       characters, beginning with 'A'.
+    dataset : DataSet
+        The data used to generate the LGST estimates
+
+    specs : 2-tuple
+        A (rhoSpecs,ESpecs) tuple usually generated by calling getRhoAndESpecs(...)
 
     Returns
     -------
-    string
-        The converted gate string.
-    
-    Examples
-    --------
-        ('Gx','Gx','Gy','Gx') => "AABA"
-    """
-    assert(len(gateLabels) < 26) #Complain if we go beyond 'Z'
-    translateDict = {}; c = 'A'
-    for gateLabel in gateLabels:
-        translateDict[gateLabel] = c
-        c = chr(ord(c) + 1)
-    return "".join([ translateDict[gateLabel] for gateLabel in gateString ])
+    list of lists of tuples
+       each list of tuples specifyies a gate string that LGST can estimate.
 
-def pythonStringToGateString(pythonString,gateLabels):
-    """
-    Convert a python string into a gate string, where each gate label is
-    represented as a **single** character, starting with 'A' and contining
-    down the alphabet.  This performs the inverse of gateStringToPythonString(...).
+  """
 
-    Parameters
-    ----------
-    pythonString : string
-        string whose individual characters correspond to the gate labels of a
-        gate string.
+  #Process input parameters
+  rhoSpecs, ESpecs = specs
 
-    gateLabels : tuple
-       tuple containing all the gate labels that will be mapped to alphabet
-       characters, beginning with 'A'.
+  estimatable = []
+  gateStrings = dataset.keys()
+  pre = tuple(ESpecs[0].str);     l0 = len(pre)   #the first ESpec string prefix
+  post = tuple(rhoSpecs[0].str); l1 = len(post)  #the first rhoSpec string postfix
 
-    Returns
-    -------
-    GateString
-        The decoded python string as a GateString object (essentially 
-        a tuple of gate labels).
+  def rootIsOK(rootStr):
+    for espec in ESpecs:
+      for rhospec in rhoSpecs:
+        if tuple(rhospec.str) + tuple(rootStr) + tuple(espec.str) not in gateStrings: # LEXICOGRAPHICAL VS MATRIX ORDER
+          return False
+    return True
 
-    Examples
-    --------
-        "AABA" => ('Gx','Gx','Gy','Gx')
-    """
-    assert(len(gateLabels) < 26) #Complain if we go beyond 'Z'
-    translateDict = {}; c = 'A'
-    for gateLabel in gateLabels:
-        translateDict[c] = gateLabel
-        c = chr(ord(c) + 1)
-    return _objs.GateString( tuple([ translateDict[c] for c in pythonString ]) )
+  #check if string has first fiducial at beginning & end, and if so
+  # strip that first fiducial off, leaving a 'root' string that we can test
+  for s in gateStrings:
+    if s[0:l0] == pre and s[len(s)-l1:] == post:
+      root = s[l0:len(s)-l1]
+      if rootIsOK( root ):
+        estimatable.append( root )
+            
+  return gateStringList(estimatable)
+
 
 
 def gateStringList( listOfGateLabelTuplesOrStrings ):
@@ -582,12 +475,12 @@ def gateStringList( listOfGateLabelTuplesOrStrings ):
     """
     ret = []
     for x in listOfGateLabelTuplesOrStrings:
-        if isinstance(x,_objs.GateString):
+        if isinstance(x,_gs.GateString):
             ret.append(x)
         if isinstance(x,tuple) or isinstance(x,list):
-            ret.append( _objs.GateString(x) )
+            ret.append( _gs.GateString(x) )
         elif isinstance(x,str):
-            ret.append( _objs.GateString(None, x) )
+            ret.append( _gs.GateString(None, x) )
         else:
             raise ValueError("Cannot convert type %s into a GateString" % str(type(x)))
     return ret
@@ -601,7 +494,7 @@ def gateStringList( listOfGateLabelTuplesOrStrings ):
 #            for l in range(minlength, maxlength+1):
 #                pdic = listPeriodicGateStringsOfLength(gateLabels, max_period, l)
 #                ret += [ tuple(lb) + tuple(p) + tuple(rb) for p in pdic ]
-#    return _LT.remove_duplicates(ret)
+#    return _lt.remove_duplicates(ret)
 #
 #def listPeriodicGateStringsOfLength(gateLabels, max_period, length):
 #    ret = [ ]
@@ -616,7 +509,7 @@ def gateStringList( listOfGateLabelTuplesOrStrings ):
 #            else:
 #                s = period * nPeriods
 #                ret.append( tuple(s[0:length]) )
-#    return _LT.remove_duplicates(ret)
+#    return _lt.remove_duplicates(ret)
 #
 #
 #

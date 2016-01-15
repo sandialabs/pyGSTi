@@ -1,7 +1,6 @@
 """ Defines the EvalTree class which implements an evaluation tree. """
 import re as _re
 import gatestring as _gs
-from .. import tools as _tools
 
 class EvalTree(list):
     """
@@ -209,8 +208,8 @@ class EvalTree(list):
         repDict = {}
         for (k,gateString) in enumerate(gateStringList):
             #print "String %d (len %d): " % (k,len(gateString)),
-            for repStr,repCnt in repetitions( _tools.gateStringToPythonString(gateString,singleGateLabels) ):
-                repGateStr = _tools.pythonStringToGateString(repStr,singleGateLabels)
+            for repStr,repCnt in repetitions( _gs.gateStringToPythonString(gateString,singleGateLabels) ):
+                repGateStr = _gs.pythonStringToGateString(repStr,singleGateLabels)
                 if repDict.has_key(repGateStr):
                     if repCnt not in repDict[repGateStr][0]:
                         repDict[repGateStr][0].append(repCnt)
@@ -455,5 +454,3 @@ class EvalTree(list):
                                                 'xlabel': "Index Interval", 'ylabel': 'Index' }
 
         return analysis
-
-

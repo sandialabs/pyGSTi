@@ -1,7 +1,7 @@
 """ Defines classes which represent gates, as well as supporting functions """
 import numpy as _np
-from .. import tools as _tools
-from .. import algorithms.optimize as _opt
+from .. import optimize as _opt
+from ..tools import matrixtools as _mt
 
 def optimizeGate(gateToOptimize, targetGate, bG0 = True):
     """
@@ -39,14 +39,14 @@ def optimizeGate(gateToOptimize, targetGate, bG0 = True):
 
     def objectiveFunc(param_vec):
         gateToOptimize.fromVector(param_vec,bG0)
-        return _tools.frobeniusNorm(gateToOptimize.matrix-targetMatrix)
+        return _mt.frobeniusNorm(gateToOptimize.matrix-targetMatrix)
         
     x0 = gateToOptimize.toVector(bG0)
     minSol = _opt.minimize(objectiveFunc, x0, method='BFGS', maxiter=10000, maxfev=10000,
                            tol=1e-6, callback=None)
 
     gateToOptimize.fromVector(minSol.x)
-    print "DEBUG: optimized gate to min frobenius distance %g" % _tools.frobeniusNorm(gateToOptimize.matrix-targetMatrix)
+    print "DEBUG: optimized gate to min frobenius distance %g" % _mt.frobeniusNorm(gateToOptimize.matrix-targetMatrix)
 
 
 def compose(gate1, gate2):
@@ -252,7 +252,7 @@ class FullyParameterizedGate(object):
 
     def __str__(self):
         s = "Fully Parameterized gate with shape %s\n" % str(self.matrix.shape)
-        s += _tools.mxToString(self.matrix, width=4, prec=2)
+        s += _mt.mxToString(self.matrix, width=4, prec=2)
         return s
 
     def compose(self, otherGate):
@@ -537,7 +537,7 @@ class LinearlyParameterizedGate(object):
 
     def __str__(self):
         s = "Linearly Parameterized gate with shape %s, num params = %d\n" % (str(self.matrix.shape), self.numParams)
-        s += _tools.mxToString(self.matrix, width=5, prec=1)
+        s += _mt.mxToString(self.matrix, width=5, prec=1)
         return s
 
     def compose(self, otherGate):

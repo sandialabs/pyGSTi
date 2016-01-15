@@ -3,9 +3,6 @@
 # the package namespace
 
 from core import *
-from highdrivers import *
-from optimize import *
-from likelihoodfns import *
 from grammatrix import *
 from germselection import *
 from fiducialpairreduction import *

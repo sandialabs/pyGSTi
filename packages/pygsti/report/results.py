@@ -6,11 +6,12 @@ import re as _re
 import collections as _collections
 import matplotlib as _matplotlib
 
-from .. import report as _rpt
-from .. import tools as _tools
-from .. import objects as _objs
-from .. import algorithms as _alg
+from ..objects import gatestring as _gs
+from ..algorithms import optimizeGauge as _optimizeGauge
 
+import latex as _latex
+import generation as _generation
+import plotting as _plotting
 
 class Results(object):
     """
@@ -166,7 +167,7 @@ class Results(object):
             germ should be repeated "L times".  Function should
             take parameters (germ, L) and return the repeated
             gate string.  For example, see
-            GST.GateStringTools.repeatWithMaxLength.
+            pygsti.construction.repeatWithMaxLength.
 
         constrainToTP : boolean
             Whether or not the gatesetEstimate was constrained to lie
@@ -322,7 +323,7 @@ class Results(object):
 
         if confidenceLevel not in self.confidenceRegions:
             if self.objective == "logL":
-                cr = _rpt.generation.constructLogLConfidenceRegion(
+                cr = _generation.constructLogLConfidenceRegion(
                     self.gsBestEstimate, self.dataset, confidenceLevel,
                     self.constrainToTP, self.bestGateStringList,
                     self.additionalInfo['probClipInterval'],
@@ -330,7 +331,7 @@ class Results(object):
                     self.additionalInfo['radius'],
                     self.additionalInfo['hessianProjection'])
             elif self.objective == "chi2":
-                cr = _rpt.generation.constructChi2ConfidenceRegion(
+                cr = _generation.constructChi2ConfidenceRegion(
                     self.gsBestEstimate, self.dataset, confidenceLevel,
                     self.constrainToTP, self.bestGateStringList,
                     self.additionalInfo['probClipInterval'],
@@ -392,38 +393,38 @@ class Results(object):
 
         # target gateset tables
         if tableName == 'targetSpamTable': 
-            return _rpt.generation.getGatesetSPAMTable(
+            return _generation.getGatesetSPAMTable(
                 self.gsTarget, self.formatsToCompute, self.tableClass,
                 self.longTables)
         elif tableName == 'targetGatesTable':
-            return _rpt.generation.getUnitaryGatesetGatesTable(
+            return _generation.getUnitaryGatesetGatesTable(
                 self.gsTarget, self.formatsToCompute, self.tableClass,
                 self.longTables)
 
         # dataset and gatestring list tables
         elif tableName == 'datasetOverviewTable':
-            return _rpt.generation.getDatasetOverviewTable(
+            return _generation.getDatasetOverviewTable(
                 self.dataset, self.formatsToCompute, self.tableClass,
                 self.longTables)
 
         elif tableName == 'fiducialListTable':
-            return _rpt.generation.getGatestringMultiTable(
+            return _generation.getGatestringMultiTable(
                 [self.rhoStrs, self.EStrs], ["Prep.","Measure"],
                 self.formatsToCompute, self.tableClass, self.longTables,
                 "Fiducials")
 
         elif tableName == 'rhoStrListTable':
-            return _rpt.generation.getGatestringTable(
+            return _generation.getGatestringTable(
                 self.rhoStrs, "Preparation Fiducial", self.formatsToCompute, 
                 self.tableClass, self.longTables)
 
         elif tableName == 'EStrListTable':
-            return _rpt.generation.getGatestringTable(
+            return _generation.getGatestringTable(
                 self.EStrs, "Measurement Fiducial", self.formatsToCompute,
                 self.tableClass, self.longTables)
 
         elif tableName == 'germListTable':
-            return _rpt.generation.getGatestringTable(
+            return _generation.getGatestringTable(
                 self.germs, "Germ", self.formatsToCompute, self.tableClass,
                 self.longTables)
 
@@ -431,55 +432,55 @@ class Results(object):
         # Estimated gateset tables
         elif tableName == 'bestGatesetSpamTable':
             cri = self.getConfidenceRegion(confidenceLevel)
-            return _rpt.generation.getGatesetSPAMTable(
+            return _generation.getGatesetSPAMTable(
                 self.gsBestEstimate, self.formatsToCompute, self.tableClass,
                 self.longTables, cri)
 
         elif tableName == 'bestGatesetSpamParametersTable':
             cri = self.getConfidenceRegion(confidenceLevel)
-            return _rpt.generation.getGatesetSPAMParametersTable(
+            return _generation.getGatesetSPAMParametersTable(
                 self.gsBestEstimate, self.formatsToCompute, self.tableClass,
                 self.longTables, cri)
 
         elif tableName == 'bestGatesetGatesTable':
             cri = self.getConfidenceRegion(confidenceLevel)
-            return _rpt.generation.getGatesetGatesTable(
+            return _generation.getGatesetGatesTable(
                 self.gsBestEstimate, self.formatsToCompute, self.tableClass,
                 self.longTables, cri)
 
         elif tableName == 'bestGatesetChoiTable':
             cri = self.getConfidenceRegion(confidenceLevel)
-            return _rpt.generation.getGatesetChoiTable(
+            return _generation.getGatesetChoiTable(
                 self.gsBestEstimate, self.formatsToCompute, self.tableClass,
                 self.longTables, cri)
 
         elif tableName == 'bestGatesetDecompTable':
             cri = self.getConfidenceRegion(confidenceLevel)
-            return _rpt.generation.getGatesetDecompTable(
+            return _generation.getGatesetDecompTable(
                 self.gsBestEstimate, self.formatsToCompute, self.tableClass,
                 self.longTables, cri)
 
         elif tableName == 'bestGatesetRotnAxisTable':
             cri = self.getConfidenceRegion(confidenceLevel)
-            return _rpt.generation.getGatesetRotnAxisTable(
+            return _generation.getGatesetRotnAxisTable(
                 self.gsBestEstimate, self.formatsToCompute, self.tableClass,
                 self.longTables, cri)
 
         elif tableName == 'bestGatesetClosestUnitaryTable':
             #cri = self.getConfidenceRegion(confidenceLevel)
-            return _rpt.generation.getGatesetClosestUnitaryTable(
+            return _generation.getGatesetClosestUnitaryTable(
                 self.gsBestEstimate, self.formatsToCompute, self.tableClass,
                 self.longTables) #, cri)
 
         elif tableName == 'bestGatesetVsTargetTable':
             cri = self.getConfidenceRegion(confidenceLevel)
-            return _rpt.generation.getGatesetVsTargetTable(
+            return _generation.getGatesetVsTargetTable(
                 self.gsBestEstimate, self.gsTarget, self.formatsToCompute,
                 self.tableClass, self.longTables, cri)
 
         elif tableName == 'bestGatesetErrorGenTable':
             cri = self.getConfidenceRegion(confidenceLevel)
-            return _rpt.generation.getGatesetVsTargetErrGenTable(
+            return _generation.getGatesetVsTargetErrGenTable(
                 self.gsBestEstimate, self.gsTarget, self.formatsToCompute,
                 self.tableClass, self.longTables, cri)
 
@@ -487,14 +488,14 @@ class Results(object):
         # progress tables
         elif tableName == 'chi2ProgressTable':
             assert(self.LsAndGermInfoSet)
-            return _rpt.generation.getChi2ProgressTable(
+            return _generation.getChi2ProgressTable(
                 self.Ls, self.gatesets, self.gateStringLists, self.dataset,
                 self.constrainToTP, self.formatsToCompute, self.tableClass,
                 self.longTables)
 
         elif tableName == 'logLProgressTable':
             assert(self.LsAndGermInfoSet)
-            return _rpt.generation.getLogLProgressTable(
+            return _generation.getLogLProgressTable(
                 self.Ls, self.gatesets, self.gateStringLists, self.dataset,
                 self.constrainToTP, self.formatsToCompute, self.tableClass,
                 self.longTables)        
@@ -537,15 +538,15 @@ class Results(object):
             print "Generating %s figure..." % figureName; _sys.stdout.flush()
 
         if self.objective == "chi2":
-            plotFn = _rpt.plotting.ChiSqBoxPlot
-            directPlotFn = _rpt.plotting.DirectChiSqBoxPlot
-            whackAMolePlotFn = _rpt.plotting.WhackAChiSqMoleBoxPlot
+            plotFn = _plotting.ChiSqBoxPlot
+            directPlotFn = _plotting.DirectChiSqBoxPlot
+            whackAMolePlotFn = _plotting.WhackAChiSqMoleBoxPlot
             #plotFnName,plotFnLatex = "Chi2", "$\chi^2$"
             mpc = self.additionalInfo['minProbClipForWeighting']
         elif self.objective == "logL":
-            plotFn = _rpt.plotting.LogLBoxPlot
-            directPlotFn = _rpt.plotting.DirectLogLBoxPlot
-            whackAMolePlotFn = _rpt.plotting.WhackALogLMoleBoxPlot
+            plotFn = _plotting.LogLBoxPlot
+            directPlotFn = _plotting.DirectLogLBoxPlot
+            whackAMolePlotFn = _plotting.WhackALogLMoleBoxPlot
             #plotFnName,plotFnLatex = "LogL", "$\\log(\\mathcal{L})$"
             mpc = self.additionalInfo['minProbClip']
         else: 
@@ -583,14 +584,14 @@ class Results(object):
         elif figureName == "blankBoxPlot":
             #TODO - have BlankBoxPlot return a GSTFigure object
             raise ValueError("not implemented")
-            fig = _rpt.plotting.BlankBoxPlot( 
+            fig = _plotting.BlankBoxPlot( 
                 self.Ls, self.germs, baseStr_dict, strs, "L", "germ",
                 scale=1.0, title="", sumUp=False, saveTo="", ticSize=20)
 
         elif figureName == "blankSummedBoxPlot":
             #TODO - have BlankBoxPlot return a GSTFigure object
             raise ValueError("not implemented")
-            fig = _rpt.plotting.BlankBoxPlot( 
+            fig = _plotting.BlankBoxPlot( 
                 self.Ls, self.germs, baseStr_dict, strs, "L", "germ",
                 scale=1.0, title="", sumUp=True, saveTo="", ticSize=20)
 
@@ -608,21 +609,21 @@ class Results(object):
 
         elif figureName == "directLGSTDeviationColorBoxPlot":
             directLGST  = self.getSpecial('DirectLGSTGatesets')
-            fig = _rpt.plotting.DirectDeviationBoxPlot( 
+            fig = _plotting.DirectDeviationBoxPlot( 
                 self.Ls[st:], self.germs, baseStr_dict, self.dataset,
                 self.gsBestEstimate, directLGST, "L", "germ", m=0, scale=1.0,
                 prec=-1, title="", saveTo="", ticSize=20)
 
         elif figureName == "directLongSeqGSTDeviationColorBoxPlot":
             directLongSeqGST = self.getSpecial('DirectLongSeqGatesets')
-            fig = _rpt.plotting.DirectDeviationBoxPlot(
+            fig = _plotting.DirectDeviationBoxPlot(
                 self.Ls[st:], self.germs, baseStr_dict, self.dataset,
                 self.gsBestEstimate, directLongSeqGST, "L", "germ", m=0,
                 scale=1.0, prec=-1, title="", saveTo="", ticSize=20)
 
         elif figureName == "smallEigvalErrRateColorBoxPlot":
             directLongSeqGST = self.getSpecial('DirectLongSeqGatesets')
-            fig = _rpt.plotting.SmallEigvalErrRateBoxPlot(
+            fig = _plotting.SmallEigvalErrRateBoxPlot(
                 self.Ls[st:], self.germs, baseStr_dict, self.dataset,
                 directLongSeqGST, "L", "germ", m=0, scale=1.0, title="",
                 saveTo="", ticSize=20)
@@ -633,7 +634,7 @@ class Results(object):
             highestL = self.Ls[-1]; allGateStrings = self.gateStringLists[-1]; hammerWeight = 10.0
             len1GermFirstEls = [ g[0] for g in self.germs if len(g) == 1 ]
             assert(gateLabel in len1GermFirstEls) #only these whack-a-mole plots are available
-            strToWhack = _objs.GateString( (gateLabel,)*highestL )
+            strToWhack = _gs.GateString( (gateLabel,)*highestL )
 
             fig = whackAMolePlotFn( strToWhack, allGateStrings, self.Ls[st:], self.germs, baseStr_dict, self.dataset,
                                     self.gsBestEstimate, strs, "L", "germ", scale=1.0, sumUp=False, title="", whackWith=hammerWeight,
@@ -645,7 +646,7 @@ class Results(object):
             highestL = self.Ls[-1]; allGateStrings = self.gateStringLists[-1]; hammerWeight = 10.0
             len1GermFirstEls = [ g[0] for g in self.germs if len(g) == 1 ]
             assert(gateLabel in len1GermFirstEls) #only these whack-a-mole plots are available
-            strToWhack = _objs.GateString( (gateLabel,)*highestL )
+            strToWhack = _gs.GateString( (gateLabel,)*highestL )
 
             fig = whackAMolePlotFn( strToWhack, allGateStrings, self.Ls[st:], self.germs, baseStr_dict, self.dataset,
                                     self.gsBestEstimate, strs, "L", "germ", scale=1.0, sumUp=True, title="", whackWith=hammerWeight,
@@ -688,22 +689,22 @@ class Results(object):
                 print "Performing gauge transforms for appendix..."; _sys.stdout.flush()
             best_gs_gauges = _collections.OrderedDict()
 
-            best_gs_gauges['Target'] = _alg.optimizeGauge(
+            best_gs_gauges['Target'] = _optimizeGauge(
                 self.gsBestEstimate, "target", targetGateset=self.gsTarget,
                 constrainToTP=self.constrainToTP, gateWeight=1.0,
                 spamWeight=1.0, verbosity=2)
 
-            best_gs_gauges['TargetSpam'] = _alg.optimizeGauge(
+            best_gs_gauges['TargetSpam'] = _optimizeGauge(
                 self.gsBestEstimate, "target", targetGateset=self.gsTarget,
                 verbosity=2, gateWeight=0.01, spamWeight=0.99,
                 constrainToTP=self.constrainToTP)
 
-            best_gs_gauges['TargetGates'] = _alg.optimizeGauge(
+            best_gs_gauges['TargetGates'] = _optimizeGauge(
                 self.gsBestEstimate, "target", targetGateset=self.gsTarget,
                 verbosity=2, gateWeight=0.99, spamWeight=0.01,
                 constrainToTP=self.constrainToTP)
 
-            best_gs_gauges['CPTP'] = _alg.optimizeGauge(
+            best_gs_gauges['CPTP'] = _optimizeGauge(
                 self.gsBestEstimate, "CPTP and target", 
                 targetGateset=self.gsTarget, verbosity=2,
                 targetFactor=1.0e-7, constrainToTP=self.constrainToTP)
@@ -711,7 +712,7 @@ class Results(object):
             if self.constrainToTP:
                 best_gs_gauges['TP'] = best_gs_gauges['Target'].copy() #assume best_gs is already in TP, so just optimize to target (done above)
             else:
-                best_gs_gauges['TP'] = _alg.optimizeGauge(
+                best_gs_gauges['TP'] = _optimizeGauge(
                     self.gsBestEstimate, "TP and target",
                     targetGateset=self.gsTarget, targetFactor=1.0e-7)
             return best_gs_gauges
@@ -726,39 +727,39 @@ class Results(object):
                 #FUTURE: add confidence region support to these appendices? -- would need to compute confidenceRegionInfo (cri)
                 #  for each gauge-optimized gateset, gopt_gs and pass to appropriate functions below
                 ret['best%sGatesetSpamTable' % gaugeKey] = \
-                    _rpt.generation.getGatesetSPAMTable(
+                    _generation.getGatesetSPAMTable(
                     gopt_gs, self.formatsToCompute, self.tableClass,
                     self.longTables)
                 ret['best%sGatesetSpamParametersTable' % gaugeKey] = \
-                    _rpt.generation.getGatesetSPAMParametersTable(
+                    _generation.getGatesetSPAMParametersTable(
                     gopt_gs, self.formatsToCompute, self.tableClass,
                     self.longTables)
                 ret['best%sGatesetGatesTable' % gaugeKey] = \
-                    _rpt.generation.getGatesetGatesTable(
+                    _generation.getGatesetGatesTable(
                     gopt_gs, self.formatsToCompute, self.tableClass,
                     self.longTables)
                 ret['best%sGatesetChoiTable' % gaugeKey] = \
-                    _rpt.generation.getGatesetChoiTable(
+                    _generation.getGatesetChoiTable(
                     gopt_gs, self.formatsToCompute, self.tableClass,
                     self.longTables)
                 ret['best%sGatesetDecompTable' % gaugeKey] = \
-                    _rpt.generation.getGatesetDecompTable(
+                    _generation.getGatesetDecompTable(
                     gopt_gs, self.formatsToCompute, self.tableClass,
                     self.longTables)                
                 ret['best%sGatesetRotnAxisTable' % gaugeKey] = \
-                    _rpt.generation.getGatesetRotnAxisTable(
+                    _generation.getGatesetRotnAxisTable(
                     gopt_gs, self.formatsToCompute, self.tableClass,
                     self.longTables)
                 ret['best%sGatesetClosestUnitaryTable' % gaugeKey] = \
-                    _rpt.generation.getGatesetClosestUnitaryTable(
+                    _generation.getGatesetClosestUnitaryTable(
                     gopt_gs, self.formatsToCompute, self.tableClass,
                     self.longTables)
                 ret['best%sGatesetVsTargetTable' % gaugeKey] = \
-                    _rpt.generation.getGatesetVsTargetTable(
+                    _generation.getGatesetVsTargetTable(
                     gopt_gs, self.gsTarget, self.formatsToCompute, 
                     self.tableClass, self.longTables)
                 ret['best%sGatesetErrorGenTable' % gaugeKey] = \
-                    _rpt.generation.getGatesetVsTargetErrGenTable(
+                    _generation.getGatesetVsTargetErrGenTable(
                     gopt_gs, self.gsTarget, self.formatsToCompute,
                     self.tableClass, self.longTables)
 
@@ -770,23 +771,23 @@ class Results(object):
             ret = {}
             for gaugeKey in ('Target','TargetSpam', 'TargetGates', 'CPTP', 'TP'):
                 ret['best%sGatesetSpamTable' % gaugeKey] = \
-                    _rpt.generation.getBlankTable(self.formatsToCompute)
+                    _generation.getBlankTable(self.formatsToCompute)
                 ret['best%sGatesetSpamParametersTable' % gaugeKey] = \
-                    _rpt.generation.getBlankTable(self.formatsToCompute)
+                    _generation.getBlankTable(self.formatsToCompute)
                 ret['best%sGatesetGatesTable' % gaugeKey] = \
-                    _rpt.generation.getBlankTable(self.formatsToCompute)
+                    _generation.getBlankTable(self.formatsToCompute)
                 ret['best%sGatesetChoiTable' % gaugeKey] = \
-                    _rpt.generation.getBlankTable(self.formatsToCompute)
+                    _generation.getBlankTable(self.formatsToCompute)
                 ret['best%sGatesetDecompTable' % gaugeKey] = \
-                    _rpt.generation.getBlankTable(self.formatsToCompute)
+                    _generation.getBlankTable(self.formatsToCompute)
                 ret['best%sGatesetRotnAxisTable' % gaugeKey] = \
-                    _rpt.generation.getBlankTable(self.formatsToCompute)
+                    _generation.getBlankTable(self.formatsToCompute)
                 ret['best%sGatesetClosestUnitaryTable' % gaugeKey] = \
-                    _rpt.generation.getBlankTable(self.formatsToCompute)
+                    _generation.getBlankTable(self.formatsToCompute)
                 ret['best%sGatesetVsTargetTable' % gaugeKey] = \
-                    _rpt.generation.getBlankTable(self.formatsToCompute)
+                    _generation.getBlankTable(self.formatsToCompute)
                 ret['best%sGatesetErrorGenTable' % gaugeKey] = \
-                    _rpt.generation.getBlankTable(self.formatsToCompute)
+                    _generation.getBlankTable(self.formatsToCompute)
 
             return ret
 
@@ -801,7 +802,7 @@ class Results(object):
                     if self.L_germ_tuple_to_baseStr_dict[(L,germ)] not in baseStrs:
                         baseStrs.append( self.L_germ_tuple_to_baseStr_dict[(L,germ)] )
 
-            return _rpt.plotting.DirectLGSTGatesets( 
+            return _plotting.DirectLGSTGatesets( 
                 baseStrs, self.dataset, direct_specs, self.gsTarget,
                 svdTruncateTo=4, verbosity=0) #TODO: svdTruncateTo set elegantly?
         
@@ -817,7 +818,7 @@ class Results(object):
                         baseStrs.append( self.L_germ_tuple_to_baseStr_dict[(L,germ)] )
 
             if self.objective == "chi2":
-                return _rpt.plotting.DirectLSGSTGatesets(
+                return _plotting.DirectLSGSTGatesets(
                     baseStrs, self.dataset, direct_specs, self.gsTarget,
                     svdTruncateTo=self.gsTarget.get_dimension(), 
                     minProbClipForWeighting=self.additionalInfo['minProbClipForWeighting'],
@@ -825,7 +826,7 @@ class Results(object):
                     verbosity=0)
 
             elif self.objective == "logL":
-                return _rpt.plotting.DirectMLEGSTGatesets(
+                return _plotting.DirectMLEGSTGatesets(
                     baseStrs, self.dataset, direct_specs, self.gsTarget,
                     svdTruncateTo=self.gsTarget.get_dimension(),
                     minProbClip=self.additionalInfo['minProbClip'],
@@ -965,7 +966,7 @@ class Results(object):
 
         if datasetLabel == "auto":
             if default_base is not None:
-                datasetLabel = _tools.latex_escaped( default_base )
+                datasetLabel = _latex.latex_escaped( default_base )
             else:
                 datasetLabel = "$\\mathcal{D}$"
 
@@ -1330,7 +1331,7 @@ class Results(object):
 
         if datasetLabel == "auto":
             if default_base is not None:
-                datasetLabel = _tools.latex_escaped( default_base )
+                datasetLabel = _latex.latex_escaped( default_base )
             else:
                 datasetLabel = "$\\mathcal{D}$"
 
@@ -1558,7 +1559,7 @@ class Results(object):
 
         if datasetLabel == "auto":
             if default_base is not None:
-                datasetLabel = _tools.latex_escaped( default_base )
+                datasetLabel = _latex.latex_escaped( default_base )
             else:
                 datasetLabel = "$\\mathcal{D}$"
 

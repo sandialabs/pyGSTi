@@ -10,14 +10,14 @@ import scipy.stats as _stats
 import sys as _sys
 import matplotlib as _matplotlib
 
+from .. import algorithms as _alg
+from .. import tools as _tools
+from .. import objects as _objs
 
 import reportables as _cr
 import plotting as _plt
 import tableformat as _tf
 
-from .. import algorithms as _alg
-from .. import tools as _tools
-from .. import objects as _objs
 
 
 def getBlankTable(formats):
@@ -724,8 +724,8 @@ def getLogLProgressTable(Ls, gatesetsByL, gateStringsByL, dataset, TPconstrained
     _tf.CreateTable_preformatted(formats, tables, colHeadings, tableclass, longtable)
 
     for L,gs,gstrs in zip(Ls,gatesetsByL,gateStringsByL):
-        logL_upperbound = _alg.logL_max(dataset, gstrs)
-        logL = _alg.logL( gs, dataset, gstrs )
+        logL_upperbound = _tools.logL_max(dataset, gstrs)
+        logL = _tools.logL( gs, dataset, gstrs )
         if(logL_upperbound < logL):
             raise ValueError("LogL upper bound = %g but logL = %g!!" % (logL_upperbound, logL))
         Ns = len(gstrs)*(len(dataset.getSpamLabels())-1) #number of independent parameters in dataset
@@ -918,7 +918,7 @@ def constructLogLConfidenceRegion(gateset, dataset, confidenceLevel, TPconstrain
         gateStringList = dataset.keys()
         
     #Compute appropriate Hessian
-    hessian = _alg.logL_hessian(gateset, dataset, gateStringList, gates, G0,
+    hessian = _tools.logL_hessian(gateset, dataset, gateStringList, gates, G0,
                                 SPAM,SP0,minProbClip, probClipInterval, radius) 
 
     cri = _objs.ConfidenceRegion(gateset, hessian, confidenceLevel, gates,

@@ -1,8 +1,8 @@
 """Functions related to computation of the log-likelihood."""
 import numpy as _np
-import JamiolkowskiOps as _JOps
 import warnings as _warnings
-from .. import tools as _tools
+import basistools as _bt
+import jamiolkowski as _jam
 
 TOL = 1e-20
 
@@ -722,7 +722,7 @@ def rhoVecPenalty(rhoVec):
     float
     """
     # rhoVec must be positive semidefinite and trace = 1
-    rhoMx = _tools.gellMannVectorToMatrixInStdBasis(rhoVec)
+    rhoMx = _bt.gellMannVectorToMatrixInStdBasis(rhoVec)
     evals = _np.linalg.eigvals( rhoMx )  #could use eigvalsh, but wary of this since eigh can be wrong...
     sumOfNeg = sum( [ -ev.real for ev in evals if ev.real < 0 ] )
     nQubits = _np.log2(len(rhoVec)) / 2
@@ -748,7 +748,7 @@ def EVecPenalty(EVec):
     float
     """
     # EVec must have eigenvalues between 0 and 1
-    EMx = _tools.gellMannVectorToMatrixInStdBasis(EVec)
+    EMx = _bt.gellMannVectorToMatrixInStdBasis(EVec)
     evals = _np.linalg.eigvals( EMx )  #could use eigvalsh, but wary of this since eigh can be wrong...
     sumOfPen = 0
     for ev in evals:
@@ -779,13 +779,48 @@ def cptpPenalty(gateset, include_spam_penalty=True):
     float
         CPTP penalty (possibly with added spam penalty).
     """
-    ret = _JOps.sumOfNegativeJEvals(gateset)
+    ret = _jam.sumOfNegativeJEvals(gateset)
     if include_spam_penalty:
         ret += sum([ rhoVecPenalty(r) for r in gateset.rhoVecs ])
         ret += sum([ EVecPenalty(e) for e in gateset.EVecs ])
     return ret
 
             
+def TwoDeltaLogLFunc(N, p, f, minProbClip=1e-6, poissonPicture=True): 
+    """
+    Term of the 2*[log(L)-upper-bound - log(L)] sum corresponding
+     to a single gate string and spam label.
+
+    Parameters
+    ----------
+    N : float or numpy array
+        Number of samples.
+
+    p : float or numpy array
+        Probability of 1st outcome (typically computed).
+
+    f : float or numpy array
+        Frequency of 1st outcome (typically observed).
+
+    minProbClip : float, optional
+        Minimum probability clip point to avoid evaluating
+        log(number <= zero)
+
+    poissonPicture : boolean, optional
+        Whether the log-likelihood-in-the-Poisson-picture terms should be included
+        in the returned logL value.
+        
+    Returns
+    -------
+    float or numpy array
+    """
+    cp = _np.clip(p,minProbClip,1e10) #effectively no upper bound
+    zf = _np.where(f < 1e-10, 0.0, f) #set zero-freqs to zero
+    nzf = _np.where(f < 1e-10, 1.0, f) #set zero-freqs to one -- together w/above line makes 0 * log(0) == 0
+    if poissonPicture:
+        return 2 * (N * zf * _np.log(nzf/cp) - N * (f-cp))
+    else:
+        return 2 * N * zf * _np.log(nzf/cp)
     
     
     

@@ -1,9 +1,8 @@
 """ Gate string list creation functions using repeated-germs limited by a max-length."""
 import itertools as _itertools
+from ..objects import spamspec as _ss
+from ..tools import listtools as _lt
 import gatestringconstruction as _gsc
-from .. import tools as _tools
-from .. import algorithms as _alg
-
 
 def make_lsgst_lists(gateLabels, fiducialList, germList, maxLengthList,
                      rhoEPairs=None, truncScheme="whole germ powers"):
@@ -16,10 +15,10 @@ def make_lsgst_lists(gateLabels, fiducialList, germList, maxLengthList,
     nonzero element of maxLengthList, call it L, add strings of the form:
     
     Case: truncScheme == 'whole germ powers':
-      fiducial1 + GST.GateStringTools.repeatWithMaxLength(germ,L) + fiducial2
+      fiducial1 + pygsti.construction.repeatWithMaxLength(germ,L) + fiducial2
 
     Case: truncScheme == 'truncated germ powers':
-      fiducial1 + GST.GateStringTools.repeatAndTruncate(germ,L) + fiducial2
+      fiducial1 + pygsti.construction.repeatAndTruncate(germ,L) + fiducial2
 
     Case: truncScheme == 'length as exponent':
       fiducial1 + germ^L + fiducial2
@@ -79,7 +78,7 @@ def make_lsgst_lists_asymmetric_fids(gateLabels, rhoStrs, EStrs, germList, maxLe
     Same as make_lsgst_lists, except for asymmetric fiducial sets, specified by rhoStrs and EStrs.
     '''
     lgstStrings = _gatestringconstruction.listLGSTGateStrings(
-        _alg.getRhoAndESpecs(rhoStrs = rhoStrs, EStrs = EStrs),
+        _ss.getRhoAndESpecs(rhoStrs = rhoStrs, EStrs = EStrs),
         gateLabels)
     lsgst_list = _gatestringconstruction.gateStringList([ () ]) #running list of all strings so far
 
@@ -100,7 +99,7 @@ def make_lsgst_lists_asymmetric_fids(gateLabels, rhoStrs, EStrs, germList, maxLe
                                                 f=fiducialPairs,
                                                 germ=germList, N=maxLen,
                                                 R=Rfn, order=('germ','f'))
-        lsgst_listOfLists.append( _tools.remove_duplicates(lgstStrings + lsgst_list) )
+        lsgst_listOfLists.append( _lt.remove_duplicates(lgstStrings + lsgst_list) )
 
     #print "%d LSGST sets w/lengths" % len(lsgst_listOfLists),map(len,lsgst_listOfLists)
     return lsgst_listOfLists
@@ -117,10 +116,10 @@ def make_elgst_lists(gateLabels, germList, maxLengthList,
     For each nonzero element of maxLengthList, call it L, add strings of the form:
 
     Case: truncScheme == 'whole germ powers':
-      GST.GateStringTools.repeatWithMaxLength(germ,L)
+      pygsti.construction.repeatWithMaxLength(germ,L)
 
     Case: truncScheme == 'truncated germ powers':
-      GST.GateStringTools.repeatAndTruncate(germ,L)
+      pygsti.construction.repeatAndTruncate(germ,L)
 
     Case: truncScheme == 'length as exponent':
       germ^L
@@ -173,7 +172,7 @@ def make_elgst_lists(gateLabels, germList, maxLengthList,
 
     for maxLen in maxLengthList:
         elgst_list += _gsc.createGateStringList("R(germ,N)", germ=germList, N=maxLen, R=Rfn)
-        elgst_listOfLists.append( _tools.remove_duplicates(singleGates + elgst_list) )
+        elgst_listOfLists.append( _lt.remove_duplicates(singleGates + elgst_list) )
 
     #print "%d eLGST sets w/lengths" % len(elgst_listOfLists),map(len,elgst_listOfLists)
     return elgst_listOfLists

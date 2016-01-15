@@ -2,8 +2,7 @@
 import numpy as _np
 import scipy.stats as _stats
 import warnings as _warnings
-
-from .. import algorithms.optimize as _opt
+from .. import optimize as _opt
 
 from gateset import P_RANK_TOL
 
@@ -455,8 +454,9 @@ def _optProjectionForGateCIs(gateset, base_hessian, nNonGaugeParams, nGaugeParam
     x0 = startM.flatten()
     printObjFunc = _opt.createObjFuncPrinter(objectiveFunc)
     minSol = _opt.minimize(objectiveFunc, x0,
-                           method=method, maxiter=maxiter, maxfev=maxfev, tol=tol, 
-                           callback = printObjFunc if verbosity > 2 else None)
+                                    method=method, maxiter=maxiter,
+                                    maxfev=maxfev, tol=tol, 
+                                    callback = printObjFunc if verbosity > 2 else None)
 
     mixMx = minSol.x.reshape( (nNonGaugeParams,nGaugeParams) )
     proj_extra = gateset.getNonGaugeProjectorEx(mixMx, gates, G0, SPAM, SP0)

@@ -5,8 +5,7 @@ from collections import OrderedDict as _OrderedDict
 
 from gatestring import GateString as _GateString
 from dataset import DataSet as _DataSet
-from .. import tools as _tools
-
+import dataset as _ds
 
 class MultiDataSet_KeyValIterator:
   """ Iterator class for datasetName,DataSet pairs of a MultiDataSet """
@@ -267,14 +266,14 @@ class MultiDataSet:
 
 
   def __getstate__(self):
-    toPickle = { 'gsIndexKeys': map(_tools.compressGateLabelTuple, self.gsIndex.keys() if self.gsIndex else []),
+    toPickle = { 'gsIndexKeys': map(_ds.compressGateLabelTuple, self.gsIndex.keys() if self.gsIndex else []),
                  'gsIndexVals': self.gsIndex.values() if self.gsIndex else [],
                  'slIndex': self.slIndex,
                  'countsDict': self.countsDict }
     return toPickle
 
   def __setstate__(self, state_dict):
-    self.gsIndex = _OrderedDict( zip( map(_tools.expandGateLabelTuple, state_dict['gsIndexKeys']), state_dict['gsIndexVals']) )
+    self.gsIndex = _OrderedDict( zip( map(_ds.expandGateLabelTuple, state_dict['gsIndexKeys']), state_dict['gsIndexVals']) )
     self.slIndex = state_dict['slIndex']
     self.countsDict = state_dict['countsDict']
 
@@ -289,7 +288,7 @@ class MultiDataSet:
         filename ends in ".gz", the file will be gzip compressed.
     """
 
-    toPickle = { 'gsIndexKeys': map(_tools.compressGateLabelTuple, self.gsIndex.keys() if self.gsIndex else []),
+    toPickle = { 'gsIndexKeys': map(_ds.compressGateLabelTuple, self.gsIndex.keys() if self.gsIndex else []),
                  'gsIndexVals': self.gsIndex.values() if self.gsIndex else [],
                  'slIndex': self.slIndex,
                  'countsKeys': self.countsDict.keys() }  #Don't pickle countsDict numpy data b/c it's inefficient
@@ -331,7 +330,7 @@ class MultiDataSet:
         f = fileOrFilename
 
     state_dict = _pickle.load(f)
-    self.gsIndex = _OrderedDict( zip( map(_tools.expandGateLabelTuple, state_dict['gsIndexKeys']), state_dict['gsIndexVals']) )
+    self.gsIndex = _OrderedDict( zip( map(_ds.expandGateLabelTuple, state_dict['gsIndexKeys']), state_dict['gsIndexVals']) )
     self.slIndex = state_dict['slIndex']
     self.countsDict = _OrderedDict()
     for key in state_dict['countsKeys']:

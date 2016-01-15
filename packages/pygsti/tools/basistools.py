@@ -30,8 +30,9 @@ Notes:
     in the "gm" or "pp" bases.
 """
 import numpy as _np
+import scipy.linalg as _spl
 import itertools as _itertools
-from .. import tools as _tools
+import matrixtools as _mt
 
 
 
@@ -865,8 +866,8 @@ def stateUnitaryToPauliDensityMxOp(U):
 
     for i in (0,1,2,3):
         for j in (0,1,2,3):
-            op_mx[i,j] = _np.real(_tools.trace(_np.dot(sigmaVec[i],_np.dot(U,_np.dot(sigmaVec[j],Udag)))))
-        # in clearer notation: op_mx[i,j] = _tools.trace( sigma[i] * U * sigma[j] * Udag )
+            op_mx[i,j] = _np.real(_mt.trace(_np.dot(sigmaVec[i],_np.dot(U,_np.dot(sigmaVec[j],Udag)))))
+        # in clearer notation: op_mx[i,j] = _mt.trace( sigma[i] * U * sigma[j] * Udag )
     return op_mx
 
 # single qubit density matrix in 2-qubit pauli basis (16x16 matrix)
@@ -899,7 +900,7 @@ def stateUnitaryToPauliDensityMxOp_2Q(U):
 
     for i in range(16):
         for j in range(16):
-            op_mx[i,j] = _np.real(_tools.trace(_np.dot(sigmaVec_2Q[i],_np.dot(U,_np.dot(sigmaVec_2Q[j],Udag)))))
+            op_mx[i,j] = _np.real(_mt.trace(_np.dot(sigmaVec_2Q[i],_np.dot(U,_np.dot(sigmaVec_2Q[j],Udag)))))
         # in clearer notation: op_mx[i,j] = trace( sigma[i] * U * sigma[j] * Udag )
     return op_mx
 
@@ -977,7 +978,7 @@ def matrixInStdBasisToPauliProdVector(m):
 
     v = _np.empty((dim**2,1))
     for i,ppMx in enumerate(ppMxs):
-        v[i,0] = _np.real(_tools.trace(_np.dot(ppMx,m)))
+        v[i,0] = _np.real(_mt.trace(_np.dot(ppMx,m)))
 
     return v
 
@@ -1003,6 +1004,122 @@ def matrixInStdBasisToGellMannVector(m):
 
     v = _np.empty((dim**2,1))
     for i,gmMx in enumerate(gmMxs):
-        v[i,0] = _np.real(_tools.trace(_np.dot(gmMx,m)))
+        v[i,0] = _np.real(_mt.trace(_np.dot(gmMx,m)))
 
     return v
+
+
+def singleQubitGate(hx, hy, hz, noise=0):
+    """
+    Construct the single-qubit gate matrix.
+
+    Build the gate matrix given by exponentiating -i * (hx*X + hy*Y + hz*Z),
+    where X, Y, and Z are the sigma matrices.  Thus, hx, hy, and hz 
+    correspond to rotation angles divided by 2.  Additionally, a uniform
+    depolarization noise can be applied to the gate.
+
+    Parameters
+    ----------
+    hx : float
+        Coefficient of sigma-X matrix in exponent.
+
+    hy : float
+        Coefficient of sigma-Y matrix in exponent.
+
+    hz : float
+        Coefficient of sigma-Z matrix in exponent.
+
+    noise: float, optional
+        The amount of uniform depolarizing noise.
+
+    Returns
+    -------
+    numpy array
+        4x4 gate matrix which operates on a 1-qubit
+        density matrix expressed as a vector in the 
+        Pauli basis ( {I,X,Y,Z}/sqrt(2) ).
+    """
+    ex = -1j * (hx*sigmax + hy*sigmay + hz*sigmaz)
+    D = _np.diag( [1]+[1-noise]*(4-1) )
+    return _np.dot(D, stateUnitaryToPauliDensityMxOp( _spl.expm(ex) ))
+
+
+def twoQubitGate(ix=0, iy=0, iz=0, xi=0, xx=0, xy=0, xz=0, yi=0, yx=0, yy=0, yz=0, zi=0, zx=0, zy=0, zz=0):
+    """
+    Construct the single-qubit gate matrix.
+
+    Build the gate matrix given by exponentiating -i * (xx*XX + xy*XY + ...)
+    where terms in the exponent are tensor products of two Pauli matrices.
+
+    Parameters
+    ----------
+    ix : float, optional
+        Coefficient of IX matrix in exponent.
+
+    iy : float, optional
+        Coefficient of IY matrix in exponent.
+
+    iz : float, optional
+        Coefficient of IZ matrix in exponent.
+
+    xi : float, optional
+        Coefficient of XI matrix in exponent.
+
+    xx : float, optional
+        Coefficient of XX matrix in exponent.
+
+    xy : float, optional
+        Coefficient of XY matrix in exponent.
+
+    xz : float, optional
+        Coefficient of XZ matrix in exponent.
+
+    yi : float, optional
+        Coefficient of YI matrix in exponent.
+
+    yx : float, optional
+        Coefficient of YX matrix in exponent.
+
+    yy : float, optional
+        Coefficient of YY matrix in exponent.
+
+    yz : float, optional
+        Coefficient of YZ matrix in exponent.
+
+    zi : float, optional
+        Coefficient of ZI matrix in exponent.
+
+    zx : float, optional
+        Coefficient of ZX matrix in exponent.
+
+    zy : float, optional
+        Coefficient of ZY matrix in exponent.
+
+    zz : float, optional
+        Coefficient of ZZ matrix in exponent.
+
+    Returns
+    -------
+    numpy array
+        16x16 gate matrix which operates on a 2-qubit
+        density matrix expressed as a vector in the 
+        Pauli-Product basis.
+    """
+    ex = _np.zeros( (4,4), 'complex' )
+    ex += ix * sigmaix
+    ex += iy * sigmaiy
+    ex += iz * sigmaiz
+    ex += xi * sigmaxi
+    ex += xx * sigmaxx
+    ex += xy * sigmaxy
+    ex += xz * sigmaxz
+    ex += yi * sigmayi
+    ex += yx * sigmayx
+    ex += yy * sigmayy
+    ex += yz * sigmayz
+    ex += zi * sigmazi
+    ex += zx * sigmazx
+    ex += zy * sigmazy
+    ex += zz * sigmazz
+    return stateUnitaryToPauliDensityMxOp_2Q( _spl.expm(-1j * ex) )
+      #TODO: fix noise op to depolarizing

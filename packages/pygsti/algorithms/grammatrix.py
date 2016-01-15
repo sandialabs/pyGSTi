@@ -1,7 +1,8 @@
 """ Utility functions related to Gram matrix construction."""
 from .. import tools as _tools
+from ..objects import spamspec as _ss
 from core import gramRankAndEvals as _gramRankAndEvals
-from core import getRhoAndESpecs as _getRhoAndESpecs
+
 
 ########################################################
 ## Gram matrix stuff
@@ -74,7 +75,7 @@ def maxGramRankAndEvals(dataset, maxBasisStringLength=10):
     eigenvalues : numpy array
     """
     maxStringSet = getMaxGramBasis(dataset.getGateLabels(), dataset, maxBasisStringLength)
-    specs = _getRhoAndESpecs(fiducialGateStrings=maxStringSet) 
+    specs = _ss.getRhoAndESpecs(fiducialGateStrings=maxStringSet) 
     # Note: specs use by default just the 0-th rho and Evec indices, so 
     #  we just need to have a spamDict that associates (0,0) with some spam label
     #  in the dataset -- we just take the first one.

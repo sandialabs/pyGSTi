@@ -6,9 +6,13 @@ import numpy.linalg as _nla
 import numpy.random as _rndm
 import collections as _collections
 
+from ..tools import matrixtools as _mt
+from ..tools import basistools as _bt
+
 import evaltree as _evaltree
 import gate as _gate
-from .. import tools as _tools
+import gatetools as _gt
+
 
 # Tolerace for matrix_rank when finding rank of a *normalized* projection matrix.
 #  This is a legitimate tolerace since a normalized projection matrix should have
@@ -1252,21 +1256,21 @@ class GateSet(_collections.OrderedDict):
         if bUseScaling:
             old_err = _np.seterr(over='ignore')
             G,scale = self.product(gatestring, True)
-            p = _tools.trace( _np.dot(self.SPAMs[spamLabel],G) ) * scale # probability, with scaling applied (may generate overflow, but OK)
+            p = _mt.trace( _np.dot(self.SPAMs[spamLabel],G) ) * scale # probability, with scaling applied (may generate overflow, but OK)
 
             #DEBUG: catch warnings to make sure correct (inf if value is large) evaluation occurs when there's a warning
             #bPrint = False
             #with _warnings.catch_warnings():
             #    _warnings.filterwarnings('error')
             #    try:
-            #        test = _tools.trace( _np.dot(self.SPAMs[spamLabel],G) ) * scale
+            #        test = _mt.trace( _np.dot(self.SPAMs[spamLabel],G) ) * scale
             #    except Warning: bPrint = True
             #if bPrint:  print 'Warning in Gateset.Pr : scale=%g, trace=%g, p=%g' % (scale,_np.dot(self.SPAMs[spamLabel],G) ), p)
             _np.seterr(**old_err)
 
         else: #no scaling -- faster but susceptible to overflow
             G = self.product(gatestring, False)
-            p = _tools.trace( _np.dot(self.SPAMs[spamLabel],G) )
+            p = _mt.trace( _np.dot(self.SPAMs[spamLabel],G) )
 
         if _np.isnan(p): 
             if len(gatestring) < 10:
@@ -1280,7 +1284,7 @@ class GateSet(_collections.OrderedDict):
             #    G = _np.dot(G,self[lGate])  # product of gates, starting with G0
             #    nG = norm(G); G /= nG; total_exp += log(nG) # scale and keep track of exponent
             #
-            #    p = _tools.trace( _np.dot(self.SPAMs[spamLabel],G) ) * exp(total_exp) # probability
+            #    p = _mt.trace( _np.dot(self.SPAMs[spamLabel],G) ) * exp(total_exp) # probability
             #    print "%d: p = %g, norm %g, exp %g\n%s" % (i,p,norm(G),total_exp,str(G))
             #    if _np.isnan(p): raise ValueError("STOP")
 
@@ -1370,7 +1374,7 @@ class GateSet(_collections.OrderedDict):
             dpr_dGates[0,i] = float(_np.dot(E, _np.dot( dprod_dGates[i], rho)))
         
         if returnPr:
-            p = _tools.trace(_np.dot(self.SPAMs[spamLabel],prod)) * scale  #may generate overflow, but OK
+            p = _mt.trace(_np.dot(self.SPAMs[spamLabel],prod)) * scale  #may generate overflow, but OK
             if clipTo is not None:  p = _np.clip( p, clipTo[0], clipTo[1] )
 
         if bSPAM:
@@ -1501,7 +1505,7 @@ class GateSet(_collections.OrderedDict):
         if returnPr or bSPAM:
             prod,scale = self.product(gatestring,True)
             if returnPr:
-                p = _tools.trace(_np.dot(self.SPAMs[spamLabel],prod)) * scale  #may generate overflow, but OK
+                p = _mt.trace(_np.dot(self.SPAMs[spamLabel],prod)) * scale  #may generate overflow, but OK
                 if clipTo is not None:  p = _np.clip( p, clipTo[0], clipTo[1] )
 
         if returnDeriv or bSPAM:
@@ -3434,45 +3438,45 @@ class GateSet(_collections.OrderedDict):
         if T is not None:
             Ti = _nla.inv(T)
             for gateLabel in self:
-                d += gateWeight * _tools.frobeniusNorm2( _np.dot(Ti,_np.dot(self[gateLabel],T)) - otherGateSet[gateLabel] )
+                d += gateWeight * _mt.frobeniusNorm2( _np.dot(Ti,_np.dot(self[gateLabel],T)) - otherGateSet[gateLabel] )
                 nSummands += gateWeight * _np.size(self[gateLabel])
 
             for (i,rhoV) in enumerate(self.rhoVecs): 
-                d += spamWeight * _tools.frobeniusNorm2(_np.dot(Ti,rhoV)-otherGateSet.rhoVecs[i])
+                d += spamWeight * _mt.frobeniusNorm2(_np.dot(Ti,rhoV)-otherGateSet.rhoVecs[i])
                 nSummands += spamWeight * _np.size(rhoV)
 
             for (i,Evec) in enumerate(self.EVecs):
-                d += spamWeight * _tools.frobeniusNorm2(_np.dot(_np.transpose(T),Evec)-otherGateSet.EVecs[i])
+                d += spamWeight * _mt.frobeniusNorm2(_np.dot(_np.transpose(T),Evec)-otherGateSet.EVecs[i])
                 nSummands += spamWeight * _np.size(Evec)
 
             if self.identityVec is not None:
-                d += spamWeight * _tools.frobeniusNorm2(_np.dot(_np.transpose(T),self.identityVec)-otherGateSet.identityVec)
+                d += spamWeight * _mt.frobeniusNorm2(_np.dot(_np.transpose(T),self.identityVec)-otherGateSet.identityVec)
                 nSummands += spamWeight * _np.size(self.identityVec)
 
 
             #for (spamLabel,spamGate) in self.SPAMs.iteritems():
             #    if spamGate is not None:
-            #        d += _tools.frobeniusNorm( _np.dot(Ti,_np.dot(spamGate,T)) - otherGateSet.SPAMs[spamLabel] )
+            #        d += _mt.frobeniusNorm( _np.dot(Ti,_np.dot(spamGate,T)) - otherGateSet.SPAMs[spamLabel] )
         else:
             for gateLabel in self:
-                d += gateWeight * _tools.frobeniusNorm2(self[gateLabel]-otherGateSet[gateLabel])
+                d += gateWeight * _mt.frobeniusNorm2(self[gateLabel]-otherGateSet[gateLabel])
                 nSummands += gateWeight * _np.size(self[gateLabel])
 
             for (i,rhoV) in enumerate(self.rhoVecs): 
-                d += spamWeight * _tools.frobeniusNorm2(rhoV-otherGateSet.rhoVecs[i])
+                d += spamWeight * _mt.frobeniusNorm2(rhoV-otherGateSet.rhoVecs[i])
                 nSummands += spamWeight *  _np.size(rhoV)
 
             for (i,Evec) in enumerate(self.EVecs):
-                d += spamWeight * _tools.frobeniusNorm2(Evec-otherGateSet.EVecs[i])
+                d += spamWeight * _mt.frobeniusNorm2(Evec-otherGateSet.EVecs[i])
                 nSummands += spamWeight * _np.size(Evec)
 
             if self.identityVec is not None:
-                d += spamWeight * _tools.frobeniusNorm2(self.identityVec-otherGateSet.identityVec)
+                d += spamWeight * _mt.frobeniusNorm2(self.identityVec-otherGateSet.identityVec)
                 nSummands += spamWeight * _np.size(self.identityVec)
 
             #for (spamLabel,spamGate) in self.SPAMs.iteritems():
             #    if spamGate is not None:
-            #        d += _tools.frobeniusNorm(spamGate - otherGateSet.SPAMs[spamLabel] )
+            #        d += _mt.frobeniusNorm(spamGate - otherGateSet.SPAMs[spamLabel] )
 
         if normalize and nSummands > 0: 
             return _np.sqrt( d / float(nSummands) )
@@ -3504,15 +3508,15 @@ class GateSet(_collections.OrderedDict):
         T = transformMx
         if T is not None:
             Ti = _nla.inv(T)
-            dists = [ _tools.JTraceDistance( _np.dot(Ti,_np.dot(self[gateLabel],T)), otherGateSet[gateLabel] ) for gateLabel in self ]
+            dists = [ _gt.JTraceDistance( _np.dot(Ti,_np.dot(self[gateLabel],T)), otherGateSet[gateLabel] ) for gateLabel in self ]
             for (spamLabel,spamGate) in self.SPAMs.iteritems():
                 if spamGate is not None:
-                    dists.append( _tools.JTraceDistance( _np.dot(Ti,_np.dot(spamGate,T)), otherGateSet.SPAMs[spamLabel] ) )
+                    dists.append( _gt.JTraceDistance( _np.dot(Ti,_np.dot(spamGate,T)), otherGateSet.SPAMs[spamLabel] ) )
         else:
-            dists = [ _tools.JTraceDistance(self[gateLabel], otherGateSet[gateLabel]) for gateLabel in self ]
+            dists = [ _gt.JTraceDistance(self[gateLabel], otherGateSet[gateLabel]) for gateLabel in self ]
             for (spamLabel,spamGate) in self.SPAMs.iteritems():
                 if spamGate is not None:
-                    dists.append( _tools.JTraceDistance(spamGate, otherGateSet.SPAMs[spamLabel] ) )
+                    dists.append( _gt.JTraceDistance(spamGate, otherGateSet.SPAMs[spamLabel] ) )
         return max(dists)
 
 
@@ -3545,13 +3549,13 @@ class GateSet(_collections.OrderedDict):
     def __str__(self):
         s = ""
         for (i,rhoVec) in enumerate(self.rhoVecs):
-            s += "rhoVec[%d] = " % i + _tools.mxToString(_np.transpose(rhoVec)) + "\n"
+            s += "rhoVec[%d] = " % i + _mt.mxToString(_np.transpose(rhoVec)) + "\n"
         s += "\n"
         for (i,EVec) in enumerate(self.EVecs):
-            s += "EVec[%d] = " % i + _tools.mxToString(_np.transpose(EVec)) + "\n"
+            s += "EVec[%d] = " % i + _mt.mxToString(_np.transpose(EVec)) + "\n"
         s += "\n"
         for (l,gatemx) in self.iteritems():
-            s += l + " = \n" + _tools.mxToString(gatemx) + "\n\n"
+            s += l + " = \n" + _mt.mxToString(gatemx) + "\n\n"
         return s
 
         
@@ -3669,7 +3673,7 @@ class GateSet(_collections.OrderedDict):
         dG = _np.empty( (nElements, dim**2), 'd' )
         for i in xrange(dim): #Note: always range over all rows: this is *generator* mx, not gauge mx itself
             for j in xrange(dim):
-                unitMx = _tools.basistools._mut(i,j,dim)
+                unitMx = _bt._mut(i,j,dim)
                 #DEBUG: gsDeriv = self.copy() -- should delete this after debugging is done since doesn't work for parameterized gates
                 if SPAM:
                     for k,rhoVec in enumerate(self.rhoVecs):
@@ -3781,7 +3785,7 @@ class GateSet(_collections.OrderedDict):
         dG = _np.empty( (nElements, dim**2), 'd' )
         for i in xrange(dim): #Note: always range over all rows: this is *generator* mx, not gauge mx itself
             for j in xrange(dim):
-                unitMx = _tools.basistools._mut(i,j,dim)
+                unitMx = _bt._mut(i,j,dim)
                 gsDeriv = self.copy()
                 if SPAM:
                     for k,rhoVec in enumerate(self.rhoVecs):

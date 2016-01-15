@@ -3,11 +3,9 @@ import numpy as _np
 import scipy.linalg as _spl
 import scipy.optimize as _spo
 
-import basistools as _bt
-import jamiolkowski as _jam
-from matrixtools import trace as _trace
-from .. import algorthms.optimize as _opt
-from .. import construction as _construction
+from ..tools import basistools as _bt
+from ..tools import jamiolkowski as _jam
+from ..tools import matrixtools as _mt
 
 def _hack_sqrtm(A):
     return _spl.sqrtm(A) #Travis found this scipy function 
@@ -54,7 +52,7 @@ def Fidelity(A, B):
 
     sqrtA = _hack_sqrtm(A) #_spl.sqrtm(A)
     assert( _np.linalg.norm( _np.dot(sqrtA,sqrtA) - A ) < 1e-8 ) #test the scipy sqrtm function
-    F = (_trace( _hack_sqrtm( _np.dot( sqrtA, _np.dot(B, sqrtA) ) ) ).real)**2 # Tr( sqrt{ sqrt(A) * B * sqrt(A) } )^2
+    F = (_mt.trace( _hack_sqrtm( _np.dot( sqrtA, _np.dot(B, sqrtA) ) ) ).real)**2 # Tr( sqrt{ sqrt(A) * B * sqrt(A) } )^2
     return F
 
 
@@ -263,63 +261,55 @@ def DiamondNorm(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
   #vU = _np.dot( _np.kron(U,I), bell ) # "Choi vector" corresponding to unitary U
   #JU = _np.kron( vU, _np.transpose(_np.conjugate(vU))) # Choi matrix corresponding to U
 
-def getClosestUnitaryGateMx(gateMx):
-  """
-  Get the closest gate matrix (by maximizing Fidelity)
-    to gateMx that describes a unitary quantum gate.
 
-  Parameters
-  ----------
-  gateMx : numpy array
-      The gate matrix to act on.
+def JTraceDistance(A, B, mxBasis="gm"): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)|)
+    """
+    Compute the Jamiolkowski trace distance between gate matrices A and B,
+    given by:
 
-  Returns
-  -------
-  numpy array
-      The resulting closest unitary gate matrix.
-  """
-  gate_JMx = _jam.opWithJamiolkowskiIsomorphism( gateMx, choiMxBasis="std" )
-  d = _np.sqrt(gateMx.shape[0])
-  I = _np.identity(d)
+      D = 0.5 * Tr( sqrt{ (J(A)-J(B))^2 } ) 
+      
+    where J(.) is the Jamiolkowski isomorphism map that maps a gate matrix
+    to it's corresponding Choi Matrix.
 
-  def getU_1Q(basisVec):  # 1 qubit version
-      return _spl.expm( 1j * (basisVec[0]*_bt.sigmax + basisVec[1]*_bt.sigmay + basisVec[2]*_bt.sigmaz) )
-  def getGateMx_1Q(basisVec):  # 1 qubit version
-      return _construction.singleQubitGate(basisVec[0], 
-                                           basisVec[1],
-                                           basisVec[2])
+    Parameters
+    ----------
+    A, B : numpy array
+        The matrices to compute the distance between.
+
+    mxBasis : {"std","gm","pp"}, optional
+        the basis of the gate matrices A and B : standard (matrix units),
+        Gell-Mann, or Pauli-product, respectively.
+    """
+    JA = _jam.opWithJamiolkowskiIsomorphism(A, gateMxBasis=mxBasis)
+    JB = _jam.opWithJamiolkowskiIsomorphism(B, gateMxBasis=mxBasis)
+    evals = _np.linalg.eigvals( JA-JB )
+    return 0.5 * sum( [abs(ev) for ev in evals] )
 
 
-  if gateMx.shape[0] == 4:
-    #bell = _np.transpose(_np.array( [[1,0,0,1]] )) / _np.sqrt(2)
-    initialBasisVec = [ 0, 0, 0]  #start with I until we figure out how to extract target unitary 
-    #getU = getU_1Q
-    getGateMx = getGateMx_1Q
-  #Note: seems like for 2 qubits bell = [1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 ]/sqrt(4) (4 zeros between 1's since state dimension is 4 ( == sqrt(gate dimension))
-  else:
-    raise ValueError("Can't get closest unitary for > 1 qubits yet -- need to generalize.")  
+def ProcessFidelity(A, B, mxBasis="gm"):
+    """
+    Returns the process fidelity between gate
+      matrices A and B given by :
 
-  def objectiveFunc(basisVec):
-    gateMx = getGateMx(basisVec)
-    JU = _jam.opWithJamiolkowskiIsomorphism( gateMx, choiMxBasis="std" )
-    # OLD: but computes JU in Pauli basis (I think) -> wrong matrix to fidelity check with gate_JMx
-    #U = getU(basisVec)
-    #vU = _np.dot( _np.kron(U,I), bell ) # "Choi vector" corresponding to unitary U
-    #JU = _np.kron( vU, _np.transpose(_np.conjugate(vU))) # Choi matrix corresponding to U
-    return -Fidelity(gate_JMx, JU)
-  
-  printObjFunc = _opt.createObjFuncPrinter(objectiveFunc)
-  solution = _spo.minimize(objectiveFunc, initialBasisVec,  options={'maxiter': 10000},
-                           method='Nelder-Mead',callback=None, tol=1e-8) # if verbosity > 2 else None
-  gateMx = getGateMx(solution.x)
+      F = Tr( sqrt{ sqrt(J(A)) * J(B) * sqrt(J(A)) } )^2
+      
+    where J(.) is the Jamiolkowski isomorphism map that maps a gate matrix
+    to it's corresponding Choi Matrix.
 
-  #print "DEBUG: Best Fidelity = ",-solution.fun
-  #print "DEBUG: Using vector = ", solution.x
-  #print "DEBUG: Gate Mx = \n", gateMx
-  #print "DEBUG: Chi Mx = \n", _jam.opWithJamiolkowskiIsomorphism( gateMx)
-  #return -solution.fun, gateMx
-  return gateMx
-  
+    Parameters
+    ----------
+    A, B : numpy array
+        The matrices to compute the fidelity between.
+
+    mxBasis : {"std","gm","pp"}, optional
+        the basis of the gate matrices A and B : standard (matrix units),
+        Gell-Mann, or Pauli-product, respectively.
+    """
+    JA = _jam.opWithJamiolkowskiIsomorphism(A, gateMxBasis=mxBasis)
+    JB = _jam.opWithJamiolkowskiIsomorphism(B, gateMxBasis=mxBasis)
+    return Fidelity(JA,JB)
+
 
 def getFidelityUpperBound(gateMx):
     """
@@ -350,7 +340,7 @@ def getFidelityUpperBound(gateMx):
     #new_evals = _np.zeros( len(closestUnitaryVec) ); new_evals[iClosestU] = 1.0
     #closestUnitaryJmx = _np.dot(choi_evecs, _np.dot( _np.diag(new_evals), _np.linalg.inv(choi_evecs) ) ) #gives same result
     closestJmx = _np.kron( closestVec, _np.transpose(_np.conjugate(closestVec))) # closest rank-1 Jmx
-    closestJmx /= _trace(closestJmx)  #normalize so trace of Jmx == 1.0
+    closestJmx /= _mt.trace(closestJmx)  #normalize so trace of Jmx == 1.0
 
 
     maxF = Fidelity(choi, closestJmx)
@@ -364,7 +354,7 @@ def getFidelityUpperBound(gateMx):
         #    print "DEBUG choi_evals = ",choi_evals, " iMax = ",iMax
         #    #print "DEBUG: J = \n", closestUnitaryJmx
         #    print "DEBUG: eigvals(J) = ", _np.linalg.eigvals(closestJmx)
-        #    print "DEBUG: trace(J) = ", _trace(closestJmx)
+        #    print "DEBUG: trace(J) = ", _mt.trace(closestJmx)
         #    print "DEBUG: maxF = %f,  maxF_direct = %f" % (maxF, maxF_direct)
         #    raise ValueError("ERROR: maxF - maxF_direct = %f" % (maxF -maxF_direct))
         assert(abs(maxF - maxF_direct) < 1e-6)
