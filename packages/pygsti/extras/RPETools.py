@@ -17,7 +17,7 @@ class myGate():
     def copy(self):
         return myGate(self.matrix)
 
-def makeParamterizedRPEGateSet(alphaTrue,epsilonTrue,Yrot,SPAMdepol,gateDepol=None,withId = True):
+def make_paramterized_rpe_gate_set(alphaTrue,epsilonTrue,Yrot,SPAMdepol,gateDepol=None,withId = True):
     """
     Make a gateset for simulating RPE, paramaterized by rotation angles.  Note that output gateset also has thetaTrue, alphaTrue, and epsilonTrue attributes.
 
@@ -36,19 +36,19 @@ def makeParamterizedRPEGateSet(alphaTrue,epsilonTrue,Yrot,SPAMdepol,gateDepol=No
     """
 
     if withId:
-        outputGateset = GST.buildGateset( [2], [('Q0',)],['Gi','Gx','Gz'], 
+        outputGateset = GST.build_gateset( [2], [('Q0',)],['Gi','Gx','Gz'], 
                                      [ "I(Q0)", "X("+str(epsilonTrue)+",Q0)", "Z("+str(alphaTrue)+",Q0)"],
                                      rhoExpressions=["0"], EExpressions=["1"], 
                                      spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
     else:
-        outputGateset = GST.buildGateset( [2], [('Q0',)],['Gx','Gz'], 
+        outputGateset = GST.build_gateset( [2], [('Q0',)],['Gx','Gz'], 
                                      [ "X("+str(epsilonTrue)+",Q0)", "Z("+str(alphaTrue)+",Q0)"],
                                      rhoExpressions=["0"], EExpressions=["1"], 
                                      spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
 
 
     if Yrot != 0:
-        gatesetAux1 = GST.buildGateset( [2], [('Q0',)],['Gi','Gy','Gz'], 
+        gatesetAux1 = GST.build_gateset( [2], [('Q0',)],['Gi','Gy','Gz'], 
                                      [ "I(Q0)", "Y("+str(Yrot)+",Q0)", "Z(pi/2,Q0)"],
                                      rhoExpressions=["0"], EExpressions=["1"], 
                                      spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
@@ -56,23 +56,23 @@ def makeParamterizedRPEGateSet(alphaTrue,epsilonTrue,Yrot,SPAMdepol,gateDepol=No
         outputGateset.set_gate('Gx',GST.Gate.FullyParameterizedGate(np.dot(np.dot(np.linalg.inv(gatesetAux1['Gy']),outputGateset['Gx']),gatesetAux1['Gy'])))       
 #        myGate(np.dot(np.dot(np.linalg.inv(gatesetAux1['Gy']),outputGateset['Gx']),gatesetAux1['Gy'])))
 
-    outputGateset = GST.GateSetTools.depolarizeSPAM(outputGateset,noise=SPAMdepol)
+    outputGateset = GST.GateSetTools.depolarize_spam(outputGateset,noise=SPAMdepol)
     
     if gateDepol:
-        outputGateset = GST.GateSetTools.depolarizeGateset(outputGateset,noise=gateDepol)
+        outputGateset = GST.GateSetTools.depolarize_gateset(outputGateset,noise=gateDepol)
     
-    thetaTrue = extractTheta(outputGateset)
+    thetaTrue = extract_theta(outputGateset)
     outputGateset.thetaTrue = thetaTrue
     
-    outputGateset.alphaTrue = extractAlpha(outputGateset)
+    outputGateset.alphaTrue = extract_alpha(outputGateset)
     outputGateset.alphaTrue = alphaTrue
     
-    outputGateset.epsilonTrue = extractEpsilon(outputGateset)
+    outputGateset.epsilonTrue = extract_epsilon(outputGateset)
     outputGateset.epsilonTrue = epsilonTrue
     
     return outputGateset
 
-def makeAlphaStrListsGxGz(kList):
+def make_alpha_str_lists_gx_gz(kList):
     """
     Make alpha cosine and sine gatestring lists for (approx) X pi/4 and Z pi/2 gates.
     These gate strings are used to estimate alpha (Z rotation angle).
@@ -99,7 +99,7 @@ def makeAlphaStrListsGxGz(kList):
                                                  'GxGxGzGzGz^'+str(k)+'GzGzGzGxGx')]
     return cosStrList, sinStrList
     
-def makeEpsilonStrListsGxGz(kList):
+def make_epsilon_str_lists_gx_gz(kList):
     """
     Make epsilon cosine and sine gatestring lists for (approx) X pi/4 and Z pi/2 gates.
     These gate strings are used to estimate epsilon (X rotation angle).
@@ -127,7 +127,7 @@ def makeEpsilonStrListsGxGz(kList):
                              'GxGxGzGzGx^'+str(k)+'GxGxGxGx')]
     return epsilonCosStrList, epsilonSinStrList
 
-def makeThetaStrListsGxGz(kList):
+def make_theta_str_lists_gx_gz(kList):
     """
     Make theta cosine and sine gatestring lists for (approx) X pi/4 and Z pi/2 gates.
     These gate strings are used to estimate theta (X-Z axes angle).
@@ -155,7 +155,7 @@ def makeThetaStrListsGxGz(kList):
                              '(GzGxGxGxGxGzGzGxGxGxGxGz)^'+str(k)+'GxGxGxGx')]
     return thetaCosStrList, thetaSinStrList
 
-def makeRPEStringListD(log2kMax):
+def make_rpe_string_list_d(log2kMax):
     """
     Generates a dictionary that contains gate strings for all RPE cosine and sine experiments for all three angles.
     
@@ -178,9 +178,9 @@ def makeRPEStringListD(log2kMax):
         - 'totalStrList' : All above gate strings combined into one list; duplicates removed.
     """
     kList = [2**k for k in range(log2kMax+1)]
-    alphaCosStrList, alphaSinStrList = makeAlphaStrListsGxGz(kList)
-    epsilonCosStrList, epsilonSinStrList = makeEpsilonStrListsGxGz(kList)
-    thetaCosStrList, thetaSinStrList = makeThetaStrListsGxGz(kList)
+    alphaCosStrList, alphaSinStrList = make_alpha_str_lists_gx_gz(kList)
+    epsilonCosStrList, epsilonSinStrList = make_epsilon_str_lists_gx_gz(kList)
+    thetaCosStrList, thetaSinStrList = make_theta_str_lists_gx_gz(kList)
     totalStrList = alphaCosStrList + alphaSinStrList + epsilonCosStrList + epsilonSinStrList + thetaCosStrList + thetaSinStrList
     totalStrList = GST.ListTools.remove_duplicates(totalStrList)#This step is probably superfluous.
     stringListD = {}
@@ -193,9 +193,9 @@ def makeRPEStringListD(log2kMax):
     stringListD['totalStrList'] = totalStrList
     return stringListD
 
-def makeRPEDataSet(gatesetOrDataset,stringListD,nSamples,sampleError='binomial',seed=None):
+def make_rpe_data_set(gatesetOrDataset,stringListD,nSamples,sampleError='binomial',seed=None):
     """
-    Generate a fake RPE DataSet using the probabilities obtained from a gateset..  Is a thin wrapper for GST.generateFakeData, changing default behavior of sampleError,
+    Generate a fake RPE DataSet using the probabilities obtained from a gateset..  Is a thin wrapper for GST.generate_fake_data, changing default behavior of sampleError,
     and taking a dictionary of gate strings as input.
 
     Parameters
@@ -208,7 +208,7 @@ def makeRPEDataSet(gatesetOrDataset,stringListD,nSamples,sampleError='binomial',
         Each tuple or GateString contains gate labels and 
         specifies a gate sequence whose counts are included 
         in the returned DataSet.  The dictionary must have the key 'totalStrList';
-        easiest if this dictionary is generated by makeRPEStringListD.
+        easiest if this dictionary is generated by make_rpe_string_list_d.
 
     nSamples : int or list of ints or None
         The simulated number of samples for each gate string.  This only
@@ -244,10 +244,10 @@ def makeRPEDataSet(gatesetOrDataset,stringListD,nSamples,sampleError='binomial',
     DataSet
        A static data set filled with counts for the specified gate strings.
     """
-    simDS = GST.generateFakeData(gatesetOrDataset,stringListD['totalStrList'],nSamples,sampleError=sampleError,seed=seed)
+    simDS = GST.generate_fake_data(gatesetOrDataset,stringListD['totalStrList'],nSamples,sampleError=sampleError,seed=seed)
     return simDS
 
-def extractRotationHat(xhat,yhat,k,Nx,Ny,previousAngle=None):
+def extract_rotation_hat(xhat,yhat,k,Nx,Ny,previousAngle=None):
     """
     For a single germ generation (k value), estimate the angle of rotation for either
     alpha, epsilon, or Phi.  (Warning:  Do not use for theta estimate without further processing!)
@@ -282,7 +282,7 @@ def extractRotationHat(xhat,yhat,k,Nx,Ny,previousAngle=None):
                 raise Exception('What?!')
         return angle_j
 
-def estAngleList(DS,angleSinStrs,angleCosStrs):
+def est_angle_list(DS,angleSinStrs,angleCosStrs):
     """
     For a dataset containing sin and cos strings to estimate either alpha, epsilon, or Phi
     return a list of alpha, epsilon, or Phi estimates (one for each generation).
@@ -308,11 +308,11 @@ def estAngleList(DS,angleSinStrs,angleCosStrs):
         yhatTemp = DS[angleCosStrs[i]]['plus']
         Nx = xhatTemp + DS[angleSinStrs[i]]['minus']
         Ny = yhatTemp + DS[angleCosStrs[i]]['minus']
-        angleTemp1 = extractRotationHat(xhatTemp,yhatTemp,2**i,Nx,Ny,angleTemp1)
+        angleTemp1 = extract_rotation_hat(xhatTemp,yhatTemp,2**i,Nx,Ny,angleTemp1)
         angleHatList.append(angleTemp1)
     return angleHatList
     
-def sinPhi2Func(theta,Phi,epsilon):
+def sin_phi2_func(theta,Phi,epsilon):
     """
     Returns the function whose zero, for fixed Phi and epsilon, occurs at the desired value of theta.
     (This function exists to be passed to a minimizer to obtain theta.)
@@ -328,13 +328,13 @@ def sinPhi2Func(theta,Phi,epsilon):
     Returns
     -------
     sinPhi2FuncVal
-        The value of sinPhi2Func for given inputs.  (Must be 0 to achieve "true" theta.)
+        The value of sin_phi2_func for given inputs.  (Must be 0 to achieve "true" theta.)
     """
     newEpsilon = (epsilon / (np.pi/4)) - 1
     sinPhi2FuncVal = np.abs(2*np.sin(theta)*np.cos(np.pi*newEpsilon/2)*np.sqrt(1-np.sin(theta)**2*np.cos(np.pi*newEpsilon/2)**2)-np.sin(Phi/2))
     return sinPhi2FuncVal
 
-def estThetaList(DS,angleSinStrs,angleCosStrs,epsilonList,returnPhiFunList = False):
+def est_theta_list(DS,angleSinStrs,angleCosStrs,epsilonList,returnPhiFunList = False):
     """
     For a dataset containing sin and cos strings to estimate theta,
     along with already-made estimates of epsilon, return a list of theta 
@@ -353,15 +353,15 @@ def estThetaList(DS,angleSinStrs,angleCosStrs,epsilonList,returnPhiFunList = Fal
     thetaHatList
         A list of theta estimates, ordered by generation (k).
     PhiFunList
-        A list of sinPhi2Func vals at optimal theta values.  If not close to 0, constraints unsatisfiable.  Only returned if returnPhiFunList is set to True.
+        A list of sin_phi2_func vals at optimal theta values.  If not close to 0, constraints unsatisfiable.  Only returned if returnPhiFunList is set to True.
     """
 
-    PhiList = estAngleList(DS,angleSinStrs,angleCosStrs)
+    PhiList = est_angle_list(DS,angleSinStrs,angleCosStrs)
     thetaList = []
     PhiFunList = []
     for index, Phi in enumerate(PhiList):
         epsilon = epsilonList[index]
-        soln = optimize.minimize(lambda x: sinPhi2Func(x,Phi,epsilon),0)
+        soln = optimize.minimize(lambda x: sin_phi2_func(x,Phi,epsilon),0)
         thetaList.append(soln['x'][0])
         PhiFunList.append(soln['fun'])
 #        if soln['fun'] > 1e-2:
@@ -376,7 +376,7 @@ def estThetaList(DS,angleSinStrs,angleCosStrs,epsilonList,returnPhiFunList = Fal
 #    For a given gateset, extract 
 #    """
 
-def extractAlpha(gateset):
+def extract_alpha(gateset):
     """
     For a given gateset, obtain the angle of rotation about Z axis (for gate "Gz").
     
@@ -393,11 +393,11 @@ def extractAlpha(gateset):
     """
     gateLabels = gateset.keys()  # gate labels
     qtys_to_compute = [ ('%s decomposition' % gl) for gl in gateLabels ]
-    qtys = GST.ComputeReportables.compute_GateSet_Quantities(qtys_to_compute, gateset, confidenceRegionInfo=None)
+    qtys = GST.ComputeReportables.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo=None)
     alphaVal = qtys['Gz decomposition'].value['pi rotations'] * np.pi
     return alphaVal
 
-def extractEpsilon(gateset):
+def extract_epsilon(gateset):
     """
     For a given gateset, obtain the angle of rotation about X axis (for gate "Gx").
     
@@ -414,11 +414,11 @@ def extractEpsilon(gateset):
     """
     gateLabels = gateset.keys()  # gate labels
     qtys_to_compute = [ ('%s decomposition' % gl) for gl in gateLabels ]
-    qtys = GST.ComputeReportables.compute_GateSet_Quantities(qtys_to_compute, gateset, confidenceRegionInfo=None)
+    qtys = GST.ComputeReportables.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo=None)
     epsilonVal = qtys['Gx decomposition'].value['pi rotations'] * np.pi
     return epsilonVal
 
-def extractTheta(gateset):
+def extract_theta(gateset):
     """
     For a given gateset, obtain the angle between the "X axis of rotation" and the "true" X axis (perpendicular to Z).
     (Angle of misalignment between "Gx" axis of rotation and X axis as defined by "Gz".)
@@ -436,9 +436,9 @@ def extractTheta(gateset):
     """
     gateLabels = gateset.keys()  # gate labels
     qtys_to_compute = [ ('%s decomposition' % gl) for gl in gateLabels ]
-    qtys = GST.ComputeReportables.compute_GateSet_Quantities(qtys_to_compute, gateset, confidenceRegionInfo=None)
+    qtys = GST.ComputeReportables.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo=None)
     thetaVal = np.real_if_close([np.arccos(np.dot(
-            qtys['Gx decomposition'].getValue()['axis of rotation'],
+            qtys['Gx decomposition'].get_value()['axis of rotation'],
             [0,1,0,0]))])[0]
     if thetaVal > np.pi/2:
         thetaVal = np.pi - thetaVal
@@ -446,7 +446,7 @@ def extractTheta(gateset):
         thetaVal = np.pi + thetaVal
     return thetaVal
 
-def analyzeSimulatedRPEExperiment(inputDataset,trueGateset,stringListD):
+def analyze_simulated_rpe_experiment(inputDataset,trueGateset,stringListD):
     """
     Compute angle estimates and compare to true estimates for alpha, epsilon, and theta.
     
@@ -454,7 +454,7 @@ def analyzeSimulatedRPEExperiment(inputDataset,trueGateset,stringListD):
     ----------
     inputDataset : The dataset containing the RPE experiments.
     trueGateset : The gateset used to generate the RPE data.
-    stringListD : The dictionary of gate string lists used for the RPE experiments.  This should be generated via makeRPEStringListD.
+    stringListD : The dictionary of gate string lists used for the RPE experiments.  This should be generated via make_rpe_string_list_d.
     
     Returns
     -------
@@ -468,7 +468,7 @@ def analyzeSimulatedRPEExperiment(inputDataset,trueGateset,stringListD):
         -'alphaErrorList' : List (ordered by k) of difference between true alpha and RPE estimate of alpha.
         -'epsilonErrorList' : List (ordered by k) of difference between true epsilon and RPE estimate of epsilon.
         -'thetaErrorList' : List (ordered by k) of difference between true theta and RPE estimate of theta.
-        -'PhiFunErrorList' : List (ordered by k) of sinPhi2Func values.
+        -'PhiFunErrorList' : List (ordered by k) of sin_phi2_func values.
 
     """
     alphaCosStrList = stringListD['alpha','cos']
@@ -480,11 +480,11 @@ def analyzeSimulatedRPEExperiment(inputDataset,trueGateset,stringListD):
     try:
         alphaTrue = trueGateset.alphaTrue
     except:
-        alphaTrue = extractAlpha(trueGateset)
+        alphaTrue = extract_alpha(trueGateset)
     try:
         epsilonTrue = trueGateset.epsilonTrue
     except:
-        epsilonTrue = extractEpsilon(trueGateset)
+        epsilonTrue = extract_epsilon(trueGateset)
     try:
         thetaTrue = trueGateset.thetaTrue
     except:
@@ -493,9 +493,9 @@ def analyzeSimulatedRPEExperiment(inputDataset,trueGateset,stringListD):
     epsilonErrorList = []
     thetaErrorList = []
 #    PhiFunErrorList = []
-    alphaHatList = estAngleList(inputDataset,alphaSinStrList,alphaCosStrList)
-    epsilonHatList = estAngleList(inputDataset,epsilonSinStrList,epsilonCosStrList)
-    thetaHatList,PhiFunErrorList = estThetaList(inputDataset,thetaSinStrList,thetaCosStrList,epsilonHatList,returnPhiFunList=True)
+    alphaHatList = est_angle_list(inputDataset,alphaSinStrList,alphaCosStrList)
+    epsilonHatList = est_angle_list(inputDataset,epsilonSinStrList,epsilonCosStrList)
+    thetaHatList,PhiFunErrorList = est_theta_list(inputDataset,thetaSinStrList,thetaCosStrList,epsilonHatList,returnPhiFunList=True)
     for alphaTemp1 in alphaHatList:
         alphaErrorList.append(abs(alphaTrue+alphaTemp1))
     for epsilonTemp1 in epsilonHatList:
@@ -517,34 +517,34 @@ def analyzeSimulatedRPEExperiment(inputDataset,trueGateset,stringListD):
 
 
 
-def ensembleTest(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs, plot=False, savePlot=False):
+def ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs, plot=False, savePlot=False):
 
     kList = [2**k for k in range(log2kMax+1)]
 
-    alphaCosStrList, alphaSinStrList = makeAlphaStrListsGxGz(kList)
-    epsilonCosStrList, epsilonSinStrList = makeEpsilonStrListsGxGz(kList)
-    thetaCosStrList, thetaSinStrList = makeThetaStrListsGxGz(kList)
+    alphaCosStrList, alphaSinStrList = make_alpha_str_lists_gx_gz(kList)
+    epsilonCosStrList, epsilonSinStrList = make_epsilon_str_lists_gx_gz(kList)
+    thetaCosStrList, thetaSinStrList = make_theta_str_lists_gx_gz(kList)
 
     percentAlphaError = 100*np.abs((np.pi/2-alphaTrue)/alphaTrue)
     percentEpsilonError = 100*np.abs((np.pi/4 - epsilonTrue)/epsilonTrue)
 
-    simGateset = GST.buildGateset( [2], [('Q0',)],['Gi','Gx','Gz'], 
+    simGateset = GST.build_gateset( [2], [('Q0',)],['Gi','Gx','Gz'], 
                                  [ "I(Q0)", "X("+str(epsilonTrue)+",Q0)", "Z("+str(alphaTrue)+",Q0)"],
                                  rhoExpressions=["0"], EExpressions=["1"], 
                                  spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
 
-    gatesetAux1 = GST.buildGateset( [2], [('Q0',)],['Gi','Gy','Gz'], 
+    gatesetAux1 = GST.build_gateset( [2], [('Q0',)],['Gi','Gy','Gz'], 
                                  [ "I(Q0)", "Y("+str(Yrot)+",Q0)", "Z(pi/2,Q0)"],
                                  rhoExpressions=["0"], EExpressions=["1"], 
                                  spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
 
     simGateset.set_gate('Gx',myGate(np.dot(np.dot(np.linalg.inv(gatesetAux1['Gy']),simGateset['Gx']),gatesetAux1['Gy'])))
 
-    simGateset = GST.GateSetTools.depolarizeSPAM(simGateset,noise=SPAMdepol)
+    simGateset = GST.GateSetTools.depolarize_spam(simGateset,noise=SPAMdepol)
 
-    #gateset3 = GST.GateSetTools.depolarizeSPAM(gateset3,noise=0.01)
+    #gateset3 = GST.GateSetTools.depolarize_spam(gateset3,noise=0.01)
 
-    thetaTrue = extractTheta(simGateset)
+    thetaTrue = extract_theta(simGateset)
 
     SPAMerror = np.dot(simGateset.EVecs[0].T,simGateset.rhoVecs[0])[0,0]
 
@@ -560,16 +560,16 @@ def ensembleTest(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs, plo
     PhiFunErrorArray = np.zeros([jMax,log2kMax+1],dtype='object')
 
     for j in xrange(jMax):
-    #    simDS = GST.generateFakeData(gateset3,alphaCosStrList+alphaSinStrList+epsilonCosStrList+epsilonSinStrList+thetaCosStrList+epsilonSinStrList,
-        simDS = GST.generateFakeData(simGateset,alphaCosStrList+alphaSinStrList+epsilonCosStrList+epsilonSinStrList+thetaCosStrList+thetaSinStrList,
+    #    simDS = GST.generate_fake_data(gateset3,alphaCosStrList+alphaSinStrList+epsilonCosStrList+epsilonSinStrList+thetaCosStrList+epsilonSinStrList,
+        simDS = GST.generate_fake_data(simGateset,alphaCosStrList+alphaSinStrList+epsilonCosStrList+epsilonSinStrList+thetaCosStrList+thetaSinStrList,
                                    N,sampleError='binomial',seed=j)
         alphaErrorList = []
         epsilonErrorList = []
         thetaErrorList = []
         PhiFunErrorList = []
-        alphaHatList = estAngleList(simDS,alphaSinStrList,alphaCosStrList)
-        epsilonHatList = estAngleList(simDS,epsilonSinStrList,epsilonCosStrList)
-        thetaHatList,PhiFunList = estThetaList(simDS,thetaSinStrList,thetaCosStrList,epsilonHatList,returnPhiFunList=True)
+        alphaHatList = est_angle_list(simDS,alphaSinStrList,alphaCosStrList)
+        epsilonHatList = est_angle_list(simDS,epsilonSinStrList,epsilonCosStrList)
+        thetaHatList,PhiFunList = est_theta_list(simDS,thetaSinStrList,thetaCosStrList,epsilonHatList,returnPhiFunList=True)
         for alphaTemp1 in alphaHatList:
             alphaErrorList.append(abs(alphaTrue+alphaTemp1))
         for epsilonTemp1 in epsilonHatList:
@@ -655,7 +655,7 @@ def ensembleTest(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs, plo
 
 
 '''
-def makeRPEDataSet(inputGateset, log2kMax, N, seed = None, returnStringListDict = False):
+def make_rpe_data_set(inputGateset, log2kMax, N, seed = None, returnStringListDict = False):
     """
     Generate a fake RPE dataset.  At present, only works for kList of form [1,2,4,...,2**log2kMax]
 
@@ -675,12 +675,12 @@ def makeRPEDataSet(inputGateset, log2kMax, N, seed = None, returnStringListDict 
         Dictionary of gate string lists for sin and cos experiments; is not returned by default.
     """
     kList = [2**k for k in range(log2kMax+1)]
-    alphaCosStrList, alphaSinStrList = makeAlphaStrListsGxGz(kList)
-    epsilonCosStrList, epsilonSinStrList = makeEpsilonStrListsGxGz(kList)
-    thetaCosStrList, thetaSinStrList = makeThetaStrListsGxGz(kList)
+    alphaCosStrList, alphaSinStrList = make_alpha_str_lists_gx_gz(kList)
+    epsilonCosStrList, epsilonSinStrList = make_epsilon_str_lists_gx_gz(kList)
+    thetaCosStrList, thetaSinStrList = make_theta_str_lists_gx_gz(kList)
     totalStrList = alphaCosStrList + alphaSinStrList + epsilonCosStrList + epsilonSinStrList + thetaCosStrList + thetaSinStrList
     totalStrList = GST.ListTools.remove_duplicates(totalStrList)#This step is probably superfluous.
-    simDS = GST.generateFakeData(inputGateset,totalStrList,N,sampleError='binomial',seed=seed)
+    simDS = GST.generate_fake_data(inputGateset,totalStrList,N,sampleError='binomial',seed=seed)
     if returnStringListDict:
         stringListD = {}
         stringListD['alpha','cos'] = alphaCosStrList

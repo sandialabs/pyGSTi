@@ -222,14 +222,14 @@ SPAMLABEL plus = rho_up E
         f.write(gatesetfile_test2)
         f.close()
 
-        gs1 = GST.StdInputParser.readGateset("temp_test_files/sip_test.gateset1")
-        gs2 = GST.StdInputParser.readGateset("temp_test_files/sip_test.gateset2")
+        gs1 = GST.StdInputParser.read_gateset("temp_test_files/sip_test.gateset1")
+        gs2 = GST.StdInputParser.read_gateset("temp_test_files/sip_test.gateset2")
         #print " ==> gateset1:\n", gs1
         #print " ==> gateset2:\n", gs2
 
-        rotXPi   = GST.buildGate( [2],[('Q0',)], "X(pi,Q0)").matrix
-        rotXPiOv2   = GST.buildGate( [2],[('Q0',)], "X(pi/2,Q0)").matrix        
-        rotYPiOv2   = GST.buildGate( [2],[('Q0',)], "Y(pi/2,Q0)").matrix        
+        rotXPi   = GST.build_gate( [2],[('Q0',)], "X(pi,Q0)").matrix
+        rotXPiOv2   = GST.build_gate( [2],[('Q0',)], "X(pi/2,Q0)").matrix        
+        rotYPiOv2   = GST.build_gate( [2],[('Q0',)], "Y(pi/2,Q0)").matrix        
 
 
         self.assertArraysAlmostEqual(gs1['G1'],rotXPiOv2)

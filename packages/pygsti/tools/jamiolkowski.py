@@ -51,7 +51,7 @@ import matrixtools as _mt
 
 
 
-def opWithJamiolkowskiIsomorphism(gateMx, gateMxBasis="gm", choiMxBasis="gm", dimOrStateSpaceDims=None):
+def jamiolkowski_iso(gateMx, gateMxBasis="gm", choiMxBasis="gm", dimOrStateSpaceDims=None):
     """
     Given a gate matrix, return the corresponding Choi matrix that is normalized
     to have trace == 1.
@@ -83,14 +83,14 @@ def opWithJamiolkowskiIsomorphism(gateMx, gateMxBasis="gm", choiMxBasis="gm", di
     if gateMxBasis == "std":
         gateMxInStdBasis = gateMx
     elif gateMxBasis == "gm" or gateMxBasis == "pauli":
-        gateMxInStdBasis = _bt.basisChg_GellMannToStd(gateMx, dimOrStateSpaceDims)
+        gateMxInStdBasis = _bt.gm_to_std(gateMx, dimOrStateSpaceDims)
     elif gateMxBasis == "pp":
-        gateMxInStdBasis = _bt.basisChg_PauliProdToStd(gateMx, dimOrStateSpaceDims)
+        gateMxInStdBasis = _bt.pp_to_std(gateMx, dimOrStateSpaceDims)
     else: raise ValueError("Invalid gateMxBasis: %s" % gateMxBasis)
 
     #expand gate matrix so it acts on entire space of dmDim x dmDim density matrices
     #  so that we can take dot products with the BVec matrices below
-    gateMxInStdBasis = _bt.expandFromStdDirectSumMx(gateMxInStdBasis, dimOrStateSpaceDims)
+    gateMxInStdBasis = _bt.expand_from_std_direct_sum_mx(gateMxInStdBasis, dimOrStateSpaceDims)
     N = gateMxInStdBasis.shape[0] #dimension of the full-basis (expanded) gate
     dmDim = int(round(_np.sqrt(N))) #density matrix dimension
 
@@ -101,11 +101,11 @@ def opWithJamiolkowskiIsomorphism(gateMx, gateMxBasis="gm", choiMxBasis="gm", di
 
     #get full list of basis matrices (in std basis) -- i.e. we use dmDim not dimOrStateSpaceDims
     if choiMxBasis == "gm":
-        BVec = _bt.GetNormalizedGellMannMatrices(dmDim)
+        BVec = _bt.gm_matrices(dmDim)
     elif choiMxBasis == "std":
-        BVec = _bt.GetMatrixUnitMatrices(dmDim)
+        BVec = _bt.std_matrices(dmDim)
     elif choiMxBasis == "pp":
-        BVec = _bt.GetPauliProdMatrices(dmDim)
+        BVec = _bt.pp_matrices(dmDim)
     else: raise ValueError("Invalid choiMxBasis: %s" % choiMxBasis)    
     assert(len(BVec) == N) #make sure the number of basis matrices matches the dim of the gate given
                                                   
@@ -123,10 +123,10 @@ def opWithJamiolkowskiIsomorphism(gateMx, gateMxBasis="gm", choiMxBasis="gm", di
     return choiMx_normalized
 
 # GStd = sum_ij Jij (BSj^* x BSi)
-def opWithInvJamiolkowskiIsomorphism(choiMx, choiMxBasis="gm", gateMxBasis="gm", dimOrStateSpaceDims=None):
+def jamiolkowski_iso_inv(choiMx, choiMxBasis="gm", gateMxBasis="gm", dimOrStateSpaceDims=None):
     """
     Given a choi matrix, return the corresponding gate matrix.  This function 
-    performs the inverse of opWithJamiolkowskiIsomorphism(...).
+    performs the inverse of jamiolkowski_iso(...).
 
     Parameters
     ----------
@@ -155,11 +155,11 @@ def opWithInvJamiolkowskiIsomorphism(choiMx, choiMxBasis="gm", gateMxBasis="gm",
 
     #get full list of basis matrices (in std basis)
     if choiMxBasis == "gm":
-        BVec = _bt.GetNormalizedGellMannMatrices(dmDim)
+        BVec = _bt.gm_matrices(dmDim)
     elif choiMxBasis == "std":
-        BVec = _bt.GetMatrixUnitMatrices(dmDim)
+        BVec = _bt.std_matrices(dmDim)
     elif choiMxBasis == "pp":
-        BVec = _bt.GetPauliProdMatrices(dmDim)
+        BVec = _bt.pp_matrices(dmDim)
     else: raise ValueError("Invalid choiMxBasis: %s" % choiMxBasis)
     assert(len(BVec) == N) #make sure the number of basis matrices matches the dim of the choi matrix given
 
@@ -173,16 +173,16 @@ def opWithInvJamiolkowskiIsomorphism(choiMx, choiMxBasis="gm", gateMxBasis="gm",
             gateMxInStdBasis += choiMx_unnorm[i,j] * BjBi
     
     #project gate matrix so it acts only on the space given by the desired state space blocks
-    gateMxInStdBasis = _bt.contractToStdDirectSumMx(gateMxInStdBasis, dimOrStateSpaceDims)
+    gateMxInStdBasis = _bt.contract_to_std_direct_sum_mx(gateMxInStdBasis, dimOrStateSpaceDims)
 
     #transform gate matrix into appropriate basis
     bReal = False
     if gateMxBasis == "std":
         gateMx = gateMxInStdBasis
     elif gateMxBasis == "gm" or gateMxBasis == "pauli":
-        gateMx = _bt.basisChg_StdToGellMann(gateMxInStdBasis, dimOrStateSpaceDims); bReal = True
+        gateMx = _bt.std_to_gm(gateMxInStdBasis, dimOrStateSpaceDims); bReal = True
     elif gateMxBasis == "pp":
-        gateMx = _bt.basisChg_StdToPauliProd(gateMxInStdBasis, dimOrStateSpaceDims); bReal = True
+        gateMx = _bt.std_to_pp(gateMxInStdBasis, dimOrStateSpaceDims); bReal = True
     else: raise ValueError("Invalid gateMxBasis: %s" % gateMxBasis)
 
     if bReal: # matrix should always be real
@@ -213,14 +213,14 @@ def opWithInvJamiolkowskiIsomorphism(choiMx, choiMxBasis="gm", gateMxBasis="gm",
 #        ConvToStd = PauliToStd; ConvFromStd = StdToPauli #always Pauli conversion since gateMxInPauliBasis is
 #        if Jbasis == "MatrixUnit": BVec = _bt.mxUnitVec  #vector of basis elements, each in std basis
 #        elif Jbasis == "Pauli":    BVec = _bt.sigmaVec   #vector of basis elements, each in std basis
-#        else: raise ValueError("opWithJamiolkowskiIsomorphism: %s basis is not implemented." % Jbasis)
+#        else: raise ValueError("jamiolkowski_iso: %s basis is not implemented." % Jbasis)
 #    elif N == 16: # 2-qubit case
 #        ConvToStd = PauliToStd_2Q; ConvFromStd = StdToPauli_2Q  #always Pauli conversion since gateMxInPauliBasis is
 #        if Jbasis == "MatrixUnit": BVec = _bt.mxUnitVec_2Q  #vector of basis elements, each in std basis
 #        elif Jbasis == "Pauli":    BVec = _bt.sigmaVec_2Q   #vector of basis elements, each in std basis
-#        else: raise ValueError("opWithJamiolkowskiIsomorphism: %s basis is not implemented." % Jbasis)
+#        else: raise ValueError("jamiolkowski_iso: %s basis is not implemented." % Jbasis)
 #    else:
-#        raise ValueError("opWithJamiolkowskiIsomorphism: only one and two qubit cases are currently implemented.")
+#        raise ValueError("jamiolkowski_iso: only one and two qubit cases are currently implemented.")
 #
 #    gateMxInStdBasis = _np.zeros( (N,N), 'complex')
 #    for i in range(N):
@@ -241,7 +241,7 @@ def opWithInvJamiolkowskiIsomorphism(choiMx, choiMxBasis="gm", gateMxBasis="gm",
 #    elif gateMxInPauliBasis.shape[0] == 16: # 2-qubit case
 #        gateMxInStdBasis = _np.dot( PauliToStd_2Q, _np.dot(gateMxInPauliBasis, StdToPauli_2Q) )  #process mx for gate
 #    else:
-#        raise ValueError("opWithJamiolkowskiIsomorphism: only one and two qubit cases are currently implemented.")
+#        raise ValueError("jamiolkowski_iso: only one and two qubit cases are currently implemented.")
 #
 #    def iVM(i,N): # vectorized index i to (row, col) index of matrix
 #        col = i // N
@@ -296,13 +296,13 @@ def opWithInvJamiolkowskiIsomorphism(choiMx, choiMxBasis="gm", gateMxBasis="gm",
 #    elif gateMxInStdBasis.shape[0] == 16: # 2-qubit case
 #        gateMxInPauliBasis = _np.dot(StdToPauli_2Q, _np.dot(gateMxInStdBasis, PauliToStd_2Q) ) 
 #    else:
-#        raise ValueError("opWithJamiolkowskiIsomorphism: only one and two qubit cases are currently implemented.")
+#        raise ValueError("jamiolkowski_iso: only one and two qubit cases are currently implemented.")
 #    #return gateMxInPauliBasis #for debugging -- should always be real
 #    return _np.real(gateMxInPauliBasis)
 
 
 
-def sumOfNegativeJEvals(gateset):
+def sum_of_negative_choi_evals(gateset):
     """ 
     Compute the amount of non-CP-ness of a gateset by summing the negative
     eigenvalues of the Choi matrix for each gate in gateset.
@@ -317,10 +317,10 @@ def sumOfNegativeJEvals(gateset):
     float
         the sum of negative eigenvalues of the Choi matrix for each gate.
     """
-    return sum(sumsOfNegativeJEvals(gateset))
+    return sum(sums_of_negative_choi_evals(gateset))
 
 
-def sumsOfNegativeJEvals(gateset):
+def sums_of_negative_choi_evals(gateset):
     """ 
     Compute the amount of non-CP-ness of a gateset by summing the negative
     eigenvalues of the Choi matrix for each gate in gateset separately.
@@ -338,7 +338,7 @@ def sumsOfNegativeJEvals(gateset):
     """
     ret = []
     for (label,gate) in gateset.iteritems():
-        J = opWithJamiolkowskiIsomorphism( gate, choiMxBasis="std" )
+        J = jamiolkowski_iso( gate, choiMxBasis="std" )
         evals = _np.linalg.eigvals( J )  #could use eigvalsh, but wary of this since eigh can be wrong...
         sumOfNeg = 0.0
         for ev in evals:
@@ -347,7 +347,7 @@ def sumsOfNegativeJEvals(gateset):
     return ret
 
 
-def magsOfNegativeJEvals(gateset):
+def mags_of_negative_choi_evals(gateset):
     """ 
     Compute the magnitudes of the negative eigenvalues of the Choi matricies
     for each gate in gateset.
@@ -366,7 +366,7 @@ def magsOfNegativeJEvals(gateset):
     """
     ret = []
     for (label,gate) in gateset.iteritems():
-        J = opWithJamiolkowskiIsomorphism( gate, choiMxBasis="std" )
+        J = jamiolkowski_iso( gate, choiMxBasis="std" )
         evals = _np.linalg.eigvals( J )  #could use eigvalsh, but wary of this since eigh can be wrong...
         for ev in evals:
             ret.append( -ev.real if ev.real < 0 else 0.0 )

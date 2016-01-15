@@ -55,7 +55,7 @@ def _SuperOpForPerfectTwirl(wrt, eps):
     
 
 
-def TwirledDeriv(gateset, gatestring, gates=True, G0=True, eps=1e-6):
+def twirled_deriv(gateset, gatestring, gates=True, G0=True, eps=1e-6):
     """ 
     Compute the "Twirled Derivative" of a gatestring, obtained
     by acting on the standard derivative of a gate string with
@@ -90,12 +90,12 @@ def TwirledDeriv(gateset, gatestring, gates=True, G0=True, eps=1e-6):
       An array of shape (gate_dim^2, num_gateset_params) 
     """
     prod  = gateset.product(gatestring)
-    dProd = gateset.dProduct(gatestring, gates, G0, flat=True) # flattened_gate_dim x vec_gateset_dim
+    dProd = gateset.dproduct(gatestring, gates, G0, flat=True) # flattened_gate_dim x vec_gateset_dim
     twirler = _SuperOpForPerfectTwirl(prod, eps) # flattened_gate_dim x flattened_gate_dim
     return _np.dot( twirler, dProd ) # flattened_gate_dim x vec_gateset_dim
 
 
-def Bulk_TwirledDeriv(gateset, gatestrings, gates=True, G0=True, eps=1e-6):
+def bulk_twirled_deriv(gateset, gatestrings, gates=True, G0=True, eps=1e-6):
     """ 
     Compute the "Twirled Derivative" of a gatestring, obtained
     by acting on the standard derivative of a gate string with
@@ -129,8 +129,8 @@ def Bulk_TwirledDeriv(gateset, gatestrings, gates=True, G0=True, eps=1e-6):
     numpy array
       An array of shape (num_gate_strings, gate_dim^2, num_gateset_params) 
     """
-    evalTree = gateset.Bulk_evalTree(gatestrings)
-    dProds, prods = gateset.Bulk_dProduct(evalTree, gates, G0, flat=True, bReturnProds=True, memLimit=None)
+    evalTree = gateset.bulk_evaltree(gatestrings)
+    dProds, prods = gateset.bulk_dproduct(evalTree, gates, G0, flat=True, bReturnProds=True, memLimit=None)
     gate_dim = gateset.get_dimension()
     fd = gate_dim**2 # flattened gate dimension
     
@@ -142,7 +142,7 @@ def Bulk_TwirledDeriv(gateset, gatestrings, gates=True, G0=True, eps=1e-6):
     
 
 
-def testGermList_finiteL(gateset, germsToTest, L, gates=True, G0=True, weights=None, 
+def test_germ_list_finitel(gateset, germsToTest, L, gates=True, G0=True, weights=None, 
                          returnSpectrum=False, tol=1e-6):
     """
     Test whether a set of germs is able to amplify all of the gateset's non-gauge parameters.
@@ -200,8 +200,8 @@ def testGermList_finiteL(gateset, germsToTest, L, gates=True, G0=True, weights=N
     germToPowL = [ germ*L for germ in germsToTest ]
 
     gate_dim = gateset.get_dimension()
-    evt = gateset.Bulk_evalTree(germToPowL)
-    dprods = gateset.Bulk_dProduct(evt, gates, G0, flat=True) # nGerms*flattened_gate_dim x vec_gateset_dim
+    evt = gateset.bulk_evaltree(germToPowL)
+    dprods = gateset.bulk_dproduct(evt, gates, G0, flat=True) # nGerms*flattened_gate_dim x vec_gateset_dim
     dprods = _np.reshape(dprods,(nGerms,gate_dim**2, dprods.shape[1])) # nGerms x flattened_gate_dim x vec_gateset_dim
 
     germLensSq = _np.array( [ float(len(s))**2 for s in germsToTest ], 'd' )
@@ -217,14 +217,14 @@ def testGermList_finiteL(gateset, germsToTest, L, gates=True, G0=True, weights=N
     combinedDDD = _np.einsum('i,ijk', weights, 1.0 / L**2 * derivDaggerDeriv)
     sortedEigenvals = _np.sort(_np.real(_np.linalg.eigvalsh(combinedDDD)))
 
-    nGaugeParams = gateset.getNumGaugeParams(gates, G0, SPAM=False)
+    nGaugeParams = gateset.num_gauge_params(gates, G0, SPAM=False)
     bSuccess = bool(sortedEigenvals[nGaugeParams] > tol)
     
     return (bSuccess,sortedEigenvals) if returnSpectrum else bSuccess
 
 
 
-def testGermList_infiniteL(gateset, germsToTest, gates=True, G0=True, weights=None, 
+def test_germ_list_infl(gateset, germsToTest, gates=True, G0=True, weights=None, 
                            returnSpectrum=False, tol=1e-6):
     """
     Test whether a set of germs is able to amplify all of the gateset's non-gauge parameters.
@@ -276,7 +276,7 @@ def testGermList_infiniteL(gateset, germsToTest, gates=True, G0=True, weights=No
     """
 
     germLengths = _np.array( map(len,germsToTest), 'i')
-    twirledDeriv = Bulk_TwirledDeriv(gateset, germsToTest, gates, G0, tol) / germLengths[:,None,None]
+    twirledDeriv = bulk_twirled_deriv(gateset, germsToTest, gates, G0, tol) / germLengths[:,None,None]
     twirledDerivDaggerDeriv = _np.einsum('ijk,ijl->ikl', _np.conjugate(twirledDeriv), twirledDeriv) #is conjugate needed? -- all should be real
        #result[i] = _np.dot( twirledDeriv[i].H, twirledDeriv[i] ) i.e. matrix product
        #result[i,k,l] = sum_j twirledDerivH[i,k,j] * twirledDeriv(i,j,l)
@@ -289,13 +289,13 @@ def testGermList_infiniteL(gateset, germsToTest, gates=True, G0=True, weights=No
     combinedTDDD = _np.einsum('i,ijk',weights,twirledDerivDaggerDeriv)
     sortedEigenvals = _np.sort(_np.real(_np.linalg.eigvalsh(combinedTDDD)))
 
-    nGaugeParams = gateset.getNumGaugeParams(gates, G0, SPAM=False)
+    nGaugeParams = gateset.num_gauge_params(gates, G0, SPAM=False)
     bSuccess = bool(sortedEigenvals[nGaugeParams] > tol)
     
     return (bSuccess,sortedEigenvals) if returnSpectrum else bSuccess
 
 
-def optimizeIntegerGermsSlack(gateset, germsList, initialWeights=None, 
+def optimize_integer_germs_slack(gateset, germsList, initialWeights=None, 
                               gates=True, G0=True, maxIter=100, 
                               fixedSlack=False, slackFrac=False, 
                               returnAll=False, tol=1e-6, verbosity=1):
@@ -377,7 +377,7 @@ def optimizeIntegerGermsSlack(gateset, germsList, initialWeights=None,
         raise ValueError("Either fixedSlack *or* slackFrac should be specified")
     lessWeightOnly = False  #Initially allow adding to weight. -- maybe make this an argument??
 
-    nGaugeParams = gateset.getNumGaugeParams(gates, G0, SPAM=False)
+    nGaugeParams = gateset.num_gauge_params(gates, G0, SPAM=False)
     nGerms = len(germsList)
 
     if verbosity > 0:
@@ -393,18 +393,18 @@ def optimizeIntegerGermsSlack(gateset, germsList, initialWeights=None,
     # indexed by (iGerm, iGatesetParam1, iGatesetParam2)
     # size (nGerms, vec_gateset_dim, vec_gateset_dim)
     germLengths = _np.array( map(len,germsList), 'i')
-    twirledDeriv = Bulk_TwirledDeriv(gateset, germsList, gates, G0, tol) / germLengths[:,None,None]
+    twirledDeriv = bulk_twirled_deriv(gateset, germsList, gates, G0, tol) / germLengths[:,None,None]
     twirledDerivDaggerDeriv = _np.einsum('ijk,ijl->ikl', _np.conjugate(twirledDeriv), twirledDeriv)
     
-    def computeScore(wts):
+    def compute_score(wts):
         """ Returns the 1/(first non-gauge eigenvalue) == a "score" in which smaller is better """
         combinedTDDD = _np.einsum('i,ijk',wts,twirledDerivDaggerDeriv)
         sortedEigenvals = _np.sort(_np.real(_np.linalg.eigvalsh(combinedTDDD)))
         score = 1.0/sortedEigenvals[nGaugeParams]
-        scoreD[tuple(wts)] = score # side affect: calling computeScore caches result in scoreD
+        scoreD[tuple(wts)] = score # side affect: calling compute_score caches result in scoreD
         return score
 
-    def getNeighbors(boolVec):
+    def get_neighbors(boolVec):
         for i in xrange(nGerms):
             v = boolVec.copy()
             v[i] = (v[i] + 1) % 2 #toggle v[i] btwn 0 and 1
@@ -416,7 +416,7 @@ def optimizeIntegerGermsSlack(gateset, germsList, initialWeights=None,
         weights = _np.ones( nGerms, 'i' ) #default: start with all germs
         lessWeightOnly = True #we're starting at the max-weight vector
 
-    score = computeScore(weights)
+    score = compute_score(weights)
     L1 = sum(weights) # ~ L1 norm of weights
 
     for iIter in xrange(maxIter):
@@ -426,10 +426,10 @@ def optimizeIntegerGermsSlack(gateset, germsList, initialWeights=None,
             print "Iteration %d: score=%g, nGerms=%d" % (iIter, score, L1)
         
         bFoundBetterNeighbor = False
-        for neighborNum, neighbor in enumerate(getNeighbors(weights)):
+        for neighborNum, neighbor in enumerate(get_neighbors(weights)):
             if tuple(neighbor) not in scoreD_keys:
                 neighborL1 = sum(neighbor)
-                neighborScore = computeScore(neighbor)
+                neighborScore = compute_score(neighbor)
             else:
                 neighborL1 = sum(neighbor)
                 neighborScore = scoreD[tuple(neighbor)]
@@ -454,7 +454,7 @@ def optimizeIntegerGermsSlack(gateset, germsList, initialWeights=None,
                 print "No better neighbor. Relaxing score w/slack: %g => %g" % (score, score+slack)
             score += slack #artificially increase score and see if any neighbor is better now...
 
-            for neighborNum, neighbor in enumerate(getNeighbors(weights)):
+            for neighborNum, neighbor in enumerate(get_neighbors(weights)):
                 if sum(neighbor) < L1 and scoreD[tuple(neighbor)] < score:
                     weights, score, L1 = neighbor, scoreD[tuple(neighbor)], sum(neighbor)
                     bFoundBetterNeighbor = True

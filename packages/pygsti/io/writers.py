@@ -4,7 +4,7 @@ import stdinput as _stdinput
 from .. import tools as _tools
 from .. import objects as _objs
 
-def writeParameterFile(filename, params):
+def write_parameter_file(filename, params):
     """ 
     Write a json-formatted parameter file.
 
@@ -20,7 +20,7 @@ def writeParameterFile(filename, params):
     return _json.dump( params, open(filename, "wb"), indent=4) # object_pairs_hook=_collections.OrderedDict
 
 
-def writeEmptyDatasetFile(filename, gateStringList, 
+def write_empty_dataset_file(filename, gatestring_list, 
                           headerString='## Columns = plus frequency, count total', numZeroCols=None,
                           appendWeightsColumn=False):
     """
@@ -31,7 +31,7 @@ def writeEmptyDatasetFile(filename, gateStringList,
     filename : string
         The filename to write.
 
-    gateStringList : list of GateStrings
+    gatestring_list : list of GateStrings
         List of gate strings to write, each to be followed by numZeroCols zeros.
         
     headerString : string, optional
@@ -48,8 +48,8 @@ def writeEmptyDatasetFile(filename, gateStringList,
 
     """
 
-    if len(gateStringList) > 0 and not isinstance(gateStringList[0], _objs.GateString):
-        raise ValueError("Argument gateStringList must be a list of GateString objects!")
+    if len(gatestring_list) > 0 and not isinstance(gatestring_list[0], _objs.GateString):
+        raise ValueError("Argument gatestring_list must be a list of GateString objects!")
 
     if numZeroCols is None: #TODO: cleaner way to extract number of columns from headerString?
         if headerString.startswith('## Columns = '):
@@ -60,12 +60,12 @@ def writeEmptyDatasetFile(filename, gateStringList,
     f = open(filename, 'w')
     zeroCols = "  ".join( ['0']*numZeroCols )
     print >> f, headerString
-    for gateString in gateStringList: #gateString should be a GateString object here
+    for gateString in gatestring_list: #gateString should be a GateString object here
         print >> f, gateString.str + "  " + zeroCols + (("  %f" % gateString.weight) if appendWeightsColumn else "")
     f.close()
 
 
-def writeDatasetFile(filename, gateStringList, dataset, spamLabelOrder=None):
+def write_dataset_file(filename, gatestring_list, dataset, spamLabelOrder=None):
     """
     Write a text-formatted dataset file.
 
@@ -74,7 +74,7 @@ def writeDatasetFile(filename, gateStringList, dataset, spamLabelOrder=None):
     filename : string
         The filename to write.
 
-    gateStringList : list of GateStrings
+    gatestring_list : list of GateStrings
         The list of gate strings to include in the written dataset.
 
     dataset : DataSet
@@ -84,10 +84,10 @@ def writeDatasetFile(filename, gateStringList, dataset, spamLabelOrder=None):
         A list of the SPAM labels in dataset which specifies
         the column order in the output file.
     """
-    if len(gateStringList) > 0 and not isinstance(gateStringList[0], _objs.GateString):
-        raise ValueError("Argument gateStringList must be a list of GateString objects!")
+    if len(gatestring_list) > 0 and not isinstance(gatestring_list[0], _objs.GateString):
+        raise ValueError("Argument gatestring_list must be a list of GateString objects!")
 
-    spamLabels = dataset.getSpamLabels()
+    spamLabels = dataset.get_spam_labels()
     if spamLabelOrder is not None:
         assert(len(spamLabelOrder) == len(spamLabels))
         assert(all( [sl in spamLabels for sl in spamLabelOrder] ))
@@ -99,13 +99,13 @@ def writeDatasetFile(filename, gateStringList, dataset, spamLabelOrder=None):
 
     f = open(filename, 'w')
     print >> f, headerString
-    for gateString in gateStringList: #gateString should be a GateString object here
+    for gateString in gatestring_list: #gateString should be a GateString object here
         dataRow = dataset[gateString.tup]
         print >> f, gateString.str + "  " + "  ".join( [("%g" % dataRow[sl]) for sl in spamLabels] )
     f.close()
 
 
-def writeGatestringList(filename, gateStringList, header=None):
+def write_gatestring_list(filename, gatestring_list, header=None):
     """
     Write a text-formatted gate string list file.
 
@@ -114,7 +114,7 @@ def writeGatestringList(filename, gateStringList, header=None):
     filename : string
         The filename to write.
 
-    gateStringList : list of GateStrings
+    gatestring_list : list of GateStrings
         The list of gate strings to include in the written dataset.
 
     header : string, optional
@@ -122,21 +122,21 @@ def writeGatestringList(filename, gateStringList, header=None):
         need to include one.
 
     """
-    if len(gateStringList) > 0 and not isinstance(gateStringList[0], _obs.GateString):
-        raise ValueError("Argument gateStringList must be a list of GateString objects!")
+    if len(gatestring_list) > 0 and not isinstance(gatestring_list[0], _obs.GateString):
+        raise ValueError("Argument gatestring_list must be a list of GateString objects!")
     
     f = open(filename, "w")
 
     if header is not None:
         print >> f, "# %s" % header
 
-    for gateString in gateStringList:
+    for gateString in gatestring_list:
         print >> f, gateString.str
 
     f.close()
 
 
-def writeGateset(gs,filename,title=None):
+def write_gateset(gs,filename,title=None):
     """
     Write a text-formatted gate set file.
 
@@ -174,7 +174,7 @@ def writeGateset(gs,filename,title=None):
     for (label,gate) in gs.iteritems():
         print >> f, label
         print >> f, "PauliMx"
-        print >> f, _tools.mxToString(gate, width=16, prec=8)
+        print >> f, _tools.mx_to_string(gate, width=16, prec=8)
         print >> f, ""
 
     if gs.identityVec is not None:

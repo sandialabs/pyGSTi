@@ -4,14 +4,14 @@ import itertools as _itertools
 import math as _math
 import sys as _sys
 
-def boolListToIndList(boolList):
+def bool_list_to_ind_list(boolList):
     output = _np.array([])
     for i, boolVal in boolList:
         if boolVal == 1:
             output = _np.append(i)
     return output
 
-def makePrepMxs(gs,prepFidList):
+def make_prep_mxs(gs,prepFidList):
     dimRho = gs.rhoVecs[0].shape[0]
     numRho = len(gs.rhoVecs)
     numFid = len(prepFidList)
@@ -25,7 +25,7 @@ def makePrepMxs(gs,prepFidList):
         outputMatList.append(outputMat)
     return outputMatList
 
-def makeMeasMxs(gs,prepMeasList):
+def make_meas_mxs(gs,prepMeasList):
     dimE = gs.EVecs[0].shape[0]
     numE = len(gs.EVecs)
     numFid = len(prepMeasList)
@@ -51,7 +51,7 @@ def makeMeasMxs(gs,prepMeasList):
 #    SqOutputMat = _np.dot(outputMat,outputMat.T)
 #    return SqOutputMat
 
-# def makeMeasMxs(gs,measFidList):
+# def make_meas_mxs(gs,measFidList):
 #     dimE = gs.EVecs[0].shape[0]
 #     numE = len(gs.EVecs)
 #     numFid = len(measFidList)
@@ -64,17 +64,17 @@ def makeMeasMxs(gs,prepMeasList):
 #     SqOutputMat = _np.dot(outputMat,outputMat.T)
 #     return SqOutputMat
 
-def scoreFidList(gs,fidList,kind=None):
+def score_fid_list(gs,fidList,kind=None):
     if kind not in ('prep', 'meas'):
         raise ValueError("Need to specify 'prep' or 'meas' for kind!")
     if kind == 'prep':
-        matToScore = makePrepMxs(gs,fidList)
+        matToScore = make_prep_mxs(gs,fidList)
     else:
-        matToScore = makeMeasMxs(gs,fidList)
+        matToScore = make_meas_mxs(gs,fidList)
     score = len(fidList) * _np.sum(1./_np.linalg.eigvalsh(matToScore))
     return score
 
-def optimizeIntegerFidsSlack(gateset, fidList, 
+def optimize_integer_fiducials_slack(gateset, fidList, 
                               prepOrMeas = None,
                               initialWeights=None, 
 #                              gates=True, G0=True, 
@@ -159,7 +159,7 @@ def optimizeIntegerFidsSlack(gateset, fidList,
         raise ValueError("Either fixedSlack *or* slackFrac should be specified")
     lessWeightOnly = False  #Initially allow adding to weight. -- maybe make this an argument??
 
-#    nGaugeParams = gateset.getNumGaugeParams(gates, G0, SPAM=False)
+#    nGaugeParams = gateset.num_gauge_params(gates, G0, SPAM=False)
 #    nGerms = len(germsList)
     nFids = len(fidList)
 
@@ -179,12 +179,12 @@ def optimizeIntegerFidsSlack(gateset, fidList,
     # size (nGerms, vec_gateset_dim, vec_gateset_dim)
     fidLengths = _np.array( map(len,fidList), 'i')
     if prepOrMeas == 'prep':
-        fidArrayList = makePrepMxs(gateset,fidList)
+        fidArrayList = make_prep_mxs(gateset,fidList)
     elif prepOrMeas == 'meas':
-        fidArrayList = makeMeasMxs(gateset,fidList)
+        fidArrayList = make_meas_mxs(gateset,fidList)
     numMxs = len(fidArrayList)
         
-    def computeScore(wts):
+    def compute_score(wts):
         numFids = _np.sum(wts)
         scoreMx = _np.zeros([dimRho,numFids *  numMxs],float)
         colInd = 0
@@ -200,7 +200,7 @@ def optimizeIntegerFidsSlack(gateset, fidList,
         scoreD[tuple(wts)] = score
         return score
 
-    def getNeighbors(boolVec):
+    def get_neighbors(boolVec):
         for i in xrange(nFids):
             v = boolVec.copy()
             v[i] = (v[i] + 1) % 2 #toggle v[i] btwn 0 and 1
@@ -212,7 +212,7 @@ def optimizeIntegerFidsSlack(gateset, fidList,
         weights = _np.ones( nFids, 'i' ) #default: start with all germs
         lessWeightOnly = True #we're starting at the max-weight vector
 
-    score = computeScore(weights)
+    score = compute_score(weights)
     L1 = sum(weights) # ~ L1 norm of weights
 
     for iIter in xrange(maxIter):
@@ -222,10 +222,10 @@ def optimizeIntegerFidsSlack(gateset, fidList,
             print "Iteration %d: score=%g, nFids=%d" % (iIter, score, L1)
         
         bFoundBetterNeighbor = False
-        for neighborNum, neighbor in enumerate(getNeighbors(weights)):
+        for neighborNum, neighbor in enumerate(get_neighbors(weights)):
             if tuple(neighbor) not in scoreD_keys:
                 neighborL1 = sum(neighbor)
-                neighborScore = computeScore(neighbor)
+                neighborScore = compute_score(neighbor)
             else:
                 neighborL1 = sum(neighbor)
                 neighborScore = scoreD[tuple(neighbor)]
@@ -250,7 +250,7 @@ def optimizeIntegerFidsSlack(gateset, fidList,
                 print "No better neighbor. Relaxing score w/slack: %g => %g" % (score, score+slack)
             score += slack #artificially increase score and see if any neighbor is better now...
 
-            for neighborNum, neighbor in enumerate(getNeighbors(weights)):
+            for neighborNum, neighbor in enumerate(get_neighbors(weights)):
                 if sum(neighbor) < L1 and scoreD[tuple(neighbor)] < score:
                     weights, score, L1 = neighbor, scoreD[tuple(neighbor)], sum(neighbor)
                     bFoundBetterNeighbor = True

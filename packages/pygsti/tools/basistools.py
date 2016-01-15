@@ -168,7 +168,7 @@ def _processBlockDims(dimOrBlockDims):
 #    return dmDim, dim
 
 
-def GetMatrixUnitMatrices(dimOrBlockDims):
+def std_matrices(dimOrBlockDims):
     """ 
     Get the elements of the matrix unit, or "standard", basis
     spanning the density-matrix space given by dimOrBlockDims.
@@ -212,7 +212,7 @@ def GetMatrixUnitMatrices(dimOrBlockDims):
     return mxList
 
 
-def expandFromStdDirectSumMx(mxInStdBasis, dimOrBlockDims):
+def expand_from_std_direct_sum_mx(mxInStdBasis, dimOrBlockDims):
     """
     Convert a gate matrix in the standard basis of a "direct-sum" 
     space to a matrix in the standard basis of the embedding space.
@@ -259,7 +259,7 @@ def expandFromStdDirectSumMx(mxInStdBasis, dimOrBlockDims):
         return mx
 
     
-def contractToStdDirectSumMx(mxInStdBasis, dimOrBlockDims):
+def contract_to_std_direct_sum_mx(mxInStdBasis, dimOrBlockDims):
     """
     Convert a gate matrix in the standard basis of the
     embedding space to a matrix in the standard basis
@@ -326,7 +326,7 @@ def _GetGellMannNonIdentityDiagMxs(dimension):
 
     return listOfMxs
 
-def GetGellMannMatrices(dimOrBlockDims):
+def gm_matrices_unnormalized(dimOrBlockDims):
     """ 
     Get the elements of the generalized Gell-Mann 
     basis spanning the density-matrix space given by dimOrBlockDims.
@@ -381,7 +381,7 @@ def GetGellMannMatrices(dimOrBlockDims):
 
         listOfMxs = []; start = 0
         for blockDim in blockDims:
-            for blockMx in GetGellMannMatrices(blockDim):
+            for blockMx in gm_matrices_unnormalized(blockDim):
                 mx = _np.zeros( (dmDim, dmDim), 'complex' )
                 mx[start:start+blockDim, start:start+blockDim] = blockMx
                 listOfMxs.append( mx )
@@ -393,7 +393,7 @@ def GetGellMannMatrices(dimOrBlockDims):
         raise ValueError("Invalid dimOrBlockDims = %s" % str(dimOrBlockDims))
 
 
-def GetNormalizedGellMannMatrices(dimOrBlockDims):
+def gm_matrices(dimOrBlockDims):
     """ 
     Get the normalized elements of the generalized Gell-Mann 
     basis spanning the density-matrix space given by dimOrBlockDims.
@@ -418,13 +418,13 @@ def GetNormalizedGellMannMatrices(dimOrBlockDims):
         and N is the dimension of the density-matrix space, 
         equal to sum( block_dim_i^2 ).
     """
-    mxs = GetGellMannMatrices(dimOrBlockDims)
+    mxs = gm_matrices_unnormalized(dimOrBlockDims)
     mxs[0] *= 1/_np.sqrt( mxs[0].shape[0] ) #identity mx
     for mx in mxs[1:]:
         mx *= 1/sqrt2
     return mxs
 
-def GetGellMannToStdBasisTransformMatrix(dimOrBlockDims):
+def gm_to_std_transform_matrix(dimOrBlockDims):
     """
     Construct the matrix which transforms a gate matrix in
     the Gell-Mann basis for a density matrix space to the 
@@ -459,7 +459,7 @@ def GetGellMannToStdBasisTransformMatrix(dimOrBlockDims):
 
     start = 0
     for blockDim in blockDims:
-        mxs = GetNormalizedGellMannMatrices(blockDim)
+        mxs = gm_matrices(blockDim)
         assert( len(mxs) == blockDim**2 )
 
         for j,mx in enumerate(mxs):
@@ -470,7 +470,7 @@ def GetGellMannToStdBasisTransformMatrix(dimOrBlockDims):
     assert(start == gateDim)        
     return gmToStd
 
-def basisChg_StdToGellMann(mxInStdBasis, dimOrBlockDims=None):
+def std_to_gm(mxInStdBasis, dimOrBlockDims=None):
     """ 
     Convert a gate matrix in the Standard basis of a
     density matrix space to the Gell-Mann basis (of the same space).
@@ -495,7 +495,7 @@ def basisChg_StdToGellMann(mxInStdBasis, dimOrBlockDims=None):
         dimOrBlockDims = int(round(_np.sqrt(mxInStdBasis.shape[0])))
         assert( dimOrBlockDims**2 == mxInStdBasis.shape[0] )
     
-    gmToStd = GetGellMannToStdBasisTransformMatrix(dimOrBlockDims)
+    gmToStd = gm_to_std_transform_matrix(dimOrBlockDims)
     stdToGM = _np.linalg.inv(gmToStd)
 
     if len(mxInStdBasis.shape) == 2 and mxInStdBasis.shape[0] == mxInStdBasis.shape[1]:
@@ -524,7 +524,7 @@ def basisChg_StdToGellMann(mxInStdBasis, dimOrBlockDims=None):
     else: raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
 
 
-def basisChg_GellMannToStd(mxInGellMannBasis, dimOrBlockDims=None):
+def gm_to_std(mxInGellMannBasis, dimOrBlockDims=None):
     """ 
     Convert a gate matrix in the Gell-Mann basis of a
     density matrix space to the Standard basis (of the same space).
@@ -550,7 +550,7 @@ def basisChg_GellMannToStd(mxInGellMannBasis, dimOrBlockDims=None):
         dimOrBlockDims = int(round(_np.sqrt(mxInGellMannBasis.shape[0])))
         assert( dimOrBlockDims**2 == mxInGellMannBasis.shape[0] )
 
-    gmToStd = GetGellMannToStdBasisTransformMatrix(dimOrBlockDims)
+    gmToStd = gm_to_std_transform_matrix(dimOrBlockDims)
     stdToGM = _np.linalg.inv(gmToStd)
 
     if len(mxInGellMannBasis.shape) == 2 and mxInGellMannBasis.shape[0] == mxInGellMannBasis.shape[1]:
@@ -563,7 +563,7 @@ def basisChg_GellMannToStd(mxInGellMannBasis, dimOrBlockDims=None):
     else: raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
 
 
-def GetPauliProdMatrices(dim):
+def pp_matrices(dim):
     """ 
     Get the elements of the Pauil-product basis
     spanning the space of dim x dim density matricies
@@ -596,14 +596,14 @@ def GetPauliProdMatrices(dim):
 
     sigmaVec = (id2x2/sqrt2, sigmax/sqrt2, sigmay/sqrt2, sigmaz/sqrt2)
 
-    def isInteger(x):
+    def is_integer(x):
         return bool( abs(x - round(x)) < 1e-6 )
 
     if type(dim) != int:
         raise ValueError("Dimension for Pauli tensor product matrices must be an *integer* power of 2")
 
     nQubits = _np.log2(dim)
-    if not isInteger(nQubits):
+    if not is_integer(nQubits):
         raise ValueError("Dimension for Pauli tensor product matrices must be an integer *power of 2*")
 
     if nQubits == 0: #special case: return single 1x1 identity mx
@@ -621,7 +621,7 @@ def GetPauliProdMatrices(dim):
     return matrices
 
 
-def GetPauliProdToStdBasisTransformMatrix(dimOrBlockDims):
+def pp_to_std_transform_matrix(dimOrBlockDims):
     """
     Construct the matrix which transforms a gate matrix in
     the Pauil-product basis for a density matrix space to the 
@@ -657,7 +657,7 @@ def GetPauliProdToStdBasisTransformMatrix(dimOrBlockDims):
 
     start = 0
     for blockDim in blockDims: 
-        mxs = GetPauliProdMatrices(blockDim)
+        mxs = pp_matrices(blockDim)
         assert( len(mxs) == blockDim**2 )
 
         for j,mx in enumerate(mxs):
@@ -669,7 +669,7 @@ def GetPauliProdToStdBasisTransformMatrix(dimOrBlockDims):
     return ppToStd
 
 
-def basisChg_StdToPauliProd(mxInStdBasis, dimOrBlockDims=None):
+def std_to_pp(mxInStdBasis, dimOrBlockDims=None):
     """ 
     Convert a gate matrix in the Standard basis of a
     density matrix space to the Pauil-product basis (of the same space).
@@ -695,7 +695,7 @@ def basisChg_StdToPauliProd(mxInStdBasis, dimOrBlockDims=None):
         dimOrBlockDims = int(round(_np.sqrt(mxInStdBasis.shape[0])))
         assert( dimOrBlockDims**2 == mxInStdBasis.shape[0] )
 
-    ppToStd = GetPauliProdToStdBasisTransformMatrix(dimOrBlockDims)
+    ppToStd = pp_to_std_transform_matrix(dimOrBlockDims)
     stdToPP = _np.linalg.inv(ppToStd)
 
     if len(mxInStdBasis.shape) == 2 and mxInStdBasis.shape[0] == mxInStdBasis.shape[1]:
@@ -725,7 +725,7 @@ def basisChg_StdToPauliProd(mxInStdBasis, dimOrBlockDims=None):
     else: raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
 
 
-def basisChg_PauliProdToStd(mxInPauliProdBasis, dimOrBlockDims=None):
+def pp_to_std(mxInPauliProdBasis, dimOrBlockDims=None):
     """ 
     Convert a gate matrix in the Pauli-product basis of a
     density matrix space to the Standard basis (of the same space).
@@ -751,7 +751,7 @@ def basisChg_PauliProdToStd(mxInPauliProdBasis, dimOrBlockDims=None):
         dimOrBlockDims = int(round(_np.sqrt(mxInPauliProdBasis.shape[0])))
         assert( dimOrBlockDims**2 == mxInPauliProdBasis.shape[0] )
 
-    ppToStd = GetPauliProdToStdBasisTransformMatrix(dimOrBlockDims)
+    ppToStd = pp_to_std_transform_matrix(dimOrBlockDims)
     stdToPP = _np.linalg.inv(ppToStd)
 
     if len(mxInPauliProdBasis.shape) == 2 and mxInPauliProdBasis.shape[0] == mxInPauliProdBasis.shape[1]:
@@ -764,7 +764,7 @@ def basisChg_PauliProdToStd(mxInPauliProdBasis, dimOrBlockDims=None):
     else: raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
 
 
-def basisChg_GellMannToPauliProd(mxInGellMannBasis, dimOrBlockDims=None):
+def gm_to_pp(mxInGellMannBasis, dimOrBlockDims=None):
     """ 
     Convert a gate matrix in the Gell-Mann basis of a
     density matrix space to the Pauil-product basis (of the same space).
@@ -785,9 +785,9 @@ def basisChg_GellMannToPauliProd(mxInGellMannBasis, dimOrBlockDims=None):
         The given gate matrix converted to the Pauli-product basis.
         Array size is the same as mxInGellMannBasis.
     """
-    return basisChg_StdToPauliProd(basisChg_GellMannToStd(mxInGellMannBasis, dimOrBlockDims), dimOrBlockDims)
+    return std_to_pp(gm_to_std(mxInGellMannBasis, dimOrBlockDims), dimOrBlockDims)
 
-def basisChg_PauliProdtoGellMann(mxInPauliProdBasis, dimOrBlockDims=None):
+def pp_to_gm(mxInPauliProdBasis, dimOrBlockDims=None):
     """ 
     Convert a gate matrix in the Pauli-product basis of a
     density matrix space to the Gell-Mann basis (of the same space).
@@ -808,7 +808,7 @@ def basisChg_PauliProdtoGellMann(mxInPauliProdBasis, dimOrBlockDims=None):
         The given gate matrix converted to the Gell-Mann basis.
         Array size is the same as mxInPauliProdBasis.
     """
-    return basisChg_StdToGellMann(basisChg_PauliProdToStd(mxInPauliProdBasis, dimOrBlockDims), dimOrBlockDims)
+    return std_to_gm(pp_to_std(mxInPauliProdBasis, dimOrBlockDims), dimOrBlockDims)
 
 
 
@@ -818,7 +818,7 @@ def basisChg_PauliProdtoGellMann(mxInPauliProdBasis, dimOrBlockDims=None):
 #TODO: maybe make these more general than for 1 or 2 qubits??
 #############################################################################
 
-def stateToPauliDensityVec(state_vec):
+def state_to_pauli_density_vec(state_vec):
     """
     Convert a single qubit state vector into a density matrix.
 
@@ -836,10 +836,10 @@ def stateToPauliDensityVec(state_vec):
     assert( len(state_vec) == 2 )  
     st_vec = _np.array( [ [state_vec[0]], [state_vec[1]] ] )
     dm_mx = _np.kron( _np.conjugate(_np.transpose(st_vec)), st_vec ) #density matrix in sigmaz basis
-    return matrixInStdBasisToPauliProdVector(dm_mx)
+    return stdmx_to_ppvec(dm_mx)
 
 
-def stateUnitaryToPauliDensityMxOp(U):
+def unitary_to_pauligate_1q(U):
     """
     Get the linear operator on (vectorized) density
     matrices corresponding to a 1-qubit unitary 
@@ -862,7 +862,7 @@ def stateUnitaryToPauliDensityMxOp(U):
     op_mx = _np.empty( (4,4) ) #, 'complex' )
     Udag = _np.conjugate(_np.transpose(U))
 
-    sigmaVec = GetPauliProdMatrices(2)
+    sigmaVec = pp_matrices(2)
 
     for i in (0,1,2,3):
         for j in (0,1,2,3):
@@ -872,7 +872,7 @@ def stateUnitaryToPauliDensityMxOp(U):
 
 # single qubit density matrix in 2-qubit pauli basis (16x16 matrix)
 # U must be a 4x4 matrix
-def stateUnitaryToPauliDensityMxOp_2Q(U):
+def unitary_to_pauligate_2q(U):
     """
     Get the linear operator on (vectorized) density
     matrices corresponding to a 2-qubit unitary 
@@ -896,7 +896,7 @@ def stateUnitaryToPauliDensityMxOp_2Q(U):
     op_mx = _np.empty( (16,16), 'd') #, 'complex' )
     Udag = _np.conjugate(_np.transpose(U))
 
-    sigmaVec_2Q = GetPauliProdMatrices(4)
+    sigmaVec_2Q = pp_matrices(4)
 
     for i in range(16):
         for j in range(16):
@@ -905,7 +905,7 @@ def stateUnitaryToPauliDensityMxOp_2Q(U):
     return op_mx
 
 
-def pauliProdVectorToMatrixInStdBasis(v):
+def ppvec_to_stdmx(v):
     """
     Convert a vector in the Pauli basis to a matrix
      in the standard basis.
@@ -923,7 +923,7 @@ def pauliProdVectorToMatrixInStdBasis(v):
 
     # nQubits = _np.log2(len(v)) / 2  ( n qubits = 2^n x 2^n mx ; len(v) = 2^2n -> n = log2(len(v))/2 )
     dim = int(_np.sqrt( len(v) )) # len(v) = dim^2, where dim is matrix dimension of Pauli-prod mxs
-    ppMxs    = GetPauliProdMatrices(dim)
+    ppMxs    = pp_matrices(dim)
 
     ret = _np.zeros( (dim,dim), 'complex' )
     for i,ppMx in enumerate(ppMxs):
@@ -931,7 +931,7 @@ def pauliProdVectorToMatrixInStdBasis(v):
     return ret
 
 
-def gellMannVectorToMatrixInStdBasis(v):
+def gmvec_to_stdmx(v):
     """
     Convert a vector in the Gell-Mann basis to a matrix
      in the standard basis.
@@ -948,7 +948,7 @@ def gellMannVectorToMatrixInStdBasis(v):
     """
 
     dim = int(_np.sqrt( len(v) )) # len(v) = dim^2, where dim is matrix dimension of Pauli-prod mxs
-    gmMxs = GetNormalizedGellMannMatrices(dim)
+    gmMxs = gm_matrices(dim)
 
     ret = _np.zeros( (dim,dim), 'complex' )
     for i,gmMx in enumerate(gmMxs):
@@ -956,7 +956,7 @@ def gellMannVectorToMatrixInStdBasis(v):
     return ret
 
 
-def matrixInStdBasisToPauliProdVector(m):
+def stdmx_to_ppvec(m):
     """
     Convert a matrix in the standard basis to
      a vector in the Pauli basis.
@@ -974,7 +974,7 @@ def matrixInStdBasisToPauliProdVector(m):
 
     assert(len(m.shape) == 2 and m.shape[0] == m.shape[1])
     dim = m.shape[0]
-    ppMxs = GetPauliProdMatrices(dim)
+    ppMxs = pp_matrices(dim)
 
     v = _np.empty((dim**2,1))
     for i,ppMx in enumerate(ppMxs):
@@ -982,7 +982,7 @@ def matrixInStdBasisToPauliProdVector(m):
 
     return v
 
-def matrixInStdBasisToGellMannVector(m):
+def stdmx_to_gmvec(m):
     """
     Convert a matrix in the standard basis to
      a vector in the Gell-Mann basis.
@@ -1000,7 +1000,7 @@ def matrixInStdBasisToGellMannVector(m):
 
     assert(len(m.shape) == 2 and m.shape[0] == m.shape[1])
     dim = m.shape[0]
-    gmMxs = GetNormalizedGellMannMatrices(dim)
+    gmMxs = gm_matrices(dim)
 
     v = _np.empty((dim**2,1))
     for i,gmMx in enumerate(gmMxs):
@@ -1009,7 +1009,7 @@ def matrixInStdBasisToGellMannVector(m):
     return v
 
 
-def singleQubitGate(hx, hy, hz, noise=0):
+def single_qubit_gate(hx, hy, hz, noise=0):
     """
     Construct the single-qubit gate matrix.
 
@@ -1041,10 +1041,10 @@ def singleQubitGate(hx, hy, hz, noise=0):
     """
     ex = -1j * (hx*sigmax + hy*sigmay + hz*sigmaz)
     D = _np.diag( [1]+[1-noise]*(4-1) )
-    return _np.dot(D, stateUnitaryToPauliDensityMxOp( _spl.expm(ex) ))
+    return _np.dot(D, unitary_to_pauligate_1q( _spl.expm(ex) ))
 
 
-def twoQubitGate(ix=0, iy=0, iz=0, xi=0, xx=0, xy=0, xz=0, yi=0, yx=0, yy=0, yz=0, zi=0, zx=0, zy=0, zz=0):
+def two_qubit_gate(ix=0, iy=0, iz=0, xi=0, xx=0, xy=0, xz=0, yi=0, yx=0, yy=0, yz=0, zi=0, zx=0, zy=0, zz=0):
     """
     Construct the single-qubit gate matrix.
 
@@ -1121,5 +1121,5 @@ def twoQubitGate(ix=0, iy=0, iz=0, xi=0, xx=0, xy=0, xz=0, yi=0, yx=0, yy=0, yz=
     ex += zx * sigmazx
     ex += zy * sigmazy
     ex += zz * sigmazz
-    return stateUnitaryToPauliDensityMxOp_2Q( _spl.expm(-1j * ex) )
+    return unitary_to_pauligate_2q( _spl.expm(-1j * ex) )
       #TODO: fix noise op to depolarizing

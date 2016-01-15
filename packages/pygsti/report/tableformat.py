@@ -177,7 +177,7 @@ def _formatList(items, formatters, fmt):
     return formatted_items
 
 
-def CreateTable(formats, tables, colHeadings, formatters, tableclass, longtable, customHeader=None):
+def create_table(formats, tables, colHeadings, formatters, tableclass, longtable, customHeader=None):
     """ Create a new table for each specified format in the tables dictionary """
 
     if "latex" in formats:
@@ -230,7 +230,7 @@ def CreateTable(formats, tables, colHeadings, formatters, tableclass, longtable,
 
 
 
-def CreateTable_preformatted(formats, tables, colHeadings, tableclass, longtable):
+def create_table_preformatted(formats, tables, colHeadings, tableclass, longtable):
     """ Create a new table for each specified format in the tables dictionary
         colHeadings is assumed to be a dictionary with pre-formatted column
         heading appropriate for each format
@@ -267,7 +267,7 @@ def CreateTable_preformatted(formats, tables, colHeadings, tableclass, longtable
         tables['ppt'].append( tableDict )
 
 
-def AddTableRow(formats, tables, rowData, formatters):
+def add_table_row(formats, tables, rowData, formatters):
     """ Add a row to each table in tables dictionary """
 
     if "latex" in formats:
@@ -301,7 +301,7 @@ def AddTableRow(formats, tables, rowData, formatters):
 
 
 
-def FinishTable(formats, tables, longtable):
+def finish_table(formats, tables, longtable):
     """ Finish (end) each table in tables dictionary """
 
     if "latex" in formats:
@@ -324,9 +324,9 @@ def FinishTable(formats, tables, longtable):
 #        tables["ppt"][-1] = _pu.PPTTable(curTableDict) # convert dict to a ppt table object for later rendering
 
 
-def AddInterTableSpace(formats, tables):
+def add_inter_table_space(formats, tables):
     """ Add some space (if appropriate) to each table in tables dictionary.
-        Should only be used after calling FinishTable """
+        Should only be used after calling finish_table """
 
     if "latex" in formats:
         assert("latex" in tables)

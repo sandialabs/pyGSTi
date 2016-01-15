@@ -82,12 +82,12 @@ class DataSetRow:
   def __setitem__(self,spamlabel,count):
     raise ValueError("Setting dataset counts must be done using the addData functions")
 
-  def asDict(self):
+  def as_dict(self):
     """ Returns the (spamlabel,count) pairs as a dictionary."""
     return dict( zip(self.dataset.slIndex.keys(),self.rowData) )
 
   def __str__(self):
-    return str(self.asDict())
+    return str(self.as_dict())
 
 
 class DataSetRow_KeyValIterator:
@@ -281,7 +281,7 @@ class DataSet:
     """
     return DataSet_ValIterator(self)
 
-  def getSpamLabels(self):
+  def get_spam_labels(self):
     """ 
     Get the spam labels of this DataSet.
 
@@ -292,7 +292,7 @@ class DataSet:
     """
     return self.slIndex.keys()
 
-  def getGateLabels(self):
+  def get_gate_labels(self):
     """ 
     Get a list of all the distinct gate labels used
       in the gate strings of this dataset.
@@ -308,7 +308,7 @@ class DataSet:
         if gateLabel not in gateLabels: gateLabels.append(gateLabel)
     return gateLabels
 
-  def addCountDict(self, gateString, countDict):
+  def add_count_dict(self, gateString, countDict):
     """ 
     Add a single gate string's counts to this DataSet
 
@@ -327,15 +327,15 @@ class DataSet:
     if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
     countList = [ _np.nan ] * len(self.slIndex)
     for (spamLabel,count) in countDict.iteritems():
-      if spamLabel not in self.getSpamLabels(): 
+      if spamLabel not in self.get_spam_labels(): 
         raise ValueError("Error adding data to Dataset: invalid spam label %s" % spamLabel)
       countList[ self.slIndex[spamLabel] ] = count
     if _np.nan in countList: 
       raise ValueError("Error adding data to Dataset: not all spam labels were specified")
-    self.addCountList(gateString, countList)
+    self.add_count_list(gateString, countList)
 
 
-  def addCountList(self, gateString, countList):
+  def add_count_list(self, gateString, countList):
     """ 
     Add a single gate string's counts to this DataSet.  
       
@@ -371,7 +371,7 @@ class DataSet:
       self.counts.append( countArray )
       self.gsIndex[ gateString ] = gateStringIndx
 
-  def addCounts_1Q(self, gateString, nPlus, nMinus):
+  def add_counts_1q(self, gateString, nPlus, nMinus):
     """ 
     Single-qubit version of addCountsDict, for convenience when
       the DataSet contains two spam labels, 'plus' and 'minus'.
@@ -408,9 +408,9 @@ class DataSet:
             ' percent! To resolve this issue, I am not going to ignore the latter data.'
         return
 
-    self.addCountDict(gateString, {'plus':nPlus, 'minus':nMinus} )
+    self.add_count_dict(gateString, {'plus':nPlus, 'minus':nMinus} )
 
-  def addCountsFromDataset(self, otherDataSet):
+  def add_counts_from_dataset(self, otherDataSet):
     """ 
     Append another DataSet's data to this DataSet
 
@@ -424,9 +424,9 @@ class DataSet:
     None
     """
     if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
-    assert(self.getSpamLabels() == otherDataSet.getSpamLabels())
+    assert(self.get_spam_labels() == otherDataSet.get_spam_labels())
     for (gateLabelString,dsRow) in otherDataSet.iteritems():
-        self.addCountList(gateLabelString, dsRow.values() )
+        self.add_count_list(gateLabelString, dsRow.values() )
 
   def __str__(self):
     s = ""
@@ -476,11 +476,11 @@ class DataSet:
       #trunc_dataset = StaticDataSet(self.counts.take(gateStringIndices,axis=0), gateStrings=gateStrings, spamLabelIndices=self.slIndex)
 
     else:
-      trunc_dataset = DataSet(spamLabels=self.getSpamLabels())
+      trunc_dataset = DataSet(spamLabels=self.get_spam_labels())
       for gateString in _lt.remove_duplicates(listOfGateStringsToKeep):
         if gateString in self.gsIndex:
           gateStringIndx = self.gsIndex[gateString]
-          trunc_dataset.addCountList( self.counts[ gateStringIndex ].copy() ) #Copy operation so trucated dataset can be modified
+          trunc_dataset.add_count_list( self.counts[ gateStringIndex ].copy() ) #Copy operation so trucated dataset can be modified
         elif bThrowErrorIfStringIsMissing:
           raise ValueError("Gate string %s was not found in dataset begin truncated and bThrowErrorIfStringIsMissing == True" % str(gateString))
 
@@ -491,12 +491,12 @@ class DataSet:
     if self.bStatic: 
       return self # doesn't need to be copied since data can't change
     else:
-      copyOfMe = DataSet(self.getSpamLabels())
+      copyOfMe = DataSet(self.get_spam_labels())
       copyOfMe.gsIndex = self.gsIndex.copy()
       copyOfMe.counts = [ el.copy() for el in self.counts ]
       return copyOfMe
 
-  def doneAddingData(self):
+  def done_adding_data(self):
     """ 
     Promotes a non-static DataSet to a static (read-only) DataSet.  This
      method should be called after all data has been added.
@@ -511,7 +511,7 @@ class DataSet:
     self.counts, self.bStatic = newCounts, True
 
   def __getstate__(self):
-    toPickle = { 'gsIndexKeys': map(compressGateLabelTuple, self.gsIndex.keys()),
+    toPickle = { 'gsIndexKeys': map(compress_gate_label_tuple, self.gsIndex.keys()),
                  'gsIndexVals': self.gsIndex.values(),
                  'slIndex': self.slIndex,
                  'bStatic': self.bStatic,
@@ -519,7 +519,7 @@ class DataSet:
     return toPickle
 
   def __setstate__(self, state_dict):
-    self.gsIndex = _OrderedDict( zip( map(expandGateLabelTuple, state_dict['gsIndexKeys']), state_dict['gsIndexVals']) )
+    self.gsIndex = _OrderedDict( zip( map(expand_gate_label_tuple, state_dict['gsIndexKeys']), state_dict['gsIndexVals']) )
     self.slIndex = state_dict['slIndex']
     self.counts = state_dict['counts']
     self.bStatic = state_dict['bStatic']
@@ -540,7 +540,7 @@ class DataSet:
     None
     """
     
-    toPickle = { 'gsIndexKeys': map(compressGateLabelTuple, self.gsIndex.keys() if self.gsIndex else []),
+    toPickle = { 'gsIndexKeys': map(compress_gate_label_tuple, self.gsIndex.keys() if self.gsIndex else []),
                  'gsIndexVals': self.gsIndex.values() if self.gsIndex else [],
                  'slIndex': self.slIndex,
                  'bStatic': self.bStatic } #Don't pickle counts numpy data b/c it's inefficient
@@ -589,7 +589,7 @@ class DataSet:
         f = fileOrFilename
 
     state_dict = _pickle.load(f)
-    self.gsIndex = _OrderedDict( zip( map(expandGateLabelTuple, state_dict['gsIndexKeys']), state_dict['gsIndexVals']) )
+    self.gsIndex = _OrderedDict( zip( map(expand_gate_label_tuple, state_dict['gsIndexKeys']), state_dict['gsIndexVals']) )
     self.slIndex = state_dict['slIndex']
     self.bStatic = state_dict['bStatic']
 
@@ -609,7 +609,7 @@ def _getNumPeriods(gateString, periodLen):
         n += 1
     return n
 
-def compressGateLabelTuple(gateString, minLenToCompress=20, maxPeriodToLookFor=20):
+def compress_gate_label_tuple(gateString, minLenToCompress=20, maxPeriodToLookFor=20):
     """
     Compress a gate string.  The result is tuple with a special compressed-
     gate-string form form that is not useable by other GST methods but is
@@ -665,16 +665,16 @@ def compressGateLabelTuple(gateString, minLenToCompress=20, maxPeriodToLookFor=2
             
     return tuple(compressed)
 
-def expandGateLabelTuple(compressedGateString):
+def expand_gate_label_tuple(compressedGateString):
     """
-    Expand a compressed tuple created with compressGateLabelTuple(...)
+    Expand a compressed tuple created with compress_gate_label_tuple(...)
     into a tuple of gate labels.
 
     Parameters
     ----------
     compressedGateString : tuple
         a tuple in the compressed form created by
-        compressGateLabelTuple(...).
+        compress_gate_label_tuple(...).
 
     Returns
     -------
@@ -690,19 +690,19 @@ def expandGateLabelTuple(compressedGateString):
     return tuple(expandedString)    
 
 
-def UpgradeOldDataSet(oldDataset):
+def upgrade_old_dataset(oldDataset):
     """ Deprecated: Returns a DataSet based on an old-version dataset object """
     if len(oldDataset.keys()) > 0:
       spamLabels = oldDataset[ oldDataset.keys()[0] ].n.keys()
       newDataset = DataSet(spamLabels=spamLabels)
       for gs,datum in oldDataset.iteritems():
-        newDataset.addCountDict( gs, datum.n )
+        newDataset.add_count_dict( gs, datum.n )
     else:
       newDataset = DataSet(spamLabels=[]) #if it's an empty dataset, no spam labels
-    newDataset.doneAddingData()
+    newDataset.done_adding_data()
     return newDataset
 
-def UpgradeOldDataSetPickle(filename):
+def upgrade_old_data_set_pickle(filename):
     """ Deprecated: Upgrades an old-version dataset object pickle file."""
     import sys as _sys
     import OldDataSet as _OldDataSet
@@ -713,7 +713,7 @@ def UpgradeOldDataSetPickle(filename):
     try:     oldDataset = _pickle.load( open(filename,"rb") )
     finally: _sys.modules['DataSet'] = currentDataSetModule
 
-    newDataset = UpgradeOldDataSet(oldDataset)
+    newDataset = upgrade_old_dataset(oldDataset)
 
     _pickle.dump( newDataset, open(filename + ".upd","wb") )
     print "Successfully updated ==> %s" % (filename + ".upd")

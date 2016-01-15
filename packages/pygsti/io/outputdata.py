@@ -1,6 +1,6 @@
 """ Defines the OutputData class and supporting functions """
 import cPickle as _pickle
-from dataset import UpgradeOldDataSet as _UpgradeOldDataSet
+from dataset import upgrade_old_dataset as _UpgradeOldDataSet
 
 class OutputData:
     """
@@ -14,7 +14,7 @@ class OutputData:
         self.filename = init_from_filename
         
         if self.filename is not None:
-            self.loadFrom(self.filename)
+            self.load_from(self.filename)
 
     def has_gateset(self, gsKey):
         """ Test whether this OutputData contains a gateset named gsKey"""
@@ -85,7 +85,7 @@ class OutputData:
 
 
 
-    def loadFrom(self, filename):
+    def load_from(self, filename):
         """ Load data from a file.  If filename ends in .gz it will be gzip decompressed. """
         self.filename = filename
 
@@ -121,10 +121,10 @@ class OutputData:
     def save(self):
         """ Save data to the same file this OutputData was loaded from """
         if self.filename is None:
-            raise ValueError("Cannot save this OutputData object when it wasn't loaded from a file -- must use saveTo")
-        return saveTo(self.filename)
+            raise ValueError("Cannot save this OutputData object when it wasn't loaded from a file -- must use save_to")
+        return save_to(self.filename)
 
-    def saveTo(self, filename):
+    def save_to(self, filename):
         """ Save data to a file.  If filename ends in .gz it will be gzip compressed. """
         dictToSave = { 'gatesets': self.gatesets,
                        'datasets': self.datasets,
@@ -138,13 +138,13 @@ class OutputData:
 
 
 
-#def UpgradeOldDataSets(outputDataWithOldDatasets):
+#def upgrade_old_data_sets(outputDataWithOldDatasets):
 #    newDatasets = { }
 #    for key,oldDataset in outputDataWithOldDatasets.datasets.iteritems():
 #        newDatasets[key] = _UpgradeOldDataSet(oldDataset)
 #    outputDataWithOldDatasets.datasets = newDatasets
 #
-#def UpgradeOldDataSetPickle(filename):
+#def upgrade_old_data_set_pickle(filename):
 #    import sys, DataSet, OldDataSet
 #
 #    currentDataSetModule = sys.modules['DataSet']
@@ -152,8 +152,8 @@ class OutputData:
 #    try:      od = OutputData(filename)
 #    finally:  sys.modules['DataSet'] = currentDataSetModule
 #
-#    od.UpgradeOldDataSets(od)
-#    od.saveTo(filename + ".upd")
+#    od.upgrade_old_data_sets(od)
+#    od.save_to(filename + ".upd")
 #
 #    updated_od = OutputData(filename + ".upd")
 #    for key,ds in updated_od.datasets.iteritems():

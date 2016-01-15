@@ -6,7 +6,7 @@ import matplotlib
 def decay(x,a,b):
     return (1+(2*a-1)*np.exp(-b * x))/2.
     
-def getDecayRate(RBDS,showPlot=False,xlim=None,ylim=None,saveFigPath=None):
+def get_decay_rate(RBDS,showPlot=False,xlim=None,ylim=None,saveFigPath=None):
     RBlengths = []
     RBsuccesses = []
     for key in RBDS.keys():
@@ -35,21 +35,21 @@ def getDecayRate(RBDS,showPlot=False,xlim=None,ylim=None,saveFigPath=None):
         newplot.savefig(saveFigPath)            
     return a,b
 
-def makeSimRBData(gs,ExpRBData,seed = None):
+def make_sim_RB_data(gs,ExpRBData,seed = None):
     if seed != None:
         np.random.seed(seed)
     DS = GST.DataSet(spamLabels=['plus','minus'])
     RBKeys = ExpRBData.keys()
     for key in RBKeys:
         N = sum(ExpRBData[key].values())
-        pp = gs.Pr('plus',key,clipTo=(0,1))
+        pp = gs.pr('plus',key,clipTo=(0,1))
         Np = np.random.binomial(N,pp)
         Nm = N - Np
-        DS.addCountDict(key,{'plus':Np,'minus':Nm})
-    DS.doneAddingData()
+        DS.add_count_dict(key,{'plus':Np,'minus':Nm})
+    DS.done_adding_data()
     return DS
 
-def makeSimRBDataPerfect(gs,ExpRBData,N=1e6):
+def make_sim_rb_data_perfect(gs,ExpRBData,N=1e6):
     RBKeys = ExpRBData.keys()
-    DS = GST.generateFakeData(gs,RBKeys,N,sampleError='none')
+    DS = GST.generate_fake_data(gs,RBKeys,N,sampleError='none')
     return DS

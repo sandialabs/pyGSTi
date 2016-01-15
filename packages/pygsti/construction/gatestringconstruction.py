@@ -11,7 +11,7 @@ def _runExpression(str_expression, myLocals):
     exec( "result = " + str_expression, {"__builtins__": None}, myLocals )
     return myLocals.get("result",None)
 
-def createGateStringList(*args,**kwargs):
+def create_gatestring_list(*args,**kwargs):
     """
     Create a list of gate strings using a nested loop.  Positional arguments
     specify evaluation strings, which are evaluated within the inner-loop
@@ -83,7 +83,7 @@ def repeat(x,nTimes,assertAtLeastOneRep=False):
 
     assertAtLeastOneRep : bool, optional
        if True, assert that nTimes > 0.  This can be useful when used
-       within a createGateStringList inner loop to build a gate string
+       within a create_gatestring_list inner loop to build a gate string
        lists where a string must be repeated at least once to be added
        to the list.
 
@@ -94,7 +94,7 @@ def repeat(x,nTimes,assertAtLeastOneRep=False):
     if assertAtLeastOneRep:  assert(nTimes > 0)
     return x*nTimes
 
-def repeatCountWithMaxLength(x,maxLength,assertAtLeastOneRep=False):
+def repeat_count_with_max_length(x,maxLength,assertAtLeastOneRep=False):
     """
     Compute the number of times a gate string x must be repeated such that
     the repeated string has length <= maxLength.
@@ -109,7 +109,7 @@ def repeatCountWithMaxLength(x,maxLength,assertAtLeastOneRep=False):
 
     assertAtLeastOneRep : bool, optional
        if True, assert that number of repetitions is > 0.
-       This can be useful when used within a createGateStringList inner loop
+       This can be useful when used within a create_gatestring_list inner loop
        to build a gate string lists where a string must be repeated at
        least once to be added to the list.
 
@@ -123,7 +123,7 @@ def repeatCountWithMaxLength(x,maxLength,assertAtLeastOneRep=False):
     reps = maxLength//l if l > 0 else 0
     return reps
 
-def repeatWithMaxLength(x,maxLength,assertAtLeastOneRep=False):
+def repeat_with_max_length(x,maxLength,assertAtLeastOneRep=False):
     """
     Repeat the gate string x an integer number of times such that
     the repeated string has length <= maxLength.
@@ -138,7 +138,7 @@ def repeatWithMaxLength(x,maxLength,assertAtLeastOneRep=False):
 
     assertAtLeastOneRep : bool, optional
        if True, assert that number of repetitions is > 0.
-       This can be useful when used within a createGateStringList inner loop
+       This can be useful when used within a create_gatestring_list inner loop
        to build a gate string lists where a string must be repeated at
        least once to be added to the list.
 
@@ -147,13 +147,13 @@ def repeatWithMaxLength(x,maxLength,assertAtLeastOneRep=False):
     tuple or GateString (whichever x was)    
         the repeated gate string
     """
-    return repeat(x,repeatCountWithMaxLength(x,maxLength,assertAtLeastOneRep),assertAtLeastOneRep)
+    return repeat(x,repeat_count_with_max_length(x,maxLength,assertAtLeastOneRep),assertAtLeastOneRep)
 
 #Useful for anything?
-#def repeatEmpty(x,maxLength,assertAtLeastOneRep=False):
+#def repeat_empty(x,maxLength,assertAtLeastOneRep=False):
 #    return ()
 
-def repeatAndTruncate(x,N,assertAtLeastOneRep=False):
+def repeat_and_truncate(x,N,assertAtLeastOneRep=False):
     """
     Repeat the gate string x so the repeated string has length greater than N,
     then truncate the string to be exactly length N.
@@ -175,10 +175,10 @@ def repeatAndTruncate(x,N,assertAtLeastOneRep=False):
     tuple or GateString (whichever x was)    
         the repeated-then-truncated gate string
     """
-    reps = repeatCountWithMaxLength(x,N,assertAtLeastOneRep) + 1
+    reps = repeat_count_with_max_length(x,N,assertAtLeastOneRep) + 1
     return (x*reps)[0:N]
 
-def repeatRemainderForTruncation(x,N,assertAtLeastOneRep=False):
+def repeat_remainder_for_truncation(x,N,assertAtLeastOneRep=False):
     """
     Repeat the gate string x the fewest number of times such that the repeated
     string has length greater than or equal to N.  Return the portion of this
@@ -203,11 +203,11 @@ def repeatRemainderForTruncation(x,N,assertAtLeastOneRep=False):
         the remainder gate string
 
     """
-    reps = repeatCountWithMaxLength(x,N,assertAtLeastOneRep)
+    reps = repeat_count_with_max_length(x,N,assertAtLeastOneRep)
     return x[0:(N - reps*len(x))]
 
 
-def simplifyStr(gateStringStr):
+def simplify_str(gateStringStr):
     """
     Simplify a string representation of a gate string.  The simplified
       string should evaluate to the same gate label tuple as the original.
@@ -234,7 +234,7 @@ def simplifyStr(gateStringStr):
 
 ## gate-label-tuple function.  TODO: check if these are still needed.
 
-def listAllGateStrings(gateLabels, minlength, maxlength):
+def list_all_gatestrings(gateLabels, minlength, maxlength):
     """
     List all the gate strings in a given length range.
     
@@ -256,17 +256,17 @@ def listAllGateStrings(gateLabels, minlength, maxlength):
     """
     ret = [ ]
     for l in range(minlength, maxlength+1):
-        ret += listAllGateStringsOfLength(gateLabels, l)
+        ret += list_all_gatestrings_onelen(gateLabels, l)
     return ret
 
-def genAllGateStrings(gateLabels, minlength, maxlength):
-    """ Generator version of listAllGateStrings """
+def gen_all_gatestrings(gateLabels, minlength, maxlength):
+    """ Generator version of list_all_gatestrings """
     ret = [ ]
     for l in range(minlength, maxlength+1):
-        for s in genAllGateStringsOfLength(gateLabels, l):
+        for s in gen_all_gatestrings_onelen(gateLabels, l):
             yield s
 
-def listAllGateStringsOfLength(gateLabels, length):
+def list_all_gatestrings_onelen(gateLabels, length):
     """
     List all the gate strings of a given length.
     
@@ -285,30 +285,30 @@ def listAllGateStringsOfLength(gateLabels, length):
     """
     if length == 0: return [ _gs.GateString( () ) ]
     if length == 1: return [ _gs.GateString( (g,) ) for g in gateLabels ]
-    m1StrList = listAllGateStringsOfLength(gateLabels, length-1)
+    m1StrList = list_all_gatestrings_onelen(gateLabels, length-1)
     return [ _gs.GateString( (g,) ) + s for g in gateLabels for s in m1StrList ]
 
 
-def genAllGateStringsOfLength(gateLabels, length):
-    """Generator version of listAllGateStringsOfLength"""
+def gen_all_gatestrings_onelen(gateLabels, length):
+    """Generator version of list_all_gatestrings_onelen"""
     if length == 0: yield _gs.GateString( () )
     elif length == 1: 
         for g in gateLabels:
             yield _gs.GateString( (g,) )
     else:
         for g in gateLabels:
-            for s in genAllGateStringsOfLength(gateLabels, length-1):
+            for s in gen_all_gatestrings_onelen(gateLabels, length-1):
                 yield _gs.GateString( (g,) ) + s
 
 
-def listAllGateStringsWithoutPowersAndCycles(gateLabels, maxLength):
+def list_all_gatestrings_without_powers_and_cycles(gateLabels, maxLength):
 
     #Are we trying to add a germ that is a permutation of a germ we already have?  False if no, True if yes.
-    def permCheck(testStr,strList): # works with python strings, so can use "in" to test for substring inclusion
+    def perm_check(testStr,strList): # works with python strings, so can use "in" to test for substring inclusion
         return any( [ testStr in s*2 for s in strList ] )
     
     #Are we trying to add a germ that is a power of a germ we already have?  False if no, True if yes.
-    def powCheck(testStr,strListDict):
+    def pow_check(testStr,strListDict):
         L = len(testStr)
         for k in strListDict.keys():
             if L % k == 0:
@@ -321,23 +321,23 @@ def listAllGateStringsWithoutPowersAndCycles(gateLabels, maxLength):
     for length in _np.arange(1,maxLength+1):
 
         permCheckedStrs = []
-        for s in genAllGateStringsOfLength(gateLabels, length):
-            pys = gateStringToPythonString(s,gateLabels)
-            if not permCheck(pys,permCheckedStrs):#Sequence is not a cycle of anything in permCheckedStrs
+        for s in gen_all_gatestrings_onelen(gateLabels, length):
+            pys = gatestr_to_pythonstr(s,gateLabels)
+            if not perm_check(pys,permCheckedStrs):#Sequence is not a cycle of anything in permCheckedStrs
                 permCheckedStrs.append(pys)
 
         outputDict[length] = []
         for pys in permCheckedStrs:#Now check to see if any elements of tempList2 are powers of elements already in output
-            if not powCheck(pys,outputDict):#Seqeunce is not a power of anything in output
+            if not pow_check(pys,outputDict):#Seqeunce is not a power of anything in output
                 outputDict[length].append(pys)
 
     output = []
     for length in _np.arange(1,maxLength+1):
-        output.extend( [ pythonStringToGateString(pys, gateLabels) for pys in outputDict[length] ] )
+        output.extend( [ pythonstr_to_gatestr(pys, gateLabels) for pys in outputDict[length] ] )
     return output
 
 
-def listRandomGateStringsOfLength(gateLabels, length, count):
+def list_random_gatestrings_onelen(gateLabels, length, count):
     """
     Create a list of random gate strings of a given length.
     
@@ -363,7 +363,7 @@ def listRandomGateStringsOfLength(gateLabels, length, count):
         ret.append( _gs.GateString( [gateLabels[int(k)] for k in r]) )
     return ret
 
-def listPartialStrings(gateString):
+def list_partial_strings(gateString):
     """
     List the parial strings of gateString, that is,
       the strings that are the slices gateString[0:n]
@@ -384,14 +384,14 @@ def listPartialStrings(gateString):
         ret.append( tuple(gateString[0:l]) )
     return ret
 
-def listLGSTGateStrings(specs, gateLabels):
+def list_lgst_gatestrings(specs, gateLabels):
     """
     List the gate strings required for runnsing LGST.
 
     Parameters
     ----------
     specs : 2-tuple
-        A (rhoSpecs,ESpecs) tuple usually generated by calling getRhoAndESpecs(...).
+        A (rhoSpecs,ESpecs) tuple usually generated by calling get_spam_specs(...).
 
     gateLabels : tuple
         tuple of gate labels to estimate using LGST.
@@ -401,16 +401,16 @@ def listLGSTGateStrings(specs, gateLabels):
     list of GateString objects
         The list of required gate strings, without duplicates.
     """
-    from Core import getRhoAndEStrs as _getRhoAndEStrs #move this to the top when this fn is split off of Core.py
+    from Core import get_spam_strs as _getRhoAndEStrs #move this to the top when this fn is split off of Core.py
     rStrings, eStrings = _getRhoAndEStrs(specs)
     singleGates = [ _gs.GateString( (gl,), "(%s)" % gl ) for gl in gateLabels ]
-    ret = createGateStringList('eStr','rhoStr','rhoStr+eStr','rhoStr+g+eStr',
+    ret = create_gatestring_list('eStr','rhoStr','rhoStr+eStr','rhoStr+g+eStr',
                                eStr=eStrings, rhoStr=rStrings, g=singleGates,
                                order=['g','rhoStr','eStr'] ) # LEXICOGRAPHICAL VS MATRIX ORDER
     return _lt.remove_duplicates(ret)
 
 
-def listStringsLGSTcanEstimate(dataset, specs):
+def list_strings_lgst_can_estimate(dataset, specs):
   """ 
     Compute the gate strings that LGST is able to estimate
     given a set of fiducial strings or rhoSpecs and ESpecs.
@@ -421,7 +421,7 @@ def listStringsLGSTcanEstimate(dataset, specs):
         The data used to generate the LGST estimates
 
     specs : 2-tuple
-        A (rhoSpecs,ESpecs) tuple usually generated by calling getRhoAndESpecs(...)
+        A (rhoSpecs,ESpecs) tuple usually generated by calling get_spam_specs(...)
 
     Returns
     -------
@@ -438,7 +438,7 @@ def listStringsLGSTcanEstimate(dataset, specs):
   pre = tuple(ESpecs[0].str);     l0 = len(pre)   #the first ESpec string prefix
   post = tuple(rhoSpecs[0].str); l1 = len(post)  #the first rhoSpec string postfix
 
-  def rootIsOK(rootStr):
+  def root_is_ok(rootStr):
     for espec in ESpecs:
       for rhospec in rhoSpecs:
         if tuple(rhospec.str) + tuple(rootStr) + tuple(espec.str) not in gateStrings: # LEXICOGRAPHICAL VS MATRIX ORDER
@@ -450,14 +450,14 @@ def listStringsLGSTcanEstimate(dataset, specs):
   for s in gateStrings:
     if s[0:l0] == pre and s[len(s)-l1:] == post:
       root = s[l0:len(s)-l1]
-      if rootIsOK( root ):
+      if root_is_ok( root ):
         estimatable.append( root )
             
-  return gateStringList(estimatable)
+  return gatestring_list(estimatable)
 
 
 
-def gateStringList( listOfGateLabelTuplesOrStrings ):
+def gatestring_list( listOfGateLabelTuplesOrStrings ):
     """ 
     Converts a list of gate label tuples or strings to 
      a list of GateString objects.
@@ -487,24 +487,24 @@ def gateStringList( listOfGateLabelTuplesOrStrings ):
 
 
 #Unneeded
-#def listPeriodicGateStrings(gateLabels, max_period, minlength, maxlength, left_bookends=[()], right_bookends=[()]):
+#def list_periodic_gatestrings(gateLabels, max_period, minlength, maxlength, left_bookends=[()], right_bookends=[()]):
 #    ret = [ ]
 #    for lb in left_bookends:
 #        for rb in right_bookends:
 #            for l in range(minlength, maxlength+1):
-#                pdic = listPeriodicGateStringsOfLength(gateLabels, max_period, l)
+#                pdic = list_periodic_gatestrings_onelen(gateLabels, max_period, l)
 #                ret += [ tuple(lb) + tuple(p) + tuple(rb) for p in pdic ]
 #    return _lt.remove_duplicates(ret)
 #
-#def listPeriodicGateStringsOfLength(gateLabels, max_period, length):
+#def list_periodic_gatestrings_onelen(gateLabels, max_period, length):
 #    ret = [ ]
 #    if max_period >= 0: ret.append( [] )
 #    for period_length in range(1,min(max_period,length)+1):
 #        nPeriods = _np.ceil(length / float(period_length))
-#        for period in listAllGateStringsOfLength(gateLabels, period_length):
+#        for period in list_all_gatestrings_onelen(gateLabels, period_length):
 #            for k in range(1,period_length):
 #                if period_length % k > 0: continue
-#                if period in listPeriodicGateStringsOfLength(gateLabels, k, period_length):
+#                if period in list_periodic_gatestrings_onelen(gateLabels, k, period_length):
 #                    break # period is itself periodic with period k < len(period), so don't use it as the string it generates has already been found
 #            else:
 #                s = period * nPeriods
@@ -513,23 +513,23 @@ def gateStringList( listOfGateLabelTuplesOrStrings ):
 #
 #
 #
-#def listExponentiatedGermGateStrings(germs, exponents, ends=None, left_ends=None, right_ends=None):
+#def list_exponentiated_germ_gatestrings(germs, exponents, ends=None, left_ends=None, right_ends=None):
 #    if ends is not None:
 #        if not left_ends and not right_ends:
 #            left_ends = right_ends = ends
-#        else: raise ValueError("Conflicting arguments to listExponentiatedGermGateStrings - specify either" + \
+#        else: raise ValueError("Conflicting arguments to list_exponentiated_germ_gatestrings - specify either" + \
 #                                   "'ends' or 'left_ends' and/or 'right_ends', not both")
 #    if left_ends is None: left_ends = [()]
 #    elif () not in left_ends: left_ends = [()] + left_ends
 #    if right_ends is None: right_ends = [()]
 #    elif () not in right_ends: right_ends = [()] + right_ends
 #
-#    ret = createGateStringList("lb+germ*exp+rb", germ=germs, exp=exponents,lb=left_ends, rb=right_ends,
+#    ret = create_gatestring_list("lb+germ*exp+rb", germ=germs, exp=exponents,lb=left_ends, rb=right_ends,
 #                               order=['germ','exp','lb','rb'] )
 #    return ret
 #
 #
-#def readGateStringList(filename,**kwargs):
+#def read_gatestring_list(filename,**kwargs):
 #    emptyCode = kwargs.get("empty_code","") # code for the empty string
 #    mode = kwargs.get("mode", "comma-delim") #or const-length
 #    L = kwargs.get("length", 0)
@@ -548,7 +548,7 @@ def gateStringList( listOfGateLabelTuplesOrStrings ):
 #        elif mode == "const-length":            
 #            gateString = tuple( [ charStr[i:i+L] for i in range(0,len(charStr),L) ] )
 #        else: 
-#            raise ValueError("Invalid mode passed to readGateStringList: %s" % mode)
+#            raise ValueError("Invalid mode passed to read_gatestring_list: %s" % mode)
 #
 #        ret.append(gateString)
 #        

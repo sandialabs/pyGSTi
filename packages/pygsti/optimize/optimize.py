@@ -46,7 +46,7 @@ def minimize(fn,x0, method='cg', callback=None,
     callback : function, optional
         A callback function to be called in order to track optimizer progress.
         Should have signature: myCallback(x, f=None, accepted=None).  Note that
-        createObjFuncPrinter(...) function can be used to create a callback.
+        create_obj_func_printer(...) function can be used to create a callback.
 
     tol : float, optional
         Tolerance value used for all types of tolerances available in a given method.
@@ -81,7 +81,7 @@ def minimize(fn,x0, method='cg', callback=None,
                                      max_outer_iter=100, min_inner_maxiter=100, max_inner_maxiter=maxiter)
 
     elif method == 'customcg':
-        def fnToMax(x): 
+        def fn_to_max(x): 
             f = fn(x); return -f if f is not None else None
 
         if jac is not None:
@@ -92,7 +92,7 @@ def minimize(fn,x0, method='cg', callback=None,
         else:
             dfdx_and_bdflag = None
 
-        solution = fmax_cg(fnToMax, x0, maxiter, tol, dfdx_and_bdflag, None ) #Note: even though we maximize, return value is negated to conform to min routines
+        solution = fmax_cg(fn_to_max, x0, maxiter, tol, dfdx_and_bdflag, None ) #Note: even though we maximize, return value is negated to conform to min routines
 
     elif method == 'brute':
       ranges = [ (0.0,1.0) ] * len(x0); Ns = 4  #params for 'brute' algorithm
@@ -486,7 +486,7 @@ def _maximize1D(g,s1,s2,g1):
             else:  # Got it bracketed: now just narrow down bracket
                 return _max_within_bracket(g,s1,g1,s2,g2,s3,g3)
 
-    print "Warning: maximize1D could not find bracket"
+    print "Warning: maximize_1d could not find bracket"
 
     ret = s2 if g2 is not None else s1 #return s2 if it evaluates to a valid point
     assert( g(ret) is not None )       #  otherwise return s1, since it should always be valid   
@@ -702,7 +702,7 @@ def fmin_particle_swarm(f, x0, err_crit, iter_max, popsize=100, c1=2, c2=2):
 
             #from .. import tools as tools_
             #matM = p.params.reshape( (4,4) )  #DEBUG
-            #minDistToBest = min(minDistToBest, _tools.frobeniusNorm(
+            #minDistToBest = min(minDistToBest, _tools.frobenius_norm(
             #                                    bestGaugeMx - matM)) #DEBUG
             #minV = min( _np.linalg.norm(v), minV)
             #maxV = max( _np.linalg.norm(v), maxV)
@@ -945,7 +945,7 @@ def fmin_evolutionary(f, x0, num_generations, num_individuals):
 
 
 
-def createObjFuncPrinter(objFunc):
+def create_obj_func_printer(objFunc):
     """
     Create a callback function that prints the value of an objective function.
 
@@ -959,12 +959,12 @@ def createObjFuncPrinter(objFunc):
     function
         A callback function which prints objFunc.
     """
-    def printObjFunc(x,f=None,accepted=None): # Just print the objective function value (used to monitor convergence in a callback)
+    def print_obj_func(x,f=None,accepted=None): # Just print the objective function value (used to monitor convergence in a callback)
         if f is not None and accepted is not None:
             print "%5ds %22.10f %s" % (_time.time()-startTime, f, 'accepted' if accepted else 'not accepted')
         else:
             print "%5ds %22.10f" % (_time.time()-startTime, objFunc(x))
-    return printObjFunc
+    return print_obj_func
 
 
 

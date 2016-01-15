@@ -98,7 +98,7 @@ def is_valid_density_mx(mx, TOL=1e-9):
     return is_hermitian(mx,TOL) and is_pos_def(mx,TOL) and abs(trace(mx)-1.0) < TOL
 
 
-def frobeniusNorm(ar):
+def frobenius_norm(ar):
     """
     Compute the frobenius norm of an array (or matrix),
 
@@ -117,7 +117,7 @@ def frobeniusNorm(ar):
     """
     return _np.sqrt(_np.sum(ar**2))
 
-def frobeniusNorm2(ar):
+def frobenius_norm_sq(ar):
     """
     Compute the squared frobenius norm of an array (or matrix),
 
@@ -136,7 +136,7 @@ def frobeniusNorm2(ar):
     """
     return _np.sum(ar**2)
 
-def printMx(mx, width=9, prec=4):
+def print_mx(mx, width=9, prec=4):
     """ 
     Print matrix in pretty format.
 
@@ -155,9 +155,9 @@ def printMx(mx, width=9, prec=4):
         the precision (in characters) of each printed element
 
     """
-    print mxToString(mx, width, prec)
+    print mx_to_string(mx, width, prec)
 
-def mxToString(m, width=9, prec=4):
+def mx_to_string(m, width=9, prec=4):
     """ 
     Generate a "pretty-format" string for a matrix.
 
@@ -182,7 +182,7 @@ def mxToString(m, width=9, prec=4):
     """
     s = ""; tol = 10**(-prec)
     if _np.max(abs(_np.imag(m))) > tol: 
-        return complexMxToString(m, width, width, prec)
+        return mx_to_string_complex(m, width, width, prec)
 
     for i in range(m.shape[0]):
         for j in range(m.shape[1]):
@@ -191,7 +191,7 @@ def mxToString(m, width=9, prec=4):
         s += "\n"
     return s
 
-def complexMxToString(m, real_width=9, im_width=9, prec=4):
+def mx_to_string_complex(m, real_width=9, im_width=9, prec=4):
     """ 
     Generate a "pretty-format" string for a complex-valued matrix.
 

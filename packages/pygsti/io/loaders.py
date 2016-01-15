@@ -5,7 +5,7 @@ import json as _json
 import stdinput as _stdinput
 from .. import objects as _objs
 
-def loadParameterFile(filename):
+def load_parameter_file(filename):
     """ 
     Load a json-formatted parameter file.
 
@@ -21,7 +21,7 @@ def loadParameterFile(filename):
     """
     return _json.load( open(filename, "rb") )
 
-def loadDataset(filename, cache=False):
+def load_dataset(filename, cache=False):
     """
     Load a DataSet from a file.  First tries to load file as a 
     saved DataSet object, then as a standard text-formatted DataSet.
@@ -75,7 +75,7 @@ def loadDataset(filename, cache=False):
         return ds
 
 
-def loadMultiDataset(filename, cache=False):
+def load_multidataset(filename, cache=False):
     """
     Load a MultiDataSet from a file.  First tries to load file as a 
     saved MultiDataSet object, then as a standard text-formatted MultiDataSet.
@@ -130,7 +130,7 @@ def loadMultiDataset(filename, cache=False):
 
 
 
-def loadGateset(filename):
+def load_gateset(filename):
     """
     Load a GateSet from a file, formatted using the 
     standard text-format for gate sets.
@@ -144,9 +144,9 @@ def loadGateset(filename):
     -------
     GateSet
     """
-    return _stdinput.readGateset(filename)
+    return _stdinput.read_gateset(filename)
 
-def loadGatestringDict(filename):
+def load_gatestring_dict(filename):
     """
     Load a gate string dictionary from a file, formatted 
     using the standard text-format.
@@ -164,7 +164,7 @@ def loadGatestringDict(filename):
     std = _stdinput.StdInputParser()
     return std.parse_dictfile(filename)
 
-def loadGatestringList(filename, readRawStrings=False):
+def load_gatestring_list(filename, readRawStrings=False):
     """
     Load a gate string list from a file, formatted 
     using the standard text-format.

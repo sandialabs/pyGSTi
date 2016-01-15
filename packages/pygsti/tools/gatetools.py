@@ -12,7 +12,7 @@ def _hack_sqrtm(A):
                          # to be incorrect in certain cases (we need a workaround)
     #return _np.array( (_np.matrix(A))**0.5 ) #gives error about int power
 
-def Fidelity(A, B):
+def fidelity(A, B):
     """
     Returns the quantum state fidelity between density
       matrices A and B given by :
@@ -21,7 +21,7 @@ def Fidelity(A, B):
 
     To compute process fidelity, pass this function the
     Choi matrices of the two processes, or just call
-    the ProcessFidelity function with the gate matrices.
+    the process_fidelity function with the gate matrices.
 
     Parameters
     ----------
@@ -56,7 +56,7 @@ def Fidelity(A, B):
     return F
 
 
-def DiamondNorm(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
+def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
     """
     Returns the approximate diamond norm describing the difference between gate
     matrices A and B given by :
@@ -117,11 +117,11 @@ def DiamondNorm(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
     assert(dim == A.shape[1] == B.shape[0] == B.shape[1])
 
     #Code below assumes *un-normalized* Jamiol-isomorphism, so multiply by density mx dimension
-    JAstd = smallDim * _jam.opWithJamiolkowskiIsomorphism(A, mxBasis, "std", dimOrStateSpaceDims)
-    JBstd = smallDim * _jam.opWithJamiolkowskiIsomorphism(B, mxBasis, "std", dimOrStateSpaceDims)
+    JAstd = smallDim * _jam.jamiolkowski_iso(A, mxBasis, "std", dimOrStateSpaceDims)
+    JBstd = smallDim * _jam.jamiolkowski_iso(B, mxBasis, "std", dimOrStateSpaceDims)
     
     #CHECK: Kevin's jamiolowski, which implements the un-normalized isomorphism:
-    #  smallDim * _jam.opWithJamiolkowskiIsomorphism(M, "std", "std")
+    #  smallDim * _jam.jamiolkowski_iso(M, "std", "std")
     #def kevins_jamiolkowski(process, representation = 'superoperator'):
     #    # Return the Choi-Jamiolkowski representation of a quantum process
     #    # Add methods as necessary to accept different representations
@@ -213,11 +213,11 @@ def DiamondNorm(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
 #    if mxBasis == "std":
 #        AInStdBasis, BInStdBasis = A, B
 #    elif mxBasis == "gm" or mxBasis == "pauli":
-#        AInStdBasis = _bt.basisChg_GellMannToStd(A, dimOrStateSpaceDims)
-#        BInStdBasis = _bt.basisChg_GellMannToStd(B, dimOrStateSpaceDims)
+#        AInStdBasis = _bt.gm_to_std(A, dimOrStateSpaceDims)
+#        BInStdBasis = _bt.gm_to_std(B, dimOrStateSpaceDims)
 #    elif mxBasis == "pp":
-#        AInStdBasis = _bt.basisChg_PauliProdToStd(A, dimOrStateSpaceDims)
-#        BInStdBasis = _bt.basisChg_PauliProdToStd(B, dimOrStateSpaceDims)
+#        AInStdBasis = _bt.pp_to_std(A, dimOrStateSpaceDims)
+#        BInStdBasis = _bt.pp_to_std(B, dimOrStateSpaceDims)
 #    else: raise ValueError("Invalid mxBasis: %s" % mxBasis)
 #
 #    if seed is not None:
@@ -227,7 +227,7 @@ def DiamondNorm(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
 #    BtensorId = _np.kron(BInStdBasis,_np.identity(gate_dim))
 #    gateDiffTensorId = BtensorId - AtensorId # in std basis by construction
 #
-#    def random2StateDensityMx():
+#    def random_two_state_density_mx():
 #        x = _np.random.randn(state_dim*2,1) + 1j * _np.random.randn(state_dim*2,1)
 #        x = x / _np.linalg.norm(x,'fro') # normalize state
 #        x = _np.dot(x,_np.conj(x).T) # state => density matrix via dm = psi x psi_dag
@@ -235,21 +235,21 @@ def DiamondNorm(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
 #        return x
 #
 #    #Note:  We are using definition that ||X||_1 = Tr(sqrt(X^dagger X)), not 0.5 * Tr(sqrt(X^dagger X)) 
-#    def oneShotOneQubitDiamondNorm(gateDiffTensorId):
-#        randStateDM = random2StateDensityMx() # in std basis
+#    def one_shot_one_qubit_diamond_norm(gateDiffTensorId):
+#        randStateDM = random_two_state_density_mx() # in std basis
 #        outDM = _np.dot(gateDiffTensorId,randStateDM) # in std basis
 #        outDM = _np.reshape(outDM, [2*state_dim, 2*state_dim] )
 #            # Omit transposition here to save time, as that does not affect eigenvalues
 #        return _np.sum(_np.abs(_np.linalg.eigvalsh(outDM)))
 #
-#    oneShotVals = [ oneShotOneQubitDiamondNorm(gateDiffTensorId) for i in xrange(nSamples) ]
+#    oneShotVals = [ one_shot_one_qubit_diamond_norm(gateDiffTensorId) for i in xrange(nSamples) ]
 #    return max(oneShotVals)
 
 
 
 #Scratch -- to remove later
   ##extract unitary from targetGate (assumes it corresponds to a unitary)
-  #target_JMx = _jam.opWithJamiolkowskiIsomorphism( targetGate )
+  #target_JMx = _jam.jamiolkowski_iso( targetGate )
   #target_Jevals, target_Jevecs = _np.linalg.eig(target_JMx)
   #max_target_Jevec = target_Jevecs[:,_np.argmax(target_Jevals)]  # |max_Jevec> = (U x I)|bell>
 
@@ -262,7 +262,7 @@ def DiamondNorm(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
   #JU = _np.kron( vU, _np.transpose(_np.conjugate(vU))) # Choi matrix corresponding to U
 
 
-def JTraceDistance(A, B, mxBasis="gm"): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)|)
+def jtracedist(A, B, mxBasis="gm"): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)|)
     """
     Compute the Jamiolkowski trace distance between gate matrices A and B,
     given by:
@@ -281,13 +281,13 @@ def JTraceDistance(A, B, mxBasis="gm"): #Jamiolkowski trace distance:  Tr(|J(A)-
         the basis of the gate matrices A and B : standard (matrix units),
         Gell-Mann, or Pauli-product, respectively.
     """
-    JA = _jam.opWithJamiolkowskiIsomorphism(A, gateMxBasis=mxBasis)
-    JB = _jam.opWithJamiolkowskiIsomorphism(B, gateMxBasis=mxBasis)
+    JA = _jam.jamiolkowski_iso(A, gateMxBasis=mxBasis)
+    JB = _jam.jamiolkowski_iso(B, gateMxBasis=mxBasis)
     evals = _np.linalg.eigvals( JA-JB )
     return 0.5 * sum( [abs(ev) for ev in evals] )
 
 
-def ProcessFidelity(A, B, mxBasis="gm"):
+def process_fidelity(A, B, mxBasis="gm"):
     """
     Returns the process fidelity between gate
       matrices A and B given by :
@@ -306,12 +306,12 @@ def ProcessFidelity(A, B, mxBasis="gm"):
         the basis of the gate matrices A and B : standard (matrix units),
         Gell-Mann, or Pauli-product, respectively.
     """
-    JA = _jam.opWithJamiolkowskiIsomorphism(A, gateMxBasis=mxBasis)
-    JB = _jam.opWithJamiolkowskiIsomorphism(B, gateMxBasis=mxBasis)
-    return Fidelity(JA,JB)
+    JA = _jam.jamiolkowski_iso(A, gateMxBasis=mxBasis)
+    JB = _jam.jamiolkowski_iso(B, gateMxBasis=mxBasis)
+    return fidelity(JA,JB)
 
 
-def getFidelityUpperBound(gateMx):
+def fidelity_upper_bound(gateMx):
     """
     Get an upper bound on the fidelity of the given
       gate matrix with any unitary gate matrix.
@@ -329,7 +329,7 @@ def getFidelityUpperBound(gateMx):
     float
         The resulting upper bound on fidelity(gateMx, anyUnitaryGateMx)
     """
-    choi = _jam.opWithJamiolkowskiIsomorphism(gateMx, choiMxBasis="std")
+    choi = _jam.jamiolkowski_iso(gateMx, choiMxBasis="std")
     choi_evals,choi_evecs = _np.linalg.eig(choi)
     maxF_direct = max([_np.sqrt(max(ev.real,0.0)) for ev in choi_evals]) ** 2
 
@@ -343,7 +343,7 @@ def getFidelityUpperBound(gateMx):
     closestJmx /= _mt.trace(closestJmx)  #normalize so trace of Jmx == 1.0
 
 
-    maxF = Fidelity(choi, closestJmx)
+    maxF = fidelity(choi, closestJmx)
     
     if not _np.isnan(maxF):
 
@@ -361,7 +361,7 @@ def getFidelityUpperBound(gateMx):
     else:
         maxF = maxF_direct # case when maxF is nan, due to scipy sqrtm function being buggy - just use direct F
 
-    closestGateMx = _jam.opWithInvJamiolkowskiIsomorphism( closestJmx, choiMxBasis="std" )
+    closestGateMx = _jam.jamiolkowski_iso_inv( closestJmx, choiMxBasis="std" )
     return maxF, closestGateMx
 
     #closestU_evals, closestU_evecs = _np.linalg.eig(closestUnitaryGateMx)
@@ -371,7 +371,7 @@ def getFidelityUpperBound(gateMx):
 
 
 #decompose gate matrix into axis of rotation, etc
-def decomposeGateMatrix(gateMx):
+def decompose_gate_matrix(gateMx):
     """
     Compute how the action of a gate matrix can be
     is decomposed into fixed points, axes of rotation, 

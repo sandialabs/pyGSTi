@@ -11,7 +11,7 @@ def _nCr(n,r):
     f = _math.factorial
     return f(n) / f(r) / f(n-r)
 
-def getSufficientFiducialPairs(targetGateset, rhoStrs, EStrs, germList, 
+def find_sufficient_fiducial_pairs(targetGateset, rhoStrs, EStrs, germList, 
                                testLs=(256,2048), spamLabels="all", tol=0.75,
                                verbosity=0, testPairList=None):
 
@@ -20,26 +20,26 @@ def getSufficientFiducialPairs(targetGateset, rhoStrs, EStrs, germList,
     
     #tol = 0.5 #fraction of expected amplification that must be observed to call a parameter "amplified"
     if spamLabels == "all":
-        spamLabels = targetGateset.get_SPAM_labels()
+        spamLabels = targetGateset.get_spam_labels()
 
-    nGatesetParams = targetGateset.getNumParams(SPAM=True)
+    nGatesetParams = targetGateset.get_num_params(SPAM=True)
 
     #Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j> where i = composite EVec & fiducial index and j similar
-    def getDerivs(L):
+    def get_derivs(L):
         dP = _np.empty( (len(germList),len(spamLabels),len(EStrs)*len(rhoStrs), nGatesetParams) )
            #indexed by [iGerm,iSpamLabel,iFiducialPair,iGatesetParam] : gives d(<SP|f0+exp_iGerm+f1|AM>)/d(iGatesetParam)
 
         for iGerm,germ in enumerate(germList):
-            expGerm = _gsc.repeatWithMaxLength(germ,L) # could pass exponent and set to germ**exp here
-            lst = _gsc.createGateStringList("f0+expGerm+f1", f0=rhoStrs, f1=EStrs,
+            expGerm = _gsc.repeat_with_max_length(germ,L) # could pass exponent and set to germ**exp here
+            lst = _gsc.create_gatestring_list("f0+expGerm+f1", f0=rhoStrs, f1=EStrs,
                                                          expGerm=expGerm, order=('f0','f1'))
-            evTree = targetGateset.Bulk_evalTree(lst)
-            dProbs = targetGateset.Bulk_dProbs(evTree,SPAM=True)
+            evTree = targetGateset.bulk_evaltree(lst)
+            dprobs = targetGateset.bulk_dprobs(evTree,SPAM=True)
             for iSpamLabel,spamLabel in enumerate(spamLabels):
-                dP[iGerm, iSpamLabel, :,:] = dProbs[spamLabel]
+                dP[iGerm, iSpamLabel, :,:] = dprobs[spamLabel]
         return dP
     
-    def getNumberAmplified(M0,M1,L0,L1,verb):
+    def get_number_amplified(M0,M1,L0,L1,verb):
         L_ratio = float(L1)/float(L0)
         try:
             s0 = _np.linalg.svd(M0, compute_uv=False)
@@ -64,14 +64,14 @@ def getSufficientFiducialPairs(targetGateset, rhoStrs, EStrs, germList,
     if verbosity > 0: 
         print "------  Fiducial Pair Reduction --------"
             
-    L0 = testLs[0]; dP0 = getDerivs(L0)
-    L1 = testLs[1]; dP1 = getDerivs(L1)
+    L0 = testLs[0]; dP0 = get_derivs(L0)
+    L1 = testLs[1]; dP1 = get_derivs(L1)
     fullTestMx0 = dP0.view(); fullTestMx0.shape = ( (len(germList)*len(spamLabels)*len(rhoStrs)*len(EStrs), nGatesetParams) )
     fullTestMx1 = dP1.view(); fullTestMx1.shape = ( (len(germList)*len(spamLabels)*len(rhoStrs)*len(EStrs), nGatesetParams) )        
 
     #Get number of amplified parameters in the "full" test matrix: the one we get when we use all possible fiducial pairs
     if testPairList is None: 
-        maxAmplified = getNumberAmplified(fullTestMx0, fullTestMx1, L0, L1, verbosity+1)
+        maxAmplified = get_number_amplified(fullTestMx0, fullTestMx1, L0, L1, verbosity+1)
         if verbosity > 0: print "maximum number of amplified parameters = ",maxAmplified
 
     #Loop through fiducial pairs and add all derivative rows (1 x nGatesetParams) to test matrix
@@ -95,7 +95,7 @@ def getSufficientFiducialPairs(targetGateset, rhoStrs, EStrs, germList,
             gateStringIndicesForPairs.extend( gateStringIndicesForPair[iRhoStr*nEStrs + iEStr] )
         testMx0 = _np.take( fullTestMx0, gateStringIndicesForPairs, axis=0 )
         testMx1 = _np.take( fullTestMx1, gateStringIndicesForPairs, axis=0 )
-        nAmplified = getNumberAmplified(testMx0, testMx1, L0, L1, verbosity)
+        nAmplified = get_number_amplified(testMx0, testMx1, L0, L1, verbosity)
         print "Number of amplified parameters = ",nAmplified
         return None
 
@@ -112,7 +112,7 @@ def getSufficientFiducialPairs(targetGateset, rhoStrs, EStrs, germList,
                 gateStringIndicesForPairs.extend( gateStringIndicesForPair[i] )
             testMx0 = _np.take( fullTestMx0, gateStringIndicesForPairs, axis=0 )
             testMx1 = _np.take( fullTestMx1, gateStringIndicesForPairs, axis=0 )
-            nAmplified = getNumberAmplified(testMx0, testMx1, L0, L1, verbosity)
+            nAmplified = get_number_amplified(testMx0, testMx1, L0, L1, verbosity)
             bestAmplified = max(bestAmplified, nAmplified)
             if verbosity > 1:
                 ret = []
@@ -142,24 +142,24 @@ def getSufficientFiducialPairs(targetGateset, rhoStrs, EStrs, germList,
 #def _old_TestPair(targetGateset, fiducialList, germList, L, testPairList, spamLabels="all"):
 #
 #    if spamLabels == "all":
-#        spamLabels = targetGateset.get_SPAM_labels()
+#        spamLabels = targetGateset.get_spam_labels()
 #
-#    dProbs = []
+#    dprobs = []
 #    for iGerm,germ in enumerate(germList):
-#        expGerm = _gsc.repeatWithMaxLength(germ,L)
-#        lst = _gsc.createGateStringList("f0+expGerm+f1", f0=fiducialList, f1=fiducialList,
+#        expGerm = _gsc.repeat_with_max_length(germ,L)
+#        lst = _gsc.create_gatestring_list("f0+expGerm+f1", f0=fiducialList, f1=fiducialList,
 #                                        expGerm=expGerm, order=('f0','f1'))
-#        evTree = targetGateset.Bulk_evalTree(lst)
-#        dProbs.append( targetGateset.Bulk_dProbs(evTree,SPAM=True) )
+#        evTree = targetGateset.bulk_evaltree(lst)
+#        dprobs.append( targetGateset.bulk_dprobs(evTree,SPAM=True) )
 #
-#    nGatesetParams = targetGateset.getNumParams(SPAM=True)
+#    nGatesetParams = targetGateset.get_num_params(SPAM=True)
 #    testMatrix = _np.empty( (0,nGatesetParams) )
 #    for (i0,i1) in testPairList: #[(0,0),(1,0),(2,3),(4,5)]:
-#        iCmp = i0*len(fiducialList) + i1 #composite index of (f0,f1) in dProbs[iGerm][spamLabel]
+#        iCmp = i0*len(fiducialList) + i1 #composite index of (f0,f1) in dprobs[iGerm][spamLabel]
 #
 #        for iGerm,germ in enumerate(germList):
 #            for spamLabel in spamLabels:
-#                testMatrix = _np.concatenate( (testMatrix, dProbs[iGerm][spamLabel][iCmp:iCmp+1,:] ), axis=0 )
+#                testMatrix = _np.concatenate( (testMatrix, dprobs[iGerm][spamLabel][iCmp:iCmp+1,:] ), axis=0 )
 #                
 #        U,s,V = _np.linalg.svd(testMatrix)
 #        rank = len( [v for v in s if v > 0.001] )

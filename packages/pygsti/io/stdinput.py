@@ -41,13 +41,13 @@ class StdInputParser:
     def __init__(self):
         """ Creates a new StdInputParser object """
 
-        def pushFirst( strg, loc, toks ):
+        def push_first( strg, loc, toks ):
             self.exprStack.append( toks[0] )
-        def pushMult( strg, loc, toks ):
+        def push_mult( strg, loc, toks ):
             self.exprStack.append( '*' )
-        def pushSlice( strg, loc, toks ):
+        def push_slice( strg, loc, toks ):
             self.exprStack.append( 'SLICE' )
-        def pushCount( strg, loc, toks ):
+        def push_count( strg, loc, toks ):
             self.exprStack.append( toks[0] )
             self.exprStack.append( 'COUNT' )
     
@@ -58,9 +58,9 @@ class StdInputParser:
         #e     = _pp.CaselessLiteral( "E" )
         #real  = _pp.Combine( _pp.Word( "+-"+_pp.nums, _pp.nums ) + 
         #                  _pp.Optional( point + _pp.Optional( _pp.Word( _pp.nums ) ) ) +
-        #                  _pp.Optional( e + _pp.Word( "+-"+_pp.nums, _pp.nums ) ) ).setParseAction(pushFirst)
+        #                  _pp.Optional( e + _pp.Word( "+-"+_pp.nums, _pp.nums ) ) ).setParseAction(push_first)
         real = _pp.Regex(r'[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?') #faster than above
-        nop   = _pp.Literal("{}").setParseAction(pushFirst)
+        nop   = _pp.Literal("{}").setParseAction(push_first)
 
         expop = _pp.Literal( "^" )
         lpar  = _pp.Literal( "(" ).suppress()
@@ -68,27 +68,27 @@ class StdInputParser:
         lbrk  = _pp.Literal( "[" ).suppress()
         rbrk  = _pp.Literal( "]" ).suppress()
     
-        integer = _pp.Word( digits ).setParseAction(pushFirst)
-        reflbl  = _pp.Word(_pp.alphas+_pp.nums+"_").setParseAction(pushFirst)
-        #gate   = _pp.Word( "G", lowers + digits + "_" ).setParseAction(pushFirst)
-        gate    = _pp.Regex(r'G[a-z0-9_]+').setParseAction(pushFirst) #faster than above
-        strref  = (_pp.Literal("S") + "[" + reflbl + "]" ).setParseAction(pushFirst)
-        slcref  = (strref + _pp.Optional( ("[" + integer + ":" + integer + "]").setParseAction(pushSlice)) )
+        integer = _pp.Word( digits ).setParseAction(push_first)
+        reflbl  = _pp.Word(_pp.alphas+_pp.nums+"_").setParseAction(push_first)
+        #gate   = _pp.Word( "G", lowers + digits + "_" ).setParseAction(push_first)
+        gate    = _pp.Regex(r'G[a-z0-9_]+').setParseAction(push_first) #faster than above
+        strref  = (_pp.Literal("S") + "[" + reflbl + "]" ).setParseAction(push_first)
+        slcref  = (strref + _pp.Optional( ("[" + integer + ":" + integer + "]").setParseAction(push_slice)) )
 
         bSimple = False #experimenting with possible parser speedups
         if bSimple:
             string  = _pp.Forward()
             gateSeq = _pp.OneOrMore( gate )
             expable = (nop | gateSeq | lpar + gateSeq + rpar)
-            expdstr = expable + _pp.Optional( (expop + integer).setParseAction(pushFirst) )
-            string << expdstr + _pp.ZeroOrMore( (_pp.Optional("*") + expdstr).setParseAction(pushMult))
+            expdstr = expable + _pp.Optional( (expop + integer).setParseAction(push_first) )
+            string << expdstr + _pp.ZeroOrMore( (_pp.Optional("*") + expdstr).setParseAction(push_mult))
         else:
             string  = _pp.Forward()
             expable = (gate | slcref | lpar + string + rpar | nop)
-            expdstr = expable + _pp.ZeroOrMore( (expop + integer).setParseAction(pushFirst) )
-            string << expdstr + _pp.ZeroOrMore( (_pp.Optional("*") + expdstr).setParseAction(pushMult))
+            expdstr = expable + _pp.ZeroOrMore( (expop + integer).setParseAction(push_first) )
+            string << expdstr + _pp.ZeroOrMore( (_pp.Optional("*") + expdstr).setParseAction(push_mult))
         
-        count = real.copy().setParseAction(pushCount)
+        count = real.copy().setParseAction(push_count)
         dataline = string + _pp.OneOrMore( count )
         dictline = reflbl + string
 
@@ -251,12 +251,12 @@ class StdInputParser:
         list of GateStrings
             The gatestrings read from the file.
         """
-        gateStringList = [ ]
+        gatestring_list = [ ]
         for line in open(filename,'r'):
             line = line.strip()
             if len(line) == 0 or line[0] =='#': continue
-            gateStringList.append( _objs.GateString(self.parse_gatestring(line), line) )
-        return gateStringList
+            gatestring_list.append( _objs.GateString(self.parse_gatestring(line), line) )
+        return gatestring_list
 
     def parse_dictfile(self, filename):
         """ 
@@ -332,19 +332,19 @@ class StdInputParser:
             try:
                 import time
                 from IPython.display import clear_output
-                def displayProgress(i,N): 
+                def display_progress(i,N): 
                     time.sleep(0.001)
                     clear_output()
                     print "Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N))
                     _sys.stdout.flush()
             except:
-                def displayProgress(i,N): pass
+                def display_progress(i,N): pass
         else:
-            def displayProgress(i,N): pass
+            def display_progress(i,N): pass
 
         countDict = {}
         for (iLine,line) in enumerate(open(filename,'r')):
-            if iLine % nSkip == 0 or iLine+1 == nLines: displayProgress(iLine+1, nLines)
+            if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines)
 
             line = line.strip()
             if len(line) == 0 or line[0] == '#': continue
@@ -357,9 +357,9 @@ class StdInputParser:
             if all([ (abs(v) < 1e-9) for v in countDict.values()]):
                 _warnings.warn( "Dataline for gateString '%s' has zero counts and will be ignored" % gateStringStr)
                 continue #skip lines in dataset file with zero counts (no experiments done)
-            dataset.addCountDict(gateStringTuple, countDict) #Note: don't use gateStringStr since DataSet currently doesn't hold GateString objs (just tuples)
+            dataset.add_count_dict(gateStringTuple, countDict) #Note: don't use gateStringStr since DataSet currently doesn't hold GateString objs (just tuples)
                 
-        dataset.doneAddingData()
+        dataset.done_adding_data()
         return dataset
 
     def _extractLabelsFromColLabels(self, colLabels ):
@@ -467,18 +467,18 @@ class StdInputParser:
             try:
                 import time
                 from IPython.display import clear_output
-                def displayProgress(i,N): 
+                def display_progress(i,N): 
                     time.sleep(0.001)
                     clear_output()
                     print "Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N))
                     _sys.stdout.flush()
             except:
-                def displayProgress(i,N): pass
+                def display_progress(i,N): pass
         else:
-            def displayProgress(i,N): pass
+            def display_progress(i,N): pass
 
         for (iLine,line) in enumerate(open(filename,'r')):
-            if iLine % nSkip == 0 or iLine+1 == nLines: displayProgress(iLine+1, nLines)
+            if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines)
 
             line = line.strip()
             if len(line) == 0 or line[0] == '#': continue
@@ -489,12 +489,12 @@ class StdInputParser:
                     (filename, line, str(e)))
             self._fillMultiDataCountDicts(dsCountDicts, fillInfo, valueList)
             for dsLabel, countDict in dsCountDicts.iteritems():
-                datasets[dsLabel].addCountDict(gateStringTuple, countDict)
+                datasets[dsLabel].add_count_dict(gateStringTuple, countDict)
               
         mds = _objs.MultiDataSet()
         for dsLabel,ds in datasets.iteritems():
-            ds.doneAddingData()
-            mds.addDataset(dsLabel, ds)
+            ds.done_adding_data()
+            mds.add_dataset(dsLabel, ds)
         return mds
 
 
@@ -571,7 +571,7 @@ def _evalRowList(rows, bComplex):
     return _np.array( [ [ _evalElement(x,bComplex) for x in r ] for r in rows ], 
                      'complex' if bComplex else 'd' )
 
-def readGateset(filename):
+def read_gateset(filename):
     """ 
     Parse a gateset file into a GateSet object.
 
@@ -589,13 +589,13 @@ def readGateset(filename):
         if cur_format == "StateVec":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (1,2):
-                spam_vecs[cur_label] = _tools.stateToPauliDensityVec(ar[0,:])
+                spam_vecs[cur_label] = _tools.state_to_pauli_density_vec(ar[0,:])
             else: raise ValueError("Invalid state vector shape for %s: %s" % (cur_label,ar.shape))
             
         elif cur_format == "DensityMx":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (2,2):
-                spam_vecs[cur_label] = _tools.matrixInStdBasisToPauliProdVector(ar)
+                spam_vecs[cur_label] = _tools.stdmx_to_ppvec(ar)
             else: raise ValueError("Invalid density matrix shape for %s: %s" % (cur_label,ar.shape))
 
         elif cur_format == "PauliVec":
@@ -605,20 +605,20 @@ def readGateset(filename):
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (2,2):
                 gs.set_gate(cur_label, _objs.FullyParameterizedGate(
-                        _tools.stateUnitaryToPauliDensityMxOp(ar)))
+                        _tools.unitary_to_pauligate_1q(ar)))
             elif ar.shape == (4,4):
                 gs.set_gate(cur_label, _objs.FullyParameterizedGate(
-                        _tools.stateUnitaryToPauliDensityMxOp_2Q(ar)))
+                        _tools.unitary_to_pauligate_2q(ar)))
             else: raise ValueError("Invalid unitary matrix shape for %s: %s" % (cur_label,ar.shape))
             
         elif cur_format == "UnitaryMxExp":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (2,2):
                 gs.set_gate(cur_label, _objs.FullyParameterizedGate(
-                        _tools.stateUnitaryToPauliDensityMxOp( _expm(-1j * ar) )))
+                        _tools.unitary_to_pauligate_1q( _expm(-1j * ar) )))
             elif ar.shape == (4,4):
                 gs.set_gate(cur_label, _objs.FullyParameterizedGate(
-                        _tools.stateUnitaryToPauliDensityMxOp_2Q( _expm(-1j * ar) )))
+                        _tools.unitary_to_pauligate_2q( _expm(-1j * ar) )))
             else: raise ValueError("Invalid unitary matrix exponent shape for %s: %s" % (cur_label,ar.shape))
             
         elif cur_format == "PauliMx":
@@ -686,19 +686,19 @@ def readGateset(filename):
         del E_names[ E_names.index("remainder") ]
 
      #add vectors to gateset
-    for (i,rho_nm) in enumerate(rho_names): gs.set_rhoVec(spam_vecs[rho_nm],i)
-    for (i,E_nm)   in enumerate(E_names):   gs.set_EVec(spam_vecs[E_nm],i)
+    for (i,rho_nm) in enumerate(rho_names): gs.set_rhovec(spam_vecs[rho_nm],i)
+    for (i,E_nm)   in enumerate(E_names):   gs.set_evec(spam_vecs[E_nm],i)
 
-    gs.set_identityVec(identity_vec)
+    gs.set_identity_vec(identity_vec)
 
      #add spam labels to gateset
     for spam_label in spam_labels:
         (rho_nm,E_nm) = spam_labels[spam_label]
         if E_nm == "remainder":
-            gs.add_SPAM_label( rho_names.index(rho_nm) , -1, spam_label)
+            gs.add_spam_label( rho_names.index(rho_nm) , -1, spam_label)
         else:
-            gs.add_SPAM_label( rho_names.index(rho_nm) , E_names.index(E_nm), spam_label)        
+            gs.add_spam_label( rho_names.index(rho_nm) , E_names.index(E_nm), spam_label)        
     if len(remainder_spam_label) > 0:
-        gs.add_SPAM_label( -1, -1, remainder_spam_label)
+        gs.add_spam_label( -1, -1, remainder_spam_label)
 
     return gs

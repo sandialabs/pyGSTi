@@ -1,14 +1,14 @@
 """ Utility functions related to Gram matrix construction."""
 from .. import tools as _tools
 from ..objects import spamspec as _ss
-from core import gramRankAndEvals as _gramRankAndEvals
+from core import gram_rank_and_evals as _gramRankAndEvals
 
 
 ########################################################
 ## Gram matrix stuff
 ########################################################
 
-def getMaxGramBasis(gateLabels, dataset, maxLength=0):
+def get_max_gram_basis(gateLabels, dataset, maxLength=0):
     """ 
     Compute a maximal set of gate strings that can be used as a basis for a Gram
       matrix.  That is, a maximal set of strings {S_i} such that the gate 
@@ -37,9 +37,9 @@ def getMaxGramBasis(gateLabels, dataset, maxLength=0):
     minLength = min( [len(s) for s in datasetStrings] )
     if maxLength <= 0:
         maxLength = max( [len(s) for s in datasetStrings] )
-    possibleStrings = _tools.genAllGateStrings(gateLabels, (minLength+1)//2, maxLength//2)
+    possibleStrings = _tools.gen_all_gatestrings(gateLabels, (minLength+1)//2, maxLength//2)
   
-    def haveAllData(strings,datasetStrs):
+    def have_all_data(strings,datasetStrs):
       for a in strings:
         for b in strings:
           if tuple(list(a) + list(b)) not in datasetStrs:
@@ -48,17 +48,17 @@ def getMaxGramBasis(gateLabels, dataset, maxLength=0):
     
     max_string_set = [ ]
     for p in possibleStrings:
-      if haveAllData(max_string_set + [p], datasetStrings):
+      if have_all_data(max_string_set + [p], datasetStrings):
         max_string_set.append(p)
   
     return max_string_set
 
 
-def maxGramRankAndEvals(dataset, maxBasisStringLength=10):
+def max_gram_rank_and_evals(dataset, maxBasisStringLength=10):
     """
     Compute the rank and eigenvalues of a maximal Gram matrix,that is, the
     Gram matrix using a basis computed by:
-    getMaxGramBasis(dataset.getGateLabels(), dataset, maxBasisStringLength).
+    get_max_gram_basis(dataset.get_gate_labels(), dataset, maxBasisStringLength).
 
     Parameters
     ----------
@@ -74,11 +74,11 @@ def maxGramRankAndEvals(dataset, maxBasisStringLength=10):
     rank : integer
     eigenvalues : numpy array
     """
-    maxStringSet = getMaxGramBasis(dataset.getGateLabels(), dataset, maxBasisStringLength)
-    specs = _ss.getRhoAndESpecs(fiducialGateStrings=maxStringSet) 
+    maxStringSet = get_max_gram_basis(dataset.get_gate_labels(), dataset, maxBasisStringLength)
+    specs = _ss.get_spam_specs(fiducialGateStrings=maxStringSet) 
     # Note: specs use by default just the 0-th rho and Evec indices, so 
     #  we just need to have a spamDict that associates (0,0) with some spam label
     #  in the dataset -- we just take the first one.
-    firstSpamLabel = dataset.getSpamLabels()[0]
+    firstSpamLabel = dataset.get_spam_labels()[0]
     return _gramRankAndEvals(dataset, specs, spamDict={(0,0): firstSpamLabel})
 

@@ -15,10 +15,10 @@ def make_lsgst_lists(gateLabels, fiducialList, germList, maxLengthList,
     nonzero element of maxLengthList, call it L, add strings of the form:
     
     Case: truncScheme == 'whole germ powers':
-      fiducial1 + pygsti.construction.repeatWithMaxLength(germ,L) + fiducial2
+      fiducial1 + pygsti.construction.repeat_with_max_length(germ,L) + fiducial2
 
     Case: truncScheme == 'truncated germ powers':
-      fiducial1 + pygsti.construction.repeatAndTruncate(germ,L) + fiducial2
+      fiducial1 + pygsti.construction.repeat_and_truncate(germ,L) + fiducial2
 
     Case: truncScheme == 'length as exponent':
       fiducial1 + germ^L + fiducial2
@@ -77,10 +77,10 @@ def make_lsgst_lists_asymmetric_fids(gateLabels, rhoStrs, EStrs, germList, maxLe
     '''
     Same as make_lsgst_lists, except for asymmetric fiducial sets, specified by rhoStrs and EStrs.
     '''
-    lgstStrings = _gatestringconstruction.listLGSTGateStrings(
-        _ss.getRhoAndESpecs(rhoStrs = rhoStrs, EStrs = EStrs),
+    lgstStrings = _gatestringconstruction.list_lgst_gatestrings(
+        _ss.get_spam_specs(rhoStrs = rhoStrs, EStrs = EStrs),
         gateLabels)
-    lsgst_list = _gatestringconstruction.gateStringList([ () ]) #running list of all strings so far
+    lsgst_list = _gatestringconstruction.gatestring_list([ () ]) #running list of all strings so far
 
     if rhoEPairs is not None:
         fiducialPairs = [ (rhoStrs[i],EStrs[j]) for (i,j) in rhoEPairs ]
@@ -95,7 +95,7 @@ def make_lsgst_lists_asymmetric_fids(gateLabels, rhoStrs, EStrs, germList, maxLe
     Rfn = _getTruncFunction(truncScheme)
         
     for maxLen in maxLengthList:
-        lsgst_list += _gsc.createGateStringList("f[0]+R(germ,N)+f[1]",
+        lsgst_list += _gsc.create_gatestring_list("f[0]+R(germ,N)+f[1]",
                                                 f=fiducialPairs,
                                                 germ=germList, N=maxLen,
                                                 R=Rfn, order=('germ','f'))
@@ -116,10 +116,10 @@ def make_elgst_lists(gateLabels, germList, maxLengthList,
     For each nonzero element of maxLengthList, call it L, add strings of the form:
 
     Case: truncScheme == 'whole germ powers':
-      pygsti.construction.repeatWithMaxLength(germ,L)
+      pygsti.construction.repeat_with_max_length(germ,L)
 
     Case: truncScheme == 'truncated germ powers':
-      pygsti.construction.repeatAndTruncate(germ,L)
+      pygsti.construction.repeat_and_truncate(germ,L)
 
     Case: truncScheme == 'length as exponent':
       germ^L
@@ -160,8 +160,8 @@ def make_elgst_lists(gateLabels, germList, maxLengthList,
         maxLengthList[i].  Note that a "0" exponent corresponds to the gate
         label strings.
     """
-    singleGates = _gsc.gateStringList([(g,) for g in gateLabels])
-    elgst_list = _gsc.gateStringList([ () ])  #running list of all strings so far
+    singleGates = _gsc.gatestring_list([(g,) for g in gateLabels])
+    elgst_list = _gsc.gatestring_list([ () ])  #running list of all strings so far
     
     if maxLengthList[0] == 0:
         elgst_listOfLists = [ singleGates ]
@@ -171,7 +171,7 @@ def make_elgst_lists(gateLabels, germList, maxLengthList,
     Rfn = _getTruncFunction(truncScheme)
 
     for maxLen in maxLengthList:
-        elgst_list += _gsc.createGateStringList("R(germ,N)", germ=germList, N=maxLen, R=Rfn)
+        elgst_list += _gsc.create_gatestring_list("R(germ,N)", germ=germList, N=maxLen, R=Rfn)
         elgst_listOfLists.append( _lt.remove_duplicates(singleGates + elgst_list) )
 
     #print "%d eLGST sets w/lengths" % len(elgst_listOfLists),map(len,elgst_listOfLists)
@@ -180,9 +180,9 @@ def make_elgst_lists(gateLabels, germList, maxLengthList,
 
 def _getTruncFunction(truncScheme):
     if truncScheme == "whole germ powers":
-        Rfn = _gsc.repeatWithMaxLength
+        Rfn = _gsc.repeat_with_max_length
     elif truncScheme == "truncated germ powers":
-        Rfn = _gsc.repeatAndTruncate
+        Rfn = _gsc.repeat_and_truncate
     elif truncScheme == "length as exponent":
         def Rfn(germ,N): return germ*N
     else:

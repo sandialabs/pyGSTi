@@ -29,7 +29,7 @@ class SpamSpec(object):
           #this makes sure self.str is always a gatestring object
         
         
-def getRhoAndESpecs(fiducialGateStrings=None, rhoStrs=None, EStrs=None, rhoSpecs=None, ESpecs=None, rhoVecInds=(0,), EVecInds=(0,) ):
+def get_spam_specs(fiducialGateStrings=None, rhoStrs=None, EStrs=None, rhoSpecs=None, ESpecs=None, rhoVecInds=(0,), EVecInds=(0,) ):
     """
     Computes rho and E specifiers based on optional arguments.  This function
       is used to generate the (rhoSpecs,ESpecs) tuple needed by many of the 
@@ -101,7 +101,7 @@ def getRhoAndESpecs(fiducialGateStrings=None, rhoStrs=None, EStrs=None, rhoSpecs
     return rhoSpecs, ESpecs
 
 
-def getRhoAndEStrs(specs):
+def get_spam_strs(specs):
     """ 
     Get just the string portion of a pair of rho and E specifiers by
       stripping last element of rhoSpecs and first element of ESpecs

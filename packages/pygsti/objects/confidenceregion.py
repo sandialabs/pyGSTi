@@ -24,14 +24,14 @@ class ConfidenceRegion(object):
         Parameters
         ----------
         gateset : GateSet
-            the gate set point estimate that maximizes the logL or minimizes 
+            the gate set point estimate that maximizes the logl or minimizes 
             the chi2, and marks the point in gateset-space where the Hessian
             has been evaluated.
 
         hessian : numpy array
             A nParams x nParams Hessian matrix, where nParams is the number 
             of dimensions of gateset space, i.e. 
-            nParams = gateset.getNumParams(gates,G0,SPAM,SP0)
+            nParams = gateset.get_num_params(gates,G0,SPAM,SP0)
 
         confidenceLevel : float
             The confidence level as a percentage, i.e. between 0 and 100.
@@ -53,7 +53,7 @@ class ConfidenceRegion(object):
               corresponding to gate (as opposed to SPAM vector) parameters.
         """
 
-        proj_non_gauge = gateset.getNonGaugeProjector(gates,G0,SPAM,SP0)
+        proj_non_gauge = gateset.get_nongauge_projector(gates,G0,SPAM,SP0)
         self.nNonGaugeParams = _np.linalg.matrix_rank(proj_non_gauge, P_RANK_TOL)
         self.nGaugeParams = hessian.shape[0] - self.nNonGaugeParams
 
@@ -118,7 +118,7 @@ class ConfidenceRegion(object):
 
         #Store params and offsets of gateset for future use
         self.gateset_paramFlags = gates, G0, SPAM ,SP0
-        self.gateset_offsets = gateset.getVectorOffsets(gates,G0,SPAM,SP0)
+        self.gateset_offsets = gateset.get_vector_offsets(gates,G0,SPAM,SP0)
 
         #Store list of profile-likelihood confidence intervals
         #  which == sqrt(diagonal els) of invRegionQuadcForm
@@ -147,7 +147,7 @@ class ConfidenceRegion(object):
         #import sys
         #sys.exit()
 
-    def getGateset(self):
+    def get_gateset(self):
         """ 
         Retrieve the associated gate set.
 
@@ -158,7 +158,7 @@ class ConfidenceRegion(object):
         """
         return self.gateset
 
-    def getParameterizationFlags(self):
+    def get_parameterization_flags(self):
         """ 
         Retrieve the quantities specifying gate set parameterization.
 
@@ -169,7 +169,7 @@ class ConfidenceRegion(object):
         """
         return self.gateset_paramFlags
 
-    def getProfileLikelihoodConfidenceIntervals(self, label=None):
+    def get_profile_likelihood_confidence_intervals(self, label=None):
         """
         Retrieve the profile-likelihood confidence intervals for a specified
         gate set object (or all such intervals).
@@ -194,7 +194,7 @@ class ConfidenceRegion(object):
             start,end = self.gateset_offsets[label]
             return self.profLCI[start:end]
 
-    def getGateFnConfidenceInterval(self, fnOfGate, gateLabel, eps=1e-7, returnFnVal=False, verbosity=0):
+    def get_gate_fn_confidence_interval(self, fnOfGate, gateLabel, eps=1e-7, returnFnVal=False, verbosity=0):
         """
         Compute the confidence interval for a function of a single gate.
 
@@ -230,16 +230,16 @@ class ConfidenceRegion(object):
             at the gate specified by gateLabel.
         """
 
-        gates,G0,SPAM,SP0 = self.getParameterizationFlags()
-        nParams = self.gateset.getNumParams(gates,G0,SPAM,SP0)
+        gates,G0,SPAM,SP0 = self.get_parameterization_flags()
+        nParams = self.gateset.get_num_params(gates,G0,SPAM,SP0)
 
         gateMx = self.gateset[gateLabel]
         gateObj = self.gateset.get_gate(gateLabel).copy() # copy because we add eps to this gate
         gpo = self.gateset_offsets[gateLabel][0] #starting "gate parameter offset"        
 
         f0 = fnOfGate(gateMx) #function value at "base point" gateMx
-        nGateParams = gateObj.getNumParams(G0)
-        gateVec0 = gateObj.toVector(G0)
+        nGateParams = gateObj.get_num_params(G0)
+        gateVec0 = gateObj.to_vector(G0)
 
         #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
         if type(f0) == float:
@@ -250,7 +250,7 @@ class ConfidenceRegion(object):
 
         if gates == True or (type(gates) in (list,tuple) and gateLabel in gates):
             for i in range(nGateParams):
-                gateVec = gateVec0.copy(); gateVec[i] += eps; gateObj.fromVector(gateVec,G0)
+                gateVec = gateVec0.copy(); gateVec[i] += eps; gateObj.from_vector(gateVec,G0)
                 gradF[gpo + i] = ( fnOfGate( gateObj.matrix ) - f0 ) / eps        
             
         if verbosity > 0:
@@ -319,7 +319,7 @@ class ConfidenceRegion(object):
         return (df, f0 ) if returnFnVal else df
 
 
-    def getSpamFnConfidenceInterval(self, fnOfSpamVecs, eps=1e-7, returnFnVal=False, verbosity=0):
+    def get_spam_fn_confidence_interval(self, fnOfSpamVecs, eps=1e-7, returnFnVal=False, verbosity=0):
         """
         Compute the confidence interval for a function of spam vectors.
 
@@ -352,10 +352,10 @@ class ConfidenceRegion(object):
         f0 : float or numpy array
             Only returned when returnFnVal == True. Value of fnOfSpamVecs.
         """
-        gates,G0,SPAM,SP0 = self.getParameterizationFlags()
-        nParams = self.gateset.getNumParams(gates,G0,SPAM,SP0)
+        gates,G0,SPAM,SP0 = self.get_parameterization_flags()
+        nParams = self.gateset.get_num_params(gates,G0,SPAM,SP0)
 
-        f0 = fnOfSpamVecs(self.gateset.get_rhoVecs(), self.gateset.get_EVecs())
+        f0 = fnOfSpamVecs(self.gateset.get_rho_vecs(), self.gateset.get_evecs())
           #Note: .get_Evecs() can be different from .EVecs b/c the former includes compliment EVec
 
         #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
@@ -369,27 +369,27 @@ class ConfidenceRegion(object):
 
             gsEps = self.gateset.copy()
 
-            #loop just over parameterized objects - don't use get_rhoVecs() here...
+            #loop just over parameterized objects - don't use get_rho_vecs() here...
             for k,rhoVec in enumerate(self.gateset.rhoVecs): 
-                nRhoParams = len(rhoVec) if SP0 else len(rhoVec)-1 # LATER: rhoVecObj.getNumParams(SP0?)
+                nRhoParams = len(rhoVec) if SP0 else len(rhoVec)-1 # LATER: rhoVecObj.get_num_params(SP0?)
                 m = 0 if SP0 else 1
                 off = self.gateset_offsets["rho%d" % k][0]
                 for i in range(nRhoParams):
-                    vecEps = rhoVec.copy(); vecEps[m+i] += eps; gsEps.set_rhoVec( vecEps, k ) #update gsEps parameter
-                    gradF[off + i] = ( fnOfSpamVecs( gsEps.get_rhoVecs(), gsEps.get_EVecs() ) - f0 ) / eps        
-                gsEps.set_rhoVec( rhoVec.copy(), k )  #I don't think copy() is needed here, but just to be safe
+                    vecEps = rhoVec.copy(); vecEps[m+i] += eps; gsEps.set_rhovec( vecEps, k ) #update gsEps parameter
+                    gradF[off + i] = ( fnOfSpamVecs( gsEps.get_rho_vecs(), gsEps.get_evecs() ) - f0 ) / eps        
+                gsEps.set_rhovec( rhoVec.copy(), k )  #I don't think copy() is needed here, but just to be safe
 
-            #loop just over parameterized objects - don't use get_EVecs() here...
+            #loop just over parameterized objects - don't use get_evecs() here...
             for k,EVec in enumerate(self.gateset.EVecs): 
-                nEParams = len(EVec) # LATER: EVecObj.getNumParams()
+                nEParams = len(EVec) # LATER: EVecObj.get_num_params()
                 off = self.gateset_offsets["E%d" % k][0]
                 for i in range(nEParams):
-                    vecEps = EVec.copy(); vecEps[i] += eps; gsEps.set_EVec( vecEps, k ) #update gsEps parameter
-                    gradF[off + i] = ( fnOfSpamVecs( gsEps.get_rhoVecs(), gsEps.get_EVecs() ) - f0 ) / eps        
-                gsEps.set_EVec( EVec.copy(), k )  #I don't think copy() is needed here, but just to be safe
+                    vecEps = EVec.copy(); vecEps[i] += eps; gsEps.set_evec( vecEps, k ) #update gsEps parameter
+                    gradF[off + i] = ( fnOfSpamVecs( gsEps.get_rho_vecs(), gsEps.get_evecs() ) - f0 ) / eps        
+                gsEps.set_evec( EVec.copy(), k )  #I don't think copy() is needed here, but just to be safe
 
 
-        # NOTE: below here is same as for getGateFnConfidenceInterval ------------------------            
+        # NOTE: below here is same as for get_gate_fn_confidence_interval ------------------------            
 
         if verbosity > 0:
             print "gradF = ",gradF
@@ -440,26 +440,26 @@ def _optProjectionForGateCIs(gateset, base_hessian, nNonGaugeParams, nGaugeParam
     if verbosity > 2: print ""
     if verbosity > 1: print "--- Hessian Projector Optimization for gate CIs (%s) ---" % method
 
-    def objectiveFunc(vectorM):
+    def objective_func(vectorM):
         matM = vectorM.reshape( (nNonGaugeParams,nGaugeParams) )
-        proj_extra = gateset.getNonGaugeProjectorEx(matM, gates, G0, SPAM, SP0)
+        proj_extra = gateset.get_nongauge_projector_ex(matM, gates, G0, SPAM, SP0)
         projected_hessian_ex = _np.dot(proj_extra, _np.dot(base_hessian, proj_extra))
          
         ci = ConfidenceRegion(gateset, projected_hessian_ex, level, gates, G0, SPAM, SP0, hessianProjection="none")
-        gateCIs = _np.concatenate( [ ci.getProfileLikelihoodConfidenceIntervals(gl).flatten() for gl in gateset] )
+        gateCIs = _np.concatenate( [ ci.get_profile_likelihood_confidence_intervals(gl).flatten() for gl in gateset] )
         return _np.sqrt( _np.sum(gateCIs**2) )
                     
     #Run Minimization Algorithm
     startM = _np.zeros( (nNonGaugeParams,nGaugeParams), 'd')  
     x0 = startM.flatten()
-    printObjFunc = _opt.createObjFuncPrinter(objectiveFunc)
-    minSol = _opt.minimize(objectiveFunc, x0,
+    print_obj_func = _opt.create_obj_func_printer(objective_func)
+    minSol = _opt.minimize(objective_func, x0,
                                     method=method, maxiter=maxiter,
                                     maxfev=maxfev, tol=tol, 
-                                    callback = printObjFunc if verbosity > 2 else None)
+                                    callback = print_obj_func if verbosity > 2 else None)
 
     mixMx = minSol.x.reshape( (nNonGaugeParams,nGaugeParams) )
-    proj_extra = gateset.getNonGaugeProjectorEx(mixMx, gates, G0, SPAM, SP0)
+    proj_extra = gateset.get_nongauge_projector_ex(mixMx, gates, G0, SPAM, SP0)
     projected_hessian_ex = _np.dot(proj_extra, _np.dot(base_hessian, proj_extra))
          
     if verbosity > 1:
@@ -470,11 +470,11 @@ def _optProjectionForGateCIs(gateset, base_hessian, nNonGaugeParams, nGaugeParam
 
 #OLD
 
-##chi2, dchi2, HessD['perfect'] = GST.AT.TotalChiSquared(DSD['perfect'],gsEst,lsgstLists[-1],
+##chi2, dchi2, HessD['perfect'] = GST.AT.chi2(DSD['perfect'],gsEst,lsgstLists[-1],
 ##                                         returnGradient=True,returnHessian=True)
 ## semilogy(sort(abs(np.linalg.eigvals(ProjNoGauge * np.matrix(HessD['perfect']) * ProjNoGauge))),'+')
-#def GatesetConfidenceRegion(gateset, chi2Hessian, gates=True,G0=True,SPAM=True,SP0=True):
-#    proj_non_gauge = gateset.getNonGaugeProjector(gates,G0,SPAM,SP0)
+#def gateset_confidence_region(gateset, chi2Hessian, gates=True,G0=True,SPAM=True,SP0=True):
+#    proj_non_gauge = gateset.get_nongauge_projector(gates,G0,SPAM,SP0)
 #    return _np.dot(proj_non_gauge, _np.dot(chi2Hessian, proj_non_gauge))
 #
 #    # semilogy(sort(abs(np.linalg.eigvals(ProjNoGauge * np.matrix(HessD['perfect']) * ProjNoGauge))),'+')

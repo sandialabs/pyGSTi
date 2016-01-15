@@ -22,7 +22,7 @@ class EvalTree(list):
         self.subTrees = []
         super(EvalTree, self).__init__(items)
 
-    def initialize(self, gateLabels, gateStringList):
+    def initialize(self, gateLabels, gatestring_list):
         """
           Initialize an evaluation tree using a set of gate strings.
           This function must be called before using an EvalTree.
@@ -33,9 +33,9 @@ class EvalTree(list):
               A list of all the single gate labels to 
               be stored at the beginnign of the tree.  This
               list must include all the gate labels contained
-              in the elements of gateStringList.
+              in the elements of gatestring_list.
 
-          gateStringList : list of (tuples or GateStrings)
+          gatestring_list : list of (tuples or GateStrings)
               A list of tuples of gate labels or GateString 
               objects, specifying the gate strings that
               should be present in the evaluation tree.
@@ -46,8 +46,8 @@ class EvalTree(list):
         """
         self.gateLabels = gateLabels
 
-        if len(gateStringList ) > 0 and isinstance(gateStringList[0],_gs.GateString):
-            gateStringList = [gs.tup for gs in gateStringList]
+        if len(gatestring_list ) > 0 and isinstance(gatestring_list[0],_gs.GateString):
+            gatestring_list = [gs.tup for gs in gatestring_list]
 
         #Evaluation dictionary:
         # keys == gate strings that have been evaluated so far
@@ -61,14 +61,14 @@ class EvalTree(list):
         # and the order of the elements specifies the evaluation order.
         # In particular, the gateString = evalTree[iLeft] + evalTree[iRight]
         #   so that matrix(gateString) = matrixOf(evalTree[iRight]) * matrixOf(evalTree[iLeft])
-        #  and iInFinalList is the index of this gatestring in the gateStringList
+        #  and iInFinalList is the index of this gatestring in the gatestring_list
         # passed to this function, or -1 if it is not in the list.
         del self[:] #clear self (a list)
 
         #Final Index List
         # A list of integers whose i-th element is the index into evalTree
-        #  corresponding to the i-th gatestring in gateStringList.
-        finalIndxList = [ None ] * len(gateStringList)
+        #  corresponding to the i-th gatestring in gatestring_list.
+        finalIndxList = [ None ] * len(gatestring_list)
 
         #Single gate (or zero-gate) computations are assumed to be atomic, and be computed independently.
         #  These labels serve as the initial values, and each gate string is assumed to be a tuple of gate labels.
@@ -81,7 +81,7 @@ class EvalTree(list):
         
         #avgBiteSize = 0
         useCounts = {}
-        for (k,gateString) in enumerate(gateStringList):
+        for (k,gateString) in enumerate(gatestring_list):
             L = len(gateString)
             if L == 0: 
                 self[0] = (None,None,k) #set in-final-list index for zero-length string (special case)
@@ -120,7 +120,7 @@ class EvalTree(list):
 
             #if nBites > 0: avgBiteSize += L / float(nBites)
 
-        #avgBiteSize /= float(len(gateStringList))
+        #avgBiteSize /= float(len(gatestring_list))
         #print "DEBUG: Avg bite size = ",avgBiteSize
         
         #see if there are superfluous tree nodes: those with iFinal == -1 and 
@@ -128,30 +128,30 @@ class EvalTree(list):
         self.myFinalToParentFinalMap = [] #this tree has no "children", i.e. has not been created by a 'split'
         self.subTrees = [] #no subtrees yet
 
-    def getInitLabels(self):
+    def get_init_labels(self):
         """ Return a tuple of the gate labels (strings)
             which form the beginning of the tree.
         """
         return tuple(self.gateLabels)
 
-    def getTreeIndexOfFinalValue(self, finalValueIndex):
+    def get_tree_index_of_final_value(self, finalValueIndex):
         """ 
         Return the index within the tree list of the
           gate string that had index finalValueIndex in
-          the gateStringList passed to initialize. 
+          the gatestring_list passed to initialize. 
         """
         return self.finalList[finalValueIndex]
 
-    def getListOfFinalValueTreeIndices(self):
+    def get_list_of_final_value_tree_indices(self):
         """ 
         Get a list of indices (ints) which specifying the
           tree indices corresponding to each gate string
-          in the gateStringList passed to initialize.
+          in the gatestring_list passed to initialize.
 
         Returns
         -------
         list of integers
-            List of indices with length len(gateStringList passed to initialize).
+            List of indices with length len(gatestring_list passed to initialize).
             
         Note
         ----
@@ -161,7 +161,7 @@ class EvalTree(list):
         """
         return self.finalList #Note: no copy, so caller could modify this!
 
-    def _initializeBETA(self, gateLabels, gateStringList):
+    def _initializeBETA(self, gateLabels, gatestring_list):
         """
           Experimental alternate tree initialization algorithm.
           This doesn't currently work.
@@ -184,14 +184,14 @@ class EvalTree(list):
         #  (iLeft, iRight, iInFinalList)
         # and the order of the elements specifies the evaluation order.
         # In particular, the gateString = evalTree[iLeft] + evalTree[iRight]
-        #  and iInFinalList is the index of this gatestring in the gateStringList
+        #  and iInFinalList is the index of this gatestring in the gatestring_list
         # passed to this function, or -1 if it is not in the list.
         del self[:] #clear self (a list)
 
         #Final Index List
         # A list of integers whose i-th element is the index into evalTree
-        #  corresponding to the i-th gatestring in gateStringList.
-        finalIndxList = [ None ] * len(gateStringList)
+        #  corresponding to the i-th gatestring in gatestring_list.
+        finalIndxList = [ None ] * len(gatestring_list)
 
         #Single gate (or zero-gate) computations are assumed to be atomic, and be computed independently.
         #  These labels serve as the initial values, and each gate string is assumed to be a tuple of gate labels.
@@ -206,10 +206,10 @@ class EvalTree(list):
 
         #Collect list of what sub-strings get repeated a lot
         repDict = {}
-        for (k,gateString) in enumerate(gateStringList):
+        for (k,gateString) in enumerate(gatestring_list):
             #print "String %d (len %d): " % (k,len(gateString)),
-            for repStr,repCnt in repetitions( _gs.gateStringToPythonString(gateString,singleGateLabels) ):
-                repGateStr = _gs.pythonStringToGateString(repStr,singleGateLabels)
+            for repStr,repCnt in repetitions( _gs.gatestr_to_pythonstr(gateString,singleGateLabels) ):
+                repGateStr = _gs.pythonstr_to_gatestr(repStr,singleGateLabels)
                 if repDict.has_key(repGateStr):
                     if repCnt not in repDict[repGateStr][0]:
                         repDict[repGateStr][0].append(repCnt)
@@ -228,14 +228,14 @@ class EvalTree(list):
         self.myFinalToParentFinalMap = [] #this tree has no "children", i.e. has not been created by a 'split'
         self.subTrees = []
 
-    def getNumFinalStrings(self):
+    def get_num_final_strings(self):
         """ 
         Returns the integer number of "final" gate strings, equal
-          to the length of the gateStringList passed to initialize.
+          to the length of the gatestring_list passed to initialize.
         """         
         return len(self.finalList)
 
-    def generateGateStringList(self):
+    def generate_gatestring_list(self):
         """ 
         Generate a list of the final gate strings this tree evaluates.
 
@@ -251,7 +251,7 @@ class EvalTree(list):
             A list of the gate strings evaluated by this tree, each
             specified as a tuple of gate labels.
         """
-        finalGateStrings = [None]*self.getNumFinalStrings()
+        finalGateStrings = [None]*self.get_num_final_strings()
         gateStrings = []
         
         #Set initial single- or zero- gate strings at beginning of tree
@@ -353,17 +353,17 @@ class EvalTree(list):
 
         return
 
-    def isSplit(self):
+    def is_split(self):
         """ Returns boolean indicating whether tree is split into sub-trees or not. """
         return len(self.subTrees) > 0
 
-    def getSubTrees(self):
+    def get_sub_trees(self):
         """ 
         Returns a list of all the sub-trees (also EvalTree instances) of 
           this tree.  If this tree is not split, returns a single-element
           list containing just the tree.
         """
-        if self.isSplit():
+        if self.is_split():
             return self.subTrees
         else:
             return [self] #return self as the only "subTree" when not split
@@ -374,16 +374,16 @@ class EvalTree(list):
         if iLeft is not None: self._walkSubTree(iLeft,out)
         if iRight is not None: self._walkSubTree(iRight,out)
 
-    def printAnalysis(self):
+    def print_analysis(self):
         """ 
         Print a brief analysis of this tree. Used for 
         debugging and assessing tree quality.
         """
 
         #Analyze tree
-        if not self.isSplit():
+        if not self.is_split():
             print "Size of evalTree = %d" % len(self)
-            print "Size of gateStringList = %d" % len(self.finalList)
+            print "Size of gatestring_list = %d" % len(self.finalList)
     
             lastOccurrance = [-1] * len(self)
             nRefs = [-1] * len(self)
@@ -414,10 +414,10 @@ class EvalTree(list):
             #print "Final list: ",self.subTreesFinalList
             for i,t in enumerate(self.subTrees):
                 print ">> sub-tree %d: " % i
-                t.printAnalysis()
+                t.print_analysis()
 
         
-    def getAnalysisPlotInfos(self):
+    def get_analysis_plot_infos(self):
         """ 
         Returns debug plot information useful for 
         assessing the quality of a tree.

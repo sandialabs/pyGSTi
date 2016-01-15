@@ -1,6 +1,6 @@
 import numpy as _np
 
-def TotalChiSquared(dataset, gateset, gateStrings=None,
+def chi2(dataset, gateset, gateStrings=None,
                     returnGradient=False, returnHessian=False, 
                     G0=True, SP0=True, SPAM=True, gates=True,
                     minProbClipForWeighting=1e-4, clipTo=None,
@@ -36,11 +36,11 @@ def TotalChiSquared(dataset, gateset, gateStrings=None,
           gates == whether gate matrices are parameterized
 
     minProbClipForWeighting : float, optional
-        defines the clipping interval for the statistical weight (see ChiSqFunc).
+        defines the clipping interval for the statistical weight (see chi2fn).
 
     clipTo : 2-tuple, optional
         (min,max) to clip probabilities to within GateSet probability
-        computation routines (see GateSet.Bulk_fillProbs)
+        computation routines (see GateSet.bulk_fill_probs)
 
     useFreqWeightedChiSq : bool, optional
         Whether or not frequencies (instead of probabilities) should be used 
@@ -73,9 +73,9 @@ def TotalChiSquared(dataset, gateset, gateStrings=None,
     if useFreqWeightedChiSq:
       raise ValueError("frequency weighted chi2 is not implemented yet.")
 
-    spamLabels = gateset.get_SPAM_labels() #this list fixes the ordering of the spam labels
+    spamLabels = gateset.get_spam_labels() #this list fixes the ordering of the spam labels
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
-    vec_gs_len = gateset.getNumParams(gates, G0, SPAM, SP0)
+    vec_gs_len = gateset.get_num_params(gates, G0, SPAM, SP0)
 
     if gateStrings is None:
       gateStrings = dataset.keys()
@@ -97,17 +97,17 @@ def TotalChiSquared(dataset, gateset, gateStrings=None,
         for k,sl in enumerate(spamLabels):
             f[k,i] = dataset[gateStr].fraction(sl)
 
-    evTree = gateset.Bulk_evalTree(gateStrings)
+    evTree = gateset.bulk_evaltree(gateStrings)
     
     if returnHessian:
-      gateset.Bulk_fillhProbs(hprobs, spam_lbl_rows, evTree, 
+      gateset.bulk_fill_hprobs(hprobs, spam_lbl_rows, evTree, 
                               gates, G0, SPAM, SP0, probs, dprobs, clipTo,
                               check)
     elif returnGradient:
-      gateset.Bulk_filldProbs(dprobs, spam_lbl_rows, evTree, 
+      gateset.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree, 
                               gates, G0, SPAM, SP0, probs, clipTo, check)
     else:
-      gateset.Bulk_fillProbs(probs, spam_lbl_rows, evTree, clipTo, check)
+      gateset.bulk_fill_probs(probs, spam_lbl_rows, evTree, clipTo, check)
 
 
     #cprobs = _np.clip(probs,minProbClipForWeighting,1-minProbClipForWeighting) #clipped probabilities (also clip derivs to 0?)
@@ -145,18 +145,18 @@ def TotalChiSquared(dataset, gateset, gateStrings=None,
 #    """
 #
 #    if gateStrings is None:
-#        return sum( [ GateStringChiSq( gatestring, dataset, gateset, useFreqWeightedChiSq, 
+#        return sum( [ gate_string_chi2( gatestring, dataset, gateset, useFreqWeightedChiSq, 
 #                                       minProbClipForWeighting) for gatestring in dataset] )
-#        #return sum( [ ChiSqFunc_2outcome( dsRow.total(), 
-#        #                     gateset.Pr('plus', gatestring), 
+#        #return sum( [ chi2fn_2outcome( dsRow.total(), 
+#        #                     gateset.pr('plus', gatestring), 
 #        #                     dsRow.fraction('plus'),
 #        #                     minProbClipForWeighting ) for gatestring,dsRow in dataset.iteritems() ] )
 #    else:
-#        return sum( [ GateStringChiSq( gatestring, dataset, gateset, useFreqWeightedChiSq, 
+#        return sum( [ gate_string_chi2( gatestring, dataset, gateset, useFreqWeightedChiSq, 
 #                                       minProbClipForWeighting) for gatestring in gateStrings] )
 #
 
-def GateStringChiSq( gatestring, dataset, gateset, useFreqWeightedChiSq=False, 
+def gate_string_chi2( gatestring, dataset, gateset, useFreqWeightedChiSq=False, 
                      minProbClipForWeighting=1e-4):
     """
     Computes the chi-squared term for a single gate string.
@@ -181,7 +181,7 @@ def GateStringChiSq( gatestring, dataset, gateset, useFreqWeightedChiSq=False,
 
     minProbClipForWeighting : float, optional
         If useFreqWeightedChiSq == False, defines the clipping interval
-        for the statistical weight (see ChiSqFunc).
+        for the statistical weight (see chi2fn).
 
     Returns
     -------
@@ -190,16 +190,16 @@ def GateStringChiSq( gatestring, dataset, gateset, useFreqWeightedChiSq=False,
         (one term per SPAM label).
     """
     
-    chiSqFn  = ChiSqFunc_wFreqs if useFreqWeightedChiSq else ChiSqFunc
+    chiSqFn  = chi2fn_wfreqs if useFreqWeightedChiSq else chi2fn
     rowData  = dataset[gatestring]
     clip = minProbClipForWeighting
 
     N = rowData.total()
-    p = gateset.Probs(gatestring)
-    return sum( [ chiSqFn(N, p[sl], rowData[sl]/N, clip) for sl in gateset.get_SPAM_labels() ] )
+    p = gateset.probs(gatestring)
+    return sum( [ chiSqFn(N, p[sl], rowData[sl]/N, clip) for sl in gateset.get_spam_labels() ] )
 
 
-def ChiSqFunc_2outcome( N, p, f, minProbClipForWeighting=1e-4 ):
+def chi2fn_2outcome( N, p, f, minProbClipForWeighting=1e-4 ):
     """ 
     Computes chi^2 for a 2-outcome measurement.
 
@@ -231,7 +231,7 @@ def ChiSqFunc_2outcome( N, p, f, minProbClipForWeighting=1e-4 ):
     return N*(p-f)**2/(cp*(1-cp))
 
 
-def ChiSqFunc_2outcome_wFreqs( N, p, f, minProbClipForWeighting=1e-4 ):
+def chi2fn_2outcome_wfreqs( N, p, f, minProbClipForWeighting=1e-4 ):
     """ 
     Computes chi^2 for a 2-outcome measurement using frequency-weighting.
 
@@ -251,7 +251,7 @@ def ChiSqFunc_2outcome_wFreqs( N, p, f, minProbClipForWeighting=1e-4 ):
 
     minProbClipForWeighting : float, optional
         unused but present to keep the same function 
-        signature as ChiSqFunc_2outcome.
+        signature as chi2fn_2outcome.
         
     Returns
     -------
@@ -264,7 +264,7 @@ def ChiSqFunc_2outcome_wFreqs( N, p, f, minProbClipForWeighting=1e-4 ):
     return N*(p-f)**2/(f1*(1-f1))
 
 
-def ChiSqFunc( N, p, f, minProbClipForWeighting=1e-4 ):
+def chi2fn( N, p, f, minProbClipForWeighting=1e-4 ):
     """ 
     Computes the chi^2 term corresponding to a single outcome.
 
@@ -298,7 +298,7 @@ def ChiSqFunc( N, p, f, minProbClipForWeighting=1e-4 ):
     return N*(p-f)**2/cp
 
 
-def ChiSqFunc_wFreqs( N, p, f, minProbClipForWeighting=1e-4 ):
+def chi2fn_wfreqs( N, p, f, minProbClipForWeighting=1e-4 ):
     """ 
     Computes the frequency-weighed chi^2 term corresponding to a single outcome.
 
@@ -318,7 +318,7 @@ def ChiSqFunc_wFreqs( N, p, f, minProbClipForWeighting=1e-4 ):
 
     minProbClipForWeighting : float, optional
         unused but present to keep the same function 
-        signature as ChiSqFunc.
+        signature as chi2fn.
         
     Returns
     -------

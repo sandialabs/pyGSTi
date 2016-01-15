@@ -7,7 +7,7 @@ import collections as _collections
 import matplotlib as _matplotlib
 
 from ..objects import gatestring as _gs
-from ..algorithms import optimizeGauge as _optimizeGauge
+from ..algorithms import optimize_gauge as _optimizeGauge
 
 import latex as _latex
 import generation as _generation
@@ -57,10 +57,10 @@ class Results(object):
         self.latexCmd = latexCmd
         self.bEssentialResultsSet = False
         self.LsAndGermInfoSet = False
-        self.setAdditionalInfo() #set all default values of additional info
+        self.set_additional_info() #set all default values of additional info
 
     def init_single(self, objective, targetGateset, dataset, gatesetEstimate,
-                    gateStringList, constrainToTP, gatesetEstimate_noGaugeOpt=None):
+                    gatestring_list, constrainToTP, gatesetEstimate_noGaugeOpt=None):
         """ 
         Initialize this Results object from the inputs and outputs of a
         single (non-iterative) GST method.
@@ -68,7 +68,7 @@ class Results(object):
 
         Parameters
         ----------
-        objective : {'chi2', 'logL'}
+        objective : {'chi2', 'logl'}
             Whether gateset was obtained by minimizing chi^2 or
             maximizing the log-likelihood.
             
@@ -81,7 +81,7 @@ class Results(object):
         gatesetEstimate : GateSet
             The (single) gate set obtained which optimizes the objective.
 
-        gateStringList : list of GateStrings
+        gatestring_list : list of GateStrings
             The list of gate strings used to optimize the objective.
 
         constrainToTP : boolean
@@ -102,8 +102,8 @@ class Results(object):
         self.gsTarget = targetGateset
         self.gatesets = [ gatesetEstimate ]
         self.gsBestEstimate = gatesetEstimate
-        self.gateStringLists = [ gateStringList ]
-        self.bestGateStringList = gateStringList
+        self.gateStringLists = [ gatestring_list ]
+        self.bestGateStringList = gatestring_list
         self.dataset = dataset
         self.objective = objective
         self.constrainToTP = constrainToTP
@@ -114,7 +114,7 @@ class Results(object):
         self.gsSeed = None
         self.bEssentialResultsSet = True
 
-    def init_LsAndGerms(self, objective, targetGateset, dataset,
+    def init_Ls_and_germs(self, objective, targetGateset, dataset,
                               seedGateset, Ls, germs, gatesetsByL, gateStringListByL, 
                               rhoStrs, EStrs, truncFn, constrainToTP, rhoEPairs=None,
                               gatesetsByL_noGaugeOpt=None):
@@ -127,7 +127,7 @@ class Results(object):
 
         Parameters
         ----------
-        objective : {'chi2', 'logL'}
+        objective : {'chi2', 'logl'}
             Whether gateset was obtained by minimizing chi^2 or
             maximizing the log-likelihood.
             
@@ -167,7 +167,7 @@ class Results(object):
             germ should be repeated "L times".  Function should
             take parameters (germ, L) and return the repeated
             gate string.  For example, see
-            pygsti.construction.repeatWithMaxLength.
+            pygsti.construction.repeat_with_max_length.
 
         constrainToTP : boolean
             Whether or not the gatesetEstimate was constrained to lie
@@ -218,7 +218,7 @@ class Results(object):
         self.LsAndGermInfoSet = True
 
 
-    def setAdditionalInfo(self,minProbClip=1e-6, minProbClipForWeighting=1e-4,
+    def set_additional_info(self,minProbClip=1e-6, minProbClipForWeighting=1e-4,
                           probClipInterval=(-1e6,1e6), radius=1e-4,
                           weightsDict=None, defaultDirectory=None, defaultBasename=None):
         """
@@ -272,7 +272,7 @@ class Results(object):
                                 'defaultDirectory': defaultDirectory,
                                 'defaultBasename': defaultBasename }
 
-    def setTemplatePath(self, pathToTemplates):
+    def set_template_path(self, pathToTemplates):
         """
         Sets the location of GST report and presentation templates.
 
@@ -285,7 +285,7 @@ class Results(object):
         self.templatePath = pathToTemplates
 
 
-    def setLatexCmd(self, latexCmd):
+    def set_latex_cmd(self, latexCmd):
         """
         Sets the shell command used for compiling latex reports and
         presentations.
@@ -300,7 +300,7 @@ class Results(object):
         self.latexCmd = latexCmd
 
 
-    def getConfidenceRegion(self, confidenceLevel):
+    def get_confidence_region(self, confidenceLevel):
         """
         Get the ConfidenceRegion object associated with a given confidence level.
         One will be created and cached the first time given level is requested,
@@ -322,8 +322,8 @@ class Results(object):
             return None
 
         if confidenceLevel not in self.confidenceRegions:
-            if self.objective == "logL":
-                cr = _generation.constructLogLConfidenceRegion(
+            if self.objective == "logl":
+                cr = _generation.get_logl_confidence_region(
                     self.gsBestEstimate, self.dataset, confidenceLevel,
                     self.constrainToTP, self.bestGateStringList,
                     self.additionalInfo['probClipInterval'],
@@ -331,7 +331,7 @@ class Results(object):
                     self.additionalInfo['radius'],
                     self.additionalInfo['hessianProjection'])
             elif self.objective == "chi2":
-                cr = _generation.constructChi2ConfidenceRegion(
+                cr = _generation.get_chi2_confidence_region(
                     self.gsBestEstimate, self.dataset, confidenceLevel,
                     self.constrainToTP, self.bestGateStringList,
                     self.additionalInfo['probClipInterval'],
@@ -344,7 +344,7 @@ class Results(object):
         return self.confidenceRegions[confidenceLevel]
 
 
-    def getTable(self, tableName, confidenceLevel=None, fmt="py", verbosity=0):
+    def get_table(self, tableName, confidenceLevel=None, fmt="py", verbosity=0):
         """
         Get a report table in a specified format.  Tables are created on 
         the first request then cached for later requests for the same table.
@@ -393,94 +393,94 @@ class Results(object):
 
         # target gateset tables
         if tableName == 'targetSpamTable': 
-            return _generation.getGatesetSPAMTable(
+            return _generation.get_gateset_spam_table(
                 self.gsTarget, self.formatsToCompute, self.tableClass,
                 self.longTables)
         elif tableName == 'targetGatesTable':
-            return _generation.getUnitaryGatesetGatesTable(
+            return _generation.get_unitary_gateset_gates_table(
                 self.gsTarget, self.formatsToCompute, self.tableClass,
                 self.longTables)
 
         # dataset and gatestring list tables
         elif tableName == 'datasetOverviewTable':
-            return _generation.getDatasetOverviewTable(
+            return _generation.get_dataset_overview_table(
                 self.dataset, self.formatsToCompute, self.tableClass,
                 self.longTables)
 
         elif tableName == 'fiducialListTable':
-            return _generation.getGatestringMultiTable(
+            return _generation.get_gatestring_multi_table(
                 [self.rhoStrs, self.EStrs], ["Prep.","Measure"],
                 self.formatsToCompute, self.tableClass, self.longTables,
                 "Fiducials")
 
         elif tableName == 'rhoStrListTable':
-            return _generation.getGatestringTable(
+            return _generation.get_gatestring_table(
                 self.rhoStrs, "Preparation Fiducial", self.formatsToCompute, 
                 self.tableClass, self.longTables)
 
         elif tableName == 'EStrListTable':
-            return _generation.getGatestringTable(
+            return _generation.get_gatestring_table(
                 self.EStrs, "Measurement Fiducial", self.formatsToCompute,
                 self.tableClass, self.longTables)
 
         elif tableName == 'germListTable':
-            return _generation.getGatestringTable(
+            return _generation.get_gatestring_table(
                 self.germs, "Germ", self.formatsToCompute, self.tableClass,
                 self.longTables)
 
 
         # Estimated gateset tables
         elif tableName == 'bestGatesetSpamTable':
-            cri = self.getConfidenceRegion(confidenceLevel)
-            return _generation.getGatesetSPAMTable(
+            cri = self.get_confidence_region(confidenceLevel)
+            return _generation.get_gateset_spam_table(
                 self.gsBestEstimate, self.formatsToCompute, self.tableClass,
                 self.longTables, cri)
 
         elif tableName == 'bestGatesetSpamParametersTable':
-            cri = self.getConfidenceRegion(confidenceLevel)
-            return _generation.getGatesetSPAMParametersTable(
+            cri = self.get_confidence_region(confidenceLevel)
+            return _generation.get_gateset_spam_parameters_table(
                 self.gsBestEstimate, self.formatsToCompute, self.tableClass,
                 self.longTables, cri)
 
         elif tableName == 'bestGatesetGatesTable':
-            cri = self.getConfidenceRegion(confidenceLevel)
-            return _generation.getGatesetGatesTable(
+            cri = self.get_confidence_region(confidenceLevel)
+            return _generation.get_gateset_gates_table(
                 self.gsBestEstimate, self.formatsToCompute, self.tableClass,
                 self.longTables, cri)
 
         elif tableName == 'bestGatesetChoiTable':
-            cri = self.getConfidenceRegion(confidenceLevel)
-            return _generation.getGatesetChoiTable(
+            cri = self.get_confidence_region(confidenceLevel)
+            return _generation.get_gateset_choi_table(
                 self.gsBestEstimate, self.formatsToCompute, self.tableClass,
                 self.longTables, cri)
 
         elif tableName == 'bestGatesetDecompTable':
-            cri = self.getConfidenceRegion(confidenceLevel)
-            return _generation.getGatesetDecompTable(
+            cri = self.get_confidence_region(confidenceLevel)
+            return _generation.get_gateset_decomp_table(
                 self.gsBestEstimate, self.formatsToCompute, self.tableClass,
                 self.longTables, cri)
 
         elif tableName == 'bestGatesetRotnAxisTable':
-            cri = self.getConfidenceRegion(confidenceLevel)
-            return _generation.getGatesetRotnAxisTable(
+            cri = self.get_confidence_region(confidenceLevel)
+            return _generation.get_gateset_rotn_axis_table(
                 self.gsBestEstimate, self.formatsToCompute, self.tableClass,
                 self.longTables, cri)
 
         elif tableName == 'bestGatesetClosestUnitaryTable':
-            #cri = self.getConfidenceRegion(confidenceLevel)
-            return _generation.getGatesetClosestUnitaryTable(
+            #cri = self.get_confidence_region(confidenceLevel)
+            return _generation.get_gateset_closest_unitary_table(
                 self.gsBestEstimate, self.formatsToCompute, self.tableClass,
                 self.longTables) #, cri)
 
         elif tableName == 'bestGatesetVsTargetTable':
-            cri = self.getConfidenceRegion(confidenceLevel)
-            return _generation.getGatesetVsTargetTable(
+            cri = self.get_confidence_region(confidenceLevel)
+            return _generation.get_gateset_vs_target_table(
                 self.gsBestEstimate, self.gsTarget, self.formatsToCompute,
                 self.tableClass, self.longTables, cri)
 
         elif tableName == 'bestGatesetErrorGenTable':
-            cri = self.getConfidenceRegion(confidenceLevel)
-            return _generation.getGatesetVsTargetErrGenTable(
+            cri = self.get_confidence_region(confidenceLevel)
+            return _generation.get_gateset_vs_target_err_gen_table(
                 self.gsBestEstimate, self.gsTarget, self.formatsToCompute,
                 self.tableClass, self.longTables, cri)
 
@@ -488,21 +488,21 @@ class Results(object):
         # progress tables
         elif tableName == 'chi2ProgressTable':
             assert(self.LsAndGermInfoSet)
-            return _generation.getChi2ProgressTable(
+            return _generation.get_chi2_progress_table(
                 self.Ls, self.gatesets, self.gateStringLists, self.dataset,
                 self.constrainToTP, self.formatsToCompute, self.tableClass,
                 self.longTables)
 
         elif tableName == 'logLProgressTable':
             assert(self.LsAndGermInfoSet)
-            return _generation.getLogLProgressTable(
+            return _generation.get_logl_progress_table(
                 self.Ls, self.gatesets, self.gateStringLists, self.dataset,
                 self.constrainToTP, self.formatsToCompute, self.tableClass,
                 self.longTables)        
         else:
             raise ValueError("Invalid table name: %s" % tableName)
 
-    def getFigure(self, figureName, verbosity=0):
+    def get_figure(self, figureName, verbosity=0):
         """
         Get a report figure.  Figures are created on the first
         request then cached for later requests for the same figure.
@@ -538,15 +538,15 @@ class Results(object):
             print "Generating %s figure..." % figureName; _sys.stdout.flush()
 
         if self.objective == "chi2":
-            plotFn = _plotting.ChiSqBoxPlot
-            directPlotFn = _plotting.DirectChiSqBoxPlot
-            whackAMolePlotFn = _plotting.WhackAChiSqMoleBoxPlot
+            plotFn = _plotting.chi2_boxplot
+            directPlotFn = _plotting.direct_chi2_boxplot
+            whackAMolePlotFn = _plotting.whack_a_chi2_mole_boxplot
             #plotFnName,plotFnLatex = "Chi2", "$\chi^2$"
             mpc = self.additionalInfo['minProbClipForWeighting']
-        elif self.objective == "logL":
-            plotFn = _plotting.LogLBoxPlot
-            directPlotFn = _plotting.DirectLogLBoxPlot
-            whackAMolePlotFn = _plotting.WhackALogLMoleBoxPlot
+        elif self.objective == "logl":
+            plotFn = _plotting.logl_boxplot
+            directPlotFn = _plotting.direct_logl_boxplot
+            whackAMolePlotFn = _plotting.whack_a_logl_mole_boxplot
             #plotFnName,plotFnLatex = "LogL", "$\\log(\\mathcal{L})$"
             mpc = self.additionalInfo['minProbClip']
         else: 
@@ -562,71 +562,71 @@ class Results(object):
         if figureName == "bestEstimateColorBoxPlot":
             fig = plotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, self.gsBestEstimate, strs,
                           "L", "germ", M=M, m=m, scale=1.0, sumUp=False, histogram=True, title="", rhoEPairs=self.rhoEPairs,
-                          minProbClipForWeighting=mpc, saveTo="", ticSize=20)
+                          minProbClipForWeighting=mpc, save_to="", ticSize=20)
 
         elif figureName == "invertedBestEstimateColorBoxPlot":
             fig = plotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, self.gsBestEstimate, strs,
                           "L", "germ", M=M, m=m, scale=1.0, sumUp=False, histogram=True, title="", rhoEPairs=self.rhoEPairs,
-                          saveTo="", ticSize=20, minProbClipForWeighting=mpc, invert=True)
+                          save_to="", ticSize=20, minProbClipForWeighting=mpc, invert=True)
 
         elif figureName == "bestEstimateSummedColorBoxPlot":
             sumScale = len(self.rhoStrs)*len(self.EStrs) if self.rhoEPairs is None else len(self.rhoEPairs)
             fig = plotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, self.gsBestEstimate, strs,
                           "L", "germ", M=M*sumScale, m=m*sumScale, scale=1.0, sumUp=True, histogram=False,
-                          title="", rhoEPairs=self.rhoEPairs, minProbClipForWeighting=mpc, saveTo="", ticSize=14)    
+                          title="", rhoEPairs=self.rhoEPairs, minProbClipForWeighting=mpc, save_to="", ticSize=14)    
             
-        elif figureName.startswith("estimateForLIndex") and figureName.endswith("ColorBoxPlot"):
-            i = int(figureName[len("estimateForLIndex"):-len("ColorBoxPlot")])
+        elif figureName.startswith("estimateForLIndex") and figureName.endswith("color_boxplot"):
+            i = int(figureName[len("estimateForLIndex"):-len("color_boxplot")])
             fig = plotFn( self.Ls[st:i+1], self.germs, baseStr_dict, self.dataset, self.gatesets[i],
                           strs, "L", "germ", M=M, m=m, scale=1.0, sumUp=False, histogram=False, title="",
-                          rhoEPairs=self.rhoEPairs, saveTo="", minProbClipForWeighting=mpc, ticSize=20 )
+                          rhoEPairs=self.rhoEPairs, save_to="", minProbClipForWeighting=mpc, ticSize=20 )
 
         elif figureName == "blankBoxPlot":
-            #TODO - have BlankBoxPlot return a GSTFigure object
+            #TODO - have blank_boxplot return a GSTFigure object
             raise ValueError("not implemented")
-            fig = _plotting.BlankBoxPlot( 
+            fig = _plotting.blank_boxplot( 
                 self.Ls, self.germs, baseStr_dict, strs, "L", "germ",
-                scale=1.0, title="", sumUp=False, saveTo="", ticSize=20)
+                scale=1.0, title="", sumUp=False, save_to="", ticSize=20)
 
         elif figureName == "blankSummedBoxPlot":
-            #TODO - have BlankBoxPlot return a GSTFigure object
+            #TODO - have blank_boxplot return a GSTFigure object
             raise ValueError("not implemented")
-            fig = _plotting.BlankBoxPlot( 
+            fig = _plotting.blank_boxplot( 
                 self.Ls, self.germs, baseStr_dict, strs, "L", "germ",
-                scale=1.0, title="", sumUp=True, saveTo="", ticSize=20)
+                scale=1.0, title="", sumUp=True, save_to="", ticSize=20)
 
         elif figureName == "directLGSTColorBoxPlot":
-            directLGST  = self.getSpecial('DirectLGSTGatesets')
+            directLGST  = self.get_special('direct_lgst_gatesets')
             fig = directPlotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, directLGST, strs,
                                 "L", "germ", M=M, m=m, scale=1.0, sumUp=False, title="", minProbClipForWeighting=mpc,
-                                rhoEPairs=self.rhoEPairs, saveTo="", ticSize=20)
+                                rhoEPairs=self.rhoEPairs, save_to="", ticSize=20)
 
         elif figureName == "directLongSeqGSTColorBoxPlot":
-            directLongSeqGST = self.getSpecial('DirectLongSeqGatesets')
+            directLongSeqGST = self.get_special('DirectLongSeqGatesets')
             fig = directPlotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, directLongSeqGST, strs,
                           "L", "germ", M=M, m=m, scale=1.0, sumUp=False, title="",minProbClipForWeighting=mpc,
-                          rhoEPairs=self.rhoEPairs, saveTo="", ticSize=20)
+                          rhoEPairs=self.rhoEPairs, save_to="", ticSize=20)
 
         elif figureName == "directLGSTDeviationColorBoxPlot":
-            directLGST  = self.getSpecial('DirectLGSTGatesets')
-            fig = _plotting.DirectDeviationBoxPlot( 
+            directLGST  = self.get_special('direct_lgst_gatesets')
+            fig = _plotting.direct_deviation_boxplot( 
                 self.Ls[st:], self.germs, baseStr_dict, self.dataset,
                 self.gsBestEstimate, directLGST, "L", "germ", m=0, scale=1.0,
-                prec=-1, title="", saveTo="", ticSize=20)
+                prec=-1, title="", save_to="", ticSize=20)
 
         elif figureName == "directLongSeqGSTDeviationColorBoxPlot":
-            directLongSeqGST = self.getSpecial('DirectLongSeqGatesets')
-            fig = _plotting.DirectDeviationBoxPlot(
+            directLongSeqGST = self.get_special('DirectLongSeqGatesets')
+            fig = _plotting.direct_deviation_boxplot(
                 self.Ls[st:], self.germs, baseStr_dict, self.dataset,
                 self.gsBestEstimate, directLongSeqGST, "L", "germ", m=0,
-                scale=1.0, prec=-1, title="", saveTo="", ticSize=20)
+                scale=1.0, prec=-1, title="", save_to="", ticSize=20)
 
         elif figureName == "smallEigvalErrRateColorBoxPlot":
-            directLongSeqGST = self.getSpecial('DirectLongSeqGatesets')
-            fig = _plotting.SmallEigvalErrRateBoxPlot(
+            directLongSeqGST = self.get_special('DirectLongSeqGatesets')
+            fig = _plotting.small_eigval_err_rate_boxplot(
                 self.Ls[st:], self.germs, baseStr_dict, self.dataset,
                 directLongSeqGST, "L", "germ", m=0, scale=1.0, title="",
-                saveTo="", ticSize=20)
+                save_to="", ticSize=20)
 
         elif figureName.startswith("whack") and figureName.endswith("MoleBoxes"):
             gateLabel = figureName[len("whack"):-len("MoleBoxes")]
@@ -638,7 +638,7 @@ class Results(object):
 
             fig = whackAMolePlotFn( strToWhack, allGateStrings, self.Ls[st:], self.germs, baseStr_dict, self.dataset,
                                     self.gsBestEstimate, strs, "L", "germ", scale=1.0, sumUp=False, title="", whackWith=hammerWeight,
-                                    saveTo="", minProbClipForWeighting=mpc, ticSize=20, rhoEPairs=self.rhoEPairs, m=0)
+                                    save_to="", minProbClipForWeighting=mpc, ticSize=20, rhoEPairs=self.rhoEPairs, m=0)
 
         elif figureName.startswith("whack") and figureName.endswith("MoleBoxesSummed"):
             gateLabel = figureName[len("whack"):-len("MoleBoxesSummed")]
@@ -650,7 +650,7 @@ class Results(object):
 
             fig = whackAMolePlotFn( strToWhack, allGateStrings, self.Ls[st:], self.germs, baseStr_dict, self.dataset,
                                     self.gsBestEstimate, strs, "L", "germ", scale=1.0, sumUp=True, title="", whackWith=hammerWeight,
-                                    saveTo="", minProbClipForWeighting=mpc, ticSize=20, rhoEPairs=self.rhoEPairs, m=0)
+                                    save_to="", minProbClipForWeighting=mpc, ticSize=20, rhoEPairs=self.rhoEPairs, m=0)
 
         else:
             raise ValueError("Invalid figure name: %s" % figureName)
@@ -658,7 +658,7 @@ class Results(object):
         return fig
 
 
-    def getSpecial(self, specialName, verbosity=0):
+    def get_special(self, specialName, verbosity=0):
         """
         Get a "special item", which can be almost anything used in report
         or presentation construction.  This method is almost solely used 
@@ -720,46 +720,46 @@ class Results(object):
         elif specialName == 'gaugeOptAppendixTables':
             assert(self.bEssentialResultsSet)
 
-            best_gs_gauges = self.getSpecial('gaugeOptAppendixGatesets')
+            best_gs_gauges = self.get_special('gaugeOptAppendixGatesets')
             ret = {}
 
             for gaugeKey,gopt_gs in best_gs_gauges.iteritems():
                 #FUTURE: add confidence region support to these appendices? -- would need to compute confidenceRegionInfo (cri)
                 #  for each gauge-optimized gateset, gopt_gs and pass to appropriate functions below
                 ret['best%sGatesetSpamTable' % gaugeKey] = \
-                    _generation.getGatesetSPAMTable(
+                    _generation.get_gateset_spam_table(
                     gopt_gs, self.formatsToCompute, self.tableClass,
                     self.longTables)
                 ret['best%sGatesetSpamParametersTable' % gaugeKey] = \
-                    _generation.getGatesetSPAMParametersTable(
+                    _generation.get_gateset_spam_parameters_table(
                     gopt_gs, self.formatsToCompute, self.tableClass,
                     self.longTables)
                 ret['best%sGatesetGatesTable' % gaugeKey] = \
-                    _generation.getGatesetGatesTable(
+                    _generation.get_gateset_gates_table(
                     gopt_gs, self.formatsToCompute, self.tableClass,
                     self.longTables)
                 ret['best%sGatesetChoiTable' % gaugeKey] = \
-                    _generation.getGatesetChoiTable(
+                    _generation.get_gateset_choi_table(
                     gopt_gs, self.formatsToCompute, self.tableClass,
                     self.longTables)
                 ret['best%sGatesetDecompTable' % gaugeKey] = \
-                    _generation.getGatesetDecompTable(
+                    _generation.get_gateset_decomp_table(
                     gopt_gs, self.formatsToCompute, self.tableClass,
                     self.longTables)                
                 ret['best%sGatesetRotnAxisTable' % gaugeKey] = \
-                    _generation.getGatesetRotnAxisTable(
+                    _generation.get_gateset_rotn_axis_table(
                     gopt_gs, self.formatsToCompute, self.tableClass,
                     self.longTables)
                 ret['best%sGatesetClosestUnitaryTable' % gaugeKey] = \
-                    _generation.getGatesetClosestUnitaryTable(
+                    _generation.get_gateset_closest_unitary_table(
                     gopt_gs, self.formatsToCompute, self.tableClass,
                     self.longTables)
                 ret['best%sGatesetVsTargetTable' % gaugeKey] = \
-                    _generation.getGatesetVsTargetTable(
+                    _generation.get_gateset_vs_target_table(
                     gopt_gs, self.gsTarget, self.formatsToCompute, 
                     self.tableClass, self.longTables)
                 ret['best%sGatesetErrorGenTable' % gaugeKey] = \
-                    _generation.getGatesetVsTargetErrGenTable(
+                    _generation.get_gateset_vs_target_err_gen_table(
                     gopt_gs, self.gsTarget, self.formatsToCompute,
                     self.tableClass, self.longTables)
 
@@ -771,38 +771,38 @@ class Results(object):
             ret = {}
             for gaugeKey in ('Target','TargetSpam', 'TargetGates', 'CPTP', 'TP'):
                 ret['best%sGatesetSpamTable' % gaugeKey] = \
-                    _generation.getBlankTable(self.formatsToCompute)
+                    _generation.get_blank_table(self.formatsToCompute)
                 ret['best%sGatesetSpamParametersTable' % gaugeKey] = \
-                    _generation.getBlankTable(self.formatsToCompute)
+                    _generation.get_blank_table(self.formatsToCompute)
                 ret['best%sGatesetGatesTable' % gaugeKey] = \
-                    _generation.getBlankTable(self.formatsToCompute)
+                    _generation.get_blank_table(self.formatsToCompute)
                 ret['best%sGatesetChoiTable' % gaugeKey] = \
-                    _generation.getBlankTable(self.formatsToCompute)
+                    _generation.get_blank_table(self.formatsToCompute)
                 ret['best%sGatesetDecompTable' % gaugeKey] = \
-                    _generation.getBlankTable(self.formatsToCompute)
+                    _generation.get_blank_table(self.formatsToCompute)
                 ret['best%sGatesetRotnAxisTable' % gaugeKey] = \
-                    _generation.getBlankTable(self.formatsToCompute)
+                    _generation.get_blank_table(self.formatsToCompute)
                 ret['best%sGatesetClosestUnitaryTable' % gaugeKey] = \
-                    _generation.getBlankTable(self.formatsToCompute)
+                    _generation.get_blank_table(self.formatsToCompute)
                 ret['best%sGatesetVsTargetTable' % gaugeKey] = \
-                    _generation.getBlankTable(self.formatsToCompute)
+                    _generation.get_blank_table(self.formatsToCompute)
                 ret['best%sGatesetErrorGenTable' % gaugeKey] = \
-                    _generation.getBlankTable(self.formatsToCompute)
+                    _generation.get_blank_table(self.formatsToCompute)
 
             return ret
 
-        elif specialName == "DirectLGSTGatesets":
+        elif specialName == "direct_lgst_gatesets":
             assert(self.bEssentialResultsSet)
             assert(self.LsAndGermInfoSet)
 
-            direct_specs = _alg.getRhoAndESpecs(rhoStrs=self.rhoStrs, EStrs=self.EStrs, EVecInds=self.gsTarget.getEVecIndices() )
+            direct_specs = _alg.get_spam_specs(rhoStrs=self.rhoStrs, EStrs=self.EStrs, EVecInds=self.gsTarget.get_evec_indices() )
             baseStrs = [] # (L,germ) base strings without duplicates
             for L in self.Ls:
                 for germ in self.germs:
                     if self.L_germ_tuple_to_baseStr_dict[(L,germ)] not in baseStrs:
                         baseStrs.append( self.L_germ_tuple_to_baseStr_dict[(L,germ)] )
 
-            return _plotting.DirectLGSTGatesets( 
+            return _plotting.direct_lgst_gatesets( 
                 baseStrs, self.dataset, direct_specs, self.gsTarget,
                 svdTruncateTo=4, verbosity=0) #TODO: svdTruncateTo set elegantly?
         
@@ -810,7 +810,7 @@ class Results(object):
             assert(self.bEssentialResultsSet)
             assert(self.LsAndGermInfoSet)
 
-            direct_specs = _alg.getRhoAndESpecs(rhoStrs=self.rhoStrs, EStrs=self.EStrs, EVecInds=self.gsTarget.getEVecIndices() )
+            direct_specs = _alg.get_spam_specs(rhoStrs=self.rhoStrs, EStrs=self.EStrs, EVecInds=self.gsTarget.get_evec_indices() )
             baseStrs = [] # (L,germ) base strings without duplicates
             for L in self.Ls:
                 for germ in self.germs:
@@ -818,15 +818,15 @@ class Results(object):
                         baseStrs.append( self.L_germ_tuple_to_baseStr_dict[(L,germ)] )
 
             if self.objective == "chi2":
-                return _plotting.DirectLSGSTGatesets(
+                return _plotting.direct_mc2gst_gatesets(
                     baseStrs, self.dataset, direct_specs, self.gsTarget,
                     svdTruncateTo=self.gsTarget.get_dimension(), 
                     minProbClipForWeighting=self.additionalInfo['minProbClipForWeighting'],
                     probClipInterval=self.additionalInfo['probClipInterval'],
                     verbosity=0)
 
-            elif self.objective == "logL":
-                return _plotting.DirectMLEGSTGatesets(
+            elif self.objective == "logl":
+                return _plotting.direct_mlgst_gatesets(
                     baseStrs, self.dataset, direct_specs, self.gsTarget,
                     svdTruncateTo=self.gsTarget.get_dimension(),
                     minProbClip=self.additionalInfo['minProbClip'],
@@ -877,7 +877,7 @@ class Results(object):
         return baseStr_dict
     
 
-    def createFullReportPDF(self, confidenceLevel=None, filename="auto", 
+    def create_full_report_pdf(self, confidenceLevel=None, filename="auto", 
                             title="auto", datasetLabel="auto", suffix="",
                             debugAidsAppendix=False, gaugeOptAppendix=False,
                             pixelPlotAppendix=False, whackamoleAppendix=False,
@@ -897,7 +897,7 @@ class Results(object):
         filename : string, optional
            The output filename where the report file(s) will be saved.  Specifying
            "auto" will use the default directory and base name (specified in 
-           setAdditionalInfo) if given, otherwise the file "GSTReport.pdf" will
+           set_additional_info) if given, otherwise the file "GSTReport.pdf" will
            be output to the current directoy.
 
         title : string, optional
@@ -1003,7 +1003,7 @@ class Results(object):
         qtys['confidenceLevel'] = "%g" % confidenceLevel if confidenceLevel is not None else "NOT-SET"
     
         if confidenceLevel is not None:
-            cri = self.getConfidenceRegion(confidenceLevel)
+            cri = self.get_confidence_region(confidenceLevel)
             qtys['confidenceIntervalScaleFctr'] = "%.3g" % cri.intervalScaling
             qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % cri.nNonGaugeParams
         else:
@@ -1022,17 +1022,17 @@ class Results(object):
                            'bestGatesetVsTargetTable','bestGatesetErrorGenTable')
             
         if self.LsAndGermInfoSet:
-            progress_tbl = 'logLProgressTable' if self.objective == "logL" else 'chi2ProgressTable'
+            progress_tbl = 'logLProgressTable' if self.objective == "logl" else 'chi2ProgressTable'
             required_tables += ('fiducialListTable','rhoStrListTable','EStrListTable','germListTable', progress_tbl)            
 
         for key in required_tables:
-            qtys[key] = self.getTable(key, confidenceLevel, 'latex', verbosity)
+            qtys[key] = self.get_table(key, confidenceLevel, 'latex', verbosity)
 
         if gaugeOptAppendix: #get appendix tables if needed
-            goaTables = self.getSpecial('gaugeOptAppendixTables', verbosity)
+            goaTables = self.get_special('gaugeOptAppendixTables', verbosity)
             qtys.update( { key : goaTables[key]['latex'] for key in goaTables }  )
         elif any((debugAidsAppendix, pixelPlotAppendix, whackamoleAppendix)):       # if other appendices used, 
-            goaTables = self.getSpecial('blankGaugeOptAppendixTables', verbosity)   # fill keys with blank tables
+            goaTables = self.get_special('blankGaugeOptAppendixTables', verbosity)   # fill keys with blank tables
             qtys.update( { key : goaTables[key]['latex'] for key in goaTables }  )  # for format substitution
 
     
@@ -1052,14 +1052,14 @@ class Results(object):
 
         maxW,maxH = 6.5,9.0 #max width and height of graphic in latex document (in inches)
 
-        #Chi2 or logL plots
+        #Chi2 or logl plots
         if self.LsAndGermInfoSet:
             st = 1 if self.Ls[0] == 0 else 0 #start index: skips LGST column in report color box plots        
             nPlots = (len(self.Ls[st:])-1)+2 if pixelPlotAppendix else 2
 
             if self.objective == "chi2":
                 plotFnName,plotFnLatex = "Chi2", "$\chi^2$"
-            elif self.objective == "logL":
+            elif self.objective == "logl":
                 plotFnName,plotFnLatex = "LogL", "$\\log(\\mathcal{L})$"
             else: 
                 raise ValueError("Invalid objective value: %s" % self.objective)
@@ -1069,14 +1069,14 @@ class Results(object):
 
             if verbosity > 0: 
                 print "1 ",; _sys.stdout.flush()
-            fig = self.getFigure("bestEstimateColorBoxPlot",verbosity)
-            fig.saveTo(_os.path.join(report_dir, D,"best%sBoxes.pdf" % plotFnName))
-            maxX = fig.getExtraInfo()['nUsedXs']; maxY = fig.getExtraInfo()['nUsedYs']
+            fig = self.get_figure("bestEstimateColorBoxPlot",verbosity)
+            fig.save_to(_os.path.join(report_dir, D,"best%sBoxes.pdf" % plotFnName))
+            maxX = fig.get_extra_info()['nUsedXs']; maxY = fig.get_extra_info()['nUsedYs']
 
             if verbosity > 0: 
                 print "2 ",; _sys.stdout.flush()
-            fig = self.getFigure("invertedBestEstimateColorBoxPlot",verbosity)
-            fig.saveTo(_os.path.join(report_dir, D,"best%sBoxes_inverted.pdf" % plotFnName))
+            fig = self.get_figure("invertedBestEstimateColorBoxPlot",verbosity)
+            fig.save_to(_os.path.join(report_dir, D,"best%sBoxes_inverted.pdf" % plotFnName))
     
         pixplots = ""
         if pixelPlotAppendix:
@@ -1085,9 +1085,9 @@ class Results(object):
                 if verbosity > 0: 
                     print "%d " % (i-st+3),; _sys.stdout.flush()
 
-                fig = self.getFigure("estimateForLIndex%dColorBoxPlot" % i, verbosity)
-                fig.saveTo( _os.path.join(report_dir, D,"L%d_%sBoxes.pdf" % (i,plotFnName)) )
-                lx = fig.getExtraInfo()['nUsedXs']; ly = fig.getExtraInfo()['nUsedYs']
+                fig = self.get_figure("estimateForLIndex%dColorBoxPlot" % i, verbosity)
+                fig.save_to( _os.path.join(report_dir, D,"L%d_%sBoxes.pdf" % (i,plotFnName)) )
+                lx = fig.get_extra_info()['nUsedXs']; ly = fig.get_extra_info()['nUsedYs']
 
                 W = float(lx+1)/float(maxX+1) * maxW #scale figure size according to number of rows 
                 H = float(ly)  /float(maxY)   * maxH # and columns+1 (+1 for labels ~ another col) relative to initial plot
@@ -1111,23 +1111,23 @@ class Results(object):
 
             #if verbosity > 0: 
             #    print " ?",; _sys.stdout.flush()        
-            #fig = self.getFigure("directLGSTColorBoxPlot",verbosity)
-            #fig.saveTo(_os.path.join(report_dir, D,"directLGST%sBoxes.pdf" % plotFnName))
+            #fig = self.get_figure("directLGSTColorBoxPlot",verbosity)
+            #fig.save_to(_os.path.join(report_dir, D,"directLGST%sBoxes.pdf" % plotFnName))
 
             if verbosity > 0: 
                 print " 1",; _sys.stdout.flush()        
-            fig = self.getFigure("directLongSeqGSTColorBoxPlot",verbosity)
-            fig.saveTo(_os.path.join(report_dir, D,"directLongSeqGST%sBoxes.pdf" % plotFnName))
+            fig = self.get_figure("directLongSeqGSTColorBoxPlot",verbosity)
+            fig.save_to(_os.path.join(report_dir, D,"directLongSeqGST%sBoxes.pdf" % plotFnName))
 
             #if verbosity > 0: 
             #    print " ?",; _sys.stdout.flush()        
-            #fig = self.getFigure("directLGSTDeviationColorBoxPlot",verbosity)
-            #fig.saveTo(_os.path.join(report_dir, D,"directLGSTDeviationBoxes.pdf"))
+            #fig = self.get_figure("directLGSTDeviationColorBoxPlot",verbosity)
+            #fig.save_to(_os.path.join(report_dir, D,"directLGSTDeviationBoxes.pdf"))
 
             if verbosity > 0: 
                 print " 2",; _sys.stdout.flush()
-            fig = self.getFigure("directLongSeqGSTDeviationColorBoxPlot",verbosity)
-            fig.saveTo(_os.path.join(report_dir, D,"directLongSeqGSTDeviationBoxes.pdf"))
+            fig = self.get_figure("directLongSeqGSTDeviationColorBoxPlot",verbosity)
+            fig.save_to(_os.path.join(report_dir, D,"directLongSeqGSTDeviationBoxes.pdf"))
 
             if verbosity > 0: 
                 print ""; _sys.stdout.flush()
@@ -1136,8 +1136,8 @@ class Results(object):
             #Small eigenvalue error rate
             if verbosity > 0: 
                 print " -- Error rate plots..."; _sys.stdout.flush()
-            fig = self.getFigure("smallEigvalErrRateColorBoxPlot",verbosity)
-            fig.saveTo(_os.path.join(report_dir, D,"smallEigvalErrRateBoxes.pdf"))
+            fig = self.get_figure("smallEigvalErrRateColorBoxPlot",verbosity)
+            fig.save_to(_os.path.join(report_dir, D,"smallEigvalErrRateBoxes.pdf"))
     
 
         whackamoleplots = ""
@@ -1153,8 +1153,8 @@ class Results(object):
                 if verbosity > 0: 
                     print "%d " % (i+1),; _sys.stdout.flush()
 
-                fig = self.getFigure("whack%sMoleBoxes" % germ[0],verbosity)
-                fig.saveTo(_os.path.join(report_dir, D,"whack%sMoleBoxes.pdf" % germ[0]))
+                fig = self.get_figure("whack%sMoleBoxes" % germ[0],verbosity)
+                fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.pdf" % germ[0]))
         
                 whackamoleplots += "\n"
                 whackamoleplots += "\\begin{figure}\n"
@@ -1169,8 +1169,8 @@ class Results(object):
                 if verbosity > 0: 
                     print "%d " % (len(len1Germs)+i+1),; _sys.stdout.flush()
 
-                fig = self.getFigure("whack%sMoleBoxesSummed" % germ[0], verbosity)
-                fig.saveTo(_os.path.join(report_dir, D,"whack%sMoleBoxesSummed.pdf" % germ[0]))
+                fig = self.get_figure("whack%sMoleBoxesSummed" % germ[0], verbosity)
+                fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxesSummed.pdf" % germ[0]))
     
                 whackamoleplots += "\n"
                 whackamoleplots += "\\begin{figure}\n"
@@ -1194,7 +1194,7 @@ class Results(object):
             qtys['directLGSTChi2BoxPlot']      = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/directLGSTChi2Boxes.pdf}" % (maxW,maxH,D)
             qtys['directLongSeqGSTChi2BoxPlot']      = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/directLongSeqGSTChi2Boxes.pdf}" % (maxW,maxH,D)
     
-        elif self.objective == "logL":
+        elif self.objective == "logl":
             qtys['bestGatesetLogLBoxPlot']     = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/bestLogLBoxes.pdf}" % (maxW,maxH,D)
             qtys['bestGatesetLogLInvBoxPlot']  = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/bestLogLBoxes_inverted.pdf}" % (maxW,maxH,D)
             qtys['bestGatesetLogLHistPlot']    = "\\includegraphics[width=4in,angle=0]{%s/bestLogLBoxes_hist.pdf}" % D
@@ -1223,7 +1223,7 @@ class Results(object):
         if self.objective == "chi2":    
             mainTemplate = "report_chi2_main.tex"
             appendicesTemplate = "report_chi2_appendices.tex"
-        elif self.objective == "logL":
+        elif self.objective == "logl":
             mainTemplate = "report_logL_main.tex"
             appendicesTemplate = "report_logL_appendices.tex"
         else: 
@@ -1267,7 +1267,7 @@ class Results(object):
         return
 
 
-    def createBriefReportPDF(self, confidenceLevel=None, 
+    def create_brief_report_pdf(self, confidenceLevel=None, 
                              filename="auto", title="auto", datasetLabel="auto",
                              suffix="", m=0, M=10, verbosity=0):
         """
@@ -1286,7 +1286,7 @@ class Results(object):
         filename : string, optional
            The output filename where the report file(s) will be saved.  Specifying
            "auto" will use the default directory and base name (specified in 
-           setAdditionalInfo) if given, otherwise the file "GSTBrief.pdf" will
+           set_additional_info) if given, otherwise the file "GSTBrief.pdf" will
            be output to the current directoy.
 
         title : string, optional
@@ -1362,11 +1362,11 @@ class Results(object):
         qtys['settoggles'] =  "\\togglefalse{confidences}\n" if confidenceLevel is None else "\\toggletrue{confidences}\n"
         qtys['settoggles'] += "\\toggletrue{goodnessSection}\n" if goodnessOfFitSection else "\\togglefalse{goodnessSection}\n"
         qtys['confidenceLevel'] = "%g" % confidenceLevel if confidenceLevel is not None else "NOT-SET"
-        qtys['objective'] = "$\\log{\\mathcal{L}}$" if self.objective == "logL" else "$\\chi^2$"
-        qtys['gofObjective'] = "$2\\Delta\\log{\\mathcal{L}}$" if self.objective == "logL" else "$\\chi^2$"
+        qtys['objective'] = "$\\log{\\mathcal{L}}$" if self.objective == "logl" else "$\\chi^2$"
+        qtys['gofObjective'] = "$2\\Delta\\log{\\mathcal{L}}$" if self.objective == "logl" else "$\\chi^2$"
 
         if confidenceLevel is not None:
-            cri = self.getConfidenceRegion(confidenceLevel)
+            cri = self.get_confidence_region(confidenceLevel)
             qtys['confidenceIntervalScaleFctr'] = "%.3g" % cri.intervalScaling
             qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % cri.nNonGaugeParams
         else:
@@ -1383,11 +1383,11 @@ class Results(object):
                            'bestGatesetDecompTable','bestGatesetRotnAxisTable','bestGatesetVsTargetTable',
                            'bestGatesetErrorGenTable')
         for key in required_tables:
-            qtys[key] = self.getTable(key, confidenceLevel, 'latex', verbosity)
+            qtys[key] = self.get_table(key, confidenceLevel, 'latex', verbosity)
 
         if goodnessOfFitSection:
-            progress_tbl = 'logLProgressTable' if self.objective == "logL" else 'chi2ProgressTable'
-            qtys['progressTable'] = self.getTable(progress_tbl, confidenceLevel, 'latex', verbosity)
+            progress_tbl = 'logLProgressTable' if self.objective == "logl" else 'chi2ProgressTable'
+            qtys['progressTable'] = self.get_table(progress_tbl, confidenceLevel, 'latex', verbosity)
 
     
         # 2) generate plots
@@ -1405,11 +1405,11 @@ class Results(object):
         #    if not _os.path.isdir( _os.path.join(report_dir,D)):
         #        _os.mkdir( _os.path.join(report_dir,D))
         #
-        #    #Chi2 or logL plot
+        #    #Chi2 or logl plot
         #    nPlots = 1
         #    if self.objective == "chi2":
         #        plotFnName,plotFnLatex = "Chi2", "$\chi^2$"
-        #    elif self.objective == "logL":
+        #    elif self.objective == "logl":
         #        plotFnName,plotFnLatex = "LogL", "$\\log(\\mathcal{L})$"
         #    else: 
         #        raise ValueError("Invalid objective value: %s" % self.objective)
@@ -1419,9 +1419,9 @@ class Results(object):
         #
         #    if verbosity > 0: 
         #        print "1 ",; _sys.stdout.flush()
-        #    fig = self.getFigure("bestEstimateColorBoxPlot",verbosity)
-        #    fig.saveTo(_os.path.join(report_dir, D,"best%sBoxes.pdf" % plotFnName))
-        #    maxX = fig.getExtraInfo()['nUsedXs']; maxY = fig.getExtraInfo()['nUsedYs']
+        #    fig = self.get_figure("bestEstimateColorBoxPlot",verbosity)
+        #    fig.save_to(_os.path.join(report_dir, D,"best%sBoxes.pdf" % plotFnName))
+        #    maxX = fig.get_extra_info()['nUsedXs']; maxY = fig.get_extra_info()['nUsedYs']
         #    maxW,maxH = 6.5,9.0 #max width and height of graphic in latex document (in inches)
         #
         #    if verbosity > 0: 
@@ -1474,7 +1474,7 @@ class Results(object):
         return
 
 
-    def createPresentationPDF(self, confidenceLevel=None, filename="auto", 
+    def create_presentation_pdf(self, confidenceLevel=None, filename="auto", 
                               title="auto", datasetLabel="auto", suffix="",
                               debugAidsAppendix=False, 
                               pixelPlotAppendix=False, whackamoleAppendix=False,
@@ -1497,7 +1497,7 @@ class Results(object):
         filename : string, optional
            The output filename where the presentation file(s) will be saved.  
            Specifying "auto" will use the default directory and base name 
-           (specified in setAdditionalInfo) if given, otherwise the file
+           (specified in set_additional_info) if given, otherwise the file
            "GSTSlides.pdf" will be output to the current directoy.
 
         title : string, optional
@@ -1590,11 +1590,11 @@ class Results(object):
         qtys['settoggles'] += "\\toggletrue{pixelplotsappendix}\n" if pixelPlotAppendix else "\\togglefalse{pixelplotsappendix}\n"
         qtys['settoggles'] += "\\toggletrue{whackamoleappendix}\n" if whackamoleAppendix else "\\togglefalse{whackamoleappendix}\n"
         qtys['confidenceLevel'] = "%g" % confidenceLevel if confidenceLevel is not None else "NOT-SET"
-        qtys['objective'] = "$\\log{\\mathcal{L}}$" if self.objective == "logL" else "$\\chi^2$"
-        qtys['gofObjective'] = "$2\\Delta\\log{\\mathcal{L}}$" if self.objective == "logL" else "$\\chi^2$"
+        qtys['objective'] = "$\\log{\\mathcal{L}}$" if self.objective == "logl" else "$\\chi^2$"
+        qtys['gofObjective'] = "$2\\Delta\\log{\\mathcal{L}}$" if self.objective == "logl" else "$\\chi^2$"
     
         if confidenceLevel is not None:
-            cri = self.getConfidenceRegion(confidenceLevel)
+            cri = self.get_confidence_region(confidenceLevel)
             qtys['confidenceIntervalScaleFctr'] = "%.3g" % cri.intervalScaling
             qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % cri.nNonGaugeParams
         else:
@@ -1612,12 +1612,12 @@ class Results(object):
                            'bestGatesetDecompTable','bestGatesetRotnAxisTable','bestGatesetVsTargetTable','bestGatesetErrorGenTable')
             
         if self.LsAndGermInfoSet:
-            progress_tbl = 'logLProgressTable' if self.objective == "logL" else 'chi2ProgressTable'
-            qtys['progressTable'] = self.getTable(progress_tbl, confidenceLevel, 'latex', verbosity)
+            progress_tbl = 'logLProgressTable' if self.objective == "logl" else 'chi2ProgressTable'
+            qtys['progressTable'] = self.get_table(progress_tbl, confidenceLevel, 'latex', verbosity)
             required_tables += ('fiducialListTable','rhoStrListTable','EStrListTable','germListTable')
 
         for key in required_tables:
-            qtys[key] = self.getTable(key, confidenceLevel, 'latex', verbosity)
+            qtys[key] = self.get_table(key, confidenceLevel, 'latex', verbosity)
 
     
         # 2) generate plots
@@ -1637,7 +1637,7 @@ class Results(object):
         maxW,maxH = 4.0,3.0 #max width and height of graphic in latex presentation (in inches)
         maxHc = 2.5 #max height allowed for a figure with a caption (in inches)
 
-        #Chi2 or logL plots
+        #Chi2 or logl plots
         if self.LsAndGermInfoSet:
             baseStr_dict = self._getBaseStrDict()
 
@@ -1646,7 +1646,7 @@ class Results(object):
 
             if self.objective == "chi2":
                 plotFnName,plotFnLatex = "Chi2", "$\chi^2$"
-            elif self.objective == "logL":
+            elif self.objective == "logl":
                 plotFnName,plotFnLatex = "LogL", "$\\log(\\mathcal{L})$"
             else: 
                 raise ValueError("Invalid objective value: %s" % self.objective)
@@ -1656,9 +1656,9 @@ class Results(object):
 
             if verbosity > 0: 
                 print "1 ",; _sys.stdout.flush()
-            fig = self.getFigure("bestEstimateColorBoxPlot",verbosity)
-            fig.saveTo(_os.path.join(report_dir, D,"best%sBoxes.pdf" % plotFnName))
-            maxX = fig.getExtraInfo()['nUsedXs']; maxY = fig.getExtraInfo()['nUsedYs']
+            fig = self.get_figure("bestEstimateColorBoxPlot",verbosity)
+            fig.save_to(_os.path.join(report_dir, D,"best%sBoxes.pdf" % plotFnName))
+            maxX = fig.get_extra_info()['nUsedXs']; maxY = fig.get_extra_info()['nUsedYs']
         
         pixplots = ""
         if pixelPlotAppendix:
@@ -1667,9 +1667,9 @@ class Results(object):
                 if verbosity > 0: 
                     print "%d " % (i-st+2),; _sys.stdout.flush()
 
-                fig = self.getFigure("estimateForLIndex%dColorBoxPlot" % i, verbosity)
-                fig.saveTo( _os.path.join(report_dir, D,"L%d_%sBoxes.pdf" % (i,plotFnName)) )
-                lx = fig.getExtraInfo()['nUsedXs']; ly = fig.getExtraInfo()['nUsedYs']
+                fig = self.get_figure("estimateForLIndex%dColorBoxPlot" % i, verbosity)
+                fig.save_to( _os.path.join(report_dir, D,"L%d_%sBoxes.pdf" % (i,plotFnName)) )
+                lx = fig.get_extra_info()['nUsedXs']; ly = fig.get_extra_info()['nUsedYs']
 
                 W = float(lx+1)/float(maxX+1) * maxW #scale figure size according to number of rows 
                 H = float(ly)  /float(maxY)   * maxH # and columns+1 (+1 for labels ~ another col) relative to initial plot
@@ -1695,13 +1695,13 @@ class Results(object):
 
             if verbosity > 0: 
                 print " 1",; _sys.stdout.flush()        
-            fig = self.getFigure("directLongSeqGSTColorBoxPlot",verbosity)
-            fig.saveTo(_os.path.join(report_dir, D,"directLongSeqGST%sBoxes.pdf" % plotFnName))
+            fig = self.get_figure("directLongSeqGSTColorBoxPlot",verbosity)
+            fig.save_to(_os.path.join(report_dir, D,"directLongSeqGST%sBoxes.pdf" % plotFnName))
 
             if verbosity > 0: 
                 print " 2",; _sys.stdout.flush()
-            fig = self.getFigure("directLongSeqGSTDeviationColorBoxPlot",verbosity)
-            fig.saveTo(_os.path.join(report_dir, D,"directLongSeqGSTDeviationBoxes.pdf"))
+            fig = self.get_figure("directLongSeqGSTDeviationColorBoxPlot",verbosity)
+            fig.save_to(_os.path.join(report_dir, D,"directLongSeqGSTDeviationBoxes.pdf"))
 
             if verbosity > 0: 
                 print ""; _sys.stdout.flush()
@@ -1710,8 +1710,8 @@ class Results(object):
             #Small eigenvalue error rate
             if verbosity > 0: 
                 print " -- Error rate plots..."; _sys.stdout.flush()
-            fig = self.getFigure("smallEigvalErrRateColorBoxPlot",verbosity)
-            fig.saveTo(_os.path.join(report_dir, D,"smallEigvalErrRateBoxes.pdf"))
+            fig = self.get_figure("smallEigvalErrRateColorBoxPlot",verbosity)
+            fig.save_to(_os.path.join(report_dir, D,"smallEigvalErrRateBoxes.pdf"))
 
 
         whackamoleplots = ""
@@ -1727,8 +1727,8 @@ class Results(object):
                 if verbosity > 0: 
                     print "%d " % (i+1),; _sys.stdout.flush()
 
-                fig = self.getFigure("whack%sMoleBoxes" % germ[0],verbosity)
-                fig.saveTo(_os.path.join(report_dir, D,"whack%sMoleBoxes.pdf" % germ[0]))
+                fig = self.get_figure("whack%sMoleBoxes" % germ[0],verbosity)
+                fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.pdf" % germ[0]))
         
                 whackamoleplots += "\n"
                 whackamoleplots += "\\begin{frame}\n"
@@ -1745,8 +1745,8 @@ class Results(object):
                 if verbosity > 0: 
                     print "%d " % (len(len1Germs)+i+1),; _sys.stdout.flush()
     
-                fig = self.getFigure("whack%sMoleBoxesSummed" % germ[0], verbosity)
-                fig.saveTo(_os.path.join(report_dir, D,"whack%sMoleBoxesSummed.pdf" % germ[0]))
+                fig = self.get_figure("whack%sMoleBoxesSummed" % germ[0], verbosity)
+                fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxesSummed.pdf" % germ[0]))
 
                 whackamoleplots += "\n"
                 whackamoleplots += "\\begin{frame}\n"
@@ -1769,7 +1769,7 @@ class Results(object):
             qtys['bestGatesetBoxPlot']      = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/bestChi2Boxes.pdf}" % (maxW,maxH,D)
             qtys['directLongSeqGSTBoxPlot'] = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/directLongSeqGSTChi2Boxes.pdf}" % (maxW,maxHc,D)
     
-        elif self.objective == "logL":
+        elif self.objective == "logl":
             qtys['bestGatesetBoxPlot']      = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/bestLogLBoxes.pdf}" % (maxW,maxH,D)
             qtys['directLongSeqGSTBoxPlot'] = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/directLongSeqGSTLogLBoxes.pdf}" % (maxW,maxHc,D)
         else: 
@@ -1827,7 +1827,7 @@ class Results(object):
 
 
 
-    def createPresentationPPT(self, confidenceLevel=None, filename="auto", 
+    def create_presentation_ppt(self, confidenceLevel=None, filename="auto", 
                             title="auto", datasetLabel="auto", suffix="",
                             debugAidsAppendix=False,
                             pixelPlotAppendix=False, whackamoleAppendix=False,
@@ -1854,7 +1854,7 @@ class Results(object):
         filename : string, optional
            The output filename where the presentation file(s) will be saved.  
            Specifying "auto" will use the default directory and base name 
-           (specified in setAdditionalInfo) if given, otherwise the file
+           (specified in set_additional_info) if given, otherwise the file
            "GSTSlides.pptx" will be output to the current directoy.
 
         title : string, optional
@@ -1955,11 +1955,11 @@ class Results(object):
         qtys['title'] = title
         qtys['datasetLabel'] = datasetLabel
         qtys['confidenceLevel'] = "%g" % confidenceLevel if confidenceLevel is not None else "NOT-SET"
-        qtys['objective'] = "$\\log{\\mathcal{L}}$" if self.objective == "logL" else "$\\chi^2$"
-        qtys['gofObjective'] = "$2\\Delta\\log{\\mathcal{L}}$" if self.objective == "logL" else "$\\chi^2$"
+        qtys['objective'] = "$\\log{\\mathcal{L}}$" if self.objective == "logl" else "$\\chi^2$"
+        qtys['gofObjective'] = "$2\\Delta\\log{\\mathcal{L}}$" if self.objective == "logl" else "$\\chi^2$"
     
         if confidenceLevel is not None:
-            cri = self.getConfidenceRegion(confidenceLevel)
+            cri = self.get_confidence_region(confidenceLevel)
             qtys['confidenceIntervalScaleFctr'] = "%.3g" % cri.intervalScaling
             qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % cri.nNonGaugeParams
         else:
@@ -1978,12 +1978,12 @@ class Results(object):
             
         tableFormat = 'ppt' if pptTables else 'latex'
         if self.LsAndGermInfoSet:
-            progress_tbl = 'logLProgressTable' if self.objective == "logL" else 'chi2ProgressTable'
-            qtys['progressTable'] = self.getTable(progress_tbl, confidenceLevel, tableFormat, verbosity)
+            progress_tbl = 'logLProgressTable' if self.objective == "logl" else 'chi2ProgressTable'
+            qtys['progressTable'] = self.get_table(progress_tbl, confidenceLevel, tableFormat, verbosity)
             required_tables += ('fiducialListTable','rhoStrListTable','EStrListTable','germListTable')
 
         for key in required_tables:
-            qtys[key] = self.getTable(key, confidenceLevel, tableFormat, verbosity)
+            qtys[key] = self.get_table(key, confidenceLevel, tableFormat, verbosity)
 
     
         # 2) generate plots
@@ -2002,7 +2002,7 @@ class Results(object):
 
         maxW,maxH = 4.0,3.0 #max width and height of graphic in latex presentation (in inches)
 
-        #Chi2 or logL plots
+        #Chi2 or logl plots
         if self.LsAndGermInfoSet:
             baseStr_dict = self._getBaseStrDict()
 
@@ -2011,7 +2011,7 @@ class Results(object):
 
             if self.objective == "chi2":
                 plotFnName,plotFnLatex = "Chi2", "$\chi^2$"
-            elif self.objective == "logL":
+            elif self.objective == "logl":
                 plotFnName,plotFnLatex = "LogL", "$\\log(\\mathcal{L})$"
             else: 
                 raise ValueError("Invalid objective value: %s" % self.objective)
@@ -2021,9 +2021,9 @@ class Results(object):
 
             if verbosity > 0: 
                 print "1 ",; _sys.stdout.flush()
-            fig = self.getFigure("bestEstimateColorBoxPlot",verbosity)
-            fig.saveTo(_os.path.join(report_dir, D,"best%sBoxes.png" % plotFnName))
-            maxX = fig.getExtraInfo()['nUsedXs']; maxY = fig.getExtraInfo()['nUsedYs']
+            fig = self.get_figure("bestEstimateColorBoxPlot",verbosity)
+            fig.save_to(_os.path.join(report_dir, D,"best%sBoxes.png" % plotFnName))
+            maxX = fig.get_extra_info()['nUsedXs']; maxY = fig.get_extra_info()['nUsedYs']
 
         pixplots = []
         if pixelPlotAppendix:
@@ -2032,9 +2032,9 @@ class Results(object):
                 if verbosity > 0: 
                     print "%d " % (i-st+2),; _sys.stdout.flush()
 
-                fig = self.getFigure("estimateForLIndex%dColorBoxPlot" % i, verbosity)
-                fig.saveTo( _os.path.join(report_dir, D,"L%d_%sBoxes.png" % (i,plotFnName)) )
-                lx = fig.getExtraInfo()['nUsedXs']; ly = fig.getExtraInfo()['nUsedYs']
+                fig = self.get_figure("estimateForLIndex%dColorBoxPlot" % i, verbosity)
+                fig.save_to( _os.path.join(report_dir, D,"L%d_%sBoxes.png" % (i,plotFnName)) )
+                lx = fig.get_extra_info()['nUsedXs']; ly = fig.get_extra_info()['nUsedYs']
 
                 W = float(lx+1)/float(maxX+1) * maxW #scale figure size according to number of rows 
                 H = float(ly)  /float(maxY)   * maxH # and columns+1 (+1 for labels ~ another col) relative to initial plot
@@ -2051,13 +2051,13 @@ class Results(object):
 
             if verbosity > 0: 
                 print " 1",; _sys.stdout.flush()        
-            fig = self.getFigure("directLongSeqGSTColorBoxPlot",verbosity)
-            fig.saveTo(_os.path.join(report_dir, D,"directLongSeqGST%sBoxes.png" % plotFnName))
+            fig = self.get_figure("directLongSeqGSTColorBoxPlot",verbosity)
+            fig.save_to(_os.path.join(report_dir, D,"directLongSeqGST%sBoxes.png" % plotFnName))
 
             if verbosity > 0: 
                 print " 2",; _sys.stdout.flush()
-            fig = self.getFigure("directLongSeqGSTDeviationColorBoxPlot",verbosity)
-            fig.saveTo(_os.path.join(report_dir, D,"directLongSeqGSTDeviationBoxes.png"))
+            fig = self.get_figure("directLongSeqGSTDeviationColorBoxPlot",verbosity)
+            fig.save_to(_os.path.join(report_dir, D,"directLongSeqGSTDeviationBoxes.png"))
 
             if verbosity > 0: 
                 print ""; _sys.stdout.flush()
@@ -2065,8 +2065,8 @@ class Results(object):
             #Small eigenvalue error rate
             if verbosity > 0: 
                 print " -- Error rate plots..."; _sys.stdout.flush()
-            fig = self.getFigure("smallEigvalErrRateColorBoxPlot",verbosity)
-            fig.saveTo(_os.path.join(report_dir, D,"smallEigvalErrRateBoxes.png"))
+            fig = self.get_figure("smallEigvalErrRateColorBoxPlot",verbosity)
+            fig.save_to(_os.path.join(report_dir, D,"smallEigvalErrRateBoxes.png"))
                 
     
         whackamoleplots = []
@@ -2082,16 +2082,16 @@ class Results(object):
                 if verbosity > 0: 
                     print "%d " % (i+1),; _sys.stdout.flush()
 
-                fig = self.getFigure("whack%sMoleBoxes" % germ[0],verbosity)
-                fig.saveTo(_os.path.join(report_dir, D,"whack%sMoleBoxes.png" % germ[0]))
+                fig = self.get_figure("whack%sMoleBoxes" % germ[0],verbosity)
+                fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.png" % germ[0]))
                 whackamoleplots.append( _os.path.join(report_dir, D,"whack%sMoleBoxes.png" % germ[0]) )
         
             for i,germ in enumerate(len1Germs):
                 if verbosity > 0: 
                     print "%d " % (len(len1Germs)+i+1),; _sys.stdout.flush()
 
-                fig = self.getFigure("whack%sMoleBoxesSummed" % germ[0],verbosity)
-                fig.saveTo(_os.path.join(report_dir, D,"whack%sMoleBoxesSummed.png" % germ[0]))
+                fig = self.get_figure("whack%sMoleBoxesSummed" % germ[0],verbosity)
+                fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxesSummed.png" % germ[0]))
                 whackamoleplots.append( _os.path.join(report_dir, D,"whack%sMoleBoxesSummed.png" % germ[0]) )
     
             if verbosity > 0: 
@@ -2105,7 +2105,7 @@ class Results(object):
             qtys['bestGatesetBoxPlot']      = "%s/bestChi2Boxes.png" % fileDir
             qtys['directLongSeqGSTBoxPlot'] = "%s/directLongSeqGSTChi2Boxes.png" % fileDir
     
-        elif self.objective == "logL":
+        elif self.objective == "logl":
             qtys['bestGatesetBoxPlot']      = "%s/bestLogLBoxes.png" % fileDir
             qtys['directLongSeqGSTBoxPlot'] = "%s/directLongSeqGSTLogLBoxes.png" % fileDir
         else: 
@@ -2140,7 +2140,7 @@ class Results(object):
         SLD_LAYOUT_TITLE_AND_CONTENT = 6
         SLD_LAYOUT_TITLE_NO_CONTENT = 10
 
-        def drawTable_ppt(shapes, key, left, top, width, height, ptSize=10):
+        def draw_table_ppt(shapes, key, left, top, width, height, ptSize=10):
             tabDicts = qtys[key]
             tabDict = tabDicts[0] #for now, just draw the first table
             nRows = len(tabDict['row data']) + 1
@@ -2224,7 +2224,7 @@ class Results(object):
 
             return table
 
-        def drawTable_latex(shapes, key, left, top, width, height, ptSize=10):
+        def draw_table_latex(shapes, key, left, top, width, height, ptSize=10):
             latexTabStr = qtys[key]
             d = {'toLatex': latexTabStr }
             print "Latexing %s table..." % key; _sys.stdout.flush()
@@ -2246,10 +2246,10 @@ class Results(object):
                 _os.chdir(cwd)
             
             pathToImg = _os.path.join(fileDir, "%s.png" % key)
-            return drawPic(shapes, pathToImg, left, top, width, height)
+            return draw_pic(shapes, pathToImg, left, top, width, height)
 
 
-        def drawPic(shapes, path, left, top, width, height):
+        def draw_pic(shapes, path, left, top, width, height):
             pxWidth, pxHeight = Image.open(open(path)).size
             pxAspect = pxWidth / float(pxHeight) #aspect ratio of image
             maxAspect = width / float(height) #aspect ratio of "max" box
@@ -2261,16 +2261,16 @@ class Results(object):
                 #print "%s -> constrain height to %f so width is %f" % (path,height,height * pxAspect)
             return shapes.add_picture(path, Inches(left), Inches(top), w, h)
 
-        def addSlide(typ, title):
+        def add_slide(typ, title):
             slide_layout = prs.slide_layouts[typ]
             slide = prs.slides.add_slide(slide_layout)
             slide.shapes.title.text = title
             return slide
 
-        def addText(shapes, left, top, width, height, text, ptSize=20):
-            return addTextList(shapes, left, top, width, height, [text])
+        def add_text(shapes, left, top, width, height, text, ptSize=20):
+            return add_text_list(shapes, left, top, width, height, [text])
 
-        def addTextList(shapes, left, top, width, height, textList, ptSize=20):
+        def add_text_list(shapes, left, top, width, height, textList, ptSize=20):
             l = Inches(left); t = Inches(top); w = Inches(width); h = Inches(height)
             txtBox = slide.shapes.add_textbox(l, t, w, h)
             tf = txtBox.text_frame
@@ -2286,7 +2286,7 @@ class Results(object):
 
             return txtBox
 
-        drawTable = drawTable_ppt if pptTables else drawTable_latex
+        drawTable = draw_table_ppt if pptTables else draw_table_latex
         
         # begin presentation creation
         #prs = Presentation() #templateFilename)
@@ -2296,78 +2296,78 @@ class Results(object):
 
 
         # title slide
-        slide = addSlide(SLD_LAYOUT_TITLE, title)
+        slide = add_slide(SLD_LAYOUT_TITLE, title)
         subtitle_shape = slide.placeholders[1]
         subtitle_shape.text = "Your GST results in Powerpoint!"
 
         # goodness of fit
-        slide = addSlide(SLD_LAYOUT_TITLE_NO_CONTENT, "%s vs GST iteration" % plotFnName)
+        slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "%s vs GST iteration" % plotFnName)
         #body_shape = slide.shapes.placeholders[1]; tf = body_shape.text_frame
-        addTextList(slide.shapes, 1, 2, 8, 2, ['Ns is the number of gate strings', 'Np is the number of parameters'], 15)
+        add_text_list(slide.shapes, 1, 2, 8, 2, ['Ns is the number of gate strings', 'Np is the number of parameters'], 15)
         drawTable(slide.shapes, 'progressTable', 1, 3, 8.5, 4, ptSize=10)
         
-        slide = addSlide(SLD_LAYOUT_TITLE_NO_CONTENT, "Detailed %s Analysis" % plotFnName)
-        drawPic(slide.shapes, qtys['bestGatesetBoxPlot'], 1, 1.5, 8, 5.5)
+        slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Detailed %s Analysis" % plotFnName)
+        draw_pic(slide.shapes, qtys['bestGatesetBoxPlot'], 1, 1.5, 8, 5.5)
 
         # gate esimtates
-        slide = addSlide(SLD_LAYOUT_TITLE_NO_CONTENT, "GST Estimate vs. target")
+        slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "GST Estimate vs. target")
         drawTable(slide.shapes, 'bestGatesetVsTargetTable', 1.5, 1.5, 7, 2, ptSize=10)
         drawTable(slide.shapes, 'bestGatesetErrorGenTable', 1.5, 3.7, 7, 3.5, ptSize=10)
 
-        slide = addSlide(SLD_LAYOUT_TITLE_NO_CONTENT, "GST Estimate decomposition")
+        slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "GST Estimate decomposition")
         drawTable(slide.shapes, 'bestGatesetDecompTable', 1, 1.5, 7.5, 3.5 , ptSize=10)
         drawTable(slide.shapes, 'bestGatesetRotnAxisTable', 1, 5.1, 5, 1.5, ptSize=10)        
 
-        slide = addSlide(SLD_LAYOUT_TITLE_NO_CONTENT, "Raw GST Estimate: Gates")
+        slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Raw GST Estimate: Gates")
         drawTable(slide.shapes, 'bestGatesetGatesTable', 1, 2, 8, 5, ptSize=10)
 
-        slide = addSlide(SLD_LAYOUT_TITLE_NO_CONTENT, "Raw GST Estimate: SPAM")
+        slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Raw GST Estimate: SPAM")
         drawTable(slide.shapes, 'bestGatesetSpamTable', 1, 1.5, 8, 3, ptSize=10)
         drawTable(slide.shapes, 'bestGatesetSpamParametersTable', 1, 5, 3, 1, ptSize=10)
 
-        slide = addSlide(SLD_LAYOUT_TITLE_NO_CONTENT, "Raw GST Choi Matrices")
+        slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Raw GST Choi Matrices")
         drawTable(slide.shapes, 'bestGatesetChoiTable', 0.5, 1.5, 8.5, 5.5, ptSize=10)
 
         #Inputs to GST
-        slide = addSlide(SLD_LAYOUT_TITLE_NO_CONTENT, "Target SPAM")
+        slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Target SPAM")
         drawTable(slide.shapes, 'targetSpamTable', 1.5, 1.5, 7, 5, ptSize=10)
 
-        slide = addSlide(SLD_LAYOUT_TITLE_NO_CONTENT, "Target Gates")
+        slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Target Gates")
         drawTable(slide.shapes, 'targetGatesTable', 1, 1.5, 7, 5, ptSize=10)
 
-        slide = addSlide(SLD_LAYOUT_TITLE_NO_CONTENT, "Fiducial and Germ Gate Strings")
+        slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Fiducial and Germ Gate Strings")
         drawTable(slide.shapes, 'fiducialListTable', 1, 1.5, 4, 3, ptSize=10)
         drawTable(slide.shapes, 'germListTable', 5.5, 1.5, 4, 5, ptSize=10)
 
-        slide = addSlide(SLD_LAYOUT_TITLE_NO_CONTENT, "Dataset Overview")
+        slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Dataset Overview")
         drawTable(slide.shapes, 'datasetOverviewTable', 1, 2, 5, 4, ptSize=10)
 
         if debugAidsAppendix:
             #Debugging aids slides
-            slide = addSlide(SLD_LAYOUT_TITLE_NO_CONTENT, "Direct-GST")
-            drawPic(slide.shapes, qtys['directLongSeqGSTBoxPlot'], 1, 1.5, 8, 5.5)
+            slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Direct-GST")
+            draw_pic(slide.shapes, qtys['directLongSeqGSTBoxPlot'], 1, 1.5, 8, 5.5)
 
-            slide = addSlide(SLD_LAYOUT_TITLE_NO_CONTENT, "Direct-GST Deviation")
-            drawPic(slide.shapes, qtys['directLongSeqGSTDeviationBoxPlot'], 1, 1.5, 8, 5.5)
+            slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Direct-GST Deviation")
+            draw_pic(slide.shapes, qtys['directLongSeqGSTDeviationBoxPlot'], 1, 1.5, 8, 5.5)
 
-            slide = addSlide(SLD_LAYOUT_TITLE_NO_CONTENT, "Per-gate error rates")
-            drawPic(slide.shapes, qtys['smallEvalErrRateBoxPlot'], 1, 1.5, 8, 5.5)
+            slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Per-gate error rates")
+            draw_pic(slide.shapes, qtys['smallEvalErrRateBoxPlot'], 1, 1.5, 8, 5.5)
 
         if pixelPlotAppendix:
             for i,pixPlotPath in zip( range(st,len(self.Ls)-1), pixplots ):
-                slide = addSlide(SLD_LAYOUT_TITLE_NO_CONTENT, "Iteration %d (L=%d): %s values" % (i,self.Ls[i],plotFnName))
-                drawPic(slide.shapes, pixPlotPath, 1, 1.5, 8, 5.5)
+                slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Iteration %d (L=%d): %s values" % (i,self.Ls[i],plotFnName))
+                draw_pic(slide.shapes, pixPlotPath, 1, 1.5, 8, 5.5)
 
         if whackamoleAppendix:
             curPlot = 0
             for i,germ in enumerate(len1Germs):
-                slide = addSlide(SLD_LAYOUT_TITLE_NO_CONTENT, "Whack-a-%s-mole plot for %s^%d" % (plotFnName,germ[0],highestL))
-                drawPic(slide.shapes, whackamoleplots[curPlot], 1, 1.5, 8, 5.5)
+                slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Whack-a-%s-mole plot for %s^%d" % (plotFnName,germ[0],highestL))
+                draw_pic(slide.shapes, whackamoleplots[curPlot], 1, 1.5, 8, 5.5)
                 curPlot += 1
 
             for i,germ in enumerate(len1Germs):
-                slide = addSlide(SLD_LAYOUT_TITLE_NO_CONTENT, "Summed whack-a-%s-mole plot for %s^%d" % (plotFnName,germ[0],highestL))
-                drawPic(slide.shapes, whackamoleplots[curPlot], 1, 1.5, 8, 5.5)
+                slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Summed whack-a-%s-mole plot for %s^%d" % (plotFnName,germ[0],highestL))
+                draw_pic(slide.shapes, whackamoleplots[curPlot], 1, 1.5, 8, 5.5)
                 curPlot += 1
 
         # 4) save presenation as PPTX file
@@ -2377,10 +2377,10 @@ class Results(object):
 
 
     #FUTURE?
-    #def createBriefHtmlPage(self, tableClass):
+    #def create_brief_html_page(self, tableClass):
     #    pass
     #
-    #def createFullHtmlPage(self, tableClass):
+    #def create_full_html_page(self, tableClass):
     #    pass
 
 

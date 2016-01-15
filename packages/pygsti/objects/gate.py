@@ -3,7 +3,7 @@ import numpy as _np
 from .. import optimize as _opt
 from ..tools import matrixtools as _mt
 
-def optimizeGate(gateToOptimize, targetGate, bG0 = True):
+def optimize_gate(gateToOptimize, targetGate, bG0 = True):
     """
     Optimize the parameters of gateToOptimize so that the 
       the resulting gate matrix is as close as possible to 
@@ -37,16 +37,16 @@ def optimizeGate(gateToOptimize, targetGate, bG0 = True):
     assert(targetGate.dim == gateToOptimize.dim) #gates must have the same overall dimension
     targetMatrix = targetGate.matrix
 
-    def objectiveFunc(param_vec):
-        gateToOptimize.fromVector(param_vec,bG0)
-        return _mt.frobeniusNorm(gateToOptimize.matrix-targetMatrix)
+    def objective_func(param_vec):
+        gateToOptimize.from_vector(param_vec,bG0)
+        return _mt.frobenius_norm(gateToOptimize.matrix-targetMatrix)
         
-    x0 = gateToOptimize.toVector(bG0)
-    minSol = _opt.minimize(objectiveFunc, x0, method='BFGS', maxiter=10000, maxfev=10000,
+    x0 = gateToOptimize.to_vector(bG0)
+    minSol = _opt.minimize(objective_func, x0, method='BFGS', maxiter=10000, maxfev=10000,
                            tol=1e-6, callback=None)
 
-    gateToOptimize.fromVector(minSol.x)
-    print "DEBUG: optimized gate to min frobenius distance %g" % _mt.frobeniusNorm(gateToOptimize.matrix-targetMatrix)
+    gateToOptimize.from_vector(minSol.x)
+    print "DEBUG: optimized gate to min frobenius distance %g" % _mt.frobenius_norm(gateToOptimize.matrix-targetMatrix)
 
 
 def compose(gate1, gate2):
@@ -93,7 +93,7 @@ class FullyParameterizedGate(object):
         self.matrix = matrix
         self.dim = matrix.shape[0]
 
-    def setValue(self, value):
+    def set_value(self, value):
         """
         Sets the value of the gate.  In general, the "value" of a gate means a 
           floating point number for each paramter.  In this case when all gate
@@ -112,10 +112,10 @@ class FullyParameterizedGate(object):
             raise ValueError("You can only assign a (%d,%d) matrix to this fully parameterized gate" % (self.dim,self.dim))
         self.matrix = _np.array(value)
 
-    def valueDimension(self):
+    def value_dimension(self):
         """ 
         Get the dimensions of the parameterized "value" of
-        this gate which can be set using setValue(...).
+        this gate which can be set using set_value(...).
 
         Returns
         -------
@@ -124,7 +124,7 @@ class FullyParameterizedGate(object):
         """
         return (self.dim,self.dim)
 
-    def getNumParams(self, bG0=True):
+    def get_num_params(self, bG0=True):
         """
         Get the number of independent parameters which specify this gate.
 
@@ -149,7 +149,7 @@ class FullyParameterizedGate(object):
             #subtract params for the first row
             return self.dim**2 - self.dim 
 
-    def toVector(self, bG0=True):
+    def to_vector(self, bG0=True):
         """
         Extract a vector of the underlying gate parameters from this gate.
 
@@ -162,14 +162,14 @@ class FullyParameterizedGate(object):
         Returns
         -------
         numpy array
-            a 1D numpy array with length == getNumParams(bG0).
+            a 1D numpy array with length == get_num_params(bG0).
         """
         if bG0:
             return self.matrix.flatten() #.real in case of complex matrices
         else:
             return self.matrix.flatten()[self.dim:] #.real in case of complex matrices
 
-    def fromVector(self, v, bG0=True):
+    def from_vector(self, v, bG0=True):
         """
         Initialize the gate using a vector of its gate parameters.
 
@@ -177,7 +177,7 @@ class FullyParameterizedGate(object):
         ----------
         v : numpy array
             The 1D vector of gate parameters.  Length 
-            must == getNumParams(bG0).
+            must == get_num_params(bG0).
 
         bG0 : bool
             Whether or not the first row of the gate matrix 
@@ -191,7 +191,7 @@ class FullyParameterizedGate(object):
         if bG0:
             self.matrix = v.reshape(self.matrix.shape)
         else:
-            flattened = _np.empty(self.getNumParams())
+            flattened = _np.empty(self.get_num_params())
             flattened[0:self.dim] = self.matrix[0,:]
             flattened[self.dim:] = v
             self.matrix = flattened.reshape(self.matrix.shape)
@@ -215,7 +215,7 @@ class FullyParameterizedGate(object):
         """
         self.matrix = _np.dot(Si, _np.dot(self.matrix, S))
 
-    def derivWRTparams(self, bG0=True):
+    def deriv_wrt_params(self, bG0=True):
         """ 
         Construct a matrix whose columns are the vectorized
         derivatives of the gate matrix with respect to a
@@ -252,7 +252,7 @@ class FullyParameterizedGate(object):
 
     def __str__(self):
         s = "Fully Parameterized gate with shape %s\n" % str(self.matrix.shape)
-        s += _mt.mxToString(self.matrix, width=4, prec=2)
+        s += _mt.mx_to_string(self.matrix, width=4, prec=2)
         return s
 
     def compose(self, otherGate):
@@ -303,7 +303,7 @@ class LinearlyParameterizedGate(object):
         parameterArray : numpy array
             a 1D numpy array that holds the all the parameters for this
             gate.  The shape of this array sets is what is returned by
-            valueDimension(...).
+            value_dimension(...).
 
         parameterToBaseIndicesMap : dict
             A dictionary with keys == index of a parameter
@@ -378,7 +378,7 @@ class LinearlyParameterizedGate(object):
         return derivMx
 
 
-    def setValue(self, value):
+    def set_value(self, value):
         """
         Sets the value of the gate.  In general, the "value" of a gate means a 
           floating point number for each parameter. 
@@ -399,10 +399,10 @@ class LinearlyParameterizedGate(object):
         self.parameterArray = _np.array(value)
         self._computeMatrix()
 
-#    def valueDimension(self):
+#    def value_dimension(self):
 #        """ 
 #        Get the dimensions of the parameterized "value" of
-#        this gate which can be set using setValue(...).
+#        this gate which can be set using set_value(...).
 #
 #        Returns
 #        -------
@@ -411,7 +411,7 @@ class LinearlyParameterizedGate(object):
 #        """
 #        return self.numParams
 
-    def getNumParams(self, bG0=True):
+    def get_num_params(self, bG0=True):
         """
         Get the number of independent parameters which specify this gate.
 
@@ -435,7 +435,7 @@ class LinearlyParameterizedGate(object):
         else:
             raise ValueError("Linearly parameterized gate with first gate row *not* parameterized is not implemented yet!")
 
-    def toVector(self, bG0=True):
+    def to_vector(self, bG0=True):
         """
         Extract a vector of the underlying gate parameters from this gate.
 
@@ -448,14 +448,14 @@ class LinearlyParameterizedGate(object):
         Returns
         -------
         numpy array
-            a 1D numpy array with length == getNumParams(bG0).
+            a 1D numpy array with length == get_num_params(bG0).
         """
         if bG0:
             return self.parameterArray #.real in case of complex matrices
         else:
             raise ValueError("Linearly parameterized gate with first gate row *not* parameterized is not implemented yet!")
 
-    def fromVector(self, v, bG0=True):
+    def from_vector(self, v, bG0=True):
         """
         Initialize the gate using a vector of its gate parameters.
 
@@ -463,7 +463,7 @@ class LinearlyParameterizedGate(object):
         ----------
         v : numpy array
             The 1D vector of gate parameters.  Length 
-            must == getNumParams(bG0).
+            must == get_num_params(bG0).
 
         bG0 : bool
             Whether or not the first row of the gate matrix 
@@ -501,7 +501,7 @@ class LinearlyParameterizedGate(object):
         # update self.enforceReal to False if Si or S is imaginary?
         self._computeMatrix()
             
-    def derivWRTparams(self, bG0=True):
+    def deriv_wrt_params(self, bG0=True):
         """ 
         Construct a matrix whose columns are the vectorized
         derivatives of the gate matrix with respect to a
@@ -537,7 +537,7 @@ class LinearlyParameterizedGate(object):
 
     def __str__(self):
         s = "Linearly Parameterized gate with shape %s, num params = %d\n" % (str(self.matrix.shape), self.numParams)
-        s += _mt.mxToString(self.matrix, width=5, prec=1)
+        s += _mt.mx_to_string(self.matrix, width=5, prec=1)
         return s
 
     def compose(self, otherGate):
@@ -651,21 +651,21 @@ class LinearlyParameterizedGate(object):
 #        self.dim = self.matrix.shape[0]
 #        self.derivMx = self._computeDerivs()
 #
-#    def setValue(self, value):
+#    def set_value(self, value):
 #        if(value.shape != (self.param_dim, self.param_dim)):
 #            raise ValueError("You cannot set the value of this tensor-product gate with a %s matrix.  Shape must be (%d,%d)"  \
 #                                 % (str(value.shape), self.param_dim, self.param_dim))
 #        self.param_matrix = _np.array(value)
 #        self.matrix = _np.kron(self.pre, _np.kron(self.param_matrix, self.post))
 #
-#    def valueDimension(self):
+#    def value_dimension(self):
 #        """ 
 #        Returns the dimension of the parameterized "value" of
-#        this gate which can be set using setValue(...)
+#        this gate which can be set using set_value(...)
 #        """
 #        return (self.param_dim,self.param_dim)
 #
-#    def getNumParams(self, bG0=True):
+#    def get_num_params(self, bG0=True):
 #        # if bG0 == True, need to subtract the number of parameters which *only*
 #        #  parameterize the first row of the final gate matrix
 #        if bG0:
@@ -673,13 +673,13 @@ class LinearlyParameterizedGate(object):
 #        else:
 #            raise ValueError("Tensor product gate with first gate row *not* parameterized is not implemented yet!")
 #
-#    def toVector(self, bG0=True):
+#    def to_vector(self, bG0=True):
 #        if bG0:
 #            return self.param_matrix.flatten() #.real in case of complex matrices
 #        else:
 #            raise ValueError("Tensor product gate with first gate row *not* parameterized is not implemented yet!")
 #
-#    def fromVector(self, v, bG0=True):
+#    def from_vector(self, v, bG0=True):
 #        if bG0:
 #            self.param_matrix = v.reshape(self.matrix.shape)
 #            self.matrix = _np.kron(self.pre, _np.kron(self.param_matrix, self.post))
@@ -690,7 +690,7 @@ class LinearlyParameterizedGate(object):
 #        """ gate matrix => Si * gate matrix * S """
 #        raise ValueError("The similarity transform of a tensor product gate is not implemented yet!")
 #            
-#    def derivWRTparams(self, bG0=True):
+#    def deriv_wrt_params(self, bG0=True):
 #        """ 
 #        Return a matrix whose columns are the vectorized
 #        derivatives of the gate matrix with respect to a
@@ -723,7 +723,7 @@ class LinearlyParameterizedGate(object):
 
 
 
-#def buildTensorProdGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
+#def build_tensor_prod_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
 ##coherentStateSpaceBlockDims
 #    """
 #    Build a gate matrix from an expression

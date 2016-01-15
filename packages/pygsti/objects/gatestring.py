@@ -194,7 +194,7 @@ class WeightedGateString(GateString):
 
 
 #Conversion routines for evalTree usage -- TODO: make these member functions
-def gateStringToPythonString(gateString,gateLabels):
+def gatestr_to_pythonstr(gateString,gateLabels):
     """
     Convert a gate string into a python string, where each gate label is
     represented as a **single** character, starting with 'A' and contining
@@ -226,11 +226,11 @@ def gateStringToPythonString(gateString,gateLabels):
         c = chr(ord(c) + 1)
     return "".join([ translateDict[gateLabel] for gateLabel in gateString ])
 
-def pythonStringToGateString(pythonString,gateLabels):
+def pythonstr_to_gatestr(pythonString,gateLabels):
     """
     Convert a python string into a gate string, where each gate label is
     represented as a **single** character, starting with 'A' and contining
-    down the alphabet.  This performs the inverse of gateStringToPythonString(...).
+    down the alphabet.  This performs the inverse of gatestr_to_pythonstr(...).
 
     Parameters
     ----------

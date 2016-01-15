@@ -140,7 +140,7 @@ class MultiDataSet:
     return _DataSet(self.countsDict[datasetName], gateStringIndices=self.gsIndex, spamLabelIndices=self.slIndex, bStatic=True)
 
   def __setitem__(self, datasetName, dataset):
-    self.addDataset(datasetName, dataset)
+    self.add_dataset(datasetName, dataset)
 
   def __contains__(self, datasetName):
     return datasetName in self.countsDict
@@ -161,7 +161,7 @@ class MultiDataSet:
     """ Iterator over DataSets corresponding to each dataset name """
     return MultiDataSet_ValIterator(self)
 
-  def getDatasetsSum(self, *datasetNames):
+  def get_datasets_sum(self, *datasetNames):
     """
     Generate a new DataSet by combining the counts of multiple member Datasets.
     
@@ -189,7 +189,7 @@ class MultiDataSet:
     return _DataSet(summedCounts, gateStringIndices=self.gsIndex,
                     spamLabelIndices=self.slIndex, bStatic=True)
 
-  def addDataset(self, datasetName, dataset):
+  def add_dataset(self, datasetName, dataset):
     """ 
     Add a DataSet to this MultiDataSet.  The dataset
     must be static and conform with the gate strings passed
@@ -231,7 +231,7 @@ class MultiDataSet:
         assert( min(self.slIndex.values()) >= 0)
 
 
-  def addDatasetCounts(self, datasetName, datasetCounts):
+  def add_dataset_counts(self, datasetName, datasetCounts):
     """ 
     Directly add a full set of counts for a specified dataset.
 
@@ -266,14 +266,14 @@ class MultiDataSet:
 
 
   def __getstate__(self):
-    toPickle = { 'gsIndexKeys': map(_ds.compressGateLabelTuple, self.gsIndex.keys() if self.gsIndex else []),
+    toPickle = { 'gsIndexKeys': map(_ds.compress_gate_label_tuple, self.gsIndex.keys() if self.gsIndex else []),
                  'gsIndexVals': self.gsIndex.values() if self.gsIndex else [],
                  'slIndex': self.slIndex,
                  'countsDict': self.countsDict }
     return toPickle
 
   def __setstate__(self, state_dict):
-    self.gsIndex = _OrderedDict( zip( map(_ds.expandGateLabelTuple, state_dict['gsIndexKeys']), state_dict['gsIndexVals']) )
+    self.gsIndex = _OrderedDict( zip( map(_ds.expand_gate_label_tuple, state_dict['gsIndexKeys']), state_dict['gsIndexVals']) )
     self.slIndex = state_dict['slIndex']
     self.countsDict = state_dict['countsDict']
 
@@ -288,7 +288,7 @@ class MultiDataSet:
         filename ends in ".gz", the file will be gzip compressed.
     """
 
-    toPickle = { 'gsIndexKeys': map(_ds.compressGateLabelTuple, self.gsIndex.keys() if self.gsIndex else []),
+    toPickle = { 'gsIndexKeys': map(_ds.compress_gate_label_tuple, self.gsIndex.keys() if self.gsIndex else []),
                  'gsIndexVals': self.gsIndex.values() if self.gsIndex else [],
                  'slIndex': self.slIndex,
                  'countsKeys': self.countsDict.keys() }  #Don't pickle countsDict numpy data b/c it's inefficient
@@ -330,7 +330,7 @@ class MultiDataSet:
         f = fileOrFilename
 
     state_dict = _pickle.load(f)
-    self.gsIndex = _OrderedDict( zip( map(_ds.expandGateLabelTuple, state_dict['gsIndexKeys']), state_dict['gsIndexVals']) )
+    self.gsIndex = _OrderedDict( zip( map(_ds.expand_gate_label_tuple, state_dict['gsIndexKeys']), state_dict['gsIndexVals']) )
     self.slIndex = state_dict['slIndex']
     self.countsDict = _OrderedDict()
     for key in state_dict['countsKeys']:

@@ -23,12 +23,12 @@ class BasisToolsMethods(BasisToolsTestCase):
                                  [3,0,0,4]],'d')
 
         # Reduce to a matrix operating on a density matrix space with 2 1x1 blocks (hence [1,1])
-        mxInReducedBasis = GST.BT.contractToStdDirectSumMx(mxInStdBasis,[1,1])
+        mxInReducedBasis = GST.BT.contract_to_std_direct_sum_mx(mxInStdBasis,[1,1])
         correctAnswer = np.array([[ 1.0,  2.0],
                                   [ 3.0,  4.0]])
         self.assertArraysAlmostEqual( mxInReducedBasis, correctAnswer )
         
-        expandedMx = GST.BT.expandFromStdDirectSumMx(mxInReducedBasis,[1,1])
+        expandedMx = GST.BT.expand_from_std_direct_sum_mx(mxInReducedBasis,[1,1])
         self.assertArraysAlmostEqual( expandedMx, mxInStdBasis )
 
     def test_GellMann(self):
@@ -39,7 +39,7 @@ class BasisToolsMethods(BasisToolsTestCase):
         sigmaz = np.array([[1,0],[0,-1]])
 
         # Gell-Mann 2x2 matrices should just be the sigma matrices
-        GM2_mxs = GST.BT.GetGellMannMatrices(2)
+        GM2_mxs = GST.BT.gm_matrices_unnormalized(2)
         self.assertTrue(len(GM2_mxs) == 4)
         self.assertArraysAlmostEqual( GM2_mxs[0], id2x2 )
         self.assertArraysAlmostEqual( GM2_mxs[1], sigmax )
@@ -47,13 +47,13 @@ class BasisToolsMethods(BasisToolsTestCase):
         self.assertArraysAlmostEqual( GM2_mxs[3], sigmaz )
 
         # GM [1,1] matrices are the basis matrices for each block, concatenated together
-        GM11_mxs = GST.BT.GetGellMannMatrices([1,1]) 
+        GM11_mxs = GST.BT.gm_matrices_unnormalized([1,1]) 
         self.assertTrue(len(GM11_mxs) == 2)
         self.assertArraysAlmostEqual( GM11_mxs[0], np.array([[1,0],[0,0]],'d') )
         self.assertArraysAlmostEqual( GM11_mxs[1], np.array([[0,0],[0,1]],'d') )
 
         # Normalized Gell-Mann 2x2 matrices should just be the sigma matrices / sqrt(2)
-        NGM2_mxs = GST.BT.GetNormalizedGellMannMatrices(2)
+        NGM2_mxs = GST.BT.gm_matrices(2)
         self.assertTrue(len(NGM2_mxs) == 4)
         self.assertArraysAlmostEqual( NGM2_mxs[0], id2x2/np.sqrt(2) )
         self.assertArraysAlmostEqual( NGM2_mxs[1], sigmax/np.sqrt(2) )
@@ -66,7 +66,7 @@ class BasisToolsMethods(BasisToolsTestCase):
 
         #Gell Mann
         dim = 5
-        mxs = GST.BT.GetNormalizedGellMannMatrices(dim)
+        mxs = GST.BT.gm_matrices(dim)
         N = len(mxs); self.assertTrue(N == dim**2)
 
         gm_trMx = np.zeros((N,N), 'complex')
@@ -78,7 +78,7 @@ class BasisToolsMethods(BasisToolsTestCase):
 
         #Std Basis
         dim = 5
-        mxs = GST.BT.GetMatrixUnitMatrices(dim)
+        mxs = GST.BT.std_matrices(dim)
         N = len(mxs); self.assertTrue(N == dim**2)
 
         std_trMx = np.zeros((N,N), 'complex')
@@ -89,7 +89,7 @@ class BasisToolsMethods(BasisToolsTestCase):
 
         #Pauli-product basis
         dim = 4
-        mxs = GST.BT.GetPauliProdMatrices(dim)
+        mxs = GST.BT.pp_matrices(dim)
         N = len(mxs); self.assertTrue(N == dim**2)
 
         pp_trMx = np.zeros((N,N), 'complex')
@@ -105,23 +105,23 @@ class BasisToolsMethods(BasisToolsTestCase):
                           [0,1,0,0],
                           [0,0,1,0],
                           [0,0,0,1]], 'complex')
-        mxGM = GST.BT.basisChg_StdToGellMann(mxStd)
-        mxStd2 = GST.BT.basisChg_GellMannToStd(mxGM)
+        mxGM = GST.BT.std_to_gm(mxStd)
+        mxStd2 = GST.BT.gm_to_std(mxGM)
         self.assertArraysAlmostEqual( mxStd, mxStd2 )
         
-        mxPP = GST.BT.basisChg_StdToPauliProd(mxStd)
-        mxStd2 = GST.BT.basisChg_PauliProdToStd(mxPP)
+        mxPP = GST.BT.std_to_pp(mxStd)
+        mxStd2 = GST.BT.pp_to_std(mxPP)
         self.assertArraysAlmostEqual( mxStd, mxStd2 )
 
-        mxPP2 = GST.BT.basisChg_GellMannToPauliProd(mxGM)
+        mxPP2 = GST.BT.gm_to_pp(mxGM)
         self.assertArraysAlmostEqual( mxPP, mxPP2 )
         
-        mxGM2 = GST.BT.basisChg_PauliProdtoGellMann(mxPP)
+        mxGM2 = GST.BT.pp_to_gm(mxPP)
         self.assertArraysAlmostEqual( mxGM, mxGM2 )
 
     def test_few_qubit_fns(self):
         state_vec = np.array([1,0],'complex')
-        dmVec = GST.BT.stateToPauliDensityVec(state_vec)
+        dmVec = GST.BT.state_to_pauli_density_vec(state_vec)
         self.assertArraysAlmostEqual(dmVec, np.array([[0.70710678],[0],[0],[0.70710678]], 'complex'))
 
         theta = np.pi
@@ -129,7 +129,7 @@ class BasisToolsMethods(BasisToolsTestCase):
         U = scipy.linalg.expm(ex) 
         # U is 2x2 unitary matrix operating on single qubit in [0,1] basis (X(pi) rotation)
 
-        op = GST.BT.stateUnitaryToPauliDensityMxOp(U)
+        op = GST.BT.unitary_to_pauligate_1q(U)
         op_ans = np.array([[ 1.,  0.,  0.,  0.],
                            [ 0.,  1.,  0.,  0.],
                            [ 0.,  0., -1.,  0.],
@@ -139,13 +139,13 @@ class BasisToolsMethods(BasisToolsTestCase):
         U_2Q = np.identity(4, 'complex'); U_2Q[2:,2:] = U
         # U_2Q is 4x4 unitary matrix operating on isolated two-qubit space (CX(pi) rotation)
         
-        op_2Q = GST.BT.stateUnitaryToPauliDensityMxOp_2Q(U_2Q)
+        op_2Q = GST.BT.unitary_to_pauligate_2q(U_2Q)
 
         stdMx = np.array( [[1,0],[0,0]], 'complex' ) #density matrix
-        pauliVec = GST.BT.matrixInStdBasisToPauliProdVector(stdMx)
+        pauliVec = GST.BT.stdmx_to_ppvec(stdMx)
         self.assertArraysAlmostEqual(pauliVec, np.array([[0.70710678],[0],[0],[0.70710678]], 'complex'))
 
-        stdMx2 = GST.BT.pauliProdVectorToMatrixInStdBasis(pauliVec)
+        stdMx2 = GST.BT.ppvec_to_stdmx(pauliVec)
         self.assertArraysAlmostEqual( stdMx, stdMx2 )
         
 

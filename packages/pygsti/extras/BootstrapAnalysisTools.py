@@ -6,7 +6,7 @@ from matplotlib import pyplot
 from GSTCommons import Std1Q_XYI
 import GSTCommons.Analyze_WholeGermPowers as Analyze
 
-def makeBootstrapDataset(inputDataSet,generationMethod,inputGateSet=None,seed=None,spamLabels=['plus','minus']):#,GSTMethod="MLE",constrainToTP=False,)
+def make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=None,seed=None,spamLabels=['plus','minus']):#,GSTMethod="MLE",constrainToTP=False,)
     if generationMethod not in ['nonparametric', 'parametric']:
         raise ValueError("generationMethod must be 'parametric' or 'nonparametric'!")
     if seed is not None:
@@ -22,15 +22,15 @@ def makeBootstrapDataset(inputDataSet,generationMethod,inputGateSet=None,seed=No
         elif generationMethod == 'nonparametric':
             raise ValueError("Input gateset provided, but nonparametric data demanded; must reconcile inconsistency!")
 #    if generationMethod == 'nonparametric':
-#        return GST.generateFakeData(inputDataSet,inputDataSet.keys())
+#        return GST.generate_fake_data(inputDataSet,inputDataSet.keys())
     simDS = GST.DataSet(spamLabels=spamLabels)
-    gateStringList = inputDataSet.keys()
-    for s in gateStringList:
+    gatestring_list = inputDataSet.keys()
+    for s in gatestring_list:
         nSamples = np.sum([inputDataSet[s][key] for key in spamLabels])
         if generationMethod == 'parametric':
-            ps = inputGateSet.Probs(s) # New version of old line.
+            ps = inputGateSet.probs(s) # New version of old line.
         elif generationMethod == 'nonparametric':
-            fs = inputDataSet[s].asDict()
+            fs = inputDataSet[s].as_dict()
             ps = {key:fs[key] / float(nSamples) for key in fs.keys()}
         counts = {}
         pList = np.array([np.clip(ps[spamLabel],0,1) for spamLabel in spamLabels])#Truncate before normalization; bad extremal values shouldn't screw up not-bad values, yes?
@@ -38,11 +38,11 @@ def makeBootstrapDataset(inputDataSet,generationMethod,inputGateSet=None,seed=No
         countsArray = np.random.multinomial(nSamples, pList, 1)
         for i,spamLabel in enumerate(spamLabels):
             counts[spamLabel] = countsArray[0,i]
-        simDS.addCountDict(s, counts)
-    simDS.doneAddingData()
+        simDS.add_count_dict(s, counts)
+    simDS.done_adding_data()
     return simDS
 
-def makeBootstrapGatesets(numIterations,inputDataSet,generationMethod,inputGateSet=None,gs_target=None,startSeed=0,
+def make_bootstrap_gatesets(numIterations,inputDataSet,generationMethod,inputGateSet=None,gs_target=None,startSeed=0,
                           spamLabels=['plus','minus'],GSTMethod="MLE",constrainToTP=True,lsgstLists=None,returnData=False,
                           fiducialPrep=Std1Q_XYI.fiducials,fiducialMeasure=Std1Q_XYI.fiducials,germs=Std1Q_XYI.germs,maxLengths=None,verbosity=2,**kwargs):
     if maxLengths == None:
@@ -56,7 +56,7 @@ def makeBootstrapGatesets(numIterations,inputDataSet,generationMethod,inputGateS
     for run in xrange(numIterations):
         print run,
         datasetList.append(
-            makeBootstrapDataset(inputDataSet,generationMethod,inputGateSet=inputGateSet,seed=startSeed+run,spamLabels=spamLabels)
+            make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=inputGateSet,seed=startSeed+run,spamLabels=spamLabels)
             )
     gatesetList = []
     for run in xrange(numIterations):
@@ -71,7 +71,7 @@ def makeBootstrapGatesets(numIterations,inputDataSet,generationMethod,inputGateS
     else:
         return gatesetList, datasetList
 
-def gaugeOptimizeGSList(gsList,targetGateset,constrainToTP=True,gateMetric = 'frobenius', spamMetric = 'frobenius', plot=True):
+def gauge_optimize_gs_list(gsList,targetGateset,constrainToTP=True,gateMetric = 'frobenius', spamMetric = 'frobenius', plot=True):
     listOfBootStrapEstsNoOpt = list(gsList)
     numResamples = len(listOfBootStrapEstsNoOpt)
     ddof = 1
@@ -86,17 +86,17 @@ def gaugeOptimizeGSList(gsList,targetGateset,constrainToTP=True,gateMetric = 'fr
         print spWind
         listOfBootStrapEstsNoOptG0toTargetVarSpam = []
         for gs in listOfBootStrapEstsNoOpt:
-            listOfBootStrapEstsNoOptG0toTargetVarSpam.append(GST.optimizeGauge(gs,"target",returnAll=True,targetGateset=targetGateset,spamWeight=spW,constrainToTP=constrainToTP,targetGatesMetric=gateMetric,targetSpamMetric=spamMetric))
+            listOfBootStrapEstsNoOptG0toTargetVarSpam.append(GST.optimize_gauge(gs,"target",returnAll=True,targetGateset=targetGateset,spamWeight=spW,constrainToTP=constrainToTP,targetGatesMetric=gateMetric,targetSpamMetric=spamMetric))
 
         GateSetGOtoTargetVarSpamVecArray = np.zeros([numResamples],dtype='object')
         for i in xrange(numResamples):
-            GateSetGOtoTargetVarSpamVecArray[i] = listOfBootStrapEstsNoOptG0toTargetVarSpam[i][-1].toVector()
+            GateSetGOtoTargetVarSpamVecArray[i] = listOfBootStrapEstsNoOptG0toTargetVarSpam[i][-1].to_vector()
 
     #    gsAverageGOtoGeneratorVarSpam = gsGST.copy()
     #    gsStdevGOtoGeneratorVarSpam = gsGST.copy()
 
-    #    gsAverageGOtoGeneratorVarSpam.fromVector(np.mean(GateSetGOtoGeneratorVarSpamVecArray))
-    #    gsStdevGOtoGeneratorVarSpam.fromVector(
+    #    gsAverageGOtoGeneratorVarSpam.from_vector(np.mean(GateSetGOtoGeneratorVarSpamVecArray))
+    #    gsStdevGOtoGeneratorVarSpam.from_vector(
         gsStdevVec = np.std(GateSetGOtoTargetVarSpamVecArray,ddof=ddof)
         gsStdevVecSPAM = gsStdevVec[:8]
         gsStdevVecGates = gsStdevVec[8:]
@@ -131,94 +131,94 @@ def gaugeOptimizeGSList(gsList,targetGateset,constrainToTP=True,gateMetric = 'fr
 
     listOfBootStrapEstsG0toTargetSmallSpam = []
     for gs in listOfBootStrapEstsNoOpt:
-        listOfBootStrapEstsG0toTargetSmallSpam.append(GST.optimizeGauge(gs,"target",returnAll=True,targetGateset=targetGateset,spamWeight=bestSPAMWeight,constrainToTP=constrainToTP,targetGatesMetric=gateMetric,targetSpamMetric=spamMetric)[2])
+        listOfBootStrapEstsG0toTargetSmallSpam.append(GST.optimize_gauge(gs,"target",returnAll=True,targetGateset=targetGateset,spamWeight=bestSPAMWeight,constrainToTP=constrainToTP,targetGatesMetric=gateMetric,targetSpamMetric=spamMetric)[2])
     return listOfBootStrapEstsG0toTargetSmallSpam
     
 #For metrics that evaluate gateset with single scalar:
-def gsStdev(gsFunc, gsEnsemble, ddof=1, **kwargs):
+def gs_stdev(gsFunc, gsEnsemble, ddof=1, **kwargs):
     return np.std([gsFunc(gs, **kwargs) for gs in gsEnsemble],ddof=ddof)
 
-def gsMean(gsFunc, gsEnsemble, axis = 0,**kwargs):
+def gs_mean(gsFunc, gsEnsemble, axis = 0,**kwargs):
     return np.mean([gsFunc(gs, **kwargs) for gs in gsEnsemble])
 
 #For metrics that evaluate gateset with scalar for each gate
-def gsStdev1(gsFunc, gsEnsemble, ddof=1,axis=0, **kwargs):
+def gs_stdev1(gsFunc, gsEnsemble, ddof=1,axis=0, **kwargs):
     return np.std([gsFunc(gs, **kwargs) for gs in gsEnsemble],axis=axis,ddof=ddof)
 
-def gsMean1(gsFunc, gsEnsemble, axis = 0,**kwargs):
+def gs_mean1(gsFunc, gsEnsemble, axis = 0,**kwargs):
     return np.mean([gsFunc(gs,**kwargs) for gs in gsEnsemble],axis=axis)
 
-def toVector(gs):
-    return gs.toVector()
+def to_vector(gs):
+    return gs.to_vector()
 
-def toMeanGateset(gsList,target_gs):
+def to_mean_gateset(gsList,target_gs):
     numResamples = len(gsList)
     gsVecArray = np.zeros([numResamples],dtype='object')
     for i in xrange(numResamples):
-        gsVecArray[i] = gsList[i].toVector()
+        gsVecArray[i] = gsList[i].to_vector()
     output_gs = target_gs.copy()
-    output_gs.fromVector(np.mean(gsVecArray))
+    output_gs.from_vector(np.mean(gsVecArray))
     return output_gs
 
-def toStdGateset(gsList,target_gs,ddof=1):
+def to_std_gateset(gsList,target_gs,ddof=1):
     numResamples = len(gsList)
     gsVecArray = np.zeros([numResamples],dtype='object')
     for i in xrange(numResamples):
-        gsVecArray[i] = gsList[i].toVector()
+        gsVecArray[i] = gsList[i].to_vector()
     output_gs = target_gs.copy()
-    output_gs.fromVector(np.std(gsVecArray,ddof=ddof))
+    output_gs.from_vector(np.std(gsVecArray,ddof=ddof))
     return output_gs
 
-def toRMSGateset(gsList,target_gs):
+def to_rms_gateset(gsList,target_gs):
     numResamples = len(gsList)
     gsVecArray = np.zeros([numResamples],dtype='object')
     for i in xrange(numResamples):
-        gsVecArray[i] = np.sqrt(gsList[i].toVector()**2)
+        gsVecArray[i] = np.sqrt(gsList[i].to_vector()**2)
     output_gs = target_gs.copy()
-    output_gs.fromVector(np.mean(gsVecArray))
+    output_gs.from_vector(np.mean(gsVecArray))
     return output_gs
 
-def gatesetJTraceDistance(gs,gs_target,mxBasis="gm"):
+def gateset_jtracedist(gs,gs_target,mxBasis="gm"):
     output = np.zeros(3,dtype=float)
     for i, gate in enumerate(gs_target.keys()):
-        output[i] = GST.JTraceDistance(gs[gate],gs_target[gate],mxBasis=mxBasis)
+        output[i] = GST.jtracedist(gs[gate],gs_target[gate],mxBasis=mxBasis)
 #    print output
     return output
 
-def gatesetProcessFidelity(gs,gs_target):
+def gateset_process_fidelity(gs,gs_target):
     output = np.zeros(3,dtype=float)
     for i, gate in enumerate(gs_target.keys()):
-        output[i] = GST.JamiolkowskiOps.ProcessFidelity(gs[gate],gs_target[gate])
+        output[i] = GST.JamiolkowskiOps.process_fidelity(gs[gate],gs_target[gate])
     return output
 
-def gatesetDecomp_angle(gs):
+def gateset_decomp_angle(gs):
     output = np.zeros(3,dtype=float)
     for i, gate in enumerate(gs.keys()):
-        output[i] = GST.GateOps.decomposeGateMatrix(gs[gate]).get('pi rotations',0)
+        output[i] = GST.GateOps.decompose_gate_matrix(gs[gate]).get('pi rotations',0)
     return output
 
-def gatesetDecomp_decay_diag(gs):
+def gateset_decomp_decay_diag(gs):
     output = np.zeros(3,dtype=float)
     for i, gate in enumerate(gs.keys()):
-        output[i] = GST.GateOps.decomposeGateMatrix(gs[gate]).get('decay of diagonal rotation terms',0)
+        output[i] = GST.GateOps.decompose_gate_matrix(gs[gate]).get('decay of diagonal rotation terms',0)
     return output
 
-def gatesetDecomp_decay_offdiag(gs):
+def gateset_decomp_decay_offdiag(gs):
     output = np.zeros(3,dtype=float)
     for i, gate in enumerate(gs.keys()):
-        output[i] = GST.GateOps.decomposeGateMatrix(gs[gate]).get('decay of off diagonal rotation terms',0)
+        output[i] = GST.GateOps.decompose_gate_matrix(gs[gate]).get('decay of off diagonal rotation terms',0)
     return output
 
-#def gatesetFidelity(gs,gs_target,mxBasis="gm"):
+#def gateset_fidelity(gs,gs_target,mxBasis="gm"):
 #    output = np.zeros(3,dtype=float)
 #    for i, gate in enumerate(gs_target.keys()):
-#        output[i] = GST.Fidelity(gs[gate],gs_target[gate])
+#        output[i] = GST.fidelity(gs[gate],gs_target[gate])
 #    return output
 
-def gateSetDiamondNorm(gs,gs_target,mxBasis="gm"):
+def gate_set_diamond_norm(gs,gs_target,mxBasis="gm"):
     output = np.zeros(3,dtype=float)
     for i, gate in enumerate(gs_target.keys()):
-        output[i] = GST.GateOps.DiamondNorm(gs[gate],gs_target[gate],mxBasis=mxBasis)
+        output[i] = GST.GateOps.diamonddist(gs[gate],gs_target[gate],mxBasis=mxBasis)
     return output
     
 def spamrameter(gs):

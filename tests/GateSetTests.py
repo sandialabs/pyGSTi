@@ -7,7 +7,7 @@ import pickle
 class GateSetTestCase(unittest.TestCase):
 
     def setUp(self):
-        self.gateset = GST.buildGateset( [2], [('Q0',)],['Gi','Gx','Gy'], 
+        self.gateset = GST.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'], 
                                          [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
                                          rhoExpressions=["0"], EExpressions=["1"], 
                                          spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
@@ -31,12 +31,12 @@ class TestGateSetMethods(GateSetTestCase):
   def test_pickling(self):
       p = pickle.dumps(self.gateset)
       g = pickle.loads(p)
-      self.assertAlmostEqual(self.gateset.diff_Frobenius(g), 0.0)
+      self.assertAlmostEqual(self.gateset.diff_frobenius(g), 0.0)
 
   def test_counting(self):
 
-      self.assertEqual(self.gateset.getNumRhoVecs(), 1) 
-      self.assertEqual(self.gateset.getNumEVecs(), 2) 
+      self.assertEqual(self.gateset.get_num_rhovecs(), 1) 
+      self.assertEqual(self.gateset.get_num_evecs(), 2) 
 
       for gates in (True,False):
           for G0 in (True,False):
@@ -48,10 +48,10 @@ class TestGateSetMethods(GateSetTestCase):
                       nEVecs = 1 if SPAM else 0
                       nParamsPerSP = 4 if SP0 else 3
                       nParams =  nGates * nParamsPerGate + nSPVecs * nParamsPerSP + nEVecs * 4
-                      self.assertEqual(self.gateset.getNumParams(gates,G0,SPAM,SP0), nParams)  
+                      self.assertEqual(self.gateset.get_num_params(gates,G0,SPAM,SP0), nParams)  
 
-      self.assertEqual(self.gateset.getRhoVecIndices(), [0]) 
-      self.assertEqual(self.gateset.getEVecIndices(), [0, -1]) 
+      self.assertEqual(self.gateset.get_rhovec_indices(), [0]) 
+      self.assertEqual(self.gateset.get_evec_indices(), [0, -1]) 
 
       self.gateset.log("Test Log Message")
 
@@ -60,21 +60,21 @@ class TestGateSetMethods(GateSetTestCase):
 
       v = np.array( [[1],[2],[3],[4]], 'd')
       
-      self.gateset.set_identityVec(v)
-      w = self.gateset.get_identityVec()
+      self.gateset.set_identity_vec(v)
+      w = self.gateset.get_identity_vec()
       self.assertArraysAlmostEqual(w,v)
 
-      self.gateset.set_rhoVec(v,index=1)
-      w = self.gateset.get_rhoVec(index=1)
+      self.gateset.set_rhovec(v,index=1)
+      w = self.gateset.get_rho_vec(index=1)
       self.assertArraysAlmostEqual(w,v)
 
-      self.gateset.set_EVec(v,index=1)
-      w = self.gateset.get_EVec(index=1)
+      self.gateset.set_evec(v,index=1)
+      w = self.gateset.get_evec(index=1)
       self.assertArraysAlmostEqual(w,v)
 
-      self.gateset.add_SPAM_label(0,1,"TEST")
-      self.assertTrue("TEST" in self.gateset.get_SPAM_labels())
-      d = self.gateset.get_SPAM_label_dict()
+      self.gateset.add_spam_label(0,1,"TEST")
+      self.assertTrue("TEST" in self.gateset.get_spam_labels())
+      d = self.gateset.get_spam_label_dict()
       self.assertEqual( d[(0,1)], "TEST" )
 
       Gi_matrix = np.identity(4, 'd')
@@ -89,8 +89,8 @@ class TestGateSetMethods(GateSetTestCase):
 
   def test_copy(self):
       cp = self.gateset.copy()
-      self.assertAlmostEqual( self.gateset.diff_Frobenius(cp), 0 )
-      self.assertAlmostEqual( self.gateset.diff_JTraceDistance(cp), 0 )
+      self.assertAlmostEqual( self.gateset.diff_frobenius(cp), 0 )
+      self.assertAlmostEqual( self.gateset.diff_jtracedist(cp), 0 )
 
 
   def test_vectorize(self):
@@ -99,9 +99,9 @@ class TestGateSetMethods(GateSetTestCase):
           for G0 in (True,False):
               for SPAM in (True,False):
                   for SP0 in (True,False):
-                      v = cp.toVector(gates, G0, SPAM, SP0 )
-                      cp.fromVector(v, gates, G0, SPAM, SP0)
-                      self.assertAlmostEqual( self.gateset.diff_Frobenius(cp), 0 )
+                      v = cp.to_vector(gates, G0, SPAM, SP0 )
+                      cp.from_vector(v, gates, G0, SPAM, SP0)
+                      self.assertAlmostEqual( self.gateset.diff_frobenius(cp), 0 )
 
 
   def test_transform(self):
@@ -113,8 +113,8 @@ class TestGateSetMethods(GateSetTestCase):
       cp = self.gateset.copy()
       cp.transform(T,Tinv)
 
-      self.assertAlmostEqual( self.gateset.diff_Frobenius(cp, T), 0 )
-      self.assertAlmostEqual( self.gateset.diff_JTraceDistance(cp, T), 0 )
+      self.assertAlmostEqual( self.gateset.diff_frobenius(cp, T), 0 )
+      self.assertAlmostEqual( self.gateset.diff_jtracedist(cp, T), 0 )
 
       for gateLabel in cp:
           self.assertArraysAlmostEqual(cp[gateLabel], np.dot(Tinv, np.dot(self.gateset[gateLabel], T)))
@@ -143,13 +143,13 @@ class TestGateSetMethods(GateSetTestCase):
   def test_bulk_multiplication(self):
       gatestring1 = ('Gx','Gy')
       gatestring2 = ('Gx','Gy','Gy')
-      evt = self.gateset.Bulk_evalTree( [gatestring1,gatestring2] )      
+      evt = self.gateset.bulk_evaltree( [gatestring1,gatestring2] )      
 
       p1 = np.dot( self.gateset['Gy'], self.gateset['Gx'] )
       p2 = np.dot( self.gateset['Gy'], np.dot( self.gateset['Gy'], self.gateset['Gx'] ))
 
-      bulk_prods = self.gateset.Bulk_Product(evt)
-      bulk_prods_scaled, scaleVals = self.gateset.Bulk_Product(evt, bScale=True)
+      bulk_prods = self.gateset.bulk_product(evt)
+      bulk_prods_scaled, scaleVals = self.gateset.bulk_product(evt, bScale=True)
       bulk_prods2 = scaleVals[:,None,None] * bulk_prods_scaled
       self.assertArraysAlmostEqual(bulk_prods[0],p1)
       self.assertArraysAlmostEqual(bulk_prods[1],p2)
@@ -163,7 +163,7 @@ class TestGateSetMethods(GateSetTestCase):
                    np.dot( self.gateset['Gy'],
                            np.dot(self.gateset['Gx'],
                                   self.gateset.rhoVecs[0])))
-      p2 = self.gateset.Pr('plus',gatestring)
+      p2 = self.gateset.pr('plus',gatestring)
       self.assertArraysAlmostEqual(p1,p2)
 
   def test_simple_probabilityB(self):
@@ -173,13 +173,13 @@ class TestGateSetMethods(GateSetTestCase):
                            np.dot( self.gateset['Gy'], 
                                    np.dot(self.gateset['Gx'], 
                                           self.gateset.rhoVecs[0]))))
-      p2 = self.gateset.Pr('plus',gatestring)
+      p2 = self.gateset.pr('plus',gatestring)
       self.assertAlmostEqual(p1,p2)
 
   def test_bulk_probabilities(self):
       gatestring1 = ('Gx','Gy')
       gatestring2 = ('Gx','Gy','Gy')
-      evt = self.gateset.Bulk_evalTree( [gatestring1,gatestring2] )      
+      evt = self.gateset.bulk_evaltree( [gatestring1,gatestring2] )      
 
       p1 = np.dot( np.transpose(self.gateset.EVecs[0]),
                    np.dot( self.gateset['Gy'],
@@ -193,21 +193,21 @@ class TestGateSetMethods(GateSetTestCase):
                                           self.gateset.rhoVecs[0]))))
 
       #check == true could raise a warning if a mismatch is detected
-      bulk_pr = self.assertNoWarnings(self.gateset.Bulk_Pr,'plus',evt,check=True)
-      bulk_pr_m = self.assertNoWarnings(self.gateset.Bulk_Pr,'minus',evt,check=True)
+      bulk_pr = self.assertNoWarnings(self.gateset.bulk_pr,'plus',evt,check=True)
+      bulk_pr_m = self.assertNoWarnings(self.gateset.bulk_pr,'minus',evt,check=True)
       self.assertAlmostEqual(bulk_pr[0],p1)
       self.assertAlmostEqual(bulk_pr[1],p2)
       self.assertAlmostEqual(bulk_pr_m[0],1.0-p1)
       self.assertAlmostEqual(bulk_pr_m[1],1.0-p2)
 
-      probs1 = self.gateset.Probs(gatestring1)
-      probs2 = self.gateset.Probs(gatestring2)
+      probs1 = self.gateset.probs(gatestring1)
+      probs2 = self.gateset.probs(gatestring2)
       self.assertAlmostEqual(probs1['plus'],p1)
       self.assertAlmostEqual(probs2['plus'],p2)
       self.assertAlmostEqual(probs1['minus'],1.0-p1)
       self.assertAlmostEqual(probs2['minus'],1.0-p2)
 
-      bulk_probs = self.assertNoWarnings(self.gateset.Bulk_Probs,evt,check=True)
+      bulk_probs = self.assertNoWarnings(self.gateset.bulk_probs,evt,check=True)
       self.assertAlmostEqual(bulk_probs['plus'][0],p1)
       self.assertAlmostEqual(bulk_probs['plus'][1],p2)
       self.assertAlmostEqual(bulk_probs['minus'][0],1.0-p1)
@@ -216,13 +216,13 @@ class TestGateSetMethods(GateSetTestCase):
       nGateStrings = 2; nSpamLabels = 2
       probs_to_fill = np.empty( (nSpamLabels,nGateStrings), 'd')
       spam_label_rows = { 'plus': 0, 'minus': 1 }
-      self.assertNoWarnings(self.gateset.Bulk_fillProbs, probs_to_fill, spam_label_rows, evt, check=True)
+      self.assertNoWarnings(self.gateset.bulk_fill_probs, probs_to_fill, spam_label_rows, evt, check=True)
       self.assertAlmostEqual(probs_to_fill[0,0],p1)
       self.assertAlmostEqual(probs_to_fill[0,1],p2)
       self.assertAlmostEqual(probs_to_fill[1,0],1-p1)
       self.assertAlmostEqual(probs_to_fill[1,1],1-p2)
 
-      prods = self.gateset.Bulk_Product(evt) #TODO: test output?
+      prods = self.gateset.bulk_product(evt) #TODO: test output?
 
 
 
@@ -231,19 +231,19 @@ class TestGateSetMethods(GateSetTestCase):
       gatestring1 = ('Gx','Gy')
       gatestring2 = ('Gx','Gy','Gy')
 
-      evt = self.gateset.Bulk_evalTree( [gatestring0,gatestring1,gatestring2] )
+      evt = self.gateset.bulk_evaltree( [gatestring0,gatestring1,gatestring2] )
 
-      dP0 = self.gateset.dPr("plus", gatestring0)
-      dP1 = self.gateset.dPr("plus", gatestring1)
-      dP2 = self.gateset.dPr("plus", gatestring2)
-      dP0m = self.gateset.dPr("minus", gatestring0)
-      dP1m = self.gateset.dPr("minus", gatestring1)
-      dP2m = self.gateset.dPr("minus", gatestring2)
+      dP0 = self.gateset.dpr("plus", gatestring0)
+      dP1 = self.gateset.dpr("plus", gatestring1)
+      dP2 = self.gateset.dpr("plus", gatestring2)
+      dP0m = self.gateset.dpr("minus", gatestring0)
+      dP1m = self.gateset.dpr("minus", gatestring1)
+      dP2m = self.gateset.dpr("minus", gatestring2)
 
 
-      bulk_dP = self.gateset.Bulk_dPr("plus", evt, returnPr=False, check=True)
-      bulk_dP_m = self.gateset.Bulk_dPr("minus", evt, returnPr=False, check=True)
-      bulk_dP_chk, bulk_P = self.gateset.Bulk_dPr("plus", evt, returnPr=True, check=False)
+      bulk_dP = self.gateset.bulk_dpr("plus", evt, returnPr=False, check=True)
+      bulk_dP_m = self.gateset.bulk_dpr("minus", evt, returnPr=False, check=True)
+      bulk_dP_chk, bulk_P = self.gateset.bulk_dpr("plus", evt, returnPr=True, check=False)
       self.assertArraysAlmostEqual(bulk_dP,bulk_dP_chk)
       self.assertArraysAlmostEqual(bulk_dP[0,:],dP0)
       self.assertArraysAlmostEqual(bulk_dP[1,:],dP1)
@@ -253,11 +253,11 @@ class TestGateSetMethods(GateSetTestCase):
       self.assertArraysAlmostEqual(bulk_dP_m[2,:],dP2m)
 
 
-      dProbs0 = self.gateset.dProbs(gatestring0)
-      dProbs1 = self.gateset.dProbs(gatestring1)
-      dProbs2 = self.gateset.dProbs(gatestring2)
-      bulk_dProbs = self.gateset.Bulk_dProbs(evt, returnPr=False, check=True)
-      bulk_dProbs_chk = self.gateset.Bulk_dProbs(evt, returnPr=True, check=True)
+      dProbs0 = self.gateset.dprobs(gatestring0)
+      dProbs1 = self.gateset.dprobs(gatestring1)
+      dProbs2 = self.gateset.dprobs(gatestring2)
+      bulk_dProbs = self.gateset.bulk_dprobs(evt, returnPr=False, check=True)
+      bulk_dProbs_chk = self.gateset.bulk_dprobs(evt, returnPr=True, check=True)
       self.assertArraysAlmostEqual(bulk_dProbs['plus'],bulk_dProbs_chk['plus'][0])
       self.assertArraysAlmostEqual(bulk_dProbs['plus'][0,:],dP0)
       self.assertArraysAlmostEqual(bulk_dProbs['plus'][1,:],dP1)
@@ -267,22 +267,22 @@ class TestGateSetMethods(GateSetTestCase):
       self.assertArraysAlmostEqual(bulk_dProbs['plus'][2,:],dProbs2['plus'])
 
 
-      nGateStrings = 3; nSpamLabels = 2; nParams = self.gateset.getNumParams()
+      nGateStrings = 3; nSpamLabels = 2; nParams = self.gateset.get_num_params()
       probs_to_fill = np.empty( (nSpamLabels,nGateStrings), 'd')
       dprobs_to_fill = np.empty( (nSpamLabels,nGateStrings,nParams), 'd')
       dprobs_to_fillB = np.empty( (nSpamLabels,nGateStrings,nParams), 'd')
       spam_label_rows = { 'plus': 0, 'minus': 1 }
-      self.assertNoWarnings(self.gateset.Bulk_filldProbs, dprobs_to_fill, spam_label_rows, evt,
+      self.assertNoWarnings(self.gateset.bulk_fill_dprobs, dprobs_to_fill, spam_label_rows, evt,
                             prMxToFill=probs_to_fill,check=True)
       self.assertArraysAlmostEqual(dprobs_to_fill[0,0,:],dP0)
       self.assertArraysAlmostEqual(dprobs_to_fill[0,1,:],dP1)
       self.assertArraysAlmostEqual(dprobs_to_fill[0,2,:],dP2)
 
       #without probs
-      self.assertNoWarnings(self.gateset.Bulk_filldProbs, dprobs_to_fillB, spam_label_rows, evt, check=True)
+      self.assertNoWarnings(self.gateset.bulk_fill_dprobs, dprobs_to_fillB, spam_label_rows, evt, check=True)
       self.assertArraysAlmostEqual(dprobs_to_fill,dprobs_to_fillB)
 
-      dProds = self.gateset.Bulk_dProduct(evt) #TODO: test output?
+      dProds = self.gateset.bulk_dproduct(evt) #TODO: test output?
 
 
 
@@ -291,18 +291,18 @@ class TestGateSetMethods(GateSetTestCase):
       gatestring1 = ('Gx','Gy')
       gatestring2 = ('Gx','Gy','Gy')
 
-      evt = self.gateset.Bulk_evalTree( [gatestring0,gatestring1,gatestring2] )
+      evt = self.gateset.bulk_evaltree( [gatestring0,gatestring1,gatestring2] )
 
-      hP0 = self.gateset.hPr("plus", gatestring0)
-      hP1 = self.gateset.hPr("plus", gatestring1)
-      hP2 = self.gateset.hPr("plus", gatestring2)
-      hP0m = self.gateset.hPr("minus", gatestring0)
-      hP1m = self.gateset.hPr("minus", gatestring1)
-      hP2m = self.gateset.hPr("minus", gatestring2)
+      hP0 = self.gateset.hpr("plus", gatestring0)
+      hP1 = self.gateset.hpr("plus", gatestring1)
+      hP2 = self.gateset.hpr("plus", gatestring2)
+      hP0m = self.gateset.hpr("minus", gatestring0)
+      hP1m = self.gateset.hpr("minus", gatestring1)
+      hP2m = self.gateset.hpr("minus", gatestring2)
 
-      bulk_hP = self.gateset.Bulk_hPr("plus", evt, returnPr=False, returnDeriv=False, check=True)
-      bulk_hP_m = self.gateset.Bulk_hPr("minus", evt, returnPr=False, returnDeriv=False, check=True)
-      bulk_hP_chk, bulk_dP, bulk_P = self.gateset.Bulk_hPr("plus", evt, returnPr=True, returnDeriv=True, check=False)
+      bulk_hP = self.gateset.bulk_hpr("plus", evt, returnPr=False, returnDeriv=False, check=True)
+      bulk_hP_m = self.gateset.bulk_hpr("minus", evt, returnPr=False, returnDeriv=False, check=True)
+      bulk_hP_chk, bulk_dP, bulk_P = self.gateset.bulk_hpr("plus", evt, returnPr=True, returnDeriv=True, check=False)
       self.assertArraysAlmostEqual(bulk_hP,bulk_hP_chk)
       self.assertArraysAlmostEqual(bulk_hP[0,:,:],hP0)
       self.assertArraysAlmostEqual(bulk_hP[1,:,:],hP1)
@@ -311,11 +311,11 @@ class TestGateSetMethods(GateSetTestCase):
       self.assertArraysAlmostEqual(bulk_hP_m[1,:,:],hP1m)
       self.assertArraysAlmostEqual(bulk_hP_m[2,:,:],hP2m)
 
-      hProbs0 = self.gateset.hProbs(gatestring0)
-      hProbs1 = self.gateset.hProbs(gatestring1)
-      hProbs2 = self.gateset.hProbs(gatestring2)
-      bulk_hProbs = self.gateset.Bulk_hProbs(evt, returnPr=False, check=True)
-      bulk_hProbs_chk = self.gateset.Bulk_hProbs(evt, returnPr=True, check=True)
+      hProbs0 = self.gateset.hprobs(gatestring0)
+      hProbs1 = self.gateset.hprobs(gatestring1)
+      hProbs2 = self.gateset.hprobs(gatestring2)
+      bulk_hProbs = self.gateset.bulk_hprobs(evt, returnPr=False, check=True)
+      bulk_hProbs_chk = self.gateset.bulk_hprobs(evt, returnPr=True, check=True)
       self.assertArraysAlmostEqual(bulk_hProbs['plus'],bulk_hProbs_chk['plus'][0])
       self.assertArraysAlmostEqual(bulk_hProbs['plus'][0,:,:],hP0)
       self.assertArraysAlmostEqual(bulk_hProbs['plus'][1,:,:],hP1)
@@ -324,7 +324,7 @@ class TestGateSetMethods(GateSetTestCase):
       self.assertArraysAlmostEqual(bulk_hProbs['plus'][1,:,:],hProbs1['plus'])
       self.assertArraysAlmostEqual(bulk_hProbs['plus'][2,:,:],hProbs2['plus'])
 
-      nGateStrings = 3; nSpamLabels = 2; nParams = self.gateset.getNumParams()
+      nGateStrings = 3; nSpamLabels = 2; nParams = self.gateset.get_num_params()
       probs_to_fill = np.empty( (nSpamLabels,nGateStrings), 'd')
       probs_to_fillB = np.empty( (nSpamLabels,nGateStrings), 'd')
       dprobs_to_fill = np.empty( (nSpamLabels,nGateStrings,nParams), 'd')
@@ -332,7 +332,7 @@ class TestGateSetMethods(GateSetTestCase):
       hprobs_to_fill = np.empty( (nSpamLabels,nGateStrings,nParams,nParams), 'd')
       hprobs_to_fillB = np.empty( (nSpamLabels,nGateStrings,nParams,nParams), 'd')
       spam_label_rows = { 'plus': 0, 'minus': 1 }
-      self.assertNoWarnings(self.gateset.Bulk_fillhProbs, hprobs_to_fill, spam_label_rows, evt,
+      self.assertNoWarnings(self.gateset.bulk_fill_hprobs, hprobs_to_fill, spam_label_rows, evt,
                             prMxToFill=probs_to_fill, derivMxToFill=dprobs_to_fill, check=True)
 
       self.assertArraysAlmostEqual(hprobs_to_fill[0,0,:,:],hP0)
@@ -341,40 +341,40 @@ class TestGateSetMethods(GateSetTestCase):
 
 
       #without derivative
-      self.assertNoWarnings(self.gateset.Bulk_fillhProbs, hprobs_to_fillB, spam_label_rows, evt,
+      self.assertNoWarnings(self.gateset.bulk_fill_hprobs, hprobs_to_fillB, spam_label_rows, evt,
                             prMxToFill=probs_to_fillB, check=True) 
       self.assertArraysAlmostEqual(hprobs_to_fill,hprobs_to_fillB)
       self.assertArraysAlmostEqual(probs_to_fill,probs_to_fillB)
 
       #without probs
-      self.assertNoWarnings(self.gateset.Bulk_fillhProbs, hprobs_to_fillB, spam_label_rows, evt,
+      self.assertNoWarnings(self.gateset.bulk_fill_hprobs, hprobs_to_fillB, spam_label_rows, evt,
                             derivMxToFill=dprobs_to_fillB, check=True) 
       self.assertArraysAlmostEqual(hprobs_to_fill,hprobs_to_fillB)
       self.assertArraysAlmostEqual(dprobs_to_fill,dprobs_to_fillB)
 
       #without either
-      self.assertNoWarnings(self.gateset.Bulk_fillhProbs, hprobs_to_fillB, spam_label_rows, evt, check=True) 
+      self.assertNoWarnings(self.gateset.bulk_fill_hprobs, hprobs_to_fillB, spam_label_rows, evt, check=True) 
       self.assertArraysAlmostEqual(hprobs_to_fill,hprobs_to_fillB)
 
       N = self.gateset.gate_dim**2 #number of elements in a gate matrix
       
-      hProds = self.gateset.Bulk_hProduct(evt)
-      hProdsB,scales = self.gateset.Bulk_hProduct(evt, bScale=True)
+      hProds = self.gateset.bulk_hproduct(evt)
+      hProdsB,scales = self.gateset.bulk_hproduct(evt, bScale=True)
       self.assertArraysAlmostEqual(hProds, scales[:,None,None,None,None]*hProdsB)
 
-      hProdsFlat = self.gateset.Bulk_hProduct(evt, flat=True, bScale=False)
-      hProdsFlatB,S1 = self.gateset.Bulk_hProduct(evt, flat=True, bScale=True)
+      hProdsFlat = self.gateset.bulk_hproduct(evt, flat=True, bScale=False)
+      hProdsFlatB,S1 = self.gateset.bulk_hproduct(evt, flat=True, bScale=True)
       self.assertArraysAlmostEqual(hProdsFlat, np.repeat(S1,N)[:,None,None]*hProdsFlatB)
 
-      hProdsC, dProdsC, prodsC = self.gateset.Bulk_hProduct(evt, bReturnDProdsAndProds=True, bScale=False)
-      hProdsD, dProdsD, prodsD, S2 = self.gateset.Bulk_hProduct(evt, bReturnDProdsAndProds=True, bScale=True)
+      hProdsC, dProdsC, prodsC = self.gateset.bulk_hproduct(evt, bReturnDProdsAndProds=True, bScale=False)
+      hProdsD, dProdsD, prodsD, S2 = self.gateset.bulk_hproduct(evt, bReturnDProdsAndProds=True, bScale=True)
       self.assertArraysAlmostEqual(hProds, hProdsC)
       self.assertArraysAlmostEqual(hProds, S2[:,None,None,None,None]*hProdsD)
       self.assertArraysAlmostEqual(dProdsC, S2[:,None,None,None]*dProdsD)
       self.assertArraysAlmostEqual(prodsC, S2[:,None,None]*prodsD)
 
-      hProdsF, dProdsF, prodsF    = self.gateset.Bulk_hProduct(evt, bReturnDProdsAndProds=True, flat=True, bScale=False)
-      hProdsF2, dProdsF2, prodsF2, S3 = self.gateset.Bulk_hProduct(evt, bReturnDProdsAndProds=True, flat=True, bScale=True)
+      hProdsF, dProdsF, prodsF    = self.gateset.bulk_hproduct(evt, bReturnDProdsAndProds=True, flat=True, bScale=False)
+      hProdsF2, dProdsF2, prodsF2, S3 = self.gateset.bulk_hproduct(evt, bReturnDProdsAndProds=True, flat=True, bScale=True)
       self.assertArraysAlmostEqual(hProdsFlat, hProdsF)
       self.assertArraysAlmostEqual(hProdsFlat, np.repeat(S3,N)[:,None,None]*hProdsF2)
       self.assertArraysAlmostEqual(dProdsF, np.repeat(S3,N)[:,None]*dProdsF2)
