@@ -2249,7 +2249,7 @@ class GateSet(_collections.OrderedDict):
                 if dProdCache[i].max() < 1e-100 and dProdCache[i].min() > -1e-100:
                     nL,nR = max(_nla.norm(dL), _np.exp(-scaleCache[iLeft]),1e-300), max(_nla.norm(dR), _np.exp(-scaleCache[iRight]),1e-300)
                     sL, sR, sdL, sdR = L/nL, R/nR, dL/nL, dR/nR
-                    shL, shR, sdLdR = hL/nL, hR/nR, _np.swapaxes(_np.dot(dL,dR),1,2) #_np.einsum('ikm,jml->ijkl',sdL,sdR)
+                    shL, shR, sdLdR = hL/nL, hR/nR, _np.swapaxes(_np.dot(sdL,sdR),1,2) #_np.einsum('ikm,jml->ijkl',sdL,sdR)
                     prodCache[i] = _np.dot(sL,sR); dProdCache[i] = _np.dot(sdL, sR) + _np.swapaxes(_np.dot(sL, sdR),0,1)
                     hProdCache[i] = _np.dot(shL, sR) + sdLdR + _np.swapaxes(sdLdR,0,1) + _np.swapaxes(_np.dot(sL,shR),0,2)
                     scaleCache[i] = scaleCache[iLeft] + scaleCache[iRight] + _np.log(nL) + _np.log(nR)
