@@ -1,0 +1,6 @@
+pygsti.report.Results.get_table
+===============================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: Results.get_table

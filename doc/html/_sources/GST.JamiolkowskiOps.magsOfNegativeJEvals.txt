@@ -1,6 +1,0 @@
-GST.JamiolkowskiOps.magsOfNegativeJEvals
-========================================
-
-.. currentmodule:: GST.JamiolkowskiOps
-
-.. autofunction:: magsOfNegativeJEvals

@@ -1,6 +1,0 @@
-GST.GateSetConstruction.twoQubitGate
-====================================
-
-.. currentmodule:: GST.GateSetConstruction
-
-.. autofunction:: twoQubitGate

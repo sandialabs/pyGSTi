@@ -3,23 +3,19 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to Gate Set Tomography's documentation!
-===============================================
+Welcome to pyGSTi's documentation
+=================================
 
-Modules
--------
+**pyGSTi** is a python implementation of Gate Set Tomography (GST).
 
-.. autosummary::
-   :template: GST_autosummary.rst
-   :toctree:
-
-   GST
+Packages
+--------
 
 .. autosummary::
-   :template: GSTCommons_autosummary.rst
+   :template: pygsti_autosummary.rst
    :toctree:
 
-   GSTCommons
+   pygsti
 
 
 .. 

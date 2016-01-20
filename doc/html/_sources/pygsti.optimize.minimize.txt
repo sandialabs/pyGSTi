@@ -1,0 +1,6 @@
+pygsti.optimize.minimize
+========================
+
+.. currentmodule:: pygsti.optimize
+
+.. autofunction:: minimize

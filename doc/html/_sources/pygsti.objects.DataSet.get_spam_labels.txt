@@ -1,0 +1,6 @@
+pygsti.objects.DataSet.get_spam_labels
+======================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: DataSet.get_spam_labels

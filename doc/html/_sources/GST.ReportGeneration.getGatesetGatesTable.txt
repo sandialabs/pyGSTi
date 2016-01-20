@@ -1,6 +1,0 @@
-GST.ReportGeneration.getGatesetGatesTable
-=========================================
-
-.. currentmodule:: GST.ReportGeneration
-
-.. autofunction:: getGatesetGatesTable

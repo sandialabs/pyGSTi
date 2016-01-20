@@ -1,0 +1,6 @@
+pygsti.optimize.fmin_supersimplex
+=================================
+
+.. currentmodule:: pygsti.optimize
+
+.. autofunction:: fmin_supersimplex

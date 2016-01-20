@@ -1,6 +1,0 @@
-GST.Core.doLSGST
-================
-
-.. currentmodule:: GST.Core
-
-.. autofunction:: doLSGST

@@ -1,6 +1,0 @@
-GST.BasisTools.contractToStdDirectSumMx
-=======================================
-
-.. currentmodule:: GST.BasisTools
-
-.. autofunction:: contractToStdDirectSumMx

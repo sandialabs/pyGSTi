@@ -1,6 +1,0 @@
-GST.DataSet.doneAddingData
-==========================
-
-.. currentmodule:: GST
-
-.. automethod:: DataSet.doneAddingData

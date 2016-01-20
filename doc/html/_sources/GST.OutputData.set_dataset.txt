@@ -1,6 +1,0 @@
-GST.OutputData.set_dataset
-==========================
-
-.. currentmodule:: GST
-
-.. automethod:: OutputData.set_dataset

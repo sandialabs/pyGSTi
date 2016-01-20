@@ -1,0 +1,6 @@
+pygsti.tools.logl_max
+=====================
+
+.. currentmodule:: pygsti.tools
+
+.. autofunction:: logl_max

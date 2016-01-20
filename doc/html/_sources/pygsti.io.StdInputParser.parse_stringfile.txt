@@ -1,0 +1,6 @@
+pygsti.io.StdInputParser.parse_stringfile
+=========================================
+
+.. currentmodule:: pygsti.io
+
+.. automethod:: StdInputParser.parse_stringfile

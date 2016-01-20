@@ -1,6 +1,0 @@
-GST.AnalysisTools.ZoomedDirectChiSqBoxPlot
-==========================================
-
-.. currentmodule:: GST.AnalysisTools
-
-.. autofunction:: ZoomedDirectChiSqBoxPlot

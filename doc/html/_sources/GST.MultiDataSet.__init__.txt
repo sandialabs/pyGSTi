@@ -1,6 +1,0 @@
-GST.MultiDataSet.__init__
-=========================
-
-.. currentmodule:: GST
-
-.. automethod:: MultiDataSet.__init__

@@ -1,6 +1,0 @@
-GSTCommons.Analyze_TruncatedGermPowers.make_elgst_lists
-=======================================================
-
-.. currentmodule:: GSTCommons.Analyze_TruncatedGermPowers
-
-.. autofunction:: make_elgst_lists

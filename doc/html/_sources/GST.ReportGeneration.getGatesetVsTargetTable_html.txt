@@ -1,6 +1,0 @@
-GST.ReportGeneration.getGatesetVsTargetTable_html
-=================================================
-
-.. currentmodule:: GST.ReportGeneration
-
-.. autofunction:: getGatesetVsTargetTable_html

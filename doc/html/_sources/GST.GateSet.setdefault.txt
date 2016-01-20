@@ -1,6 +1,0 @@
-GST.GateSet.setdefault
-======================
-
-.. currentmodule:: GST
-
-.. automethod:: GateSet.setdefault

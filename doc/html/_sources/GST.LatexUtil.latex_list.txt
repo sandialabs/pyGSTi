@@ -1,6 +1,0 @@
-GST.LatexUtil.latex_list
-========================
-
-.. currentmodule:: GST.LatexUtil
-
-.. autofunction:: latex_list

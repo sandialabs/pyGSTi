@@ -1,6 +1,0 @@
-GST.listLGSTGateStrings
-=======================
-
-.. currentmodule:: GST
-
-.. autofunction:: listLGSTGateStrings

@@ -1,6 +1,0 @@
-GST.AnalysisTools.GSTFigure.getExtraInfo
-========================================
-
-.. currentmodule:: GST.AnalysisTools
-
-.. automethod:: GSTFigure.getExtraInfo

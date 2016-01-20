@@ -1,0 +1,6 @@
+pygsti.tools.unitary_to_pauligate_2q
+====================================
+
+.. currentmodule:: pygsti.tools
+
+.. autofunction:: unitary_to_pauligate_2q

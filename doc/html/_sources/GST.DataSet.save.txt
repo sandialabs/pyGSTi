@@ -1,6 +1,0 @@
-GST.DataSet.save
-================
-
-.. currentmodule:: GST
-
-.. automethod:: DataSet.save

@@ -1,6 +1,0 @@
-GST.Results.setAdditionalInfo
-=============================
-
-.. currentmodule:: GST
-
-.. automethod:: Results.setAdditionalInfo

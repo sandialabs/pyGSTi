@@ -1,6 +1,0 @@
-GST.AnalysisTools.DirectLSGSTGatesets
-=====================================
-
-.. currentmodule:: GST.AnalysisTools
-
-.. autofunction:: DirectLSGSTGatesets

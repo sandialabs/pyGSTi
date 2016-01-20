@@ -1,6 +1,0 @@
-GST.GateOps.getFidelityUpperBound
-=================================
-
-.. currentmodule:: GST.GateOps
-
-.. autofunction:: getFidelityUpperBound

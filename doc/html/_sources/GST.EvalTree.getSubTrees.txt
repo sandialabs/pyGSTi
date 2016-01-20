@@ -1,6 +1,0 @@
-GST.EvalTree.getSubTrees
-========================
-
-.. currentmodule:: GST
-
-.. automethod:: EvalTree.getSubTrees

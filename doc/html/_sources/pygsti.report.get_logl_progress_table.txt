@@ -1,0 +1,6 @@
+pygsti.report.get_logl_progress_table
+=====================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: get_logl_progress_table

@@ -1,0 +1,27 @@
+pygsti.report.ReportableQty
+===========================
+
+.. currentmodule:: pygsti.report
+
+.. autoclass:: ReportableQty
+
+   
+   .. automethod:: __init__
+       :noindex:
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree:
+   
+      ~ReportableQty.__init__
+      ~ReportableQty.get_err_bar
+      ~ReportableQty.get_value
+      ~ReportableQty.get_value_and_err_bar
+   
+   
+
+   
+   
+   

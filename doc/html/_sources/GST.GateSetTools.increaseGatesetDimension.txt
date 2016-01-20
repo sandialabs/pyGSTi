@@ -1,6 +1,0 @@
-GST.GateSetTools.increaseGatesetDimension
-=========================================
-
-.. currentmodule:: GST.GateSetTools
-
-.. autofunction:: increaseGatesetDimension

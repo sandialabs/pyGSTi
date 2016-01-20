@@ -1,6 +1,0 @@
-GST.OutputData.saveTo
-=====================
-
-.. currentmodule:: GST
-
-.. automethod:: OutputData.saveTo

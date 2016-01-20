@@ -1,6 +1,0 @@
-GST.GateSet.get_dimension
-=========================
-
-.. currentmodule:: GST
-
-.. automethod:: GateSet.get_dimension

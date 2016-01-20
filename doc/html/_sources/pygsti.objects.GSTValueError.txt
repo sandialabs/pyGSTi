@@ -1,0 +1,6 @@
+pygsti.objects.GSTValueError
+============================
+
+.. currentmodule:: pygsti.objects
+
+.. autoexception:: GSTValueError

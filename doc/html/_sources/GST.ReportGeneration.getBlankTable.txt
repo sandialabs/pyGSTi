@@ -1,6 +1,0 @@
-GST.ReportGeneration.getBlankTable
-==================================
-
-.. currentmodule:: GST.ReportGeneration
-
-.. autofunction:: getBlankTable

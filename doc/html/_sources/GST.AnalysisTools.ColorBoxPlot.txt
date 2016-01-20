@@ -1,6 +1,0 @@
-GST.AnalysisTools.ColorBoxPlot
-==============================
-
-.. currentmodule:: GST.AnalysisTools
-
-.. autofunction:: ColorBoxPlot

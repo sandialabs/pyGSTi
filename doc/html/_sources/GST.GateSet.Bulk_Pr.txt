@@ -1,6 +1,0 @@
-GST.GateSet.Bulk_Pr
-===================
-
-.. currentmodule:: GST
-
-.. automethod:: GateSet.Bulk_Pr

@@ -1,0 +1,24 @@
+pygsti.objects.WeightedGateString
+=================================
+
+.. currentmodule:: pygsti.objects
+
+.. autoclass:: WeightedGateString
+
+   
+   .. automethod:: __init__
+       :noindex:
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree:
+   
+      ~WeightedGateString.__init__
+   
+   
+
+   
+   
+   

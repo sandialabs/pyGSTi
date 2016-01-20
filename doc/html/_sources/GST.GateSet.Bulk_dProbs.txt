@@ -1,6 +1,0 @@
-GST.GateSet.Bulk_dProbs
-=======================
-
-.. currentmodule:: GST
-
-.. automethod:: GateSet.Bulk_dProbs

@@ -1,6 +1,0 @@
-GST.AnalysisTools.DirectMLEGSTGatesets
-======================================
-
-.. currentmodule:: GST.AnalysisTools
-
-.. autofunction:: DirectMLEGSTGatesets

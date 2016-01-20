@@ -1,0 +1,6 @@
+pygsti.objects.EvalTree.is_split
+================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: EvalTree.is_split

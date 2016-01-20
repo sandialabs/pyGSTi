@@ -1,0 +1,6 @@
+pygsti.frobenius_norm
+=====================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: frobenius_norm

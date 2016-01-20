@@ -1,6 +1,0 @@
-GST.Core.gramRankAndEvals
-=========================
-
-.. currentmodule:: GST.Core
-
-.. autofunction:: gramRankAndEvals

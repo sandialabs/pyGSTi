@@ -1,0 +1,6 @@
+pygsti.gm_to_std
+================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: gm_to_std

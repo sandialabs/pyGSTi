@@ -1,0 +1,6 @@
+pygsti.objects.EvalTree.generate_gatestring_list
+================================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: EvalTree.generate_gatestring_list

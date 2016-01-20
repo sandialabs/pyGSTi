@@ -1,6 +1,0 @@
-GST.ReportGeneration.getGatesetDecompTables_html
-================================================
-
-.. currentmodule:: GST.ReportGeneration
-
-.. autofunction:: getGatesetDecompTables_html

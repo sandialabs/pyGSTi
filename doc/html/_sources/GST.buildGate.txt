@@ -1,6 +1,0 @@
-GST.buildGate
-=============
-
-.. currentmodule:: GST
-
-.. autofunction:: buildGate

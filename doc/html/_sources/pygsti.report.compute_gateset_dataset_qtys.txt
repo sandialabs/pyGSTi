@@ -1,0 +1,6 @@
+pygsti.report.compute_gateset_dataset_qtys
+==========================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: compute_gateset_dataset_qtys

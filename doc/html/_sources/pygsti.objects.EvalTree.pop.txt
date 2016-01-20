@@ -1,0 +1,6 @@
+pygsti.objects.EvalTree.pop
+===========================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: EvalTree.pop

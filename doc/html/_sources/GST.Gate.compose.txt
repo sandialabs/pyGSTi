@@ -1,6 +1,0 @@
-GST.Gate.compose
-================
-
-.. currentmodule:: GST.Gate
-
-.. autofunction:: compose

@@ -1,6 +1,0 @@
-GST.GateStringTools.repeatWithMaxLength
-=======================================
-
-.. currentmodule:: GST.GateStringTools
-
-.. autofunction:: repeatWithMaxLength

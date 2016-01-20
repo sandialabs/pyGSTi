@@ -1,6 +1,0 @@
-GST.BasisTools.stateToPauliDensityVec
-=====================================
-
-.. currentmodule:: GST.BasisTools
-
-.. autofunction:: stateToPauliDensityVec

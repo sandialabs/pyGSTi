@@ -1,0 +1,6 @@
+pygsti.report.small_eigval_err_rate_boxplot
+===========================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: small_eigval_err_rate_boxplot

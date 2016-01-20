@@ -1,0 +1,6 @@
+pygsti.optimize.fmin_particle_swarm
+===================================
+
+.. currentmodule:: pygsti.optimize
+
+.. autofunction:: fmin_particle_swarm

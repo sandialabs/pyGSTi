@@ -1,0 +1,6 @@
+pygsti.gm_to_std_transform_matrix
+=================================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: gm_to_std_transform_matrix

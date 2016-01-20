@@ -1,6 +1,0 @@
-GST.AnalysisTools.Direct2xCompBoxPlot
-=====================================
-
-.. currentmodule:: GST.AnalysisTools
-
-.. autofunction:: Direct2xCompBoxPlot

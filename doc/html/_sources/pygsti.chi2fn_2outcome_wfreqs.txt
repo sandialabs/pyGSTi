@@ -1,0 +1,6 @@
+pygsti.chi2fn_2outcome_wfreqs
+=============================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: chi2fn_2outcome_wfreqs

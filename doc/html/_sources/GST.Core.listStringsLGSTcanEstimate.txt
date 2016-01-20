@@ -1,6 +1,0 @@
-GST.Core.listStringsLGSTcanEstimate
-===================================
-
-.. currentmodule:: GST.Core
-
-.. autofunction:: listStringsLGSTcanEstimate

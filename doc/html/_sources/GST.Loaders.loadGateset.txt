@@ -1,6 +1,0 @@
-GST.Loaders.loadGateset
-=======================
-
-.. currentmodule:: GST.Loaders
-
-.. autofunction:: loadGateset

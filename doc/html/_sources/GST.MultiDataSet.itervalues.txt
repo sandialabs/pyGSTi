@@ -1,6 +1,0 @@
-GST.MultiDataSet.itervalues
-===========================
-
-.. currentmodule:: GST
-
-.. automethod:: MultiDataSet.itervalues

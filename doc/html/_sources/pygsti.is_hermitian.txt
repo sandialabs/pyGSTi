@@ -1,0 +1,6 @@
+pygsti.is_hermitian
+===================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: is_hermitian

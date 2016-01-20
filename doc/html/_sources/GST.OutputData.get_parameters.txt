@@ -1,6 +1,0 @@
-GST.OutputData.get_parameters
-=============================
-
-.. currentmodule:: GST
-
-.. automethod:: OutputData.get_parameters

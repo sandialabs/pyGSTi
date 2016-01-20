@@ -1,6 +1,0 @@
-GST.DataSet.addCounts_1Q
-========================
-
-.. currentmodule:: GST
-
-.. automethod:: DataSet.addCounts_1Q

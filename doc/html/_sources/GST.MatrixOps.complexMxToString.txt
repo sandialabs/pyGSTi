@@ -1,6 +1,0 @@
-GST.MatrixOps.complexMxToString
-===============================
-
-.. currentmodule:: GST.MatrixOps
-
-.. autofunction:: complexMxToString

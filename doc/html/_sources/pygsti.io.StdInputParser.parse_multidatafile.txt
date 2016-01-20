@@ -1,0 +1,6 @@
+pygsti.io.StdInputParser.parse_multidatafile
+============================================
+
+.. currentmodule:: pygsti.io
+
+.. automethod:: StdInputParser.parse_multidatafile

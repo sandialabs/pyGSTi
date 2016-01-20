@@ -1,6 +1,0 @@
-GST.HtmlUtil.html_value
-=======================
-
-.. currentmodule:: GST.HtmlUtil
-
-.. autofunction:: html_value

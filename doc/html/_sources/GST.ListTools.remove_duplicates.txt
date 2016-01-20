@@ -1,6 +1,0 @@
-GST.ListTools.remove_duplicates
-===============================
-
-.. currentmodule:: GST.ListTools
-
-.. autofunction:: remove_duplicates

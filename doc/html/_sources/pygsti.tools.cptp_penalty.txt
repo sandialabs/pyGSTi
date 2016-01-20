@@ -1,0 +1,6 @@
+pygsti.tools.cptp_penalty
+=========================
+
+.. currentmodule:: pygsti.tools
+
+.. autofunction:: cptp_penalty

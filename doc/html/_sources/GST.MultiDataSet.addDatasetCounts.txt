@@ -1,6 +1,0 @@
-GST.MultiDataSet.addDatasetCounts
-=================================
-
-.. currentmodule:: GST
-
-.. automethod:: MultiDataSet.addDatasetCounts

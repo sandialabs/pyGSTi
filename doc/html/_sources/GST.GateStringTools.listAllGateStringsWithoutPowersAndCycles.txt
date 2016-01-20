@@ -1,6 +1,0 @@
-GST.GateStringTools.listAllGateStringsWithoutPowersAndCycles
-============================================================
-
-.. currentmodule:: GST.GateStringTools
-
-.. autofunction:: listAllGateStringsWithoutPowersAndCycles

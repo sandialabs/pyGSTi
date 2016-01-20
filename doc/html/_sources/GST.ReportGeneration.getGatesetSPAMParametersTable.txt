@@ -1,6 +1,0 @@
-GST.ReportGeneration.getGatesetSPAMParametersTable
-==================================================
-
-.. currentmodule:: GST.ReportGeneration
-
-.. autofunction:: getGatesetSPAMParametersTable

@@ -1,6 +1,0 @@
-GSTCommons.Analyze_TruncatedGermPowers.doLSGSTAnalysis
-======================================================
-
-.. currentmodule:: GSTCommons.Analyze_TruncatedGermPowers
-
-.. autofunction:: doLSGSTAnalysis

@@ -1,6 +1,0 @@
-GST.AnalysisTools.NestedColorBoxPlot
-====================================
-
-.. currentmodule:: GST.AnalysisTools
-
-.. autofunction:: NestedColorBoxPlot

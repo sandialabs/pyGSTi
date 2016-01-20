@@ -1,0 +1,6 @@
+pygsti.io.write_parameter_file
+==============================
+
+.. currentmodule:: pygsti.io
+
+.. autofunction:: write_parameter_file

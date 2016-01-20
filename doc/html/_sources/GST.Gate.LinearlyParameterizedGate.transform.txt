@@ -1,6 +1,0 @@
-GST.Gate.LinearlyParameterizedGate.transform
-============================================
-
-.. currentmodule:: GST.Gate
-
-.. automethod:: LinearlyParameterizedGate.transform

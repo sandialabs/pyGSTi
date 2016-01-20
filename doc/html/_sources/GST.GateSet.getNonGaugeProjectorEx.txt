@@ -1,6 +1,0 @@
-GST.GateSet.getNonGaugeProjectorEx
-==================================
-
-.. currentmodule:: GST
-
-.. automethod:: GateSet.getNonGaugeProjectorEx

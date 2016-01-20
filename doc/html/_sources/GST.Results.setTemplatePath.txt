@@ -1,6 +1,0 @@
-GST.Results.setTemplatePath
-===========================
-
-.. currentmodule:: GST
-
-.. automethod:: Results.setTemplatePath

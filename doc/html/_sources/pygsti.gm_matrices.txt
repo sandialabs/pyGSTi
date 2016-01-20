@@ -1,0 +1,6 @@
+pygsti.gm_matrices
+==================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: gm_matrices

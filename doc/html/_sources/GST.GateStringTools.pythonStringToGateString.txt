@@ -1,6 +1,0 @@
-GST.GateStringTools.pythonStringToGateString
-============================================
-
-.. currentmodule:: GST.GateStringTools
-
-.. autofunction:: pythonStringToGateString

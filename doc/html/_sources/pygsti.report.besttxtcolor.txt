@@ -1,0 +1,6 @@
+pygsti.report.besttxtcolor
+==========================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: besttxtcolor

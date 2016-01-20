@@ -1,0 +1,6 @@
+pygsti.report.generate_zoomed_boxplot
+=====================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: generate_zoomed_boxplot

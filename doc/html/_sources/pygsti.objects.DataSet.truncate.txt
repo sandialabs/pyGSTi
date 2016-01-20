@@ -1,0 +1,6 @@
+pygsti.objects.DataSet.truncate
+===============================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: DataSet.truncate

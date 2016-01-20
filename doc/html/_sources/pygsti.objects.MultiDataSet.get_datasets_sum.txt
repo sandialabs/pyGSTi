@@ -1,0 +1,6 @@
+pygsti.objects.MultiDataSet.get_datasets_sum
+============================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: MultiDataSet.get_datasets_sum

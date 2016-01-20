@@ -1,6 +1,0 @@
-GST.Results.createBriefReportPDF
-================================
-
-.. currentmodule:: GST
-
-.. automethod:: Results.createBriefReportPDF

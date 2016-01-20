@@ -1,6 +1,0 @@
-GST.PPTUtil.ppt_vector
-======================
-
-.. currentmodule:: GST.PPTUtil
-
-.. autofunction:: ppt_vector

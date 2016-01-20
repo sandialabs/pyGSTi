@@ -1,6 +1,0 @@
-GST.loadGatestringList
-======================
-
-.. currentmodule:: GST
-
-.. autofunction:: loadGatestringList

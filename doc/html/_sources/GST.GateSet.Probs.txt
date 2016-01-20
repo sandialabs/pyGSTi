@@ -1,6 +1,0 @@
-GST.GateSet.Probs
-=================
-
-.. currentmodule:: GST
-
-.. automethod:: GateSet.Probs

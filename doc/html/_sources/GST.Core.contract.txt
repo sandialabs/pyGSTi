@@ -1,6 +1,0 @@
-GST.Core.contract
-=================
-
-.. currentmodule:: GST.Core
-
-.. autofunction:: contract

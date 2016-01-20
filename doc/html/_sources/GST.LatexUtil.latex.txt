@@ -1,6 +1,0 @@
-GST.LatexUtil.latex
-===================
-
-.. currentmodule:: GST.LatexUtil
-
-.. autofunction:: latex

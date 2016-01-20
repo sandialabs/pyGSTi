@@ -1,0 +1,6 @@
+pygsti.report.get_gateset_choi_table
+====================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: get_gateset_choi_table

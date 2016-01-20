@@ -1,6 +1,0 @@
-GST.AnalysisTools.GatesetWithLGSTGatestringEstimates
-====================================================
-
-.. currentmodule:: GST.AnalysisTools
-
-.. autofunction:: GatesetWithLGSTGatestringEstimates

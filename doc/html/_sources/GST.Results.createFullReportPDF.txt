@@ -1,6 +1,0 @@
-GST.Results.createFullReportPDF
-===============================
-
-.. currentmodule:: GST
-
-.. automethod:: Results.createFullReportPDF

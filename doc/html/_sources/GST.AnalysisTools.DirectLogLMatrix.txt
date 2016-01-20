@@ -1,6 +1,0 @@
-GST.AnalysisTools.DirectLogLMatrix
-==================================
-
-.. currentmodule:: GST.AnalysisTools
-
-.. autofunction:: DirectLogLMatrix

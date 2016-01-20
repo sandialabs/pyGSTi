@@ -1,0 +1,6 @@
+pygsti.create_count_vec_dict
+============================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: create_count_vec_dict

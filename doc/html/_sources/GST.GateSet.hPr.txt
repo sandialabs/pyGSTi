@@ -1,6 +1,0 @@
-GST.GateSet.hPr
-===============
-
-.. currentmodule:: GST
-
-.. automethod:: GateSet.hPr

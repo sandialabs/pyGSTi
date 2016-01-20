@@ -1,6 +1,0 @@
-GST.AnalysisTools.LogLMatrix
-============================
-
-.. currentmodule:: GST.AnalysisTools
-
-.. autofunction:: LogLMatrix

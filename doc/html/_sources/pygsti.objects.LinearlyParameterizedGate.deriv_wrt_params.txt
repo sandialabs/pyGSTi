@@ -1,0 +1,6 @@
+pygsti.objects.LinearlyParameterizedGate.deriv_wrt_params
+=========================================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: LinearlyParameterizedGate.deriv_wrt_params

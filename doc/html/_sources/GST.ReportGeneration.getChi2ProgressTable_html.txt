@@ -1,6 +1,0 @@
-GST.ReportGeneration.getChi2ProgressTable_html
-==============================================
-
-.. currentmodule:: GST.ReportGeneration
-
-.. autofunction:: getChi2ProgressTable_html

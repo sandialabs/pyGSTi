@@ -1,6 +1,0 @@
-GST.writeEmptyDatasetFile
-=========================
-
-.. currentmodule:: GST
-
-.. autofunction:: writeEmptyDatasetFile

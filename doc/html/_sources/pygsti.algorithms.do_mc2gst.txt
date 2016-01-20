@@ -1,0 +1,6 @@
+pygsti.algorithms.do_mc2gst
+===========================
+
+.. currentmodule:: pygsti.algorithms
+
+.. autofunction:: do_mc2gst

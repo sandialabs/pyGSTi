@@ -1,6 +1,0 @@
-GST.LikelihoodFunctions.logL_max
-================================
-
-.. currentmodule:: GST.LikelihoodFunctions
-
-.. autofunction:: logL_max

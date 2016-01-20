@@ -1,6 +1,0 @@
-GST.Exceptions.GSTValueError
-============================
-
-.. currentmodule:: GST.Exceptions
-
-.. autoexception:: GSTValueError

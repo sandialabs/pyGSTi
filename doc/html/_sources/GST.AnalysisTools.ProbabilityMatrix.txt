@@ -1,6 +1,0 @@
-GST.AnalysisTools.ProbabilityMatrix
-===================================
-
-.. currentmodule:: GST.AnalysisTools
-
-.. autofunction:: ProbabilityMatrix

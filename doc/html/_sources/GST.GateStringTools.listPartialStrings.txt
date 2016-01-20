@@ -1,6 +1,0 @@
-GST.GateStringTools.listPartialStrings
-======================================
-
-.. currentmodule:: GST.GateStringTools
-
-.. autofunction:: listPartialStrings

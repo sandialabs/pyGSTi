@@ -1,6 +1,0 @@
-GST.GateSetTools.rotateGateset
-==============================
-
-.. currentmodule:: GST.GateSetTools
-
-.. autofunction:: rotateGateset

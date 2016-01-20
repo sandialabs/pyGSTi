@@ -1,0 +1,6 @@
+pygsti.construction.build_gateset
+=================================
+
+.. currentmodule:: pygsti.construction
+
+.. autofunction:: build_gateset

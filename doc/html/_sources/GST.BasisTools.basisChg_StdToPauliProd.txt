@@ -1,6 +1,0 @@
-GST.BasisTools.basisChg_StdToPauliProd
-======================================
-
-.. currentmodule:: GST.BasisTools
-
-.. autofunction:: basisChg_StdToPauliProd

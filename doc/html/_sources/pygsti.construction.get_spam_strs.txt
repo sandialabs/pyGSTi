@@ -1,0 +1,6 @@
+pygsti.construction.get_spam_strs
+=================================
+
+.. currentmodule:: pygsti.construction
+
+.. autofunction:: get_spam_strs

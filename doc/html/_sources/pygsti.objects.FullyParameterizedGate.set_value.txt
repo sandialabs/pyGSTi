@@ -1,0 +1,6 @@
+pygsti.objects.FullyParameterizedGate.set_value
+===============================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: FullyParameterizedGate.set_value

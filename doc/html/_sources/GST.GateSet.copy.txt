@@ -1,6 +1,0 @@
-GST.GateSet.copy
-================
-
-.. currentmodule:: GST
-
-.. automethod:: GateSet.copy

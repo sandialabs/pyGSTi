@@ -1,6 +1,0 @@
-GST.BasisTools.basisChg_StdToGellMann
-=====================================
-
-.. currentmodule:: GST.BasisTools
-
-.. autofunction:: basisChg_StdToGellMann

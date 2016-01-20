@@ -1,6 +1,0 @@
-GST.OutputData.loadFrom
-=======================
-
-.. currentmodule:: GST
-
-.. automethod:: OutputData.loadFrom

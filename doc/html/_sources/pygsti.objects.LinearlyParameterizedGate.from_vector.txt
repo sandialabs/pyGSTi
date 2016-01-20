@@ -1,0 +1,6 @@
+pygsti.objects.LinearlyParameterizedGate.from_vector
+====================================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: LinearlyParameterizedGate.from_vector

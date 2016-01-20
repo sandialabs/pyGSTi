@@ -1,6 +1,0 @@
-GST.HtmlUtil.html_escaped
-=========================
-
-.. currentmodule:: GST.HtmlUtil
-
-.. autofunction:: html_escaped

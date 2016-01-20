@@ -1,6 +1,0 @@
-GST.GateSet.latex
-=================
-
-.. currentmodule:: GST
-
-.. automethod:: GateSet.latex

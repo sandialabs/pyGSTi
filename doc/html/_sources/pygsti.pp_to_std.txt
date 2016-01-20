@@ -1,0 +1,6 @@
+pygsti.pp_to_std
+================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: pp_to_std

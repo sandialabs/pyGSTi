@@ -1,0 +1,6 @@
+pygsti.algorithms.twirled_deriv
+===============================
+
+.. currentmodule:: pygsti.algorithms
+
+.. autofunction:: twirled_deriv

@@ -1,0 +1,6 @@
+pygsti.io.write_gateset
+=======================
+
+.. currentmodule:: pygsti.io
+
+.. autofunction:: write_gateset

@@ -1,6 +1,0 @@
-GST.GramMatrix.getMaxGramBasis
-==============================
-
-.. currentmodule:: GST.GramMatrix
-
-.. autofunction:: getMaxGramBasis

@@ -1,6 +1,0 @@
-GST.GateSet.iteritems
-=====================
-
-.. currentmodule:: GST
-
-.. automethod:: GateSet.iteritems

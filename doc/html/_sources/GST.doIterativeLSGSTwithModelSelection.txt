@@ -1,6 +1,0 @@
-GST.doIterativeLSGSTwithModelSelection
-======================================
-
-.. currentmodule:: GST
-
-.. autofunction:: doIterativeLSGSTwithModelSelection

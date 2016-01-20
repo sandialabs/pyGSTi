@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.copy
+===========================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.copy

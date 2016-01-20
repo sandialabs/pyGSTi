@@ -1,6 +1,0 @@
-GST.doMLEGST
-============
-
-.. currentmodule:: GST
-
-.. autofunction:: doMLEGST

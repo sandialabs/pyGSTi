@@ -1,6 +1,0 @@
-GST.ReportGeneration.writeReport_LsAndGerms
-===========================================
-
-.. currentmodule:: GST.ReportGeneration
-
-.. autofunction:: writeReport_LsAndGerms

@@ -1,0 +1,6 @@
+pygsti.construction.build_spam_specs
+====================================
+
+.. currentmodule:: pygsti.construction
+
+.. autofunction:: build_spam_specs

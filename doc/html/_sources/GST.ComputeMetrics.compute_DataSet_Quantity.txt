@@ -1,6 +1,0 @@
-GST.ComputeMetrics.compute_DataSet_Quantity
-===========================================
-
-.. currentmodule:: GST.ComputeMetrics
-
-.. autofunction:: compute_DataSet_Quantity

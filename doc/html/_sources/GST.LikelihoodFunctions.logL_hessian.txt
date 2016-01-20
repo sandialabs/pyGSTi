@@ -1,6 +1,0 @@
-GST.LikelihoodFunctions.logL_hessian
-====================================
-
-.. currentmodule:: GST.LikelihoodFunctions
-
-.. autofunction:: logL_hessian

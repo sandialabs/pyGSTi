@@ -1,0 +1,6 @@
+pygsti.report.get_blank_table
+=============================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: get_blank_table

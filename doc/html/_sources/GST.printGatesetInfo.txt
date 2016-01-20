@@ -1,6 +1,0 @@
-GST.printGatesetInfo
-====================
-
-.. currentmodule:: GST
-
-.. autofunction:: printGatesetInfo

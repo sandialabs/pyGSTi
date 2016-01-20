@@ -1,0 +1,6 @@
+pygsti.fidelity
+===============
+
+.. currentmodule:: pygsti
+
+.. autofunction:: fidelity

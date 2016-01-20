@@ -1,6 +1,0 @@
-GST.MatrixOps.is_hermitian
-==========================
-
-.. currentmodule:: GST.MatrixOps
-
-.. autofunction:: is_hermitian

@@ -1,0 +1,6 @@
+pygsti.construction.make_lsgst_lists_asymmetric_fids
+====================================================
+
+.. currentmodule:: pygsti.construction
+
+.. autofunction:: make_lsgst_lists_asymmetric_fids

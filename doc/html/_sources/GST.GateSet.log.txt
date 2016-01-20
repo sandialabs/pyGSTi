@@ -1,6 +1,0 @@
-GST.GateSet.log
-===============
-
-.. currentmodule:: GST
-
-.. automethod:: GateSet.log

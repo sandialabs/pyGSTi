@@ -1,0 +1,6 @@
+pygsti.io.write_empty_dataset_file
+==================================
+
+.. currentmodule:: pygsti.io
+
+.. autofunction:: write_empty_dataset_file

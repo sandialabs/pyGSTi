@@ -1,6 +1,0 @@
-GST.JamiolkowskiOps.ProcessFidelity
-===================================
-
-.. currentmodule:: GST.JamiolkowskiOps
-
-.. autofunction:: ProcessFidelity

@@ -1,6 +1,0 @@
-GST.EvalTree.count
-==================
-
-.. currentmodule:: GST
-
-.. automethod:: EvalTree.count

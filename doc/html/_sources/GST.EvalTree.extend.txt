@@ -1,6 +1,0 @@
-GST.EvalTree.extend
-===================
-
-.. currentmodule:: GST
-
-.. automethod:: EvalTree.extend

@@ -1,6 +1,0 @@
-GST.BasisTools.GetGellMannMatrices
-==================================
-
-.. currentmodule:: GST.BasisTools
-
-.. autofunction:: GetGellMannMatrices

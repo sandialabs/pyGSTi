@@ -1,0 +1,24 @@
+pygsti.objects.SpamSpec
+=======================
+
+.. currentmodule:: pygsti.objects
+
+.. autoclass:: SpamSpec
+
+   
+   .. automethod:: __init__
+       :noindex:
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree:
+   
+      ~SpamSpec.__init__
+   
+   
+
+   
+   
+   

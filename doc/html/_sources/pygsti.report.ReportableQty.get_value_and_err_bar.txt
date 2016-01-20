@@ -1,0 +1,6 @@
+pygsti.report.ReportableQty.get_value_and_err_bar
+=================================================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: ReportableQty.get_value_and_err_bar

@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.pop
+==========================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.pop

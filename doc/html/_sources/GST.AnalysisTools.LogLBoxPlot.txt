@@ -1,6 +1,0 @@
-GST.AnalysisTools.LogLBoxPlot
-=============================
-
-.. currentmodule:: GST.AnalysisTools
-
-.. autofunction:: LogLBoxPlot

@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.get_evec
+===============================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.get_evec

@@ -1,0 +1,33 @@
+pygsti.objects.LinearlyParameterizedGate
+========================================
+
+.. currentmodule:: pygsti.objects
+
+.. autoclass:: LinearlyParameterizedGate
+
+   
+   .. automethod:: __init__
+       :noindex:
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree:
+   
+      ~LinearlyParameterizedGate.__init__
+      ~LinearlyParameterizedGate.compose
+      ~LinearlyParameterizedGate.copy
+      ~LinearlyParameterizedGate.deriv_wrt_params
+      ~LinearlyParameterizedGate.from_vector
+      ~LinearlyParameterizedGate.get_num_params
+      ~LinearlyParameterizedGate.set_value
+      ~LinearlyParameterizedGate.to_vector
+      ~LinearlyParameterizedGate.transform
+      ~LinearlyParameterizedGate.value_dimension
+   
+   
+
+   
+   
+   

@@ -1,6 +1,0 @@
-GST.DataSet.keys
-================
-
-.. currentmodule:: GST
-
-.. automethod:: DataSet.keys

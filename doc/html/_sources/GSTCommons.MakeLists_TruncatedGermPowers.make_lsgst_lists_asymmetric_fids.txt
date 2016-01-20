@@ -1,6 +1,0 @@
-GSTCommons.MakeLists_TruncatedGermPowers.make_lsgst_lists_asymmetric_fids
-=========================================================================
-
-.. currentmodule:: GSTCommons.MakeLists_TruncatedGermPowers
-
-.. autofunction:: make_lsgst_lists_asymmetric_fids

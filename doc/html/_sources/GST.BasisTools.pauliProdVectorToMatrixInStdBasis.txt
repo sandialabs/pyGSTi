@@ -1,6 +1,0 @@
-GST.BasisTools.pauliProdVectorToMatrixInStdBasis
-================================================
-
-.. currentmodule:: GST.BasisTools
-
-.. autofunction:: pauliProdVectorToMatrixInStdBasis

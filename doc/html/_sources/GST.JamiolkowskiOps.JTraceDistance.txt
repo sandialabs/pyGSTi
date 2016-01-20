@@ -1,6 +1,0 @@
-GST.JamiolkowskiOps.JTraceDistance
-==================================
-
-.. currentmodule:: GST.JamiolkowskiOps
-
-.. autofunction:: JTraceDistance

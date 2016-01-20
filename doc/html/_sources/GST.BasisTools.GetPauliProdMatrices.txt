@@ -1,6 +1,0 @@
-GST.BasisTools.GetPauliProdMatrices
-===================================
-
-.. currentmodule:: GST.BasisTools
-
-.. autofunction:: GetPauliProdMatrices

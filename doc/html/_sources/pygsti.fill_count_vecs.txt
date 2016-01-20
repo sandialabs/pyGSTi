@@ -1,0 +1,6 @@
+pygsti.fill_count_vecs
+======================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: fill_count_vecs

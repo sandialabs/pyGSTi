@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.clear
+============================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.clear

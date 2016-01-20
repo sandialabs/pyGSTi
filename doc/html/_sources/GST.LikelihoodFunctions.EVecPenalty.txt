@@ -1,6 +1,0 @@
-GST.LikelihoodFunctions.EVecPenalty
-===================================
-
-.. currentmodule:: GST.LikelihoodFunctions
-
-.. autofunction:: EVecPenalty

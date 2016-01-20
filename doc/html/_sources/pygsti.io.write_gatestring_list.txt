@@ -1,0 +1,6 @@
+pygsti.io.write_gatestring_list
+===============================
+
+.. currentmodule:: pygsti.io
+
+.. autofunction:: write_gatestring_list

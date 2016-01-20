@@ -1,6 +1,0 @@
-GST.GateSet.getNumElements
-==========================
-
-.. currentmodule:: GST
-
-.. automethod:: GateSet.getNumElements

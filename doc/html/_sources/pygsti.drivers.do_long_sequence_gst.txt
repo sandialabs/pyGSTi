@@ -1,0 +1,6 @@
+pygsti.drivers.do_long_sequence_gst
+===================================
+
+.. currentmodule:: pygsti.drivers
+
+.. autofunction:: do_long_sequence_gst

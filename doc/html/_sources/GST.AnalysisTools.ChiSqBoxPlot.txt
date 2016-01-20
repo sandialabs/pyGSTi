@@ -1,6 +1,0 @@
-GST.AnalysisTools.ChiSqBoxPlot
-==============================
-
-.. currentmodule:: GST.AnalysisTools
-
-.. autofunction:: ChiSqBoxPlot

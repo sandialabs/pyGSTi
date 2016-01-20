@@ -1,6 +1,0 @@
-GST.EvalTree.remove
-===================
-
-.. currentmodule:: GST
-
-.. automethod:: EvalTree.remove

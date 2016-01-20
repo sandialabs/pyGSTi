@@ -1,0 +1,6 @@
+pygsti.report.GSTFigure.get_extra_info
+======================================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: GSTFigure.get_extra_info

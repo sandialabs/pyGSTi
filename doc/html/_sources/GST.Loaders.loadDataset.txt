@@ -1,6 +1,0 @@
-GST.Loaders.loadDataset
-=======================
-
-.. currentmodule:: GST.Loaders
-
-.. autofunction:: loadDataset

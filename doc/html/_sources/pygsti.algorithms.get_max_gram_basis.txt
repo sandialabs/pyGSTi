@@ -1,0 +1,6 @@
+pygsti.algorithms.get_max_gram_basis
+====================================
+
+.. currentmodule:: pygsti.algorithms
+
+.. autofunction:: get_max_gram_basis

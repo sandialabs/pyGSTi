@@ -1,6 +1,0 @@
-GST.GateOps.Fidelity
-====================
-
-.. currentmodule:: GST.GateOps
-
-.. autofunction:: Fidelity

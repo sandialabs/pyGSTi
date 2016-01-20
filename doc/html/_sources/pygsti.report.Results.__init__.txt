@@ -1,0 +1,6 @@
+pygsti.report.Results.__init__
+==============================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: Results.__init__

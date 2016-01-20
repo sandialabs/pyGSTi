@@ -1,6 +1,0 @@
-GST.PPTUtil.ppt_matrix
-======================
-
-.. currentmodule:: GST.PPTUtil
-
-.. autofunction:: ppt_matrix

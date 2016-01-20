@@ -1,6 +1,0 @@
-GST.HtmlUtil.html_vector
-========================
-
-.. currentmodule:: GST.HtmlUtil
-
-.. autofunction:: html_vector

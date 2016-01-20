@@ -1,6 +1,0 @@
-GST.HtmlUtil.html_list
-======================
-
-.. currentmodule:: GST.HtmlUtil
-
-.. autofunction:: html_list

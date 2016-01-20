@@ -1,0 +1,6 @@
+pygsti.objects.EvalTree.remove
+==============================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: EvalTree.remove

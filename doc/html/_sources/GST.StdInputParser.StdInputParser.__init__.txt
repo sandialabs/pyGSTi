@@ -1,6 +1,0 @@
-GST.StdInputParser.StdInputParser.__init__
-==========================================
-
-.. currentmodule:: GST.StdInputParser
-
-.. automethod:: StdInputParser.__init__

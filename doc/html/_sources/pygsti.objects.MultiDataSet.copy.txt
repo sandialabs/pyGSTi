@@ -1,0 +1,6 @@
+pygsti.objects.MultiDataSet.copy
+================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: MultiDataSet.copy

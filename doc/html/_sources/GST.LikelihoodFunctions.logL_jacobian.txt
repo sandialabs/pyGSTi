@@ -1,6 +1,0 @@
-GST.LikelihoodFunctions.logL_jacobian
-=====================================
-
-.. currentmodule:: GST.LikelihoodFunctions
-
-.. autofunction:: logL_jacobian

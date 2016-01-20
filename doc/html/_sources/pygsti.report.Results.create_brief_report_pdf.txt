@@ -1,0 +1,6 @@
+pygsti.report.Results.create_brief_report_pdf
+=============================================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: Results.create_brief_report_pdf

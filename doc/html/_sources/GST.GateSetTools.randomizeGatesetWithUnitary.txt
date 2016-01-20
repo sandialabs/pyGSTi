@@ -1,6 +1,0 @@
-GST.GateSetTools.randomizeGatesetWithUnitary
-============================================
-
-.. currentmodule:: GST.GateSetTools
-
-.. autofunction:: randomizeGatesetWithUnitary

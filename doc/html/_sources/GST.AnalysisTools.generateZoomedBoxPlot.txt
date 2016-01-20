@@ -1,6 +1,0 @@
-GST.AnalysisTools.generateZoomedBoxPlot
-=======================================
-
-.. currentmodule:: GST.AnalysisTools
-
-.. autofunction:: generateZoomedBoxPlot

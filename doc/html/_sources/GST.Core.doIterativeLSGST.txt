@@ -1,6 +1,0 @@
-GST.Core.doIterativeLSGST
-=========================
-
-.. currentmodule:: GST.Core
-
-.. autofunction:: doIterativeLSGST

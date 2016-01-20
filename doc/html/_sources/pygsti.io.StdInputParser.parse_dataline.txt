@@ -1,0 +1,6 @@
+pygsti.io.StdInputParser.parse_dataline
+=======================================
+
+.. currentmodule:: pygsti.io
+
+.. automethod:: StdInputParser.parse_dataline

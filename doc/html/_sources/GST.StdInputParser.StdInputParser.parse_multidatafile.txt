@@ -1,6 +1,0 @@
-GST.StdInputParser.StdInputParser.parse_multidatafile
-=====================================================
-
-.. currentmodule:: GST.StdInputParser
-
-.. automethod:: StdInputParser.parse_multidatafile

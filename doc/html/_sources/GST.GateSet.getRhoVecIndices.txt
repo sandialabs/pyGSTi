@@ -1,6 +1,0 @@
-GST.GateSet.getRhoVecIndices
-============================
-
-.. currentmodule:: GST
-
-.. automethod:: GateSet.getRhoVecIndices

@@ -1,6 +1,0 @@
-GST.getRhoAndEStrs
-==================
-
-.. currentmodule:: GST
-
-.. autofunction:: getRhoAndEStrs

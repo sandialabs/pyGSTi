@@ -1,0 +1,6 @@
+pygsti.io.StdInputParser.parse_gatestring
+=========================================
+
+.. currentmodule:: pygsti.io
+
+.. automethod:: StdInputParser.parse_gatestring

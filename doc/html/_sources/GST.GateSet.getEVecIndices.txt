@@ -1,6 +1,0 @@
-GST.GateSet.getEVecIndices
-==========================
-
-.. currentmodule:: GST
-
-.. automethod:: GateSet.getEVecIndices

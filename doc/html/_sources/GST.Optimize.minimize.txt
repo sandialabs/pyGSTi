@@ -1,6 +1,0 @@
-GST.Optimize.minimize
-=====================
-
-.. currentmodule:: GST.Optimize
-
-.. autofunction:: minimize

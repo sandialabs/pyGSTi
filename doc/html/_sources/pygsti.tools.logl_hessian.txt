@@ -1,0 +1,6 @@
+pygsti.tools.logl_hessian
+=========================
+
+.. currentmodule:: pygsti.tools
+
+.. autofunction:: logl_hessian

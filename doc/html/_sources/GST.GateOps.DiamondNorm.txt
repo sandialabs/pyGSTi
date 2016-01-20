@@ -1,6 +1,0 @@
-GST.GateOps.DiamondNorm
-=======================
-
-.. currentmodule:: GST.GateOps
-
-.. autofunction:: DiamondNorm

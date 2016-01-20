@@ -1,6 +1,0 @@
-GST.AnalysisTools.besttxtcolor
-==============================
-
-.. currentmodule:: GST.AnalysisTools
-
-.. autofunction:: besttxtcolor

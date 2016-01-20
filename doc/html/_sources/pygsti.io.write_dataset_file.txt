@@ -1,0 +1,6 @@
+pygsti.io.write_dataset_file
+============================
+
+.. currentmodule:: pygsti.io
+
+.. autofunction:: write_dataset_file

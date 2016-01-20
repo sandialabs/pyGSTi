@@ -1,0 +1,6 @@
+pygsti.report.Results.init_Ls_and_germs
+=======================================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: Results.init_Ls_and_germs

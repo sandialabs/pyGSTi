@@ -1,6 +1,0 @@
-GST.MatrixOps.frobeniusNorm
-===========================
-
-.. currentmodule:: GST.MatrixOps
-
-.. autofunction:: frobeniusNorm

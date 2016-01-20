@@ -1,6 +1,0 @@
-GST.WeightedGateString.__init__
-===============================
-
-.. currentmodule:: GST
-
-.. automethod:: WeightedGateString.__init__

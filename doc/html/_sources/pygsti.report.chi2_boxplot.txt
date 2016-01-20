@@ -1,0 +1,6 @@
+pygsti.report.chi2_boxplot
+==========================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: chi2_boxplot

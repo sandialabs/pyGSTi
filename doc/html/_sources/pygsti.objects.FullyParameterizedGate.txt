@@ -1,0 +1,33 @@
+pygsti.objects.FullyParameterizedGate
+=====================================
+
+.. currentmodule:: pygsti.objects
+
+.. autoclass:: FullyParameterizedGate
+
+   
+   .. automethod:: __init__
+       :noindex:
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree:
+   
+      ~FullyParameterizedGate.__init__
+      ~FullyParameterizedGate.compose
+      ~FullyParameterizedGate.copy
+      ~FullyParameterizedGate.deriv_wrt_params
+      ~FullyParameterizedGate.from_vector
+      ~FullyParameterizedGate.get_num_params
+      ~FullyParameterizedGate.set_value
+      ~FullyParameterizedGate.to_vector
+      ~FullyParameterizedGate.transform
+      ~FullyParameterizedGate.value_dimension
+   
+   
+
+   
+   
+   

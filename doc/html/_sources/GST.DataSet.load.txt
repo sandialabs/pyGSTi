@@ -1,6 +1,0 @@
-GST.DataSet.load
-================
-
-.. currentmodule:: GST
-
-.. automethod:: DataSet.load

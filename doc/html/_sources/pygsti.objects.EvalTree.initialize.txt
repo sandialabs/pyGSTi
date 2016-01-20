@@ -1,0 +1,6 @@
+pygsti.objects.EvalTree.initialize
+==================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: EvalTree.initialize

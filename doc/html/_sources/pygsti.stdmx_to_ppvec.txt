@@ -1,0 +1,6 @@
+pygsti.stdmx_to_ppvec
+=====================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: stdmx_to_ppvec

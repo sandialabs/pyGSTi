@@ -1,6 +1,0 @@
-GST.PPTUtil.ppt_escaped
-=======================
-
-.. currentmodule:: GST.PPTUtil
-
-.. autofunction:: ppt_escaped

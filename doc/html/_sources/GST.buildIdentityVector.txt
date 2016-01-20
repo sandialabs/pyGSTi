@@ -1,6 +1,0 @@
-GST.buildIdentityVector
-=======================
-
-.. currentmodule:: GST
-
-.. autofunction:: buildIdentityVector

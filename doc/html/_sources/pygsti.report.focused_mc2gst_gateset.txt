@@ -1,0 +1,6 @@
+pygsti.report.focused_mc2gst_gateset
+====================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: focused_mc2gst_gateset

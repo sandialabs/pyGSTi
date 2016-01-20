@@ -1,6 +1,0 @@
-GST.GateSet.getVectorOffsets
-============================
-
-.. currentmodule:: GST
-
-.. automethod:: GateSet.getVectorOffsets

@@ -1,6 +1,0 @@
-GST.GateSet.hProduct
-====================
-
-.. currentmodule:: GST
-
-.. automethod:: GateSet.hProduct

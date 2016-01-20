@@ -1,0 +1,6 @@
+pygsti.report.zoomed_chi2_boxplot
+=================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: zoomed_chi2_boxplot

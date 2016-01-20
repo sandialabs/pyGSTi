@@ -1,6 +1,0 @@
-GST.EvalTree.index
-==================
-
-.. currentmodule:: GST
-
-.. automethod:: EvalTree.index

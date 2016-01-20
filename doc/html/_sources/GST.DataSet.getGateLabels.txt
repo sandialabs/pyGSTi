@@ -1,6 +1,0 @@
-GST.DataSet.getGateLabels
-=========================
-
-.. currentmodule:: GST
-
-.. automethod:: DataSet.getGateLabels

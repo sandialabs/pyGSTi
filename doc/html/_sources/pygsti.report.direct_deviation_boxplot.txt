@@ -1,0 +1,6 @@
+pygsti.report.direct_deviation_boxplot
+======================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: direct_deviation_boxplot

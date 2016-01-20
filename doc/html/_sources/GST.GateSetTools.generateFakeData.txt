@@ -1,6 +1,0 @@
-GST.GateSetTools.generateFakeData
-=================================
-
-.. currentmodule:: GST.GateSetTools
-
-.. autofunction:: generateFakeData

@@ -1,6 +1,0 @@
-GST.Optimize.createObjFuncPrinter
-=================================
-
-.. currentmodule:: GST.Optimize
-
-.. autofunction:: createObjFuncPrinter

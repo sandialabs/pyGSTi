@@ -1,6 +1,0 @@
-GST.BasisTools.GetPauliProdToStdBasisTransformMatrix
-====================================================
-
-.. currentmodule:: GST.BasisTools
-
-.. autofunction:: GetPauliProdToStdBasisTransformMatrix

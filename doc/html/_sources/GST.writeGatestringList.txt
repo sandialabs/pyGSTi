@@ -1,6 +1,0 @@
-GST.writeGatestringList
-=======================
-
-.. currentmodule:: GST
-
-.. autofunction:: writeGatestringList

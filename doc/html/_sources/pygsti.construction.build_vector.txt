@@ -1,0 +1,6 @@
+pygsti.construction.build_vector
+================================
+
+.. currentmodule:: pygsti.construction
+
+.. autofunction:: build_vector

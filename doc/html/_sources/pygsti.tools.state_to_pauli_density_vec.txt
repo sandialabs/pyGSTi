@@ -1,0 +1,6 @@
+pygsti.tools.state_to_pauli_density_vec
+=======================================
+
+.. currentmodule:: pygsti.tools
+
+.. autofunction:: state_to_pauli_density_vec

@@ -1,6 +1,0 @@
-GST.LatexUtil.latex_vector
-==========================
-
-.. currentmodule:: GST.LatexUtil
-
-.. autofunction:: latex_vector

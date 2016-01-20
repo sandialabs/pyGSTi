@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.log
+==========================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.log

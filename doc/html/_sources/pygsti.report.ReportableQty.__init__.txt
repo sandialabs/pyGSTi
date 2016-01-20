@@ -1,0 +1,6 @@
+pygsti.report.ReportableQty.__init__
+====================================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: ReportableQty.__init__

@@ -1,6 +1,0 @@
-GST.doIterativeExLGST
-=====================
-
-.. currentmodule:: GST
-
-.. autofunction:: doIterativeExLGST

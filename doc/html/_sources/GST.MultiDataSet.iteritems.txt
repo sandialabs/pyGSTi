@@ -1,6 +1,0 @@
-GST.MultiDataSet.iteritems
-==========================
-
-.. currentmodule:: GST
-
-.. automethod:: MultiDataSet.iteritems

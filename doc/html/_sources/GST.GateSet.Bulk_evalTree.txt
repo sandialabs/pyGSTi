@@ -1,6 +1,0 @@
-GST.GateSet.Bulk_evalTree
-=========================
-
-.. currentmodule:: GST
-
-.. automethod:: GateSet.Bulk_evalTree

@@ -1,6 +1,0 @@
-GST.GateSetConstruction.buildGateset
-====================================
-
-.. currentmodule:: GST.GateSetConstruction
-
-.. autofunction:: buildGateset

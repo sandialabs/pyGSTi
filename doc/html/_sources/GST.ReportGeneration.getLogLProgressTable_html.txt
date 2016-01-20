@@ -1,6 +1,0 @@
-GST.ReportGeneration.getLogLProgressTable_html
-==============================================
-
-.. currentmodule:: GST.ReportGeneration
-
-.. autofunction:: getLogLProgressTable_html

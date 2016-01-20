@@ -1,6 +1,0 @@
-GST.Writers.writeEmptyDatasetFile
-=================================
-
-.. currentmodule:: GST.Writers
-
-.. autofunction:: writeEmptyDatasetFile

@@ -54,9 +54,9 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'Gate Set Tomography'
-copyright = u'2015, Robin Blume-Kohout, John King Gamble, Erik Nielsen, Kenneth Rudinger'
-author = u'Robin Blume-Kohout, John King Gamble, Erik Nielsen, Kenneth Rudinger'
+project = u'pyGSTi'
+copyright = u'2015, Erik Nielsen, Kenneth Rudinger, John King Gamble, Robin Blume-Kohout'
+author = u'Erik Nielsen, Kenneth Rudinger, John King Gamble, Robin Blume-Kohout'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -277,9 +277,9 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  (master_doc, 'GateSetTomography', u'Gate Set Tomography Documentation',
-   author, 'GateSetTomography', 'One line description of project.',
-   'Miscellaneous'),
+  (master_doc, 'pyGSTi', u'pyGSTi Documentation',
+   author, 'pyGSTi', 'Python GST Implemenation.',
+   'Tomography'),
 ]
 
 # Documents to append as an appendix to all manuals.

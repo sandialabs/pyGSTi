@@ -1,6 +1,0 @@
-GST.AnalysisTools.ChiSqFunc
-===========================
-
-.. currentmodule:: GST.AnalysisTools
-
-.. autofunction:: ChiSqFunc

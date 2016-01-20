@@ -1,6 +1,0 @@
-GST.loadMultiDataset
-====================
-
-.. currentmodule:: GST
-
-.. autofunction:: loadMultiDataset

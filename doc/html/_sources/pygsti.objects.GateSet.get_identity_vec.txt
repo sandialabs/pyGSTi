@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.get_identity_vec
+=======================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.get_identity_vec

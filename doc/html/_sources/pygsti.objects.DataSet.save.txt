@@ -1,0 +1,6 @@
+pygsti.objects.DataSet.save
+===========================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: DataSet.save

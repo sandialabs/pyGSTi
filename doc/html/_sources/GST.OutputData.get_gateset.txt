@@ -1,6 +1,0 @@
-GST.OutputData.get_gateset
-==========================
-
-.. currentmodule:: GST
-
-.. automethod:: OutputData.get_gateset

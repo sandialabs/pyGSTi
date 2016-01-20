@@ -1,6 +1,0 @@
-GST.Gate.FullyParameterizedGate.__init__
-========================================
-
-.. currentmodule:: GST.Gate
-
-.. automethod:: FullyParameterizedGate.__init__

@@ -1,0 +1,6 @@
+pygsti.report.Results.get_figure
+================================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: Results.get_figure

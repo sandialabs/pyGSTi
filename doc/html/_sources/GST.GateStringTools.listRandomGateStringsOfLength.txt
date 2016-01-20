@@ -1,6 +1,0 @@
-GST.GateStringTools.listRandomGateStringsOfLength
-=================================================
-
-.. currentmodule:: GST.GateStringTools
-
-.. autofunction:: listRandomGateStringsOfLength

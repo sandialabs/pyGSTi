@@ -1,6 +1,0 @@
-GST.optimizeGauge
-=================
-
-.. currentmodule:: GST
-
-.. autofunction:: optimizeGauge

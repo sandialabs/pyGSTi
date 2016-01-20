@@ -1,6 +1,0 @@
-GST.LikelihoodFunctions.createCountVecDict
-==========================================
-
-.. currentmodule:: GST.LikelihoodFunctions
-
-.. autofunction:: createCountVecDict

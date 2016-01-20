@@ -1,6 +1,0 @@
-GST.JTraceDistance
-==================
-
-.. currentmodule:: GST
-
-.. autofunction:: JTraceDistance

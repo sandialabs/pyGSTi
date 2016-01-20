@@ -1,6 +1,0 @@
-GST.DataSet.addCountsFromDataset
-================================
-
-.. currentmodule:: GST
-
-.. automethod:: DataSet.addCountsFromDataset

@@ -1,6 +1,0 @@
-GST.StdInputParser.StdInputParser.parse_dictline
-================================================
-
-.. currentmodule:: GST.StdInputParser
-
-.. automethod:: StdInputParser.parse_dictline

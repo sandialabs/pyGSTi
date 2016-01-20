@@ -1,6 +1,0 @@
-GST.GateStringTools.repeat
-==========================
-
-.. currentmodule:: GST.GateStringTools
-
-.. autofunction:: repeat

@@ -1,6 +1,0 @@
-GST.MatrixOps.printMx
-=====================
-
-.. currentmodule:: GST.MatrixOps
-
-.. autofunction:: printMx

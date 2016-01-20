@@ -1,6 +1,0 @@
-GST.GateSet.diff_JTraceDistance
-===============================
-
-.. currentmodule:: GST
-
-.. automethod:: GateSet.diff_JTraceDistance

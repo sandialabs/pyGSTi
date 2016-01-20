@@ -1,6 +1,0 @@
-GST.Gate.FullyParameterizedGate.derivWRTparams
-==============================================
-
-.. currentmodule:: GST.Gate
-
-.. automethod:: FullyParameterizedGate.derivWRTparams

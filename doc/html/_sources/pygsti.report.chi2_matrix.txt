@@ -1,0 +1,6 @@
+pygsti.report.chi2_matrix
+=========================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: chi2_matrix

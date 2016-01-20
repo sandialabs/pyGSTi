@@ -1,6 +1,0 @@
-GST.loadGatestringDict
-======================
-
-.. currentmodule:: GST
-
-.. autofunction:: loadGatestringDict

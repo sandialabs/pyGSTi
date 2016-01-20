@@ -1,6 +1,0 @@
-GST.GateSetTools.depolarizeSPAM
-===============================
-
-.. currentmodule:: GST.GateSetTools
-
-.. autofunction:: depolarizeSPAM

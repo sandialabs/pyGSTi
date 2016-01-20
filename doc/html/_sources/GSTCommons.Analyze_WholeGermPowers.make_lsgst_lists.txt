@@ -1,6 +1,0 @@
-GSTCommons.Analyze_WholeGermPowers.make_lsgst_lists
-===================================================
-
-.. currentmodule:: GSTCommons.Analyze_WholeGermPowers
-
-.. autofunction:: make_lsgst_lists

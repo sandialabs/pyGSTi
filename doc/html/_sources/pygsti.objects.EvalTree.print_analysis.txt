@@ -1,0 +1,6 @@
+pygsti.objects.EvalTree.print_analysis
+======================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: EvalTree.print_analysis

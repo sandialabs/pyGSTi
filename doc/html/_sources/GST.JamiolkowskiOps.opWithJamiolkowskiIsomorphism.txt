@@ -1,6 +1,0 @@
-GST.JamiolkowskiOps.opWithJamiolkowskiIsomorphism
-=================================================
-
-.. currentmodule:: GST.JamiolkowskiOps
-
-.. autofunction:: opWithJamiolkowskiIsomorphism

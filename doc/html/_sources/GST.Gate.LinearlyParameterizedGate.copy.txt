@@ -1,6 +1,0 @@
-GST.Gate.LinearlyParameterizedGate.copy
-=======================================
-
-.. currentmodule:: GST.Gate
-
-.. automethod:: LinearlyParameterizedGate.copy

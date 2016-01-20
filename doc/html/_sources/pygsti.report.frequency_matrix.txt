@@ -1,0 +1,6 @@
+pygsti.report.frequency_matrix
+==============================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: frequency_matrix

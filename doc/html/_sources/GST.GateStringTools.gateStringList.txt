@@ -1,6 +1,0 @@
-GST.GateStringTools.gateStringList
-==================================
-
-.. currentmodule:: GST.GateStringTools
-
-.. autofunction:: gateStringList

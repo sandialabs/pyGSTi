@@ -1,6 +1,0 @@
-GST.MultiDataSet.save
-=====================
-
-.. currentmodule:: GST
-
-.. automethod:: MultiDataSet.save

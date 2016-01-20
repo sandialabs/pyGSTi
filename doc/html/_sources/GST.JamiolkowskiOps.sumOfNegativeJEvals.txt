@@ -1,6 +1,0 @@
-GST.JamiolkowskiOps.sumOfNegativeJEvals
-=======================================
-
-.. currentmodule:: GST.JamiolkowskiOps
-
-.. autofunction:: sumOfNegativeJEvals

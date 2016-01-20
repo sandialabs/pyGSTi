@@ -1,0 +1,6 @@
+pygsti.objects.WeightedGateString.__init__
+==========================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: WeightedGateString.__init__

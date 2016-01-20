@@ -1,6 +1,0 @@
-GST.GateSet.keys
-================
-
-.. currentmodule:: GST
-
-.. automethod:: GateSet.keys

@@ -1,6 +1,0 @@
-GST.AnalysisTools.ChiSqFunc_2outcome
-====================================
-
-.. currentmodule:: GST.AnalysisTools
-
-.. autofunction:: ChiSqFunc_2outcome

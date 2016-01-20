@@ -1,6 +1,0 @@
-GST.GateSet.set_EVec
-====================
-
-.. currentmodule:: GST
-
-.. automethod:: GateSet.set_EVec

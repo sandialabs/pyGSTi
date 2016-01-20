@@ -1,6 +1,0 @@
-GST.Core.doLSGSTwithModelSelection
-==================================
-
-.. currentmodule:: GST.Core
-
-.. autofunction:: doLSGSTwithModelSelection

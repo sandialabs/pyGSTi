@@ -1,6 +1,0 @@
-GST.Results.createPresentationPDF
-=================================
-
-.. currentmodule:: GST
-
-.. automethod:: Results.createPresentationPDF

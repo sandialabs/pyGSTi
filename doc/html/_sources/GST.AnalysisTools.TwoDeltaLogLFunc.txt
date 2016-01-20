@@ -1,6 +1,0 @@
-GST.AnalysisTools.TwoDeltaLogLFunc
-==================================
-
-.. currentmodule:: GST.AnalysisTools
-
-.. autofunction:: TwoDeltaLogLFunc

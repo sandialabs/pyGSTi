@@ -1,6 +1,0 @@
-GST.buildVector
-===============
-
-.. currentmodule:: GST
-
-.. autofunction:: buildVector

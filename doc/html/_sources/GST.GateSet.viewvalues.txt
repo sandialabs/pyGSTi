@@ -1,6 +1,0 @@
-GST.GateSet.viewvalues
-======================
-
-.. currentmodule:: GST
-
-.. automethod:: GateSet.viewvalues

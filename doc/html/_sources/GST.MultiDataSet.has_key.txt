@@ -1,6 +1,0 @@
-GST.MultiDataSet.has_key
-========================
-
-.. currentmodule:: GST
-
-.. automethod:: MultiDataSet.has_key

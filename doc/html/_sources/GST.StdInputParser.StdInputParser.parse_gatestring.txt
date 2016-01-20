@@ -1,6 +1,0 @@
-GST.StdInputParser.StdInputParser.parse_gatestring
-==================================================
-
-.. currentmodule:: GST.StdInputParser
-
-.. automethod:: StdInputParser.parse_gatestring

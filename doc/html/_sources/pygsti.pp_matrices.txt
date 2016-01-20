@@ -1,0 +1,6 @@
+pygsti.pp_matrices
+==================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: pp_matrices

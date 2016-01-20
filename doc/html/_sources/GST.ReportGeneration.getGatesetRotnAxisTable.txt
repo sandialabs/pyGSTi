@@ -1,6 +1,0 @@
-GST.ReportGeneration.getGatesetRotnAxisTable
-============================================
-
-.. currentmodule:: GST.ReportGeneration
-
-.. autofunction:: getGatesetRotnAxisTable

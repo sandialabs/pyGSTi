@@ -1,6 +1,0 @@
-GST.AnalysisTools.GateStringChiSq
-=================================
-
-.. currentmodule:: GST.AnalysisTools
-
-.. autofunction:: GateStringChiSq

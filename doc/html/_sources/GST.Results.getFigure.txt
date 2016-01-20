@@ -1,6 +1,0 @@
-GST.Results.getFigure
-=====================
-
-.. currentmodule:: GST
-
-.. automethod:: Results.getFigure

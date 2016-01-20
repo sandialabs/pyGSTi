@@ -1,6 +1,0 @@
-GST.Optimize.fmin_particle_swarm
-================================
-
-.. currentmodule:: GST.Optimize
-
-.. autofunction:: fmin_particle_swarm

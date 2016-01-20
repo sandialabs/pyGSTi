@@ -1,0 +1,6 @@
+pygsti.algorithms.optimize_integer_germs_slack
+==============================================
+
+.. currentmodule:: pygsti.algorithms
+
+.. autofunction:: optimize_integer_germs_slack

@@ -1,6 +1,0 @@
-GST.BasisTools.GetGellMannToStdBasisTransformMatrix
-===================================================
-
-.. currentmodule:: GST.BasisTools
-
-.. autofunction:: GetGellMannToStdBasisTransformMatrix

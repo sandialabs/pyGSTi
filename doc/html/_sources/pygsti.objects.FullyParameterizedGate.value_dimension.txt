@@ -1,0 +1,6 @@
+pygsti.objects.FullyParameterizedGate.value_dimension
+=====================================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: FullyParameterizedGate.value_dimension

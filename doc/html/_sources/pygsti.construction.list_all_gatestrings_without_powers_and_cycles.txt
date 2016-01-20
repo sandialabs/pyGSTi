@@ -1,0 +1,6 @@
+pygsti.construction.list_all_gatestrings_without_powers_and_cycles
+==================================================================
+
+.. currentmodule:: pygsti.construction
+
+.. autofunction:: list_all_gatestrings_without_powers_and_cycles

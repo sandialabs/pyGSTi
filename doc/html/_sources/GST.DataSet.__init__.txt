@@ -1,6 +1,0 @@
-GST.DataSet.__init__
-====================
-
-.. currentmodule:: GST
-
-.. automethod:: DataSet.__init__

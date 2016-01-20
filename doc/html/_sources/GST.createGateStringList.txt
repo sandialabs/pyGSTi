@@ -1,6 +1,0 @@
-GST.createGateStringList
-========================
-
-.. currentmodule:: GST
-
-.. autofunction:: createGateStringList

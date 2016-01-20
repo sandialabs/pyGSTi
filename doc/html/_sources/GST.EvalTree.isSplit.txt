@@ -1,6 +1,0 @@
-GST.EvalTree.isSplit
-====================
-
-.. currentmodule:: GST
-
-.. automethod:: EvalTree.isSplit

@@ -1,6 +1,0 @@
-GST.GramMatrix.maxGramRankAndEvals
-==================================
-
-.. currentmodule:: GST.GramMatrix
-
-.. autofunction:: maxGramRankAndEvals

@@ -1,6 +1,0 @@
-GST.EvalTree.reverse
-====================
-
-.. currentmodule:: GST
-
-.. automethod:: EvalTree.reverse

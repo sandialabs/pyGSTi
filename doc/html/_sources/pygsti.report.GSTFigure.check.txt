@@ -1,0 +1,6 @@
+pygsti.report.GSTFigure.check
+=============================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: GSTFigure.check

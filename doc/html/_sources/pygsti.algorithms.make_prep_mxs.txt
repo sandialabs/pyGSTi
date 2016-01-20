@@ -1,0 +1,6 @@
+pygsti.algorithms.make_prep_mxs
+===============================
+
+.. currentmodule:: pygsti.algorithms
+
+.. autofunction:: make_prep_mxs

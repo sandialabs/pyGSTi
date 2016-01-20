@@ -1,6 +1,0 @@
-GST.ReportGeneration.getGatesetSPAMTable
-========================================
-
-.. currentmodule:: GST.ReportGeneration
-
-.. autofunction:: getGatesetSPAMTable

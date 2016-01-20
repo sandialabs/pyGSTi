@@ -1,6 +1,0 @@
-GST.DataSet.addCountDict
-========================
-
-.. currentmodule:: GST
-
-.. automethod:: DataSet.addCountDict

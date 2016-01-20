@@ -1,6 +1,0 @@
-GST.writeDatasetFile
-====================
-
-.. currentmodule:: GST
-
-.. autofunction:: writeDatasetFile

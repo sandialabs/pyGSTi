@@ -1,6 +1,0 @@
-GSTCommons.FiducialPairReduction.getSufficientFiducialPairs
-===========================================================
-
-.. currentmodule:: GSTCommons.FiducialPairReduction
-
-.. autofunction:: getSufficientFiducialPairs
