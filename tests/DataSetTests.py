@@ -175,7 +175,7 @@ Gx^4 0.2 100
                                                      rhoExpressions=["0"], EExpressions=["1"], 
                                                      spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
 
-        depol_gateset = pygsti.objects.gatesettools.depolarize_gateset(gateset, noise=0.1)
+        depol_gateset = gateset.depolarize(gate_noise=0.1,spam_noise=0)
 
         fids  = pygsti.construction.gatestring_list( [ (), ('Gx',), ('Gy'), ('Gx','Gx') ] )
         germs = pygsti.construction.gatestring_list( [ ('Gi',), ('Gx',), ('Gy'), ('Gi','Gi','Gi')] )        

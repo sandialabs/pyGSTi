@@ -1320,8 +1320,7 @@ def do_mc2gst_with_model_selection(dataset, startGateset, dimDelta, gateStringsT
   curStartGateset = origGS
   while tryDecreasedDim:
     curDim -= dimDelta
-    curStartGateset = _objs.gatesettools.decrease_gateset_dimension(
-      curStartGateset, curDim)
+    curStartGateset = curStartGateset.decrease_dimension(curDim)
     nParams = len(curStartGateset.to_vector(G0=opt_G0, SP0=opt_SP0, SPAM=opt_SPAM, gates=opt_gates))
 
     minErr, gs = do_mc2gst(dataset, curStartGateset, gateStringsToUse, maxiter, maxfev, tol, 
@@ -1353,10 +1352,8 @@ def do_mc2gst_with_model_selection(dataset, startGateset, dimDelta, gateStringsT
 
   while tryIncreasedDim:
     curDim += dimDelta
-    curStartGateset = _objs.gatesettools.increase_gateset_dimension(
-      curStartGateset, curDim)
-    curStartGateset = _objs.gatesettools.kick_gateset(
-      curStartGateset, 0.01) #give random kick here??
+    curStartGateset = curStartGateset.increase_dimension(curDim)
+    curStartGateset = curStartGateset.kick(0.01) #give random kick here??
     nParams = len(curStartGateset.to_vector(G0=opt_G0, SP0=opt_SP0, SPAM=opt_SPAM, gates=opt_gates))
     if nParams > nStrings: 
       #Future: do "LSGST" for underconstrained nonlinear problems -- or just double up?

@@ -10,8 +10,7 @@ class ReportTestCase(unittest.TestCase):
     def setUp(self):
 
         self.targetGateset = std.gs_target
-        datagen_gateset = pygsti.objects.gatesettools.depolarize_gateset(self.targetGateset, noise=0.05)
-        datagen_gateset = pygsti.objects.gatesettools.depolarize_spam(datagen_gateset, noise=0.1)
+        datagen_gateset = self.targetGateset.depolarize(gate_noise=0.05, spam_noise=0.1)
         
         self.fiducials = std.fiducials
         self.germs = std.germs

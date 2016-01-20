@@ -9,7 +9,7 @@ import sys
 class AlgorithmTestCase(unittest.TestCase):
 
     def setUp(self):
-        self.gs_target_noisy = pygsti.objects.gatesettools.randomize_gateset_with_unitary(std.gs_target, 0.001, seed=1234)
+        self.gs_target_noisy = std.gs_target.randomize_with_unitary(0.001, seed=1234)
 
     def runSilent(self, callable, *args, **kwds):
         orig_stdout = sys.stdout

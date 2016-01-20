@@ -419,9 +419,9 @@ SPAMLABEL minus = rho remainder
             rhoExpressions=["0"], EExpressions=["0","1","2"], 
             spamLabelDict={'upup': (0,0), 'updn': (0,1), 'dnup': (0,2), 'dndn': (0,-1) }, basis="pp" )
 
-        gateset_rot = pygsti.objects.gatesettools.rotate_gateset(gateset, (np.pi/2,0,0) ) #rotate all gates by pi/2 about X axis
-        gateset_randu = pygsti.objects.gatesettools.randomize_gateset_with_unitary(gateset,0.01)
-        gateset_randu = pygsti.objects.gatesettools.randomize_gateset_with_unitary(gateset,0.01,seed=1234)
+        gateset_rot = gateset.rotate( (np.pi/2,0,0) ) #rotate all gates by pi/2 about X axis
+        gateset_randu = gateset.randomize_with_unitary(0.01)
+        gateset_randu = gateset.randomize_with_unitary(0.01,seed=1234)
         #print gateset_rot
 
         rotXPi   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi,Q0)").matrix
@@ -433,13 +433,13 @@ SPAMLABEL minus = rho remainder
         self.assertArraysAlmostEqual(gateset_rot['Gx'], np.dot(rotXPiOv2,rotXPiOv2))
         self.assertArraysAlmostEqual(gateset_rot['Gy'], np.dot(rotXPiOv2,rotYPiOv2))
 
-        gateset_2q_rot = pygsti.objects.gatesettools.rotate_2q_gateset(gateset_2q, rotate=list(np.zeros(15,'d')))
-        gateset_2q_randu = pygsti.objects.gatesettools.randomize_gateset_with_unitary(gateset_2q,0.01)
-        gateset_2q_randu = pygsti.objects.gatesettools.randomize_gateset_with_unitary(gateset_2q,0.01,seed=1234)
+        gateset_2q_rot = gateset_2q.rotate(rotate=list(np.zeros(15,'d')))
+        gateset_2q_randu = gateset_2q.randomize_with_unitary(0.01)
+        gateset_2q_randu = gateset_2q.randomize_with_unitary(0.01,seed=1234)
 
         #TODO: test 2q rotated gates??
 
-        gateset_dep = pygsti.objects.gatesettools.depolarize_gateset(gateset,noise=0.1)
+        gateset_dep = gateset.depolarize(gate_noise=0.1)
         #print gateset_dep
 
         Gi_dep = np.array([[ 1,   0,   0,   0 ],
@@ -460,53 +460,49 @@ SPAMLABEL minus = rho remainder
         self.assertArraysAlmostEqual(gateset_dep['Gy'], Gy_dep)
 
 
-        gateset_spam = pygsti.objects.gatesettools.depolarize_spam(gateset,noise=0.1)
+        gateset_spam = gateset.depolarize(spam_noise=0.1)
         #print gateset_spam
         self.assertAlmostEqual(np.dot(gateset.EVecs[0].T,gateset.rhoVecs[0]),0)
         self.assertAlmostEqual(np.dot(gateset_spam.EVecs[0].T,gateset_spam.rhoVecs[0]),0.095)
         self.assertArraysAlmostEqual(gateset_spam.rhoVecs[0], 1/np.sqrt(2)*np.array([1,0,0,0.9]).reshape(-1,1) )
         self.assertArraysAlmostEqual(gateset_spam.EVecs[0], 1/np.sqrt(2)*np.array([1,0,0,-0.9]).reshape(-1,1) )
 
-        gateset_rand_rot = pygsti.objects.gatesettools.rotate_gateset(gateset,max_rotate=0.2)
-        gateset_rand_rot = pygsti.objects.gatesettools.rotate_gateset(gateset,max_rotate=0.2,seed=1234)
+        gateset_rand_rot = gateset.rotate(max_rotate=0.2)
+        gateset_rand_rot = gateset.rotate(max_rotate=0.2,seed=1234)
         with self.assertRaises(ValueError):
-            pygsti.objects.gatesettools.rotate_gateset(gateset,rotate=0.2,max_rotate=0.2) #can't specify both
+            gateset.rotate(rotate=0.2,max_rotate=0.2) #can't specify both
         with self.assertRaises(ValueError):
-            pygsti.objects.gatesettools.rotate_gateset(gateset) #must specify rotate or max_rotate
+            gateset.rotate() #must specify rotate or max_rotate
         with self.assertRaises(ValueError):
-            pygsti.objects.gatesettools.rotate_gateset(gateset, (1,2,3,4) ) #tuple must be length 3 (or a float)
+            gateset.rotate( (1,2,3,4) ) #tuple must be length 3 (or a float)
         with self.assertRaises(ValueError):
-            pygsti.objects.gatesettools.rotate_gateset(gateset, "a string!" ) #must be a 3-tuple or float
+            gateset.rotate( "a string!" ) #must be a 3-tuple or float
         with self.assertRaises(ValueError):
-            pygsti.objects.gatesettools.rotate_gateset(gateset_2q, rotate=(0,0,0)) #wrong dimension gateset
+            gateset_2q.rotate(rotate=(0,0,0)) #wrong dimension gateset
 
 
-        gateset_2q_rand_rot = pygsti.objects.gatesettools.rotate_2q_gateset(gateset_2q,max_rotate=0.2)
-        gateset_2q_rand_rot = pygsti.objects.gatesettools.rotate_2q_gateset(gateset_2q,max_rotate=0.2,seed=1234)
+        gateset_2q_rand_rot = gateset_2q.rotate(max_rotate=0.2)
+        gateset_2q_rand_rot = gateset_2q.rotate(max_rotate=0.2,seed=1234)
         with self.assertRaises(ValueError):
-            pygsti.objects.gatesettools.rotate_2q_gateset(gateset_2q,rotate=0.2,max_rotate=0.2) #can't specify both
+            gateset_2q.rotate(rotate=0.2,max_rotate=0.2) #can't specify both
         with self.assertRaises(ValueError):
-            pygsti.objects.gatesettools.rotate_2q_gateset(gateset_2q) #must specify rotate or max_rotate
+            gateset_2q.rotate() #must specify rotate or max_rotate
         with self.assertRaises(ValueError):
-            pygsti.objects.gatesettools.rotate_2q_gateset(gateset_2q, (1,2,3,4) ) #tuple must be length 15 (or a float)
+            gateset_2q.rotate( (1,2,3,4) ) #tuple must be length 15 (or a float)
         with self.assertRaises(ValueError):
-            pygsti.objects.gatesettools.rotate_2q_gateset(gateset_2q, "a string!" ) #must be a 3-tuple or float
+            gateset_2q.rotate( "a string!" ) #must be a 3-tuple or float
         with self.assertRaises(ValueError):
-            pygsti.objects.gatesettools.rotate_2q_gateset(gateset, rotate=np.zeros(15,'d')) #wrong dimension gateset
+            gateset.rotate( rotate=np.zeros(15,'d')) #wrong dimension gateset
 
-        gateset_rand_dep = pygsti.objects.gatesettools.depolarize_gateset(gateset,max_noise=0.1)
-        gateset_rand_dep = pygsti.objects.gatesettools.depolarize_gateset(gateset,max_noise=0.1,seed=1234)
+        gateset_rand_dep = gateset.depolarize(max_gate_noise=0.1)
+        gateset_rand_dep = gateset.depolarize(max_gate_noise=0.1, seed=1234)
         with self.assertRaises(ValueError):
-            pygsti.objects.gatesettools.depolarize_gateset(gateset,noise=0.1,max_noise=0.1) #can't specify both
-        with self.assertRaises(ValueError):
-            pygsti.objects.gatesettools.depolarize_gateset(gateset) #must specify noise or max_noise
+            gateset.depolarize(gate_noise=0.1,max_gate_noise=0.1, spam_noise=0) #can't specify both
 
-        gateset_rand_spam = pygsti.objects.gatesettools.depolarize_spam(gateset,max_noise=0.1)
-        gateset_rand_spam = pygsti.objects.gatesettools.depolarize_spam(gateset,max_noise=0.1,seed=1234)
+        gateset_rand_spam = gateset.depolarize(max_spam_noise=0.1)
+        gateset_rand_spam = gateset.depolarize(max_spam_noise=0.1,seed=1234)
         with self.assertRaises(ValueError):
-            pygsti.objects.gatesettools.depolarize_spam(gateset,noise=0.1,max_noise=0.1) #can't specify both
-        with self.assertRaises(ValueError):
-            pygsti.objects.gatesettools.depolarize_spam(gateset) #must specify noise or max_noise
+            gateset.depolarize(spam_noise=0.1,max_spam_noise=0.1) #can't specify both
 
         
     def test_spamspecs(self):

@@ -7,8 +7,8 @@ class MetricsTestCase(unittest.TestCase):
 
     def setUp(self):
         self.gateset = std.gs_target
-        self.gateset_dep = pygsti.objects.gatesettools.depolarize_gateset(self.gateset, noise=0.05)
-        self.gateset_rdm = pygsti.objects.gatesettools.kick_gateset(self.gateset_dep, absmag=0.1)
+        self.gateset_dep = self.gateset.depolarize(gate_noise=0.05, spam_noise=0)
+        self.gateset_rdm = self.gateset_dep.kick( absmag=0.1 )
         self.gatestrings = [ (), ('Gx',), ('Gx','Gy') ]
 
         dataset_txt = \

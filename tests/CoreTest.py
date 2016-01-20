@@ -11,8 +11,7 @@ class CoreTestCase(unittest.TestCase):
     def setUp(self):
 
         self.gateset = std.gs_target
-        self.datagen_gateset = pygsti.objects.gatesettools.depolarize_gateset(self.gateset, noise=0.05)
-        self.datagen_gateset = pygsti.objects.gatesettools.depolarize_spam(self.datagen_gateset, noise=0.1)
+        self.datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0.1)
         
         self.fiducials = std.fiducials
         self.germs = std.germs
@@ -300,7 +299,7 @@ class TestCoreMethods(CoreTestCase):
         self.assertAlmostEqual( gs_mlegst.diff_frobenius(gs_mle_compare), 0)
 
     def test_LGST_1overSqrtN_dependence(self):
-        my_datagen_gateset = pygsti.objects.gatesettools.depolarize_gateset(self.gateset, noise=0.05)
+        my_datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0)
         # !!don't depolarize spam or 1/sqrt(N) dependence saturates!!
 
         nSamplesList = np.array([ 16, 128, 1024, 8192 ])
@@ -358,7 +357,7 @@ class TestCoreMethods(CoreTestCase):
                                                     nSamples=1000, sampleError='none')
         strs = pygsti.construction.list_strings_lgst_can_estimate(ds, self.specs)
 
-        self.runSilent(pygsti.objects.gatesettools.print_gateset_info,self.gateset) #just make sure it works
+        self.runSilent(self.gateset.print_info) #just make sure it works
 
 
     def test_gaugeopt_and_contract(self):
@@ -409,7 +408,7 @@ class TestCoreMethods(CoreTestCase):
 
         # big kick that should land it outside XP, TP, etc, so contraction
         # routines are more tested
-        gs_bigkick = pygsti.objects.gatesettools.kick_gateset(gs_lgst_target, absmag=1.0)
+        gs_bigkick = gs_lgst_target.kick(absmag=1.0)
         gs_badspam = gs_bigkick.copy()
         gs_badspam.set_evec( np.array( [[2],[0],[0],[4]], 'd'), 0) #set a bad evec so vSPAM has to work...
 

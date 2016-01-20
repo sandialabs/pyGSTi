@@ -18,4 +18,3 @@ from spamspec import SpamSpec
 
 #Functions
 from gate import compose, optimize_gate
-import gatesettools

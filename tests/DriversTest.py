@@ -30,8 +30,7 @@ class DriversTestCase(unittest.TestCase):
             truncScheme='length as exponent' )
 
         # RUN BELOW LINES TO GENERATE SAVED DATASETS
-        #datagen_gateset = pygsti.objects.gatesettools.depolarize_gateset(self.gateset, noise=0.05)
-        #datagen_gateset = pygsti.objects.gatesettools.depolarize_spam(datagen_gateset, noise=0.1)
+        #datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0.1)
         #ds = pygsti.construction.generate_fake_data(
         #    datagen_gateset, self.lsgstStrings[-1],
         #    nSamples=1000,sampleError='binomial', seed=100)

@@ -793,6 +793,7 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, xlabel=""
             interact(makeplot, 
                      min_clip=str(init_min_clip) if init_min_clip is not None else str(0),
                      max_clip=str(init_max_clip) if init_max_clip is not None else str(10) )
+            gstFig = None
         else:
             gstFig = makeplot(init_min_clip, init_max_clip)
 
@@ -851,11 +852,13 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, xlabel=""
                      min_clip=str(init_min_clip) if init_min_clip is not None else str(0),
                      max_clip=str(init_max_clip) if init_max_clip is not None else str(10),
                      labels=boxLabels)
+            gstFig = None
         else:
             gstFig = makeplot(init_min_clip, init_max_clip, boxLabels)
 
-    gstFig.set_extra_info( { 'nUsedXs': len(used_xvals),
-                           'nUsedYs': len(used_yvals) } )                     
+    if gstFig:
+        gstFig.set_extra_info( { 'nUsedXs': len(used_xvals),
+                                 'nUsedYs': len(used_yvals) } )                     
     # gstFig.check() #DEBUG - test that figure can unpickle correctly -- if not, probably used magic matplotlib (don't do that)
     return gstFig
 
