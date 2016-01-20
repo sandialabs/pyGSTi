@@ -355,7 +355,7 @@ class ConfidenceRegion(object):
         gates,G0,SPAM,SP0 = self.get_parameterization_flags()
         nParams = self.gateset.get_num_params(gates,G0,SPAM,SP0)
 
-        f0 = fnOfSpamVecs(self.gateset.get_rho_vecs(), self.gateset.get_evecs())
+        f0 = fnOfSpamVecs(self.gateset.get_rhovecs(), self.gateset.get_evecs())
           #Note: .get_Evecs() can be different from .EVecs b/c the former includes compliment EVec
 
         #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
@@ -369,14 +369,14 @@ class ConfidenceRegion(object):
 
             gsEps = self.gateset.copy()
 
-            #loop just over parameterized objects - don't use get_rho_vecs() here...
+            #loop just over parameterized objects - don't use get_rhovecs() here...
             for k,rhoVec in enumerate(self.gateset.rhoVecs): 
                 nRhoParams = len(rhoVec) if SP0 else len(rhoVec)-1 # LATER: rhoVecObj.get_num_params(SP0?)
                 m = 0 if SP0 else 1
                 off = self.gateset_offsets["rho%d" % k][0]
                 for i in range(nRhoParams):
                     vecEps = rhoVec.copy(); vecEps[m+i] += eps; gsEps.set_rhovec( vecEps, k ) #update gsEps parameter
-                    gradF[off + i] = ( fnOfSpamVecs( gsEps.get_rho_vecs(), gsEps.get_evecs() ) - f0 ) / eps        
+                    gradF[off + i] = ( fnOfSpamVecs( gsEps.get_rhovecs(), gsEps.get_evecs() ) - f0 ) / eps        
                 gsEps.set_rhovec( rhoVec.copy(), k )  #I don't think copy() is needed here, but just to be safe
 
             #loop just over parameterized objects - don't use get_evecs() here...
@@ -385,7 +385,7 @@ class ConfidenceRegion(object):
                 off = self.gateset_offsets["E%d" % k][0]
                 for i in range(nEParams):
                     vecEps = EVec.copy(); vecEps[i] += eps; gsEps.set_evec( vecEps, k ) #update gsEps parameter
-                    gradF[off + i] = ( fnOfSpamVecs( gsEps.get_rho_vecs(), gsEps.get_evecs() ) - f0 ) / eps        
+                    gradF[off + i] = ( fnOfSpamVecs( gsEps.get_rhovecs(), gsEps.get_evecs() ) - f0 ) / eps        
                 gsEps.set_evec( EVec.copy(), k )  #I don't think copy() is needed here, but just to be safe
 
 

@@ -1,7 +1,7 @@
 """ Functions for generating report tables in different formats """
 import latex as _lu
 import html as _hu
-import pptx as _pu
+import ppt as _pu
 import cgi as _cgi
 import numpy as _np
 
@@ -315,32 +315,32 @@ def finish_table(formats, tables, longtable):
 
     if "py" in formats:
         assert("py" in tables)
-        pass #nothing to do to mark table dict as finished
+        #pass #nothing to do to mark table dict as finished
 
     if "ppt" in formats:
         assert("ppt" in tables)
-        pass
+        #pass
 #        curTableDict = tables["ppt"][-1] #last table dict is "current" one
 #        tables["ppt"][-1] = _pu.PPTTable(curTableDict) # convert dict to a ppt table object for later rendering
 
 
-def add_inter_table_space(formats, tables):
-    """ Add some space (if appropriate) to each table in tables dictionary.
-        Should only be used after calling finish_table """
-
-    if "latex" in formats:
-        assert("latex" in tables)
-        tables['latex'] += "\n\n\\vspace{2em}\n\n"
-
-    if "html" in formats:
-        assert("html" in tables)
-        tables['html'] += "<br/>"
-
-    if "py" in formats:
-        assert("py" in tables)
-        pass #adding space N/A for python format
-
-    if "ppt" in formats:
-        assert("ppt" in tables)
-        pass #adding space N/A for powerpoint format
+#def add_inter_table_space(formats, tables):
+#    """ Add some space (if appropriate) to each table in tables dictionary.
+#        Should only be used after calling finish_table """
+#
+#    if "latex" in formats:
+#        assert("latex" in tables)
+#        tables['latex'] += "\n\n\\vspace{2em}\n\n"
+#
+#    if "html" in formats:
+#        assert("html" in tables)
+#        tables['html'] += "<br/>"
+#
+#    if "py" in formats:
+#        assert("py" in tables)
+#        pass #adding space N/A for python format
+#
+#    if "ppt" in formats:
+#        assert("ppt" in tables)
+#        pass #adding space N/A for powerpoint format
 

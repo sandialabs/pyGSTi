@@ -122,7 +122,7 @@ def write_gatestring_list(filename, gatestring_list, header=None):
         need to include one.
 
     """
-    if len(gatestring_list) > 0 and not isinstance(gatestring_list[0], _obs.GateString):
+    if len(gatestring_list) > 0 and not isinstance(gatestring_list[0], _objs.GateString):
         raise ValueError("Argument gatestring_list must be a list of GateString objects!")
     
     f = open(filename, "w")

@@ -11,9 +11,6 @@ from collections import OrderedDict as _OrderedDict
 
 from .. import tools as _tools
 from .. import algorithms as _alg
-from ..objects import gatetools as _gtools
-
-import plotting as _plt
 
 FINITE_DIFF_EPS = 1e-7
 
@@ -90,7 +87,7 @@ def _getSpamQuantity(fnOfSpamVecs, gateset, eps, confidenceRegionInfo, verbosity
     """ For constructing a ReportableQty from a function of a spam vectors."""
 
     if confidenceRegionInfo is None: # No Error bars
-        return ReportableQty(fnOfSpamVecs(gateset.get_rho_vecs(), gateset.get_evecs()))
+        return ReportableQty(fnOfSpamVecs(gateset.get_rhovecs(), gateset.get_evecs()))
 
     # make sure the gateset we're given is the one used to generate the confidence region
     if(gateset.diff_frobenius(confidenceRegionInfo.get_gateset()) > 1e-6):
@@ -104,7 +101,7 @@ def _getSpamQuantity(fnOfSpamVecs, gateset, eps, confidenceRegionInfo, verbosity
 
                                    
 
-def compute_dataset_qty(qtyname, dataset, gatestrings):
+def compute_dataset_qty(qtyname, dataset, gatestrings=None):
     """
     Compute the named "Dataset" quantity.
 
@@ -116,8 +113,9 @@ def compute_dataset_qty(qtyname, dataset, gatestrings):
     dataset : DataSet
         Data used to compute the quantity.
 
-    gatestrings : list of tuples or GateString objects
+    gatestrings : list of tuples or GateString objects, optional
         A list of gatestrings used in the computation of certain quantities.
+        If None, all the gatestrings in the dataset are used.
         
     Returns
     -------
@@ -129,7 +127,7 @@ def compute_dataset_qty(qtyname, dataset, gatestrings):
     elif ret.has_key(qtyname): return ret[qtyname]
     else: return None
 
-def compute_dataset_qtys(qtynames, dataset, gatestrings):
+def compute_dataset_qtys(qtynames, dataset, gatestrings=None):
     """
     Compute the named "Dataset" quantities.
 
@@ -141,8 +139,9 @@ def compute_dataset_qtys(qtynames, dataset, gatestrings):
     dataset : DataSet
         Data used to compute the quantity.
 
-    gatestrings : list of tuples or GateString objects
+    gatestrings : list of tuples or GateString objects, optional
         A list of gatestrings used in the computation of certain quantities.
+        If None, all the gatestrings in the dataset are used.
         
     Returns
     -------
@@ -264,50 +263,50 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
         return _np.trace(choi)
 
     def decomp_angle(gate):
-        decomp = _gtools.decompose_gate_matrix(gate)
+        decomp = _tools.decompose_gate_matrix(gate)
         return decomp.get('pi rotations',0)
 
     def decomp_decay_diag(gate):
-        decomp = _gtools.decompose_gate_matrix(gate)
+        decomp = _tools.decompose_gate_matrix(gate)
         return decomp.get('decay of diagonal rotation terms',0)
 
     def decomp_decay_offdiag(gate):
-        decomp = _gtools.decompose_gate_matrix(gate)
+        decomp = _tools.decompose_gate_matrix(gate)
         return decomp.get('decay of off diagonal rotation terms',0)
 
     def decomp_cu_angle(gate):
         closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
-        decomp = _gtools.decompose_gate_matrix(closestUGateMx)
+        decomp = _tools.decompose_gate_matrix(closestUGateMx)
         return decomp.get('pi rotations',0)
 
     def decomp_cu_decay_diag(gate):
         closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
-        decomp = _gtools.decompose_gate_matrix(closestUGateMx)
+        decomp = _tools.decompose_gate_matrix(closestUGateMx)
         return decomp.get('decay of diagonal rotation terms',0)
 
     def decomp_cu_decay_offdiag(gate):
         closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
-        decomp = _gtools.decompose_gate_matrix(closestUGateMx)
+        decomp = _tools.decompose_gate_matrix(closestUGateMx)
         return decomp.get('decay of off diagonal rotation terms',0)
 
     def upper_bound_fidelity(gate):
-        ubF, ubGateMx = _gtools.fidelity_upper_bound(gate)
+        ubF, ubGateMx = _tools.fidelity_upper_bound(gate)
         return ubF
 
     def closest_ujmx(gate):
-        closestUGateMx = _gtools.find_closest_unitary_gatemx(gate)
+        closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
         return _tools.jamiolkowski_iso(closestUGateMx)
         
     def maximum_fidelity(gate):
-        closestUGateMx = _gtools.find_closest_unitary_gatemx(gate)
+        closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
         closestUJMx = _tools.jamiolkowski_iso(closestUGateMx)
         choi = _tools.jamiolkowski_iso(gate)
-        return _gtools.fidelity(closestUJMx, choi)
+        return _tools.fidelity(closestUJMx, choi)
 
     def maximum_trace_dist(gate):
-        closestUGateMx = _gtools.find_closest_unitary_gatemx(gate)
+        closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
         closestUJMx = _tools.jamiolkowski_iso(closestUGateMx)
-        return _gtools.jtracedist(gate, closestUGateMx)
+        return _tools.jtracedist(gate, closestUGateMx)
 
     def spam_dotprods(rhoVecs, EVecs):
         ret = _np.empty( (len(rhoVecs), len(EVecs)), 'd')
@@ -337,7 +336,7 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
             choiEvQty = _getGateQuantity(choi_evals, gateset, label, eps, confidenceRegionInfo) 
             choiTrQty = _getGateQuantity(choi_trace, gateset, label, eps, confidenceRegionInfo) 
 
-            decompDict = _gtools.decompose_gate_matrix(gate)
+            decompDict = _tools.decompose_gate_matrix(gate)
             if decompDict['isValid']:
                 angleQty = _getGateQuantity(decomp_angle, gateset, label, eps, confidenceRegionInfo) 
                 diagQty = _getGateQuantity(decomp_decay_diag, gateset, label, eps, confidenceRegionInfo) 
@@ -375,8 +374,8 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
             maxFQty = _getGateQuantity(maximum_fidelity, gateset, label, eps, confidenceRegionInfo) 
             maxJTDQty = _getGateQuantity(maximum_trace_dist, gateset, label, eps, confidenceRegionInfo) 
 
-            closestUGateMx = _gtools.find_closest_unitary_gatemx(gate)
-            decompDict = _gtools.decompose_gate_matrix(closestUGateMx)
+            closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
+            decompDict = _tools.decompose_gate_matrix(closestUGateMx)
             if decompDict['isValid']:
                 angleQty = _getGateQuantity(decomp_cu_angle, gateset, label, eps, confidenceRegionInfo) 
                 diagQty = _getGateQuantity(decomp_cu_decay_diag, gateset, label, eps, confidenceRegionInfo) 
@@ -403,7 +402,7 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
     return ret        
 
     
-def compute_gateset_dataset_qty(qtyname, gateset, dataset, gatestrings):
+def compute_gateset_dataset_qty(qtyname, gateset, dataset, gatestrings=None):
     """
     Compute the named "GateSet & Dataset" quantity.
 
@@ -418,8 +417,9 @@ def compute_gateset_dataset_qty(qtyname, gateset, dataset, gatestrings):
     dataset : DataSet
         Data used to compute the quantity.
 
-    gatestrings : list of tuples or GateString objects
+    gatestrings : list of tuples or GateString objects, optional
         A list of gatestrings used in the computation of certain quantities.
+        If None, all the gatestrings in the dataset are used.
         
     Returns
     -------
@@ -431,7 +431,7 @@ def compute_gateset_dataset_qty(qtyname, gateset, dataset, gatestrings):
     elif ret.has_key(qtyname): return ret[qtyname]
     else: return None
 
-def compute_gateset_dataset_qtys(qtynames, gateset, dataset, gatestrings):
+def compute_gateset_dataset_qtys(qtynames, gateset, dataset, gatestrings=None):
     """
     Compute the named "GateSet & Dataset" quantities.
 
@@ -446,8 +446,9 @@ def compute_gateset_dataset_qtys(qtynames, gateset, dataset, gatestrings):
     dataset : DataSet
         Data used to compute the quantities.
 
-    gatestrings : list of tuples or GateString objects
+    gatestrings : list of tuples or GateString objects, optional
         A list of gatestrings used in the computation of certain quantities.
+        If None, all the gatestrings in the dataset are used.
         
     Returns
     -------
@@ -492,7 +493,7 @@ def compute_gateset_dataset_qtys(qtynames, gateset, dataset, gatestrings):
                 per_gatestring_qtys['count(%s) diff' % spamLabel].append( int( round(p[spamLabel] * N) - dsRow[spamLabel]) )
                 per_gatestring_qtys['Est prob(%s)' % spamLabel].append( p[spamLabel] )
                 per_gatestring_qtys['Est count(%s)' % spamLabel].append( int(round(p[spamLabel] * N)) )
-                per_gatestring_qtys['gatestring chi2(%s)' % spamLabel].append( _plt.chi2fn( N, p[spamLabel], pExp[spamLabel], 1e-4 ) )
+                per_gatestring_qtys['gatestring chi2(%s)' % spamLabel].append( _tools.chi2fn( N, p[spamLabel], pExp[spamLabel], 1e-4 ) )
                         
         for qtyname in qtynames:
             if qtyname in per_gatestring_qtys:
@@ -509,13 +510,13 @@ def compute_gateset_dataset_qtys(qtynames, gateset, dataset, gatestrings):
 
     qty = "chi2"; possible_qtys.append(qty)        
     if qty in qtynames:
-        ret[qty] = ReportableQty( _plt.chi2( dataset, gateset, minProbClipForWeighting=1e-4) )
+        ret[qty] = ReportableQty( _tools.chi2( dataset, gateset, minProbClipForWeighting=1e-4) )
 
     #Quantities which take a single value per spamlabel for a given gateset and dataset
     #for spl in gateset.SPAMs.keys(): 
     #    qty = "chi2(%s)" % spl; possible_qtys.append(qty)        
     #    if qty in qtynames:
-    #        ret[qty] = _plt.chi2( dataset, gateset, minProbClipForWeighting=1e-4)
+    #        ret[qty] = _tools.chi2( dataset, gateset, minProbClipForWeighting=1e-4)
 
     if qtynames[0] is None:
         return possible_qtys + per_gatestring_qtys.keys()
@@ -598,7 +599,7 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2, confidenceRegionI
         if key in qtynames or key2 in qtynames:
 
             def process_fidelity(gate): #Note: default 'gm' basis
-                return _gtools.process_fidelity(gate, gateset2[gateLabel]) #vary elements of gateset1 (assume gateset2 is fixed)
+                return _tools.process_fidelity(gate, gateset2[gateLabel]) #vary elements of gateset1 (assume gateset2 is fixed)
 
             #print "DEBUG: fidelity(%s)" % gateLabel
             FQty = _getGateQuantity(process_fidelity, gateset1, gateLabel,
@@ -613,20 +614,20 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2, confidenceRegionI
             
             #Note: default 'gm' basis
             def closest_unitary_fidelity(gate): # assume vary gateset1, gateset2 fixed
-                decomp1 = _gtools.decompose_gate_matrix(gate)
-                decomp2 = _gtools.decompose_gate_matrix(gateset2[gateLabel])
+                decomp1 = _tools.decompose_gate_matrix(gate)
+                decomp2 = _tools.decompose_gate_matrix(gateset2[gateLabel])
 
                 if decomp1['isUnitary']:
                     closestUGateMx1 = gate
-                else: closestUGateMx1 = _gtools.find_closest_unitary_gatemx(gate)
+                else: closestUGateMx1 = _alg.find_closest_unitary_gatemx(gate)
     
                 if decomp2['isUnitary']:
                     closestUGateMx2 = gateset2[gateLabel] 
-                else: closestUGateMx2 = _gtools.find_closest_unitary_gatemx(gateset2[gateLabel])
+                else: closestUGateMx2 = _alg.find_closest_unitary_gatemx(gateset2[gateLabel])
             
                 closeChoi1 = _tools.jamiolkowski_iso(closestUGateMx1)
                 closeChoi2 = _tools.jamiolkowski_iso(closestUGateMx2)
-                return _gtools.fidelity(closeChoi1,closeChoi2)
+                return _tools.fidelity(closeChoi1,closeChoi2)
 
             ret[key] = _getGateQuantity(closest_unitary_fidelity, gateset1, gateLabel, eps, confidenceRegionInfo) 
 
@@ -640,7 +641,7 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2, confidenceRegionI
         key = "%s Jamiolkowski trace dist" % gateLabel; possible_qtys.append(key)
         if key in qtynames: 
             def jt_diff(gate): # assume vary gateset1, gateset2 fixed
-                return _gtools.jtracedist(gate,gateset2[gateLabel]) #Note: default 'gm' basis
+                return _tools.jtracedist(gate,gateset2[gateLabel]) #Note: default 'gm' basis
             #print "DEBUG: jtdist(%s)" % gateLabel
             ret[key] = _getGateQuantity(jt_diff, gateset1, gateLabel, eps, confidenceRegionInfo) 
 
@@ -648,7 +649,7 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2, confidenceRegionI
         if key in qtynames:
 
             def half_diamond_norm(gate):
-                return 0.5 * _gtools.diamonddist(gate, gateset2[gateLabel]) #Note: default 'gm' basis
+                return 0.5 * _tools.diamonddist(gate, gateset2[gateLabel]) #Note: default 'gm' basis
                   #vary elements of gateset1 (assume gateset2 is fixed)
 
             try:
@@ -664,7 +665,7 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2, confidenceRegionI
     if key in qtynames: ret[key] = ReportableQty( gateset1.diff_frobenius(gateset2) )
 
     key = "Max Jamiolkowski trace dist"; possible_qtys.append(key)
-    if key in qtynames: ret[key] = ReportableQty( max( [ _gtools.jtracedist(gateset1[l],gateset2[l]) for l in gateset1 ] ) )
+    if key in qtynames: ret[key] = ReportableQty( max( [ _tools.jtracedist(gateset1[l],gateset2[l]) for l in gateset1 ] ) )
 
  
     #Special case: when qtyname is None then return a list of all possible names that can be computed

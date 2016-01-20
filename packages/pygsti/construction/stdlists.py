@@ -3,6 +3,7 @@ import itertools as _itertools
 from ..objects import spamspec as _ss
 from ..tools import listtools as _lt
 import gatestringconstruction as _gsc
+import spamspecconstruction as _ssc
 
 def make_lsgst_lists(gateLabels, fiducialList, germList, maxLengthList,
                      rhoEPairs=None, truncScheme="whole germ powers"):
@@ -77,10 +78,9 @@ def make_lsgst_lists_asymmetric_fids(gateLabels, rhoStrs, EStrs, germList, maxLe
     '''
     Same as make_lsgst_lists, except for asymmetric fiducial sets, specified by rhoStrs and EStrs.
     '''
-    lgstStrings = _gatestringconstruction.list_lgst_gatestrings(
-        _ss.get_spam_specs(rhoStrs = rhoStrs, EStrs = EStrs),
-        gateLabels)
-    lsgst_list = _gatestringconstruction.gatestring_list([ () ]) #running list of all strings so far
+    lgstStrings = _gsc.list_lgst_gatestrings( _ssc.build_spam_specs(rhoStrs = rhoStrs, EStrs = EStrs),
+                                              gateLabels)
+    lsgst_list = _gsc.gatestring_list([ () ]) #running list of all strings so far
 
     if rhoEPairs is not None:
         fiducialPairs = [ (rhoStrs[i],EStrs[j]) for (i,j) in rhoEPairs ]

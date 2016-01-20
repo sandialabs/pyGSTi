@@ -47,9 +47,9 @@ class StdInputParser:
             self.exprStack.append( '*' )
         def push_slice( strg, loc, toks ):
             self.exprStack.append( 'SLICE' )
-        def push_count( strg, loc, toks ):
-            self.exprStack.append( toks[0] )
-            self.exprStack.append( 'COUNT' )
+        #def push_count( strg, loc, toks ):
+        #    self.exprStack.append( toks[0] )
+        #    self.exprStack.append( 'COUNT' )
     
         #caps = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         lowers = _string.lowercase #caps.lower()
@@ -75,25 +75,25 @@ class StdInputParser:
         strref  = (_pp.Literal("S") + "[" + reflbl + "]" ).setParseAction(push_first)
         slcref  = (strref + _pp.Optional( ("[" + integer + ":" + integer + "]").setParseAction(push_slice)) )
 
-        bSimple = False #experimenting with possible parser speedups
-        if bSimple:
-            string  = _pp.Forward()
-            gateSeq = _pp.OneOrMore( gate )
-            expable = (nop | gateSeq | lpar + gateSeq + rpar)
-            expdstr = expable + _pp.Optional( (expop + integer).setParseAction(push_first) )
-            string << expdstr + _pp.ZeroOrMore( (_pp.Optional("*") + expdstr).setParseAction(push_mult))
-        else:
-            string  = _pp.Forward()
-            expable = (gate | slcref | lpar + string + rpar | nop)
-            expdstr = expable + _pp.ZeroOrMore( (expop + integer).setParseAction(push_first) )
-            string << expdstr + _pp.ZeroOrMore( (_pp.Optional("*") + expdstr).setParseAction(push_mult))
+        #bSimple = False #experimenting with possible parser speedups
+        #if bSimple:
+        #    string  = _pp.Forward()
+        #    gateSeq = _pp.OneOrMore( gate )
+        #    expable = (nop | gateSeq | lpar + gateSeq + rpar)
+        #    expdstr = expable + _pp.Optional( (expop + integer).setParseAction(push_first) )
+        #    string << expdstr + _pp.ZeroOrMore( (_pp.Optional("*") + expdstr).setParseAction(push_mult))
+        #else:
+        string  = _pp.Forward()
+        expable = (gate | slcref | lpar + string + rpar | nop)
+        expdstr = expable + _pp.ZeroOrMore( (expop + integer).setParseAction(push_first) )
+        string << expdstr + _pp.ZeroOrMore( (_pp.Optional("*") + expdstr).setParseAction(push_mult))
         
-        count = real.copy().setParseAction(push_count)
-        dataline = string + _pp.OneOrMore( count )
+        #count = real.copy().setParseAction(push_count)
+        #dataline = string + _pp.OneOrMore( count )
         dictline = reflbl + string
 
         self.string_parser = string
-        self.dataline_parser = dataline
+        #self.dataline_parser = dataline #OLD: when data lines had their own parser
         self.dictline_parser = dictline
 
 
@@ -115,10 +115,10 @@ class StdInputParser:
             op = self._evaluateStack( s )
             return op[lower:upper]
 
-        elif op == 'COUNT':
-            cnt = float(s.pop())          # next item on stack is a count
-            self.countList.insert(0, cnt) # so add it to countList and eval the rest of the stack
-            return self._evaluateStack( s )
+        #elif op == 'COUNT':
+        #    cnt = float(s.pop())          # next item on stack is a count
+        #    self.countList.insert(0, cnt) # so add it to countList and eval the rest of the stack
+        #    return self._evaluateStack( s )
     
         elif op[0] == 'G':
             return (op,) #as tuple
@@ -153,7 +153,10 @@ class StdInputParser:
         """
         self.lookup = lookup
         self.exprStack = []
-        result = self.string_parser.parseString(s)
+        try:
+            result = self.string_parser.parseString(s)
+        except _pp.ParseException as e:
+            raise ValueError("Parsing error when parsing %s: %s" % (s,str(e)))
         #print "DB: result = ",result
         #print "DB: stack = ",self.exprStack
         return self._evaluateStack(self.exprStack)
@@ -196,6 +199,7 @@ class StdInputParser:
             except: break
             counts.append( f )
         counts.reverse() #because we appended them in reversed order
+        totalCounts = len(counts) #in case expectedCounts is less
         if len(counts) > expectedCounts >= 0:
             counts = counts[0:expectedCounts]
 
@@ -205,7 +209,7 @@ class StdInputParser:
         if nCounts == len(parts):
             raise ValueError("No gatestring column found -- all columns look like data")
 
-        gateStringStr = " ".join(parts[0:len(parts)-nCounts])
+        gateStringStr = " ".join(parts[0:len(parts)-totalCounts])
         gateStringTuple = self.parse_gatestring(gateStringStr, lookup)
         return gateStringTuple, gateStringStr, counts
 
@@ -308,15 +312,17 @@ class StdInputParser:
         #Process premble
         orig_cwd = _os.getcwd()
         if len(_os.path.dirname(filename)) > 0: _os.chdir( _os.path.dirname(filename) ) #allow paths relative to datafile path
-        if preamble_directives.has_key('Lookup'): 
-            lookupDict = self.parse_dictfile( preamble_directives['Lookup'] )
-        else: lookupDict = { }
-        if preamble_directives.has_key('Columns'):
-            colLabels = [ l.strip() for l in preamble_directives['Columns'].split(",") ]
-        else: colLabels = [ 'plus count', 'count total' ] #  spamLabel (' frequency' | ' count') | 'count total' |  ?? 'T0' | 'Tf' ??
-        spamLabels,fillInfo = self._extractLabelsFromColLabels(colLabels)
-        nDataCols = len(colLabels)
-        _os.chdir(orig_cwd)
+        try:
+            if preamble_directives.has_key('Lookup'): 
+                lookupDict = self.parse_dictfile( preamble_directives['Lookup'] )
+            else: lookupDict = { }
+            if preamble_directives.has_key('Columns'):
+                colLabels = [ l.strip() for l in preamble_directives['Columns'].split(",") ]
+            else: colLabels = [ 'plus count', 'count total' ] #  spamLabel (' frequency' | ' count') | 'count total' |  ?? 'T0' | 'Tf' ??
+            spamLabels,fillInfo = self._extractLabelsFromColLabels(colLabels)
+            nDataCols = len(colLabels)
+        finally:
+            _os.chdir(orig_cwd)
 
         #Read data lines of data file
         dataset = _objs.DataSet(spamLabels=spamLabels)
@@ -438,15 +444,17 @@ class StdInputParser:
         orig_cwd = _os.getcwd()
         if len(_os.path.dirname(filename)) > 0: 
             _os.chdir( _os.path.dirname(filename) ) #allow paths relative to datafile path
-        if preamble_directives.has_key('Lookup'): 
-            lookupDict = self.parse_dictfile( preamble_directives['Lookup'] )
-        else: lookupDict = { }
-        if preamble_directives.has_key('Columns'):
-            colLabels = [ l.strip() for l in preamble_directives['Columns'].split(",") ]
-        else: colLabels = [ 'dataset1 plus count', 'dataset1 count total' ]
-        dsSpamLabels, fillInfo = self._extractLabelsFromMultiDataColLabels(colLabels)
-        nDataCols = len(colLabels)
-        _os.chdir(orig_cwd)
+        try:
+            if preamble_directives.has_key('Lookup'): 
+                lookupDict = self.parse_dictfile( preamble_directives['Lookup'] )
+            else: lookupDict = { }
+            if preamble_directives.has_key('Columns'):
+                colLabels = [ l.strip() for l in preamble_directives['Columns'].split(",") ]
+            else: colLabels = [ 'dataset1 plus count', 'dataset1 count total' ]
+            dsSpamLabels, fillInfo = self._extractLabelsFromMultiDataColLabels(colLabels)
+            nDataCols = len(colLabels)
+        finally:
+            _os.chdir(orig_cwd)
 
         #Read data lines of data file
         datasets = _OrderedDict()
@@ -520,7 +528,7 @@ class StdInputParser:
                 dsLabel = wordsInColLabel[-3]
                 if '%s count total' % dsLabel not in colLabels:
                     raise ValueError("Frequency columns specified without" +
-                                     "count total for dataset '%s'" % dslabel)
+                                     "count total for dataset '%s'" % dsLabel)
                 else: iTotal = colLabels.index( '%s count total' % dsLabel )
                 
                 if dsLabel not in dsSpamLabels: 
@@ -594,7 +602,7 @@ def read_gateset(filename):
             
         elif cur_format == "DensityMx":
             ar = _evalRowList( cur_rows, bComplex=True )
-            if ar.shape == (2,2):
+            if ar.shape == (2,2) or ar.shape == (4,4):
                 spam_vecs[cur_label] = _tools.stdmx_to_ppvec(ar)
             else: raise ValueError("Invalid density matrix shape for %s: %s" % (cur_label,ar.shape))
 

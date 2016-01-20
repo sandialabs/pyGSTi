@@ -102,14 +102,14 @@ def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
     
     #< A, B > = Tr(A.dag B)
     
-    def vec(matrix_in):
-        # Stack the columns of a matrix to return a vector
-        return _np.transpose(matrix_in).flatten()
-    
-    def unvec(vector_in):
-        # Slice a vector into columns of a matrix
-        d = int(_np.sqrt(vector_in.size))
-        return _np.transpose(vector_in.reshape( (d,d) ))
+    #def vec(matrix_in):
+    #    # Stack the columns of a matrix to return a vector
+    #    return _np.transpose(matrix_in).flatten()
+    #
+    #def unvec(vector_in):
+    #    # Slice a vector into columns of a matrix
+    #    d = int(_np.sqrt(vector_in.size))
+    #    return _np.transpose(vector_in.reshape( (d,d) ))
 
 
     dim = A.shape[0]
@@ -464,7 +464,7 @@ def decompose_gate_matrix(gateMx):
                abs(_np.imag( gate_evals[ conjpair_eval_indices[1][0] ] )) < TOL:
                 iToBreak = _np.argmax( [_np.real(conjpair_eval_indices[0][0]), _np.real(conjpair_eval_indices[1][0])] )
             elif abs(_np.imag( gate_evals[ conjpair_eval_indices[0][0] ] )) < TOL: iToBreak = 0
-            elif abs(_np.imag( gate_evals[ conjpair_eval_indices[0][0] ] )) < TOL: iToBreak = 1
+            elif abs(_np.imag( gate_evals[ conjpair_eval_indices[1][0] ] )) < TOL: iToBreak = 1
 
             if iToBreak is not None:
                 real_eval_indices.append( conjpair_eval_indices[iToBreak][0])
@@ -480,7 +480,7 @@ def decompose_gate_matrix(gateMx):
             # the remaining eigenvectors w.r.t this one.
             A = _np.take(gate_evecs, unit_eval_indices, axis=1)
             b = _np.array( [[1],[0],[0],[0]], 'd') #identity density mx
-            x = _np.dot( _np.linalg.inv( _np.dot(A.T,A) ), _np.dot(A.T, b))
+            x = _np.dot( _np.linalg.pinv( _np.dot(A.T,A) ), _np.dot(A.T, b))
             fixedPtVec = _np.dot(A,x); fixedPtVec / _np.linalg.norm(fixedPtVec)
             fixedPtVec = fixedPtVec[:,0]
             

@@ -3,4 +3,5 @@
 # the package namespace
 from generation import *
 from plotting import *
+from reportables import *
 from results import Results

@@ -18,7 +18,7 @@ class MultiDataSet_KeyValIterator:
 
   def next(self):
     datasetName = self.countsDictIter.next()
-    return datasetName, _DataSet(self.multidataset.counts[datasetName], gateStringIndices=self.multidataset.gsIndex,
+    return datasetName, _DataSet(self.multidataset.countsDict[datasetName], gateStringIndices=self.multidataset.gsIndex,
                                 spamLabelIndices=self.multidataset.slIndex, bStatic=True)
   
 
@@ -27,14 +27,13 @@ class MultiDataSet_ValIterator:
   def __init__(self, multidataset):
     self.multidataset = multidataset
     self.countsDictIter = multidataset.countsDict.__iter__()
-    self.countIter = dataset.counts.__iter__()
 
   def __iter__(self):
     return self
 
   def next(self):
     datasetName = self.countsDictIter.next()
-    return _DataSet(self.multidataset.counts[datasetName], gateStringIndices=self.multidataset.gsIndex,
+    return _DataSet(self.multidataset.countsDict[datasetName], gateStringIndices=self.multidataset.gsIndex,
                     spamLabelIndices=self.multidataset.slIndex, bStatic=True)
 
 
@@ -131,7 +130,7 @@ class MultiDataSet:
 
   
   def __iter__(self):
-    return self.countsDict.__iter__() #iterator over gate strings
+    return self.countsDict.__iter__() #iterator over dataset names
 
   def __len__(self):
     return len(self.countsDict)
@@ -179,7 +178,7 @@ class MultiDataSet:
     if len(datasetNames) == 0: raise ValueError("Must specify at least one dataset name")
     for datasetName in datasetNames:
       if datasetName not in self:
-        raise ValueError("No dataset with the name '%d' exists" % datasetName)
+        raise ValueError("No dataset with the name '%s' exists" % datasetName)
 
       if summedCounts is None:
         summedCounts = self.countsDict[datasetName].copy()
@@ -249,7 +248,7 @@ class MultiDataSet:
     if self.gsIndex:  #Note: tests if not none and nonempty
         maxIndex = max(self.gsIndex.values())
         assert( datasetCounts.shape[0] > maxIndex and datasetCounts.shape[1] == len(self.slIndex) )
-    self.countsDict[datasetName] = dataset.counts
+    self.countsDict[datasetName] = datasetCounts
 
   def __str__(self):
     s  = "MultiDataSet containing: %d datasets, each with %d strings\n" % (len(self), len(self.gsIndex) if self.gsIndex is not None else 0)

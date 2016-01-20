@@ -1,10 +1,16 @@
 import unittest
-import GST
+import pygsti
 import numpy as np
 import sys
 
 def f(x):
     return np.dot(x,x)
+
+def f_vec(x):
+    return np.array( [np.dot(x,x)] )
+
+def jac(x):
+    return 2*x[None,:]
 
 class OptimizeTestCase(unittest.TestCase):
 
@@ -23,21 +29,29 @@ class TestOptimizeMethods(OptimizeTestCase):
         sys.stdout = open("temp_test_files/optimize.out","w")
         
         for method in ("simplex","supersimplex","customcg","basinhopping","CG","BFGS","L-BFGS-B"): #"homebrew"
-            result = GST.Optimize.minimize(f, self.x0, method, maxiter=1000)
+            result = pygsti.optimize.minimize(f, self.x0, method, maxiter=1000)
             self.assertArraysAlmostEqual(result.x, self.answer)
 
-        result = GST.Optimize.minimize(f, self.x0, "swarm", maxiter=30)
+        for method in ("simplex","supersimplex","customcg","basinhopping","CG","BFGS","L-BFGS-B"): #"homebrew"
+            result = pygsti.optimize.minimize(f, self.x0, method, maxiter=1) #max iterations exceeded...
+
+        result = pygsti.optimize.minimize(f, self.x0, "swarm", maxiter=30)
         self.assertArraysAlmostEqual(result.x, self.answer)
 
-        result = GST.Optimize.minimize(f, self.x0, "brute", maxiter=10)
+        result = pygsti.optimize.minimize(f, self.x0, "brute", maxiter=10)
         self.assertArraysAlmostEqual(result.x, self.answer)
 
-        result = GST.Optimize.minimize(f, self.x0, "evolve", maxiter=20)
+        result = pygsti.optimize.minimize(f, self.x0, "evolve", maxiter=20)
         self.assertLess(np.linalg.norm(result.x-self.answer), 0.01) #takes too long to converge...
         
         sys.stdout.close()
         sys.stdout = old_stdout
 
+
+    def test_checkjac(self):
+        x0 = self.x0
+        pygsti.optimize.check_jac(f_vec, x0, jac(x0), eps=1e-10, tol=1e-6, errType='rel')
+        pygsti.optimize.check_jac(f_vec, x0, jac(x0), eps=1e-10, tol=1e-6, errType='abs')
 
       
 if __name__ == "__main__":

@@ -1,30 +1,32 @@
 """ Functions for selecting a complete set of germs for a GST analysis."""
 import numpy as _np
+import numpy.linalg as _nla
 import itertools as _itertools
 import math as _math
 import sys as _sys
+import warnings as _warnings
 
 
-def _PerfectTwirl(mxToTwirl,wrt,eps):
-    """ Perform twirl on mxToTwirl with respect to wrt """
-    assert(mxToTwirl.shape[0] == mxToTwirl.shape[1]) #only square matrices allowed
-    assert(wrt.shape[0] == wrt.shape[1])
-    dim = mxToTwirl.shape[0]
-
-    #Get spectrum and eigenvectors of wrt
-    wrtEvals,wrtEvecs = _np.linalg.eig(wrt)
-    wrtEvecsInv = _np.linalg.inv( wrtEvecs )
-    
-    # rotate mxToTwirl to the eigenbasis of wrt
-    rotmat = _np.dot(wrtEvecsInv, _np.dot(mxToTwirl, wrtEvecs))
-
-    #destroy coherences between non-degenerate eigenvectors (this is what twirling does)
-    for i in xrange(dim):
-        for j in xrange(dim):
-            if abs(wrtEvals[i] - wrtEvals[j]) > eps:
-                rotmat[i,j] = 0 
-
-    return _np.dot(wrtEvecs, _np.dot(rotmat, wrtEvecsInv)) # rotate back to the original basis
+#def _PerfectTwirl(mxToTwirl,wrt,eps):
+#    """ Perform twirl on mxToTwirl with respect to wrt """
+#    assert(mxToTwirl.shape[0] == mxToTwirl.shape[1]) #only square matrices allowed
+#    assert(wrt.shape[0] == wrt.shape[1])
+#    dim = mxToTwirl.shape[0]
+#
+#    #Get spectrum and eigenvectors of wrt
+#    wrtEvals,wrtEvecs = _np.linalg.eig(wrt)
+#    wrtEvecsInv = _np.linalg.inv( wrtEvecs )
+#    
+#    # rotate mxToTwirl to the eigenbasis of wrt
+#    rotmat = _np.dot(wrtEvecsInv, _np.dot(mxToTwirl, wrtEvecs))
+#
+#    #destroy coherences between non-degenerate eigenvectors (this is what twirling does)
+#    for i in xrange(dim):
+#        for j in xrange(dim):
+#            if abs(wrtEvals[i] - wrtEvals[j]) > eps:
+#                rotmat[i,j] = 0 
+#
+#    return _np.dot(wrtEvecs, _np.dot(rotmat, wrtEvecsInv)) # rotate back to the original basis
     
 
 #wrt is gate_dim x gate_dim, so is M, Minv, Proj
@@ -95,7 +97,7 @@ def twirled_deriv(gateset, gatestring, gates=True, G0=True, eps=1e-6):
     return _np.dot( twirler, dProd ) # flattened_gate_dim x vec_gateset_dim
 
 
-def bulk_twirled_deriv(gateset, gatestrings, gates=True, G0=True, eps=1e-6):
+def bulk_twirled_deriv(gateset, gatestrings, gates=True, G0=True, eps=1e-6, check=False):
     """ 
     Compute the "Twirled Derivative" of a gatestring, obtained
     by acting on the standard derivative of a gate string with
@@ -124,6 +126,10 @@ def bulk_twirled_deriv(gateset, gatestrings, gates=True, G0=True, eps=1e-6):
       Tolerance used for testing whether two eigenvectors
       are degenerate (i.e. abs(eval1 - eval2) < eps ? )
 
+    check : bool, optional
+      Whether to perform internal consistency checks, at the
+      expense of making the function slower.
+
     Returns
     -------
     numpy array
@@ -138,6 +144,14 @@ def bulk_twirled_deriv(gateset, gatestrings, gates=True, G0=True, eps=1e-6):
     for i in xrange(len(gatestrings)):
         twirler = _SuperOpForPerfectTwirl(prods[i], eps) # flattened_gate_dim x flattened_gate_dim        
         ret[i] = _np.dot( twirler, dProds[i*fd:(i+1)*fd] ) # flattened_gate_dim x vec_gateset_dim
+
+    if check:
+        for i in xrange(len(gatestrings)):
+            chk_ret = twirled_deriv(gateset, gatestrings[i], gates, G0, eps)
+            if _nla.norm(ret[i] - chk_ret) > 1e-6:
+                _warnings.warn( "bulk twirled derive norm mismatch = %g - %g = %g" % \
+                   (_nla.norm(ret[i]), _nla.norm(chk_ret), _nla.norm(ret[i] - chk_ret)) )
+            
     return ret # nGateStrings x flattened_gate_dim x vec_gateset_dim
     
 
@@ -225,7 +239,7 @@ def test_germ_list_finitel(gateset, germsToTest, L, gates=True, G0=True, weights
 
 
 def test_germ_list_infl(gateset, germsToTest, gates=True, G0=True, weights=None, 
-                           returnSpectrum=False, tol=1e-6):
+                           returnSpectrum=False, tol=1e-6, check=False):
     """
     Test whether a set of germs is able to amplify all of the gateset's non-gauge parameters.
 
@@ -264,6 +278,11 @@ def test_germ_list_infl(gateset, germsToTest, gates=True, G0=True, weights=None,
         zero and thus a parameter un-amplified when it is less than tol.
         Also used for eigenvector degeneracy testing in twirling operation.
 
+    check : bool, optional
+      Whether to perform internal consistency checks, at the
+      expense of making the function slower.
+
+
     Returns
     -------
     success : bool
@@ -276,7 +295,7 @@ def test_germ_list_infl(gateset, germsToTest, gates=True, G0=True, weights=None,
     """
 
     germLengths = _np.array( map(len,germsToTest), 'i')
-    twirledDeriv = bulk_twirled_deriv(gateset, germsToTest, gates, G0, tol) / germLengths[:,None,None]
+    twirledDeriv = bulk_twirled_deriv(gateset, germsToTest, gates, G0, tol, check) / germLengths[:,None,None]
     twirledDerivDaggerDeriv = _np.einsum('ijk,ijl->ikl', _np.conjugate(twirledDeriv), twirledDeriv) #is conjugate needed? -- all should be real
        #result[i] = _np.dot( twirledDeriv[i].H, twirledDeriv[i] ) i.e. matrix product
        #result[i,k,l] = sum_j twirledDerivH[i,k,j] * twirledDeriv(i,j,l)
@@ -296,9 +315,10 @@ def test_germ_list_infl(gateset, germsToTest, gates=True, G0=True, weights=None,
 
 
 def optimize_integer_germs_slack(gateset, germsList, initialWeights=None, 
-                              gates=True, G0=True, maxIter=100, 
-                              fixedSlack=False, slackFrac=False, 
-                              returnAll=False, tol=1e-6, verbosity=1):
+                                 gates=True, G0=True, maxIter=100, 
+                                 fixedSlack=False, slackFrac=False, 
+                                 returnAll=False, tol=1e-6, check=False,
+                                 verbosity=1):
     """
     Find a locally optimal subset of the germs in germsList.
 
@@ -354,6 +374,10 @@ def optimize_integer_germs_slack(gateset, germsList, initialWeights=None,
     tol : float, optional
         Tolerance used for eigenvector degeneracy testing in twirling operation.
 
+    check : bool, optional
+      Whether to perform internal consistency checks, at the
+      expense of making the function slower.
+
     verbosity : int, optional
         Integer >= 0 indicating the amount of detail to print.
 
@@ -393,7 +417,7 @@ def optimize_integer_germs_slack(gateset, germsList, initialWeights=None,
     # indexed by (iGerm, iGatesetParam1, iGatesetParam2)
     # size (nGerms, vec_gateset_dim, vec_gateset_dim)
     germLengths = _np.array( map(len,germsList), 'i')
-    twirledDeriv = bulk_twirled_deriv(gateset, germsList, gates, G0, tol) / germLengths[:,None,None]
+    twirledDeriv = bulk_twirled_deriv(gateset, germsList, gates, G0, tol, check) / germLengths[:,None,None]
     twirledDerivDaggerDeriv = _np.einsum('ijk,ijl->ikl', _np.conjugate(twirledDeriv), twirledDeriv)
     
     def compute_score(wts):

@@ -104,6 +104,15 @@ def fill_count_vecs(mxToFill, spam_label_rows, dataset, gatestring_list):
  #   and hlogL == d/d1 ( d/d2 ( logl ) )  -- i.e. dp2 is the *first* derivative performed...
 
 
+ #Note: Poisson picture entered use when we allowed an EVec which was 1-{other EVecs} -- a
+ # (0,-1) spam index -- instead of assuming all probabilities of a given gat string summed
+ # to one -- a (-1,-1) spam index.  The poisson picture gives a correct log-likelihood
+ # description when the probabilities (for a given gate string) may not sum to one, by
+ # interpreting them each as rates.  In the standard picture, large gatestring probabilities
+ # are not penalized (each standard logL term increases monotonically with each probability,
+ # and the reason this is ok when the probabilities sum to one is that for a probabilility 
+ # that gets close to 1, there's another that is close to zero, and logL is very negative
+ # near zero.
 
  # The log(Likelihood) within the Poisson picture is:
  #
@@ -346,7 +355,7 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
     if gatestring_list is None:
         gatestring_list = dataset.keys()
 
-    spamLabels = gs.get_spam_labels() #this list fixes the ordering of the spam labels
+    spamLabels = gateset.get_spam_labels() #this list fixes the ordering of the spam labels
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
 
     if countVecMx is None:

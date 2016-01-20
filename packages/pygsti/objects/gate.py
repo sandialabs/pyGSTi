@@ -329,7 +329,7 @@ class LinearlyParameterizedGate(object):
             elements.
         """ 
 
-        self.baseMatrix = baseMatrix
+        self.baseMatrix = _np.array(baseMatrix,'complex') #complex, even if passed all real base matrix
         self.parameterArray = parameterArray
         self.numParams = len(parameterArray)
 
@@ -339,12 +339,13 @@ class LinearlyParameterizedGate(object):
                 assert((i,j) not in self.elementExpressions) #only one parameter allowed per base index pair
                 self.elementExpressions[(i,j)] = [ LinearlyParameterizedElementTerm(1.0, [p]) ]
 
-        self.leftTrans = leftTransform
-        self.rightTrans = rightTransform
-        self.enforceReal = real
-
         assert(len(self.baseMatrix.shape) == 2)
         assert(self.baseMatrix.shape[0] == self.baseMatrix.shape[1])
+
+        I = _np.identity(self.baseMatrix.shape[0],'d')
+        self.leftTrans = leftTransform if (leftTransform is not None) else I
+        self.rightTrans = rightTransform if (rightTransform is not None) else I
+        self.enforceReal = real
         
         self._computeMatrix()
         self.dim = self.matrix.shape[0]
@@ -399,17 +400,17 @@ class LinearlyParameterizedGate(object):
         self.parameterArray = _np.array(value)
         self._computeMatrix()
 
-#    def value_dimension(self):
-#        """ 
-#        Get the dimensions of the parameterized "value" of
-#        this gate which can be set using set_value(...).
-#
-#        Returns
-#        -------
-#        tuple of ints
-#            The dimension of the parameterized "value" of this gate.
-#        """
-#        return self.numParams
+    def value_dimension(self):
+        """ 
+        Get the dimensions of the parameterized "value" of
+        this gate which can be set using set_value(...).
+
+        Returns
+        -------
+        tuple of ints
+            The dimension of the parameterized "value" of this gate.
+        """
+        return self.numParams
 
     def get_num_params(self, bG0=True):
         """

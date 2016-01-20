@@ -33,7 +33,7 @@ def html(x, brackets=False):
         raise ValueError("I don't know how to render a rank %d numpy array as html" % d)
     elif type(x) in (float,int,complex,_np.float64,_np.int64):
         return html_value(x)
-    elif type(x) == list:
+    elif type(x) in (list,tuple):
         return html_list(x)
     elif type(x) == str:
         return html_escaped(x)
@@ -207,13 +207,13 @@ def html_value(el,ROUND=6,complexAsPolar=True):
             else:
                 s = "0"
     except:
-        try:
-            if abs(el) > TOL: #throw exception if el is not a number
-                s = "%s" % render(el.real)
-            else:
-                s = "0"
-        except:
-            s = str(el)
+        #try:
+        #    if abs(el) > TOL: #throw exception if el is not a number
+        #        s = "%s" % render(el.real)
+        #    else:
+        #        s = "0"
+        #except:
+        s = str(el)
 
     return s
             

@@ -5,6 +5,7 @@
 import algorithms as alg
 import construction as cst
 import objects as obj
+import report as rpt
 
 from algorithms.core import *
 from algorithms.grammatrix import *

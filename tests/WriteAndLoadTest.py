@@ -1,6 +1,6 @@
 import unittest
-import GST
-from GSTCommons import Std1Q_XYI as Std
+import pygsti
+from pygsti.construction import std1Q_XYI as std
 import numpy as np
 
 class WriteAndLoadTestCase(unittest.TestCase):
@@ -16,50 +16,92 @@ class TestWriteAndLoad(WriteAndLoadTestCase):
 
     def test_paramfile(self):
         d = {'a': 1, 'b': 2 }
-        GST.Writers.write_parameter_file("temp_test_files/paramFile.json", d)
-        d2 = GST.Loaders.load_parameter_file("temp_test_files/paramFile.json")
+        pygsti.io.write_parameter_file("temp_test_files/paramFile.json", d)
+        d2 = pygsti.io.load_parameter_file("temp_test_files/paramFile.json")
         self.assertEqual(d,d2)
 
     def test_dataset_file(self):
 
-        strList = GST.gatestring_list( [(), ('Gx',), ('Gx','Gy') ] )
-        weighted_strList = [ GST.WeightedGateString((), weight=0.1), 
-                             GST.WeightedGateString(('Gx',), weight=2.0),
-                             GST.WeightedGateString(('Gx','Gy'), weight=1.5) ]
-        GST.write_empty_dataset_file("temp_test_files/emptyDataset.txt", strList, numZeroCols=2, appendWeightsColumn=False)
-        GST.write_empty_dataset_file("temp_test_files/emptyDataset2.txt", weighted_strList, 
+        strList = pygsti.construction.gatestring_list( [(), ('Gx',), ('Gx','Gy') ] )
+        weighted_strList = [ pygsti.obj.WeightedGateString((), weight=0.1), 
+                             pygsti.obj.WeightedGateString(('Gx',), weight=2.0),
+                             pygsti.obj.WeightedGateString(('Gx','Gy'), weight=1.5) ]
+        pygsti.io.write_empty_dataset_file("temp_test_files/emptyDataset.txt", strList, numZeroCols=2, appendWeightsColumn=False)
+        pygsti.io.write_empty_dataset_file("temp_test_files/emptyDataset2.txt", weighted_strList, 
                                   headerString='## Columns = myplus count, myminus count', appendWeightsColumn=True)
+
+        with self.assertRaises(ValueError):
+            pygsti.io.write_empty_dataset_file("temp_test_files/emptyDataset.txt", [ ('Gx',) ], numZeroCols=2) #must be GateStrings
+        with self.assertRaises(ValueError):
+            pygsti.io.write_empty_dataset_file("temp_test_files/emptyDataset.txt", strList, headerString="# Nothing ")
+              #must give numZeroCols or meaningful header string (default => 2 cols)
+
         
-        ds = GST.DataSet(spamLabels=['plus','minus'])
+        ds = pygsti.obj.DataSet(spamLabels=['plus','minus'])
         ds.add_count_dict( ('Gx',), {'plus': 10, 'minus': 90} )
         ds.add_count_dict( ('Gx','Gy'), {'plus': 40, 'minus': 60} )
         ds.done_adding_data()
 
-        GST.write_dataset_file("temp_test_files/dataset_loadwrite.txt", GST.gatestring_list(ds.keys()), ds)
-        ds2 = GST.load_dataset("temp_test_files/dataset_loadwrite.txt")
+        pygsti.io.write_dataset_file("temp_test_files/dataset_loadwrite.txt",
+                                     pygsti.construction.gatestring_list(ds.keys())[0:10], ds) #write only first 10 strings
+        ds2 = pygsti.io.load_dataset("temp_test_files/dataset_loadwrite.txt")
+        ds3 = pygsti.io.load_dataset("temp_test_files/dataset_loadwrite.txt", cache=True) #creates cache file
+        ds4 = pygsti.io.load_dataset("temp_test_files/dataset_loadwrite.txt", cache=True) #loads from cache file
+
+        pygsti.io.write_dataset_file("temp_test_files/dataset_loadwrite.txt",
+                                     pygsti.construction.gatestring_list(ds.keys()), ds, spamLabelOrder=['plus','minus'])
+        ds5 = pygsti.io.load_dataset("temp_test_files/dataset_loadwrite.txt", cache=True) #rewrites cache file
 
         for s in ds:
-            self.assertEqual(ds[s]['plus'],ds2[s]['plus'])
-            self.assertEqual(ds[s]['minus'],ds2[s]['minus'])
+            self.assertEqual(ds[s]['plus'],ds5[s]['plus'])
+            self.assertEqual(ds[s]['minus'],ds5[s]['minus'])
+
+        with self.assertRaises(ValueError):
+            pygsti.io.write_dataset_file("temp_test_files/dataset_loadwrite.txt",ds.keys(), ds) #must be GateStrings
+        with self.assertRaises(ValueError):
+            pygsti.io.write_dataset_file("temp_test_files/dataset_loadwrite.txt",ds.keys(), ds) #must be GateStrings
+
+
+    def test_multidataset_file(self):
+        strList = pygsti.construction.gatestring_list( [(), ('Gx',), ('Gx','Gy') ] )
+        pygsti.io.write_empty_dataset_file("temp_test_files/emptyMultiDataset.txt", strList,
+                                           headerString='## Columns = ds1 plus count, ds1 minus count, ds2 plus count, ds2 minus count')
+        ds = pygsti.io.load_multidataset("temp_test_files/dataset_loadwrite.txt")
+        ds2 = pygsti.io.load_multidataset("temp_test_files/dataset_loadwrite.txt", cache=True)
+        ds3 = pygsti.io.load_multidataset("temp_test_files/dataset_loadwrite.txt", cache=True) #load from cache
+
 
     def test_gatestring_list_file(self):
-        strList = GST.gatestring_list( [(), ('Gx',), ('Gx','Gy') ] )
-        GST.write_gatestring_list("temp_test_files/gatestringlist_loadwrite.txt", strList, "My Header")
-        strList2 = GST.load_gatestring_list("temp_test_files/gatestringlist_loadwrite.txt")
+        strList = pygsti.construction.gatestring_list( [(), ('Gx',), ('Gx','Gy') ] )
+        pygsti.io.write_gatestring_list("temp_test_files/gatestringlist_loadwrite.txt", strList, "My Header")
+        strList2 = pygsti.io.load_gatestring_list("temp_test_files/gatestringlist_loadwrite.txt")
+        pythonStrList = pygsti.io.load_gatestring_list("temp_test_files/gatestringlist_loadwrite.txt", readRawStrings=True)
         self.assertEqual(strList, strList2)
+        self.assertEqual(pythonStrList[2], 'GxGy')
+
+        with self.assertRaises(ValueError):
+            pygsti.io.write_gatestring_list("temp_test_files/gatestringlist_bad.txt", [ ('Gx',)], "My Header") #Must be GateStrings
 
 
     def test_gatestring_list_file(self):
-        strList = GST.gatestring_list( [(), ('Gx',), ('Gx','Gy') ] )
-        GST.write_gatestring_list("temp_test_files/gatestringlist_loadwrite.txt", strList, "My Header")
-        strList2 = GST.load_gatestring_list("temp_test_files/gatestringlist_loadwrite.txt")
+        strList = pygsti.construction.gatestring_list( [(), ('Gx',), ('Gx','Gy') ] )
+        pygsti.io.write_gatestring_list("temp_test_files/gatestringlist_loadwrite.txt", strList, "My Header")
+        strList2 = pygsti.io.load_gatestring_list("temp_test_files/gatestringlist_loadwrite.txt")
         self.assertEqual(strList, strList2)
 
         
     def test_gateset_file(self):
-        GST.write_gateset(Std.gs_target, "temp_test_files/gateset_loadwrite.txt", "My title")
-        gs = GST.load_gateset("temp_test_files/gateset_loadwrite.txt")
-        self.assertAlmostEqual(gs.diff_frobenius(Std.gs_target), 0)
+        pygsti.io.write_gateset(std.gs_target, "temp_test_files/gateset_loadwrite.txt", "My title")
+        gs = pygsti.io.load_gateset("temp_test_files/gateset_loadwrite.txt")
+        self.assertAlmostEqual(gs.diff_frobenius(std.gs_target), 0)
+
+        gateset_m1m1 = pygsti.construction.build_gateset([2], [('Q0',)],['Gi','Gx','Gy'], 
+                                                         [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
+                                                         rhoExpressions=["0"], EExpressions=["1"], 
+                                                         spamLabelDict={'plus': (0,0), 'minus': (-1,-1) })
+        pygsti.io.write_gateset(gateset_m1m1, "temp_test_files/gateset_m1m1_loadwrite.txt", "My title m1m1")
+        gs_m1m1 = pygsti.io.load_gateset("temp_test_files/gateset_m1m1_loadwrite.txt")
+        self.assertAlmostEqual(gs_m1m1.diff_frobenius(gateset_m1m1), 0)
 
         gateset_txt = """# Gateset file using other allowed formats
 rho0
@@ -107,13 +149,13 @@ SPAMLABEL plus1 = rho1 E
 SPAMLABEL minus = remainder
 """
         open("temp_test_files/formatExample.gateset","w").write(gateset_txt)
-        gs_formats = GST.load_gateset("temp_test_files/formatExample.gateset")
+        gs_formats = pygsti.io.load_gateset("temp_test_files/formatExample.gateset")
         #print gs_formats
 
-        rotXPi   = GST.build_gate( [2],[('Q0',)], "X(pi,Q0)").matrix
-        rotYPi   = GST.build_gate( [2],[('Q0',)], "Y(pi,Q0)").matrix
-        rotXPiOv2   = GST.build_gate( [2],[('Q0',)], "X(pi/2,Q0)").matrix        
-        rotYPiOv2   = GST.build_gate( [2],[('Q0',)], "Y(pi/2,Q0)").matrix        
+        rotXPi   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi,Q0)").matrix
+        rotYPi   = pygsti.construction.build_gate( [2],[('Q0',)], "Y(pi,Q0)").matrix
+        rotXPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi/2,Q0)").matrix        
+        rotYPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "Y(pi/2,Q0)").matrix        
 
         self.assertArraysAlmostEqual(gs_formats['Gi'], np.identity(4,'d'))
         self.assertArraysAlmostEqual(gs_formats['Gx'], rotXPiOv2)
@@ -125,10 +167,10 @@ SPAMLABEL minus = remainder
         self.assertArraysAlmostEqual(gs_formats.rhoVecs[1], 1/np.sqrt(2)*np.array([[1],[0],[0],[1]],'d'))
         self.assertArraysAlmostEqual(gs_formats.EVecs[0], 1/np.sqrt(2)*np.array([[1],[0],[0],[-1]],'d'))
 
-        #GST.print_mx( rotXPi )
-        #GST.print_mx( rotYPi )
-        #GST.print_mx( rotXPiOv2 )
-        #GST.print_mx( rotYPiOv2 )
+        #pygsti.print_mx( rotXPi )
+        #pygsti.print_mx( rotYPi )
+        #pygsti.print_mx( rotXPiOv2 )
+        #pygsti.print_mx( rotYPiOv2 )
 
 
 
@@ -137,7 +179,7 @@ SPAMLABEL minus = remainder
         file_txt = "# Gate string dictionary\nF1 GxGx\nF2 GxGy"  #TODO: make a Writers function for gate string dicts
         open("temp_test_files/gatestringdict_loadwrite.txt","w").write(file_txt)
 
-        d = GST.load_gatestring_dict("temp_test_files/gatestringdict_loadwrite.txt")
+        d = pygsti.io.load_gatestring_dict("temp_test_files/gatestringdict_loadwrite.txt")
         self.assertEqual( tuple(d['F1']), ('Gx','Gx'))
 
         

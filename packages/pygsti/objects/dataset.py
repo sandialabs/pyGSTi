@@ -480,7 +480,7 @@ class DataSet:
       for gateString in _lt.remove_duplicates(listOfGateStringsToKeep):
         if gateString in self.gsIndex:
           gateStringIndx = self.gsIndex[gateString]
-          trunc_dataset.add_count_list( self.counts[ gateStringIndex ].copy() ) #Copy operation so trucated dataset can be modified
+          trunc_dataset.add_count_list( gateString, self.counts[ gateStringIndx ].copy() ) #Copy operation so trucated dataset can be modified
         elif bThrowErrorIfStringIsMissing:
           raise ValueError("Gate string %s was not found in dataset begin truncated and bThrowErrorIfStringIsMissing == True" % str(gateString))
 
@@ -491,7 +491,7 @@ class DataSet:
     if self.bStatic: 
       return self # doesn't need to be copied since data can't change
     else:
-      copyOfMe = DataSet(self.get_spam_labels())
+      copyOfMe = DataSet(spamLabels=self.get_spam_labels())
       copyOfMe.gsIndex = self.gsIndex.copy()
       copyOfMe.counts = [ el.copy() for el in self.counts ]
       return copyOfMe
@@ -544,7 +544,7 @@ class DataSet:
                  'gsIndexVals': self.gsIndex.values() if self.gsIndex else [],
                  'slIndex': self.slIndex,
                  'bStatic': self.bStatic } #Don't pickle counts numpy data b/c it's inefficient
-    if self.bStatic: toPickle['nRows'] = len(self.counts)
+    if not self.bStatic: toPickle['nRows'] = len(self.counts)
     
     bOpen = (type(fileOrFilename) == str)
     if bOpen:
@@ -690,30 +690,30 @@ def expand_gate_label_tuple(compressedGateString):
     return tuple(expandedString)    
 
 
-def upgrade_old_dataset(oldDataset):
-    """ Deprecated: Returns a DataSet based on an old-version dataset object """
-    if len(oldDataset.keys()) > 0:
-      spamLabels = oldDataset[ oldDataset.keys()[0] ].n.keys()
-      newDataset = DataSet(spamLabels=spamLabels)
-      for gs,datum in oldDataset.iteritems():
-        newDataset.add_count_dict( gs, datum.n )
-    else:
-      newDataset = DataSet(spamLabels=[]) #if it's an empty dataset, no spam labels
-    newDataset.done_adding_data()
-    return newDataset
-
-def upgrade_old_data_set_pickle(filename):
-    """ Deprecated: Upgrades an old-version dataset object pickle file."""
-    import sys as _sys
-    import OldDataSet as _OldDataSet
-    import cPickle as _pickle
-
-    currentDataSetModule = _sys.modules['DataSet']
-    _sys.modules['DataSet'] = _OldDataSet  #replace DataSet module with old one so unpickling can work
-    try:     oldDataset = _pickle.load( open(filename,"rb") )
-    finally: _sys.modules['DataSet'] = currentDataSetModule
-
-    newDataset = upgrade_old_dataset(oldDataset)
-
-    _pickle.dump( newDataset, open(filename + ".upd","wb") )
-    print "Successfully updated ==> %s" % (filename + ".upd")
+#def upgrade_old_dataset(oldDataset):
+#    """ Deprecated: Returns a DataSet based on an old-version dataset object """
+#    if len(oldDataset.keys()) > 0:
+#      spamLabels = oldDataset[ oldDataset.keys()[0] ].n.keys()
+#      newDataset = DataSet(spamLabels=spamLabels)
+#      for gs,datum in oldDataset.iteritems():
+#        newDataset.add_count_dict( gs, datum.n )
+#    else:
+#      newDataset = DataSet(spamLabels=[]) #if it's an empty dataset, no spam labels
+#    newDataset.done_adding_data()
+#    return newDataset
+#
+#def upgrade_old_data_set_pickle(filename):
+#    """ Deprecated: Upgrades an old-version dataset object pickle file."""
+#    import sys as _sys
+#    import OldDataSet as _OldDataSet
+#    import cPickle as _pickle
+#
+#    currentDataSetModule = _sys.modules['DataSet']
+#    _sys.modules['DataSet'] = _OldDataSet  #replace DataSet module with old one so unpickling can work
+#    try:     oldDataset = _pickle.load( open(filename,"rb") )
+#    finally: _sys.modules['DataSet'] = currentDataSetModule
+#
+#    newDataset = upgrade_old_dataset(oldDataset)
+#
+#    _pickle.dump( newDataset, open(filename + ".upd","wb") )
+#    print "Successfully updated ==> %s" % (filename + ".upd")

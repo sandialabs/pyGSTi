@@ -1,5 +1,6 @@
 *~
 *.tmp
+*.bak
 .ipynb_checkpoints
 tests/temp_test_files/*
 ipython_notebooks/Tutorials/tutorial_files

@@ -7,6 +7,7 @@ import collections as _collections
 import matplotlib as _matplotlib
 
 from ..objects import gatestring as _gs
+from ..construction import spamspecconstruction as _ssc
 from ..algorithms import optimize_gauge as _optimizeGauge
 
 import latex as _latex
@@ -575,24 +576,20 @@ class Results(object):
                           "L", "germ", M=M*sumScale, m=m*sumScale, scale=1.0, sumUp=True, histogram=False,
                           title="", rhoEPairs=self.rhoEPairs, minProbClipForWeighting=mpc, save_to="", ticSize=14)    
             
-        elif figureName.startswith("estimateForLIndex") and figureName.endswith("color_boxplot"):
-            i = int(figureName[len("estimateForLIndex"):-len("color_boxplot")])
+        elif figureName.startswith("estimateForLIndex") and figureName.endswith("ColorBoxPlot"):
+            i = int(figureName[len("estimateForLIndex"):-len("ColorBoxPlot")])
             fig = plotFn( self.Ls[st:i+1], self.germs, baseStr_dict, self.dataset, self.gatesets[i],
                           strs, "L", "germ", M=M, m=m, scale=1.0, sumUp=False, histogram=False, title="",
                           rhoEPairs=self.rhoEPairs, save_to="", minProbClipForWeighting=mpc, ticSize=20 )
 
         elif figureName == "blankBoxPlot":
-            #TODO - have blank_boxplot return a GSTFigure object
-            raise ValueError("not implemented")
             fig = _plotting.blank_boxplot( 
-                self.Ls, self.germs, baseStr_dict, strs, "L", "germ",
+                self.Ls[st:], self.germs, baseStr_dict, strs, "L", "germ",
                 scale=1.0, title="", sumUp=False, save_to="", ticSize=20)
 
         elif figureName == "blankSummedBoxPlot":
-            #TODO - have blank_boxplot return a GSTFigure object
-            raise ValueError("not implemented")
             fig = _plotting.blank_boxplot( 
-                self.Ls, self.germs, baseStr_dict, strs, "L", "germ",
+                self.Ls[st:], self.germs, baseStr_dict, strs, "L", "germ",
                 scale=1.0, title="", sumUp=True, save_to="", ticSize=20)
 
         elif figureName == "directLGSTColorBoxPlot":
@@ -795,7 +792,9 @@ class Results(object):
             assert(self.bEssentialResultsSet)
             assert(self.LsAndGermInfoSet)
 
-            direct_specs = _alg.get_spam_specs(rhoStrs=self.rhoStrs, EStrs=self.EStrs, EVecInds=self.gsTarget.get_evec_indices() )
+            direct_specs = _ssc.build_spam_specs(
+                rhoStrs=self.rhoStrs, EStrs=self.EStrs,
+                EVecInds=self.gsTarget.get_evec_indices() )
             baseStrs = [] # (L,germ) base strings without duplicates
             for L in self.Ls:
                 for germ in self.germs:
@@ -810,7 +809,9 @@ class Results(object):
             assert(self.bEssentialResultsSet)
             assert(self.LsAndGermInfoSet)
 
-            direct_specs = _alg.get_spam_specs(rhoStrs=self.rhoStrs, EStrs=self.EStrs, EVecInds=self.gsTarget.get_evec_indices() )
+            direct_specs = _ssc.build_spam_specs(
+                rhoStrs=self.rhoStrs, EStrs=self.EStrs,
+                EVecInds=self.gsTarget.get_evec_indices() )
             baseStrs = [] # (L,germ) base strings without duplicates
             for L in self.Ls:
                 for germ in self.germs:
@@ -981,8 +982,6 @@ class Results(object):
         # 5) remove auxiliary files generated during compilation
         #  FUTURE?? determine what we need to compute & plot by reading through the template file?
         
-        baseStr_dict = self._getBaseStrDict()
-                            
         #Note: for now, we assume the best gateset corresponds to the last L-value
         best_gs = self.gsBestEstimate
 
@@ -995,7 +994,7 @@ class Results(object):
         qtys['title'] = title
         qtys['datasetLabel'] = datasetLabel
         qtys['settoggles'] =  "\\togglefalse{confidences}\n" if confidenceLevel is None else "\\toggletrue{confidences}\n"
-        qtys['settoggles'] =  "\\toggletrue{LsAndGermsSet}\n" if self.LsAndGermInfoSet else "\\toggletrue{LsAndGermsSet}\n"
+        qtys['settoggles'] += "\\toggletrue{LsAndGermsSet}\n" if self.LsAndGermInfoSet else "\\togglefalse{LsAndGermsSet}\n"
         qtys['settoggles'] += "\\toggletrue{debuggingaidsappendix}\n" if debugAidsAppendix else "\\togglefalse{debuggingaidsappendix}\n"
         qtys['settoggles'] += "\\toggletrue{gaugeoptappendix}\n" if gaugeOptAppendix else "\\togglefalse{gaugeoptappendix}\n"
         qtys['settoggles'] += "\\toggletrue{pixelplotsappendix}\n" if pixelPlotAppendix else "\\togglefalse{pixelplotsappendix}\n"
@@ -1020,11 +1019,17 @@ class Results(object):
                            'bestGatesetSpamTable','bestGatesetSpamParametersTable','bestGatesetGatesTable','bestGatesetChoiTable',
                            'bestGatesetDecompTable','bestGatesetRotnAxisTable','bestGatesetClosestUnitaryTable',
                            'bestGatesetVsTargetTable','bestGatesetErrorGenTable')
+
+        progress_tbl = 'logLProgressTable' if self.objective == "logl" else 'chi2ProgressTable'
+        ls_and_germs_tables = ('fiducialListTable','rhoStrListTable','EStrListTable','germListTable', progress_tbl)            
             
         if self.LsAndGermInfoSet:
-            progress_tbl = 'logLProgressTable' if self.objective == "logl" else 'chi2ProgressTable'
-            required_tables += ('fiducialListTable','rhoStrListTable','EStrListTable','germListTable', progress_tbl)            
-
+            required_tables += ls_and_germs_tables
+        else:
+            #Fill required keys with blank tables so merge still works below
+            for key in ls_and_germs_tables:
+                qtys[key] = _generation.get_blank_table(self.formatsToCompute)['latex']
+            
         for key in required_tables:
             qtys[key] = self.get_table(key, confidenceLevel, 'latex', verbosity)
 
@@ -1045,7 +1050,6 @@ class Results(object):
             bWasInteractive = True
         else: bWasInteractive = False
     
-        strs  = self.rhoStrs, self.EStrs
         D = report_base + "_files" #figure directory relative to reportDir
         if not _os.path.isdir( _os.path.join(report_dir,D)):
             _os.mkdir( _os.path.join(report_dir,D))
@@ -1585,7 +1589,7 @@ class Results(object):
         qtys['title'] = title
         qtys['datasetLabel'] = datasetLabel
         qtys['settoggles'] =  "\\togglefalse{confidences}\n" if confidenceLevel is None else "\\toggletrue{confidences}\n"
-        qtys['settoggles'] =  "\\toggletrue{LsAndGermsSet}\n" if self.LsAndGermInfoSet else "\\toggletrue{LsAndGermsSet}\n"
+        qtys['settoggles'] += "\\toggletrue{LsAndGermsSet}\n" if self.LsAndGermInfoSet else "\\togglefalse{LsAndGermsSet}\n"
         qtys['settoggles'] += "\\toggletrue{debuggingaidsappendix}\n" if debugAidsAppendix else "\\togglefalse{debuggingaidsappendix}\n"
         qtys['settoggles'] += "\\toggletrue{pixelplotsappendix}\n" if pixelPlotAppendix else "\\togglefalse{pixelplotsappendix}\n"
         qtys['settoggles'] += "\\toggletrue{whackamoleappendix}\n" if whackamoleAppendix else "\\togglefalse{whackamoleappendix}\n"
@@ -1615,6 +1619,10 @@ class Results(object):
             progress_tbl = 'logLProgressTable' if self.objective == "logl" else 'chi2ProgressTable'
             qtys['progressTable'] = self.get_table(progress_tbl, confidenceLevel, 'latex', verbosity)
             required_tables += ('fiducialListTable','rhoStrListTable','EStrListTable','germListTable')
+        else:
+            qtys['progressTable'] = _generation.get_blank_table(self.formatsToCompute)['latex']
+            for key in ('fiducialListTable','rhoStrListTable','EStrListTable','germListTable'):
+                qtys[key] = _generation.get_blank_table(self.formatsToCompute)['latex']
 
         for key in required_tables:
             qtys[key] = self.get_table(key, confidenceLevel, 'latex', verbosity)
@@ -1629,7 +1637,6 @@ class Results(object):
             bWasInteractive = True
         else: bWasInteractive = False
     
-        strs  = self.rhoStrs, self.EStrs
         D = report_base + "_files" #figure directory relative to reportDir
         if not _os.path.isdir( _os.path.join(report_dir,D)):
             _os.mkdir( _os.path.join(report_dir,D))
@@ -1995,7 +2002,6 @@ class Results(object):
             bWasInteractive = True
         else: bWasInteractive = False
     
-        strs  = self.rhoStrs, self.EStrs
         D = report_base + "_files" #figure directory relative to reportDir
         if not _os.path.isdir( _os.path.join(report_dir,D)):
             _os.mkdir( _os.path.join(report_dir,D))
@@ -2301,13 +2307,14 @@ class Results(object):
         subtitle_shape.text = "Your GST results in Powerpoint!"
 
         # goodness of fit
-        slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "%s vs GST iteration" % plotFnName)
-        #body_shape = slide.shapes.placeholders[1]; tf = body_shape.text_frame
-        add_text_list(slide.shapes, 1, 2, 8, 2, ['Ns is the number of gate strings', 'Np is the number of parameters'], 15)
-        drawTable(slide.shapes, 'progressTable', 1, 3, 8.5, 4, ptSize=10)
+        if self.LsAndGermInfoSet:
+            slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "%s vs GST iteration" % plotFnName)
+            #body_shape = slide.shapes.placeholders[1]; tf = body_shape.text_frame
+            add_text_list(slide.shapes, 1, 2, 8, 2, ['Ns is the number of gate strings', 'Np is the number of parameters'], 15)
+            drawTable(slide.shapes, 'progressTable', 1, 3, 8.5, 4, ptSize=10)
         
-        slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Detailed %s Analysis" % plotFnName)
-        draw_pic(slide.shapes, qtys['bestGatesetBoxPlot'], 1, 1.5, 8, 5.5)
+            slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Detailed %s Analysis" % plotFnName)
+            draw_pic(slide.shapes, qtys['bestGatesetBoxPlot'], 1, 1.5, 8, 5.5)
 
         # gate esimtates
         slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "GST Estimate vs. target")
@@ -2335,9 +2342,10 @@ class Results(object):
         slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Target Gates")
         drawTable(slide.shapes, 'targetGatesTable', 1, 1.5, 7, 5, ptSize=10)
 
-        slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Fiducial and Germ Gate Strings")
-        drawTable(slide.shapes, 'fiducialListTable', 1, 1.5, 4, 3, ptSize=10)
-        drawTable(slide.shapes, 'germListTable', 5.5, 1.5, 4, 5, ptSize=10)
+        if self.LsAndGermInfoSet:
+            slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Fiducial and Germ Gate Strings")
+            drawTable(slide.shapes, 'fiducialListTable', 1, 1.5, 4, 3, ptSize=10)
+            drawTable(slide.shapes, 'germListTable', 5.5, 1.5, 4, 5, ptSize=10)
 
         slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Dataset Overview")
         drawTable(slide.shapes, 'datasetOverviewTable', 1, 2, 5, 4, ptSize=10)

@@ -161,72 +161,72 @@ class EvalTree(list):
         """
         return self.finalList #Note: no copy, so caller could modify this!
 
-    def _initializeBETA(self, gateLabels, gatestring_list):
-        """
-          Experimental alternate tree initialization algorithm.
-          This doesn't currently work.
-        """
-        self.gateLabels = gateLabels
-
-        def repetitions(s):
-            r = _re.compile(r"(.+?)\1+")
-            for match in r.finditer(s):
-                yield (match.group(1), len(match.group(0))/len(match.group(1)))
-
-        #Evaluation dictionary:
-        # keys == gate strings that have been evaluated so far
-        # values == index of gate string (key) within evalTree
-        evalDict = { } 
-
-        #Evaluation tree:
-        # A list of tuples, where each element contains
-        #  information about evaluating a particular gate string:
-        #  (iLeft, iRight, iInFinalList)
-        # and the order of the elements specifies the evaluation order.
-        # In particular, the gateString = evalTree[iLeft] + evalTree[iRight]
-        #  and iInFinalList is the index of this gatestring in the gatestring_list
-        # passed to this function, or -1 if it is not in the list.
-        del self[:] #clear self (a list)
-
-        #Final Index List
-        # A list of integers whose i-th element is the index into evalTree
-        #  corresponding to the i-th gatestring in gatestring_list.
-        finalIndxList = [ None ] * len(gatestring_list)
-
-        #Single gate (or zero-gate) computations are assumed to be atomic, and be computed independently.
-        #  These labels serve as the initial values, and each gate string is assumed to be a tuple of gate labels.
-        singleGateLabels = []
-        for gateLabel in self.gateLabels:
-            if gateLabel == "": #special case of empty label == no gate
-                evalDict[ () ] = len(self)
-            else:
-                evalDict[ (gateLabel,) ] = len(self)
-                singleGateLabels.append(gateLabel)
-            self.append( (None,None,-1) ) #iLeft = iRight = None for always-evaluated zero string
-
-        #Collect list of what sub-strings get repeated a lot
-        repDict = {}
-        for (k,gateString) in enumerate(gatestring_list):
-            #print "String %d (len %d): " % (k,len(gateString)),
-            for repStr,repCnt in repetitions( _gs.gatestr_to_pythonstr(gateString,singleGateLabels) ):
-                repGateStr = _gs.pythonstr_to_gatestr(repStr,singleGateLabels)
-                if repDict.has_key(repGateStr):
-                    if repCnt not in repDict[repGateStr][0]:
-                        repDict[repGateStr][0].append(repCnt)
-                        repDict[repGateStr][1].append(1)
-                    else:
-                        indx = repDict[repGateStr][0].index(repCnt)
-                        repDict[repGateStr][1][indx] += 1
-                else:
-                    repDict[repGateStr] = [ [repCnt],[1] ] #list of unique rep counts, list of multiplicities
-                #print "%s^%d" % (str(repGateStr),repCnt),
-            #print ""
-        for repGateStr,repCntList in repDict.iteritems():
-            print repGateStr, ":", repCntList
-
-        self.finalList = []
-        self.myFinalToParentFinalMap = [] #this tree has no "children", i.e. has not been created by a 'split'
-        self.subTrees = []
+#    def _initializeBETA(self, gateLabels, gatestring_list):
+#        """
+#          Experimental alternate tree initialization algorithm.
+#          This doesn't currently work.
+#        """
+#        self.gateLabels = gateLabels
+#
+#        def repetitions(s):
+#            r = _re.compile(r"(.+?)\1+")
+#            for match in r.finditer(s):
+#                yield (match.group(1), len(match.group(0))/len(match.group(1)))
+#
+#        #Evaluation dictionary:
+#        # keys == gate strings that have been evaluated so far
+#        # values == index of gate string (key) within evalTree
+#        evalDict = { } 
+#
+#        #Evaluation tree:
+#        # A list of tuples, where each element contains
+#        #  information about evaluating a particular gate string:
+#        #  (iLeft, iRight, iInFinalList)
+#        # and the order of the elements specifies the evaluation order.
+#        # In particular, the gateString = evalTree[iLeft] + evalTree[iRight]
+#        #  and iInFinalList is the index of this gatestring in the gatestring_list
+#        # passed to this function, or -1 if it is not in the list.
+#        del self[:] #clear self (a list)
+#
+#        #Final Index List
+#        # A list of integers whose i-th element is the index into evalTree
+#        #  corresponding to the i-th gatestring in gatestring_list.
+#        finalIndxList = [ None ] * len(gatestring_list)
+#
+#        #Single gate (or zero-gate) computations are assumed to be atomic, and be computed independently.
+#        #  These labels serve as the initial values, and each gate string is assumed to be a tuple of gate labels.
+#        singleGateLabels = []
+#        for gateLabel in self.gateLabels:
+#            if gateLabel == "": #special case of empty label == no gate
+#                evalDict[ () ] = len(self)
+#            else:
+#                evalDict[ (gateLabel,) ] = len(self)
+#                singleGateLabels.append(gateLabel)
+#            self.append( (None,None,-1) ) #iLeft = iRight = None for always-evaluated zero string
+#
+#        #Collect list of what sub-strings get repeated a lot
+#        repDict = {}
+#        for (k,gateString) in enumerate(gatestring_list):
+#            #print "String %d (len %d): " % (k,len(gateString)),
+#            for repStr,repCnt in repetitions( _gs.gatestr_to_pythonstr(gateString,singleGateLabels) ):
+#                repGateStr = _gs.pythonstr_to_gatestr(repStr,singleGateLabels)
+#                if repDict.has_key(repGateStr):
+#                    if repCnt not in repDict[repGateStr][0]:
+#                        repDict[repGateStr][0].append(repCnt)
+#                        repDict[repGateStr][1].append(1)
+#                    else:
+#                        indx = repDict[repGateStr][0].index(repCnt)
+#                        repDict[repGateStr][1][indx] += 1
+#                else:
+#                    repDict[repGateStr] = [ [repCnt],[1] ] #list of unique rep counts, list of multiplicities
+#                #print "%s^%d" % (str(repGateStr),repCnt),
+#            #print ""
+#        for repGateStr,repCntList in repDict.iteritems():
+#            print repGateStr, ":", repCntList
+#
+#        self.finalList = []
+#        self.myFinalToParentFinalMap = [] #this tree has no "children", i.e. has not been created by a 'split'
+#        self.subTrees = []
 
     def get_num_final_strings(self):
         """ 

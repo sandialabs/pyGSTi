@@ -8,16 +8,22 @@ import collections as _collections
 
 from ..tools import matrixtools as _mt
 from ..tools import basistools as _bt
+from ..tools import gatetools as _gt
 
 import evaltree as _evaltree
 import gate as _gate
-import gatetools as _gt
 
 
 # Tolerace for matrix_rank when finding rank of a *normalized* projection matrix.
 #  This is a legitimate tolerace since a normalized projection matrix should have
 #  just 0 and 1 eigenvalues, and thus a tolerace << 1.0 will work well.
 P_RANK_TOL = 1e-7 
+
+# Smallness tolerances, used internally for conditional scaling required
+# to control bulk products, their gradients, and their Hessians.
+PSMALL = 1e-100
+DSMALL = 1e-100
+HSMALL = 1e-100
 
 class GateSet(_collections.OrderedDict):
     """
@@ -125,7 +131,7 @@ class GateSet(_collections.OrderedDict):
         self.make_spams()
 
 
-    def get_rho_vec(self, index=0):
+    def get_rhovec(self, index=0):
         """
         Get a state prepartion vector by index.
 
@@ -142,7 +148,7 @@ class GateSet(_collections.OrderedDict):
         return self.rhoVecs[index]
 
 
-    def get_rho_vecs(self):
+    def get_rhovecs(self):
         """
         Get an list of all the state prepartion vectors.  These
         vectors are copies of internally stored data and thus
@@ -153,7 +159,7 @@ class GateSet(_collections.OrderedDict):
         list of numpy arrays
             list of state preparation vectors of shape (gate_dim, 1).
         """
-        return [ self.get_rho_vec(i).copy() for i in self.get_rhovec_indices() ]
+        return [ self.get_rhovec(i).copy() for i in self.get_rhovec_indices() ]
 
                                
     def set_evec(self, EVec, index=0):
@@ -325,7 +331,7 @@ class GateSet(_collections.OrderedDict):
 
     def __setitem__(self, key, value):
         if key not in self:
-            raise KeyError("You cannot set a new gate of a GateSet using braket assignment.  Use set_gate(...) instead.");
+            raise KeyError("You cannot set a new gate of a GateSet using bracket assignment.  Use set_gate(...) instead.");
         raise ValueError("You must set gateset elements using set_gate now, and cannot directly assign a gate via array indexing")
 
         #NOTE: FUTURE - we could set the value of an existing gate, but this seems somewhat confusing and I don't think we'll need it
@@ -900,11 +906,15 @@ class GateSet(_collections.OrderedDict):
                     self.SPAMs[label] = _np.kron(self.rhoVecs[irhoVec], _np.conjugate(_np.transpose(self.EVecs[iEVec])))
                 elif iEVec == -1:
                     self.SPAMs[label] = _np.kron(self.rhoVecs[irhoVec], _np.conjugate(_np.transpose(self.get_evec(-1))))
-                else: raise ValueError("Bad E-vector index: %d" % iEVec)
+                else: 
+                    del self.SPAM_labels[label]
+                    raise ValueError("Bad E-vector index: %d" % iEVec)
             elif irhoVec == -1:
                 assert(iEVec == -1 and self.assumeSumToOne)
                 self.SPAMs[label] = None    
-            else: raise ValueError("Bad rho-vector index: %d" % irhoVec)
+            else:
+                del self.SPAM_labels[label]
+                raise ValueError("Bad rho-vector index: %d" % irhoVec)
 
     def product(self, gatestring, bScale=False):
         """ 
@@ -945,7 +955,7 @@ class GateSet(_collections.OrderedDict):
                 gate, ex = scaledGatesAndExps[lGate]
                 H = _np.dot(gate,G)   # product of gates, starting with identity
                 scale_exp += ex   # scale and keep track of exponent
-                if H.max() < 1e-100 and H.min() > -1e-100:
+                if H.max() < PSMALL and H.min() > -PSMALL:
                     nG = max(_nla.norm(G), _np.exp(-scale_exp))
                     G = _np.dot(gate,G/nG); scale_exp += _np.log(nG) 
                     #OLD: _np.dot(G/nG,gate); scale_exp += _np.log(nG) LEXICOGRAPHICAL VS MATRIX ORDER
@@ -1466,16 +1476,16 @@ class GateSet(_collections.OrderedDict):
         if self.SPAMs[spamLabel] is None: #then compute Hessian[ 1.0 - (all other spam label probabilities) ]
             otherSpamLabels = self.get_spam_labels(); del otherSpamLabels[ otherSpamLabels.index(spamLabel) ]
             assert( all([ (self.SPAMs[sl] is not None) for sl in otherSpamLabels]) )
-            otherResults = [self.hpr(sl, gatestring, gates, G0, SPAM, SP0, returnPr, clipTo) for sl in otherSpamLabels]
+            otherResults = [self.hpr(sl, gatestring, gates, G0, SPAM, SP0, returnPr, returnDeriv, clipTo) for sl in otherSpamLabels]
             if returnDeriv: 
                 if returnPr: return ( -1.0 * sum([hpr for hpr,dpr,p in otherResults]),
                                       -1.0 * sum([dpr for hpr,dpr,p in otherResults]), 
-                                       1.0 - sum([p for hpr,dpr,p in otherResults])     )
+                                       1.0 - sum([p   for hpr,dpr,p in otherResults])   )
                 else:        return ( -1.0 * sum([hpr for hpr,dpr in otherResults]),
                                       -1.0 * sum([dpr for hpr,dpr in otherResults])     )
             else:
                 if returnPr: return ( -1.0 * sum([hpr for hpr,p in otherResults]),
-                                      -1.0 * sum([p for hpr,p in otherResults])         )
+                                       1.0 - sum([p   for hpr,p in otherResults])   )
                 else:        return   -1.0 * sum(otherResults)
 
 
@@ -1768,18 +1778,18 @@ class GateSet(_collections.OrderedDict):
         return hprobs
 
 
-    def bulk_evaltree_beta(self, gatestring_list):
-        """
-          Returns an evaluation tree for all the gate 
-          strings in gatestring_list. Used by bulk_pr and
-          bulk_dpr, this is it's own function so that 
-          if many calls to bulk_pr and/or bulk_dpr are
-          made with the same gatestring_list, only a single
-          call to bulk_evaltree is needed.
-        """
-        evalTree = _evaltree.EvalTree()
-        evalTree.initialize_beta([""] + self.keys(), gatestring_list)
-        return evalTree
+#    def bulk_evaltree_beta(self, gatestring_list):
+#        """
+#          Returns an evaluation tree for all the gate 
+#          strings in gatestring_list. Used by bulk_pr and
+#          bulk_dpr, this is it's own function so that 
+#          if many calls to bulk_pr and/or bulk_dpr are
+#          made with the same gatestring_list, only a single
+#          call to bulk_evaltree is needed.
+#        """
+#        evalTree = _evaltree.EvalTree()
+#        evalTree.initialize_beta([""] + self.keys(), gatestring_list)
+#        return evalTree
 
 
     def bulk_evaltree(self, gatestring_list):
@@ -1863,7 +1873,7 @@ class GateSet(_collections.OrderedDict):
             prodCache[i] = _np.dot(L,R)
             scaleCache[i] = scaleCache[iLeft] + scaleCache[iRight]
 
-            if prodCache[i].max() < 1e-100 and prodCache[i].min() > -1e-100:
+            if prodCache[i].max() < PSMALL and prodCache[i].min() > -PSMALL:
                 nL,nR = max(_nla.norm(L), _np.exp(-scaleCache[iLeft]),1e-300), max(_nla.norm(R), _np.exp(-scaleCache[iRight]),1e-300)
                 sL, sR = L/nL, R/nR
                 prodCache[i] = _np.dot(sL,sR); scaleCache[i] += _np.log(nL) + _np.log(nR)
@@ -2017,24 +2027,24 @@ class GateSet(_collections.OrderedDict):
             prodCache[i] = _np.dot(L,R)
 
             #if not prodCache[i].any(): #same as norm(prodCache[i]) == 0 but faster
-            if prodCache[i].max() < 1e-100 and prodCache[i].min() > -1e-100:
+            if prodCache[i].max() < PSMALL and prodCache[i].min() > -PSMALL:
                 nL,nR = max(_nla.norm(L), _np.exp(-scaleCache[iLeft]),1e-300), max(_nla.norm(R), _np.exp(-scaleCache[iRight]),1e-300)
                 sL, sR, sdL, sdR = L/nL, R/nR, dProdCache[iLeft]/nL, dProdCache[iRight]/nR
                 prodCache[i] = _np.dot(sL,sR); dProdCache[i] = _np.dot(sdL, sR) + _np.swapaxes(_np.dot(sL, sdR),0,1)
                 scaleCache[i] = scaleCache[iLeft] + scaleCache[iRight] + _np.log(nL) + _np.log(nR)
-                if dProdCache[i].max() < 1e-100 and dProdCache[i].min() > -1e-100:
+                if dProdCache[i].max() < DSMALL and dProdCache[i].min() > -DSMALL:
                     _warnings.warn("Scaled dProd small in order to keep prod managable.")
             else:
                 dL,dR = dProdCache[iLeft], dProdCache[iRight]
                 dProdCache[i] = _np.dot(dL, R) + _np.swapaxes(_np.dot(L, dR),0,1) #dot(dS, T) + dot(S, dT)
                 scaleCache[i] = scaleCache[iLeft] + scaleCache[iRight]
                 
-                if dProdCache[i].max() < 1e-100 and dProdCache[i].min() > -1e-100:
+                if dProdCache[i].max() < DSMALL and dProdCache[i].min() > -DSMALL:
                     nL,nR = max(_nla.norm(dL), _np.exp(-scaleCache[iLeft]),1e-300), max(_nla.norm(dR), _np.exp(-scaleCache[iRight]),1e-300)
                     sL, sR, sdL, sdR = L/nL, R/nR, dL/nL, dR/nR
                     prodCache[i] = _np.dot(sL,sR); dProdCache[i] = _np.dot(sdL, sR) + _np.swapaxes(_np.dot(sL, sdR),0,1)
                     scaleCache[i] = scaleCache[iLeft] + scaleCache[iRight] + _np.log(nL) + _np.log(nR)
-                    if prodCache[i].max() < 1e-100 and prodCache[i].min() > -1e-100:
+                    if prodCache[i].max() < PSMALL and prodCache[i].min() > -PSMALL:
                         _warnings.warn("Scaled prod small in order to keep dProd managable.")
                 
         nanOrInfCacheIndices = (~_np.isfinite(prodCache)).nonzero()[0] 
@@ -2226,16 +2236,16 @@ class GateSet(_collections.OrderedDict):
             L,R = prodCache[iLeft], prodCache[iRight]
             prodCache[i] = _np.dot(L,R)
 
-            if prodCache[i].max() < 1e-100 and prodCache[i].min() > -1e-100:
+            if prodCache[i].max() < PSMALL and prodCache[i].min() > -PSMALL:
                 nL,nR = max(_nla.norm(L), _np.exp(-scaleCache[iLeft]),1e-300), max(_nla.norm(R), _np.exp(-scaleCache[iRight]),1e-300)
                 sL, sR, sdL, sdR = L/nL, R/nR, dProdCache[iLeft]/nL, dProdCache[iRight]/nR
                 shL, shR, sdLdR = hProdCache[iLeft]/nL, hProdCache[iRight]/nR, _np.swapaxes(_np.dot(sdL,sdR),1,2) #_np.einsum('ikm,jml->ijkl',sdL,sdR)
                 prodCache[i] = _np.dot(sL,sR); dProdCache[i] = _np.dot(sdL, sR) + _np.swapaxes(_np.dot(sL, sdR),0,1)
                 hProdCache[i] = _np.dot(shL, sR) + sdLdR + _np.swapaxes(sdLdR,0,1) + _np.swapaxes(_np.dot(sL,shR),0,2)
                 scaleCache[i] = scaleCache[iLeft] + scaleCache[iRight] + _np.log(nL) + _np.log(nR)
-                if dProdCache[i].max() < 1e-100 and dProdCache[i].min() > -1e-100:
+                if dProdCache[i].max() < DSMALL and dProdCache[i].min() > -DSMALL:
                     _warnings.warn("Scaled dProd small in order to keep prod managable.")
-                if hProdCache[i].max() < 1e-100 and hProdCache[i].min() > -1e-100:
+                if hProdCache[i].max() < HSMALL and hProdCache[i].min() > -HSMALL:
                     _warnings.warn("Scaled hProd small in order to keep prod managable.")
             else:
                 dL,dR = dProdCache[iLeft], dProdCache[iRight]
@@ -2246,16 +2256,16 @@ class GateSet(_collections.OrderedDict):
                 dLdR = _np.swapaxes(_np.dot(dL,dR),1,2) #_np.einsum('ikm,jml->ijkl',dL,dR) # Note: L, R = GxG ; dL,dR = vgs x GxG ; hL,hR = vgs x vgs x GxG
                 hProdCache[i] = _np.dot(hL, R) + dLdR + _np.swapaxes(dLdR,0,1) + _np.swapaxes(_np.dot(L,hR),0,2)
 
-                if dProdCache[i].max() < 1e-100 and dProdCache[i].min() > -1e-100:
+                if dProdCache[i].max() < DSMALL and dProdCache[i].min() > -DSMALL:
                     nL,nR = max(_nla.norm(dL), _np.exp(-scaleCache[iLeft]),1e-300), max(_nla.norm(dR), _np.exp(-scaleCache[iRight]),1e-300)
                     sL, sR, sdL, sdR = L/nL, R/nR, dL/nL, dR/nR
-                    shL, shR, sdLdR = hL/nL, hR/nR, _np.swapaxes(_np.dot(dL,dR),1,2) #_np.einsum('ikm,jml->ijkl',sdL,sdR)
+                    shL, shR, sdLdR = hL/nL, hR/nR, _np.swapaxes(_np.dot(sdL,sdR),1,2) #_np.einsum('ikm,jml->ijkl',sdL,sdR)
                     prodCache[i] = _np.dot(sL,sR); dProdCache[i] = _np.dot(sdL, sR) + _np.swapaxes(_np.dot(sL, sdR),0,1)
                     hProdCache[i] = _np.dot(shL, sR) + sdLdR + _np.swapaxes(sdLdR,0,1) + _np.swapaxes(_np.dot(sL,shR),0,2)
                     scaleCache[i] = scaleCache[iLeft] + scaleCache[iRight] + _np.log(nL) + _np.log(nR)
-                    if prodCache[i].max() < 1e-100 and prodCache[i].min() > -1e-100:
+                    if prodCache[i].max() < PSMALL and prodCache[i].min() > -PSMALL:
                         _warnings.warn("Scaled prod small in order to keep dProd managable.")
-                    if hProdCache[i].max() < 1e-100 and hProdCache[i].min() > -1e-100:
+                    if hProdCache[i].max() < HSMALL and hProdCache[i].min() > -HSMALL:
                         _warnings.warn("Scaled hProd small in order to keep dProd managable.")
                 
         nanOrInfCacheIndices = (~_np.isfinite(prodCache)).nonzero()[0] 
@@ -2470,7 +2480,14 @@ class GateSet(_collections.OrderedDict):
         bSPAM = SPAM; bG0 = G0; bSP0 = SP0
 
         if self.SPAMs[spamLabel] is None: #then compute Deriv[ 1.0 - (all other spam label probabilities) ]
-            raise ValueError("Cannot compute bulk probability derivatives for spamlabel %s" % spamLabel)
+            otherSpamLabels = self.get_spam_labels(); del otherSpamLabels[ otherSpamLabels.index(spamLabel) ]
+            assert( all([ (self.SPAMs[sl] is not None) for sl in otherSpamLabels]) )
+            otherResults = [self.bulk_dpr(sl, evalTree, gates, G0, SPAM, SP0, returnPr, clipTo) for sl in otherSpamLabels]
+            if returnPr:
+                return ( -1.0 * _np.sum([dpr for dpr,p in otherResults],axis=0),
+                          1.0 - _np.sum([p   for dpr,p in otherResults],axis=0) )
+            else:
+                return -1.0 * _np.sum(otherResults, axis=0)
 
         (rhoIndex,eIndex) = self.SPAM_labels[spamLabel]
         rho = self.rhoVecs[rhoIndex]
@@ -2657,7 +2674,19 @@ class GateSet(_collections.OrderedDict):
         bSPAM = SPAM; bG0 = G0; bSP0 = SP0
 
         if self.SPAMs[spamLabel] is None: #then compute Deriv[ 1.0 - (all other spam label probabilities) ]
-            raise ValueError("Cannot compute bulk probability hessians for spamlabel %s" % spamLabel)
+            otherSpamLabels = self.get_spam_labels(); del otherSpamLabels[ otherSpamLabels.index(spamLabel) ]
+            assert( all([ (self.SPAMs[sl] is not None) for sl in otherSpamLabels]) )
+            otherResults = [self.bulk_hpr(sl, evalTree, gates, G0, SPAM, SP0, returnPr, returnDeriv, clipTo) for sl in otherSpamLabels]
+            if returnDeriv: 
+                if returnPr: return ( -1.0 * _np.sum([hpr for hpr,dpr,p in otherResults],axis=0),
+                                      -1.0 * _np.sum([dpr for hpr,dpr,p in otherResults],axis=0), 
+                                       1.0 - _np.sum([p   for hpr,dpr,p in otherResults],axis=0) )
+                else:        return ( -1.0 * _np.sum([hpr for hpr,dpr in otherResults],axis=0),
+                                      -1.0 * _np.sum([dpr for hpr,dpr in otherResults],axis=0)   )
+            else:
+                if returnPr: return ( -1.0 * _np.sum([hpr for hpr,p in otherResults],axis=0),
+                                       1.0 - _np.sum([p   for hpr,p in otherResults],axis=0)  )
+                else:        return   -1.0 * _np.sum(otherResults,axis=0)
 
         (rhoIndex,eIndex) = self.SPAM_labels[spamLabel]
         rho = self.rhoVecs[rhoIndex]
@@ -2807,7 +2836,7 @@ class GateSet(_collections.OrderedDict):
             if returnDeriv and _nla.norm(vdp - check_vdp) > 1e-6:
                 _warnings.warn("norm(vdp-check_vdp) = %g - %g = %g" % (_nla.norm(vdp), _nla.norm(check_vdp), _nla.norm(vdp - check_vdp)))
             if _nla.norm(vhp - check_vhp) > 1e-6:
-                _warnings.warn("norm(vdp-check_vdp) = %g - %g = %g" % (_nla.norm(vdp), _nla.norm(check_vdp), _nla.norm(vdp - check_vdp)))
+                _warnings.warn("norm(vhp-check_vhp) = %g - %g = %g" % (_nla.norm(vhp), _nla.norm(check_vhp), _nla.norm(vhp - check_vhp)))
 
         if returnDeriv: 
             if returnPr: return vhp, vdp, vp

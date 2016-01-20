@@ -39,13 +39,14 @@
 \newtoggle{debuggingaidsappendix}
 \newtoggle{pixelplotsappendix}
 \newtoggle{whackamoleappendix}
+\togglefalse{confidences}
 \toggletrue{LsAndGermsSet}
 \togglefalse{debuggingaidsappendix}
 \togglefalse{pixelplotsappendix}
 \togglefalse{whackamoleappendix}
 
 
-\title{GST on $\mathcal{D}$}
+\title{GST on MyDefaultReportName}
 \subtitle{A projector-friendly look at your GST results}
 \author{PyGSTi}
 \institute{Sandia National Labs}
@@ -247,9 +248,9 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & 0.000627 &  & 0.118909$\pi$ & 0.491367$\pi$ \\ \hline
-Gx & 0.500353 & 0.118909$\pi$ &  & 0.44317$\pi$ \\ \hline
-Gy & 0.500073 & 0.491367$\pi$ & 0.44317$\pi$ &  \\ \hline
+Gi & 0.000627$\pi$ &  & 0.118909$\pi$ & 0.491367$\pi$ \\ \hline
+Gx & 0.500353$\pi$ & 0.118909$\pi$ &  & 0.44317$\pi$ \\ \hline
+Gy & 0.500073$\pi$ & 0.491367$\pi$ & 0.44317$\pi$ &  \\ \hline
 \end{tabular}
 
 \end{tabular}
@@ -521,8 +522,10 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 \begin{center}
 \begin{minipage}[b]{0.40\linewidth}
 \centering
+\adjustbox{max width=\linewidth}{
 \begin{tabular}[l]{|c|c|c|}
 \hline
+ & \multicolumn{2}{c|}{Fiducials} \\ \hline
 \# & Prep. & Measure \\ \hline
 1 & $$ & $$ \\ \hline
 2 & $\mbox{Gx}$ & $\mbox{Gx}$ \\ \hline
@@ -532,8 +535,10 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 6 & $\mbox{Gy}\cdot\mbox{Gy}\cdot\mbox{Gy}$ & $\mbox{Gy}\cdot\mbox{Gy}\cdot\mbox{Gy}$ \\ \hline
 \end{tabular}
 
+}
 \end{minipage}
 \begin{minipage}[b]{0.40\linewidth}
+\adjustbox{max width=\linewidth}{
 \begin{tabular}[l]{|c|c|}
 \hline
 \# & Germ \\ \hline
@@ -550,6 +555,7 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 11 & $\mbox{Gx}\cdot\mbox{Gx}\cdot\mbox{Gy}\cdot\mbox{Gx}\cdot\mbox{Gy}\cdot\mbox{Gy}$ \\ \hline
 \end{tabular}
 
+}
 \end{minipage}
 \end{center}
 \end{table}

@@ -1,5 +1,7 @@
 import unittest
-import GST
+import warnings
+import pyparsing
+import pygsti
 import numpy as np
 
 class StdInputParserTestCase(unittest.TestCase):
@@ -9,6 +11,13 @@ class StdInputParserTestCase(unittest.TestCase):
 
     def assertArraysAlmostEqual(self,a,b):
         self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
+
+    def assertWarns(self, callable, *args, **kwds):
+        with warnings.catch_warnings(record=True) as warning_list:
+            warnings.simplefilter('always')
+            result = callable(*args, **kwds)
+            self.assertTrue(len(warning_list) > 0)
+        return result
 
 
 class TestStdInputParser(StdInputParserTestCase):
@@ -34,13 +43,16 @@ class TestStdInputParser(StdInputParserTestCase):
                          ("G_my_x*G_my_y", ('G_my_x', 'G_my_y')),
                          ("G_my_x G_my_y", ('G_my_x', 'G_my_y')) ]
         
-        std = GST.StdInputParser.StdInputParser()
+        std = pygsti.io.StdInputParser()
 
         #print "String Tests:"
         for s,expected in string_tests:
             #print "%s ==> " % s, result
             result = std.parse_gatestring(s, lookup=lkup)
             self.assertEqual(result, expected)
+
+        with self.assertRaises(ValueError):
+            std.parse_gatestring("FooBar")
 
 
     def test_lines(self):
@@ -51,11 +63,19 @@ class TestStdInputParser(StdInputParserTestCase):
         dictline_tests = [ "1  G1G2G3",
                            "MyFav (G1G2)^3" ]
 
-        std = GST.StdInputParser.StdInputParser()
+        std = pygsti.io.StdInputParser()
 
         self.assertEqual( std.parse_dataline(dataline_tests[0]), (('G1', 'G2', 'G3'), 'G1G2G3', [0.1, 100.0]))
         self.assertEqual( std.parse_dataline(dataline_tests[1]), (('G1', 'G2', 'G3'), 'G1 G2 G3', [0.798, 100.0]))
         self.assertEqual( std.parse_dataline(dataline_tests[2]), (('G1', 'G2', 'G3', 'G2', 'G3', 'G4'), 'G1 (G2 G3)^2 G4', [1.0, 100.0]))
+        self.assertEqual( std.parse_dataline("G1G2G3 0.1 100 2.0", expectedCounts=2),
+                          (('G1', 'G2', 'G3'), 'G1G2G3', [0.1, 100.0])) #extra col ignored
+
+        with self.assertRaises(ValueError):
+            std.parse_dataline("G1G2G3  1.0", expectedCounts=2) #too few cols == error
+        with self.assertRaises(ValueError):
+            std.parse_dataline("1.0 2.0") #just data cols (no gatestring col!)
+
 
         self.assertEqual( std.parse_dictline(dictline_tests[0]), ('1', ('G1', 'G2', 'G3'), 'G1G2G3'))
         self.assertEqual( std.parse_dictline(dictline_tests[1]), ('MyFav', ('G1', 'G2', 'G1', 'G2', 'G1', 'G2'), '(G1G2)^3'))
@@ -126,7 +146,144 @@ G_my_x G_my_y 0.5 24.0
         f.write(datafile_test)
         f.close()
 
-        std = GST.StdInputParser.StdInputParser()
+        datafile_test = \
+"""#Data File without Header
+{}            1.0 100
+"""
+        f = open("temp_test_files/sip_test2.data","w")
+        f.write(datafile_test)
+        f.close()
+
+        datafile_test = \
+"""#Data File with bad syntax
+## Columns = plus frequency, count total
+{}            1.0 100
+G1            0.0 100
+FooBar        0.4 100
+G3            0.2 100
+"""
+        f = open("temp_test_files/sip_test3.data","w")
+        f.write(datafile_test)
+        f.close()
+
+        datafile_test = \
+"""#Data File with zero counts
+## Columns = plus frequency, count total
+{}            1.0 100
+G1            0.0 100
+G2            0   0
+G3            0.2 100
+"""
+        f = open("temp_test_files/sip_test4.data","w")
+        f.write(datafile_test)
+        f.close()
+
+        datafile_test = \
+"""#Data File with bad columns
+## Columns = plus frequency, minus frequency
+{}            1.0 0.0
+G1            0.0 1.0
+G2            0   1.0
+G3            0.2 0.8
+"""
+        f = open("temp_test_files/sip_test5.data","w")
+        f.write(datafile_test)
+        f.close()
+
+        datafile_test = \
+"""#Data File with bad frequency
+## Columns = plus frequency, count total
+{}            1.0 100
+G1            0.0 100
+G2            3.4 100
+G3            0.2 100
+"""
+        f = open("temp_test_files/sip_test6.data","w")
+        f.write(datafile_test)
+        f.close()
+
+        datafile_test = \
+"""#Data File with bad counts
+## Columns = plus count, count total
+{}            30  100
+G1            10  100
+G2            0.2 100
+G3            0.1 100
+"""
+        f = open("temp_test_files/sip_test7.data","w")
+        f.write(datafile_test)
+        f.close()
+
+
+        multidatafile_test = \
+"""#Multi Data File
+## Lookup = sip_test.dict
+## Columns = ds1 plus count, ds1 count total, ds2 plus count, ds2 count total
+{}            30  100  20 200
+G1            10  100  10 200
+G2            20  100  5  200
+G3            10  100  80 200
+"""
+        f = open("temp_test_files/sip_test.multidata","w")
+        f.write(multidatafile_test)
+        f.close()
+
+        multidatafile_test = \
+"""#Multi Data File with default cols
+{}            30  100
+G1            10  100
+G2            20  100
+G3            10  100
+"""
+        f = open("temp_test_files/sip_test2.multidata","w")
+        f.write(multidatafile_test)
+        f.close()
+
+        multidatafile_test = \
+"""#Multi Data File syntax error
+{}            30  100
+FooBar        10  100
+G2            20  100
+"""
+        f = open("temp_test_files/sip_test3.multidata","w")
+        f.write(multidatafile_test)
+        f.close()
+
+        multidatafile_test = \
+"""#Multi Data File bad columns
+## Columns = ds1 plus frequency, ds1 minus frequency, ds2 plus count, ds2 count total
+{}            0.3  0.4  20 200
+G1            0.1  0.5  10 200
+G2            0.2  0.3  5  200
+"""
+        f = open("temp_test_files/sip_test4.multidata","w")
+        f.write(multidatafile_test)
+        f.close()
+
+        multidatafile_test = \
+"""#Multi Data File frequency out of range
+## Columns = ds1 plus frequency, ds1 count total, ds2 plus count, ds2 count total
+{}            0.3  100  20 200
+G1            10   100  10 200
+G2            0.2  100  5  200
+"""
+        f = open("temp_test_files/sip_test5.multidata","w")
+        f.write(multidatafile_test)
+        f.close()
+
+        multidatafile_test = \
+"""#Multi Data File count out of range
+## Columns = ds1 plus count, ds1 count total, ds2 plus count, ds2 count total
+{}            0.3  100  20 200
+G1            0.1   100  10 200
+G2            20  100  5  200
+"""
+        f = open("temp_test_files/sip_test6.multidata","w")
+        f.write(multidatafile_test)
+        f.close()
+
+
+        std = pygsti.io.StdInputParser()
 
         import pprint
         pp = pprint.PrettyPrinter(indent=4)
@@ -144,6 +301,52 @@ G_my_x G_my_y 0.5 24.0
         #print " Datafile Test:"
         ds = std.parse_datafile("temp_test_files/sip_test.data")
         #print " ==> DataSet:\n", ds
+
+        #test file with no header
+        ds = std.parse_datafile("temp_test_files/sip_test2.data") 
+
+        #test file with bad data
+        with self.assertRaises(ValueError):
+            std.parse_datafile("temp_test_files/sip_test3.data")
+
+        #test file with line(s) containing all zeros => ignore with warning
+        self.assertWarns( std.parse_datafile, "temp_test_files/sip_test4.data" )
+
+        #test file with frequency columns but no count total
+        with self.assertRaises(ValueError):
+            std.parse_datafile("temp_test_files/sip_test5.data")
+
+        #test file with out-of-range frequency
+        with self.assertRaises(ValueError):
+            std.parse_datafile("temp_test_files/sip_test6.data")
+
+        #test file with out-of-range counts
+        with self.assertRaises(ValueError):
+            std.parse_datafile("temp_test_files/sip_test7.data")
+
+
+        #Multi-dataset tests
+        mds = std.parse_multidatafile("temp_test_files/sip_test.multidata")
+
+        #test file with no header
+        mds = std.parse_datafile("temp_test_files/sip_test2.multidata") 
+
+        #test file with bad data
+        with self.assertRaises(ValueError):
+            std.parse_datafile("temp_test_files/sip_test3.multidata")
+
+        #test file with frequency columns but no count total
+        with self.assertRaises(ValueError):
+            std.parse_multidatafile("temp_test_files/sip_test4.multidata")
+
+        #test file with out-of-range frequency
+        with self.assertRaises(ValueError):
+            std.parse_multidatafile("temp_test_files/sip_test5.multidata")
+
+        #test file with out-of-range counts
+        with self.assertRaises(ValueError):
+            std.parse_multidatafile("temp_test_files/sip_test6.multidata")
+
 
         #TODO: add asserts
 
@@ -214,23 +417,142 @@ pi/2      0
 SPAMLABEL plus = rho_up E
 """
 
+        gatesetfile_test3 = \
+"""#My Gateset file with bad StateVec size
+
+rho_up
+StateVec
+1 0 0
+
+"""
+
+        gatesetfile_test4 = \
+"""#My Gateset file with bad DensityMx size
+
+rho_dn
+DensityMx
+0 0 0
+0 1 0
+0 0 1
+
+"""
+
+        gatesetfile_test5 = \
+"""#My Gateset file with bad UnitaryMx size
+
+#G1 = X(pi/2)
+G1
+UnitaryMx
+ 1/sqrt(2)   -1j/sqrt(2)
+
+"""
+
+        gatesetfile_test6 = \
+"""#My Gateset file with bad UnitaryMxExp size
+
+#G2 = Y(pi/2)
+G2
+UnitaryMxExp
+0           -1j*pi/4.0 0.0
+1j*pi/4.0  0           0.0
+
+"""
+
+        gatesetfile_test7 = \
+"""#My Gateset file with bad format spec
+
+G2
+FooBar
+0   1
+1   0
+
+"""
+
+        gatesetfile_test8 = \
+"""#My Gateset file specifying 2-Qubit gates using non-Pauli format
+
+rho_up
+DensityMx
+1 0 0 0
+0 0 0 0
+0 0 0 0
+0 0 0 0
+
+E
+DensityMx
+0 0 0 0
+0 0 0 0
+0 0 0 0
+0 0 0 1
+
+G1
+UnitaryMx
+ 1/sqrt(2)   -1j/sqrt(2) 0 0
+-1j/sqrt(2)   1/sqrt(2)  0 0
+ 0                0      1 0
+ 0                0      0 1
+
+G2
+UnitaryMxExp
+0           -1j*pi/4.0 0 0
+1j*pi/4.0  0           0 0
+0          0           1 0
+0          0           0 1
+
+IDENTITYVEC 2 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+SPAMLABEL plus = rho_up E
+"""
+
+
+
+
         f = open("temp_test_files/sip_test.gateset1","w")
-        f.write(gatesetfile_test)
-        f.close()
+        f.write(gatesetfile_test); f.close()
         
         f = open("temp_test_files/sip_test.gateset2","w")
-        f.write(gatesetfile_test2)
-        f.close()
+        f.write(gatesetfile_test2); f.close()
 
-        gs1 = GST.StdInputParser.read_gateset("temp_test_files/sip_test.gateset1")
-        gs2 = GST.StdInputParser.read_gateset("temp_test_files/sip_test.gateset2")
+        f = open("temp_test_files/sip_test.gateset3","w")
+        f.write(gatesetfile_test3); f.close()
+
+        f = open("temp_test_files/sip_test.gateset4","w")
+        f.write(gatesetfile_test4); f.close()
+
+        f = open("temp_test_files/sip_test.gateset5","w")
+        f.write(gatesetfile_test5); f.close()
+
+        f = open("temp_test_files/sip_test.gateset6","w")
+        f.write(gatesetfile_test6); f.close()
+
+        f = open("temp_test_files/sip_test.gateset7","w")
+        f.write(gatesetfile_test7); f.close()
+
+        f = open("temp_test_files/sip_test.gateset8","w")
+        f.write(gatesetfile_test8); f.close()
+
+
+        gs1 = pygsti.io.read_gateset("temp_test_files/sip_test.gateset1")
+        gs2 = pygsti.io.read_gateset("temp_test_files/sip_test.gateset2")
+
+        with self.assertRaises(ValueError):
+            pygsti.io.read_gateset("temp_test_files/sip_test.gateset3")
+        with self.assertRaises(ValueError):
+            pygsti.io.read_gateset("temp_test_files/sip_test.gateset4")
+        with self.assertRaises(ValueError):
+            pygsti.io.read_gateset("temp_test_files/sip_test.gateset5")
+        with self.assertRaises(ValueError):
+            pygsti.io.read_gateset("temp_test_files/sip_test.gateset6")
+        with self.assertRaises(ValueError):
+            pygsti.io.read_gateset("temp_test_files/sip_test.gateset7")
+
+        gs8 = pygsti.io.read_gateset("temp_test_files/sip_test.gateset8")
+
         #print " ==> gateset1:\n", gs1
         #print " ==> gateset2:\n", gs2
 
-        rotXPi   = GST.build_gate( [2],[('Q0',)], "X(pi,Q0)").matrix
-        rotXPiOv2   = GST.build_gate( [2],[('Q0',)], "X(pi/2,Q0)").matrix        
-        rotYPiOv2   = GST.build_gate( [2],[('Q0',)], "Y(pi/2,Q0)").matrix        
-
+        rotXPi   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi,Q0)").matrix
+        rotXPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi/2,Q0)").matrix        
+        rotYPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "Y(pi/2,Q0)").matrix        
 
         self.assertArraysAlmostEqual(gs1['G1'],rotXPiOv2)
         self.assertArraysAlmostEqual(gs1['G2'],rotYPiOv2)

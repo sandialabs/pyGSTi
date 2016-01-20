@@ -15,13 +15,12 @@ from .. import tools as _tools
 from .. import objects as _objs
 
 import reportables as _cr
-import plotting as _plt
 import tableformat as _tf
 
 
 
 def get_blank_table(formats):
-    """ Create a blank table as a placeholder witht the given formats """
+    """ Create a blank table as a placeholder with the given formats """
     tables = {}
     _tf.create_table(formats, tables, ['Blank'], [None], "", False)
     _tf.finish_table(formats, tables, False)
@@ -656,7 +655,7 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, TPconstrai
     _tf.create_table_preformatted(formats, tables, colHeadings, tableclass, longtable)
 
     for L,gs,gstrs in zip(Ls,gatesetsByL,gateStringsByL):
-        chi2 = _plt.chi2( dataset, gs, gstrs, 
+        chi2 = _tools.chi2( dataset, gs, gstrs, 
                                      minProbClipForWeighting=1e-4)
         Ns = len(gstrs)
 
@@ -666,7 +665,7 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, TPconstrai
         else:
             Np = gs.num_nongauge_params() #include everything
 
-        k = Ns-Np #expected chi^2 mean
+        k = max(Ns-Np,0) #expected chi^2 mean
         pv = 1.0 - _stats.chi2.cdf(chi2,k) # reject GST model if p-value < threshold (~0.05?)
 
         if   (chi2-k) < _np.sqrt(2*k): rating = 5
@@ -736,7 +735,7 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, TPconstrai
         else:
             Np = gs.num_nongauge_params() #include everything
 
-        k = Ns-Np #expected 2*(logL_ub-logl) mean
+        k = max(Ns-Np,0) #expected 2*(logL_ub-logl) mean
         twoDeltaLogL = 2*(logL_upperbound - logl)
         pv = 1.0 - _stats.chi2.cdf(twoDeltaLogL,k) # reject GST model if p-value < threshold (~0.05?)
 
@@ -816,9 +815,10 @@ def get_gatestring_multi_table(gsLists, titles, formats, tableclass, longtable, 
 
     tables = {}
 
-    if commonTitle is not None:
+    if commonTitle is None:
         _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable)
     else:
+        table = "longtable" if longtable else "tabular"
         colHeadings = ('\\#',) + tuple(titles)
         latex_head  = "\\begin{%s}[l]{%s}\n\hline\n" % (table, "|c" * len(colHeadings) + "|")
         latex_head += " & \multicolumn{%d}{c|}{%s} \\\\ \hline\n" % (len(titles),commonTitle)
@@ -1003,10 +1003,10 @@ def get_chi2_confidence_region(gateset, dataset, confidenceLevel, TPconstrained=
         gatestring_list = dataset.keys()
         
     #Compute appropriate Hessian
-    dummy_chi2, hessian = _plt.chi2(dataset, gateset, gatestring_list,
-                                               False, True,G0, SP0, SPAM, gates,
-                                               minProbClipForWeighting,
-                                               probClipInterval)
+    dummy_chi2, hessian = _tools.chi2(dataset, gateset, gatestring_list,
+                                      False, True,G0, SP0, SPAM, gates,
+                                      minProbClipForWeighting,
+                                      probClipInterval)
 
     cri = _objs.ConfidenceRegion(gateset, hessian, confidenceLevel, gates, G0,
                                  SPAM, SP0, hessianProjection)

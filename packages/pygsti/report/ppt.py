@@ -33,7 +33,7 @@ def ppt(x, brackets=False):
         raise ValueError("I don't know how to render a rank %d numpy array as ppt" % d)
     elif type(x) in (float,int,complex,_np.float64,_np.int64):
         return ppt_value(x)
-    elif type(x) == list:
+    elif type(x) in (list,tuple):
         return ppt_list(x)
     elif type(x) == str:
         return ppt_escaped(x)
@@ -193,13 +193,13 @@ def ppt_value(el,ROUND=6,complexAsPolar=True):
             else:
                 s = "0"
     except:
-        try:
-            if abs(el) > TOL: #thows exception if el is not a number
-                s = "%s" % render(el.real)
-            else:
-                s = "0"
-        except:
-            s = str(el)
+        #try:
+        #    if abs(el) > TOL: #thows exception if el is not a number
+        #        s = "%s" % render(el.real)
+        #    else:
+        #        s = "0"
+        #except:
+        s = str(el)
 
     return s
             

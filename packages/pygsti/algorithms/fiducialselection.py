@@ -4,12 +4,12 @@ import itertools as _itertools
 import math as _math
 import sys as _sys
 
-def bool_list_to_ind_list(boolList):
-    output = _np.array([])
-    for i, boolVal in boolList:
-        if boolVal == 1:
-            output = _np.append(i)
-    return output
+#def bool_list_to_ind_list(boolList):
+#    output = _np.array([])
+#    for i, boolVal in boolList:
+#        if boolVal == 1:
+#            output = _np.append(i)
+#    return output
 
 def make_prep_mxs(gs,prepFidList):
     dimRho = gs.rhoVecs[0].shape[0]
@@ -64,15 +64,15 @@ def make_meas_mxs(gs,prepMeasList):
 #     SqOutputMat = _np.dot(outputMat,outputMat.T)
 #     return SqOutputMat
 
-def score_fid_list(gs,fidList,kind=None):
-    if kind not in ('prep', 'meas'):
-        raise ValueError("Need to specify 'prep' or 'meas' for kind!")
-    if kind == 'prep':
-        matToScore = make_prep_mxs(gs,fidList)
-    else:
-        matToScore = make_meas_mxs(gs,fidList)
-    score = len(fidList) * _np.sum(1./_np.linalg.eigvalsh(matToScore))
-    return score
+#def score_fid_list(gs,fidList,kind=None):
+#    if kind not in ('prep', 'meas'):
+#        raise ValueError("Need to specify 'prep' or 'meas' for kind!")
+#    if kind == 'prep':
+#        matToScore = make_prep_mxs(gs,fidList)
+#    else:
+#        matToScore = make_meas_mxs(gs,fidList)
+#    score = len(fidList) * _np.sum(1./_np.linalg.eigvalsh(matToScore))
+#    return score
 
 def optimize_integer_fiducials_slack(gateset, fidList, 
                               prepOrMeas = None,

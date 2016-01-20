@@ -3,18 +3,20 @@ import warnings as _warnings
 import numpy as _np
 import sys as _sys
 
+from .. import report as _report
+from .. import algorithms as _alg
 from .. import construction as _construction
 from .. import io as _io
 from .. import objects as _objs
 from .. import tools as _tools
 
 def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
-                      rhoStrsListOrFilename, EStrsListOrFilename,
-                      germsListOrFilename, maxLengths, gateLabels, 
-                      weightsDict, rhoEPairs, constrainToTP, 
-                      gaugeOptToCPTP, gaugeOptRatio, objective="logl",
-                      advancedOptions={}, lsgstLists=None,
-                      truncScheme="whole germ powers"):
+                         rhoStrsListOrFilename, EStrsListOrFilename,
+                         germsListOrFilename, maxLengths, gateLabels=None, 
+                         weightsDict=None, rhoEPairs=None, constrainToTP=True, 
+                         gaugeOptToCPTP=False, gaugeOptRatio=0.001,
+                         objective="logl", advancedOptions={}, lsgstLists=None,
+                         truncScheme="whole germ powers"):
     """
     Perform end-to-end GST analysis using Ls and germs, with L as a maximum length.
 
@@ -65,7 +67,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         iteration includes the repeated germs truncated to the L-values *up to* 
         and including the i-th one.
 
-    gateLabelsInStrings : list or tuple
+    gateLabels : list or tuple
         A list or tuple of the gate labels to use when generating the sets of
         gate strings used in LSGST iterations.  If None, then the gate labels
         of the target gateset will be used.  This option is useful if you 
@@ -163,36 +165,37 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
 
     #Starting Point = LGST
     gate_dim = gs_target.get_dimension()
-    specs = _tools.get_spam_specs(rhoStrs=rhoStrs, EStrs=EStrs, EVecInds=gs_target.get_evec_indices())
-    gs_lgst = _core.do_lgst(ds, specs, gs_target, svdTruncateTo=gate_dim, verbosity=3)
+    specs = _construction.build_spam_specs(rhoStrs=rhoStrs, EStrs=EStrs,
+                                           EVecInds=gs_target.get_evec_indices())
+    gs_lgst = _alg.do_lgst(ds, specs, gs_target, svdTruncateTo=gate_dim, verbosity=3)
 
     if constrainToTP: #gauge optimize (and contract if needed) to TP, then lock down first basis element as the identity
         firstElIdentityVec = _np.zeros( (gate_dim,1) )
         firstElIdentityVec[0] = gate_dim**0.25 # first basis el is assumed = sqrt(gate_dim)-dimensional identity density matrix 
-        minPenalty, gaugeMx, gs_in_TP = _core.optimize_gauge(gs_lgst, "TP",  returnAll=True, spamWeight=1.0, gateWeight=1.0, verbosity=3)
+        minPenalty, gaugeMx, gs_in_TP = _alg.optimize_gauge(gs_lgst, "TP",  returnAll=True, spamWeight=1.0, gateWeight=1.0, verbosity=3)
         if minPenalty > 0:
-            gs_in_TP = _core.contract(gs_in_TP, "TP")
+            gs_in_TP = _alg.contract(gs_in_TP, "TP")
             if minPenalty > 1e-5: 
                 _warnings.warn("Could not gauge optimize to TP (penalty=%g), so contracted LGST gateset to TP" % minPenalty)
 
-        gs_after_gauge_opt = _core.optimize_gauge(gs_in_TP, "target", targetGateset=gs_target, constrainToTP=True, spamWeight=1.0, gateWeight=1.0)
+        gs_after_gauge_opt = _alg.optimize_gauge(gs_in_TP, "target", targetGateset=gs_target, constrainToTP=True, spamWeight=1.0, gateWeight=1.0)
         gs_after_gauge_opt.set_identity_vec( firstElIdentityVec ) # declare that this basis has the identity as its first element
 
     else: # no TP constraint
-        gs_after_gauge_opt = _core.optimize_gauge(gs_lgst, "target", targetGateset=gs_target, spamWeight=1.0, gateWeight=1.0)
-        #OLD: gs_clgst = _core.contract(gs_after_gauge_opt, "CPTP")
+        gs_after_gauge_opt = _alg.optimize_gauge(gs_lgst, "target", targetGateset=gs_target, spamWeight=1.0, gateWeight=1.0)
+        #OLD: gs_clgst = _alg.contract(gs_after_gauge_opt, "CPTP")
         #TODO: set identity vector, or leave as is, which assumes LGST had the right one and contraction doesn't change it ??
 
     #Run LSGST on data
     if objective == "chi2":
-        gs_lsgst_list = _core.do_iterative_mc2gst(ds, gs_after_gauge_opt, lsgstLists, 
+        gs_lsgst_list = _alg.do_iterative_mc2gst(ds, gs_after_gauge_opt, lsgstLists, 
                                               minProbClipForWeighting=advancedOptions.get('minProbClipForWeighting',1e-4),
                                               probClipInterval = advancedOptions.get('probClipInterval',(-1e6,1e6)),
                                               returnAll=True, opt_G0=(not constrainToTP), opt_SP0=(not constrainToTP),
                                               gatestringWeightsDict=weightsDict, verbosity=advancedOptions.get('verbosity',2),
                                               memLimit=advancedOptions.get('memoryLimitInBytes',None))
     elif objective == "logl":
-        gs_lsgst_list = _core.do_iterative_mlgst(ds, gs_after_gauge_opt, lsgstLists,
+        gs_lsgst_list = _alg.do_iterative_mlgst(ds, gs_after_gauge_opt, lsgstLists,
                                                minProbClip = advancedOptions.get('minProbClip',1e-4),
                                                probClipInterval = advancedOptions.get('probClipInterval',(-1e6,1e6)),
                                                radius=advancedOptions.get('radius',1e-4), 
@@ -206,24 +209,24 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     #   so fidelity and frobenius distance w/targets is more meaningful
     if gaugeOptToCPTP:
         print "\nGauge Optimizing to CPTP..."; _sys.stdout.flush()
-        go_gs_lsgst_list = [_core.optimize_gauge(gs,'CPTP', constrainToTP=constrainToTP) for gs in gs_lsgst_list]
+        go_gs_lsgst_list = [_alg.optimize_gauge(gs,'CPTP', constrainToTP=constrainToTP) for gs in gs_lsgst_list]
     else:
         go_gs_lsgst_list = gs_lsgst_list
         
     for i,gs in enumerate(go_gs_lsgst_list):
         if gaugeOptToCPTP and _tools.sum_of_negative_choi_evals(gs) < 1e-8:  #if a gateset is in CP, then don't let it out (constrain = True)
-            go_gs_lsgst_list[i] = _core.optimize_gauge(gs,'target',targetGateset=gs_target,
+            go_gs_lsgst_list[i] = _alg.optimize_gauge(gs,'target',targetGateset=gs_target,
                                                       constrainToTP=constrainToTP, constrainToCP=True,
                                                       gateWeight=1, spamWeight=gaugeOptRatio)
         
         else: #otherwise just optimize to the target and forget about CPTP...
-            go_gs_lsgst_list[i] = _core.optimize_gauge(gs,'target',targetGateset=gs_target,
+            go_gs_lsgst_list[i] = _alg.optimize_gauge(gs,'target',targetGateset=gs_target,
                                                       constrainToTP=constrainToTP, 
                                                       gateWeight=1, spamWeight=gaugeOptRatio)
 
     truncFn = _construction.stdlists._getTruncFunction(truncScheme)
 
-    ret = _objs.Results()
+    ret = _report.Results()
     ret.init_Ls_and_germs(objective, gs_target, ds, 
                         gs_after_gauge_opt, maxLengths, germs,
                         go_gs_lsgst_list, lsgstLists, rhoStrs, EStrs,

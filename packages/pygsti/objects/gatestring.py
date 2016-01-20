@@ -41,7 +41,7 @@ class GateString(object):
         if tupleOfGateLabels is None and stringRepresentation is None:
             raise ValueError("tupleOfGateLabels and stringRepresentation cannot both be None");
 
-        if tupleOfGateLabels is None or bCheck:
+        if tupleOfGateLabels is None or (bCheck and stringRepresentation is not None):
             from ..io import stdinput as _stdinput
             parser = _stdinput.StdInputParser()
             chkTuple = parser.parse_gatestring( stringRepresentation )
@@ -85,14 +85,14 @@ class GateString(object):
         if self.str != "{}":
             s = (self.str + x.str) if x.str != "{}" else self.str
         else: s = x.str
-        return GateString(self.tup + x.tup, s)
+        return GateString(self.tup + x.tup, s, bCheck=False)
 
     def __mul__(self,x):
         assert(isinstance(x,int) and x >= 0)
         if x > 1: s = "(%s)^%d" % (self.str,x)
         elif x == 1: s = "(%s)" % self.str
         else: s = "{}"
-        return GateString(self.tup * x, s)
+        return GateString(self.tup * x, s, bCheck=False)
 
     def __pow__(self,x): #same as __mul__()
         return self.__mul__(x)
@@ -111,10 +111,10 @@ class GateString(object):
         return self.tup.__hash__()
 
     def __copy__(self):
-        return GateString( self.tup, self.str)
+        return GateString( self.tup, self.str, bCheck=False)
 
     def __deepcopy__(self):
-        return GateString( self.tup, self.str)
+        return GateString( self.tup, self.str, bCheck=False)
 
     def __getitem__(self, key):
         if isinstance( key, slice ):
@@ -138,7 +138,7 @@ class WeightedGateString(GateString):
     treated as having zero weight and the result is another WeightedGateString.
     """
 
-    def __init__(self,tupleOfGateLabels, stringRepresentation=None, weight=1.0, bCheck=False):
+    def __init__(self,tupleOfGateLabels, stringRepresentation=None, weight=1.0, bCheck=True):
         """ 
         Create a new WeightedGateString object 
 
@@ -168,28 +168,28 @@ class WeightedGateString(GateString):
     def __add__(self,x):
         tmp = super(WeightedGateString,self).__add__(x)
         x_weight = x.weight if type(x) == WeightedGateString else 0.0
-        return WeightedGateString( tmp.tup, tmp.str, self.weight + x_weight ) #add weights
+        return WeightedGateString( tmp.tup, tmp.str, self.weight + x_weight, bCheck=False ) #add weights
 
     def __radd__(self,x):
         if isinstance(x, GateString):
             tmp = x.__add__(self)
             x_weight = x.weight if type(x) == WeightedGateString else 0.0
-            return WeightedGateString( tmp.tup, tmp.str, x_weight + self.weight )
+            return WeightedGateString( tmp.tup, tmp.str, x_weight + self.weight, bCheck=False )
         raise ValueError("Can only add GateStrings objects to other GateString objects")
 
     def __mul__(self,x):
         tmp = super(WeightedGateString,self).__mul__(x)
-        return WeightedGateString(tmp.tup, tmp.str, self.weight) #keep weight
+        return WeightedGateString(tmp.tup, tmp.str, self.weight, bCheck=False) #keep weight
 
     def __copy__(self):
-        return WeightedGateString( self.tup, self.str, self.weight )
+        return WeightedGateString( self.tup, self.str, self.weight, bCheck=False )
 
     def __deepcopy__(self):
-        return WeightedGateString( self.tup, self.str, self.weight )
+        return WeightedGateString( self.tup, self.str, self.weight, bCheck=False )
 
     def __getitem__(self, key):
         if isinstance( key, slice ):
-            return WeightedGateString( self.tup.__getitem__(key), None, self.weight )
+            return WeightedGateString( self.tup.__getitem__(key), None, self.weight, bCheck=False )
         return self.tup.__getitem__(key)
 
 
@@ -257,12 +257,13 @@ def pythonstr_to_gatestr(pythonString,gateLabels):
     for gateLabel in gateLabels:
         translateDict[c] = gateLabel
         c = chr(ord(c) + 1)
-    return _gs.GateString( tuple([ translateDict[c] for c in pythonString ]) )
+    return GateString( tuple([ translateDict[c] for c in pythonString ]) )
 
 
-if __name__ == "__main__":
-    wgs = WeightedGateString(('Gx',), weight=0.5)
-    gs = GateString(('Gx',) )
-    print ((gs + wgs)*2).weight
-    print (wgs + gs).weight
+#Now tested in unit tests
+#if __name__ == "__main__":
+#    wgs = WeightedGateString(('Gx',), weight=0.5)
+#    gs = GateString(('Gx',) )
+#    print ((gs + wgs)*2).weight
+#    print (wgs + gs).weight
 

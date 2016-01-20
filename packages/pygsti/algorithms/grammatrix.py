@@ -1,6 +1,6 @@
 """ Utility functions related to Gram matrix construction."""
 from .. import tools as _tools
-from ..objects import spamspec as _ss
+from .. import construction as _construction
 from core import gram_rank_and_evals as _gramRankAndEvals
 
 
@@ -37,7 +37,7 @@ def get_max_gram_basis(gateLabels, dataset, maxLength=0):
     minLength = min( [len(s) for s in datasetStrings] )
     if maxLength <= 0:
         maxLength = max( [len(s) for s in datasetStrings] )
-    possibleStrings = _tools.gen_all_gatestrings(gateLabels, (minLength+1)//2, maxLength//2)
+    possibleStrings = _construction.gen_all_gatestrings(gateLabels, (minLength+1)//2, maxLength//2)
   
     def have_all_data(strings,datasetStrs):
       for a in strings:
@@ -75,7 +75,7 @@ def max_gram_rank_and_evals(dataset, maxBasisStringLength=10):
     eigenvalues : numpy array
     """
     maxStringSet = get_max_gram_basis(dataset.get_gate_labels(), dataset, maxBasisStringLength)
-    specs = _ss.get_spam_specs(fiducialGateStrings=maxStringSet) 
+    specs = _construction.build_spam_specs(fiducialGateStrings=maxStringSet) 
     # Note: specs use by default just the 0-th rho and Evec indices, so 
     #  we just need to have a spamDict that associates (0,0) with some spam label
     #  in the dataset -- we just take the first one.
