@@ -39,14 +39,14 @@ def optimize_gate(gateToOptimize, targetGate, bG0 = True):
 
     def objective_func(param_vec):
         gateToOptimize.from_vector(param_vec,bG0)
-        return _mt.frobenius_norm(gateToOptimize.matrix-targetMatrix)
+        return _mt.frobeniusnorm(gateToOptimize.matrix-targetMatrix)
         
     x0 = gateToOptimize.to_vector(bG0)
     minSol = _opt.minimize(objective_func, x0, method='BFGS', maxiter=10000, maxfev=10000,
                            tol=1e-6, callback=None)
 
     gateToOptimize.from_vector(minSol.x)
-    print "DEBUG: optimized gate to min frobenius distance %g" % _mt.frobenius_norm(gateToOptimize.matrix-targetMatrix)
+    print "DEBUG: optimized gate to min frobenius distance %g" % _mt.frobeniusnorm(gateToOptimize.matrix-targetMatrix)
 
 
 def compose(gate1, gate2):
@@ -124,7 +124,7 @@ class FullyParameterizedGate(object):
         """
         return (self.dim,self.dim)
 
-    def get_num_params(self, bG0=True):
+    def num_params(self, bG0=True):
         """
         Get the number of independent parameters which specify this gate.
 
@@ -162,7 +162,7 @@ class FullyParameterizedGate(object):
         Returns
         -------
         numpy array
-            a 1D numpy array with length == get_num_params(bG0).
+            a 1D numpy array with length == num_params(bG0).
         """
         if bG0:
             return self.matrix.flatten() #.real in case of complex matrices
@@ -177,7 +177,7 @@ class FullyParameterizedGate(object):
         ----------
         v : numpy array
             The 1D vector of gate parameters.  Length 
-            must == get_num_params(bG0).
+            must == num_params(bG0).
 
         bG0 : bool
             Whether or not the first row of the gate matrix 
@@ -191,7 +191,7 @@ class FullyParameterizedGate(object):
         if bG0:
             self.matrix = v.reshape(self.matrix.shape)
         else:
-            flattened = _np.empty(self.get_num_params())
+            flattened = _np.empty(self.num_params())
             flattened[0:self.dim] = self.matrix[0,:]
             flattened[self.dim:] = v
             self.matrix = flattened.reshape(self.matrix.shape)
@@ -412,7 +412,7 @@ class LinearlyParameterizedGate(object):
         """
         return self.numParams
 
-    def get_num_params(self, bG0=True):
+    def num_params(self, bG0=True):
         """
         Get the number of independent parameters which specify this gate.
 
@@ -449,7 +449,7 @@ class LinearlyParameterizedGate(object):
         Returns
         -------
         numpy array
-            a 1D numpy array with length == get_num_params(bG0).
+            a 1D numpy array with length == num_params(bG0).
         """
         if bG0:
             return self.parameterArray #.real in case of complex matrices
@@ -464,7 +464,7 @@ class LinearlyParameterizedGate(object):
         ----------
         v : numpy array
             The 1D vector of gate parameters.  Length 
-            must == get_num_params(bG0).
+            must == num_params(bG0).
 
         bG0 : bool
             Whether or not the first row of the gate matrix 
@@ -666,7 +666,7 @@ class LinearlyParameterizedGate(object):
 #        """
 #        return (self.param_dim,self.param_dim)
 #
-#    def get_num_params(self, bG0=True):
+#    def num_params(self, bG0=True):
 #        # if bG0 == True, need to subtract the number of parameters which *only*
 #        #  parameterize the first row of the final gate matrix
 #        if bG0:

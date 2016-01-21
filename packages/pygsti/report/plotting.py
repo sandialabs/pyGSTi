@@ -2713,7 +2713,7 @@ def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
     rhoStrs, EStrs = strs
     spamLabels = gateset.get_spam_labels() #this list fixes the ordering of the spam labels
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
-    vec_gs_len = gateset.get_num_params(G0=True, SP0=True, SPAM=True, gates=True)
+    vec_gs_len = gateset.num_params(G0=True, SP0=True, SPAM=True, gates=True)
 
     N      = _np.empty( len(allGatestringsUsedInChi2Opt) )
     f      = _np.empty( (len(spamLabels),len(allGatestringsUsedInChi2Opt)) )
@@ -2892,7 +2892,7 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
     rhoStrs, EStrs = strs
     spamLabels = gateset.get_spam_labels() #this list fixes the ordering of the spam labels
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
-    vec_gs_len = gateset.get_num_params(G0=True, SP0=True, SPAM=True, gates=True) 
+    vec_gs_len = gateset.num_params(G0=True, SP0=True, SPAM=True, gates=True) 
       #Note: assumes *all* gateset params vary, which may not be what we always want (e.g. for TP-constrained analyses)
 
     N      = _np.empty( len(allGatestringsUsedInLogLOpt) )

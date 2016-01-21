@@ -1,6 +1,5 @@
 import GST
 import numpy as np
-import numpy.random as _rndm
 import matplotlib
 from matplotlib import pyplot
 from GSTCommons import Std1Q_XYI
@@ -9,8 +8,7 @@ import GSTCommons.Analyze_WholeGermPowers as Analyze
 def make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=None,seed=None,spamLabels=['plus','minus']):#,GSTMethod="MLE",constrainToTP=False,)
     if generationMethod not in ['nonparametric', 'parametric']:
         raise ValueError("generationMethod must be 'parametric' or 'nonparametric'!")
-    if seed is not None:
-        np.random.seed(seed)
+    rndm = _np.random.RandomState(seed)
     if inputGateSet is None:
         if generationMethod == 'nonparametric':
             print "Generating non-parametric dataset."
@@ -35,7 +33,7 @@ def make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=None,seed=
         counts = {}
         pList = np.array([np.clip(ps[spamLabel],0,1) for spamLabel in spamLabels])#Truncate before normalization; bad extremal values shouldn't screw up not-bad values, yes?
         pList = pList / sum(pList)
-        countsArray = np.random.multinomial(nSamples, pList, 1)
+        countsArray = rndm.multinomial(nSamples, pList, 1)
         for i,spamLabel in enumerate(spamLabels):
             counts[spamLabel] = countsArray[0,i]
         simDS.add_count_dict(s, counts)

@@ -29,15 +29,22 @@ def get_blank_table(formats):
 
 def get_gateset_spam_table(gateset, formats, tableclass, longtable, confidenceRegionInfo=None, basis="gm"):
     """ 
-    Create an HTML table for gateset's SPAM vectors.
+    Create a table for gateset's SPAM vectors.
     
     Parameters
     ----------
     gateset : GateSet
         The GateSet
 
+    formats : list
+        List of formats to include in returned tables dictionary. Allowed
+        formats are 'latex', 'html', 'py', and 'ppt'.
+
     tableclass : string
         CSS class to apply to the HTML table.
+
+    longtable : bool
+        Whether table should be a latex longtable or not.
 
     confidenceRegionInfo : ConfidenceRegion, optional
         If not None, specifies a confidence-region
@@ -49,8 +56,9 @@ def get_gateset_spam_table(gateset, formats, tableclass, longtable, confidenceRe
 
     Returns
     -------
-    string
-        HTML string output.
+    dict
+        Dictionary with keys equal to the requested formats (e.g. 'latex'),
+        and values equal to the table data in the corresponding format.
     """
 
     if confidenceRegionInfo is None:
@@ -97,13 +105,20 @@ def get_gateset_spam_table(gateset, formats, tableclass, longtable, confidenceRe
 
 def get_gateset_spam_parameters_table(gateset, formats, tableclass, longtable, confidenceRegionInfo=None):
     """ 
-    Create latex table for gateset's "SPAM parameters", that is, the
+    Create a table for gateset's "SPAM parameters", that is, the
     dot products of rho-vectors and E-vectors.
     
     Parameters
     ----------
     gateset : GateSet
         The GateSet
+
+    formats : list
+        List of formats to include in returned tables dictionary. Allowed
+        formats are 'latex', 'html', 'py', and 'ppt'.
+
+    tableclass : string
+        CSS class to apply to the HTML table.
 
     longtable : bool
         Whether table should be a latex longtable or not.
@@ -114,8 +129,9 @@ def get_gateset_spam_parameters_table(gateset, formats, tableclass, longtable, c
 
     Returns
     -------
-    string
-        Latex string output.
+    dict
+        Dictionary with keys equal to the requested formats (e.g. 'latex'),
+        and values equal to the table data in the corresponding format.
     """
     colHeadings = [''] + [ i for i in gateset.get_evec_indices() ]
     formatters = [None] + [ _tf.E ]*len(gateset.get_evec_indices())
@@ -143,12 +159,19 @@ def get_gateset_spam_parameters_table(gateset, formats, tableclass, longtable, c
 
 def get_gateset_gates_table(gateset, formats, tableclass, longtable, confidenceRegionInfo=None):
     """ 
-    Create latex table for gateset's gates.
+    Create a table for gateset's gates.
     
     Parameters
     ----------
     gateset : GateSet
         The GateSet
+
+    formats : list
+        List of formats to include in returned tables dictionary. Allowed
+        formats are 'latex', 'html', 'py', and 'ppt'.
+
+    tableclass : string
+        CSS class to apply to the HTML table.
 
     longtable : bool
         Whether table should be a latex longtable or not.
@@ -159,8 +182,9 @@ def get_gateset_gates_table(gateset, formats, tableclass, longtable, confidenceR
 
     Returns
     -------
-    string
-        Latex string output.
+    dict
+        Dictionary with keys equal to the requested formats (e.g. 'latex'),
+        and values equal to the table data in the corresponding format.
     """
     gateLabels = gateset.keys()  # gate labels
 
@@ -194,12 +218,19 @@ def get_gateset_gates_table(gateset, formats, tableclass, longtable, confidenceR
 
 def get_unitary_gateset_gates_table(gateset, formats, tableclass, longtable, confidenceRegionInfo=None):
     """ 
-    Create latex table for gateset's gates assuming they're unitary.
+    Create a table for gateset's gates assuming they're unitary.
     
     Parameters
     ----------
     gateset : GateSet
         The GateSet
+
+    formats : list
+        List of formats to include in returned tables dictionary. Allowed
+        formats are 'latex', 'html', 'py', and 'ppt'.
+
+    tableclass : string
+        CSS class to apply to the HTML table.
 
     longtable : bool
         Whether table should be a latex longtable or not.
@@ -210,8 +241,9 @@ def get_unitary_gateset_gates_table(gateset, formats, tableclass, longtable, con
 
     Returns
     -------
-    string
-        Latex string output.
+    dict
+        Dictionary with keys equal to the requested formats (e.g. 'latex'),
+        and values equal to the table data in the corresponding format.
     """
     gateLabels = gateset.keys()  # gate labels
 
@@ -257,12 +289,19 @@ def get_unitary_gateset_gates_table(gateset, formats, tableclass, longtable, con
 
 def get_gateset_choi_table(gateset, formats, tableclass, longtable, confidenceRegionInfo=None):
     """ 
-    Create latex table for the Choi matrices of a gateset's gates.
+    Create a table for the Choi matrices of a gateset's gates.
     
     Parameters
     ----------
     gateset : GateSet
         The GateSet
+
+    formats : list
+        List of formats to include in returned tables dictionary. Allowed
+        formats are 'latex', 'html', 'py', and 'ppt'.
+
+    tableclass : string
+        CSS class to apply to the HTML table.
 
     longtable : bool
         Whether table should be a latex longtable or not.
@@ -273,8 +312,9 @@ def get_gateset_choi_table(gateset, formats, tableclass, longtable, confidenceRe
 
     Returns
     -------
-    string
-        Latex string output.
+    dict
+        Dictionary with keys equal to the requested formats (e.g. 'latex'),
+        and values equal to the table data in the corresponding format.
     """
     gateLabels = gateset.keys()  # gate labels
 
@@ -307,12 +347,19 @@ def get_gateset_choi_table(gateset, formats, tableclass, longtable, confidenceRe
 
 def get_gateset_vs_target_table(gateset, targetGateset, formats, tableclass, longtable, confidenceRegionInfo=None):
     """ 
-    Create latex table comparing a gateset to a target gateset.
+    Create a table comparing a gateset to a target gateset.
     
     Parameters
     ----------
     gateset, targetGateset : GateSet
         The gate sets to compare
+
+    formats : list
+        List of formats to include in returned tables dictionary. Allowed
+        formats are 'latex', 'html', 'py', and 'ppt'.
+
+    tableclass : string
+        CSS class to apply to the HTML table.
 
     longtable : bool
         Whether table should be a latex longtable or not.
@@ -323,8 +370,9 @@ def get_gateset_vs_target_table(gateset, targetGateset, formats, tableclass, lon
 
     Returns
     -------
-    string
-        Latex string output.
+    dict
+        Dictionary with keys equal to the requested formats (e.g. 'latex'),
+        and values equal to the table data in the corresponding format.
     """
     gateLabels = gateset.keys()  # gate labels
 
@@ -353,13 +401,20 @@ def get_gateset_vs_target_table(gateset, targetGateset, formats, tableclass, lon
 
 def get_gateset_vs_target_err_gen_table(gateset, targetGateset, formats, tableclass, longtable, confidenceRegionInfo=None):
     """ 
-    Create latex table listing the error generators obtained by 
+    Create a table listing the error generators obtained by 
     comparing a gateset to a target gateset.
     
     Parameters
     ----------
     gateset, targetGateset : GateSet
         The gate sets to compare
+
+    formats : list
+        List of formats to include in returned tables dictionary. Allowed
+        formats are 'latex', 'html', 'py', and 'ppt'.
+
+    tableclass : string
+        CSS class to apply to the HTML table.
 
     longtable : bool
         Whether table should be a latex longtable or not.
@@ -370,8 +425,9 @@ def get_gateset_vs_target_err_gen_table(gateset, targetGateset, formats, tablecl
 
     Returns
     -------
-    string
-        Latex string output.
+    dict
+        Dictionary with keys equal to the requested formats (e.g. 'latex'),
+        and values equal to the table data in the corresponding format.
     """
     gateLabels = gateset.keys()  # gate labels
     colHeadings = ('Gate','Error Generator')
@@ -387,12 +443,19 @@ def get_gateset_vs_target_err_gen_table(gateset, targetGateset, formats, tablecl
 
 def get_gateset_closest_unitary_table(gateset, formats, tableclass, longtable, confidenceRegionInfo=None):
     """ 
-    Create latex table for gateset that contains closest-unitary gates.
+    Create a table for gateset that contains closest-unitary gates.
     
     Parameters
     ----------
     gateset : GateSet
         The GateSet
+
+    formats : list
+        List of formats to include in returned tables dictionary. Allowed
+        formats are 'latex', 'html', 'py', and 'ppt'.
+
+    tableclass : string
+        CSS class to apply to the HTML table.
 
     longtable : bool
         Whether table should be a latex longtable or not.
@@ -403,8 +466,9 @@ def get_gateset_closest_unitary_table(gateset, formats, tableclass, longtable, c
 
     Returns
     -------
-    string
-        Latex string output.
+    dict
+        Dictionary with keys equal to the requested formats (e.g. 'latex'),
+        and values equal to the table data in the corresponding format.
     """
 
     gateLabels = gateset.keys()  # gate labels
@@ -450,12 +514,19 @@ def get_gateset_closest_unitary_table(gateset, formats, tableclass, longtable, c
 
 def get_gateset_decomp_table(gateset, formats, tableclass, longtable, confidenceRegionInfo=None):
     """ 
-    Create latex tables for decomposing a gateset's gates.
+    Create tables for decomposing a gateset's gates.
     
     Parameters
     ----------
     gateset : GateSet
         The GateSet
+
+    formats : list
+        List of formats to include in returned tables dictionary. Allowed
+        formats are 'latex', 'html', 'py', and 'ppt'.
+
+    tableclass : string
+        CSS class to apply to the HTML table.
 
     longtable : bool
         Whether table should be a latex longtable or not.
@@ -466,8 +537,9 @@ def get_gateset_decomp_table(gateset, formats, tableclass, longtable, confidence
 
     Returns
     -------
-    string
-        Latex string output.
+    dict
+        Dictionary with keys equal to the requested formats (e.g. 'latex'),
+        and values equal to the table data in the corresponding format.
     """
     gateLabels = gateset.keys()  # gate labels
     colHeadings = ('Gate','Eigenvalues','Fixed pt','Rotn. axis','Diag. decay','Off-diag. decay')
@@ -506,13 +578,20 @@ def get_gateset_decomp_table(gateset, formats, tableclass, longtable, confidence
 
 def get_gateset_rotn_axis_table(gateset, formats, tableclass, longtable, confidenceRegionInfo=None):
     """ 
-    Create latex table of the angle between a gate rotation axes for 
+    Create a table of the angle between a gate rotation axes for 
      gates belonging to a gateset
     
     Parameters
     ----------
     gateset : GateSet
         The GateSet
+
+    formats : list
+        List of formats to include in returned tables dictionary. Allowed
+        formats are 'latex', 'html', 'py', and 'ppt'.
+
+    tableclass : string
+        CSS class to apply to the HTML table.
 
     longtable : bool
         Whether table should be a latex longtable or not.
@@ -523,8 +602,9 @@ def get_gateset_rotn_axis_table(gateset, formats, tableclass, longtable, confide
 
     Returns
     -------
-    string
-        Latex string output.
+    dict
+        Dictionary with keys equal to the requested formats (e.g. 'latex'),
+        and values equal to the table data in the corresponding format.
     """
     gateLabels = gateset.keys()  # gate labels
 
@@ -583,20 +663,28 @@ def get_gateset_rotn_axis_table(gateset, formats, tableclass, longtable, confide
 
 def get_dataset_overview_table(dataset, formats, tableclass, longtable):
     """ 
-    Create latex table overviewing a data set.
+    Create a table overviewing a data set.
     
     Parameters
     ----------
     dataset : DataSet
         The DataSet
 
+    formats : list
+        List of formats to include in returned tables dictionary. Allowed
+        formats are 'latex', 'html', 'py', and 'ppt'.
+
+    tableclass : string
+        CSS class to apply to the HTML table.
+
     longtable : bool
         Whether table should be a latex longtable or not.
 
     Returns
     -------
-    string
-        Latex string output.
+    dict
+        Dictionary with keys equal to the requested formats (e.g. 'latex'),
+        and values equal to the table data in the corresponding format.
     """
     colHeadings = ('Quantity','Value')
     formatters = (None,None)
@@ -616,7 +704,7 @@ def get_dataset_overview_table(dataset, formats, tableclass, longtable):
 
 def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, TPconstrained, formats, tableclass, longtable):
     """ 
-    Create latex table showing how Chi2 changes with GST iteration.
+    Create a table showing how Chi2 changes with GST iteration.
     
     Parameters
     ----------
@@ -636,13 +724,21 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, TPconstrai
     TPconstrained : bool
         Whether gatesetsByL were optimized under a TP constraint.
 
+    formats : list
+        List of formats to include in returned tables dictionary. Allowed
+        formats are 'latex', 'html', 'py', and 'ppt'.
+
+    tableclass : string
+        CSS class to apply to the HTML table.
+
     longtable : bool
         Whether table should be a latex longtable or not.
 
     Returns
     -------
-    string
-        Latex string output.
+    dict
+        Dictionary with keys equal to the requested formats (e.g. 'latex'),
+        and values equal to the table data in the corresponding format.
     """
     colHeadings = { 'latex': ('L','$\\chi^2$','$k$','$\\chi^2-k$','$\sqrt{2k}$','$P$','$N_s$','$N_p$', 'Rating'),
                     'html': ('L','&chi;<sup>2</sup>','k','&chi;<sup>2</sup>-k',
@@ -683,7 +779,7 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, TPconstrai
 
 def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, TPconstrained, formats, tableclass, longtable):
     """ 
-    Create latex table showing how the log-likelihood changes with GST iteration.
+    Create a table showing how the log-likelihood changes with GST iteration.
     
     Parameters
     ----------
@@ -703,13 +799,21 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, TPconstrai
     TPconstrained : bool
         Whether gatesetsByL were optimized under a TP constraint.
 
+    formats : list
+        List of formats to include in returned tables dictionary. Allowed
+        formats are 'latex', 'html', 'py', and 'ppt'.
+
+    tableclass : string
+        CSS class to apply to the HTML table.
+
     longtable : bool
         Whether table should be a latex longtable or not.
 
     Returns
     -------
-    string
-        Latex string output.
+    dict
+        Dictionary with keys equal to the requested formats (e.g. 'latex'),
+        and values equal to the table data in the corresponding format.
     """
     colHeadings = { 'latex': ('L','$2\Delta\\log(\\mathcal{L})$','$k$','$2\Delta\\log(\\mathcal{L})-k$',
                               '$\sqrt{2k}$','$P$','$N_s$','$N_p$', 'Rating'),
@@ -755,7 +859,7 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, TPconstrai
 
 def get_gatestring_table(gsList, title, formats, tableclass, longtable):
     """ 
-    Creates a 2-column latex table enumerating a list of gate strings.
+    Creates a 2-column table enumerating a list of gate strings.
     
     Parameters
     ----------
@@ -765,13 +869,21 @@ def get_gatestring_table(gsList, title, formats, tableclass, longtable):
     title : string
         The title for the table column containing the strings.
 
+    formats : list
+        List of formats to include in returned tables dictionary. Allowed
+        formats are 'latex', 'html', 'py', and 'ppt'.
+
+    tableclass : string
+        CSS class to apply to the HTML table.
+
     longtable : bool
         Whether table should be a latex longtable or not.
 
     Returns
     -------
-    string
-        Latex string output.
+    dict
+        Dictionary with keys equal to the requested formats (e.g. 'latex'),
+        and values equal to the table data in the corresponding format.
     """
     colHeadings = ('#',title)
     formatters = (_tf.TxtCnv,_tf.Nml)
@@ -788,7 +900,7 @@ def get_gatestring_table(gsList, title, formats, tableclass, longtable):
 
 def get_gatestring_multi_table(gsLists, titles, formats, tableclass, longtable, commonTitle=None):
     """ 
-    Creates an N-column latex table enumerating a N-1 lists of gate strings.
+    Creates an N-column table enumerating a N-1 lists of gate strings.
     
     Parameters
     ----------
@@ -797,6 +909,13 @@ def get_gatestring_multi_table(gsLists, titles, formats, tableclass, longtable, 
         
     titles : list of strings
         The titles for the table columns containing the strings.
+
+    formats : list
+        List of formats to include in returned tables dictionary. Allowed
+        formats are 'latex', 'html', 'py', and 'ppt'.
+
+    tableclass : string
+        CSS class to apply to the HTML table.
 
     longtable : bool
         Whether table should be a latex longtable or not.
@@ -807,8 +926,9 @@ def get_gatestring_multi_table(gsLists, titles, formats, tableclass, longtable, 
 
     Returns
     -------
-    string
-        Latex string output.
+    dict
+        Dictionary with keys equal to the requested formats (e.g. 'latex'),
+        and values equal to the table data in the corresponding format.
     """
     colHeadings = ('#',) + tuple(titles)
     formatters = (_tf.TxtCnv,) + (_tf.Nml,)*len(titles)

@@ -33,14 +33,14 @@ class TestHessianMethods(HessianTestCase):
 
     def test_parameter_counting(self):
         #XY Gateset: SPAM=True
-        n = stdxy.gs_target.get_num_params(SPAM=True)
+        n = stdxy.gs_target.num_params(SPAM=True)
         self.assertEqual(n,40) # 2*16 + 2*4 = 40
         
         n = stdxy.gs_target.num_nongauge_params(SPAM=True)
         self.assertEqual(n,24) # full 16 gauge params: SPAM gate + 2 others
         
         #XY Gateset: SPAM=False
-        n = stdxy.gs_target.get_num_params(SPAM=False)
+        n = stdxy.gs_target.num_params(SPAM=False)
         self.assertEqual(n,32) # 2*16 = 32
         
         n = stdxy.gs_target.num_nongauge_params(SPAM=False)
@@ -48,28 +48,28 @@ class TestHessianMethods(HessianTestCase):
 
 
         #XYI Gateset: SPAM=True
-        n = stdxyi.gs_target.get_num_params()
+        n = stdxyi.gs_target.num_params()
         self.assertEqual(n,56) # 3*16 + 2*4 = 56
         
         n = stdxyi.gs_target.num_nongauge_params()
         self.assertEqual(n,40) # full 16 gauge params: SPAM gate + 3 others
         
         #XYI Gateset: SPAM=False
-        n = stdxyi.gs_target.get_num_params(SPAM=False)
+        n = stdxyi.gs_target.num_params(SPAM=False)
         self.assertEqual(n,48) # 3*16 = 48
         
         n = stdxyi.gs_target.num_nongauge_params(SPAM=False)
         self.assertEqual(n,34) # gates are all unital & TP => only 14 gauge params (2 casimirs)
 
         #XYI Gateset: SP0=False
-        n = stdxyi.gs_target.get_num_params(SP0=False)
+        n = stdxyi.gs_target.num_params(SP0=False)
         self.assertEqual(n,55) # 3*16 + 4 + 3 = 55
         
         n = stdxyi.gs_target.num_nongauge_params(SP0=False)
         self.assertEqual(n,40) # 15 gauge params (minus one b/c can't change rho?)
 
         #XYI Gateset: G0=SP0=False
-        n = stdxyi.gs_target.get_num_params(G0=False, SP0=False)
+        n = stdxyi.gs_target.num_params(G0=False, SP0=False)
         self.assertEqual(n,43) # 3*12 + 4 + 3 = 43
         
         n = stdxyi.gs_target.num_nongauge_params(G0=False, SP0=False)

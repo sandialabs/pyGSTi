@@ -467,8 +467,8 @@ def fmin_particle_swarm(f, x0, err_crit, iter_max, popsize=100, c1=2, c2=2):
 
             #from .. import tools as tools_
             #matM = p.params.reshape( (4,4) )  #DEBUG
-            #minDistToBest = min(minDistToBest, _tools.frobenius_norm(
-            #                                    bestGaugeMx - matM)) #DEBUG
+            #minDistToBest = min(minDistToBest, _tools.frobeniusdist(
+            #                                    bestGaugeMx,matM)) #DEBUG
             #minV = min( _np.linalg.norm(v), minV)
             #maxV = max( _np.linalg.norm(v), maxV)
 

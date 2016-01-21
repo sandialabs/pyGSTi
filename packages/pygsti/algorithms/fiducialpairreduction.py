@@ -22,7 +22,7 @@ def find_sufficient_fiducial_pairs(targetGateset, rhoStrs, EStrs, germList,
     if spamLabels == "all":
         spamLabels = targetGateset.get_spam_labels()
 
-    nGatesetParams = targetGateset.get_num_params(SPAM=True)
+    nGatesetParams = targetGateset.num_params(SPAM=True)
 
     #Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j> where i = composite EVec & fiducial index and j similar
     def get_derivs(L):
@@ -152,7 +152,7 @@ def find_sufficient_fiducial_pairs(targetGateset, rhoStrs, EStrs, germList,
 #        evTree = targetGateset.bulk_evaltree(lst)
 #        dprobs.append( targetGateset.bulk_dprobs(evTree,SPAM=True) )
 #
-#    nGatesetParams = targetGateset.get_num_params(SPAM=True)
+#    nGatesetParams = targetGateset.num_params(SPAM=True)
 #    testMatrix = _np.empty( (0,nGatesetParams) )
 #    for (i0,i1) in testPairList: #[(0,0),(1,0),(2,3),(4,5)]:
 #        iCmp = i0*len(fiducialList) + i1 #composite index of (f0,f1) in dprobs[iGerm][spamLabel]

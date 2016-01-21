@@ -30,8 +30,8 @@ class TestGateSetMethods(GateSetTestCase):
 
   def test_counting(self):
 
-      self.assertEqual(self.gateset.get_num_rhovecs(), 1) 
-      self.assertEqual(self.gateset.get_num_evecs(), 1) 
+      self.assertEqual(self.gateset.num_rhovecs(), 1) 
+      self.assertEqual(self.gateset.num_evecs(), 1) 
 
       for gates in (True,False):
           for G0 in (True,False):
@@ -43,7 +43,7 @@ class TestGateSetMethods(GateSetTestCase):
                       nEVecs = 1 if SPAM else 0
                       nParamsPerSP = 4 if SP0 else 3
                       nParams =  nGates * nParamsPerGate + nSPVecs * nParamsPerSP + nEVecs * 4
-                      self.assertEqual(self.gateset.get_num_params(gates,G0,SPAM,SP0), nParams)  
+                      self.assertEqual(self.gateset.num_params(gates,G0,SPAM,SP0), nParams)  
 
       self.assertEqual(self.gateset.get_rhovec_indices(), [0]) 
       self.assertEqual(self.gateset.get_evec_indices(), [0]) 
@@ -84,8 +84,9 @@ class TestGateSetMethods(GateSetTestCase):
 
   def test_copy(self):
       cp = self.gateset.copy()
-      self.assertAlmostEqual( self.gateset.diff_frobenius(cp), 0 )
-      self.assertAlmostEqual( self.gateset.diff_jtracedist(cp), 0 )
+      self.assertAlmostEqual( self.gateset.frobeniusdist(cp), 0 )
+      self.assertAlmostEqual( self.gateset.jtracedist(cp), 0 )
+      self.assertAlmostEqual( self.gateset.diamonddist(cp), 0 )
 
 
   def test_vectorize(self):
@@ -96,7 +97,7 @@ class TestGateSetMethods(GateSetTestCase):
                   for SP0 in (True,False):
                       v = cp.to_vector(gates, G0, SPAM, SP0 )
                       cp.from_vector(v, gates, G0, SPAM, SP0)
-                      self.assertAlmostEqual( self.gateset.diff_frobenius(cp), 0 )
+                      self.assertAlmostEqual( self.gateset.frobeniusdist(cp), 0 )
 
 
   def test_transform(self):
@@ -108,8 +109,9 @@ class TestGateSetMethods(GateSetTestCase):
       cp = self.gateset.copy()
       cp.transform(T,Tinv)
 
-      self.assertAlmostEqual( self.gateset.diff_frobenius(cp, T), 0 )
-      self.assertAlmostEqual( self.gateset.diff_jtracedist(cp, T), 0 )
+      self.assertAlmostEqual( self.gateset.frobeniusdist(cp, T), 0 )
+      self.assertAlmostEqual( self.gateset.jtracedist(cp, T), 0 )
+      self.assertAlmostEqual( self.gateset.diamonddist(cp, T), 0 )
 
       for gateLabel in cp:
           self.assertArraysAlmostEqual(cp[gateLabel], np.dot(Tinv, np.dot(self.gateset[gateLabel], T)))
@@ -273,7 +275,7 @@ class TestGateSetMethods(GateSetTestCase):
       dProbs0b = self.gateset.dprobs(gatestring0, returnPr=True)
 
 
-      nGateStrings = 3; nSpamLabels = 2; nParams = self.gateset.get_num_params()
+      nGateStrings = 3; nSpamLabels = 2; nParams = self.gateset.num_params()
       probs_to_fill = np.empty( (nSpamLabels,nGateStrings), 'd')
       dprobs_to_fill = np.empty( (nSpamLabels,nGateStrings,nParams), 'd')
       dprobs_to_fillB = np.empty( (nSpamLabels,nGateStrings,nParams), 'd')
@@ -346,7 +348,7 @@ class TestGateSetMethods(GateSetTestCase):
       bulk_hProbs_C = self.gateset.bulk_hprobs(evt, returnDeriv=True)
 
 
-      nGateStrings = 3; nSpamLabels = 2; nParams = self.gateset.get_num_params()
+      nGateStrings = 3; nSpamLabels = 2; nParams = self.gateset.num_params()
       probs_to_fill = np.empty( (nSpamLabels,nGateStrings), 'd')
       probs_to_fillB = np.empty( (nSpamLabels,nGateStrings), 'd')
       dprobs_to_fill = np.empty( (nSpamLabels,nGateStrings,nParams), 'd')

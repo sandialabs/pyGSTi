@@ -321,6 +321,27 @@ class ToolsMethods(ToolsTestCase):
         decomp = pygsti.decompose_gate_matrix(largeMx) #can only handle 1Q mxs
         self.assertFalse(decomp['isValid'])
 
+        A = np.array( [[0.9, 0, 0.1j, 0],
+                       [ 0,  0, 0,    0],
+                       [ -0.1j, 0, 0, 0],
+                       [ 0,  0,  0,  0.1]], 'complex')
+
+        B = np.array( [[0.5, 0, 0, -0.2j],
+                       [ 0,  0.25, 0,  0],
+                       [ 0, 0, 0.25,   0],
+                       [ 0.2j,  0,  0,  0.1]], 'complex')
+
+        self.assertAlmostEqual( pygsti.frobeniusdist(A,A), 0.0 )
+        self.assertAlmostEqual( pygsti.jtracedist(A,A,mxBasis="std"), 0.0 )
+        self.assertAlmostEqual( pygsti.diamonddist(A,A,mxBasis="std"), 0.0 )
+        self.assertAlmostEqual( pygsti.frobeniusdist(A,B), (0.430116263352+0j) )
+        self.assertAlmostEqual( pygsti.jtracedist(A,B,mxBasis="std"), 0.260078105936)
+        self.assertAlmostEqual( pygsti.diamonddist(A,B,mxBasis="std"), 0.614258836298)
+
+        self.assertAlmostEqual( pygsti.frobeniusdist(A,B), pygsti.frobeniusnorm(A-B) )
+        self.assertAlmostEqual( pygsti.frobeniusdist(A,B), np.sqrt( pygsti.frobeniusnorm2(A-B) ) )
+        
+
     def test_jamiolkowski_ops(self):
         mxGM  = np.array([[1, 0, 0, 0],
                           [0, 0, 1, 0],

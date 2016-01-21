@@ -20,9 +20,9 @@ def write_parameter_file(filename, params):
     return _json.dump( params, open(filename, "wb"), indent=4) # object_pairs_hook=_collections.OrderedDict
 
 
-def write_empty_dataset_file(filename, gatestring_list, 
-                          headerString='## Columns = plus frequency, count total', numZeroCols=None,
-                          appendWeightsColumn=False):
+def write_empty_dataset(filename, gatestring_list, 
+                        headerString='## Columns = plus frequency, count total', numZeroCols=None,
+                        appendWeightsColumn=False):
     """
     Write an empty dataset file to be used as a template.
 
@@ -65,7 +65,7 @@ def write_empty_dataset_file(filename, gatestring_list,
     f.close()
 
 
-def write_dataset_file(filename, gatestring_list, dataset, spamLabelOrder=None):
+def write_dataset(filename, gatestring_list, dataset, spamLabelOrder=None):
     """
     Write a text-formatted dataset file.
 
@@ -102,6 +102,50 @@ def write_dataset_file(filename, gatestring_list, dataset, spamLabelOrder=None):
     for gateString in gatestring_list: #gateString should be a GateString object here
         dataRow = dataset[gateString.tup]
         print >> f, gateString.str + "  " + "  ".join( [("%g" % dataRow[sl]) for sl in spamLabels] )
+    f.close()
+
+def write_multidataset(filename, gatestring_list, multidataset, spamLabelOrder=None):
+    """
+    Write a text-formatted multi-dataset file.
+
+    Parameters
+    ----------
+    filename : string
+        The filename to write.
+
+    gatestring_list : list of GateStrings
+        The list of gate strings to include in the written dataset.
+
+    multidataset : MultiDataSet
+        The multi data set from which counts are obtained.
+
+    spamLabelOrder : list, optional
+        A list of the SPAM labels in multidataset which specifies
+        the column order in the output file.
+    """
+    if len(gatestring_list) > 0 and not isinstance(gatestring_list[0], _objs.GateString):
+        raise ValueError("Argument gatestring_list must be a list of GateString objects!")
+
+    spamLabels = multidataset.get_spam_labels()
+    if spamLabelOrder is not None:
+        assert(len(spamLabelOrder) == len(spamLabels))
+        assert(all( [sl in spamLabels for sl in spamLabelOrder] ))
+        assert(all( [sl in spamLabelOrder for sl in spamLabels] ))
+        spamLabels = spamLabelOrder
+
+    dsLabels = multidataset.keys()
+
+    headerString = '## Columns = ' + ", ".join( [ "%s %s count" % (dsl,sl) 
+                                                  for dsl in dsLabels
+                                                  for sl in spamLabels ]) 
+    parser = _stdinput.StdInputParser()
+
+    f = open(filename, 'w')
+    print >> f, headerString
+    for gateString in gatestring_list: #gateString should be a GateString object here
+        gs = gateString.tup #gatestring tuple
+        print >> f, gateString.str + "  " + "  ".join( [("%g" % multidataset[dsl][gs][sl])
+                                                        for dsl in dsLabels for sl in spamLabels] )
     f.close()
 
 

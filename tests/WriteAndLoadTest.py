@@ -26,14 +26,14 @@ class TestWriteAndLoad(WriteAndLoadTestCase):
         weighted_strList = [ pygsti.obj.WeightedGateString((), weight=0.1), 
                              pygsti.obj.WeightedGateString(('Gx',), weight=2.0),
                              pygsti.obj.WeightedGateString(('Gx','Gy'), weight=1.5) ]
-        pygsti.io.write_empty_dataset_file("temp_test_files/emptyDataset.txt", strList, numZeroCols=2, appendWeightsColumn=False)
-        pygsti.io.write_empty_dataset_file("temp_test_files/emptyDataset2.txt", weighted_strList, 
+        pygsti.io.write_empty_dataset("temp_test_files/emptyDataset.txt", strList, numZeroCols=2, appendWeightsColumn=False)
+        pygsti.io.write_empty_dataset("temp_test_files/emptyDataset2.txt", weighted_strList, 
                                   headerString='## Columns = myplus count, myminus count', appendWeightsColumn=True)
 
         with self.assertRaises(ValueError):
-            pygsti.io.write_empty_dataset_file("temp_test_files/emptyDataset.txt", [ ('Gx',) ], numZeroCols=2) #must be GateStrings
+            pygsti.io.write_empty_dataset("temp_test_files/emptyDataset.txt", [ ('Gx',) ], numZeroCols=2) #must be GateStrings
         with self.assertRaises(ValueError):
-            pygsti.io.write_empty_dataset_file("temp_test_files/emptyDataset.txt", strList, headerString="# Nothing ")
+            pygsti.io.write_empty_dataset("temp_test_files/emptyDataset.txt", strList, headerString="# Nothing ")
               #must give numZeroCols or meaningful header string (default => 2 cols)
 
         
@@ -42,13 +42,13 @@ class TestWriteAndLoad(WriteAndLoadTestCase):
         ds.add_count_dict( ('Gx','Gy'), {'plus': 40, 'minus': 60} )
         ds.done_adding_data()
 
-        pygsti.io.write_dataset_file("temp_test_files/dataset_loadwrite.txt",
+        pygsti.io.write_dataset("temp_test_files/dataset_loadwrite.txt",
                                      pygsti.construction.gatestring_list(ds.keys())[0:10], ds) #write only first 10 strings
         ds2 = pygsti.io.load_dataset("temp_test_files/dataset_loadwrite.txt")
         ds3 = pygsti.io.load_dataset("temp_test_files/dataset_loadwrite.txt", cache=True) #creates cache file
         ds4 = pygsti.io.load_dataset("temp_test_files/dataset_loadwrite.txt", cache=True) #loads from cache file
 
-        pygsti.io.write_dataset_file("temp_test_files/dataset_loadwrite.txt",
+        pygsti.io.write_dataset("temp_test_files/dataset_loadwrite.txt",
                                      pygsti.construction.gatestring_list(ds.keys()), ds, spamLabelOrder=['plus','minus'])
         ds5 = pygsti.io.load_dataset("temp_test_files/dataset_loadwrite.txt", cache=True) #rewrites cache file
 
@@ -57,18 +57,34 @@ class TestWriteAndLoad(WriteAndLoadTestCase):
             self.assertEqual(ds[s]['minus'],ds5[s]['minus'])
 
         with self.assertRaises(ValueError):
-            pygsti.io.write_dataset_file("temp_test_files/dataset_loadwrite.txt",ds.keys(), ds) #must be GateStrings
+            pygsti.io.write_dataset("temp_test_files/dataset_loadwrite.txt",ds.keys(), ds) #must be GateStrings
         with self.assertRaises(ValueError):
-            pygsti.io.write_dataset_file("temp_test_files/dataset_loadwrite.txt",ds.keys(), ds) #must be GateStrings
+            pygsti.io.write_dataset("temp_test_files/dataset_loadwrite.txt",ds.keys(), ds) #must be GateStrings
 
 
     def test_multidataset_file(self):
         strList = pygsti.construction.gatestring_list( [(), ('Gx',), ('Gx','Gy') ] )
-        pygsti.io.write_empty_dataset_file("temp_test_files/emptyMultiDataset.txt", strList,
+        pygsti.io.write_empty_dataset("temp_test_files/emptyMultiDataset.txt", strList,
                                            headerString='## Columns = ds1 plus count, ds1 minus count, ds2 plus count, ds2 minus count')
-        ds = pygsti.io.load_multidataset("temp_test_files/dataset_loadwrite.txt")
-        ds2 = pygsti.io.load_multidataset("temp_test_files/dataset_loadwrite.txt", cache=True)
-        ds3 = pygsti.io.load_multidataset("temp_test_files/dataset_loadwrite.txt", cache=True) #load from cache
+
+        multi_dataset_txt = \
+"""## Columns = DS0 plus count, DS0 minus count, DS1 plus frequency, DS1 count total
+{} 0 100 0 100
+Gx 10 90 0.1 100
+GxGy 40 60 0.4 100
+Gx^4 20 80 0.2 100
+"""
+        open("temp_test_files/TestMultiDataset.txt","w").write(multi_dataset_txt)
+
+
+        ds = pygsti.io.load_multidataset("temp_test_files/TestMultiDataset.txt")
+        ds2 = pygsti.io.load_multidataset("temp_test_files/TestMultiDataset.txt", cache=True)
+        ds3 = pygsti.io.load_multidataset("temp_test_files/TestMultiDataset.txt", cache=True) #load from cache
+
+        pygsti.io.write_multidataset("temp_test_files/emptyMultiDataset2.txt", strList, ds)
+        ds_copy = pygsti.io.load_multidataset("temp_test_files/emptyMultiDataset2.txt")
+        self.assertEqual(ds_copy['DS0'][('Gx',)]['plus'], ds['DS0'][('Gx',)]['plus'] )
+        self.assertEqual(ds_copy['DS0'][('Gx','Gy')]['minus'], ds['DS1'][('Gx','Gy')]['minus'] )
 
 
     def test_gatestring_list_file(self):
@@ -93,7 +109,7 @@ class TestWriteAndLoad(WriteAndLoadTestCase):
     def test_gateset_file(self):
         pygsti.io.write_gateset(std.gs_target, "temp_test_files/gateset_loadwrite.txt", "My title")
         gs = pygsti.io.load_gateset("temp_test_files/gateset_loadwrite.txt")
-        self.assertAlmostEqual(gs.diff_frobenius(std.gs_target), 0)
+        self.assertAlmostEqual(gs.frobeniusdist(std.gs_target), 0)
 
         gateset_m1m1 = pygsti.construction.build_gateset([2], [('Q0',)],['Gi','Gx','Gy'], 
                                                          [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
@@ -101,7 +117,7 @@ class TestWriteAndLoad(WriteAndLoadTestCase):
                                                          spamLabelDict={'plus': (0,0), 'minus': (-1,-1) })
         pygsti.io.write_gateset(gateset_m1m1, "temp_test_files/gateset_m1m1_loadwrite.txt", "My title m1m1")
         gs_m1m1 = pygsti.io.load_gateset("temp_test_files/gateset_m1m1_loadwrite.txt")
-        self.assertAlmostEqual(gs_m1m1.diff_frobenius(gateset_m1m1), 0)
+        self.assertAlmostEqual(gs_m1m1.frobeniusdist(gateset_m1m1), 0)
 
         gateset_txt = """# Gateset file using other allowed formats
 rho0

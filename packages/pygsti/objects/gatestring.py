@@ -66,6 +66,68 @@ class GateString(object):
             self.tup = tuple(tupleOfGateLabels)
             self.str = str(stringRepresentation)
 
+    #Conversion routines for evalTree usage -- TODO: make these member functions
+    def to_pythonstr(self,gateLabels):
+        """
+        Convert this gate string into a python string, where each gate label is
+        represented as a **single** character, starting with 'A' and contining
+        down the alphabet.  This can be useful for processing gate strings 
+        using python's string tools (regex in particular).
+    
+        Parameters
+        ----------
+        gateLabels : tuple
+           tuple containing all the gate labels that will be mapped to alphabet
+           characters, beginning with 'A'.
+    
+        Returns
+        -------
+        string
+            The converted gate string.
+        
+        Examples
+        --------
+            ('Gx','Gx','Gy','Gx') => "AABA"
+        """
+        assert(len(gateLabels) < 26) #Complain if we go beyond 'Z'
+        translateDict = {}; c = 'A'
+        for gateLabel in gateLabels:
+            translateDict[gateLabel] = c
+            c = chr(ord(c) + 1)
+        return "".join([ translateDict[gateLabel] for gateLabel in self.tup ])
+    
+    @classmethod
+    def from_pythonstr(cls,pythonString,gateLabels):
+        """
+        Create a GateString from a python string where each gate label is
+        represented as a **single** character, starting with 'A' and contining
+        down the alphabet.  This performs the inverse of to_pythonstr(...).
+    
+        Parameters
+        ----------
+        pythonString : string
+            string whose individual characters correspond to the gate labels of a
+            gate string.
+    
+        gateLabels : tuple
+           tuple containing all the gate labels that will be mapped to alphabet
+           characters, beginning with 'A'.
+    
+        Returns
+        -------
+        GateString
+    
+        Examples
+        --------
+            "AABA" => ('Gx','Gx','Gy','Gx')
+        """
+        assert(len(gateLabels) < 26) #Complain if we go beyond 'Z'
+        translateDict = {}; c = 'A'
+        for gateLabel in gateLabels:
+            translateDict[c] = gateLabel
+            c = chr(ord(c) + 1)
+        return cls( tuple([ translateDict[c] for c in pythonString ]) )
+
 
     def __str__(self):
         return self.str
@@ -193,71 +255,6 @@ class WeightedGateString(GateString):
         return self.tup.__getitem__(key)
 
 
-#Conversion routines for evalTree usage -- TODO: make these member functions
-def gatestr_to_pythonstr(gateString,gateLabels):
-    """
-    Convert a gate string into a python string, where each gate label is
-    represented as a **single** character, starting with 'A' and contining
-    down the alphabet.  This can be useful for processing gate strings 
-    using python's string tools (regex in particular).
-
-    Parameters
-    ----------
-    gateString : tuple or GateString
-        the gate label sequence that is converted to a string.
-    
-    gateLabels : tuple
-       tuple containing all the gate labels that will be mapped to alphabet
-       characters, beginning with 'A'.
-
-    Returns
-    -------
-    string
-        The converted gate string.
-    
-    Examples
-    --------
-        ('Gx','Gx','Gy','Gx') => "AABA"
-    """
-    assert(len(gateLabels) < 26) #Complain if we go beyond 'Z'
-    translateDict = {}; c = 'A'
-    for gateLabel in gateLabels:
-        translateDict[gateLabel] = c
-        c = chr(ord(c) + 1)
-    return "".join([ translateDict[gateLabel] for gateLabel in gateString ])
-
-def pythonstr_to_gatestr(pythonString,gateLabels):
-    """
-    Convert a python string into a gate string, where each gate label is
-    represented as a **single** character, starting with 'A' and contining
-    down the alphabet.  This performs the inverse of gatestr_to_pythonstr(...).
-
-    Parameters
-    ----------
-    pythonString : string
-        string whose individual characters correspond to the gate labels of a
-        gate string.
-
-    gateLabels : tuple
-       tuple containing all the gate labels that will be mapped to alphabet
-       characters, beginning with 'A'.
-
-    Returns
-    -------
-    GateString
-        The decoded python string as a GateString object (essentially 
-        a tuple of gate labels).
-
-    Examples
-    --------
-        "AABA" => ('Gx','Gx','Gy','Gx')
-    """
-    assert(len(gateLabels) < 26) #Complain if we go beyond 'Z'
-    translateDict = {}; c = 'A'
-    for gateLabel in gateLabels:
-        translateDict[c] = gateLabel
-        c = chr(ord(c) + 1)
-    return GateString( tuple([ translateDict[c] for c in pythonString ]) )
 
 
 #Now tested in unit tests

@@ -61,9 +61,9 @@ class GateSet(_collections.OrderedDict):
     #        self.append( _np.identity(gateDimension) ) #note: no 'complex' here - real gate matrix
 
     #def set_random(self, sd, radius):
-    #    _rndm.seed(sd)
+    #    rndm = _np.random.RandomState(sd)
     #    for (i,gate) in enumerate(self):
-    #        self[i] = _rndm.random(gate.shape) * radius #Need to mult by identity if we want 'complex' matrices
+    #        self[i] = rndm.randn(gate.shape) * radius #Need to mult by identity if we want 'complex' matrices
 
     def get_dimension(self):
         """ 
@@ -119,7 +119,7 @@ class GateSet(_collections.OrderedDict):
 
         index : int, optional
             the index of the state preparation vector to set.  Must
-            be <= get_num_rhovecs(), where equality adds a new vector.
+            be <= num_rhovecs(), where equality adds a new vector.
         """
         if self.gate_dim is None:
             self.gate_dim = len(rhoVec)
@@ -176,7 +176,7 @@ class GateSet(_collections.OrderedDict):
 
         index : int, optional
             the index of the effect vector to set.  Must
-            be <= get_num_evecs(), where equality adds a new vector.
+            be <= num_evecs(), where equality adds a new vector.
         """
         if self.gate_dim is None:
             self.gate_dim = len(EVec)
@@ -224,7 +224,7 @@ class GateSet(_collections.OrderedDict):
         return [ self.get_evec(i).copy() for i in self.get_evec_indices() ]
 
 
-    def get_num_rhovecs(self):
+    def num_rhovecs(self):
         """
         Get the number of state preparation vectors
 
@@ -234,7 +234,7 @@ class GateSet(_collections.OrderedDict):
         """
         return len(self.rhoVecs)
 
-    def get_num_evecs(self):
+    def num_evecs(self):
         """
         Get the number of effect vectors, including a "complement" effect vector,
           equal to Identity - sum(other effect vectors)
@@ -449,7 +449,7 @@ class GateSet(_collections.OrderedDict):
         self.history.append( (strDescription,extra) )
 
 
-    def get_num_params(self,gates=True,G0=True,SPAM=True,SP0=True):
+    def num_params(self,gates=True,G0=True,SPAM=True,SP0=True):
         """
         Return the number of free parameters when vectorizing
         this gateset according to the optional parameters.
@@ -491,14 +491,14 @@ class GateSet(_collections.OrderedDict):
         if gates == True:     gates = self.keys()
         elif gates == False:  gates = []
         for gateLabelToInclude in gates:
-            L += self.get_gate(gateLabelToInclude).get_num_params(bG0)
+            L += self.get_gate(gateLabelToInclude).num_params(bG0)
         if bSPAM: L += sum(rhoSize) + sum(eSize)
 
         assert(L == len(self.to_vector(gates,G0,SPAM,SP0)) ) #Sanity check
         return L
 
 
-    def get_num_elements(self):
+    def num_elements(self):
         """
         Return the number of total gate matrix and spam vector
         elements in this gateset.  This is in general different
@@ -585,7 +585,7 @@ class GateSet(_collections.OrderedDict):
         int
             the number of gauge gateset parameters.
         """
-        return self.get_num_params(gates,G0,SPAM,SP0) - self.num_nongauge_params(gates,G0,SPAM,SP0)
+        return self.num_params(gates,G0,SPAM,SP0) - self.num_nongauge_params(gates,G0,SPAM,SP0)
 
 
     #TODO: update for multiple rhoVecs / EVecs when I have time
@@ -639,7 +639,7 @@ class GateSet(_collections.OrderedDict):
         if len(self) == 0: return _np.array([])
 
         m = 0 if bSP0 else 1
-        gsize = dict( [ (l,g.get_num_params(bG0)) for (l,g) in self.gates.iteritems() ])
+        gsize = dict( [ (l,g.num_params(bG0)) for (l,g) in self.gates.iteritems() ])
         rhoSize = [ len(rhoVec)-m for rhoVec in self.rhoVecs ]
         eSize   = [ len(EVec) for EVec in self.EVecs ]
 
@@ -702,7 +702,7 @@ class GateSet(_collections.OrderedDict):
         bSPAM = SPAM; bG0 = G0; bSP0 = SP0
 
         m = 0 if bSP0 else 1
-        gsize = dict( [ (l,g.get_num_params(bG0)) for (l,g) in self.gates.iteritems() ])
+        gsize = dict( [ (l,g.num_params(bG0)) for (l,g) in self.gates.iteritems() ])
         rhoSize = [ len(rhoVec)-m for rhoVec in self.rhoVecs ]
         eSize   = [ len(EVec) for EVec in self.EVecs ]
 
@@ -766,7 +766,7 @@ class GateSet(_collections.OrderedDict):
         bSPAM = SPAM; bG0 = G0; bSP0 = SP0
     
         m = 0 if bSP0 else 1
-        gsize = dict( [ (l,g.get_num_params(bG0)) for (l,g) in self.gates.iteritems() ])
+        gsize = dict( [ (l,g.num_params(bG0)) for (l,g) in self.gates.iteritems() ])
         rhoSize = [ len(rhoVec)-m for rhoVec in self.rhoVecs ]
         eSize   = [ len(EVec) for EVec in self.EVecs ]
     
@@ -800,7 +800,7 @@ class GateSet(_collections.OrderedDict):
         of the true vectorized gateset.
 
         Each column is the length of a vectorized gateset of
-        fully parameterized gates and there are get_num_params(...) columns.
+        fully parameterized gates and there are num_params(...) columns.
         If the gateset is fully parameterized (i.e. contains only
         fully parameterized gates) then the resulting matrix will be
         the (square) identity matrix.
@@ -833,7 +833,7 @@ class GateSet(_collections.OrderedDict):
         if len(self) == 0: return _np.array([])
 
         m = 0 if bSP0 else 1
-        gsize = dict( [ (l,g.get_num_params(bG0)) for (l,g) in self.gates.iteritems() ])
+        gsize = dict( [ (l,g.num_params(bG0)) for (l,g) in self.gates.iteritems() ])
         rhoSize = [ len(rhoVec)-m for rhoVec in self.rhoVecs ]
         eSize   = [ len(EVec) for EVec in self.EVecs ]
         full_vsize = self.gate_dim
@@ -842,8 +842,8 @@ class GateSet(_collections.OrderedDict):
         if gates == True:     gates = self.keys()
         elif gates == False:  gates = []
 
-        nParams = self.get_num_params(gates,G0,SPAM,SP0)
-        nElements = self.get_num_elements() #total number of gate mx and spam vec elements
+        nParams = self.num_params(gates,G0,SPAM,SP0)
+        nElements = self.num_elements() #total number of gate mx and spam vec elements
         deriv = _np.zeros( (nElements, nParams), 'd' )
 
         k = 0; foff= 0; off = 0 #independently track full-offset and (parameterized)-offset
@@ -1073,7 +1073,7 @@ class GateSet(_collections.OrderedDict):
         # Initialize storage
         dprod_dgateLabel = { }; dgate_dgateLabel = {}
         for gateLabel in gatesToVectorize:
-            dprod_dgateLabel[gateLabel] = _np.zeros( (gate_dim**2, self.get_gate(gateLabel).get_num_params(bG0) ) )
+            dprod_dgateLabel[gateLabel] = _np.zeros( (gate_dim**2, self.get_gate(gateLabel).num_params(bG0) ) )
             dgate_dgateLabel[gateLabel] = self.get_gate(gateLabel).deriv_wrt_params(bG0) # (gate_dim**2, nParams[gateLabel])
 
         #Add contributions for each gate in list
@@ -1976,8 +1976,8 @@ class GateSet(_collections.OrderedDict):
         gate_dim = self.gate_dim
         assert(not evalTree.is_split()) #product functions can't use split trees (as there's really no point)
 
-        nGateStrings = evalTree.get_num_final_strings() #len(gatestring_list)
-        nGateDerivCols = self.get_num_params(gates=gates, G0=bG0, SPAM=False) 
+        nGateStrings = evalTree.num_final_strings() #len(gatestring_list)
+        nGateDerivCols = self.num_params(gates=gates, G0=bG0, SPAM=False) 
         deriv_shape = (nGateDerivCols, gate_dim, gate_dim)
         cacheSize = len(evalTree)
 
@@ -2193,8 +2193,8 @@ class GateSet(_collections.OrderedDict):
         gate_dim = self.gate_dim
         assert(not evalTree.is_split()) #product functions can't use split trees (as there's really no point)
 
-        nGateStrings = evalTree.get_num_final_strings() #len(gatestring_list)
-        nGateDerivCols = self.get_num_params(gates=gates, G0=bG0, SPAM=False) 
+        nGateStrings = evalTree.num_final_strings() #len(gatestring_list)
+        nGateDerivCols = self.num_params(gates=gates, G0=bG0, SPAM=False) 
         deriv_shape = (nGateDerivCols, gate_dim, gate_dim)
         hessn_shape = (nGateDerivCols, nGateDerivCols, gate_dim, gate_dim)
 
@@ -2353,7 +2353,7 @@ class GateSet(_collections.OrderedDict):
           the (float) probabilities.
         """
 
-        nGateStrings = evalTree.get_num_final_strings() #len(gatestring_list)
+        nGateStrings = evalTree.num_final_strings() #len(gatestring_list)
         if evalTree.is_split():
             vp = _np.empty( nGateStrings, 'd' )
 
@@ -2496,15 +2496,15 @@ class GateSet(_collections.OrderedDict):
         rho = self.rhoVecs[rhoIndex]
         E   = _np.conjugate(_np.transpose(self.get_evec(eIndex)))
         gate_dim = self.gate_dim
-        nGateStrings = evalTree.get_num_final_strings()
-        nDerivCols = self.get_num_params(gates, bG0, bSPAM, bSP0) 
+        nGateStrings = evalTree.num_final_strings()
+        nDerivCols = self.num_params(gates, bG0, bSPAM, bSP0) 
 
         if evalTree.is_split():
             vp = _np.empty( nGateStrings, 'd' )
             vdp = _np.empty( (nGateStrings, nDerivCols), 'd' )  
 
         for evalSubTree in evalTree.get_sub_trees():
-            sub_nGateStrings = evalSubTree.get_num_final_strings()
+            sub_nGateStrings = evalSubTree.num_final_strings()
             dGs, Gs, scaleVals = self.bulk_dproduct(evalSubTree, gates, G0, bScale=True, bReturnProds=True, memLimit=memLimit)
 
             old_err = _np.seterr(over='ignore')
@@ -2695,8 +2695,8 @@ class GateSet(_collections.OrderedDict):
         rho = self.rhoVecs[rhoIndex]
         E   = _np.conjugate(_np.transpose(self.get_evec(eIndex)))
         gate_dim = self.gate_dim
-        nGateStrings = evalTree.get_num_final_strings()
-        nDerivCols = self.get_num_params(gates, bG0, bSPAM, bSP0) 
+        nGateStrings = evalTree.num_final_strings()
+        nDerivCols = self.num_params(gates, bG0, bSPAM, bSP0) 
 
         if evalTree.is_split():
             vp = _np.empty( nGateStrings, 'd' )
@@ -2704,7 +2704,7 @@ class GateSet(_collections.OrderedDict):
             vhp = _np.empty( (nGateStrings, nDerivCols, nDerivCols), 'd' )
 
         for evalSubTree in evalTree.get_sub_trees():
-            sub_nGateStrings = evalSubTree.get_num_final_strings()
+            sub_nGateStrings = evalSubTree.num_final_strings()
             hGs, dGs, Gs, scaleVals = self.bulk_hproduct(evalSubTree, gates, G0, bScale=True, bReturnDProdsAndProds=True)
             old_err = _np.seterr(over='ignore')
     
@@ -2882,7 +2882,7 @@ class GateSet(_collections.OrderedDict):
                 probs[spamLabel] = self.bulk_pr(spamLabel, evalTree, clipTo, check)
         else:
             spam_labels_to_loop = self.SPAMs.keys()
-            s = _np.zeros( evalTree.get_num_final_strings(), 'd'); lastLabel = None
+            s = _np.zeros( evalTree.num_final_strings(), 'd'); lastLabel = None
             for spamLabel in spam_labels_to_loop:
                 if self.SPAMs[spamLabel] is None:
                     assert(lastLabel is None) # ensure there is at most one dummy spam label
@@ -2960,7 +2960,7 @@ class GateSet(_collections.OrderedDict):
         else:
             spam_labels_to_loop = self.SPAMs.keys()
             ds = None; lastLabel = None
-            s = _np.zeros( evalTree.get_num_final_strings(), 'd')
+            s = _np.zeros( evalTree.num_final_strings(), 'd')
             for spamLabel in spam_labels_to_loop:
                 if self.SPAMs[spamLabel] is None:
                     assert(lastLabel is None) # ensure there is at most one dummy spam label
@@ -3044,7 +3044,7 @@ class GateSet(_collections.OrderedDict):
         else:
             spam_labels_to_loop = self.SPAMs.keys()
             hs = None; ds = None; lastLabel = None
-            s = _np.zeros( evalTree.get_num_final_strings(), 'd')
+            s = _np.zeros( evalTree.num_final_strings(), 'd')
             for spamLabel in spam_labels_to_loop:
                 if self.SPAMs[spamLabel] is None:
                     assert(lastLabel is None) # ensure there is at most one dummy spam label
@@ -3094,7 +3094,7 @@ class GateSet(_collections.OrderedDict):
         mxToFill : numpy ndarray
           an already-allocated KxS numpy array, where K is larger
           than the maximum value in spam_label_rows and S is equal
-          to the number of gate strings (i.e. evalTree.get_num_final_strings())
+          to the number of gate strings (i.e. evalTree.num_final_strings())
 
         spam_label_rows : dictionary
           a dictionary with keys == spam labels and values which 
@@ -3122,7 +3122,7 @@ class GateSet(_collections.OrderedDict):
                 mxToFill[rowIndex] = self.bulk_pr(spamLabel, evalTree, clipTo, check)
         else:
             spam_labels_to_loop = self.SPAMs.keys()
-            s = _np.zeros( evalTree.get_num_final_strings(), 'd'); lastLabel = None
+            s = _np.zeros( evalTree.num_final_strings(), 'd'); lastLabel = None
             for spamLabel in spam_labels_to_loop: #Note: must loop through all spam labels, even if not requested
                 if self.SPAMs[spamLabel] is None:
                     assert(lastLabel is None) # ensure there is at most one dummy spam label
@@ -3158,7 +3158,7 @@ class GateSet(_collections.OrderedDict):
         mxToFill : numpy array
           an already-allocated KxSxM numpy array, where K is larger
           than the maximum value in spam_label_rows, S is equal
-          to the number of gate strings (i.e. evalTree.get_num_final_strings()),
+          to the number of gate strings (i.e. evalTree.num_final_strings()),
           and M is the length of the vectorized gateset.
 
         spam_label_rows : dictionary
@@ -3220,7 +3220,7 @@ class GateSet(_collections.OrderedDict):
         else:
             spam_labels_to_loop = self.SPAMs.keys()
             ds = None; lastLabel = None
-            s = _np.zeros( evalTree.get_num_final_strings(), 'd')
+            s = _np.zeros( evalTree.num_final_strings(), 'd')
 
             if prMxToFill is not None: #then compute & fill probabilities too
                 for spamLabel in spam_labels_to_loop: #Note: must loop through all spam labels, even if not requested, in case prMxToFill is not None
@@ -3276,7 +3276,7 @@ class GateSet(_collections.OrderedDict):
         mxToFill : numpy array
           an already-allocated KxSxMxM numpy array, where K is larger
           than the maximum value in spam_label_rows, S is equal
-          to the number of gate strings (i.e. evalTree.get_num_final_strings()),
+          to the number of gate strings (i.e. evalTree.num_final_strings()),
           and M is the length of the vectorized gateset.
 
         spam_label_rows : dictionary
@@ -3355,7 +3355,7 @@ class GateSet(_collections.OrderedDict):
 
             spam_labels_to_loop = self.SPAMs.keys()
             hs = None; ds = None; lastLabel = None
-            s = _np.zeros( evalTree.get_num_final_strings(), 'd')
+            s = _np.zeros( evalTree.num_final_strings(), 'd')
 
             if prMxToFill is not None: #then compute & fill probabilities too
                 if derivMxToFill is not None: #then compute & fill derivatives too
@@ -3433,10 +3433,14 @@ class GateSet(_collections.OrderedDict):
     
 
 
-    def diff_frobenius(self, otherGateSet, transformMx=None, gateWeight=1.0, spamWeight=1.0, normalize=True):
+    def frobeniusdist(self, otherGateSet, transformMx=None, gateWeight=1.0, spamWeight=1.0, normalize=True):
         """
         Compute the weighted frobenius norm of the difference between this
-        gateset and otherGateSet.
+        gateset and otherGateSet.  Differences in each corresponding gate
+        matrix and spam vector element are squared, weighted (using gateWeight
+        or spamWeight as applicable), then summed.  The value returned is the
+        square root of this sum, or the square root of this sum divided by the
+        number of summands if normalize == True.
 
         Parameters
         ----------
@@ -3470,45 +3474,45 @@ class GateSet(_collections.OrderedDict):
         if T is not None:
             Ti = _nla.inv(T)
             for gateLabel in self:
-                d += gateWeight * _mt.frobenius_norm_sq( _np.dot(Ti,_np.dot(self[gateLabel],T)) - otherGateSet[gateLabel] )
+                d += gateWeight * _gt.frobeniusdist2( _np.dot(Ti,_np.dot(self[gateLabel],T)),otherGateSet[gateLabel] )
                 nSummands += gateWeight * _np.size(self[gateLabel])
 
             for (i,rhoV) in enumerate(self.rhoVecs): 
-                d += spamWeight * _mt.frobenius_norm_sq(_np.dot(Ti,rhoV)-otherGateSet.rhoVecs[i])
+                d += spamWeight * _gt.frobeniusdist2(_np.dot(Ti,rhoV),otherGateSet.rhoVecs[i])
                 nSummands += spamWeight * _np.size(rhoV)
 
             for (i,Evec) in enumerate(self.EVecs):
-                d += spamWeight * _mt.frobenius_norm_sq(_np.dot(_np.transpose(T),Evec)-otherGateSet.EVecs[i])
+                d += spamWeight * _gt.frobeniusdist2(_np.dot(_np.transpose(T),Evec),otherGateSet.EVecs[i])
                 nSummands += spamWeight * _np.size(Evec)
 
             if self.identityVec is not None:
-                d += spamWeight * _mt.frobenius_norm_sq(_np.dot(_np.transpose(T),self.identityVec)-otherGateSet.identityVec)
+                d += spamWeight * _gt.frobeniusdist2(_np.dot(_np.transpose(T),self.identityVec),otherGateSet.identityVec)
                 nSummands += spamWeight * _np.size(self.identityVec)
 
 
             #for (spamLabel,spamGate) in self.SPAMs.iteritems():
             #    if spamGate is not None:
-            #        d += _mt.frobenius_norm( _np.dot(Ti,_np.dot(spamGate,T)) - otherGateSet.SPAMs[spamLabel] )
+            #        d += _bt.frobeniusdist( _np.dot(Ti,_np.dot(spamGate,T)),otherGateSet.SPAMs[spamLabel] )
         else:
             for gateLabel in self:
-                d += gateWeight * _mt.frobenius_norm_sq(self[gateLabel]-otherGateSet[gateLabel])
+                d += gateWeight * _gt.frobeniusdist2(self[gateLabel],otherGateSet[gateLabel])
                 nSummands += gateWeight * _np.size(self[gateLabel])
 
             for (i,rhoV) in enumerate(self.rhoVecs): 
-                d += spamWeight * _mt.frobenius_norm_sq(rhoV-otherGateSet.rhoVecs[i])
+                d += spamWeight * _gt.frobeniusdist2(rhoV,otherGateSet.rhoVecs[i])
                 nSummands += spamWeight *  _np.size(rhoV)
 
             for (i,Evec) in enumerate(self.EVecs):
-                d += spamWeight * _mt.frobenius_norm_sq(Evec-otherGateSet.EVecs[i])
+                d += spamWeight * _gt.frobeniusdist2(Evec,otherGateSet.EVecs[i])
                 nSummands += spamWeight * _np.size(Evec)
 
             if self.identityVec is not None:
-                d += spamWeight * _mt.frobenius_norm_sq(self.identityVec-otherGateSet.identityVec)
+                d += spamWeight * _gt.frobeniusdist2(self.identityVec,otherGateSet.identityVec)
                 nSummands += spamWeight * _np.size(self.identityVec)
 
             #for (spamLabel,spamGate) in self.SPAMs.iteritems():
             #    if spamGate is not None:
-            #        d += _mt.frobenius_norm(spamGate - otherGateSet.SPAMs[spamLabel] )
+            #        d += _bt.frobeniusdist(spamGate,otherGateSet.SPAMs[spamLabel] )
 
         if normalize and nSummands > 0: 
             return _np.sqrt( d / float(nSummands) )
@@ -3516,10 +3520,12 @@ class GateSet(_collections.OrderedDict):
             return _np.sqrt(d)
 
 
-    def diff_jtracedist(self, otherGateSet, transformMx=None):
+    def jtracedist(self, otherGateSet, transformMx=None):
         """
         Compute the Jamiolkowski trace distance between this
-        gateset and otherGateSet.
+        gateset and otherGateSet, defined as the maximum
+        of the trace distances between each corresponding gate,
+        including spam gates.
 
         Parameters
         ----------
@@ -3549,6 +3555,44 @@ class GateSet(_collections.OrderedDict):
             for (spamLabel,spamGate) in self.SPAMs.iteritems():
                 if spamGate is not None:
                     dists.append( _gt.jtracedist(spamGate, otherGateSet.SPAMs[spamLabel] ) )
+        return max(dists)
+
+
+    def diamonddist(self, otherGateSet, transformMx=None):
+        """
+        Compute the diamond-norm distance between this
+        gateset and otherGateSet, defined as the maximum
+        of the diamond-norm distances between each
+        corresponding gate, including spam gates.
+
+        Parameters
+        ----------
+        otherGateSet : GateSet
+            the other gate set to difference against.
+
+        transformMx : numpy array, optional
+            if not None, transform this gateset by  
+            G => inv(transformMx) * G * transformMx, for each gate matrix G 
+            (and similar for rho and E vectors) before taking the difference.
+            This transformation is applied only for the difference and does
+            not alter the values stored in this gateset.
+
+        Returns
+        -------
+        float
+        """
+        T = transformMx
+        if T is not None:
+            Ti = _nla.inv(T)
+            dists = [ _gt.diamonddist( _np.dot(Ti,_np.dot(self[gateLabel],T)), otherGateSet[gateLabel] ) for gateLabel in self ]
+            for (spamLabel,spamGate) in self.SPAMs.iteritems():
+                if spamGate is not None:
+                    dists.append( _gt.diamonddist( _np.dot(Ti,_np.dot(spamGate,T)), otherGateSet.SPAMs[spamLabel] ) )
+        else:
+            dists = [ _gt.diamonddist(self[gateLabel], otherGateSet[gateLabel]) for gateLabel in self ]
+            for (spamLabel,spamGate) in self.SPAMs.iteritems():
+                if spamGate is not None:
+                    dists.append( _gt.diamonddist(spamGate, otherGateSet.SPAMs[spamLabel] ) )
         return max(dists)
 
 
@@ -3685,7 +3729,7 @@ class GateSet(_collections.OrderedDict):
         #  **If G0 == False, then don't include gauge basis elements corresponding to the first row (since we assume
         #     gauge transforms will be TP constrained in this case)
         dim = self.gate_dim
-        nParams = self.get_num_params(gates,G0,SPAM,SP0)
+        nParams = self.num_params(gates,G0,SPAM,SP0)
 
         #Note: gateset object (gsDeriv) must have all elements of gate mxs and spam vectors as parameters in order
         #  to match deriv_wrt_params calls, which give derivs wrt 
@@ -3695,7 +3739,7 @@ class GateSet(_collections.OrderedDict):
         for k,rhoVec in enumerate(gsDeriv.rhoVecs): gsDeriv.set_rhovec(_np.zeros((dim,1),'d'), k)
         for k,EVec in enumerate(gsDeriv.EVecs):     gsDeriv.set_evec(_np.zeros((dim,1),'d'), k)
 
-        nElements = gsDeriv.get_num_elements()
+        nElements = gsDeriv.num_elements()
 
         if gates == True: gatesToInclude = self.keys() #all gates
         elif gates == False: gatesToInclude = [] #no gates
@@ -3797,7 +3841,7 @@ class GateSet(_collections.OrderedDict):
 
     def get_nongauge_projector_ex(self, nonGaugeMixMx, gates=True,G0=True,SPAM=True,SP0=True):
         dim = self.gate_dim
-        nParams = self.get_num_params(gates,G0,SPAM,SP0)
+        nParams = self.num_params(gates,G0,SPAM,SP0)
 
         #Note: gateset object (gsDeriv) must have all elements of gate mxs and spam vectors as parameters in order
         #  to match deriv_wrt_params calls, which give derivs wrt 
@@ -3807,7 +3851,7 @@ class GateSet(_collections.OrderedDict):
         for k,rhoVec in enumerate(gsDeriv.rhoVecs): gsDeriv.set_rhovec(_np.zeros((dim,1),'d'), k)
         for k,EVec in enumerate(gsDeriv.EVecs):     gsDeriv.set_evec(_np.zeros((dim,1),'d'), k)
 
-        nElements = gsDeriv.get_num_elements()
+        nElements = gsDeriv.num_elements()
 
         if gates == True: gatesToInclude = self.keys() #all gates
         elif gates == False: gatesToInclude = [] #no gates
@@ -3949,16 +3993,14 @@ class GateSet(_collections.OrderedDict):
         """
         newGateset = self.copy() # start by just copying the current gateset
         gateDim = self.get_dimension()
-    
-        if seed is not None:
-            _rndm.seed(seed)
+        rndm = _np.random.RandomState(seed)
 
         if max_gate_noise is not None:
             if gate_noise is not None: 
                 raise ValueError("Must specify at most one of 'gate_noise' and 'max_gate_noise' NOT both")
     
             #Apply random depolarization to each gate
-            r = max_gate_noise * _rndm.random( len(self) )
+            r = max_gate_noise * rndm.random_sample( len(self) )
             for (i,label) in enumerate(self):
                 D = _np.diag( [1]+[1-r[i]]*(gateDim-1) )
                 newGateset.set_gate(label, _gate.FullyParameterizedGate( _np.dot(D,self[label]) ))
@@ -3974,12 +4016,12 @@ class GateSet(_collections.OrderedDict):
                 raise ValueError("Must specify at most  one of 'noise' and 'max_noise' NOT both")
     
             #Apply random depolarization to each rho and E vector
-            r = max_spam_noise * _rndm.random( len(self.rhoVecs) )
+            r = max_spam_noise * rndm.random_sample( len(self.rhoVecs) )
             for (i,rhoVec) in enumerate(self.rhoVecs):
                 D = _np.diag( [1]+[1-r[i]]*(gateDim-1) )
                 newGateset.set_rhovec( _np.dot(D,rhoVec), i)
     
-            r = max_spam_noise * _rndm.random( len(self.EVecs) )
+            r = max_spam_noise * rndm.random_sample( len(self.EVecs) )
             for (i,EVec) in enumerate(self.EVecs):
                 D = _np.diag( [1]+[1-r[i]]*(gateDim-1) )
                 newGateset.set_evec( _np.dot(D,EVec), i)    
@@ -4039,8 +4081,7 @@ class GateSet(_collections.OrderedDict):
         if dim not in (4, 16):
             raise ValueError("Gateset dimension must be either 4 (single-qubit) or 16 (two-qubit)")
 
-        if seed is not None:
-            _rndm.seed(seed)
+        rndm = _np.random.RandomState(seed)
     
         if max_rotate is not None:
             if rotate is not None: 
@@ -4048,13 +4089,13 @@ class GateSet(_collections.OrderedDict):
     
             #Apply random rotation to each gate
             if dim == 4:
-                r = max_rotate * _rndm.random( len(self) * 3 )
+                r = max_rotate * rndm.random_sample( len(self) * 3 )
                 for (i,label) in enumerate(self):
                     rot = r[3*i:3*(i+1)]
                     newGateset.set_gate(label, _gate.FullyParameterizedGate( _np.dot( 
                                 _bt.single_qubit_gate(rot[0]/2.0,rot[1]/2.0,rot[2]/2.0), self[label]) ))
             elif dim == 16:
-                r = max_rotate * _rndm.random( len(self) * 15 )
+                r = max_rotate * rndm.random_sample( len(self) * 15 )
                 for (i,label) in enumerate(self):
                     rot = r[15*i:15*(i+1)]
                     newGateset.set_gate(label, _gate.FullyParameterizedGate( _np.dot( 
@@ -4128,10 +4169,8 @@ class GateSet(_collections.OrderedDict):
         GateSet
             the randomized GateSet
         """
-        gs_pauli = self.copy() # assumes self is in the pauli-product basis!!
-    
-        if seed is not None:
-            _np.random.seed(seed)
+        gs_pauli = self.copy() # assumes self is in the pauli-product basis!!    
+        rndm = _np.random.RandomState(seed)
     
         gate_dim = gs_pauli.get_dimension()
         if gate_dim == 4: unitary_dim = 2
@@ -4139,7 +4178,7 @@ class GateSet(_collections.OrderedDict):
         else: raise ValueError("Gateset dimension must be either 4 (single-qubit) or 16 (two-qubit)")
     
         for gateLabel in gs_pauli.keys():
-            randMat = scale * (_np.random.randn(unitary_dim,unitary_dim) + 1j * _np.random.randn(unitary_dim,unitary_dim))
+            randMat = scale * (rndm.randn(unitary_dim,unitary_dim) + 1j * rndm.randn(unitary_dim,unitary_dim))
             randMat = _np.dot(_np.transpose(_np.conjugate(randMat)),randMat) # make randMat Hermetian: (A_dag*A)^dag = (A_dag*A)
             randU   = _scipy.linalg.expm(-1j*randMat)
     
@@ -4257,7 +4296,7 @@ class GateSet(_collections.OrderedDict):
         new_gateset.make_spams()
         return new_gateset
     
-    def kick(self, absmag=1.0, bias=0):
+    def kick(self, absmag=1.0, bias=0, seed=None):
         """
         Kick gateset by adding to each gate a random matrix with values
         uniformly distributed in the interval [bias-absmag,bias+absmag],
@@ -4271,6 +4310,10 @@ class GateSet(_collections.OrderedDict):
             
         bias : float, optional
             The bias of the entries in the "kick" matrix.
+
+        seed : int, optional
+          if not None, seed numpy's random number generator with this value
+          before generating random depolarizations.
     
         Returns
         -------
@@ -4278,8 +4321,9 @@ class GateSet(_collections.OrderedDict):
             the kicked gate set.
         """
         kicked_gs = self.copy()
+        rndm = _np.random.RandomState(seed)
         for gateLabel,gate in self.iteritems():
-            delta = absmag * 2.0*(_rndm.random(gate.shape)-0.5) + bias
+            delta = absmag * 2.0*(rndm.random_sample(gate.shape)-0.5) + bias
             kicked_gs.set_gate(gateLabel, _gate.FullyParameterizedGate(kicked_gs[gateLabel] + delta))
         #kicked_gs.make_spams() #if we modify rhoVecs or EVecs
         return kicked_gs

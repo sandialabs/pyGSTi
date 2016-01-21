@@ -323,7 +323,7 @@ def list_all_gatestrings_without_powers_and_cycles(gateLabels, maxLength):
 
         permCheckedStrs = []
         for s in gen_all_gatestrings_onelen(gateLabels, length):
-            pys = _gs.gatestr_to_pythonstr(s,gateLabels)
+            pys = s.to_pythonstr(gateLabels)
             if not perm_check(pys,permCheckedStrs):#Sequence is not a cycle of anything in permCheckedStrs
                 permCheckedStrs.append(pys)
 
@@ -334,7 +334,7 @@ def list_all_gatestrings_without_powers_and_cycles(gateLabels, maxLength):
 
     output = []
     for length in _np.arange(1,maxLength+1):
-        output.extend( [ _gs.pythonstr_to_gatestr(pys, gateLabels) for pys in outputDict[length] ] )
+        output.extend( [ _gs.GateString.from_pythonstr(pys, gateLabels) for pys in outputDict[length] ] )
     return output
 
 

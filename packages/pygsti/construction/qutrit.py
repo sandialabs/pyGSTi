@@ -37,7 +37,7 @@ def ms2qubit(theta,phi):
 
 
 #Removes columns and rows from inputArr
-def remove_from_matrix(inputArr, columns, rows, outputType = _np.matrix):
+def _remove_from_matrix(inputArr, columns, rows, outputType = _np.matrix):
     inputArr = _np.array(inputArr)
     return outputType([
            [inputArr[row_num][col_num]
@@ -49,7 +49,7 @@ def remove_from_matrix(inputArr, columns, rows, outputType = _np.matrix):
 
 def to_qutrit_space(inputMat):
     inputMat = _np.matrix(inputMat)
-    return remove_from_matrix(A * inputMat * A**-1,[2],[2])
+    return _remove_from_matrix(A * inputMat * A**-1,[2],[2])
 #    return (A * inputMat * A**-1)[:3,:3]#Comment out above line and uncomment this line if you want the state space
 #labelling to be |0>=|00>,|1>=|11>,|2>~|01>+|10>
 
@@ -62,10 +62,9 @@ def XX3(theta):
 def YY3(theta):
     return to_qutrit_space(Y2qubit(theta))
 
-def random_rot(scale,arrType = _np.array, seed=None):
-    if seed is not None:
-        _np.random.seed(seed)
-    randH = scale * (_np.random.randn(3,3) + 1j * _np.random.randn(3,3))
+def _random_rot(scale,arrType = _np.array, seed=None):
+    rndm = _np.random.RandomState(seed)
+    randH = scale * (rndm.randn(3,3) + 1j * rndm.randn(3,3))
     randH = _np.dot(_np.conj(randH.T), randH)
     randU = _linalg.expm(-1j * randH)
     return arrType(randU)
@@ -93,13 +92,11 @@ def make_qutrit_gateset(errorScale,Xangle = _np.pi/2, Yangle = _np.pi/2, MSgloba
 
     #Now introduce unitary noise.
 
-    if seed is not None:
-        _np.random.seed(seed)
     scale = errorScale
-    Xrand = random_rot(scale,seed = seed)
-    Yrand = random_rot(scale)
-    Mrand = random_rot(scale)
-    Irand = random_rot(scale)
+    Xrand = _random_rot(scale,seed = seed)
+    Yrand = _random_rot(scale)
+    Mrand = _random_rot(scale)
+    Irand = _random_rot(scale)
 
 
     if similarity:#Change basis for each gate; this preserves rotation angles, and should map identity to identity

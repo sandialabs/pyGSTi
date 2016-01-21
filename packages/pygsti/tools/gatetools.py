@@ -55,6 +55,53 @@ def fidelity(A, B):
     F = (_mt.trace( _hack_sqrtm( _np.dot( sqrtA, _np.dot(B, sqrtA) ) ) ).real)**2 # Tr( sqrt{ sqrt(A) * B * sqrt(A) } )^2
     return F
 
+def frobeniusdist(A, B):
+    """
+    Returns the frobenius distance between gate
+      or density matrices A and B given by :
+
+      sqrt( sum( (A_ij-B_ij)^2 ) )
+
+    Parameters
+    ----------
+    A : numpy array
+        First matrix.
+
+    B : numpy array
+        Second matrix.
+
+    Returns
+    -------
+    float
+        The resulting frobenius distance.
+    """
+    return _mt.frobeniusnorm(A-B)
+
+
+def frobeniusdist2(A, B):
+    """
+    Returns the square of the frobenius distance between gate
+      or density matrices A and B given by :
+
+      sum( (A_ij-B_ij)^2 )
+
+    Parameters
+    ----------
+    A : numpy array
+        First matrix.
+
+    B : numpy array
+        Second matrix.
+
+    Returns
+    -------
+    float
+        The resulting frobenius distance.
+    """
+    return _mt.frobeniusnorm2(A-B)
+
+
+
 
 def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
     """
@@ -145,7 +192,7 @@ def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
     #print "diff A = ",_np.linalg.norm(JAstd_kev/2.0-JAstd)
     #print "diff B = ",_np.linalg.norm(JBstd_kev/2.0-JBstd)
 
-    #Kevin's function: def diamond_norm( jamiolkowski_matrix ):
+    #Kevin's function: def diamondnorm( jamiolkowski_matrix ):
     jamiolkowski_matrix = JBstd-JAstd
 
     # Here we define a bunch of auxiliary matrices because CVXPY doesn't use complex numbers
@@ -220,15 +267,14 @@ def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
 #        BInStdBasis = _bt.pp_to_std(B, dimOrStateSpaceDims)
 #    else: raise ValueError("Invalid mxBasis: %s" % mxBasis)
 #
-#    if seed is not None:
-#        _np.random.seed(seed)
+#    rndm = _np.random.RandomState(seed)
 #
 #    AtensorId = _np.kron(AInStdBasis,_np.identity(gate_dim))
 #    BtensorId = _np.kron(BInStdBasis,_np.identity(gate_dim))
 #    gateDiffTensorId = BtensorId - AtensorId # in std basis by construction
 #
 #    def random_two_state_density_mx():
-#        x = _np.random.randn(state_dim*2,1) + 1j * _np.random.randn(state_dim*2,1)
+#        x = rndm.randn(state_dim*2,1) + 1j * rndm.randn(state_dim*2,1)
 #        x = x / _np.linalg.norm(x,'fro') # normalize state
 #        x = _np.dot(x,_np.conj(x).T) # state => density matrix via dm = psi x psi_dag
 #        x = _np.reshape(x.T,[(state_dim*2)**2,1]) #density matrix in std basis
@@ -544,3 +590,24 @@ def decompose_gate_matrix(gateMx):
                  'isUnitary': False,
                  'msg': "Unsupported number of qubits: %d" % nQubits }
                          
+
+def unitary_to_process_mx(U):
+    """
+    Compute the super-operator which acts on (row)-vectorized
+    density matrices from a unitary operator (matrix) U which
+    acts on state vectors.  This super-operator is given by
+    the tensor product of U and conjugate(U), i.e. kron(U,U.conj).
+
+    Parameters
+    ----------
+    U : numpy array
+        The unitary matrix which acts on state vectors.
+
+    Returns
+    -------
+    numpy array
+       The super-operator process matrix.
+    """
+    # U -> kron(U,Uc) since U rho U_dag -> kron(U,Uc)
+    #  since AXB --row-vectorize--> kron(A,B.T)*vec(X)
+    return _np.kron(U,_np.conjugate(U))

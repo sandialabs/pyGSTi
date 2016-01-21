@@ -73,7 +73,7 @@ def _getGateQuantity(fnOfGate, gateset, gateLabel, eps, confidenceRegionInfo, ve
         return ReportableQty(fnOfGate(gateset[gateLabel]))
 
     # make sure the gateset we're given is the one used to generate the confidence region
-    if(gateset.diff_frobenius(confidenceRegionInfo.get_gateset()) > 1e-6):
+    if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
         raise ValueError("Gate quantity confidence region is being requested for " +
                          "a different gateset than the given confidenceRegionInfo")
 
@@ -90,7 +90,7 @@ def _getSpamQuantity(fnOfSpamVecs, gateset, eps, confidenceRegionInfo, verbosity
         return ReportableQty(fnOfSpamVecs(gateset.get_rhovecs(), gateset.get_evecs()))
 
     # make sure the gateset we're given is the one used to generate the confidence region
-    if(gateset.diff_frobenius(confidenceRegionInfo.get_gateset()) > 1e-6):
+    if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
         raise ValueError("Spam quantity confidence region is being requested for " +
                          "a different gateset than the given confidenceRegionInfo")
 
@@ -634,7 +634,7 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2, confidenceRegionI
         key = "%s Frobenius diff" % gateLabel; possible_qtys.append(key)
         if key in qtynames: 
             def fro_diff(gate): # assume vary gateset1, gateset2 fixed
-                return _tools.frobenius_norm(gate-gateset2[gateLabel])
+                return _tools.frobeniusdist(gate,gateset2[gateLabel])
             #print "DEBUG: frodist(%s)" % gateLabel
             ret[key] = _getGateQuantity(fro_diff, gateset1, gateLabel, eps, confidenceRegionInfo) 
 
@@ -662,7 +662,7 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2, confidenceRegionI
     ###  per gateset quantities
     #############################################
     key = "Gateset Frobenius diff"; possible_qtys.append(key)
-    if key in qtynames: ret[key] = ReportableQty( gateset1.diff_frobenius(gateset2) )
+    if key in qtynames: ret[key] = ReportableQty( gateset1.frobeniusdist(gateset2) )
 
     key = "Max Jamiolkowski trace dist"; possible_qtys.append(key)
     if key in qtynames: ret[key] = ReportableQty( max( [ _tools.jtracedist(gateset1[l],gateset2[l]) for l in gateset1 ] ) )

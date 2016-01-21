@@ -75,7 +75,7 @@ def chi2(dataset, gateset, gateStrings=None,
 
     spamLabels = gateset.get_spam_labels() #this list fixes the ordering of the spam labels
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
-    vec_gs_len = gateset.get_num_params(gates, G0, SPAM, SP0)
+    vec_gs_len = gateset.num_params(gates, G0, SPAM, SP0)
 
     if gateStrings is None:
       gateStrings = dataset.keys()

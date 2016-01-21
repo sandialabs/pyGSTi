@@ -152,10 +152,10 @@ class TestGateStringMethods(GateStringTestCase):
     def test_python_string_conversion(self):
         gs = pygsti.obj.GateString(None, stringRepresentation="Gx^3Gy^2GxGz")
 
-        pystr = pygsti.obj.gatestring.gatestr_to_pythonstr( gs, ('Gx','Gy','Gz') )
+        pystr = gs.to_pythonstr( ('Gx','Gy','Gz') )
         self.assertEqual( pystr, "AAABBAC" )
         
-        gs2_tup = pygsti.obj.gatestring.pythonstr_to_gatestr( pystr, ('Gx','Gy','Gz') )
+        gs2_tup = pygsti.obj.GateString.from_pythonstr( pystr, ('Gx','Gy','Gz') )
         self.assertEqual( gs2_tup, tuple(gs) )
 
     def test_std_lists(self):

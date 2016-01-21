@@ -128,6 +128,21 @@ class MultiDataSet:
     else:
       self.countsDict = _OrderedDict()
 
+  def get_spam_labels(self):
+    """ 
+    Get the spam labels of this MultiDataSet.
+
+    Returns
+    -------
+    list of strings
+      A list where each element is a spam label.
+      Returns None when the MultiDataSet is not
+      yet initialized with any data or spam labels.
+    """
+    if self.slIndex is not None:
+      return self.slIndex.keys()
+    else: return None
+
   
   def __iter__(self):
     return self.countsDict.__iter__() #iterator over dataset names

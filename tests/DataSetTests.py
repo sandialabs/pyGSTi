@@ -207,10 +207,10 @@ Gx^4 0.2 100
         
 
         # TO SEED SAVED FILE, RUN THIS: 
-        #pygsti.io.write_dataset_file("cmp_chk_files/Fake_Dataset_none.txt", gateStrings, ds_none) 
-        #pygsti.io.write_dataset_file("cmp_chk_files/Fake_Dataset_round.txt", gateStrings, ds_round) 
-        #pygsti.io.write_dataset_file("cmp_chk_files/Fake_Dataset_binom.txt", gateStrings, ds_binom) 
-        #pygsti.io.write_dataset_file("cmp_chk_files/Fake_Dataset_multi.txt", gateStrings, ds_multi) 
+        #pygsti.io.write_dataset("cmp_chk_files/Fake_Dataset_none.txt", gateStrings, ds_none) 
+        #pygsti.io.write_dataset("cmp_chk_files/Fake_Dataset_round.txt", gateStrings, ds_round) 
+        #pygsti.io.write_dataset("cmp_chk_files/Fake_Dataset_binom.txt", gateStrings, ds_binom) 
+        #pygsti.io.write_dataset("cmp_chk_files/Fake_Dataset_multi.txt", gateStrings, ds_multi) 
 
         saved_ds = pygsti.io.load_dataset("cmp_chk_files/Fake_Dataset_none.txt", cache=True)
         self.assertEqualDatasets(ds_none, saved_ds)

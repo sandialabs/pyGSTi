@@ -36,14 +36,13 @@ def get_decay_rate(RBDS,showPlot=False,xlim=None,ylim=None,saveFigPath=None):
     return a,b
 
 def make_sim_RB_data(gs,ExpRBData,seed = None):
-    if seed != None:
-        np.random.seed(seed)
+    rndm = _np.random.RandomState(seed)
     DS = GST.DataSet(spamLabels=['plus','minus'])
     RBKeys = ExpRBData.keys()
     for key in RBKeys:
         N = sum(ExpRBData[key].values())
         pp = gs.pr('plus',key,clipTo=(0,1))
-        Np = np.random.binomial(N,pp)
+        Np = rndm.binomial(N,pp)
         Nm = N - Np
         DS.add_count_dict(key,{'plus':Np,'minus':Nm})
     DS.done_adding_data()

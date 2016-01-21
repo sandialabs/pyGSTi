@@ -8,7 +8,6 @@ import warnings as _warnings
 from .. import optimize as _opt
 from .. import tools as _tools
 from .. import objects as _objs
-from ..objects import exceptions as _e
 
 #Note on where 4x4 or possibly other integral-qubit dimensions are needed:
 # 1) Need to use Jamiol. Isomorphism to contract to CPTP or even gauge optimize to CPTP
@@ -116,12 +115,12 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
     gateLabelsToEstimate = gateLabels
   elif targetGateset is not None:
     gateLabelsToEstimate = targetGateset.keys()
-  else: raise _e.GSTValueError("do_lgst cannot determine gate labels to estimate from supplied parameters")
+  else: raise ValueError("do_lgst cannot determine gate labels to estimate from supplied parameters")
 
   if spamDict is None:
     if targetGateset is not None:
       spamDict = targetGateset.get_spam_label_dict()
-    else: raise _e.GSTValueError("do_lgst cannot determine SPAM dictionary from supplied parameters")
+    else: raise ValueError("do_lgst cannot determine SPAM dictionary from supplied parameters")
 
   if guessGatesetForGauge is None:
     guessGatesetForGauge = targetGateset # (which may also be None)
@@ -131,7 +130,7 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
   if identityVec is None: #check again in case targetGateset.identityVec == None
     for (ir,ie) in spamDict.keys():
       if ie == -1 and ir != -1: #then identityVec is required b/c this spamlabel represents Evec = identityVec - sum(other_Evecs)
-        raise _e.GSTValueError("do_lgst cannot determine the identity vector from supplied parameters")
+        raise ValueError("do_lgst cannot determine the identity vector from supplied parameters")
     #otherwise identityVec is not required, so OK if it's None
 
 
@@ -169,7 +168,7 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
   #print "DEBUG: Evals(ABmat) = \n",_np.linalg.eigvals(ABMat)
   rankAB = _np.linalg.matrix_rank(ABMat_p)
   if rankAB < ABMat_p.shape[0]:
-    raise _e.GSTValueError("LGST AB matrix is rank %d < %d. Choose better rhoSpecs and/or ESpecs, or decrease svdTruncateTo" \
+    raise ValueError("LGST AB matrix is rank %d < %d. Choose better rhoSpecs and/or ESpecs, or decrease svdTruncateTo" \
                           % (rankAB, ABMat_p.shape[0]))
 
   invABMat_p = _np.dot(Pjt, _np.dot(_np.diag(1.0/s), Pj)) # (trunc,trunc)
@@ -306,7 +305,7 @@ def _constructXMatrix(rhoSpecs, ESpecs, spamDict, gateLabelTuple, dataset):
       try:
         dsRow = dataset[gateLabelString]
       except:
-        raise _e.GSTValueError("Missing data needed to construct X matrix for " + str(gateLabelTuple) \
+        raise KeyError("Missing data needed to construct X matrix for " + str(gateLabelTuple) \
                            + ": gate string " + str(gateLabelString))
       X[i,j] = dsRow.fraction(spamLabel)
   return X
@@ -364,7 +363,7 @@ def gram_rank_and_evals(dataset, specs, targetGateset=None, spamDict=None):
   if spamDict is None:
     if targetGateset is not None:
       spamDict = targetGateset.get_spam_label_dict()
-    else: raise _e.GSTValueError("do_lgst cannot determine SPAM dictionary from supplied parameters")
+    else: raise ValueError("do_lgst cannot determine SPAM dictionary from supplied parameters")
   
   ABMat = _constructAB(rhoSpecs, ESpecs, spamDict, dataset)
   U,s,V = _np.linalg.svd(ABMat)
@@ -622,7 +621,7 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs,
       #try: print "   log(likelihood) = ", _tools.logl(gs, dataset)
       #except: pass
       if targetGateset is not None and len(targetGateset.rhoVecs[0]) == len(gs.rhoVecs[0]):
-        print "   frobenius distance to target = ", gs.diff_frobenius(targetGateset)
+        print "   frobenius distance to target = ", gs.frobeniusdist(targetGateset)
 
       #DEBUG
       #print "  Sum of minimum least squares error check = %g" % sum([x**2 for x in minErrVec_chk])
@@ -1123,7 +1122,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
       # jacobian[k,l] = derivative of p[k] wrt vectorGS[l].  Just concatenate derivative of p[k]'s multiplied by weights
 
   else:
-    raise _e.GSTValueError("CPTP-penalized LSGST not implemented yet.")
+    raise NotImplementedError("CPTP-penalized LSGST not implemented yet.")
     #def objective_func(vectorGS):  #TODO: Upgrade from 'plus' restricted case
     #  gs.from_vector(vectorGS,G0=opt_G0, SP0=opt_SP0, SPAM=opt_SPAM, gates=opt_gates)
     #  p = gs.bulk_pr('plus', evTree, clipTo=probClipInterval, check=check) #RESTRICTION: 'plus' assumes only a single 'plus' spam label
@@ -1851,7 +1850,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
         print "--- MLEGST ---"
         
     spamLabels = gs.get_spam_labels() #this list fixes the ordering of the spam labels
-    vec_gs_len = gs.get_num_params(opt_gates,opt_G0,opt_SPAM,opt_SP0)
+    vec_gs_len = gs.num_params(opt_gates,opt_G0,opt_SPAM,opt_SP0)
 
     if gateLabelAliases is not None: #then find & replace aliased gate labels with their expanded form
       dsGateStringsToUse = []
@@ -2451,11 +2450,11 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
         #Special case of full frobenius norm
           # TODO: remove?  but note this is different from the separate cases summed b/c of normalization
         if targetGatesMetric == "frobenius" and targetSpamMetric == "frobenius":
-          return gs.diff_frobenius(targetGateset, None, gateWeight, spamWeight)
+          return gs.frobeniusdist(targetGateset, None, gateWeight, spamWeight)
 
         diff = 0
         if targetGatesMetric == "frobenius":
-          diff += gs.diff_frobenius(targetGateset, None, gateWeight, 0.0)
+          diff += gs.frobeniusdist(targetGateset, None, gateWeight, 0.0)
         elif targetGatesMetric == "fidelity":
           for gateLbl in gs:
             diff += gateWeight * (1.0 - _tools.process_fidelity(targetGateset[gateLbl], gs[gateLbl]))
@@ -2465,7 +2464,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
         else: raise ValueError("Invalid targetGatesMetric: %s" % targetGatesMetric)
             
         if targetSpamMetric == "frobenius":
-          diff += gs.diff_frobenius(targetGateset, None, 0.0, spamWeight)
+          diff += gs.frobeniusdist(targetGateset, None, 0.0, spamWeight)
         elif targetSpamMetric == "fidelity":
           for spamlabel in gs.SPAMs.keys(): 
             diff += spamWeight * (1.0 - _tools.process_fidelity(targetGateset.SPAMs[spamlabel], gs.SPAMs[spamlabel]))
@@ -2507,7 +2506,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
         cpPenalties = _tools.sums_of_negative_choi_evals(gs)
         #numNonCP = sum([ 1 if p > 1e-4 else 0 for p in cpPenalties ])
         #cpPenalty = sum( [ 10**i*cp for (i,cp) in enumerate(cpPenalties)] ) + 100*numNonCP #DEBUG
-        #print "DB: diff from best = ", frobenius_norm(bestGaugeMx - matM) #DEBUG
+        #print "DB: diff from best = ", frobeniusnorm(bestGaugeMx - matM) #DEBUG
         cpPenalty = sum( cpPenalties )
 
         spamPenalty =  sum( [ _tools.rhovec_penalty(rhoVec) for rhoVec in gs.rhoVecs ] )
@@ -2567,7 +2566,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
         for rhoVec in gs.rhoVecs:
           tpPenalty += (rhoVecFirstEl - rhoVec[0])**2
 
-        return tpPenalty + gs.diff_frobenius(targetGateset, None, gateWeight, spamWeight) * targetFactor
+        return tpPenalty + gs.frobeniusdist(targetGateset, None, gateWeight, spamWeight) * targetFactor
 
 
     elif toGetTo == "CPTP and target":
@@ -2597,7 +2596,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
         spamPenalty =  sum( [ _tools.rhovec_penalty(rhoVec) for rhoVec in gs.rhoVecs ] )
         spamPenalty += sum( [ _tools.evec_penalty(EVec)     for EVec   in gs.EVecs ] )
 
-        targetPenalty = gs.diff_frobenius(targetGateset, None, gateWeight, spamWeight) * targetFactor
+        targetPenalty = gs.frobeniusdist(targetGateset, None, gateWeight, spamWeight) * targetFactor
 
         penalty = cpPenalty + spamPenalty + targetPenalty
         if penalty > 1e-100: return _np.log10(penalty)
@@ -2616,12 +2615,12 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
 
         gs = gateset.copy(); gs.transform(matM); d=0
         for gateLabel in gs:
-          d += _tools.frobenius_norm(gs[gateLabel]-complDepolGate)
+          d += _tools.frobeniusdist(gs[gateLabel],complDepolGate)
         spamPenalty  = sum( [ _tools.rhovec_penalty(rhoVec) for rhoVec in gs.rhoVecs ] )
         spamPenalty += sum( [ _tools.evec_penalty(EVec)     for EVec   in gs.EVecs ] )        
         return d + spamPenalty
 
-    else: raise _e.GSTValueError("Invalid toGetTo passed to optimize_gauge: %s" % toGetTo)
+    else: raise ValueError("Invalid toGetTo passed to optimize_gauge: %s" % toGetTo)
 
     #Run Minimization Algorithm
     startM = _np.identity(gateDim)  #take identity as initial gauge matrix   
@@ -2650,11 +2649,11 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
       if toGetTo == "target":
         print 'The resulting Frobenius-norm distance is: %g' % minSol.fun
         for gateLabel in newGateset:
-          print "  frobenius norm diff of %s = %g" % (gateLabel, _tools.frobenius_norm(newGateset[gateLabel]-targetGateset[gateLabel]))
+          print "  frobenius norm diff of %s = %g" % (gateLabel, _tools.frobeniusdist(newGateset[gateLabel],targetGateset[gateLabel]))
         for (i,rhoV) in enumerate(newGateset.rhoVecs): 
-          print "  frobenius norm diff of rho[%d] = %g" % (i, _tools.frobenius_norm(rhoV-targetGateset.rhoVecs[i]))
+          print "  frobenius norm diff of rho[%d] = %g" % (i, _tools.frobeniusdist(rhoV,targetGateset.rhoVecs[i]))
         for (i,Evec) in enumerate(newGateset.EVecs): 
-          print "  frobenius norm diff of EVec[%d] = %g" % (i, _tools.frobenius_norm(Evec-targetGateset.EVecs[i]))
+          print "  frobenius norm diff of EVec[%d] = %g" % (i, _tools.frobeniusdist(Evec,targetGateset.EVecs[i]))
       else:
         print 'The resulting %s penalty is: %g' % (toGetTo, minSol.fun)
 
@@ -2766,7 +2765,7 @@ def contract(gateset, toWhat, dataset=None, maxiter=1000000, tol=0.01, useDirect
       distance,contractedGateset = _contractToTP(gateset,verbosity)
       distance,contractedGateset = _contractToCP(contractedGateset, verbosity, method, maxiter, tol, opt_G0=False)
   elif toWhat == 'XPTP':
-    if dataset is None: raise _e.GSTValueError("dataset must be given to contract to " + toWhat)
+    if dataset is None: raise ValueError("dataset must be given to contract to " + toWhat)
     distance,contractedGateset = _contractToTP(gateset,verbosity)
     distance,contractedGateset = _contractToXP(contractedGateset, dataset,verbosity, method, maxiter, tol, opt_G0=False)
   elif toWhat == 'CP':
@@ -2774,13 +2773,13 @@ def contract(gateset, toWhat, dataset=None, maxiter=1000000, tol=0.01, useDirect
   elif toWhat == 'TP':
     distance,contractedGateset = _contractToTP(gateset,verbosity)
   elif toWhat == 'XP':
-    if dataset is None: raise _e.GSTValueError("dataset must be given to contract to " + toWhat)
+    if dataset is None: raise ValueError("dataset must be given to contract to " + toWhat)
     distance,contractedGateset = _contractToXP(gateset,dataset,verbosity,method,maxiter,tol,opt_G0=True)
   elif toWhat == 'vSPAM':
     contractedGateset = _contractToValidSPAM(gateset, verbosity)
   elif toWhat == 'nothing':
     contractedGateset = gateset.copy()
-  else: raise _e.GSTValueError("Invalid contract argument: %s" % toWhat)
+  else: raise ValueError("Invalid contract argument: %s" % toWhat)
 
   return contractedGateset
 
@@ -2798,7 +2797,7 @@ def _contractToXP(gateset,dataset,verbosity,method='Nelder-Mead',
     def objective_func(vectorGS):
         gs.from_vector(vectorGS,SPAM=False,G0=opt_G0)
         forbiddenProbPenalty = _tools.forbidden_prob(gs,dataset)
-        return (CLIFF + forbiddenProbPenalty if forbiddenProbPenalty > 1e-10 else 0) + gs.diff_frobenius(gateset)
+        return (CLIFF + forbiddenProbPenalty if forbiddenProbPenalty > 1e-10 else 0) + gs.frobeniusdist(gateset)
 
     print_obj_func = _opt.create_obj_func_printer(objective_func)
     if objective_func(gs.to_vector(SPAM=False,G0=opt_G0)) < 1e-8:  
@@ -2811,7 +2810,7 @@ def _contractToXP(gateset,dataset,verbosity,method='Nelder-Mead',
                       
     gs.from_vector(optSol.x,SPAM=False,G0=opt_G0)
     gs.log("Contract to XP", { 'method': method, 'tol': tol, 'maxiter': maxiter, 'opt_G0': opt_G0 } )
-    if optSol.fun >= CLIFF: raise _e.GSTRuntimeError("Failed to contract_to_xp")
+    if optSol.fun >= CLIFF: raise ValueError("Failed to contract_to_xp")
 
     if verbosity > 1:
         print 'The closest legal point found was distance: ' + str(optSol.fun)        
@@ -2831,7 +2830,7 @@ def _contractToCP(gateset,verbosity,method='Nelder-Mead',
     def objective_func(vectorGS):
         gs.from_vector(vectorGS,SPAM=False,G0=opt_G0)
         cpPenalty = _tools.sum_of_negative_choi_evals(gs) * 1000
-        return (CLIFF + cpPenalty if cpPenalty > 1e-10 else 0) + gs.diff_frobenius(gateset)
+        return (CLIFF + cpPenalty if cpPenalty > 1e-10 else 0) + gs.frobeniusdist(gateset)
 
     print_obj_func = _opt.create_obj_func_printer(objective_func)
     if objective_func(gs.to_vector(SPAM=False,G0=opt_G0)) < 1e-8:  
@@ -2844,7 +2843,7 @@ def _contractToCP(gateset,verbosity,method='Nelder-Mead',
 
     gs.from_vector(optSol.x,SPAM=False,G0=opt_G0)
     gs.log("Contract to CP", { 'method': method, 'tol': tol, 'maxiter': maxiter, 'opt_G0': opt_G0 } )
-    if optSol.fun >= CLIFF: raise _e.GSTRuntimeError("Failed to contract_to_cp")
+    if optSol.fun >= CLIFF: raise ValueError("Failed to contract_to_cp")
 
     if verbosity > 1:
         print 'The closest legal point found was distance: ' + str(optSol.fun)        
@@ -2973,10 +2972,10 @@ def _contractToCP_direct(gateset,verbosity,TPalso=False,maxiter=100000,tol=1e-8)
 
       if verbosity > 2:
         print "Direct CP contraction of %s gate gives frobenius diff of %g" % \
-            (gateLabel, _tools.frobenius_norm(gs[gateLabel] - gate))
+            (gateLabel, _tools.frobeniusdist(gs[gateLabel],gate))
         
     gs.log("Choi-Truncate to %s" % ("CPTP" if TPalso else "CP"), { 'maxiter': maxiter } )
-    distance = gs.diff_frobenius(gateset)
+    distance = gs.frobeniusdist(gateset)
     if verbosity > 1:
         print 'The closest legal point found was distance: %s' % str(distance)
     
@@ -2996,7 +2995,7 @@ def _contractToTP(gateset,verbosity):
     for rhoVec in gs.rhoVecs:
       rhoVec[0] = 1.0 / gate_dim**0.25
     
-    distance = gs.diff_frobenius(gateset)
+    distance = gs.frobeniusdist(gateset)
     if verbosity > 1:
       print 'Projected TP gateset was at distance: %g' % distance
 

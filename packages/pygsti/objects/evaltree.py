@@ -208,8 +208,8 @@ class EvalTree(list):
 #        repDict = {}
 #        for (k,gateString) in enumerate(gatestring_list):
 #            #print "String %d (len %d): " % (k,len(gateString)),
-#            for repStr,repCnt in repetitions( _gs.gatestr_to_pythonstr(gateString,singleGateLabels) ):
-#                repGateStr = _gs.pythonstr_to_gatestr(repStr,singleGateLabels)
+#            for repStr,repCnt in repetitions( gateString.to_pythonstr(singleGateLabels) ):
+#                repGateStr = _gs.GateString.from_pythonstr(repStr,singleGateLabels)
 #                if repDict.has_key(repGateStr):
 #                    if repCnt not in repDict[repGateStr][0]:
 #                        repDict[repGateStr][0].append(repCnt)
@@ -228,7 +228,7 @@ class EvalTree(list):
 #        self.myFinalToParentFinalMap = [] #this tree has no "children", i.e. has not been created by a 'split'
 #        self.subTrees = []
 
-    def get_num_final_strings(self):
+    def num_final_strings(self):
         """ 
         Returns the integer number of "final" gate strings, equal
           to the length of the gatestring_list passed to initialize.
@@ -251,7 +251,7 @@ class EvalTree(list):
             A list of the gate strings evaluated by this tree, each
             specified as a tuple of gate labels.
         """
-        finalGateStrings = [None]*self.get_num_final_strings()
+        finalGateStrings = [None]*self.num_final_strings()
         gateStrings = []
         
         #Set initial single- or zero- gate strings at beginning of tree

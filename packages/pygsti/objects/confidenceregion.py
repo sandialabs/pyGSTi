@@ -31,7 +31,7 @@ class ConfidenceRegion(object):
         hessian : numpy array
             A nParams x nParams Hessian matrix, where nParams is the number 
             of dimensions of gateset space, i.e. 
-            nParams = gateset.get_num_params(gates,G0,SPAM,SP0)
+            nParams = gateset.num_params(gates,G0,SPAM,SP0)
 
         confidenceLevel : float
             The confidence level as a percentage, i.e. between 0 and 100.
@@ -231,14 +231,14 @@ class ConfidenceRegion(object):
         """
 
         gates,G0,SPAM,SP0 = self.get_parameterization_flags()
-        nParams = self.gateset.get_num_params(gates,G0,SPAM,SP0)
+        nParams = self.gateset.num_params(gates,G0,SPAM,SP0)
 
         gateMx = self.gateset[gateLabel]
         gateObj = self.gateset.get_gate(gateLabel).copy() # copy because we add eps to this gate
         gpo = self.gateset_offsets[gateLabel][0] #starting "gate parameter offset"        
 
         f0 = fnOfGate(gateMx) #function value at "base point" gateMx
-        nGateParams = gateObj.get_num_params(G0)
+        nGateParams = gateObj.num_params(G0)
         gateVec0 = gateObj.to_vector(G0)
 
         #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
@@ -353,7 +353,7 @@ class ConfidenceRegion(object):
             Only returned when returnFnVal == True. Value of fnOfSpamVecs.
         """
         gates,G0,SPAM,SP0 = self.get_parameterization_flags()
-        nParams = self.gateset.get_num_params(gates,G0,SPAM,SP0)
+        nParams = self.gateset.num_params(gates,G0,SPAM,SP0)
 
         f0 = fnOfSpamVecs(self.gateset.get_rhovecs(), self.gateset.get_evecs())
           #Note: .get_Evecs() can be different from .EVecs b/c the former includes compliment EVec
@@ -371,7 +371,7 @@ class ConfidenceRegion(object):
 
             #loop just over parameterized objects - don't use get_rhovecs() here...
             for k,rhoVec in enumerate(self.gateset.rhoVecs): 
-                nRhoParams = len(rhoVec) if SP0 else len(rhoVec)-1 # LATER: rhoVecObj.get_num_params(SP0?)
+                nRhoParams = len(rhoVec) if SP0 else len(rhoVec)-1 # LATER: rhoVecObj.num_params(SP0?)
                 m = 0 if SP0 else 1
                 off = self.gateset_offsets["rho%d" % k][0]
                 for i in range(nRhoParams):
@@ -381,7 +381,7 @@ class ConfidenceRegion(object):
 
             #loop just over parameterized objects - don't use get_evecs() here...
             for k,EVec in enumerate(self.gateset.EVecs): 
-                nEParams = len(EVec) # LATER: EVecObj.get_num_params()
+                nEParams = len(EVec) # LATER: EVecObj.num_params()
                 off = self.gateset_offsets["E%d" % k][0]
                 for i in range(nEParams):
                     vecEps = EVec.copy(); vecEps[i] += eps; gsEps.set_evec( vecEps, k ) #update gsEps parameter

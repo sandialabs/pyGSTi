@@ -556,12 +556,12 @@ SPAMLABEL minus = rho remainder
             pygsti.obj.LinearlyParameterizedGate(baseMx, np.array( [1.0+1j, 1.0] ),
                                                  parameterToBaseIndicesMap, real=True) #must be real
             
-        numParams = gate_linear_B.get_num_params()
+        numParams = gate_linear_B.num_params()
         v = gate_linear_B.to_vector()
         gate_linear_B.from_vector(v)
         deriv = gate_linear_B.deriv_wrt_params()
         with self.assertRaises(ValueError):
-            gate_linear_B.get_num_params(bG0=False) #not implemented
+            gate_linear_B.num_params(bG0=False) #not implemented
         with self.assertRaises(ValueError):
             gate_linear_B.to_vector(bG0=False) #not implemented
         with self.assertRaises(ValueError):
@@ -577,12 +577,12 @@ SPAMLABEL minus = rho remainder
         mx = np.array( [[1,0],[0,1]], 'd' )
         gate_full_B = pygsti.obj.FullyParameterizedGate(mx)
             
-        numParams = gate_full_B.get_num_params()
+        numParams = gate_full_B.num_params()
         v = gate_full_B.to_vector()
         gate_full_B.from_vector(v)
         deriv = gate_full_B.deriv_wrt_params()
 
-        numParams_noG0 = gate_full_B.get_num_params(bG0=False)
+        numParams_noG0 = gate_full_B.num_params(bG0=False)
         v_noG0 = gate_full_B.to_vector(bG0=False)
         gate_full_B.from_vector(v_noG0,bG0=False)
         deriv_noG0 = gate_full_B.deriv_wrt_params(bG0=False)

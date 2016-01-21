@@ -349,7 +349,7 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
       array of shape (M,), where M is the length of the vectorized gateset.
     """
 
-    nP = gateset.get_num_params(gates,G0,SPAM,SP0)
+    nP = gateset.num_params(gates,G0,SPAM,SP0)
     jac = _np.zeros([1,nP])
 
     if gatestring_list is None:
@@ -496,7 +496,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
       array of shape (M,M), where M is the length of the vectorized gateset.
     """
 
-    nP = gateset.get_num_params(gates,G0,SPAM,SP0)
+    nP = gateset.num_params(gates,G0,SPAM,SP0)
     jac = _np.zeros([1,nP])
 
     if gatestring_list is None:
@@ -842,7 +842,7 @@ def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
 
 
 #def dlogl_analytic(gateset, dataset):
-#    nP = gateset.get_num_params()
+#    nP = gateset.num_params()
 #    result = _np.zeros([1,nP])
 #    dPmx = dpr_plus(gateset, [gateString for gateString in dataset])
 #    
@@ -863,13 +863,13 @@ def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
 #    return numerical_deriv(logl, gateset, dataset, 1)
 #
 #def logl_hessian_finite_diff(gateset, dataset):
-#    return numerical_deriv(dlogl_finite_diff, gateset, dataset, gateset.get_num_params())
+#    return numerical_deriv(dlogl_finite_diff, gateset, dataset, gateset.num_params())
 #
 #def logl_hessian_at_ml(gateset, gatestrings, nSamples):
 #    return nSamples * logl_hessian_at_ML_per_sample(gateset, gatestrings)
 #
 #def logl_hessian_at_ML_per_sample(gateset, gatestrings):
-#    nP = gateset.get_num_params()
+#    nP = gateset.num_params()
 #    result = _np.zeros([nP,nP])
 #    
 #    dPmx = dpr_plus(gateset, gatestrings)
@@ -888,7 +888,7 @@ def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
 #
 #def dpr_plus(gateset, gatestrings):
 #    DELTA = 1e-7
-#    nP = gateset.get_num_params()
+#    nP = gateset.num_params()
 #    nGateStrings = len(gatestrings)
 #    result = _np.zeros([nP,nGateStrings])
 #
@@ -918,7 +918,7 @@ def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
 #
 #def numerical_deriv(fnToDifferentiate, gateset, dataset, resultLen):
 #    DELTA = 1e-6
-#    nP = gateset.get_num_params()
+#    nP = gateset.num_params()
 #    result = _np.zeros([resultLen,nP])
 #
 #    fMid = fnToDifferentiate(gateset, dataset)

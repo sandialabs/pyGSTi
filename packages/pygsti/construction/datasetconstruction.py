@@ -64,7 +64,8 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples, sampleError=
         dsGen = None
         dataset = _ds.DataSet( spamLabels=gsGen.get_spam_labels() )
 
-    if seed is not None: _rndm.seed(seed)
+    if sampleError in ("binomial","multinomial"):
+        rndm = _rndm.RandomState(seed) # ok if seed is None
 
     for k,s in enumerate(gatestring_list):
       if gsGen:
@@ -92,13 +93,13 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples, sampleError=
           spamLabel1, spamLabel2 = ps.keys(); p1 = ps[spamLabel1]
           if p1 < 0 and abs(p1) < 1e-6: p1 = 0
           if p1 > 1 and abs(p1-1.0) < 1e-6: p1 = 1
-          if p1 < 0 or p1 > 1: print "Warning: probability == %g" % p1
+          if p1 < 0 or p1 > 1: print "Warning: probability == %g clipped to generate fake data" % p1
           p1 = _np.clip(p1,0,1)
-          counts[spamLabel1] = _rndm.binomial(nWeightedSamples, p1) #numpy.clip(p1,0,1) )
+          counts[spamLabel1] = rndm.binomial(nWeightedSamples, p1) #numpy.clip(p1,0,1) )
           counts[spamLabel2] = nWeightedSamples - counts[spamLabel1]
       elif sampleError == "multinomial":
           nOutcomes = len(ps.keys())
-          countsArray = _rndm.multinomial(nWeightedSamples, ps.values(), size=1)
+          countsArray = rndm.multinomial(nWeightedSamples, ps.values(), size=1)
           for i,spamLabel in enumerate(ps.keys()):
               counts[spamLabel] = countsArray[0,i]
       else:

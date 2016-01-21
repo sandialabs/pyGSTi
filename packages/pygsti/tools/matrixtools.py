@@ -98,7 +98,7 @@ def is_valid_density_mx(mx, TOL=1e-9):
     return is_hermitian(mx,TOL) and is_pos_def(mx,TOL) and abs(trace(mx)-1.0) < TOL
 
 
-def frobenius_norm(ar):
+def frobeniusnorm(ar):
     """
     Compute the frobenius norm of an array (or matrix),
 
@@ -117,7 +117,7 @@ def frobenius_norm(ar):
     """
     return _np.sqrt(_np.sum(ar**2))
 
-def frobenius_norm_sq(ar):
+def frobeniusnorm2(ar):
     """
     Compute the squared frobenius norm of an array (or matrix),
 
