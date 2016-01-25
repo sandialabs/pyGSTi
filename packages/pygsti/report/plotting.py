@@ -28,12 +28,14 @@ class GSTFigure(object):
         if filename is not None and len(filename) > 0:
             try:
                 axes = _pickle.loads(self.pickledAxes) #this creates a new (current) figure in matplotlib
+                curFig = _plt.gcf() # gcf == "get current figure"
+                curFig.callbacks.callbacks = {} # initialize fig's CallbackRegistry, which doesn't unpickle properly in matplotlib 1.5.1
             except:
                 raise ValueError("GSTFigure unpickling error!  This could be caused by using matplotlib or pylab" +
                                  " magic functions ('%pylab inline' or '%matplotlib inline') within an iPython" +
                                  " notebook, so if you used either of these please remove it and all should be well.")
             _plt.savefig(filename, bbox_extra_artists=(axes,), bbox_inches='tight') #need extra artists otherwise axis labels get clipped
-            _plt.close(_plt.gcf()) # gcf == "get current figure"; closes the figure created by unpickling
+            _plt.close(curFig) # closes the figure created by unpickling
 
     def set_extra_info(self, extraInfo):
         self.extraInfo = extraInfo
@@ -43,8 +45,9 @@ class GSTFigure(object):
     
     def check(self):
         axes = _pickle.loads(self.pickledAxes) #this creates a new (current) figure in matplotlib
-        _plt.close(_plt.gcf()) # gcf == "get current figure"; closes the figure created by unpickling
-        
+        curFig = _plt.gcf() # gcf == "get current figure"
+        curFig.callbacks.callbacks = {} # initialize fig's CallbackRegistry, which doesn't unpickle properly in matplotlib 1.5.1
+        _plt.close(curFig) # gcf == "get current figure"; closes the figure created by unpickling
 
 
 def total_count_matrix( gateString, dataset, strs, rhoEPairs=None):
