@@ -1,4 +1,10 @@
+#*****************************************************************
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
+#    This Software is released under the GPL license detailed    
+#    in the file "license.txt" in the top-level pyGSTi directory 
+#*****************************************************************
 """ Text-parsering classes and functions to read input files."""
+
 import os as _os
 import sys as _sys
 import numpy as _np

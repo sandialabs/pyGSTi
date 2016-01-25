@@ -1,4 +1,10 @@
+#*****************************************************************
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
+#    This Software is released under the GPL license detailed    
+#    in the file "license.txt" in the top-level pyGSTi directory 
+#*****************************************************************
 """Utility functions related to the Choi representation of gates."""
+
 import numpy as _np
 import basistools as _bt
 import matrixtools as _mt

@@ -1,4 +1,10 @@
+#*****************************************************************
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
+#    This Software is released under the GPL license detailed    
+#    in the file "license.txt" in the top-level pyGSTi directory 
+#*****************************************************************
 """ Defines the MultiDataSet class and supporting classes and functions """
+
 import numpy as _np
 import cPickle as _pickle
 from collections import OrderedDict as _OrderedDict

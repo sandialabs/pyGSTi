@@ -1,4 +1,10 @@
+#*****************************************************************
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
+#    This Software is released under the GPL license detailed    
+#    in the file "license.txt" in the top-level pyGSTi directory 
+#*****************************************************************
 """ Functions for generating plots and computing chi^2 """
+
 from __future__ import division
 import numpy as _np
 import matplotlib.pyplot as _plt

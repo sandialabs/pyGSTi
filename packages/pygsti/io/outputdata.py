@@ -1,4 +1,10 @@
+#*****************************************************************
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
+#    This Software is released under the GPL license detailed    
+#    in the file "license.txt" in the top-level pyGSTi directory 
+#*****************************************************************
 """ Defines the OutputData class and supporting functions """
+
 import cPickle as _pickle
 from dataset import upgrade_old_dataset as _UpgradeOldDataSet
 
