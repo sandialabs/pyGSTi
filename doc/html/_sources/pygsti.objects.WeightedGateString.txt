@@ -16,6 +16,8 @@ pygsti.objects.WeightedGateString
       :toctree:
    
       ~WeightedGateString.__init__
+      ~WeightedGateString.from_pythonstr
+      ~WeightedGateString.to_pythonstr
    
    
 

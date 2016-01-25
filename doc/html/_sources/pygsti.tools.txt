@@ -27,8 +27,10 @@ pygsti.tools
       fidelity_upper_bound
       fill_count_vecs
       forbidden_prob
-      frobenius_norm
-      frobenius_norm_sq
+      frobeniusdist
+      frobeniusdist2
+      frobeniusnorm
+      frobeniusnorm2
       gate_string_chi2
       gm_matrices
       gm_matrices_unnormalized
@@ -73,6 +75,7 @@ pygsti.tools
       two_qubit_gate
       unitary_to_pauligate_1q
       unitary_to_pauligate_2q
+      unitary_to_process_mx
    
    
 

@@ -20,7 +20,7 @@ pygsti.objects.FullyParameterizedGate
       ~FullyParameterizedGate.copy
       ~FullyParameterizedGate.deriv_wrt_params
       ~FullyParameterizedGate.from_vector
-      ~FullyParameterizedGate.get_num_params
+      ~FullyParameterizedGate.num_params
       ~FullyParameterizedGate.set_value
       ~FullyParameterizedGate.to_vector
       ~FullyParameterizedGate.transform
