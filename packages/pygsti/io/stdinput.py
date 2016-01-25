@@ -683,7 +683,8 @@ def read_gateset(filename):
     #Default SPAMLABEL directive if none are give and rho and E vectors are:
     if len(spam_labels) == 0 and spam_vecs.has_key("rho") and spam_vecs.has_key("E"):
         spam_labels['plus'] = [ 'rho', 'E' ]
-        remainder_spam_label = 'minus'
+        spam_labels['minus'] = [ 'rho', 'remainder' ] #NEW default behavior
+        # OLD default behavior: remainder_spam_label = 'minus'
     if len(spam_labels) == 0: raise ValueError("Must specify rho and E or spam labels directly.")
 
     #Make SPAMs

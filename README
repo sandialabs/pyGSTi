@@ -1,0 +1,43 @@
+********************************************************************************
+  pyGSTi 0.9 
+********************************************************************************
+
+Overview:
+--------
+This is the root directory of the pyGSTi software, which is a python
+ implementation of Gate Set Tomography.  pyGSTi free software, licensed
+ under the GNU public license (GPL).  Copyright and license information
+ can be found in license.txt, and the GPL itself in COPYING.
+
+
+
+Brief description of the directory structure:
+--------------------------------------------
+
+doc/  :  Directory containing the HTML documentation and other
+         reference documents.
+
+ipython_notebooks/  : Parent directory of all iPython notebook tutorial
+		      files included with pyGSTi.  It is convenient to
+		      start an iPython notebook server from within this
+		      directory.
+
+packages/  :  Directory containing the (one) package provided by pyGSTi.
+	      All of the python source code lies here.
+
+tests/  :  Directory containing pyGSTi unit tests.
+
+install_locally.py :  A Python script that sets up the software to run 
+		      from its current location within the file system.  This
+		      essentially adds the packages directory to the list of
+		      directories Python uses to search for packages in, so
+		      that "import pygsti" will work for any Python script, 
+		      regardless of its location in the file system.  This
+		      action is local to the user running the script, and does
+                      not copy any files to any system directories, making it
+		      a good option for a user without administrative access.
+
+COPYING  :  A text version of the GNU Public License.
+
+license.txt  :  A text file giving copyright and licensing information
+	        about pyGSTi.
