@@ -102,7 +102,7 @@ def get_gateset_spam_table(gateset, formats, tableclass, longtable, confidenceRe
             _tf.add_table_row(formats, tables, (i, EVec, EMx), (_tf.E,_tf.Nml,_tf.Brk))
         else:
             intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals("E%d" % i)[:,None]
-            _tf.add_table_row(formats, tables, (i, EVec, intervalVec, EMx), (_tf.Rho,_tf.Nml,_tf.Nml,_tf.Brk))
+            _tf.add_table_row(formats, tables, (i, EVec, intervalVec, EMx), (_tf.E,_tf.Nml,_tf.Nml,_tf.Brk))
             
     _tf.finish_table(formats, tables, longtable)
     return tables
