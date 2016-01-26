@@ -1,2 +1,2 @@
 #!/bin/bash
-rm GST*.rst
+rm pygsti*.rst

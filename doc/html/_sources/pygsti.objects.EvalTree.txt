@@ -23,13 +23,13 @@ pygsti.objects.EvalTree
       ~EvalTree.get_analysis_plot_infos
       ~EvalTree.get_init_labels
       ~EvalTree.get_list_of_final_value_tree_indices
-      ~EvalTree.get_num_final_strings
       ~EvalTree.get_sub_trees
       ~EvalTree.get_tree_index_of_final_value
       ~EvalTree.index
       ~EvalTree.initialize
       ~EvalTree.insert
       ~EvalTree.is_split
+      ~EvalTree.num_final_strings
       ~EvalTree.pop
       ~EvalTree.print_analysis
       ~EvalTree.remove

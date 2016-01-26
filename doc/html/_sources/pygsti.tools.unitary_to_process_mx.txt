@@ -1,0 +1,6 @@
+pygsti.tools.unitary_to_process_mx
+==================================
+
+.. currentmodule:: pygsti.tools
+
+.. autofunction:: unitary_to_process_mx

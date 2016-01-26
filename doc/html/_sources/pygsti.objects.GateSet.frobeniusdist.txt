@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.frobeniusdist
+====================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.frobeniusdist

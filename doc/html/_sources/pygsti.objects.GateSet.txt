@@ -35,11 +35,11 @@ pygsti.objects.GateSet
       ~GateSet.decrease_dimension
       ~GateSet.depolarize
       ~GateSet.deriv_wrt_params
-      ~GateSet.diff_frobenius
-      ~GateSet.diff_jtracedist
+      ~GateSet.diamonddist
       ~GateSet.dpr
       ~GateSet.dprobs
       ~GateSet.dproduct
+      ~GateSet.frobeniusdist
       ~GateSet.from_vector
       ~GateSet.fromkeys
       ~GateSet.get
@@ -51,10 +51,6 @@ pygsti.objects.GateSet
       ~GateSet.get_identity_vec
       ~GateSet.get_nongauge_projector
       ~GateSet.get_nongauge_projector_ex
-      ~GateSet.get_num_elements
-      ~GateSet.get_num_evecs
-      ~GateSet.get_num_params
-      ~GateSet.get_num_rhovecs
       ~GateSet.get_rhovec
       ~GateSet.get_rhovec_indices
       ~GateSet.get_rhovecs
@@ -71,12 +67,17 @@ pygsti.objects.GateSet
       ~GateSet.iteritems
       ~GateSet.iterkeys
       ~GateSet.itervalues
+      ~GateSet.jtracedist
       ~GateSet.keys
       ~GateSet.kick
       ~GateSet.log
       ~GateSet.make_spams
+      ~GateSet.num_elements
+      ~GateSet.num_evecs
       ~GateSet.num_gauge_params
       ~GateSet.num_nongauge_params
+      ~GateSet.num_params
+      ~GateSet.num_rhovecs
       ~GateSet.pop
       ~GateSet.popitem
       ~GateSet.pr

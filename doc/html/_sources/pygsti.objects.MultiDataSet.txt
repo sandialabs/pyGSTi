@@ -20,6 +20,7 @@ pygsti.objects.MultiDataSet
       ~MultiDataSet.add_dataset_counts
       ~MultiDataSet.copy
       ~MultiDataSet.get_datasets_sum
+      ~MultiDataSet.get_spam_labels
       ~MultiDataSet.has_key
       ~MultiDataSet.iteritems
       ~MultiDataSet.itervalues

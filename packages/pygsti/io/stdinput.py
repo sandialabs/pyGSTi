@@ -1,4 +1,10 @@
+#*****************************************************************
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
+#    This Software is released under the GPL license detailed    
+#    in the file "license.txt" in the top-level pyGSTi directory 
+#*****************************************************************
 """ Text-parsering classes and functions to read input files."""
+
 import os as _os
 import sys as _sys
 import numpy as _np
@@ -683,7 +689,8 @@ def read_gateset(filename):
     #Default SPAMLABEL directive if none are give and rho and E vectors are:
     if len(spam_labels) == 0 and spam_vecs.has_key("rho") and spam_vecs.has_key("E"):
         spam_labels['plus'] = [ 'rho', 'E' ]
-        remainder_spam_label = 'minus'
+        spam_labels['minus'] = [ 'rho', 'remainder' ] #NEW default behavior
+        # OLD default behavior: remainder_spam_label = 'minus'
     if len(spam_labels) == 0: raise ValueError("Must specify rho and E or spam labels directly.")
 
     #Make SPAMs

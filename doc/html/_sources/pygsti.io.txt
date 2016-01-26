@@ -18,10 +18,11 @@ pygsti.io
       load_multidataset
       load_parameter_file
       read_gateset
-      write_dataset_file
-      write_empty_dataset_file
+      write_dataset
+      write_empty_dataset
       write_gateset
       write_gatestring_list
+      write_multidataset
       write_parameter_file
    
    

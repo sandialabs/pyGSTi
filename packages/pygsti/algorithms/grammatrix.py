@@ -1,4 +1,10 @@
+#*****************************************************************
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
+#    This Software is released under the GPL license detailed    
+#    in the file "license.txt" in the top-level pyGSTi directory 
+#*****************************************************************
 """ Utility functions related to Gram matrix construction."""
+
 from .. import tools as _tools
 from .. import construction as _construction
 from core import gram_rank_and_evals as _gramRankAndEvals

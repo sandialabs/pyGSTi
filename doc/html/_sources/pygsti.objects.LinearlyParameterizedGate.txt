@@ -20,7 +20,7 @@ pygsti.objects.LinearlyParameterizedGate
       ~LinearlyParameterizedGate.copy
       ~LinearlyParameterizedGate.deriv_wrt_params
       ~LinearlyParameterizedGate.from_vector
-      ~LinearlyParameterizedGate.get_num_params
+      ~LinearlyParameterizedGate.num_params
       ~LinearlyParameterizedGate.set_value
       ~LinearlyParameterizedGate.to_vector
       ~LinearlyParameterizedGate.transform

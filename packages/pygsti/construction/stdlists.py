@@ -1,4 +1,10 @@
+#*****************************************************************
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
+#    This Software is released under the GPL license detailed    
+#    in the file "license.txt" in the top-level pyGSTi directory 
+#*****************************************************************
 """ Gate string list creation functions using repeated-germs limited by a max-length."""
+
 import itertools as _itertools
 from ..objects import spamspec as _ss
 from ..tools import listtools as _lt

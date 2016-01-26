@@ -1,4 +1,10 @@
+#*****************************************************************
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
+#    This Software is released under the GPL license detailed    
+#    in the file "license.txt" in the top-level pyGSTi directory 
+#*****************************************************************
 """ Utility functions for creating and acting on lists of gate strings."""
+
 import itertools as _itertools
 import numpy as _np
 import numpy.random as _rndm

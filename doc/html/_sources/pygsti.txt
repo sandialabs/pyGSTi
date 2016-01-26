@@ -3,7 +3,7 @@ pygsti
 
 .. automodule:: pygsti
 
-   .. rubric:: Sub-modules
+   .. rubric:: Sub-packages
 
    .. 
      This list needs to be manually updated with all
@@ -59,8 +59,10 @@ pygsti
       fill_count_vecs
       find_closest_unitary_gatemx
       forbidden_prob
-      frobenius_norm
-      frobenius_norm_sq
+      frobeniusdist
+      frobeniusdist2
+      frobeniusnorm
+      frobeniusnorm2
       gate_string_chi2
       get_max_gram_basis
       gm_matrices
@@ -109,6 +111,7 @@ pygsti
       two_qubit_gate
       unitary_to_pauligate_1q
       unitary_to_pauligate_2q
+      unitary_to_process_mx
    
    
 

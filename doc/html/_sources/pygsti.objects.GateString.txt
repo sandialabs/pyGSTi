@@ -16,6 +16,8 @@ pygsti.objects.GateString
       :toctree:
    
       ~GateString.__init__
+      ~GateString.from_pythonstr
+      ~GateString.to_pythonstr
    
    
 

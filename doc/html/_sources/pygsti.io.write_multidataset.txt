@@ -1,0 +1,6 @@
+pygsti.io.write_multidataset
+============================
+
+.. currentmodule:: pygsti.io
+
+.. autofunction:: write_multidataset
