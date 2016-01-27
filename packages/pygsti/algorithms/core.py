@@ -2377,7 +2377,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
        valid state preparation and measurements.
 
     returnAll : bool, optional
-       When True, return best "goodness" valuea and gauge matrix in addition to the
+       When True, return best "goodness" value and gauge matrix in addition to the
        gauge optimized gateset.
 
     gateWeight : float, optional

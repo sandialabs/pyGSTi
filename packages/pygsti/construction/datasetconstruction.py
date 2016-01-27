@@ -121,3 +121,69 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples, sampleError=
       dataset.add_count_dict(s, counts)
     dataset.done_adding_data()
     return dataset
+
+
+def generate_sim_rb_data(gateset, expRBdataset, seed=None):
+    """
+    Creates a DataSet using the gate strings from a given experimental RB
+    DataSet and probabilities generated from a given GateSet.
+
+    Parameters
+    ----------
+    gateset : GateSet
+       The gate set used to generate probabilities
+
+    expRBdataset : DataSet
+      The data set used to specify which gate strings to compute counts for.
+      Usually this is an experimental RB data set.
+
+    seed : int, optional
+       Seed for numpy's random number gernerator.
+
+    Returns
+    -------
+    DataSet
+    """
+
+    rndm = _np.random.RandomState(seed)
+    ds = _ds.DataSet(spamLabels=['plus','minus'])
+    gateStrings = expRBdataset.keys()
+    spamLabels = expRBdataset.get_spam_labels()
+
+    possibleSpamLabels = gateset.get_spam_labels()
+    assert( all([sl in possibleSpamLabels for sl in spamLabels]) )
+
+    for s in gateStrings:
+        N = expRBdataset[s].total()
+        ps = gateSet.probs(s)
+        pList = [ ps[sl] for sl in spamLabels ]
+        countsArray = rndm.multinomial(N, pList, 1)
+        counts = { sl: countsArray[0,i] for i,sl in enumerate(spamLabels) }
+        ds.add_count_dict(s, counts)
+    ds.done_adding_data()
+    return ds
+
+def generate_sim_rb_data_perfect(gateset,expRBdataset,N=1e6):
+    """
+    Creates a "perfect" DataSet using the gate strings from a given
+    experimental RB DataSet and probabilities generated from a given GateSet.
+    "Perfect" here means the generated counts have no sampling error.
+
+    Parameters
+    ----------
+    gateset : GateSet
+       The gate set used to generate probabilities
+
+    expRBdataset : DataSet
+      The data set used to specify which gate strings to compute counts for.
+      Usually this is an experimental RB data set.
+
+    N : int, optional
+       The (uniform) number of samples to use.
+
+    Returns
+    -------
+    DataSet
+    """
+    gateStrings = expRBdataset.keys()
+    return generate_fake_data(gateset,gateStrings,N,sampleError='none')

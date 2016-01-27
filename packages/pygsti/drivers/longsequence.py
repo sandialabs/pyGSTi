@@ -69,7 +69,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         gate string list file (text format).
 
     maxLengths : list of ints
-        List of the integers, one per LGST iteration, which set truncation lengths
+        List of integers, one per LSGST iteration, which set truncation lengths
         for repeated germ strings.  The list of gate strings for the i-th LSGST
         iteration includes the repeated germs truncated to the L-values *up to* 
         and including the i-th one.
