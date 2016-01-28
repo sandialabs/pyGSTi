@@ -12,4 +12,4 @@ from gatestringconstruction import *
 from spamspecconstruction import *
 from datasetconstruction import *
 from stdlists import *
-import rpeconstruction as rpe #keep in separate namespace for now
+from rpeconstruction import *

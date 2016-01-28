@@ -1,6 +1,6 @@
 import numpy as _np
 from scipy.optimize import curve_fit as _curve_fit
-import matplotlib as _mpl
+from matplotlib import pyplot as _plt
 
 
 def rb_decay(x,a,b):
@@ -51,20 +51,20 @@ def rb_decay_rate(dataset,showPlot=False,xlim=None,ylim=None,saveFigPath=None):
         RBsuccesses.append(1 - dataLine['plus']/float(N))
         if dataLine['plus']/float(N) > 1:
             print key
-    a,b = _curve_fit(decay,RBlengths,RBsuccesses)[0]
+    a,b = _curve_fit(rb_decay,RBlengths,RBsuccesses)[0]
     if saveFigPath or showPlot:
-        newplot = _mpl.pylab.figure()
+        newplot = _plt.figure()
         newplotgca = newplot.gca()
         newplotgca.plot(RBlengths,RBsuccesses,'.')
         newplotgca.plot(xrange(max(RBlengths)),
-                        decay(_np.arange(max(RBlengths)),a,b),'+')
+                        rb_decay(_np.arange(max(RBlengths)),a,b),'+')
         newplotgca.set_xlabel('RB sequence length (non-Clifford)')
         newplotgca.set_ylabel('Success rate')
         newplotgca.set_title('RB success')
         if xlim:
-            _mpl.pyplot.xlim(xlim)
+            _plt.xlim(xlim)
         if ylim:
-            _mpl.pyplot.ylim(ylim)
+            _plt.ylim(ylim)
     if saveFigPath:
         newplot.savefig(saveFigPath)            
     return a,b

@@ -155,7 +155,7 @@ def generate_sim_rb_data(gateset, expRBdataset, seed=None):
 
     for s in gateStrings:
         N = expRBdataset[s].total()
-        ps = gateSet.probs(s)
+        ps = gateset.probs(s)
         pList = [ ps[sl] for sl in spamLabels ]
         countsArray = rndm.multinomial(N, pList, 1)
         counts = { sl: countsArray[0,i] for i,sl in enumerate(spamLabels) }

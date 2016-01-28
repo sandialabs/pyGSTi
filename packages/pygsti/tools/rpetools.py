@@ -78,7 +78,8 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon"):
     """
     For a dataset containing sin and cos strings to estimate either alpha,
     epsilon, or Phi return a list of alpha, epsilon, or Phi estimates (one for
-    each generation).
+    each generation).  Note: this assumes the dataset contains 'plus' and 
+    'minus' SPAM labels.
 
     WARNING:  At present, kList must be of form [1,2,4,...,2**log2kMax].
     
@@ -322,7 +323,7 @@ def analyze_simulated_rpe_experiment(inputDataset,trueGateset,stringListD):
     try:
         thetaTrue = trueGateset.thetaTrue
     except:
-        thetaTrue = trueGateset(trueGateset)
+        thetaTrue = extract_theta(trueGateset)
     alphaErrorList = []
     epsilonErrorList = []
     thetaErrorList = []

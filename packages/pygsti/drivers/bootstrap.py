@@ -6,13 +6,14 @@
 """ Functions for generating bootstrapped error bars """
 import numpy as _np
 import matplotlib as _mpl
+from longsequence import do_long_sequence_gst as _do_long_sequence_gst
 
 from .. import objects as _obj
 from .. import algorithms as _alg
 from .. import tools as _tools
 
 def make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=None,
-                           seed=None,spamLabels=None)
+                           seed=None,spamLabels=None):
     """
     Creates a DataSet used for generating bootstrapped error bars.
 
@@ -50,7 +51,7 @@ def make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=None,
     if spamLabels is None:
         spamLabels = inputDataSet.get_spam_labels()
 
-    rndm = __np.random.RandomState(seed)
+    rndm = _np.random.RandomState(seed)
     if inputGateSet is None:
         if generationMethod == 'nonparametric':
             print "Generating non-parametric dataset."
@@ -67,14 +68,14 @@ def make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=None,
     possibleSpamLabels = inputDataSet.get_spam_labels()
     assert( all([sl in possibleSpamLabels for sl in spamLabels]) )
     
-    simDS = _objs.DataSet(spamLabels=spamLabels) #create new dataset
+    simDS = _obj.DataSet(spamLabels=spamLabels) #create new dataset
     gatestring_list = inputDataSet.keys()
     for s in gatestring_list:
         nSamples = inputDataSet[s].total()
         if generationMethod == 'parametric':
             ps = inputGateSet.probs(s)
         elif generationMethod == 'nonparametric':
-            ps = { sl: inputDataSet[s].frac(sl) for sl in spamLabels }
+            ps = { sl: inputDataSet[s].fraction(sl) for sl in spamLabels }
         pList = _np.array([_np.clip(ps[spamLabel],0,1) for spamLabel in spamLabels])
           #Truncate before normalization; bad extremal values shouldn't
           # screw up not-bad values, yes?
@@ -198,7 +199,7 @@ def make_bootstrap_gatesets(numGateSets, inputDataSet, generationMethod,
     print "Creating GateSets: "
     for run in xrange(numGateSets):
         print "Running MLGST Iteration %d " % run
-        results = do_long_sequence_gst(
+        results = _do_long_sequence_gst(
             datasetList[run], targetGateSet, fiducialPrep, fiducialMeasure,
             germs, maxLengths, constrainToTP=constrainToTP,
             lsgstLists=lsgstLists, advancedOptions={'verbosity':verbosity} )
@@ -412,7 +413,7 @@ def gateset_decomp_decay_offdiag(gs):
 #        output[i] = _tools.fidelity(gs[gate],gs_target[gate])
 #    return output
 
-def gate_set_diamond_norm(gs,gs_target,mxBasis="gm"):
+def gateset_diamonddist(gs,gs_target,mxBasis="gm"):
     output = _np.zeros(3,dtype=float)
     for i, gate in enumerate(gs_target.keys()):
         output[i] = _tools.diamonddist(gs[gate],gs_target[gate],mxBasis=mxBasis)

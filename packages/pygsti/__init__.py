@@ -7,6 +7,7 @@
 
 #Import the most important/useful routines of each module/sub-package
 # into the package namespace
+from _version import __version__
 
 import algorithms as alg
 import construction as cst

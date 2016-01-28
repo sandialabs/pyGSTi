@@ -191,6 +191,51 @@ class TestDriversMethods(DriversTestCase):
         #advancedOptions={}, lsgstLists=None,
         #truncScheme="whole germ powers"):
 
+    def test_bootstrap(self):
+        ds = pygsti.objects.DataSet(fileToLoadFrom="cmp_chk_files/drivers.dataset")        
+        specs = pygsti.construction.build_spam_specs(std.fiducials)
+        gs = pygsti.do_lgst(ds, specs, targetGateset=std.gs_target, svdTruncateTo=4, verbosity=0)
+
+        bootds_p = pygsti.drivers.make_bootstrap_dataset(ds,'parametric',gs, seed=1234 )
+        bootds_np = pygsti.drivers.make_bootstrap_dataset(ds,'nonparametric', seed=1234 )
+        
+        maxLengths = [0] #just do LGST strings to make this fast...
+        bootgs_p = self.runSilent(pygsti.drivers.make_bootstrap_gatesets,
+            2, ds, 'parametric', std.fiducials, std.fiducials,
+            std.germs, maxLengths, inputGateSet=gs, constrainToTP=True,
+            returnData=False)
+
+        bootgs_np, bootds_np2 = self.runSilent(pygsti.drivers.make_bootstrap_gatesets,
+            2, ds, 'nonparametric', std.fiducials, std.fiducials,
+            std.germs, maxLengths, targetGateSet=gs, 
+            constrainToTP=True, returnData=True)
+
+        self.runSilent(pygsti.drivers.gauge_optimize_gs_list, bootgs_p, std.gs_target, constrainToTP=True,
+                           gateMetric = 'frobenius', spamMetric = 'frobenius', plot=False)
+
+
+        #Test utility functions -- just make sure they run for now...
+        def gsFn(gs):
+            return gs.get_dimension()
+
+        pygsti.drivers.gs_stdev(gsFn, bootgs_p)
+        pygsti.drivers.gs_mean(gsFn, bootgs_p)
+        pygsti.drivers.gs_stdev1(gsFn, bootgs_p)
+        pygsti.drivers.gs_mean1(gsFn, bootgs_p)
+        pygsti.drivers.to_vector(bootgs_p[0])
+
+        pygsti.drivers.to_mean_gateset(bootgs_p, std.gs_target)
+        pygsti.drivers.to_std_gateset(bootgs_p, std.gs_target)
+        pygsti.drivers.to_rms_gateset(bootgs_p, std.gs_target)
+        
+        pygsti.drivers.gateset_jtracedist(bootgs_p[0], std.gs_target)
+        pygsti.drivers.gateset_process_fidelity(bootgs_p[0], std.gs_target)
+        pygsti.drivers.gateset_diamonddist(bootgs_p[0], std.gs_target)
+        pygsti.drivers.gateset_decomp_angle(bootgs_p[0])
+        pygsti.drivers.gateset_decomp_decay_diag(bootgs_p[0])
+        pygsti.drivers.gateset_decomp_decay_offdiag(bootgs_p[0])
+        pygsti.drivers.spamrameter(bootgs_p[0])
+
     
       
 if __name__ == "__main__":

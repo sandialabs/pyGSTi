@@ -77,18 +77,18 @@ def make_paramterized_rpe_gate_set(alphaTrue, epsilonTrue, Yrot, SPAMdepol,
     outputGateset = outputGateset.depolarize(gate_noise=gateDepol,
                                              spam_noise=SPAMdepol)
     
-    thetaTrue = extract_theta(outputGateset)
+    thetaTrue = _tools.rpe.extract_theta(outputGateset)
     outputGateset.thetaTrue = thetaTrue
     
-    outputGateset.alphaTrue = extract_alpha(outputGateset)
+    outputGateset.alphaTrue = _tools.rpe.extract_alpha(outputGateset)
     outputGateset.alphaTrue = alphaTrue
     
-    outputGateset.epsilonTrue = extract_epsilon(outputGateset)
+    outputGateset.epsilonTrue = _tools.rpe.extract_epsilon(outputGateset)
     outputGateset.epsilonTrue = epsilonTrue
     
     return outputGateset
 
-def make_alpha_str_lists_gx_gz(kList):
+def make_rpe_alpha_str_lists_gx_gz(kList):
     """
     Make alpha cosine and sine gatestring lists for (approx) X pi/4 and Z pi/2
     gates. These gate strings are used to estimate alpha (Z rotation angle).
@@ -139,7 +139,7 @@ def make_alpha_str_lists_gx_gz(kList):
 
     return cosStrList, sinStrList
     
-def make_epsilon_str_lists_gx_gz(kList):
+def make_rpe_epsilon_str_lists_gx_gz(kList):
     """
     Make epsilon cosine and sine gatestring lists for (approx) X pi/4 and
     Z pi/2 gates. These gate strings are used to estimate epsilon (X rotation
@@ -180,7 +180,7 @@ def make_epsilon_str_lists_gx_gz(kList):
 
     return epsilonCosStrList, epsilonSinStrList
 
-def make_theta_str_lists_gx_gz(kList):
+def make_rpe_theta_str_lists_gx_gz(kList):
     """
     Make theta cosine and sine gatestring lists for (approx) X pi/4 and Z pi/2
     gates. These gate strings are used to estimate theta (X-Z axes angle).
@@ -204,13 +204,13 @@ def make_theta_str_lists_gx_gz(kList):
     for k in kList:
         thetaCosStrList += [_objs.GateString(
                 ('Gz','Gx','Gx','Gx','Gx','Gz','Gz','Gx','Gx','Gx','Gx','Gz')*k+
-                ('Gx',)*4, 'GzGxGxGxGxGzGzGxGxGxGxGz^'+str(k)+'GxGxGxGx')]
+                ('Gx',)*4, '(GzGxGxGxGxGzGzGxGxGxGxGz)^'+str(k)+'GxGxGxGx')]
     
         thetaSinStrList += [_objs.GateString(
                 ('Gx','Gx','Gz','Gz')+
                 ('Gz','Gx','Gx','Gx','Gx','Gz','Gz','Gx','Gx','Gx','Gx','Gz')*k+
                 ('Gx',)*4,
-                '(GzGxGxGxGxGzGzGxGxGxGxGz)^'+str(k)+'GxGxGxGx')]
+                '(GxGxGzGz)(GzGxGxGxGxGzGzGxGxGxGxGz)^'+str(k)+'GxGxGxGx')]
 
         #From RPEToolsNewNew.py
         #thetaCosStrList += [_objs.GateString(
@@ -257,9 +257,9 @@ def make_rpe_string_list_d(log2kMax):
           duplicates removed.
     """
     kList = [2**k for k in range(log2kMax+1)]
-    alphaCosStrList, alphaSinStrList = make_alpha_str_lists_gx_gz(kList)
-    epsilonCosStrList, epsilonSinStrList = make_epsilon_str_lists_gx_gz(kList)
-    thetaCosStrList, thetaSinStrList = make_theta_str_lists_gx_gz(kList)
+    alphaCosStrList, alphaSinStrList = make_rpe_alpha_str_lists_gx_gz(kList)
+    epsilonCosStrList, epsilonSinStrList = make_rpe_epsilon_str_lists_gx_gz(kList)
+    thetaCosStrList, thetaSinStrList = make_rpe_theta_str_lists_gx_gz(kList)
     totalStrList = alphaCosStrList + alphaSinStrList + epsilonCosStrList + epsilonSinStrList + thetaCosStrList + thetaSinStrList
     totalStrList = _tools.remove_duplicates(totalStrList) #probably superfluous
       
@@ -334,18 +334,18 @@ def make_rpe_data_set(gatesetOrDataset,stringListD,nSamples,sampleError='binomia
 
 
 
-def ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs,
+def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs,
                   plot=False, savePlot=False):
 
     """ Experimental test function """
     kList = [2**k for k in range(log2kMax+1)]
 
-    alphaCosStrList, alphaSinStrList = make_alpha_str_lists_gx_gz(kList)
-    epsilonCosStrList, epsilonSinStrList = make_epsilon_str_lists_gx_gz(kList)
-    thetaCosStrList, thetaSinStrList = make_theta_str_lists_gx_gz(kList)
+    alphaCosStrList, alphaSinStrList = make_rpe_alpha_str_lists_gx_gz(kList)
+    epsilonCosStrList, epsilonSinStrList = make_rpe_epsilon_str_lists_gx_gz(kList)
+    thetaCosStrList, thetaSinStrList = make_rpe_theta_str_lists_gx_gz(kList)
 
-    percentAlphaError = 100*np.abs((np.pi/2-alphaTrue)/alphaTrue)
-    percentEpsilonError = 100*np.abs((np.pi/4 - epsilonTrue)/epsilonTrue)
+    percentAlphaError = 100*_np.abs((_np.pi/2-alphaTrue)/alphaTrue)
+    percentEpsilonError = 100*_np.abs((_np.pi/4 - epsilonTrue)/epsilonTrue)
 
     simGateset = _setc.build_gateset( [2], [('Q0',)],['Gi','Gx','Gz'], 
                                  [ "I(Q0)", "X("+str(epsilonTrue)+",Q0)", "Z("+str(alphaTrue)+",Q0)"],
@@ -358,25 +358,25 @@ def ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs,
                                  spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
 
     simGateset.set_gate('Gx', _objs.FullyParameterizedGate(
-            np.dot(np.dot(np.linalg.inv(gatesetAux1['Gy']),simGateset['Gx']),
+            _np.dot(_np.dot(_np.linalg.inv(gatesetAux1['Gy']),simGateset['Gx']),
                    gatesetAux1['Gy'])))
 
     simGateset = simGateset.depolarize(spam_noise=SPAMdepol)
 
-    thetaTrue = extract_theta(simGateset)
+    thetaTrue = _tools.rpe.extract_theta(simGateset)
 
-    SPAMerror = np.dot(simGateset.EVecs[0].T,simGateset.rhoVecs[0])[0,0]
+    SPAMerror = _np.dot(simGateset.EVecs[0].T,simGateset.rhoVecs[0])[0,0]
 
     jMax = runs
     
-    alphaHatListArray = np.zeros([jMax,log2kMax+1],dtype='object')
-    epsilonHatListArray = np.zeros([jMax,log2kMax+1],dtype='object')
-    thetaHatListArray = np.zeros([jMax,log2kMax+1],dtype='object')
+    alphaHatListArray = _np.zeros([jMax,log2kMax+1],dtype='object')
+    epsilonHatListArray = _np.zeros([jMax,log2kMax+1],dtype='object')
+    thetaHatListArray = _np.zeros([jMax,log2kMax+1],dtype='object')
     
-    alphaErrorArray = np.zeros([jMax,log2kMax+1],dtype='object')
-    epsilonErrorArray = np.zeros([jMax,log2kMax+1],dtype='object')
-    thetaErrorArray = np.zeros([jMax,log2kMax+1],dtype='object')
-    PhiFunErrorArray = np.zeros([jMax,log2kMax+1],dtype='object')
+    alphaErrorArray = _np.zeros([jMax,log2kMax+1],dtype='object')
+    epsilonErrorArray = _np.zeros([jMax,log2kMax+1],dtype='object')
+    thetaErrorArray = _np.zeros([jMax,log2kMax+1],dtype='object')
+    PhiFunErrorArray = _np.zeros([jMax,log2kMax+1],dtype='object')
 
     for j in xrange(jMax):
     #    simDS = _dsc.generate_fake_data(gateset3,alphaCosStrList+alphaSinStrList+epsilonCosStrList+epsilonSinStrList+thetaCosStrList+epsilonSinStrList,
@@ -388,31 +388,31 @@ def ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs,
         epsilonErrorList = []
         thetaErrorList = []
         PhiFunErrorList = []
-        alphaHatList = est_angle_list(simDS,alphaSinStrList,
-                                      alphaCosStrList,'alpha')
-        epsilonHatList = est_angle_list(simDS,epsilonSinStrList,
-                                        epsilonCosStrList,'epsilon')
-        thetaHatList,PhiFunList = est_theta_list(simDS,thetaSinStrList,
+        alphaHatList = _tools.rpe.est_angle_list(simDS,alphaSinStrList,
+                                                 alphaCosStrList,'alpha')
+        epsilonHatList = _tools.rpe.est_angle_list(simDS,epsilonSinStrList,
+                                                   epsilonCosStrList,'epsilon')
+        thetaHatList,PhiFunList = _tools.rpe.est_theta_list(simDS,thetaSinStrList,
                                                  thetaCosStrList,epsilonHatList,
                                                  returnPhiFunList=True)
         for alphaTemp1 in alphaHatList:
             alphaErrorList.append(abs(alphaTrue - alphaTemp1))
         for epsilonTemp1 in epsilonHatList:
             epsilonErrorList.append(abs(epsilonTrue - epsilonTemp1))
-    #        print abs(np.pi/2-abs(alphaTemp1))
+    #        print abs(_np.pi/2-abs(alphaTemp1))
         for thetaTemp1 in thetaHatList:
             thetaErrorList.append(abs(thetaTrue - thetaTemp1))
         for PhiFunTemp1 in PhiFunList:
             PhiFunErrorList.append(PhiFunTemp1)
  
-        alphaErrorArray[j,:] = np.array(alphaErrorList)
-        epsilonErrorArray[j,:] = np.array(epsilonErrorList)
-        thetaErrorArray[j,:] = np.array(thetaErrorList)
-        PhiFunErrorArray[j,:] = np.array(PhiFunErrorList)
+        alphaErrorArray[j,:] = _np.array(alphaErrorList)
+        epsilonErrorArray[j,:] = _np.array(epsilonErrorList)
+        thetaErrorArray[j,:] = _np.array(thetaErrorList)
+        PhiFunErrorArray[j,:] = _np.array(PhiFunErrorList)
  
-        alphaHatListArray[j,:] = np.array(alphaHatList)
-        epsilonHatListArray[j,:] = np.array(epsilonHatList)
-        thetaHatListArray[j,:] = np.array(thetaHatList)
+        alphaHatListArray[j,:] = _np.array(alphaHatList)
+        epsilonHatListArray[j,:] = _np.array(epsilonHatList)
+        thetaHatListArray[j,:] = _np.array(thetaHatList)
 
     #print "True alpha:",alphaTrue
     #print "True alpha:",alphaTrue
@@ -422,9 +422,9 @@ def ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs,
 
     if plot:
         import matplotlib as _mpl
-        _mpl.pyplot.loglog(kList,np.median(alphaErrorArray,axis=0),label='N='+str(N))
+        _mpl.pyplot.loglog(kList,_np.median(alphaErrorArray,axis=0),label='N='+str(N))
 
-        _mpl.pyplot.loglog(kList,np.array(kList)**-1.,'-o',label='1/k')
+        _mpl.pyplot.loglog(kList,_np.array(kList)**-1.,'-o',label='1/k')
         _mpl.pyplot.xlabel('k')
         _mpl.pyplot.ylabel(r'$\alpha_z - \widehat{\alpha_z}$')
         _mpl.pyplot.title('RPE error in Z angle\n% error in Z angle '+str(percentAlphaError)+'%, % error in X angle '+str(percentEpsilonError)+'%\n% error in SPAM, '+str(100*SPAMerror)+'%, X-Z axis error '+str(Yrot)+'\nMedian of '+str(jMax)+' Trials')
@@ -432,9 +432,9 @@ def ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs,
 
         _mpl.pyplot.show()
 
-        _mpl.pyplot.loglog(kList,np.median(epsilonErrorArray,axis=0),label='N='+str(N))
+        _mpl.pyplot.loglog(kList,_np.median(epsilonErrorArray,axis=0),label='N='+str(N))
 
-        _mpl.pyplot.loglog(kList,np.array(kList)**-1.,'-o',label='1/k')
+        _mpl.pyplot.loglog(kList,_np.array(kList)**-1.,'-o',label='1/k')
         _mpl.pyplot.xlabel('k')
         _mpl.pyplot.ylabel(r'$\epsilon_x - \widehat{\epsilon_x}$')
         _mpl.pyplot.title('RPE error in X angle\n% error in Z angle '+str(percentAlphaError)+'%, % error in X angle '+str(percentEpsilonError)+'%\n% error in SPAM, '+str(100*SPAMerror)+'%, X-Z axis error '+str(Yrot)+'\nMedian of '+str(jMax)+' Trials')
@@ -442,9 +442,9 @@ def ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs,
 
         _mpl.pyplot.show()
 
-        _mpl.pyplot.loglog(kList,np.median(thetaErrorArray,axis=0),label='N='+str(N))
+        _mpl.pyplot.loglog(kList,_np.median(thetaErrorArray,axis=0),label='N='+str(N))
 
-        _mpl.pyplot.loglog(kList,np.array(kList)**-1.,'-o',label='1/k')
+        _mpl.pyplot.loglog(kList,_np.array(kList)**-1.,'-o',label='1/k')
         _mpl.pyplot.xlabel('k')
         _mpl.pyplot.ylabel(r'$\theta_{xz} - \widehat{\theta_{xz}}$')
         _mpl.pyplot.title('RPE error in X axis angle\n% error in Z angle '+str(percentAlphaError)+'%, % error in X angle '+str(percentEpsilonError)+'%\n% error in SPAM, '+str(100*SPAMerror)+'%, X-Z axis error '+str(Yrot)+'\nMedian of '+str(jMax)+' Trials')
@@ -452,9 +452,9 @@ def ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs,
 
         _mpl.pyplot.show()
 
-        _mpl.pyplot.loglog(kList,np.median(PhiFunErrorArray,axis=0),label='N='+str(N))
+        _mpl.pyplot.loglog(kList,_np.median(PhiFunErrorArray,axis=0),label='N='+str(N))
 
-#        _mpl.pyplot.loglog(kList,np.array(kList)**-1.,'-o',label='1/k')
+#        _mpl.pyplot.loglog(kList,_np.array(kList)**-1.,'-o',label='1/k')
         _mpl.pyplot.xlabel('k')
         _mpl.pyplot.ylabel(r'$\Phi func.$')
         _mpl.pyplot.title('RPE error in Phi func.\n% error in Z angle '+str(percentAlphaError)+'%, % error in X angle '+str(percentEpsilonError)+'%\n% error in SPAM, '+str(100*SPAMerror)+'%, X-Z axis error '+str(Yrot)+'\nMedian of '+str(jMax)+' Trials')
