@@ -1,0 +1,9 @@
+include README COPYING license.txt
+include install_locally.py 
+include ipython_notebooks/Tutorials/*.ipynb
+include ipython_notebooks/Tutorials/tutorial_files/.placeholder
+include test/test*.py
+include test/*.sh
+include test/cmp_chk_files/*
+include test/temp_test_files/.placeholder
+recursive-include doc/html *
