@@ -2138,7 +2138,8 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                       opt_gates=True, opt_G0=True, opt_SPAM=True, opt_SP0=True,
                       minProbClip=1e-4, probClipInterval=None, radius=1e-4, poissonPicture=True,
                       returnMaxLogL=False, returnAll=False, 
-                      gateStringSetLabels=None, verbosity=0, check=False, memLimit=None):
+                      gateStringSetLabels=None, useFreqWeightedChiSq=False, verbosity=0, 
+                      check=False, memLimit=None):
   """
   Performs Iterative Maximum Liklihood Estimation Gate Set Tomography on the dataset.
 
@@ -2209,6 +2210,12 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
       An identification label for each of the gate string sets (used for displaying
       progress).  Must be the same length as gateStringSetsToUseInEstimation.
 
+  useFreqWeightedChiSq : bool, optional
+      If True, chi-square objective function uses the approximate chi^2 weighting:  N/(f*(1-f)) 
+      where f is the frequency obtained from the dataset, instead of the true chi^2: N/(p*(1-p))
+      where p is a predicted probability.  Defaults to False, and only should use 
+      True for backward compatibility.
+
   returnAll : boolean, optional
       If True return a list of gatesets
                       gateStringSetLabels=None,
@@ -2260,7 +2267,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
     
     chi2Diff, mleGateset = do_mc2gst( dataset, mleGateset, stringsToEstimate,
                                     maxiter, maxfev, tol, opt_gates, opt_G0, opt_SPAM, opt_SP0,
-                                    0, minProbClip, probClipInterval, False, 0, verbosity, check,
+                                    0, minProbClip, probClipInterval, useFreqWeightedChiSq, 0, verbosity, check,
                                     False, None, None, memLimit) # so maxLogL is really chi2 number here
 
     logL_ub = _tools.logl_max(dataset, stringsToEstimate, None, poissonPicture, check)

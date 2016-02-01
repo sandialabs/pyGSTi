@@ -264,7 +264,7 @@ class TestCoreMethods(CoreTestCase):
         #Other option variations - just make sure they run at this point
         gs_mlegst_chk_opts = pygsti.do_iterative_mlgst(ds, gs_clgst, self.lsgstStrings[0:2], verbosity=0,
                                                       minProbClip=1e-6, probClipInterval=(-1e2,1e2),
-                                                      gateStringSetLabels=["Set1","Set2"] )
+                                                      gateStringSetLabels=["Set1","Set2"], useFreqWeightedChiSq=True )
 
         aliased_list = [ pygsti.obj.GateString( [ (x if x != "Gx" else "A1") for x in gs]) for gs in self.lsgstStrings[0] ]
         gs_withA1 = gs_clgst.copy(); gs_withA1.set_gate("A1",gs_clgst.get_gate("Gx"))

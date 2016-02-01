@@ -190,8 +190,13 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
 
     else: # no TP constraint
         gs_after_gauge_opt = _alg.optimize_gauge(gs_lgst, "target", targetGateset=gs_target, spamWeight=1.0, gateWeight=1.0)
-        #OLD: gs_clgst = _alg.contract(gs_after_gauge_opt, "CPTP")
         #TODO: set identity vector, or leave as is, which assumes LGST had the right one and contraction doesn't change it ??
+
+    #Advanced Options can specify further manipulation of LGST seed
+    if advancedOptions.get('contractLGSTtoCPTP',False):
+        gs_after_gauge_opt = _alg.contract(gs_after_gauge_opt, "CPTP")
+    if advancedOptions.get('depolarizeLGST',0) > 0:
+        gs_after_gauge_opt = gs_after_gauge_opt.depolarize(gate_noise=advancedOptions['depolarizeLGST'])
 
     #Run LSGST on data
     if objective == "chi2":
@@ -200,7 +205,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                                               probClipInterval = advancedOptions.get('probClipInterval',(-1e6,1e6)),
                                               returnAll=True, opt_G0=(not constrainToTP), opt_SP0=(not constrainToTP),
                                               gatestringWeightsDict=weightsDict, verbosity=advancedOptions.get('verbosity',2),
-                                              memLimit=advancedOptions.get('memoryLimitInBytes',None))
+                                              memLimit=advancedOptions.get('memoryLimitInBytes',None),
+                                              useFreqWeightedChiSq=advancedOptions.get('useFreqWeightedChiSq',False))
     elif objective == "logl":
         gs_lsgst_list = _alg.do_iterative_mlgst(ds, gs_after_gauge_opt, lsgstLists,
                                                minProbClip = advancedOptions.get('minProbClip',1e-4),
@@ -208,7 +214,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                                                radius=advancedOptions.get('radius',1e-4), 
                                                returnAll=True, opt_G0=(not constrainToTP), opt_SP0=(not constrainToTP),
                                                verbosity=advancedOptions.get('verbosity',2),
-                                               memLimit=advancedOptions.get('memoryLimitInBytes',None))
+                                               memLimit=advancedOptions.get('memoryLimitInBytes',None),
+                                               useFreqWeightedChiSq=advancedOptions.get('useFreqWeightedChiSq',False))
     else:
         raise ValueError("Invalid longSequenceObjective: %s" % objective)
 
