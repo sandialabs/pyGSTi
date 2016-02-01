@@ -640,7 +640,7 @@ def read_gateset(filename):
 
 
     gs = _objs.GateSet()
-    spam_vecs = { }; spam_labels = { }; remainder_spam_label = ""
+    spam_vecs = _OrderedDict(); spam_labels = _OrderedDict(); remainder_spam_label = ""
     identity_vec = _np.transpose( _np.array( [ _np.sqrt(2.0), 0,0,0] ) )  #default = 1-QUBIT identity vector
 
     state = "look for label"
@@ -699,6 +699,10 @@ def read_gateset(filename):
     E_names   = list(_OrderedDict.fromkeys( [ E   for (rho,E) in spam_labels.values() ] ) ) #  SPAMLABEL line (not 2 items to right of = sign)
     if "remainder" in E_names:
         del E_names[ E_names.index("remainder") ]
+
+    #Order E_names and rho_names using spam_vecs ordering
+    rho_names = sorted(rho_names, key=spam_vecs.keys().index)
+    E_names = sorted(E_names, key=spam_vecs.keys().index)
 
      #add vectors to gateset
     for (i,rho_nm) in enumerate(rho_names): gs.set_rhovec(spam_vecs[rho_nm],i)
