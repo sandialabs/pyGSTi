@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.diff_frobenius
+=====================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.diff_frobenius

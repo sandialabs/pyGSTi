@@ -1,0 +1,6 @@
+pygsti.objects.MultiDataSet.add_dataset
+=======================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: MultiDataSet.add_dataset

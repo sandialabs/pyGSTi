@@ -1,0 +1,6 @@
+pygsti.report.compute_dataset_qty
+=================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: compute_dataset_qty

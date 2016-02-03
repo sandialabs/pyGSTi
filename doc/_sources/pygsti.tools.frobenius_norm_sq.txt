@@ -1,0 +1,6 @@
+pygsti.tools.frobenius_norm_sq
+==============================
+
+.. currentmodule:: pygsti.tools
+
+.. autofunction:: frobenius_norm_sq

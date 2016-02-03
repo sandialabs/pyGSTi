@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.bulk_evaltree
+====================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.bulk_evaltree

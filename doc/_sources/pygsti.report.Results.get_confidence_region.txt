@@ -1,0 +1,6 @@
+pygsti.report.Results.get_confidence_region
+===========================================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: Results.get_confidence_region

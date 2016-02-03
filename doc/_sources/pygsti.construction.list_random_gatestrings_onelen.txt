@@ -1,0 +1,6 @@
+pygsti.construction.list_random_gatestrings_onelen
+==================================================
+
+.. currentmodule:: pygsti.construction
+
+.. autofunction:: list_random_gatestrings_onelen

@@ -1,0 +1,6 @@
+pygsti.report.direct_logl_matrix
+================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: direct_logl_matrix

@@ -1,0 +1,6 @@
+pygsti.objects.EvalTree.get_tree_index_of_final_value
+=====================================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: EvalTree.get_tree_index_of_final_value

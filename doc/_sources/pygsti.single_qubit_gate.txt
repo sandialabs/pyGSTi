@@ -1,0 +1,6 @@
+pygsti.single_qubit_gate
+========================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: single_qubit_gate

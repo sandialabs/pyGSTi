@@ -1,0 +1,6 @@
+pygsti.chi2
+===========
+
+.. currentmodule:: pygsti
+
+.. autofunction:: chi2

@@ -1,0 +1,6 @@
+pygsti.construction.build_identity_vec
+======================================
+
+.. currentmodule:: pygsti.construction
+
+.. autofunction:: build_identity_vec

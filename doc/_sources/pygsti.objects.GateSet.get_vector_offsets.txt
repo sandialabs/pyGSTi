@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.get_vector_offsets
+=========================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.get_vector_offsets

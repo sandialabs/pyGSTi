@@ -1,0 +1,6 @@
+pygsti.objects.ConfidenceRegion.__init__
+========================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: ConfidenceRegion.__init__

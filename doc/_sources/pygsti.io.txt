@@ -1,0 +1,45 @@
+pygsti.io
+=========
+
+.. automodule:: pygsti.io
+
+   
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+      :toctree:
+
+   
+      load_dataset
+      load_gateset
+      load_gatestring_dict
+      load_gatestring_list
+      load_multidataset
+      load_parameter_file
+      read_gateset
+      write_dataset
+      write_empty_dataset
+      write_gateset
+      write_gatestring_list
+      write_multidataset
+      write_parameter_file
+   
+   
+
+   
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+      :template: my_autosummary_class.rst
+      :toctree:
+
+   
+      StdInputParser
+   
+   
+
+   
+   
+   

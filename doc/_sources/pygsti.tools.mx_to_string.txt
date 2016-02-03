@@ -1,0 +1,6 @@
+pygsti.tools.mx_to_string
+=========================
+
+.. currentmodule:: pygsti.tools
+
+.. autofunction:: mx_to_string

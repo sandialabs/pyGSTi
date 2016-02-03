@@ -1,0 +1,6 @@
+pygsti.report.nested_color_boxplot
+==================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: nested_color_boxplot

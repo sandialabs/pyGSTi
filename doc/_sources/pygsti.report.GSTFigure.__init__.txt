@@ -1,0 +1,6 @@
+pygsti.report.GSTFigure.__init__
+================================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: GSTFigure.__init__

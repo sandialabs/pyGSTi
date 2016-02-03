@@ -1,0 +1,6 @@
+pygsti.report.color_boxplot
+===========================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: color_boxplot

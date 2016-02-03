@@ -1,0 +1,6 @@
+pygsti.optimize_gauge
+=====================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: optimize_gauge

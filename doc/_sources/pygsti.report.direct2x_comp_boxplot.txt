@@ -1,0 +1,6 @@
+pygsti.report.direct2x_comp_boxplot
+===================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: direct2x_comp_boxplot

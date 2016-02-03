@@ -1,0 +1,6 @@
+pygsti.gm_matrices_unnormalized
+===============================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: gm_matrices_unnormalized

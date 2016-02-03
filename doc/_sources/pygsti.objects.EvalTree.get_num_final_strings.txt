@@ -1,0 +1,6 @@
+pygsti.objects.EvalTree.get_num_final_strings
+=============================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: EvalTree.get_num_final_strings

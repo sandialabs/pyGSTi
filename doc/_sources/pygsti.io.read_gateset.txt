@@ -1,0 +1,6 @@
+pygsti.io.read_gateset
+======================
+
+.. currentmodule:: pygsti.io
+
+.. autofunction:: read_gateset

@@ -1,0 +1,6 @@
+pygsti.io.StdInputParser.parse_dictfile
+=======================================
+
+.. currentmodule:: pygsti.io
+
+.. automethod:: StdInputParser.parse_dictfile

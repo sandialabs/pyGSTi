@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.bulk_dpr
+===============================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.bulk_dpr

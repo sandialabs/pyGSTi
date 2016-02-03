@@ -1,0 +1,6 @@
+pygsti.tools.evec_penalty
+=========================
+
+.. currentmodule:: pygsti.tools
+
+.. autofunction:: evec_penalty

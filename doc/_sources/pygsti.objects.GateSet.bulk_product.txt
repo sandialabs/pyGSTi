@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.bulk_product
+===================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.bulk_product

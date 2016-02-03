@@ -1,0 +1,6 @@
+pygsti.decompose_gate_matrix
+============================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: decompose_gate_matrix

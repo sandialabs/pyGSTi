@@ -1,0 +1,6 @@
+pygsti.objects.EvalTree.insert
+==============================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: EvalTree.insert

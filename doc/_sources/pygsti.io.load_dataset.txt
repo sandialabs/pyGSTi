@@ -1,0 +1,6 @@
+pygsti.io.load_dataset
+======================
+
+.. currentmodule:: pygsti.io
+
+.. autofunction:: load_dataset

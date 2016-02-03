@@ -1,0 +1,6 @@
+pygsti.algorithms.find_sufficient_fiducial_pairs
+================================================
+
+.. currentmodule:: pygsti.algorithms
+
+.. autofunction:: find_sufficient_fiducial_pairs

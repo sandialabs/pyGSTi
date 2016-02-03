@@ -1,0 +1,6 @@
+pygsti.tools.sum_of_negative_choi_evals
+=======================================
+
+.. currentmodule:: pygsti.tools
+
+.. autofunction:: sum_of_negative_choi_evals

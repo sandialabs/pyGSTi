@@ -1,0 +1,6 @@
+pygsti.tools.jtracedist
+=======================
+
+.. currentmodule:: pygsti.tools
+
+.. autofunction:: jtracedist

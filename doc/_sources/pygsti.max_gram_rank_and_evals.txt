@@ -1,0 +1,6 @@
+pygsti.max_gram_rank_and_evals
+==============================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: max_gram_rank_and_evals

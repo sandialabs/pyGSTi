@@ -1,0 +1,6 @@
+pygsti.algorithms.test_germ_list_infl
+=====================================
+
+.. currentmodule:: pygsti.algorithms
+
+.. autofunction:: test_germ_list_infl

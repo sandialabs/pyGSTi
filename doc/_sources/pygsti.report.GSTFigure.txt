@@ -1,0 +1,28 @@
+pygsti.report.GSTFigure
+=======================
+
+.. currentmodule:: pygsti.report
+
+.. autoclass:: GSTFigure
+
+   
+   .. automethod:: __init__
+       :noindex:
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree:
+   
+      ~GSTFigure.__init__
+      ~GSTFigure.check
+      ~GSTFigure.get_extra_info
+      ~GSTFigure.save_to
+      ~GSTFigure.set_extra_info
+   
+   
+
+   
+   
+   

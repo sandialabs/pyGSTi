@@ -1,0 +1,6 @@
+pygsti.construction.list_all_gatestrings
+========================================
+
+.. currentmodule:: pygsti.construction
+
+.. autofunction:: list_all_gatestrings

@@ -1,0 +1,6 @@
+pygsti.objects.EvalTree.index
+=============================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: EvalTree.index

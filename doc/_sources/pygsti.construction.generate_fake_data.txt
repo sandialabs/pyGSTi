@@ -1,0 +1,6 @@
+pygsti.construction.generate_fake_data
+======================================
+
+.. currentmodule:: pygsti.construction
+
+.. autofunction:: generate_fake_data

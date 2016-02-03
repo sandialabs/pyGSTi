@@ -1,0 +1,6 @@
+pygsti.report.direct_lgst_gateset
+=================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: direct_lgst_gateset

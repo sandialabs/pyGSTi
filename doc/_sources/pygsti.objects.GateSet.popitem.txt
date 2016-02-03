@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.popitem
+==============================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.popitem

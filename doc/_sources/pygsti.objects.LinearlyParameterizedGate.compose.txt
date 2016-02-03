@@ -1,0 +1,6 @@
+pygsti.objects.LinearlyParameterizedGate.compose
+================================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: LinearlyParameterizedGate.compose

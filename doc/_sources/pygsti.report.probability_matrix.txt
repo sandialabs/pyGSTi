@@ -1,0 +1,6 @@
+pygsti.report.probability_matrix
+================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: probability_matrix

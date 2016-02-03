@@ -1,0 +1,6 @@
+pygsti.objects.EvalTree.get_init_labels
+=======================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: EvalTree.get_init_labels

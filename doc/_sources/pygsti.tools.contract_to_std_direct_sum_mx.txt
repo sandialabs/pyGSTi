@@ -1,0 +1,6 @@
+pygsti.tools.contract_to_std_direct_sum_mx
+==========================================
+
+.. currentmodule:: pygsti.tools
+
+.. autofunction:: contract_to_std_direct_sum_mx

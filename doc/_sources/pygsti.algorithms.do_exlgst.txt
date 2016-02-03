@@ -1,0 +1,6 @@
+pygsti.algorithms.do_exlgst
+===========================
+
+.. currentmodule:: pygsti.algorithms
+
+.. autofunction:: do_exlgst

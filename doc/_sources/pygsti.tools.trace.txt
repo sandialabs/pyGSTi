@@ -1,0 +1,6 @@
+pygsti.tools.trace
+==================
+
+.. currentmodule:: pygsti.tools
+
+.. autofunction:: trace

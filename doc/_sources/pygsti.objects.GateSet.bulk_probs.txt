@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.bulk_probs
+=================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.bulk_probs

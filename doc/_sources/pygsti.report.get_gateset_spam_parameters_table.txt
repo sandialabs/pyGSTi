@@ -1,0 +1,6 @@
+pygsti.report.get_gateset_spam_parameters_table
+===============================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: get_gateset_spam_parameters_table

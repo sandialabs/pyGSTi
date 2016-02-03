@@ -1,0 +1,6 @@
+pygsti.report.Results.set_template_path
+=======================================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: Results.set_template_path

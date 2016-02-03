@@ -1,0 +1,6 @@
+pygsti.algorithms.do_iterative_mc2gst_with_model_selection
+==========================================================
+
+.. currentmodule:: pygsti.algorithms
+
+.. autofunction:: do_iterative_mc2gst_with_model_selection

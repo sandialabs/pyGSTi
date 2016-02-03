@@ -1,0 +1,6 @@
+pygsti.is_pos_def
+=================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: is_pos_def

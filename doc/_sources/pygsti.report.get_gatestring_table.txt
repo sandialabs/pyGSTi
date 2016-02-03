@@ -1,0 +1,6 @@
+pygsti.report.get_gatestring_table
+==================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: get_gatestring_table

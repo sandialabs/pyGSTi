@@ -1,0 +1,6 @@
+pygsti.report.get_dataset_overview_table
+========================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: get_dataset_overview_table

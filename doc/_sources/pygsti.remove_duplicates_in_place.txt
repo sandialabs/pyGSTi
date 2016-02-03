@@ -1,0 +1,6 @@
+pygsti.remove_duplicates_in_place
+=================================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: remove_duplicates_in_place

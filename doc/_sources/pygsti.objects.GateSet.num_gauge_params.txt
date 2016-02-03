@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.num_gauge_params
+=======================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.num_gauge_params

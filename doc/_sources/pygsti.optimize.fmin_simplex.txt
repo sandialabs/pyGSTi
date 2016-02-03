@@ -1,0 +1,6 @@
+pygsti.optimize.fmin_simplex
+============================
+
+.. currentmodule:: pygsti.optimize
+
+.. autofunction:: fmin_simplex

@@ -1,0 +1,6 @@
+pygsti.objects.DataSet.add_counts_from_dataset
+==============================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: DataSet.add_counts_from_dataset

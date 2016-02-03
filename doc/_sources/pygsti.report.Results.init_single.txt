@@ -1,0 +1,6 @@
+pygsti.report.Results.init_single
+=================================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: Results.init_single

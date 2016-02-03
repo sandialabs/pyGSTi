@@ -1,0 +1,6 @@
+pygsti.io.load_parameter_file
+=============================
+
+.. currentmodule:: pygsti.io
+
+.. autofunction:: load_parameter_file

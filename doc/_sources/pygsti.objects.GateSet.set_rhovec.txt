@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.set_rhovec
+=================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.set_rhovec

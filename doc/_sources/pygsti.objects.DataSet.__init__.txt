@@ -1,0 +1,6 @@
+pygsti.objects.DataSet.__init__
+===============================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: DataSet.__init__

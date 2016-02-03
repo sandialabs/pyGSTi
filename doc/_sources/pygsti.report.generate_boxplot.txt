@@ -1,0 +1,6 @@
+pygsti.report.generate_boxplot
+==============================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: generate_boxplot

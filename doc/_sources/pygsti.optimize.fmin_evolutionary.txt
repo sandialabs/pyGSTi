@@ -1,0 +1,6 @@
+pygsti.optimize.fmin_evolutionary
+=================================
+
+.. currentmodule:: pygsti.optimize
+
+.. autofunction:: fmin_evolutionary

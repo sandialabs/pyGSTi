@@ -1,0 +1,6 @@
+pygsti.construction.repeat_with_max_length
+==========================================
+
+.. currentmodule:: pygsti.construction
+
+.. autofunction:: repeat_with_max_length

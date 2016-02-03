@@ -1,0 +1,26 @@
+pygsti.objects.GateString
+=========================
+
+.. currentmodule:: pygsti.objects
+
+.. autoclass:: GateString
+
+   
+   .. automethod:: __init__
+       :noindex:
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree:
+   
+      ~GateString.__init__
+      ~GateString.from_pythonstr
+      ~GateString.to_pythonstr
+   
+   
+
+   
+   
+   

@@ -1,0 +1,6 @@
+pygsti.report.whack_a_chi2_mole_boxplot
+=======================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: whack_a_chi2_mole_boxplot

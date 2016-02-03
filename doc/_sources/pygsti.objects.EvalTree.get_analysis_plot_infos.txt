@@ -1,0 +1,6 @@
+pygsti.objects.EvalTree.get_analysis_plot_infos
+===============================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: EvalTree.get_analysis_plot_infos

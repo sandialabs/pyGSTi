@@ -1,0 +1,6 @@
+pygsti.tools.fidelity_upper_bound
+=================================
+
+.. currentmodule:: pygsti.tools
+
+.. autofunction:: fidelity_upper_bound

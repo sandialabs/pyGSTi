@@ -1,0 +1,6 @@
+pygsti.report.Results.set_additional_info
+=========================================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: Results.set_additional_info

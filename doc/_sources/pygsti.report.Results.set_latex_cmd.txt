@@ -1,0 +1,6 @@
+pygsti.report.Results.set_latex_cmd
+===================================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: Results.set_latex_cmd

@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.add_spam_label
+=====================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.add_spam_label

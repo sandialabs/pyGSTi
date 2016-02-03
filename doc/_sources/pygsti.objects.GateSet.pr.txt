@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.pr
+=========================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.pr

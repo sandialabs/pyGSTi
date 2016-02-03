@@ -1,0 +1,35 @@
+pygsti.objects.MultiDataSet
+===========================
+
+.. currentmodule:: pygsti.objects
+
+.. autoclass:: MultiDataSet
+
+   
+   .. automethod:: __init__
+       :noindex:
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree:
+   
+      ~MultiDataSet.__init__
+      ~MultiDataSet.add_dataset
+      ~MultiDataSet.add_dataset_counts
+      ~MultiDataSet.copy
+      ~MultiDataSet.get_datasets_sum
+      ~MultiDataSet.get_spam_labels
+      ~MultiDataSet.has_key
+      ~MultiDataSet.iteritems
+      ~MultiDataSet.itervalues
+      ~MultiDataSet.keys
+      ~MultiDataSet.load
+      ~MultiDataSet.save
+   
+   
+
+   
+   
+   

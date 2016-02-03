@@ -1,0 +1,31 @@
+pygsti.io.StdInputParser
+========================
+
+.. currentmodule:: pygsti.io
+
+.. autoclass:: StdInputParser
+
+   
+   .. automethod:: __init__
+       :noindex:
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree:
+   
+      ~StdInputParser.__init__
+      ~StdInputParser.parse_datafile
+      ~StdInputParser.parse_dataline
+      ~StdInputParser.parse_dictfile
+      ~StdInputParser.parse_dictline
+      ~StdInputParser.parse_gatestring
+      ~StdInputParser.parse_multidatafile
+      ~StdInputParser.parse_stringfile
+   
+   
+
+   
+   
+   

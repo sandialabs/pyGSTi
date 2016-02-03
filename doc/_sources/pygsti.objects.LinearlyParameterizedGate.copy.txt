@@ -1,0 +1,6 @@
+pygsti.objects.LinearlyParameterizedGate.copy
+=============================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: LinearlyParameterizedGate.copy

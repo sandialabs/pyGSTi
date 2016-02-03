@@ -1,0 +1,6 @@
+pygsti.objects.MultiDataSet.itervalues
+======================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: MultiDataSet.itervalues

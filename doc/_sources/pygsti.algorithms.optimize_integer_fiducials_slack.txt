@@ -1,0 +1,6 @@
+pygsti.algorithms.optimize_integer_fiducials_slack
+==================================================
+
+.. currentmodule:: pygsti.algorithms
+
+.. autofunction:: optimize_integer_fiducials_slack

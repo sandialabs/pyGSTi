@@ -1,0 +1,31 @@
+pygsti.optimize
+===============
+
+.. automodule:: pygsti.optimize
+
+   
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+      :toctree:
+
+   
+      check_jac
+      create_obj_func_printer
+      fmax_cg
+      fmin_evolutionary
+      fmin_particle_swarm
+      fmin_simplex
+      fmin_supersimplex
+      minimize
+   
+   
+
+   
+   
+   
+
+   
+   
+   

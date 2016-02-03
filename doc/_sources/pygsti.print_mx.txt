@@ -1,0 +1,6 @@
+pygsti.print_mx
+===============
+
+.. currentmodule:: pygsti
+
+.. autofunction:: print_mx

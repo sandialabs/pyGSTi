@@ -1,0 +1,6 @@
+pygsti.mags_of_negative_choi_evals
+==================================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: mags_of_negative_choi_evals

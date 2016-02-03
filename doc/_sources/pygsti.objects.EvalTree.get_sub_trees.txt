@@ -1,0 +1,6 @@
+pygsti.objects.EvalTree.get_sub_trees
+=====================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: EvalTree.get_sub_trees

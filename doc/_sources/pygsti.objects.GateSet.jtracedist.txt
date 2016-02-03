@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.jtracedist
+=================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.jtracedist

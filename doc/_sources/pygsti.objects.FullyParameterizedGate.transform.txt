@@ -1,0 +1,6 @@
+pygsti.objects.FullyParameterizedGate.transform
+===============================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: FullyParameterizedGate.transform

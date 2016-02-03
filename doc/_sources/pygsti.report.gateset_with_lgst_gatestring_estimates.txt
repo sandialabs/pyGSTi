@@ -1,0 +1,6 @@
+pygsti.report.gateset_with_lgst_gatestring_estimates
+====================================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: gateset_with_lgst_gatestring_estimates

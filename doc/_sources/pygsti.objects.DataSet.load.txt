@@ -1,0 +1,6 @@
+pygsti.objects.DataSet.load
+===========================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: DataSet.load

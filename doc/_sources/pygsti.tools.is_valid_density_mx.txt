@@ -1,0 +1,6 @@
+pygsti.tools.is_valid_density_mx
+================================
+
+.. currentmodule:: pygsti.tools
+
+.. autofunction:: is_valid_density_mx

@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.deriv_wrt_params
+=======================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.deriv_wrt_params

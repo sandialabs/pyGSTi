@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.increase_dimension
+=========================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.increase_dimension

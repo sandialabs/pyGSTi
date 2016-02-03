@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.depolarize
+=================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.depolarize

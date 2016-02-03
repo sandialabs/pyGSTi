@@ -1,0 +1,6 @@
+pygsti.tools.gm_matrices
+========================
+
+.. currentmodule:: pygsti.tools
+
+.. autofunction:: gm_matrices

@@ -1,0 +1,6 @@
+pygsti.report.GSTFigure.save_to
+===============================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: GSTFigure.save_to

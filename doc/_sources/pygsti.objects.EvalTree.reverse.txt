@@ -1,0 +1,6 @@
+pygsti.objects.EvalTree.reverse
+===============================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: EvalTree.reverse

@@ -1,0 +1,6 @@
+pygsti.construction.list_strings_lgst_can_estimate
+==================================================
+
+.. currentmodule:: pygsti.construction
+
+.. autofunction:: list_strings_lgst_can_estimate

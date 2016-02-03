@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.set_gate
+===============================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.set_gate

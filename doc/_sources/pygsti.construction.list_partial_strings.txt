@@ -1,0 +1,6 @@
+pygsti.construction.list_partial_strings
+========================================
+
+.. currentmodule:: pygsti.construction
+
+.. autofunction:: list_partial_strings

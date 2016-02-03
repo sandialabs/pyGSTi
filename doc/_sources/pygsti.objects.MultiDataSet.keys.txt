@@ -1,0 +1,6 @@
+pygsti.objects.MultiDataSet.keys
+================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: MultiDataSet.keys

@@ -1,0 +1,6 @@
+pygsti.diamonddist
+==================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: diamonddist

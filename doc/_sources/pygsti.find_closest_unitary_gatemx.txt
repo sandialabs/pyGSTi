@@ -1,0 +1,6 @@
+pygsti.find_closest_unitary_gatemx
+==================================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: find_closest_unitary_gatemx

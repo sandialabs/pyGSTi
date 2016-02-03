@@ -1,0 +1,6 @@
+pygsti.construction.repeat_remainder_for_truncation
+===================================================
+
+.. currentmodule:: pygsti.construction
+
+.. autofunction:: repeat_remainder_for_truncation

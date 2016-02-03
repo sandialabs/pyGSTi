@@ -1,0 +1,6 @@
+pygsti.objects.GSTRuntimeError
+==============================
+
+.. currentmodule:: pygsti.objects
+
+.. autoexception:: GSTRuntimeError

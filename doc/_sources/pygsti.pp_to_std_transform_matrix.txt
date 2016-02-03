@@ -1,0 +1,6 @@
+pygsti.pp_to_std_transform_matrix
+=================================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: pp_to_std_transform_matrix

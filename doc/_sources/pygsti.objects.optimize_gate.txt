@@ -1,0 +1,6 @@
+pygsti.objects.optimize_gate
+============================
+
+.. currentmodule:: pygsti.objects
+
+.. autofunction:: optimize_gate

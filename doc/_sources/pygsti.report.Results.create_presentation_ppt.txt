@@ -1,0 +1,6 @@
+pygsti.report.Results.create_presentation_ppt
+=============================================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: Results.create_presentation_ppt

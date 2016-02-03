@@ -1,0 +1,6 @@
+pygsti.report.get_unitary_gateset_gates_table
+=============================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: get_unitary_gateset_gates_table

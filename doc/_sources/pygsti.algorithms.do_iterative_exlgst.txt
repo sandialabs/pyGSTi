@@ -1,0 +1,6 @@
+pygsti.algorithms.do_iterative_exlgst
+=====================================
+
+.. currentmodule:: pygsti.algorithms
+
+.. autofunction:: do_iterative_exlgst

@@ -1,0 +1,6 @@
+pygsti.io.StdInputParser.__init__
+=================================
+
+.. currentmodule:: pygsti.io
+
+.. automethod:: StdInputParser.__init__
