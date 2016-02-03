@@ -387,7 +387,8 @@ def gram_rank_and_evals(dataset, specs, targetGateset=None, spamDict=None):
 def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs, 
              targetGateset=None, spamDict=None, guessGatesetForGauge=None,
              svdTruncateTo=0, maxiter=100000, maxfev=None, tol=1e-6, 
-             opt_gates=True, opt_G0=True, regularizeFactor=0, verbosity=0, check_jacobian=False):
+             opt_gates=True, opt_G0=True, regularizeFactor=0, verbosity=0,
+             check_jacobian=False):
   """
   Performs Extended Linear-inversion Gate Set Tomography on the dataset.
 
@@ -1162,9 +1163,14 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
   if verbosity > 1:
     nGateStrings = len(gateStringsToUse)
-    nModelParams = gs.num_nongauge_params(opt_gates, opt_G0, opt_SPAM, opt_SP0) #len(x0)
     nDataParams  = nGateStrings*(len(dataset.get_spam_labels())-1) #number of independent parameters
                                                                  # in dataset (max. model # of params)
+    try:
+      nModelParams = gs.num_nongauge_params(opt_gates, opt_G0, opt_SPAM, opt_SP0) #len(x0)
+    except: #numpy can throw a LinAlgError
+      print "Warning: could not obtain number of *non-gauge* parameters - using total params instead"
+      nModelParams = gs.num_params(opt_gates, opt_G0, opt_SPAM, opt_SP0) #just use total number of params
+      
     totChi2 = sum([x**2 for x in minErrVec])
     pvalue = 1.0 - _stats.chi2.cdf(totChi2,nDataParams-nModelParams) # reject GST model if p-value < threshold (~0.05?)
     print "  Sum of Chi^2 = %g (%d data params - %d model params = expected mean of %g; p-value = %g)" % \
@@ -2078,9 +2084,14 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     if verbosity > 1:
       if _np.isfinite(deltaLogL):
         nGateStrings = len(gateStringsToUse)
-        nModelParams = gs.num_nongauge_params(opt_gates, opt_G0, opt_SPAM, opt_SP0) #len(x0)
         nDataParams  = nGateStrings*(len(dataset.get_spam_labels())-1) #number of independent parameters 
                                                                      # in dataset (max. model # of params)
+        try:
+          nModelParams = gs.num_nongauge_params(opt_gates, opt_G0, opt_SPAM, opt_SP0) #len(x0)
+        except: #numpy can throw a LinAlgError
+          print "Warning: could not obtain number of *non-gauge* parameters - using total params instead"
+          nModelParams = gs.num_params(opt_gates, opt_G0, opt_SPAM, opt_SP0) #just use total number of params
+
         pvalue = 1.0 - _stats.chi2.cdf(2*deltaLogL,nDataParams-nModelParams) # reject GST if p-value < threshold (~0.05?)
 
         print "  Maximum log(L) = %g below upper bound of %g" % (deltaLogL, logL_upperbound)
