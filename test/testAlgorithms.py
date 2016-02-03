@@ -62,6 +62,16 @@ class TestAlgorithmMethods(AlgorithmTestCase):
         
         suffPairs = self.runSilent(pygsti.alg.find_sufficient_fiducial_pairs,
             std.gs_target, std.fiducials, std.fiducials, std.germs, verbosity=4)
+
+        self.runSilent(pygsti.alg.find_sufficient_fiducial_pairs,
+                       std.gs_target, std.fiducials, std.fiducials,
+                       std.germs, searchMode="random", nRandom=3,
+                       seed=1234, verbosity=2)
+        self.runSilent(pygsti.alg.find_sufficient_fiducial_pairs,
+                       std.gs_target, std.fiducials, std.fiducials,
+                       std.germs, searchMode="random", nRandom=300,
+                       seed=1234, verbosity=2)
+
         
         self.assertEqual(suffPairs, [(0, 0), (0, 1), (1, 0)])
 

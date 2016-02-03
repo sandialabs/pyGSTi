@@ -10,6 +10,7 @@ import itertools as _itertools
 import math as _math
 import sys as _sys
 from ..construction import gatestringconstruction as _gsc
+from ..tools import remove_duplicates as _remove_duplicates
 
 
 def _nCr(n,r):
@@ -18,8 +19,9 @@ def _nCr(n,r):
     return f(n) / f(r) / f(n-r)
 
 def find_sufficient_fiducial_pairs(targetGateset, rhoStrs, EStrs, germList, 
-                               testLs=(256,2048), spamLabels="all", tol=0.75,
-                               verbosity=0, testPairList=None):
+                                   testLs=(256,2048), spamLabels="all", tol=0.75,
+                                   searchMode="sequential", nRandom=100, seed=None,
+                                   verbosity=0, testPairList=None):
 
     """ Still in experimental stages.  TODO docstring. """
     #trim LSGST list of all f1+germ^exp+f2 strings to just those needed to get full rank jacobian. (compressed sensing like)
@@ -112,7 +114,29 @@ def find_sufficient_fiducial_pairs(targetGateset, rhoStrs, EStrs, germList,
             _sys.stdout.flush()
 
         bestAmplified = 0
-        for pairIndicesToTest in _itertools.combinations(allPairIndices, nNeededPairs):
+        if searchMode == "sequential":
+            pairIndicesToIterateOver = _itertools.combinations(allPairIndices, nNeededPairs)
+
+        elif searchMode == "random":
+            rand = _np.random.RandomState(seed)  # ok if seed is None
+            nTotalPairCombos = _nCr(len(allPairIndices), nNeededPairs)
+            if nRandom < nTotalPairCombos:
+                randIndices = _remove_duplicates(sorted(rand.randint(0,nTotalPairCombos,size=nRandom)))
+            else:
+                randIndices = range(nTotalPairCombos)
+
+            def filterAll(it): #generator which filters iterator "it" using randIndices
+                nxt = 0
+                for i,val in enumerate(it):
+                    if i == randIndices[nxt]:
+                        yield val
+                        nxt += 1
+                        if nxt == len(randIndices): break
+
+            pairIndicesToIterateOver = filterAll(_itertools.combinations(allPairIndices, nNeededPairs))
+
+
+        for pairIndicesToTest in pairIndicesToIterateOver:
             gateStringIndicesForPairs = []
             for i in pairIndicesToTest:
                 gateStringIndicesForPairs.extend( gateStringIndicesForPair[i] )
@@ -135,7 +159,7 @@ def find_sufficient_fiducial_pairs(targetGateset, rhoStrs, EStrs, germList,
                     iEStr   = i - iRhoStr*nEStrs
                     ret.append( (iRhoStr,iEStr) )
                 return ret
-        if verbosity > 0: print " --> Higheset number of amplified parameters was %d" % bestAmplified
+    if verbosity > 0: print " --> Higheset number of amplified parameters was %d" % bestAmplified
 
     #if we tried all the way to nPossiblePairs-1 and no success, just return all the pairs
     listOfAllPairs = [ (iRhoStr,iEStr) for iRhoStr in xrange(nRhoStrs) for iEStr in xrange(nEStrs) ]
