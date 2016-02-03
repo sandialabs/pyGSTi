@@ -34,48 +34,56 @@
         <h2>
 <a id="getting-started" class="anchor" href="#getting-started" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Getting Started:</h2>
 
-<p>pyGSTi is written entirely in Python, and so there's no compiling necessary.
-The first step is to install Python (and iPython notebook is highly
-recommended) if you haven't already.   In order to use pyGSTi you need to
+<p>pyGSTi is a software package to perform gate set tomography (GST).  GST is a kind of quantum tomography, and it provides full characterization of quantum logic gates on quantum devices such as qubits.  For a basic (albeit out of date) introduction to GST, see <a href="http://arxiv.org/abs/1310.4492">http://arxiv.org/abs/1310.4492</a> (by the GST authors) or <a href="http://arxiv.org/abs/1509.02921">http://arxiv.org/abs/1509.02921</a> (by an independent 3rd party).  These papers describe a relatively primitive implementation of GST (compared to what’s available in pyGSTi).  Major upgrades in pyGSTi include higher accuracy (from the analysis of long gate sequences) and automatic generation of detailed reports. </p>
+
+<p>pyGSTi is written entirely in Python, so there's no compiling necessary.
+The first step is to install <strong>Python</strong> and <strong>iPython notebook</strong> (if they aren't
+installed already).  In order to use pyGSTi you need to
 tell your python distribution where pyGSTi lives, which can be done in one
  of two ways:</p>
 
-<p>1) run: "python install_locally.py" </p>
+<ol>
+<li>
+<p>run: <code>python install_locally.py</code> </p>
 
-<p>This adds the current pyGSTi path to python's list of search paths, and
-  doesn't required administrative access (but only applies to the current user).</p>
+<p>This adds the current pyGSTi path to Python's list of search paths, and
+doesn't required administrative access (but only applies to the current user).</p>
+</li>
+<li>
+<p>run: <code>python setup.py install</code></p>
 
-<p>2) run: python setup.py install</p>
-
-<p>This installs the pyGSTi python package into one of the python distribution's
-  search directories.  This typically requires administrative privileges, and
-  is the way most python packages are installed.  Installing this way has the
-  advantage that it makes the package available to all users and then allows 
-  you to move or delete the directory you're installing from.</p>
+<p>This installs the pyGSTi package into one of the Python distribution's
+search directories.  This typically requires administrative privileges, and
+is the way most Python packages are installed.  Installing this way has the
+advantage that it makes the package available to all users and then allows 
+you to move or delete the directory you're installing from.</p>
 
 <p>The reason why you may <em>not</em> want to use this installation method is that 
-  pyGSTi comes with (iPython notebook) tutorials that you may want to access.
-  And if you're keeping the tutorial files somewhere in your local user
-  directories, you may want to just place the entire pyGSTi directory there
-  use method 1) above.</p>
+pyGSTi comes with (iPython notebook) tutorials that you may want to access.
+If you're keeping the tutorial files somewhere in your local user
+directories, you may want to just place the entire pyGSTi directory there
+using option (1) above.</p>
+</li>
+</ol>
 
-<p>After you've installed pyGSTi, you should be able to import the 
-"pygsti" Python package.  The next thing to do is take a look at
-the tutorials, which you do by:</p>
+<p>After you've installed pyGSTi, you should be able to 
+"<code>import pygsti</code>" in Python or an iPython notebook.  The next step is to take a look at
+the tutorials.  To do this:</p>
 
 <ul>
 <li><p>change to the notebook directory, by running:
-cd ipython_notebooks  </p></li>
+<code>cd ipython_notebooks</code>  </p></li>
 <li><p>start up the iPython notebook server by running:
-ipython notebook</p></li>
+<code>ipython notebook</code></p></li>
 </ul>
 
-<p>The iPython server should open up your web browser to the server root,
-from where you can navigate to the "Tutorials" folder and start the 
-first "00" tutorial notebook.  Note that the key command to execute
-a cell within the iPython notebook is "Shift+Enter", not just "Enter".</p>
+<p>The iPython server should open up your web browser to the server root.
+From there, you can navigate to the "Tutorials" folder and start the 
+first tutorial notebook, “00 Quick and easy GST”.  If you're new to iPython
+notebook, note that the key command to execute
+a cell within a notebook is , not just .</p>
 
-<p>Congratulations!  You're up and running with pyGSTi!</p>
+<p><strong>Congratulations!  You're up and running with pyGSTi!</strong></p>
 
 <h2>
 <a id="license" class="anchor" href="#license" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>License</h2>
@@ -98,7 +106,17 @@ a cell within the iPython notebook is "Shift+Enter", not just "Enter".</p>
       </footer>
     </div>
 
-    
+              <script type="text/javascript">
+            var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+            document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+          </script>
+          <script type="text/javascript">
+            try {
+              var pageTracker = _gat._getTracker("UA-21066806-3");
+            pageTracker._trackPageview();
+            } catch(err) {}
+          </script>
+
 
   </body>
 </html>
