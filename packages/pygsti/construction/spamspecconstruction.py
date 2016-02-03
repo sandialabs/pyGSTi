@@ -5,6 +5,7 @@
 #*****************************************************************
 """ Construction routines for SPAM specifiers """
 
+from ..tools import remove_duplicates as _remove_duplicates
 from ..objects import spamspec as _ss
 
 
@@ -84,7 +85,7 @@ def get_spam_strs(specs):
     """ 
     Get just the string portion of a pair of rho and E specifiers by
       stripping last element of rhoSpecs and first element of ESpecs
-      to get rhoStrs and EStrs.
+      to get rhoStrs and EStrs.  Duplicate strings are removed.
 
     Parameters
     ----------
@@ -97,6 +98,6 @@ def get_spam_strs(specs):
     EStrs : list of strings
     """
     rhoSpecs, ESpecs = specs
-    rhoStrs = [ rhoSpec.str for rhoSpec in rhoSpecs ]
-    EStrs   = [ ESpec.str for ESpec in ESpecs ]
+    rhoStrs = _remove_duplicates( [ rhoSpec.str for rhoSpec in rhoSpecs ] )
+    EStrs   = _remove_duplicates( [ ESpec.str for ESpec in ESpecs ] )
     return rhoStrs, EStrs
