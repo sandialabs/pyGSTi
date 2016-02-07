@@ -280,11 +280,14 @@ Full-Width Styles
 
 table.headertable {
   border: 0px;
+  margin-left: -100px; /* 80px image + 2*10px td-padding */
 }
 table.headertable td {
+  border: 0px;
   vertical-align: bottom;
 }
 table.headertable img {
+  padding: 0px;
   border: 0px;
   box-shadow: none;
   -webkit-box-shadow: none;
