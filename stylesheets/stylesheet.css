@@ -278,13 +278,13 @@ Full-Width Styles
   margin: 0 auto;
 }
 
-table.tableinner {
+table.headertable {
   border: 0px;
 }
-table.tableinner td {
+table.headertable td {
   vertical-align: bottom;
 }
-table.tableinner img {
+table.headertable img {
   border: 0px;
   box-shadow: none;
   -webkit-box-shadow: none;
