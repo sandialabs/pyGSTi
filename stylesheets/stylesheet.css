@@ -271,13 +271,6 @@ Full-Width Styles
   margin: 0 auto;
 }
 
-.headerinner {
-  position: relative;
-  max-width: 640px;
-  padding: 20px 10px;
-  margin: 0 auto;
-}
-
 table.headertable {
   border: 0px;
   margin-left: -100px; /* 80px image + 2*10px td-padding */
