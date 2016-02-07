@@ -271,6 +271,26 @@ Full-Width Styles
   margin: 0 auto;
 }
 
+.headerinner {
+  position: relative;
+  max-width: 740px;
+  padding: 20px 10px;
+  margin: 0 auto;
+}
+
+table.tableinner {
+  border: 0px;
+}
+table.tableinner td {
+  vertical-align: bottom;
+}
+table.tableinner img {
+  border: 0px;
+  box-shadow: none;
+  -webkit-box-shadow: none;
+}
+
+
 #forkme_banner {
   display: block;
   position: absolute;
