@@ -259,70 +259,64 @@ class ConfidenceRegion(object):
                 gateVec = gateVec0.copy(); gateVec[i] += eps; gateObj.from_vector(gateVec,G0)
                 gradF[gpo + i] = ( fnOfGate( gateObj.matrix ) - f0 ) / eps        
             
-        if verbosity > 0:
-            print "gradF = ",gradF
-            
-        #Compute df = sqrt( gradFu.dag * 1/D * gradFu )
-        #  where regionQuadcForm = U * D * U.dag and gradFu = U.dag * gradF
-        #  so df = sqrt( gradF.dag * U * 1/D * U.dag * gradF )
-        #        = sqrt( gradF.dag * invRegionQuadcForm * gradF )
+        return self._compute_df_from_gradF(gradF, f0, returnFnVal, verbosity)
+
+
+    def get_gateset_fn_confidence_interval(self, fnOfGateset, eps=1e-7, returnFnVal=False, verbosity=0):
+        """
+        Compute the confidence interval for a function of a GateSet.
+
+        Parameters
+        ----------
+        fnOfGateset : function
+            A function which takes as its only argument a GateSet object.  The
+            returned confidence interval is based on linearizing this function
+            and propagating the gateset-space confidence region.
+
+        eps : float, optional
+            Step size used when taking finite-difference derivatives of fnOfGateset.
+
+        returnFnVal : bool, optional
+            If True, return the value of fnOfGateset along with it's confidence
+            region half-widths.
+
+        verbosity : int, optional
+            Specifies level of detail in standard output.
+
+        Returns
+        -------
+        df : float or numpy array
+            Half-widths of confidence intervals for each of the elements
+            in the float or array returned by fnOfGateset.  Thus, shape of
+            df matches that returned by fnOfGateset.
+
+        f0 : float or numpy array
+            Only returned when returnFnVal == True. Value of fnOfGateset
+            at the gate specified by gateLabel.
+        """
+
+        gates,G0,SPAM,SP0 = self.get_parameterization_flags()
+        nParams = self.gateset.num_params(gates,G0,SPAM,SP0)
+
+        gateset = self.gateset.copy() # copy because we add eps to this gateset
+
+        f0 = fnOfGateset(gateset) #function value at "base point" gateMx
+        gatesetVec0 = gateset.to_vector(gates, G0, SPAM, SP0)
+        assert(len(gatesetVec0) == nParams)
+
+        #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
         if type(f0) == float:
-            gradFdag = _np.conjugate(_np.transpose(gradF))
-
-            #DEBUG
-            #arg = _np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, gradF))
-            #print "HERE: taking sqrt(abs(%s))" % arg
-
-            df = _np.sqrt( abs(_np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, gradF))) )
+            gradF = _np.zeros( nParams, 'd' ) #assume all functions are real-valued for now...
         else:
-            fDims = len(f0.shape)
-            gradF = _np.rollaxis(gradF, 0, 1+fDims) # roll parameter axis to be the last index, preceded by f-shape
-            df = _np.empty( f0.shape, f0.dtype)
+            gradSize = (nParams,) + tuple(f0.shape)
+            gradF = _np.zeros( gradSize, f0.dtype ) #assume all functions are real-valued for now...
 
-            if f0.dtype == _np.dtype("complex"): #real and imaginary parts separately
-                if fDims == 0: #same as float case above
-                    gradFdag = _np.transpose(gradF)
-                    df = _np.sqrt( abs( _np.dot(gradFdag.real, _np.dot(self.invRegionQuadcForm, gradF.real))) ) \
-                        + 1j * _np.sqrt( abs( _np.dot(gradFdag.imag, _np.dot(self.invRegionQuadcForm, gradF.imag))) )
-                elif fDims == 1:
-                    for i in range(f0.shape[0]):
-                        gradFdag = _np.transpose(gradF[i])
-                        df[i] = _np.sqrt( abs( _np.dot(gradFdag.real, _np.dot(self.invRegionQuadcForm, gradF[i].real))) ) \
-                            + 1j * _np.sqrt( abs( _np.dot(gradFdag.imag, _np.dot(self.invRegionQuadcForm, gradF[i].imag))) )
-                elif fDims == 2:
-                    for i in range(f0.shape[0]):
-                        for j in range(f0.shape[1]):
-                            gradFdag = _np.transpose(gradF[i,j])
-                            df[i,j] = _np.sqrt( abs( _np.dot(gradFdag.real, _np.dot(self.invRegionQuadcForm, gradF[i,j].real))) ) \
-                                + 1j * _np.sqrt( abs( _np.dot(gradFdag.imag, _np.dot(self.invRegionQuadcForm, gradF[i,j].imag))) )
-                else:
-                    raise ValueError("Unsupported number of dimensions returned by fnOfGate: %d" % fDims)
-    
-            else: #assume real -- so really don't need conjugate calls below
-                if fDims == 0: #same as float case above
-                    gradFdag = _np.conjugate(_np.transpose(gradF))
-
-                    #DEBUG
-                    #arg = _np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, gradF))
-                    #print "HERE2: taking sqrt(abs(%s))" % arg
-
-                    df = _np.sqrt( abs( _np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, gradF))) )
-                elif fDims == 1:
-                    for i in range(f0.shape[0]):
-                        gradFdag = _np.conjugate(_np.transpose(gradF[i]))
-                        df[i] = _np.sqrt( abs(_np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, gradF[i]))) )
-                elif fDims == 2:
-                    for i in range(f0.shape[0]):
-                        for j in range(f0.shape[1]):
-                            gradFdag = _np.conjugate(_np.transpose(gradF[i,j]))
-                            df[i,j] = _np.sqrt( abs(_np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, gradF[i,j]))) )
-                else:
-                    raise ValueError("Unsupported number of dimensions returned by fnOfGate: %d" % fDims)
-        
-        if verbosity > 0:
-            print "df = ",df
-        
-        return (df, f0 ) if returnFnVal else df
+        for i in range(nParams):
+            gatesetVec = gatesetVec0.copy(); gatesetVec[i] += eps
+            gateset.from_vector(gatesetVec,gates,G0,SPAM,SP0)
+            gradF[i] = ( fnOfGateset(gateset) - f0 ) / eps        
+            
+        return self._compute_df_from_gradF(gradF, f0, returnFnVal, verbosity)
 
 
     def get_spam_fn_confidence_interval(self, fnOfSpamVecs, eps=1e-7, returnFnVal=False, verbosity=0):
@@ -394,43 +388,81 @@ class ConfidenceRegion(object):
                     gradF[off + i] = ( fnOfSpamVecs( gsEps.get_rhovecs(), gsEps.get_evecs() ) - f0 ) / eps        
                 gsEps.set_evec( EVec.copy(), k )  #I don't think copy() is needed here, but just to be safe
 
+        return self._compute_df_from_gradF(gradF, f0, returnFnVal, verbosity)
 
-        # NOTE: below here is same as for get_gate_fn_confidence_interval ------------------------            
 
-        if verbosity > 0:
-            print "gradF = ",gradF
-
+    def _compute_df_from_gradF(self, gradF, f0, returnFnVal, verbosity):
+        """ 
+        Internal function which computes error bars given an function value
+        and gradient (using linear approx. to function)
+        """
+    
         #Compute df = sqrt( gradFu.dag * 1/D * gradFu )
         #  where regionQuadcForm = U * D * U.dag and gradFu = U.dag * gradF
         #  so df = sqrt( gradF.dag * U * 1/D * U.dag * gradF )
         #        = sqrt( gradF.dag * invRegionQuadcForm * gradF )
+
+        if verbosity > 0:
+            print "gradF = ",gradF
+
         if type(f0) == float:
             gradFdag = _np.conjugate(_np.transpose(gradF))
+
+            #DEBUG
+            #arg = _np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, gradF))
+            #print "HERE: taking sqrt(abs(%s))" % arg
+
             df = _np.sqrt( abs(_np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, gradF))) )
         else:
             fDims = len(f0.shape)
             gradF = _np.rollaxis(gradF, 0, 1+fDims) # roll parameter axis to be the last index, preceded by f-shape
             df = _np.empty( f0.shape, f0.dtype)
 
-            if fDims == 0: #same as float case above
-                gradFdag = _np.conjugate(_np.transpose(gradF))
-                df = _np.sqrt( abs( _np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, gradF))) )
-            elif fDims == 1:
-                for i in range(f0.shape[0]):
-                    gradFdag = _np.conjugate(_np.transpose(gradF[i]))
-                    df[i] = _np.sqrt( abs(_np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, gradF[i]))) )
-            elif fDims == 2:
-                for i in range(f0.shape[0]):
-                    for j in range(f0.shape[1]):
-                        gradFdag = _np.conjugate(_np.transpose(gradF[i,j]))
-                        df[i,j] = _np.sqrt( abs(_np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, gradF[i,j]))) )
-            else:
-                raise ValueError("Unsupported number of dimensions returned by fnOfGate: %d" % fDims)
+            if f0.dtype == _np.dtype("complex"): #real and imaginary parts separately
+                if fDims == 0: #same as float case above
+                    gradFdag = _np.transpose(gradF)
+                    df = _np.sqrt( abs( _np.dot(gradFdag.real, _np.dot(self.invRegionQuadcForm, gradF.real))) ) \
+                        + 1j * _np.sqrt( abs( _np.dot(gradFdag.imag, _np.dot(self.invRegionQuadcForm, gradF.imag))) )
+                elif fDims == 1:
+                    for i in range(f0.shape[0]):
+                        gradFdag = _np.transpose(gradF[i])
+                        df[i] = _np.sqrt( abs( _np.dot(gradFdag.real, _np.dot(self.invRegionQuadcForm, gradF[i].real))) ) \
+                            + 1j * _np.sqrt( abs( _np.dot(gradFdag.imag, _np.dot(self.invRegionQuadcForm, gradF[i].imag))) )
+                elif fDims == 2:
+                    for i in range(f0.shape[0]):
+                        for j in range(f0.shape[1]):
+                            gradFdag = _np.transpose(gradF[i,j])
+                            df[i,j] = _np.sqrt( abs( _np.dot(gradFdag.real, _np.dot(self.invRegionQuadcForm, gradF[i,j].real))) ) \
+                                + 1j * _np.sqrt( abs( _np.dot(gradFdag.imag, _np.dot(self.invRegionQuadcForm, gradF[i,j].imag))) )
+                else:
+                    raise ValueError("Unsupported number of dimensions returned by fnOfGate or fnOfGateset: %d" % fDims)
+    
+            else: #assume real -- so really don't need conjugate calls below
+                if fDims == 0: #same as float case above
+                    gradFdag = _np.conjugate(_np.transpose(gradF))
+
+                    #DEBUG
+                    #arg = _np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, gradF))
+                    #print "HERE2: taking sqrt(abs(%s))" % arg
+
+                    df = _np.sqrt( abs( _np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, gradF))) )
+                elif fDims == 1:
+                    for i in range(f0.shape[0]):
+                        gradFdag = _np.conjugate(_np.transpose(gradF[i]))
+                        df[i] = _np.sqrt( abs(_np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, gradF[i]))) )
+                elif fDims == 2:
+                    for i in range(f0.shape[0]):
+                        for j in range(f0.shape[1]):
+                            gradFdag = _np.conjugate(_np.transpose(gradF[i,j]))
+                            df[i,j] = _np.sqrt( abs(_np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, gradF[i,j]))) )
+                else:
+                    raise ValueError("Unsupported number of dimensions returned by fnOfGate or fnOfGateset: %d" % fDims)
         
         if verbosity > 0:
             print "df = ",df
         
-        return (df, f0) if returnFnVal else df
+        return (df, f0 ) if returnFnVal else df
+
 
 
 

@@ -582,7 +582,8 @@ def get_gateset_decomp_table(gateset, formats, tableclass, longtable, confidence
     return tables
 
 
-def get_gateset_rotn_axis_table(gateset, formats, tableclass, longtable, confidenceRegionInfo=None):
+def get_gateset_rotn_axis_table(gateset, formats, tableclass, longtable, 
+                                confidenceRegionInfo=None, showAxisAngleErrBars=True):
     """ 
     Create a table of the angle between a gate rotation axes for 
      gates belonging to a gateset
@@ -606,16 +607,20 @@ def get_gateset_rotn_axis_table(gateset, formats, tableclass, longtable, confide
         If not None, specifies a confidence-region
         used to display error intervals.
 
+    showAxisAngleErrBars : bool, optional
+        Whether or not table should include error bars on the angles
+        between rotation axes (doing so makes the table take up more
+        space).
+
     Returns
     -------
     dict
         Dictionary with keys equal to the requested formats (e.g. 'latex'),
         and values equal to the table data in the corresponding format.
     """
-    gateLabels = gateset.keys()  # gate labels
+    gateLabels = gateset.keys()
 
-    qtyNames = ('decomposition',)
-    qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames for gl in gateLabels ]
+    qtys_to_compute = [ '%s decomposition' % gl for gl in gateLabels ] + ['Gateset Axis Angles']
     qtys = _cr.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo)
 
     colHeadings = ("Gate","Angle") + tuple( [ "RAAW(%s)" % gl for gl in gateLabels] )
@@ -631,32 +636,34 @@ def get_gateset_rotn_axis_table(gateset, formats, tableclass, longtable, confide
     tables = {}
     _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable, customHeader={'latex': latex_head} )
 
-    formatters = [None, _tf.EBPi] + [ _tf.Pi ] * len(gateLabels)
+    formatters = [None, _tf.EBPi] + [ _tf.EBPi ] * len(gateLabels)
 
-    for gl in gateLabels:
+    rotnAxisAngles, rotnAxisAnglesEB = qtys['Gateset Axis Angles'].get_value_and_err_bar()
+    rotnAngles = [ qtys['%s decomposition' % gl].get_value().get('pi rotations','X') \
+                       for gl in gateLabels ]
+
+    for i,gl in enumerate(gateLabels):
         decomp, decompEB = qtys['%s decomposition' % gl].get_value_and_err_bar()
         rotnAngle = decomp.get('pi rotations','X')
 
         angles_btwn_rotn_axes = []
-        axisOfRotn = decomp.get('axis of rotation',None)
-        for gl_other in gateLabels:
+        for j,gl_other in enumerate(gateLabels):
+            decomp_other, decompEB_other = qtys['%s decomposition' % gl_other].get_value_and_err_bar()
+            rotnAngle_other = decomp_other.get('pi rotations','X')
 
-            if gl_other == gl:  
-                angles_btwn_rotn_axes.append( "" )
-            else:
-                decomp_other, decompEB_other = qtys['%s decomposition' % gl_other].get_value_and_err_bar()
-                rotnAngle_other = decomp_other.get('pi rotations','X')                
-                if rotnAngle == 'X' or abs(rotnAngle) < 1e-4 or \
-                   rotnAngle_other == 'X' or abs(rotnAngle_other) < 1e-4:
-                    angles_btwn_rotn_axes.append( "--" )
+            if gl_other == gl:
+                angles_btwn_rotn_axes.append( ("",None) )
+            elif rotnAngle == 'X' or abs(rotnAngle) < 1e-4 or \
+                 rotnAngle_other == 'X' or abs(rotnAngle_other) < 1e-4:
+                angles_btwn_rotn_axes.append( ("--",None) )
+            elif not _np.isnan(rotnAxisAngles[i,j]):
+                if showAxisAngleErrBars and rotnAxisAnglesEB is not None:
+                    angles_btwn_rotn_axes.append( (rotnAxisAngles[i,j], rotnAxisAnglesEB[i,j]) )
                 else:
-                    axisOfRotn_other = decomp_other.get('axis of rotation',None)
-                    if axisOfRotn is not None and axisOfRotn_other is not None:
-                        real_dot =  _np.clip( _np.real(_np.dot(axisOfRotn,axisOfRotn_other)), 0.0, 1.0)
-                        angles_btwn_rotn_axes.append( _np.arccos( real_dot ) / _np.pi )
-                    else: 
-                        angles_btwn_rotn_axes.append( "X" )
-        
+                    angles_btwn_rotn_axes.append( (rotnAxisAngles[i,j], None) )
+            else:
+                angles_btwn_rotn_axes.append( ("X",None) )
+                
         if confidenceRegionInfo is None or decompEB is None: #decompEB is None when gate decomp failed
             rowData = [gl, (rotnAngle,None)] + angles_btwn_rotn_axes
         else:

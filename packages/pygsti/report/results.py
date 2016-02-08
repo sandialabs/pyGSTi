@@ -470,7 +470,7 @@ class Results(object):
             cri = self.get_confidence_region(confidenceLevel)
             return _generation.get_gateset_rotn_axis_table(
                 self.gsBestEstimate, self.formatsToCompute, self.tableClass,
-                self.longTables, cri)
+                self.longTables, cri, True)
 
         elif tableName == 'bestGatesetClosestUnitaryTable':
             #cri = self.get_confidence_region(confidenceLevel)

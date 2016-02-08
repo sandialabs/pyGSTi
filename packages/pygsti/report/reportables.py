@@ -88,6 +88,23 @@ def _getGateQuantity(fnOfGate, gateset, gateLabel, eps, confidenceRegionInfo, ve
     return ReportableQty(f0,df)
 
 
+def _getGateSetQuantity(fnOfGateSet, gateset, eps, confidenceRegionInfo, verbosity=0):
+    """ For constructing a ReportableQty from a function of a gate. """
+
+    if confidenceRegionInfo is None: # No Error bars
+        return ReportableQty(fnOfGateSet(gateset))
+
+    # make sure the gateset we're given is the one used to generate the confidence region
+    if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
+        raise ValueError("GateSet quantity confidence region is being requested for " +
+                         "a different gateset than the given confidenceRegionInfo")
+
+    df, f0 = confidenceRegionInfo.get_gateset_fn_confidence_interval(
+        fnOfGateSet, eps, returnFnVal=True, verbosity=verbosity)
+
+    return ReportableQty(f0,df)
+
+
 def _getSpamQuantity(fnOfSpamVecs, gateset, eps, confidenceRegionInfo, verbosity=0):
     """ For constructing a ReportableQty from a function of a spam vectors."""
 
@@ -320,10 +337,43 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
                 ret[i,j] = _np.dot(_np.transpose(EVec), rhoVec)
         return ret
 
+    def angles_btwn_rotn_axes(gateset):
+        gateLabels = gateset.keys()
+        angles_btwn_rotn_axes = _np.zeros( (len(gateLabels), len(gateLabels)), 'd' )
+
+        for i,gl in enumerate(gateLabels):
+            decomp = _tools.decompose_gate_matrix(gateset[gl])
+            rotnAngle = decomp.get('pi rotations','X')
+            axisOfRotn = decomp.get('axis of rotation',None)
+    
+            for j,gl_other in enumerate(gateLabels[i+1:],start=i+1):
+                decomp_other = _tools.decompose_gate_matrix(gateset[gl_other])
+                rotnAngle_other = decomp_other.get('pi rotations','X')                
+
+                if rotnAngle == 'X' or abs(rotnAngle) < 1e-4 or \
+                   rotnAngle_other == 'X' or abs(rotnAngle_other) < 1e-4:
+                    angles_btwn_rotn_axes[i,j] =  _np.nan
+                else:
+                    axisOfRotn_other = decomp_other.get('axis of rotation',None)
+                    if axisOfRotn is not None and axisOfRotn_other is not None:
+                        real_dot =  _np.clip( _np.real(_np.dot(axisOfRotn,axisOfRotn_other)), 0.0, 1.0)
+                        angles_btwn_rotn_axes[i,j] = _np.arccos( real_dot ) / _np.pi
+                    else: 
+                        angles_btwn_rotn_axes[i,j] = _np.nan
+
+                angles_btwn_rotn_axes[j,i] = angles_btwn_rotn_axes[i,j]
+        return angles_btwn_rotn_axes
+
+
+
     # Spam quantities (computed for all spam vectors at once):
     key = "Spam DotProds"; possible_qtys.append(key)
     if key in qtynames:
         ret[key] = _getSpamQuantity(spam_dotprods, gateset, eps, confidenceRegionInfo)
+
+    key = "Gateset Axis Angles"; possible_qtys.append(key)
+    if key in qtynames:
+        ret[key] = _getGateSetQuantity(angles_btwn_rotn_axes, gateset, eps, confidenceRegionInfo)
 
     # Quantities computed per gate
     for (label,gate) in gateset.iteritems():
