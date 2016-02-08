@@ -179,8 +179,8 @@ SPAMLABEL minus = remainder
         self.assertArraysAlmostEqual(gs_formats['Gx2'], rotXPi)
         self.assertArraysAlmostEqual(gs_formats['Gy2'], rotYPi)
 
-        self.assertArraysAlmostEqual(gs_formats.rhoVecs[0], 1/np.sqrt(2)*np.array([[1],[0],[0],[-1]],'d'))
-        self.assertArraysAlmostEqual(gs_formats.rhoVecs[1], 1/np.sqrt(2)*np.array([[1],[0],[0],[1]],'d'))
+        self.assertArraysAlmostEqual(gs_formats.rhoVecs[0], 1/np.sqrt(2)*np.array([[1],[0],[0],[1]],'d'))
+        self.assertArraysAlmostEqual(gs_formats.rhoVecs[1], 1/np.sqrt(2)*np.array([[1],[0],[0],[-1]],'d'))
         self.assertArraysAlmostEqual(gs_formats.EVecs[0], 1/np.sqrt(2)*np.array([[1],[0],[0],[-1]],'d'))
 
         #pygsti.print_mx( rotXPi )
