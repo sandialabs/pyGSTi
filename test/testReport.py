@@ -195,7 +195,7 @@ class TestReport(ReportTestCase):
         #tests which fill in the cracks of the full-report tests
         with self.assertRaises(ValueError):
             gen.get_gateset_spam_table(gateset, formats, tableclass,
-                                                            longtable, None, basis="fooBar")
+                                       longtable, None, mxBasis="fooBar")
         gen.get_gateset_gates_table(gateset, formats, tableclass, longtable, ci_TP) #test zero-padding
         gen.get_unitary_gateset_gates_table(std.gs_target, formats, tableclass, longtable, ci_tgt) #unitary gates w/CIs
         gen.get_unitary_gateset_gates_table(std.gs_target, formats, tableclass, longtable, ci_TP_tgt) #unitary gates w/CIs

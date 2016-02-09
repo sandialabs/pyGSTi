@@ -416,28 +416,33 @@ class Results(object):
 
         # dataset and gatestring list tables
         elif tableName == 'datasetOverviewTable':
-            maxLen = max( 2*max( map(len,self.rhoStrs + self.EStrs) ), 10 ) #heuristic
+            #maxLen = max( 2*max( map(len,self.rhoStrs + self.EStrs) ), 10 ) #heuristic (unused)
             return _generation.get_dataset_overview_table(
                 self.dataset, self.gsTarget, self.formatsToCompute,
-                self.tableClass, self.longTables, maxLen, [self.rhoStrs, self.EStrs])
+                self.tableClass, self.longTables, 10, 
+                [self.rhoStrs, self.EStrs] if self.LsAndGermInfoSet else None)
 
         elif tableName == 'fiducialListTable':
+            assert(self.LsAndGermInfoSet)
             return _generation.get_gatestring_multi_table(
                 [self.rhoStrs, self.EStrs], ["Prep.","Measure"],
                 self.formatsToCompute, self.tableClass, self.longTables,
                 "Fiducials")
 
         elif tableName == 'rhoStrListTable':
+            assert(self.LsAndGermInfoSet)
             return _generation.get_gatestring_table(
                 self.rhoStrs, "Preparation Fiducial", self.formatsToCompute, 
                 self.tableClass, self.longTables)
 
         elif tableName == 'EStrListTable':
+            assert(self.LsAndGermInfoSet)
             return _generation.get_gatestring_table(
                 self.EStrs, "Measurement Fiducial", self.formatsToCompute,
                 self.tableClass, self.longTables)
 
         elif tableName == 'germListTable':
+            assert(self.LsAndGermInfoSet)
             return _generation.get_gatestring_table(
                 self.germs, "Germ", self.formatsToCompute, self.tableClass,
                 self.longTables)
