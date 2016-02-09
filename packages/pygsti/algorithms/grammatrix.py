@@ -60,7 +60,9 @@ def get_max_gram_basis(gateLabels, dataset, maxLength=0):
     return max_string_set
 
 
-def max_gram_rank_and_evals(dataset, maxBasisStringLength=10):
+def max_gram_rank_and_evals(dataset, maxBasisStringLength=10, 
+                            targetGateset=None, spamDict=None,
+                            fixedLists=None):
     """
     Compute the rank and eigenvalues of a maximal Gram matrix,that is, the
     Gram matrix using a basis computed by:
@@ -74,17 +76,43 @@ def max_gram_rank_and_evals(dataset, maxBasisStringLength=10):
     maxBasisStringLength : int, optional
       the maximum string length considered for Gram matrix basis
       elements.  Defaults to 10.
+
+    targetGateset : GateSet, optional
+      A gateset used to specify the SPAM labels used to connect
+      the dataset values to rhoVec and EVec indices.
+  
+    spamDict : dictionary, optional
+      Dictionary mapping (rhoVec_index,EVec_index) integer tuples to string spam labels.
+      Defaults to the spam dictionary of targetGateset
+      e.g. spamDict[(0,0)] == "plus"
+
+    fixedLists : (rhoStrs, EStrs), optional
+      2-tuple of gate string lists, specifying the preparation and
+      measurement fiducials to use when constructing the Gram matrix,
+      and thereby bypassing the search for such lists.
+
     
     Returns
     -------
     rank : integer
     eigenvalues : numpy array
     """
-    maxStringSet = get_max_gram_basis(dataset.get_gate_labels(), dataset, maxBasisStringLength)
-    specs = _construction.build_spam_specs(fiducialGateStrings=maxStringSet) 
-    # Note: specs use by default just the 0-th rho and Evec indices, so 
-    #  we just need to have a spamDict that associates (0,0) with some spam label
-    #  in the dataset -- we just take the first one.
-    firstSpamLabel = dataset.get_spam_labels()[0]
-    return _gramRankAndEvals(dataset, specs, spamDict={(0,0): firstSpamLabel})
+    if fixedLists is not None:
+        maxRhoStrs, maxEStrs = fixedLists
+    else:
+        maxStringSet = get_max_gram_basis(dataset.get_gate_labels(), dataset, maxBasisStringLength)
+        maxRhoStrs = maxEStrs = maxStringSet
+
+    if spamDict is None:
+        if targetGateset is not None: 
+            spamDict = targetGateset.get_spam_label_dict()
+        else:
+            firstSpamLabel = dataset.get_spam_labels()[0]
+            spamDict = {(0,0): firstSpamLabel}
+    rhoInds = sorted(_tools.remove_duplicates( [rhoInd for (rhoInd,EInd) in spamDict] ))
+    EInds = sorted(_tools.remove_duplicates( [EInd for (rhoInd,EInd) in spamDict] ))
+    if -1 in EInds:  del EInds[EInds.index(-1)]  #remove "-1" as an Evec-index
+    
+    specs = _construction.build_spam_specs(rhoStrs=maxRhoStrs, EStrs=maxEStrs, rhoVecInds=rhoInds, EVecInds=EInds) 
+    return _gramRankAndEvals(dataset, specs, targetGateset, spamDict)
 

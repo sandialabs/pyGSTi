@@ -23,7 +23,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                          weightsDict=None, rhoEPairs=None, constrainToTP=True, 
                          gaugeOptToCPTP=False, gaugeOptRatio=0.001,
                          objective="logl", advancedOptions={}, lsgstLists=None,
-                         truncScheme="whole germ powers"):
+                         truncScheme="whole germ powers", mxBasis="gm"):
     """
     Perform end-to-end GST analysis using Ls and germs, with L as a maximum length.
 
@@ -124,6 +124,9 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
           to be exactly equal to the max (partial germ at end is ok).
         - 'length as exponent' -- max. length is instead interpreted
           as the germ exponent (the number of germ repetitions).
+
+    mxBasis : {"std", "gm", "pp"}, optional
+        The basis used to interpret the gate matrices.
 
         
     Returns
@@ -249,7 +252,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                           advancedOptions.get('minProbClipForWeighting',1e-4),
                           advancedOptions.get('probClipInterval',(-1e6,1e6)),
                           advancedOptions.get('radius',1e-4), 
-                          weightsDict, default_dir, default_base)
+                          weightsDict, default_dir, default_base, mxBasis)
 
     assert( len(maxLengths) == len(lsgstLists) == len(go_gs_lsgst_list) )
     return ret

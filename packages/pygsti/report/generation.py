@@ -33,8 +33,9 @@ def get_blank_table(formats):
     return tables
     
 
-def get_gateset_spam_table(gateset, formats, tableclass, longtable, confidenceRegionInfo=None, basis="gm"):
-    """ 
+def get_gateset_spam_table(gateset, formats, tableclass, longtable, 
+                           confidenceRegionInfo=None, mxBasis="gm"):
+    """
     Create a table for gateset's SPAM vectors.
     
     Parameters
@@ -56,9 +57,10 @@ def get_gateset_spam_table(gateset, formats, tableclass, longtable, confidenceRe
         If not None, specifies a confidence-region
         used to display error intervals.
 
-    basis : {'gm','pp'}
+    mxBasis : {'std', 'gm','pp'}
         Which basis the gateset is represented in.  Allowed
-        options are Gell-Mann (gm) and Pauli-product (pp).
+        options are Matrix-unit (std), Gell-Mann (gm) and
+        Pauli-product (pp).
 
     Returns
     -------
@@ -66,13 +68,15 @@ def get_gateset_spam_table(gateset, formats, tableclass, longtable, confidenceRe
         Dictionary with keys equal to the requested formats (e.g. 'latex'),
         and values equal to the table data in the corresponding format.
     """
+    
+    basisNm = _tools.basis_longname(mxBasis, gateset.get_dimension())
 
     if confidenceRegionInfo is None:
-        colHeadings = ('Operator','Hilbert-Schmidt vector (Pauli basis)','Matrix')
+        colHeadings = ('Operator','Hilbert-Schmidt vector (%s basis)' % basisNm,'Matrix')
         formatters = (None,None,None)
     else:
         colHeadings = ('Operator',
-                       'Hilbert-Schmidt vector (Pauli basis)',
+                       'Hilbert-Schmidt vector (%s basis)' % basisNm,
                        '%g%% C.I. half-width' % confidenceRegionInfo.level,
                        'Matrix')
         formatters = (None,None,_tf.TxtCnv,None)
@@ -81,9 +85,10 @@ def get_gateset_spam_table(gateset, formats, tableclass, longtable, confidenceRe
     _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable)
 
     for i,rhoVec in enumerate(gateset.rhoVecs):
-        if basis == "pp":   rhoMx = _tools.ppvec_to_stdmx(rhoVec)
-        elif basis == "gm": rhoMx = _tools.gmvec_to_stdmx(rhoVec)
-        else: raise ValueError("Invalid basis specifier: %s" % basis)
+        if mxBasis == "pp":   rhoMx = _tools.ppvec_to_stdmx(rhoVec)
+        elif mxBasis == "gm": rhoMx = _tools.gmvec_to_stdmx(rhoVec)
+        elif mxBasis == "std": rhoMx = _tools.stdvec_to_stdmx(rhoVec)
+        else: raise ValueError("Invalid basis specifier: %s" % mxBasis)
 
         if confidenceRegionInfo is None:
             _tf.add_table_row(formats, tables, (i, rhoVec, rhoMx), (_tf.Rho,_tf.Nml,_tf.Brk))
@@ -94,9 +99,10 @@ def get_gateset_spam_table(gateset, formats, tableclass, longtable, confidenceRe
             _tf.add_table_row(formats, tables, (i, rhoVec, intervalVec, rhoMx), (_tf.Rho,_tf.Nml,_tf.Nml,_tf.Brk))
 
     for i,EVec in enumerate(gateset.EVecs):
-        if basis == "pp":   EMx = _tools.ppvec_to_stdmx(EVec)
-        elif basis == "gm": EMx = _tools.gmvec_to_stdmx(EVec)
-        else: raise ValueError("Invalid basis specifier: %s" % basis)
+        if mxBasis == "pp":    EMx = _tools.ppvec_to_stdmx(EVec)
+        elif mxBasis == "gm":  EMx = _tools.gmvec_to_stdmx(EVec)
+        elif mxBasis == "std": EMx = _tools.stdvec_to_stdmx(EVec)
+        else: raise ValueError("Invalid basis specifier: %s" % mxBasis)
 
         if confidenceRegionInfo is None:
             _tf.add_table_row(formats, tables, (i, EVec, EMx), (_tf.E,_tf.Nml,_tf.Brk))
@@ -163,7 +169,8 @@ def get_gateset_spam_parameters_table(gateset, formats, tableclass, longtable, c
     return tables
 
 
-def get_gateset_gates_table(gateset, formats, tableclass, longtable, confidenceRegionInfo=None):
+def get_gateset_gates_table(gateset, formats, tableclass, longtable,
+                            confidenceRegionInfo=None, mxBasis="gm"):
     """ 
     Create a table for gateset's gates.
     
@@ -186,6 +193,12 @@ def get_gateset_gates_table(gateset, formats, tableclass, longtable, confidenceR
         If not None, specifies a confidence-region
         used to display error intervals.
 
+    mxBasis : {'std', 'gm','pp'}
+        Which basis the gateset is represented in.  Allowed
+        options are Matrix-unit (std), Gell-Mann (gm) and
+        Pauli-product (pp).
+
+
     Returns
     -------
     dict
@@ -193,12 +206,14 @@ def get_gateset_gates_table(gateset, formats, tableclass, longtable, confidenceR
         and values equal to the table data in the corresponding format.
     """
     gateLabels = gateset.keys()  # gate labels
+    basisNm = _tools.basis_longname(mxBasis, gateset.get_dimension())
 
     if confidenceRegionInfo is None:    
-        colHeadings = ('Gate','Superoperator (Pauli basis)')
+        colHeadings = ('Gate','Superoperator (%s basis)' % basisNm)
         formatters = (None,None)
     else:
-        colHeadings = ('Gate','Superoperator (Pauli basis)','%g%% C.I. half-width' % confidenceRegionInfo.level)
+        colHeadings = ('Gate','Superoperator (%s basis)' % basisNm,
+                       '%g%% C.I. half-width' % confidenceRegionInfo.level)
         formatters = (None,None,_tf.TxtCnv)
 
     tables = {}
@@ -222,7 +237,8 @@ def get_gateset_gates_table(gateset, formats, tableclass, longtable, confidenceR
     return tables
 
 
-def get_unitary_gateset_gates_table(gateset, formats, tableclass, longtable, confidenceRegionInfo=None):
+def get_unitary_gateset_gates_table(gateset, formats, tableclass, longtable, 
+                                    confidenceRegionInfo=None, mxBasis="gm"):
     """ 
     Create a table for gateset's gates assuming they're unitary.
     
@@ -245,6 +261,12 @@ def get_unitary_gateset_gates_table(gateset, formats, tableclass, longtable, con
         If not None, specifies a confidence-region
         used to display error intervals.
 
+    mxBasis : {'std', 'gm','pp'}
+        Which basis the gateset is represented in.  Allowed
+        options are Matrix-unit (std), Gell-Mann (gm) and
+        Pauli-product (pp).
+
+
     Returns
     -------
     dict
@@ -252,15 +274,16 @@ def get_unitary_gateset_gates_table(gateset, formats, tableclass, longtable, con
         and values equal to the table data in the corresponding format.
     """
     gateLabels = gateset.keys()  # gate labels
+    basisNm = _tools.basis_longname(mxBasis, gateset.get_dimension())
 
     qtys_to_compute = [ ('%s decomposition' % gl) for gl in gateLabels ]
     qtys = _cr.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo)
 
     if confidenceRegionInfo is None:
-        colHeadings = ('Gate','Superoperator (Pauli basis)','Rotation axis','Angle')
+        colHeadings = ('Gate','Superoperator (%s basis)' % basisNm,'Rotation axis','Angle')
         formatters = (None,None,None,None)
     else:
-        colHeadings = ('Gate','Superoperator (Pauli basis)',
+        colHeadings = ('Gate','Superoperator (%s basis)' % basisNm,
                        '%g%% C.I. half-width' % confidenceRegionInfo.level,
                        'Rotation axis','Angle')
         formatters = (None,None,_tf.TxtCnv,None,None)
@@ -293,7 +316,8 @@ def get_unitary_gateset_gates_table(gateset, formats, tableclass, longtable, con
     return tables
 
 
-def get_gateset_choi_table(gateset, formats, tableclass, longtable, confidenceRegionInfo=None):
+def get_gateset_choi_table(gateset, formats, tableclass, longtable,
+                           confidenceRegionInfo=None, mxBasis="gm"):
     """ 
     Create a table for the Choi matrices of a gateset's gates.
     
@@ -316,6 +340,12 @@ def get_gateset_choi_table(gateset, formats, tableclass, longtable, confidenceRe
         If not None, specifies a confidence-region
         used to display error intervals.
 
+    mxBasis : {'std', 'gm','pp'}
+        Which basis the gateset is represented in.  Allowed
+        options are Matrix-unit (std), Gell-Mann (gm) and
+        Pauli-product (pp).
+
+
     Returns
     -------
     dict
@@ -324,22 +354,23 @@ def get_gateset_choi_table(gateset, formats, tableclass, longtable, confidenceRe
     """
     gateLabels = gateset.keys()  # gate labels
 
-    qtys_to_compute = [ ('%s choi matrix in pauli basis' % gl) for gl in gateLabels ]
+    qtys_to_compute = [ ('%s choi matrix' % gl) for gl in gateLabels ]
     qtys_to_compute += [ ('%s choi eigenvalues' % gl) for gl in gateLabels ]
-    qtys = _cr.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo)
-
+    qtys = _cr.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo, mxBasis)
+    basisNm = _tools.basis_longname(mxBasis, gateset.get_dimension())
+    
     if confidenceRegionInfo is None:
-        colHeadings = ('Gate','Choi matrix (Pauli basis)','Eigenvalues')
+        colHeadings = ('Gate','Choi matrix (%s basis)' % basisNm,'Eigenvalues')
         formatters = (None,None,None)        
     else:
-        colHeadings = ('Gate','Choi matrix (Pauli basis)','Eigenvalues') # 'Confidence Intervals',
+        colHeadings = ('Gate','Choi matrix (%s basis)' % basisNm,'Eigenvalues') # 'Confidence Intervals',
         formatters = (None,None,None)
 
     tables = {}
     _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable)
 
     for gl in gateLabels:
-        choiMx,choiEB = qtys['%s choi matrix in pauli basis' % gl].get_value_and_err_bar()
+        choiMx,choiEB = qtys['%s choi matrix' % gl].get_value_and_err_bar()
         evals, evalsEB = qtys['%s choi eigenvalues' % gl].get_value_and_err_bar()
     
         if confidenceRegionInfo is None:
@@ -351,7 +382,8 @@ def get_gateset_choi_table(gateset, formats, tableclass, longtable, confidenceRe
     return tables
 
 
-def get_gateset_vs_target_table(gateset, targetGateset, formats, tableclass, longtable, confidenceRegionInfo=None):
+def get_gateset_vs_target_table(gateset, targetGateset, formats, tableclass, longtable, 
+                                confidenceRegionInfo=None, mxBasis="gm"):
     """ 
     Create a table comparing a gateset to a target gateset.
     
@@ -374,6 +406,12 @@ def get_gateset_vs_target_table(gateset, targetGateset, formats, tableclass, lon
         If not None, specifies a confidence-region
         used to display error intervals.
 
+    mxBasis : {'std', 'gm','pp'}
+        Which basis the gateset is represented in.  Allowed
+        options are Matrix-unit (std), Gell-Mann (gm) and
+        Pauli-product (pp).
+
+
     Returns
     -------
     dict
@@ -387,7 +425,8 @@ def get_gateset_vs_target_table(gateset, targetGateset, formats, tableclass, lon
 
     qtyNames = ('infidelity','Jamiolkowski trace dist','diamond norm','Frobenius diff')
     qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames for gl in gateLabels ]
-    qtys = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset, confidenceRegionInfo)
+    qtys = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
+                                            confidenceRegionInfo, mxBasis)
 
     tables = {}
     _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable)
@@ -492,7 +531,7 @@ def get_gateset_closest_unitary_table(gateset, formats, tableclass, longtable, c
     qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames for gl in gateLabels ]
     qtys = _cr.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo)
     decompNames = ('axis of rotation','pi rotations')
-    #Other possible qtyName: 'closest unitary choi matrix in pauli basis'
+    #Other possible qtyName: 'closest unitary choi matrix'
 
     tables = {}
     _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable)
@@ -674,7 +713,8 @@ def get_gateset_rotn_axis_table(gateset, formats, tableclass, longtable,
     return tables
 
 
-def get_dataset_overview_table(dataset, formats, tableclass, longtable):
+def get_dataset_overview_table(dataset, target, formats, tableclass, longtable,
+                               maxlen=10, fixedLists=None):
     """ 
     Create a table overviewing a data set.
     
@@ -682,6 +722,10 @@ def get_dataset_overview_table(dataset, formats, tableclass, longtable):
     ----------
     dataset : DataSet
         The DataSet
+
+    target : GateSet
+        A target gateset which is used for it's mapping of SPAM labels to
+        SPAM specifiers.
 
     formats : list
         List of formats to include in returned tables dictionary. Allowed
@@ -693,6 +737,17 @@ def get_dataset_overview_table(dataset, formats, tableclass, longtable):
     longtable : bool
         Whether table should be a latex longtable or not.
 
+    maxlen : integer, optional
+        The maximum length string used when searching for the 
+        maximal (best) Gram matrix.  It's useful to make this
+        at least twice the maximum length fiducial sequence.
+
+    fixedLists : (rhoStrs, EStrs), optional
+      2-tuple of gate string lists, specifying the preparation and
+      measurement fiducials to use when constructing the Gram matrix,
+      and thereby bypassing the search for such lists.
+
+
     Returns
     -------
     dict
@@ -701,7 +756,7 @@ def get_dataset_overview_table(dataset, formats, tableclass, longtable):
     """
     colHeadings = ('Quantity','Value')
     formatters = (None,None)
-    rank,evals = _alg.max_gram_rank_and_evals( dataset )
+    rank,evals = _alg.max_gram_rank_and_evals( dataset, maxlen, target, fixedLists=fixedLists )
 
     tables = {}
     _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable)

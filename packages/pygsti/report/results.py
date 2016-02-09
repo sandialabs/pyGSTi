@@ -226,7 +226,8 @@ class Results(object):
 
     def set_additional_info(self,minProbClip=1e-6, minProbClipForWeighting=1e-4,
                           probClipInterval=(-1e6,1e6), radius=1e-4,
-                          weightsDict=None, defaultDirectory=None, defaultBasename=None):
+                          weightsDict=None, defaultDirectory=None, defaultBasename=None,
+                          mxBasis="gm"):
         """
         Set advanced parameters for producing derived outputs.  Usually the default
         values are fine (which is why setting these inputs is separated into a
@@ -263,6 +264,10 @@ class Results(object):
         defaultBasename : string, optional
            Default basename for generated reports and presentations.
 
+        mxBasis : {"std", "gm", "pp"}, optional
+           The basis used to interpret the gate matrices.
+
+
         Returns
         -------
         None
@@ -276,7 +281,8 @@ class Results(object):
                                 'radius': radius,
                                 'hessianProjection': 'std',
                                 'defaultDirectory': defaultDirectory,
-                                'defaultBasename': defaultBasename }
+                                'defaultBasename': defaultBasename,
+                                'mxBasis': "gm"}
 
     def set_template_path(self, pathToTemplates):
         """
@@ -393,6 +399,7 @@ class Results(object):
         assert(self.bEssentialResultsSet)
         gaugeOptAppendixTablenames = [ 'best%sGateset%sTable' % (a,b) for a in ('Target','TargetSpam','TargetGates','CPTP','TP') \
                                            for b in ('Spam','SpamParameters','Gates','Choi','Decomp','ClosestUnitary','VsTarget') ]
+        mxBasis = self.additionalInfo['mxBasis']
 
         if verbosity > 0:
             print "Generating %s table..." % tableName; _sys.stdout.flush()
@@ -401,17 +408,18 @@ class Results(object):
         if tableName == 'targetSpamTable': 
             return _generation.get_gateset_spam_table(
                 self.gsTarget, self.formatsToCompute, self.tableClass,
-                self.longTables)
+                self.longTables, None, mxBasis)
         elif tableName == 'targetGatesTable':
             return _generation.get_unitary_gateset_gates_table(
                 self.gsTarget, self.formatsToCompute, self.tableClass,
-                self.longTables)
+                self.longTables, None, mxBasis)
 
         # dataset and gatestring list tables
         elif tableName == 'datasetOverviewTable':
+            maxLen = max( 2*max( map(len,self.rhoStrs + self.EStrs) ), 10 ) #heuristic
             return _generation.get_dataset_overview_table(
-                self.dataset, self.formatsToCompute, self.tableClass,
-                self.longTables)
+                self.dataset, self.gsTarget, self.formatsToCompute,
+                self.tableClass, self.longTables, maxLen, [self.rhoStrs, self.EStrs])
 
         elif tableName == 'fiducialListTable':
             return _generation.get_gatestring_multi_table(
@@ -440,7 +448,7 @@ class Results(object):
             cri = self.get_confidence_region(confidenceLevel)
             return _generation.get_gateset_spam_table(
                 self.gsBestEstimate, self.formatsToCompute, self.tableClass,
-                self.longTables, cri)
+                self.longTables, cri, mxBasis)
 
         elif tableName == 'bestGatesetSpamParametersTable':
             cri = self.get_confidence_region(confidenceLevel)
@@ -452,13 +460,13 @@ class Results(object):
             cri = self.get_confidence_region(confidenceLevel)
             return _generation.get_gateset_gates_table(
                 self.gsBestEstimate, self.formatsToCompute, self.tableClass,
-                self.longTables, cri)
+                self.longTables, cri, mxBasis)
 
         elif tableName == 'bestGatesetChoiTable':
             cri = self.get_confidence_region(confidenceLevel)
             return _generation.get_gateset_choi_table(
                 self.gsBestEstimate, self.formatsToCompute, self.tableClass,
-                self.longTables, cri)
+                self.longTables, cri, mxBasis)
 
         elif tableName == 'bestGatesetDecompTable':
             cri = self.get_confidence_region(confidenceLevel)
@@ -482,7 +490,7 @@ class Results(object):
             cri = self.get_confidence_region(confidenceLevel)
             return _generation.get_gateset_vs_target_table(
                 self.gsBestEstimate, self.gsTarget, self.formatsToCompute,
-                self.tableClass, self.longTables, cri)
+                self.tableClass, self.longTables, cri, mxBasis)
 
         elif tableName == 'bestGatesetErrorGenTable':
             cri = self.get_confidence_region(confidenceLevel)
@@ -728,6 +736,7 @@ class Results(object):
             for gaugeKey,gopt_gs in best_gs_gauges.iteritems():
                 #FUTURE: add confidence region support to these appendices? -- would need to compute confidenceRegionInfo (cri)
                 #  for each gauge-optimized gateset, gopt_gs and pass to appropriate functions below
+                mxBasis = self.additionalInfo['mxBasis']
                 ret['best%sGatesetSpamTable' % gaugeKey] = \
                     _generation.get_gateset_spam_table(
                     gopt_gs, self.formatsToCompute, self.tableClass,
@@ -759,7 +768,7 @@ class Results(object):
                 ret['best%sGatesetVsTargetTable' % gaugeKey] = \
                     _generation.get_gateset_vs_target_table(
                     gopt_gs, self.gsTarget, self.formatsToCompute, 
-                    self.tableClass, self.longTables)
+                    self.tableClass, self.longTables, None, mxBasis)
                 ret['best%sGatesetErrorGenTable' % gaugeKey] = \
                     _generation.get_gateset_vs_target_err_gen_table(
                     gopt_gs, self.gsTarget, self.formatsToCompute,

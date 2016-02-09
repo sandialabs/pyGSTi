@@ -172,6 +172,37 @@ def _processBlockDims(dimOrBlockDims):
 #    #return dmiToVi, dmDim, dim  #Note dim == len(dmiToVi)
 #    return dmDim, dim
 
+def basis_longname(basis, dim=None):
+    """
+    Get the "long name" for a particular basis,
+    which is typically used in reports, etc.
+    
+    Parameters
+    ----------
+    basis : {'std', 'gm','pp'}
+        Which basis the gateset is represented in.  Allowed
+        options are Matrix-unit (std), Gell-Mann (gm) and
+        Pauli-product (pp).
+
+    dim : int, optional
+        Dimension of gates, to aid in creating a long-name.
+        For example, a basis of the 4-dimensional Gell-Mann
+        matrices is the same as the Pauli matrices, and thus
+        the long name is just "Pauli" in this case.
+
+    Returns
+    -------
+    string
+    """
+    if basis == "std": return "Matrix-unit"
+    elif basis == "gm":
+        if dim == 4: return "Pauli"
+        else: return "Gell-Mann"
+    elif basis == "pp":
+        if dim == 4: return "Pauli"
+        else: return "Pauli-prod"
+    else: return "?Unknown?"
+
 
 def std_matrices(dimOrBlockDims):
     """ 
@@ -952,12 +983,37 @@ def gmvec_to_stdmx(v):
         The matrix, shape (2,2) or (4,4) respectively.
     """
 
-    dim = int(_np.sqrt( len(v) )) # len(v) = dim^2, where dim is matrix dimension of Pauli-prod mxs
+    dim = int(_np.sqrt( len(v) )) # len(v) = dim^2
     gmMxs = gm_matrices(dim)
 
     ret = _np.zeros( (dim,dim), 'complex' )
     for i,gmMx in enumerate(gmMxs):
         ret += v[i]*gmMx
+    return ret
+
+def stdvec_to_stdmx(v):
+    """
+    Convert a vector in the standard basis to a matrix
+     in the standard basis.
+
+    Parameters
+    ----------
+    v : numpy array
+        The vector, length 4 (1Q) or 16 (2Q)
+
+    Returns
+    -------
+    numpy array
+        The matrix, shape (2,2) or (4,4) respectively.
+    """
+
+    # nQubits = _np.log2(len(v)) / 2  ( n qubits = 2^n x 2^n mx ; len(v) = 2^2n -> n = log2(len(v))/2 )
+    dim = int(_np.sqrt( len(v) )) # len(v) = dim^2, where dim is matrix dimension
+    stdMxs = std_matrices(dim)
+
+    ret = _np.zeros( (dim,dim), 'complex' )
+    for i,stdMx in enumerate(stdMxs):
+        ret += v[i]*stdMx
     return ret
 
 
@@ -1010,6 +1066,33 @@ def stdmx_to_gmvec(m):
     v = _np.empty((dim**2,1))
     for i,gmMx in enumerate(gmMxs):
         v[i,0] = _np.real(_mt.trace(_np.dot(gmMx,m)))
+
+    return v
+
+
+def stdmx_to_stdvec(m):
+    """
+    Convert a matrix in the standard basis to
+     a vector in the standard basis.
+
+    Parameters
+    ----------
+    m : numpy array
+        The matrix, must be square.
+
+    Returns
+    -------
+    numpy array
+        The vector, length == number of elements in m
+    """
+
+    assert(len(m.shape) == 2 and m.shape[0] == m.shape[1])
+    dim = m.shape[0]
+    stdMxs = std_matrices(dim)
+
+    v = _np.empty((dim**2,1))
+    for i,stdMx in enumerate(stdMxs):
+        v[i,0] = _np.real(_mt.trace(_np.dot(stdMx,m)))
 
     return v
 

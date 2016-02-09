@@ -221,7 +221,7 @@ def compute_dataset_qtys(qtynames, dataset, gatestrings=None):
     return ret
 
 
-def compute_gateset_qty(qtyname, gateset, confidenceRegionInfo=None):
+def compute_gateset_qty(qtyname, gateset, confidenceRegionInfo=None, mxBasis="gm"):
     """
     Compute the named "GateSet" quantity.
 
@@ -238,17 +238,20 @@ def compute_gateset_qty(qtyname, gateset, confidenceRegionInfo=None):
         contained in the returned quantity.  If None, then no error bars are
         computed.
 
+    mxBasis : {"std", "gm", "pp"}, optional
+        The basis used to interpret the gate matrices.
+
     Returns
     -------
     ReportableQty
         The quantity requested, or None if quantity could not be computed.
     """
-    ret = compute_gateset_qtys( [qtyname], gateset, confidenceRegionInfo )
+    ret = compute_gateset_qtys( [qtyname], gateset, confidenceRegionInfo, mxBasis )
     if qtyname is None: return ret
     elif ret.has_key(qtyname): return ret[qtyname]
     else: return None
 
-def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
+def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None, mxBasis="gm"):
     """
     Compute the named "GateSet" quantities.
 
@@ -265,6 +268,9 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
         contained in the returned quantities.  If None, then no error bars are
         computed.
 
+    mxBasis : {"std", "gm", "pp"}, optional
+        The basis used to interpret the gate matrices.
+
     Returns
     -------
     dict
@@ -275,13 +281,17 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
     possible_qtys = [ ]
     eps = FINITE_DIFF_EPS
 
+
+    def choi_matrix(gate):
+        return _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
+
     def choi_evals(gate):
-        choi = _tools.jamiolkowski_iso(gate)
+        choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
         choi_eigvals = _np.linalg.eigvals(choi)
         return _np.array(sorted(choi_eigvals))
 
     def choi_trace(gate):
-        choi = _tools.jamiolkowski_iso(gate)
+        choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
         return _np.trace(choi)
 
     def decomp_angle(gate):
@@ -317,17 +327,17 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
 
     def closest_ujmx(gate):
         closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
-        return _tools.jamiolkowski_iso(closestUGateMx)
+        return _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
         
     def maximum_fidelity(gate):
         closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
-        closestUJMx = _tools.jamiolkowski_iso(closestUGateMx)
-        choi = _tools.jamiolkowski_iso(gate)
+        closestUJMx = _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
+        choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
         return _tools.fidelity(closestUJMx, choi)
 
     def maximum_trace_dist(gate):
         closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
-        closestUJMx = _tools.jamiolkowski_iso(closestUGateMx)
+        closestUJMx = _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
         return _tools.jtracedist(gate, closestUGateMx)
 
     def spam_dotprods(rhoVecs, EVecs):
@@ -380,14 +390,14 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
 
         #Gate quantities
         suffixes = ('eigenvalues', 'eigenvectors', 'choi eigenvalues', 'choi trace',
-                    'choi matrix in pauli basis', 'decomposition')
+                    'choi matrix', 'decomposition')
         gate_qtys = _OrderedDict( [ ("%s %s" % (label,s), None) for s in suffixes ] )
         possible_qtys += gate_qtys.keys()
 
         if any( [qtyname in gate_qtys for qtyname in qtynames] ):
             #gate_evals,gate_evecs = _np.linalg.eig(gate)
             evalsQty = _getGateQuantity(_np.linalg.eigvals, gateset, label, eps, confidenceRegionInfo)
-            choiQty = _getGateQuantity(_tools.jamiolkowski_iso, gateset, label, eps, confidenceRegionInfo) 
+            choiQty = _getGateQuantity(choi_matrix, gateset, label, eps, confidenceRegionInfo) 
             choiEvQty = _getGateQuantity(choi_evals, gateset, label, eps, confidenceRegionInfo) 
             choiTrQty = _getGateQuantity(choi_trace, gateset, label, eps, confidenceRegionInfo) 
 
@@ -405,7 +415,7 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
 
             gate_qtys[ '%s eigenvalues' % label ]      = evalsQty
             #gate_qtys[ '%s eigenvectors' % label ]     = gate_evecs
-            gate_qtys[ '%s choi matrix in pauli basis' % label ] = choiQty
+            gate_qtys[ '%s choi matrix' % label ]      = choiQty
             gate_qtys[ '%s choi eigenvalues' % label ] = choiEvQty
             gate_qtys[ '%s choi trace' % label ]       = choiTrQty
             gate_qtys[ '%s decomposition' % label]     = decompQty
@@ -419,7 +429,7 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
         suffixes = ('max fidelity with unitary', 
                     'max trace dist with unitary',
                     'upper bound on fidelity with unitary',
-                    'closest unitary choi matrix in pauli basis',
+                    'closest unitary choi matrix',
                     'closest unitary decomposition')
         closestU_qtys = _OrderedDict( [ ("%s %s" % (label,s), None) for s in suffixes ] )
         possible_qtys += closestU_qtys.keys()
@@ -445,7 +455,7 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
             closestU_qtys[ '%s max fidelity with unitary' % label ]                  = maxFQty
             closestU_qtys[ '%s max trace dist with unitary' % label ]                = maxJTDQty
             closestU_qtys[ '%s upper bound on fidelity with unitary' % label ]       = ubFQty
-            closestU_qtys[ '%s closest unitary choi matrix in pauli basis' % label ] = closeUJMxQty
+            closestU_qtys[ '%s closest unitary choi matrix' % label ]                = closeUJMxQty
             closestU_qtys[ '%s closest unitary decomposition' % label ]              = decompQty
 
             for qtyname in qtynames:
@@ -578,7 +588,8 @@ def compute_gateset_dataset_qtys(qtynames, gateset, dataset, gatestrings=None):
     return ret
 
 
-def compute_gateset_gateset_qty(qtyname, gateset1, gateset2, confidenceRegionInfo=None):
+def compute_gateset_gateset_qty(qtyname, gateset1, gateset2, 
+                                confidenceRegionInfo=None, mxBasis="gm"):
     """
     Compute the named "GateSet vs. GateSet" quantity.
 
@@ -597,18 +608,22 @@ def compute_gateset_gateset_qty(qtyname, gateset1, gateset2, confidenceRegionInf
         If not None, specifies a confidence-region used to compute the error bars
         contained in the returned quantity.  If None, then no error bars are
         computed.
+
+    mxBasis : {"std", "gm", "pp"}, optional
+        The basis used to interpret the gate matrices.
         
     Returns
     -------
     ReportableQty
         The quantity requested, or None if quantity could not be computed.
     """
-    ret = compute_gateset_gateset_qtys( [qtyname], gateset1, gateset2, confidenceRegionInfo)
+    ret = compute_gateset_gateset_qtys( [qtyname], gateset1, gateset2, confidenceRegionInfo, mxBasis)
     if qtyname is None: return ret
     elif ret.has_key(qtyname): return ret[qtyname]
     else: return None
 
-def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2, confidenceRegionInfo=None):
+def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
+                                 confidenceRegionInfo=None, mxBasis="gm"):
     """
     Compute the named "GateSet vs. GateSet" quantities.
 
@@ -627,6 +642,9 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2, confidenceRegionI
         If not None, specifies a confidence-region used to compute the error bars
         contained in the returned quantities.  If None, then no error bars are
         computed.
+
+    mxBasis : {"std", "gm", "pp"}, optional
+        The basis used to interpret the gate matrices.
         
     Returns
     -------
@@ -654,7 +672,8 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2, confidenceRegionI
         if key in qtynames or key2 in qtynames:
 
             def process_fidelity(gate): #Note: default 'gm' basis
-                return _tools.process_fidelity(gate, gateset2[gateLabel]) #vary elements of gateset1 (assume gateset2 is fixed)
+                return _tools.process_fidelity(gate, gateset2[gateLabel], mxBasis) 
+                  #vary elements of gateset1 (assume gateset2 is fixed)
 
             #print "DEBUG: fidelity(%s)" % gateLabel
             FQty = _getGateQuantity(process_fidelity, gateset1, gateLabel,
