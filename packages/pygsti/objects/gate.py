@@ -82,7 +82,7 @@ def compose(gate1, gate2):
 
 class FullyParameterizedGate(object):
     """ 
-    Encapsulates a gate matrix that is fully paramterized, that is,
+    Encapsulates a gate matrix that is fully parameterized, that is,
       each element of the gate matrix is an independent parameter.
     """
     def __init__(self, matrix):
@@ -102,7 +102,7 @@ class FullyParameterizedGate(object):
     def set_value(self, value):
         """
         Sets the value of the gate.  In general, the "value" of a gate means a 
-          floating point number for each paramter.  In this case when all gate
+          floating point number for each parameter.  In this case when all gate
           matrix element are parameters, the value is the gate matrix itself.
 
         Parameters
@@ -291,8 +291,8 @@ class LinearlyParameterizedElementTerm(object):
 
 class LinearlyParameterizedGate(object):
     """ 
-    Encapsulates a gate matrix that is paramterized such that each
-    element of the gate matrix depends only linearly on any paramter.
+    Encapsulates a gate matrix that is parameterized such that each
+    element of the gate matrix depends only linearly on any parameter.
     """
     def __init__(self, baseMatrix, parameterArray, parameterToBaseIndicesMap,
                  leftTransform=None, rightTransform=None, real=False):

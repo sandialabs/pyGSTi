@@ -3512,7 +3512,7 @@ class GateSet(_collections.OrderedDict):
                 d += spamWeight * _gt.frobeniusdist2(Evec,otherGateSet.EVecs[i])
                 nSummands += spamWeight * _np.size(Evec)
 
-            if self.identityVec is not None:
+            if self.identityVec is not None and otherGateSet.identityVec is not None:
                 d += spamWeight * _gt.frobeniusdist2(self.identityVec,otherGateSet.identityVec)
                 nSummands += spamWeight * _np.size(self.identityVec)
 
