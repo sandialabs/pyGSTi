@@ -344,7 +344,7 @@ def list_all_gatestrings_without_powers_and_cycles(gateLabels, maxLength):
     return output
 
 
-def list_random_gatestrings_onelen(gateLabels, length, count):
+def list_random_gatestrings_onelen(gateLabels, length, count, seed=None):
     """
     Create a list of random gate strings of a given length.
     
@@ -359,14 +359,19 @@ def list_random_gatestrings_onelen(gateLabels, length, count):
     count : int
         the number of random strings to create.
 
+    seed : int, optional
+        If not None, a seed for numpy's random number generator.
+
+
     Returns
     -------
     list of GateStrings
         A list of random gate strings as GateString objects.
     """    
     ret = [ ]
+    rndm = _rndm.RandomState(seed) # ok if seed is None
     for i in range(count):
-        r = _rndm.random(length) * len(gateLabels)
+        r = rndm.random(length) * len(gateLabels)
         ret.append( _gs.GateString( [gateLabels[int(k)] for k in r]) )
     return ret
 
