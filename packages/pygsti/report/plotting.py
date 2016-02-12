@@ -332,8 +332,7 @@ def small_eigval_err_rate(sigma, dataset, directGSTgatesets):
     minEigval = min(abs(_np.linalg.eigvals( gs_direct["sigmaLbl"] )))
     return 1.0 - minEigval**(1.0/max(len(sigma),1)) # (approximate) per-gate error rate; max averts divide by zero error
 
-
-def besttxtcolor( x, xmin, xmax ):
+def besttxtcolor( x, xmin, xmax, cmapName ):
     """ 
     Determinining function for whether text should be white or black
 
@@ -342,14 +341,28 @@ def besttxtcolor( x, xmin, xmax ):
     x, xmin, xmax : float
         Values of the cell in question, the minimum cell value, and the maximum cell value
 
+    cmapName: string
+        The name of the colormap
+
     Returns
     -------
     {"white","black"}
     """
-    if ((x-xmin)/xmax<0.37) or ((x-xmin)/xmax>0.77):
-        return "white"
+    if cmapName in ['inferno', 'plasma', 'viridis']:
+        if  ((x-xmin)/xmax<0.37):
+            return "white"
+        else:
+            return "black"
+    elif cmapName == 'PuRd':
+        if  ((x-xmin)/xmax>0.77):
+            return "white"
+        else:
+            return "black"
     else:
-        return "black"
+        if  ((x-xmin)/xmax<0.37) or((x-xmin)/xmax>0.77):
+            return "white"
+        else:
+            return "black"
     
 def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, ytics=None,
                  vmin=None, vmax=None, colorbar=True, fig=None, axes=None, size=None, prec=0, boxLabels=True,
@@ -509,7 +522,7 @@ def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, 
                 if _np.isnan(plt_data[y, x]): continue
                 axes.text(x + 0.5, y + 0.5, eformat(plt_data[y, x], prec),
                         horizontalalignment='center',
-                        verticalalignment='center', color=besttxtcolor( plt_data[y,x], vmin, vmax) )
+                        verticalalignment='center', color=besttxtcolor( plt_data[y,x], vmin, vmax, cmap.name) )
 
     if colorbar:
         _plt.colorbar(heatmap)
