@@ -434,7 +434,7 @@ def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, 
     if vmin is None: vmin = min( finite_plt_data_flat )
     if vmax is None: vmax = max( finite_plt_data_flat )
 
-    cmap = _matplotlib.cm.jet
+    cmap = _matplotlib.cm.plasma
     cmap.set_bad('w',1)
     masked_data = _np.ma.array (plt_data, mask=_np.isnan(plt_data))
     #heatmap = ax.pcolor( plt_data, vmin=vmin, vmax=vmax)
