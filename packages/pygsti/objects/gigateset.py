@@ -23,6 +23,9 @@ from ..tools import jamiolkowski as _jt
 import gate as _gate
 import gateset as _gateset
 
+def _isreal(a):
+    return _np.isclose(a.imag, 0.0)
+
 class GaugeInvGateSet(object):  #(_collections.OrderedDict):
     """
     Encapsulates a set of gate, state preparation, and POVM effect operations
@@ -44,7 +47,7 @@ class GaugeInvGateSet(object):  #(_collections.OrderedDict):
         self.gateLabels = []
         self.storedY0 = None
 
-    def from_gateset(self, gateset, verbosity=0):
+    def from_gateset(self, gateset, debug=None, verbosity=0):
         """        
         Initialize a gauge-invariant gate set from an existing (gauge-
          variant) GateSet.
@@ -70,12 +73,12 @@ class GaugeInvGateSet(object):  #(_collections.OrderedDict):
         #Get parameterization of gate eigenvalues (and get corresponding
         #  eigenvector matrices for later use)
         for i,gl in enumerate(self.gateLabels):
-            self.D_params[i], Y[i] = _parameterize_real_gate_mx(gateset[gl],vb)
+            self.D_params[i], Y[i] = _parameterize_real_gate_mx(gateset[gl],vb,debug)
 
         #DEBUG
-        #print "DB: Y0 = "; _mt.print_mx(Y[0])
-        #print "DB: invY0 = "; _mt.print_mx(_np.linalg.inv(Y[0]))
-        #print "DB: rho = "; _mt.print_mx(gateset.rhoVecs[0])
+        print "DB: Y0 = "; _mt.print_mx(Y[0])
+        print "DB: invY0 = "; _mt.print_mx(_np.linalg.inv(Y[0]))
+        print "DB: rho = "; _mt.print_mx(gateset.rhoVecs[0])
 
         #Get parameterization of SPAM pair (assume just a single pair is
         # present for now)
@@ -87,6 +90,13 @@ class GaugeInvGateSet(object):  #(_collections.OrderedDict):
         #remember the "gauge" of this gateset for going back to a 
         # gauge-dependent gateset.
         self.storedY0 = scaledY0 
+
+        #DEBUG
+        print "DB: Scaled Y0 = "; _mt.print_mx(scaledY0)
+        print "DB: delta0_diag = "; _mt.print_mx(delta0_diag)
+        print "DB: rho_tilde = "; _mt.print_mx(_np.dot( _np.diag(1.0/delta0_diag), rho_tilde))
+        if debug is not None:
+            print "DB: BScaled Y0 = "; _mt.print_mx( _np.dot(debug,scaledY0))
 
         #Make sure scaling rho_tilde gives vector of all 1s
         assert( _np.allclose( _np.dot( _np.diag(1.0/delta0_diag), rho_tilde),
@@ -101,6 +111,7 @@ class GaugeInvGateSet(object):  #(_collections.OrderedDict):
         self.B0_params = [None]*(len(self.gateLabels))
         for j,gl in enumerate(self.gateLabels[1:],start=1):
             invYjY0 = _np.dot( _np.linalg.inv(Y[j]), scaledY0 )
+            print "DB: invYjY0 = "; _mt.print_mx(invYjY0)
             self.B0_params[j] = _get_B_params(invYjY0, self.D_params[j],
                                               self.D_params[0])
                            
@@ -129,7 +140,7 @@ class GaugeInvGateSet(object):  #(_collections.OrderedDict):
         #Set E (FUTURE: multiple allowed?)
         ETilde = _get_ETilde_vector( self.E_params, self.D_params[0] )
         Evec = _np.dot(_np.transpose(invY0),ETilde)
-        assert( all(_np.isreal(Evec)) ) # b/c of conjugacy structure
+        assert( all(_isreal(Evec)) ) # b/c of conjugacy structure
         gs.set_evec( _np.real(Evec) ) 
 
         #Set initial gate
@@ -182,7 +193,7 @@ class GaugeInvGateSet(object):  #(_collections.OrderedDict):
 
 
 
-def _parameterize_real_gate_mx(real_gate_mx, verbosity):
+def _parameterize_real_gate_mx(real_gate_mx, verbosity, debug):
     """ 
     Convert the possibly complex eigenvalues of a real matrix into
     the purely real gauge-inv-gateset parameters.
@@ -197,22 +208,54 @@ def _parameterize_real_gate_mx(real_gate_mx, verbosity):
         if any([ i in p for p in conjugate_pairs]): continue
         for j,w in enumerate(evals[i+1:],start=i+1):
             if any([ j in p for p in conjugate_pairs]): continue
+            if verbosity > 5: print "%s == %s? %s (real: %s)" % (v.conj(), w, _np.isclose(v.conj(), w), _isreal(v))
             if _np.isclose(v.conj(), w): 
                 conjugate_pairs.append( (i,j) )
-                if _np.isreal(v): #special case of degenerate evals
+                if _isreal(v): #special case of degenerate evals
                     V = evecs[:,i].copy(); W = evecs[:,j].copy()
-                    if all(_np.isreal(V)) and all(_np.isreal(W)):
+                    if verbosity > 4: 
+                        print "DEGEN PAIR"
+                        print " V = "; print V
+                        print " W = "; print W
+                        print " isreal(V) = "; print _isreal(V)
+                        print " isreal(W) = "; print _isreal(W)
+                    if all(_isreal(V)) and all(_isreal(W)):
                         #we treat all degen. eigenvals as conjugate-pairs,
                         # so want conjugate-pair, not real eigenvectors:
+                        if verbosity > 4: print "REAL DEGEN PAIR"
                         evecs[:,i] = (V + 1j*W); evecs[:,j] = (V - 1j*W)
                         evecs[:,i] /= _np.linalg.norm(evecs[:,i])
                         evecs[:,j] /= _np.linalg.norm(evecs[:,j])
+                    else:
+                        print " AV chk = "; print _np.linalg.norm( _np.dot(real_gate_mx,V) - v*V)
+                        print " AVc chk= "; print _np.linalg.norm( _np.dot(real_gate_mx,V.conj()) - v*V.conj())
+                        print " AW chk= "; print _np.linalg.norm( _np.dot(real_gate_mx,W) - v*W)
+                        print " AWc chk= "; print _np.linalg.norm( _np.dot(real_gate_mx,W.conj()) - v*W.conj())
+                        print "Vnorm = ", _np.linalg.norm(V)
+                        print "Wnorm = ", _np.linalg.norm(W)
+                        print "nrm = ", _np.linalg.norm(W.real/_np.linalg.norm(W.real))
+                        print " chk= "; print _np.linalg.norm( W.real/_np.linalg.norm(W.real) - V)
+
+                        print "prod chk = ", _np.linalg.norm( _np.dot(evecs, _np.dot(_np.diag(evals), _np.linalg.inv(evecs))) - real_gate_mx)
+
+
+                        evecs[:,i] = W.conj()
+                        evecs[:,i] /= _np.linalg.norm(evecs[:,i])
+
+                        print "prod chk2 = ", _np.linalg.norm( _np.dot(evecs, _np.dot(_np.diag(evals), _np.linalg.inv(evecs))) - real_gate_mx)
+
+                        #raise ValueError("COMPLEX DEGEN PAIR")
+                        if verbosity > 4: print "COMPLEX DEGEN PAIR"
+                        pass
+                        #evecs[:,j] = V.conj()
+                        #evecs[:,j] /= _np.linalg.norm(evecs[:,j])
+                        
                         
     
     #put remaining (non-conj-pair) indices ==> real_pairs
     remaining = [ i for i in range(len(evals)) if \
                       not any([ i in p for p in conjugate_pairs]) ]
-    assert(all([ _np.isreal(evals[i]) for i in remaining ]))
+    assert(all([ _isreal(evals[i]) for i in remaining ]))
 
     nLeft = len(remaining)
     real_pairs = [(remaining[i],remaining[i+1]) for i in range(0,nLeft-1,2)]
@@ -243,16 +286,27 @@ def _parameterize_real_gate_mx(real_gate_mx, verbosity):
         k += 2
 
     if len(remaining) % 2 == 1: #if there's one un-paired (real) eval
-        assert(_np.isreal(evals[remaining[-1]]))
+        assert(_isreal(evals[remaining[-1]]))
         permMx[remaining[-1],k] = 1.0
         eval_params[k] = evals[remaining[-1]].real
 
     if verbosity > 3:
         print "Parameterizing matrix:"; _mt.print_mx(real_gate_mx)
         print " -> Eigenvalues: ";_mt.print_mx(evals)
+        print " -> Eigenvectors: ";_mt.print_mx(evecs)
         print " -> Parameters: ";_mt.print_mx(eval_params)
         print " -> Evec Permutation Mx  = ";_mt.print_mx(permMx)
         print " -> Y-Mx  = ";_mt.print_mx(_np.dot(evecs, permMx))
+        
+        if debug is not None:
+            B = debug
+            Bi = _np.linalg.inv(debug)
+            print " -> debug matrix:"; _mt.print_mx(_np.dot(B,_np.dot(real_gate_mx,Bi)))
+            print " -> debug Y-Mx  = ";_mt.print_mx(_np.dot(B,_np.dot(evecs, permMx)))
+
+            Y = _np.dot(B,_np.dot(evecs, permMx))
+            Yi = _np.linalg.inv(Y)
+            print " -> test: "; _mt.print_mx(_np.dot(Y,_np.dot(_np.diag(evals), Yi)))
         print ""
 
     new_evecs = _np.dot(evecs, permMx)
@@ -286,31 +340,31 @@ def _get_delta0_diag(rho_tilde, D0_params, verbosity):
             assert(_np.isclose(rho_tilde[i],rho_tilde[i+1].conj()))
             if abs(rho_tilde[i]) < 1e-10:
                 print "Warning1: scaling near-zero rho_tilde element to 1.0!"
-                inv_delta0_diag[i] = 1e10 # ~= 1 / 1e-10
+                inv_delta0_diag[i] = 1e3 # ~= 1 / 1e-10
             else:
                 inv_delta0_diag[i] = (1.0+0j) / rho_tilde[i] #complex division
             inv_delta0_diag[i+1] = inv_delta0_diag[i].conj()
         else:
             # real pair at index i,i+1, so:
-            assert(_np.isreal(rho_tilde[i]) and _np.isreal(rho_tilde[i+1]))
+            assert(_isreal(rho_tilde[i]) and _isreal(rho_tilde[i+1]))
             if abs(rho_tilde[i]) < 1e-10:
                 print "Warning2: scaling near-zero rho_tilde element to 1.0!"
-                inv_delta0_diag[i] = 1e10 # ~= 1 / 1e-10
+                inv_delta0_diag[i] = 1e3 # ~= 1 / 1e-10
             else:
                 inv_delta0_diag[i] = 1.0 / rho_tilde[i].real
 
             if abs(rho_tilde[i+1]) < 1e-10:
                 print "Warning3: scaling near-zero rho_tilde element to 1.0!"
-                inv_delta0_diag[i+1] = 1e10 # ~= 1 / 1e-10
+                inv_delta0_diag[i+1] = 1e3 # ~= 1 / 1e-10
             else:
-                inv_delta0_diag[i+1] = 1.0 / rho_tilde[i].real
+                inv_delta0_diag[i+1] = 1.0 / rho_tilde[i+1].real
 
     if len(D0_params) % 2 == 1: #then there's an un-paired real eigenvalue
         i = len(D0_params)-1
-        assert(_np.isreal(rho_tilde[i]))
+        assert(_isreal(rho_tilde[i]))
         if abs(rho_tilde[i]) < 1e-10:
             print "Warning4: scaling near-zero rho_tilde element to 1.0!"
-            inv_delta0_diag[i] = 1e10 # ~= 1 / 1e-10
+            inv_delta0_diag[i] = 1e3 # ~= 1 / 1e-10
         else:
             inv_delta0_diag[i] = 1.0 / rho_tilde[i].real
 
@@ -333,14 +387,14 @@ def _get_ET_params(ET_tilde, D0_params):
             #TODO: maybe we divide by abs(b) before setting E_params??
         else:
             # real pair at index i,i+1, so:
-            assert(_np.isreal(ET_tilde[i]) and _np.isreal(ET_tilde[i+1]))
+            assert(_isreal(ET_tilde[i]) and _isreal(ET_tilde[i+1]))
             E_params[i]   = (ET_tilde[i].real + ET_tilde[i+1].real)/2.0
             E_params[i+1] = (ET_tilde[i].real - ET_tilde[i+1].real)/2.0
             #TODO: maybe we divide by abs(b) before setting E_params??
 
     if len(D0_params) % 2 == 1: #then there's an un-paired real eigenvalue
         i = len(D0_params)-1
-        assert(_np.isreal(ET_tilde[i]))
+        assert(_isreal(ET_tilde[i]))
         E_params[i] = ET_tilde[i].real
 
     return E_params
@@ -366,7 +420,7 @@ def _get_B_params(invYjY0, Dj_params, D0_params):
             # complex-conj pair rows at index i,i+1
             if abs(invYjY0[i,i]) < 1e-10:
                 print "Warning: scaling near-zero B0j element to 1.0!"
-                inv_deltaj_diag[i] = 1e10 # ~= 1 / 1e-10
+                inv_deltaj_diag[i] = 1e3 # ~= 1 / 1e-10
             else:
                 inv_deltaj_diag[i] = 1.0 / invYjY0[i,i] # complex division
             inv_deltaj_diag[i+1] = inv_deltaj_diag[i].conj()
@@ -388,13 +442,13 @@ def _get_B_params(invYjY0, Dj_params, D0_params):
             # real-pair rows at index i,i+1
             if abs(invYjY0[i,i]) < 1e-10:
                 print "Warning: scaling near-zero B0j element to 1.0!"
-                inv_deltaj_diag[i] = 1e10 # ~= 1 / 1e-10
+                inv_deltaj_diag[i] = 1e3 # ~= 1 / 1e-10
             else:
                 inv_deltaj_diag[i] = 1.0 / invYjY0[i,i].real
 
             if abs(invYjY0[i+1,i+1]) < 1e-10:
                 print "Warning: scaling near-zero B0j element to 1.0!"
-                inv_deltaj_diag[i+1] = 1e10 # ~= 1 / 1e-10
+                inv_deltaj_diag[i+1] = 1e3 # ~= 1 / 1e-10
             else:
                 inv_deltaj_diag[i+1] = 1.0 / invYjY0[i+1,i+1].real
 
@@ -408,16 +462,16 @@ def _get_B_params(invYjY0, Dj_params, D0_params):
             else:
                 # real-pair rows & cols at index i,i+1, so deltaj
                 # computed above scales both (real) diagonal els to 1
-                assert(_np.isreal(invYjY0[i,i]) and 
-                       _np.isreal(invYjY0[i+1,i+1]))
+                assert(_isreal(invYjY0[i,i]) and 
+                       _isreal(invYjY0[i+1,i+1]))
 
 
     if len(Dj_params) % 2 == 1: #then there's an un-paired real eigenvalue
         i = len(Dj_params)-1
-        assert(_np.isreal(invYjY0[i,i]))
+        assert(_isreal(invYjY0[i,i]))
         if abs(invYjY0[i,i]) < 1e-10:
             print "Warning: scaling near-zero B0j element to 1.0!"
-            inv_deltaj_diag[i] = 1e10 # ~= 1 / 1e-10
+            inv_deltaj_diag[i] = 1e3 # ~= 1 / 1e-10
         else:
             inv_deltaj_diag[i] = 1.0 / invYjY0[i,i].real
         #scaling sets diagonal element to 1
@@ -425,12 +479,18 @@ def _get_B_params(invYjY0, Dj_params, D0_params):
     # Scale invYjY0
     B0j = _np.dot( _np.diag(inv_deltaj_diag), invYjY0 )
     
+    print "DB: inv_deltaj_diag = ";_mt.print_mx(inv_deltaj_diag)
+    print "DB: D0_params = ";_mt.print_mx(D0_params)
+    print "DB: Dj_params = ";_mt.print_mx(Dj_params)
+    print "DB: B0j = ";_mt.print_mx(B0j)
+    
     # Extract (real) parameters from B0j
     B0j_params = {} # a dictionary of lists, indexed by two "2x2 block" indices
     for i in range(0,len(Dj_params)-1,2): #loop over row-pairs
         a1,b1 = Dj_params[i:i+2] #rows
         for j in range(0,len(D0_params)-1,2): #loop over col-pairs
-            a2,b2 = D0_params[i:i+2] #cols
+            print "DB index = ",(i,j)
+            a2,b2 = D0_params[j:j+2] #cols
 
             #Each 2x2 square of B0j contains 4 real parameters (after
             # accounting for structure) *except* if i == j, in which case
@@ -481,8 +541,8 @@ def _get_B_params(invYjY0, Dj_params, D0_params):
                 else:
                     # real-pair rows & cols, so block is
                     # [ [a, b], [c, d] ] (all real); parameterize a, b, c, d.
-                    assert(_np.isreal(B0j[i,j]) and _np.isreal(B0j[i,j+1]) and 
-                           _np.isreal(B0j[i+1,j]) and _np.isreal(B0j[i+1,j+1]))
+                    assert(_isreal(B0j[i,j]) and _isreal(B0j[i,j+1]) and 
+                           _isreal(B0j[i+1,j]) and _isreal(B0j[i+1,j+1]))
 
                     if i != j:
                         B0j_params[i//2,j//2] = \
@@ -498,7 +558,7 @@ def _get_B_params(invYjY0, Dj_params, D0_params):
         M = len(Dj_params)//2 # index of unpaired block in B0j_params
         i = len(Dj_params)-1
         for j in range(0,len(D0_params)-1,2): #loop over col-pairs (final row)
-            a2,b2 = D0_params[i:i+2] #cols
+            a2,b2 = D0_params[j:j+2] #cols
             
             if b2 <= 0:
                 # single-real row & complex-conj pair cols,
@@ -512,7 +572,7 @@ def _get_B_params(invYjY0, Dj_params, D0_params):
             else:
                 # single-real row & real-pair cols, so block is
                 # [a, b] (both real); parameterize a, b
-                assert(_np.isreal(B0j[i,j]) and _np.isreal(B0j[i,j+1]))
+                assert(_isreal(B0j[i,j]) and _isreal(B0j[i,j+1]))
                 B0j_params[M,j//2] = \
                     [ B0j[i,j].real, B0j[i,j+1].real ]
                 #TODO: maybe we divide by abs(b) before setting??
@@ -534,7 +594,7 @@ def _get_B_params(invYjY0, Dj_params, D0_params):
             else:
                 # real-pair rows & single-real col, so block is
                 # [[a], [b]] (both real); parameterize a, b
-                assert(_np.isreal(B0j[i,j]) and _np.isreal(B0j[i+1,j]))
+                assert(_isreal(B0j[i,j]) and _isreal(B0j[i+1,j]))
                 B0j_params[i//2,M] = \
                     [ B0j[i,j].real, B0j[i+1,j].real ]
                 #TODO: maybe we divide by abs(b) before setting??
@@ -569,7 +629,7 @@ def _get_B_params(invYjY0, Dj_params, D0_params):
             assert(len(B0j_params[k,M]) == 2)
             concat_params.extend( B0j_params[k,M] )
             
-    assert( all(_np.isreal(concat_params)) )
+    assert( all(_np.isclose(_np.imag(concat_params), 0.0) ))
     return _np.array(concat_params, 'd')
         
 
@@ -609,7 +669,7 @@ def _deparameterize_real_gate_mx(Dj_params, D0_params, B0j_params,
     for i in range(0,len(Dj_params)-1,2): #loop over row-pairs
         a1,b1 = Dj_params[i:i+2] #rows
         for j in range(0,len(D0_params)-1,2): #loop over col-pairs
-            a2,b2 = D0_params[i:i+2] #cols
+            a2,b2 = D0_params[j:j+2] #cols
 
             #Each 2x2 square of B0j is specified with 4 real parameters
             # *except* if i == j, in which case our deltaj-scaling has
@@ -680,7 +740,7 @@ def _deparameterize_real_gate_mx(Dj_params, D0_params, B0j_params,
     if len(Dj_params) % 2 == 1: #then there's an un-paired real eigenvalue
         i = len(Dj_params)-1
         for j in range(0,len(D0_params)-1,2): #loop over col-pairs
-            a2,b2 = D0_params[i:i+2] #cols
+            a2,b2 = D0_params[j:j+2] #cols
             params = B0j_params[k:k+2]; k += 2 #always length 2 (i != j always)
 
             if b2 <= 0:
@@ -738,7 +798,7 @@ def _deparameterize_real_gate_mx(Dj_params, D0_params, B0j_params,
 
     #Construct gate
     mx = _np.dot(Yj, _np.dot(Dj, invYj))    
-    assert(all(_np.isreal(mx.flatten())))
+    assert(all(_isreal(mx.flatten())))
 
     return _np.real(mx)
 
