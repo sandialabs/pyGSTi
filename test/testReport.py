@@ -122,6 +122,9 @@ class TestReport(ReportTestCase):
         with self.assertRaises(ValueError):
             self.results_logL.get_special('FooBar')
 
+        #Run tests to generate tables we don't use in reports
+        self.results_logL.get_table("bestGatesetVsTargetAnglesTable")
+
 
 
         self.results_logL.create_full_report_pdf(filename="temp_test_files/full_reportC.pdf", confidenceLevel=None,
