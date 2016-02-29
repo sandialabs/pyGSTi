@@ -3,7 +3,7 @@
 #    This Software is released under the GPL license detailed    
 #    in the file "license.txt" in the top-level pyGSTi directory 
 #*****************************************************************
-""" Defines the GateSet class and supporting functionality."""
+""" Defines an *experimental* gauge-invariant GateSet class and supporting functionality."""
 
 import itertools as _itertools
 import warnings as _warnings
@@ -37,7 +37,7 @@ class GaugeInvGateSet(object):  #(_collections.OrderedDict):
      in a gauge-invariant manner.
 
     A GaugeInvGateSet stores a gateset using a *minimal* gauge-invariant
-    representation.
+    representation.  This class is *experimental* and not ready for use yet.
     """
     
     def __init__(self,items=[]):
