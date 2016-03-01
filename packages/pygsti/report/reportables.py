@@ -366,7 +366,7 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None, mxBasis="
                 else:
                     axisOfRotn_other = decomp_other.get('axis of rotation',None)
                     if axisOfRotn is not None and axisOfRotn_other is not None:
-                        real_dot =  _np.clip( _np.real(_np.dot(axisOfRotn,axisOfRotn_other)), 0.0, 1.0)
+                        real_dot =  _np.clip( _np.real(_np.dot(axisOfRotn,axisOfRotn_other)), -1.0, 1.0)
                         angles_btwn_rotn_axes[i,j] = _np.arccos( real_dot ) / _np.pi
                     else: 
                         angles_btwn_rotn_axes[i,j] = _np.nan
@@ -731,6 +731,33 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
                                             eps, confidenceRegionInfo) 
             except ImportError: #if failed to import cvxpy (probably b/c it's not installed)
                 ret[key] = ReportableQty(_np.nan) # report NAN for diamond norms
+
+        key = '%s angle btwn rotn axes' % gateLabel; possible_qtys.append(key)
+        if key in qtynames:
+
+            def angle_btwn_axes(gate): #Note: default 'gm' basis
+                decomp = _tools.decompose_gate_matrix(gate)
+                decomp2 = _tools.decompose_gate_matrix(gateset2[gateLabel])
+                axisOfRotn = decomp.get('axis of rotation',None)
+                rotnAngle = decomp.get('pi rotations','X')
+                axisOfRotn2 = decomp2.get('axis of rotation',None)
+                rotnAngle2 = decomp2.get('pi rotations','X')
+
+                if rotnAngle == 'X' or abs(rotnAngle) < 1e-4 or \
+                   rotnAngle2 == 'X' or abs(rotnAngle2) < 1e-4:
+                    return _np.nan
+
+                if axisOfRotn is None or axisOfRotn2 is None:
+                    return _np.nan
+
+                real_dot =  _np.clip( _np.real(_np.dot(axisOfRotn,axisOfRotn2)), -1.0, 1.0)
+                return _np.arccos( abs(real_dot) ) / _np.pi  
+                  #Note: abs() allows axis to be off by 180 degrees -- if showing *angle* as
+                  #      well, must flip sign of angle of rotation if you allow axis to
+                  #      "reverse" by 180 degrees.
+
+            ret[key] = _getGateQuantity(angle_btwn_axes, gateset1, gateLabel,
+                                    eps, confidenceRegionInfo) 
 
 
     ###  per gateset quantities
