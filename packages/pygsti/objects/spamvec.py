@@ -9,7 +9,7 @@ functionality.
 """
 
 
-class FullyParameterizedSPAMOp(object):
+class FullyParameterizedSPAMVec(object):
     """
     Encapsulates a SPAM vector that is fully parameterized, that is,
       each element of the SPAM vector is an independent parameter.
@@ -150,7 +150,7 @@ class FullyParameterizedSPAMOp(object):
         return s 
 
 
-class FullyParameterizedRhoOp(FullyParameterizedSPAMOp):
+class FullyParameterizedRhoVec(FullyParameterizedSPAMVec):
 
     def __init__(self, vec):
         """ See FullyParameterizedSPAMOp """
@@ -161,7 +161,7 @@ class FullyParameterizedRhoOp(FullyParameterizedSPAMOp):
         self.vector = _np.dot(Si, self.vec)
 
 
-class FullyParameterizedEOp(FullyParameterizedSPAMOp):
+class FullyParameterizedEVec(FullyParameterizedSPAMVec):
 
     def __init__(self, vec):
         """ See FullyParameterizedSPAMOp """
