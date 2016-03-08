@@ -503,6 +503,13 @@ class Results(object):
                 self.gsBestEstimate, self.gsTarget, self.formatsToCompute,
                 self.tableClass, self.longTables, cri)
 
+        elif tableName == 'bestGatesetVsTargetAnglesTable':
+            cri = self.get_confidence_region(confidenceLevel)
+            return _generation.get_gateset_vs_target_angles_table(
+                self.gsBestEstimate, self.gsTarget, self.formatsToCompute,
+                self.tableClass, self.longTables, cri, mxBasis)
+
+
 
         # progress tables
         elif tableName == 'chi2ProgressTable':

@@ -486,6 +486,69 @@ def get_gateset_vs_target_err_gen_table(gateset, targetGateset, formats, tablecl
     return tables
 
 
+
+def get_gateset_vs_target_angles_table(gateset, targetGateset, formats, tableclass, longtable, 
+                                       confidenceRegionInfo=None, mxBasis="gm"):
+    """ 
+    Create a table comparing a gateset to a target gateset.
+    
+    Parameters
+    ----------
+    gateset, targetGateset : GateSet
+        The gate sets to compare
+
+    formats : list
+        List of formats to include in returned tables dictionary. Allowed
+        formats are 'latex', 'html', 'py', and 'ppt'.
+
+    tableclass : string
+        CSS class to apply to the HTML table.
+
+    longtable : bool
+        Whether table should be a latex longtable or not.
+
+    confidenceRegionInfo : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+
+    mxBasis : {'std', 'gm','pp'}
+        Which basis the gateset is represented in.  Allowed
+        options are Matrix-unit (std), Gell-Mann (gm) and
+        Pauli-product (pp).
+
+
+    Returns
+    -------
+    dict
+        Dictionary with keys equal to the requested formats (e.g. 'latex'),
+        and values equal to the table data in the corresponding format.
+    """
+    gateLabels = gateset.keys()  # gate labels
+
+    colHeadings = ('Gate', "Angle between|rotation axes")
+    formatters = (None,_tf.TxtCnv)
+
+    qtyNames = ('angle btwn rotn axes',)
+    qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames for gl in gateLabels ]
+    qtys = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
+                                            confidenceRegionInfo, mxBasis)
+
+    tables = {}
+    _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable)
+
+    formatters = [None] + [ _tf.EBPi ]*len(qtyNames)
+    
+    for gl in gateLabels:
+        if confidenceRegionInfo is None:
+            rowData = [gl] + [ (qtys['%s %s' % (gl,qty)].get_value(),None) for qty in qtyNames ]
+        else:
+            rowData = [gl] + [ qtys['%s %s' % (gl,qty)].get_value_and_err_bar() for qty in qtyNames ]
+        _tf.add_table_row(formats, tables, rowData, formatters)
+
+    _tf.finish_table(formats, tables, longtable)
+    return tables
+
+
 def get_gateset_closest_unitary_table(gateset, formats, tableclass, longtable, confidenceRegionInfo=None):
     """ 
     Create a table for gateset that contains closest-unitary gates.
