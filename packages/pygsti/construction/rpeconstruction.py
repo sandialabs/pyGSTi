@@ -11,9 +11,8 @@ import datasetconstruction as _dsc
 from .. import objects as _objs
 from .. import tools as _tools
 
-
-def make_paramterized_rpe_gate_set(alphaTrue, epsilonTrue, Yrot, SPAMdepol,
-                                   gateDepol=None, withId=True):
+def make_paramterized_rpe_gate_set(alphaTrue, epsilonTrue, auxRot, SPAMdepol,
+                                   gateDepol=None, withId=True,rpeconfig_inst=None):
     """
     Make a gateset for simulating RPE, paramaterized by rotation angles.  Note
     that the output gateset also has thetaTrue, alphaTrue, and epsilonTrue 
@@ -22,16 +21,14 @@ def make_paramterized_rpe_gate_set(alphaTrue, epsilonTrue, Yrot, SPAMdepol,
     Parameters
     ----------
     alphaTrue : float
-       Angle of Z rotation (canonical RPE requires alphaTrue to be close to 
-       pi/2).
+       Angle of rotation about "fixed axis" 
 
     epsilonTrue : float
-       Angle of X rotation (canonical RPE requires epsilonTrue to be close to
-       pi/4).
+       Angle of rotation about "loose axis"
 
-    Yrot : float
-       Angle of rotation about Y axis that, by similarity transformation,
-       rotates X rotation.
+    auxRot : float
+       Angle of rotation about the axis perpendicular to fixed and loose axes,
+       that, by similarity transformation, changes loose axis.
 
     SPAMdepol : float
        Amount to depolarize SPAM by.
@@ -43,6 +40,10 @@ def make_paramterized_rpe_gate_set(alphaTrue, epsilonTrue, Yrot, SPAMdepol,
        Do we include (perfect) identity or no identity? (Defaults to False;
        should be False for RPE, True for GST)
 
+    rpeconfig_inst : rpeconfig object
+        Declares which gate set configuration RPE should be trying to fit;
+        determines particular functions and values to be used.
+
     Returns
     -------
     GateSet
@@ -50,54 +51,80 @@ def make_paramterized_rpe_gate_set(alphaTrue, epsilonTrue, Yrot, SPAMdepol,
         alphaTrue, and epsilonTrue, automatically extracted.
     """
 
+#    if rpeconfig_inst not in rpeInstanceDict.keys():
+#        raise Exception('Need valid rpeconfig_inst!')
+
+#    rpeconfig_inst = rpeInstanceDict[rpeconfig_inst]
+
+    loose_axis_gate_label = rpeconfig_inst.loose_axis_gate_label
+    loose_axis_label = rpeconfig_inst.loose_axis_label
+    fixed_axis_gate_label = rpeconfig_inst.fixed_axis_gate_label
+    fixed_axis_label = rpeconfig_inst.fixed_axis_label
+
+    auxiliary_axis_gate_label = rpeconfig_inst.auxiliary_axis_gate_label
+    auxiliary_axis_label = rpeconfig_inst.auxiliary_axis_label
+    
+    rhoExpressions = rpeconfig_inst.rhoExpressions
+    EExpressions = rpeconfig_inst.EExpressions
+    spamLabelDict = rpeconfig_inst.spamLabelDict
+
     if withId:
         outputGateset = _setc.build_gateset( 
-            [2], [('Q0',)],['Gi','Gx','Gz'], 
-            [ "I(Q0)", "X(%s,Q0)" % epsilonTrue, "Z(%s,Q0)" % alphaTrue],
-            rhoExpressions=["0"], EExpressions=["1"], 
-            spamLabelDict={'plus': (0,0), 'minus': (0,-1) } )
+            [2], [('Q0',)],['Gi',loose_axis_gate_label,fixed_axis_gate_label], 
+            [ "I(Q0)", loose_axis_label+"(%s,Q0)" % epsilonTrue, fixed_axis_label+"(%s,Q0)" % alphaTrue],
+            rhoExpressions=rhoExpressions, EExpressions=EExpressions, 
+            spamLabelDict=spamLabelDict )
     else:
         outputGateset = _setc.build_gateset( 
-            [2], [('Q0',)],['Gx','Gz'], 
-            [ "X(%s,Q0)" % epsilonTrue, "Z(%s,Q0)" % alphaTrue],
-            rhoExpressions=["0"], EExpressions=["1"], 
-            spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
+            [2], [('Q0',)],[loose_axis_gate_label,fixed_axis_gate_label], 
+            [ loose_axis_label+"(%s,Q0)" % epsilonTrue, fixed_axis_label+"(%s,Q0)" % alphaTrue],
+            rhoExpressions=rhoExpressions, EExpressions=EExpressions, 
+            spamLabelDict=spamLabelDict )
 
-    if Yrot != 0:
+    if auxRot != 0:
         gatesetAux1 = _setc.build_gateset( 
-            [2], [('Q0',)],['Gi','Gy','Gz'], 
-            [ "I(Q0)", "Y(%s,Q0)" % Yrot, "Z(pi/2,Q0)"],
-            rhoExpressions=["0"], EExpressions=["1"], 
-            spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
+            [2], [('Q0',)],['Gi',auxiliary_axis_gate_label,fixed_axis_gate_label], 
+            [ "I(Q0)", auxiliary_axis_label+"(%s,Q0)" % auxRot, fixed_axis_label+"(pi/2,Q0)"],
+            rhoExpressions=rhoExpressions, EExpressions=EExpressions, 
+            spamLabelDict=spamLabelDict)
 
-        outputGateset.set_gate('Gx',_objs.FullyParameterizedGate(
-                _np.dot( _np.dot(_np.linalg.inv(gatesetAux1['Gy']),
-                               outputGateset['Gx']),gatesetAux1['Gy'])) )
+        outputGateset.set_gate(loose_axis_gate_label,_objs.FullyParameterizedGate(
+                _np.dot( _np.dot(_np.linalg.inv(gatesetAux1[auxiliary_axis_gate_label]),
+                               outputGateset[loose_axis_gate_label]),gatesetAux1[auxiliary_axis_gate_label])) )
 
     outputGateset = outputGateset.depolarize(gate_noise=gateDepol,
                                              spam_noise=SPAMdepol)
     
-    thetaTrue = _tools.rpe.extract_theta(outputGateset)
+    thetaTrue = _tools.rpe.extract_theta(outputGateset,rpeconfig_inst)
     outputGateset.thetaTrue = thetaTrue
     
-    outputGateset.alphaTrue = _tools.rpe.extract_alpha(outputGateset)
+    outputGateset.alphaTrue = _tools.rpe.extract_alpha(outputGateset,rpeconfig_inst)
     outputGateset.alphaTrue = alphaTrue
     
-    outputGateset.epsilonTrue = _tools.rpe.extract_epsilon(outputGateset)
+    outputGateset.epsilonTrue = _tools.rpe.extract_epsilon(outputGateset,rpeconfig_inst)
     outputGateset.epsilonTrue = epsilonTrue
     
     return outputGateset
 
-def make_rpe_alpha_str_lists_gx_gz(kList):
+#def make_rpe_alpha_str_lists(kList,angleStr,rpeconfig_inst):
+def make_rpe_angle_str_lists(kList,angleName,rpeconfig_inst):
     """
-    Make alpha cosine and sine gatestring lists for (approx) X pi/4 and Z pi/2
-    gates. These gate strings are used to estimate alpha (Z rotation angle).
+    Make cosine and sine gatestring lists.  These gate strings are used to estimate the angle specified
+    by angleName ('alpha', 'epsilon', or 'theta')
 
     Parameters
     ----------
     kList : list of ints
-       The list of "germ powers" to be used.  Typically successive powers of 
-       two; e.g. [1,2,4,8,16].
+        The list of "germ powers" to be used.  Typically successive powers of 
+        two; e.g. [1,2,4,8,16].
+
+    angleName : string
+        The angle to be deduced from these gate sequences.
+        (Choices are 'alpha', 'epsilon', or 'theta')
+    
+    rpeconfig_inst : rpeconfig object
+        Declares which gate set configuration RPE should be trying to fit;
+        determines particular functions and values to be used.
 
     Returns
     -------
@@ -106,134 +133,78 @@ def make_rpe_alpha_str_lists_gx_gz(kList):
     sinStrList : list of GateStrings
         The list of "sine strings" to be used for alpha estimation.
     """
+    
+#    rpeconfig_inst = rpeInstanceDict[rpeconfig_inst]
+
+    if angleName == 'alpha':
+        cos_prep_tuple = rpeconfig_inst.alpha_cos_prep_tuple
+        cos_prep_str = rpeconfig_inst.alpha_cos_prep_str
+        cos_germ_tuple = rpeconfig_inst.alpha_cos_germ_tuple
+        cos_germ_str = rpeconfig_inst.alpha_cos_germ_str
+        cos_meas_tuple = rpeconfig_inst.alpha_cos_meas_tuple
+        cos_meas_str = rpeconfig_inst.alpha_cos_meas_str
+        sin_prep_tuple = rpeconfig_inst.alpha_sin_prep_tuple
+        sin_prep_str = rpeconfig_inst.alpha_sin_prep_str
+        sin_germ_tuple = rpeconfig_inst.alpha_sin_germ_tuple
+        sin_germ_str = rpeconfig_inst.alpha_sin_germ_str
+        sin_meas_tuple = rpeconfig_inst.alpha_sin_meas_tuple
+        sin_meas_str = rpeconfig_inst.alpha_sin_meas_str
+        
+    elif angleName == 'epsilon':
+        cos_prep_tuple = rpeconfig_inst.epsilon_cos_prep_tuple
+        cos_prep_str = rpeconfig_inst.epsilon_cos_prep_str
+        cos_germ_tuple = rpeconfig_inst.epsilon_cos_germ_tuple
+        cos_germ_str = rpeconfig_inst.epsilon_cos_germ_str
+        cos_meas_tuple = rpeconfig_inst.epsilon_cos_meas_tuple
+        cos_meas_str = rpeconfig_inst.epsilon_cos_meas_str
+        sin_prep_tuple = rpeconfig_inst.epsilon_sin_prep_tuple
+        sin_prep_str = rpeconfig_inst.epsilon_sin_prep_str
+        sin_germ_tuple = rpeconfig_inst.epsilon_sin_germ_tuple
+        sin_germ_str = rpeconfig_inst.epsilon_sin_germ_str
+        sin_meas_tuple = rpeconfig_inst.epsilon_sin_meas_tuple
+        sin_meas_str = rpeconfig_inst.epsilon_sin_meas_str
+
+    elif angleName == 'theta':
+        cos_prep_tuple = rpeconfig_inst.theta_cos_prep_tuple
+        cos_prep_str = rpeconfig_inst.theta_cos_prep_str
+        cos_germ_tuple = rpeconfig_inst.theta_cos_germ_tuple
+        cos_germ_str = rpeconfig_inst.theta_cos_germ_str
+        cos_meas_tuple = rpeconfig_inst.theta_cos_meas_tuple
+        cos_meas_str = rpeconfig_inst.theta_cos_meas_str
+        sin_prep_tuple = rpeconfig_inst.theta_sin_prep_tuple
+        sin_prep_str = rpeconfig_inst.theta_sin_prep_str
+        sin_germ_tuple = rpeconfig_inst.theta_sin_germ_tuple
+        sin_germ_str = rpeconfig_inst.theta_sin_germ_str
+        sin_meas_tuple = rpeconfig_inst.theta_sin_meas_tuple
+        sin_meas_str = rpeconfig_inst.theta_sin_meas_str
+
+    else:
+        raise Exception("Need valid angle!")
+
     cosStrList = []
     sinStrList = []
     for k in kList:
-        cosStrList += [ _objs.GateString(('Gi','Gx','Gx','Gz')+
-                                         ('Gz',)*k + 
-                                         ('Gz','Gz','Gz','Gx','Gx'),
-                                         'GiGxGxGzGz^'+str(k)+'GzGzGzGxGx')]
-
-        sinStrList += [ _objs.GateString(('Gx','Gx','Gz','Gz')+
-                                         ('Gz',)*k + 
-                                         ('Gz','Gz','Gz','Gx','Gx'),
-                                         'GxGxGzGzGz^'+str(k)+'GzGzGzGxGx')]
-
-        #From RPEToolsNewNew.py
-        ##cosStrList += [_objs.GateString(('Gi','Gx','Gx')+
-        ##                                ('Gz',)*k +
-        ##                                ('Gx','Gx'),
-        ##                                'GiGxGxGz^'+str(k)+'GxGx')]
-        #
-        #
-        #cosStrList += [_objs.GateString(('Gx','Gx')+
-        #                                ('Gz',)*k + 
-        #                                ('Gx','Gx'),
-        #                                'GxGxGz^'+str(k)+'GxGx')]
-        #
-        #
-        #sinStrList += [_objs.GateString(('Gx','Gx')+
-        #                                ('Gz',)*k + 
-        #                                ('Gz','Gx','Gx'),
-        #                                'GxGxGz^'+str(k)+'GzGxGx')]
-
+        cosStrList += [_objs.GateString(cos_prep_tuple+cos_germ_tuple*k+cos_meas_tuple,
+                                                cos_prep_str+'('+cos_germ_str+')^'+str(k)+cos_meas_str)]
+        sinStrList += [_objs.GateString(sin_prep_tuple+sin_germ_tuple*k+sin_meas_tuple,
+                                                sin_prep_str+'('+sin_germ_str+')^'+str(k)+sin_meas_str)]
     return cosStrList, sinStrList
-    
-def make_rpe_epsilon_str_lists_gx_gz(kList):
-    """
-    Make epsilon cosine and sine gatestring lists for (approx) X pi/4 and
-    Z pi/2 gates. These gate strings are used to estimate epsilon (X rotation
-    angle).
 
-    Parameters
-    ----------
-    kList : list of ints
-       The list of "germ powers" to be used.  Typically successive powers of 
-       two; e.g. [1,2,4,8,16].
-
-    Returns
-    -------
-    epsilonCosStrList : list of GateStrings
-        The list of "cosine strings" to be used for epsilon estimation.
-    epsilonSinStrList : list of GateStrings
-        The list of "sine strings" to be used for epsilon estimation.
-    """
-    epsilonCosStrList = []
-    epsilonSinStrList = []
-
-    for k in kList:
-        epsilonCosStrList += [_objs.GateString(('Gx',)*k+
-                                               ('Gx',)*4,
-                                               'Gx^'+str(k)+'GxGxGxGx')]
-    
-        epsilonSinStrList += [_objs.GateString(('Gx','Gx','Gz','Gz')+
-                                               ('Gx',)*k+
-                                               ('Gx',)*4,
-                                               'GxGxGzGzGx^'+str(k)+'GxGxGxGx')]
-
-        #From RPEToolsNewNew.py
-        #epsilonCosStrList += [_objs.GateString(('Gx',)*k,
-        #                                       'Gx^'+str(k))]
-        #
-        #epsilonSinStrList += [_objs.GateString(('Gx','Gx')+('Gx',)*k,
-        #                                       'GxGxGx^'+str(k))]
-
-    return epsilonCosStrList, epsilonSinStrList
-
-def make_rpe_theta_str_lists_gx_gz(kList):
-    """
-    Make theta cosine and sine gatestring lists for (approx) X pi/4 and Z pi/2
-    gates. These gate strings are used to estimate theta (X-Z axes angle).
-
-    Parameters
-    ----------
-    kList : list of ints
-       The list of "germ powers" to be used.  Typically successive powers of 
-       two; e.g. [1,2,4,8,16].
-
-    Returns
-    -------
-    thetaCosStrList : list of GateStrings
-        The list of "cosine strings" to be used for theta estimation.
-    thetaSinStrList : list of GateStrings
-        The list of "sine strings" to be used for theta estimation.
-    """
-    thetaCosStrList = []
-    thetaSinStrList = []
-
-    for k in kList:
-        thetaCosStrList += [_objs.GateString(
-                ('Gz','Gx','Gx','Gx','Gx','Gz','Gz','Gx','Gx','Gx','Gx','Gz')*k+
-                ('Gx',)*4, '(GzGxGxGxGxGzGzGxGxGxGxGz)^'+str(k)+'GxGxGxGx')]
-    
-        thetaSinStrList += [_objs.GateString(
-                ('Gx','Gx','Gz','Gz')+
-                ('Gz','Gx','Gx','Gx','Gx','Gz','Gz','Gx','Gx','Gx','Gx','Gz')*k+
-                ('Gx',)*4,
-                '(GxGxGzGz)(GzGxGxGxGxGzGzGxGxGxGxGz)^'+str(k)+'GxGxGxGx')]
-
-        #From RPEToolsNewNew.py
-        #thetaCosStrList += [_objs.GateString(
-        #       ('Gz','Gx','Gx','Gx','Gx','Gz','Gz','Gx','Gx','Gx','Gx','Gz')*k,
-        #       '(GzGxGxGxGxGzGzGxGxGxGxGz)^'+str(k))]
-        #
-        #thetaSinStrList += [_objs.GateString(
-        #       ('Gx','Gx')+
-        #       ('Gz','Gx','Gx','Gx','Gx','Gz','Gz','Gx','Gx','Gx','Gx','Gz')*k,
-        #       'GxGx(GzGxGxGxGxGzGzGxGxGxGxGz)^'+str(k))]
-
-    return thetaCosStrList, thetaSinStrList
-
-def make_rpe_string_list_d(log2kMax):
+def make_rpe_angle_string_list_dict(log2kMaxOrkList,rpeconfig_inst):
     """
     Generates a dictionary that contains gate strings for all RPE cosine and
     sine experiments for all three angles.
     
     Parameters
     ----------
-    log2kMax : int
-       Maximum number of times to repeat an RPE "germ"
-    
+    log2kMaxOrkList : int or list
+        int - log2(Maximum number of times to repeat an RPE germ)
+        list - List of maximum number of times to repeat an RPE germ
+        
+    rpeconfig_inst : rpeconfig object
+        Declares which gate set configuration RPE should be trying to fit;
+        determines particular functions and values to be used.
+
     Returns
     -------
     totalStrListD : dict
@@ -256,10 +227,13 @@ def make_rpe_string_list_d(log2kMax):
         - 'totalStrList' : All above gate strings combined into one list; 
           duplicates removed.
     """
-    kList = [2**k for k in range(log2kMax+1)]
-    alphaCosStrList, alphaSinStrList = make_rpe_alpha_str_lists_gx_gz(kList)
-    epsilonCosStrList, epsilonSinStrList = make_rpe_epsilon_str_lists_gx_gz(kList)
-    thetaCosStrList, thetaSinStrList = make_rpe_theta_str_lists_gx_gz(kList)
+    if isinstance(log2kMaxOrkList,int):
+        kList = [2**k for k in range(log2kMaxOrkList+1)]
+    else:
+        kList = log2kMaxOrkList
+    alphaCosStrList, alphaSinStrList = make_rpe_angle_str_lists(kList,'alpha',rpeconfig_inst)
+    epsilonCosStrList, epsilonSinStrList = make_rpe_angle_str_lists(kList,'epsilon',rpeconfig_inst)
+    thetaCosStrList, thetaSinStrList = make_rpe_angle_str_lists(kList,'theta',rpeconfig_inst)
     totalStrList = alphaCosStrList + alphaSinStrList + epsilonCosStrList + epsilonSinStrList + thetaCosStrList + thetaSinStrList
     totalStrList = _tools.remove_duplicates(totalStrList) #probably superfluous
       
@@ -305,7 +279,7 @@ def make_rpe_data_set(gatesetOrDataset,stringListD,nSamples,sampleError='binomia
     sampleError : string, optional
         What type of sample error is included in the counts.  Can be:
 
-        - "none"  - no sampl error: 
+        - "none"  - no sample error: 
           counts are floating point numbers such that the exact
           probabilty can be found by the ratio of count / total.
         - "round" - same as "none", except counts are rounded to the nearest
@@ -331,191 +305,3 @@ def make_rpe_data_set(gatesetOrDataset,stringListD,nSamples,sampleError='binomia
     return _dsc.generate_fake_data(gatesetOrDataset,
                                    stringListD['totalStrList'],
                                    nSamples,sampleError=sampleError,seed=seed)
-
-
-
-def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs,
-                  plot=False, savePlot=False):
-
-    """ Experimental test function """
-    kList = [2**k for k in range(log2kMax+1)]
-
-    alphaCosStrList, alphaSinStrList = make_rpe_alpha_str_lists_gx_gz(kList)
-    epsilonCosStrList, epsilonSinStrList = make_rpe_epsilon_str_lists_gx_gz(kList)
-    thetaCosStrList, thetaSinStrList = make_rpe_theta_str_lists_gx_gz(kList)
-
-    percentAlphaError = 100*_np.abs((_np.pi/2-alphaTrue)/alphaTrue)
-    percentEpsilonError = 100*_np.abs((_np.pi/4 - epsilonTrue)/epsilonTrue)
-
-    simGateset = _setc.build_gateset( [2], [('Q0',)],['Gi','Gx','Gz'], 
-                                 [ "I(Q0)", "X("+str(epsilonTrue)+",Q0)", "Z("+str(alphaTrue)+",Q0)"],
-                                 rhoExpressions=["0"], EExpressions=["1"], 
-                                 spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
-
-    gatesetAux1 = _setc.build_gateset( [2], [('Q0',)],['Gi','Gy','Gz'], 
-                                 [ "I(Q0)", "Y("+str(Yrot)+",Q0)", "Z(pi/2,Q0)"],
-                                 rhoExpressions=["0"], EExpressions=["1"], 
-                                 spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
-
-    simGateset.set_gate('Gx', _objs.FullyParameterizedGate(
-            _np.dot(_np.dot(_np.linalg.inv(gatesetAux1['Gy']),simGateset['Gx']),
-                   gatesetAux1['Gy'])))
-
-    simGateset = simGateset.depolarize(spam_noise=SPAMdepol)
-
-    thetaTrue = _tools.rpe.extract_theta(simGateset)
-
-    SPAMerror = _np.dot(simGateset.EVecs[0].T,simGateset.rhoVecs[0])[0,0]
-
-    jMax = runs
-    
-    alphaHatListArray = _np.zeros([jMax,log2kMax+1],dtype='object')
-    epsilonHatListArray = _np.zeros([jMax,log2kMax+1],dtype='object')
-    thetaHatListArray = _np.zeros([jMax,log2kMax+1],dtype='object')
-    
-    alphaErrorArray = _np.zeros([jMax,log2kMax+1],dtype='object')
-    epsilonErrorArray = _np.zeros([jMax,log2kMax+1],dtype='object')
-    thetaErrorArray = _np.zeros([jMax,log2kMax+1],dtype='object')
-    PhiFunErrorArray = _np.zeros([jMax,log2kMax+1],dtype='object')
-
-    for j in xrange(jMax):
-    #    simDS = _dsc.generate_fake_data(gateset3,alphaCosStrList+alphaSinStrList+epsilonCosStrList+epsilonSinStrList+thetaCosStrList+epsilonSinStrList,
-        simDS = _dsc.generate_fake_data(
-            simGateset, alphaCosStrList+alphaSinStrList+epsilonCosStrList+
-            epsilonSinStrList+thetaCosStrList+thetaSinStrList,
-            N,sampleError='binomial',seed=j)
-        alphaErrorList = []
-        epsilonErrorList = []
-        thetaErrorList = []
-        PhiFunErrorList = []
-        alphaHatList = _tools.rpe.est_angle_list(simDS,alphaSinStrList,
-                                                 alphaCosStrList,'alpha')
-        epsilonHatList = _tools.rpe.est_angle_list(simDS,epsilonSinStrList,
-                                                   epsilonCosStrList,'epsilon')
-        thetaHatList,PhiFunList = _tools.rpe.est_theta_list(simDS,thetaSinStrList,
-                                                 thetaCosStrList,epsilonHatList,
-                                                 returnPhiFunList=True)
-        for alphaTemp1 in alphaHatList:
-            alphaErrorList.append(abs(alphaTrue - alphaTemp1))
-        for epsilonTemp1 in epsilonHatList:
-            epsilonErrorList.append(abs(epsilonTrue - epsilonTemp1))
-    #        print abs(_np.pi/2-abs(alphaTemp1))
-        for thetaTemp1 in thetaHatList:
-            thetaErrorList.append(abs(thetaTrue - thetaTemp1))
-        for PhiFunTemp1 in PhiFunList:
-            PhiFunErrorList.append(PhiFunTemp1)
- 
-        alphaErrorArray[j,:] = _np.array(alphaErrorList)
-        epsilonErrorArray[j,:] = _np.array(epsilonErrorList)
-        thetaErrorArray[j,:] = _np.array(thetaErrorList)
-        PhiFunErrorArray[j,:] = _np.array(PhiFunErrorList)
- 
-        alphaHatListArray[j,:] = _np.array(alphaHatList)
-        epsilonHatListArray[j,:] = _np.array(epsilonHatList)
-        thetaHatListArray[j,:] = _np.array(thetaHatList)
-
-    #print "True alpha:",alphaTrue
-    #print "True alpha:",alphaTrue
-    #print "True alpha:",alphaTrue
-    #print "True alpha:",alphaTrue
-    #print "% true alpha deviation from target:", percentAlphaError
-
-    if plot:
-        import matplotlib as _mpl
-        _mpl.pyplot.loglog(kList,_np.median(alphaErrorArray,axis=0),label='N='+str(N))
-
-        _mpl.pyplot.loglog(kList,_np.array(kList)**-1.,'-o',label='1/k')
-        _mpl.pyplot.xlabel('k')
-        _mpl.pyplot.ylabel(r'$\alpha_z - \widehat{\alpha_z}$')
-        _mpl.pyplot.title('RPE error in Z angle\n% error in Z angle '+str(percentAlphaError)+'%, % error in X angle '+str(percentEpsilonError)+'%\n% error in SPAM, '+str(100*SPAMerror)+'%, X-Z axis error '+str(Yrot)+'\nMedian of '+str(jMax)+' Trials')
-        _mpl.pyplot.legend()
-
-        _mpl.pyplot.show()
-
-        _mpl.pyplot.loglog(kList,_np.median(epsilonErrorArray,axis=0),label='N='+str(N))
-
-        _mpl.pyplot.loglog(kList,_np.array(kList)**-1.,'-o',label='1/k')
-        _mpl.pyplot.xlabel('k')
-        _mpl.pyplot.ylabel(r'$\epsilon_x - \widehat{\epsilon_x}$')
-        _mpl.pyplot.title('RPE error in X angle\n% error in Z angle '+str(percentAlphaError)+'%, % error in X angle '+str(percentEpsilonError)+'%\n% error in SPAM, '+str(100*SPAMerror)+'%, X-Z axis error '+str(Yrot)+'\nMedian of '+str(jMax)+' Trials')
-        _mpl.pyplot.legend()
-
-        _mpl.pyplot.show()
-
-        _mpl.pyplot.loglog(kList,_np.median(thetaErrorArray,axis=0),label='N='+str(N))
-
-        _mpl.pyplot.loglog(kList,_np.array(kList)**-1.,'-o',label='1/k')
-        _mpl.pyplot.xlabel('k')
-        _mpl.pyplot.ylabel(r'$\theta_{xz} - \widehat{\theta_{xz}}$')
-        _mpl.pyplot.title('RPE error in X axis angle\n% error in Z angle '+str(percentAlphaError)+'%, % error in X angle '+str(percentEpsilonError)+'%\n% error in SPAM, '+str(100*SPAMerror)+'%, X-Z axis error '+str(Yrot)+'\nMedian of '+str(jMax)+' Trials')
-        _mpl.pyplot.legend()
-
-        _mpl.pyplot.show()
-
-        _mpl.pyplot.loglog(kList,_np.median(PhiFunErrorArray,axis=0),label='N='+str(N))
-
-#        _mpl.pyplot.loglog(kList,_np.array(kList)**-1.,'-o',label='1/k')
-        _mpl.pyplot.xlabel('k')
-        _mpl.pyplot.ylabel(r'$\Phi func.$')
-        _mpl.pyplot.title('RPE error in Phi func.\n% error in Z angle '+str(percentAlphaError)+'%, % error in X angle '+str(percentEpsilonError)+'%\n% error in SPAM, '+str(100*SPAMerror)+'%, X-Z axis error '+str(Yrot)+'\nMedian of '+str(jMax)+' Trials')
-        _mpl.pyplot.legend()
-    
-    outputDict = {}
-#    outputDict['alphaArray'] = alphaHatListArray
-#    outputDict['alphaErrorArray'] = alphaErrorArray
-#    outputDict['epsilonArray'] = epsilonHatListArray
-#    outputDict['epsilonErrorArray'] = epsilonErrorArray
-#    outputDict['thetaArray'] = thetaHatListArray
-#    outputDict['thetaErrorArray'] = thetaErrorArray
-#    outputDict['PhiFunErrorArray'] = PhiFunErrorArray
-#    outputDict['alpha'] = alphaTrue
-#    outputDict['epsilonTrue'] = epsilonTrue
-#    outputDict['thetaTrue'] = thetaTrue
-#    outputDict['Yrot'] = Yrot
-#    outputDict['SPAMdepol'] = SPAMdepol#Input value to depolarize SPAM by
-#    outputDict['SPAMerror'] = SPAMerror#<<E|rho>>
-#    outputDict['gs'] = simGateset
-#    outputDict['N'] = N
-    
-    return outputDict
-
-
-
-#def make_rpe_data_set(inputGateset, log2kMax, N, seed = None, returnStringListDict = False):
-#    """
-#    Generate a fake RPE dataset.  At present, only works for kList of form [1,2,4,...,2**log2kMax]
-#
-#    Parameters
-#    ----------
-#    inputGateset : The gateset used to generate the data.
-#    log2kMax : Maximum number of times to repeat an RPE "germ"
-#    N : Number of clicks per experiment.
-#    seed : Used to seed numpy's random number generator.  Default is None.
-#    returnStringListDict : Do we want a dictionary of the sin and cos experiments for the various angles?  Default is False.
-#
-#    Returns
-#    -------
-#    simDS
-#        The simulated dataset containing the RPE experiments.
-#    stringListD
-#        Dictionary of gate string lists for sin and cos experiments; is not returned by default.
-#    """
-#    kList = [2**k for k in range(log2kMax+1)]
-#    alphaCosStrList, alphaSinStrList = make_alpha_str_lists_gx_gz(kList)
-#    epsilonCosStrList, epsilonSinStrList = make_epsilon_str_lists_gx_gz(kList)
-#    thetaCosStrList, thetaSinStrList = make_theta_str_lists_gx_gz(kList)
-#    totalStrList = alphaCosStrList + alphaSinStrList + epsilonCosStrList + epsilonSinStrList + thetaCosStrList + thetaSinStrList
-#    totalStrList = _tools.remove_duplicates(totalStrList)#This step is probably superfluous.
-#    simDS = _dsc.generate_fake_data(inputGateset,totalStrList,N,sampleError='binomial',seed=seed)
-#    if returnStringListDict:
-#        stringListD = {}
-#        stringListD['alpha','cos'] = alphaCosStrList
-#        stringListD['alpha','sin'] = alphaSinStrList
-#        stringListD['epsilon','cos'] = epsilonCosStrList
-#        stringListD['epsilon','sin'] = epsilonSinStrList
-#        stringListD['theta','cos'] = thetaCosStrList
-#        stringListD['theta','sin'] = thetaSinStrList
-#        return simDS, stringListD
-#    else:
-#        return simDS, None
-

@@ -15,4 +15,6 @@ from likelihoodfns import *
 from chi2fns import *
 from gatetools import *
 from rbtools import *
-import rpetools as rpe #keep in separate namespace for now
+#import rpetools as rpe_old #keep in separate namespace for now
+#import rpetools_xy as rpe #also keep in separate namespace for now
+import rpetools as rpe

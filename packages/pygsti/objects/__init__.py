@@ -22,5 +22,7 @@ from gatestring import WeightedGateString
 from multidataset import MultiDataSet
 from spamspec import SpamSpec
 
+from rpeconfig import rpeconfig
+
 #Functions
 from gate import compose, optimize_gate
