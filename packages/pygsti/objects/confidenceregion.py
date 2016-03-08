@@ -480,7 +480,7 @@ def _optProjectionForGateCIs(gateset, base_hessian, nNonGaugeParams, nGaugeParam
 
     def objective_func(vectorM):
         matM = vectorM.reshape( (nNonGaugeParams,nGaugeParams) )
-        proj_extra = gateset.get_nongauge_projector_ex(matM, gates, G0, SPAM, SP0)
+        proj_extra = gateset.get_nongauge_projector(matM, gates, G0, SPAM, SP0)
         projected_hessian_ex = _np.dot(proj_extra, _np.dot(base_hessian, proj_extra))
          
         ci = ConfidenceRegion(gateset, projected_hessian_ex, level, gates, G0, SPAM, SP0, hessianProjection="none")
@@ -497,7 +497,7 @@ def _optProjectionForGateCIs(gateset, base_hessian, nNonGaugeParams, nGaugeParam
                                     callback = print_obj_func if verbosity > 2 else None)
 
     mixMx = minSol.x.reshape( (nNonGaugeParams,nGaugeParams) )
-    proj_extra = gateset.get_nongauge_projector_ex(mixMx, gates, G0, SPAM, SP0)
+    proj_extra = gateset.get_nongauge_projector(mixMx, gates, G0, SPAM, SP0)
     projected_hessian_ex = _np.dot(proj_extra, _np.dot(base_hessian, proj_extra))
          
     if verbosity > 1:
