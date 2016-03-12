@@ -798,8 +798,11 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
 
 
 
-def build_gateset(stateSpaceDims, stateSpaceLabels, gateLabelList, gateExpressionList, 
-                 rhoExpressions, EExpressions, spamLabelDict, basis="gm", parameterization="full"):
+def build_gateset(stateSpaceDims, stateSpaceLabels, 
+                  gateLabelList, gateExpressionList, 
+                  rhoLabelList, rhoExpressions,
+                  ELabelList, EExpressions, 
+                  spamLabelDict, basis="gm", parameterization="full"):
     """
     Build a new GateSet given lists of gate labels and expressions.
 
@@ -828,22 +831,31 @@ def build_gateset(stateSpaceDims, stateSpaceLabels, gateLabelList, gateExpressio
         A list of gate expressions, each corresponding to a gate label in gateLabelList,
         which determine what operation each gate performs (see documentation for build_gate).
 
+    rhoLabelList : list of string
+        A list of labels for each created state preparation in the final gateset.  To
+        conform with conventions these shames should begin with "rho".
+
     rhoExpressions : list of strings
         A list of vector expressions for each state preparation vector (see documentation
         for build_vector).
+
+    ELabelList : list of string
+        A list of labels for each created and *parameterized* POVM effect in the final
+        gateset.  To conform with conventions these shames should begin with "E".
 
     EExpressions : list of strings
         A list of vector expressions for each POVM effect vector (see documentation for
         build_vector).
 
     spamLabelDict : dict
-        A dictionary mapping spam labels to (rhoIndex,EIndex) 2-tuples associating a 
-        particular state preparation and effect vector with a label.  rhoIndex and EIndex
-        must be within the bounds of rhoExpressions and EExpressions respectively except
-        for two special cases:
+        A dictionary mapping spam labels to (rhoLabel,ELabel) 2-tuples associating a 
+        particular state preparation and effect vector with a label.  rhoLabel and ELabel
+        must be contained in rhoLabelList and ELabelList respectively except for two
+        special cases:
 
-        1.  EIndex can be set to -1 to mean an effect vector that is the identity - (other effect vectors)
-        2.  EIndex and rhoIndex can both be set to -1 to mean a spam label that generates
+        1.  ELabel can be set to "remainder" to mean an effect vector that is the
+            identity - (other effect vectors)
+        2.  ELabel and rhoLabel can both be "remainder" to mean a spam label that generates
             probabilities that are 1.0 - (sum of probabilities from all other spam labels).
 
     basis : {'gm','pp','std'}, optional
@@ -860,20 +872,23 @@ def build_gateset(stateSpaceDims, stateSpaceLabels, gateLabelList, gateExpressio
     GateSet
         The created gate set.
     """
-    ret = _gateset.GateSet()
+    ret = _gateset.GateSet(default_param="full") #TODO: tp/static parameterization
+                 #rho_prefix="rho", e_prefix="E", gate_prefix="G",
+                 #remainder_label="remainder", identity_label="identity")
 
-    for i,rhoExpr in enumerate(rhoExpressions):
-        ret.set_rhovec( build_vector(stateSpaceDims, stateSpaceLabels, rhoExpr, basis), i)
-    for i,EExpr in enumerate(EExpressions):
-        ret.set_evec( build_vector(stateSpaceDims, stateSpaceLabels, EExpr, basis), i)
+    for label,rhoExpr in zip(rhoLabelList, rhoExpressions):
+        ret.rhoVecs[label] = build_vector(stateSpaceDims, stateSpaceLabels, rhoExpr, basis)
+    for label,EExpr in zip(ELabelList,EExpressions):
+        ret.EVecs[label] = build_vector(stateSpaceDims, stateSpaceLabels, EExpr, basis)
 
-    ret.set_identity_vec( build_identity_vec(stateSpaceDims, basis) )
+    ret['identity'] = build_identity_vec(stateSpaceDims, basis)
 
     for label,val in spamLabelDict.iteritems():
         ret.add_spam_label(val[0],val[1],label)
 
     for (gateLabel,gateExpr) in zip(gateLabelList, gateExpressionList):
-        ret.set_gate(gateLabel, build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis, parameterization))
+        ret.gates[gateLabel] = build_gate(stateSpaceDims, stateSpaceLabels,
+                                          gateExpr, basis, parameterization)
 
     return ret
 

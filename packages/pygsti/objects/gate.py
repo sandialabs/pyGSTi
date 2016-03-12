@@ -9,6 +9,9 @@ import numpy as _np
 from .. import optimize as _opt
 from ..tools import matrixtools as _mt
 
+from protectedarray import ProtectedArray as _ProtectedArray
+
+
 def optimize_gate(gateToOptimize, targetGate):
     """
     Optimize the parameters of gateToOptimize so that the 
@@ -126,25 +129,25 @@ def convert(gate, toType):
        object from the gate object passed as input.
     """
     if toType == "full":
-        if isinstance(gate, FullyParamterizedGate):
+        if isinstance(gate, FullyParameterizedGate):
             return gate #no conversion necessary
         else:
-            return FullyParmaterizedGate( gate.construct_matrix() )
+            ret = FullyParameterizedGate( gate )
+            return ret
 
     elif toType == "tp":
-        if isinstance(gate, TPParamterizedGate):
+        if isinstance(gate, TPParameterizedGate):
             return gate #no conversion necessary
         else:
-            return TPParmaterizedGate( gate.construct_matrix() )
+            return TPParameterizedGate( gate )
               # above will raise ValueError if conversion cannot be done
 
     elif toType == "linear":
         if isinstance(gate, LinearlyParameterizedGate):
             return gate #no conversion necessary
         elif isinstance(gate, StaticGate):
-            real = _np.isclose(_np.linalg.norm( gate.construct_matrix().imag ),0)
-            return LinearlyParameterizedGate(gate.construct_matrix(),
-                                             _np.array([]), {}, real)
+            real = _np.isclose(_np.linalg.norm( gate.imag ),0)
+            return LinearlyParameterizedGate(gate, _np.array([]), {}, real)
         else:
             raise ValueError("Cannot convert type %s to LinearlyParameterizedGate"
                              % type(gate))
@@ -153,26 +156,26 @@ def convert(gate, toType):
         if isinstance(gate, StaticGate):
             return gate #no conversion necessary
         else:
-            return StaticGate( gate.construct_matrix() )
+            return StaticGate( gate )
         
     else:
         raise ValueError("Invalid toType argument: %s" % toType)
 
 
 
-class Gate(object):
+class Gate(object):  #LATER: make this into an ABC specifying the "Gate" interface??
     """
     Excapulates a parameterization of a gate matrix.  This class is the 
     common base class for all specific parameterizations of a gate.
     """
 
-    def __init__(self, dim):
-        """ Initialize a new Gate """
-        self.dim = dim
+    #def __init__(self):
+    #    """ Initialize a new Gate """
+    #    pass
 
-    def get_dimension(self):
-        """ Return the dimension of the gate matrix. """
-        return self.dim
+    #def get_dimension(self):
+    #    """ Return the dimension of the gate matrix. """
+    #    return self.dim
 
     @staticmethod
     def convert_to_matrix(M):
@@ -189,7 +192,8 @@ class Gate(object):
         """
         if isinstance(M, Gate): 
             dim = M.dim
-            matrix = M.construct_matrix()
+            matrix = _np.asarray(M).copy()
+              # Gate objs should also derive from ndarray
         else:
             try:
                 dim = len(M)
@@ -198,17 +202,29 @@ class Gate(object):
                 raise ValueError("%s doesn't look like a 2D array/list" % M)
             if any([len(row) != dim for row in M]):
                 raise ValueError("%s is not a *square* 2D array" % M)
-            matrix = _np.array(M)
+
+            typ = 'd' if _np.all(_np.isreal(M)) else 'complex'
+            matrix = _np.array(M, typ)
+
+        if len(matrix.shape) != 2:
+            raise ValueError("%s has %d dimensions when 2 are expected"
+                             % (M, len(matrix.shape)))
+
+        if matrix.shape[0] != matrix.shape[1]:
+            raise ValueError("%s is not a *square* 2D array" % M)
+            
         return matrix
 
 
 
-class StaticGate(Gate):
+class StaticGate(_np.ndarray, Gate):
     """ 
     Encapsulates a gate matrix that is completely fixed, or "static", meaning
       that is contains no parameters.
     """
-    def __init__(self, matrix):
+    __array_priority__ = -2.0
+
+    def __new__(cls, matrix):
         """ 
         Initialize a StaticGate object.
 
@@ -218,8 +234,32 @@ class StaticGate(Gate):
             a square 2D array-like or Gate object representing the gate action.
             The shape of M sets the dimension of the gate.
         """
-        self.matrix = Gate.convert_to_matrix(M)
-        super(StaticGate, self).__init__(self.matrix.shape[0])
+        gateMx = Gate.convert_to_matrix(M)
+        obj = _np.asarray(gateMx).view(cls)
+        obj.dim = gateMx.shape[0]
+        return obj
+
+        #Note: no need to override __init__ as all initialization is performed
+        # in __new__, and no need to override __array_finalize__ since we don't
+        # need slices of Gates to be considered "Gates", nor do we need to 
+        # view-cast other types of arrays to Gates
+
+    def __getitem__( self, key ):
+        #Items and slices are *not* gates - just numpy arrays:
+        return _np.ndarray.__getitem__(self.view(_np.ndarray), key)
+
+    def __getslice__(self, i,j):
+        #For special cases when getslice is still called, e.g. A[:]
+        return self.__getitem__(slice(i,j))
+
+    def __array_finalize__(self, obj):
+        if obj is None: return # let __new__ handle flags
+        if len(self.shape) == 2 and self.shape[0] == self.shape[1]:
+            self.dim = self.shape[0]
+        else:
+            raise ValueError("Gates must be square 2D arrays")
+        #print "Finalize called with obj type: ", type(obj), " dim = ",self.dim
+
 
     def set_matrix(self, mx):
         """
@@ -236,19 +276,11 @@ class StaticGate(Gate):
         -------
         None
         """
-        raise ValueError("Cannot set the matrix of a StaticGate (no parameters!)")
-
-
-    def construct_matrix(self):
-        """
-        Build and return the gate matrix using the current parameters.
-
-        Returns
-        -------
-        numpy array
-            The gate matrix as a 2D array.
-        """
-        return self.matrix
+        mx = Gate.convert_to_matrix(mx)
+        if(mx.shape != (self.dim, self.dim)):
+            raise ValueError("Argument must be a (%d,%d) matrix!"
+                             % (self.dim,self.dim))
+        self[:,:] = _np.array(mx)
 
 
     def num_params(self):
@@ -319,12 +351,12 @@ class StaticGate(Gate):
         Gate
             A copy of this gate.
         """
-        return StaticGate(self.matrix)
+        return StaticGate(self)
 
 
     def __str__(self):
-        s = "Static gate with shape %s\n" % str(self.matrix.shape)
-        s += _mt.mx_to_string(self.matrix, width=4, prec=2)
+        s = "Static gate with shape %s\n" % str(self.shape)
+        s += _mt.mx_to_string(self, width=4, prec=2)
         return s
 
 
@@ -346,17 +378,30 @@ class StaticGate(Gate):
         StaticGate
         """
         assert( isinstance(otherGate, StaticGate) )
-        return StaticGate( _np.dot( self.construct_matrix(),
-                                    otherGate.construct_matrix() ) )
+        return StaticGate( _np.dot( self,otherGate ) )
+
+    def __reduce__(self):
+        """ Pickle plumbing. """
+        createFn, args, state = _np.ndarray.__reduce__(self)
+        new_state = state + (self.__dict__,)
+        return (createFn, args, new_state)
+
+    def __setstate__(self, state):
+        """ Pickle plumbing. """
+        _np.ndarray.__setstate__(self,state[0:-1])
+        self.__dict__.update(state[-1])
 
 
 
-class FullyParameterizedGate(Gate):
+
+class FullyParameterizedGate(_np.ndarray, Gate):
     """ 
     Encapsulates a gate matrix that is fully parameterized, that is,
       each element of the gate matrix is an independent parameter.
     """
-    def __init__(self, M):
+    __array_priority__ = -2.0
+
+    def __new__(cls, M):
         """ 
         Initialize a FullyParameterizedGate object.
 
@@ -366,8 +411,31 @@ class FullyParameterizedGate(Gate):
             a square 2D array-like or Gate object representing the gate action.
             The shape of M sets the dimension of the gate.
         """
-        self.matrix = Gate.convert_to_matrix(M)
-        super(FullyParameterizedGate, self).__init__(self.matrix.shape[0])
+        gateMx = Gate.convert_to_matrix(M)
+        obj = _np.asarray(gateMx).view(cls)
+        obj.dim = gateMx.shape[0]
+        return obj
+
+        #Note: no need to override __init__ as all initialization is performed
+        # in __new__, and no need to override __array_finalize__ since we don't
+        # need slices of Gates to be considered "Gates", nor do we need to 
+        # view-cast other types of arrays to Gates
+
+    def __getitem__( self, key ):
+        #Items and slices are *not* gates - just numpy arrays:
+        return _np.ndarray.__getitem__(self.view(_np.ndarray), key)
+    
+    def __getslice__(self, i,j):
+        #For special cases when getslice is still called, e.g. A[:]
+        return self.__getitem__(slice(i,j))
+
+    def __array_finalize__(self, obj):
+        if obj is None: return # let __new__ handle flags
+        if len(self.shape) == 2 and self.shape[0] == self.shape[1]:
+            self.dim = self.shape[0]
+        else:
+            raise ValueError("Gates must be square 2D arrays")
+        #print "Finalize called with obj type: ", type(obj), " dim = ",self.dim
 
 
     def set_matrix(self, mx):
@@ -389,18 +457,7 @@ class FullyParameterizedGate(Gate):
         if(mx.shape != (self.dim, self.dim)):
             raise ValueError("Argument must be a (%d,%d) matrix!"
                              % (self.dim,self.dim))
-        self.matrix = _np.array(mx)
-
-    def construct_matrix(self):
-        """
-        Build and return the gate matrix using the current parameters.
-
-        Returns
-        -------
-        numpy array
-            The gate matrix as a 2D array.
-        """
-        return self.matrix
+        self[:,:] = _np.array(mx)
 
 
     def num_params(self):
@@ -424,7 +481,7 @@ class FullyParameterizedGate(Gate):
         numpy array
             The gate parameters as a 1D array with length num_params().
         """
-        return self.matrix.flatten() #.real in case of complex matrices
+        return self.flatten() #.real in case of complex matrices?
 
 
     def from_vector(self, v):
@@ -441,8 +498,8 @@ class FullyParameterizedGate(Gate):
         -------
         None
         """
-
-        self.matrix = v.reshape(self.matrix.shape)
+        assert(len(self.shape) == (self.dim, self.dim))
+        self[:,:] = v.reshape( (self.dim,self.dim) )
 
 
     def deriv_wrt_params(self):
@@ -469,12 +526,12 @@ class FullyParameterizedGate(Gate):
         Gate
             A copy of this gate.
         """
-        return FullyParameterizedGate(self.matrix)
+        return FullyParameterizedGate(self)
 
 
     def __str__(self):
-        s = "Fully Parameterized gate with shape %s\n" % str(self.matrix.shape)
-        s += _mt.mx_to_string(self.matrix, width=4, prec=2)
+        s = "Fully Parameterized gate with shape %s\n" % str(self.shape)
+        s += _mt.mx_to_string(self, width=4, prec=2)
         return s
 
 
@@ -496,38 +553,80 @@ class FullyParameterizedGate(Gate):
         FullyParameterizedGate
         """
         assert( isinstance(otherGate, FullyParameterizedGate) )
-        return FullyParameterizedGate( _np.dot( self.construct_matrix(),
-                                                otherGate.construct_matrix() ) )
+        return FullyParameterizedGate( _np.dot( self,otherGate) )
+
+    def __reduce__(self):
+        """ Pickle plumbing. """
+        createFn, args, state = _np.ndarray.__reduce__(self)
+        new_state = state + (self.__dict__,)
+        return (createFn, args, new_state)
+
+    def __setstate__(self, state):
+        """ Pickle plumbing. """
+        _np.ndarray.__setstate__(self,state[0:-1])
+        self.__dict__.update(state[-1])
 
 
 
-class TPParameterizedGate(Gate):
+
+class TPParameterizedGate(_ProtectedArray, Gate):
     """ 
     Encapsulates a gate matrix that is fully parameterized except for
     the first row, which is frozen to be [1 0 ... 0] so that the action
     of the gate, when interpreted in the Pauli or Gell-Mann basis, is 
     trace preserving (TP).
     """
+    __array_priority__ = -2.0
 
-    def __init__(self, matrix):
+    def __new__(cls, M):
         """ 
         Initialize a TPParameterizedGate object.
 
         Parameters
         ----------
-        matrix : array_like or Gate
+        M : array_like or Gate
             a square 2D numpy array representing the gate action.  The
             shape of this array sets the dimension of the gate.
         """
-        self.matrix = Gate.convert_to_matrix(M)
-        if not (_np.isclose(self.matrix[0,0], 1.0) and \
-                _np.allclose(self.matrix[0,1:], 0.0)):
+        gateMx = Gate.convert_to_matrix(M)
+        if not (_np.isclose(gateMx[0,0], 1.0) and \
+                _np.allclose(gateMx[0,1:], 0.0)):
             raise ValueError("Cannot create TPParameterizedGate: " + 
                              "invalid form for 1st row!")
-            
-        super(TPParameterizedGate, self).__init__(self.matrix.shape[0])
 
-    def set_matrix(self, mx):
+        obj = _ProtectedArray.__new__(cls, gateMx, 
+                                      indicesToProtect=(0, slice(None,None,None)))
+        obj.dim = gateMx.shape[0]
+        return obj
+
+        #Note: no need to override __init__ as all initialization is performed
+        # in __new__.
+
+    def __getitem__( self, key ):
+        #Items and slices are *not* gates - just numpy arrays:
+        return _ProtectedArray.__getitem__(self.view(_ProtectedArray), key)
+
+    def __getslice__(self, i,j):
+        #For special cases when getslice is still called, e.g. A[:]
+        return self.__getitem__(slice(i,j))
+
+    def __array_finalize__(self, obj):
+        _ProtectedArray.__array_finalize__(self, obj) #call base class handler
+        if obj is None: return # let __new__ handle flags
+        print "Finalize called with obj type: ", type(obj) #, " dim = ",self.dim
+        if len(self.shape) == 2 and self.shape[0] == self.shape[1]:
+            self.dim = self.shape[0]
+        else:
+            raise ValueError("Gates must be square 2D arrays")
+
+#Taken care of by lower __array_priority__
+#    def __array_wrap__(self, out_arr, context=None):
+#        # The outputs of ufuncs are *not* in general gates (e.g. kron). Perhaps
+#        # in the future we could preserve "gate-ness" when appropriate?
+#        return _np.asarray( _np.ndarray.__array_wrap__(self, out_arr, context))
+
+    
+    def set_matrix(self, M):
         """
         Attempts to modify gate parameters so that the specified raw
         gate matrix becomes mx.  Will raise ValueError if this operation
@@ -535,7 +634,7 @@ class TPParameterizedGate(Gate):
 
         Parameters
         ----------
-        matrix : array_like or Gate
+        M : array_like or Gate
             An array of shape (dim, dim) or Gate representing the gate action.
 
         Returns
@@ -549,18 +648,7 @@ class TPParameterizedGate(Gate):
         if not (_np.isclose(mx[0,0], 1.0) and _np.allclose(mx[0,1:], 0.0)):
             raise ValueError("Cannot set TPParameterizedGate: " +
                              "invalid form for 1st row!" )
-        self.matrix = _np.array(mx)
-
-    def construct_matrix(self):
-        """
-        Build and return the gate matrix using the current parameters.
-
-        Returns
-        -------
-        numpy array
-            The gate matrix as a 2D array.
-        """
-        return self.matrix
+        self[1:,:] = _np.array(mx)[1:,:]
 
 
     def num_params(self):
@@ -584,7 +672,7 @@ class TPParameterizedGate(Gate):
         numpy array
             The gate parameters as a 1D array with length num_params().
         """
-        return self.matrix.flatten()[self.dim:] #.real in case of complex matrices?
+        return self.flatten()[self.dim:] #.real in case of complex matrices?
 
     def from_vector(self, v):
         """
@@ -601,9 +689,10 @@ class TPParameterizedGate(Gate):
         None
         """
         flattened = _np.empty(self.dim**2)
-        flattened[0:self.dim] = self.matrix[0,:]
+        flattened[0:self.dim] = self[0,:]
         flattened[self.dim:] = v
-        self.matrix = flattened.reshape( (self.dim,self.dim) )
+        assert(len(self.shape) == (self.dim, self.dim))
+        self[:,:] = flattened.reshape( (self.dim,self.dim) )
 
 
     def deriv_wrt_params(self):
@@ -631,11 +720,11 @@ class TPParameterizedGate(Gate):
         Gate
             A copy of this gate.
         """
-        return TPParameterizedGate(self.matrix)
+        return TPParameterizedGate(self)
 
     def __str__(self):
-        s = "TP Parameterized gate with shape %s\n" % str(self.matrix.shape)
-        s += _mt.mx_to_string(self.matrix, width=4, prec=2)
+        s = "TP Parameterized gate with shape %s\n" % str(self.shape)
+        s += _mt.mx_to_string(self, width=4, prec=2)
         return s
 
     def compose(self, otherGate):
@@ -656,8 +745,19 @@ class TPParameterizedGate(Gate):
         TPParameterizedGate
         """
         assert( isinstance(otherGate, TPParameterizedGate) )
-        return TPParameterizedGate( _np.dot( self.construct_matrix(),
-                                             otherGate.construct_matrix() ) )
+        return TPParameterizedGate( _np.dot( self,otherGate ) )
+
+    def __reduce__(self):
+        """ Pickle plumbing. """
+        createFn, args, state = _np.ndarray.__reduce__(self)
+        new_state = state + (self.__dict__,)
+        return (createFn, args, new_state)
+
+    def __setstate__(self, state):
+        """ Pickle plumbing. """
+        _np.ndarray.__setstate__(self,state[0:-1])
+        self.__dict__.update(state[-1])
+
 
 
 
@@ -671,13 +771,14 @@ class LinearlyParameterizedElementTerm(object):
         return LinearlyParameterizedElementTerm(self.coeff, self.paramIndices)
 
 
-class LinearlyParameterizedGate(Gate):
+class LinearlyParameterizedGate(_np.ndarray, Gate):
     """ 
     Encapsulates a gate matrix that is parameterized such that each
     element of the gate matrix depends only linearly on any parameter.
     """
+    __array_priority__ = -2.0
 
-    def __init__(self, baseMatrix, parameterArray, parameterToBaseIndicesMap,
+    def __new__(cls, baseMatrix, parameterArray, parameterToBaseIndicesMap,
                  real=False):
         """ 
         Initialize a LinearlyParameterizedGate object.
@@ -719,58 +820,51 @@ class LinearlyParameterizedGate(Gate):
         #    the base matrix after parameters have been evaluated.  Defaults to 
         #    no tranform.
 
-        self.baseMatrix = _np.array(baseMatrix,'complex') #complex, even if passed all real base matrix
-        self.parameterArray = parameterArray
-        self.numParams = len(parameterArray)
+        baseMatrix = _np.array( Gate.convert_to_matrix(baseMatrix), 'complex')
+          #complex, even if passed all real base matrix
 
-        self.elementExpressions = {}
+        elementExpressions = {}
         for p,ij_tuples in parameterToBaseIndicesMap.iteritems():
             for i,j in ij_tuples:
-                assert((i,j) not in self.elementExpressions) #only one parameter allowed per base index pair
-                self.elementExpressions[(i,j)] = [ LinearlyParameterizedElementTerm(1.0, [p]) ]
+                assert((i,j) not in elementExpressions) #only one parameter allowed per base index pair
+                elementExpressions[(i,j)] = [ LinearlyParameterizedElementTerm(1.0, [p]) ]
 
-        assert(len(self.baseMatrix.shape) == 2)
-        assert(self.baseMatrix.shape[0] == self.baseMatrix.shape[1])
+        obj = _np.asarray(baseMatrix).view(cls)
+        obj.baseMatrix = baseMatrix
+        obj.parameterArray = parameterArray
+        obj.numParams = len(parameterArray)
+        obj.elementExpressions = elementExpressions
+        obj.dim = baseMatrix.shape[0]
 
-        I = _np.identity(self.baseMatrix.shape[0],'d')
-        #self.leftTrans = leftTransform if (leftTransform is not None) else I
-        #self.rightTrans = rightTransform if (rightTransform is not None) else I
-        self.enforceReal = real
-        
-        super(LinearlyParameterizedGate, self).__init__(self.baseMatrix.shape[0])
+        #I = _np.identity(self.baseMatrix.shape[0],'d')
+        #obj.leftTrans = leftTransform if (leftTransform is not None) else I
+        #obj.rightTrans = rightTransform if (rightTransform is not None) else I
+        obj.enforceReal = real
+        obj.flags.writeable = False # only _construct_matrix can change array
+        obj._construct_matrix() # construct the matrix from the parameters
+        return obj
 
 
-    def set_matrix(self, mx):
+    def __getitem__( self, key ):
+        #Items and slices are *not* gates - just numpy arrays:
+        return _np.ndarray.__getitem__(self.view(_np.ndarray), key)
+
+    def __getslice__(self, i,j):
+        #For special cases when getslice is still called, e.g. A[:]
+        return self.__getitem__(slice(i,j))
+
+    def __array_finalize__(self, obj):
+        if obj is None: return # let __new__ handle flags
+        self.dim = None # mark object as invalid, since we don't have enough
+                        # info to create one from obj
+
+    def _check(self):
+        if self.dim is None:
+            raise ValueError("Gate object is invalid!")
+
+    def _construct_matrix(self):
         """
-        Attempts to modify gate parameters so that the specified raw
-        gate matrix becomes mx.  Will raise ValueError if this operation
-        is not possible.
-
-        Parameters
-        ----------
-        mx : numpy array or Gate
-            A numpy array of shape (dim, dim) or Gate representing the gate action.
-
-        Returns
-        -------
-        None
-        """
-        mx = Gate.convert_to_matrix(M)
-        if(mx.shape != (self.dim, self.dim)):
-            raise ValueError("Argument must be a (%d,%d) matrix!" % (self.dim,self.dim))
-        raise ValueError("Currently, directly setting the matrix of a" +
-                         " LinearlyParameterizedGate object is not" + 
-                         " supported.")
-
-
-    def construct_matrix(self):
-        """
-        Build and return the gate matrix using the current parameters.
-
-        Returns
-        -------
-        numpy array
-            The gate matrix as a 2D array.
+        Build the internal gate matrix using the current parameters.
         """
         matrix = self.baseMatrix.copy()
         for (i,j),terms in self.elementExpressions.iteritems():
@@ -785,8 +879,33 @@ class LinearlyParameterizedGate(Gate):
                         "imaginary part (%g)!" % _np.linalg.norm(_np.imag(matrix)))
             matrix = _np.real(matrix)
 
-        return matrix
+        assert(matrix.shape == (self.dim,self.dim))
+        self.flags.writeable = True
+        self[:,:] = matrix
+        self.flags.writeable = False
 
+    def set_matrix(self, mx):
+        """
+        Attempts to modify gate parameters so that the specified raw
+        gate matrix becomes mx.  Will raise ValueError if this operation
+        is not possible.
+    
+        Parameters
+        ----------
+        mx : numpy array or Gate
+            A numpy array of shape (dim, dim) or Gate representing the gate action.
+    
+        Returns
+        -------
+        None
+        """
+        self._check()
+        mx = Gate.convert_to_matrix(M)
+        if(mx.shape != (self.dim, self.dim)):
+            raise ValueError("Argument must be a (%d,%d) matrix!" % (self.dim,self.dim))
+        raise ValueError("Currently, directly setting the matrix of a" +
+                         " LinearlyParameterizedGate object is not" + 
+                         " supported.  Please use the from_vector method.")
 
 
     def num_params(self):
@@ -798,6 +917,7 @@ class LinearlyParameterizedGate(Gate):
         int
            the number of independent parameters.
         """
+        self._check()
         return self.numParams
 
 
@@ -810,6 +930,7 @@ class LinearlyParameterizedGate(Gate):
         numpy array
             a 1D numpy array with length == num_params().
         """
+        self._check()
         return self.parameterArray #.real in case of complex matrices
 
 
@@ -827,7 +948,9 @@ class LinearlyParameterizedGate(Gate):
         -------
         None
         """
+        self._check()
         self.parameterArray = v
+        self._construct_matrix()
 
             
     def deriv_wrt_params(self):
@@ -842,6 +965,8 @@ class LinearlyParameterizedGate(Gate):
         numpy array 
             Array of derivatives, shape == (dimension^2, num_params)
         """
+        self._check()
+
         k = 0
         derivMx = _np.zeros( (self.dim**2, self.numParams), 'd' )
         for (i,j),terms in self.elementExpressions.iteritems():
@@ -855,6 +980,8 @@ class LinearlyParameterizedGate(Gate):
 
         
     def copy(self):
+        self._check()
+
         #Construct new gate with no intial elementExpressions
         newGate = LinearlyParameterizedGate(self.baseMatrix, self.parameterArray,
                                             {}, self.enforceReal)
@@ -863,14 +990,15 @@ class LinearlyParameterizedGate(Gate):
         #Deep copy elementExpressions into new gate
         for tup, termList in self.elementExpressions.iteritems():
             newGate.elementExpressions[tup] = [ term.copy() for term in termList ]
+        newGate._construct_matrix()
 
         return newGate
 
     def __str__(self):
-        matrix = self.compute_matrix()
+        self._check()
         s = "Linearly Parameterized gate with shape %s, num params = %d\n" % \
-            (str(matrix.shape), self.numParams)
-        s += _mt.mx_to_string(matrix, width=5, prec=1)
+            (str(self.shape), self.numParams)
+        s += _mt.mx_to_string(self, width=5, prec=1)
         return s
 
     def compose(self, otherGate):
@@ -890,6 +1018,7 @@ class LinearlyParameterizedGate(Gate):
         -------
         LinearlyParameterizedGate
         """
+        self._check()
         assert( isinstance(otherGate, LinearlyParameterizedGate) )
         
         ### Implementation Notes ###
@@ -959,4 +1088,20 @@ class LinearlyParameterizedGate(Gate):
 
                 composedGate.elementExpressions[(i,j)] = terms
 
+        composedGate._construct_matrix()
         return composedGate
+
+
+    def __reduce__(self):
+        """ Pickle plumbing. """
+        self._check()
+        createFn, args, state = _np.ndarray.__reduce__(self)
+        new_state = state + (self.__dict__,)
+        return (createFn, args, new_state)
+
+    def __setstate__(self, state):
+        """ Pickle plumbing. """
+        self._check()
+        _np.ndarray.__setstate__(self,state[0:-1])
+        self.__dict__.update(state[-1])
+
