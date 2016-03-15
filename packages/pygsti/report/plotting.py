@@ -364,6 +364,38 @@ def besttxtcolor( x, xmin, xmax, cmapName ):
         else:
             return "black"
     
+class LinLogNorm(_matplotlib.colors.Normalize):
+    def __init__(self, trans=None, vmin=None, vmax=None, clip=False):
+        super(LinLogNorm, self).__init__(vmin=vmin, vmax=vmax, clip=clip)
+        self.trans = trans
+            
+    def inverse(self, value):
+        norm_trans = super(LinLogNorm, self).__call__(self.trans)
+        deltav = self.vmax - self.vmin
+        return_value = _np.where(_np.greater(0.5, value),
+                                 2*value*self.trans + self.vmin,
+                                 _np.power(norm_trans, -2*value))
+        if return_value.shape==():
+            return return_value.item()
+        else:
+            return return_value.view(_np.ma.MaskedArray)
+        
+    def __call__(self, value, clip=None):
+        lin_norm_value = super(LinLogNorm, self).__call__(value)
+        if self.trans is None:
+            self.trans = (self.vmax - self.vmin)/10 + self.vmin
+        norm_trans = super(LinLogNorm, self).__call__(self.trans)
+        log10_norm_trans = _np.log10(norm_trans)
+        return_value = _np.where(_np.greater(norm_trans, lin_norm_value),
+                                 lin_norm_value/(2*norm_trans),
+                                 (log10_norm_trans -
+                                  _np.log10(lin_norm_value)) /
+                                 (2*log10_norm_trans) + 0.5)
+        if return_value.shape==():
+            return return_value.item()
+        else:
+            return return_value.view(_np.ma.MaskedArray)
+
 def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, ytics=None,
                  vmin=None, vmax=None, colorbar=True, fig=None, axes=None, size=None, prec=0, boxLabels=True,
                  xlabel=None, ylabel=None, save_to=None, ticSize=14, grid=False):
@@ -434,11 +466,21 @@ def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, 
     if vmin is None: vmin = min( finite_plt_data_flat )
     if vmax is None: vmax = max( finite_plt_data_flat )
 
-    cmap = _matplotlib.cm.plasma
+    cdict = {'red': [(0.0, 1.0, 1.0),
+                     (0.5, 0.5, 0.8),
+                     (1.0, 0.7, 0.7)],
+             'green': [(0.0, 1.0, 1.0),
+                       (0.5, 0.5, 0.4),
+                       (1.0, 0.0, 0.0)],
+             'blue': [(0.0, 1.0, 1.0),
+                      (0.5, 0.5, 0.4),
+                      (1.0, 0.0, 0.0)]}
+    cmap = _matplotlib.colors.LinearSegmentedColormap('linlog', cdict)
     cmap.set_bad('w',1)
     masked_data = _np.ma.array (plt_data, mask=_np.isnan(plt_data))
+    norm = LinLogNorm(trans=1)
     #heatmap = ax.pcolor( plt_data, vmin=vmin, vmax=vmax)
-    heatmap = axes.pcolormesh( masked_data, vmin=vmin, vmax=vmax, cmap=cmap)
+    heatmap = axes.pcolormesh( masked_data, vmin=vmin, vmax=vmax, cmap=cmap, norm=norm)
 
     if size is not None and fig is not None:
         fig.set_size_inches(size[0],size[1]) # was 12,8 for "super" color plot
