@@ -466,9 +466,12 @@ def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, 
     if vmin is None: vmin = min( finite_plt_data_flat )
     if vmax is None: vmax = max( finite_plt_data_flat )
 
+    # Colors ranging from white to gray on [0.0, 0.5) and pink to red on
+    # [0.5, 1.0] such that the perceived brightness of the pink matches the
+    # gray.
     cdict = {'red': [(0.0, 1.0, 1.0),
-                     (0.5, 0.5, 0.8),
-                     (1.0, 0.7, 0.7)],
+                     (0.5, 0.5, 0.786),
+                     (1.0, 0.366, 0.366)],
              'green': [(0.0, 1.0, 1.0),
                        (0.5, 0.5, 0.4),
                        (1.0, 0.0, 0.0)],
