@@ -365,8 +365,8 @@ class LinLogNorm(_matplotlib.colors.Normalize):
         norm_trans = super(LinLogNorm, self).__call__(self.trans)
         deltav = self.vmax - self.vmin
         return_value = _np.where(_np.greater(0.5, value),
-                                 2*value*self.trans + self.vmin,
-                                 _np.power(norm_trans, -2*value))
+                                 2*value*(self.trans - self.vmin) + self.vmin,
+                                 deltav*_np.power(norm_trans, 2*(1 - value)))
         if return_value.shape==():
             return return_value.item()
         else:
