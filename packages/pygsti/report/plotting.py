@@ -398,7 +398,8 @@ class LinLogNorm(_matplotlib.colors.Normalize):
 
 def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, ytics=None,
                  vmin=None, vmax=None, colorbar=True, fig=None, axes=None, size=None, prec=0, boxLabels=True,
-                 xlabel=None, ylabel=None, save_to=None, ticSize=14, grid=False):
+                 xlabel=None, ylabel=None, save_to=None, ticSize=14, grid=False,
+                 linlog_trans=10):
     """
     Create a color box plot.
 
@@ -454,6 +455,10 @@ def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, 
 
     grid : bool, optional
         Whether or not grid lines should be displayed.
+
+    linlog_tran : float, optional
+        The value at which the colormap should transition from a linear to a
+        logarithmic scale.
     
     Returns
     -------
@@ -481,7 +486,7 @@ def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, 
     cmap = _matplotlib.colors.LinearSegmentedColormap('linlog', cdict)
     cmap.set_bad('w',1)
     masked_data = _np.ma.array (plt_data, mask=_np.isnan(plt_data))
-    norm = LinLogNorm(trans=1)
+    norm = LinLogNorm(trans=linlog_trans)
     #heatmap = ax.pcolor( plt_data, vmin=vmin, vmax=vmax)
     heatmap = axes.pcolormesh( masked_data, vmin=vmin, vmax=vmax, cmap=cmap, norm=norm)
 
