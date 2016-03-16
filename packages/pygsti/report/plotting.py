@@ -332,37 +332,29 @@ def small_eigval_err_rate(sigma, dataset, directGSTgatesets):
     minEigval = min(abs(_np.linalg.eigvals( gs_direct["sigmaLbl"] )))
     return 1.0 - minEigval**(1.0/max(len(sigma),1)) # (approximate) per-gate error rate; max averts divide by zero error
 
-def besttxtcolor( x, xmin, xmax, cmapName ):
+def besttxtcolor( x, cmap, norm ):
     """ 
     Determinining function for whether text should be white or black
 
     Parameters
     ----------
-    x, xmin, xmax : float
-        Values of the cell in question, the minimum cell value, and the maximum cell value
-
-    cmapName: string
-        The name of the colormap
+    x : float
+        Value of the cell in question
+    cmap : matplotlib colormap
+        Colormap assigning colors to the cells
+    norm : matplotlib normalizer
+        Function to map cell values to the interval [0, 1] for use by a
+        colormap
 
     Returns
     -------
     {"white","black"}
     """
-    if cmapName in ['inferno', 'plasma', 'viridis']:
-        if  ((x-xmin)/xmax<0.37):
-            return "white"
-        else:
-            return "black"
-    elif cmapName == 'PuRd':
-        if  ((x-xmin)/xmax>0.77):
-            return "white"
-        else:
-            return "black"
-    else:
-        if  ((x-xmin)/xmax<0.37) or((x-xmin)/xmax>0.77):
-            return "white"
-        else:
-            return "black"
+    cell_color = cmap(norm(x))
+    R, G, B = cell_color[:3]
+    # Perceived brightness calculation from http://alienryderflex.com/hsp.html
+    P = _np.sqrt(0.299*R**2 + 0.587*G**2 + 0.114*B**2)
+    return "black" if 0.5 <= P else "white"
     
 class LinLogNorm(_matplotlib.colors.Normalize):
     def __init__(self, trans=None, vmin=None, vmax=None, clip=False):
@@ -572,7 +564,7 @@ def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, 
                 if _np.isnan(plt_data[y, x]): continue
                 axes.text(x + 0.5, y + 0.5, eformat(plt_data[y, x], prec),
                         horizontalalignment='center',
-                        verticalalignment='center', color=besttxtcolor( plt_data[y,x], vmin, vmax, cmap.name) )
+                        verticalalignment='center', color=besttxtcolor( plt_data[y,x], cmap, norm) )
 
     if colorbar:
         _plt.colorbar(heatmap)
