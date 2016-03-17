@@ -378,47 +378,49 @@ def to_rms_gateset(gsList,target_gs):
 
 def gateset_jtracedist(gs,gs_target,mxBasis="gm"):
     output = _np.zeros(3,dtype=float)
-    for i, gate in enumerate(gs_target.keys()):
-        output[i] = _tools.jtracedist(gs[gate],gs_target[gate],mxBasis=mxBasis)
+    for i, gate in enumerate(gs_target.gates.keys()):
+        output[i] = _tools.jtracedist(gs.gates[gate],gs_target.gates[gate],mxBasis=mxBasis)
 #    print output
     return output
 
 def gateset_process_fidelity(gs,gs_target):
     output = _np.zeros(3,dtype=float)
-    for i, gate in enumerate(gs_target.keys()):
-        output[i] = _tools.process_fidelity(gs[gate],gs_target[gate])
+    for i, gate in enumerate(gs_target.gates.keys()):
+        output[i] = _tools.process_fidelity(gs.gates[gate],gs_target.gates[gate])
     return output
 
 def gateset_decomp_angle(gs):
     output = _np.zeros(3,dtype=float)
-    for i, gate in enumerate(gs.keys()):
-        output[i] = _tools.decompose_gate_matrix(gs[gate]).get('pi rotations',0)
+    for i, gate in enumerate(gs.gates.keys()):
+        output[i] = _tools.decompose_gate_matrix(gs.gates[gate]).get('pi rotations',0)
     return output
 
 def gateset_decomp_decay_diag(gs):
     output = _np.zeros(3,dtype=float)
-    for i, gate in enumerate(gs.keys()):
-        output[i] = _tools.decompose_gate_matrix(gs[gate]).get('decay of diagonal rotation terms',0)
+    for i, gate in enumerate(gs.gates.keys()):
+        output[i] = _tools.decompose_gate_matrix(gs.gates[gate]).get('decay of diagonal rotation terms',0)
     return output
 
 def gateset_decomp_decay_offdiag(gs):
     output = _np.zeros(3,dtype=float)
-    for i, gate in enumerate(gs.keys()):
-        output[i] = _tools.decompose_gate_matrix(gs[gate]).get('decay of off diagonal rotation terms',0)
+    for i, gate in enumerate(gs.gates.keys()):
+        output[i] = _tools.decompose_gate_matrix(gs.gates[gate]).get('decay of off diagonal rotation terms',0)
     return output
 
 #def gateset_fidelity(gs,gs_target,mxBasis="gm"):
 #    output = _np.zeros(3,dtype=float)
-#    for i, gate in enumerate(gs_target.keys()):
-#        output[i] = _tools.fidelity(gs[gate],gs_target[gate])
+#    for i, gate in enumerate(gs_target.gates.keys()):
+#        output[i] = _tools.fidelity(gs.gates[gate],gs_target.gates[gate])
 #    return output
 
 def gateset_diamonddist(gs,gs_target,mxBasis="gm"):
     output = _np.zeros(3,dtype=float)
-    for i, gate in enumerate(gs_target.keys()):
-        output[i] = _tools.diamonddist(gs[gate],gs_target[gate],mxBasis=mxBasis)
+    for i, gate in enumerate(gs_target.gates.keys()):
+        output[i] = _tools.diamonddist(gs.gates[gate],gs_target.gates[gate],mxBasis=mxBasis)
     return output
     
 def spamrameter(gs):
-    return _np.dot(gs.rhoVecs[0].T,gs.EVecs[0])[0,0]
+    firstRho = gs.rhoVecs.keys()[0]
+    firstE = gs.EVecs.keys()[0]
+    return _np.dot(gs.rhoVecs[firstRho].T,gs.EVecs[firstE])[0,0]
 

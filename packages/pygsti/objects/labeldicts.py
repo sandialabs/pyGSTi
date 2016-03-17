@@ -1,5 +1,6 @@
 import collections as _collections
 import numpy as _np
+import warnings as _warnings
 
 import spamvec as _sv
 import gate as _gate
@@ -12,8 +13,8 @@ class PrefixOrderedDict(_collections.OrderedDict):
 
     def __setitem__(self, key, val):
         if not key.startswith(self._prefix):
-            raise ValueError("All keys must be strings, " +
-                             "beginning with the prefix '%s'" % self._prefix)
+            raise KeyError("All keys must be strings, " +
+                           "beginning with the prefix '%s'" % self._prefix)
         super(PrefixOrderedDict,self).__setitem__(key, val)
 
     def __reduce__(self):
@@ -39,12 +40,12 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
                              "%d to gateset of dimension %d"
                              % (len(vec),self.parent.dim))
 
-    def __getitem(self, key):
+    def __getitem__(self, key):
         if key == self.remainderLabel:
             if self.parent is None or self.parent.identityVec is None:
-                raise ValueError("Cannot compute remainder vector because "
-                                 + " identity vector is not set!")
-            return parent.identityVec - sum(self)
+                raise KeyError("Cannot compute remainder vector because "
+                               + " identity vector is not set!")
+            return self.parent.identityVec - sum(self.values())
         return super(OrderedSPAMVecDict,self).__getitem__(key)
 
 
@@ -172,9 +173,9 @@ class OrderedSPAMLabelDict(_collections.OrderedDict):
 
     def __setitem__(self, key, val):
         if type(key) != str:
-            raise ValueError("SPAM labels must be strings!")
+            raise KeyError("SPAM labels must be strings!")
         if type(val) != tuple or len(val) != 2:
-            raise ValueError("SPAM label values must be 2-tuples!")
+            raise KeyError("SPAM label values must be 2-tuples!")
 
         rhoLabel, eLabel = val        
         if rhoLabel == self.remainderLabel:
@@ -194,6 +195,9 @@ class OrderedSPAMLabelDict(_collections.OrderedDict):
         # if inserted *value* already exists, clobber so values are unique
         for k,v in self.iteritems():
             if val == v: del self[k]
+
+        #TODO: perhaps add checks that value == (rhoLabel,eLabel) labels exist
+        # (would need to add a "parent" member to access the GateSet)
 
         super(OrderedSPAMLabelDict,self).__setitem__(key,val)
 

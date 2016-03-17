@@ -10,6 +10,7 @@ import numpy as _np
 import numpy.linalg as _nla
 import numpy.random as _rndm
 import scipy as _scipy
+import itertools as _itertools
 
 from ..tools import matrixtools as _mt
 from ..tools import basistools as _bt
@@ -146,7 +147,7 @@ class GateSet(object):
         Returns
         -------
         list of numpy arrays
-            list of state preparation vectors of shape (gate_dim, 1).
+            list of state preparation vectors of shape (dim, 1).
         """
         return [ self.rhoVecs[l].copy() for l in self.get_rhovec_labels() ]
 
@@ -160,7 +161,7 @@ class GateSet(object):
         Returns
         -------
         list of numpy arrays
-            list of POVM effect vectors of shape (gate_dim, 1).
+            list of POVM effect vectors of shape (dim, 1).
         """
         return [ self.EVecs[l].copy() for l in self.get_evec_labels() ]
 
@@ -236,6 +237,24 @@ class GateSet(object):
         return self.SPAM_labels.keys()
 
 
+    def get_spamgate(self, spamLabel):
+        """ 
+        Construct the SPAM gate associated with
+        a given spam label.
+
+        Parameters
+        ----------
+        spamLabel : str
+           the spam label to construct a "spam gate" for.
+
+        Returns
+        -------
+        numpy array
+        """
+        return self._calc()._make_spamgate(spamLabel)
+
+
+
     def __setitem__(self, label, value):
         """
         Set a Gate or SPAM vector associated with a given label.
@@ -257,9 +276,17 @@ class GateSet(object):
         elif label.startswith(self.gates._prefix):
             self.gates[label] = value
         elif label == self._identity:
-            self.identityVec = _sv.StaticSPAMVec(value) # always static
+            if self.dim is None:     self.dim = len(value)
+            if self.dim != len(value):
+                raise ValueError("Cannot add vector with dimension" +
+                                 "%d to gateset of dimension %d"
+                                 % (len(value),self.dim))
+            if self.identityVec is not None:
+                self.identityVec.set_vector(value)
+            else:
+                self.identityVec = _sv.StaticSPAMVec(value) # always static
         else:
-            raise ValueError("Key %s has an invalid prefix" % label)
+            raise KeyError("Key %s has an invalid prefix" % label)
 
     def __getitem__(self, label):
         """
@@ -279,7 +306,7 @@ class GateSet(object):
         elif label == self._identity:
             return self.identityVec
         else:
-            raise ValueError("Key %s has an invalid prefix" % label)
+            raise KeyError("Key %s has an invalid prefix" % label)
 
     def set_all_parameterizations(self, parameterization_type):
         """ 
@@ -337,7 +364,6 @@ class GateSet(object):
         L = sum([ rhoVec.num_params() for rhoVec in self.rhoVecs.values() ])
         L += sum([ EVec.num_params() for EVec in self.EVecs.values() ])
         L += sum([ gate.num_params() for gate in self.gates.values()])
-        assert(L == len(self.to_vector()) )
         return L
 
 
@@ -443,8 +469,9 @@ class GateSet(object):
         """
         off = 0
         offsets = {}
-        for label,obj in self.rhoVecs.iteritems() + self.EVecs.iteritems() + \
-                         self.gates.iteritems():
+        for label,obj in _itertools.chain(self.rhoVecs.iteritems(),
+                                          self.EVecs.iteritems(),
+                                          self.gates.iteritems() ):
             np = obj.num_params()
             offsets[label] = (off,off+np); off += np
     
@@ -476,6 +503,7 @@ class GateSet(object):
         eo = po = 0 # element & parameter offsets
         for obj in objs_to_vectorize:
             ne, np = obj.size, obj.num_params() #number of els & params
+            #print "DB: setting [%d:%d, %d:%d] = \n%s" % (eo,eo+ne,po,po+np,obj.deriv_wrt_params())
             deriv[eo:eo+ne,po:po+np] = obj.deriv_wrt_params()
             eo += ne; po += np
 
@@ -568,10 +596,16 @@ class GateSet(object):
         #   above to get the general case projector.
 
 
-        #Use a parameterizaton object to hold & then vectorize the derivatives wrt each gauge transform basis element (each ij)
+        #Use a GateSet object to hold & then vectorize the derivatives wrt each gauge transform basis element (each ij)
         dim = self.dim
         nParams = self.num_params()
         nElements = self.num_elements()
+
+        #This was considered as optional behavior, but better to just delete qtys from GateSet
+        ##whether elements of the raw gateset matrices/SPAM vectors that are not
+        ## parameterized at all should be ignored.   By ignoring changes to such
+        ## elements, they are treated as not being a part of the "gateset"
+        #bIgnoreUnparameterizedEls = True
 
         #Note: parameterizaton object (pmDeriv) must have all elements of gate
         # mxs and spam vectors as parameters (i.e. be "fully parameterized") in
@@ -580,11 +614,11 @@ class GateSet(object):
         gsDeriv = GateSet("full", self.rhoVecs._prefix, self.EVecs._prefix,
                           self.gates._prefix, self._remainder, self._identity)
         for gateLabel in self.gates:
-            gsDeriv[gateLabel] = _np.zeros((dim,dim),'d')
+            gsDeriv.gates[gateLabel] = _np.zeros((dim,dim),'d')
         for rhoLabel in self.rhoVecs: 
-            gsDeriv[rhoLabel] = _np.zeros((dim,1),'d')
+            gsDeriv.rhoVecs[rhoLabel] = _np.zeros((dim,1),'d')
         for eLabel in self.EVecs:
-            gsDeriv[eLabel] = _np.zeros((dim,1),'d')
+            gsDeriv.EVecs[eLabel] = _np.zeros((dim,1),'d')
 
         assert(gsDeriv.num_elements() == gsDeriv.num_params() == nElements)
 
@@ -593,20 +627,26 @@ class GateSet(object):
             for j in xrange(dim):  # *generator* mx, not gauge mx itself
                 unitMx = _bt._mut(i,j,dim)
                 for lbl,rhoVec in self.rhoVecs.iteritems():
-                    gsDeriv[lbl] = _np.dot(unitMx, rhoVec)
+                    gsDeriv.rhoVecs[lbl] = _np.dot(unitMx, rhoVec)
                 for lbl,EVec in self.EVecs.iteritems():
-                    gsDeriv[lbl] =  -_np.dot(EVec.T, unitMx).T
+                    gsDeriv.EVecs[lbl] =  -_np.dot(EVec.T, unitMx).T
                 for lbl,gate in self.gates.iteritems():
-                    gsDeriv[lbl] = _np.dot(unitMx,gate) - \
-                                   _np.dot(gate,unitMx)
+                    gsDeriv.gates[lbl] = _np.dot(unitMx,gate) - \
+                                         _np.dot(gate,unitMx)
 
                 #Note: vectorize all the parameters in this full-
                 # parameterization object, which gives a vector of length
                 # equal to the number of gateset *elements*.
                 dG[:,i*dim+j] = gsDeriv.to_vector() 
 
-
         dP = self.deriv_wrt_params() 
+
+        #if bIgnoreUnparameterizedEls:
+        #    for i in range(dP.shape[0]):
+        #        if _np.isclose( _np.linalg.norm(dP[i,:]), 0): 
+        #            dG[i,:] = 0 #if i-th element not parameterized,
+        #                        # clear dG row corresponding to it.
+
         M = _np.concatenate( (dP,dG), axis=1 )
         
         def nullspace(m, tol=1e-7): #get the nullspace of a matrix
@@ -681,8 +721,8 @@ class GateSet(object):
         #print "Rank P = ",_np.linalg.matrix_rank(P)
         #print "Rank Pp = ",_np.linalg.matrix_rank(Pp, P_RANK_TOL)
         #print "Rank 1-Pp = ",_np.linalg.matrix_rank(_np.identity(nParams,'d') - Pp, P_RANK_TOL)
-          #print " Evals(1-Pp) = \n","\n".join([ "%d: %g" % (i,ev) \
-          #    for i,ev in enumerate(_np.sort(_np.linalg.eigvals(_np.identity(nParams,'d') - Pp))) ])
+        #print " Evals(1-Pp) = \n","\n".join([ "%d: %g" % (i,ev) \
+        #       for i,ev in enumerate(_np.sort(_np.linalg.eigvals(_np.identity(nParams,'d') - Pp))) ])
 
         rank_P = _np.linalg.matrix_rank(P, P_RANK_TOL) # original un-normalized projector onto gauge space
           # Note: use P_RANK_TOL here even though projector is *un-normalized* since sometimes P will
@@ -704,11 +744,11 @@ class GateSet(object):
         ----------
         S : numpy array
             Matrix to perform similarity transform.  
-            Should be shape (gate_dim, gate_dim).
+            Should be shape (dim, dim).
             
         Si : numpy array, optional
             Inverse of S.  If None, inverse of S is computed.  
-            Should be shape (gate_dim, gate_dim).
+            Should be shape (dim, dim).
         """
         if Si is None: Si = _nla.inv(S) 
 
@@ -723,7 +763,7 @@ class GateSet(object):
                                                  self.identityVec) ) 
 
         for gateObj in self.gates.values():
-            gateObj.set_matrix(_np.dot(Si,_np.dot(gateObj, S)))
+            gateObj.transform(S,Si)
 
     def _calc(self):
         return _gscalc.GateSetCalculator(self.dim, self.gates, self.rhoVecs,
@@ -1035,7 +1075,7 @@ class GateSet(object):
             An evaluation tree object.
         """
         evalTree = _evaltree.EvalTree()
-        evalTree.initialize([""] + self.keys(), gatestring_list)
+        evalTree.initialize([""] + self.gates.keys(), gatestring_list)
         return evalTree
 
 
@@ -1340,7 +1380,7 @@ class GateSet(object):
             only returned if returnPr == True.  A length-S array 
             containing the probabilities for each gate string.
         """
-        return self.calc().bulk_hpr(spamLabel, evalTree, returnPr,returnDeriv,
+        return self._calc().bulk_hpr(spamLabel, evalTree, returnPr,returnDeriv,
                                     clipTo,check)
 
 
@@ -1654,7 +1694,7 @@ class GateSet(object):
         -------
         float
         """
-        return self._calc().frobeniusdist(otherGateSet.calc(), transformMx,
+        return self._calc().frobeniusdist(otherGateSet._calc(), transformMx,
                                           gateWeight, spamWeight, normalize)
 
 
@@ -1681,7 +1721,7 @@ class GateSet(object):
         -------
         float
         """
-        return self._calc().jtracedist(otherGateSet.calc(), transformMx)
+        return self._calc().jtracedist(otherGateSet._calc(), transformMx)
 
 
     def diamonddist(self, otherGateSet, transformMx=None):
@@ -1707,7 +1747,7 @@ class GateSet(object):
         -------
         float
         """
-        return self._calc().diamonddist(otherGateSet.calc(), transformMx)
+        return self._calc().diamonddist(otherGateSet._calc(), transformMx)
 
 
     def copy(self):
@@ -1725,6 +1765,9 @@ class GateSet(object):
         newGateset.gates = self.gates.copy()
         newGateset.SPAM_labels = self.SPAM_labels.copy()
         newGateset.identityVec = self.identityVec.copy()
+        newGateset.dim = self.dim
+        newGateset._remainder = self._remainder
+        newGateset._identity = self._identity
         return newGateset
 
     def __str__(self):
@@ -1833,7 +1876,7 @@ class GateSet(object):
         elif gate_noise is not None:
             #Apply the same depolarization to each gate
             D = _np.diag( [1]+[1-gate_noise]*(gateDim-1) )
-            for (i,label) in enumerate(self):
+            for (i,label) in enumerate(self.gates):
                 newGateset[label] = _gate.FullyParameterizedGate( 
                                            _np.dot(D,self.gates[label]) )
     
@@ -1931,14 +1974,13 @@ class GateSet(object):
                 r = max_rotate * rndm.random_sample( len(self.gates) * 15 )
                 for (i,label) in enumerate(self.gates):
                     rot = r[15*i:15*(i+1)]
-                    newGateset.set_gate(label, _gate.FullyParameterizedGate( 
-                      _np.dot( 
-                         _bt.two_qubit_gate(rot[0]/2.0,rot[1]/2.0,rot[2]/2.0,
-                                            rot[3]/2.0,rot[4]/2.0,rot[5]/2.0,
-                                            rot[6]/2.0,rot[7]/2.0,rot[8]/2.0,
-                                            rot[9]/2.0,rot[10]/2.0,rot[11]/2.0,
-                                            rot[12]/2.0,rot[13]/2.0,rot[14]/2.0,
-                                            ), self.gates[label]) ))
+                    newGateset.gates[label] = _gate.FullyParameterizedGate( 
+                     _np.dot( _bt.two_qubit_gate(rot[0]/2.0,rot[1]/2.0,rot[2]/2.0,
+                                                 rot[3]/2.0,rot[4]/2.0,rot[5]/2.0,
+                                                 rot[6]/2.0,rot[7]/2.0,rot[8]/2.0,
+                                                 rot[9]/2.0,rot[10]/2.0,rot[11]/2.0,
+                                                 rot[12]/2.0,rot[13]/2.0,rot[14]/2.0,
+                                                 ), self.gates[label]) )
             #else: raise ValueError("Invalid gateset dimension") # checked above
                 
         elif rotate is not None:
@@ -2062,9 +2104,11 @@ class GateSet(object):
     
         curDim = self.get_dimension()
         assert(newDimension > curDim)
-        
-        new_gateset = self.copy()
-        new_gateset.gate_dim = newDimension;
+
+        new_gateset = GateSet("full", self.rhoVecs._prefix, self.EVecs._prefix,
+                              self.gates._prefix, self._remainder, self._identity)
+        new_gateset.dim = newDimension
+        new_gateset.SPAM_labels.update( self.SPAM_labels )
     
         addedDim = newDimension-curDim
         vec_zeroPad = _np.zeros( (addedDim,1), 'd')
@@ -2072,13 +2116,13 @@ class GateSet(object):
         #Increase dimension of rhoVecs and EVecs by zero-padding
         for lbl,rhoVec in self.rhoVecs.iteritems():
             assert( len(rhoVec) == curDim )
-            new_gateset[lbl] = _sv.FullyParameterizedSPAMVec(
-                    _np.concatenate( (rhoVec, vec_zeroPad) ))
+            new_gateset.rhoVecs[lbl] = \
+                _sv.FullyParameterizedSPAMVec(_np.concatenate( (rhoVec, vec_zeroPad) ))
     
         for lbl,EVec in self.EVecs.iteritems():
             assert( len(EVec) == curDim )
-            new_gateset[lbl] = _sv.FullyParameterizedSPAMVec(
-                            _np.concatenate( (EVec, vec_zeroPad) ))
+            new_gateset.EVecs[lbl] = \
+                _sv.FullyParameterizedSPAMVec(_np.concatenate( (EVec, vec_zeroPad) ))
     
         #Increase dimension of identityVec by zero-padding
         if self.identityVec is not None:
@@ -2091,7 +2135,7 @@ class GateSet(object):
             newGate = _np.zeros( (newDimension,newDimension) )
             newGate[ 0:curDim, 0:curDim ] = gate[:,:]
             for i in xrange(curDim,newDimension): newGate[i,i] = 1.0
-            new_gateset.set_gate(gateLabel, _gate.FullyParameterizedGate(newGate))
+            new_gateset.gates[gateLabel] = _gate.FullyParameterizedGate(newGate)
     
         return new_gateset
     
@@ -2118,19 +2162,21 @@ class GateSet(object):
         curDim = self.get_dimension()
         assert(newDimension < curDim)
         
-        new_gateset = self.copy()
-        new_gateset.gate_dim = newDimension
+        new_gateset = GateSet("full", self.rhoVecs._prefix, self.EVecs._prefix,
+                              self.gates._prefix, self._remainder, self._identity)
+        new_gateset.dim = newDimension
+        new_gateset.SPAM_labels.update( self.SPAM_labels )
     
         #Decrease dimension of rhoVecs and EVecs by truncation
         for lbl,rhoVec in self.rhoVecs.iteritems():
             assert( len(rhoVec) == curDim )
-            new_gateset[lbl] = _sv.FullyParameterizedSPAMVec(
-                                    rhoVec[0:newDimension,:] )
+            new_gateset.rhoVecs[lbl] = \
+                _sv.FullyParameterizedSPAMVec(rhoVec[0:newDimension,:])
     
         for lbl,EVec in self.EVecs.iteritems():
-            assert( len(self.EVec) == curDim )
-            new_gateset[lbl] = _sv.FullyParameterizedSPAMVec(
-                                    EVec[0:newDimension,:] )
+            assert( len(EVec) == curDim )
+            new_gateset.EVecs[lbl] = \
+                _sv.FullyParameterizedSPAMVec(EVec[0:newDimension,:])
     
         #Decrease dimension of identityVec by trunction
         if self.identityVec is not None:
@@ -2142,7 +2188,7 @@ class GateSet(object):
             assert( gate.shape == (curDim,curDim) )
             newGate = _np.zeros( (newDimension,newDimension) )
             newGate[ :, : ] = gate[0:newDimension,0:newDimension]
-            new_gateset.set_gate(gateLabel, _gate.FullyParameterizedGate(newGate))
+            new_gateset.gates[gateLabel] = _gate.FullyParameterizedGate(newGate)
     
         return new_gateset
     
@@ -2270,7 +2316,7 @@ class GateSet(object):
 #        Returns
 #        -------
 #        numpy array
-#            a state preparation vector of shape (gate_dim, 1).
+#            a state preparation vector of shape (dim, 1).
 #        """
 #        return self.rhoVecs[index]
 #
@@ -2306,7 +2352,7 @@ class GateSet(object):
 #        Returns
 #        -------
 #        numpy array
-#            an effect vector of shape (gate_dim, 1).
+#            an effect vector of shape (dim, 1).
 #        """
 #        if index == -1:
 #            return self.identityVec - sum(self.EVecs)

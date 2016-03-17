@@ -3,6 +3,7 @@ import collections
 import pickle
 import pygsti
 import numpy as np
+import warnings
 
 class DataSetTestCase(unittest.TestCase):
 
@@ -15,6 +16,13 @@ class DataSetTestCase(unittest.TestCase):
             self.assertAlmostEqual( ds1[gatestring]['plus'], ds2[gatestring]['plus'], places=3 )
             self.assertAlmostEqual( ds1[gatestring]['minus'], ds2[gatestring]['minus'], places=3 )
 
+    def assertWarns(self, callable, *args, **kwds):
+        with warnings.catch_warnings(record=True) as warning_list:
+            warnings.simplefilter('always')
+            result = callable(*args, **kwds)
+            self.assertTrue(len(warning_list) > 0)
+        return result
+
 
 class TestDataSetMethods(DataSetTestCase):
 
@@ -23,7 +31,7 @@ class TestDataSetMethods(DataSetTestCase):
         ds = pygsti.objects.DataSet(spamLabels=['plus','minus'])
         ds.add_count_dict( ('Gx',), {'plus': 10, 'minus': 90} )
         ds.add_counts_1q( ('Gx','Gy'), 10, 40 )
-        ds.add_counts_1q( ('Gx','Gy'), 40, 10 )
+        ds.add_counts_1q( ('Gx','Gy'), 40, 10 ) #freq much different from existing
         with self.assertRaises(ValueError):
             ds.add_count_dict( ('Gx',), {'FooBar': 10, 'minus': 90 }) #bad spam label
         with self.assertRaises(ValueError):
@@ -172,8 +180,10 @@ Gx^4 0.2 100
 
         gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy','Gz'], 
                                                      [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)", "Z(pi/2,Q0)"],
-                                                     rhoExpressions=["0"], EExpressions=["1"], 
-                                                     spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
+                                                     rhoLabelList=['rho0'], rhoExpressions=["0"],
+                                                     ELabelList=['E0'], EExpressions=["1"], 
+                                                     spamLabelDict={'plus': ('rho0','E0'),
+                                                                    'minus': ('rho0','remainder') })
 
         depol_gateset = gateset.depolarize(gate_noise=0.1,spam_noise=0)
 

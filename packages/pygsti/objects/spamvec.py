@@ -359,7 +359,7 @@ class FullyParameterizedSPAMVec(_np.ndarray, SPAMVec):
         numpy array
             The parameters as a 1D array with length num_params().
         """
-        return self.flatten() #.real in case of complex matrices
+        return _np.asarray(self).flatten() #.real in case of complex matrices
 
 
     def from_vector(self, v):
@@ -542,7 +542,7 @@ class TPParameterizedSPAMVec(_ProtectedArray, SPAMVec):
         numpy array
             The parameters as a 1D array with length num_params().
         """
-        return self.flatten()[1:] #.real in case of complex matrices?
+        return _np.asarray(self).flatten()[1:] #.real in case of complex matrices?
 
 
     def from_vector(self, v):
@@ -559,7 +559,7 @@ class TPParameterizedSPAMVec(_ProtectedArray, SPAMVec):
         -------
         None
         """
-        self[0,0] = (self.dim)**-0.25 #necessary? (should be set already)
+        assert(_np.isclose(self[0,0], (self.dim)**-0.25))
         self[1:,0] = v
 
 

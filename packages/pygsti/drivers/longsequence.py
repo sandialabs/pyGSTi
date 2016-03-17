@@ -153,7 +153,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
 
     #Get gate strings and labels
     if gateLabels is None:
-        gateLabels = gs_target.keys()
+        gateLabels = gs_target.gates.keys()
 
     if isinstance(rhoStrsListOrFilename, str):
         rhoStrs = _io.load_gatestring_list(rhoStrsListOrFilename)
@@ -176,10 +176,12 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     #Starting Point = LGST
     gate_dim = gs_target.get_dimension()
     specs = _construction.build_spam_specs(rhoStrs=rhoStrs, EStrs=EStrs,
-                                           EVecInds=gs_target.get_evec_indices())
+                                           rhoVecLbls=gs_target.get_rhovec_labels(),
+                                           EVecLbls=gs_target.get_evec_labels())
     gs_lgst = _alg.do_lgst(ds, specs, gs_target, svdTruncateTo=gate_dim, verbosity=3)
 
     if constrainToTP: #gauge optimize (and contract if needed) to TP, then lock down first basis element as the identity
+        #TODO: instead contract to vSPAM? (this could do more than just alter the 1st element...)
         firstElIdentityVec = _np.zeros( (gate_dim,1) )
         firstElIdentityVec[0] = gate_dim**0.25 # first basis el is assumed = sqrt(gate_dim)-dimensional identity density matrix 
         minPenalty, gaugeMx, gs_in_TP = _alg.optimize_gauge(gs_lgst, "TP",  returnAll=True, spamWeight=1.0, gateWeight=1.0, verbosity=3)
@@ -189,7 +191,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                 _warnings.warn("Could not gauge optimize to TP (penalty=%g), so contracted LGST gateset to TP" % minPenalty)
 
         gs_after_gauge_opt = _alg.optimize_gauge(gs_in_TP, "target", targetGateset=gs_target, constrainToTP=True, spamWeight=1.0, gateWeight=1.0)
-        gs_after_gauge_opt.set_identity_vec( firstElIdentityVec ) # declare that this basis has the identity as its first element
+        gs_after_gauge_opt['identity'] = firstElIdentityVec # declare that this basis has the identity as its first element
 
     else: # no TP constraint
         gs_after_gauge_opt = _alg.optimize_gauge(gs_lgst, "target", targetGateset=gs_target, spamWeight=1.0, gateWeight=1.0)
@@ -201,24 +203,28 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     if advancedOptions.get('depolarizeLGST',0) > 0:
         gs_after_gauge_opt = gs_after_gauge_opt.depolarize(gate_noise=advancedOptions['depolarizeLGST'])
 
+    if constrainToTP:
+        gs_after_gauge_opt.set_all_parameterizations("tp")
+
     #Run LSGST on data
     if objective == "chi2":
-        gs_lsgst_list = _alg.do_iterative_mc2gst(ds, gs_after_gauge_opt, lsgstLists, 
-                                              minProbClipForWeighting=advancedOptions.get('minProbClipForWeighting',1e-4),
-                                              probClipInterval = advancedOptions.get('probClipInterval',(-1e6,1e6)),
-                                              returnAll=True, opt_G0=(not constrainToTP), opt_SP0=(not constrainToTP),
-                                              gatestringWeightsDict=weightsDict, verbosity=advancedOptions.get('verbosity',2),
-                                              memLimit=advancedOptions.get('memoryLimitInBytes',None),
-                                              useFreqWeightedChiSq=advancedOptions.get('useFreqWeightedChiSq',False))
+        gs_lsgst_list = _alg.do_iterative_mc2gst(
+            ds, gs_after_gauge_opt, lsgstLists, 
+            minProbClipForWeighting=advancedOptions.get('minProbClipForWeighting',1e-4),
+            probClipInterval = advancedOptions.get('probClipInterval',(-1e6,1e6)),
+            returnAll=True, gatestringWeightsDict=weightsDict,
+            verbosity=advancedOptions.get('verbosity',2),
+            memLimit=advancedOptions.get('memoryLimitInBytes',None),
+            useFreqWeightedChiSq=advancedOptions.get('useFreqWeightedChiSq',False))
     elif objective == "logl":
-        gs_lsgst_list = _alg.do_iterative_mlgst(ds, gs_after_gauge_opt, lsgstLists,
-                                               minProbClip = advancedOptions.get('minProbClip',1e-4),
-                                               probClipInterval = advancedOptions.get('probClipInterval',(-1e6,1e6)),
-                                               radius=advancedOptions.get('radius',1e-4), 
-                                               returnAll=True, opt_G0=(not constrainToTP), opt_SP0=(not constrainToTP),
-                                               verbosity=advancedOptions.get('verbosity',2),
-                                               memLimit=advancedOptions.get('memoryLimitInBytes',None),
-                                               useFreqWeightedChiSq=advancedOptions.get('useFreqWeightedChiSq',False))
+        gs_lsgst_list = _alg.do_iterative_mlgst(
+            ds, gs_after_gauge_opt, lsgstLists,
+            minProbClip = advancedOptions.get('minProbClip',1e-4),
+            probClipInterval = advancedOptions.get('probClipInterval',(-1e6,1e6)),
+            radius=advancedOptions.get('radius',1e-4), 
+            returnAll=True, verbosity=advancedOptions.get('verbosity',2),
+            memLimit=advancedOptions.get('memoryLimitInBytes',None),
+            useFreqWeightedChiSq=advancedOptions.get('useFreqWeightedChiSq',False))
     else:
         raise ValueError("Invalid longSequenceObjective: %s" % objective)
 

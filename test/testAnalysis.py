@@ -14,11 +14,11 @@ class AnalysisTestCase(unittest.TestCase):
         
         self.fiducials = std.fiducials
         self.germs = std.germs
-        self.specs = pygsti.construction.build_spam_specs(self.fiducials, EVecInds=[0]) #only use the first EVec
+        self.specs = pygsti.construction.build_spam_specs(self.fiducials, rhoVecLbls=['rho0'], EVecLbls=['E0'])
         self.strs = pygsti.construction.get_spam_strs(self.specs)
 
-        self.gateLabels = self.gateset.keys() # also == std.gates
-        self.lgstStrings = pygsti.construction.list_lgst_gatestrings(self.specs, self.gateset.keys())
+        self.gateLabels = self.gateset.gates.keys() # also == std.gates
+        self.lgstStrings = pygsti.construction.list_lgst_gatestrings(self.specs, self.gateLabels)
 
         self.maxLengthList = [0,1,2,4,8]
         

@@ -10,24 +10,71 @@ import html as _hu
 import ppt as _pu
 import cgi as _cgi
 import numpy as _np
+import re as _re
 
 ##############################################################################
 #Formatting functions
 ##############################################################################
 
-#create a 'rho' (state prep) symbol of given index
-def _fmtRho_html(j):  return '&rho;<sub>%d</sub>' % j
-def _fmtRho_latex(j): return '$\\rho_{%d}$' % j
-def _fmtRho_py(j): return 'rho_%d' % j
-def _fmtRho_ppt(j): return 'rho_%d' % j
+# 'rho' (state prep) formatting
+#def _fmtRho_html(j):  return '&rho;<sub>%d</sub>' % j
+#def _fmtRho_latex(j): return '$\\rho_{%d}$' % j
+#def _fmtRho_py(j): return 'rho_%d' % j
+#def _fmtRho_ppt(j): return 'rho_%d' % j
+def _fmtRho_html(lbl):
+    l = lbl.replace('rho','&rho;')
+    m = _re.match('.*?([0-9]+)$', l)
+    if m is not None:
+        n = m.group(1) #trailing digits
+        l = l[0:-len(n)] + "<sub>%s</sub>" % n
+    return l
+def _fmtRho_latex(lbl):
+    l = lbl.replace('rho','\\rho')
+    m = _re.match('.*?([0-9]+)$', l)
+    if m is not None:
+        n = m.group(1) #trailing digits
+        l = l[0:-len(n)] + "_{%s}" % n
+    return '$%s$' % l
+def _fmtRho_py(lbl): return '%s' % lbl
+def _fmtRho_ppt(lbl): return '%s' % lbl
 Rho = { 'html': _fmtRho_html, 'latex': _fmtRho_latex, 'py': _fmtRho_py, 'ppt': _fmtRho_ppt }
 
-#create an 'E' (POVM) symbol of given index
-def _fmtE_html(j):  return 'E<sub>%d</sub>' % j
-def _fmtE_latex(j): return '$E_{%d}$' % j
-def _fmtE_py(j): return 'E_%d' % j
-def _fmtE_ppt(j): return 'E_%d' % j
+# 'E' (POVM) effect formatting
+#def _fmtE_html(j):  return 'E<sub>%d</sub>' % j
+#def _fmtE_latex(j): return '$E_{%d}$' % j
+#def _fmtE_py(j): return 'E_%d' % j
+#def _fmtE_ppt(j): return 'E_%d' % j
+def _fmtE_html(lbl):
+    if lbl == "remainder": return "E<sub>C</sub>"
+    m = _re.match('.*?([0-9]+)$', lbl)
+    if m is not None:
+        n = m.group(1) #trailing digits
+        lbl = lbl[0:-len(n)] + "<sub>%s</sub>" % n
+    return lbl
+def _fmtE_latex(lbl):
+    if lbl == "remainder": return "$E_C$"
+    m = _re.match('.*?([0-9]+)$', lbl)
+    if m is not None:
+        n = m.group(1) #trailing digits
+        lbl = lbl[0:-len(n)] + "_{%s}" % n
+    return '$%s$' % lbl
+def _fmtE_py(lbl): return '%s' % lbl
+def _fmtE_ppt(lbl): return '%s' % lbl
 E = { 'html': _fmtE_html, 'latex': _fmtE_latex, 'py': _fmtE_py, 'ppt': _fmtE_ppt }
+
+
+#Gate Label formatting
+def _fmtG_html(lbl):
+    if lbl[0] == 'G':
+        lbl = lbl[0] + "<sub>%s</sub>" % lbl[1:]
+    return lbl
+def _fmtG_latex(lbl):
+    if lbl[0] == 'G':
+        lbl = lbl[0] + "_{%s}" % lbl[1:]
+    return '$%s$' % lbl
+def _fmtG_py(lbl): return '%s' % lbl
+def _fmtG_ppt(lbl): return '%s' % lbl
+G = { 'html': _fmtG_html, 'latex': _fmtG_latex, 'py': _fmtG_py, 'ppt': _fmtG_ppt }
 
 # 'normal' formatting
 def _fmtNml_html(x):  return _hu.html(x)

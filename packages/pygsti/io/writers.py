@@ -209,19 +209,19 @@ def write_gateset(gs,filename,title=None):
         print >> f, "# %s" % title
     print >> f, ""
 
-    for (i,rhoVec) in enumerate(gs.rhoVecs):
-        print >> f, "rho%s" % (str(i) if len(gs.rhoVecs) > 1 else "")
+    for (rhoLabel,rhoVec) in gs.rhoVecs.iteritems():
+        print >> f, "%s" % rhoLabel
         print >> f, "PauliVec"
         print >> f, " ".join( "%.8g" % el for el in rhoVec )
         print >> f, ""
 
-    for (i,EVec) in enumerate(gs.EVecs):
-        print >> f, "E%s" % (str(i) if len(gs.EVecs) > 1 else "")
+    for (ELabel,EVec) in gs.EVecs.iteritems():
+        print >> f, "%s" % ELabel
         print >> f, "PauliVec"
         print >> f, " ".join( "%.8g" % el for el in EVec )
         print >> f, ""
 
-    for (label,gate) in gs.iteritems():
+    for (label,gate) in gs.gates.iteritems():
         print >> f, label
         print >> f, "PauliMx"
         print >> f, _tools.mx_to_string(gate, width=16, prec=8)
@@ -232,16 +232,7 @@ def write_gateset(gs,filename,title=None):
     else:
         print >> f, "IDENTITYVEC None"
 
-    for sl in gs.SPAM_labels:
-        (iR,iE) = gs.SPAM_labels[sl]
-        if iE == -1:
-            if iR == -1:
-                print >> f, "SPAMLABEL %s = remainder" % sl
-            else:
-                print >> f, "SPAMLABEL %s = %s remainder" % (sl, "rho%s" % (str(iR) if len(gs.rhoVecs) > 1 else ""))
-        else:
-            assert(iR >= 0)  #iR can only be -1 when iE == -1
-            print >> f, "SPAMLABEL %s = %s %s" % (sl, 
-                                                  "rho%s" % (str(iR) if len(gs.rhoVecs) > 1 else ""),
-                                                  "E%s" % (str(iE) if len(gs.EVecs) > 1 else "") )
+    for sl,(rhoLabel,ELabel) in gs.SPAM_labels.iteritems():
+        print >> f, "SPAMLABEL %s = %s %s" % (sl, rhoLabel, ELabel)
+
     f.close()

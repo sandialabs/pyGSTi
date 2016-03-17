@@ -9,7 +9,7 @@ from ..tools import remove_duplicates as _remove_duplicates
 from ..objects import spamspec as _ss
 
 
-def build_spam_specs(fiducialGateStrings=None, rhoStrs=None, EStrs=None, rhoSpecs=None, ESpecs=None, rhoVecInds=(0,), EVecInds=(0,) ):
+def build_spam_specs(fiducialGateStrings=None, rhoStrs=None, EStrs=None, rhoSpecs=None, ESpecs=None, rhoVecLbls=('rho0',), EVecLbls=('E0',)):
     """
     Computes rho and E specifiers based on optional arguments.  This function
       is used to generate the (rhoSpecs,ESpecs) tuple needed by many of the 
@@ -41,11 +41,11 @@ def build_spam_specs(fiducialGateStrings=None, rhoStrs=None, EStrs=None, rhoSpec
         Each tuple contains an integer EVec index followed by gate labels.
         e.g. [ (0,'Gi') , (1,'Gi') , (0,'Gx','Gi','Gy') ]
 
-    rhoVecInds : tuple of integers, optional
-        Indices to prepend to fiducial strings to create rhoSpecs
+    rhoVecLbls : tuple of strs, optional
+        Labels to prepend to fiducial strings to create rhoSpecs
 
-    EVecInds : tuple of integers, optional
-        Indices to append to fiducial strings to create ESpecs
+    EVecLbls : tuple of strs, optional
+        Labels to append to fiducial strings to create ESpecs
 
     Returns
     -------
@@ -57,11 +57,11 @@ def build_spam_specs(fiducialGateStrings=None, rhoStrs=None, EStrs=None, rhoSpec
         if rhoStrs is not None or fiducialGateStrings is not None:
            raise ValueError("Can only specify one of rhoSpecs, rhoStrs, or fiducialGateStrings")
     elif rhoStrs is not None:
-        rhoSpecs = [ _ss.SpamSpec(iRho,f) for f in rhoStrs for iRho in rhoVecInds ]
+        rhoSpecs = [ _ss.SpamSpec(rhoLbl,f) for f in rhoStrs for rhoLbl in rhoVecLbls ]
         if fiducialGateStrings is not None:
            raise ValueError("Can only specify one of rhoSpecs, rhoStrs, or fiducialGateStrings")
     elif fiducialGateStrings is not None:
-        rhoSpecs = [ _ss.SpamSpec(iRho,f) for f in fiducialGateStrings for iRho in rhoVecInds ]
+        rhoSpecs = [ _ss.SpamSpec(rhoLbl,f) for f in fiducialGateStrings for rhoLbl in rhoVecLbls ]
     else:
         raise ValueError("Must specfiy one of rhoSpecs, rhoStrs, or fiducialGateStrings")
     
@@ -70,11 +70,11 @@ def build_spam_specs(fiducialGateStrings=None, rhoStrs=None, EStrs=None, rhoSpec
         if EStrs is not None or fiducialGateStrings is not None:
            raise ValueError("Can only specify one of ESpecs, EStrs, or fiducialGateStrings")
     elif EStrs is not None:
-        ESpecs = [ _ss.SpamSpec(iEvec,f) for f in EStrs for iEvec in EVecInds ]
+        ESpecs = [ _ss.SpamSpec(eLbl,f) for f in EStrs for eLbl in EVecLbls ]
         if fiducialGateStrings is not None:
            raise ValueError("Can only specify one of ESpecs, EStrs, or fiducialGateStrings")
     elif fiducialGateStrings is not None:
-        ESpecs = [ _ss.SpamSpec(iEvec,f) for f in fiducialGateStrings for iEvec in EVecInds ]
+        ESpecs = [ _ss.SpamSpec(eLbl,f) for f in fiducialGateStrings for eLbl in EVecLbls ]
     else:
         raise ValueError("Must specfiy one of ESpecs, EStrs, or fiducialGateStrings")
         

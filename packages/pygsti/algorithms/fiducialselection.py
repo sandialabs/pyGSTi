@@ -18,11 +18,11 @@ import sys as _sys
 #    return output
 
 def make_prep_mxs(gs,prepFidList):
-    dimRho = gs.rhoVecs[0].shape[0]
+    dimRho = gs.get_dimension()
     numRho = len(gs.rhoVecs)
     numFid = len(prepFidList)
     outputMatList = []
-    for rho in gs.rhoVecs:
+    for rho in gs.rhoVecs.values():
         outputMat = _np.zeros([dimRho,numFid],float)
         counter = 0
         for prepFid in prepFidList:
@@ -32,11 +32,11 @@ def make_prep_mxs(gs,prepFidList):
     return outputMatList
 
 def make_meas_mxs(gs,prepMeasList):
-    dimE = gs.EVecs[0].shape[0]
+    dimE = gs.get_dimension()
     numE = len(gs.EVecs)
     numFid = len(prepMeasList)
     outputMatList = []
-    for E in gs.EVecs:
+    for E in gs.EVecs.values():
         outputMat = _np.zeros([dimE,numFid],float)
         counter = 0
         for measFid in prepMeasList:
@@ -50,7 +50,7 @@ def make_meas_mxs(gs,prepMeasList):
 #    outputMat = _np.zeros([dimRho,numRho*numFid],float)
 #    counter = 0
 #    for prepFid in prepFidList:
-#        for rho in gs.rhoVecs:
+#        for rho in gs.rhoVecs.values():
 #            outputMat[:,counter] = _np.dot(gs.product(prepFid),rho).T[0]
 #            counter += 1
 #    return outputMat
@@ -58,13 +58,13 @@ def make_meas_mxs(gs,prepMeasList):
 #    return SqOutputMat
 
 # def make_meas_mxs(gs,measFidList):
-#     dimE = gs.EVecs[0].shape[0]
+#     dimE = gs.get_dimension()
 #     numE = len(gs.EVecs)
 #     numFid = len(measFidList)
 #     outputMat = _np.zeros([dimE,numE*numFid],float)
 #     counter = 0
 #     for measFid in measFidList:
-#         for E in gs.EVecs:
+#         for E in gs.EVecs.values():
 #             outputMat[:,counter] = _np.dot(E.T,gs.product(measFid))[0]
 #             counter += 1
 #     SqOutputMat = _np.dot(outputMat,outputMat.T)
@@ -169,7 +169,7 @@ def optimize_integer_fiducials_slack(gateset, fidList,
 #    nGerms = len(germsList)
     nFids = len(fidList)
 
-    dimRho = gateset.rhoVecs[0].shape[0]
+    dimRho = gateset.get_dimension()
 
     if verbosity > 0:
         print "Starting fiducial set optimization. Lower score is better."

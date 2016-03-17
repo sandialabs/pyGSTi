@@ -63,7 +63,7 @@ def _SuperOpForPerfectTwirl(wrt, eps):
     
 
 
-def twirled_deriv(gateset, gatestring, gates=True, G0=True, eps=1e-6):
+def twirled_deriv(gateset, gatestring, eps=1e-6):
     """ 
     Compute the "Twirled Derivative" of a gatestring, obtained
     by acting on the standard derivative of a gate string with
@@ -77,17 +77,6 @@ def twirled_deriv(gateset, gatestring, gates=True, G0=True, eps=1e-6):
     gatestring : GateString object
       The gate string to take a twirled derivative of.
 
-    gates : bool or list, optional
-      Whether/which gates should be included as gateset paramters.
-
-      - True = all gates
-      - False = no gates
-      - list of gate labels = those particular gates.
-
-    G0 : bool, optional
-      Whether the first row of the included gate matrices
-      should be included as gateset parameters.
-
     eps : float, optional
       Tolerance used for testing whether two eigenvectors
       are degenerate (i.e. abs(eval1 - eval2) < eps ? )
@@ -98,12 +87,12 @@ def twirled_deriv(gateset, gatestring, gates=True, G0=True, eps=1e-6):
       An array of shape (gate_dim^2, num_gateset_params) 
     """
     prod  = gateset.product(gatestring)
-    dProd = gateset.dproduct(gatestring, gates, G0, flat=True) # flattened_gate_dim x vec_gateset_dim
+    dProd = gateset.dproduct(gatestring, flat=True) # flattened_gate_dim x vec_gateset_dim
     twirler = _SuperOpForPerfectTwirl(prod, eps) # flattened_gate_dim x flattened_gate_dim
     return _np.dot( twirler, dProd ) # flattened_gate_dim x vec_gateset_dim
 
 
-def bulk_twirled_deriv(gateset, gatestrings, gates=True, G0=True, eps=1e-6, check=False):
+def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False):
     """ 
     Compute the "Twirled Derivative" of a gatestring, obtained
     by acting on the standard derivative of a gate string with
@@ -116,17 +105,6 @@ def bulk_twirled_deriv(gateset, gatestrings, gates=True, G0=True, eps=1e-6, chec
 
     gatestrings : list of GateString objects
       The gate string to take a twirled derivative of.
-
-    gates : bool or list, optional
-      Whether/which gates should be included as gateset paramters.
-
-      - True = all gates
-      - False = no gates
-      - list of gate labels = those particular gates.
-
-    G0 : bool, optional
-      Whether the first row of the included gate matrices
-      should be included as gateset parameters.
 
     eps : float, optional
       Tolerance used for testing whether two eigenvectors
@@ -142,7 +120,7 @@ def bulk_twirled_deriv(gateset, gatestrings, gates=True, G0=True, eps=1e-6, chec
       An array of shape (num_gate_strings, gate_dim^2, num_gateset_params) 
     """
     evalTree = gateset.bulk_evaltree(gatestrings)
-    dProds, prods = gateset.bulk_dproduct(evalTree, gates, G0, flat=True, bReturnProds=True, memLimit=None)
+    dProds, prods = gateset.bulk_dproduct(evalTree, flat=True, bReturnProds=True, memLimit=None)
     gate_dim = gateset.get_dimension()
     fd = gate_dim**2 # flattened gate dimension
     
@@ -153,7 +131,7 @@ def bulk_twirled_deriv(gateset, gatestrings, gates=True, G0=True, eps=1e-6, chec
 
     if check:
         for i in xrange(len(gatestrings)):
-            chk_ret = twirled_deriv(gateset, gatestrings[i], gates, G0, eps)
+            chk_ret = twirled_deriv(gateset, gatestrings[i], eps)
             if _nla.norm(ret[i] - chk_ret) > 1e-6:
                 _warnings.warn( "bulk twirled derive norm mismatch = %g - %g = %g" % \
                    (_nla.norm(ret[i]), _nla.norm(chk_ret), _nla.norm(ret[i] - chk_ret)) )
@@ -162,7 +140,7 @@ def bulk_twirled_deriv(gateset, gatestrings, gates=True, G0=True, eps=1e-6, chec
     
 
 
-def test_germ_list_finitel(gateset, germsToTest, L, gates=True, G0=True, weights=None, 
+def test_germ_list_finitel(gateset, germsToTest, L, weights=None, 
                          returnSpectrum=False, tol=1e-6):
     """
     Test whether a set of germs is able to amplify all of the gateset's non-gauge parameters.
@@ -178,18 +156,6 @@ def test_germ_list_finitel(gateset, germsToTest, L, gates=True, G0=True, weights
     L : int
         The finite length to use in amplification testing.  Larger
         values take longer to compute but give more robust results.
-
-    gates : bool or list, optional
-        Whether/which gates' parameters should be included as gateset
-        parameters *and* considered as part of the gateset space.
-
-      - True = all gates
-      - False = no gates
-      - list of gate labels = those particular gates.
-
-    G0 : bool, optional
-        Whether the first row of gate matrices should be included
-        as gateset parameters.
 
     weights : numpy array, optional
         A 1-D array of weights with length equal len(germsToTest), 
@@ -216,12 +182,19 @@ def test_germ_list_finitel(gateset, germsToTest, L, gates=True, G0=True, weights
         matrix used to determine parameter amplification.
     """
 
+    #Remove any SPAM vectors from gateset since we only want
+    # to consider the set of *gate* parameters for amplification
+    # and this makes sure our parameter counting is correct
+    gateset = gateset.copy()
+    for rhoLabel in gateset.rhoVecs.keys():  del gateset.rhoVecs[rhoLabel]
+    for eLabel in gateset.EVecs.keys():  del gateset.EVecs[eLabel]
+
     nGerms = len(germsToTest)
     germToPowL = [ germ*L for germ in germsToTest ]
 
     gate_dim = gateset.get_dimension()
     evt = gateset.bulk_evaltree(germToPowL)
-    dprods = gateset.bulk_dproduct(evt, gates, G0, flat=True) # nGerms*flattened_gate_dim x vec_gateset_dim
+    dprods = gateset.bulk_dproduct(evt, flat=True) # nGerms*flattened_gate_dim x vec_gateset_dim
     dprods = _np.reshape(dprods,(nGerms,gate_dim**2, dprods.shape[1])) # nGerms x flattened_gate_dim x vec_gateset_dim
 
     germLensSq = _np.array( [ float(len(s))**2 for s in germsToTest ], 'd' )
@@ -237,14 +210,14 @@ def test_germ_list_finitel(gateset, germsToTest, L, gates=True, G0=True, weights
     combinedDDD = _np.einsum('i,ijk', weights, 1.0 / L**2 * derivDaggerDeriv)
     sortedEigenvals = _np.sort(_np.real(_np.linalg.eigvalsh(combinedDDD)))
 
-    nGaugeParams = gateset.num_gauge_params(gates, G0, SPAM=False)
+    nGaugeParams = gateset.num_gauge_params()
     bSuccess = bool(sortedEigenvals[nGaugeParams] > tol)
     
     return (bSuccess,sortedEigenvals) if returnSpectrum else bSuccess
 
 
 
-def test_germ_list_infl(gateset, germsToTest, gates=True, G0=True, weights=None, 
+def test_germ_list_infl(gateset, germsToTest, weights=None, 
                            returnSpectrum=False, tol=1e-6, check=False):
     """
     Test whether a set of germs is able to amplify all of the gateset's non-gauge parameters.
@@ -256,18 +229,6 @@ def test_germ_list_infl(gateset, germsToTest, gates=True, G0=True, weights=None,
 
     germsToTest : list of GateStrings
         List of germs gate sequences to test for completeness.
-
-    gates : bool or list, optional
-        Whether/which gates' parameters should be included as gateset
-        parameters *and* considered as part of the gateset space.
-
-      - True = all gates
-      - False = no gates
-      - list of gate labels = those particular gates.
-
-    G0 : bool, optional
-        Whether the first row of gate matrices should be included
-        as gateset parameters.
 
     weights : numpy array, optional
         A 1-D array of weights with length equal len(germsToTest), 
@@ -301,7 +262,7 @@ def test_germ_list_infl(gateset, germsToTest, gates=True, G0=True, weights=None,
     """
 
     germLengths = _np.array( map(len,germsToTest), 'i')
-    twirledDeriv = bulk_twirled_deriv(gateset, germsToTest, gates, G0, tol, check) / germLengths[:,None,None]
+    twirledDeriv = bulk_twirled_deriv(gateset, germsToTest, tol, check) / germLengths[:,None,None]
     twirledDerivDaggerDeriv = _np.einsum('ijk,ijl->ikl', _np.conjugate(twirledDeriv), twirledDeriv) #is conjugate needed? -- all should be real
        #result[i] = _np.dot( twirledDeriv[i].H, twirledDeriv[i] ) i.e. matrix product
        #result[i,k,l] = sum_j twirledDerivH[i,k,j] * twirledDeriv(i,j,l)
@@ -314,15 +275,14 @@ def test_germ_list_infl(gateset, germsToTest, gates=True, G0=True, weights=None,
     combinedTDDD = _np.einsum('i,ijk',weights,twirledDerivDaggerDeriv)
     sortedEigenvals = _np.sort(_np.real(_np.linalg.eigvalsh(combinedTDDD)))
 
-    nGaugeParams = gateset.num_gauge_params(gates, G0, SPAM=False)
+    nGaugeParams = gateset.num_gauge_params()
     bSuccess = bool(sortedEigenvals[nGaugeParams] > tol)
     
     return (bSuccess,sortedEigenvals) if returnSpectrum else bSuccess
 
 
 def optimize_integer_germs_slack(gateset, germsList, initialWeights=None, 
-                                 gates=True, G0=True, maxIter=100, 
-                                 fixedSlack=False, slackFrac=False, 
+                                 maxIter=100, fixedSlack=False, slackFrac=False, 
                                  returnAll=False, tol=1e-6, check=False,
                                  verbosity=1):
     """
@@ -347,18 +307,6 @@ def optimize_integer_germs_slack(gateset, germsList, initialWeights=None,
         specifying which germs in germList comprise the initial
         germ set.  If None, then starting point includes all
         germs.
-
-    gates : bool or list, optional
-        Whether/which gates' parameters should be included as gateset
-        parameters *and* considered as part of the gateset space.
-
-      - True = all gates
-      - False = no gates
-      - list of gate labels = those particular gates.
-
-    G0 : bool, optional
-        Whether the first row of gate matrices should be included
-        as gateset parameters.
 
     maxIter : int, optional
         The maximum number of iterations before giving up.
@@ -407,7 +355,7 @@ def optimize_integer_germs_slack(gateset, germsList, initialWeights=None,
         raise ValueError("Either fixedSlack *or* slackFrac should be specified")
     lessWeightOnly = False  #Initially allow adding to weight. -- maybe make this an argument??
 
-    nGaugeParams = gateset.num_gauge_params(gates, G0, SPAM=False)
+    nGaugeParams = gateset.num_gauge_params()
     nGerms = len(germsList)
 
     if verbosity > 0:
@@ -423,7 +371,7 @@ def optimize_integer_germs_slack(gateset, germsList, initialWeights=None,
     # indexed by (iGerm, iGatesetParam1, iGatesetParam2)
     # size (nGerms, vec_gateset_dim, vec_gateset_dim)
     germLengths = _np.array( map(len,germsList), 'i')
-    twirledDeriv = bulk_twirled_deriv(gateset, germsList, gates, G0, tol, check) / germLengths[:,None,None]
+    twirledDeriv = bulk_twirled_deriv(gateset, germsList, tol, check) / germLengths[:,None,None]
     twirledDerivDaggerDeriv = _np.einsum('ijk,ijl->ikl', _np.conjugate(twirledDeriv), twirledDeriv)
     
     def compute_score(wts):

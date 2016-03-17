@@ -337,7 +337,7 @@ class Results(object):
             if self.objective == "logl":
                 cr = _generation.get_logl_confidence_region(
                     self.gsBestEstimate, self.dataset, confidenceLevel,
-                    self.constrainToTP, self.bestGateStringList,
+                    self.bestGateStringList,
                     self.additionalInfo['probClipInterval'],
                     self.additionalInfo['minProbClip'],
                     self.additionalInfo['radius'],
@@ -345,7 +345,7 @@ class Results(object):
             elif self.objective == "chi2":
                 cr = _generation.get_chi2_confidence_region(
                     self.gsBestEstimate, self.dataset, confidenceLevel,
-                    self.constrainToTP, self.bestGateStringList,
+                    self.bestGateStringList,
                     self.additionalInfo['probClipInterval'],
                     self.additionalInfo['minProbClipForWeighting'],
                     self.additionalInfo['hessianProjection'])
@@ -516,15 +516,13 @@ class Results(object):
             assert(self.LsAndGermInfoSet)
             return _generation.get_chi2_progress_table(
                 self.Ls, self.gatesets, self.gateStringLists, self.dataset,
-                self.constrainToTP, self.formatsToCompute, self.tableClass,
-                self.longTables)
+                self.formatsToCompute, self.tableClass, self.longTables)
 
         elif tableName == 'logLProgressTable':
             assert(self.LsAndGermInfoSet)
             return _generation.get_logl_progress_table(
                 self.Ls, self.gatesets, self.gateStringLists, self.dataset,
-                self.constrainToTP, self.formatsToCompute, self.tableClass,
-                self.longTables)        
+                self.formatsToCompute, self.tableClass, self.longTables)        
         else:
             raise ValueError("Invalid table name: %s" % tableName)
 
@@ -820,7 +818,8 @@ class Results(object):
 
             direct_specs = _ssc.build_spam_specs(
                 rhoStrs=self.rhoStrs, EStrs=self.EStrs,
-                EVecInds=self.gsTarget.get_evec_indices() )
+                rhoVecLbls=self.gsTarget.get_rhovec_labels(),
+                EVecLbls=self.gsTarget.get_evec_labels() )
             baseStrs = [] # (L,germ) base strings without duplicates
             for L in self.Ls:
                 for germ in self.germs:
@@ -837,7 +836,8 @@ class Results(object):
 
             direct_specs = _ssc.build_spam_specs(
                 rhoStrs=self.rhoStrs, EStrs=self.EStrs,
-                EVecInds=self.gsTarget.get_evec_indices() )
+                rhoVecLbls=self.gsTarget.get_rhovec_labels(),
+                EVecLbls=self.gsTarget.get_evec_labels() )
             baseStrs = [] # (L,germ) base strings without duplicates
             for L in self.Ls:
                 for germ in self.germs:

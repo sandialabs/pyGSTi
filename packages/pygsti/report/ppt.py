@@ -28,7 +28,7 @@ def ppt(x, brackets=False):
     string
         ppt string for x.
     """
-    if type(x) == _np.ndarray:
+    if isinstance(x,_np.ndarray):
         d = 0
         for l in x.shape:
             if l > 1: d += 1

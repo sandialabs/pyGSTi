@@ -23,5 +23,6 @@ germs = _strc.gatestring_list( [('Gx',), ('Gy',), ('Gi',), ('Gx', 'Gy'),
 #Construct a target gateset: Identity, X(pi/2), Y(pi/2)
 gs_target = _setc.build_gateset([2],[('Q0',)], ['Gi','Gx','Gy'], 
                                 [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                rhoExpressions=["0"], EExpressions=["1"], 
-                                spamLabelDict={'plus': (0,0), 'minus': (0,-1) } )
+                                 rhoLabelList=["rho0"], rhoExpressions=["0"],
+                                 ELabelList=["E0"], EExpressions=["1"], 
+                                 spamLabelDict={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )

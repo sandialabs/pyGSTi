@@ -33,17 +33,20 @@ class TestHessianMethods(HessianTestCase):
 
     def test_parameter_counting(self):
         #XY Gateset: SPAM=True
-        n = stdxy.gs_target.num_params(SPAM=True)
+        n = stdxy.gs_target.num_params()
         self.assertEqual(n,40) # 2*16 + 2*4 = 40
         
-        n = stdxy.gs_target.num_nongauge_params(SPAM=True)
+        n = stdxy.gs_target.num_nongauge_params()
         self.assertEqual(n,24) # full 16 gauge params: SPAM gate + 2 others
         
         #XY Gateset: SPAM=False
-        n = stdxy.gs_target.num_params(SPAM=False)
+        tst = stdxy.gs_target.copy()
+        del tst.rhoVecs['rho0']
+        del tst.EVecs['E0']
+        n = tst.num_params()
         self.assertEqual(n,32) # 2*16 = 32
         
-        n = stdxy.gs_target.num_nongauge_params(SPAM=False)
+        n = tst.num_nongauge_params()
         self.assertEqual(n,18) # gates are all unital & TP => only 14 gauge params (2 casimirs)
 
 
@@ -55,24 +58,32 @@ class TestHessianMethods(HessianTestCase):
         self.assertEqual(n,40) # full 16 gauge params: SPAM gate + 3 others
         
         #XYI Gateset: SPAM=False
-        n = stdxyi.gs_target.num_params(SPAM=False)
+        tst = stdxyi.gs_target.copy()
+        del tst.rhoVecs['rho0']
+        del tst.EVecs['E0']
+        n = tst.num_params()
         self.assertEqual(n,48) # 3*16 = 48
         
-        n = stdxyi.gs_target.num_nongauge_params(SPAM=False)
+        n = tst.num_nongauge_params()
         self.assertEqual(n,34) # gates are all unital & TP => only 14 gauge params (2 casimirs)
 
         #XYI Gateset: SP0=False
-        n = stdxyi.gs_target.num_params(SP0=False)
+        tst = stdxyi.gs_target.copy()
+        tst['rho0'] = pygsti.obj.TPParameterizedSPAMVec(tst['rho0'])
+        n = tst.num_params()
         self.assertEqual(n,55) # 3*16 + 4 + 3 = 55
         
-        n = stdxyi.gs_target.num_nongauge_params(SP0=False)
+        n = tst.num_nongauge_params()
         self.assertEqual(n,40) # 15 gauge params (minus one b/c can't change rho?)
 
         #XYI Gateset: G0=SP0=False
-        n = stdxyi.gs_target.num_params(G0=False, SP0=False)
+        tst['Gi'] = pygsti.obj.TPParameterizedGate(tst['Gi'])
+        tst['Gx'] = pygsti.obj.TPParameterizedGate(tst['Gx'])
+        tst['Gy'] = pygsti.obj.TPParameterizedGate(tst['Gy'])
+        n = tst.num_params()
         self.assertEqual(n,43) # 3*12 + 4 + 3 = 43
         
-        n = stdxyi.gs_target.num_nongauge_params(G0=False, SP0=False)
+        n = tst.num_nongauge_params()
         self.assertEqual(n,31) # full 12 gauge params of single 4x3 gate
         
         
@@ -120,7 +131,8 @@ class TestHessianMethods(HessianTestCase):
         ci_noproj = pygsti.obj.ConfidenceRegion(self.gateset, chi2Hessian, 95.0,
                                              hessianProjection="none")
         ci_opt = pygsti.obj.ConfidenceRegion(self.gateset, chi2Hessian, 95.0,
-                                             hessianProjection="optimal gate CIs")
+                                             hessianProjection="optimal gate CIs",
+                                             tol=0.1) #very low tol so doesn't take long
         
         with self.assertRaises(ValueError):
             pygsti.obj.ConfidenceRegion(self.gateset, chi2Hessian, 95.0,

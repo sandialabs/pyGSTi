@@ -69,16 +69,17 @@ class GateSetCalculator(object):
         self.dim = dim
         self.gates = gates
         self.rhovecs = rhovecs
+        self.evecs = evecs
         self.identityvec = identityvec
         self.spamLabels = spamLabels
-        self.assumeSumToOne = bool( (self._remainderLabel,self._remainderLabel) in spamLabels)
+        self.assumeSumToOne = bool( (self._remainderLabel,self._remainderLabel) in spamLabels.values())
           #Whether spamLabels contains the value ("remainder", "remainder"),
           #  which specifies a spam label that generates probabilities such that
           #  all SPAM label probabilities sum exactly to 1.0.
 
 
 
-    def _is_remainder_spamlabel(label):
+    def _is_remainder_spamlabel(self, label):
         """
         Returns whether or not the given SPAM label is the
         special "remainder" SPAM label which generates 
@@ -87,7 +88,7 @@ class GateSetCalculator(object):
         """
         return bool(self.spamLabels[label] == (self._remainderLabel, self._remainderLabel))
 
-    def _get_evec(elabel):
+    def _get_evec(self, elabel):
         """
         Get a POVM effect vector by label.
 
@@ -102,7 +103,7 @@ class GateSetCalculator(object):
             an effect vector of shape (dim, 1).
         """
         if elabel == self._remainderLabel:
-            return self.identityvec - sum(self.evecs)
+            return self.identityvec - sum(self.evecs.values())
         else:
             return self.evecs[elabel]
 
@@ -112,7 +113,7 @@ class GateSetCalculator(object):
             return None
 
         rho,E = self.rhovecs[rhoLabel], self._get_evec(eLabel)
-        return _np.kron(rho, _np.conjugate(_np.transpose(E)))
+        return _np.kron(_np.asarray(rho), _np.conjugate(_np.transpose(E)))
 
 
     def product(self, gatestring, bScale=False):
@@ -144,7 +145,7 @@ class GateSetCalculator(object):
         """
         if bScale:
             scaledGatesAndExps = {}; 
-            for (gateLabel,gatemx) in self.gates:
+            for (gateLabel,gatemx) in self.gates.iteritems():
                 ng = max(_nla.norm(gatemx),1.0)
                 scaledGatesAndExps[gateLabel] = (gatemx / ng, _np.log(ng))
 
@@ -169,7 +170,7 @@ class GateSetCalculator(object):
         else:
             G = _np.identity( self.dim )
             for lGate in gatestring:
-                G = _np.dot(self.gates[lGate],G)  # product of gates
+                G = _np.dot(_np.asarray(self.gates[lGate]),G) #product of gates
                 #OLD: G = _np.dot(G,self[lGate]) LEXICOGRAPHICAL VS MATRIX ORDER
             return G
 
@@ -240,12 +241,14 @@ class GateSetCalculator(object):
         leftProds = [ ]
         G = _np.identity( dim ); leftProds.append(G)
         for gateLabel in revGateLabelList:
-            G = _np.dot(G,self.gates[gateLabel]); leftProds.append(G)
+            G = _np.dot(G,_np.asarray(self.gates[gateLabel]))
+            leftProds.append(G)
 
         rightProdsT = [ ]
         G = _np.identity( dim ); rightProdsT.append( _np.transpose(G) )
         for gateLabel in reversed(revGateLabelList):
-            G = _np.dot(self.gates[gateLabel],G); rightProdsT.append( _np.transpose(G) )
+            G = _np.dot(_np.asarray(self.gates[gateLabel]),G)
+            rightProdsT.append( _np.transpose(G) )
 
         # Initialize storage
         dprod_dgateLabel = { }; dgate_dgateLabel = {}
@@ -338,14 +341,14 @@ class GateSetCalculator(object):
             prods[ (i,i-1) ] = ident #product of no gates
             G = ident
             for (j,gateLabel2) in enumerate(revGateLabelList[i:],start=i): #loop over "ending" gate (>= starting gate)
-                G = _np.dot(G,self.gates[gateLabel2])
+                G = _np.dot(G,_np.asarray(self.gates[gateLabel2]))
                 prods[ (i,j) ] = G
         prods[ (len(revGateLabelList),len(revGateLabelList)-1) ] = ident #product of no gates
 
         # Initialize storage
         dgate_dgateLabel = {}; nParams = {}
         for gateLabel in set(gatesToVectorize1).union(gatesToVectorize2):
-            dgate_dgateLabel[gateLabel] = self.gates[gateLabel].deriv_wrt_params(bG0) # (dim**2, nParams[gateLabel])
+            dgate_dgateLabel[gateLabel] = self.gates[gateLabel].deriv_wrt_params() # (dim**2, nParams[gateLabel])
             nParams[gateLabel] = dgate_dgateLabel[gateLabel].shape[1]
 
         d2prod_dgateLabels = { }; 
@@ -425,9 +428,9 @@ class GateSetCalculator(object):
 
         if self._is_remainder_spamlabel(spamLabel):
             #then compute 1.0 - (all other spam label probabilities)
-            otherSpamLabels = spamLabels.copy(); del otherSpamLabels[ otherSpamLabels.index(spamLabel) ]
+            otherSpamLabels = self.spamLabels.keys()[:]; del otherSpamLabels[ otherSpamLabels.index(spamLabel) ]
             assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamLabels]) )
-            return 1.0 - sum( [self.pr(gatestring, clipTo, bUseScaling) for sl in otherSpamLabels] )
+            return 1.0 - sum( [self.pr(sl, gatestring, clipTo, bUseScaling) for sl in otherSpamLabels] )
 
         (rholabel,elabel) = self.spamLabels[spamLabel]
         rho = self.rhovecs[rholabel]
@@ -436,7 +439,7 @@ class GateSetCalculator(object):
         if bUseScaling:
             old_err = _np.seterr(over='ignore')
             G,scale = self.product(gatestring, True)
-            p = _np.dot(E, _np.dot(G, rho)) * scale # probability, with scaling applied (may generate overflow, but OK)
+            p = float(_np.dot(E, _np.dot(G, rho)) * scale) # probability, with scaling applied (may generate overflow, but OK)
 
             #DEBUG: catch warnings to make sure correct (inf if value is large) evaluation occurs when there's a warning
             #bPrint = False
@@ -450,7 +453,7 @@ class GateSetCalculator(object):
 
         else: #no scaling -- faster but susceptible to overflow
             G = self.product(gatestring, False)
-            p = _np.dot(E, _np.dot(G, rho) )
+            p = float(_np.dot(E, _np.dot(G, rho) ))
 
         if _np.isnan(p): 
             if len(gatestring) < 10:
@@ -506,7 +509,7 @@ class GateSetCalculator(object):
 
         if self._is_remainder_spamlabel(spamLabel):
             #then compute Deriv[ 1.0 - (all other spam label probabilities) ]
-            otherSpamLabels = self.get_spam_labels(); del otherSpamLabels[ otherSpamLabels.index(spamLabel) ]
+            otherSpamLabels = self.spamLabels.keys()[:]; del otherSpamLabels[ otherSpamLabels.index(spamLabel) ]
             assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamLabels]) )
             otherResults = [self.dpr(sl, gatestring, returnPr, clipTo) for sl in otherSpamLabels]
             if returnPr: 
@@ -608,7 +611,7 @@ class GateSetCalculator(object):
 
         if self._is_remainder_spamlabel(spamLabel):
             #then compute Hessian[ 1.0 - (all other spam label probabilities) ]
-            otherSpamLabels = self.get_spam_labels(); del otherSpamLabels[ otherSpamLabels.index(spamLabel) ]
+            otherSpamLabels = self.spamLabels.keys()[:]; del otherSpamLabels[ otherSpamLabels.index(spamLabel) ]
             assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamLabels]) )
             otherResults = [self.hpr(sl, gatestring, returnPr, returnDeriv, clipTo) for sl in otherSpamLabels]
             if returnDeriv: 
@@ -960,7 +963,7 @@ class GateSetCalculator(object):
             if gateLabel == "": #special case of empty label == no gate
                 prodCache[i] = _np.identity( dim )
             else:
-                gate = self.gates[gateLabel].asarray()
+                gate = _np.asarray(self.gates[gateLabel])
                 nG = max(_nla.norm(gate), 1.0)
                 prodCache[i] = gate / nG
                 scaleCache[i] = _np.log(nG)
@@ -1105,7 +1108,7 @@ class GateSetCalculator(object):
             else:
                 dgate = self.dproduct( (gateLabel,) )
                 nG = max(_nla.norm(self.gates[gateLabel]),1.0)
-                prodCache[i]  = self.gates[gateLabel].asarray() / nG
+                prodCache[i]  = _np.asarray(self.gates[gateLabel]) / nG
                 scaleCache[i] = _np.log(nG)
                 dProdCache[i] = dgate / nG 
                 
@@ -1303,7 +1306,7 @@ class GateSetCalculator(object):
                 hgate = self.hproduct( (gateLabel,) )
                 dgate = self.dproduct( (gateLabel,) )
                 nG = max(_nla.norm(self.gates[gateLabel]),1.0)
-                prodCache[i]  = self.gates[gateLabel].asarray() / nG
+                prodCache[i]  = _np.asarray(self.gates[gateLabel]) / nG
                 scaleCache[i] = _np.log(nG)
                 dProdCache[i] = dgate / nG 
                 hProdCache[i] = hgate / nG 
@@ -1543,7 +1546,7 @@ class GateSetCalculator(object):
 
         if self._is_remainder_spamlabel(spamLabel):
             #then compute Deriv[ 1.0 - (all other spam label probabilities) ]
-            otherSpamLabels = self.get_spam_labels(); del otherSpamLabels[ otherSpamLabels.index(spamLabel) ]
+            otherSpamLabels = self.spamLabels.keys()[:]; del otherSpamLabels[ otherSpamLabels.index(spamLabel) ]
             assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamLabels]) )
             otherResults = [self.bulk_dpr(sl, evalTree, returnPr, clipTo) for sl in otherSpamLabels]
             if returnPr:
@@ -1724,7 +1727,7 @@ class GateSetCalculator(object):
 
         if self._is_remainder_spamlabel(spamLabel):
             #then compute Hessian[ 1.0 - (all other spam label probabilities) ]
-            otherSpamLabels = self.get_spam_labels(); del otherSpamLabels[ otherSpamLabels.index(spamLabel) ]
+            otherSpamLabels = self.spamLabels.keys()[:]; del otherSpamLabels[ otherSpamLabels.index(spamLabel) ]
             assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamLabels]) )
             otherResults = [self.bulk_hpr(sl, evalTree, returnPr, returnDeriv, clipTo) for sl in otherSpamLabels]
             if returnDeriv: 
@@ -1824,6 +1827,7 @@ class GateSetCalculator(object):
             # d2pr_drhos[i,j,J0+J] = sum_kl E[0,k] dGs[i,j,k,l] drhoP[l,J]
             # d2pr_drhos[i,j,J0+J] = dot(E, dGs, drhoP)[0,i,j,J]
             # d2pr_drhos[:,:,J0+J] = squeeze(dot(E, dGs, drhoP),axis=(0,))[:,:,J]            
+            rhoIndex = self.rhovecs.keys().index(rholabel)
             d2pr_drhos = _np.zeros( (sub_nGateStrings, vec_gs_size, sum(num_rho_params)) )
             d2pr_drhos[:, :, rho_offset[rhoIndex]:rho_offset[rhoIndex+1]] = \
                 _np.squeeze( _np.dot(_np.dot(E,dGs),rho.deriv_wrt_params()), axis=(0,)) \
@@ -1859,11 +1863,11 @@ class GateSetCalculator(object):
             if elabel == self._remainderLabel:
                 for ei,evec in enumerate(self.evecs.values()):
                     d2pr_dErhos[:, e_offset[ei]:e_offset[ei+1], rho_offset[rhoIndex]:rho_offset[rhoIndex+1]] = \
-                        -1.0 * _np.dot(_np.transpose(evec.deriv_wrt_params()), dp_dAnyE )
+                        -1.0 * _np.swapaxes( _np.dot(_np.transpose(evec.deriv_wrt_params()), dp_dAnyE ), 0,1)
             else:
                 eIndex = self.evecs.keys().index(elabel)
                 d2pr_dErhos[:, e_offset[eIndex]:e_offset[eIndex+1], rho_offset[rhoIndex]:rho_offset[rhoIndex+1]] = \
-                    _np.dot(_np.transpose(self.evecs[elabel].deriv_wrt_params()), dp_dAnyE )
+                    _np.swapaxes( _np.dot(_np.transpose(self.evecs[elabel].deriv_wrt_params()), dp_dAnyE ), 0,1)
     
             d2pr_d2rhos = _np.zeros( (sub_nGateStrings, sum(num_rho_params), sum(num_rho_params)) )
             d2pr_d2Es   = _np.zeros( (sub_nGateStrings, sum(num_e_params), sum(num_e_params)) )
@@ -1899,7 +1903,7 @@ class GateSetCalculator(object):
             if returnPr and _nla.norm(vp - check_vp) > 1e-6:
                 _warnings.warn("norm(vp-check_vp) = %g - %g = %g" % (_nla.norm(vp), _nla.norm(check_vp), _nla.norm(vp - check_vp)))
                 #for i,gs in enumerate(gatestring_list):
-                #    if abs(vp[i] - check_vp[i]) > 1e-6: 
+                #    if abs(vp[i] - check_vp[i]) > 1e-7: 
                 #        print "   %s => p=%g, check_p=%g, diff=%g" % (str(gs),vp[i],check_vp[i],abs(vp[i]-check_vp[i]))
             if returnDeriv and _nla.norm(vdp - check_vdp) > 1e-6:
                 _warnings.warn("norm(vdp-check_vdp) = %g - %g = %g" % (_nla.norm(vdp), _nla.norm(check_vdp), _nla.norm(vdp - check_vdp)))
@@ -2456,7 +2460,7 @@ class GateSetCalculator(object):
 
             for (lbl,rhoV) in self.rhovecs.iteritems(): 
                 d += spamWeight * _gt.frobeniusdist2(_np.dot(Ti,rhoV),
-                                                     otherCalc.rhoVecs[lbl])
+                                                     otherCalc.rhovecs[lbl])
                 nSummands += spamWeight * _np.size(rhoV)
 
             for (lbl,Evec) in self.evecs.iteritems():
@@ -2473,7 +2477,7 @@ class GateSetCalculator(object):
             for gateLabel in self.gates:
                 d += gateWeight * _gt.frobeniusdist2(self.gates[gateLabel],
                                                      otherCalc.gates[gateLabel])
-                nSummands += gateWeight * _np.size(self[gateLabel])
+                nSummands += gateWeight * _np.size(self.gates[gateLabel])
 
             for (lbl,rhoV) in self.rhovecs.iteritems(): 
                 d += spamWeight * _gt.frobeniusdist2(rhoV,
@@ -2525,17 +2529,17 @@ class GateSetCalculator(object):
                                       T)), otherCalc.gates[gateLabel] ) 
                        for gateLabel in self.gates ]
 
-            for spamLabel in self.spamLabels.values():
+            for spamLabel in self.spamLabels:
                 spamGate = self._make_spamgate(spamLabel)
                 spamGate2 = otherCalc._make_spamgate(spamLabel)
                 if spamGate is not None and spamGate2 is not None:
                     dists.append( _gt.jtracedist( _np.dot(Ti,
                                   _np.dot(spamGate,T)), spamGate2 ) )
         else:
-            dists = [ _gt.jtracedist(self[gateLabel], otherGateSet[gateLabel])
+            dists = [ _gt.jtracedist(self.gates[gateLabel], otherCalc.gates[gateLabel])
                       for gateLabel in self.gates ]
 
-            for spamLabel in self.spamLabels.values():
+            for spamLabel in self.spamLabels:
                 spamGate = self._make_spamgate(spamLabel)
                 spamGate2 = otherCalc._make_spamgate(spamLabel)
                 if spamGate is not None and spamGate2 is not None:
@@ -2544,7 +2548,7 @@ class GateSetCalculator(object):
         return max(dists)
 
 
-    def diamonddist(self, otherGateSet, transformMx=None):
+    def diamonddist(self, otherCalc, transformMx=None):
         """
         Compute the diamond-norm distance between two
         gatesets, defined as the maximum
@@ -2572,10 +2576,10 @@ class GateSetCalculator(object):
             Ti = _nla.inv(T)
             dists = [ _gt.diamonddist( 
                     _np.dot(Ti,_np.dot(self.gates[gateLabel],T)),
-                    otherGateSet.gates[gateLabel] )
+                    otherCalc.gates[gateLabel] )
                       for gateLabel in self.gates ]
 
-            for spamLabel in self.spamLabels.values():
+            for spamLabel in self.spamLabels:
                 spamGate = self._make_spamgate(spamLabel)
                 spamGate2 = otherCalc._make_spamgate(spamLabel)
                 if spamGate is not None and spamGate2 is not None:
@@ -2583,10 +2587,10 @@ class GateSetCalculator(object):
                             _np.dot(Ti,_np.dot(spamGate,T)),spamGate2 ) )
         else:
             dists = [ _gt.diamonddist(self.gates[gateLabel],
-                                      otherGateSet[gateLabel])
-                      for gateLabel in self ]
+                                      otherCalc.gates[gateLabel])
+                      for gateLabel in self.gates ]
 
-            for spamLabel in self.spamLabels.values():
+            for spamLabel in self.spamLabels:
                 spamGate = self._make_spamgate(spamLabel)
                 spamGate2 = otherCalc._make_spamgate(spamLabel)
                 if spamGate is not None and spamGate2 is not None:

@@ -13,13 +13,13 @@ class JamiolkowskiTestCase(unittest.TestCase):
                                             
         #Build a test gate   -- old # X(pi,Qhappy)*LX(pi,0,2)
         self.testGate = pygsti.construction.build_gate( self.stateSpaceDims, self.stateSpaceLabels, "LX(pi,0,2)","std") 
-        self.testGateGM_mx = pygsti.std_to_gm(self.testGate.matrix, self.stateSpaceDims)
-        self.expTestGate_mx = pygsti.expand_from_std_direct_sum_mx(self.testGate.matrix, self.stateSpaceDims)
+        self.testGateGM_mx = pygsti.std_to_gm(self.testGate, self.stateSpaceDims)
+        self.expTestGate_mx = pygsti.expand_from_std_direct_sum_mx(self.testGate, self.stateSpaceDims)
         self.expTestGateGM_mx = pygsti.std_to_gm(self.expTestGate_mx)
 
     def checkBasis(self, cmb):
         #Op with Jamio map on gate in std and gm bases
-        Jmx1 = pygsti.jamiolkowski_iso(self.testGate.matrix, gateMxBasis='std',
+        Jmx1 = pygsti.jamiolkowski_iso(self.testGate, gateMxBasis='std',
                                        choiMxBasis=cmb, dimOrStateSpaceDims=self.stateSpaceDims)
         Jmx2 = pygsti.jamiolkowski_iso(self.testGateGM_mx, gateMxBasis='gm',
                                        choiMxBasis=cmb, dimOrStateSpaceDims=self.stateSpaceDims)
@@ -46,7 +46,7 @@ class JamiolkowskiTestCase(unittest.TestCase):
         revExpTestGate_mx = pygsti.jamiolkowski_iso_inv(Jmx1,choiMxBasis=cmb,
                                                                       gateMxBasis='std')
         self.assertArraysAlmostEqual( pygsti.contract_to_std_direct_sum_mx(revExpTestGate_mx,self.stateSpaceDims),
-                                      self.testGate.matrix)
+                                      self.testGate)
 
 
     def assertArraysAlmostEqual(self,a,b):

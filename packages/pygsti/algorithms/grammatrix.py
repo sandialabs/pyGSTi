@@ -106,13 +106,15 @@ def max_gram_rank_and_evals(dataset, maxBasisStringLength=10,
     if spamDict is None:
         if targetGateset is not None: 
             spamDict = targetGateset.get_spam_label_dict()
+            rhoLabels = targetGateset.rhoVecs.keys()
+            eLabels = targetGateset.EVecs.keys() # 'remainder' should *not* be an eLabel here
         else:
             firstSpamLabel = dataset.get_spam_labels()[0]
-            spamDict = {(0,0): firstSpamLabel}
-    rhoInds = sorted(_tools.remove_duplicates( [rhoInd for (rhoInd,EInd) in spamDict] ))
-    EInds = sorted(_tools.remove_duplicates( [EInd for (rhoInd,EInd) in spamDict] ))
-    if -1 in EInds:  del EInds[EInds.index(-1)]  #remove "-1" as an Evec-index
+            spamDict = {('dummy_rho','dummy_E'): firstSpamLabel} 
+            rhoLabels = ['dummy_rho']; eLabels = ['dummy_E']
+            # Note: it doesn't actually matter what strings we use here
     
-    specs = _construction.build_spam_specs(rhoStrs=maxRhoStrs, EStrs=maxEStrs, rhoVecInds=rhoInds, EVecInds=EInds) 
+    specs = _construction.build_spam_specs(rhoStrs=maxRhoStrs, EStrs=maxEStrs,
+                                           rhoVecLbls=rhoLabels, EVecLbls=eLabels) 
     return _gramRankAndEvals(dataset, specs, targetGateset, spamDict)
 

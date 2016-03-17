@@ -329,7 +329,7 @@ def small_eigval_err_rate(sigma, dataset, directGSTgatesets):
     """
     if sigma is None: return _np.nan # in plot processing, "None" gatestrings = no plot output = nan values
     gs_direct = directGSTgatesets[sigma]
-    minEigval = min(abs(_np.linalg.eigvals( gs_direct["sigmaLbl"] )))
+    minEigval = min(abs(_np.linalg.eigvals( gs_direct["GsigmaLbl"] )))
     return 1.0 - minEigval**(1.0/max(len(sigma),1)) # (approximate) per-gate error rate; max averts divide by zero error
 
 
@@ -1497,18 +1497,18 @@ def gateset_with_lgst_gatestring_estimates( gateStringsToEstimate, dataset, spec
             gateLabels.append(gateLabel)
     else:
         for gateStr in gateStringsToEstimate:
-            aliases[tuple(gateStr)] = tuple(gateStr) #use gatestring tuple as label
-            gateLabels.append(tuple(gateStr))
+            newLabel = 'G'+'.'.join(tuple(gateStr))
+            aliases[newLabel] = tuple(gateStr) #use gatestring tuple as label
+            gateLabels.append(newLabel)
             
     #Add target gateset labels (not aliased) if requested
     if includeTargetGates and targetGateset is not None:
-        for targetGateLabel in targetGateset:
+        for targetGateLabel in targetGateset.gates:
             if targetGateLabel not in gateLabels: #very unlikely that this is false
                 gateLabels.append(targetGateLabel)
         
     return _alg.do_lgst( dataset, specs, targetGateset, gateLabels, aliases,
-                        spamDict, guessGatesetForGauge, svdTruncateTo, None,
-                        verbosity )
+               spamDict, guessGatesetForGauge, svdTruncateTo, None, verbosity )
 
 def direct_lgst_gateset( gateStringToEstimate, gateStringLabel, dataset, 
                        specs, targetGateset, svdTruncateTo=0, verbosity=0 ):
@@ -1582,14 +1582,14 @@ def direct_lgst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncate
     dict
         A dictionary that relates each gate string of gateStrings to a
         GateSet containing the LGST estimate of that gate string stored under 
-        the gate label "sigmaLbl", along with LGST estimates of the gates in
+        the gate label "GsigmaLbl", along with LGST estimates of the gates in
         targetGateset.
     """    
     directLGSTgatesets = {}
     if verbosity > 0: print "--- Direct LGST precomputation ---"
     for i,sigma in enumerate(gateStrings):
         if verbosity > 0: print "--- Computing gateset for string %d of %d ---" % (i,len(gateStrings))
-        directLGSTgatesets[sigma] = direct_lgst_gateset( sigma, "sigmaLbl", dataset, specs, targetGateset,
+        directLGSTgatesets[sigma] = direct_lgst_gateset( sigma, "GsigmaLbl", dataset, specs, targetGateset,
                                                         svdTruncateTo, verbosity)
     return directLGSTgatesets
 
@@ -1659,7 +1659,7 @@ def direct_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs
 
     # LEXICOGRAPHICAL VS MATRIX ORDER
     gatestrings = rhoStrs + EStrs + [ rhoStr + EStr for rhoStr in rhoStrs for EStr in EStrs ]
-    for gateLabel in direct_lgst:
+    for gateLabel in direct_lgst.gates:
         gatestrings.extend( [ rhoStr + _objs.GateString( (gateLabel,), bCheck=False) + EStr 
                               for rhoStr in rhoStrs for EStr in EStrs ] )
 
@@ -1713,14 +1713,14 @@ def direct_mc2gst_gatesets(gateStrings, dataset, specs, targetGateset, svdTrunca
     dict
         A dictionary that relates each gate string of gateStrings to a
         GateSet containing the LSGST estimate of that gate string stored under 
-        the gate label "sigmaLbl", along with LSGST estimates of the gates in
+        the gate label "GsigmaLbl", along with LSGST estimates of the gates in
         targetGateset.
     """    
     directLSGSTgatesets = {}
     if verbosity > 0: print "--- Direct LSGST precomputation ---"
     for i,sigma in enumerate(gateStrings):
         if verbosity > 0: print "--- Computing gateset for string %d of %d ---" % (i,len(gateStrings))
-        directLSGSTgatesets[sigma] = direct_mc2gst_gateset( sigma, "sigmaLbl", dataset, specs, targetGateset,
+        directLSGSTgatesets[sigma] = direct_mc2gst_gateset( sigma, "GsigmaLbl", dataset, specs, targetGateset,
                                                         svdTruncateTo, minProbClipForWeighting,
                                                         probClipInterval, verbosity)
     return directLSGSTgatesets
@@ -1790,7 +1790,7 @@ def direct_mlgst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs,
 
     # LEXICOGRAPHICAL VS MATRIX ORDER
     gatestrings = rhoStrs + EStrs + [ rhoStr + EStr for rhoStr in rhoStrs for EStr in EStrs ]
-    for gateLabel in direct_lgst:
+    for gateLabel in direct_lgst.gates:
         gatestrings.extend( [ rhoStr + _objs.GateString( (gateLabel,), bCheck=False) + EStr 
                               for rhoStr in rhoStrs for EStr in EStrs ] )
 
@@ -1842,14 +1842,14 @@ def direct_mlgst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncat
     dict
         A dictionary that relates each gate string of gateStrings to a
         GateSet containing the MLEGST estimate of that gate string stored under 
-        the gate label "sigmaLbl", along with MLEGST estimates of the gates in
+        the gate label "GsigmaLbl", along with MLEGST estimates of the gates in
         targetGateset.
     """    
     directMLEGSTgatesets = {}
     if verbosity > 0: print "--- Direct MLEGST precomputation ---"
     for i,sigma in enumerate(gateStrings):
         if verbosity > 0: print "--- Computing gateset for string %d of %d ---" % (i,len(gateStrings))
-        directMLEGSTgatesets[sigma] = direct_mlgst_gateset( sigma, "sigmaLbl", dataset, specs, targetGateset,
+        directMLEGSTgatesets[sigma] = direct_mlgst_gateset( sigma, "GsigmaLbl", dataset, specs, targetGateset,
                                                         svdTruncateTo, minProbClip, probClipInterval, verbosity)
     return directMLEGSTgatesets
 
@@ -1906,9 +1906,8 @@ def focused_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, spec
         minProbClipForWeighting=minProbClipForWeighting,
         probClipInterval=probClipInterval, verbosity=verbosity)
 
-    focused_lsgst.set_gate(
-        gateStringLabel, _objs.FullyParameterizedGate(
-            focused_lsgst.product(gateStringToEstimate))) #add desired string as a separate labeled gate
+    focused_lsgst.gates[gateStringLabel] = _objs.FullyParameterizedGate(
+            focused_lsgst.product(gateStringToEstimate)) #add desired string as a separate labeled gate
     return focused_lsgst
 
 
@@ -1948,13 +1947,13 @@ def focused_mc2gst_gatesets(gateStrings, dataset, specs, startGateset,
     dict
         A dictionary that relates each gate string of gateStrings to a
         GateSet containing the LSGST estimate of that gate string stored under 
-        the gate label "sigmaLbl".
+        the gate label "GsigmaLbl".
     """    
     focusedLSGSTgatesets = {}
     if verbosity > 0: print "--- Focused LSGST precomputation ---"
     for i,sigma in enumerate(gateStrings):
         if verbosity > 0: print "--- Computing gateset for string %d of %d ---" % (i,len(gateStrings))
-        focusedLSGSTgatesets[sigma] = focused_mc2gst_gateset( sigma, "sigmaLbl", dataset, specs, startGateset,
+        focusedLSGSTgatesets[sigma] = focused_mc2gst_gateset( sigma, "GsigmaLbl", dataset, specs, startGateset,
                                                            minProbClipForWeighting, probClipInterval, verbosity)
     return focusedLSGSTgatesets
 
@@ -1968,7 +1967,7 @@ def direct_chi2_matrix( sigma, dataset, directGateset, strs,
     Similar to chi2_matrix, except the probabilities used to compute
     chi^2 values come from using the "composite gate" of directGatesets[sigma],
     a GateSet assumed to contain some estimate of sigma stored under the
-    gate label "sigmaLbl".
+    gate label "GsigmaLbl".
 
     Parameters
     ----------
@@ -1980,7 +1979,7 @@ def direct_chi2_matrix( sigma, dataset, directGateset, strs,
 
     directGateset : GateSet
         GateSet which contains an estimate of sigma stored
-        under the gate label "sigmaLbl".
+        under the gate label "GsigmaLbl".
 
     strs : 2-tuple
         A (rhoStrs,EStrs) tuple usually generated by calling get_spam_strs(...)
@@ -2003,7 +2002,7 @@ def direct_chi2_matrix( sigma, dataset, directGateset, strs,
     cntMx  = total_count_matrix(  sigma, dataset, strs, rhoEPairs)
     gs_direct = directGateset
     for sl in gs_direct.get_spam_labels():
-        probMx = probability_matrix( _objs.GateString( ("sigmaLbl",) ), gs_direct, sl, strs, rhoEPairs)
+        probMx = probability_matrix( _objs.GateString( ("GsigmaLbl",) ), gs_direct, sl, strs, rhoEPairs)
         freqMx = frequency_matrix( sigma, dataset, sl, strs, rhoEPairs)
         chiSqMx += _tools.chi2fn( cntMx, probMx, freqMx,
                                      minProbClipForWeighting)
@@ -2035,7 +2034,7 @@ def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
     directGatesets : dict
         Dictionary with keys == gate strings and values == GateSets.  
         directGatesets[sigma] must be a GateSet which contains an estimate
-        of sigma stored under the gate label "sigmaLbl".
+        of sigma stored under the gate label "GsigmaLbl".
 
     strs : 2-tuple
         A (rhoStrs,EStrs) tuple usually generated by calling get_spam_strs(...)
@@ -2143,7 +2142,7 @@ def zoomed_direct_chi2_boxplot(xvals, yvals, xy_gatestring_dict, dataset, direct
     directGatesets : dict
         Dictionary with keys == gate strings and values == GateSets.  
         directGatesets[sigma] must be a GateSet which contains an estimate
-        of sigma stored under the gate label "sigmaLbl".
+        of sigma stored under the gate label "GsigmaLbl".
 
     strs : 2-tuple
         A (rhoStrs,EStrs) tuple usually generated by calling get_spam_strs(...)
@@ -2195,7 +2194,7 @@ def direct_logl_matrix( sigma, dataset, directGateset, strs,
     Similar to logl_matrix, except the probabilities used to compute
     LogL values come from using the "composite gate" of directGatesets[sigma],
     a GateSet assumed to contain some estimate of sigma stored under the
-    gate label "sigmaLbl".
+    gate label "GsigmaLbl".
 
     Parameters
     ----------
@@ -2207,7 +2206,7 @@ def direct_logl_matrix( sigma, dataset, directGateset, strs,
 
     directGateset : GateSet
         GateSet which contains an estimate of sigma stored
-        under the gate label "sigmaLbl".
+        under the gate label "GsigmaLbl".
 
     strs : 2-tuple
         A (rhoStrs,EStrs) tuple usually generated by calling get_spam_strs(...)
@@ -2230,7 +2229,7 @@ def direct_logl_matrix( sigma, dataset, directGateset, strs,
     cntMx  = total_count_matrix(  sigma, dataset, strs, rhoEPairs)
     gs_direct = directGateset
     for sl in gs_direct.get_spam_labels():
-        probMx = probability_matrix( _objs.GateString( ("sigmaLbl",) ),
+        probMx = probability_matrix( _objs.GateString( ("GsigmaLbl",) ),
                                     gs_direct, sl, strs, rhoEPairs)
         freqMx = frequency_matrix( sigma, dataset, sl, strs, rhoEPairs)
         logLMx += _tools.two_delta_loglfn( cntMx, probMx, freqMx, minProbClip)
@@ -2263,7 +2262,7 @@ def direct_logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
     directGatesets : dict
         Dictionary with keys == gate strings and values == GateSets.  
         directGatesets[sigma] must be a GateSet which contains an estimate
-        of sigma stored under the gate label "sigmaLbl".
+        of sigma stored under the gate label "GsigmaLbl".
 
     strs : 2-tuple
         A (rhoStrs,EStrs) tuple usually generated by calling get_spam_strs(...)
@@ -2382,7 +2381,7 @@ def direct2x_comp_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGate
     directGatesets : dict
         Dictionary with keys == gate strings and values == GateSets.  
         directGatesets[sigma] must be a GateSet which contains an estimate
-        of sigma stored under the gate label "sigmaLbl".
+        of sigma stored under the gate label "GsigmaLbl".
 
     strs : 2-tuple
         A (rhoStrs,EStrs) tuple usually generated by calling get_spam_strs(...)
@@ -2457,12 +2456,12 @@ def direct2x_comp_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGate
     def mx_fn(gateStr):
         chiSqMx = _np.zeros( (len(strs[1]),len(strs[0])), 'd')
         if gateStr is None: return _np.nan*chiSqMx
-        gs_direct = directGatesets[ gateStr ] #contains "sigmaLbl" gate <=> gateStr
+        gs_direct = directGatesets[ gateStr ] #contains "GsigmaLbl" gate <=> gateStr
         try:
         #if gateStr*2 in directGatesets: 
             cntMx  = total_count_matrix(  gateStr*2, dataset, strs)
             for sl in gs_direct.get_spam_labels():
-                probMx = probability_matrix( _objs.GateString( ("sigmaLbl","sigmaLbl") ), gs_direct, sl, strs)
+                probMx = probability_matrix( _objs.GateString( ("GsigmaLbl","GsigmaLbl") ), gs_direct, sl, strs)
                 freqMx = frequency_matrix( gateStr*2, dataset, sl, strs)
                 chiSqMx += _tools.chi2fn( cntMx, probMx, freqMx, minProbClipForWeighting)
         #else:
@@ -2523,7 +2522,7 @@ def direct_deviation_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset
     directGatesets : dict
         Dictionary with keys == gate strings and values == GateSets.  
         directGatesets[sigma] must be a GateSet which contains an estimate
-        of sigma stored under the gate label "sigmaLbl".
+        of sigma stored under the gate label "GsigmaLbl".
 
     xlabel, ylabel : str, optional
         X and Y axis labels
@@ -2580,7 +2579,7 @@ def direct_deviation_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset
     def mx_fn(gateStr):
         if gateStr is None: return _np.nan * _np.zeros( (1,1), 'd')
         gate = gateset.product( gateStr )
-        gate_direct = directGatesets[ gateStr ][ "sigmaLbl" ]
+        gate_direct = directGatesets[ gateStr ][ "GsigmaLbl" ]
         #evals = _np.linalg.eigvals(gate)
         #evals_direct = _np.linalg.eigvals(gate_direct)
         ubF, ubGateMx = _tools.fidelity_upper_bound(gate)
@@ -2722,7 +2721,7 @@ def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
     rhoStrs, EStrs = strs
     spamLabels = gateset.get_spam_labels() #this list fixes the ordering of the spam labels
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
-    vec_gs_len = gateset.num_params(G0=True, SP0=True, SPAM=True, gates=True)
+    vec_gs_len = gateset.num_params()
 
     N      = _np.empty( len(allGatestringsUsedInChi2Opt) )
     f      = _np.empty( (len(spamLabels),len(allGatestringsUsedInChi2Opt)) )
@@ -2735,8 +2734,7 @@ def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
             f[k,i] = dataset[gateStr].fraction(sl)
 
     evTree = gateset.bulk_evaltree(allGatestringsUsedInChi2Opt)
-    gateset.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree, 
-                             G0=True, SP0=True, SPAM=True, gates=True, prMxToFill=probs)
+    gateset.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree, prMxToFill=probs)
 
     t = ((probs - f)/probs)[:,:,None]
     Dchi2 = N[None,:,None] * t * (2 - t) * dprobs  # (1,M,1) * (K,M,1) * (K,M,N)
@@ -2901,7 +2899,7 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
     rhoStrs, EStrs = strs
     spamLabels = gateset.get_spam_labels() #this list fixes the ordering of the spam labels
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
-    vec_gs_len = gateset.num_params(G0=True, SP0=True, SPAM=True, gates=True) 
+    vec_gs_len = gateset.num_params()
       #Note: assumes *all* gateset params vary, which may not be what we always want (e.g. for TP-constrained analyses)
 
     N      = _np.empty( len(allGatestringsUsedInLogLOpt) )
@@ -2915,8 +2913,7 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
             f[k,i] = dataset[gateStr].fraction(sl)
 
     evTree = gateset.bulk_evaltree(allGatestringsUsedInLogLOpt)
-    gateset.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree, 
-                             G0=True, SP0=True, SPAM=True, gates=True, prMxToFill=probs) # spamlabel, gatestring, gsParam
+    gateset.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree, prMxToFill=probs) # spamlabel, gatestring, gsParam
 
     pos_probs = _np.maximum(probs, minProbClipForWeighting) #make sure all probs are positive? TODO: make this fn handle minProbClip like do_mlgst does...
     DlogL = 2 * (N[None,:] * (1.0 - f/pos_probs))[:,:,None] * dprobs # (K,M,1) * (K,M,N)

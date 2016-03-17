@@ -348,7 +348,7 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None, mxBasis="
         return ret
 
     def angles_btwn_rotn_axes(gateset):
-        gateLabels = gateset.keys()
+        gateLabels = gateset.gates.keys()
         angles_btwn_rotn_axes = _np.zeros( (len(gateLabels), len(gateLabels)), 'd' )
 
         for i,gl in enumerate(gateLabels):
@@ -386,7 +386,7 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None, mxBasis="
         ret[key] = _getGateSetQuantity(angles_btwn_rotn_axes, gateset, eps, confidenceRegionInfo)
 
     # Quantities computed per gate
-    for (label,gate) in gateset.iteritems():
+    for (label,gate) in gateset.gates.iteritems():
 
         #Gate quantities
         suffixes = ('eigenvalues', 'eigenvectors', 'choi eigenvalues', 'choi trace',
@@ -529,7 +529,7 @@ def compute_gateset_dataset_qtys(qtynames, gateset, dataset, gatestrings=None):
 
     #Quantities computed per gatestring
     per_gatestring_qtys = _OrderedDict() # OLD qtys: [('logl term diff', []), ('score', [])]
-    for spl in gateset.SPAMs.keys(): 
+    for spl in gateset.get_spam_labels():
         per_gatestring_qtys['prob(%s) diff' % spl] = []
         per_gatestring_qtys['count(%s) diff' % spl] = []
         per_gatestring_qtys['Est prob(%s)' % spl] = []
@@ -578,7 +578,7 @@ def compute_gateset_dataset_qtys(qtynames, gateset, dataset, gatestrings=None):
         ret[qty] = ReportableQty( _tools.chi2( dataset, gateset, minProbClipForWeighting=1e-4) )
 
     #Quantities which take a single value per spamlabel for a given gateset and dataset
-    #for spl in gateset.SPAMs.keys(): 
+    #for spl in gateset.get_spam_labels(): 
     #    qty = "chi2(%s)" % spl; possible_qtys.append(qty)        
     #    if qty in qtynames:
     #        ret[qty] = _tools.chi2( dataset, gateset, minProbClipForWeighting=1e-4)
@@ -656,16 +656,16 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
     possible_qtys = [ ]
     eps = FINITE_DIFF_EPS
 
-    for gateLabel in gateset1:
-        if gateLabel not in gateset2:
+    for gateLabel in gateset1.gates:
+        if gateLabel not in gateset2.gates:
             raise ValueError("%s gate is missing from second gateset - cannot compare gatesets", gateLabel)
-    for gateLabel in gateset2:
-        if gateLabel not in gateset1:
+    for gateLabel in gateset2.gates:
+        if gateLabel not in gateset1.gates:
             raise ValueError("%s gate is missing from first gateset - cannot compare gatesets", gateLabel)
 
     ### per gate quantities           
     #############################################
-    for gateLabel in gateset1:
+    for gateLabel in gateset1.gates:
 
         key = '%s fidelity' % gateLabel; possible_qtys.append(key)
         key2 = '%s infidelity' % gateLabel; possible_qtys.append(key)
@@ -766,7 +766,8 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
     if key in qtynames: ret[key] = ReportableQty( gateset1.frobeniusdist(gateset2) )
 
     key = "Max Jamiolkowski trace dist"; possible_qtys.append(key)
-    if key in qtynames: ret[key] = ReportableQty( max( [ _tools.jtracedist(gateset1[l],gateset2[l]) for l in gateset1 ] ) )
+    if key in qtynames: ret[key] = ReportableQty( max( [ _tools.jtracedist(gateset1[l],gateset2[l])
+                                                         for l in gateset1.gates ] ) )
 
  
     #Special case: when qtyname is None then return a list of all possible names that can be computed

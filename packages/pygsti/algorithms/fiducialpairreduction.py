@@ -30,7 +30,7 @@ def find_sufficient_fiducial_pairs(targetGateset, rhoStrs, EStrs, germList,
     if spamLabels == "all":
         spamLabels = targetGateset.get_spam_labels()
 
-    nGatesetParams = targetGateset.num_params(SPAM=True)
+    nGatesetParams = targetGateset.num_params()
 
     #Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j> where i = composite EVec & fiducial index and j similar
     def get_derivs(L):
@@ -42,7 +42,7 @@ def find_sufficient_fiducial_pairs(targetGateset, rhoStrs, EStrs, germList,
             lst = _gsc.create_gatestring_list("f0+expGerm+f1", f0=rhoStrs, f1=EStrs,
                                                          expGerm=expGerm, order=('f0','f1'))
             evTree = targetGateset.bulk_evaltree(lst)
-            dprobs = targetGateset.bulk_dprobs(evTree,SPAM=True)
+            dprobs = targetGateset.bulk_dprobs(evTree)
             for iSpamLabel,spamLabel in enumerate(spamLabels):
                 dP[iGerm, iSpamLabel, :,:] = dprobs[spamLabel]
         return dP
@@ -180,9 +180,9 @@ def find_sufficient_fiducial_pairs(targetGateset, rhoStrs, EStrs, germList,
 #        lst = _gsc.create_gatestring_list("f0+expGerm+f1", f0=fiducialList, f1=fiducialList,
 #                                        expGerm=expGerm, order=('f0','f1'))
 #        evTree = targetGateset.bulk_evaltree(lst)
-#        dprobs.append( targetGateset.bulk_dprobs(evTree,SPAM=True) )
+#        dprobs.append( targetGateset.bulk_dprobs(evTree) )
 #
-#    nGatesetParams = targetGateset.num_params(SPAM=True)
+#    nGatesetParams = targetGateset.num_params()
 #    testMatrix = _np.empty( (0,nGatesetParams) )
 #    for (i0,i1) in testPairList: #[(0,0),(1,0),(2,3),(4,5)]:
 #        iCmp = i0*len(fiducialList) + i1 #composite index of (f0,f1) in dprobs[iGerm][spamLabel]

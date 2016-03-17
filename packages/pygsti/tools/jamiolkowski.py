@@ -86,6 +86,7 @@ def jamiolkowski_iso(gateMx, gateMxBasis="gm", choiMxBasis="gm", dimOrStateSpace
     """
     
     #first, get gate matrix into std basis
+    gateMx = _np.asarray(gateMx)
     if gateMxBasis == "std":
         gateMxInStdBasis = gateMx
     elif gateMxBasis == "gm" or gateMxBasis == "pauli":
@@ -340,10 +341,10 @@ def sums_of_negative_choi_evals(gateset):
     -------
     list of floats
         each element == sum of the negative eigenvalues of the Choi matrix
-        for the corresponding gate (as ordered  by gateset.iteritems()).
+        for the corresponding gate (as ordered  by gateset.gates.iteritems()).
     """
     ret = []
-    for (label,gate) in gateset.iteritems():
+    for (label,gate) in gateset.gates.iteritems():
         J = jamiolkowski_iso( gate, choiMxBasis="std" )
         evals = _np.linalg.eigvals( J )  #could use eigvalsh, but wary of this since eigh can be wrong...
         sumOfNeg = 0.0
@@ -371,7 +372,7 @@ def mags_of_negative_choi_evals(gateset):
         as positive eigenvalues contribute nothing to this list.
     """
     ret = []
-    for (label,gate) in gateset.iteritems():
+    for (label,gate) in gateset.gates.iteritems():
         J = jamiolkowski_iso( gate, choiMxBasis="std" )
         evals = _np.linalg.eigvals( J )  #could use eigvalsh, but wary of this since eigh can be wrong...
         for ev in evals:

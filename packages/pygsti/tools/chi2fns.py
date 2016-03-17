@@ -9,7 +9,6 @@ import numpy as _np
 
 def chi2(dataset, gateset, gateStrings=None,
                     returnGradient=False, returnHessian=False, 
-                    G0=True, SP0=True, SPAM=True, gates=True,
                     minProbClipForWeighting=1e-4, clipTo=None,
                     useFreqWeightedChiSq=False, check=False):
     """ 
@@ -35,13 +34,6 @@ def chi2(dataset, gateset, gateStrings=None,
     returnGradient, returnHessian : bool
         Whether to compute and return the gradient and/or Hessian of chi^2.
 
-    G0, SP0, SPAM, gates : bool
-        How to parameterize the gateset:
-          G0 == whether first row of gate matrices are parameterized
-          SP0 == whether first element of each rho vector is parameterized
-          SPAM == whether SPAM (rho and E) vectors are parameterized
-          gates == whether gate matrices are parameterized
-
     minProbClipForWeighting : float, optional
         defines the clipping interval for the statistical weight (see chi2fn).
 
@@ -64,7 +56,6 @@ def chi2(dataset, gateset, gateStrings=None,
     dchi2 : numpy array
         Only returned if returnGradient == True. The gradient vector of 
         length nGatesetParams, the number of gateset parameters. 
-        (nGatesetParams depends on values of G0, SP0, SPAM, and gates).
     d2chi2 : numpy array
         Only returned if returnHessian == True. The Hessian matrix of 
         shape (nGatesetParams, nGatesetParams).
@@ -82,7 +73,7 @@ def chi2(dataset, gateset, gateStrings=None,
 
     spamLabels = gateset.get_spam_labels() #this list fixes the ordering of the spam labels
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
-    vec_gs_len = gateset.num_params(gates, G0, SPAM, SP0)
+    vec_gs_len = gateset.num_params()
 
     if gateStrings is None:
       gateStrings = dataset.keys()
@@ -108,13 +99,13 @@ def chi2(dataset, gateset, gateStrings=None,
     
     if returnHessian:
       gateset.bulk_fill_hprobs(hprobs, spam_lbl_rows, evTree, 
-                              gates, G0, SPAM, SP0, probs, dprobs, clipTo,
-                              check)
+                              probs, dprobs, clipTo, check)
     elif returnGradient:
       gateset.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree, 
-                              gates, G0, SPAM, SP0, probs, clipTo, check)
+                              probs, clipTo, check)
     else:
-      gateset.bulk_fill_probs(probs, spam_lbl_rows, evTree, clipTo, check)
+      gateset.bulk_fill_probs(probs, spam_lbl_rows, evTree,
+                              clipTo, check)
 
 
     #cprobs = _np.clip(probs,minProbClipForWeighting,1-minProbClipForWeighting) #clipped probabilities (also clip derivs to 0?)

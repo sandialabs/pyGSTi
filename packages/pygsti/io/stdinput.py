@@ -618,25 +618,25 @@ def read_gateset(filename):
         elif cur_format == "UnitaryMx":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (2,2):
-                gs.set_gate(cur_label, _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate_1q(ar)))
+                gs.gates[cur_label] = _objs.FullyParameterizedGate(
+                        _tools.unitary_to_pauligate_1q(ar))
             elif ar.shape == (4,4):
-                gs.set_gate(cur_label, _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate_2q(ar)))
+                gs.gates[cur_label] = _objs.FullyParameterizedGate(
+                        _tools.unitary_to_pauligate_2q(ar))
             else: raise ValueError("Invalid unitary matrix shape for %s: %s" % (cur_label,ar.shape))
             
         elif cur_format == "UnitaryMxExp":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (2,2):
-                gs.set_gate(cur_label, _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate_1q( _expm(-1j * ar) )))
+                gs.gates[cur_label] = _objs.FullyParameterizedGate(
+                        _tools.unitary_to_pauligate_1q( _expm(-1j * ar) ))
             elif ar.shape == (4,4):
-                gs.set_gate(cur_label, _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate_2q( _expm(-1j * ar) )))
+                gs.gates[cur_label] = _objs.FullyParameterizedGate(
+                        _tools.unitary_to_pauligate_2q( _expm(-1j * ar) ))
             else: raise ValueError("Invalid unitary matrix exponent shape for %s: %s" % (cur_label,ar.shape))
             
         elif cur_format == "PauliMx":
-            gs.set_gate(cur_label, _objs.FullyParameterizedGate( _evalRowList( cur_rows, bComplex=False ) ) )
+            gs.gates[cur_label] = _objs.FullyParameterizedGate( _evalRowList( cur_rows, bComplex=False ) )
 
 
     gs = _objs.GateSet()
@@ -697,27 +697,27 @@ def read_gateset(filename):
      #get unique rho and E names
     rho_names = list(_OrderedDict.fromkeys( [ rho for (rho,E) in spam_labels.values() ] ) ) #if this fails, may be due to malformatted
     E_names   = list(_OrderedDict.fromkeys( [ E   for (rho,E) in spam_labels.values() ] ) ) #  SPAMLABEL line (not 2 items to right of = sign)
+    if "remainder" in rho_names:
+        del rho_names[ rho_names.index("remainder") ]
     if "remainder" in E_names:
         del E_names[ E_names.index("remainder") ]
 
     #Order E_names and rho_names using spam_vecs ordering
-    rho_names = sorted(rho_names, key=spam_vecs.keys().index)
-    E_names = sorted(E_names, key=spam_vecs.keys().index)
+    #rho_names = sorted(rho_names, key=spam_vecs.keys().index)
+    #E_names = sorted(E_names, key=spam_vecs.keys().index)
 
      #add vectors to gateset
-    for (i,rho_nm) in enumerate(rho_names): gs.set_rhovec(spam_vecs[rho_nm],i)
-    for (i,E_nm)   in enumerate(E_names):   gs.set_evec(spam_vecs[E_nm],i)
+    for rho_nm in rho_names: gs.rhoVecs[rho_nm] = spam_vecs[rho_nm]
+    for E_nm   in E_names:   gs.EVecs[E_nm] = spam_vecs[E_nm]
 
-    gs.set_identity_vec(identity_vec)
+    gs['identity'] = identity_vec
 
      #add spam labels to gateset
     for spam_label in spam_labels:
         (rho_nm,E_nm) = spam_labels[spam_label]
-        if E_nm == "remainder":
-            gs.add_spam_label( rho_names.index(rho_nm) , -1, spam_label)
-        else:
-            gs.add_spam_label( rho_names.index(rho_nm) , E_names.index(E_nm), spam_label)        
+        gs.add_spam_label(rho_nm , E_nm, spam_label)
+
     if len(remainder_spam_label) > 0:
-        gs.add_spam_label( -1, -1, remainder_spam_label)
+        gs.add_spam_label( 'remainder', 'remainder', remainder_spam_label)
 
     return gs

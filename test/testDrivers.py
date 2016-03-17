@@ -13,7 +13,7 @@ class DriversTestCase(unittest.TestCase):
         self.germs = std.germs
         self.fiducials = std.fiducials
         self.maxLens = [0,1,2,4]
-        self.gateLabels = self.gateset.keys()
+        self.gateLabels = self.gateset.gates.keys()
         
         self.elgstStrings = pygsti.construction.make_elgst_lists(
             self.gateLabels, self.germs, self.maxLens )
@@ -167,8 +167,10 @@ class TestDriversMethods(DriversTestCase):
 
         gs_target = pygsti.construction.build_gateset([2],[('Q0',)], ['Gi','Gx','Gy'], 
                                                       [ "D(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                                      rhoExpressions=["0"], EExpressions=["1"], 
-                                                      spamLabelDict={'plus': (0,0), 'minus': (0,-1) },
+                                                      rhoLabelList=['rho0'], rhoExpressions=["0"],
+                                                      ELabelList=['E0'], EExpressions=["1"], 
+                                                      spamLabelDict={'plus': ('rho0','E0'),
+                                                                     'minus': ('rho0','remainder') },
                                                       parameterization="linear")
 
         maxLens = self.maxLens
@@ -218,19 +220,22 @@ class TestDriversMethods(DriversTestCase):
         def gsFn(gs):
             return gs.get_dimension()
 
+        tp_target = std.gs_target.copy()
+        tp_target.set_all_parameterizations("tp")
+        
         pygsti.drivers.gs_stdev(gsFn, bootgs_p)
         pygsti.drivers.gs_mean(gsFn, bootgs_p)
         pygsti.drivers.gs_stdev1(gsFn, bootgs_p)
         pygsti.drivers.gs_mean1(gsFn, bootgs_p)
         pygsti.drivers.to_vector(bootgs_p[0])
 
-        pygsti.drivers.to_mean_gateset(bootgs_p, std.gs_target)
-        pygsti.drivers.to_std_gateset(bootgs_p, std.gs_target)
-        pygsti.drivers.to_rms_gateset(bootgs_p, std.gs_target)
+        pygsti.drivers.to_mean_gateset(bootgs_p, tp_target)
+        pygsti.drivers.to_std_gateset(bootgs_p, tp_target)
+        pygsti.drivers.to_rms_gateset(bootgs_p, tp_target)
         
-        pygsti.drivers.gateset_jtracedist(bootgs_p[0], std.gs_target)
-        pygsti.drivers.gateset_process_fidelity(bootgs_p[0], std.gs_target)
-        pygsti.drivers.gateset_diamonddist(bootgs_p[0], std.gs_target)
+        pygsti.drivers.gateset_jtracedist(bootgs_p[0], tp_target)
+        pygsti.drivers.gateset_process_fidelity(bootgs_p[0], tp_target)
+        pygsti.drivers.gateset_diamonddist(bootgs_p[0], tp_target)
         pygsti.drivers.gateset_decomp_angle(bootgs_p[0])
         pygsti.drivers.gateset_decomp_decay_diag(bootgs_p[0])
         pygsti.drivers.gateset_decomp_decay_offdiag(bootgs_p[0])

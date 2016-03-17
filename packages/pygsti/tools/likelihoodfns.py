@@ -279,7 +279,6 @@ def logl(gateset, dataset, gatestring_list=None,
 
     
 def logl_jacobian(gateset, dataset, gatestring_list=None, 
-                  gates=True, G0=True, SPAM=True, SP0=True, 
                   minProbClip=1e-6, probClipInterval=None, radius=1e-4, 
                   evalTree=None, countVecMx=None, poissonPicture=True, check=False):
     """
@@ -297,24 +296,6 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
         Each element specifies a gate string to include in the log-likelihood
         sum.  Default value of None implies all the gate strings in dataset
         should be used.
-
-    gates : bool or list, optional
-        Whether/which gates should be included as gateset parameters.
-          True = all gates
-          False = no gates
-          list of gate labels = those particular gates.
-
-    G0 : bool, optional
-        Whether the first row of the included gate matrices
-        should be included as gateset parameters.
-
-    SPAM : bool, optional
-        Whether rhoVecs and EVecs should be included as gateset
-        parameters.
-
-    SP0 : bool, optional
-        Whether the first element of the state preparation (rho) vectors
-        should be included as gateset parameters.
 
     minProbClip : float, optional
         The minimum probability treated normally in the evaluation of the log-likelihood.
@@ -355,7 +336,7 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
       array of shape (M,), where M is the length of the vectorized gateset.
     """
 
-    nP = gateset.num_params(gates,G0,SPAM,SP0)
+    nP = gateset.num_params()
     jac = _np.zeros([1,nP])
 
     if gatestring_list is None:
@@ -385,7 +366,6 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
         evalTree = gateset.bulk_evaltree(gatestring_list)
 
     gateset.bulk_fill_dprobs(dprobs, spam_lbl_rows, evalTree, 
-                            G0=G0, SP0=SP0, SPAM=SPAM, gates=gates,
                             prMxToFill=probs, clipTo=probClipInterval, check=check)
 
     pos_probs = _np.where(probs < min_p, min_p, probs)
@@ -426,7 +406,6 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
 
 
 def logl_hessian(gateset, dataset, gatestring_list=None, 
-                 gates=True, G0=True, SPAM=True, SP0=True, 
                  minProbClip=1e-6, probClipInterval=None, radius=1e-4, 
                  evalTree=None, countVecMx=None, poissonPicture=True, check=False):
     """
@@ -444,24 +423,6 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
         Each element specifies a gate string to include in the log-likelihood
         sum.  Default value of None implies all the gate strings in dataset
         should be used.
-
-    gates : bool or list, optional
-        Whether/which gates should be included as gateset parameters.
-          True = all gates
-          False = no gates
-          list of gate labels = those particular gates.
-
-    G0 : bool, optional
-        Whether the first row of the included gate matrices
-        should be included as gateset parameters.
-
-    SPAM : bool, optional
-        Whether rhoVecs and EVecs should be included as gateset
-        parameters.
-
-    SP0 : bool, optional
-        Whether the first element of the state preparation (rho) vectors
-        should be included as gateset parameters.
 
     minProbClip : float, optional
         The minimum probability treated normally in the evaluation of the log-likelihood.
@@ -502,7 +463,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
       array of shape (M,M), where M is the length of the vectorized gateset.
     """
 
-    nP = gateset.num_params(gates,G0,SPAM,SP0)
+    nP = gateset.num_params()
     jac = _np.zeros([1,nP])
 
     if gatestring_list is None:
@@ -527,7 +488,6 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
         evalTree = gateset.bulk_evaltree(gatestring_list)
 
     gateset.bulk_fill_hprobs(hprobs, spam_lbl_rows, evalTree, 
-                            G0=G0, SP0=SP0, SPAM=SPAM, gates=gates,
                             prMxToFill=probs, derivMxToFill=dprobs, 
                             clipTo=probClipInterval, check=check)
 
@@ -737,7 +697,7 @@ def rhovec_penalty(rhoVec):
     float
     """
     # rhoVec must be positive semidefinite and trace = 1
-    rhoMx = _bt.gmvec_to_stdmx(rhoVec)
+    rhoMx = _bt.gmvec_to_stdmx(_np.asarray(rhoVec))
     evals = _np.linalg.eigvals( rhoMx )  #could use eigvalsh, but wary of this since eigh can be wrong...
     sumOfNeg = sum( [ -ev.real for ev in evals if ev.real < 0 ] )
     nQubits = _np.log2(len(rhoVec)) / 2
@@ -763,7 +723,7 @@ def evec_penalty(EVec):
     float
     """
     # EVec must have eigenvalues between 0 and 1
-    EMx = _bt.gmvec_to_stdmx(EVec)
+    EMx = _bt.gmvec_to_stdmx(_np.asarray(EVec))
     evals = _np.linalg.eigvals( EMx )  #could use eigvalsh, but wary of this since eigh can be wrong...
     sumOfPen = 0
     for ev in evals:
@@ -796,8 +756,8 @@ def cptp_penalty(gateset, include_spam_penalty=True):
     """
     ret = _jam.sum_of_negative_choi_evals(gateset)
     if include_spam_penalty:
-        ret += sum([ rhovec_penalty(r) for r in gateset.rhoVecs ])
-        ret += sum([ evec_penalty(e) for e in gateset.EVecs ])
+        ret += sum([ rhovec_penalty(r) for r in gateset.rhoVecs.values() ])
+        ret += sum([ evec_penalty(e) for e in gateset.EVecs.values() ])
     return ret
 
             
@@ -829,6 +789,9 @@ def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
     -------
     float or numpy array
     """
+    #TODO: change this function to handle nan's in the inputs without warnings, since
+    # fiducial pair reduction may pass inputs with nan's legitimately and the desired
+    # behavior is to just let the nan's pass through to nan's in the output.
     cp = _np.clip(p,minProbClip,1e10) #effectively no upper bound
     zf = _np.where(f < 1e-10, 0.0, f) #set zero-freqs to zero
     nzf = _np.where(f < 1e-10, 1.0, f) #set zero-freqs to one -- together w/above line makes 0 * log(0) == 0

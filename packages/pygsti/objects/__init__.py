@@ -13,8 +13,15 @@ from confidenceregion import ConfidenceRegion
 from dataset import DataSet
 from exceptions import *
 from evaltree import EvalTree
+from gate import Gate
 from gate import LinearlyParameterizedGate
 from gate import FullyParameterizedGate
+from gate import TPParameterizedGate
+from gate import StaticGate
+from spamvec import SPAMVec
+from spamvec import FullyParameterizedSPAMVec
+from spamvec import TPParameterizedSPAMVec
+from spamvec import StaticSPAMVec
 
 from gateset import GateSet
 from gatestring import GateString
