@@ -113,7 +113,7 @@ class GateSetCalculator(object):
             return None
 
         rho,E = self.rhovecs[rhoLabel], self._get_evec(eLabel)
-        return _np.kron(_np.asarray(rho), _np.conjugate(_np.transpose(E)))
+        return _np.kron(rho.base, _np.conjugate(_np.transpose(E)))
 
 
     def product(self, gatestring, bScale=False):
@@ -170,7 +170,7 @@ class GateSetCalculator(object):
         else:
             G = _np.identity( self.dim )
             for lGate in gatestring:
-                G = _np.dot(_np.asarray(self.gates[lGate]),G) #product of gates
+                G = _np.dot(self.gates[lGate].base,G) #product of gates
                 #OLD: G = _np.dot(G,self[lGate]) LEXICOGRAPHICAL VS MATRIX ORDER
             return G
 
@@ -241,13 +241,13 @@ class GateSetCalculator(object):
         leftProds = [ ]
         G = _np.identity( dim ); leftProds.append(G)
         for gateLabel in revGateLabelList:
-            G = _np.dot(G,_np.asarray(self.gates[gateLabel]))
+            G = _np.dot(G,self.gates[gateLabel].base)
             leftProds.append(G)
 
         rightProdsT = [ ]
         G = _np.identity( dim ); rightProdsT.append( _np.transpose(G) )
         for gateLabel in reversed(revGateLabelList):
-            G = _np.dot(_np.asarray(self.gates[gateLabel]),G)
+            G = _np.dot(self.gates[gateLabel].base,G)
             rightProdsT.append( _np.transpose(G) )
 
         # Initialize storage
@@ -341,7 +341,7 @@ class GateSetCalculator(object):
             prods[ (i,i-1) ] = ident #product of no gates
             G = ident
             for (j,gateLabel2) in enumerate(revGateLabelList[i:],start=i): #loop over "ending" gate (>= starting gate)
-                G = _np.dot(G,_np.asarray(self.gates[gateLabel2]))
+                G = _np.dot(G,self.gates[gateLabel2].base)
                 prods[ (i,j) ] = G
         prods[ (len(revGateLabelList),len(revGateLabelList)-1) ] = ident #product of no gates
 
@@ -963,7 +963,7 @@ class GateSetCalculator(object):
             if gateLabel == "": #special case of empty label == no gate
                 prodCache[i] = _np.identity( dim )
             else:
-                gate = _np.asarray(self.gates[gateLabel])
+                gate = self.gates[gateLabel].base
                 nG = max(_nla.norm(gate), 1.0)
                 prodCache[i] = gate / nG
                 scaleCache[i] = _np.log(nG)
@@ -1108,7 +1108,7 @@ class GateSetCalculator(object):
             else:
                 dgate = self.dproduct( (gateLabel,) )
                 nG = max(_nla.norm(self.gates[gateLabel]),1.0)
-                prodCache[i]  = _np.asarray(self.gates[gateLabel]) / nG
+                prodCache[i]  = self.gates[gateLabel].base / nG
                 scaleCache[i] = _np.log(nG)
                 dProdCache[i] = dgate / nG 
                 
@@ -1306,7 +1306,7 @@ class GateSetCalculator(object):
                 hgate = self.hproduct( (gateLabel,) )
                 dgate = self.dproduct( (gateLabel,) )
                 nG = max(_nla.norm(self.gates[gateLabel]),1.0)
-                prodCache[i]  = _np.asarray(self.gates[gateLabel]) / nG
+                prodCache[i]  = self.gates[gateLabel].base / nG
                 scaleCache[i] = _np.log(nG)
                 dProdCache[i] = dgate / nG 
                 hProdCache[i] = hgate / nG 

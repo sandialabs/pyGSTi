@@ -73,9 +73,9 @@ def make_paramterized_rpe_gate_set(alphaTrue, epsilonTrue, Yrot, SPAMdepol,
             ELabelList=["E0"], EExpressions=["1"], 
             spamLabelDict={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
 
-        outputGateset['Gx'] = _objs.FullyParameterizedGate(
-            _np.dot( _np.dot(_np.linalg.inv(gatesetAux1['Gy']),
-                             outputGateset['Gx']),gatesetAux1['Gy']))
+        outputGateset.gates['Gx'] = _objs.FullyParameterizedGate(
+            _np.dot( _np.dot(_np.linalg.inv(gatesetAux1.gates['Gy']),
+                             outputGateset.gates['Gx']),gatesetAux1.gates['Gy']))
 
     outputGateset = outputGateset.depolarize(gate_noise=gateDepol,
                                              spam_noise=SPAMdepol)
@@ -363,9 +363,9 @@ def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs
                                        ELabelList=["E0"], EExpressions=["1"], 
                                        spamLabelDict={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
 
-    simGateset['Gx'] =  _objs.FullyParameterizedGate(
-        _np.dot(_np.dot(_np.linalg.inv(gatesetAux1['Gy']),simGateset['Gx']),
-                gatesetAux1['Gy']))
+    simGateset.gates['Gx'] =  _objs.FullyParameterizedGate(
+        _np.dot(_np.dot(_np.linalg.inv(gatesetAux1.gates['Gy']),simGateset.gates['Gx']),
+                gatesetAux1.gates['Gy']))
 
     simGateset = simGateset.depolarize(spam_noise=SPAMdepol)
 

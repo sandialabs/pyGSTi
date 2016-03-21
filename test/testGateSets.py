@@ -4,9 +4,14 @@ import numpy as np
 import warnings
 import pickle
 
+
 class GateSetTestCase(unittest.TestCase):
 
     def setUp(self):
+        #OK for these tests, since we test user interface?
+        #Set GateSet objects to "strict" mode for testing
+        pygsti.objects.GateSet._strict = False
+
         self.gateset = pygsti.construction.build_gateset(
             [2], [('Q0',)],['Gi','Gx','Gy'], 
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
@@ -48,10 +53,10 @@ class TestGateSetMethods(GateSetTestCase):
       self.assertEqual(self.gateset.num_rhovecs(), 1) 
       self.assertEqual(self.gateset.num_evecs(), 2) 
 
-      for default_param in ("full","tp","static"):
-          nGates = 3 if default_param in ("full","tp") else 0
-          nSPVecs = 1 if default_param in ("full","tp") else 0
-          nEVecs = 1 if default_param in ("full","tp") else 0
+      for default_param in ("full","TP","static"):
+          nGates = 3 if default_param in ("full","TP") else 0
+          nSPVecs = 1 if default_param in ("full","TP") else 0
+          nEVecs = 1 if default_param in ("full","TP") else 0
           nParamsPerGate = 16 if default_param == "full" else 12
           nParamsPerSP = 4 if default_param == "full" else 3
           nParams =  nGates * nParamsPerGate + nSPVecs * nParamsPerSP + nEVecs * 4
@@ -85,7 +90,6 @@ class TestGateSetMethods(GateSetTestCase):
 
       Gi_matrix = np.identity(4, 'd')
       self.assertTrue( isinstance(self.gateset['Gi'], pygsti.objects.Gate) )
-      self.assertTrue( isinstance(self.gateset['Gi'], np.ndarray) )
 
       Gi_test_matrix = np.random.random( (4,4) )
       Gi_test = pygsti.objects.FullyParameterizedGate( Gi_test_matrix  )

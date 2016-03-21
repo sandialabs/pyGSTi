@@ -5,6 +5,10 @@ import numpy as np
 class JamiolkowskiTestCase(unittest.TestCase):
 
     def setUp(self):
+        #Set GateSet objects to "strict" mode for testing
+        pygsti.objects.GateSet._strict = True
+
+
         # density matrix == 3x3 block diagonal matrix: a 2x2 block followed by a 1x1 block 
         self.stateSpaceDims = [2,1] 
 

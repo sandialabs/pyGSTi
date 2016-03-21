@@ -3,10 +3,12 @@ import pygsti
 from pygsti.construction import std1Q_XYI as std
 import numpy as np
 
+
 class WriteAndLoadTestCase(unittest.TestCase):
 
     def setUp(self):
-        pass
+        #Set GateSet objects to "strict" mode for testing
+        pygsti.objects.GateSet._strict = True
 
     def assertArraysAlmostEqual(self,a,b):
         self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
@@ -175,15 +177,15 @@ SPAMLABEL minus = remainder
         rotXPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi/2,Q0)")
         rotYPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "Y(pi/2,Q0)")
 
-        self.assertArraysAlmostEqual(gs_formats['Gi'], np.identity(4,'d'))
-        self.assertArraysAlmostEqual(gs_formats['Gx'], rotXPiOv2)
-        self.assertArraysAlmostEqual(gs_formats['Gy'], rotYPiOv2)
-        self.assertArraysAlmostEqual(gs_formats['Gx2'], rotXPi)
-        self.assertArraysAlmostEqual(gs_formats['Gy2'], rotYPi)
+        self.assertArraysAlmostEqual(gs_formats.gates['Gi'], np.identity(4,'d'))
+        self.assertArraysAlmostEqual(gs_formats.gates['Gx'], rotXPiOv2)
+        self.assertArraysAlmostEqual(gs_formats.gates['Gy'], rotYPiOv2)
+        self.assertArraysAlmostEqual(gs_formats.gates['Gx2'], rotXPi)
+        self.assertArraysAlmostEqual(gs_formats.gates['Gy2'], rotYPi)
 
-        self.assertArraysAlmostEqual(gs_formats['rho0'], 1/np.sqrt(2)*np.array([[1],[0],[0],[1]],'d'))
-        self.assertArraysAlmostEqual(gs_formats['rho1'], 1/np.sqrt(2)*np.array([[1],[0],[0],[-1]],'d'))
-        self.assertArraysAlmostEqual(gs_formats['E'], 1/np.sqrt(2)*np.array([[1],[0],[0],[-1]],'d'))
+        self.assertArraysAlmostEqual(gs_formats.rhoVecs['rho0'], 1/np.sqrt(2)*np.array([[1],[0],[0],[1]],'d'))
+        self.assertArraysAlmostEqual(gs_formats.rhoVecs['rho1'], 1/np.sqrt(2)*np.array([[1],[0],[0],[-1]],'d'))
+        self.assertArraysAlmostEqual(gs_formats.EVecs['E'], 1/np.sqrt(2)*np.array([[1],[0],[0],[-1]],'d'))
 
         #pygsti.print_mx( rotXPi )
         #pygsti.print_mx( rotYPi )

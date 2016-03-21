@@ -3,10 +3,14 @@ import pygsti
 import numpy as np
 import warnings
 
+
 class GateSetConstructionTestCase(unittest.TestCase):
 
     def setUp(self):
-        pass
+        #OK for these tests, since we test user interface?
+        #Set GateSet objects to "strict" mode for testing
+        pygsti.objects.GateSet._strict = False
+
 
     def assertArraysAlmostEqual(self,a,b):
         self.assertAlmostEqual( np.linalg.norm(a-b), 0 )

@@ -37,6 +37,8 @@ class GateSet(object):
     access to their matrices.  State preparation and POVM effect operations are 
     represented as column vectors.
     """
+
+    _strict = False #Whether access to gates & spam vecs via GateSet indexing is allowed
     
     def __init__(self, default_param="full", 
                  rho_prefix="rho", e_prefix="E", gate_prefix="G",
@@ -46,10 +48,10 @@ class GateSet(object):
 
         Parameters
         ----------
-        default_param : {"full", "tp", "static"}, optional
+        default_param : {"full", "TP", "static"}, optional
             Specifies the default gate and SPAM vector parameterization type.
             "full" : by default gates and vectors are fully parameterized.
-            "tp" : by default the first row of gates and the first element of
+            "TP" : by default the first row of gates and the first element of
              vectors is not parameterized and fixed so gate set is trace-
              preserving.
              "static" : by default gates and vectors are not parameterized.
@@ -71,8 +73,8 @@ class GateSet(object):
 
         """
         
-        assert(default_param in ('full','tp','static'))
-        default_e_param = "full" if default_param == "tp" else default_param
+        assert(default_param in ('full','TP','static'))
+        default_e_param = "full" if default_param == "TP" else default_param
 
         #Gate dimension of this GateSet (None => unset, to be determined)
         self.dim = None
@@ -269,6 +271,9 @@ class GateSet(object):
             appropriate dimension for the GateSet and appropriate type
             given the prefix of the label.
         """
+        if GateSet._strict and label != self._identity:
+            raise KeyError("Strict-mode: invalid key %s" % label)
+
         if label.startswith(self.rhoVecs._prefix):
             self.rhoVecs[label] = value
         elif label.startswith(self.EVecs._prefix) or label == self._remainder:
@@ -297,6 +302,9 @@ class GateSet(object):
         label : string
             the gate or SPAM vector label.
         """
+        if GateSet._strict and label != self._identity:
+            raise KeyError("Strict-mode: invalid key %s" % label)
+
         if label.startswith(self.rhoVecs._prefix):
             return self.rhoVecs[label]
         elif label.startswith(self.EVecs._prefix) or label == self._remainder:
@@ -315,13 +323,13 @@ class GateSet(object):
 
         Parameters
         ----------
-        parameterization_type : {"full", "tp", "static"}
+        parameterization_type : {"full", "TP", "static"}
             The gate and SPAM vector parameterization type:
             
         """
         typ = parameterization_type
-        assert(parameterization_type in ('full','tp','static'))
-        etyp = "full" if typ == "tp" else typ #EVecs never "tp"
+        assert(parameterization_type in ('full','TP','static'))
+        etyp = "full" if typ == "TP" else typ #EVecs never "TP"
 
         for lbl,gate in self.gates.iteritems():
             self.gates[lbl] = _gate.convert(gate, typ)
@@ -1870,14 +1878,14 @@ class GateSet(object):
             r = max_gate_noise * rndm.random_sample( len(self.gates) )
             for (i,label) in enumerate(self.gates):
                 D = _np.diag( [1]+[1-r[i]]*(gateDim-1) )
-                newGateset[label] = _gate.FullyParameterizedGate( 
+                newGateset.gates[label] = _gate.FullyParameterizedGate( 
                                            _np.dot(D,self.gates[label]) )
                 
         elif gate_noise is not None:
             #Apply the same depolarization to each gate
             D = _np.diag( [1]+[1-gate_noise]*(gateDim-1) )
             for (i,label) in enumerate(self.gates):
-                newGateset[label] = _gate.FullyParameterizedGate( 
+                newGateset.gates[label] = _gate.FullyParameterizedGate( 
                                            _np.dot(D,self.gates[label]) )
     
         if max_spam_noise is not None:
@@ -1888,24 +1896,24 @@ class GateSet(object):
             r = max_spam_noise * rndm.random_sample( len(self.rhoVecs) )
             for (i,lbl) in enumerate(self.rhoVecs):
                 D = _np.diag( [1]+[1-r[i]]*(gateDim-1) )
-                newGateset[lbl] = _sv.FullyParameterizedSPAMVec(
-                                     _np.dot(D,self.rhoVecs[lbl]))
+                newGateset.rhoVecs[lbl] = _sv.FullyParameterizedSPAMVec(
+                                           _np.dot(D,self.rhoVecs[lbl]))
     
             r = max_spam_noise * rndm.random_sample( len(self.EVecs) )
             for (i,lbl) in enumerate(self.EVecs):
                 D = _np.diag( [1]+[1-r[i]]*(gateDim-1) )
-                newGateset[lbl] = _sv.FullyParameterizedSPAMVec(
-                                       _np.dot(D,self.EVecs[lbl]))
+                newGateset.EVecs[lbl] = _sv.FullyParameterizedSPAMVec(
+                                         _np.dot(D,self.EVecs[lbl]))
                 
         elif spam_noise is not None:
             #Apply the same depolarization to each gate
             D = _np.diag( [1]+[1-spam_noise]*(gateDim-1) )
             for lbl,rhoVec in self.rhoVecs.iteritems():
-                newGateset[lbl] = _sv.FullyParameterizedSPAMVec(
-                                       _np.dot(D,rhoVec) )
+                newGateset.rhoVecs[lbl] = _sv.FullyParameterizedSPAMVec(
+                                            _np.dot(D,rhoVec) )
             for lbl,EVec in self.EVecs.iteritems():
-                newGateset[lbl] = _sv.FullyParameterizedSPAMVec(
-                                       _np.dot(D,EVec) )
+                newGateset.EVecs[lbl] = _sv.FullyParameterizedSPAMVec(
+                                         _np.dot(D,EVec) )
 
         return newGateset
     
@@ -1966,7 +1974,7 @@ class GateSet(object):
                 r = max_rotate * rndm.random_sample( len(self.gates) * 3 )
                 for (i,label) in enumerate(self.gates):
                     rot = r[3*i:3*(i+1)]
-                    newGateset[label] = _gate.FullyParameterizedGate(
+                    newGateset.gates[label] = _gate.FullyParameterizedGate(
                        _np.dot( _bt.single_qubit_gate(rot[0]/2.0,
                                 rot[1]/2.0,rot[2]/2.0), self.gates[label]) )
 
@@ -1997,9 +2005,10 @@ class GateSet(object):
                        + "number or as a lenght-3 list, not: %s" % str(rotate))
                     
                 for (i,label) in enumerate(self.gates):
-                    newGateset[label] = _gate.FullyParameterizedGate( _np.dot( 
-                                   _bt.single_qubit_gate(rx/2.0,ry/2.0,rz/2.0),
-                                   self.gates[label]) )
+                    newGateset.gates[label] = _gate.FullyParameterizedGate( 
+                        _np.dot( 
+                            _bt.single_qubit_gate(rx/2.0,ry/2.0,rz/2.0),
+                            self.gates[label]) )
 
             elif dim == 16:
                 #Specify rotation by a single value (to mean this rotation along each axis) or a 15-tuple
@@ -2018,7 +2027,8 @@ class GateSet(object):
                       + "number or as a lenght-15 list, not: %s" % str(rotate))
                     
                 for (i,label) in enumerate(self.gates):
-                    newGateset[label] = _gate.FullyParameterizedGate( _np.dot( 
+                    newGateset.gates[label] = _gate.FullyParameterizedGate( 
+                        _np.dot( 
                             _bt.two_qubit_gate(rix/2.0,riy/2.0,riz/2.0,
                                                rxi/2.0,rxx/2.0,rxy/2.0,rxz/2.0,
                                                ryi/2.0,ryx/2.0,ryy/2.0,ryz/2.0,
@@ -2075,7 +2085,7 @@ class GateSet(object):
             else: raise ValueError("Gateset dimension must be either 4 " +
                                    "(single-qubit) or 16 (two-qubit)")
     
-            gs_pauli[gateLabel] = _gate.FullyParameterizedGate(
+            gs_pauli.gates[gateLabel] = _gate.FullyParameterizedGate(
                             _np.dot(randUPP,gs_pauli.gates[gateLabel]))
     
         return gs_pauli
@@ -2220,8 +2230,8 @@ class GateSet(object):
         rndm = _np.random.RandomState(seed)
         for gateLabel,gate in self.gates.iteritems():
             delta = absmag * 2.0*(rndm.random_sample(gate.shape)-0.5) + bias
-            kicked_gs[gateLabel] = _gate.FullyParameterizedGate(
-                                          kicked_gs[gateLabel] + delta )
+            kicked_gs.gates[gateLabel] = _gate.FullyParameterizedGate(
+                                            kicked_gs.gates[gateLabel] + delta )
         return kicked_gs
     
     

@@ -5,10 +5,13 @@ import scipy.linalg
 import pygsti
 from pygsti.construction import std1Q_XYI as std
 
+
 class ToolsTestCase(unittest.TestCase):
 
     def setUp(self):
-        pass
+        #Set GateSet objects to "strict" mode for testing
+        pygsti.objects.GateSet._strict = True
+
 
     def assertArraysAlmostEqual(self,a,b):
         self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
@@ -488,7 +491,7 @@ class ToolsMethods(ToolsTestCase):
 
         from pygsti.construction import std1Q_XZ as stdXZ
         target = stdXZ.gs_target.copy()
-        target['Gi'] =  std.gs_target['Gi'] #need a Gi gate...
+        target.gates['Gi'] =  std.gs_target.gates['Gi'] #need a Gi gate...
         stringListD = pygsti.construction.make_rpe_string_list_d(2)
         gs_depolXZ = target.depolarize(gate_noise=0.1,spam_noise=0.1)
         ds = pygsti.construction.generate_fake_data(gs_depolXZ, stringListD['totalStrList'],

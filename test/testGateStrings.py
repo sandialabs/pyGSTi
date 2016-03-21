@@ -2,10 +2,13 @@ import unittest
 import pygsti
 import numpy as np
 
+
 class GateStringTestCase(unittest.TestCase):
 
     def setUp(self):
-        pass
+        #Set GateSet objects to "strict" mode for testing
+        pygsti.objects.GateSet._strict = True
+
 
 class TestGateStringMethods(GateStringTestCase):
     def test_simple(self):

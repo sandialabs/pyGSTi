@@ -9,6 +9,9 @@ import sys
 class AlgorithmTestCase(unittest.TestCase):
 
     def setUp(self):
+        #Set GateSet objects to "strict" mode for testing
+        pygsti.objects.GateSet._strict = True
+
         self.gs_target_noisy = std.gs_target.randomize_with_unitary(0.001, seed=1234)
 
     def runSilent(self, callable, *args, **kwds):

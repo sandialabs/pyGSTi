@@ -329,7 +329,7 @@ def small_eigval_err_rate(sigma, dataset, directGSTgatesets):
     """
     if sigma is None: return _np.nan # in plot processing, "None" gatestrings = no plot output = nan values
     gs_direct = directGSTgatesets[sigma]
-    minEigval = min(abs(_np.linalg.eigvals( gs_direct["GsigmaLbl"] )))
+    minEigval = min(abs(_np.linalg.eigvals( gs_direct.gates["GsigmaLbl"] )))
     return 1.0 - minEigval**(1.0/max(len(sigma),1)) # (approximate) per-gate error rate; max averts divide by zero error
 
 
@@ -2579,7 +2579,7 @@ def direct_deviation_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset
     def mx_fn(gateStr):
         if gateStr is None: return _np.nan * _np.zeros( (1,1), 'd')
         gate = gateset.product( gateStr )
-        gate_direct = directGatesets[ gateStr ][ "GsigmaLbl" ]
+        gate_direct = directGatesets[ gateStr ].gates[ "GsigmaLbl" ]
         #evals = _np.linalg.eigvals(gate)
         #evals_direct = _np.linalg.eigvals(gate_direct)
         ubF, ubGateMx = _tools.fidelity_upper_bound(gate)

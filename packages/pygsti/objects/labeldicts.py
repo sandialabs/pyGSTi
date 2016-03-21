@@ -54,9 +54,6 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
 
         if isinstance(vec, _sv.SPAMVec):  #if we're given a SPAMVec object...
             #just replace or create vector
-            if vec.transposed:
-                raise ValueError("I store only *column* SPAM vectors - please" +
-                                 " transpose this vector first")
             super(OrderedSPAMVecDict,self).__setitem__(key, vec) 
 
         elif key in self: #if a SPAMVec object already exists...

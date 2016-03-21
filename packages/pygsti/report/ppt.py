@@ -10,6 +10,7 @@ LatexUtil has for latex conversion.
 
 import numpy as _np
 import cmath
+from .. import objects as _objs
 
 def ppt(x, brackets=False):
     """
@@ -28,7 +29,9 @@ def ppt(x, brackets=False):
     string
         ppt string for x.
     """
-    if isinstance(x,_np.ndarray):
+    if isinstance(x,_np.ndarray) or \
+       isinstance(x,_objs.Gate) or \
+       isinstance(x,_objs.SPAMVec):
         d = 0
         for l in x.shape:
             if l > 1: d += 1

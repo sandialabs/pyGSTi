@@ -8,6 +8,8 @@ import os
 class ReportTestCase(unittest.TestCase):
 
     def setUp(self):
+        #Set GateSet objects to "strict" mode for testing
+        pygsti.objects.GateSet._strict = True
 
         self.targetGateset = std.gs_target
         datagen_gateset = self.targetGateset.depolarize(gate_noise=0.05, spam_noise=0.1)
@@ -34,7 +36,7 @@ class ReportTestCase(unittest.TestCase):
         gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",targetGateset=self.targetGateset)
         self.gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
         self.gs_clgst_tp = pygsti.contract(self.gs_clgst, "vSPAM")
-        self.gs_clgst_tp.set_all_parameterizations("tp")
+        self.gs_clgst_tp.set_all_parameterizations("TP")
         
 
     def checkFile(self, fn):
@@ -187,7 +189,7 @@ class TestReport(ReportTestCase):
         chi2, chi2Hessian = pygsti.chi2(ds, gateset, returnHessian=True)
         ci = pygsti.obj.ConfidenceRegion(gateset, chi2Hessian, 95.0,
                                          hessianProjection="std")
-        gateset_tp = pygsti.contract(gateset,"TP"); gateset_tp.set_all_parameterizations("tp")
+        gateset_tp = pygsti.contract(gateset,"TP"); gateset_tp.set_all_parameterizations("TP")
         chi2, chi2Hessian_TP = pygsti.chi2(ds, gateset_tp, returnHessian=True)
         ci_TP = pygsti.obj.ConfidenceRegion(gateset_tp, chi2Hessian_TP, 95.0,
                                             hessianProjection="std")
@@ -195,7 +197,7 @@ class TestReport(ReportTestCase):
         chi2, chi2Hessian_tgt = pygsti.chi2(ds, std.gs_target, returnHessian=True)
         ci_tgt = pygsti.obj.ConfidenceRegion(std.gs_target, chi2Hessian_tgt, 95.0,
                                          hessianProjection="std")
-        target_tp = std.gs_target.copy(); target_tp.set_all_parameterizations("tp")
+        target_tp = std.gs_target.copy(); target_tp.set_all_parameterizations("TP")
         chi2, chi2Hessian_tgt_TP = pygsti.chi2(ds, target_tp, returnHessian=True)
         ci_TP_tgt = pygsti.obj.ConfidenceRegion(target_tp, chi2Hessian_tgt_TP, 95.0,
                                             hessianProjection="std")

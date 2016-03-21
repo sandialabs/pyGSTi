@@ -75,7 +75,7 @@ def _getGateQuantity(fnOfGate, gateset, gateLabel, eps, confidenceRegionInfo, ve
     """ For constructing a ReportableQty from a function of a gate. """
 
     if confidenceRegionInfo is None: # No Error bars
-        return ReportableQty(fnOfGate(gateset[gateLabel]))
+        return ReportableQty(fnOfGate(gateset.gates[gateLabel]))
 
     # make sure the gateset we're given is the one used to generate the confidence region
     if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
@@ -352,12 +352,12 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None, mxBasis="
         angles_btwn_rotn_axes = _np.zeros( (len(gateLabels), len(gateLabels)), 'd' )
 
         for i,gl in enumerate(gateLabels):
-            decomp = _tools.decompose_gate_matrix(gateset[gl])
+            decomp = _tools.decompose_gate_matrix(gateset.gates[gl])
             rotnAngle = decomp.get('pi rotations','X')
             axisOfRotn = decomp.get('axis of rotation',None)
     
             for j,gl_other in enumerate(gateLabels[i+1:],start=i+1):
-                decomp_other = _tools.decompose_gate_matrix(gateset[gl_other])
+                decomp_other = _tools.decompose_gate_matrix(gateset.gates[gl_other])
                 rotnAngle_other = decomp_other.get('pi rotations','X')                
 
                 if rotnAngle == 'X' or abs(rotnAngle) < 1e-4 or \
@@ -672,7 +672,7 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
         if key in qtynames or key2 in qtynames:
 
             def process_fidelity(gate): #Note: default 'gm' basis
-                return _tools.process_fidelity(gate, gateset2[gateLabel], mxBasis) 
+                return _tools.process_fidelity(gate, gateset2.gates[gateLabel], mxBasis) 
                   #vary elements of gateset1 (assume gateset2 is fixed)
 
             #print "DEBUG: fidelity(%s)" % gateLabel
@@ -689,15 +689,15 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
             #Note: default 'gm' basis
             def closest_unitary_fidelity(gate): # assume vary gateset1, gateset2 fixed
                 decomp1 = _tools.decompose_gate_matrix(gate)
-                decomp2 = _tools.decompose_gate_matrix(gateset2[gateLabel])
+                decomp2 = _tools.decompose_gate_matrix(gateset2.gates[gateLabel])
 
                 if decomp1['isUnitary']:
                     closestUGateMx1 = gate
                 else: closestUGateMx1 = _alg.find_closest_unitary_gatemx(gate)
     
                 if decomp2['isUnitary']:
-                    closestUGateMx2 = gateset2[gateLabel] 
-                else: closestUGateMx2 = _alg.find_closest_unitary_gatemx(gateset2[gateLabel])
+                    closestUGateMx2 = gateset2.gates[gateLabel] 
+                else: closestUGateMx2 = _alg.find_closest_unitary_gatemx(gateset2.gates[gateLabel])
             
                 closeChoi1 = _tools.jamiolkowski_iso(closestUGateMx1)
                 closeChoi2 = _tools.jamiolkowski_iso(closestUGateMx2)
@@ -708,14 +708,14 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
         key = "%s Frobenius diff" % gateLabel; possible_qtys.append(key)
         if key in qtynames: 
             def fro_diff(gate): # assume vary gateset1, gateset2 fixed
-                return _tools.frobeniusdist(gate,gateset2[gateLabel])
+                return _tools.frobeniusdist(gate,gateset2.gates[gateLabel])
             #print "DEBUG: frodist(%s)" % gateLabel
             ret[key] = _getGateQuantity(fro_diff, gateset1, gateLabel, eps, confidenceRegionInfo) 
 
         key = "%s Jamiolkowski trace dist" % gateLabel; possible_qtys.append(key)
         if key in qtynames: 
             def jt_diff(gate): # assume vary gateset1, gateset2 fixed
-                return _tools.jtracedist(gate,gateset2[gateLabel]) #Note: default 'gm' basis
+                return _tools.jtracedist(gate,gateset2.gates[gateLabel]) #Note: default 'gm' basis
             #print "DEBUG: jtdist(%s)" % gateLabel
             ret[key] = _getGateQuantity(jt_diff, gateset1, gateLabel, eps, confidenceRegionInfo) 
 
@@ -723,7 +723,7 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
         if key in qtynames:
 
             def half_diamond_norm(gate):
-                return 0.5 * _tools.diamonddist(gate, gateset2[gateLabel]) #Note: default 'gm' basis
+                return 0.5 * _tools.diamonddist(gate, gateset2.gates[gateLabel]) #Note: default 'gm' basis
                   #vary elements of gateset1 (assume gateset2 is fixed)
 
             try:
@@ -737,7 +737,7 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
 
             def angle_btwn_axes(gate): #Note: default 'gm' basis
                 decomp = _tools.decompose_gate_matrix(gate)
-                decomp2 = _tools.decompose_gate_matrix(gateset2[gateLabel])
+                decomp2 = _tools.decompose_gate_matrix(gateset2.gates[gateLabel])
                 axisOfRotn = decomp.get('axis of rotation',None)
                 rotnAngle = decomp.get('pi rotations','X')
                 axisOfRotn2 = decomp2.get('axis of rotation',None)
@@ -766,8 +766,9 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
     if key in qtynames: ret[key] = ReportableQty( gateset1.frobeniusdist(gateset2) )
 
     key = "Max Jamiolkowski trace dist"; possible_qtys.append(key)
-    if key in qtynames: ret[key] = ReportableQty( max( [ _tools.jtracedist(gateset1[l],gateset2[l])
-                                                         for l in gateset1.gates ] ) )
+    if key in qtynames: ret[key] = ReportableQty( 
+        max( [ _tools.jtracedist(gateset1.gates[l],gateset2.gates[l])
+               for l in gateset1.gates ] ) )
 
  
     #Special case: when qtyname is None then return a list of all possible names that can be computed

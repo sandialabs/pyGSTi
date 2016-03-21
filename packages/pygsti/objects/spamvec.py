@@ -22,7 +22,7 @@ def convert(spamvec, toType):
     spamvec : SPAMVec
         SPAM vector to convert
 
-    toType : {"full","tp","static"}
+    toType : {"full","TP","static"}
         The type of parameterizaton to convert to.
 
     Returns
@@ -37,7 +37,7 @@ def convert(spamvec, toType):
         else:
             return FullyParameterizedSPAMVec( spamvec )
 
-    elif toType == "tp":
+    elif toType == "TP":
         if isinstance(spamvec, TPParameterizedSPAMVec):
             return spamvec #no conversion necessary
         else:
@@ -55,20 +55,70 @@ def convert(spamvec, toType):
 
 
 
-class SPAMVec(object): #LATER: make this into an ABC specifying the "SPAMVec" interface??
+class SPAMVec(object):
     """
     Excapulates a parameterization of a state preparation OR POVM effect
     vector. This class is the  common base class for all specific
     parameterizations of a SPAM vector.
     """
 
-    #def __init__(self, dim):
-    #    """ Initialize a new SPAM Vector """
-    #    self.dim = dim
-    #
-    #def get_dimension(self):
-    #    """ Return the dimension of the gate matrix. """
-    #    return self.dim
+    def __init__(self, vec):
+        """ Initialize a new SPAM Vector """
+        self.base = vec
+        self.dim = len(vec)
+    
+    def get_dimension(self):
+        """ Return the dimension of the gate matrix. """
+        return self.dim
+
+    def __str__(self):
+        s = "Spam vector with length %d\n" % len(self.base)
+        s += _mt.mx_to_string(self.base, width=4, prec=2)
+        return s 
+
+
+    #Pickle plumbing
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+
+    #Access to underlying array
+    def __getitem__( self, key ):
+        return self.base.__getitem__(key)
+
+    def __getslice__(self, i,j):
+        return self.__getitem__(slice(i,j)) #Called for A[:]
+
+    def __setitem__(self, key, val):
+        return self.base.__setitem__(key,val)
+        
+    def __getattr__(self, attr):
+        #use __dict__ so no chance for recursive __getattr__
+        ret = getattr(self.__dict__['base'],attr)
+        if(self.base.shape != (self.dim,1)):
+           raise ValueError("Cannot change dimension of Vector")
+        return ret
+
+
+    #Mimic array
+    def __pos__(self):        return self.base
+    def __neg__(self):        return -self.base
+    def __abs__(self):        return abs(self.base)
+    def __add__(self,x):      return self.base + x
+    def __radd__(self,x):     return x + self.base
+    def __sub__(self,x):      return self.base - x
+    def __rsub__(self,x):     return x - self.base
+    def __mul__(self,x):      return self.base * x
+    def __rmul__(self,x):     return x * self.base
+    def __div__(self,x):      return self.base / x
+    def __floordiv__(self,x): return self.base // x
+    def __pow__(self,x):      return self.base ** x
+    def __eq__(self,x):       return self.base == x
+    def __len__(self):        return len(self.base)
+    def __int__(self):        return int(self.base)
+    def __long__(self):       return long(self.base)
+    def __float__(self):      return float(self.base)
+    def __complex__(self):    return complex(self.base)
+
 
     @staticmethod
     def convert_to_vector(V):
@@ -106,19 +156,18 @@ class SPAMVec(object): #LATER: make this into an ABC specifying the "SPAMVec" in
                 typ = 'd' if _np.all(_np.isreal(V)) else 'complex'
                 vector = _np.array(V, typ)[:,None] # make into a 2-D column vec
 
-        transposed = False # column vector
-        return vector, transposed
+        return vector
 
 
 
-class StaticSPAMVec(_np.ndarray, SPAMVec):
+
+class StaticSPAMVec(SPAMVec):
     """ 
     Encapsulates a SPAM vector that is completely fixed, or "static", meaning
       that is contains no parameters.
     """
-    __array_priority__ = -1.0
 
-    def __new__(cls, vec):
+    def __init__(self, vec):
         """ 
         Initialize a StaticSPAMVec object.
 
@@ -128,30 +177,7 @@ class StaticSPAMVec(_np.ndarray, SPAMVec):
             a 1D numpy array representing the SPAM operation.  The
             shape of this array sets the dimension of the SPAM op.
         """
-        vector, T = SPAMVec.convert_to_vector(vec)
-        obj = _np.asarray(vector).view(cls)
-        obj.dim = len(vector)
-        obj.transposed = T
-        return obj
-
-    def __getitem__( self, key ):
-        #Items and slices are *not* gates - just numpy arrays:
-        return _np.ndarray.__getitem__(self.view(_np.ndarray), key)
-
-    def __getslice__(self, i,j):
-        #For special cases when getslice is still called, e.g. A[:]
-        return self.__getitem__(slice(i,j))
-
-    def __array_finalize__(self, obj):
-        if obj is None: return # let __new__ handle flags
-        if len(self.shape) == 2:
-            if self.shape[1] == 1:   # column vector
-                self.dim,self.transposed = self.shape[0],False
-            elif self.shape[0] == 1: # row vector
-                self.dim,self.transposed = self.shape[1],True
-            else:
-                raise ValueError("SPAMVecs must have a unit dimension")
-        else: raise ValueError("SPAMVecs must be 2D arrays")
+        SPAMVec.__init__(self, SPAMVec.convert_to_vector(vec))
 
 
     def set_vector(self, vec):
@@ -169,13 +195,10 @@ class StaticSPAMVec(_np.ndarray, SPAMVec):
         -------
         None
         """
-        vec, T = SPAMVec.convert_to_vector(vec)
-        if T != self.transposed:
-            raise ValueError("Transpose mismatch: must set vector " +
-                             "using the same shape")
+        vec  = SPAMVec.convert_to_vector(vec)
         if(vec.size != self.dim):
             raise ValueError("Argument must be length %d" % self.dim) 
-        self[:,:] = vec
+        self.base[:,:] = vec
 
 
 
@@ -246,35 +269,29 @@ class StaticSPAMVec(_np.ndarray, SPAMVec):
         StaticSPAMVec
             A copy of this SPAM operation.
         """
-        return StaticSPAMVec(self)
+        return StaticSPAMVec(self.base)
+
 
     def __str__(self):
         s = "Static spam vector with length %d\n" % \
-            len(self)
-        s += _mt.mx_to_string(self, width=4, prec=2)
+            len(self.base)
+        s += _mt.mx_to_string(self.base, width=4, prec=2)
         return s 
 
     def __reduce__(self):
-        createFn, args, state = _np.ndarray.__reduce__(self)
-        new_state = state + (self.__dict__,)
-        return (createFn, args, new_state)
-
-    def __setstate__(self, state):
-        _np.ndarray.__setstate__(self,state[0:-1])
-        self.__dict__.update(state[-1])
+        return (StaticSPAMVec, (_np.empty((self.dim,1),'d'),), self.__dict__)
 
 
 
 
 
-class FullyParameterizedSPAMVec(_np.ndarray, SPAMVec):
+class FullyParameterizedSPAMVec(SPAMVec):
     """
     Encapsulates a SPAM vector that is fully parameterized, that is,
       each element of the SPAM vector is an independent parameter.
     """
-    __array_priority__ = -1.0
 
-    def __new__(cls, vec):
+    def __init__(self, vec):
         """ 
         Initialize a FullyParameterizedSPAMOp object.
 
@@ -284,34 +301,7 @@ class FullyParameterizedSPAMVec(_np.ndarray, SPAMVec):
             a 1D numpy array representing the SPAM operation.  The
             shape of this array sets the dimension of the SPAM op.
         """
-        vector,T = SPAMVec.convert_to_vector(vec)
-        obj = _np.asarray(vector).view(cls)
-        obj.dim = len(vector)
-        obj.transposed = T
-        return obj
-
-        #Note: alternative to asarray line above is to call:
-        # obj=_np.ndarray.__new__(cls,vector.shape)
-        # obj[:,:] = vector.copy()
-
-    def __getitem__( self, key ):
-        #Items and slices are *not* gates - just numpy arrays:
-        return _np.ndarray.__getitem__(self.view(_np.ndarray), key)
-
-    def __getslice__(self, i,j):
-        #For special cases when getslice is still called, e.g. A[:]
-        return self.__getitem__(slice(i,j))
-
-    def __array_finalize__(self, obj):
-        if obj is None: return # let __new__ handle flags
-        if len(self.shape) == 2:
-            if self.shape[1] == 1:   # column vector
-                self.dim,self.transposed = self.shape[0],False
-            elif self.shape[0] == 1: # row vector
-                self.dim,self.transposed = self.shape[1],True
-            else:
-                raise ValueError("SPAMVecs must have a unit dimension")
-        else: raise ValueError("SPAMVecs must be 2D arrays")
+        SPAMVec.__init__(self, SPAMVec.convert_to_vector(vec))
 
 
     def set_vector(self, vec):
@@ -329,13 +319,10 @@ class FullyParameterizedSPAMVec(_np.ndarray, SPAMVec):
         -------
         None
         """
-        vec,T = SPAMVec.convert_to_vector(vec)
-        if T != self.transposed:
-            raise ValueError("Transpose mismatch: must set vector " +
-                             "using the same shape")
+        vec = SPAMVec.convert_to_vector(vec)
         if(vec.size != self.dim):
             raise ValueError("Argument must be length %d" % self.dim) 
-        self[:,:] = vec
+        self.base[:,:] = vec
 
 
     def num_params(self):
@@ -359,7 +346,7 @@ class FullyParameterizedSPAMVec(_np.ndarray, SPAMVec):
         numpy array
             The parameters as a 1D array with length num_params().
         """
-        return _np.asarray(self).flatten() #.real in case of complex matrices
+        return self.base.flatten() #.real in case of complex matrices
 
 
     def from_vector(self, v):
@@ -376,7 +363,7 @@ class FullyParameterizedSPAMVec(_np.ndarray, SPAMVec):
         -------
         None
         """
-        self[:,0] = v
+        self.base[:,0] = v
 
 
     def deriv_wrt_params(self):
@@ -402,21 +389,15 @@ class FullyParameterizedSPAMVec(_np.ndarray, SPAMVec):
         FullyParameterizedSPAMVec
             A copy of this SPAM operation.
         """
-        return FullyParameterizedSPAMVec(self)
+        return FullyParameterizedSPAMVec(self.base)
 
     def __str__(self):
-        s = "Fully Parameterized spam vector with length %d\n" % len(self)
-        s += _mt.mx_to_string(self, width=4, prec=2)
+        s = "Fully Parameterized spam vector with length %d\n" % len(self.base)
+        s += _mt.mx_to_string(self.base, width=4, prec=2)
         return s 
 
     def __reduce__(self):
-        createFn, args, state = _np.ndarray.__reduce__(self)
-        new_state = state + (self.__dict__,)
-        return (createFn, args, new_state)
-
-    def __setstate__(self, state):
-        _np.ndarray.__setstate__(self,state[0:-1])
-        self.__dict__.update(state[-1])
+        return (FullyParameterizedSPAMVec, (_np.empty((self.dim,1),'d'),), self.__dict__)
 
 
 
@@ -430,7 +411,7 @@ class FullyParameterizedSPAMVec(_np.ndarray, SPAMVec):
 #                off += eSize[i]; foff += full_vsize
 
 
-class TPParameterizedSPAMVec(_ProtectedArray, SPAMVec):
+class TPParameterizedSPAMVec(SPAMVec):
     """
     Encapsulates a SPAM vector that is fully parameterized except for the first
     element, which is frozen to be 1/(d**0.25).  This is so that, when the SPAM
@@ -446,9 +427,8 @@ class TPParameterizedSPAMVec(_ProtectedArray, SPAMVec):
     # alpha = 1/sqrt(d) to obtain a trace-1 matrix, i.e., finding alpha
     # s.t. Tr(alpha*[1/sqrt(d)*I]) == 1 => alpha*d/sqrt(d) == 1 => 
     # alpha = 1/sqrt(d) = 1/(len(vec)**0.25).
-    __array_priority__ = -1.0
-
-    def __new__(cls, vec):
+ 
+    def __init__(self, vec):
         """ 
         Initialize a TPParameterizedSPAMOp object.
 
@@ -458,35 +438,13 @@ class TPParameterizedSPAMVec(_ProtectedArray, SPAMVec):
             a 1D numpy array representing the SPAM operation.  The
             shape of this array sets the dimension of the SPAM op.
         """
-        vector,T = SPAMVec.convert_to_vector(vec)
+        vector = SPAMVec.convert_to_vector(vec)
         firstEl =  len(vector)**-0.25
         if not _np.isclose(vector[0,0], firstEl):
             raise ValueError("Cannot create TPParameterizedSPAMVec: " + 
                              "first element must equal %g!" % firstEl)
-        obj = _ProtectedArray.__new__(cls, vector, indicesToProtect=(0,0))
-        obj.dim = len(vector)
-        obj.transposed = T
-        return obj
-
-    def __getitem__( self, key ):
-        #Items and slices are *not* gates - just numpy arrays:
-        return _ProtectedArray.__getitem__(self.view(_ProtectedArray), key)
-
-    def __getslice__(self, i,j):
-        #For special cases when getslice is still called, e.g. A[:]
-        return self.__getitem__(slice(i,j))
-
-    def __array_finalize__(self, obj):
-        _ProtectedArray.__array_finalize__(self, obj) #call base class handler
-        if obj is None: return # let __new__ handle flags
-        if len(self.shape) == 2:
-            if self.shape[1] == 1:   # column vector
-                self.dim,self.transposed = self.shape[0],False
-            elif self.shape[0] == 1: # row vector
-                self.dim,self.transposed = self.shape[1],True
-            else:
-                raise ValueError("SPAMVecs must have a unit dimension")
-        else: raise ValueError("SPAMVecs must be 2D arrays")
+        SPAMVec.__init__(self, _ProtectedArray(vector,
+                                indicesToProtect=(0,0)))
 
 
     def set_vector(self, vec):
@@ -504,21 +462,14 @@ class TPParameterizedSPAMVec(_ProtectedArray, SPAMVec):
         -------
         None
         """
-        vec,T = SPAMVec.convert_to_vector(vec)
+        vec = SPAMVec.convert_to_vector(vec)
         firstEl =  (self.dim)**-0.25
-        if T != self.transposed:
-            raise ValueError("Transpose mismatch: must set vector " +
-                             "using the same shape")
         if(vec.size != self.dim):
             raise ValueError("Argument must be length %d" % self.dim) 
-
         if not _np.isclose(vec[0,0], firstEl):
             raise ValueError("Cannot create TPParameterizedSPAMVec: " + 
                              "first element must equal %g!" % firstEl)
-        if self.transposed:
-            self[:,1:] = vec[:,1:]
-        else:
-            self[1:,:] = vec[1:,:]
+        self.base[1:,:] = vec[1:,:]
 
 
     def num_params(self):
@@ -542,7 +493,7 @@ class TPParameterizedSPAMVec(_ProtectedArray, SPAMVec):
         numpy array
             The parameters as a 1D array with length num_params().
         """
-        return _np.asarray(self).flatten()[1:] #.real in case of complex matrices?
+        return self.base.flatten()[1:] #.real in case of complex matrices?
 
 
     def from_vector(self, v):
@@ -559,8 +510,8 @@ class TPParameterizedSPAMVec(_ProtectedArray, SPAMVec):
         -------
         None
         """
-        assert(_np.isclose(self[0,0], (self.dim)**-0.25))
-        self[1:,0] = v
+        assert(_np.isclose(self.base[0,0], (self.dim)**-0.25))
+        self.base[1:,0] = v
 
 
     def deriv_wrt_params(self):
@@ -587,21 +538,69 @@ class TPParameterizedSPAMVec(_ProtectedArray, SPAMVec):
         TPParameterizedSPAMVec
             A copy of this SPAM operation.
         """
-        return TPParameterizedSPAMVec(self)
+        return TPParameterizedSPAMVec(self.base)
 
     def __str__(self):
-        s = "TP-Parameterized spam vector with length %d\n" % len(self)
-        s += _mt.mx_to_string(self, width=4, prec=2)
+        s = "TP-Parameterized spam vector with length %d\n" % self.dim
+        s += _mt.mx_to_string(self.base, width=4, prec=2)
         return s 
 
     def __reduce__(self):
-        createFn, args, state = _np.ndarray.__reduce__(self)
-        new_state = state + (self.__dict__,)
-        return (createFn, args, new_state)
+        return (TPParameterizedSPAMVec, (_np.empty((self.dim,1),'d'),), self.__dict__)
 
-    def __setstate__(self, state):
-        _np.ndarray.__setstate__(self,state[0:-1])
-        self.__dict__.update(state[-1])
+
+
+
+
+
+#SCRATCH: TO REMOVE
+#    def __len__(self):
+#        return len(self.base)
+#
+#    def __add__(self,x):
+#        if isinstance(x, SPAMVec):
+#            return self.base + x.base
+#        else:
+#            return self.base + x
+#
+#    def __radd__(self,x):
+#        if isinstance(x, SPAMVec):
+#            return x.base + self.base
+#        else:
+#            return x + self.base
+#
+#    def __sub__(self,x):
+#        if isinstance(x, SPAMVec):
+#            return self.base - x.base
+#        else:
+#            return self.base - x
+#
+#    def __rsub__(self,x):
+#        if isinstance(x, SPAMVec):
+#            return x.base - self.base
+#        else:
+#            return x - self.base
+#
+#    def __mul__(self,x):
+#        if isinstance(x, SPAMVec):
+#            return self.base * x.base
+#        else:
+#            return self.base * x
+#
+#    def __rmul__(self,x):
+#        if isinstance(x, SPAMVec):
+#            return x.base * self.base
+#        else:
+#            return x * self.base
+#
+#    def __pow__(self,x): #same as __mul__()
+#        return self.base ** x
+#
+#    def __eq__(self,x):
+#        if isinstance(x, SPAMVec):
+#            return self.base == x.base
+#        else:
+#            return self.base == x
 
 
     

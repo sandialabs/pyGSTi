@@ -8,6 +8,9 @@ import sys
 class DriversTestCase(unittest.TestCase):
 
     def setUp(self):
+        #Set GateSet objects to "strict" mode for testing
+        pygsti.objects.GateSet._strict = True
+
         self.gateset = std.gs_target
 
         self.germs = std.germs
@@ -221,7 +224,7 @@ class TestDriversMethods(DriversTestCase):
             return gs.get_dimension()
 
         tp_target = std.gs_target.copy()
-        tp_target.set_all_parameterizations("tp")
+        tp_target.set_all_parameterizations("TP")
         
         pygsti.drivers.gs_stdev(gsFn, bootgs_p)
         pygsti.drivers.gs_mean(gsFn, bootgs_p)

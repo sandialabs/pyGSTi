@@ -1,18 +1,23 @@
 import numpy as _np
 
-class ProtectedArray(_np.ndarray):
-    def __new__(cls, input_array, indicesToProtect=None):
-        obj = _np.asarray(input_array).view(cls)
+class ProtectedArray(object):
+    """ 
+    A numpy ndarray-like class that allows certain elements to 
+    be treated as read-only.
+    """
+    
+    def __init__(self, input_array, indicesToProtect=None):
+        self.base = input_array
 
         #Get protected indices, a specified as:
-        obj.indicesToProtect = []
+        self.indicesToProtect = []
         if indicesToProtect is not None:
             if not (isinstance(indicesToProtect, tuple) 
                     or isinstance(indicesToProtect, list)):
                 indicesToProtect = (indicesToProtect,)
             
-            assert(len(indicesToProtect) <= len(obj.shape))
-            for ky,L in zip(indicesToProtect,obj.shape):
+            assert(len(indicesToProtect) <= len(self.base.shape))
+            for ky,L in zip(indicesToProtect,self.base.shape):
                 if isinstance( ky, slice ):
                     pindices = xrange(*ky.indices(L))
                 elif isinstance( ky, int ):
@@ -23,23 +28,54 @@ class ProtectedArray(_np.ndarray):
                 elif isinstance( ky, list ):
                     pindices = ky
                 else: raise TypeError("Invalid index type: %s" % type(ky))
-                obj.indicesToProtect.append(pindices)
+                self.indicesToProtect.append(pindices)
 
-        if len(obj.indicesToProtect) == 0:
-            obj.indicesToProtect = None
-        obj.flags.writeable = True
-        return obj
+        if len(self.indicesToProtect) == 0:
+            self.indicesToProtect = None
+        self.base.flags.writeable = True
 
-    def __array_finalize__(self, obj):
-        if obj is None: return # let __new__ handle flags
-        self.flags.writeable = False #default, in case getitem misses anything
-        self.indicesToProtect = None #default, in case getitem misses anything
 
+    #Mimic array behavior
+    def __pos__(self):        return self.base
+    def __neg__(self):        return -self.base
+    def __abs__(self):        return abs(self.base)
+    def __add__(self,x):      return self.base + x
+    def __radd__(self,x):     return x + self.base
+    def __sub__(self,x):      return self.base - x
+    def __rsub__(self,x):     return x - self.base
+    def __mul__(self,x):      return self.base * x
+    def __rmul__(self,x):     return x * self.base
+    def __div__(self,x):      return self.base / x
+    def __floordiv__(self,x): return self.base // x
+    def __pow__(self,x):      return self.base ** x
+    def __eq__(self,x):       return self.base == x
+    def __len__(self):        return len(self.base)
+    def __int__(self):        return int(self.base)
+    def __long__(self):       return long(self.base)
+    def __float__(self):      return float(self.base)
+    def __complex__(self):    return complex(self.base)
+
+
+
+    #Pickle plumbing
+    def __reduce__(self):
+        return (ProtectedArray, (_np.zeros(self.base.shape),), self.__dict__)
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+
+
+    #Access to underlying ndarray
+    def __getattr__(self, attr):
+        # set references to our memory as (entirely) read-only
+        ret = getattr(self.__dict__['base'],attr)
+        if isinstance(ret, _np.ndarray) and ret.base is self.base:
+            ret.flags.writeable = False 
+        return ret
 
     def __getslice__(self, i, j): 
         #For special cases when getslice is still called, e.g. A[:]
         return self.__getitem__(slice(i, j)) 
-
 
     def __getitem__( self, key ) :
 
@@ -50,10 +86,10 @@ class ProtectedArray(_np.ndarray):
             new_indicesToProtect = []; nUnprotectedIndices = 0
             tup_key = key if isinstance( key, tuple ) else (key,)
 
-            while len(tup_key) < len(self.shape):
+            while len(tup_key) < len(self.base.shape):
                 tup_key = tup_key + (slice(None,None,None),)
 
-            for ky,pindices,L in zip(tup_key,self.indicesToProtect,self.shape):
+            for ky,pindices,L in zip(tup_key,self.indicesToProtect,self.base.shape):
 
                 #Get requested indices
                 if isinstance( ky, slice ):
@@ -67,39 +103,59 @@ class ProtectedArray(_np.ndarray):
                     new_indicesToProtect.append(new_pindices)
 
                     #tally how many indices in this dimension are unprotected
-                    nUnprotectedIndices += (len(indices) - len(new_pindices))
+                    nTotalInDim = len(indices)
+                    nUnprotectedInCurDim = (len(indices) - len(new_pindices))
 
                 elif isinstance( ky, int ):
                     i = ky+L if ky<0 else ky
                     if i > L: 
                         raise IndexError("The index (%d) is out of range." % ky)
-                    if i not in pindices:
-                        nUnprotectedIndices += 1 # a single unprotected index
+
+                    nTotalInDim = 1
+                    if i not in pindices: #single index that is unprotected => all unprotected
+                        nUnprotectedInCurDim = 1 # a single unprotected index
+                    else: 
+                        nUnprotectedInCurDim = 0
+
                 else: raise TypeError("Invalid index type: %s" % type(ky))
-                        
-            if len(new_indicesToProtect) > 0:
-                new_indicesToProtect = tuple(new_indicesToProtect)
-            else: new_indicesToProtect = None
-            
-            writeable =  bool(nUnprotectedIndices > 0)
+
+                nUnprotectedIndices += nUnprotectedInCurDim
+
+                #if there exists a single dimension with no protected indices, then
+                # the whole array is writeable.
+                if nTotalInDim == nUnprotectedInCurDim:
+                    writeable = True 
+                    new_indicesToProtect = None
+                    break
+                    
+            else: #if we didn't break b/c of above block, which means each dim has
+                  # at least one protected index
+
+                #if there are no unprotected indices, then just set writeable == False
+                if nUnprotectedIndices == 0:
+                    writeable = False
+                    new_indicesToProtect = None
+                else:
+                    #There is at least one writeable (unprotected) index in some dimension
+                    # and at least one protected index in *every* dimension. We need to
+                    # set indicesToProtect to describe what to protect
+                    assert( len(new_indicesToProtect) > 0 ) #b/c otherwise another case would hold
+                    writeable = True
+                    new_indicesToProtect = tuple(new_indicesToProtect)
 
         else: # (if nothing is protected)
             writeable = True 
             new_indicesToProtect = None
 
-        ret = _np.ndarray.__getitem__(self,key)
+        ret = _np.ndarray.__getitem__(self.base,key)
 
         if not _np.isscalar(ret):
-            if writeable:
-                ret.indicesToProtect = new_indicesToProtect
-                ret.flags.writeable = True
-            else:
-                ret.indicesToProtect = None
-                ret.flags.writeable = False
-
-        #print "   writeable = ",ret.flags.writeable
-        #print "   new_toProtect = ",ret.indicesToProtect
-        #print "<< END getitem"
+            ret = ProtectedArray(ret)
+            ret.base.flags.writeable = writeable
+            ret.indicesToProtect = new_indicesToProtect
+            #print "   writeable = ",ret.flags.writeable
+            #print "   new_toProtect = ",ret.indicesToProtect
+            #print "<< END getitem"
         return ret
 
 
@@ -109,7 +165,7 @@ class ProtectedArray(_np.ndarray):
         protectionViolation = [] # per dimension
         if self.indicesToProtect is not None:
             tup_key = key if isinstance( key, tuple ) else (key,)
-            for ky,pindices,L in zip(tup_key,self.indicesToProtect,self.shape):
+            for ky,pindices,L in zip(tup_key,self.indicesToProtect,self.base.shape):
 
                 #Get requested indices
                 if isinstance( ky, slice ):
@@ -128,4 +184,63 @@ class ProtectedArray(_np.ndarray):
             
             if all(protectionViolation): #assigns to a protected index in each dim
                 raise ValueError("**assignment destination is read-only")                        
-        return _np.ndarray.__setitem__(self,key,val)
+        return self.base.__setitem__(key,val)
+
+
+
+
+
+
+
+
+
+
+
+
+#SCRATCH: TO REMOVE
+#    def __reduce__(self):
+#        """ Pickle plumbing. """
+#        createFn, args, state = _np.ndarray.__reduce__(self)
+#        new_state = state + (self.__dict__,)
+#        return (createFn, args, new_state)
+#    
+#    def __setstate__(self, state):
+#        """ Pickle plumbing. """
+#        _np.ndarray.__setstate__(self,state[0:-1])
+#        self.__dict__.update(state[-1])
+
+    #def __array_prepare__(self, out_arr, context=None):
+    #    print "PREPARE: ", type(out_arr)
+    #    return _np.asarray(out_arr)
+        
+    #def __array_finalize__(self, obj):
+    #    if obj is None: return # let __new__ handle flags
+    #    #Note: can't condition off .base since it's not set yet...
+    #    #bNone = obj.base is None
+    #    print "FINALIZE"
+    #    
+    #    print "FINALIZE obj = ",type(obj)
+    #    print "FINALIZE self = ",type(self)
+    #    
+    #    #self.flags.writeable = False #protect by default (in case getitem misses anything)
+    #    self.flags.writeable = True  #un-protect by default.  We'd like to be able to control
+    #      #this better, but if we set to False, then operations like flatten() can't work at 
+    #      # all.  Seems to be some numpy inconsistencies in this implementation...
+    #    self.indicesToProtect = None #default, in case getitem misses anything
+        
+    #def flatten(self, order='C'):
+    #    ret = _np.ndarray.flatten(self, order)
+    #    self.writeable = True
+    #    print "FLATTENED"
+    #    return ret
+
+    #def __copy__(self):
+    #    print "__COPY__!!"
+    #    return ProtectedArray(_np.asarray(self),self.indicesToProtect)
+    #
+    #def copy(self):
+    #    print "COPY!!"
+    #    return ProtectedArray(_np.asarray(self),self.indicesToProtect)
+
+
+

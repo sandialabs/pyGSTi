@@ -204,7 +204,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         gs_after_gauge_opt = gs_after_gauge_opt.depolarize(gate_noise=advancedOptions['depolarizeLGST'])
 
     if constrainToTP:
-        gs_after_gauge_opt.set_all_parameterizations("tp")
+        gs_after_gauge_opt.set_all_parameterizations("TP")
 
     #Run LSGST on data
     if objective == "chi2":

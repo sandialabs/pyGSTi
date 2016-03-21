@@ -9,6 +9,8 @@ import sys
 class CoreTestCase(unittest.TestCase):
 
     def setUp(self):
+        #Set GateSet objects to "strict" mode for testing
+        pygsti.objects.GateSet._strict = True
 
         self.gateset = std.gs_target
         self.datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0.1)
@@ -283,7 +285,7 @@ class TestCoreMethods(CoreTestCase):
                                                       gateStringSetLabels=["Set1","Set2"], useFreqWeightedChiSq=True )
 
         aliased_list = [ pygsti.obj.GateString( [ (x if x != "Gx" else "GA1") for x in gs]) for gs in self.lsgstStrings[0] ]
-        gs_withA1 = gs_clgst.copy(); gs_withA1["GA1"] = gs_clgst["Gx"]
+        gs_withA1 = gs_clgst.copy(); gs_withA1.gates["GA1"] = gs_clgst.gates["Gx"]
         gs_mlegst_chk_opts2 = pygsti.do_mlgst(ds, gs_withA1, aliased_list, minProbClip=1e-6,
                                               probClipInterval=(-1e2,1e2), verbosity=0,
                                               gateLabelAliases={ 'GA1': ('Gx',) })
@@ -431,7 +433,7 @@ class TestCoreMethods(CoreTestCase):
         # routines are more tested
         gs_bigkick = gs_lgst_target.kick(absmag=1.0)
         gs_badspam = gs_bigkick.copy()
-        gs_badspam['E0'] =  np.array( [[2],[0],[0],[4]], 'd') #set a bad evec so vSPAM has to work...
+        gs_badspam.EVecs['E0'] =  np.array( [[2],[0],[0],[4]], 'd') #set a bad evec so vSPAM has to work...
 
         gs_clgst_tp    = self.runSilent(pygsti.contract,gs_bigkick, "TP", verbosity=10, tol=10.0)
         gs_clgst_cp    = self.runSilent(pygsti.contract,gs_bigkick, "CP", verbosity=10, tol=10.0)

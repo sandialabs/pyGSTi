@@ -221,7 +221,7 @@ def get_gateset_gates_table(gateset, formats, tableclass, longtable,
 
     for gl in gateLabels:
         if confidenceRegionInfo is None:
-            _tf.add_table_row(formats, tables, (gl, gateset[gl]), (None,_tf.Brk))
+            _tf.add_table_row(formats, tables, (gl, gateset.gates[gl]), (None,_tf.Brk))
         else:
             intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(gl)[:,None]
             if isinstance(gateset.gates[gl], _objs.FullyParameterizedGate): #then we know how to reshape into a matrix
@@ -233,7 +233,7 @@ def get_gateset_gates_table(gateset, formats, tableclass, longtable,
                                                 intervalVec.reshape(gate_dim-1,gate_dim)), axis=0 )
             else: 
                 intervalMx = intervalVec # we don't know how best to reshape vector of parameter intervals, so don't
-            _tf.add_table_row(formats, tables, (gl, gateset[gl], intervalMx), (None,_tf.Brk,_tf.Brk))
+            _tf.add_table_row(formats, tables, (gl, gateset.gates[gl], intervalMx), (None,_tf.Brk,_tf.Brk))
 
     _tf.finish_table(formats, tables, longtable)
     return tables
@@ -297,7 +297,7 @@ def get_unitary_gateset_gates_table(gateset, formats, tableclass, longtable,
         decomp, decompEB = qtys['%s decomposition' % gl].get_value_and_err_bar()
         if confidenceRegionInfo is None:
             _tf.add_table_row(formats, tables, 
-                        (gl, gateset[gl],decomp.get('axis of rotation','X'),decomp.get('pi rotations','X')),
+                        (gl, gateset.gates[gl],decomp.get('axis of rotation','X'),decomp.get('pi rotations','X')),
                         (None, _tf.Brk, _tf.Nml, _tf.Pi) )
         else:
             intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(gl)[:,None]
@@ -310,7 +310,7 @@ def get_unitary_gateset_gates_table(gateset, formats, tableclass, longtable,
                 intervalMx = intervalVec # we don't know how best to reshape vector of parameter intervals, so don't
 
             _tf.add_table_row(formats, tables, 
-                        (gl, gateset[gl],decomp.get('axis of rotation','X'), 
+                        (gl, gateset.gates[gl],decomp.get('axis of rotation','X'), 
                          (decomp.get('pi rotations','X'), decompEB.get('pi rotations','X')) ),
                         (None, _tf.Brk, _tf.Nml, _tf.EBPi) )
 
@@ -482,7 +482,8 @@ def get_gateset_vs_target_err_gen_table(gateset, targetGateset, formats, tablecl
     tables = {}
     _tf.create_table(formats, tables, colHeadings, (None,None), tableclass, longtable)
     for gl in gateLabels:
-        _tf.add_table_row(formats, tables, (gl, _spl.logm(_np.dot(_np.linalg.inv(targetGateset[gl]),gateset[gl]))),
+        _tf.add_table_row(formats, tables, (gl, _spl.logm(_np.dot(_np.linalg.inv(
+                            targetGateset.gates[gl]),gateset.gates[gl]))),
                     (None, _tf.Brk))
     _tf.finish_table(formats, tables, longtable)
     return tables

@@ -228,7 +228,7 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
       rhoVec[i] = dsRow.fraction(spamLabel)
     rhoVec_p = _np.dot( Pjt, _np.dot(Ud, rhoVec) ) #truncate rhoVec => rhoVec', shape (trunc, 1)
     rhoVec_p = _np.dot(invABMat_p,rhoVec_p)      
-    lgstGateset[rhoLabel] = rhoVec_p
+    lgstGateset.rhoVecs[rhoLabel] = rhoVec_p
 
   # Add identity vector to gateset (needed before adding spam labels)
   #  Pad with zeros if needed (ROBIN - is this correct?)
@@ -292,7 +292,7 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
         if gateLabel in guessGatesetForGauge.gates:
           new_gate = guessGatesetForGauge.gates[gateLabel].copy()
           _objs.gate.optimize_gate( new_gate, lgstGateset.gates[gateLabel])
-          lgstGateset[ gateLabel ] = new_gate
+          lgstGateset.gates[ gateLabel ] = new_gate
 
     #inv_BMat_p = _np.dot(invABMat_p, AMat_p) # should be equal to inv(BMat_p) when trunc == gsDim ?? check??
     #lgstGateset.transform( S=_np.dot(invABMat_p, AMat_p), Si=BMat_p ) # lgstGateset had dim trunc, so after transform is has dim gsDim
@@ -517,7 +517,7 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs,
 
   estimates = _np.empty( (len(gateStringsToUseInEstimation), gate_dim, gate_dim), 'd')
   for (i,gateStr) in enumerate(gateStringsToUseInEstimation):
-    estimates[i] = lgstEstimates[ "Gestimator%d" % i ]
+    estimates[i] = lgstEstimates.gates[ "Gestimator%d" % i ]
     
   evTree = gs.bulk_evaltree(gateStringsToUseInEstimation)
   maxGateStringLength = max([len(x) for x in gateStringsToUseInEstimation])
@@ -2372,10 +2372,10 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
           diff += gs.frobeniusdist(targetGateset, None, gateWeight, 0.0)
         elif targetGatesMetric == "fidelity":
           for gateLbl in gs.gates:
-            diff += gateWeight * (1.0 - _tools.process_fidelity(targetGateset[gateLbl], gs[gateLbl]))
+            diff += gateWeight * (1.0 - _tools.process_fidelity(targetGateset.gates[gateLbl], gs.gates[gateLbl]))
         elif targetGatesMetric == "tracedist":
           for gateLbl in gs.gates:
-            diff += gateWeight * _tools.jtracedist(targetGateset[gateLbl], gs[gateLbl])
+            diff += gateWeight * _tools.jtracedist(targetGateset.gates[gateLbl], gs.gates[gateLbl])
         else: raise ValueError("Invalid targetGatesMetric: %s" % targetGatesMetric)
             
         if targetSpamMetric == "frobenius":
@@ -2532,7 +2532,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
 
         gs = gateset.copy(); gs.transform(matM); d=0
         for gateLabel in gs.gates:
-          d += _tools.frobeniusdist(gs[gateLabel],complDepolGate)
+          d += _tools.frobeniusdist(gs.gates[gateLabel],complDepolGate)
         spamPenalty  = sum( [ _tools.rhovec_penalty(rhoVec) for rhoVec in gs.rhoVecs.values() ] )
         spamPenalty += sum( [ _tools.evec_penalty(EVec)     for EVec   in gs.EVecs.values() ] )        
         return d + spamPenalty
@@ -2566,7 +2566,8 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
       if toGetTo == "target":
         print 'The resulting Frobenius-norm distance is: %g' % minSol.fun
         for gateLabel in newGateset.gates:
-          print "  frobenius norm diff of %s = %g" % (gateLabel, _tools.frobeniusdist(newGateset[gateLabel],targetGateset[gateLabel]))
+          print "  frobenius norm diff of %s = %g" % (gateLabel,
+            _tools.frobeniusdist(newGateset.gates[gateLabel],targetGateset.gates[gateLabel]))
         for (rhoLbl,rhoV) in newGateset.rhoVecs.iteritems(): 
           print "  frobenius norm diff of %s = %g" % \
               (rhoLbl, _tools.frobeniusdist(rhoV,targetGateset.rhoVecs[rhoLbl]))

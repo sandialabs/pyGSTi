@@ -7,9 +7,13 @@ from pygsti.construction import std1Q_XY as stdxy
 import numpy as np
 import sys
 
+
 class HessianTestCase(unittest.TestCase):
 
     def setUp(self):
+        #Set GateSet objects to "strict" mode for testing
+        pygsti.objects.GateSet._strict = True
+
         self.gateset = pygsti.io.load_gateset("cmp_chk_files/analysis.gateset")
         self.ds = pygsti.objects.DataSet(fileToLoadFrom="cmp_chk_files/analysis.dataset")
 
@@ -69,7 +73,7 @@ class TestHessianMethods(HessianTestCase):
 
         #XYI Gateset: SP0=False
         tst = stdxyi.gs_target.copy()
-        tst['rho0'] = pygsti.obj.TPParameterizedSPAMVec(tst['rho0'])
+        tst.rhoVecs['rho0'] = pygsti.obj.TPParameterizedSPAMVec(tst.rhoVecs['rho0'])
         n = tst.num_params()
         self.assertEqual(n,55) # 3*16 + 4 + 3 = 55
         
@@ -77,9 +81,9 @@ class TestHessianMethods(HessianTestCase):
         self.assertEqual(n,40) # 15 gauge params (minus one b/c can't change rho?)
 
         #XYI Gateset: G0=SP0=False
-        tst['Gi'] = pygsti.obj.TPParameterizedGate(tst['Gi'])
-        tst['Gx'] = pygsti.obj.TPParameterizedGate(tst['Gx'])
-        tst['Gy'] = pygsti.obj.TPParameterizedGate(tst['Gy'])
+        tst.gates['Gi'] = pygsti.obj.TPParameterizedGate(tst.gates['Gi'])
+        tst.gates['Gx'] = pygsti.obj.TPParameterizedGate(tst.gates['Gx'])
+        tst.gates['Gy'] = pygsti.obj.TPParameterizedGate(tst.gates['Gy'])
         n = tst.num_params()
         self.assertEqual(n,43) # 3*12 + 4 + 3 = 43
         

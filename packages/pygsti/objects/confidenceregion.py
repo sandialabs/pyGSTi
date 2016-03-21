@@ -365,10 +365,10 @@ class ConfidenceRegion(object):
             vec = rhoVec.to_vector()
             for i in range(nRhoParams):
                 vecEps = vec.copy(); vecEps[i] += eps
-                gsEps[rhoLabel].from_vector(vecEps) #update gsEps parameters
+                gsEps.rhoVecs[rhoLabel].from_vector(vecEps) #update gsEps parameters
                 gradF[off + i] = ( fnOfSpamVecs( gsEps.get_rhovecs(),
                                    gsEps.get_evecs() ) - f0 ) / eps
-            gsEps[rhoLabel] = rhoVec.copy()  #reset gsEps (copy() just to be safe)
+            gsEps.rhoVecs[rhoLabel] = rhoVec.copy()  #reset gsEps (copy() just to be safe)
 
         #loop just over parameterized objects - don't use get_evecs() here...
         for ELabel,EVec in self.gateset.EVecs.iteritems(): 
@@ -377,10 +377,10 @@ class ConfidenceRegion(object):
             vec = EVec.to_vector()
             for i in range(nEParams):
                 vecEps = vec.copy(); vecEps[i] += eps
-                gsEps[ELabel].from_vector(vecEps) #update gsEps parameters
+                gsEps.EVecs[ELabel].from_vector(vecEps) #update gsEps parameters
                 gradF[off + i] = ( fnOfSpamVecs( gsEps.get_rhovecs(),
                                    gsEps.get_evecs() ) - f0 ) / eps        
-            gsEps[ELabel] = EVec.copy()  #reset gsEps (copy() just to be safe)
+            gsEps.EVecs[ELabel] = EVec.copy()  #reset gsEps (copy() just to be safe)
 
         return self._compute_df_from_gradF(gradF, f0, returnFnVal, verbosity)
 
