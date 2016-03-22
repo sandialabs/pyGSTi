@@ -19,10 +19,10 @@ import sys as _sys
 
 def make_prep_mxs(gs,prepFidList):
     dimRho = gs.get_dimension()
-    numRho = len(gs.rhoVecs)
+    numRho = len(gs.preps)
     numFid = len(prepFidList)
     outputMatList = []
-    for rho in gs.rhoVecs.values():
+    for rho in gs.preps.values():
         outputMat = _np.zeros([dimRho,numFid],float)
         counter = 0
         for prepFid in prepFidList:
@@ -33,10 +33,10 @@ def make_prep_mxs(gs,prepFidList):
 
 def make_meas_mxs(gs,prepMeasList):
     dimE = gs.get_dimension()
-    numE = len(gs.EVecs)
+    numE = len(gs.effects)
     numFid = len(prepMeasList)
     outputMatList = []
-    for E in gs.EVecs.values():
+    for E in gs.effects.values():
         outputMat = _np.zeros([dimE,numFid],float)
         counter = 0
         for measFid in prepMeasList:
@@ -50,7 +50,7 @@ def make_meas_mxs(gs,prepMeasList):
 #    outputMat = _np.zeros([dimRho,numRho*numFid],float)
 #    counter = 0
 #    for prepFid in prepFidList:
-#        for rho in gs.rhoVecs.values():
+#        for rho in gs.preps.values():
 #            outputMat[:,counter] = _np.dot(gs.product(prepFid),rho).T[0]
 #            counter += 1
 #    return outputMat
@@ -59,12 +59,12 @@ def make_meas_mxs(gs,prepMeasList):
 
 # def make_meas_mxs(gs,measFidList):
 #     dimE = gs.get_dimension()
-#     numE = len(gs.EVecs)
+#     numE = len(gs.effects)
 #     numFid = len(measFidList)
 #     outputMat = _np.zeros([dimE,numE*numFid],float)
 #     counter = 0
 #     for measFid in measFidList:
-#         for E in gs.EVecs.values():
+#         for E in gs.effects.values():
 #             outputMat[:,counter] = _np.dot(E.T,gs.product(measFid))[0]
 #             counter += 1
 #     SqOutputMat = _np.dot(outputMat,outputMat.T)

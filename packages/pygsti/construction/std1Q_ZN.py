@@ -13,9 +13,9 @@ import gatesetconstruction as _setc
 
 gs_target = _setc.build_gateset([2],[('Q0',)], ['Gz','Gn'], 
                                 [ "Z(pi/2,Q0)", "N(pi/2, sqrt(3)/2, 0, -0.5, Q0)"],
-                                rhoLabelList=["rho0"], rhoExpressions=["0"],
-                                ELabelList=["E0"], EExpressions=["1"], 
-                                spamLabelDict={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
+                                prepLabels=["rho0"], prepExpressions=["0"],
+                                effectLabels=["E0"], effectExpressions=["1"], 
+                                spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
 
 prepFiducials = _strc.gatestring_list([(),
                                        ('Gn',),

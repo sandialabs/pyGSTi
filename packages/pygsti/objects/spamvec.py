@@ -402,11 +402,11 @@ class FullyParameterizedSPAMVec(SPAMVec):
 
 
 #Helpful for deriv_wrt_params??
-#            for (i,rhoVec) in enumerate(self.rhoVecs):
+#            for (i,rhoVec) in enumerate(self.preps):
 #            deriv[foff+m:foff+m+rhoSize[i],off:off+rhoSize[i]] = _np.identity( rhoSize[i], 'd' )
 #                off += rhoSize[i]; foff += full_vsize
 #
-#            for (i,EVec) in enumerate(self.EVecs):
+#            for (i,EVec) in enumerate(self.effects):
 #                deriv[foff:foff+eSize[i],off:off+eSize[i]] = _np.identity( eSize[i], 'd' )
 #                off += eSize[i]; foff += full_vsize
 

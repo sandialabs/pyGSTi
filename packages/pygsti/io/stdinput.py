@@ -707,17 +707,17 @@ def read_gateset(filename):
     #E_names = sorted(E_names, key=spam_vecs.keys().index)
 
      #add vectors to gateset
-    for rho_nm in rho_names: gs.rhoVecs[rho_nm] = spam_vecs[rho_nm]
-    for E_nm   in E_names:   gs.EVecs[E_nm] = spam_vecs[E_nm]
+    for rho_nm in rho_names: gs.preps[rho_nm] = spam_vecs[rho_nm]
+    for E_nm   in E_names:   gs.effects[E_nm] = spam_vecs[E_nm]
 
-    gs['identity'] = identity_vec
+    gs.povm_identity = identity_vec
 
      #add spam labels to gateset
     for spam_label in spam_labels:
         (rho_nm,E_nm) = spam_labels[spam_label]
-        gs.add_spam_label(rho_nm , E_nm, spam_label)
+        gs.spamdefs[spam_label] = (rho_nm , E_nm)
 
     if len(remainder_spam_label) > 0:
-        gs.add_spam_label( 'remainder', 'remainder', remainder_spam_label)
+        gs.spamdefs[remainder_spam_label] = ('remainder', 'remainder')
 
     return gs

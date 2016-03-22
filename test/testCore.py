@@ -17,7 +17,7 @@ class CoreTestCase(unittest.TestCase):
         
         self.fiducials = std.fiducials
         self.germs = std.germs
-        self.specs = pygsti.construction.build_spam_specs(self.fiducials, EVecLbls=['E0']) #only use the first EVec
+        self.specs = pygsti.construction.build_spam_specs(self.fiducials, effect_labels=['E0']) #only use the first EVec
 
         self.gateLabels = self.gateset.gates.keys() # also == std.gates
         self.lgstStrings = pygsti.construction.list_lgst_gatestrings(self.specs, self.gateLabels)
@@ -99,12 +99,12 @@ class TestCoreMethods(CoreTestCase):
 
         with self.assertRaises(ValueError):
             gs_lgst = pygsti.do_lgst(ds, self.specs, None, gateLabels=self.gateset.gates.keys(),
-                                     spamDict=self.gateset.get_spam_label_dict(),
+                                     spamDict=self.gateset.get_reverse_spam_defs(),
                                      svdTruncateTo=4, verbosity=0) #no identity vector
 
         with self.assertRaises(ValueError):
             bad_specs = pygsti.construction.build_spam_specs(
-                pygsti.construction.gatestring_list([('Gx',),('Gx',),('Gx',),('Gx',)]), EVecLbls=['E0'])
+                pygsti.construction.gatestring_list([('Gx',),('Gx',),('Gx',),('Gx',)]), effect_labels=['E0'])
             gs_lgst = pygsti.do_lgst(ds, bad_specs, self.gateset, svdTruncateTo=4, verbosity=0) # bad specs (rank deficient)
 
         with self.assertRaises(KeyError):
@@ -433,7 +433,7 @@ class TestCoreMethods(CoreTestCase):
         # routines are more tested
         gs_bigkick = gs_lgst_target.kick(absmag=1.0)
         gs_badspam = gs_bigkick.copy()
-        gs_badspam.EVecs['E0'] =  np.array( [[2],[0],[0],[4]], 'd') #set a bad evec so vSPAM has to work...
+        gs_badspam.effects['E0'] =  np.array( [[2],[0],[0],[4]], 'd') #set a bad evec so vSPAM has to work...
 
         gs_clgst_tp    = self.runSilent(pygsti.contract,gs_bigkick, "TP", verbosity=10, tol=10.0)
         gs_clgst_cp    = self.runSilent(pygsti.contract,gs_bigkick, "CP", verbosity=10, tol=10.0)

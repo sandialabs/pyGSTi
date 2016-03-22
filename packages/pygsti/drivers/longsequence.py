@@ -18,9 +18,9 @@ from .. import objects as _objs
 from .. import tools as _tools
 
 def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
-                         rhoStrsListOrFilename, EStrsListOrFilename,
+                         prepStrsListOrFilename, effectStrsListOrFilename,
                          germsListOrFilename, maxLengths, gateLabels=None, 
-                         weightsDict=None, rhoEPairs=None, constrainToTP=True, 
+                         weightsDict=None, fidPairs=None, constrainToTP=True, 
                          gaugeOptToCPTP=False, gaugeOptRatio=0.001,
                          objective="logl", advancedOptions={}, lsgstLists=None,
                          truncScheme="whole germ powers", mxBasis="gm"):
@@ -55,14 +55,14 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         The target gate set, specified either directly or by the filename of a 
         gateset file (text format).
 
-    rhoStrsListOrFilename : (list of GateStrings) or string
+    prepStrsListOrFilename : (list of GateStrings) or string
         The state preparation fiducial gate strings, specified either directly 
         or by the filename of a gate string list file (text format).
 
-    EStrsListOrFilename : (list of GateStrings) or string or None
+    effectStrsListOrFilename : (list of GateStrings) or string or None
         The measurement fiducial gate strings, specified either directly 
         or by the filename of a gate string list file (text format).  If None,
-        then use the same strings as specified by rhoStrsListOrFilename.
+        then use the same strings as specified by prepStrsListOrFilename.
 
     germsListOrFilename : (list of GateStrings) or string
         The germ gate strings, specified either directly or by the filename of a
@@ -85,9 +85,9 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         A dictionary with keys == gate strings and values == multiplicative scaling 
         factor for the corresponding gate string. The default is no weight scaling at all.
 
-    rhoEPairs : list of 2-tuples, optional
-        Specifies a subset of all rhoStr,EStr string pairs to be used in this
-        analysis.  Each element of rhoEPairs is a (iRhoStr, iEStr) 2-tuple of integers,
+    fidPairs : list of 2-tuples, optional
+        Specifies a subset of all prepStr,effectStr string pairs to be used in this
+        analysis.  Each element of fidPairs is a (iRhoStr, iEStr) 2-tuple of integers,
         which index a string within the state preparation and measurement fiducial
         strings respectively.
 
@@ -155,29 +155,29 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     if gateLabels is None:
         gateLabels = gs_target.gates.keys()
 
-    if isinstance(rhoStrsListOrFilename, str):
-        rhoStrs = _io.load_gatestring_list(rhoStrsListOrFilename)
-    else: rhoStrs = rhoStrsListOrFilename
+    if isinstance(prepStrsListOrFilename, str):
+        prepStrs = _io.load_gatestring_list(prepStrsListOrFilename)
+    else: prepStrs = prepStrsListOrFilename
 
-    if EStrsListOrFilename is None:
-        EStrs = rhoStrs #use same strings for EStrs if EStrsListOrFilename is None
+    if effectStrsListOrFilename is None:
+        effectStrs = prepStrs #use same strings for effectStrs if effectStrsListOrFilename is None
     else:
-        if isinstance(EStrsListOrFilename, str):
-            EStrs = _io.load_gatestring_list(EStrsListOrFilename)
-        else: EStrs = EStrsListOrFilename
+        if isinstance(effectStrsListOrFilename, str):
+            effectStrs = _io.load_gatestring_list(effectStrsListOrFilename)
+        else: effectStrs = effectStrsListOrFilename
 
     if isinstance(germsListOrFilename, str):
         germs = _io.load_gatestring_list(germsListOrFilename)
     else: germs = germsListOrFilename
     if lsgstLists is None:
         lsgstLists = _construction.stdlists.make_lsgst_lists_asymmetric_fids(
-            gateLabels, rhoStrs, EStrs, germs, maxLengths, rhoEPairs, truncScheme)
+            gateLabels, prepStrs, effectStrs, germs, maxLengths, fidPairs, truncScheme)
 
     #Starting Point = LGST
     gate_dim = gs_target.get_dimension()
-    specs = _construction.build_spam_specs(rhoStrs=rhoStrs, EStrs=EStrs,
-                                           rhoVecLbls=gs_target.get_rhovec_labels(),
-                                           EVecLbls=gs_target.get_evec_labels())
+    specs = _construction.build_spam_specs(prepStrs=prepStrs, effectStrs=effectStrs,
+                                           prep_labels=gs_target.get_prep_labels(),
+                                           effect_labels=gs_target.get_effect_labels())
     gs_lgst = _alg.do_lgst(ds, specs, gs_target, svdTruncateTo=gate_dim, verbosity=3)
 
     if constrainToTP: #gauge optimize (and contract if needed) to TP, then lock down first basis element as the identity
@@ -191,7 +191,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                 _warnings.warn("Could not gauge optimize to TP (penalty=%g), so contracted LGST gateset to TP" % minPenalty)
 
         gs_after_gauge_opt = _alg.optimize_gauge(gs_in_TP, "target", targetGateset=gs_target, constrainToTP=True, spamWeight=1.0, gateWeight=1.0)
-        gs_after_gauge_opt['identity'] = firstElIdentityVec # declare that this basis has the identity as its first element
+        gs_after_gauge_opt.povm_identity = firstElIdentityVec # declare that this basis has the identity as its first element
 
     else: # no TP constraint
         gs_after_gauge_opt = _alg.optimize_gauge(gs_lgst, "target", targetGateset=gs_target, spamWeight=1.0, gateWeight=1.0)
@@ -252,8 +252,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     ret = _report.Results()
     ret.init_Ls_and_germs(objective, gs_target, ds, 
                         gs_after_gauge_opt, maxLengths, germs,
-                        go_gs_lsgst_list, lsgstLists, rhoStrs, EStrs,
-                        truncFn,  constrainToTP, rhoEPairs, gs_lsgst_list)
+                        go_gs_lsgst_list, lsgstLists, prepStrs, effectStrs,
+                        truncFn,  constrainToTP, fidPairs, gs_lsgst_list)
     ret.set_additional_info(advancedOptions.get('minProbClip',1e-4),
                           advancedOptions.get('minProbClipForWeighting',1e-4),
                           advancedOptions.get('probClipInterval',(-1e6,1e6)),

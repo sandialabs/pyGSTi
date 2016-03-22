@@ -34,7 +34,7 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
     def _check_dim(self, vec):
         if self.parent is None: return
         if self.parent.dim is None:
-            self.parent.dim = len(vec)
+            self.parent._dim = len(vec) # use _dim to set
         elif self.parent.dim != len(vec):
             raise ValueError("Cannot add vector with dimension" +
                              "%d to gateset of dimension %d"
@@ -42,10 +42,10 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
 
     def __getitem__(self, key):
         if key == self.remainderLabel:
-            if self.parent is None or self.parent.identityVec is None:
+            if self.parent is None or self.parent.povm_identity is None:
                 raise KeyError("Cannot compute remainder vector because "
                                + " identity vector is not set!")
-            return self.parent.identityVec - sum(self.values())
+            return self.parent.povm_identity - sum(self.values())
         return super(OrderedSPAMVecDict,self).__getitem__(key)
 
 
@@ -115,7 +115,7 @@ class OrderedGateDict(PrefixOrderedDict):
         #Dimension check
         if self.parent is None: return
         if self.parent.dim is None:
-            self.parent.dim = gate_dim
+            self.parent._dim = gate_dim #use _dim to set
         elif self.parent.dim != gate_dim:
             raise ValueError("Cannot add gate with dimension " +
                              "%d to gateset of dimension %d"
@@ -174,9 +174,9 @@ class OrderedSPAMLabelDict(_collections.OrderedDict):
         if type(val) != tuple or len(val) != 2:
             raise KeyError("SPAM label values must be 2-tuples!")
 
-        rhoLabel, eLabel = val        
-        if rhoLabel == self.remainderLabel:
-            if eLabel != self.remainderLabel: 
+        prepLabel, effectLabel = val        
+        if prepLabel == self.remainderLabel:
+            if effectLabel != self.remainderLabel: 
                 raise ValueError("POVM label must always ==" +
                                  "%s when preparation " % self.remainderLabel +
                                  "label does")
@@ -193,7 +193,7 @@ class OrderedSPAMLabelDict(_collections.OrderedDict):
         for k,v in self.iteritems():
             if val == v: del self[k]
 
-        #TODO: perhaps add checks that value == (rhoLabel,eLabel) labels exist
+        #TODO: perhaps add checks that value == (prepLabel,effectLabel) labels exist
         # (would need to add a "parent" member to access the GateSet)
 
         super(OrderedSPAMLabelDict,self).__setitem__(key,val)

@@ -84,12 +84,12 @@ class GaugeInvGateSet(object):  #(_collections.OrderedDict):
         print "DB: Y0 = "; _mt.print_mx(Y[0])
         print "DB: Y0 evals = ",_np.linalg.eigvals(Y[0])
         print "DB: invY0 = "; _mt.print_mx(_np.linalg.inv(Y[0]))
-        print "DB: rho = "; _mt.print_mx(gateset.rhoVecs[0])
+        print "DB: rho = "; _mt.print_mx(gateset.preps[0])
 
         #Get parameterization of SPAM pair (assume just a single pair is
         # present for now)
-        rho_tilde = _np.dot(_np.linalg.inv(Y[0]), gateset.rhoVecs[0])
-        E_tilde = _np.dot( _np.transpose(gateset.EVecs[0]), Y[0] )
+        rho_tilde = _np.dot(_np.linalg.inv(Y[0]), gateset.preps[0])
+        E_tilde = _np.dot( _np.transpose(gateset.effects[0]), Y[0] )
         delta0_diag, inv_delta0_diag = \
             _get_delta0_diag(rho_tilde, E_tilde, self.D_params[0], vb)
         delta0 = _np.diag( delta0_diag )
@@ -110,13 +110,13 @@ class GaugeInvGateSet(object):  #(_collections.OrderedDict):
         #assert( _np.allclose( _np.dot( _np.diag(1.0/delta0_diag), rho_tilde),
         #                      _np.ones(rho_tilde.shape)))
 
-        ET_tilde = _np.dot( _np.transpose(gateset.EVecs[0]), scaledY0 )
+        ET_tilde = _np.dot( _np.transpose(gateset.effects[0]), scaledY0 )
         self.E_params = _get_ET_params(ET_tilde, self.D_params[0])
         print "DB: ET_tilde = "; _mt.print_mx(ET_tilde)
         if debug is not None:
             print "DB: BScaled ET_tilde = "; _mt.print_mx( _np.dot(ET_tilde,debug))
 
-           #FUTURE: multiple E-vectors allowed?
+           #FUTURE: multiple effect-vectors allowed?
 
         #assume a SPAM pair is present and parameterized (for now) - so
         # parameterize B0j matrices all the same.

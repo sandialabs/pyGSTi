@@ -209,13 +209,13 @@ def write_gateset(gs,filename,title=None):
         print >> f, "# %s" % title
     print >> f, ""
 
-    for (rhoLabel,rhoVec) in gs.rhoVecs.iteritems():
-        print >> f, "%s" % rhoLabel
+    for (prepLabel,rhoVec) in gs.preps.iteritems():
+        print >> f, "%s" % prepLabel
         print >> f, "PauliVec"
         print >> f, " ".join( "%.8g" % el for el in rhoVec )
         print >> f, ""
 
-    for (ELabel,EVec) in gs.EVecs.iteritems():
+    for (ELabel,EVec) in gs.effects.iteritems():
         print >> f, "%s" % ELabel
         print >> f, "PauliVec"
         print >> f, " ".join( "%.8g" % el for el in EVec )
@@ -227,12 +227,12 @@ def write_gateset(gs,filename,title=None):
         print >> f, _tools.mx_to_string(gate, width=16, prec=8)
         print >> f, ""
 
-    if gs.identityVec is not None:
-        print >> f, "IDENTITYVEC " + " ".join( "%.8g" % el for el in gs.identityVec )
+    if gs.povm_identity is not None:
+        print >> f, "IDENTITYVEC " + " ".join( "%.8g" % el for el in gs.povm_identity )
     else:
         print >> f, "IDENTITYVEC None"
 
-    for sl,(rhoLabel,ELabel) in gs.SPAM_labels.iteritems():
-        print >> f, "SPAMLABEL %s = %s %s" % (sl, rhoLabel, ELabel)
+    for sl,(prepLabel,ELabel) in gs.spamdefs.iteritems():
+        print >> f, "SPAMLABEL %s = %s %s" % (sl, prepLabel, ELabel)
 
     f.close()

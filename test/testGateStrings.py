@@ -169,17 +169,17 @@ class TestGateStringMethods(GateStringTestCase):
         # LSGST
         maxLens = [0,1,2]
         lsgstLists = pygsti.construction.make_lsgst_lists_asymmetric_fids(
-            gateLabels, strs, strs, germs, maxLens, rhoEPairs=None, truncScheme="whole germ powers")
+            gateLabels, strs, strs, germs, maxLens, fidPairs=None, truncScheme="whole germ powers")
 
         lsgstLists2 = pygsti.construction.make_lsgst_lists_asymmetric_fids(
-            gateLabels, strs, strs, germs, maxLens, rhoEPairs=None, truncScheme="truncated germ powers")
+            gateLabels, strs, strs, germs, maxLens, fidPairs=None, truncScheme="truncated germ powers")
 
         lsgstLists3 = pygsti.construction.make_lsgst_lists_asymmetric_fids(
-            gateLabels, strs, strs, germs, maxLens, rhoEPairs=None, truncScheme="length as exponent")
+            gateLabels, strs, strs, germs, maxLens, fidPairs=None, truncScheme="length as exponent")
 
         maxLens = [1,2]
         lsgstLists4 = pygsti.construction.make_lsgst_lists_asymmetric_fids(
-            gateLabels, strs, strs, germs, maxLens, rhoEPairs=None, truncScheme="whole germ powers")
+            gateLabels, strs, strs, germs, maxLens, fidPairs=None, truncScheme="whole germ powers")
 
         # ELGST
         maxLens = [0,1,2]

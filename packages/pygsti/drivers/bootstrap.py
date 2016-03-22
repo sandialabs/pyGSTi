@@ -420,7 +420,7 @@ def gateset_diamonddist(gs,gs_target,mxBasis="gm"):
     return output
     
 def spamrameter(gs):
-    firstRho = gs.rhoVecs.keys()[0]
-    firstE = gs.EVecs.keys()[0]
-    return _np.dot(gs.rhoVecs[firstRho].T,gs.EVecs[firstE])[0,0]
+    firstRho = gs.preps.keys()[0]
+    firstE = gs.effects.keys()[0]
+    return _np.dot(gs.preps[firstRho].T,gs.effects[firstE])[0,0]
 

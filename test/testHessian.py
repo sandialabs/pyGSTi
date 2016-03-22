@@ -45,8 +45,8 @@ class TestHessianMethods(HessianTestCase):
         
         #XY Gateset: SPAM=False
         tst = stdxy.gs_target.copy()
-        del tst.rhoVecs['rho0']
-        del tst.EVecs['E0']
+        del tst.preps['rho0']
+        del tst.effects['E0']
         n = tst.num_params()
         self.assertEqual(n,32) # 2*16 = 32
         
@@ -63,8 +63,8 @@ class TestHessianMethods(HessianTestCase):
         
         #XYI Gateset: SPAM=False
         tst = stdxyi.gs_target.copy()
-        del tst.rhoVecs['rho0']
-        del tst.EVecs['E0']
+        del tst.preps['rho0']
+        del tst.effects['E0']
         n = tst.num_params()
         self.assertEqual(n,48) # 3*16 = 48
         
@@ -73,7 +73,7 @@ class TestHessianMethods(HessianTestCase):
 
         #XYI Gateset: SP0=False
         tst = stdxyi.gs_target.copy()
-        tst.rhoVecs['rho0'] = pygsti.obj.TPParameterizedSPAMVec(tst.rhoVecs['rho0'])
+        tst.preps['rho0'] = pygsti.obj.TPParameterizedSPAMVec(tst.preps['rho0'])
         n = tst.num_params()
         self.assertEqual(n,55) # 3*16 + 4 + 3 = 55
         

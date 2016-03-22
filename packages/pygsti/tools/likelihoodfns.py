@@ -680,7 +680,7 @@ def forbidden_prob(gateset, dataset):
 
     return forbidden_prob
 
-def rhovec_penalty(rhoVec):
+def prep_penalty(rhoVec):
     """
     Penalty assigned to a state preparation (rho) vector rhoVec.  State
       preparation density matrices must be positive semidefinite 
@@ -706,7 +706,7 @@ def rhovec_penalty(rhoVec):
     #print "Trace Penalty = ",tracePenalty  #DEBUG
     return sumOfNeg +  tracePenalty
     
-def evec_penalty(EVec):
+def effect_penalty(EVec):
     """
     Penalty assigned to a POVM effect vector EVec. Effects
       must have eigenvalues between 0 and 1.  A positive return
@@ -746,7 +746,7 @@ def cptp_penalty(gateset, include_spam_penalty=True):
     include_spam_penalty : bool, optional
         if True, also test gateset for invalid SPAM
         operation(s) and return sum of CPTP penalty
-        with rhoVecPenlaty(...) and evec_penalty(...)
+        with rhoVecPenlaty(...) and effect_penalty(...)
         for each rho and E vector.
 
     Returns
@@ -756,8 +756,8 @@ def cptp_penalty(gateset, include_spam_penalty=True):
     """
     ret = _jam.sum_of_negative_choi_evals(gateset)
     if include_spam_penalty:
-        ret += sum([ rhovec_penalty(r) for r in gateset.rhoVecs.values() ])
-        ret += sum([ evec_penalty(e) for e in gateset.EVecs.values() ])
+        ret += sum([ prep_penalty(r) for r in gateset.preps.values() ])
+        ret += sum([ effect_penalty(e) for e in gateset.effects.values() ])
     return ret
 
             

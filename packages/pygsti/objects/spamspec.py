@@ -9,9 +9,9 @@ import gatestring as _gatestring
 class SpamSpec(object):
     """ 
     Encapsulates a rho- or E-vector label paired with
-    a gate string, which serves as either a "rho-specifier" or
-    an "E-specifier" respectively.  A rho-specifier means a state
-    preparation followed by the gate string, while an E-specifier
+    a gate string, which serves as either a "prep-specifier" or
+    an "effect-specifier" respectively.  A prep-specifier means a state
+    preparation followed by the gate string, while an effect-specifier
     means a gate string followed by a measurement (Note: gate
     strings are performed in left-to-right order!)
     """

@@ -558,14 +558,14 @@ SPAMLABEL plus = rho_up E
 
         self.assertArraysAlmostEqual(gs1.gates['G1'],rotXPiOv2)
         self.assertArraysAlmostEqual(gs1.gates['G2'],rotYPiOv2)
-        self.assertArraysAlmostEqual(gs1.rhoVecs['rho'], 1/np.sqrt(2)*np.array([1,0,0,1]).reshape(-1,1) )
-        self.assertArraysAlmostEqual(gs1.EVecs['E'], 1/np.sqrt(2)*np.array([1,0,0,-1]).reshape(-1,1) )
+        self.assertArraysAlmostEqual(gs1.preps['rho'], 1/np.sqrt(2)*np.array([1,0,0,1]).reshape(-1,1) )
+        self.assertArraysAlmostEqual(gs1.effects['E'], 1/np.sqrt(2)*np.array([1,0,0,-1]).reshape(-1,1) )
 
         self.assertArraysAlmostEqual(gs2.gates['G1'],rotXPiOv2)
         self.assertArraysAlmostEqual(gs2.gates['G2'],rotYPiOv2)
         self.assertArraysAlmostEqual(gs2.gates['G3'],rotXPi)
-        self.assertArraysAlmostEqual(gs2.rhoVecs['rho_up'], 1/np.sqrt(2)*np.array([1,0,0,1]).reshape(-1,1) )
-        self.assertArraysAlmostEqual(gs2.EVecs['E'], 1/np.sqrt(2)*np.array([1,0,0,-1]).reshape(-1,1) )
+        self.assertArraysAlmostEqual(gs2.preps['rho_up'], 1/np.sqrt(2)*np.array([1,0,0,1]).reshape(-1,1) )
+        self.assertArraysAlmostEqual(gs2.effects['E'], 1/np.sqrt(2)*np.array([1,0,0,-1]).reshape(-1,1) )
 
 
 

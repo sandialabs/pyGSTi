@@ -16,7 +16,7 @@ class ReportTestCase(unittest.TestCase):
         
         self.fiducials = std.fiducials
         self.germs = std.germs
-        self.specs = pygsti.construction.build_spam_specs(self.fiducials, EVecLbls=['E0']) #only use the first EVec
+        self.specs = pygsti.construction.build_spam_specs(self.fiducials, effect_labels=['E0']) #only use the first EVec
 
         self.gateLabels = self.targetGateset.gates.keys() # also == std.gates
         self.lgstStrings = pygsti.construction.list_lgst_gatestrings(self.specs, self.gateLabels)
@@ -205,8 +205,8 @@ class TestReport(ReportTestCase):
         gateset_2q = pygsti.construction.build_gateset( 
             [4], [('Q0','Q1')],['GIX','GIY','GXI','GYI','GCNOT'], 
             [ "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)" ],
-            rhoLabelList=['rho0'], rhoExpressions=["0"], ELabelList=['E0','E1','E2'], EExpressions=["0","1","2"], 
-            spamLabelDict={'upup': ('rho0','E0'), 'updn': ('rho0','E1'), 'dnup': ('rho0','E2'),
+            prepLabels=['rho0'], prepExpressions=["0"], effectLabels=['E0','E1','E2'], effectExpressions=["0","1","2"], 
+            spamdefs={'upup': ('rho0','E0'), 'updn': ('rho0','E1'), 'dnup': ('rho0','E2'),
                            'dndn': ('rho0','remainder') }, basis="pp" )
         
 

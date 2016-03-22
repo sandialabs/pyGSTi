@@ -186,8 +186,8 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
     # to consider the set of *gate* parameters for amplification
     # and this makes sure our parameter counting is correct
     gateset = gateset.copy()
-    for rhoLabel in gateset.rhoVecs.keys():  del gateset.rhoVecs[rhoLabel]
-    for eLabel in gateset.EVecs.keys():  del gateset.EVecs[eLabel]
+    for prepLabel in gateset.preps.keys():  del gateset.preps[prepLabel]
+    for effectLabel in gateset.effects.keys():  del gateset.effects[effectLabel]
 
     nGerms = len(germsToTest)
     germToPowL = [ germ*L for germ in germsToTest ]

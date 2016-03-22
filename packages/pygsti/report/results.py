@@ -122,7 +122,7 @@ class Results(object):
 
     def init_Ls_and_germs(self, objective, targetGateset, dataset,
                               seedGateset, Ls, germs, gatesetsByL, gateStringListByL, 
-                              rhoStrs, EStrs, truncFn, constrainToTP, rhoEPairs=None,
+                              prepStrs, effectStrs, truncFn, constrainToTP, fidPairs=None,
                               gatesetsByL_noGaugeOpt=None):
 
         """ 
@@ -160,11 +160,11 @@ class Results(object):
         gateStringListByL : list of lists of GateStrings
             The gate string list used at each L value.
 
-        rhoStrs : list of GateStrings
+        prepStrs : list of GateStrings
             The list of state preparation fiducial strings
             in the objective optimization.
 
-        EStrs : list of GateStrings
+        effectStrs : list of GateStrings
             The list of measurement fiducial strings
             in the objective optimization.
 
@@ -179,9 +179,9 @@ class Results(object):
             Whether or not the gatesetEstimate was constrained to lie
             within TP during the objective optimization.
             
-        rhoEPairs : list of 2-tuples, optional
-            Specifies a subset of all rhoStr,EStr string pairs to be used in this
-            analysis.  Each element of rhoEPairs is a (iRhoStr, iEStr) 2-tuple of integers,
+        fidPairs : list of 2-tuples, optional
+            Specifies a subset of all prepStr,effectStr string pairs to be used in this
+            analysis.  Each element of fidPairs is a (iRhoStr, iEStr) 2-tuple of integers,
             which index a string within the state preparation and measurement fiducial
             strings respectively.
 
@@ -215,11 +215,11 @@ class Results(object):
 
         #Set "Ls and germs" info: gives particular structure
         # to the gateStringLists used to obtain estimates
-        self.rhoStrs = rhoStrs
-        self.EStrs = EStrs
+        self.prepStrs = prepStrs
+        self.effectStrs = effectStrs
         self.germs = germs
         self.Ls = Ls
-        self.rhoEPairs = rhoEPairs
+        self.fidPairs = fidPairs
         self.L_germ_tuple_to_baseStr_dict = { (L,germ):truncFn(germ,L) for L in Ls for germ in germs}
         self.LsAndGermInfoSet = True
 
@@ -416,29 +416,29 @@ class Results(object):
 
         # dataset and gatestring list tables
         elif tableName == 'datasetOverviewTable':
-            #maxLen = max( 2*max( map(len,self.rhoStrs + self.EStrs) ), 10 ) #heuristic (unused)
+            #maxLen = max( 2*max( map(len,self.prepStrs + self.effectStrs) ), 10 ) #heuristic (unused)
             return _generation.get_dataset_overview_table(
                 self.dataset, self.gsTarget, self.formatsToCompute,
                 self.tableClass, self.longTables, 10, 
-                [self.rhoStrs, self.EStrs] if self.LsAndGermInfoSet else None)
+                [self.prepStrs, self.effectStrs] if self.LsAndGermInfoSet else None)
 
         elif tableName == 'fiducialListTable':
             assert(self.LsAndGermInfoSet)
             return _generation.get_gatestring_multi_table(
-                [self.rhoStrs, self.EStrs], ["Prep.","Measure"],
+                [self.prepStrs, self.effectStrs], ["Prep.","Measure"],
                 self.formatsToCompute, self.tableClass, self.longTables,
                 "Fiducials")
 
-        elif tableName == 'rhoStrListTable':
+        elif tableName == 'prepStrListTable':
             assert(self.LsAndGermInfoSet)
             return _generation.get_gatestring_table(
-                self.rhoStrs, "Preparation Fiducial", self.formatsToCompute, 
+                self.prepStrs, "Preparation Fiducial", self.formatsToCompute, 
                 self.tableClass, self.longTables)
 
-        elif tableName == 'EStrListTable':
+        elif tableName == 'effectStrListTable':
             assert(self.LsAndGermInfoSet)
             return _generation.get_gatestring_table(
-                self.EStrs, "Measurement Fiducial", self.formatsToCompute,
+                self.effectStrs, "Measurement Fiducial", self.formatsToCompute,
                 self.tableClass, self.longTables)
 
         elif tableName == 'germListTable':
@@ -580,30 +580,30 @@ class Results(object):
         m = 0
         M = 10
         baseStr_dict = self._getBaseStrDict()
-        strs  = self.rhoStrs, self.EStrs
+        strs  = self.prepStrs, self.effectStrs
         st = 1 if self.Ls[0] == 0 else 0 #start index: skips LGST column in report color box plots        
 
         if figureName == "bestEstimateColorBoxPlot":
             fig = plotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, self.gsBestEstimate, strs,
-                          "L", "germ", M=M, m=m, scale=1.0, sumUp=False, histogram=True, title="", rhoEPairs=self.rhoEPairs,
+                          "L", "germ", M=M, m=m, scale=1.0, sumUp=False, histogram=True, title="", fidPairs=self.fidPairs,
                           minProbClipForWeighting=mpc, save_to="", ticSize=20)
 
         elif figureName == "invertedBestEstimateColorBoxPlot":
             fig = plotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, self.gsBestEstimate, strs,
-                          "L", "germ", M=M, m=m, scale=1.0, sumUp=False, histogram=True, title="", rhoEPairs=self.rhoEPairs,
+                          "L", "germ", M=M, m=m, scale=1.0, sumUp=False, histogram=True, title="", fidPairs=self.fidPairs,
                           save_to="", ticSize=20, minProbClipForWeighting=mpc, invert=True)
 
         elif figureName == "bestEstimateSummedColorBoxPlot":
-            sumScale = len(self.rhoStrs)*len(self.EStrs) if self.rhoEPairs is None else len(self.rhoEPairs)
+            sumScale = len(self.prepStrs)*len(self.effectStrs) if self.fidPairs is None else len(self.fidPairs)
             fig = plotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, self.gsBestEstimate, strs,
                           "L", "germ", M=M*sumScale, m=m*sumScale, scale=1.0, sumUp=True, histogram=False,
-                          title="", rhoEPairs=self.rhoEPairs, minProbClipForWeighting=mpc, save_to="", ticSize=14)    
+                          title="", fidPairs=self.fidPairs, minProbClipForWeighting=mpc, save_to="", ticSize=14)    
             
         elif figureName.startswith("estimateForLIndex") and figureName.endswith("ColorBoxPlot"):
             i = int(figureName[len("estimateForLIndex"):-len("ColorBoxPlot")])
             fig = plotFn( self.Ls[st:i+1], self.germs, baseStr_dict, self.dataset, self.gatesets[i],
                           strs, "L", "germ", M=M, m=m, scale=1.0, sumUp=False, histogram=False, title="",
-                          rhoEPairs=self.rhoEPairs, save_to="", minProbClipForWeighting=mpc, ticSize=20 )
+                          fidPairs=self.fidPairs, save_to="", minProbClipForWeighting=mpc, ticSize=20 )
 
         elif figureName == "blankBoxPlot":
             fig = _plotting.blank_boxplot( 
@@ -619,13 +619,13 @@ class Results(object):
             directLGST  = self.get_special('direct_lgst_gatesets')
             fig = directPlotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, directLGST, strs,
                                 "L", "germ", M=M, m=m, scale=1.0, sumUp=False, title="", minProbClipForWeighting=mpc,
-                                rhoEPairs=self.rhoEPairs, save_to="", ticSize=20)
+                                fidPairs=self.fidPairs, save_to="", ticSize=20)
 
         elif figureName == "directLongSeqGSTColorBoxPlot":
             directLongSeqGST = self.get_special('DirectLongSeqGatesets')
             fig = directPlotFn( self.Ls[st:], self.germs, baseStr_dict, self.dataset, directLongSeqGST, strs,
                           "L", "germ", M=M, m=m, scale=1.0, sumUp=False, title="",minProbClipForWeighting=mpc,
-                          rhoEPairs=self.rhoEPairs, save_to="", ticSize=20)
+                          fidPairs=self.fidPairs, save_to="", ticSize=20)
 
         elif figureName == "directLGSTDeviationColorBoxPlot":
             directLGST  = self.get_special('direct_lgst_gatesets')
@@ -658,7 +658,7 @@ class Results(object):
 
             fig = whackAMolePlotFn( strToWhack, allGateStrings, self.Ls[st:], self.germs, baseStr_dict, self.dataset,
                                     self.gsBestEstimate, strs, "L", "germ", scale=1.0, sumUp=False, title="", whackWith=hammerWeight,
-                                    save_to="", minProbClipForWeighting=mpc, ticSize=20, rhoEPairs=self.rhoEPairs, m=0)
+                                    save_to="", minProbClipForWeighting=mpc, ticSize=20, fidPairs=self.fidPairs, m=0)
 
         elif figureName.startswith("whack") and figureName.endswith("MoleBoxesSummed"):
             gateLabel = figureName[len("whack"):-len("MoleBoxesSummed")]
@@ -670,7 +670,7 @@ class Results(object):
 
             fig = whackAMolePlotFn( strToWhack, allGateStrings, self.Ls[st:], self.germs, baseStr_dict, self.dataset,
                                     self.gsBestEstimate, strs, "L", "germ", scale=1.0, sumUp=True, title="", whackWith=hammerWeight,
-                                    save_to="", minProbClipForWeighting=mpc, ticSize=20, rhoEPairs=self.rhoEPairs, m=0)
+                                    save_to="", minProbClipForWeighting=mpc, ticSize=20, fidPairs=self.fidPairs, m=0)
 
         else:
             raise ValueError("Invalid figure name: %s" % figureName)
@@ -817,9 +817,9 @@ class Results(object):
             assert(self.LsAndGermInfoSet)
 
             direct_specs = _ssc.build_spam_specs(
-                rhoStrs=self.rhoStrs, EStrs=self.EStrs,
-                rhoVecLbls=self.gsTarget.get_rhovec_labels(),
-                EVecLbls=self.gsTarget.get_evec_labels() )
+                prepStrs=self.prepStrs, effectStrs=self.effectStrs,
+                prep_labels=self.gsTarget.get_prep_labels(),
+                effect_labels=self.gsTarget.get_effect_labels() )
             baseStrs = [] # (L,germ) base strings without duplicates
             for L in self.Ls:
                 for germ in self.germs:
@@ -835,9 +835,9 @@ class Results(object):
             assert(self.LsAndGermInfoSet)
 
             direct_specs = _ssc.build_spam_specs(
-                rhoStrs=self.rhoStrs, EStrs=self.EStrs,
-                rhoVecLbls=self.gsTarget.get_rhovec_labels(),
-                EVecLbls=self.gsTarget.get_evec_labels() )
+                prepStrs=self.prepStrs, effectStrs=self.effectStrs,
+                prep_labels=self.gsTarget.get_prep_labels(),
+                effect_labels=self.gsTarget.get_effect_labels() )
             baseStrs = [] # (L,germ) base strings without duplicates
             for L in self.Ls:
                 for germ in self.germs:
@@ -1047,7 +1047,7 @@ class Results(object):
                            'bestGatesetVsTargetTable','bestGatesetErrorGenTable')
 
         progress_tbl = 'logLProgressTable' if self.objective == "logl" else 'chi2ProgressTable'
-        ls_and_germs_tables = ('fiducialListTable','rhoStrListTable','EStrListTable','germListTable', progress_tbl)            
+        ls_and_germs_tables = ('fiducialListTable','prepStrListTable','effectStrListTable','germListTable', progress_tbl)            
             
         if self.LsAndGermInfoSet:
             required_tables += ls_and_germs_tables
@@ -1430,7 +1430,7 @@ class Results(object):
         else: bWasInteractive = False
 
         #if goodnessOfFitSection:    
-        #    strs  = self.rhoStrs, self.EStrs
+        #    strs  = self.prepStrs, self.effectStrs
         #    D = report_base + "_files" #figure directory relative to reportDir
         #    if not _os.path.isdir( _os.path.join(report_dir,D)):
         #        _os.mkdir( _os.path.join(report_dir,D))
@@ -1644,10 +1644,10 @@ class Results(object):
         if self.LsAndGermInfoSet:
             progress_tbl = 'logLProgressTable' if self.objective == "logl" else 'chi2ProgressTable'
             qtys['progressTable'] = self.get_table(progress_tbl, confidenceLevel, 'latex', verbosity)
-            required_tables += ('fiducialListTable','rhoStrListTable','EStrListTable','germListTable')
+            required_tables += ('fiducialListTable','prepStrListTable','effectStrListTable','germListTable')
         else:
             qtys['progressTable'] = _generation.get_blank_table(self.formatsToCompute)['latex']
-            for key in ('fiducialListTable','rhoStrListTable','EStrListTable','germListTable'):
+            for key in ('fiducialListTable','prepStrListTable','effectStrListTable','germListTable'):
                 qtys[key] = _generation.get_blank_table(self.formatsToCompute)['latex']
 
         for key in required_tables:
@@ -2013,7 +2013,7 @@ class Results(object):
         if self.LsAndGermInfoSet:
             progress_tbl = 'logLProgressTable' if self.objective == "logl" else 'chi2ProgressTable'
             qtys['progressTable'] = self.get_table(progress_tbl, confidenceLevel, tableFormat, verbosity)
-            required_tables += ('fiducialListTable','rhoStrListTable','EStrListTable','germListTable')
+            required_tables += ('fiducialListTable','prepStrListTable','effectStrListTable','germListTable')
 
         for key in required_tables:
             qtys[key] = self.get_table(key, confidenceLevel, tableFormat, verbosity)

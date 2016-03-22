@@ -140,9 +140,9 @@ def make_qutrit_gateset(errorScale,Xangle = _np.pi/2, Yangle = _np.pi/2, MSgloba
     qutritGS['E1'] = E1gm
     qutritGS['E2'] = E2gm
     qutritGS['identity'] identity3gm
-    qutritGS.add_spam_label('rho0','E0','0bright')
-    qutritGS.add_spam_label('rho0','E1','1bright')
-    qutritGS.add_spam_label('rho0','E2','2bright')
+    qutritGS.spamdefs['0bright'] = ('rho0','E0')
+    qutritGS.spamdefs['1bright'] = ('rho0','E1')
+    qutritGS.spamdefs['2bright'] = ('rho0','E2')
     qutritGS['Gi'] = _objs.FullyParameterizedGate(arrType(gateISOgm))
     qutritGS['Gx'] = _objs.FullyParameterizedGate(arrType(gateXSOgm))
     qutritGS['Gy'] = _objs.FullyParameterizedGate(arrType(gateYSOgm))

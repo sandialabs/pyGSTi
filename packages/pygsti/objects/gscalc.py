@@ -31,7 +31,7 @@ class GateSetCalculator(object):
     fundamental operations.
     """
 
-    def __init__(self, dim, gates, rhovecs, evecs, identityvec, spamLabels,
+    def __init__(self, dim, gates, preps, effects, povm_identity, spamdefs,
                  remainderLabel):
         """
         Construct a new GateSetCalculator object.
@@ -42,38 +42,38 @@ class GateSetCalculator(object):
             The gate-dimension.  All gate matrices should be dim x dim, and all
             SPAM vectors should be dim x 1.
 
-        gates, rhovecs, evecs : OrderedDict
+        gates, preps, effects : OrderedDict
             Ordered dictionaries of Gate, SPAMVec, and SPAMVec objects,
             respectively.  Must be *ordered* dictionaries to specify a
             well-defined column ordering when taking derivatives.
 
-        identityvec : SPAMVec
-            Identity vector (shape must be dim x 1) used when spamLabels
+        povm_identity : SPAMVec
+            Identity vector (shape must be dim x 1) used when spamdefs
             contains the value (<rho_label>,"remainder"), which specifies
             a POVM effect that is the identity minus the sum of all the 
-            effect vectors in evecs.
+            effect vectors in effects.
 
-        spamLabels : OrderedDict
+        spamdefs : OrderedDict
             A dictionary whose keys are the allowed SPAM labels, and whose
             values are 2-tuples comprised of a state preparation label 
             followed by a POVM effect label (both of which are strings,
-            and keys of rhovecs and evecs, respectively, except for the
+            and keys of preps and effects, respectively, except for the
             special case when eith both or just the effect label is set
             to "remainder").            
 
         remainderLabel : string
-            A string that may appear in the values of spamLabels to designate
+            A string that may appear in the values of spamdefs to designate
             special behavior.
         """
         self._remainderLabel = remainderLabel
         self.dim = dim
         self.gates = gates
-        self.rhovecs = rhovecs
-        self.evecs = evecs
-        self.identityvec = identityvec
-        self.spamLabels = spamLabels
-        self.assumeSumToOne = bool( (self._remainderLabel,self._remainderLabel) in spamLabels.values())
-          #Whether spamLabels contains the value ("remainder", "remainder"),
+        self.preps = preps
+        self.effects = effects
+        self.povm_identity = povm_identity
+        self.spamdefs = spamdefs
+        self.assumeSumToOne = bool( (self._remainderLabel,self._remainderLabel) in spamdefs.values())
+          #Whether spamdefs contains the value ("remainder", "remainder"),
           #  which specifies a spam label that generates probabilities such that
           #  all SPAM label probabilities sum exactly to 1.0.
 
@@ -86,7 +86,7 @@ class GateSetCalculator(object):
         probabilities such that all SPAM label probabilities
         sum exactly to 1.0.
         """
-        return bool(self.spamLabels[label] == (self._remainderLabel, self._remainderLabel))
+        return bool(self.spamdefs[label] == (self._remainderLabel, self._remainderLabel))
 
     def _get_evec(self, elabel):
         """
@@ -103,16 +103,16 @@ class GateSetCalculator(object):
             an effect vector of shape (dim, 1).
         """
         if elabel == self._remainderLabel:
-            return self.identityvec - sum(self.evecs.values())
+            return self.povm_identity - sum(self.effects.values())
         else:
-            return self.evecs[elabel]
+            return self.effects[elabel]
 
     def _make_spamgate(self, spamlabel):
-        rhoLabel,eLabel = self.spamLabels[spamlabel]
-        if rhoLabel == self._remainderLabel: 
+        prepLabel,effectLabel = self.spamdefs[spamlabel]
+        if prepLabel == self._remainderLabel: 
             return None
 
-        rho,E = self.rhovecs[rhoLabel], self._get_evec(eLabel)
+        rho,E = self.preps[prepLabel], self._get_evec(effectLabel)
         return _np.kron(rho.base, _np.conjugate(_np.transpose(E)))
 
 
@@ -428,12 +428,12 @@ class GateSetCalculator(object):
 
         if self._is_remainder_spamlabel(spamLabel):
             #then compute 1.0 - (all other spam label probabilities)
-            otherSpamLabels = self.spamLabels.keys()[:]; del otherSpamLabels[ otherSpamLabels.index(spamLabel) ]
-            assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamLabels]) )
-            return 1.0 - sum( [self.pr(sl, gatestring, clipTo, bUseScaling) for sl in otherSpamLabels] )
+            otherSpamdefs = self.spamdefs.keys()[:]; del otherSpamdefs[ otherSpamdefs.index(spamLabel) ]
+            assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamdefs]) )
+            return 1.0 - sum( [self.pr(sl, gatestring, clipTo, bUseScaling) for sl in otherSpamdefs] )
 
-        (rholabel,elabel) = self.spamLabels[spamLabel]
-        rho = self.rhovecs[rholabel]
+        (rholabel,elabel) = self.spamdefs[spamLabel]
+        rho = self.preps[rholabel]
         E   = _np.conjugate(_np.transpose(self._get_evec(elabel)))
         
         if bUseScaling:
@@ -509,9 +509,9 @@ class GateSetCalculator(object):
 
         if self._is_remainder_spamlabel(spamLabel):
             #then compute Deriv[ 1.0 - (all other spam label probabilities) ]
-            otherSpamLabels = self.spamLabels.keys()[:]; del otherSpamLabels[ otherSpamLabels.index(spamLabel) ]
-            assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamLabels]) )
-            otherResults = [self.dpr(sl, gatestring, returnPr, clipTo) for sl in otherSpamLabels]
+            otherSpamdefs = self.spamdefs.keys()[:]; del otherSpamdefs[ otherSpamdefs.index(spamLabel) ]
+            assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamdefs]) )
+            otherResults = [self.dpr(sl, gatestring, returnPr, clipTo) for sl in otherSpamdefs]
             if returnPr: 
                 return -1.0 * sum([dpr for dpr,p in otherResults]), 1.0 - sum([p for dpr,p in otherResults])
             else:
@@ -522,8 +522,8 @@ class GateSetCalculator(object):
         #  dpr/d(rho)_i = sum E_k prod_ki
         #  dpr/d(E)_i   = sum prod_il rho_l
 
-        (rholabel,elabel) = self.spamLabels[spamLabel]
-        rho = self.rhovecs[rholabel]
+        (rholabel,elabel) = self.spamdefs[spamLabel]
+        rho = self.preps[rholabel]
         E   = _np.conjugate(_np.transpose(self._get_evec(elabel)))
 
         #Derivs wrt Gates
@@ -539,28 +539,28 @@ class GateSetCalculator(object):
             if clipTo is not None:  p = _np.clip( p, clipTo[0], clipTo[1] )
             
         #Derivs wrt SPAM
-        num_rho_params = [v.num_params() for v in self.rhovecs.values()]
-        rho_offset = [ sum(num_rho_params[0:i]) for i in range(len(self.rhovecs)+1) ]
-        rhoIndex = self.rhovecs.keys().index(rholabel)
+        num_rho_params = [v.num_params() for v in self.preps.values()]
+        rho_offset = [ sum(num_rho_params[0:i]) for i in range(len(self.preps)+1) ]
+        rhoIndex = self.preps.keys().index(rholabel)
         dpr_drhos = _np.zeros( (1, sum(num_rho_params)) )
         derivWrtAnyRhovec = scale * _np.dot(E,prod)
         dpr_drhos[0, rho_offset[rhoIndex]:rho_offset[rhoIndex+1]] = \
             _np.dot( derivWrtAnyRhovec, rho.deriv_wrt_params())  #may overflow, but OK
 
-        num_e_params = [v.num_params() for v in self.evecs.values()]
-        e_offset = [ sum(num_e_params[0:i]) for i in range(len(self.evecs)+1) ]
+        num_e_params = [v.num_params() for v in self.effects.values()]
+        e_offset = [ sum(num_e_params[0:i]) for i in range(len(self.effects)+1) ]
         dpr_dEs = _np.zeros( (1, sum(num_e_params)) ); 
         derivWrtAnyEvec = scale * _np.transpose(_np.dot(prod,rho)) # may overflow, but OK
            # (** doesn't depend on eIndex **) -- TODO: should also conjugate() here if complex?
         if elabel == self._remainderLabel:
-            assert(self._remainderLabel not in self.evecs) # "remainder" should be a distint *special* label
-            for ei,evec in enumerate(self.evecs.values()):  #compute Deriv w.r.t. [ 1 - sum_of_other_EVecs ]
+            assert(self._remainderLabel not in self.effects) # "remainder" should be a distint *special* label
+            for ei,evec in enumerate(self.effects.values()):  #compute Deriv w.r.t. [ 1 - sum_of_other_Effects ]
                 dpr_dEs[0, e_offset[ei]:e_offset[ei+1]] = \
                     -1.0 * _np.dot( derivWrtAnyEvec, evec.deriv_wrt_params() )
         else:
-            eIndex = self.evecs.keys().index(elabel)
+            eIndex = self.effects.keys().index(elabel)
             dpr_dEs[0, e_offset[eIndex]:e_offset[eIndex+1]] = \
-                _np.dot( derivWrtAnyEvec, self.evecs[elabel].deriv_wrt_params() )
+                _np.dot( derivWrtAnyEvec, self.effects[elabel].deriv_wrt_params() )
 
         _np.seterr(**old_err)
 
@@ -611,9 +611,9 @@ class GateSetCalculator(object):
 
         if self._is_remainder_spamlabel(spamLabel):
             #then compute Hessian[ 1.0 - (all other spam label probabilities) ]
-            otherSpamLabels = self.spamLabels.keys()[:]; del otherSpamLabels[ otherSpamLabels.index(spamLabel) ]
-            assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamLabels]) )
-            otherResults = [self.hpr(sl, gatestring, returnPr, returnDeriv, clipTo) for sl in otherSpamLabels]
+            otherSpamdefs = self.spamdefs.keys()[:]; del otherSpamdefs[ otherSpamdefs.index(spamLabel) ]
+            assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamdefs]) )
+            otherResults = [self.hpr(sl, gatestring, returnPr, returnDeriv, clipTo) for sl in otherSpamdefs]
             if returnDeriv: 
                 if returnPr: return ( -1.0 * sum([hpr for hpr,dpr,p in otherResults]),
                                       -1.0 * sum([dpr for hpr,dpr,p in otherResults]), 
@@ -634,8 +634,8 @@ class GateSetCalculator(object):
         #  d2pr/d(E)_i d(E)_j            = 0
         #  d2pr/d(rho)_i d(rho)_j        = 0
 
-        (rholabel,elabel) = self.spamLabels[spamLabel]
-        rho = self.rhovecs[rholabel]
+        (rholabel,elabel) = self.spamdefs[spamLabel]
+        rho = self.preps[rholabel]
         E   = _np.conjugate(_np.transpose(self._get_evec(elabel)))
 
         d2prod_dGates = self.hproduct(gatestring)
@@ -663,11 +663,11 @@ class GateSetCalculator(object):
 
 
         #Derivs wrt SPAM
-        num_rho_params = [v.num_params() for v in self.rhovecs.values()]
-        num_e_params = [v.num_params() for v in self.evecs.values()]
-        rho_offset = [ sum(num_rho_params[0:i]) for i in range(len(self.rhovecs)+1) ]
-        e_offset = [ sum(num_e_params[0:i]) for i in range(len(self.evecs)+1) ]
-        rhoIndex = self.rhovecs.keys().index(rholabel)
+        num_rho_params = [v.num_params() for v in self.preps.values()]
+        num_e_params = [v.num_params() for v in self.effects.values()]
+        rho_offset = [ sum(num_rho_params[0:i]) for i in range(len(self.preps)+1) ]
+        e_offset = [ sum(num_e_params[0:i]) for i in range(len(self.effects)+1) ]
+        rhoIndex = self.preps.keys().index(rholabel)
 
         if returnDeriv:  #same as in dpr(...)
             dpr_drhos = _np.zeros( (1, sum(num_rho_params)) )
@@ -678,14 +678,14 @@ class GateSetCalculator(object):
             dpr_dEs = _np.zeros( (1, sum(num_e_params)) ); 
             derivWrtAnyEvec = scale * _np.transpose(_np.dot(prod,rho)) # may overflow, but OK
             if elabel == self._remainderLabel:
-                assert(self._remainderLabel not in self.evecs)
-                for ei,evec in enumerate(self.evecs.values()):  #compute Deriv w.r.t. [ 1 - sum_of_other_EVecs ]
+                assert(self._remainderLabel not in self.effects)
+                for ei,evec in enumerate(self.effects.values()):  #compute Deriv w.r.t. [ 1 - sum_of_other_Effects ]
                     dpr_dEs[0, e_offset[ei]:e_offset[ei+1]] = \
                         -1.0 * _np.dot( derivWrtAnyEvec, evec.deriv_wrt_params() )
             else:
-                eIndex = self.evecs.keys().index(elabel)
+                eIndex = self.effects.keys().index(elabel)
                 dpr_dEs[0, e_offset[eIndex]:e_offset[eIndex+1]] = \
-                    _np.dot( derivWrtAnyEvec, self.evecs[elabel].deriv_wrt_params() )
+                    _np.dot( derivWrtAnyEvec, self.effects[elabel].deriv_wrt_params() )
         
             dpr = _np.concatenate( (dpr_drhos,dpr_dEs,dpr_dGates), axis=1 )
 
@@ -696,29 +696,29 @@ class GateSetCalculator(object):
         d2pr_dEs = _np.zeros( (1, vec_gs_size, sum(num_e_params)) )
         derivWrtAnyEvec = _np.squeeze(_np.dot(dprod_dGates,rho), axis=(2,))
         if elabel == self._remainderLabel:
-            assert(self._remainderLabel not in self.evecs)
-            for ei,evec in enumerate(self.evecs.values()): #similar to above, but now after a deriv w.r.t gates
+            assert(self._remainderLabel not in self.effects)
+            for ei,evec in enumerate(self.effects.values()): #similar to above, but now after a deriv w.r.t gates
                 d2pr_dEs[0, :, e_offset[ei]:e_offset[ei+1]] = \
                     -1.0 * _np.dot( derivWrtAnyEvec, evec.deriv_wrt_params() )
         else:
-            eIndex = self.evecs.keys().index(elabel)
+            eIndex = self.effects.keys().index(elabel)
             d2pr_dEs[0, :, e_offset[eIndex]:e_offset[eIndex+1]] = \
-                _np.dot(derivWrtAnyEvec, self.evecs[elabel].deriv_wrt_params())
+                _np.dot(derivWrtAnyEvec, self.effects[elabel].deriv_wrt_params())
         
         d2pr_dErhos = _np.zeros( (1, sum(num_e_params), sum(num_rho_params)) )
         derivWrtAnyEvec = scale * _np.dot(prod, rho.deriv_wrt_params()) #may generate overflow, but OK
 
         if elabel == self._remainderLabel:
-            for ei,evec in enumerate(self.evecs.values()): #similar to above, but now after also a deriv w.r.t rhos
+            for ei,evec in enumerate(self.effects.values()): #similar to above, but now after also a deriv w.r.t rhos
                 d2pr_dErhos[0, e_offset[ei]:e_offset[ei+1], rho_offset[rhoIndex]:rho_offset[rhoIndex+1]] = \
                     -1.0 * _np.dot( _np.transpose(evec.deriv_wrt_params()),derivWrtAnyEvec)
                 # ET*P*rho -> drhoP -> ET*P*drho/drhoP = ((P*drho/drhoP)^T*E)^T -> dEp -> 
                 # ((P*drho/drhoP)^T*dE/dEp)^T = dE/dEp^T*(P*drho/drhoP) = (d,eP)^T*(d,rhoP) = (eP,rhoP) OK!
         else:
-            eIndex = self.evecs.keys().index(elabel)
+            eIndex = self.effects.keys().index(elabel)
             d2pr_dErhos[0, e_offset[eIndex]:e_offset[eIndex+1], 
                         rho_offset[rhoIndex]:rho_offset[rhoIndex+1]] = \
-                        _np.dot( _np.transpose(self.evecs[elabel].deriv_wrt_params()),derivWrtAnyEvec)
+                        _np.dot( _np.transpose(self.effects[elabel].deriv_wrt_params()),derivWrtAnyEvec)
 
         d2pr_d2rhos = _np.zeros( (1, sum(num_rho_params), sum(num_rho_params)) )
         d2pr_d2Es   = _np.zeros( (1, sum(num_e_params), sum(num_e_params)) )
@@ -760,11 +760,11 @@ class GateSetCalculator(object):
         """
         probs = { }
         if not self.assumeSumToOne:
-            for spamLabel in self.spamLabels:
+            for spamLabel in self.spamdefs:
                 probs[spamLabel] = self.pr(spamLabel, gatestring, clipTo)
         else:
             s = 0; lastLabel = None
-            for spamLabel in self.spamLabels:
+            for spamLabel in self.spamdefs:
                 if self._is_remainder_spamlabel(spamLabel):
                     assert(lastLabel is None) # ensure there is at most one "remainder" spam label
                     lastLabel = spamLabel; continue
@@ -801,11 +801,11 @@ class GateSetCalculator(object):
         """
         dprobs = { }
         if not self.assumeSumToOne:
-            for spamLabel in self.spamLabels:
+            for spamLabel in self.spamdefs:
                 dprobs[spamLabel] = self.dpr(spamLabel, gatestring, returnPr,clipTo)
         else:
             ds = None; s=0; lastLabel = None
-            for spamLabel in self.spamLabels:
+            for spamLabel in self.spamdefs:
                 if self._is_remainder_spamlabel(spamLabel):
                     assert(lastLabel is None) # ensure there is at most one dummy spam label
                     lastLabel = spamLabel; continue
@@ -851,12 +851,12 @@ class GateSetCalculator(object):
         """
         hprobs = { }
         if not self.assumeSumToOne:
-            for spamLabel in self.spamLabels:
+            for spamLabel in self.spamdefs:
                 hprobs[spamLabel] = self.hpr(spamLabel, gatestring, returnPr,
                                              returnDeriv,clipTo)
         else:
             hs = None; ds=None; s=0; lastLabel = None
-            for spamLabel in self.spamLabels:
+            for spamLabel in self.spamdefs:
                 if self._is_remainder_spamlabel(spamLabel):
                     assert(lastLabel is None) # ensure there is at most one dummy spam label
                     lastLabel = spamLabel; continue
@@ -1441,8 +1441,8 @@ class GateSetCalculator(object):
         if evalTree.is_split():
             vp = _np.empty( nGateStrings, 'd' )
 
-        (rholabel,elabel) = self.spamLabels[spamLabel]
-        rho = self.rhovecs[rholabel]
+        (rholabel,elabel) = self.spamdefs[spamLabel]
+        rho = self.preps[rholabel]
         E   = _np.conjugate(_np.transpose(self._get_evec(elabel)))
 
         for evalSubTree in evalTree.get_sub_trees():
@@ -1546,24 +1546,24 @@ class GateSetCalculator(object):
 
         if self._is_remainder_spamlabel(spamLabel):
             #then compute Deriv[ 1.0 - (all other spam label probabilities) ]
-            otherSpamLabels = self.spamLabels.keys()[:]; del otherSpamLabels[ otherSpamLabels.index(spamLabel) ]
-            assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamLabels]) )
-            otherResults = [self.bulk_dpr(sl, evalTree, returnPr, clipTo) for sl in otherSpamLabels]
+            otherSpamdefs = self.spamdefs.keys()[:]; del otherSpamdefs[ otherSpamdefs.index(spamLabel) ]
+            assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamdefs]) )
+            otherResults = [self.bulk_dpr(sl, evalTree, returnPr, clipTo) for sl in otherSpamdefs]
             if returnPr:
                 return ( -1.0 * _np.sum([dpr for dpr,p in otherResults],axis=0),
                           1.0 - _np.sum([p   for dpr,p in otherResults],axis=0) )
             else:
                 return -1.0 * _np.sum(otherResults, axis=0)
 
-        (rholabel,elabel) = self.spamLabels[spamLabel]
-        rho = self.rhovecs[rholabel]
+        (rholabel,elabel) = self.spamdefs[spamLabel]
+        rho = self.preps[rholabel]
         E   = _np.conjugate(_np.transpose(self._get_evec(elabel)))
 
         nGateStrings = evalTree.num_final_strings()
-        num_rho_params = [v.num_params() for v in self.rhovecs.values()]
-        num_e_params = [v.num_params() for v in self.evecs.values()]
-        rho_offset = [ sum(num_rho_params[0:i]) for i in range(len(self.rhovecs)+1) ]
-        e_offset = [ sum(num_e_params[0:i]) for i in range(len(self.evecs)+1) ]
+        num_rho_params = [v.num_params() for v in self.preps.values()]
+        num_e_params = [v.num_params() for v in self.effects.values()]
+        rho_offset = [ sum(num_rho_params[0:i]) for i in range(len(self.preps)+1) ]
+        e_offset = [ sum(num_e_params[0:i]) for i in range(len(self.effects)+1) ]
         nDerivCols = sum(num_rho_params + num_e_params + [g.num_params() for g in self.gates.values()])
 
         if evalTree.is_split():
@@ -1617,7 +1617,7 @@ class GateSetCalculator(object):
             # dp_drhos[i,J0+J] = sum_kl E[0,k] Gs[i,k,l] drhoP[l,J]
             # dp_drhos[i,J0+J] = dot(E, Gs, drhoP)[0,i,J]
             # dp_drhos[:,J0+J] = squeeze(dot(E, Gs, drhoP),axis=(0,))[:,J]
-            rhoIndex = self.rhovecs.keys().index(rholabel)
+            rhoIndex = self.preps.keys().index(rholabel)
             dp_drhos = _np.zeros( (sub_nGateStrings, sum(num_rho_params) ) )
             dp_drhos[: , rho_offset[rhoIndex]:rho_offset[rhoIndex+1] ] = \
                 _np.squeeze(_np.dot(_np.dot(E, Gs), rho.deriv_wrt_params()),axis=(0,)) \
@@ -1630,14 +1630,14 @@ class GateSetCalculator(object):
             # dp_dEs[i,J0+J] = dot(squeeze(dot(Gs, rho),2), dEP)[i,J]
             # dp_dEs[:,J0+J] = dot(squeeze(dot(Gs, rho),axis=(2,)), dEP)[:,J]
             dp_dEs = _np.zeros( (sub_nGateStrings, sum(num_e_params)) )
-            dp_dAnyE = _np.squeeze(_np.dot(Gs, rho),axis=(2,)) * scaleVals[:,None] #may overflow, but OK (deriv w.r.t any of self.evecs - independent of which)
+            dp_dAnyE = _np.squeeze(_np.dot(Gs, rho),axis=(2,)) * scaleVals[:,None] #may overflow, but OK (deriv w.r.t any of self.effects - independent of which)
             if elabel == self._remainderLabel:
-                for ei,evec in enumerate(self.evecs.values()): #compute Deriv w.r.t. [ 1 - sum_of_other_EVecs ]
+                for ei,evec in enumerate(self.effects.values()): #compute Deriv w.r.t. [ 1 - sum_of_other_Effects ]
                     dp_dEs[:,e_offset[ei]:e_offset[ei+1]] = -1.0 * _np.dot(dp_dAnyE, evec.deriv_wrt_params())
             else:
-                eIndex = self.evecs.keys().index(elabel)
+                eIndex = self.effects.keys().index(elabel)
                 dp_dEs[:,e_offset[eIndex]:e_offset[eIndex+1]] = \
-                    _np.dot(dp_dAnyE, self.evecs[elabel].deriv_wrt_params())
+                    _np.dot(dp_dAnyE, self.effects[elabel].deriv_wrt_params())
             sub_vdp = _np.concatenate( (dp_drhos,dp_dEs,dp_dGates), axis=1 )
     
             _np.seterr(**old_err)
@@ -1727,9 +1727,9 @@ class GateSetCalculator(object):
 
         if self._is_remainder_spamlabel(spamLabel):
             #then compute Hessian[ 1.0 - (all other spam label probabilities) ]
-            otherSpamLabels = self.spamLabels.keys()[:]; del otherSpamLabels[ otherSpamLabels.index(spamLabel) ]
-            assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamLabels]) )
-            otherResults = [self.bulk_hpr(sl, evalTree, returnPr, returnDeriv, clipTo) for sl in otherSpamLabels]
+            otherSpamdefs = self.spamdefs.keys()[:]; del otherSpamdefs[ otherSpamdefs.index(spamLabel) ]
+            assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamdefs]) )
+            otherResults = [self.bulk_hpr(sl, evalTree, returnPr, returnDeriv, clipTo) for sl in otherSpamdefs]
             if returnDeriv: 
                 if returnPr: return ( -1.0 * _np.sum([hpr for hpr,dpr,p in otherResults],axis=0),
                                       -1.0 * _np.sum([dpr for hpr,dpr,p in otherResults],axis=0), 
@@ -1741,15 +1741,15 @@ class GateSetCalculator(object):
                                        1.0 - _np.sum([p   for hpr,p in otherResults],axis=0)  )
                 else:        return   -1.0 * _np.sum(otherResults,axis=0)
 
-        (rholabel,elabel) = self.spamLabels[spamLabel]
-        rho = self.rhovecs[rholabel]
+        (rholabel,elabel) = self.spamdefs[spamLabel]
+        rho = self.preps[rholabel]
         E   = _np.conjugate(_np.transpose(self._get_evec(elabel)))
 
         nGateStrings = evalTree.num_final_strings()
-        num_rho_params = [v.num_params() for v in self.rhovecs.values()]
-        num_e_params = [v.num_params() for v in self.evecs.values()]
-        rho_offset = [ sum(num_rho_params[0:i]) for i in range(len(self.rhovecs)+1) ]
-        e_offset = [ sum(num_e_params[0:i]) for i in range(len(self.evecs)+1) ]
+        num_rho_params = [v.num_params() for v in self.preps.values()]
+        num_e_params = [v.num_params() for v in self.effects.values()]
+        rho_offset = [ sum(num_rho_params[0:i]) for i in range(len(self.preps)+1) ]
+        e_offset = [ sum(num_e_params[0:i]) for i in range(len(self.effects)+1) ]
         nDerivCols = sum(num_rho_params + num_e_params + [g.num_params() for g in self.gates.values()])
 
         if evalTree.is_split():
@@ -1803,7 +1803,7 @@ class GateSetCalculator(object):
     
             #SPAM ---------------------------------
             if returnDeriv: #same as in bulk_dpr - see comments there for details
-                rhoIndex = self.rhovecs.keys().index(rholabel)
+                rhoIndex = self.preps.keys().index(rholabel)
                 dp_drhos = _np.zeros( (sub_nGateStrings, sum(num_rho_params) ) )
                 dp_drhos[: , rho_offset[rhoIndex]:rho_offset[rhoIndex+1] ] = \
                     _np.squeeze(_np.dot(_np.dot(E, Gs), rho.deriv_wrt_params()),axis=(0,)) \
@@ -1812,12 +1812,12 @@ class GateSetCalculator(object):
                 dp_dEs = _np.zeros( (sub_nGateStrings, sum(num_e_params)) )
                 dp_dAnyE = _np.squeeze(_np.dot(Gs, rho),axis=(2,)) * scaleVals[:,None] #may overflow, but OK
                 if elabel == self._remainderLabel:
-                    for ei,evec in enumerate(self.evecs.values()): #compute Deriv w.r.t. [ 1 - sum_of_other_EVecs ]
+                    for ei,evec in enumerate(self.effects.values()): #compute Deriv w.r.t. [ 1 - sum_of_other_Effects ]
                         dp_dEs[:,e_offset[ei]:e_offset[ei+1]] = -1.0 * _np.dot(dp_dAnyE, evec.deriv_wrt_params())
                 else:
-                    eIndex = self.evecs.keys().index(elabel)
+                    eIndex = self.effects.keys().index(elabel)
                     dp_dEs[:,e_offset[eIndex]:e_offset[eIndex+1]] = \
-                        _np.dot(dp_dAnyE, self.evecs[elabel].deriv_wrt_params())
+                        _np.dot(dp_dAnyE, self.effects[elabel].deriv_wrt_params())
                 vdp = _np.concatenate( (dp_drhos,dp_dEs,dp_dGates), axis=1 )
                 sub_vdp = vdp
     
@@ -1827,7 +1827,7 @@ class GateSetCalculator(object):
             # d2pr_drhos[i,j,J0+J] = sum_kl E[0,k] dGs[i,j,k,l] drhoP[l,J]
             # d2pr_drhos[i,j,J0+J] = dot(E, dGs, drhoP)[0,i,j,J]
             # d2pr_drhos[:,:,J0+J] = squeeze(dot(E, dGs, drhoP),axis=(0,))[:,:,J]            
-            rhoIndex = self.rhovecs.keys().index(rholabel)
+            rhoIndex = self.preps.keys().index(rholabel)
             d2pr_drhos = _np.zeros( (sub_nGateStrings, vec_gs_size, sum(num_rho_params)) )
             d2pr_drhos[:, :, rho_offset[rhoIndex]:rho_offset[rhoIndex+1]] = \
                 _np.squeeze( _np.dot(_np.dot(E,dGs),rho.deriv_wrt_params()), axis=(0,)) \
@@ -1841,12 +1841,12 @@ class GateSetCalculator(object):
             d2pr_dEs = _np.zeros( (sub_nGateStrings, vec_gs_size, sum(num_e_params)) )
             dp_dAnyE = _np.squeeze(_np.dot(dGs,rho), axis=(3,)) * scaleVals[:,None,None] #overflow OK
             if elabel == self._remainderLabel:
-                for ei,evec in enumerate(self.evecs.values()):
+                for ei,evec in enumerate(self.effects.values()):
                     d2pr_dEs[:, :, e_offset[ei]:e_offset[ei+1]] = -1.0 * _np.dot(dp_dAnyE, evec.deriv_wrt_params())
             else:
-                eIndex = self.evecs.keys().index(elabel)
+                eIndex = self.effects.keys().index(elabel)
                 d2pr_dEs[:, :, e_offset[eIndex]:e_offset[eIndex+1]] = \
-                    _np.dot(dp_dAnyE, self.evecs[elabel].deriv_wrt_params())
+                    _np.dot(dp_dAnyE, self.effects[elabel].deriv_wrt_params())
 
     
             # Get: d2pr_dErhos[i, e_offset[eIndex]:e_offset[eIndex+1], e_offset[rhoIndex]:e_offset[rhoIndex+1]] =
@@ -1861,13 +1861,13 @@ class GateSetCalculator(object):
             d2pr_dErhos = _np.zeros( (sub_nGateStrings, sum(num_e_params), sum(num_rho_params)) )
             dp_dAnyE = _np.dot(Gs, rho.deriv_wrt_params()) * scaleVals[:,None,None] #overflow OK
             if elabel == self._remainderLabel:
-                for ei,evec in enumerate(self.evecs.values()):
+                for ei,evec in enumerate(self.effects.values()):
                     d2pr_dErhos[:, e_offset[ei]:e_offset[ei+1], rho_offset[rhoIndex]:rho_offset[rhoIndex+1]] = \
                         -1.0 * _np.swapaxes( _np.dot(_np.transpose(evec.deriv_wrt_params()), dp_dAnyE ), 0,1)
             else:
-                eIndex = self.evecs.keys().index(elabel)
+                eIndex = self.effects.keys().index(elabel)
                 d2pr_dErhos[:, e_offset[eIndex]:e_offset[eIndex+1], rho_offset[rhoIndex]:rho_offset[rhoIndex+1]] = \
-                    _np.swapaxes( _np.dot(_np.transpose(self.evecs[elabel].deriv_wrt_params()), dp_dAnyE ), 0,1)
+                    _np.swapaxes( _np.dot(_np.transpose(self.effects[elabel].deriv_wrt_params()), dp_dAnyE ), 0,1)
     
             d2pr_d2rhos = _np.zeros( (sub_nGateStrings, sum(num_rho_params), sum(num_rho_params)) )
             d2pr_d2Es   = _np.zeros( (sub_nGateStrings, sum(num_e_params), sum(num_e_params)) )
@@ -1948,11 +1948,11 @@ class GateSetCalculator(object):
         """
         probs = { }
         if not self.assumeSumToOne:
-            for spamLabel in self.spamLabels:
+            for spamLabel in self.spamdefs:
                 probs[spamLabel] = self.bulk_pr(spamLabel, evalTree, clipTo, check)
         else:
             s = _np.zeros( evalTree.num_final_strings(), 'd'); lastLabel = None
-            for spamLabel in self.spamLabels:
+            for spamLabel in self.spamdefs:
                 if self._is_remainder_spamlabel(spamLabel):
                     assert(lastLabel is None) # ensure there is at most one dummy spam label
                     lastLabel = spamLabel; continue
@@ -2003,13 +2003,13 @@ class GateSetCalculator(object):
         """
         dprobs = { }
         if not self.assumeSumToOne:
-            for spamLabel in self.spamLabels:
+            for spamLabel in self.spamdefs:
                 dprobs[spamLabel] = self.bulk_dpr(spamLabel, evalTree,
                                                   returnPr,clipTo,check,memLimit)
         else:
             ds = None; lastLabel = None
             s = _np.zeros( evalTree.num_final_strings(), 'd')
-            for spamLabel in self.spamLabels:
+            for spamLabel in self.spamdefs:
                 if self._is_remainder_spamlabel(spamLabel):
                     assert(lastLabel is None) # ensure there is at most one dummy spam label
                     lastLabel = spamLabel; continue
@@ -2065,13 +2065,13 @@ class GateSetCalculator(object):
         """
         hprobs = { }
         if not self.assumeSumToOne:
-            for spamLabel in self.spamLabels:
+            for spamLabel in self.spamdefs:
                 hprobs[spamLabel] = self.bulk_hpr(spamLabel, evalTree,
                                                   returnPr,returnDeriv,clipTo,check)
         else:
             hs = None; ds = None; lastLabel = None
             s = _np.zeros( evalTree.num_final_strings(), 'd')
-            for spamLabel in self.spamLabels:
+            for spamLabel in self.spamdefs:
                 if self._is_remainder_spamlabel(spamLabel):
                     assert(lastLabel is None) # ensure there is at most one dummy spam label
                     lastLabel = spamLabel; continue
@@ -2147,7 +2147,7 @@ class GateSetCalculator(object):
                 mxToFill[rowIndex] = self.bulk_pr(spamLabel, evalTree, clipTo, check)
         else:
             s = _np.zeros( evalTree.num_final_strings(), 'd'); lastLabel = None
-            for spamLabel in self.spamLabels: #Note: must loop through all spam labels, even if not requested
+            for spamLabel in self.spamdefs: #Note: must loop through all spam labels, even if not requested
                 if self._is_remainder_spamlabel(spamLabel):
                     assert(lastLabel is None) # ensure there is at most one dummy spam label
                     lastLabel = spamLabel; continue
@@ -2224,7 +2224,7 @@ class GateSetCalculator(object):
             s = _np.zeros( evalTree.num_final_strings(), 'd')
 
             if prMxToFill is not None: #then compute & fill probabilities too
-                for spamLabel in self.spamLabels: #Note: must loop through all spam labels, even if not requested, in case prMxToFill is not None
+                for spamLabel in self.spamdefs: #Note: must loop through all spam labels, even if not requested, in case prMxToFill is not None
                     if self._is_remainder_spamlabel(spamLabel):
                         assert(lastLabel is None) # ensure there is at most one dummy spam label
                         lastLabel = spamLabel; continue
@@ -2240,7 +2240,7 @@ class GateSetCalculator(object):
                     prMxToFill[ spam_label_rows[lastLabel] ] = 1.0-s
 
             else: #just compute derivatives of probabilities
-                for spamLabel in self.spamLabels: #Note: must loop through all spam labels, even if not requested, in case prMxToFill is not None
+                for spamLabel in self.spamdefs: #Note: must loop through all spam labels, even if not requested, in case prMxToFill is not None
                     if self._is_remainder_spamlabel(spamLabel):
                         assert(lastLabel is None) # ensure there is at most one dummy spam label
                         lastLabel = spamLabel; continue
@@ -2337,7 +2337,7 @@ class GateSetCalculator(object):
 
             if prMxToFill is not None: #then compute & fill probabilities too
                 if derivMxToFill is not None: #then compute & fill derivatives too
-                    for spamLabel in self.spamLabels: #Note: must loop through all spam labels, even if not requested, in case prMxToFill is not None
+                    for spamLabel in self.spamdefs: #Note: must loop through all spam labels, even if not requested, in case prMxToFill is not None
                         if self._is_remainder_spamlabel(spamLabel):
                             assert(lastLabel is None) # ensure there is at most one dummy spam label
                             lastLabel = spamLabel; continue
@@ -2358,7 +2358,7 @@ class GateSetCalculator(object):
 
                 else: #compute hessian & probs (no derivs)
 
-                    for spamLabel in self.spamLabels: #Note: must loop through all spam labels, even if not requested, in case prMxToFill is not None
+                    for spamLabel in self.spamdefs: #Note: must loop through all spam labels, even if not requested, in case prMxToFill is not None
                         if self._is_remainder_spamlabel(spamLabel):
                             assert(lastLabel is None) # ensure there is at most one dummy spam label
                             lastLabel = spamLabel; continue
@@ -2378,7 +2378,7 @@ class GateSetCalculator(object):
             else: 
                 if derivMxToFill is not None: #compute hessians and derivatives (no probs)
 
-                    for spamLabel in self.spamLabels: #Note: must loop through all spam labels, even if not requested, in case prMxToFill is not None
+                    for spamLabel in self.spamdefs: #Note: must loop through all spam labels, even if not requested, in case prMxToFill is not None
                         if self._is_remainder_spamlabel(spamLabel):
                             assert(lastLabel is None) # ensure there is at most one dummy spam label
                             lastLabel = spamLabel; continue
@@ -2396,7 +2396,7 @@ class GateSetCalculator(object):
 
                 else: #just compute derivatives of probabilities
 
-                    for spamLabel in self.spamLabels: #Note: must loop through all spam labels, even if not requested, in case prMxToFill is not None
+                    for spamLabel in self.spamdefs: #Note: must loop through all spam labels, even if not requested, in case prMxToFill is not None
                         if self._is_remainder_spamlabel(spamLabel):
                             assert(lastLabel is None) # ensure there is at most one dummy spam label
                             lastLabel = spamLabel; continue
@@ -2458,20 +2458,20 @@ class GateSetCalculator(object):
                     otherCalc.gates[gateLabel] )
                 nSummands += gateWeight * _np.size(self.gates[gateLabel])
 
-            for (lbl,rhoV) in self.rhovecs.iteritems(): 
+            for (lbl,rhoV) in self.preps.iteritems(): 
                 d += spamWeight * _gt.frobeniusdist2(_np.dot(Ti,rhoV),
-                                                     otherCalc.rhovecs[lbl])
+                                                     otherCalc.preps[lbl])
                 nSummands += spamWeight * _np.size(rhoV)
 
-            for (lbl,Evec) in self.evecs.iteritems():
+            for (lbl,Evec) in self.effects.iteritems():
                 d += spamWeight * _gt.frobeniusdist2(_np.dot(
-                    _np.transpose(T),Evec),otherCalc.evecs[lbl])
+                    _np.transpose(T),Evec),otherCalc.effects[lbl])
                 nSummands += spamWeight * _np.size(Evec)
 
-            if self.identityvec is not None:
+            if self.povm_identity is not None:
                 d += spamWeight * _gt.frobeniusdist2(_np.dot(
-                    _np.transpose(T),self.identityvec),otherCalc.identityvec)
-                nSummands += spamWeight * _np.size(self.identityvec)
+                    _np.transpose(T),self.povm_identity),otherCalc.povm_identity)
+                nSummands += spamWeight * _np.size(self.povm_identity)
 
         else:
             for gateLabel in self.gates:
@@ -2479,20 +2479,20 @@ class GateSetCalculator(object):
                                                      otherCalc.gates[gateLabel])
                 nSummands += gateWeight * _np.size(self.gates[gateLabel])
 
-            for (lbl,rhoV) in self.rhovecs.iteritems(): 
+            for (lbl,rhoV) in self.preps.iteritems(): 
                 d += spamWeight * _gt.frobeniusdist2(rhoV,
-                                      otherCalc.rhovecs[lbl])
+                                      otherCalc.preps[lbl])
                 nSummands += spamWeight *  _np.size(rhoV)
 
-            for (lbl,Evec) in self.evecs.iteritems():
-                d += spamWeight * _gt.frobeniusdist2(Evec,otherCalc.evecs[lbl])
+            for (lbl,Evec) in self.effects.iteritems():
+                d += spamWeight * _gt.frobeniusdist2(Evec,otherCalc.effects[lbl])
                 nSummands += spamWeight * _np.size(Evec)
 
-            if self.identityvec is not None and \
-               otherCalc.identityvec is not None:
-                d += spamWeight * _gt.frobeniusdist2(self.identityvec,
-                                                     otherCalc.identityvec)
-                nSummands += spamWeight * _np.size(self.identityvec)
+            if self.povm_identity is not None and \
+               otherCalc.povm_identity is not None:
+                d += spamWeight * _gt.frobeniusdist2(self.povm_identity,
+                                                     otherCalc.povm_identity)
+                nSummands += spamWeight * _np.size(self.povm_identity)
 
         if normalize and nSummands > 0: 
             return _np.sqrt( d / float(nSummands) )
@@ -2529,7 +2529,7 @@ class GateSetCalculator(object):
                                       T)), otherCalc.gates[gateLabel] ) 
                        for gateLabel in self.gates ]
 
-            for spamLabel in self.spamLabels:
+            for spamLabel in self.spamdefs:
                 spamGate = self._make_spamgate(spamLabel)
                 spamGate2 = otherCalc._make_spamgate(spamLabel)
                 if spamGate is not None and spamGate2 is not None:
@@ -2539,7 +2539,7 @@ class GateSetCalculator(object):
             dists = [ _gt.jtracedist(self.gates[gateLabel], otherCalc.gates[gateLabel])
                       for gateLabel in self.gates ]
 
-            for spamLabel in self.spamLabels:
+            for spamLabel in self.spamdefs:
                 spamGate = self._make_spamgate(spamLabel)
                 spamGate2 = otherCalc._make_spamgate(spamLabel)
                 if spamGate is not None and spamGate2 is not None:
@@ -2579,7 +2579,7 @@ class GateSetCalculator(object):
                     otherCalc.gates[gateLabel] )
                       for gateLabel in self.gates ]
 
-            for spamLabel in self.spamLabels:
+            for spamLabel in self.spamdefs:
                 spamGate = self._make_spamgate(spamLabel)
                 spamGate2 = otherCalc._make_spamgate(spamLabel)
                 if spamGate is not None and spamGate2 is not None:
@@ -2590,7 +2590,7 @@ class GateSetCalculator(object):
                                       otherCalc.gates[gateLabel])
                       for gateLabel in self.gates ]
 
-            for spamLabel in self.spamLabels:
+            for spamLabel in self.spamdefs:
                 spamGate = self._make_spamgate(spamLabel)
                 spamGate2 = otherCalc._make_spamgate(spamLabel)
                 if spamGate is not None and spamGate2 is not None:

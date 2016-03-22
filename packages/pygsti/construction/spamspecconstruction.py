@@ -9,10 +9,10 @@ from ..tools import remove_duplicates as _remove_duplicates
 from ..objects import spamspec as _ss
 
 
-def build_spam_specs(fiducialGateStrings=None, rhoStrs=None, EStrs=None, rhoSpecs=None, ESpecs=None, rhoVecLbls=('rho0',), EVecLbls=('E0',)):
+def build_spam_specs(fiducialGateStrings=None, prepStrs=None, effectStrs=None, prepSpecs=None, effectSpecs=None, prep_labels=('rho0',), effect_labels=('E0',)):
     """
     Computes rho and E specifiers based on optional arguments.  This function
-      is used to generate the (rhoSpecs,ESpecs) tuple needed by many of the 
+      is used to generate the (prepSpecs,effectSpecs) tuple needed by many of the 
       Core GST routines.
 
     Parameters
@@ -20,84 +20,84 @@ def build_spam_specs(fiducialGateStrings=None, rhoStrs=None, EStrs=None, rhoSpec
     fiducialGateStrings : list of (tuples or GateStrings), optional
         Each tuple contains gate labels specifying a fiducial gate string, and it
         is *assumed* that the zeroth rhoVec and EVec are used with this string
-        to form a rho-specifier and E-specifier, respectively.
+        to form a prep-specifier and effect-specifier, respectively.
         e.g. [ (), ('Gx',), ('Gx','Gy') ] 
 
-    rhoStrs : list of (tuples or GateStrings), optional
+    prepStrs : list of (tuples or GateStrings), optional
         Each tuple contains gate labels and it is *assumed* that the zeroth rhoVec
-        is used with this string to form a rho-specifier.
+        is used with this string to form a prep-specifier.
         e.g. [ ('Gi',) , ('Gx','Gx') , ('Gx','Gi','Gy') ]
 
-    EStrs : list of (tuples or GateStrings), optional
+    effectStrs : list of (tuples or GateStrings), optional
         Each tuple contains gate labels and it is *assumed* that the zeroth EVec
-        is used with this string to form a E-specifier.
+        is used with this string to form a effect-specifier.
         e.g. [ ('Gi',) , ('Gi') , ('Gx','Gi','Gy') ]
 
-    rhoSpecs : list of tuples, optional
+    prepSpecs : list of tuples, optional
         Each tuple contains gate labels followed by an integer indexing a rhoVec.
         e.g. [ ('Gi',0) , ('Gx','Gx',0) , ('Gx','Gi','Gy',0) ]
 
-    ESpecs : list of tuples, optional
+    effectSpecs : list of tuples, optional
         Each tuple contains an integer EVec index followed by gate labels.
         e.g. [ (0,'Gi') , (1,'Gi') , (0,'Gx','Gi','Gy') ]
 
-    rhoVecLbls : tuple of strs, optional
-        Labels to prepend to fiducial strings to create rhoSpecs
+    prep_labels : tuple of strs, optional
+        Labels to prepend to fiducial strings to create prepSpecs
 
-    EVecLbls : tuple of strs, optional
-        Labels to append to fiducial strings to create ESpecs
+    effect_labels : tuple of strs, optional
+        Labels to append to fiducial strings to create effectSpecs
 
     Returns
     -------
-      (rhoSpecs, ESpecs) 
-          each of the form of the optional parameters rhoSpecs and ESpecs above.
+      (prepSpecs, effectSpecs) 
+          each of the form of the optional parameters prepSpecs and effectSpecs above.
     """
 
-    if rhoSpecs is not None:
-        if rhoStrs is not None or fiducialGateStrings is not None:
-           raise ValueError("Can only specify one of rhoSpecs, rhoStrs, or fiducialGateStrings")
-    elif rhoStrs is not None:
-        rhoSpecs = [ _ss.SpamSpec(rhoLbl,f) for f in rhoStrs for rhoLbl in rhoVecLbls ]
+    if prepSpecs is not None:
+        if prepStrs is not None or fiducialGateStrings is not None:
+           raise ValueError("Can only specify one of prepSpecs, prepStrs, or fiducialGateStrings")
+    elif prepStrs is not None:
+        prepSpecs = [ _ss.SpamSpec(rhoLbl,f) for f in prepStrs for rhoLbl in prep_labels ]
         if fiducialGateStrings is not None:
-           raise ValueError("Can only specify one of rhoSpecs, rhoStrs, or fiducialGateStrings")
+           raise ValueError("Can only specify one of prepSpecs, prepStrs, or fiducialGateStrings")
     elif fiducialGateStrings is not None:
-        rhoSpecs = [ _ss.SpamSpec(rhoLbl,f) for f in fiducialGateStrings for rhoLbl in rhoVecLbls ]
+        prepSpecs = [ _ss.SpamSpec(rhoLbl,f) for f in fiducialGateStrings for rhoLbl in prep_labels ]
     else:
-        raise ValueError("Must specfiy one of rhoSpecs, rhoStrs, or fiducialGateStrings")
+        raise ValueError("Must specfiy one of prepSpecs, prepStrs, or fiducialGateStrings")
     
 
-    if ESpecs is not None:
-        if EStrs is not None or fiducialGateStrings is not None:
-           raise ValueError("Can only specify one of ESpecs, EStrs, or fiducialGateStrings")
-    elif EStrs is not None:
-        ESpecs = [ _ss.SpamSpec(eLbl,f) for f in EStrs for eLbl in EVecLbls ]
+    if effectSpecs is not None:
+        if effectStrs is not None or fiducialGateStrings is not None:
+           raise ValueError("Can only specify one of effectSpecs, effectStrs, or fiducialGateStrings")
+    elif effectStrs is not None:
+        effectSpecs = [ _ss.SpamSpec(eLbl,f) for f in effectStrs for eLbl in effect_labels ]
         if fiducialGateStrings is not None:
-           raise ValueError("Can only specify one of ESpecs, EStrs, or fiducialGateStrings")
+           raise ValueError("Can only specify one of effectSpecs, effectStrs, or fiducialGateStrings")
     elif fiducialGateStrings is not None:
-        ESpecs = [ _ss.SpamSpec(eLbl,f) for f in fiducialGateStrings for eLbl in EVecLbls ]
+        effectSpecs = [ _ss.SpamSpec(eLbl,f) for f in fiducialGateStrings for eLbl in effect_labels ]
     else:
-        raise ValueError("Must specfiy one of ESpecs, EStrs, or fiducialGateStrings")
+        raise ValueError("Must specfiy one of effectSpecs, effectStrs, or fiducialGateStrings")
         
-    return rhoSpecs, ESpecs
+    return prepSpecs, effectSpecs
 
 
 def get_spam_strs(specs):
     """ 
     Get just the string portion of a pair of rho and E specifiers by
-      stripping last element of rhoSpecs and first element of ESpecs
-      to get rhoStrs and EStrs.  Duplicate strings are removed.
+      stripping last element of prepSpecs and first element of effectSpecs
+      to get prepStrs and effectStrs.  Duplicate strings are removed.
 
     Parameters
     ----------
     specs : tuple
-        (rhoSpecs, ESpecs) to extract strings portions from.
+        (prepSpecs, effectSpecs) to extract strings portions from.
 
     Returns
     -------
-    rhoStrs : list of strings
-    EStrs : list of strings
+    prepStrs : list of strings
+    effectStrs : list of strings
     """
-    rhoSpecs, ESpecs = specs
-    rhoStrs = _remove_duplicates( [ rhoSpec.str for rhoSpec in rhoSpecs ] )
-    EStrs   = _remove_duplicates( [ ESpec.str for ESpec in ESpecs ] )
-    return rhoStrs, EStrs
+    prepSpecs, effectSpecs = specs
+    prepStrs = _remove_duplicates( [ prepSpec.str for prepSpec in prepSpecs ] )
+    effectStrs   = _remove_duplicates( [ effectSpec.str for effectSpec in effectSpecs ] )
+    return prepStrs, effectStrs

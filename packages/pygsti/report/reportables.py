@@ -109,7 +109,7 @@ def _getSpamQuantity(fnOfSpamVecs, gateset, eps, confidenceRegionInfo, verbosity
     """ For constructing a ReportableQty from a function of a spam vectors."""
 
     if confidenceRegionInfo is None: # No Error bars
-        return ReportableQty(fnOfSpamVecs(gateset.get_rhovecs(), gateset.get_evecs()))
+        return ReportableQty(fnOfSpamVecs(gateset.get_preps(), gateset.get_effects()))
 
     # make sure the gateset we're given is the one used to generate the confidence region
     if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):

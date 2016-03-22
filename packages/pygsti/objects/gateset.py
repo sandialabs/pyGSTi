@@ -38,10 +38,11 @@ class GateSet(object):
     represented as column vectors.
     """
 
-    _strict = False #Whether access to gates & spam vecs via GateSet indexing is allowed
+    #Whether access to gates & spam vecs via GateSet indexing is allowed
+    _strict = False 
     
     def __init__(self, default_param="full", 
-                 rho_prefix="rho", e_prefix="E", gate_prefix="G",
+                 prep_prefix="rho", effect_prefix="E", gate_prefix="G",
                  remainder_label="remainder", identity_label="identity"):
         """ 
         Initialize a gate set.
@@ -56,7 +57,7 @@ class GateSet(object):
              preserving.
              "static" : by default gates and vectors are not parameterized.
 
-        rho_prefix, e_prefix, gate_prefix : string, optional
+        prep_prefix, effect_prefix, gate_prefix : string, optional
             Key prefixes designating state preparations, POVM effects,
             and gates, respectively.  These prefixes allow the GateSet to 
             determine what type of object a each key corresponds to.
@@ -77,31 +78,47 @@ class GateSet(object):
         default_e_param = "full" if default_param == "TP" else default_param
 
         #Gate dimension of this GateSet (None => unset, to be determined)
-        self.dim = None
+        self._dim = None
 
         #SPAM vectors
-        self.rhoVecs = _ld.OrderedSPAMVecDict(self,default_param,
-                                              None, rho_prefix)
-        self.EVecs = _ld.OrderedSPAMVecDict(self, default_e_param,
-                                            remainder_label, e_prefix)
-        self.identityVec = None #the identity vector in whatever basis is
+        self.preps = _ld.OrderedSPAMVecDict(self,default_param,
+                                              None, prep_prefix)
+        self.effects = _ld.OrderedSPAMVecDict(self, default_e_param,
+                                            remainder_label, effect_prefix)
+        self._povm_identity = None #the identity vector in whatever basis is
                                 #being used (needed only if "-1" EVec is used)
 
-        #SPAM labels: key = label, value = (rhoLabel, eLabel)
-        self.SPAM_labels = _ld.OrderedSPAMLabelDict(remainder_label)
+        #SPAM labels: key = label, value = (prepLabel, effectLabel)
+        self.spamdefs = _ld.OrderedSPAMLabelDict(remainder_label)
 
         #Gates
         self.gates = _ld.OrderedGateDict(self, default_param, gate_prefix)
 
-        self._remainder = remainder_label
-        self._identity = identity_label
+        self._remainderlabel = remainder_label
+        self._identitylabel = identity_label
 
         super(GateSet, self).__init__()
 
+    @property
+    def povm_identity(self):
+        return self._povm_identity
 
-    def get_dimension(self):
+    @povm_identity.setter
+    def povm_identity(self, value):
+        if self._dim is None:     self._dim = len(value)
+        if self._dim != len(value):
+            raise ValueError("Cannot add vector with dimension" +
+                             "%d to gateset of dimension %d"
+                             % (len(value),self._dim))
+        if self.povm_identity is not None:
+            self._povm_identity.set_vector(value)
+        else:
+            self._povm_identity = _sv.StaticSPAMVec(value) # always static
+
+    @property
+    def dim(self):
         """ 
-        Get the dimension of the gateset, which equals d when the gate
+        The dimension of the gateset, which equals d when the gate
         matrices have shape d x d and spam vectors have shape d x 1.  
 
         Returns
@@ -109,10 +126,23 @@ class GateSet(object):
         int
             gateset dimension
         """
-        return self.dim
+        return self._dim
+
+    def get_dimension(self):
+        """ 
+        Get the dimension of the gateset, which equals d when the gate
+        matrices have shape d x d and spam vectors have shape d x 1.
+        Equivalent to gateset.dim.
+
+        Returns
+        -------
+        int
+            gateset dimension
+        """
+        return self._dim
 
 
-    def get_rhovec_labels(self):
+    def get_prep_labels(self):
         """
         Get the labels of state preparation vectors.
 
@@ -120,10 +150,10 @@ class GateSet(object):
         -------
         list of strings
         """
-        return self.rhoVecs.keys()
+        return self.preps.keys()
 
 
-    def get_evec_labels(self):
+    def get_effect_labels(self):
         """
         Get all the effect vector labels present in a SPAM label.  This
         may include the special "remainder" label signifying the "complement"
@@ -133,14 +163,15 @@ class GateSet(object):
         -------
         list of strings
         """
-        labels = self.EVecs.keys()
-        if any( [eLabel == self._remainder and rhoLabel != self._remainder
-                 for rhoLabel,eLabel in self.SPAM_labels.values()] ):
-            labels.append( self._remainder )
+        labels = self.effects.keys()
+        if any( [effectLabel == self._remainderlabel and
+                 prepLabel != self._remainderlabel
+                 for prepLabel,effectLabel in self.spamdefs.values()] ):
+            labels.append( self._remainderlabel )
         return labels
 
 
-    def get_rhovecs(self):
+    def get_preps(self):
         """
         Get an list of all the state prepartion vectors.  These
         vectors are copies of internally stored data and thus
@@ -151,9 +182,9 @@ class GateSet(object):
         list of numpy arrays
             list of state preparation vectors of shape (dim, 1).
         """
-        return [ self.rhoVecs[l].copy() for l in self.get_rhovec_labels() ]
+        return [ self.preps[l].copy() for l in self.get_prep_labels() ]
 
-    def get_evecs(self):
+    def get_effects(self):
         """
         Get an list of all the POVM effect vectors.  This list will include
         the "compliment" effect vector at the end of the list if one has been
@@ -165,10 +196,10 @@ class GateSet(object):
         list of numpy arrays
             list of POVM effect vectors of shape (dim, 1).
         """
-        return [ self.EVecs[l].copy() for l in self.get_evec_labels() ]
+        return [ self.effects[l].copy() for l in self.get_effect_labels() ]
 
 
-    def num_rhovecs(self):
+    def num_preps(self):
         """
         Get the number of state preparation vectors
 
@@ -176,9 +207,9 @@ class GateSet(object):
         -------
         int
         """
-        return len(self.rhoVecs)
+        return len(self.preps)
 
-    def num_evecs(self):
+    def num_effects(self):
         """
         Get the number of effect vectors, including a "complement" effect
         vector, equal to Identity - sum(other effect vectors)
@@ -188,44 +219,45 @@ class GateSet(object):
         int
         """
         bHaveComplementEvec = \
-            any( [eLabel == self._remainder and rhoLabel != self._remainder
-                  for rhoLabel,eLabel in self.SPAM_labels.values()] )
-        return len(self.EVecs) + ( 1 if bHaveComplementEvec else 0 )
+            any( [effectLabel == self._remainderlabel and
+                  prepLabel != self._remainderlabel
+                  for prepLabel,effectLabel in self.spamdefs.values()] )
+        return len(self.effects) + ( 1 if bHaveComplementEvec else 0 )
 
 
-    def add_spam_label(self, rhoLabel, eLabel, label):
-        """
-        Adds a new spam label.  That is, associates the SPAM
-          pair (rhoLabel,eLabel) with the given label.  Same
-          as:  gateset.SPAM_labels[label] = (rhoLabel, eLabel)
+    #def add_spam_definition(self, prepLabel, effectLabel, spamLabel):
+    #    """
+    #    Adds a new spam label.  That is, associates the SPAM
+    #      pair (prepLabel,effectLabel) with the given spamLabel.  Same
+    #      as:  gateset.spamdefs[spamLabel] = (prepLabel, effectLabel)
+    #
+    #    Parameters
+    #    ----------
+    #    prepLabel : string
+    #        state preparation label.
+    #
+    #    effectLabel : string
+    #        POVM effect label.
+    #
+    #    spamLabel : string
+    #        the "spam label" to associate with (prepLabel,effectLabel).
+    #    """
+    #    self.spamdefs[spamLabel] = (prepLabel,effectLabel)
 
-        Parameters
-        ----------
-        rhoLabel : string
-            state preparation label.
 
-        eLabel : string
-            POVM effect label.
-
-        label : string
-            the "spam label" to associate with (rhoLabel,eLabel).
-        """
-        self.SPAM_labels[label] = (rhoLabel,eLabel)
-
-
-    def get_spam_label_dict(self):
+    def get_reverse_spam_defs(self):
         """ 
         Get a reverse-lookup dictionary for spam labels.  
 
         Returns
         -------
         dict
-            a dictionary with keys == (rhoLabel,eLabel) tuples and
+            a dictionary with keys == (prepLabel,effectLabel) tuples and
             values == SPAM labels.
         """
         d = { }
-        for label in self.SPAM_labels:
-            d[  self.SPAM_labels[label] ] = label
+        for label in self.spamdefs:
+            d[  self.spamdefs[label] ] = label
         return d
 
     def get_spam_labels(self):
@@ -236,7 +268,7 @@ class GateSet(object):
         -------
         list of strings
         """
-        return self.SPAM_labels.keys()
+        return self.spamdefs.keys()
 
 
     def get_spamgate(self, spamLabel):
@@ -271,25 +303,18 @@ class GateSet(object):
             appropriate dimension for the GateSet and appropriate type
             given the prefix of the label.
         """
-        if GateSet._strict and label != self._identity:
+        if GateSet._strict:
             raise KeyError("Strict-mode: invalid key %s" % label)
 
-        if label.startswith(self.rhoVecs._prefix):
-            self.rhoVecs[label] = value
-        elif label.startswith(self.EVecs._prefix) or label == self._remainder:
-            self.EVecs[label] = value
+        if label.startswith(self.preps._prefix):
+            self.preps[label] = value
+        elif label.startswith(self.effects._prefix) \
+                or label == self._remainderlabel:
+            self.effects[label] = value
         elif label.startswith(self.gates._prefix):
             self.gates[label] = value
-        elif label == self._identity:
-            if self.dim is None:     self.dim = len(value)
-            if self.dim != len(value):
-                raise ValueError("Cannot add vector with dimension" +
-                                 "%d to gateset of dimension %d"
-                                 % (len(value),self.dim))
-            if self.identityVec is not None:
-                self.identityVec.set_vector(value)
-            else:
-                self.identityVec = _sv.StaticSPAMVec(value) # always static
+        elif label == self._identitylabel:
+            self.povm_identity = value
         else:
             raise KeyError("Key %s has an invalid prefix" % label)
 
@@ -302,17 +327,18 @@ class GateSet(object):
         label : string
             the gate or SPAM vector label.
         """
-        if GateSet._strict and label != self._identity:
+        if GateSet._strict:
             raise KeyError("Strict-mode: invalid key %s" % label)
 
-        if label.startswith(self.rhoVecs._prefix):
-            return self.rhoVecs[label]
-        elif label.startswith(self.EVecs._prefix) or label == self._remainder:
-            return self.EVecs[label]
+        if label.startswith(self.preps._prefix):
+            return self.preps[label]
+        elif label.startswith(self.effects._prefix) \
+                or label == self._remainderlabel:
+            return self.effects[label]
         elif label.startswith(self.gates._prefix):
             return self.gates[label]
-        elif label == self._identity:
-            return self.identityVec
+        elif label == self._identitylabel:
+            return self.povm_identity
         else:
             raise KeyError("Key %s has an invalid prefix" % label)
 
@@ -334,13 +360,13 @@ class GateSet(object):
         for lbl,gate in self.gates.iteritems():
             self.gates[lbl] = _gate.convert(gate, typ)
 
-        for lbl,vec in self.rhoVecs.iteritems():
-            self.rhoVecs[lbl] = _sv.convert(vec, typ)
+        for lbl,vec in self.preps.iteritems():
+            self.preps[lbl] = _sv.convert(vec, typ)
 
-        for lbl,vec in self.EVecs.iteritems():
-            self.EVecs[lbl] = _sv.convert(vec, etyp)
+        for lbl,vec in self.effects.iteritems():
+            self.effects[lbl] = _sv.convert(vec, etyp)
 
-        #Note: self.identityVec should *always* be static, and
+        #Note: self.povm_identity should *always* be static, and
         # is not changed by this method.
 
 
@@ -354,8 +380,8 @@ class GateSet(object):
         # of relevant OrderedDict-derived classes, which *don't*
         # preserve this information upon pickling so as to avoid
         # circular pickling...
-        self.rhoVecs.parent = self
-        self.EVecs.parent = self
+        self.preps.parent = self
+        self.effects.parent = self
         self.gates.parent = self
 
 
@@ -369,8 +395,8 @@ class GateSet(object):
         int
             the number of gateset parameters.
         """
-        L = sum([ rhoVec.num_params() for rhoVec in self.rhoVecs.values() ])
-        L += sum([ EVec.num_params() for EVec in self.EVecs.values() ])
+        L = sum([ rhoVec.num_params() for rhoVec in self.preps.values() ])
+        L += sum([ EVec.num_params() for EVec in self.effects.values() ])
         L += sum([ gate.num_params() for gate in self.gates.values()])
         return L
 
@@ -388,8 +414,8 @@ class GateSet(object):
         int
             the number of gateset elements.
         """
-        rhoSize = [ rho.size for rho in self.rhoVecs.values() ]
-        eSize   = [ E.size for E in self.EVecs.values() ]
+        rhoSize = [ rho.size for rho in self.preps.values() ]
+        eSize   = [ E.size for E in self.effects.values() ]
         gateSize = [ gate.size for gate in self.gates.values() ]
         return sum(rhoSize) + sum(eSize) + sum(gateSize)
 
@@ -433,7 +459,7 @@ class GateSet(object):
         v = _np.empty( self.num_params() )
 
         objs_to_vectorize = \
-            self.rhoVecs.values() + self.EVecs.values() + self.gates.values()
+            self.preps.values() + self.effects.values() + self.gates.values()
 
         off = 0
         for obj in objs_to_vectorize:
@@ -455,7 +481,7 @@ class GateSet(object):
         assert( len(v) == self.num_params() )
 
         objs_to_vectorize = \
-            self.rhoVecs.values() + self.EVecs.values() + self.gates.values()
+            self.preps.values() + self.effects.values() + self.gates.values()
 
         off = 0
         for obj in objs_to_vectorize:
@@ -477,8 +503,8 @@ class GateSet(object):
         """
         off = 0
         offsets = {}
-        for label,obj in _itertools.chain(self.rhoVecs.iteritems(),
-                                          self.EVecs.iteritems(),
+        for label,obj in _itertools.chain(self.preps.iteritems(),
+                                          self.effects.iteritems(),
                                           self.gates.iteritems() ):
             np = obj.num_params()
             offsets[label] = (off,off+np); off += np
@@ -506,7 +532,7 @@ class GateSet(object):
         deriv = _np.zeros( (self.num_elements(), self.num_params()), 'd' )
 
         objs_to_vectorize = \
-            self.rhoVecs.values() + self.EVecs.values() + self.gates.values()
+            self.preps.values() + self.effects.values() + self.gates.values()
 
         eo = po = 0 # element & parameter offsets
         for obj in objs_to_vectorize:
@@ -605,7 +631,7 @@ class GateSet(object):
 
 
         #Use a GateSet object to hold & then vectorize the derivatives wrt each gauge transform basis element (each ij)
-        dim = self.dim
+        dim = self._dim
         nParams = self.num_params()
         nElements = self.num_elements()
 
@@ -619,14 +645,15 @@ class GateSet(object):
         # mxs and spam vectors as parameters (i.e. be "fully parameterized") in
         # order to match deriv_wrt_params call, which gives derivatives wrt
         # *all* elements of a gate set / parameterizaton.
-        gsDeriv = GateSet("full", self.rhoVecs._prefix, self.EVecs._prefix,
-                          self.gates._prefix, self._remainder, self._identity)
+        gsDeriv = GateSet("full", self.preps._prefix, self.effects._prefix,
+                          self.gates._prefix, self._remainderlabel,
+                          self._identitylabel)
         for gateLabel in self.gates:
             gsDeriv.gates[gateLabel] = _np.zeros((dim,dim),'d')
-        for rhoLabel in self.rhoVecs: 
-            gsDeriv.rhoVecs[rhoLabel] = _np.zeros((dim,1),'d')
-        for eLabel in self.EVecs:
-            gsDeriv.EVecs[eLabel] = _np.zeros((dim,1),'d')
+        for prepLabel in self.preps: 
+            gsDeriv.preps[prepLabel] = _np.zeros((dim,1),'d')
+        for effectLabel in self.effects:
+            gsDeriv.effects[effectLabel] = _np.zeros((dim,1),'d')
 
         assert(gsDeriv.num_elements() == gsDeriv.num_params() == nElements)
 
@@ -634,10 +661,10 @@ class GateSet(object):
         for i in xrange(dim):      # always range over all rows: this is the
             for j in xrange(dim):  # *generator* mx, not gauge mx itself
                 unitMx = _bt._mut(i,j,dim)
-                for lbl,rhoVec in self.rhoVecs.iteritems():
-                    gsDeriv.rhoVecs[lbl] = _np.dot(unitMx, rhoVec)
-                for lbl,EVec in self.EVecs.iteritems():
-                    gsDeriv.EVecs[lbl] =  -_np.dot(EVec.T, unitMx).T
+                for lbl,rhoVec in self.preps.iteritems():
+                    gsDeriv.preps[lbl] = _np.dot(unitMx, rhoVec)
+                for lbl,EVec in self.effects.iteritems():
+                    gsDeriv.effects[lbl] =  -_np.dot(EVec.T, unitMx).T
                 for lbl,gate in self.gates.iteritems():
                     gsDeriv.gates[lbl] = _np.dot(unitMx,gate) - \
                                          _np.dot(gate,unitMx)
@@ -760,23 +787,23 @@ class GateSet(object):
         """
         if Si is None: Si = _nla.inv(S) 
 
-        for rhoVec in self.rhoVecs.values():
+        for rhoVec in self.preps.values():
             rhoVec.set_vector(_np.dot(Si,rhoVec))
 
-        for EVec in self.EVecs.values():
+        for EVec in self.effects.values():
             EVec.set_vector(_np.dot(_np.transpose(S),EVec)) #( Evec^T * S )^T
 
-        if self.identityVec is not None: # same as Es
-            self.identityVec.set_vector( _np.dot(_np.transpose(S),
-                                                 self.identityVec) ) 
+        if self.povm_identity is not None: # same as Es
+            self.povm_identity.set_vector( _np.dot(_np.transpose(S),
+                                                 self.povm_identity) ) 
 
         for gateObj in self.gates.values():
             gateObj.transform(S,Si)
 
     def _calc(self):
-        return _gscalc.GateSetCalculator(self.dim, self.gates, self.rhoVecs,
-                                         self.EVecs, self.identityVec, 
-                                         self.SPAM_labels, self._remainder)
+        return _gscalc.GateSetCalculator(self._dim, self.gates, self.preps,
+                                         self.effects, self.povm_identity, 
+                                         self.spamdefs, self._remainderlabel)
                             
     def product(self, gatestring, bScale=False):
         """ 
@@ -1768,22 +1795,22 @@ class GateSet(object):
             a (deep) copy of this gateset.
         """
         newGateset = GateSet()
-        newGateset.rhoVecs = self.rhoVecs.copy()
-        newGateset.EVecs = self.EVecs.copy()
+        newGateset.preps = self.preps.copy()
+        newGateset.effects = self.effects.copy()
         newGateset.gates = self.gates.copy()
-        newGateset.SPAM_labels = self.SPAM_labels.copy()
-        newGateset.identityVec = self.identityVec.copy()
-        newGateset.dim = self.dim
-        newGateset._remainder = self._remainder
-        newGateset._identity = self._identity
+        newGateset.spamdefs = self.spamdefs.copy()
+        newGateset.povm_identity = self.povm_identity.copy()
+        newGateset._dim = self._dim
+        newGateset._remainderlabel = self._remainderlabel
+        newGateset._identitylabel = self._identitylabel
         return newGateset
 
     def __str__(self):
         s = ""
-        for (lbl,vec) in self.rhoVecs.iteritems():
+        for (lbl,vec) in self.preps.iteritems():
             s += "%s = " % lbl + _mt.mx_to_string(_np.transpose(vec)) + "\n"
         s += "\n"
-        for (lbl,vec) in self.EVecs.iteritems():
+        for (lbl,vec) in self.effects.iteritems():
             s += "%s = " % lbl + _mt.mx_to_string(_np.transpose(vec)) + "\n"
         s += "\n"
         for (lbl,gate) in self.gates.iteritems():
@@ -1801,24 +1828,24 @@ class GateSet(object):
         for (label,gate) in self.gates.iteritems():
             yield (label, gatemx)
 
-    def iter_rhovecs(self):  
+    def iter_preps(self):  
         """
         Returns
         -------
         iterator
-            an iterator over all (rhoLabel,vector) pairs
+            an iterator over all (prepLabel,vector) pairs
         """
-        for (label,vec) in self.rhoVecs.iteritems():
+        for (label,vec) in self.preps.iteritems():
             yield (label, vec)
 
-    def iter_evecs(self):  
+    def iter_effects(self):  
         """
         Returns
         -------
         iterator
-            an iterator over all (eLabel,vector) pairs
+            an iterator over all (effectLabel,vector) pairs
         """
-        for (label,vec) in self.EVecs.iteritems():
+        for (label,vec) in self.effects.iteritems():
             yield (label, vec)
 
 
@@ -1893,26 +1920,26 @@ class GateSet(object):
                 raise ValueError("Must specify at most  one of 'noise' and 'max_noise' NOT both")
     
             #Apply random depolarization to each rho and E vector
-            r = max_spam_noise * rndm.random_sample( len(self.rhoVecs) )
-            for (i,lbl) in enumerate(self.rhoVecs):
+            r = max_spam_noise * rndm.random_sample( len(self.preps) )
+            for (i,lbl) in enumerate(self.preps):
                 D = _np.diag( [1]+[1-r[i]]*(gateDim-1) )
-                newGateset.rhoVecs[lbl] = _sv.FullyParameterizedSPAMVec(
-                                           _np.dot(D,self.rhoVecs[lbl]))
+                newGateset.preps[lbl] = _sv.FullyParameterizedSPAMVec(
+                                           _np.dot(D,self.preps[lbl]))
     
-            r = max_spam_noise * rndm.random_sample( len(self.EVecs) )
-            for (i,lbl) in enumerate(self.EVecs):
+            r = max_spam_noise * rndm.random_sample( len(self.effects) )
+            for (i,lbl) in enumerate(self.effects):
                 D = _np.diag( [1]+[1-r[i]]*(gateDim-1) )
-                newGateset.EVecs[lbl] = _sv.FullyParameterizedSPAMVec(
-                                         _np.dot(D,self.EVecs[lbl]))
+                newGateset.effects[lbl] = _sv.FullyParameterizedSPAMVec(
+                                         _np.dot(D,self.effects[lbl]))
                 
         elif spam_noise is not None:
             #Apply the same depolarization to each gate
             D = _np.diag( [1]+[1-spam_noise]*(gateDim-1) )
-            for lbl,rhoVec in self.rhoVecs.iteritems():
-                newGateset.rhoVecs[lbl] = _sv.FullyParameterizedSPAMVec(
+            for lbl,rhoVec in self.preps.iteritems():
+                newGateset.preps[lbl] = _sv.FullyParameterizedSPAMVec(
                                             _np.dot(D,rhoVec) )
-            for lbl,EVec in self.EVecs.iteritems():
-                newGateset.EVecs[lbl] = _sv.FullyParameterizedSPAMVec(
+            for lbl,EVec in self.effects.iteritems():
+                newGateset.effects[lbl] = _sv.FullyParameterizedSPAMVec(
                                          _np.dot(D,EVec) )
 
         return newGateset
@@ -1955,9 +1982,9 @@ class GateSet(object):
         dim = self.get_dimension()
  
         #NEEDED?
-        #for (i,rhoVec) in enumerate(self.rhoVecs):
+        #for (i,rhoVec) in enumerate(self.preps):
         #    newGateset.set_rhovec( rhoVec, i )  
-        #for (i,EVec) in enumerate(self.EVecs):
+        #for (i,EVec) in enumerate(self.effects):
         #    newGateset.set_evec( EVec, i )
     
         if dim not in (4, 16):
@@ -2115,29 +2142,30 @@ class GateSet(object):
         curDim = self.get_dimension()
         assert(newDimension > curDim)
 
-        new_gateset = GateSet("full", self.rhoVecs._prefix, self.EVecs._prefix,
-                              self.gates._prefix, self._remainder, self._identity)
-        new_gateset.dim = newDimension
-        new_gateset.SPAM_labels.update( self.SPAM_labels )
+        new_gateset = GateSet("full", self.preps._prefix, self.effects._prefix,
+                              self.gates._prefix, self._remainderlabel,
+                              self._identitylabel)
+        new_gateset._dim = newDimension
+        new_gateset.spamdefs.update( self.spamdefs )
     
         addedDim = newDimension-curDim
         vec_zeroPad = _np.zeros( (addedDim,1), 'd')
     
         #Increase dimension of rhoVecs and EVecs by zero-padding
-        for lbl,rhoVec in self.rhoVecs.iteritems():
+        for lbl,rhoVec in self.preps.iteritems():
             assert( len(rhoVec) == curDim )
-            new_gateset.rhoVecs[lbl] = \
+            new_gateset.preps[lbl] = \
                 _sv.FullyParameterizedSPAMVec(_np.concatenate( (rhoVec, vec_zeroPad) ))
     
-        for lbl,EVec in self.EVecs.iteritems():
+        for lbl,EVec in self.effects.iteritems():
             assert( len(EVec) == curDim )
-            new_gateset.EVecs[lbl] = \
+            new_gateset.effects[lbl] = \
                 _sv.FullyParameterizedSPAMVec(_np.concatenate( (EVec, vec_zeroPad) ))
     
         #Increase dimension of identityVec by zero-padding
-        if self.identityVec is not None:
-            new_gateset.identityVec = _sv.FullyParameterizedSPAMVec(
-                            _np.concatenate( (self.identityVec, vec_zeroPad) ))
+        if self.povm_identity is not None:
+            new_gateset.povm_identity = _sv.FullyParameterizedSPAMVec(
+                            _np.concatenate( (self.povm_identity, vec_zeroPad) ))
     
         #Increase dimension of gates by assuming they act as identity on additional (unknown) space
         for gateLabel,gate in self.gates.iteritems():
@@ -2172,26 +2200,27 @@ class GateSet(object):
         curDim = self.get_dimension()
         assert(newDimension < curDim)
         
-        new_gateset = GateSet("full", self.rhoVecs._prefix, self.EVecs._prefix,
-                              self.gates._prefix, self._remainder, self._identity)
-        new_gateset.dim = newDimension
-        new_gateset.SPAM_labels.update( self.SPAM_labels )
+        new_gateset = GateSet("full", self.preps._prefix, self.effects._prefix,
+                              self.gates._prefix, self._remainderlabel,
+                              self._identitylabel)
+        new_gateset._dim = newDimension
+        new_gateset.spamdefs.update( self.spamdefs )
     
         #Decrease dimension of rhoVecs and EVecs by truncation
-        for lbl,rhoVec in self.rhoVecs.iteritems():
+        for lbl,rhoVec in self.preps.iteritems():
             assert( len(rhoVec) == curDim )
-            new_gateset.rhoVecs[lbl] = \
+            new_gateset.preps[lbl] = \
                 _sv.FullyParameterizedSPAMVec(rhoVec[0:newDimension,:])
     
-        for lbl,EVec in self.EVecs.iteritems():
+        for lbl,EVec in self.effects.iteritems():
             assert( len(EVec) == curDim )
-            new_gateset.EVecs[lbl] = \
+            new_gateset.effects[lbl] = \
                 _sv.FullyParameterizedSPAMVec(EVec[0:newDimension,:])
     
         #Decrease dimension of identityVec by trunction
-        if self.identityVec is not None:
-            new_gateset.identityVec = _sv.FullyParameterizedSPAMVec( 
-                                self.identityVec[0:newDimension,:])
+        if self.povm_identity is not None:
+            new_gateset.povm_identity = _sv.FullyParameterizedSPAMVec( 
+                                self.povm_identity[0:newDimension,:])
     
         #Decrease dimension of gates by truncation
         for gateLabel,gate in self.gates.iteritems():
@@ -2259,12 +2288,12 @@ class GateSet(object):
                         _jt.jamiolkowski_iso(gate))] ),"\n"
         print "Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_evals(self)
     
-        rhovec_penalty = sum( [ _lf.rhovec_penalty(rhoVec)
-                                for rhoVec in self.rhoVecs.values() ] )
-        evec_penalty   = sum( [ _lf.evec_penalty(EVec) 
-                                for EVec in self.EVecs.values() ] )
-        print "rhoVec Penalty (>0 if invalid rhoVecs) = ", rhovec_penalty
-        print "EVec Penalty (>0 if invalid EVecs) = ", evec_penalty
+        prep_penalty = sum( [ _lf.prep_penalty(rhoVec)
+                                for rhoVec in self.preps.values() ] )
+        effect_penalty   = sum( [ _lf.effect_penalty(EVec) 
+                                for EVec in self.effects.values() ] )
+        print "rhoVec Penalty (>0 if invalid rhoVecs) = ", prep_penalty
+        print "EVec Penalty (>0 if invalid EVecs) = ", effect_penalty
 
 
 
@@ -2295,7 +2324,7 @@ class GateSet(object):
 #            the GateSet's internal object, so callers should copy the
 #            vector before changing it.
 #        """
-#        return self.identityVec
+#        return self.povm_identity
 #    
 #    def set_rhovec(self, rhoVec, index=0):
 #        """
@@ -2308,7 +2337,7 @@ class GateSet(object):
 #
 #        index : int, optional
 #            the index of the state preparation vector to set.  Must
-#            be <= num_rhovecs(), where equality adds a new vector.
+#            be <= num_preps(), where equality adds a new vector.
 #        """
 #        self.parameterization.set_rhovec(rhoVec, index)
 #        self._rawupdate()
@@ -2328,7 +2357,7 @@ class GateSet(object):
 #        numpy array
 #            a state preparation vector of shape (dim, 1).
 #        """
-#        return self.rhoVecs[index]
+#        return self.preps[index]
 #
 #
 #
@@ -2344,7 +2373,7 @@ class GateSet(object):
 #
 #        index : int, optional
 #            the index of the effect vector to set.  Must
-#            be <= num_evecs(), where equality adds a new vector.
+#            be <= num_effects(), where equality adds a new vector.
 #        """
 #        self.parameterization.set_evec(EVec, index)
 #        self._rawupdate()
@@ -2365,9 +2394,9 @@ class GateSet(object):
 #            an effect vector of shape (dim, 1).
 #        """
 #        if index == -1:
-#            return self.identityVec - sum(self.EVecs)
+#            return self.povm_identity - sum(self.effects)
 #        else:
-#            return self.EVecs[index]
+#            return self.effects[index]
 #
 #
 #    def get_rhovec_indices(self):
@@ -2378,7 +2407,7 @@ class GateSet(object):
 #        -------
 #        list of ints
 #        """
-#        return range(len(self.rhoVecs))
+#        return range(len(self.preps))
 #
 #    def get_evec_indices(self):
 #        """
@@ -2390,12 +2419,12 @@ class GateSet(object):
 #        -------
 #        list of ints
 #        """
-#        inds = range(len(self.EVecs))
-#        if any( [ (EIndx == -1 and rhoIndx != -1) for (rhoIndx,EIndx) in self.SPAM_labels.values() ]):
+#        inds = range(len(self.effects))
+#        if any( [ (EIndx == -1 and rhoIndx != -1) for (rhoIndx,EIndx) in self.spamdefs.values() ]):
 #            inds.append( -1 )
 #        return inds
 #
-#    def add_spam_label(self, rhoIndex, eIndex, label):
+#    def add_spam_definition(self, rhoIndex, eIndex, label):
 #        """
 #        Adds a new spam label.  That is, associates the SPAM
 #          pair (rhoIndex,eIndex) with the given label.  Calls
@@ -2415,7 +2444,7 @@ class GateSet(object):
 #XXX
 #        self.make_spams()
 #
-#    def get_spam_label_dict(self):
+#    def get_reverse_spam_defs(self):
 #        """ 
 #        Get a reverse-lookup dictionary for spam labels.  
 #
@@ -2426,8 +2455,8 @@ class GateSet(object):
 #            values == SPAM labels.
 #        """
 #        d = { }
-#        for label in self.SPAM_labels:
-#            d[  self.SPAM_labels[label] ] = label
+#        for label in self.spamdefs:
+#            d[  self.spamdefs[label] ] = label
 #        return d
 #
 #    def get_spam_labels(self):
@@ -2438,7 +2467,7 @@ class GateSet(object):
 #        -------
 #        list of strings
 #        """
-#        return self.SPAM_labels.keys()
+#        return self.spamdefs.keys()
 #
 #
 #    def __setitem__(self, label, gate):
@@ -2466,14 +2495,14 @@ class GateSet(object):
 #    def __getstate__(self):
 #        #Return the state (for pickling)
 #        mystate = { 'parameterization': self.parameterization,
-#                    'SPAM_labels': self.SPAM_labels,
+#                    'spamdefs': self.spamdefs,
 #                    'SPAMs' : self.SPAMs,
 #                    'history' : self.history,
 #                    'assumeSumToOne' : self.assumeSumToOne
 #                    }
-#                    #'rhoVecs' : self.rhoVecs,
-#                    #'EVecs': self.EVecs,
-#                    #'identityVec': self.identityVec,
+#                    #'rhoVecs' : self.preps,
+#                    #'EVecs': self.effects,
+#                    #'identityVec': self.povm_identity,
 #                    #'gate_dim': self.gate_dim,
 #                    #'gates': self.gates,
 #        return mystate
@@ -2482,11 +2511,11 @@ class GateSet(object):
 #        #Initialize a GateSet from a state dictionary (for un-pickling)
 #        #self.gate_dim = stateDict['gate_dim']
 #        self.parameterization = stateDict['parameterization']
-#        #self.rhoVecs = stateDict['rhoVecs']
-#        #self.EVecs = stateDict['EVecs']
+#        #self.preps = stateDict['rhoVecs']
+#        #self.effects = stateDict['EVecs']
 #        #self.gates = stateDict['gates']
-#        #self.identityVec = stateDict['identityVec']
-#        self.SPAM_labels = stateDict['SPAM_labels']
+#        #self.povm_identity = stateDict['identityVec']
+#        self.spamdefs = stateDict['spamdefs']
 #        self.SPAMs = stateDict['SPAMs']
 #        self.history = stateDict['history']
 #        self.assumeSumToOne = stateDict['assumeSumToOne']
@@ -2501,18 +2530,18 @@ class GateSet(object):
 #            super(GateSet, self).__setitem__(gateLabel, gateMatrix)
 #
 #        for index,rhoVec in self.parameterization.iter_rho_vectors():
-#            if index < len(self.rhoVecs):
-#                self.rhoVecs[index] = rhoVec
+#            if index < len(self.preps):
+#                self.preps[index] = rhoVec
 #            else:
-#                self.rhoVecs.append(rhoVec)
+#                self.preps.append(rhoVec)
 #
 #        for index,EVec in self.parameterization.iter_e_vectors():
-#            if index < len(self.EVecs):
-#                self.EVecs[index] = EVec
+#            if index < len(self.effects):
+#                self.effects[index] = EVec
 #            else:
-#                self.EVecs.append(EVec)
+#                self.effects.append(EVec)
 #
-#        self.identityVec = self.parameterization.compute_identity_vector()
+#        self.povm_identity = self.parameterization.compute_identity_vector()
 #        self.make_spams()
 #
 #    def get_gate(self,label):

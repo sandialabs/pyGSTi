@@ -84,7 +84,7 @@ def get_gateset_spam_table(gateset, formats, tableclass, longtable,
     tables = {}
     _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable)
 
-    for lbl,rhoVec in gateset.rhoVecs.iteritems():
+    for lbl,rhoVec in gateset.preps.iteritems():
         if mxBasis == "pp":   rhoMx = _tools.ppvec_to_stdmx(rhoVec)
         elif mxBasis == "gm": rhoMx = _tools.gmvec_to_stdmx(rhoVec)
         elif mxBasis == "std": rhoMx = _tools.stdvec_to_stdmx(rhoVec)
@@ -98,7 +98,7 @@ def get_gateset_spam_table(gateset, formats, tableclass, longtable,
                 intervalVec = _np.concatenate( (_np.zeros((1,1),'d'),intervalVec), axis=0 )
             _tf.add_table_row(formats, tables, (lbl, rhoVec, intervalVec, rhoMx), (_tf.Rho,_tf.Nml,_tf.Nml,_tf.Brk))
 
-    for lbl,EVec in gateset.EVecs.iteritems():
+    for lbl,EVec in gateset.effects.iteritems():
         if mxBasis == "pp":    EMx = _tools.ppvec_to_stdmx(EVec)
         elif mxBasis == "gm":  EMx = _tools.gmvec_to_stdmx(EVec)
         elif mxBasis == "std": EMx = _tools.stdvec_to_stdmx(EVec)
@@ -118,7 +118,7 @@ def get_gateset_spam_table(gateset, formats, tableclass, longtable,
 def get_gateset_spam_parameters_table(gateset, formats, tableclass, longtable, confidenceRegionInfo=None):
     """ 
     Create a table for gateset's "SPAM parameters", that is, the
-    dot products of rho-vectors and E-vectors.
+    dot products of prep-vectors and effect-vectors.
     
     Parameters
     ----------
@@ -145,8 +145,8 @@ def get_gateset_spam_parameters_table(gateset, formats, tableclass, longtable, c
         Dictionary with keys equal to the requested formats (e.g. 'latex'),
         and values equal to the table data in the corresponding format.
     """
-    colHeadings = [''] + list(gateset.get_evec_labels())
-    formatters = [None] + [ _tf.E ]*len(gateset.get_evec_labels())
+    colHeadings = [''] + list(gateset.get_effect_labels())
+    formatters = [None] + [ _tf.E ]*len(gateset.get_effect_labels())
 
     tables = {}
     _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable)
@@ -154,11 +154,11 @@ def get_gateset_spam_parameters_table(gateset, formats, tableclass, longtable, c
     spamDotProdsQty = _cr.compute_gateset_qty("Spam DotProds", gateset, confidenceRegionInfo)
     DPs, DPEBs = spamDotProdsQty.get_value_and_err_bar()
 
-    formatters = [ _tf.Rho ] + [ _tf.EB ]*len(gateset.get_evec_labels()) #for rows below
+    formatters = [ _tf.Rho ] + [ _tf.EB ]*len(gateset.get_effect_labels()) #for rows below
 
-    for ii,rhoLabel in enumerate(gateset.get_rhovec_labels()): # ii enumerates rhoLabels to index DPs
-        rowData = [rhoLabel]
-        for jj,eLabel in enumerate(gateset.get_evec_labels()): # jj enumerates eLabels to index DPs
+    for ii,prepLabel in enumerate(gateset.get_prep_labels()): # ii enumerates rhoLabels to index DPs
+        rowData = [prepLabel]
+        for jj,effectLabel in enumerate(gateset.get_effect_labels()): # jj enumerates eLabels to index DPs
             if confidenceRegionInfo is None:
                 rowData.append((DPs[ii,jj],None))
             else:
@@ -808,7 +808,7 @@ def get_dataset_overview_table(dataset, target, formats, tableclass, longtable,
         maximal (best) Gram matrix.  It's useful to make this
         at least twice the maximum length fiducial sequence.
 
-    fixedLists : (rhoStrs, EStrs), optional
+    fixedLists : (prepStrs, effectStrs), optional
       2-tuple of gate string lists, specifying the preparation and
       measurement fiducials to use when constructing the Gram matrix,
       and thereby bypassing the search for such lists.

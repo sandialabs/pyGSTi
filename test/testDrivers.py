@@ -94,7 +94,7 @@ class TestDriversMethods(DriversTestCase):
                                 "temp_test_files/driver_germs.txt",
                                 maxLens, truncScheme=ts)
 
-        #Try using EStrs == None and gaugeOptToCPTP
+        #Try using effectStrs == None and gaugeOptToCPTP
         result = self.runSilent(pygsti.do_long_sequence_gst,
                                 ds, std.gs_target, std.fiducials, None,
                                 std.germs, maxLens, truncScheme=ts,
@@ -149,13 +149,13 @@ class TestDriversMethods(DriversTestCase):
         ds = pygsti.objects.DataSet(fileToLoadFrom="cmp_chk_files/drivers.dataset")
         ts = "whole germ powers"
 
-        rhoEPairs = pygsti.alg.find_sufficient_fiducial_pairs(
+        fidPairs = pygsti.alg.find_sufficient_fiducial_pairs(
             std.gs_target, std.fiducials, std.fiducials, std.germs, verbosity=0)
 
         maxLens = self.maxLens
         result = self.runSilent(pygsti.do_long_sequence_gst,
                                 ds, std.gs_target, std.fiducials, std.fiducials,
-                                std.germs, maxLens, truncScheme=ts, rhoEPairs=rhoEPairs)
+                                std.germs, maxLens, truncScheme=ts, fidPairs=fidPairs)
 
         #create a report...
         result.create_full_report_pdf(filename="temp_test_files/full_report_FPR.pdf",
@@ -170,9 +170,9 @@ class TestDriversMethods(DriversTestCase):
 
         gs_target = pygsti.construction.build_gateset([2],[('Q0',)], ['Gi','Gx','Gy'], 
                                                       [ "D(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                                      rhoLabelList=['rho0'], rhoExpressions=["0"],
-                                                      ELabelList=['E0'], EExpressions=["1"], 
-                                                      spamLabelDict={'plus': ('rho0','E0'),
+                                                      prepLabels=['rho0'], prepExpressions=["0"],
+                                                      effectLabels=['E0'], effectExpressions=["1"], 
+                                                      spamdefs={'plus': ('rho0','E0'),
                                                                      'minus': ('rho0','remainder') },
                                                       parameterization="linear")
 
@@ -189,9 +189,9 @@ class TestDriversMethods(DriversTestCase):
 
 
 
-        #rhoStrsListOrFilename, EStrsListOrFilename,
+        #prepStrsListOrFilename, effectStrsListOrFilename,
         #germsListOrFilename, maxLengths, gateLabels, 
-        #weightsDict, rhoEPairs, constrainToTP, 
+        #weightsDict, fidPairs, constrainToTP, 
         #gaugeOptToCPTP, gaugeOptRatio, objective="logl",
         #advancedOptions={}, lsgstLists=None,
         #truncScheme="whole germ powers"):

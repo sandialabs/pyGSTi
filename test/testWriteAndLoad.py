@@ -115,9 +115,9 @@ Gx^4 20 80 0.2 100
 
         gateset_m1m1 = pygsti.construction.build_gateset([2], [('Q0',)],['Gi','Gx','Gy'], 
                                                          [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                                         rhoLabelList=['rho0'], rhoExpressions=["0"],
-                                                         ELabelList=['E0'], EExpressions=["1"], 
-                                                         spamLabelDict={'plus': ('rho0','E0'),
+                                                         prepLabels=['rho0'], prepExpressions=["0"],
+                                                         effectLabels=['E0'], effectExpressions=["1"], 
+                                                         spamdefs={'plus': ('rho0','E0'),
                                                                         'minus': ('remainder','remainder') })
         pygsti.io.write_gateset(gateset_m1m1, "temp_test_files/gateset_m1m1_loadwrite.txt", "My title m1m1")
         gs_m1m1 = pygsti.io.load_gateset("temp_test_files/gateset_m1m1_loadwrite.txt")
@@ -183,9 +183,9 @@ SPAMLABEL minus = remainder
         self.assertArraysAlmostEqual(gs_formats.gates['Gx2'], rotXPi)
         self.assertArraysAlmostEqual(gs_formats.gates['Gy2'], rotYPi)
 
-        self.assertArraysAlmostEqual(gs_formats.rhoVecs['rho0'], 1/np.sqrt(2)*np.array([[1],[0],[0],[1]],'d'))
-        self.assertArraysAlmostEqual(gs_formats.rhoVecs['rho1'], 1/np.sqrt(2)*np.array([[1],[0],[0],[-1]],'d'))
-        self.assertArraysAlmostEqual(gs_formats.EVecs['E'], 1/np.sqrt(2)*np.array([[1],[0],[0],[-1]],'d'))
+        self.assertArraysAlmostEqual(gs_formats.preps['rho0'], 1/np.sqrt(2)*np.array([[1],[0],[0],[1]],'d'))
+        self.assertArraysAlmostEqual(gs_formats.preps['rho1'], 1/np.sqrt(2)*np.array([[1],[0],[0],[-1]],'d'))
+        self.assertArraysAlmostEqual(gs_formats.effects['E'], 1/np.sqrt(2)*np.array([[1],[0],[0],[-1]],'d'))
 
         #pygsti.print_mx( rotXPi )
         #pygsti.print_mx( rotYPi )

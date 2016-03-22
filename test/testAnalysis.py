@@ -18,7 +18,7 @@ class AnalysisTestCase(unittest.TestCase):
         
         self.fiducials = std.fiducials
         self.germs = std.germs
-        self.specs = pygsti.construction.build_spam_specs(self.fiducials, rhoVecLbls=['rho0'], EVecLbls=['E0'])
+        self.specs = pygsti.construction.build_spam_specs(self.fiducials, prep_labels=['rho0'], effect_labels=['E0'])
         self.strs = pygsti.construction.get_spam_strs(self.specs)
 
         self.gateLabels = self.gateset.gates.keys() # also == std.gates

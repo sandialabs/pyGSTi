@@ -18,7 +18,7 @@ def _nCr(n,r):
     f = _math.factorial
     return f(n) / f(r) / f(n-r)
 
-def find_sufficient_fiducial_pairs(targetGateset, rhoStrs, EStrs, germList, 
+def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList, 
                                    testLs=(256,2048), spamLabels="all", tol=0.75,
                                    searchMode="sequential", nRandom=100, seed=None,
                                    verbosity=0, testPairList=None):
@@ -34,12 +34,12 @@ def find_sufficient_fiducial_pairs(targetGateset, rhoStrs, EStrs, germList,
 
     #Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j> where i = composite EVec & fiducial index and j similar
     def get_derivs(L):
-        dP = _np.empty( (len(germList),len(spamLabels),len(EStrs)*len(rhoStrs), nGatesetParams) )
+        dP = _np.empty( (len(germList),len(spamLabels),len(effectStrs)*len(prepStrs), nGatesetParams) )
            #indexed by [iGerm,iSpamLabel,iFiducialPair,iGatesetParam] : gives d(<SP|f0+exp_iGerm+f1|AM>)/d(iGatesetParam)
 
         for iGerm,germ in enumerate(germList):
             expGerm = _gsc.repeat_with_max_length(germ,L) # could pass exponent and set to germ**exp here
-            lst = _gsc.create_gatestring_list("f0+expGerm+f1", f0=rhoStrs, f1=EStrs,
+            lst = _gsc.create_gatestring_list("f0+expGerm+f1", f0=prepStrs, f1=effectStrs,
                                                          expGerm=expGerm, order=('f0','f1'))
             evTree = targetGateset.bulk_evaltree(lst)
             dprobs = targetGateset.bulk_dprobs(evTree)
@@ -74,8 +74,8 @@ def find_sufficient_fiducial_pairs(targetGateset, rhoStrs, EStrs, germList,
             
     L0 = testLs[0]; dP0 = get_derivs(L0)
     L1 = testLs[1]; dP1 = get_derivs(L1)
-    fullTestMx0 = dP0.view(); fullTestMx0.shape = ( (len(germList)*len(spamLabels)*len(rhoStrs)*len(EStrs), nGatesetParams) )
-    fullTestMx1 = dP1.view(); fullTestMx1.shape = ( (len(germList)*len(spamLabels)*len(rhoStrs)*len(EStrs), nGatesetParams) )        
+    fullTestMx0 = dP0.view(); fullTestMx0.shape = ( (len(germList)*len(spamLabels)*len(prepStrs)*len(effectStrs), nGatesetParams) )
+    fullTestMx1 = dP1.view(); fullTestMx1.shape = ( (len(germList)*len(spamLabels)*len(prepStrs)*len(effectStrs), nGatesetParams) )        
 
     #Get number of amplified parameters in the "full" test matrix: the one we get when we use all possible fiducial pairs
     if testPairList is None: 
@@ -86,12 +86,12 @@ def find_sufficient_fiducial_pairs(targetGateset, rhoStrs, EStrs, germList,
     # then check if testMatrix has full rank ( == nGatesetParams)
     fiducialPairs = []
 
-    nPossiblePairs = len(rhoStrs)*len(EStrs)
+    nPossiblePairs = len(prepStrs)*len(effectStrs)
     allPairIndices = range(nPossiblePairs)
 
-    nRhoStrs, nEStrs = len(rhoStrs), len(EStrs)
-    germFctr = len(spamLabels)*len(rhoStrs)*len(EStrs); nGerms = len(germList)
-    spamLabelFctr = len(rhoStrs)*len(EStrs); nSpamLabels = len(spamLabels)
+    nRhoStrs, nEStrs = len(prepStrs), len(effectStrs)
+    germFctr = len(spamLabels)*len(prepStrs)*len(effectStrs); nGerms = len(germList)
+    spamLabelFctr = len(prepStrs)*len(effectStrs); nSpamLabels = len(spamLabels)
     gateStringIndicesForPair = []
     for i in allPairIndices:
         indices = [ iGerm*germFctr + iSpamLabel*spamLabelFctr + i  for iGerm in xrange(nGerms) for iSpamLabel in xrange(nSpamLabels) ]

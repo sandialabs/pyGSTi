@@ -345,7 +345,7 @@ class ConfidenceRegion(object):
         """
         nParams = self.gateset.num_params()
 
-        f0 = fnOfSpamVecs(self.gateset.get_rhovecs(), self.gateset.get_evecs())
+        f0 = fnOfSpamVecs(self.gateset.get_preps(), self.gateset.get_effects())
           #Note: .get_Evecs() can be different from .EVecs b/c the former includes compliment EVec
 
         #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
@@ -358,29 +358,29 @@ class ConfidenceRegion(object):
 
         gsEps = self.gateset.copy()
 
-        #loop just over parameterized objects - don't use get_rhovecs() here...
-        for rhoLabel,rhoVec in self.gateset.rhoVecs.iteritems(): 
+        #loop just over parameterized objects - don't use get_preps() here...
+        for prepLabel,rhoVec in self.gateset.preps.iteritems(): 
             nRhoParams = rhoVec.num_params()
-            off = self.gateset_offsets[rhoLabel][0]
+            off = self.gateset_offsets[prepLabel][0]
             vec = rhoVec.to_vector()
             for i in range(nRhoParams):
                 vecEps = vec.copy(); vecEps[i] += eps
-                gsEps.rhoVecs[rhoLabel].from_vector(vecEps) #update gsEps parameters
-                gradF[off + i] = ( fnOfSpamVecs( gsEps.get_rhovecs(),
-                                   gsEps.get_evecs() ) - f0 ) / eps
-            gsEps.rhoVecs[rhoLabel] = rhoVec.copy()  #reset gsEps (copy() just to be safe)
+                gsEps.preps[prepLabel].from_vector(vecEps) #update gsEps parameters
+                gradF[off + i] = ( fnOfSpamVecs( gsEps.get_preps(),
+                                   gsEps.get_effects() ) - f0 ) / eps
+            gsEps.preps[prepLabel] = rhoVec.copy()  #reset gsEps (copy() just to be safe)
 
-        #loop just over parameterized objects - don't use get_evecs() here...
-        for ELabel,EVec in self.gateset.EVecs.iteritems(): 
+        #loop just over parameterized objects - don't use get_effects() here...
+        for ELabel,EVec in self.gateset.effects.iteritems(): 
             nEParams = EVec.num_params()
             off = self.gateset_offsets[ELabel][0]
             vec = EVec.to_vector()
             for i in range(nEParams):
                 vecEps = vec.copy(); vecEps[i] += eps
-                gsEps.EVecs[ELabel].from_vector(vecEps) #update gsEps parameters
-                gradF[off + i] = ( fnOfSpamVecs( gsEps.get_rhovecs(),
-                                   gsEps.get_evecs() ) - f0 ) / eps        
-            gsEps.EVecs[ELabel] = EVec.copy()  #reset gsEps (copy() just to be safe)
+                gsEps.effects[ELabel].from_vector(vecEps) #update gsEps parameters
+                gradF[off + i] = ( fnOfSpamVecs( gsEps.get_preps(),
+                                   gsEps.get_effects() ) - f0 ) / eps        
+            gsEps.effects[ELabel] = EVec.copy()  #reset gsEps (copy() just to be safe)
 
         return self._compute_df_from_gradF(gradF, f0, returnFnVal, verbosity)
 
