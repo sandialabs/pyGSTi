@@ -45,13 +45,13 @@ class TestWriteAndLoad(WriteAndLoadTestCase):
         ds.done_adding_data()
 
         pygsti.io.write_dataset("temp_test_files/dataset_loadwrite.txt",
-                                     pygsti.construction.gatestring_list(ds.keys())[0:10], ds) #write only first 10 strings
+                                ds, pygsti.construction.gatestring_list(ds.keys())[0:10]) #write only first 10 strings
         ds2 = pygsti.io.load_dataset("temp_test_files/dataset_loadwrite.txt")
         ds3 = pygsti.io.load_dataset("temp_test_files/dataset_loadwrite.txt", cache=True) #creates cache file
         ds4 = pygsti.io.load_dataset("temp_test_files/dataset_loadwrite.txt", cache=True) #loads from cache file
 
-        pygsti.io.write_dataset("temp_test_files/dataset_loadwrite.txt",
-                                     pygsti.construction.gatestring_list(ds.keys()), ds, spamLabelOrder=['plus','minus'])
+        pygsti.io.write_dataset("temp_test_files/dataset_loadwrite.txt", ds,
+                                spamLabelOrder=['plus','minus'])
         ds5 = pygsti.io.load_dataset("temp_test_files/dataset_loadwrite.txt", cache=True) #rewrites cache file
 
         for s in ds:
@@ -59,10 +59,7 @@ class TestWriteAndLoad(WriteAndLoadTestCase):
             self.assertEqual(ds[s]['minus'],ds5[s]['minus'])
 
         with self.assertRaises(ValueError):
-            pygsti.io.write_dataset("temp_test_files/dataset_loadwrite.txt",ds.keys(), ds) #must be GateStrings
-        with self.assertRaises(ValueError):
-            pygsti.io.write_dataset("temp_test_files/dataset_loadwrite.txt",ds.keys(), ds) #must be GateStrings
-
+            pygsti.io.write_dataset("temp_test_files/dataset_loadwrite.txt",ds, [('Gx',)] ) #must be GateStrings
 
     def test_multidataset_file(self):
         strList = pygsti.construction.gatestring_list( [(), ('Gx',), ('Gx','Gy') ] )
@@ -83,7 +80,7 @@ Gx^4 20 80 0.2 100
         ds2 = pygsti.io.load_multidataset("temp_test_files/TestMultiDataset.txt", cache=True)
         ds3 = pygsti.io.load_multidataset("temp_test_files/TestMultiDataset.txt", cache=True) #load from cache
 
-        pygsti.io.write_multidataset("temp_test_files/emptyMultiDataset2.txt", strList, ds)
+        pygsti.io.write_multidataset("temp_test_files/emptyMultiDataset2.txt", ds, strList)
         ds_copy = pygsti.io.load_multidataset("temp_test_files/emptyMultiDataset2.txt")
         self.assertEqual(ds_copy['DS0'][('Gx',)]['plus'], ds['DS0'][('Gx',)]['plus'] )
         self.assertEqual(ds_copy['DS0'][('Gx','Gy')]['minus'], ds['DS1'][('Gx','Gy')]['minus'] )

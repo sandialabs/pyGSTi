@@ -32,17 +32,19 @@ class TestDataSetMethods(DataSetTestCase):
         # Create a dataset from scratch
         ds = pygsti.objects.DataSet(spamLabels=['plus','minus'])
         ds.add_count_dict( ('Gx',), {'plus': 10, 'minus': 90} )
+        ds[ ('Gx',) ] = {'plus': 10, 'minus': 90}
+        ds[ ('Gx',) ]['plus'] = 10
+        ds[ ('Gx',) ]['minus'] = 90
         ds.add_counts_1q( ('Gx','Gy'), 10, 40 )
         ds.add_counts_1q( ('Gx','Gy'), 40, 10 ) #freq much different from existing
         with self.assertRaises(ValueError):
             ds.add_count_dict( ('Gx',), {'FooBar': 10, 'minus': 90 }) #bad spam label
         with self.assertRaises(ValueError):
             ds.add_count_dict( ('Gx',), {'minus': 90 }) # not all spam labels
-        with self.assertRaises(ValueError):
-            ds[('Gx',)] = { 'plus':10, 'minus': 90 } #can't set counts directly -- use addData functions
-        with self.assertRaises(ValueError):
-            ds[('Gx',)]['plus'] = 10 #can't set counts directly -- use addData functions
         ds.done_adding_data()
+
+        dsWritable = ds.copy_nonstatic()
+        dsWritable[('Gy',)] = {'plus': 20, 'minus': 80}
         
         ds_str = str(ds)
 
@@ -219,10 +221,10 @@ Gx^4 0.2 100
         
 
         # TO SEED SAVED FILE, RUN THIS: 
-        #pygsti.io.write_dataset("cmp_chk_files/Fake_Dataset_none.txt", gateStrings, ds_none) 
-        #pygsti.io.write_dataset("cmp_chk_files/Fake_Dataset_round.txt", gateStrings, ds_round) 
-        #pygsti.io.write_dataset("cmp_chk_files/Fake_Dataset_binom.txt", gateStrings, ds_binom) 
-        #pygsti.io.write_dataset("cmp_chk_files/Fake_Dataset_multi.txt", gateStrings, ds_multi) 
+        #pygsti.io.write_dataset("cmp_chk_files/Fake_Dataset_none.txt", ds_none,  gateStrings) 
+        #pygsti.io.write_dataset("cmp_chk_files/Fake_Dataset_round.txt", ds_round, gateStrings) 
+        #pygsti.io.write_dataset("cmp_chk_files/Fake_Dataset_binom.txt", ds_binom, gateStrings) 
+        #pygsti.io.write_dataset("cmp_chk_files/Fake_Dataset_multi.txt", ds_multi, gateStrings) 
 
         saved_ds = pygsti.io.load_dataset("cmp_chk_files/Fake_Dataset_none.txt", cache=True)
         self.assertEqualDatasets(ds_none, saved_ds)

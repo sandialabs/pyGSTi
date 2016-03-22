@@ -71,7 +71,7 @@ def write_empty_dataset(filename, gatestring_list,
     f.close()
 
 
-def write_dataset(filename, gatestring_list, dataset, spamLabelOrder=None):
+def write_dataset(filename, dataset, gatestring_list=None, spamLabelOrder=None):
     """
     Write a text-formatted dataset file.
 
@@ -80,18 +80,22 @@ def write_dataset(filename, gatestring_list, dataset, spamLabelOrder=None):
     filename : string
         The filename to write.
 
-    gatestring_list : list of GateStrings
-        The list of gate strings to include in the written dataset.
-
     dataset : DataSet
         The data set from which counts are obtained.
+
+    gatestring_list : list of GateStrings, optional
+        The list of gate strings to include in the written dataset.
+        If None, all gate strings are output.
 
     spamLabelOrder : list, optional
         A list of the SPAM labels in dataset which specifies
         the column order in the output file.
     """
-    if len(gatestring_list) > 0 and not isinstance(gatestring_list[0], _objs.GateString):
-        raise ValueError("Argument gatestring_list must be a list of GateString objects!")
+    if gatestring_list is not None:
+        if len(gatestring_list) > 0 and not isinstance(gatestring_list[0], _objs.GateString):
+            raise ValueError("Argument gatestring_list must be a list of GateString objects!")
+    else:
+        gatestring_list = dataset.keys()
 
     spamLabels = dataset.get_spam_labels()
     if spamLabelOrder is not None:
@@ -110,7 +114,7 @@ def write_dataset(filename, gatestring_list, dataset, spamLabelOrder=None):
         print >> f, gateString.str + "  " + "  ".join( [("%g" % dataRow[sl]) for sl in spamLabels] )
     f.close()
 
-def write_multidataset(filename, gatestring_list, multidataset, spamLabelOrder=None):
+def write_multidataset(filename, multidataset, gatestring_list=None, spamLabelOrder=None):
     """
     Write a text-formatted multi-dataset file.
 
@@ -119,18 +123,23 @@ def write_multidataset(filename, gatestring_list, multidataset, spamLabelOrder=N
     filename : string
         The filename to write.
 
-    gatestring_list : list of GateStrings
-        The list of gate strings to include in the written dataset.
-
     multidataset : MultiDataSet
         The multi data set from which counts are obtained.
+
+    gatestring_list : list of GateStrings
+        The list of gate strings to include in the written dataset.
+        If None, all gate strings are output.
 
     spamLabelOrder : list, optional
         A list of the SPAM labels in multidataset which specifies
         the column order in the output file.
     """
-    if len(gatestring_list) > 0 and not isinstance(gatestring_list[0], _objs.GateString):
-        raise ValueError("Argument gatestring_list must be a list of GateString objects!")
+
+    if gatestring_list is not None:
+        if len(gatestring_list) > 0 and not isinstance(gatestring_list[0], _objs.GateString):
+            raise ValueError("Argument gatestring_list must be a list of GateString objects!")
+    else:
+        gatestring_list = multidataset.gsIndex.keys() #TODO: make access function for gatestrings?
 
     spamLabels = multidataset.get_spam_labels()
     if spamLabelOrder is not None:

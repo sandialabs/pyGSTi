@@ -102,10 +102,9 @@ class MultiDataSet:
     if gateStringIndices is not None:
       self.gsIndex = gateStringIndices
     elif gateStrings is not None:
-      if len(gateStrings) > 0 and isinstance(gateStrings[0], _GateString):
-        self.gsIndex = _OrderedDict( [(gs.tup,i) for (i,gs) in enumerate(gateStrings) ] )
-      else:
-        self.gsIndex = _OrderedDict( [(gs,i) for (i,gs) in enumerate(gateStrings) ] )
+      dictData = [ (gs if isinstance(gs,_GateString) else _GateString(gs),i) \
+                     for (i,gs) in enumerate(gateStrings) ] #convert to GateStrings if necessary
+      self.gsIndex = _OrderedDict( dictData )
     else:
       self.gsIndex = None
 
@@ -157,7 +156,9 @@ class MultiDataSet:
     return len(self.countsDict)
 
   def __getitem__(self, datasetName):  #return a static DataSet
-    return _DataSet(self.countsDict[datasetName], gateStringIndices=self.gsIndex, spamLabelIndices=self.slIndex, bStatic=True)
+    return _DataSet(self.countsDict[datasetName],
+                    gateStringIndices=self.gsIndex,
+                    spamLabelIndices=self.slIndex, bStatic=True)
 
   def __setitem__(self, datasetName, dataset):
     self.add_dataset(datasetName, dataset)
@@ -286,14 +287,16 @@ class MultiDataSet:
 
 
   def __getstate__(self):
-    toPickle = { 'gsIndexKeys': map(_ds.compress_gate_label_tuple, self.gsIndex.keys() if self.gsIndex else []),
+    # map(_ds.compress_gate_label_tuple, self.gsIndex.keys() if self.gsIndex else [])
+    toPickle = { 'gsIndexKeys': self.gsIndex.keys() if self.gsIndex else [],
                  'gsIndexVals': self.gsIndex.values() if self.gsIndex else [],
                  'slIndex': self.slIndex,
                  'countsDict': self.countsDict }
     return toPickle
 
   def __setstate__(self, state_dict):
-    self.gsIndex = _OrderedDict( zip( map(_ds.expand_gate_label_tuple, state_dict['gsIndexKeys']), state_dict['gsIndexVals']) )
+    #map(_ds.expand_gate_label_tuple, state_dict['gsIndexKeys'])
+    self.gsIndex = _OrderedDict( zip(state_dict['gsIndexKeys'], state_dict['gsIndexVals']) )
     self.slIndex = state_dict['slIndex']
     self.countsDict = state_dict['countsDict']
 
@@ -308,7 +311,8 @@ class MultiDataSet:
         filename ends in ".gz", the file will be gzip compressed.
     """
 
-    toPickle = { 'gsIndexKeys': map(_ds.compress_gate_label_tuple, self.gsIndex.keys() if self.gsIndex else []),
+    #map(_ds.compress_gate_label_tuple, self.gsIndex.keys() if self.gsIndex else [])
+    toPickle = { 'gsIndexKeys': self.gsIndex.keys() if self.gsIndex else [],
                  'gsIndexVals': self.gsIndex.values() if self.gsIndex else [],
                  'slIndex': self.slIndex,
                  'countsKeys': self.countsDict.keys() }  #Don't pickle countsDict numpy data b/c it's inefficient
@@ -350,7 +354,8 @@ class MultiDataSet:
         f = fileOrFilename
 
     state_dict = _pickle.load(f)
-    self.gsIndex = _OrderedDict( zip( map(_ds.expand_gate_label_tuple, state_dict['gsIndexKeys']), state_dict['gsIndexVals']) )
+    #map(_ds.expand_gate_label_tuple, state_dict['gsIndexKeys'])
+    self.gsIndex = _OrderedDict( zip(state_dict['gsIndexKeys'], state_dict['gsIndexVals']) )
     self.slIndex = state_dict['slIndex']
     self.countsDict = _OrderedDict()
     for key in state_dict['countsKeys']:

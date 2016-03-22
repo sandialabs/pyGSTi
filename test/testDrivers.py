@@ -82,7 +82,7 @@ class TestDriversMethods(DriversTestCase):
         #Try using files instead of objects
         pygsti.io.write_gateset(std.gs_target, "temp_test_files/driver.gateset")
         pygsti.io.write_dataset("temp_test_files/driver_test_dataset.txt",
-                                self.lsgstStrings[-1], ds)
+                                ds, self.lsgstStrings[-1])
         pygsti.io.write_gatestring_list("temp_test_files/driver_fiducials.txt", std.fiducials)
         pygsti.io.write_gatestring_list("temp_test_files/driver_germs.txt", std.germs)
 
