@@ -4,7 +4,7 @@
 
 Overview:
 --------
-This is the root directory of the pyGSTi software, which is a python
+This is the root directory of the pyGSTi software, which is a Python
  implementation of Gate Set Tomography.  pyGSTi free software, licensed
  under the GNU public license (GPL).  Copyright and license information
  can be found in license.txt, and the GPL itself in COPYING.
@@ -15,19 +15,19 @@ Getting Started:
 pyGSTi is written entirely in Python, and so there's no compiling necessary.
 The first step is to install Python (and iPython notebook is highly
 recommended) if you haven't already.   In order to use pyGSTi you need to
-tell your python distribution where pyGSTi lives, which can be done in one
+tell your Python distribution where pyGSTi lives, which can be done in one
  of two ways:
 
 1) run: ``python install_locally.py``
 
-  This adds the current pyGSTi path to python's list of search paths, and
+  This adds the current pyGSTi path to Python's list of search paths, and
   doesn't required administrative access (but only applies to the current user).
 
 2) run: ``python setup.py install``
 
-  This installs the pyGSTi python package into one of the python distribution's
+  This installs the pyGSTi Python package into one of the Python distribution's
   search directories.  This typically requires administrative privileges, and
-  is the way most python packages are installed.  Installing this way has the
+  is the way most Python packages are installed.  Installing this way has the
   advantage that it makes the package available to all users and then allows 
   you to move or delete the directory you're installing from.
 
@@ -78,7 +78,7 @@ ipython_notebooks/  : Parent directory of all iPython notebook tutorial
 		      directory.
 
 packages/  :  Directory containing the (one) package provided by pyGSTi.
-	      All of the python source code lies here.
+	             All of the Python source code lies here.
 
 tests/  :  Directory containing pyGSTi unit tests.
 
