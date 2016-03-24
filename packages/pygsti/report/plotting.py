@@ -388,6 +388,115 @@ class LinLogNorm(_matplotlib.colors.Normalize):
         else:
             return return_value.view(_np.ma.MaskedArray)
 
+def splice_cmaps(cmaps, name=None, splice_points=None):
+    """
+    Take a list of cmaps and create a new cmap that joins them at specified
+    points.
+
+    Parameters
+    ----------
+    cmaps : list of matplotlib cmaps
+        The colormaps ordered according to how they should appear in the final
+        colormap
+
+    name : string
+        The name for the colormap. If no name is given, the name
+        'spliced_cmap1name_cmap2name_...' is assigned to the colormap.
+
+    splice_points : ordered list of floats in (0, 1), optional
+        The transition points when one colormap should end and the next should
+        begin. Should have one less point than the number of cmaps provided. If
+        no list is provided, the splice points will be arranged to split the
+        interval (0, 1) up into equal seqments.
+
+    Returns
+    -------
+    A cmap combining the provided cmaps
+    """
+    if name is None:
+        name = '_'.join(['spliced'] + [cmap.name for cmap in cmaps])
+
+    n_cmaps = len(cmaps)
+
+    if splice_points is None:
+        splice_points = _np.linspace(0, 1, n_cmaps + 1)[1:-1].tolist()
+
+    n_sps = len(splice_points)
+
+    if n_sps != n_cmaps - 1:
+        raise ValueError(('The number of splice points, {0}, is not one less' +
+            ' than the number of colormaps, {1}.').format(n_sps, n_cmaps))
+
+    ranges = list(zip([0.0] + splice_points, splice_points + [1.0]))
+
+    red_list = []
+    green_list = []
+    blue_list = []
+    alpha_list = []
+
+    # First segment
+    cmap = cmaps[0]
+    N = cmap.N
+    low_val, high_val = ranges[0]
+    input_values = _np.linspace(0.0, 1.0, N)
+    scaled_values = _np.linspace(low_val, high_val, N)
+    colors = cmap(input_values)
+    for color, value in zip(colors[:-1], scaled_values[:-1]):
+        r, g, b, a = color
+        red_list.append((value, r, r))
+        green_list.append((value, g, g))
+        blue_list.append((value, b, b))
+        alpha_list.append((value, a, a))
+
+    # Middle segments
+    for cmap, prev_cmap, rng in zip(cmaps[1:-1], cmaps[:-2], ranges[1:-1]):
+        N = cmap.N
+        low_val, high_val = rng
+        input_values = _np.linspace(0.0, 1.0, N)
+        scaled_values = _np.linspace(low_val, high_val, N)
+        colors = cmap(input_values)
+        prev_r, prev_g, prev_b, prev_a = prev_cmap(1.0)
+        r, g, b, a = colors[0]
+        red_list.append((low_val, prev_r, r))
+        green_list.append((low_val, prev_g, g))
+        blue_list.append((low_val, prev_b, b))
+        alpha_list.append((low_val, prev_a, a))
+        for color, value in zip(colors[1:-1], scaled_values[1:-1]):
+            r, g, b, a = color
+            red_list.append((value, r, r))
+            green_list.append((value, g, g))
+            blue_list.append((value, b, b))
+            alpha_list.append((value, a, a))
+
+    # Final segment
+    cmap = cmaps[-1]
+    prev_cmap = cmaps[-2]
+    N = cmap.N
+    low_val, high_val = ranges[-1]
+    input_values = _np.linspace(0.0, 1.0, N)
+    scaled_values = _np.linspace(low_val, high_val, N)
+    colors = cmap(input_values)
+    prev_r, prev_g, prev_b, prev_a = prev_cmap(1.0)
+    r, g, b, a = colors[0]
+    red_list.append((low_val, prev_r, r))
+    green_list.append((low_val, prev_g, g))
+    blue_list.append((low_val, prev_b, b))
+    alpha_list.append((low_val, prev_a, a))
+    for color, value in zip(colors[1:], scaled_values[1:]):
+        r, g, b, a = color
+        red_list.append((value, r, r))
+        green_list.append((value, g, g))
+        blue_list.append((value, b, b))
+        alpha_list.append((value, a, a))
+
+    cdict = {'red': red_list, 'green': green_list, 'blue': blue_list,
+             'alpha': alpha_list}
+    spliced_cmap = _matplotlib.colors.LinearSegmentedColormap(name, cdict)
+
+    # return name, splice_points, cdict, spliced_cmap
+
+    return spliced_cmap
+
 def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, ytics=None,
                  vmin=None, vmax=None, colorbar=True, fig=None, axes=None, size=None, prec=0, boxLabels=True,
                  xlabel=None, ylabel=None, save_to=None, ticSize=14, grid=False,
