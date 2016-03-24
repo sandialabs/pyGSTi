@@ -86,10 +86,10 @@ install_locally.py :  A Python script that sets up the software to run
 		      from its current location within the file system.  This
 		      essentially adds the packages directory to the list of
 		      directories Python uses to search for packages in, so
-		      that "import pygsti" will work for any Python script, 
+		      that ``import pygsti`` will work for any Python script,
 		      regardless of its location in the file system.  This
 		      action is local to the user running the script, and does
-                      not copy any files to any system directories, making it
+                  not copy any files to any system directories, making it
 		      a good option for a user without administrative access.
 
 COPYING  :  A text version of the GNU Public License.
