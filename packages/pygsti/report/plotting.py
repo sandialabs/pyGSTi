@@ -501,6 +501,37 @@ def splice_cmaps(cmaps, name=None, splice_points=None):
 
     return spliced_cmap
 
+def make_linear_cmap(start_color, final_color, name=None):
+    """
+    Make a color map that simply linearly interpolates between a start color
+    and final color in RGB(A) space.
+
+    Parameters
+    ----------
+    start_color : 3- (or 4-) tuple
+        The (r, g, b[, a]) values for the start color.
+
+    final_color : 3- (or 4-) tuple
+        The (r, g, b[, a]) values for the final color.
+
+    name : string
+        A name for the colormap. If not provided, a name will be constructed
+        from the colors at the two endpoints.
+
+    Returns
+    -------
+    A cmap that interpolates between the endpoints in RGB(A) space.
+    """
+    labels = ['red', 'green', 'blue', 'alpha']
+    cdict = {label: [(0, start_color[idx], start_color[idx]),
+                     (1, final_color[idx], final_color[idx])]
+             for label, idx in zip(labels, range(len(start_color)))}
+
+    if name is None:
+        name = 'linear_' + str(start_color) + '-' + str(final_color)
+
+    return _matplotlib.colors.LinearSegmentedColormap(name, cdict)
+
 def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, ytics=None,
                  vmin=None, vmax=None, colorbar=True, fig=None, axes=None, size=None, prec=0, boxLabels=True,
                  xlabel=None, ylabel=None, save_to=None, ticSize=14, grid=False,
