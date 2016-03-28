@@ -610,16 +610,9 @@ def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, 
     # Colors ranging from white to gray on [0.0, 0.5) and pink to red on
     # [0.5, 1.0] such that the perceived brightness of the pink matches the
     # gray.
-    cdict = {'red': [(0.0, 1.0, 1.0),
-                     (0.5, 0.5, 0.786),
-                     (1.0, 0.366, 0.366)],
-             'green': [(0.0, 1.0, 1.0),
-                       (0.5, 0.5, 0.4),
-                       (1.0, 0.0, 0.0)],
-             'blue': [(0.0, 1.0, 1.0),
-                      (0.5, 0.5, 0.4),
-                      (1.0, 0.0, 0.0)]}
-    cmap = _matplotlib.colors.LinearSegmentedColormap('linlog', cdict)
+    grayscale_cmap = make_linear_cmap((1, 1, 1), (0.5, 0.5, 0.5))
+    red_cmap = make_linear_cmap((.786, .4, .4), (.366, 0, 0))
+    cmap = splice_cmaps([grayscale_cmap, red_cmap], 'linlog')
     cmap.set_bad('w',1)
     masked_data = _np.ma.array (plt_data, mask=_np.isnan(plt_data))
     norm = LinLogNorm(trans=linlog_trans)
