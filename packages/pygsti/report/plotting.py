@@ -378,11 +378,15 @@ class LinLogNorm(_matplotlib.colors.Normalize):
             self.trans = (self.vmax - self.vmin)/10 + self.vmin
         norm_trans = super(LinLogNorm, self).__call__(self.trans)
         log10_norm_trans = _np.log10(norm_trans)
-        return_value = _np.where(_np.greater(norm_trans, lin_norm_value),
-                                 lin_norm_value/(2*norm_trans),
-                                 (log10_norm_trans -
-                                  _np.log10(lin_norm_value)) /
-                                 (2*log10_norm_trans) + 0.5)
+        with _np.errstate(divide='ignore'):
+            # Ignore the division-by-zero error that occurs when 0 is passed to
+            # log10 (the resulting NaN is filtered out by the where and is
+            # harmless).
+            return_value = _np.where(_np.greater(norm_trans, lin_norm_value),
+                                     lin_norm_value/(2*norm_trans),
+                                     (log10_norm_trans -
+                                      _np.log10(lin_norm_value)) /
+                                     (2*log10_norm_trans) + 0.5)
         if return_value.shape==():
             return return_value.item()
         else:
