@@ -20,7 +20,7 @@ from .. import tools as _tools
 _pp.ParserElement.enablePackrat()
 _sys.setrecursionlimit(10000)
 
-class StdInputParser:
+class StdInputParser(object):
     """
     Encapsulates a text parser for reading GST input files.
     

@@ -13,7 +13,7 @@ from gatestring import GateString as _GateString
 from dataset import DataSet as _DataSet
 import dataset as _ds
 
-class MultiDataSet_KeyValIterator:
+class MultiDataSet_KeyValIterator(object):
   """ Iterator class for datasetName,DataSet pairs of a MultiDataSet """
   def __init__(self, multidataset):
     self.multidataset = multidataset
@@ -28,7 +28,7 @@ class MultiDataSet_KeyValIterator:
                                 spamLabelIndices=self.multidataset.slIndex, bStatic=True)
   
 
-class MultiDataSet_ValIterator:
+class MultiDataSet_ValIterator(object):
   """ Iterator class for DataSets of a MultiDataSet """
   def __init__(self, multidataset):
     self.multidataset = multidataset
@@ -43,7 +43,7 @@ class MultiDataSet_ValIterator:
                     spamLabelIndices=self.multidataset.slIndex, bStatic=True)
 
 
-class MultiDataSet:
+class MultiDataSet(object):
   """ 
   The MultiDataSet class allows for the combined access and storage of 
   several static DataSets that contain the same gate strings (in the same order).
