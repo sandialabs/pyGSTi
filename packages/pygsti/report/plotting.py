@@ -378,11 +378,15 @@ class LinLogNorm(_matplotlib.colors.Normalize):
             self.trans = (self.vmax - self.vmin)/10 + self.vmin
         norm_trans = super(LinLogNorm, self).__call__(self.trans)
         log10_norm_trans = _np.log10(norm_trans)
-        return_value = _np.where(_np.greater(norm_trans, lin_norm_value),
-                                 lin_norm_value/(2*norm_trans),
-                                 (log10_norm_trans -
-                                  _np.log10(lin_norm_value)) /
-                                 (2*log10_norm_trans) + 0.5)
+        with _np.errstate(divide='ignore'):
+            # Ignore the division-by-zero error that occurs when 0 is passed to
+            # log10 (the resulting NaN is filtered out by the where and is
+            # harmless).
+            return_value = _np.where(_np.greater(norm_trans, lin_norm_value),
+                                     lin_norm_value/(2*norm_trans),
+                                     (log10_norm_trans -
+                                      _np.log10(lin_norm_value)) /
+                                     (2*log10_norm_trans) + 0.5)
         if return_value.shape==():
             return return_value.item()
         else:
@@ -497,6 +501,37 @@ def splice_cmaps(cmaps, name=None, splice_points=None):
 
     return spliced_cmap
 
+def make_linear_cmap(start_color, final_color, name=None):
+    """
+    Make a color map that simply linearly interpolates between a start color
+    and final color in RGB(A) space.
+
+    Parameters
+    ----------
+    start_color : 3- (or 4-) tuple
+        The (r, g, b[, a]) values for the start color.
+
+    final_color : 3- (or 4-) tuple
+        The (r, g, b[, a]) values for the final color.
+
+    name : string
+        A name for the colormap. If not provided, a name will be constructed
+        from the colors at the two endpoints.
+
+    Returns
+    -------
+    A cmap that interpolates between the endpoints in RGB(A) space.
+    """
+    labels = ['red', 'green', 'blue', 'alpha']
+    cdict = {label: [(0, start_color[idx], start_color[idx]),
+                     (1, final_color[idx], final_color[idx])]
+             for label, idx in zip(labels, range(len(start_color)))}
+
+    if name is None:
+        name = 'linear_' + str(start_color) + '-' + str(final_color)
+
+    return _matplotlib.colors.LinearSegmentedColormap(name, cdict)
+
 def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, ytics=None,
                  vmin=None, vmax=None, colorbar=True, fig=None, axes=None, size=None, prec=0, boxLabels=True,
                  xlabel=None, ylabel=None, save_to=None, ticSize=14, grid=False,
@@ -575,16 +610,9 @@ def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, 
     # Colors ranging from white to gray on [0.0, 0.5) and pink to red on
     # [0.5, 1.0] such that the perceived brightness of the pink matches the
     # gray.
-    cdict = {'red': [(0.0, 1.0, 1.0),
-                     (0.5, 0.5, 0.786),
-                     (1.0, 0.366, 0.366)],
-             'green': [(0.0, 1.0, 1.0),
-                       (0.5, 0.5, 0.4),
-                       (1.0, 0.0, 0.0)],
-             'blue': [(0.0, 1.0, 1.0),
-                      (0.5, 0.5, 0.4),
-                      (1.0, 0.0, 0.0)]}
-    cmap = _matplotlib.colors.LinearSegmentedColormap('linlog', cdict)
+    grayscale_cmap = make_linear_cmap((1, 1, 1), (0.5, 0.5, 0.5))
+    red_cmap = make_linear_cmap((.786, .4, .4), (.366, 0, 0))
+    cmap = splice_cmaps([grayscale_cmap, red_cmap], 'linlog')
     cmap.set_bad('w',1)
     masked_data = _np.ma.array (plt_data, mask=_np.isnan(plt_data))
     norm = LinLogNorm(trans=linlog_trans)
