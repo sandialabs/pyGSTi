@@ -460,7 +460,7 @@ def decompose_gate_matrix(gateMx):
              angle of rotation in units of pi radians
     """
 
-    gate_evals,gate_evecs = _np.linalg.eig(gateMx)
+    gate_evals,gate_evecs = _np.linalg.eig(_np.asarray(gateMx))
     fp_eigenvec = None
     aor_eval = None; aor_eigenvec = None
     ra_eval  = None; ra1_eigenvec = None; ra2_eigenvec = None

@@ -15,6 +15,9 @@ def jac(x):
 class OptimizeTestCase(unittest.TestCase):
 
     def setUp(self):
+        #Set GateSet objects to "strict" mode for testing
+        pygsti.objects.GateSet._strict = True
+
         self.x0 = np.array( [10,5], 'd')
         self.answer = np.array( [0,0], 'd')
 

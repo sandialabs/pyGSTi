@@ -7,6 +7,7 @@
 
 import numpy as _np
 import cPickle as _pickle
+import warnings as _warnings
 from collections import OrderedDict as _OrderedDict
 
 from ..tools import listtools as _lt
@@ -15,7 +16,7 @@ import gatestring as _gs
 
 
 
-class DataSet_KeyValIterator:
+class DataSet_KeyValIterator(object):
   """ Iterator class for gate_string,DataSetRow pairs of a DataSet """
   def __init__(self, dataset):
     self.dataset = dataset
@@ -29,7 +30,7 @@ class DataSet_KeyValIterator:
     return self.gsIter.next(), DataSetRow(self.dataset, self.countIter.next())
   
 
-class DataSet_ValIterator:
+class DataSet_ValIterator(object):
   """ Iterator class for DataSetRow values of a DataSet """
   def __init__(self, dataset):
     self.dataset = dataset
@@ -42,7 +43,7 @@ class DataSet_ValIterator:
     return DataSetRow(self.dataset, self.countIter.next())
 
 
-class DataSetRow:
+class DataSetRow(object):
   """ 
   Encapsulates DataSet count data for a single gate string.  Outwardly
     looks similar to a dictionary with spam labels as keys and counts as
@@ -86,7 +87,7 @@ class DataSetRow:
     return self.rowData[ self.dataset.slIndex[spamlabel] ]
 
   def __setitem__(self,spamlabel,count):
-    raise ValueError("Setting dataset counts must be done using the addData functions")
+    self.rowData[ self.dataset.slIndex[spamlabel] ] = count
 
   def as_dict(self):
     """ Returns the (spamlabel,count) pairs as a dictionary."""
@@ -96,7 +97,7 @@ class DataSetRow:
     return str(self.as_dict())
 
 
-class DataSetRow_KeyValIterator:
+class DataSetRow_KeyValIterator(object):
   """ Iterates over spamLabel,count pairs of a DataSetRow """
   def __init__(self, dataset, rowData):
     self.spamLabelIter = dataset.slIndex.__iter__()
@@ -110,7 +111,7 @@ class DataSetRow_KeyValIterator:
   
 
 
-class DataSet:
+class DataSet(object):
   """ 
   The DataSet class associates gate strings with counts for each spam label,
   and can be thought of as a table with gate strings labeling the rows and 
@@ -175,14 +176,14 @@ class DataSet:
       self.load(fileToLoadFrom)
       return
 
-    # self.gsIndex  :  Ordered dictionary where keys = gate strings (tuples), values = integer indices into counts
+    # self.gsIndex  :  Ordered dictionary where keys = GateString objects, values = integer indices into counts
     if gateStringIndices is not None:
       self.gsIndex = gateStringIndices
     elif gateStrings is not None:
-      if len(gateStrings) > 0 and isinstance(gateStrings[0], _gs.GateString):
-        self.gsIndex = _OrderedDict( [(gs.tup,i) for (i,gs) in enumerate(gateStrings) ] )
-      else:
-        self.gsIndex = _OrderedDict( [(gs,i) for (i,gs) in enumerate(gateStrings) ] )
+      dictData = [ (gs if isinstance(gs,_gs.GateString) else _gs.GateString(gs),i) \
+                     for (i,gs) in enumerate(gateStrings) ] #convert to GateStrings if necessary
+      self.gsIndex = _OrderedDict( dictData )
+
     elif not bStatic:
       self.gsIndex = _OrderedDict() 
     else: raise ValueError("Must specify either gateStrings or gateStringIndices when creating a static DataSet")
@@ -228,19 +229,18 @@ class DataSet:
     return len(self.gsIndex)
 
   def __getitem__(self, gatestring):
-    if isinstance(gatestring, _gs.GateString):
-      return DataSetRow(self, self.counts[ self.gsIndex[gatestring.tup] ])
-    else:
-      return DataSetRow(self, self.counts[ self.gsIndex[gatestring] ])
+    return DataSetRow(self, self.counts[ self.gsIndex[gatestring] ])
 
-  def __setitem__(self, indx, counts):
-    raise ValueError("Setting dataset counts must be done using the addData functions")
+  def __setitem__(self, gatestring, countDict):
+    if gatestring in self:
+      row = DataSetRow(self, self.counts[ self.gsIndex[gatestring] ])
+      for spamLabel,cnt in countDict.iteritems():
+        row[spamLabel] = cnt
+    else:
+      self.add_count_dict(gatestring, countDict)
 
   def __contains__(self, gatestring):
-    if isinstance(gatestring, _gs.GateString):
-      return gatestring.tup in self.gsIndex
-    else:
-      return gatestring in self.gsIndex
+    return gatestring in self.gsIndex
 
   def keys(self):
     """ 
@@ -264,10 +264,7 @@ class DataSet:
     bool
         whether gatestring was found.
     """
-    if isinstance(gatestring, _gs.GateString):
-      return gatestring.tup in self.gsIndex
-    else:
-      return gatestring in self.gsIndex
+    return gatestring in self.gsIndex
 
   def iteritems(self):
     """ 
@@ -358,10 +355,8 @@ class DataSet:
     None
     """
     if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
-    if isinstance(gateString, _gs.GateString):
-      gateString = gateString.tup
-    else:
-      gateString = tuple(gateString) #make sure it's a tuple, so can use as dict index
+    if not isinstance(gateString, _gs.GateString):
+      gateString = _gs.GateString(gateString) #make sure we have a GateString
 
     if round(sum(countList)) == 0: return #don't add zero counts to a dataset
 
@@ -399,10 +394,8 @@ class DataSet:
     None
     """
     if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
-    if isinstance(gateString, _gs.GateString):
-      gateString = gateString.tup
-    else:
-      gateString = tuple(gateString) #make sure it's a tuple, so can use as dict index
+    if not isinstance(gateString, _gs.GateString):
+      gateString = _gs.GateString(gateString) #make sure we have a GateString
 
     if gateString in self.gsIndex: #gate label strings are keys
       current_dsRow = self[ gateString ]
@@ -465,7 +458,7 @@ class DataSet:
       gateStringIndices = []
       gateStrings = []
       for gs in listOfGateStringsToKeep:
-        gateString = gs.tup if isinstance(gs, _gs.GateString) else gs;
+        gateString = gs if isinstance(gs, _gs.GateString) else _gs.GateString(gs)
           
         if gateString not in self.gsIndex:
           if bThrowErrorIfStringIsMissing:
@@ -502,6 +495,31 @@ class DataSet:
       copyOfMe.counts = [ el.copy() for el in self.counts ]
       return copyOfMe
 
+
+  def copy_nonstatic(self):
+    """ Make a non-static copy of this DataSet. """
+    if self.bStatic: 
+      copyOfMe = DataSet(spamLabels=self.get_spam_labels())
+      copyOfMe.gsIndex = self.gsIndex.copy()
+      copyOfMe.counts = [ el.copy() for el in self.counts ]
+      return copyOfMe
+    else:
+      return self.copy()
+
+    """ 
+    Promotes a non-static DataSet to a static (read-only) DataSet.  This
+     method should be called after all data has been added.
+    """     
+    if self.bStatic: return
+    #Convert normal dataset to static mode.
+    #  gsIndex and slIndex stay the same ; counts is transformed to a 2D numpy array
+    if len(self.counts) > 0:
+      newCounts = _np.concatenate( [el.reshape(1,-1) for el in self.counts], axis=0 )
+    else:
+      newCounts = _np.empty( (0,len(self.slIndex)), 'd')
+    self.counts, self.bStatic = newCounts, True
+
+
   def done_adding_data(self):
     """ 
     Promotes a non-static DataSet to a static (read-only) DataSet.  This
@@ -516,8 +534,9 @@ class DataSet:
       newCounts = _np.empty( (0,len(self.slIndex)), 'd')
     self.counts, self.bStatic = newCounts, True
 
+
   def __getstate__(self):
-    toPickle = { 'gsIndexKeys': map(compress_gate_label_tuple, self.gsIndex.keys()),
+    toPickle = { 'gsIndexKeys': map(_gs.CompressedGateString, self.gsIndex.keys()),
                  'gsIndexVals': self.gsIndex.values(),
                  'slIndex': self.slIndex,
                  'bStatic': self.bStatic,
@@ -525,7 +544,8 @@ class DataSet:
     return toPickle
 
   def __setstate__(self, state_dict):
-    self.gsIndex = _OrderedDict( zip( map(expand_gate_label_tuple, state_dict['gsIndexKeys']), state_dict['gsIndexVals']) )
+    gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]
+    self.gsIndex = _OrderedDict( zip( gsIndexKeys, state_dict['gsIndexVals']) )
     self.slIndex = state_dict['slIndex']
     self.counts = state_dict['counts']
     self.bStatic = state_dict['bStatic']
@@ -546,7 +566,7 @@ class DataSet:
     None
     """
     
-    toPickle = { 'gsIndexKeys': map(compress_gate_label_tuple, self.gsIndex.keys() if self.gsIndex else []),
+    toPickle = { 'gsIndexKeys': map(_gs.CompressedGateString, self.gsIndex.keys()) if self.gsIndex else [],
                  'gsIndexVals': self.gsIndex.values() if self.gsIndex else [],
                  'slIndex': self.slIndex,
                  'bStatic': self.bStatic } #Don't pickle counts numpy data b/c it's inefficient
@@ -595,7 +615,16 @@ class DataSet:
         f = fileOrFilename
 
     state_dict = _pickle.load(f)
-    self.gsIndex = _OrderedDict( zip( map(expand_gate_label_tuple, state_dict['gsIndexKeys']), state_dict['gsIndexVals']) )
+    def expand(x): #to be backward compatible
+      if isinstance(x,_gs.CompressedGateString): return x.expand()
+      else: 
+        _warnings.warn("Deprecated dataset format.  Please re-save " +
+                       "this dataset soon to avoid future incompatibility.")
+        return _gs.GateString(_gs.CompressedGateString.expand_gate_label_tuple(x))
+    gsIndexKeys = [ expand(cgs) for cgs in state_dict['gsIndexKeys'] ]
+
+    #gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]
+    self.gsIndex = _OrderedDict( zip( gsIndexKeys, state_dict['gsIndexVals']) )
     self.slIndex = state_dict['slIndex']
     self.bStatic = state_dict['bStatic']
 
@@ -606,94 +635,6 @@ class DataSet:
       for i in range(state_dict['nRows']):
         self.counts.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
     if bOpen: f.close()
-
-
-def _getNumPeriods(gateString, periodLen):
-    n = 0
-    if len(gateString) < periodLen: return 0
-    while gateString[0:periodLen] == gateString[n*periodLen:(n+1)*periodLen]: 
-        n += 1
-    return n
-
-def compress_gate_label_tuple(gateString, minLenToCompress=20, maxPeriodToLookFor=20):
-    """
-    Compress a gate string.  The result is tuple with a special compressed-
-    gate-string form form that is not useable by other GST methods but is
-    typically shorter (especially for long gate strings with a repetative
-    structure) than the original gate string tuple.
-
-    Parameters
-    ----------
-    gateString : tuple of gate labels or GateString
-        The gate string to compress.
-
-    minLenToCompress : int, optional
-        The minimum length string to compress.  If len(gateString)
-        is less than this amount its tuple is returned.
-        
-    maxPeriodToLookFor : int, optional
-        The maximum period length to use when searching for periodic
-        structure within gateString.  Larger values mean the method
-        takes more time but could result in better compressing.
-
-    Returns
-    -------
-    tuple
-        The compressed (or raw) gate string tuple.
-    """
-    gateString = tuple(gateString) # converts from GateString or list to tuple if needed
-    L = len(gateString)
-    if L < minLenToCompress: return tuple(gateString)
-    compressed = ["CCC"] #list for appending, then make into tuple at the end
-    start = 0
-    while start < L:
-        #print "Start = ",start
-        score = _np.zeros( maxPeriodToLookFor+1, 'd' )
-        numperiods = _np.zeros( maxPeriodToLookFor+1, 'i' )
-        for periodLen in range(1,maxPeriodToLookFor+1):
-            n = _getNumPeriods( gateString[start:], periodLen )
-            if n == 0: score[periodLen] = 0
-            elif n == 1: score[periodLen] = 4.1/periodLen
-            else: score[periodLen] = _np.sqrt(periodLen)*n
-            numperiods[periodLen] = n
-        bestPeriodLen = _np.argmax(score)
-        n = numperiods[bestPeriodLen]
-        bestPeriod = gateString[start:start+bestPeriodLen]
-        #print "Scores = ",score
-        #print "num per = ",numperiods
-        #print "best = %s ^ %d" % (str(bestPeriod), n)
-        assert(n > 0 and bestPeriodLen > 0)
-        if start > 0 and n == 1 and compressed[-1][1] == 1:
-            compressed[-1] = (compressed[-1][0]+bestPeriod, 1)
-        else:
-            compressed.append( (bestPeriod, n) )
-        start = start+bestPeriodLen*n
-            
-    return tuple(compressed)
-
-def expand_gate_label_tuple(compressedGateString):
-    """
-    Expand a compressed tuple created with compress_gate_label_tuple(...)
-    into a tuple of gate labels.
-
-    Parameters
-    ----------
-    compressedGateString : tuple
-        a tuple in the compressed form created by
-        compress_gate_label_tuple(...).
-
-    Returns
-    -------
-    tuple
-        A tuple of gate labels specifying the uncompressed gate string.
-    """
-    
-    if len(compressedGateString) == 0: return ()
-    if compressedGateString[0] != "CCC": return compressedGateString
-    expandedString = []
-    for (period,n) in compressedGateString[1:]:
-        expandedString += period*n
-    return tuple(expandedString)    
 
 
 #def upgrade_old_dataset(oldDataset):

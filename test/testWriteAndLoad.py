@@ -3,10 +3,12 @@ import pygsti
 from pygsti.construction import std1Q_XYI as std
 import numpy as np
 
+
 class WriteAndLoadTestCase(unittest.TestCase):
 
     def setUp(self):
-        pass
+        #Set GateSet objects to "strict" mode for testing
+        pygsti.objects.GateSet._strict = True
 
     def assertArraysAlmostEqual(self,a,b):
         self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
@@ -43,13 +45,13 @@ class TestWriteAndLoad(WriteAndLoadTestCase):
         ds.done_adding_data()
 
         pygsti.io.write_dataset("temp_test_files/dataset_loadwrite.txt",
-                                     pygsti.construction.gatestring_list(ds.keys())[0:10], ds) #write only first 10 strings
+                                ds, pygsti.construction.gatestring_list(ds.keys())[0:10]) #write only first 10 strings
         ds2 = pygsti.io.load_dataset("temp_test_files/dataset_loadwrite.txt")
         ds3 = pygsti.io.load_dataset("temp_test_files/dataset_loadwrite.txt", cache=True) #creates cache file
         ds4 = pygsti.io.load_dataset("temp_test_files/dataset_loadwrite.txt", cache=True) #loads from cache file
 
-        pygsti.io.write_dataset("temp_test_files/dataset_loadwrite.txt",
-                                     pygsti.construction.gatestring_list(ds.keys()), ds, spamLabelOrder=['plus','minus'])
+        pygsti.io.write_dataset("temp_test_files/dataset_loadwrite.txt", ds,
+                                spamLabelOrder=['plus','minus'])
         ds5 = pygsti.io.load_dataset("temp_test_files/dataset_loadwrite.txt", cache=True) #rewrites cache file
 
         for s in ds:
@@ -57,10 +59,7 @@ class TestWriteAndLoad(WriteAndLoadTestCase):
             self.assertEqual(ds[s]['minus'],ds5[s]['minus'])
 
         with self.assertRaises(ValueError):
-            pygsti.io.write_dataset("temp_test_files/dataset_loadwrite.txt",ds.keys(), ds) #must be GateStrings
-        with self.assertRaises(ValueError):
-            pygsti.io.write_dataset("temp_test_files/dataset_loadwrite.txt",ds.keys(), ds) #must be GateStrings
-
+            pygsti.io.write_dataset("temp_test_files/dataset_loadwrite.txt",ds, [('Gx',)] ) #must be GateStrings
 
     def test_multidataset_file(self):
         strList = pygsti.construction.gatestring_list( [(), ('Gx',), ('Gx','Gy') ] )
@@ -81,7 +80,7 @@ Gx^4 20 80 0.2 100
         ds2 = pygsti.io.load_multidataset("temp_test_files/TestMultiDataset.txt", cache=True)
         ds3 = pygsti.io.load_multidataset("temp_test_files/TestMultiDataset.txt", cache=True) #load from cache
 
-        pygsti.io.write_multidataset("temp_test_files/emptyMultiDataset2.txt", strList, ds)
+        pygsti.io.write_multidataset("temp_test_files/emptyMultiDataset2.txt", ds, strList)
         ds_copy = pygsti.io.load_multidataset("temp_test_files/emptyMultiDataset2.txt")
         self.assertEqual(ds_copy['DS0'][('Gx',)]['plus'], ds['DS0'][('Gx',)]['plus'] )
         self.assertEqual(ds_copy['DS0'][('Gx','Gy')]['minus'], ds['DS1'][('Gx','Gy')]['minus'] )
@@ -113,8 +112,10 @@ Gx^4 20 80 0.2 100
 
         gateset_m1m1 = pygsti.construction.build_gateset([2], [('Q0',)],['Gi','Gx','Gy'], 
                                                          [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                                         rhoExpressions=["0"], EExpressions=["1"], 
-                                                         spamLabelDict={'plus': (0,0), 'minus': (-1,-1) })
+                                                         prepLabels=['rho0'], prepExpressions=["0"],
+                                                         effectLabels=['E0'], effectExpressions=["1"], 
+                                                         spamdefs={'plus': ('rho0','E0'),
+                                                                        'minus': ('remainder','remainder') })
         pygsti.io.write_gateset(gateset_m1m1, "temp_test_files/gateset_m1m1_loadwrite.txt", "My title m1m1")
         gs_m1m1 = pygsti.io.load_gateset("temp_test_files/gateset_m1m1_loadwrite.txt")
         self.assertAlmostEqual(gs_m1m1.frobeniusdist(gateset_m1m1), 0)
@@ -168,20 +169,20 @@ SPAMLABEL minus = remainder
         gs_formats = pygsti.io.load_gateset("temp_test_files/formatExample.gateset")
         #print gs_formats
 
-        rotXPi   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi,Q0)").matrix
-        rotYPi   = pygsti.construction.build_gate( [2],[('Q0',)], "Y(pi,Q0)").matrix
-        rotXPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi/2,Q0)").matrix        
-        rotYPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "Y(pi/2,Q0)").matrix        
+        rotXPi   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi,Q0)")
+        rotYPi   = pygsti.construction.build_gate( [2],[('Q0',)], "Y(pi,Q0)")
+        rotXPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi/2,Q0)")
+        rotYPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "Y(pi/2,Q0)")
 
-        self.assertArraysAlmostEqual(gs_formats['Gi'], np.identity(4,'d'))
-        self.assertArraysAlmostEqual(gs_formats['Gx'], rotXPiOv2)
-        self.assertArraysAlmostEqual(gs_formats['Gy'], rotYPiOv2)
-        self.assertArraysAlmostEqual(gs_formats['Gx2'], rotXPi)
-        self.assertArraysAlmostEqual(gs_formats['Gy2'], rotYPi)
+        self.assertArraysAlmostEqual(gs_formats.gates['Gi'], np.identity(4,'d'))
+        self.assertArraysAlmostEqual(gs_formats.gates['Gx'], rotXPiOv2)
+        self.assertArraysAlmostEqual(gs_formats.gates['Gy'], rotYPiOv2)
+        self.assertArraysAlmostEqual(gs_formats.gates['Gx2'], rotXPi)
+        self.assertArraysAlmostEqual(gs_formats.gates['Gy2'], rotYPi)
 
-        self.assertArraysAlmostEqual(gs_formats.rhoVecs[0], 1/np.sqrt(2)*np.array([[1],[0],[0],[1]],'d'))
-        self.assertArraysAlmostEqual(gs_formats.rhoVecs[1], 1/np.sqrt(2)*np.array([[1],[0],[0],[-1]],'d'))
-        self.assertArraysAlmostEqual(gs_formats.EVecs[0], 1/np.sqrt(2)*np.array([[1],[0],[0],[-1]],'d'))
+        self.assertArraysAlmostEqual(gs_formats.preps['rho0'], 1/np.sqrt(2)*np.array([[1],[0],[0],[1]],'d'))
+        self.assertArraysAlmostEqual(gs_formats.preps['rho1'], 1/np.sqrt(2)*np.array([[1],[0],[0],[-1]],'d'))
+        self.assertArraysAlmostEqual(gs_formats.effects['E'], 1/np.sqrt(2)*np.array([[1],[0],[0],[-1]],'d'))
 
         #pygsti.print_mx( rotXPi )
         #pygsti.print_mx( rotYPi )

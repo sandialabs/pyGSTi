@@ -5,10 +5,13 @@ import scipy.linalg
 import pygsti
 from pygsti.construction import std1Q_XYI as std
 
+
 class ToolsTestCase(unittest.TestCase):
 
     def setUp(self):
-        pass
+        #Set GateSet objects to "strict" mode for testing
+        pygsti.objects.GateSet._strict = True
+
 
     def assertArraysAlmostEqual(self,a,b):
         self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
@@ -269,30 +272,24 @@ class ToolsMethods(ToolsTestCase):
                          poissonPicture=False, check=False) #Non-poisson-picture
 
         dL1 = pygsti.logl_jacobian(std.gs_target, ds, gatestrings,
-                                   gates=True, G0=True, SPAM=True, SP0=True, 
                                    probClipInterval=(-1e6,1e6), radius=1e-4, 
                                    poissonPicture=True, check=False)
         dL2 = pygsti.logl_jacobian(std.gs_target, ds, gatestrings,
-                                   gates=True, G0=True, SPAM=True, SP0=True, 
                                    probClipInterval=(-1e6,1e6), radius=1e-4, 
                                    poissonPicture=False, check=False)
         dL2b = pygsti.logl_jacobian(std.gs_target, ds, None,
-                                   gates=True, G0=True, SPAM=True, SP0=True, 
                                    probClipInterval=(-1e6,1e6), radius=1e-4, 
                                    poissonPicture=False, check=False) #test None as gs list
 
 
         hL1 = pygsti.logl_hessian(std.gs_target, ds, gatestrings,
-                                  gates=True, G0=True, SPAM=True, SP0=True, 
                                   probClipInterval=(-1e6,1e6), radius=1e-4, 
                                   poissonPicture=True, check=False)
 
         hL2 = pygsti.logl_hessian(std.gs_target, ds, gatestrings,
-                                  gates=True, G0=True, SPAM=True, SP0=True, 
                                   probClipInterval=(-1e6,1e6), radius=1e-4, 
                                   poissonPicture=False, check=False)
         hL2b = pygsti.logl_hessian(std.gs_target, ds, None,
-                                   gates=True, G0=True, SPAM=True, SP0=True, 
                                    probClipInterval=(-1e6,1e6), radius=1e-4, 
                                    poissonPicture=False, check=False) #test None as gs list
 
@@ -494,7 +491,7 @@ class ToolsMethods(ToolsTestCase):
 
         from pygsti.construction import std1Q_XZ as stdXZ
         target = stdXZ.gs_target.copy()
-        target.set_gate('Gi', std.gs_target.get_gate('Gi')) #need a Gi gate...
+        target.gates['Gi'] =  std.gs_target.gates['Gi'] #need a Gi gate...
         stringListD = pygsti.construction.make_rpe_string_list_d(2)
         gs_depolXZ = target.depolarize(gate_noise=0.1,spam_noise=0.1)
         ds = pygsti.construction.generate_fake_data(gs_depolXZ, stringListD['totalStrList'],

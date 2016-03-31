@@ -963,7 +963,7 @@ def ppvec_to_stdmx(v):
 
     ret = _np.zeros( (dim,dim), 'complex' )
     for i,ppMx in enumerate(ppMxs):
-        ret += v[i]*ppMx
+        ret += float(v[i])*ppMx
     return ret
 
 
@@ -988,7 +988,7 @@ def gmvec_to_stdmx(v):
 
     ret = _np.zeros( (dim,dim), 'complex' )
     for i,gmMx in enumerate(gmMxs):
-        ret += v[i]*gmMx
+        ret += float(v[i])*gmMx
     return ret
 
 def stdvec_to_stdmx(v):
@@ -1013,7 +1013,7 @@ def stdvec_to_stdmx(v):
 
     ret = _np.zeros( (dim,dim), 'complex' )
     for i,stdMx in enumerate(stdMxs):
-        ret += v[i]*stdMx
+        ret += float(v[i])*stdMx
     return ret
 
 

@@ -10,6 +10,7 @@ HtmlUtil has for HTML conversion.
 
 import numpy as _np
 import cmath
+from .. import objects as _objs
 
 def latex(x, brackets=False):
     """
@@ -28,7 +29,9 @@ def latex(x, brackets=False):
     string
         latex string for x.
     """
-    if type(x) == _np.ndarray:
+    if isinstance(x,_np.ndarray) or \
+       isinstance(x,_objs.Gate) or \
+       isinstance(x,_objs.SPAMVec):
         d = 0
         for l in x.shape:
             if l > 1: d += 1

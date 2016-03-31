@@ -2,10 +2,13 @@ import unittest
 import pygsti
 import numpy as np
 
+
 class GateStringTestCase(unittest.TestCase):
 
     def setUp(self):
-        pass
+        #Set GateSet objects to "strict" mode for testing
+        pygsti.objects.GateSet._strict = True
+
 
 class TestGateStringMethods(GateStringTestCase):
     def test_simple(self):
@@ -101,8 +104,8 @@ class TestGateStringMethods(GateStringTestCase):
 
     def test_string_compression(self):
         gs = pygsti.objects.GateString(None, stringRepresentation="Gx^100")
-        comp_gs = pygsti.obj.dataset.compress_gate_label_tuple(tuple(gs))
-        exp_gs = pygsti.obj.dataset.expand_gate_label_tuple(comp_gs)
+        comp_gs = pygsti.objects.gatestring.CompressedGateString.compress_gate_label_tuple(tuple(gs))
+        exp_gs = pygsti.objects.gatestring.CompressedGateString.expand_gate_label_tuple(comp_gs)
         self.assertEqual(tuple(gs), exp_gs)
 
     def test_repeat(self):
@@ -166,17 +169,17 @@ class TestGateStringMethods(GateStringTestCase):
         # LSGST
         maxLens = [0,1,2]
         lsgstLists = pygsti.construction.make_lsgst_lists_asymmetric_fids(
-            gateLabels, strs, strs, germs, maxLens, rhoEPairs=None, truncScheme="whole germ powers")
+            gateLabels, strs, strs, germs, maxLens, fidPairs=None, truncScheme="whole germ powers")
 
         lsgstLists2 = pygsti.construction.make_lsgst_lists_asymmetric_fids(
-            gateLabels, strs, strs, germs, maxLens, rhoEPairs=None, truncScheme="truncated germ powers")
+            gateLabels, strs, strs, germs, maxLens, fidPairs=None, truncScheme="truncated germ powers")
 
         lsgstLists3 = pygsti.construction.make_lsgst_lists_asymmetric_fids(
-            gateLabels, strs, strs, germs, maxLens, rhoEPairs=None, truncScheme="length as exponent")
+            gateLabels, strs, strs, germs, maxLens, fidPairs=None, truncScheme="length as exponent")
 
         maxLens = [1,2]
         lsgstLists4 = pygsti.construction.make_lsgst_lists_asymmetric_fids(
-            gateLabels, strs, strs, germs, maxLens, rhoEPairs=None, truncScheme="whole germ powers")
+            gateLabels, strs, strs, germs, maxLens, fidPairs=None, truncScheme="whole germ powers")
 
         # ELGST
         maxLens = [0,1,2]

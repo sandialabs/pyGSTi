@@ -84,31 +84,31 @@ def get_gateset_spam_table(gateset, formats, tableclass, longtable,
     tables = {}
     _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable)
 
-    for i,rhoVec in enumerate(gateset.rhoVecs):
+    for lbl,rhoVec in gateset.preps.iteritems():
         if mxBasis == "pp":   rhoMx = _tools.ppvec_to_stdmx(rhoVec)
         elif mxBasis == "gm": rhoMx = _tools.gmvec_to_stdmx(rhoVec)
         elif mxBasis == "std": rhoMx = _tools.stdvec_to_stdmx(rhoVec)
         else: raise ValueError("Invalid basis specifier: %s" % mxBasis)
 
         if confidenceRegionInfo is None:
-            _tf.add_table_row(formats, tables, (i, rhoVec, rhoMx), (_tf.Rho,_tf.Nml,_tf.Brk))
+            _tf.add_table_row(formats, tables, (lbl, rhoVec, rhoMx), (_tf.Rho,_tf.Nml,_tf.Brk))
         else:
-            intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals("rho%d" % i)[:,None]
+            intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(lbl)[:,None]
             if intervalVec.shape[0] == gateset.get_dimension()-1: #TP constrained, so pad with zero top row
                 intervalVec = _np.concatenate( (_np.zeros((1,1),'d'),intervalVec), axis=0 )
-            _tf.add_table_row(formats, tables, (i, rhoVec, intervalVec, rhoMx), (_tf.Rho,_tf.Nml,_tf.Nml,_tf.Brk))
+            _tf.add_table_row(formats, tables, (lbl, rhoVec, intervalVec, rhoMx), (_tf.Rho,_tf.Nml,_tf.Nml,_tf.Brk))
 
-    for i,EVec in enumerate(gateset.EVecs):
+    for lbl,EVec in gateset.effects.iteritems():
         if mxBasis == "pp":    EMx = _tools.ppvec_to_stdmx(EVec)
         elif mxBasis == "gm":  EMx = _tools.gmvec_to_stdmx(EVec)
         elif mxBasis == "std": EMx = _tools.stdvec_to_stdmx(EVec)
         else: raise ValueError("Invalid basis specifier: %s" % mxBasis)
 
         if confidenceRegionInfo is None:
-            _tf.add_table_row(formats, tables, (i, EVec, EMx), (_tf.E,_tf.Nml,_tf.Brk))
+            _tf.add_table_row(formats, tables, (lbl, EVec, EMx), (_tf.E,_tf.Nml,_tf.Brk))
         else:
-            intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals("E%d" % i)[:,None]
-            _tf.add_table_row(formats, tables, (i, EVec, intervalVec, EMx), (_tf.E,_tf.Nml,_tf.Nml,_tf.Brk))
+            intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(lbl)[:,None]
+            _tf.add_table_row(formats, tables, (lbl, EVec, intervalVec, EMx), (_tf.E,_tf.Nml,_tf.Nml,_tf.Brk))
             
     _tf.finish_table(formats, tables, longtable)
     return tables
@@ -118,7 +118,7 @@ def get_gateset_spam_table(gateset, formats, tableclass, longtable,
 def get_gateset_spam_parameters_table(gateset, formats, tableclass, longtable, confidenceRegionInfo=None):
     """ 
     Create a table for gateset's "SPAM parameters", that is, the
-    dot products of rho-vectors and E-vectors.
+    dot products of prep-vectors and effect-vectors.
     
     Parameters
     ----------
@@ -145,8 +145,8 @@ def get_gateset_spam_parameters_table(gateset, formats, tableclass, longtable, c
         Dictionary with keys equal to the requested formats (e.g. 'latex'),
         and values equal to the table data in the corresponding format.
     """
-    colHeadings = [''] + [ i for i in gateset.get_evec_indices() ]
-    formatters = [None] + [ _tf.E ]*len(gateset.get_evec_indices())
+    colHeadings = [''] + list(gateset.get_effect_labels())
+    formatters = [None] + [ _tf.E ]*len(gateset.get_effect_labels())
 
     tables = {}
     _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable)
@@ -154,11 +154,11 @@ def get_gateset_spam_parameters_table(gateset, formats, tableclass, longtable, c
     spamDotProdsQty = _cr.compute_gateset_qty("Spam DotProds", gateset, confidenceRegionInfo)
     DPs, DPEBs = spamDotProdsQty.get_value_and_err_bar()
 
-    formatters = [ _tf.Rho ] + [ _tf.EB ]*len(gateset.get_evec_indices()) #for rows below
+    formatters = [ _tf.Rho ] + [ _tf.EB ]*len(gateset.get_effect_labels()) #for rows below
 
-    for ii,i in enumerate(gateset.get_rhovec_indices()): # i is rho index into gateset, ii enumerates these to index DPs
-        rowData = [i]
-        for jj,j in enumerate(gateset.get_evec_indices()): # j is E index into gateset, jj enumerates these to index DPs
+    for ii,prepLabel in enumerate(gateset.get_prep_labels()): # ii enumerates rhoLabels to index DPs
+        rowData = [prepLabel]
+        for jj,effectLabel in enumerate(gateset.get_effect_labels()): # jj enumerates eLabels to index DPs
             if confidenceRegionInfo is None:
                 rowData.append((DPs[ii,jj],None))
             else:
@@ -205,7 +205,7 @@ def get_gateset_gates_table(gateset, formats, tableclass, longtable,
         Dictionary with keys equal to the requested formats (e.g. 'latex'),
         and values equal to the table data in the corresponding format.
     """
-    gateLabels = gateset.keys()  # gate labels
+    gateLabels = gateset.gates.keys()  # gate labels
     basisNm = _tools.basis_longname(mxBasis, gateset.get_dimension())
 
     if confidenceRegionInfo is None:    
@@ -221,17 +221,19 @@ def get_gateset_gates_table(gateset, formats, tableclass, longtable,
 
     for gl in gateLabels:
         if confidenceRegionInfo is None:
-            _tf.add_table_row(formats, tables, (gl, gateset[gl]), (None,_tf.Brk))
+            _tf.add_table_row(formats, tables, (gl, gateset.gates[gl]), (None,_tf.Brk))
         else:
             intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(gl)[:,None]
-            if isinstance(gateset.get_gate(gl), _objs.FullyParameterizedGate): #then we know how to reshape into a matrix
-                nCols = gateset.get_dimension(); nRows = intervalVec.size / nCols
-                intervalMx = intervalVec.reshape(nRows,nCols)
-                if nRows == (nCols-1): #TP constrained, so pad with zero top row
-                    intervalMx = _np.concatenate( (_np.zeros((1,nCols),'d'),intervalMx), axis=0 )
+            if isinstance(gateset.gates[gl], _objs.FullyParameterizedGate): #then we know how to reshape into a matrix
+                gate_dim = gateset.get_dimension()
+                intervalMx = intervalVec.reshape(gate_dim,gate_dim)
+            elif isinstance(gateset.gates[gl], _objs.TPParameterizedGate): #then we know how to reshape into a matrix
+                gate_dim = gateset.get_dimension()
+                intervalMx = _np.concatenate( ( _np.zeros((1,gate_dim),'d'),
+                                                intervalVec.reshape(gate_dim-1,gate_dim)), axis=0 )
             else: 
                 intervalMx = intervalVec # we don't know how best to reshape vector of parameter intervals, so don't
-            _tf.add_table_row(formats, tables, (gl, gateset[gl], intervalMx), (None,_tf.Brk,_tf.Brk))
+            _tf.add_table_row(formats, tables, (gl, gateset.gates[gl], intervalMx), (None,_tf.Brk,_tf.Brk))
 
     _tf.finish_table(formats, tables, longtable)
     return tables
@@ -273,7 +275,7 @@ def get_unitary_gateset_gates_table(gateset, formats, tableclass, longtable,
         Dictionary with keys equal to the requested formats (e.g. 'latex'),
         and values equal to the table data in the corresponding format.
     """
-    gateLabels = gateset.keys()  # gate labels
+    gateLabels = gateset.gates.keys()  # gate labels
     basisNm = _tools.basis_longname(mxBasis, gateset.get_dimension())
 
     qtys_to_compute = [ ('%s decomposition' % gl) for gl in gateLabels ]
@@ -295,11 +297,11 @@ def get_unitary_gateset_gates_table(gateset, formats, tableclass, longtable,
         decomp, decompEB = qtys['%s decomposition' % gl].get_value_and_err_bar()
         if confidenceRegionInfo is None:
             _tf.add_table_row(formats, tables, 
-                        (gl, gateset[gl],decomp.get('axis of rotation','X'),decomp.get('pi rotations','X')),
+                        (gl, gateset.gates[gl],decomp.get('axis of rotation','X'),decomp.get('pi rotations','X')),
                         (None, _tf.Brk, _tf.Nml, _tf.Pi) )
         else:
             intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(gl)[:,None]
-            if isinstance(gateset.get_gate(gl), _objs.FullyParameterizedGate): #then we know how to reshape into a matrix
+            if isinstance(gateset.gates[gl], _objs.FullyParameterizedGate): #then we know how to reshape into a matrix
                 nCols = gateset.get_dimension(); nRows = intervalVec.size / nCols
                 intervalMx = intervalVec.reshape(nRows,nCols)
                 if nRows == (nCols-1): #TP constrained, so pad with zero top row
@@ -308,7 +310,7 @@ def get_unitary_gateset_gates_table(gateset, formats, tableclass, longtable,
                 intervalMx = intervalVec # we don't know how best to reshape vector of parameter intervals, so don't
 
             _tf.add_table_row(formats, tables, 
-                        (gl, gateset[gl],decomp.get('axis of rotation','X'), 
+                        (gl, gateset.gates[gl],decomp.get('axis of rotation','X'), 
                          (decomp.get('pi rotations','X'), decompEB.get('pi rotations','X')) ),
                         (None, _tf.Brk, _tf.Nml, _tf.EBPi) )
 
@@ -352,7 +354,7 @@ def get_gateset_choi_table(gateset, formats, tableclass, longtable,
         Dictionary with keys equal to the requested formats (e.g. 'latex'),
         and values equal to the table data in the corresponding format.
     """
-    gateLabels = gateset.keys()  # gate labels
+    gateLabels = gateset.gates.keys()  # gate labels
 
     qtys_to_compute = [ ('%s choi matrix' % gl) for gl in gateLabels ]
     qtys_to_compute += [ ('%s choi eigenvalues' % gl) for gl in gateLabels ]
@@ -418,7 +420,7 @@ def get_gateset_vs_target_table(gateset, targetGateset, formats, tableclass, lon
         Dictionary with keys equal to the requested formats (e.g. 'latex'),
         and values equal to the table data in the corresponding format.
     """
-    gateLabels = gateset.keys()  # gate labels
+    gateLabels = gateset.gates.keys()  # gate labels
 
     colHeadings = ('Gate', "Process|Infidelity", "1/2 Trace|Distance", "1/2 Diamond-Norm", "Frobenius|Distance")
     formatters = (None,_tf.TxtCnv,_tf.TxtCnv,_tf.TxtCnv,_tf.TxtCnv)
@@ -474,13 +476,14 @@ def get_gateset_vs_target_err_gen_table(gateset, targetGateset, formats, tablecl
         Dictionary with keys equal to the requested formats (e.g. 'latex'),
         and values equal to the table data in the corresponding format.
     """
-    gateLabels = gateset.keys()  # gate labels
+    gateLabels = gateset.gates.keys()  # gate labels
     colHeadings = ('Gate','Error Generator')
 
     tables = {}
     _tf.create_table(formats, tables, colHeadings, (None,None), tableclass, longtable)
     for gl in gateLabels:
-        _tf.add_table_row(formats, tables, (gl, _spl.logm(_np.dot(_np.linalg.inv(targetGateset[gl]),gateset[gl]))),
+        _tf.add_table_row(formats, tables, (gl, _spl.logm(_np.dot(_np.linalg.inv(
+                            targetGateset.gates[gl]),gateset.gates[gl]))),
                     (None, _tf.Brk))
     _tf.finish_table(formats, tables, longtable)
     return tables
@@ -523,7 +526,7 @@ def get_gateset_vs_target_angles_table(gateset, targetGateset, formats, tablecla
         Dictionary with keys equal to the requested formats (e.g. 'latex'),
         and values equal to the table data in the corresponding format.
     """
-    gateLabels = gateset.keys()  # gate labels
+    gateLabels = gateset.gates.keys()  # gate labels
 
     colHeadings = ('Gate', "Angle between|rotation axes")
     formatters = (None,_tf.TxtCnv)
@@ -579,7 +582,7 @@ def get_gateset_closest_unitary_table(gateset, formats, tableclass, longtable, c
         and values equal to the table data in the corresponding format.
     """
 
-    gateLabels = gateset.keys()  # gate labels
+    gateLabels = gateset.gates.keys()  # gate labels
     colHeadings = ('Gate','Process|Infidelity','1/2 Trace|Distance','Rotation|Axis','Rotation|Angle','Sanity Check')
     formatters = (None,_tf.TxtCnv,_tf.TxtCnv,_tf.TxtCnv,_tf.TxtCnv,_tf.TxtCnv)
 
@@ -649,7 +652,7 @@ def get_gateset_decomp_table(gateset, formats, tableclass, longtable, confidence
         Dictionary with keys equal to the requested formats (e.g. 'latex'),
         and values equal to the table data in the corresponding format.
     """
-    gateLabels = gateset.keys()  # gate labels
+    gateLabels = gateset.gates.keys()  # gate labels
     colHeadings = ('Gate','Eigenvalues','Fixed pt','Rotn. axis','Diag. decay','Off-diag. decay')
     formatters = [None]*6
 
@@ -720,7 +723,7 @@ def get_gateset_rotn_axis_table(gateset, formats, tableclass, longtable,
         Dictionary with keys equal to the requested formats (e.g. 'latex'),
         and values equal to the table data in the corresponding format.
     """
-    gateLabels = gateset.keys()
+    gateLabels = gateset.gates.keys()
 
     qtys_to_compute = [ '%s decomposition' % gl for gl in gateLabels ] + ['Gateset Axis Angles']
     qtys = _cr.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo)
@@ -805,7 +808,7 @@ def get_dataset_overview_table(dataset, target, formats, tableclass, longtable,
         maximal (best) Gram matrix.  It's useful to make this
         at least twice the maximum length fiducial sequence.
 
-    fixedLists : (rhoStrs, EStrs), optional
+    fixedLists : (prepStrs, effectStrs), optional
       2-tuple of gate string lists, specifying the preparation and
       measurement fiducials to use when constructing the Gram matrix,
       and thereby bypassing the search for such lists.
@@ -833,7 +836,7 @@ def get_dataset_overview_table(dataset, target, formats, tableclass, longtable,
     return tables
 
 
-def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, TPconstrained, formats, tableclass, longtable):
+def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, tableclass, longtable):
     """ 
     Create a table showing how Chi2 changes with GST iteration.
     
@@ -851,9 +854,6 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, TPconstrai
 
     dataset : DataSet
         The data set used in the GST iterations.
-
-    TPconstrained : bool
-        Whether gatesetsByL were optimized under a TP constraint.
 
     formats : list
         List of formats to include in returned tables dictionary. Allowed
@@ -885,12 +885,7 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, TPconstrai
         chi2 = _tools.chi2( dataset, gs, gstrs, 
                                      minProbClipForWeighting=1e-4)
         Ns = len(gstrs)
-
-        #Get number of gateset parameters - this should match algorithm used
-        if TPconstrained:
-            Np = gs.num_nongauge_params(gates=True,G0=False,SPAM=True,SP0=False) 
-        else:
-            Np = gs.num_nongauge_params() #include everything
+        Np = gs.num_nongauge_params()
 
         k = max(Ns-Np,0) #expected chi^2 mean
         pv = 1.0 - _stats.chi2.cdf(chi2,k) # reject GST model if p-value < threshold (~0.05?)
@@ -908,7 +903,7 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, TPconstrai
     return tables
 
 
-def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, TPconstrained, formats, tableclass, longtable):
+def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, tableclass, longtable):
     """ 
     Create a table showing how the log-likelihood changes with GST iteration.
     
@@ -926,9 +921,6 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, TPconstrai
 
     dataset : DataSet
         The data set used in the GST iterations.
-
-    TPconstrained : bool
-        Whether gatesetsByL were optimized under a TP constraint.
 
     formats : list
         List of formats to include in returned tables dictionary. Allowed
@@ -963,12 +955,7 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, TPconstrai
         if(logL_upperbound < logl):
             raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
         Ns = len(gstrs)*(len(dataset.get_spam_labels())-1) #number of independent parameters in dataset
-
-        #Get number of gateset parameters - this should match algorithm used
-        if TPconstrained:
-            Np = gs.num_nongauge_params(gates=True,G0=False,SPAM=True,SP0=False) 
-        else:
-            Np = gs.num_nongauge_params() #include everything
+        Np = gs.num_nongauge_params() 
 
         k = max(Ns-Np,0) #expected 2*(logL_ub-logl) mean
         twoDeltaLogL = 2*(logL_upperbound - logl)
@@ -1100,9 +1087,9 @@ def get_gatestring_multi_table(gsLists, titles, formats, tableclass, longtable, 
 
 
 
-def get_logl_confidence_region(gateset, dataset, confidenceLevel, TPconstrained=True,
-                                  gatestring_list=None, probClipInterval=(-1e6,1e6),
-                                  minProbClip=1e-4, radius=1e-4, hessianProjection="std"):
+def get_logl_confidence_region(gateset, dataset, confidenceLevel,
+                               gatestring_list=None, probClipInterval=(-1e6,1e6),
+                               minProbClip=1e-4, radius=1e-4, hessianProjection="std"):
 
     """ 
     Constructs a ConfidenceRegion given a gateset and dataset using the log-likelihood Hessian.
@@ -1122,9 +1109,6 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel, TPconstrained=
         If not None, then the confidence level (between 0 and 100) used in
         the computation of confidence regions/intervals. If None, no 
         confidence regions or intervals are computed.
-
-    TPconstrained : bool, optional
-        Whether to constrain GST to trace-preserving gatesets.
 
     gatestring_list : list of (tuples or GateStrings), optional
         Each element specifies a gate string to include in the log-likelihood
@@ -1160,26 +1144,19 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel, TPconstrained=
     -------
     ConfidenceRegion
     """
-
-    gates = G0 = SPAM = SP0 = True    
-    if TPconstrained:
-        G0 = SP0 = False
-
     if gatestring_list is None:
         gatestring_list = dataset.keys()
         
     #Compute appropriate Hessian
-    hessian = _tools.logl_hessian(gateset, dataset, gatestring_list, gates, G0,
-                                SPAM,SP0,minProbClip, probClipInterval, radius) 
+    hessian = _tools.logl_hessian(gateset, dataset, gatestring_list,
+                                  minProbClip, probClipInterval, radius) 
 
-    cri = _objs.ConfidenceRegion(gateset, hessian, confidenceLevel, gates,
-                                 G0, SPAM, SP0, hessianProjection)
+    cri = _objs.ConfidenceRegion(gateset, hessian, confidenceLevel,
+                                 hessianProjection)
 
     #Check that number of gauge parameters reported by gateset is consistent with confidence region
     # since the parameter number computed this way is used in chi2 or logl progress tables
-    if TPconstrained:
-        Np_check = gateset.num_nongauge_params(G0=False,SP0=False)
-    else: Np_check =  gateset.num_nongauge_params()
+    Np_check =  gateset.num_nongauge_params()
     if(Np_check != cri.nNonGaugeParams):
         _warnings.warn("Number of non-gauge parameters in gateset and confidence region do " 
                        + " not match.  This indicates an internal logic error.")            
@@ -1188,7 +1165,7 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel, TPconstrained=
 
 
 
-def get_chi2_confidence_region(gateset, dataset, confidenceLevel, TPconstrained=True,
+def get_chi2_confidence_region(gateset, dataset, confidenceLevel,
                                   gatestring_list=None, probClipInterval=(-1e6,1e6),
                                   minProbClipForWeighting=1e-4, hessianProjection="std"):
 
@@ -1210,9 +1187,6 @@ def get_chi2_confidence_region(gateset, dataset, confidenceLevel, TPconstrained=
         If not None, then the confidence level (between 0 and 100) used in
         the computation of confidence regions/intervals. If None, no 
         confidence regions or intervals are computed.
-
-    TPconstrained : bool, optional
-        Whether to constrain GST to trace-preserving gatesets.
 
     gatestring_list : list of (tuples or GateStrings), optional
         Each element specifies a gate string to include in the log-likelihood
@@ -1245,28 +1219,20 @@ def get_chi2_confidence_region(gateset, dataset, confidenceLevel, TPconstrained=
     -------
     ConfidenceRegion
     """
-
-    gates = G0 = SPAM = SP0 = True    
-    if TPconstrained:
-        G0 = SP0 = False
-
     if gatestring_list is None:
         gatestring_list = dataset.keys()
         
     #Compute appropriate Hessian
     dummy_chi2, hessian = _tools.chi2(dataset, gateset, gatestring_list,
-                                      False, True,G0, SP0, SPAM, gates,
-                                      minProbClipForWeighting,
+                                      False, True, minProbClipForWeighting,
                                       probClipInterval)
 
-    cri = _objs.ConfidenceRegion(gateset, hessian, confidenceLevel, gates, G0,
-                                 SPAM, SP0, hessianProjection)
+    cri = _objs.ConfidenceRegion(gateset, hessian, confidenceLevel,
+                                 hessianProjection)
 
     #Check that number of gauge parameters reported by gateset is consistent with confidence region
     # since the parameter number computed this way is used in chi2 or logl progress tables
-    if TPconstrained:
-        Np_check = gateset.num_nongauge_params(G0=False,SP0=False)
-    else: Np_check =  gateset.num_nongauge_params()
+    Np_check =  gateset.num_nongauge_params()
     if(Np_check != cri.nNonGaugeParams):
         _warnings.warn("Number of non-gauge parameters in gateset and confidence region do " 
                        + " not match.  This indicates an internal logic error.")            

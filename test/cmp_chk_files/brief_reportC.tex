@@ -72,11 +72,11 @@ Table \ref{progressTable} shows how well GST was able to fit you data through it
 \begin{tabular}[l]{|c|c|c|c|c|c|c|c|c|}
 \hline
 L & $2\Delta\log(\mathcal{L})$ & $k$ & $2\Delta\log(\mathcal{L})-k$ & $\sqrt{2k}$ & $P$ & $N_s$ & $N_p$ & Rating \\ \hline
-0 & 53.74042 & 61 & -7.259581 & 11.04536 & 0.73 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-1 & 53.74027 & 61 & -7.259733 & 11.04536 & 0.73 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-2 & 106.549 & 137 & -30.451 & 16.55295 & 0.97 & 168 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-4 & 354.2974 & 410 & -55.70262 & 28.63564 & 0.98 & 441 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-8 & 691.0505 & 786 & -94.94949 & 39.64846 & 0.99 & 817 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+0 & 53.74648 & 61 & -7.253515 & 11.04536 & 0.73 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+1 & 53.7465 & 61 & -7.253495 & 11.04536 & 0.73 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+2 & 106.745 & 137 & -30.25503 & 16.55295 & 0.97 & 168 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+4 & 354.3548 & 410 & -55.64517 & 28.63564 & 0.98 & 441 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+8 & 691.0838 & 786 & -94.91617 & 39.64846 & 0.99 & 817 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
 \end{tabular}
 
 \caption{\textbf{Comparison between the computed and expected $2\Delta\log{\mathcal{L}}$ for different values of $L$}.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively.  $2\Delta\log{\mathcal{L}}$ is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $P$ is the p-value derived from a $\chi^2_k$ distribution (i.e.~when $P <$ some threshold like $0.05$ there is grounds for rejecting the GST fit). The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.\label{progressTable}}
@@ -105,9 +105,9 @@ Below is a collection of GST's primary result tables, ordered in what we think i
 \begin{tabular}[l]{|c|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm & \begin{tabular}{c}Frobenius\\Distance\end{tabular} \\ \hline
-Gi & 0.039931 & 0.042033 & 0.048064 & 0.101842 \\ \hline
-Gx & -0.102707 & 0.925912 & 1.404888 & 2.136226 \\ \hline
-Gy & 0.010043 & 0.522965 & 0.683333 & 1.124471 \\ \hline
+Gi & 0.039929 & 0.0401 & 0.040106 & 0.092986 \\ \hline
+Gx & 0.037847 & 0.037919 & 0.03792 & 0.087746 \\ \hline
+Gy & 0.037738 & 0.037804 & 0.037804 & 0.0875 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -116,23 +116,23 @@ Gy & 0.010043 & 0.522965 & 0.683333 & 1.124471 \\ \hline
 Gate & Error Generator \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
-0.0204 & -0.0558 & -0.0099 & -0.0056 \\ 
--0.0345 & 0.0008 & -0.0559 & 0.0016 \\ 
-0.0151 & 0.0002 & 0.0025 & -0.0524
+-0.001 & -0.0569 & -0.0066 & -0.0093 \\ 
+0.0004 & 0.0011 & -0.0543 & 0.0041 \\ 
+0.0011 & 3\e{-5} & 0.0008 & -0.0529
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
--0.1417 & -0.0034 & -0.0942 & 0.2589 \\ 
-1.3661 & -0.407 & 0.482 & -0.4731 \\ 
-0.6238 & -0.1413 & -0.469 & -0.6339
+0.0003 & -0.0508 & -0.0051 & -0.0057 \\ 
+0.0002 & 0.0003 & -0.0523 & -0.0023 \\ 
+-0.0003 & -0.0003 & -0.0001 & -0.0523
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
--0.7914 & 0.181 & 0.0471 & 0.2597 \\ 
-0.0308 & -0.4321 & -0.0846 & -0.1081 \\ 
-0.1674 & 0.2612 & -0.1412 & -0.2513
+0.0001 & -0.0524 & 0.0065 & 0.0005 \\ 
+0.0003 & 0.0011 & -0.05 & 0.0012 \\ 
+0.0002 & 0.0001 & -0.0042 & -0.0525
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -154,18 +154,18 @@ Gi & $ \begin{array}{c}
 1
  \end{array} $
  & $ \begin{array}{c}
-0.6131 \\ 
-0.2737 \\ 
--0.3701 \\ 
-0.1593
+0.999 \\ 
+-0.0223 \\ 
+0.0093 \\ 
+0.0206
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
-0.8838 \\ 
--0.0211 \\ 
--0.4673
+0.9348 \\ 
+-0.1473 \\ 
+-0.3233
  \end{array} $
- & 0.051276 & 0.054221 \\ \hline
+ & 0.05127 & 0.054222 \\ \hline
 Gx & $ \begin{array}{c}
 0.9491e^{i1.6} \\ 
 0.9491e^{-i1.6} \\ 
@@ -173,18 +173,18 @@ Gx & $ \begin{array}{c}
 1
  \end{array} $
  & $ \begin{array}{c}
-0.6128 \\ 
-0.2743 \\ 
--0.3701 \\ 
-0.1585
+1 \\ 
+0.0064 \\ 
+3\e{-5} \\ 
+0.0002
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
-0.9766 \\ 
-0.1799 \\ 
--0.1177
+-1 \\ 
+3\e{-5} \\ 
+-0.0003
  \end{array} $
- & 0.049515 & 0.050938 \\ \hline
+ & 0.049514 & 0.050938 \\ \hline
 Gy & $ \begin{array}{c}
 0.9489e^{i1.6} \\ 
 0.9489e^{-i1.6} \\ 
@@ -192,18 +192,18 @@ Gy & $ \begin{array}{c}
 1
  \end{array} $
  & $ \begin{array}{c}
-0.6129 \\ 
-0.2742 \\ 
--0.3701 \\ 
-0.1585
+1 \\ 
+1\e{-5} \\ 
+0.0067 \\ 
+-0.0002
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
--0.091 \\ 
-0.9937 \\ 
-0.0657
+-0.0054 \\ 
+1 \\ 
+-0.0012
  \end{array} $
- & 0.048792 & 0.051087 \\ \hline
+ & 0.048788 & 0.051084 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -211,9 +211,9 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & 0.000627$\pi$ &  & 0.132677$\pi$ & 0.5$\pi$ \\ \hline
-Gx & 0.500356$\pi$ & 0.132677$\pi$ &  & 0.473816$\pi$ \\ \hline
-Gy & 0.50007$\pi$ & 0.5$\pi$ & 0.473816$\pi$ &  \\ \hline
+Gi & 0.000625$\pi$ &  & 0.884316$\pi$ & 0.548542$\pi$ \\ \hline
+Gx & 0.500356$\pi$ & 0.884316$\pi$ &  & 0.498284$\pi$ \\ \hline
+Gy & 0.50007$\pi$ & 0.548542$\pi$ & 0.498284$\pi$ &  \\ \hline
 \end{tabular}
 
 \caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay''); and (7) the angle between each gate's rotation axis and the rotation axes of the other gates.  ``X'' indicates that the decomposition failed or couldn't be interpreted. \label{bestGatesetDecompTable}}
@@ -230,25 +230,25 @@ Gy & 0.50007$\pi$ & 0.5$\pi$ & 0.473816$\pi$ &  \\ \hline
 \hline
 Operator & Hilbert-Schmidt vector (Pauli basis) & Matrix \\ \hline
 $\rho_{0}$ & $ \begin{array}{c}
-0.9503 \\ 
-0.4194 \\ 
--0.5638 \\ 
-0.2879
+0.7071 \\ 
+0.0016 \\ 
+0.0003 \\ 
+0.6396
  \end{array} $
  & $ \left(\!\!\begin{array}{cc}
-0.8756 & 0.4969e^{i0.9} \\ 
-0.4969e^{-i0.9} & 0.4684
+0.9523 & 0.0012e^{-i0.2} \\ 
+0.0012e^{i0.2} & 0.0477
  \end{array}\!\!\right) $
  \\ \hline
 $E_{0}$ & $ \begin{array}{c}
-3.9955 \\ 
--1.3065 \\ 
-0.4888 \\ 
--10.011
+0.7078 \\ 
+-0.0002 \\ 
+-0.0031 \\ 
+-0.6407
  \end{array} $
  & $ \left(\!\!\begin{array}{cc}
--4.2536 & 0.9864e^{-i2.8} \\ 
-0.9864e^{i2.8} & 9.9042
+0.0475 & 0.0022e^{i1.6} \\ 
+0.0022e^{-i1.6} & 0.9535
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -261,8 +261,8 @@ $E_{0}$ & $ \begin{array}{c}
 \begin{center}
 \begin{tabular}[l]{|c|c|c|}
 \hline
- & $E_{0}$ & $E_{-1}$ \\ \hline
-$\rho_{0}$ & 0.090934 & 0.909571 \\ \hline
+ & $E_{0}$ & $E_C$ \\ \hline
+$\rho_{0}$ & 0.090701 & 0.909299 \\ \hline
 \end{tabular}
 
 \caption{\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestGatesetSpamTable}.\label{bestGatesetSpamParametersTable}}
@@ -276,23 +276,23 @@ $\rho_{0}$ & 0.090934 & 0.909571 \\ \hline
 Gate & Superoperator (Pauli basis) \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
-0.02 & 0.9457 & -0.0093 & -0.0053 \\ 
--0.0335 & 0.0007 & 0.9457 & 0.0015 \\ 
-0.0146 & 0.0002 & 0.0024 & 0.9489
+-0.001 & 0.9447 & -0.0063 & -0.0088 \\ 
+0.0004 & 0.0011 & 0.9471 & 0.0038 \\ 
+0.0011 & 3\e{-5} & 0.0007 & 0.9485
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
--0.1747 & 1.0115 & -0.1855 & 0.2225 \\ 
--0.1679 & 0.0145 & 0.4695 & -0.6146 \\ 
-1.7013 & -0.5075 & 1.7847 & -0.5326
+0.0003 & 0.9505 & -0.0049 & -0.0054 \\ 
+0.0003 & 0.0002 & 0.0001 & -0.9491 \\ 
+0.0002 & 0.0003 & 0.949 & -0.0022
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
-0.0386 & 0.2862 & -0.115 & 0.8171 \\ 
-0.1997 & -0.4731 & 0.9176 & -0.1464 \\ 
-0.8525 & -1.2252 & -0.0326 & -0.2529
+0.0002 & 0.0001 & -0.004 & 0.9488 \\ 
+0.0003 & 0.0011 & 0.9512 & 0.0011 \\ 
+-0.0001 & -0.949 & -0.0062 & -0.0005
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
