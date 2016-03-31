@@ -22,14 +22,14 @@ class DriversTestCase(unittest.TestCase):
             self.gateLabels, self.germs, self.maxLens )
         
         self.lsgstStrings = pygsti.construction.make_lsgst_lists(
-            self.gateLabels, self.fiducials, self.germs, self.maxLens )
+            self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLens )
 
         self.lsgstStrings_tgp = pygsti.construction.make_lsgst_lists(
-            self.gateLabels, self.fiducials, self.germs, self.maxLens, 
+            self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLens, 
             truncScheme="truncated germ powers" )
 
         self.lsgstStrings_lae = pygsti.construction.make_lsgst_lists(
-            self.gateLabels, self.fiducials, self.germs, self.maxLens, 
+            self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLens, 
             truncScheme='length as exponent' )
 
         # RUN BELOW LINES TO GENERATE SAVED DATASETS

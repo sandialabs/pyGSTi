@@ -168,18 +168,22 @@ class TestGateStringMethods(GateStringTestCase):
 
         # LSGST
         maxLens = [0,1,2]
-        lsgstLists = pygsti.construction.make_lsgst_lists_asymmetric_fids(
-            gateLabels, strs, strs, germs, maxLens, fidPairs=None, truncScheme="whole germ powers")
+        lsgstLists = pygsti.construction.make_lsgst_lists(
+            gateLabels, strs, strs, germs, maxLens, fidPairs=None,
+            truncScheme="whole germ powers")
 
-        lsgstLists2 = pygsti.construction.make_lsgst_lists_asymmetric_fids(
-            gateLabels, strs, strs, germs, maxLens, fidPairs=None, truncScheme="truncated germ powers")
+        lsgstLists2 = pygsti.construction.make_lsgst_lists(
+            gateLabels, strs, strs, germs, maxLens, fidPairs=None,
+            truncScheme="truncated germ powers")
 
-        lsgstLists3 = pygsti.construction.make_lsgst_lists_asymmetric_fids(
-            gateLabels, strs, strs, germs, maxLens, fidPairs=None, truncScheme="length as exponent")
+        lsgstLists3 = pygsti.construction.make_lsgst_lists(
+            gateLabels, strs, strs, germs, maxLens, fidPairs=None,
+            truncScheme="length as exponent")
 
         maxLens = [1,2]
-        lsgstLists4 = pygsti.construction.make_lsgst_lists_asymmetric_fids(
-            gateLabels, strs, strs, germs, maxLens, fidPairs=None, truncScheme="whole germ powers")
+        lsgstLists4 = pygsti.construction.make_lsgst_lists(
+            gateLabels, strs, strs, germs, maxLens, fidPairs=None,
+            truncScheme="whole germ powers", nest=False)
 
         # ELGST
         maxLens = [0,1,2]
@@ -188,7 +192,8 @@ class TestGateStringMethods(GateStringTestCase):
 
         maxLens = [1,2]
         elgstLists2 = pygsti.construction.make_elgst_lists(
-            gateLabels, germs, maxLens, truncScheme="whole germ powers")        
+            gateLabels, germs, maxLens, truncScheme="whole germ powers",
+            nest=False)        
 
         #TODO: check values here
 

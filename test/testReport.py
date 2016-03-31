@@ -23,7 +23,8 @@ class ReportTestCase(unittest.TestCase):
 
         self.maxLengthList = [0,1,2,4,8]
         
-        self.lsgstStrings = pygsti.construction.make_lsgst_lists(self.gateLabels, self.fiducials, self.germs, self.maxLengthList)
+        self.lsgstStrings = pygsti.construction.make_lsgst_lists(
+            self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLengthList)
 
         self.ds = pygsti.objects.DataSet(fileToLoadFrom="cmp_chk_files/reportgen.dataset")
 

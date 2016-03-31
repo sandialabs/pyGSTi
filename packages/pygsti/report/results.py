@@ -10,10 +10,12 @@ import os as _os
 import re as _re
 import collections as _collections
 import matplotlib as _matplotlib
+import itertools as _itertools
 
 from ..objects import gatestring as _gs
 from ..construction import spamspecconstruction as _ssc
 from ..algorithms import optimize_gauge as _optimizeGauge
+from ..tools import listtools as _lt
 
 import latex as _latex
 import generation as _generation
@@ -202,8 +204,9 @@ class Results(object):
         self.gsSeed = seedGateset
         self.gatesets = gatesetsByL
         self.gsBestEstimate = gatesetsByL[-1]
-        self.gateStringLists = gateStringListByL
         self.bestGateStringList = gateStringListByL[-1]
+        self.gateStringLists = gateStringListByL
+        self.allGateStrings = _lt.remove_duplicates( list(_itertools.chain(*gateStringListByL)) )
         self.dataset = dataset
         self.objective = objective
         self.constrainToTP = constrainToTP
@@ -651,7 +654,7 @@ class Results(object):
         elif figureName.startswith("whack") and figureName.endswith("MoleBoxes"):
             gateLabel = figureName[len("whack"):-len("MoleBoxes")]
 
-            highestL = self.Ls[-1]; allGateStrings = self.gateStringLists[-1]; hammerWeight = 10.0
+            highestL = self.Ls[-1]; allGateStrings = self.allGateStrings; hammerWeight = 10.0
             len1GermFirstEls = [ g[0] for g in self.germs if len(g) == 1 ]
             assert(gateLabel in len1GermFirstEls) #only these whack-a-mole plots are available
             strToWhack = _gs.GateString( (gateLabel,)*highestL )
@@ -663,7 +666,7 @@ class Results(object):
         elif figureName.startswith("whack") and figureName.endswith("MoleBoxesSummed"):
             gateLabel = figureName[len("whack"):-len("MoleBoxesSummed")]
 
-            highestL = self.Ls[-1]; allGateStrings = self.gateStringLists[-1]; hammerWeight = 10.0
+            highestL = self.Ls[-1]; allGateStrings = self.allGateStrings; hammerWeight = 10.0
             len1GermFirstEls = [ g[0] for g in self.germs if len(g) == 1 ]
             assert(gateLabel in len1GermFirstEls) #only these whack-a-mole plots are available
             strToWhack = _gs.GateString( (gateLabel,)*highestL )
@@ -1173,7 +1176,7 @@ class Results(object):
         whackamoleplots = ""
         if whackamoleAppendix:    
             #Whack-a-mole plots for highest L of each length-1 germ
-            highestL = self.Ls[-1]; allGateStrings = self.gateStringLists[-1]; hammerWeight = 10.0
+            highestL = self.Ls[-1]; allGateStrings = self.allGateStrings; hammerWeight = 10.0
             len1Germs = [ g for g in self.germs if len(g) == 1 ]
 
             if verbosity > 0: 
@@ -1750,7 +1753,7 @@ class Results(object):
         whackamoleplots = ""
         if whackamoleAppendix:    
             #Whack-a-mole plots for highest L of each length-1 germ
-            highestL = self.Ls[-1]; allGateStrings = self.gateStringLists[-1]; hammerWeight = 10.0
+            highestL = self.Ls[-1]; allGateStrings = self.allGateStrings; hammerWeight = 10.0
             len1Germs = [ g for g in self.germs if len(g) == 1 ]
 
             if verbosity > 0: 
@@ -2104,7 +2107,7 @@ class Results(object):
         whackamoleplots = []
         if whackamoleAppendix:    
             #Whack-a-mole plots for highest L of each length-1 germ
-            highestL = self.Ls[-1]; allGateStrings = self.gateStringLists[-1]; hammerWeight = 10.0
+            highestL = self.Ls[-1]; allGateStrings = self.allGateStrings; hammerWeight = 10.0
             len1Germs = [ g for g in self.germs if len(g) == 1 ]
 
             if verbosity > 0: 

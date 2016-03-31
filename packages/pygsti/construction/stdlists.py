@@ -11,37 +11,47 @@ from ..tools import listtools as _lt
 import gatestringconstruction as _gsc
 import spamspecconstruction as _ssc
 
-def make_lsgst_lists(gateLabels, fiducialList, germList, maxLengthList,
-                     fidPairs=None, truncScheme="whole germ powers"):
+    
+def make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
+                     fidPairs=None, truncScheme="whole germ powers", nest=True):
     """
     Create a set of gate string lists for LSGST based on germs and max-lengths.
 
-    Constructs a series of successively larger lists by iteratively adding to
-    to a running list.  If maxLengthList[0] == 0 then the starting list is the 
+    Constructs a series (a list) of gate string lists used by long-sequence GST
+    (LSGST) algorithms.  If maxLengthList[0] == 0 then the starting list is the 
     list of LGST strings, otherwise the starting list is empty.  For each 
-    nonzero element of maxLengthList, call it L, add strings of the form:
+    nonzero element of maxLengthList, call it L, a list of gate strings is 
+    created with the form:
     
     Case: truncScheme == 'whole germ powers':
-      fiducial1 + pygsti.construction.repeat_with_max_length(germ,L) + fiducial2
+      prepStr + pygsti.construction.repeat_with_max_length(germ,L) + effectStr
 
     Case: truncScheme == 'truncated germ powers':
-      fiducial1 + pygsti.construction.repeat_and_truncate(germ,L) + fiducial2
+      prepStr + pygsti.construction.repeat_and_truncate(germ,L) + effectStr
 
     Case: truncScheme == 'length as exponent':
-      fiducial1 + germ^L + fiducial2
+      prepStr + germ^L + effectStr
 
-    to the running list and add the resulting list to the list (with 
-    duplicates removed) of gate string lists that is ultimately returned.
+    If nest == True, the above list is iteratively *added* (w/duplicates
+    removed) to the current list of gate strings to form a final list for the
+    given L.  This results in successively larger lists, each of which
+    contains all the elements of previous-L lists.  If nest == False then
+    the above list *is* the final list for the given L.
 
     Parameters
     ----------
     gateLabels : list or tuple
         List of gate labels to determine needed LGST strings.  Only relevant
         when maxLengthList[0] == 0.
-
-    fiducialList : list of GateStrings
-        List of the fiducial gate strings.
         
+    prepStrs : list of GateStrings
+        List of the preparation fiducial gate strings, which follow state
+        preparation.
+
+    effectStrs : list of GateStrings
+        List of the measurement fiducial gate strings, which precede
+        measurement.
+
     germList : list of GateStrings
         List of the germ gate strings.
 
@@ -51,10 +61,11 @@ def make_lsgst_lists(gateLabels, fiducialList, germList, maxLengthList,
         returned list.
 
     fidPairs : list of 2-tuples, optional
-        Specifies a subset of all fiducial string pairs (fiducial1, fiducial2)
+        Specifies a subset of all fiducial string pairs (prepStr, effectStr)
         to be used in the gate string lists.  Each element of fidPairs is a 
-        (iFiducial1, iFidicial2) 2-tuple of integers, each indexing a string
-        within fiducialList so that fiducial1 = fiducialList[iFiducial1], etc.
+        (iPrepStr, iEffectStr) 2-tuple of integers, each indexing a string
+        within prepStrs and effectStrs, respectively, so that prepStr = 
+        prepStrs[iPrepStr] and effectStr = effectStrs[iEffectStr].
 
     truncScheme : str, optional
         Truncation scheme used to interpret what the list of maximum lengths
@@ -67,23 +78,22 @@ def make_lsgst_lists(gateLabels, fiducialList, germList, maxLengthList,
         - 'length as exponent' -- max. length is instead interpreted
           as the germ exponent (the number of germ repetitions).
 
+    nest : boolean, optional
+        If Frue, the returned gate string lists are "nested", meaning
+        that each successive list of gate strings contains all the gate
+        strings found in previous lists (and usually some additional
+        new ones).  If False, then the returned string list for maximum
+        length == L contains *only* those gate strings specified in the
+        description above, and *not* those for previous values of L.
+
     Returns
     -------
     list of (lists of GateStrings)
-        The i-th list corresponds to a gate string list containing
-        repeated germs limited to lengths maxLengthList[0] through (and including)
-        maxLengthList[i].  Note that a "0" exponent corresponds to the LGST
-        strings.
+        The i-th list corresponds to a gate string list containing repeated
+        germs limited to length maxLengthList[i].  If nest == True, then 
+        repeated germs limited to previous max-lengths are also included.
+        Note that a "0" maximum-length corresponds to the LGST strings.
     """
-    return make_lsgst_lists_asymmetric_fids(gateLabels, fiducialList, fiducialList,
-                                            germList, maxLengthList, fidPairs,
-                                            truncScheme)
-    
-def make_lsgst_lists_asymmetric_fids(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
-                                     fidPairs=None, truncScheme="whole germ powers"):
-    '''
-    Same as make_lsgst_lists, except for asymmetric fiducial sets, specified by prepStrs and effectStrs.
-    '''
     lgstStrings = _gsc.list_lgst_gatestrings( _ssc.build_spam_specs(prepStrs = prepStrs, effectStrs = effectStrs),
                                               gateLabels)
     lsgst_list = _gsc.gatestring_list([ () ]) #running list of all strings so far
@@ -101,25 +111,95 @@ def make_lsgst_lists_asymmetric_fids(gateLabels, prepStrs, effectStrs, germList,
     Rfn = _getTruncFunction(truncScheme)
         
     for maxLen in maxLengthList:
-        lsgst_list += _gsc.create_gatestring_list("f[0]+R(germ,N)+f[1]",
-                                                f=fiducialPairs,
-                                                germ=germList, N=maxLen,
-                                                R=Rfn, order=('germ','f'))
-        lsgst_listOfLists.append( _lt.remove_duplicates(lgstStrings + lsgst_list) )
+        lst = _gsc.create_gatestring_list("f[0]+R(germ,N)+f[1]",
+                                          f=fiducialPairs,
+                                          germ=germList, N=maxLen,
+                                          R=Rfn, order=('germ','f'))
+        if nest:
+            lsgst_list += lst #add new strings to running list
+            lsgst_listOfLists.append( _lt.remove_duplicates(lgstStrings + lsgst_list) )
+        else:
+            lsgst_listOfLists.append( _lt.remove_duplicates(lst) )
 
     #print "%d LSGST sets w/lengths" % len(lsgst_listOfLists),map(len,lsgst_listOfLists)
     return lsgst_listOfLists
 
 
-def make_elgst_lists(gateLabels, germList, maxLengthList,
-                     truncScheme="whole germ powers"):
+def make_lsgst_experiment_list(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
+                               fidPairs=None, truncScheme="whole germ powers"):
     """
-    Create a set of gate string lists for eLGST based on germs and max-lengths.
+    Create a list of all the gate strings (i.e. the experiments) required for
+    long-sequence GST (LSGST) algorithms.
 
-    Constructs a series of successively larger lists by iteratively adding to
-    to a running list.  If maxLengthList[0] == 0 then the starting list is the 
+    Returns a single list containing, without duplicates, all the gate
+    strings required throughout all the iterations of LSGST given by 
+    maxLengthList.  Thus, the returned list is equivalently the list of
+    the experiments required to run LSGST using the supplied parameters,
+    and so commonly used when construting data set templates or simulated
+    data sets.  The breakdown of which gate strings are used for which
+    iteration(s) of LSGST is given by make_lsgst_lists(...).
+    
+    Parameters
+    ----------
+    gateLabels : list or tuple
+        List of gate labels to determine needed LGST strings.  Only relevant
+        when maxLengthList[0] == 0.
+        
+    prepStrs : list of GateStrings
+        List of the preparation fiducial gate strings, which follow state
+        preparation.
+
+    effectStrs : list of GateStrings
+        List of the measurement fiducial gate strings, which precede
+        measurement.
+
+    germList : list of GateStrings
+        List of the germ gate strings.
+
+    maxLengthList : list of ints
+        List of maximum lengths.  If maxLengthList[0] == 0 this results in 
+        special behavior where LGST strings are included as the first 
+        returned list.
+
+    fidPairs : list of 2-tuples, optional
+        Specifies a subset of all fiducial string pairs (prepStr, effectStr)
+        to be used in the gate string lists.  Each element of fidPairs is a 
+        (iPrepStr, iEffectStr) 2-tuple of integers, each indexing a string
+        within prepStrs and effectStrs, respectively, so that prepStr = 
+        prepStrs[iPrepStr] and effectStr = effectStrs[iEffectStr].
+
+    truncScheme : str, optional
+        Truncation scheme used to interpret what the list of maximum lengths
+        means. If unsure, leave as default. Allowed values are:
+        
+        - 'whole germ powers' -- germs are repeated an integer number of 
+          times such that the length is less than or equal to the max.
+        - 'truncated germ powers' -- repeated germ string is truncated
+          to be exactly equal to the max (partial germ at end is ok).
+        - 'length as exponent' -- max. length is instead interpreted
+          as the germ exponent (the number of germ repetitions).
+
+    Returns
+    -------
+    list of GateStrings
+    """
+
+    #When nest == True the final list contains all of the strings
+    return make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList,
+                            maxLengthList, fidPairs, truncScheme, nest=True)[-1]
+
+
+
+def make_elgst_lists(gateLabels, germList, maxLengthList,
+                     truncScheme="whole germ powers", nest=True):
+    """
+    Create a set of gate string lists for eLGST based on germs and max-lengths
+
+    Constructs a series (a list) of gate string lists used by the extended LGST
+    (eLGST) algorithm.  If maxLengthList[0] == 0 then the starting list is the 
     list of length-1 gate label strings, otherwise the starting list is empty.
-    For each nonzero element of maxLengthList, call it L, add strings of the form:
+    For each nonzero element of maxLengthList, call it L, a list of gate strings is 
+    created with the form:
 
     Case: truncScheme == 'whole germ powers':
       pygsti.construction.repeat_with_max_length(germ,L)
@@ -129,14 +209,17 @@ def make_elgst_lists(gateLabels, germList, maxLengthList,
 
     Case: truncScheme == 'length as exponent':
       germ^L
-    
-    to the running list, and add the resulting list (with duplicates removed) 
-    to the list of gate string lists that is ultimately returned.
+
+    If nest == True, the above list is iteratively *added* (w/duplicates
+    removed) to the current list of gate strings to form a final list for the
+    given L.  This results in successively larger lists, each of which
+    contains all the elements of previous-L lists.  If nest == False then
+    the above list *is* the final list for the given L.
 
     Parameters
     ----------
     gateLabels : list or tuple
-        List of gate labels .Only relevant when expList[0] == 0.
+        List of gate labels. Only relevant when maxLengthList[0] == 0.
 
     germList : list of GateStrings
         List of the germ gate strings.
@@ -157,13 +240,22 @@ def make_elgst_lists(gateLabels, germList, maxLengthList,
         - 'length as exponent' -- max. length is instead interpreted
           as the germ exponent (the number of germ repetitions).
 
+    nest : boolean, optional
+        If Frue, the returned gate string lists are "nested", meaning
+        that each successive list of gate strings contains all the gate
+        strings found in previous lists (and usually some additional
+        new ones).  If False, then the returned string list for maximum
+        length == L contains *only* those gate strings specified in the
+        description above, and *not* those for previous values of L.
+
 
     Returns
     -------
     list of (lists of GateStrings)
-        The i-th list corresponds to a gate string list containing
-        repeated germs limited to lengths maxLengthList[0] through (and including)
-        maxLengthList[i].  Note that a "0" exponent corresponds to the gate
+        The i-th list corresponds to a gate string list containing repeated
+        germs limited to length maxLengthList[i].  If nest == True, then 
+        repeated germs limited to previous max-lengths are also included.
+        Note that a "0" maximum-length corresponds to the gate
         label strings.
     """
     singleGates = _gsc.gatestring_list([(g,) for g in gateLabels])
@@ -177,11 +269,64 @@ def make_elgst_lists(gateLabels, germList, maxLengthList,
     Rfn = _getTruncFunction(truncScheme)
 
     for maxLen in maxLengthList:
-        elgst_list += _gsc.create_gatestring_list("R(germ,N)", germ=germList, N=maxLen, R=Rfn)
-        elgst_listOfLists.append( _lt.remove_duplicates(singleGates + elgst_list) )
+        lst = _gsc.create_gatestring_list("R(germ,N)", germ=germList, N=maxLen, R=Rfn)
+        if nest:
+            elgst_list += lst #add new strings to running list
+            elgst_listOfLists.append( _lt.remove_duplicates(singleGates + elgst_list) )
+        else:
+            elgst_listOfLists.append( _lt.remove_duplicates(lst) )
 
     #print "%d eLGST sets w/lengths" % len(elgst_listOfLists),map(len,elgst_listOfLists)
     return elgst_listOfLists
+
+
+def make_elgst_experiment_list(gateLabels, germList, maxLengthList,
+                               truncScheme="whole germ powers"):
+    """
+    Create a list of all the gate strings (i.e. the experiments) required for
+    the extended LGST (eLGST) algorithm.
+
+    Returns a single list containing, without duplicates, all the gate
+    strings required throughout all the iterations of eLGST given by 
+    maxLengthList.  Thus, the returned list is equivalently the list of
+    the experiments required to run eLGST using the supplied parameters,
+    and so commonly used when construting data set templates or simulated
+    data sets.  The breakdown of which gate strings are used for which
+    iteration(s) of eLGST is given by make_elgst_lists(...).
+    
+    Parameters
+    ----------
+    gateLabels : list or tuple
+        List of gate labels. Only relevant when maxLengthList[0] == 0.
+        
+    germList : list of GateStrings
+        List of the germ gate strings.
+
+    maxLengthList : list of ints
+        List of the maximum lengths.  If maxLengthList[0] == 0 this results in
+        special behavior where the length-1 gate label strings are included as
+        the first returned list.
+
+    truncScheme : str, optional
+        Truncation scheme used to interpret what the list of maximum lengths
+        means. If unsure, leave as default. Allowed values are:
+        
+        - 'whole germ powers' -- germs are repeated an integer number of 
+          times such that the length is less than or equal to the max.
+        - 'truncated germ powers' -- repeated germ string is truncated
+          to be exactly equal to the max (partial germ at end is ok).
+        - 'length as exponent' -- max. length is instead interpreted
+          as the germ exponent (the number of germ repetitions).
+
+    Returns
+    -------
+    list of GateStrings
+    """
+
+    #When nest == True the final list contains all of the strings
+    return make_elgst_lists(gateLabels, prepStrs, effectStrs, germList,
+                            maxLengthList, fidPairs, truncScheme, nest=True)[-1]
+
 
 
 def _getTruncFunction(truncScheme):

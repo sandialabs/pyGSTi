@@ -170,8 +170,10 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         germs = _io.load_gatestring_list(germsListOrFilename)
     else: germs = germsListOrFilename
     if lsgstLists is None:
-        lsgstLists = _construction.stdlists.make_lsgst_lists_asymmetric_fids(
-            gateLabels, prepStrs, effectStrs, germs, maxLengths, fidPairs, truncScheme)
+        nest = advancedOptions.get('nestedGateStringLists',True)
+        lsgstLists = _construction.stdlists.make_lsgst_lists(
+            gateLabels, prepStrs, effectStrs, germs, maxLengths, fidPairs,
+            truncScheme, nest)
 
     #Starting Point = LGST
     gate_dim = gs_target.get_dimension()
