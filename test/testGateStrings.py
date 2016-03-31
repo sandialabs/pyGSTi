@@ -104,8 +104,8 @@ class TestGateStringMethods(GateStringTestCase):
 
     def test_string_compression(self):
         gs = pygsti.objects.GateString(None, stringRepresentation="Gx^100")
-        comp_gs = pygsti.obj.dataset.compress_gate_label_tuple(tuple(gs))
-        exp_gs = pygsti.obj.dataset.expand_gate_label_tuple(comp_gs)
+        comp_gs = pygsti.objects.gatestring.CompressedGateString.compress_gate_label_tuple(tuple(gs))
+        exp_gs = pygsti.objects.gatestring.CompressedGateString.expand_gate_label_tuple(comp_gs)
         self.assertEqual(tuple(gs), exp_gs)
 
     def test_repeat(self):
