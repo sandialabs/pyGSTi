@@ -7,7 +7,7 @@ def rb_decay(x,a,b):
     """ 
     Return the Randomized Benchmarking (RB) decay function:
 
-    decay(x,a,b) = 1 + (2a-1) exp(-bx))/2
+    decay(x,a,b) = (1 + (2a-1) exp(-bx))/2
     """
     return (1+(2*a-1)*_np.exp(-b * x))/2.
     
