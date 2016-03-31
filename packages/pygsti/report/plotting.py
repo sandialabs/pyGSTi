@@ -13,6 +13,7 @@ import os as _os
 import pickle as _pickle
 from matplotlib.ticker import AutoMinorLocator as _AutoMinorLocator
 from matplotlib.ticker import FixedLocator as _FixedLocator
+from scipy.stats import chi2 as _chi2
 
 from .. import algorithms as _alg
 from .. import tools as _tools
@@ -532,10 +533,31 @@ def make_linear_cmap(start_color, final_color, name=None):
 
     return _matplotlib.colors.LinearSegmentedColormap(name, cdict)
 
+def get_transition(N, eps=.1):
+    '''
+    Computes the transition point for the LinLogNorm class.
+
+    Parameters
+    -------------
+
+    N: number of chi2_1 random variables, integer
+    eps: The quantile, float
+
+    Returns
+    ---------
+
+    trans: An approximate 1-eps quantile for the maximum of N chi2_1 random
+    variables
+    '''
+
+    trans = _np.ceil(_chi2.ppf(1 - eps / N, 1))
+
+    return trans
+
 def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, ytics=None,
                  vmin=None, vmax=None, colorbar=True, fig=None, axes=None, size=None, prec=0, boxLabels=True,
                  xlabel=None, ylabel=None, save_to=None, ticSize=14, grid=False,
-                 linlog_trans=10):
+                 linlog_trans=None):
     """
     Create a color box plot.
 
@@ -606,6 +628,9 @@ def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, 
     finite_plt_data_flat = _np.take(plt_data.flat, _np.where(_np.isfinite(plt_data.flat)))[0]
     if vmin is None: vmin = min( finite_plt_data_flat )
     if vmax is None: vmax = max( finite_plt_data_flat )
+    n_chi2boxes = len(finite_plt_data_flat)
+    if linlog_trans is None:
+        linlog_trans = get_transition(n_chi2boxes)
 
     # Colors ranging from white to gray on [0.0, 0.5) and pink to red on
     # [0.5, 1.0] such that the perceived brightness of the pink matches the
