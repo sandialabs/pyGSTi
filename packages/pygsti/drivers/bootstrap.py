@@ -203,7 +203,7 @@ def make_bootstrap_gatesets(numGateSets, inputDataSet, generationMethod,
             datasetList[run], targetGateSet, fiducialPrep, fiducialMeasure,
             germs, maxLengths, constrainToTP=constrainToTP,
             lsgstLists=lsgstLists, advancedOptions={'verbosity':verbosity} )
-        gatesetList.append(results.gsBestEstimate)
+        gatesetList.append(results.gatesets['final estimate'])
 
     if not returnData:
         return gatesetList

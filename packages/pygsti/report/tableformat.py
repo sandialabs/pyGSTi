@@ -218,8 +218,16 @@ def _fmtGStr_ppt(s):
     return '.'.join(s) if s is not None else ""
 GStr = { 'html': _fmtGStr_html, 'latex': _fmtGStr_latex, 'py': _fmtGStr_py, 'ppt': _fmtGStr_ppt }
 
+# 'pre' formatting, where the user gives the data in separate formats
+def _fmtPre_html(x):  return x['html']
+def _fmtPre_latex(x): return x['latex']
+def _fmtPre_py(x): return x['py']
+def _fmtPre_ppt(x): return x['ppt']
+Pre = { 'html': _fmtPre_html, 'latex': _fmtPre_latex, 'py': _fmtPre_py, 'ppt': _fmtPre_ppt }
 
-def _formatList(items, formatters, fmt):
+
+
+def formatList(items, formatters, fmt):
     assert(len(items) == len(formatters))
     formatted_items = []
     for i,item in enumerate(items):
@@ -228,172 +236,3 @@ def _formatList(items, formatters, fmt):
         else:
             formatted_items.append( item )
     return formatted_items
-
-
-def create_table(formats, tables, colHeadings, formatters, tableclass, longtable, customHeader=None):
-    """ Create a new table for each specified format in the tables dictionary """
-
-    if "latex" in formats:
-
-        table = "longtable" if longtable else "tabular"
-        if customHeader is not None and "latex" in customHeader:
-            latex = customHeader['latex']
-        else:
-            colHeadings_formatted = _formatList(colHeadings, formatters, "latex")
-            latex  = "\\begin{%s}[l]{%s}\n\hline\n" % (table, "|c" * len(colHeadings) + "|")
-            latex += "%s \\\\ \hline\n" % (" & ".join(colHeadings_formatted))
-        
-        if "latex" not in tables: tables['latex'] = ""
-        tables['latex'] += latex
-
-
-    if "html" in formats:
-
-        if customHeader is not None and "html" in customHeader:
-            html = customHeader['html']
-        else:
-            colHeadings_formatted = _formatList(colHeadings, formatters, "html")
-            html  = "<table class=%s><thead>" % tableclass
-            html += "<tr><th> %s </th></tr>" % (" </th><th> ".join(colHeadings_formatted))
-            html += "</thead><tbody>"
-        
-        if "html" not in tables: tables['html'] = ""
-        tables['html'] += html
-
-
-    if "py" in formats:
-
-        if customHeader is not None and "py" in customHeader:
-            raise ValueError("custom headers not supported for python format")
-        colHeadings_formatted = _formatList(colHeadings, formatters, "py")
-
-        if "py" not in tables: tables['py'] = []
-        tableDict = { 'column names': colHeadings_formatted }
-        tables['py'].append( tableDict )
-
-    if "ppt" in formats:
-
-        if customHeader is not None and "ppt" in customHeader:
-            raise ValueError("custom headers not supported for powerpoint format")
-        colHeadings_formatted = _formatList(colHeadings, formatters, "ppt")
-
-        if "ppt" not in tables: tables['ppt'] = []
-        tableDict = { 'column names': colHeadings_formatted }
-        tables['ppt'].append( tableDict )
-
-
-
-def create_table_preformatted(formats, tables, colHeadings, tableclass, longtable):
-    """ Create a new table for each specified format in the tables dictionary
-        colHeadings is assumed to be a dictionary with pre-formatted column
-        heading appropriate for each format
-    """
-
-    if "latex" in formats:
-
-        table = "longtable" if longtable else "tabular"
-        latex  = "\\begin{%s}[l]{%s}\n\hline\n" % (table, "|c" * len(colHeadings['latex']) + "|")
-        latex += "%s \\\\ \hline\n" % (" & ".join(colHeadings['latex']))
-        
-        if "latex" not in tables: tables['latex'] = ""
-        tables['latex'] += latex
-
-    if "html" in formats:
-        
-        html  = "<table class=%s><thead>" % tableclass
-        html += "<tr><th> %s </th></tr>" % (" </th><th> ".join(colHeadings['html']))
-        html += "</thead><tbody>"
-        
-        if "html" not in tables: tables['html'] = ""
-        tables['html'] += html
-
-    if "py" in formats:
-
-        if "py" not in tables: tables['py'] = []
-        tableDict = { 'column names': colHeadings['py'] }
-        tables['py'].append( tableDict )
-
-    if "ppt" in formats:
-
-        if "ppt" not in tables: tables['ppt'] = []
-        tableDict = { 'column names': colHeadings['ppt'] }
-        tables['ppt'].append( tableDict )
-
-
-def add_table_row(formats, tables, rowData, formatters):
-    """ Add a row to each table in tables dictionary """
-
-    if "latex" in formats:
-        assert("latex" in tables)
-        formatted_rowData = _formatList(rowData, formatters, "latex")
-        if len(formatted_rowData) > 0:
-            tables['latex'] += " & ".join(formatted_rowData) + " \\\\ \hline\n"
-
-    if "html" in formats:
-        assert("html" in tables)
-        formatted_rowData = _formatList(rowData, formatters, "html")
-        if len(formatted_rowData) > 0:
-            tables['html'] += "<tr><td>" + "</td><td>".join(formatted_rowData) + "</td></tr>\n"
-
-
-    if "py" in formats:
-        assert("py" in tables)
-        formatted_rowData = _formatList(rowData, formatters, "py")
-        if len(formatted_rowData) > 0:
-            curTableDict = tables["py"][-1] #last table dict is "current" one
-            if "row data" not in curTableDict: curTableDict['row data'] = []
-            curTableDict['row data'].append( formatted_rowData )
-
-    if "ppt" in formats:
-        assert("ppt" in tables)
-        formatted_rowData = _formatList(rowData, formatters, "ppt")
-        if len(formatted_rowData) > 0:
-            curTableDict = tables["ppt"][-1] #last table dict is "current" one
-            if "row data" not in curTableDict: curTableDict['row data'] = []
-            curTableDict['row data'].append( formatted_rowData )
-
-
-
-def finish_table(formats, tables, longtable):
-    """ Finish (end) each table in tables dictionary """
-
-    if "latex" in formats:
-        assert("latex" in tables)
-        table = "longtable" if longtable else "tabular"
-        tables['latex'] += "\end{%s}\n" % table        
-
-    if "html" in formats:
-        assert("html" in tables)
-        tables['html'] += "</tbody></table>"
-
-    if "py" in formats:
-        assert("py" in tables)
-        #pass #nothing to do to mark table dict as finished
-
-    if "ppt" in formats:
-        assert("ppt" in tables)
-        #pass
-#        curTableDict = tables["ppt"][-1] #last table dict is "current" one
-#        tables["ppt"][-1] = _pu.PPTTable(curTableDict) # convert dict to a ppt table object for later rendering
-
-
-#def add_inter_table_space(formats, tables):
-#    """ Add some space (if appropriate) to each table in tables dictionary.
-#        Should only be used after calling finish_table """
-#
-#    if "latex" in formats:
-#        assert("latex" in tables)
-#        tables['latex'] += "\n\n\\vspace{2em}\n\n"
-#
-#    if "html" in formats:
-#        assert("html" in tables)
-#        tables['html'] += "<br/>"
-#
-#    if "py" in formats:
-#        assert("py" in tables)
-#        pass #adding space N/A for python format
-#
-#    if "ppt" in formats:
-#        assert("ppt" in tables)
-#        pass #adding space N/A for powerpoint format
-

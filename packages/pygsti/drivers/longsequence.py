@@ -256,11 +256,17 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                         gs_after_gauge_opt, maxLengths, germs,
                         go_gs_lsgst_list, lsgstLists, prepStrs, effectStrs,
                         truncFn,  constrainToTP, fidPairs, gs_lsgst_list)
-    ret.set_additional_info(advancedOptions.get('minProbClip',1e-4),
-                          advancedOptions.get('minProbClipForWeighting',1e-4),
-                          advancedOptions.get('probClipInterval',(-1e6,1e6)),
-                          advancedOptions.get('radius',1e-4), 
-                          weightsDict, default_dir, default_base, mxBasis)
+    ret.parameters['minProbClip'] = \
+        advancedOptions.get('minProbClip',1e-4)
+    ret.parameters['minProbClipForWeighting'] = \
+        advancedOptions.get('minProbClipForWeighting',1e-4)
+    ret.parameters['probClipInterval'] = \
+        advancedOptions.get('probClipInterval',(-1e6,1e6))
+    ret.parameters['radius'] = advancedOptions.get('radius',1e-4)
+    ret.parameters['weights'] = weightsDict
+    ret.parameters['defaultDirectory'] = default_dir
+    ret.parameters['defaultBasename'] = default_base
+    ret.parameters['mxBasis'] = mxBasis
 
     assert( len(maxLengths) == len(lsgstLists) == len(go_gs_lsgst_list) )
     return ret

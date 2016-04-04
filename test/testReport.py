@@ -61,10 +61,10 @@ class TestReport(ReportTestCase):
         self.results.init_Ls_and_germs("chi2", self.targetGateset, self.ds, self.gs_clgst, self.maxLengthList, self.germs,
                                      lsgst_gatesets, self.lsgstStrings, self.fiducials, self.fiducials, 
                                      pygsti.construction.repeat_with_max_length, False)
-        self.results.set_additional_info(minProbClip=1e-6, minProbClipForWeighting=1e-4,
-                                         probClipInterval=(-1e6,1e6), radius=1e-4,
-                                         weightsDict=None, defaultDirectory="temp_test_files",
-                                         defaultBasename="MyDefaultReportName")
+        self.results.parameters.update({'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
+                                        'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
+                                        'weights': None, 'defaultDirectory': "temp_test_files",
+                                        'defaultBasename': "MyDefaultReportName" } )
 
         self.results.create_full_report_pdf(filename="temp_test_files/full_reportA.pdf", confidenceLevel=None,
                                          debugAidsAppendix=False, gaugeOptAppendix=False,
@@ -125,18 +125,18 @@ class TestReport(ReportTestCase):
                                      pygsti.construction.repeat_with_max_length, True)
 
         #Run a few tests to generate figures we don't use in reports
-        self.results_logL.get_figure("bestEstimateSummedColorBoxPlot")
-        self.results_logL.get_figure("blankBoxPlot")
-        self.results_logL.get_figure("blankSummedBoxPlot")
-        self.results_logL.get_figure("directLGSTColorBoxPlot")
-        self.results_logL.get_figure("directLGSTDeviationColorBoxPlot")
-        with self.assertRaises(ValueError):
-            self.results_logL.get_figure("FooBar")
-        with self.assertRaises(ValueError):
-            self.results_logL.get_special('FooBar')
+        self.results_logL.figures["bestEstimateSummedColorBoxPlot"]
+        self.results_logL.figures["blankBoxPlot"]
+        self.results_logL.figures["blankSummedBoxPlot"]
+        self.results_logL.figures["directLGSTColorBoxPlot"]
+        self.results_logL.figures["directLGSTDeviationColorBoxPlot"]
+        with self.assertRaises(KeyError):
+            self.results_logL.figures["FooBar"]
+        with self.assertRaises(KeyError):
+            self.results_logL._specials['FooBar']
 
         #Run tests to generate tables we don't use in reports
-        self.results_logL.get_table("bestGatesetVsTargetAnglesTable")
+        self.results_logL.tables["bestGatesetVsTargetAnglesTable"]
 
 
 
@@ -358,8 +358,8 @@ class TestReport(ReportTestCase):
         results.create_presentation_ppt(filename="temp_test_files/singleSlides.ppt", pptTables=True)
 
         results2 = pygsti.report.Results(restrictToFormats=('py','latex'))
-        results2.set_template_path("/some/path/to/templates")
-        results2.set_latex_cmd("myCustomLatex")
+        results2.options.template_path = "/some/path/to/templates"
+        results2.options.latex_cmd = "myCustomLatex"
 
         #bad objective function name
         results_badObjective = pygsti.report.Results()
@@ -370,9 +370,9 @@ class TestReport(ReportTestCase):
                                                pygsti.construction.repeat_with_max_length, True)
         
         with self.assertRaises(ValueError):
-            results_badObjective.get_confidence_region(95) 
+            results_badObjective._get_confidence_region(95) 
         with self.assertRaises(ValueError):
-            results_badObjective.get_special('DirectLongSeqGatesets')
+            results_badObjective._specials['DirectLongSeqGatesets']
         with self.assertRaises(ValueError):
             results_badObjective.create_full_report_pdf(filename="temp_test_files/badReport.pdf")
         with self.assertRaises(ValueError):
