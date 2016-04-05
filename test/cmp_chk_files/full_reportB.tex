@@ -11,6 +11,9 @@
 \usepackage{units}
 \usepackage{multirow}
 \usepackage{adjustbox}
+\usepackage{hyperref}
+\usepackage{pdfcomment}
+\usepackage{color}
 
 \setcounter{topnumber}{3}
 \setcounter{bottomnumber}{3}
@@ -55,6 +58,32 @@
 \toggletrue{pixelplotsappendix}
 \toggletrue{whackamoleappendix}
 
+
+\hypersetup{
+  pdfinfo={ Author={pyGSTi},
+Title={GST report for MyDefaultReportName},
+Keywords={GST},
+pyGSTi_Version={0.9.0},
+opt_table_formats={[py, html, latex, ppt]},
+opt_long_tables={False},
+opt_table_class={dataTable},
+opt_template_path={None},
+opt_latex_cmd={pdflatex},
+defaultDirectory={temp_test_files},
+max_length_list={[0, 1, 2, 4, 8]},
+defaultBasename={MyDefaultReportName},
+radius={0.0001},
+minProbClip={1e-06},
+fiducial_pairs={None},
+mxBasis={gm},
+minProbClipForWeighting={0.0001},
+L_germ_tuple_base_string_dict={Dict[[0, Gx]: {}, [0, Gy]: {}, [0, Gi]: {}, [0, GxGy]: {}, [0, GxGyGi]: {}, [0, GxGiGy]: {}, [0, GxGiGi]: {}, [0, GyGiGi]: {}, [0, GxGxGiGy]: {}, [0, GxGyGyGi]: {}, [0, GxGxGyGxGyGy]: {}, [1, Gx]: [Gx], [1, Gy]: [Gy], [1, Gi]: [Gi], [1, GxGy]: {}, [1, GxGyGi]: {}, [1, GxGiGy]: {}, [1, GxGiGi]: {}, [1, GyGiGi]: {}, [1, GxGxGiGy]: {}, [1, GxGyGyGi]: {}, [1, GxGxGyGxGyGy]: {}, [2, Gx]: [Gx]2, [2, Gy]: [Gy]2, [2, Gi]: [Gi]2, [2, GxGy]: [GxGy], [2, GxGyGi]: {}, [2, GxGiGy]: {}, [2, GxGiGi]: {}, [2, GyGiGi]: {}, [2, GxGxGiGy]: {}, [2, GxGyGyGi]: {}, [2, GxGxGyGxGyGy]: {}, [4, Gx]: [Gx]4, [4, Gy]: [Gy]4, [4, Gi]: [Gi]4, [4, GxGy]: [GxGy]2, [4, GxGyGi]: [GxGyGi], [4, GxGiGy]: [GxGiGy], [4, GxGiGi]: [GxGiGi], [4, GyGiGi]: [GyGiGi], [4, GxGxGiGy]: [GxGxGiGy], [4, GxGyGyGi]: [GxGyGyGi], [4, GxGxGyGxGyGy]: {}, [8, Gx]: [Gx]8, [8, Gy]: [Gy]8, [8, Gi]: [Gi]8, [8, GxGy]: [GxGy]4, [8, GxGyGi]: [GxGyGi]2, [8, GxGiGy]: [GxGiGy]2, [8, GxGiGi]: [GxGiGi]2, [8, GyGiGi]: [GyGiGi]2, [8, GxGxGiGy]: [GxGxGiGy]2, [8, GxGyGyGi]: [GxGyGyGi]2, [8, GxGxGyGxGyGy]: [GxGxGyGxGyGy]]},
+probClipInterval={[-1000000.0, 1000000.0]},
+weights={None},
+objective={chi2},
+constrainToTP={False},
+hessianProjection={std}  }
+}
 
 
 \begin{document}
@@ -706,7 +735,7 @@ Thus, by comparing the difference $\chi^2 - k$ to $\sqrt{2k}$ one can determine 
 \iftoggle{LsAndGermsSet}{
 The LSGST algorithm used to generate this estimate is iterative.  It starts by fitting only data from the shortest gate sequences (which are easy to fit \emph{and} insensitive to most non-Markovian noise), then successively adds longer and longer sequences (with base sequence length $L\leq 1,2,4,8,\ldots$) to the mix.  Since we get an estimate at each intermediate $L$, it is possible to quantify not just the goodness of the \emph{best} fit (presented in the previous section), but how the goodness-of-fit behaves as longer and longer sequences are added in.
 
-This data is presented in Table \ref{chi2ProgressTable}.  What you should be looking for here is whether -- at each value of $L$ -- the $\chi^2$ quantity is roughly the same as $k$.  More precisely, is $|\chi^2-k|$ less than or equal to $\sqrt{2k}$?  If not, then the model is not fitting as well as it should, which usually indicates non-Markovian noise (or, rarely, that the GST algorithm has simply failed to find a good fit even though one exists).
+This data is presented in Table \ref{progressTable}.  What you should be looking for here is whether -- at each value of $L$ -- the $\chi^2$ quantity is roughly the same as $k$.  More precisely, is $|\chi^2-k|$ less than or equal to $\sqrt{2k}$?  If not, then the model is not fitting as well as it should, which usually indicates non-Markovian noise (or, rarely, that the GST algorithm has simply failed to find a good fit even though one exists).
 
 As a rough rule of thumb, for GST experiments involving relatively long sequences (e.g. $L\geq100$):
 
@@ -737,7 +766,7 @@ L & $\chi^2$ & $k$ & $\chi^2-k$ & $\sqrt{2k}$ & $P$ & $N_s$ & $N_p$ & Rating \\ 
 8 & 690.8224 & 777 & -86.17763 & 39.42081 & 0.99 & 817 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
 \end{tabular}
 
-\caption{\textbf{Comparison between the computed and expected $\chi^2$ for different values of $L$}.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively.  $\chi^2$ measures the goodness of fit of the GST model (small is better) and is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $P$ is the p-value derived from a $\chi^2_k$ distribution (i.e.~when $P <$ some threshold like $0.05$ there is grounds for rejecting the GST fit). The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.\label{chi2ProgressTable}}
+\caption{\textbf{Comparison between the computed and expected $\chi^2$ for different values of $L$}.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively.  $\chi^2$ measures the goodness of fit of the GST model (small is better) and is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $P$ is the p-value derived from a $\chi^2_k$ distribution (i.e.~when $P <$ some threshold like $0.05$ there is grounds for rejecting the GST fit). The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.\label{progressTable}}
 \end{center}
 \end{table}
 
@@ -751,27 +780,27 @@ L & $\chi^2$ & $k$ & $\chi^2-k$ & $\sqrt{2k}$ & $P$ & $N_s$ & $N_p$ & Rating \\ 
 \iftoggle{LsAndGermsSet}{
 \subsection{Detailed $\chi^2$ analysis}
 
-The aggregated $\chi^2$ numbers presented in Table \ref{chi2ProgressTable} tell you how well the GST estimate fits the \emph{entire} dataset.  If they are in line with theory ($\chi^2 \approx k$), then there is little more to be said.  But if the best fit to the data is not good, we can debug it by identifying \emph{which} experiments are inconsistent with the fit.
+The aggregated $\chi^2$ numbers presented in Table \ref{progressTable} tell you how well the GST estimate fits the \emph{entire} dataset.  If they are in line with theory ($\chi^2 \approx k$), then there is little more to be said.  But if the best fit to the data is not good, we can debug it by identifying \emph{which} experiments are inconsistent with the fit.
 
-Figure \ref{bestGatesetChi2BoxPlot} displays the $\chi^2$ value for each individual gate sequence (Eq.~\ref{eqGateStringChi2}).  Each gate sequence corresponds to a single colored ``pixel'' in the plot.  Each block of pixels corresponds to a single base sequence (i.e., a germ power), and the individual pixels within a block correspond to the various fiducial sequence pairs between which that base sequence was sandwiched.  (The column indicates the fiducial adjacent to state preparation, while the row indicates the fiducial adjacent to measurement).  Base sequences are arranged in a grid; different rows correspond to different germs, while different columns correspond to different maximum lengths $L$.  Pixels are labeled with the $\chi^2$ value for that sequence, and colored appropriately.  Shades of blue indicate $\chi^2$ values in the range 0-3 (``consistent''), while dark red indicates a $\chi^2$ value of 10 or above.  Such events ($\chi^2_s \geq 10$) should occur only once per 638 experiments if the model is correct.
+Figure \ref{bestEstimateColorBoxPlot} displays the $\chi^2$ value for each individual gate sequence (Eq.~\ref{eqGateStringChi2}).  Each gate sequence corresponds to a single colored ``pixel'' in the plot.  Each block of pixels corresponds to a single base sequence (i.e., a germ power), and the individual pixels within a block correspond to the various fiducial sequence pairs between which that base sequence was sandwiched.  (The column indicates the fiducial adjacent to state preparation, while the row indicates the fiducial adjacent to measurement).  Base sequences are arranged in a grid; different rows correspond to different germs, while different columns correspond to different maximum lengths $L$.  Pixels are labeled with the $\chi^2$ value for that sequence, and colored appropriately.  Shades of blue indicate $\chi^2$ values in the range 0-3 (``consistent''), while dark red indicates a $\chi^2$ value of 10 or above.  Such events ($\chi^2_s \geq 10$) should occur only once per 638 experiments if the model is correct.
 
-Identifying patterns and trends within such ``pixel plots'' can aid in identifying specific sources and types of non-Markovian noise which may be to blame if the GST algorithms are unable to produce a ``good'' estimate.  For example, it is often the case that all the short sequences [$L = O(1)$] can be fit reasonably well, but the right-hand side of Figure \ref{bestGatesetChi2BoxPlot} becomes a sea of red.  This indicates that non-Markovian behavior (potentially due to slow drift of gateset parameters) is becoming more significant for longer experiments.  In other cases, a single row may be particularly bad, indicating that a particular gate or germ is especially problematic (e.g., was not stabilized using dynamical decoupling techniques).  Be cautious in debugging, however -- sometimes bad $\chi^2$ values for a particular gate or germ can result \emph{not} from faults in that operation, but because another operation failed so badly that it distorted the entire fit (e.g., in trying to fit catastrophically non-Markovian data at Point A, GST ended up failing to fit perfectly good data at Point B).
+Identifying patterns and trends within such ``pixel plots'' can aid in identifying specific sources and types of non-Markovian noise which may be to blame if the GST algorithms are unable to produce a ``good'' estimate.  For example, it is often the case that all the short sequences [$L = O(1)$] can be fit reasonably well, but the right-hand side of Figure \ref{bestEstimateColorBoxPlot} becomes a sea of red.  This indicates that non-Markovian behavior (potentially due to slow drift of gateset parameters) is becoming more significant for longer experiments.  In other cases, a single row may be particularly bad, indicating that a particular gate or germ is especially problematic (e.g., was not stabilized using dynamical decoupling techniques).  Be cautious in debugging, however -- sometimes bad $\chi^2$ values for a particular gate or germ can result \emph{not} from faults in that operation, but because another operation failed so badly that it distorted the entire fit (e.g., in trying to fit catastrophically non-Markovian data at Point A, GST ended up failing to fit perfectly good data at Point B).
 
-If the ``generate appendices'' option was selected for this report, similar pixel plots for the intermediate estimates whose total $\chi^2$ is listed in Table \ref{chi2ProgressTable} can be found in Appendix \ref{appendix_chi2_pixelplots}.
+Similar pixel plots for the intermediate estimates whose total $\chi^2$ is listed in Table \ref{progressTable} \iftoggle{pixelplotsappendix}{can be found in Appendix \ref{appendix_chi2_pixelplots}.}{are included when the ``pixel plots'' appendix is enabled.}
 
 \begin{figure}
 \begin{center}
-\includegraphics[width=6.500000in,height=9.000000in,keepaspectratio]{full_reportB_files/bestChi2Boxes.pdf}
-\caption{\textbf{$\chi^2$ values for every individual experiment in the dataset}.  Each pixel represents a single experiment (gate sequence), and its color indicates whether GST was able to fit the corresponding frequency well.  Blue is typical; dark red squares indicating $\chi^2>10$ should appear only once per 638 experiments on average.  Square blocks of pixels correspond to base sequences (arranged vertically by germ and horizontally by length); each pixel within a block corresponds to a specific choice of pre- and post-fiducial sequences.  See text for further details.\label{bestGatesetChi2BoxPlot}}
+\includegraphics[width=6.50in,height=9.00in,keepaspectratio]{full_reportB_files/bestChi2Boxes.pdf}
+\caption{\textbf{$\chi^2$ values for every individual experiment in the dataset}.  Each pixel represents a single experiment (gate sequence), and its color indicates whether GST was able to fit the corresponding frequency well.  Blue is typical; dark red squares indicating $\chi^2>10$ should appear only once per 638 experiments on average.  Square blocks of pixels correspond to base sequences (arranged vertically by germ and horizontally by length); each pixel within a block corresponds to a specific choice of pre- and post-fiducial sequences.  See text for further details.\label{bestEstimateColorBoxPlot}}
 \end{center}
 \end{figure}
 
-Figure \ref{bestGatesetChi2InvBoxPlot} shows exactly the same $\chi^2$ analysis as Figure \ref{bestGatesetChi2BoxPlot}, but arranged differently.  Here, blocks (not square) all correspond to a single fiducial pair (e.g., pre- and post-fiducial), and pixels within a block correspond to different base sequences.  This can be useful for diagnosing a single bad fiducial sequence.
+Figure \ref{invertedBestEstimateColorBoxPlot} shows exactly the same $\chi^2$ analysis as Figure \ref{bestEstimateColorBoxPlot}, but arranged differently.  Here, blocks (not square) all correspond to a single fiducial pair (e.g., pre- and post-fiducial), and pixels within a block correspond to different base sequences.  This can be useful for diagnosing a single bad fiducial sequence.
 
 \begin{figure}
 \begin{center}
-\includegraphics[width=6.500000in,height=9.000000in,keepaspectratio]{full_reportB_files/bestChi2Boxes_inverted.pdf}
-\caption{\textbf{$\chi^2$ values for each experiment, arranged differently.}  This figure shows the same data as Figure \ref{bestGatesetChi2BoxPlot}, but arranged differently.  Each block now corresponds to a particular pair of fiducial sequences, while pixels within the block correspond to different base sequences sandwiched between those fiducials.\label{bestGatesetChi2InvBoxPlot}}
+\includegraphics[width=6.50in,height=9.00in,keepaspectratio]{full_reportB_files/bestChi2Boxes_inverted.pdf}
+\caption{\textbf{$\chi^2$ values for each experiment, arranged differently.}  This figure shows the same data as Figure \ref{bestEstimateColorBoxPlot}, but arranged differently.  Each block now corresponds to a particular pair of fiducial sequences, while pixels within the block correspond to different base sequences sandwiched between those fiducials.\label{invertedBestEstimateColorBoxPlot}}
 \end{center}
 \end{figure}
 

@@ -10,6 +10,7 @@ import numpy as _np
 import scipy.optimize as _spo
 import scipy.stats as _stats
 import warnings as _warnings
+import time as _time
 
 from .. import optimize as _opt
 from .. import tools as _tools
@@ -1363,11 +1364,13 @@ def do_mc2gst_with_model_selection(dataset, startGateset, dimDelta, gateStringsT
 
 
 def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation, 
-                     maxiter=100000, maxfev=None, tol=1e-6, 
-                     cptp_penalty_factor=0, minProbClipForWeighting=1e-4, probClipInterval=None,
-                     useFreqWeightedChiSq=False, regularizeFactor=0, returnErrorVec=False, returnAll=False,
-                     gateStringSetLabels=None, verbosity=0, check=False, check_jacobian=False,
-                     gatestringWeightsDict=None, memLimit=None):
+                        maxiter=100000, maxfev=None, tol=1e-6, 
+                        cptp_penalty_factor=0, minProbClipForWeighting=1e-4,
+                        probClipInterval=None, useFreqWeightedChiSq=False,
+                        regularizeFactor=0, returnErrorVec=False, 
+                        returnAll=False, gateStringSetLabels=None, verbosity=0,
+                        check=False, check_jacobian=False,
+                        gatestringWeightsDict=None, memLimit=None, times=None):
   """
   Performs Iterative Least Squares Gate Set Tomography on the dataset.
 
@@ -1451,6 +1454,11 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
       A rough memory limit in bytes which restricts the amount of intermediate
       values that are computed and stored.
 
+  times : list, optional
+      A list to append timing values to.  Appended values are 2-tuples 
+      comprised of a descriptive string and a duration in seconds.  Default
+      value of None means no timing information should be saved.
+
 
   Returns
   -------
@@ -1464,7 +1472,6 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
       errorVec and gateset corresponding to the results of the i-th iteration.
   """
 
-
   #convert lists of GateStrings to lists of raw tuples since that's all we'll need
   if len(gateStringSetsToUseInEstimation ) > 0 and \
      len(gateStringSetsToUseInEstimation[0]) > 0 and \
@@ -1476,6 +1483,8 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
   #Run extended LSGST iteratively on given sets of estimatable strings
   lsgstGatesets = [ ]; minErrs = [ ] #for returnAll == True case
   lsgstGateset = startGateset.copy(); nIters = len(gateStringLists)
+  tRef = _time.time() #start time
+
   for (i,stringsToEstimate) in enumerate(gateStringLists):
     if verbosity > 1: print ""
     if verbosity > 0:
@@ -1501,6 +1510,12 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
     if returnAll: 
       lsgstGatesets.append(lsgstGateset)
       minErrs.append(minErr)
+
+    if times is not None:
+      tNxt = _time.time(); 
+      times.append(('LSGST Iteration %d: chi2-opt' % (i+1),tNxt-tRef))
+      tRef=tNxt
+
 
   if returnErrorVec:
     return (minErrs, lsgstGatesets) if returnAll else (minErr, lsgstGateset)
@@ -1663,7 +1678,7 @@ def do_iterative_mc2gst_with_model_selection(dataset, startGateset, dimDelta, ga
 
 
 ###################################################################################
-#                 Maximum Likelihood Estimation GST (MLEGST)
+#                 Maximum Likelihood Estimation GST (MLGST)
 ##################################################################################
 
 #OLD args: method='leastsq', constrainToCP=False, constrainToValidSpam=False, constrainType='wall',
@@ -1712,7 +1727,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     Parameters
     ----------
     dataset : DataSet
-        The data used to generate LMLEGST gate estimates
+        The data used to generate MLGST gate estimates
   
     startGateset : GateSet
         The GateSet used as a starting point for the maximum-likelihood estimation.
@@ -1734,7 +1749,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
         optimizer performance).
 
     probClipInterval : 2-tuple or None, optional
-        (min,max) values used to clip the probabilities predicted by gatesets during MLEGST's
+        (min,max) values used to clip the probabilities predicted by gatesets during MLGST's
         search for an optimal gateset (if not None).  Defaults to no clipping.
 
     radius : float, optional
@@ -1771,7 +1786,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     
     if verbosity > 2: print ""
     if verbosity > 1:
-        print "--- MLEGST ---"
+        print "--- MLGST ---"
         
     spamLabels = gs.get_spam_labels() #this list fixes the ordering of the spam labels
     vec_gs_len = gs.num_params()
@@ -1789,7 +1804,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
 
 
     #Memory estimates - maybe make GateSet methods to get intermediate memory estimates
-    #FOR NOW - just taken from LSGST which should be ballpark correct -- TODO: recalc these estimates for MLE...
+    #FOR NOW - just taken from LSGST which should be ballpark correct -- TODO: recalc these estimates for ML...
     ns = len(spamLabels); ng = len(gateStringsToUse); ne = vec_gs_len; gd = gs.get_dimension()
     persistentMem = 8* (ng*(ns + ns*ne + 1 + 3*ns)) # Memory needed by final results in bytes
     intermedMem   = 8* (ng*(1 + gd**2 * (1 + ne))) # Memory needed by intermediate results in bytes (now just ~ that of dproduct)
@@ -1981,7 +1996,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     if verbosity > 2: print "Least squares msg = ",msg, "; flag =",flag
 
     gs.from_vector(opt_x)
-    #gs.log("MLEGST", { 'tol': tol,  'maxiter': maxiter } )
+    #gs.log("MLGST", { 'tol': tol,  'maxiter': maxiter } )
 
     minErrVec = objective_func(opt_x)  #note: calls gs.from_vector(opt_x,...) so don't need to call this again
     deltaLogL = sum([x**2 for x in minErrVec]) # upperBoundLogL - logl (a positive number)
@@ -2058,7 +2073,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                       minProbClip=1e-4, probClipInterval=None, radius=1e-4, poissonPicture=True,
                       returnMaxLogL=False, returnAll=False, 
                       gateStringSetLabels=None, useFreqWeightedChiSq=False, verbosity=0, 
-                      check=False, memLimit=None):
+                      check=False, memLimit=None, times=None):
   """
   Performs Iterative Maximum Liklihood Estimation Gate Set Tomography on the dataset.
 
@@ -2094,7 +2109,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
       optimizer performance).
 
   probClipInterval : 2-tuple or None, optional
-      (min,max) values used to clip the probabilities predicted by gatesets during MLEGST's
+      (min,max) values used to clip the probabilities predicted by gatesets during MLGST's
       search for an optimal gateset (if not None).  Defaults to no clipping.
 
   radius : float, optional
@@ -2132,6 +2147,11 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
       A rough memory limit in bytes which restricts the amount of intermediate
       values that are computed and stored.
 
+  times : list, optional
+      A list to append timing values to.  Appended values are 2-tuples 
+      comprised of a descriptive string and a duration in seconds.  Default
+      value of None means no timing information should be saved.
+
 
   Returns
   -------
@@ -2154,13 +2174,15 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
     gateStringLists = gateStringSetsToUseInEstimation 
 
 
-  #Run extended MLEGST iteratively on given sets of estimatable strings
+  #Run extended MLGST iteratively on given sets of estimatable strings
   mleGatesets = [ ]; maxLogLs = [ ] #for returnAll == True case
   mleGateset = startGateset.copy(); nIters = len(gateStringLists)
+  tRef = _time.time() #start time
+
   for (i,stringsToEstimate) in enumerate(gateStringLists):
     if verbosity > 1: print ""
     if verbosity > 0:
-      print "--- Iterative MLEGST: Beginning iter %d of %d %s: %d gate strings ---" \
+      print "--- Iterative MLGST: Beginning iter %d of %d %s: %d gate strings ---" \
                   % (i+1,nIters,("(%s) " % gateStringSetLabels[i]) if gateStringSetLabels else "", len(stringsToEstimate))
       _sys.stdout.flush()
 
@@ -2169,23 +2191,35 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
     
     chi2Diff, mleGateset = do_mc2gst( dataset, mleGateset, stringsToEstimate,
                                       maxiter, maxfev, tol, 0, minProbClip, 
-                                      probClipInterval, useFreqWeightedChiSq, 0, verbosity, check,
-                                      False, None, None, memLimit) # so maxLogL is really chi2 number here
+                                      probClipInterval, useFreqWeightedChiSq,
+                                      0, verbosity, check,
+                                      False, None, None, memLimit) 
+                          # Note maxLogL is really chi2 number here
+    if times is not None:
+      tNxt = _time.time(); 
+      times.append(('MLGST Iteration %d: chi2-opt' % (i+1),tNxt-tRef))
+      tRef=tNxt
 
     logL_ub = _tools.logl_max(dataset, stringsToEstimate, None, poissonPicture, check)
     maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval,
                        radius, None, None, poissonPicture, check)  #get maxLogL from chi2 estimate
+
+    if times is not None:
+      tNxt = _time.time(); 
+      times.append(('MLGST Iteration %d: logl-comp' % (i+1),tNxt-tRef))
+      tRef=tNxt
+
     if verbosity > 0:
       print "    2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL))
 
-    #OLD: do MLEGST for all iterations
+    #OLD: do MLGST for all iterations
     #maxLogL, mleGateset = do_mlgst( dataset, mleGateset, stringsToEstimate,
     #                                maxiter, maxfev, tol, 
     #                                minProbClip, probClipInterval, radius, poissonPicture,
     #                                verbosity, check, None, memLimit)
 
-    if i == len(gateStringLists)-1: #on the last iteration, do MLE
-      if verbosity > 0: print "--- Last Iteration: switching to MLE objective ---"
+    if i == len(gateStringLists)-1: #on the last iteration, do ML
+      if verbosity > 0: print "--- Last Iteration: switching to ML objective ---"
       maxLogL_p, mleGateset_p = do_mlgst( dataset, mleGateset, stringsToEstimate,
                                           maxiter, maxfev, tol, minProbClip, 
                                           probClipInterval, radius, poissonPicture,
@@ -2198,7 +2232,13 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
         mleGateset = mleGateset_p
       else:
         if verbosity > 0:
-          print "   !!! Warning: MLEGST failed to improve logl: retaining chi2-objective estimate !!!"
+          print "   !!! Warning: MLGST failed to improve logl: retaining chi2-objective estimate !!!"
+          
+      if times is not None:
+        tNxt = _time.time(); 
+        times.append(('MLGST Iteration %d: logl-opt' % (i+1),tNxt-tRef))
+        tRef=tNxt
+
 
     if returnAll: 
       mleGatesets.append(mleGateset)

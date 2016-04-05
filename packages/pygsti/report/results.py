@@ -16,6 +16,7 @@ from ..objects import gatestring as _gs
 from ..construction import spamspecconstruction as _ssc
 from ..algorithms import optimize_gauge as _optimizeGauge
 from ..tools import listtools as _lt
+from .. import _version
 
 import latex as _latex
 import generation as _generation
@@ -254,7 +255,8 @@ class Results(object):
         self.parameters['max length list'] = Ls
         self.parameters['fiducial pairs'] = fidPairs
         self.parameters['L,germ tuple base string dict'] = \
-            { (L,germ):truncFn(germ,L) for L in Ls for germ in germs}
+            _collections.OrderedDict( [ ( (L,germ), truncFn(germ,L) ) 
+                                        for L in Ls for germ in germs] )
         self._LsAndGermInfoSet = True
 
 
@@ -289,6 +291,11 @@ class Results(object):
         s += " .options   -- a container of display options:\n"
         s += " ---------------------------------------------------------\n"
         s += self.options.describe("   ") + "\n"
+        s += "\n"
+        s += "NOTE: passing 'tips=True' to create_full_report_pdf or\n"
+        s += " create_brief_report_pdf will add markup to the resulting\n"
+        s += " PDF indicating how tables and figures in the PDF correspond\n"
+        s += " to the values of .tables[ ] and .figures[ ] listed above.\n"
         return s
 
 
@@ -1120,7 +1127,7 @@ class Results(object):
         assert(self._bEssentialResultsSet)
         assert(self._LsAndGermInfoSet)
 
-        baseStr_dict = {}
+        baseStr_dict = _collections.OrderedDict()
         st = 1 if self.parameters['max length list'][0] == 0 else 0
           #start index: skips LGST column in report color box plots
 
@@ -1306,7 +1313,13 @@ class Results(object):
             qtys['confidenceIntervalScaleFctr'] = "NOT-SET"
             qtys['confidenceIntervalNumNonGaugeParams'] = "NOT-SET"
 
-        pdfInfo = [('Author','pyGSTi'), ('Title', title), ('Keywords', 'GST')]
+        pdfInfo = [('Author','pyGSTi'), ('Title', title),
+                   ('Keywords', 'GST'), ('pyGSTi Version',_version.__version__),
+                   ('opt_table_formats', self.options.table_formats),
+                   ('opt_long_tables', self.options.long_tables),
+                   ('opt_table_class', self.options.table_class),
+                   ('opt_template_path', self.options.template_path),
+                   ('opt_latex_cmd', self.options.latex_cmd) ]
         for key,val in self.parameters.iteritems():
             pdfInfo.append( (key, val) )
         qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
@@ -1378,7 +1391,7 @@ class Results(object):
         def incgr(figFilenm,W=None,H=None): #includegraphics "macro"
             if W is None: W = maxW
             if H is None: H = maxH
-            return "\\includegraphics[width=%fin,height=%fin" % (W,H) + \
+            return "\\includegraphics[width=%.2fin,height=%.2fin" % (W,H) + \
                 ",keepaspectratio]{%s/%s}" % (D,figFilenm)
 
         def set_fig_qtys(figkey, figFilenm, W=None,H=None):
@@ -1450,10 +1463,11 @@ class Results(object):
                 pixplots += "\n"
                 pixplots += "\\begin{figure}\n"
                 pixplots += "\\begin{center}\n"
-                pixplots += "\\includegraphics[width=%fin,height=%fin," % (W,H)\
-                    + "keepaspectratio]{%s/L%d_%sBoxes.pdf}\n"%(D,i,plotFnName)
+                pixplots += "\\includegraphics[width=%.2fin,height=%.2fin," \
+                    % (W,H) + "keepaspectratio]{%s/L%d_%sBoxes.pdf}\n" \
+                    %(D,i,plotFnName)
                 pixplots += \
-                    "\\caption{Box plot of iteration %d (L=%d)" % (i,Ls[i]) \
+                    "\\caption{Box plot of iteration %d (L=%d) " % (i,Ls[i]) \
                     + "gateset %s values.\label{L%dGateset%sBoxPlot}}\n" \
                     % (plotFnLatex,i,plotFnName)
                 #TODO: add conditional tooltip string to start of caption
@@ -1475,12 +1489,12 @@ class Results(object):
             #if verbosity > 0: 
             #    print " ?",; _sys.stdout.flush()
             #fig = set_fig_qtys("directLGSTColorBoxPlot",
-            #                   "directLGST%sBoxes.pdf" % plotFnName, W=4,H=5)
+            #                   "directLGST%sBoxes.pdf" % plotFnName)
 
             if verbosity > 0: 
                 print " 1",; _sys.stdout.flush()        
             fig = set_fig_qtys("directLongSeqGSTColorBoxPlot",
-                           "directLongSeqGST%sBoxes.pdf" % plotFnName, W=4,H=5)
+                           "directLongSeqGST%sBoxes.pdf" % plotFnName)
 
             #if verbosity > 0: 
             #    print " ?",; _sys.stdout.flush()        
@@ -1533,7 +1547,7 @@ class Results(object):
                 whackamoleplots += "\n"
                 whackamoleplots += "\\begin{figure}\n"
                 whackamoleplots += "\\begin{center}\n"
-                whackamoleplots += "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/whack%sMoleBoxes.pdf}\n" % (maxW,maxH,D,germ[0])
+                whackamoleplots += "\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/whack%sMoleBoxes.pdf}\n" % (maxW,maxH,D,germ[0])
                 whackamoleplots += "\\caption{Whack-a-%s-mole box plot for $\mathrm{%s}^{%d}$." % (plotFnLatex,germ[0],highestL)
                 #TODO: add conditional tooltip string to start of caption
                 whackamoleplots += "  Hitting with hammer of weight %.1f.\label{Whack%sMoleBoxPlot}}\n" % (hammerWeight,germ[0])
@@ -1767,7 +1781,13 @@ class Results(object):
             qtys['confidenceIntervalScaleFctr'] = "NOT-SET"
             qtys['confidenceIntervalNumNonGaugeParams'] = "NOT-SET"
 
-        pdfInfo = [('Author','pyGSTi'), ('Title', title), ('Keywords', 'GST')]
+        pdfInfo = [('Author','pyGSTi'), ('Title', title),
+                   ('Keywords', 'GST'), ('pyGSTi Version',_version.__version__),
+                   ('opt_table_formats', self.options.table_formats),
+                   ('opt_long_tables', self.options.long_tables),
+                   ('opt_table_class', self.options.table_class),
+                   ('opt_template_path', self.options.template_path),
+                   ('opt_latex_cmd', self.options.latex_cmd) ]
         for key,val in self.parameters.iteritems():
             pdfInfo.append( (key, val) )
         qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
@@ -1843,7 +1863,7 @@ class Results(object):
         #    if verbosity > 0: 
         #        print ""; _sys.stdout.flush()    
         #
-        #    qtys[figkey]  = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/%s}" % (maxW,maxH,D,figFilenm)
+        #    qtys[figkey]  = "\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/%s}" % (maxW,maxH,D,figFilenm)
         #    qtys['tt_'+ figkey]  = tooltiptex(".figures['%s']" % figkey)
         
         if bWasInteractive:
@@ -2039,7 +2059,13 @@ class Results(object):
             qtys['confidenceIntervalScaleFctr'] = "NOT-SET"
             qtys['confidenceIntervalNumNonGaugeParams'] = "NOT-SET"
 
-        pdfInfo = [('Author','pyGSTi'), ('Title', title), ('Keywords', 'GST')]
+        pdfInfo = [('Author','pyGSTi'), ('Title', title),
+                   ('Keywords', 'GST'), ('pyGSTi Version',_version.__version__),
+                   ('opt_table_formats', self.options.table_formats),
+                   ('opt_long_tables', self.options.long_tables),
+                   ('opt_table_class', self.options.table_class),
+                   ('opt_template_path', self.options.template_path),
+                   ('opt_latex_cmd', self.options.latex_cmd) ]
         for key,val in self.parameters.iteritems():
             pdfInfo.append( (key, val) )
         qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
@@ -2096,7 +2122,7 @@ class Results(object):
         def incgr(figFilenm,W=None,H=None): #includegraphics "macro"
             if W is None: W = maxW
             if H is None: H = maxH
-            return "\\includegraphics[width=%fin,height=%fin" % (W,H) + \
+            return "\\includegraphics[width=%.2fin,height=%.2fin" % (W,H) + \
                 ",keepaspectratio]{%s/%s}" % (D,figFilenm)
 
         def set_fig_qtys(figkey, figFilenm, W=None,H=None):
@@ -2163,7 +2189,7 @@ class Results(object):
                 pixplots += "\\begin{figure}\n"
                 pixplots += "\\begin{center}\n"
                 #pixplots += "\\adjustbox{max height=\\dimexpr\\textheight-5.5cm\\relax, max width=\\textwidth}{"
-                pixplots += "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/L%d_%sBoxes.pdf}\n" % (W,H,D,i,plotFnName)
+                pixplots += "\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/L%d_%sBoxes.pdf}\n" % (W,H,D,i,plotFnName)
                 #FUTURE: add caption and conditional tooltip string?
                 pixplots += "\\end{center}\n"
                 pixplots += "\\end{figure}\n"
@@ -2235,7 +2261,7 @@ class Results(object):
                 whackamoleplots += "\\begin{figure}\n"
                 whackamoleplots += "\\begin{center}\n"
                 #whackamoleplots += "\\adjustbox{max height=\\dimexpr\\textheight-5.5cm\\relax, max width=\\textwidth}{"
-                whackamoleplots += "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/whack%sMoleBoxes.pdf}\n" % (maxW,maxH,D,germ[0])
+                whackamoleplots += "\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/whack%sMoleBoxes.pdf}\n" % (maxW,maxH,D,germ[0])
                 #FUTURE: add caption and conditional tooltip?
                 whackamoleplots += "\\end{center}\n"
                 whackamoleplots += "\\end{figure}\n"
@@ -2255,7 +2281,7 @@ class Results(object):
                 whackamoleplots += "\\begin{figure}\n"
                 whackamoleplots += "\\begin{center}\n"
                 #whackamoleplots += "\\adjustbox{max height=\\dimexpr\\textheight-5.5cm\\relax, max width=\\textwidth}{"
-                whackamoleplots += "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/whack%sMoleBoxesSummed.pdf}\n" % (maxW,maxH,D,germ[0])
+                whackamoleplots += "\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/whack%sMoleBoxesSummed.pdf}\n" % (maxW,maxH,D,germ[0])
                 #FUTURE: add caption and conditional tooltip?
                 whackamoleplots += "\\end{center}\n"
                 whackamoleplots += "\\end{figure}\n"
@@ -2903,7 +2929,7 @@ class Results(object):
             draw_pic(slide.shapes, qtys['directLongSeqGSTDeviationColorBoxPlot'], 1, 1.5, 8, 5.5)
 
             slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Per-gate error rates")
-            draw_pic(slide.shapes, qtys['smallEvalErrRateColorBoxPlot'], 1, 1.5, 8, 5.5)
+            draw_pic(slide.shapes, qtys['smallEigvalErrRateColorBoxPlot'], 1, 1.5, 8, 5.5)
 
         if pixelPlotAppendix:
             Ls = self.parameters['max length list']
@@ -2968,8 +2994,39 @@ class ResultOptions(object):
 
 
 def _to_pdfinfo(list_of_keyval_tuples):
+
+    def sanitize(val):
+        if type(val) in (list,tuple):
+            sanitized_val = "[" + ", ".join([sanitize(el) 
+                                             for el in val]) + "]"
+        elif type(val) in (dict,_collections.OrderedDict):
+            sanitized_val = "Dict[" + \
+                ", ".join([ "%s: %s" % (sanitize(k),sanitize(v)) for k,v
+                            in val.iteritems()]) + "]"
+        else:
+            sanitized_val = sanitize_str( str(val) )
+        return sanitized_val
+
+    def sanitize_str(s):
+        ret = s.replace("^","")
+        ret = ret.replace("(","[")
+        ret = ret.replace(")","]")
+        return ret
+
+    def sanitize_key(s):
+        #More stringent string replacement for keys
+        ret = s.replace(" ","_")
+        ret = ret.replace("^","")
+        ret = ret.replace(",","_")
+        ret = ret.replace("(","[")
+        ret = ret.replace(")","]")
+        return ret
+
+
     sanitized_list = []
     for key,val in list_of_keyval_tuples:
-        sanitized_val = str(val) #TODO BETTER LATER
-        sanitized_list.append( (key, sanitized_val) )
+        sanitized_key = sanitize_key(key)
+        sanitized_val = sanitize(val)
+        sanitized_list.append( (sanitized_key, sanitized_val) )
+
     return ",\n".join( ["%s={%s}" % (key,val) for key,val in sanitized_list] )

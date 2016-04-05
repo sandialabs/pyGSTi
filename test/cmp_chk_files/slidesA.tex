@@ -11,6 +11,8 @@
 \usepackage{etoolbox}
 \usepackage{units}
 \usepackage{multirow}
+\usepackage{hyperref}
+\usepackage{pdfcomment}
 
 \newcommand{\rrangle}{\rangle\!\rangle} \newcommand{\llangle}{\langle\!\langle}
 \newcommand{\ket}[1]{\ensuremath{\left|#1\right\rangle}}
@@ -44,6 +46,33 @@
 \togglefalse{debuggingaidsappendix}
 \togglefalse{pixelplotsappendix}
 \togglefalse{whackamoleappendix}
+
+
+\hypersetup{
+  pdfinfo={ Author={pyGSTi},
+Title={GST on MyDefaultReportName},
+Keywords={GST},
+pyGSTi_Version={0.9.0},
+opt_table_formats={[py, html, latex, ppt]},
+opt_long_tables={False},
+opt_table_class={dataTable},
+opt_template_path={None},
+opt_latex_cmd={pdflatex},
+defaultDirectory={temp_test_files},
+max_length_list={[0, 1, 2, 4, 8]},
+defaultBasename={MyDefaultReportName},
+radius={0.0001},
+minProbClip={1e-06},
+fiducial_pairs={None},
+mxBasis={gm},
+minProbClipForWeighting={0.0001},
+L_germ_tuple_base_string_dict={Dict[[0, Gx]: {}, [0, Gy]: {}, [0, Gi]: {}, [0, GxGy]: {}, [0, GxGyGi]: {}, [0, GxGiGy]: {}, [0, GxGiGi]: {}, [0, GyGiGi]: {}, [0, GxGxGiGy]: {}, [0, GxGyGyGi]: {}, [0, GxGxGyGxGyGy]: {}, [1, Gx]: [Gx], [1, Gy]: [Gy], [1, Gi]: [Gi], [1, GxGy]: {}, [1, GxGyGi]: {}, [1, GxGiGy]: {}, [1, GxGiGi]: {}, [1, GyGiGi]: {}, [1, GxGxGiGy]: {}, [1, GxGyGyGi]: {}, [1, GxGxGyGxGyGy]: {}, [2, Gx]: [Gx]2, [2, Gy]: [Gy]2, [2, Gi]: [Gi]2, [2, GxGy]: [GxGy], [2, GxGyGi]: {}, [2, GxGiGy]: {}, [2, GxGiGi]: {}, [2, GyGiGi]: {}, [2, GxGxGiGy]: {}, [2, GxGyGyGi]: {}, [2, GxGxGyGxGyGy]: {}, [4, Gx]: [Gx]4, [4, Gy]: [Gy]4, [4, Gi]: [Gi]4, [4, GxGy]: [GxGy]2, [4, GxGyGi]: [GxGyGi], [4, GxGiGy]: [GxGiGy], [4, GxGiGi]: [GxGiGi], [4, GyGiGi]: [GyGiGi], [4, GxGxGiGy]: [GxGxGiGy], [4, GxGyGyGi]: [GxGyGyGi], [4, GxGxGyGxGyGy]: {}, [8, Gx]: [Gx]8, [8, Gy]: [Gy]8, [8, Gi]: [Gi]8, [8, GxGy]: [GxGy]4, [8, GxGyGi]: [GxGyGi]2, [8, GxGiGy]: [GxGiGy]2, [8, GxGiGi]: [GxGiGi]2, [8, GyGiGi]: [GyGiGi]2, [8, GxGxGiGy]: [GxGxGiGy]2, [8, GxGyGyGi]: [GxGyGyGi]2, [8, GxGxGyGxGyGy]: [GxGxGyGxGyGy]]},
+probClipInterval={[-1000000.0, 1000000.0]},
+weights={None},
+objective={chi2},
+constrainToTP={False},
+hessianProjection={std}  }
+}
 
 
 \title{GST on MyDefaultReportName}
@@ -103,7 +132,7 @@ L & $\chi^2$ & $k$ & $\chi^2-k$ & $\sqrt{2k}$ & $P$ & $N_s$ & $N_p$ & Rating \\ 
 
 \begin{figure}
 \begin{center}
-\includegraphics[width=4.000000in,height=3.000000in,keepaspectratio]{slidesA_files/bestChi2Boxes.pdf}
+\includegraphics[width=4.00in,height=3.00in,keepaspectratio]{slidesA_files/bestChi2Boxes.pdf}
 \end{center}
 \end{figure}
 \end{frame}
@@ -605,7 +634,7 @@ Gram singular vals & \small$ \begin{array}{c}
 
 \begin{figure}
 \begin{center}
-\includegraphics[width=4.000000in,height=2.500000in,keepaspectratio]{slidesA_files/directLongSeqGSTChi2Boxes.pdf}
+
 \caption{How well direct GST analysis of each base sequence fits the observed data.}
 \end{center}
 \end{figure}
@@ -618,7 +647,7 @@ Gram singular vals & \small$ \begin{array}{c}
 
 \begin{figure}
 \begin{center}
-\includegraphics[width=4.000000in,height=2.500000in,keepaspectratio]{slidesA_files/directLongSeqGSTDeviationBoxes.pdf}
+
 \caption{For each base sequence, the increase in ``upper bound of fidelity with unitary'' when using the direct-GST result for a gate sequence instead of the process given by the best gateset.}
 \end{center}
 \end{figure}
@@ -631,7 +660,7 @@ Gram singular vals & \small$ \begin{array}{c}
 
 \begin{figure}
 \begin{center}
-\includegraphics[width=4.000000in,height=2.500000in,keepaspectratio]{slidesA_files/smallEigvalErrRateBoxes.pdf}
+
 \caption{Extrapolated from the smallest magnitude eigenvalue of the direct GST gate matrix.}
 \end{center}
 \end{figure}

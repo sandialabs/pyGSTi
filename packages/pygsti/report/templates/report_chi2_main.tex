@@ -347,7 +347,7 @@ Figure \ref{bestEstimateColorBoxPlot} displays the $\chi^2$ value for each indiv
 
 Identifying patterns and trends within such ``pixel plots'' can aid in identifying specific sources and types of non-Markovian noise which may be to blame if the GST algorithms are unable to produce a ``good'' estimate.  For example, it is often the case that all the short sequences [$L = O(1)$] can be fit reasonably well, but the right-hand side of Figure \ref{bestEstimateColorBoxPlot} becomes a sea of red.  This indicates that non-Markovian behavior (potentially due to slow drift of gateset parameters) is becoming more significant for longer experiments.  In other cases, a single row may be particularly bad, indicating that a particular gate or germ is especially problematic (e.g., was not stabilized using dynamical decoupling techniques).  Be cautious in debugging, however -- sometimes bad $\chi^2$ values for a particular gate or germ can result \emph{not} from faults in that operation, but because another operation failed so badly that it distorted the entire fit (e.g., in trying to fit catastrophically non-Markovian data at Point A, GST ended up failing to fit perfectly good data at Point B).
 
-If the ``generate appendices'' option was selected for this report, similar pixel plots for the intermediate estimates whose total $\chi^2$ is listed in Table \ref{progressTable} can be found in Appendix \ref{appendix_chi2_pixelplots}.
+Similar pixel plots for the intermediate estimates whose total $\chi^2$ is listed in Table \ref{progressTable} \iftoggle{pixelplotsappendix}{can be found in Appendix \ref{appendix_chi2_pixelplots}.}{are included when the ``pixel plots'' appendix is enabled.}
 
 \begin{figure}
 \begin{center}
