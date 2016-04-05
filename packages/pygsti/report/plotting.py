@@ -642,7 +642,7 @@ def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, 
     masked_data = _np.ma.array (plt_data, mask=_np.isnan(plt_data))
     norm = LinLogNorm(trans=linlog_trans)
     #heatmap = ax.pcolor( plt_data, vmin=vmin, vmax=vmax)
-    heatmap = axes.pcolormesh( masked_data, vmin=vmin, vmax=vmax, cmap=cmap, norm=norm)
+    heatmap = axes.pcolormesh( masked_data, cmap=cmap, norm=norm)
 
     if size is not None and fig is not None:
         fig.set_size_inches(size[0],size[1]) # was 12,8 for "super" color plot
