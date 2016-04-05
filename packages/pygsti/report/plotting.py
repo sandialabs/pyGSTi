@@ -636,7 +636,7 @@ def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, 
     # [0.5, 1.0] such that the perceived brightness of the pink matches the
     # gray.
     grayscale_cmap = make_linear_cmap((1, 1, 1), (0.5, 0.5, 0.5))
-    red_cmap = make_linear_cmap((.786, .4, .4), (.366, 0, 0))
+    red_cmap = make_linear_cmap((.698, .13, .133), (1, 0, 0))
     cmap = splice_cmaps([grayscale_cmap, red_cmap], 'linlog')
     cmap.set_bad('w',1)
     masked_data = _np.ma.array (plt_data, mask=_np.isnan(plt_data))
