@@ -11,6 +11,9 @@
 \usepackage{units}
 \usepackage{multirow}
 \usepackage{adjustbox}
+\usepackage{hyperref}
+\usepackage{pdfcomment}
+\usepackage{color}
 
 \setcounter{topnumber}{3}
 \setcounter{bottomnumber}{3}
@@ -49,6 +52,10 @@
 \newtoggle{pixelplotsappendix}
 \newtoggle{whackamoleappendix}
 \putfield{settoggles}{}
+
+\hypersetup{
+  pdfinfo={ \putfield{pdfinfo}{}  }
+}
 
 
 \begin{document}
@@ -109,7 +116,7 @@ These Hilbert-Schmidt space representations require choosing a basis $\{M_i\}$ f
 \begin{table}[h]
 \begin{center}
 \putfield{targetSpamTable}{Target rho and E vectors table will be placed here}
-\caption{\textbf{Target gateset: SPAM (state preparation and measurement) gates}.  These are the \emph{ideal} input state ($\rho_0$) and `plus' POVM effect $E_0$ for the device on which we report.  SPAM gates are given here both as $d\times d$ matrices, and in ``vectorized'' form as $d^2$-dimensional vectors in $\mathcal{B}(\mathcal{H})$.  See Table \ref{bestGatesetSpamTable} for GST estimates of the actual $\rho_0$ and $E_0$ implemented in this experiment.\label{targetSpamTable}}
+\caption{\putfield{tt_targetSpamTable}{}\textbf{Target gateset: SPAM (state preparation and measurement) gates}.  These are the \emph{ideal} input state ($\rho_0$) and `plus' POVM effect $E_0$ for the device on which we report.  SPAM gates are given here both as $d\times d$ matrices, and in ``vectorized'' form as $d^2$-dimensional vectors in $\mathcal{B}(\mathcal{H})$.  See Table \ref{bestGatesetSpamTable} for GST estimates of the actual $\rho_0$ and $E_0$ implemented in this experiment.\label{targetSpamTable}}
 \end{center}
 \end{table}
 
@@ -120,7 +127,7 @@ In most cases, the ideal/target logic gates are reversible unitary rotations.  T
 \begin{table}[h]
 \begin{center}
 \putfield{targetGatesTable}{Target gateset overview table will be placed here}
-\caption{\textbf{Target gateset: logic gates}.  These are the \emph{ideal} (generally unitary) logic gates.  Each has a name starting with ``G'', and is represented as a $d^2\times d^2$ \emph{superoperator} that acts by matrix multiplication on vectors in $\mathcal{B}(\mathcal{H})$.  For each gate, its axis of rotation (in $\mathcal{B}(\mathcal{H})$ and angle of rotation are also given.  See Table \ref{bestGatesetGatesTable} for GST estimates of the actual logic gates implemented in this experiment.\label{targetGatesTable}}
+\caption{\putfield{tt_targetGatesTable}{}\textbf{Target gateset: logic gates}.  These are the \emph{ideal} (generally unitary) logic gates.  Each has a name starting with ``G'', and is represented as a $d^2\times d^2$ \emph{superoperator} that acts by matrix multiplication on vectors in $\mathcal{B}(\mathcal{H})$.  For each gate, its axis of rotation (in $\mathcal{B}(\mathcal{H})$ and angle of rotation are also given.  See Table \ref{bestGatesetGatesTable} for GST estimates of the actual logic gates implemented in this experiment.\label{targetGatesTable}}
 \end{center}
 \end{table}
 
@@ -158,7 +165,7 @@ This table also contains one derived quantity, the spectrum of the largest \emph
 \putfield{germListTable}{List of germs table will be placed here}
 }
 \end{minipage}
-\caption{\textbf{Fiducial sequences and germs.}  See discussion in text.\label{fiducialAndGermListTables}}
+\caption{\putfield{tt_fiducialListTable}{}\putfield{tt_germListTable}{}\textbf{Fiducial sequences and germs.}  See discussion in text.\label{fiducialAndGermListTables}}
 \end{center}
 \end{table}
 
@@ -167,7 +174,7 @@ This table also contains one derived quantity, the spectrum of the largest \emph
 \begin{table}[h]
 \begin{center}
 \putfield{datasetOverviewTable}{Dataset overview table will be placed here}
-\caption{\textbf{General dataset properties}.  See discussion in text.\label{datasetOverviewTable}}
+\caption{\putfield{tt_datasetOverviewTable}{}\textbf{General dataset properties}.  See discussion in text.\label{datasetOverviewTable}}
 \end{center}
 \end{table}
 
@@ -186,21 +193,21 @@ Tables \ref{bestGatesetSpamTable} and \ref{bestGatesetGatesTable} report \putfie
 \begin{table}[h]
 \begin{center}
 \putfield{bestGatesetSpamTable}{Best gateset rho and E vectors table will be placed here}
-\caption{\textbf{The GST estimate of the SPAM operations}.  Compare to Table \ref{targetSpamTable}.\label{bestGatesetSpamTable}}
+\caption{\putfield{tt_bestGatesetSpamTable}{}\textbf{The GST estimate of the SPAM operations}.  Compare to Table \ref{targetSpamTable}.\label{bestGatesetSpamTable}}
 \end{center}
 \end{table}
 
 \begin{table}[h]
 \begin{center}
 \putfield{bestGatesetSpamParametersTable}{Best gateset spam parametesr table will be placed here}
-\caption{\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestGatesetSpamTable}.\label{bestGatesetSpamParametersTable}}
+\caption{\putfield{tt_bestGatesetSpamParametersTable}{}\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestGatesetSpamTable}.\label{bestGatesetSpamParametersTable}}
 \end{center}
 \end{table}
 
 \begin{table}[h]
 \begin{center}
 \putfield{bestGatesetGatesTable}{Best gateset's gates table will be placed here}
-\caption{\textbf{The GST estimate of the logic gate operations}.  Compare to Table \ref{targetGatesTable}.\label{bestGatesetGatesTable}}
+\caption{\putfield{tt_bestGatesetGatesTable}{}\textbf{The GST estimate of the logic gate operations}.  Compare to Table \ref{targetGatesTable}.\label{bestGatesetGatesTable}}
 \end{center}
 \end{table}
 
@@ -223,7 +230,7 @@ It's also useful to know \emph{how} the real gates (or, more precisely, GST's es
 \putfield{bestGatesetVsTargetTable}{Best gateset overview table will be placed here}
 \vspace{2em}
 \putfield{bestGatesetErrorGenTable}{Best gateset error generator table will be placed here}
-\caption{\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The second table lists the ``Error Generator'' for each gate, which is the Lindbladian $\mathbb{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$. \label{bestGatesetVsTargetTable}}
+\caption{\putfield{tt_bestGatesetVsTargetTable}{}\putfield{tt_bestGatesetErrorGenTable}{}\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The second table lists the ``Error Generator'' for each gate, which is the Lindbladian $\mathbb{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$. \label{bestGatesetVsTargetTable}}
 \end{center}
 \end{table}
 
@@ -235,7 +242,7 @@ It's usually useful to understand \emph{how} gates fail.  The error generators i
 \putfield{bestGatesetDecompTable}{Best gateset overview table will be placed here}
 \vspace{2em}
 \putfield{bestGatesetRotnAxisTable}{Best gateset rotn axis table will be placed here}
-\caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay''); and (7) the angle between each gate's rotation axis and the rotation axes of the other gates.  ``X'' indicates that the decomposition failed or couldn't be interpreted. \label{bestGatesetDecompTable}}
+\caption{\putfield{tt_bestGatesetDecompTable}{}\putfield{tt_bestGatesetRotnAxisTable}{}\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay''); and (7) the angle between each gate's rotation axis and the rotation axes of the other gates.  ``X'' indicates that the decomposition failed or couldn't be interpreted. \label{bestGatesetDecompTable}}
 \end{center}
 \end{table}
 
@@ -246,7 +253,7 @@ Table \ref{bestGatesetClosestUnitaryTable} lists, for each estimated gate, the p
 \begin{table}[h]
 \begin{center}
 \putfield{bestGatesetClosestUnitaryTable}{Best gateset overview table will be placed here}
-\caption{Information pertaining to the closest unitary gate to each of the estimated gates.\label{bestGatesetClosestUnitaryTable}}
+\caption{\putfield{tt_bestGatesetClosestUnitaryTable}{}Information pertaining to the closest unitary gate to each of the estimated gates.\label{bestGatesetClosestUnitaryTable}}
 \end{center}
 \end{table}
 
@@ -260,7 +267,7 @@ Additionally, the condition of \emph{complete positivity} or CP (which all real 
 \begin{table}[h]
 \begin{center}
 \putfield{bestGatesetChoiTable}{Best gateset's choi matrix table will be placed here}
-\caption{\textbf{Choi matrix representation of the GST estimated gateset}.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestGatesetChoiTable}}
+\caption{\putfield{tt_bestGatesetChoiTable}{}\textbf{Choi matrix representation of the GST estimated gateset}.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestGatesetChoiTable}}
 \end{center}
 \end{table}
 
@@ -298,7 +305,7 @@ Thus, by comparing the difference $2\Delta\log(\mathcal{L}) - k$ to $\sqrt{2k}$ 
 \iftoggle{LsAndGermsSet}{
 The MLEGST algorithm used to generate this estimate is iterative.  It starts by fitting only data from the shortest gate sequences (which are easy to fit \emph{and} insensitive to most non-Markovian noise), then successively adds longer and longer sequences (with base sequence length $L\leq 1,2,4,8,\ldots$) to the mix.  Since we get an estimate at each intermediate $L$, it is possible to quantify not just the goodness of the \emph{best} fit (presented in the previous section), but how the goodness-of-fit behaves as longer and longer sequences are added in.
 
-This data is presented in Table \ref{logLProgressTable}.  What you should be looking for here is whether -- at each value of $L$ -- the $2\Delta\log(\mathcal{L})$ quantity is roughly the same as $k$.  More precisely, is $|2\Delta\log(\mathcal{L})-k|$ less than or equal to $\sqrt{2k}$?  If not, then the model is not fitting as well as it should, which usually indicates non-Markovian noise (or, rarely, that the GST algorithm has simply failed to find a good fit even though one exists).  
+This data is presented in Table \ref{progressTable}.  What you should be looking for here is whether -- at each value of $L$ -- the $2\Delta\log(\mathcal{L})$ quantity is roughly the same as $k$.  More precisely, is $|2\Delta\log(\mathcal{L})-k|$ less than or equal to $\sqrt{2k}$?  If not, then the model is not fitting as well as it should, which usually indicates non-Markovian noise (or, rarely, that the GST algorithm has simply failed to find a good fit even though one exists).  
 
 As a rough rule of thumb, for GST experiments involving relatively long sequences (e.g. $L\geq100$):
 %\begin{tabular}{rp{5.5in}}
@@ -318,8 +325,8 @@ As a rough rule of thumb, for GST experiments involving relatively long sequence
 
 \begin{table}[h]
 \begin{center}
-\putfield{logLProgressTable}{logL progress table will be placed here}
-\caption{\textbf{Comparison between the computed and expected maximum $\log(\mathcal{L})$ for different values of $L$}.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively.  The quantity $2\Delta\log(\mathcal{L})$ measures the goodness of fit of the GST model (small is better) and is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $P$ is the p-value derived from a $\chi^2_k$ distribution (i.e.~when $P <$ some threshold like $0.05$ there is grounds for rejecting the GST fit). The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.\label{logLProgressTable}}
+\putfield{progressTable}{logL progress table will be placed here}
+\caption{\putfield{tt_progressTable}{}\textbf{Comparison between the computed and expected maximum $\log(\mathcal{L})$ for different values of $L$}.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively.  The quantity $2\Delta\log(\mathcal{L})$ measures the goodness of fit of the GST model (small is better) and is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $P$ is the p-value derived from a $\chi^2_k$ distribution (i.e.~when $P <$ some threshold like $0.05$ there is grounds for rejecting the GST fit). The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.\label{progressTable}}
 \end{center}
 \end{table}
 
@@ -332,27 +339,27 @@ As a rough rule of thumb, for GST experiments involving relatively long sequence
 \iftoggle{LsAndGermsSet}{
 \subsection{Detailed likelihood analysis}
 
-The aggregated $2\Delta\log(\mathcal{L})$ numbers presented in Table \ref{logLProgressTable} tell you how well the GST estimate fits the \emph{entire} dataset.  If they are in line with theory ($2\Delta\log(\mathcal{L}) \approx k$), then there is little more to be said.  But if the best fit to the data is not good, we can debug it by identifying \emph{which} experiments are inconsistent with the fit.
+The aggregated $2\Delta\log(\mathcal{L})$ numbers presented in Table \ref{progressTable} tell you how well the GST estimate fits the \emph{entire} dataset.  If they are in line with theory ($2\Delta\log(\mathcal{L}) \approx k$), then there is little more to be said.  But if the best fit to the data is not good, we can debug it by identifying \emph{which} experiments are inconsistent with the fit.
 
-Figure \ref{bestGatesetLogLBoxPlot} displays the $2\Delta\log(\mathcal{L})$ contribution from each individual gate sequence (Eq.~\ref{eqGateStringLogL}).  Each gate sequence corresponds to a single colored ``pixel'' in the plot.  Each block of pixels corresponds to a single base sequence (i.e., a germ power), and the individual pixels within a block correspond to the various fiducial sequence pairs between which that base sequence was sandwiched.  (The column indicates the fiducial adjacent to state preparation, while the row indicates the fiducial adjacent to measurement).  Base sequences are arranged in a grid; different rows correspond to different germs, while different columns correspond to different maximum lengths $L$.  Pixels are labeled with the $2\Delta\log(\mathcal{L})$ contribution for that sequence, and colored appropriately.  Shades of blue indicate $2\Delta\log(\mathcal{L})$ contributions in the range 0-3 (``consistent''), while dark red indicates a $2\Delta\log(\mathcal{L})$ contribution of 10 or above.  Such events ($2\Delta\log(\mathcal{L})_s \geq 10$) should occur only once per 638 experiments if the model is correct.
+Figure \ref{bestEstimateColorBoxPlot} displays the $2\Delta\log(\mathcal{L})$ contribution from each individual gate sequence (Eq.~\ref{eqGateStringLogL}).  Each gate sequence corresponds to a single colored ``pixel'' in the plot.  Each block of pixels corresponds to a single base sequence (i.e., a germ power), and the individual pixels within a block correspond to the various fiducial sequence pairs between which that base sequence was sandwiched.  (The column indicates the fiducial adjacent to state preparation, while the row indicates the fiducial adjacent to measurement).  Base sequences are arranged in a grid; different rows correspond to different germs, while different columns correspond to different maximum lengths $L$.  Pixels are labeled with the $2\Delta\log(\mathcal{L})$ contribution for that sequence, and colored appropriately.  Shades of blue indicate $2\Delta\log(\mathcal{L})$ contributions in the range 0-3 (``consistent''), while dark red indicates a $2\Delta\log(\mathcal{L})$ contribution of 10 or above.  Such events ($2\Delta\log(\mathcal{L})_s \geq 10$) should occur only once per 638 experiments if the model is correct.
 
-Identifying patterns and trends within such ``pixel plots'' can aid in identifying specific sources and types of non-Markovian noise which may be to blame if the GST algorithms are unable to produce a ``good'' estimate.  For example, it is often the case that all the short sequences [$L = O(1)$] can be fit reasonably well, but the right-hand side of Figure \ref{bestGatesetLogLBoxPlot} becomes a sea of red.  This indicates that non-Markovian behavior (potentially due to slow drift of gateset parameters) is becoming more significant for longer experiments.  In other cases, a single row may be particularly bad, indicating that a particular gate or germ is especially problematic (e.g., was not stabilized using dynamical decoupling techniques).  Be cautious in debugging, however -- sometimes bad $\log(\mathcal{L})$ values for a particular gate or germ can result \emph{not} from faults in that operation, but because another operation failed so badly that it distorted the entire fit (e.g., in trying to fit catastrophically non-Markovian data at Point A, GST ended up failing to fit perfectly good data at Point B).
+Identifying patterns and trends within such ``pixel plots'' can aid in identifying specific sources and types of non-Markovian noise which may be to blame if the GST algorithms are unable to produce a ``good'' estimate.  For example, it is often the case that all the short sequences [$L = O(1)$] can be fit reasonably well, but the right-hand side of Figure \ref{bestEstimateColorBoxPlot} becomes a sea of red.  This indicates that non-Markovian behavior (potentially due to slow drift of gateset parameters) is becoming more significant for longer experiments.  In other cases, a single row may be particularly bad, indicating that a particular gate or germ is especially problematic (e.g., was not stabilized using dynamical decoupling techniques).  Be cautious in debugging, however -- sometimes bad $\log(\mathcal{L})$ values for a particular gate or germ can result \emph{not} from faults in that operation, but because another operation failed so badly that it distorted the entire fit (e.g., in trying to fit catastrophically non-Markovian data at Point A, GST ended up failing to fit perfectly good data at Point B).
 
-If the ``generate appendices'' option was selected for this report, similar pixel plots for the intermediate estimates whose total $2\Delta\log(\mathcal{L})$ is listed in Table \ref{logLProgressTable} can be found in Appendix \ref{appendix_logL_pixelplots}.
+If the ``generate appendices'' option was selected for this report, similar pixel plots for the intermediate estimates whose total $2\Delta\log(\mathcal{L})$ is listed in Table \ref{progressTable} can be found in Appendix \ref{appendix_logL_pixelplots}.
 
 \begin{figure}
 \begin{center}
-\putfield{bestGatesetLogLBoxPlot}{Box plot of best gateset logL}
-\caption{\textbf{$2\Delta\log(\mathcal{L})$ contributions for every individual experiment in the dataset}.  Each pixel represents a single experiment (gate sequence), and its color indicates whether GST was able to fit the corresponding frequency well.  Blue is typical; dark red squares indicating $2\Delta\log(\mathcal{L})_s>10$ should appear only once per 638 experiments on average.  Square blocks of pixels correspond to base sequences (arranged vertically by germ and horizontally by length); each pixel within a block corresponds to a specific choice of pre- and post-fiducial sequences.  See text for further details.\label{bestGatesetLogLBoxPlot}}
+\putfield{bestEstimateColorBoxPlot}{Box plot of best gateset logL}
+\caption{\putfield{tt_bestEstimateColorBoxPlot}{}\textbf{$2\Delta\log(\mathcal{L})$ contributions for every individual experiment in the dataset}.  Each pixel represents a single experiment (gate sequence), and its color indicates whether GST was able to fit the corresponding frequency well.  Blue is typical; dark red squares indicating $2\Delta\log(\mathcal{L})_s>10$ should appear only once per 638 experiments on average.  Square blocks of pixels correspond to base sequences (arranged vertically by germ and horizontally by length); each pixel within a block corresponds to a specific choice of pre- and post-fiducial sequences.  See text for further details.\label{bestEstimateColorBoxPlot}}
 \end{center}
 \end{figure}
 
-Figure \ref{bestGatesetLogLInvBoxPlot} shows exactly the same $\log(\mathcal{L})$ analysis as Figure \ref{bestGatesetLogLBoxPlot}, but arranged differently.  Here, blocks (not square) all correspond to a single fiducial pair (e.g., pre- and post-fiducial), and pixels within a block correspond to different base sequences.  This can be useful for diagnosing a single bad fiducial sequence.
+Figure \ref{invertedBestEstimateColorBoxPlot} shows exactly the same $\log(\mathcal{L})$ analysis as Figure \ref{bestEstimateColorBoxPlot}, but arranged differently.  Here, blocks (not square) all correspond to a single fiducial pair (e.g., pre- and post-fiducial), and pixels within a block correspond to different base sequences.  This can be useful for diagnosing a single bad fiducial sequence.
 
 \begin{figure}
 \begin{center}
-\putfield{bestGatesetLogLInvBoxPlot}{Box plot of best gateset logL with inverted box order}
-\caption{\textbf{$2\Delta\log(\mathcal{L})$ contributions for each experiment, arranged differently.}  This figure shows the same data as Figure \ref{bestGatesetLogLBoxPlot}, but arranged differently.  Each block now corresponds to a particular pair of fiducial sequences, while pixels within the block correspond to different base sequences sandwiched between those fiducials.\label{bestGatesetLogLInvBoxPlot}}
+\putfield{invertedBestEstimateColorBoxPlot}{Box plot of best gateset logL with inverted box order}
+\caption{\putfield{tt_invertedBestEstimateColorBoxPlot}{}\textbf{$2\Delta\log(\mathcal{L})$ contributions for each experiment, arranged differently.}  This figure shows the same data as Figure \ref{bestEstimateColorBoxPlot}, but arranged differently.  Each block now corresponds to a particular pair of fiducial sequences, while pixels within the block correspond to different base sequences sandwiched between those fiducials.\label{invertedBestEstimateColorBoxPlot}}
 \end{center}
 \end{figure}
 

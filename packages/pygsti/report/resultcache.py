@@ -98,9 +98,9 @@ class ResultCache(object):
         # validation function returns a list of all the computable
         # keys matching that expression, which by definition are all
         # the keys possibly computed by the given compute function.
-        return _itertools.chain( 
-            [ validateFn(expr) for expr,(computeFn, validateFn) 
-              in self._computeFns.iteritems() ] )
+        return list(_itertools.chain( 
+            *[ validateFn(expr) for expr,(computeFn, validateFn) 
+              in self._computeFns.iteritems() ] ))
 
     def __iter__(self):
         #return self.dataset.slIndex.__iter__() #iterator over spam labels

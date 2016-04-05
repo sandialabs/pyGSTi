@@ -258,6 +258,39 @@ class Results(object):
         self._LsAndGermInfoSet = True
 
 
+    def __str__(self):
+        s  = "----------------------------------------------------------\n"
+        s += "---------------- pyGSTi Results Object -------------------\n"
+        s += "----------------------------------------------------------\n"
+        s += "\n"
+        s += "I can create reports for you directly, via my create_XXX\n"
+        s += "functions, or you can query me for result data via members:\n\n"
+        s += " .dataset    -- the DataSet used to generate these results\n\n"
+        s += " .gatesets   -- a dictionary of GateSet objects w/keys:\n"
+        s += " ---------------------------------------------------------\n"
+        s += "  " + "\n  ".join(self.gatesets.keys()) + "\n"
+        s += "\n"
+        s += " .gatestring_lists   -- a dict of GateString lists w/keys:\n"
+        s += " ---------------------------------------------------------\n"
+        s += "  " + "\n  ".join(self.gatestring_lists.keys()) + "\n"
+        s += "\n"
+        s += " .tables   -- a dict of ReportTable objects w/keys:\n"
+        s += " ---------------------------------------------------------\n"
+        s += "  " + "\n  ".join(self.tables.keys()) + "\n"
+        s += "\n"
+        s += " .figures   -- a dict of ReportFigure objects w/keys:\n"
+        s += " ---------------------------------------------------------\n"
+        s += "  " + "\n  ".join(self.figures.keys()) + "\n"
+        s += "\n"
+        s += " .parameters   -- a dict of simulation parameters:\n"
+        s += " ---------------------------------------------------------\n"
+        s += "  " + "\n  ".join(self.parameters.keys()) + "\n"
+        s += "\n"
+        s += " .options   -- a container of display options:\n"
+        s += " ---------------------------------------------------------\n"
+        s += self.options.describe("   ") + "\n"
+        return s
+
 
     def _get_table_fns(self):
         """ 
@@ -442,6 +475,24 @@ class Results(object):
                 self.gatestring_lists['iteration'], self.dataset,
                 fmts, tblCl, longT)
         fns['logLProgressTable'] = (fn, validate_LsAndGerms)
+
+        def fn(key, confidenceLevel, vb):
+            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
+            if self.parameters['objective'] == "logl":
+                return _generation.get_logl_progress_table(
+                    self.parameters['max length list'],
+                    self.gatesets['iteration estimates'],
+                    self.gatestring_lists['iteration'], self.dataset,
+                    fmts, tblCl, longT)
+            elif self.parameters['objective'] == "chi2":
+                return _generation.get_chi2_progress_table(
+                    self.parameters['max length list'],
+                    self.gatesets['iteration estimates'],
+                    self.gatestring_lists['iteration'], self.dataset,
+                    fmts, tblCl, longT)
+            else: raise ValueError("Invalid Objective: %s" % 
+                                   self.parameters['objective'])
+        fns['progressTable'] = (fn, validate_LsAndGerms)
 
         return fns
 
@@ -1091,7 +1142,7 @@ class Results(object):
                             title="auto", datasetLabel="auto", suffix="",
                             debugAidsAppendix=False, gaugeOptAppendix=False,
                             pixelPlotAppendix=False, whackamoleAppendix=False,
-                            m=0, M=10, verbosity=0):
+                            m=0, M=10, tips=False, verbosity=0):
         """
         Create a "full" GST report.  This report is the most detailed of any of
         the GST reports, and includes background and explanation text to help
@@ -1152,6 +1203,13 @@ class Results(object):
            Minimum and Maximum values of the color scale used in the report's
            color box plots.
 
+        tips : boolean, optional
+           If True, additional markup and tooltips are included in the produced
+           PDF which indicate how tables and figures in the report correspond
+           to members of this Results object.  These "tips" can be useful if
+           you want to further manipulate the data contained in a table or
+           figure.
+
         verbosity : int, optional
            How much detail to send to stdout.
 
@@ -1162,6 +1220,18 @@ class Results(object):
         assert(self._bEssentialResultsSet)
         self.confidence_level = confidenceLevel 
           #set "current" level, used by ResultCache member dictionaries
+
+        if tips:
+            def tooltiptex(directive):
+                return '\\pdftooltip{{\\color{blue}\\texttt{%s}}\\quad}' \
+                    % directive + '{Access this information in pyGSTi via' \
+                    + '<ResultsObject>%s}' % directive
+
+
+        else:
+            def tooltiptex(directive):
+                return "" #tooltips disabled
+
 
         #Get report output filename
         default_dir = self.parameters['defaultDirectory']
@@ -1236,45 +1306,58 @@ class Results(object):
             qtys['confidenceIntervalScaleFctr'] = "NOT-SET"
             qtys['confidenceIntervalNumNonGaugeParams'] = "NOT-SET"
 
+        pdfInfo = [('Author','pyGSTi'), ('Title', title), ('Keywords', 'GST')]
+        for key,val in self.parameters.iteritems():
+            pdfInfo.append( (key, val) )
+        qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
+
             
         # 1) get latex tables
         if verbosity > 0: 
             print "*** Generating tables ***"; _sys.stdout.flush()
 
-        required_tables = \
+        
+        std_tables = \
             ('targetSpamTable','targetGatesTable','datasetOverviewTable',
              'bestGatesetSpamTable','bestGatesetSpamParametersTable',
              'bestGatesetGatesTable','bestGatesetChoiTable',
              'bestGatesetDecompTable','bestGatesetRotnAxisTable',
              'bestGatesetClosestUnitaryTable',
              'bestGatesetVsTargetTable','bestGatesetErrorGenTable')
-
-        progress_tbl = 'logLProgressTable' \
-            if self.parameters['objective'] == "logl" else 'chi2ProgressTable'
+        
         ls_and_germs_tables = ('fiducialListTable','prepStrListTable',
                                'effectStrListTable','germListTable',
-                               progress_tbl)            
-            
-        if self._LsAndGermInfoSet:
-            required_tables += ls_and_germs_tables
-        else:
-            #Fill required keys with blank tables so merge still works below
-            for key in ls_and_germs_tables:
-                fmts = self.options.table_formats
-                qtys[key] = _generation.get_blank_table(fmts).render('latex')
-            
-        for key in required_tables:
-            qtys[key] = self.tables.get(key, verbosity=v).render('latex')
+                               'progressTable')
 
-        if gaugeOptAppendix: #get appendix tables if needed
+        tables_to_compute = std_tables
+        tables_to_blank = []
+
+        if self._LsAndGermInfoSet:
+            tables_to_compute += ls_and_germs_tables
+        else:
+            tables_to_blank += ls_and_germs_tables
+
+        for key in tables_to_compute:
+            qtys[key] = self.tables.get(key, verbosity=v).render('latex')
+            qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
+
+        for key in tables_to_blank:
+            qtys[key] = _generation.get_blank_table(['latex']).render('latex')
+            qtys["tt_"+key] = ""
+
+        #get appendix tables if needed
+        if gaugeOptAppendix: 
             goaTables = self._specials.get('gaugeOptAppendixTables',verbosity=v)
             qtys.update( { key : goaTables[key].render('latex') 
                            for key in goaTables }  )
-        elif any((debugAidsAppendix, pixelPlotAppendix, whackamoleAppendix)):       # if other appendices used, 
+            #TODO: tables[ref] and then tooltips?
+
+        elif any((debugAidsAppendix, pixelPlotAppendix, whackamoleAppendix)):
             goaTables = self._specials.get('blankGaugeOptAppendixTables',
                               verbosity=v)   # fill keys with blank tables
             qtys.update( { key : goaTables[key].render('latex') 
                            for key in goaTables }  )  # for format substitution
+            #TODO: tables[ref] and then tooltips?
 
     
         # 2) generate plots
@@ -1292,6 +1375,19 @@ class Results(object):
 
         maxW,maxH = 6.5,9.0 #max width and height of graphic in latex document (in inches)
 
+        def incgr(figFilenm,W=None,H=None): #includegraphics "macro"
+            if W is None: W = maxW
+            if H is None: H = maxH
+            return "\\includegraphics[width=%fin,height=%fin" % (W,H) + \
+                ",keepaspectratio]{%s/%s}" % (D,figFilenm)
+
+        def set_fig_qtys(figkey, figFilenm, W=None,H=None):
+            fig = self.figures.get(figkey, verbosity=v)
+            fig.save_to(_os.path.join(report_dir, D, figFilenm))
+            qtys[figkey] = incgr(figFilenm,W,H)
+            qtys['tt_' + figkey] = tooltiptex(".figures['%s']" % figkey)
+            return fig
+
         #Chi2 or logl plots
         if self._LsAndGermInfoSet:
             Ls = self.parameters['max length list']
@@ -1307,19 +1403,30 @@ class Results(object):
                                  % self.parameters['objective'])
             
             if verbosity > 0: 
-                print " -- %s plots (%d): " % (plotFnName, nPlots),; _sys.stdout.flush()
+                print " -- %s plots (%d): " % (plotFnName, nPlots),
+                _sys.stdout.flush()
 
-            if verbosity > 0: 
+            if verbosity > 0:
                 print "1 ",; _sys.stdout.flush()
-            fig = self.figures.get("bestEstimateColorBoxPlot", verbosity=v)
-            fig.save_to(_os.path.join(report_dir, D,"best%sBoxes.pdf" % plotFnName))
-            maxX = fig.get_extra_info()['nUsedXs']; maxY = fig.get_extra_info()['nUsedYs']
+            fig = set_fig_qtys("bestEstimateColorBoxPlot",
+                               "best%sBoxes.pdf" % plotFnName)
+            maxX = fig.get_extra_info()['nUsedXs']
+            maxY = fig.get_extra_info()['nUsedYs']
+
+            #qtys["bestEstimateColorBoxPlot_hist"] = \
+            #    incgr("best%sBoxes_hist.pdf" % plotFnName figFilenm)
+            #    #no tooltip for histogram... - probably should make it 
+            #    # it's own element of .figures dict
 
             if verbosity > 0: 
                 print "2 ",; _sys.stdout.flush()
-            fig = self.figures.get("invertedBestEstimateColorBoxPlot",
-                                   verbosity=v)
-            fig.save_to(_os.path.join(report_dir, D,"best%sBoxes_inverted.pdf" % plotFnName))
+            fig = set_fig_qtys("invertedBestEstimateColorBoxPlot",
+                               "best%sBoxes_inverted.pdf" % plotFnName)
+        else:
+            for figkey in ["bestEstimateColorBoxPlot",
+                           "invertedBestEstimateColorBoxPlot"]:
+                qtys[figkey] = qtys["tt_"+figkey] = ""
+
     
         pixplots = ""
         if pixelPlotAppendix:
@@ -1328,23 +1435,34 @@ class Results(object):
 
                 if verbosity > 0: 
                     print "%d " % (i-st+3),; _sys.stdout.flush()
-
                 fig = self.figures.get("estimateForLIndex%dColorBoxPlot" % i,
                                        verbosity=v)
-                fig.save_to( _os.path.join(report_dir, D,"L%d_%sBoxes.pdf" % (i,plotFnName)) )
-                lx = fig.get_extra_info()['nUsedXs']; ly = fig.get_extra_info()['nUsedYs']
+                fig.save_to( _os.path.join(report_dir, D,
+                                           "L%d_%sBoxes.pdf" % (i,plotFnName)))
+                lx = fig.get_extra_info()['nUsedXs']
+                ly = fig.get_extra_info()['nUsedYs']
 
-                W = float(lx+1)/float(maxX+1) * maxW #scale figure size according to number of rows 
-                H = float(ly)  /float(maxY)   * maxH # and columns+1 (+1 for labels ~ another col) relative to initial plot
+                #scale figure size according to number of rows and columns+1
+                # (+1 for labels ~ another col) relative to initial plot
+                W = float(lx+1)/float(maxX+1) * maxW 
+                H = float(ly)  /float(maxY)   * maxH 
             
                 pixplots += "\n"
                 pixplots += "\\begin{figure}\n"
                 pixplots += "\\begin{center}\n"
-                pixplots += "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/L%d_%sBoxes.pdf}\n" % (W,H,D,i,plotFnName)
-                pixplots += "\\caption{Box plot of iteration %d (L=%d) gateset %s values.\label{L%dGateset%sBoxPlot}}\n" % (i,Ls[i],plotFnLatex,i,plotFnName)
+                pixplots += "\\includegraphics[width=%fin,height=%fin," % (W,H)\
+                    + "keepaspectratio]{%s/L%d_%sBoxes.pdf}\n"%(D,i,plotFnName)
+                pixplots += \
+                    "\\caption{Box plot of iteration %d (L=%d)" % (i,Ls[i]) \
+                    + "gateset %s values.\label{L%dGateset%sBoxPlot}}\n" \
+                    % (plotFnLatex,i,plotFnName)
+                #TODO: add conditional tooltip string to start of caption
                 pixplots += "\\end{center}\n"
                 pixplots += "\\end{figure}\n"
-    
+
+        #Set template quantity (empty string if appendix disabled)
+        qtys['intermediate_pixel_plot_figures'] = pixplots
+
         if verbosity > 0: 
             print ""; _sys.stdout.flush()
         
@@ -1355,26 +1473,24 @@ class Results(object):
                 print "(2):"; _sys.stdout.flush()    
 
             #if verbosity > 0: 
-            #    print " ?",; _sys.stdout.flush()        
-            #fig = self.figures.get("directLGSTColorBoxPlot",verbosity=v)
-            #fig.save_to(_os.path.join(report_dir, D,"directLGST%sBoxes.pdf" % plotFnName))
+            #    print " ?",; _sys.stdout.flush()
+            #fig = set_fig_qtys("directLGSTColorBoxPlot",
+            #                   "directLGST%sBoxes.pdf" % plotFnName, W=4,H=5)
 
             if verbosity > 0: 
                 print " 1",; _sys.stdout.flush()        
-            fig = self.figures.get("directLongSeqGSTColorBoxPlot", verbosity=v)
-            fig.save_to(_os.path.join(report_dir, D,"directLongSeqGST%sBoxes.pdf" % plotFnName))
+            fig = set_fig_qtys("directLongSeqGSTColorBoxPlot",
+                           "directLongSeqGST%sBoxes.pdf" % plotFnName, W=4,H=5)
 
             #if verbosity > 0: 
             #    print " ?",; _sys.stdout.flush()        
-            #fig = self.figures.get("directLGSTDeviationColorBoxPlot"],
-            #                       verbosity=v)
-            #fig.save_to(_os.path.join(report_dir, D,"directLGSTDeviationBoxes.pdf"))
+            #fig = set_fig_qtys("directLGSTDeviationColorBoxPlot",
+            #                   "directLGSTDeviationBoxes.pdf",W=4,H=5)
 
             if verbosity > 0: 
                 print " 2",; _sys.stdout.flush()
-            fig = self.figures.get("directLongSeqGSTDeviationColorBoxPlot",
-                                   verbosity=v)
-            fig.save_to(_os.path.join(report_dir, D,"directLongSeqGSTDeviationBoxes.pdf"))
+            fig = set_fig_qtys("directLongSeqGSTDeviationColorBoxPlot",
+                               "directLongSeqGSTDeviationBoxes.pdf",W=4,H=5)
 
             if verbosity > 0: 
                 print ""; _sys.stdout.flush()
@@ -1383,9 +1499,15 @@ class Results(object):
             #Small eigenvalue error rate
             if verbosity > 0: 
                 print " -- Error rate plots..."; _sys.stdout.flush()
-            fig = self.figures.get("smallEigvalErrRateColorBoxPlot",verbosity=v)
-            fig.save_to(_os.path.join(report_dir, D,"smallEigvalErrRateBoxes.pdf"))
-    
+            fig = set_fig_qtys("smallEigvalErrRateColorBoxPlot",
+                               "smallEigvalErrRateBoxes.pdf",W=4,H=5)
+        else:
+            #UNUSED: "directLGSTColorBoxPlot", "directLGSTDeviationColorBoxPlot"
+            for figkey in ["directLongSeqGSTColorBoxPlot",
+                           "directLongSeqGSTDeviationColorBoxPlot",
+                           "smallEigvalErrRateColorBoxPlot"]:
+                qtys[figkey] = qtys["tt_"+figkey] = ""
+
 
         whackamoleplots = ""
         if whackamoleAppendix:    
@@ -1405,13 +1527,15 @@ class Results(object):
                     print "%d " % (i+1),; _sys.stdout.flush()
 
                 fig = self.figures.get("whack%sMoleBoxes" % germ[0],verbosity=v)
-                fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.pdf" % germ[0]))
+                fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.pdf"
+                                          % germ[0]))
         
                 whackamoleplots += "\n"
                 whackamoleplots += "\\begin{figure}\n"
                 whackamoleplots += "\\begin{center}\n"
                 whackamoleplots += "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/whack%sMoleBoxes.pdf}\n" % (maxW,maxH,D,germ[0])
                 whackamoleplots += "\\caption{Whack-a-%s-mole box plot for $\mathrm{%s}^{%d}$." % (plotFnLatex,germ[0],highestL)
+                #TODO: add conditional tooltip string to start of caption
                 whackamoleplots += "  Hitting with hammer of weight %.1f.\label{Whack%sMoleBoxPlot}}\n" % (hammerWeight,germ[0])
                 whackamoleplots += "\\end{center}\n"
                 whackamoleplots += "\\end{figure}\n"
@@ -1429,42 +1553,21 @@ class Results(object):
                 whackamoleplots += "\\begin{center}\n"
                 whackamoleplots += "\\includegraphics[width=4in,height=5in,keepaspectratio]{%s/whack%sMoleBoxesSummed.pdf}\n" % (D,germ[0])
                 whackamoleplots += "\\caption{Whack-a-%s-mole box plot for $\mathrm{%s}^{%d}$, summed over fiducial matrix." % (plotFnLatex,germ[0],highestL)
+                #TODO: add conditional tooltip string to start of caption
                 whackamoleplots += "  Hitting with hammer of weight %.1f.\label{Whack%sMoleBoxPlotSummed}}\n" % (hammerWeight,germ[0])
                 whackamoleplots += "\\end{center}\n"
                 whackamoleplots += "\\end{figure}\n"
     
             if verbosity > 0: 
                 print ""; _sys.stdout.flush()
-        
-    
-        #Note: set qtys keys even if the plots were not created, since the template subsitution occurs before conditional latex inclusion.
-        #   Thus, these keys *must* exist otherwise substitution will process will generate an error.
-        if self.parameters['objective'] == "chi2":
-            qtys['bestGatesetChi2BoxPlot']     = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/bestChi2Boxes.pdf}" % (maxW,maxH,D)
-            qtys['bestGatesetChi2InvBoxPlot']  = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/bestChi2Boxes_inverted.pdf}" % (maxW,maxH,D)
-            qtys['bestGatesetChi2HistPlot']    = "\\includegraphics[width=4in,angle=0]{%s/bestChi2Boxes_hist.pdf}" % D
-            qtys['directLGSTChi2BoxPlot']      = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/directLGSTChi2Boxes.pdf}" % (maxW,maxH,D)
-            qtys['directLongSeqGSTChi2BoxPlot']      = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/directLongSeqGSTChi2Boxes.pdf}" % (maxW,maxH,D)
-    
-        elif self.parameters['objective'] == "logl":
-            qtys['bestGatesetLogLBoxPlot']     = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/bestLogLBoxes.pdf}" % (maxW,maxH,D)
-            qtys['bestGatesetLogLInvBoxPlot']  = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/bestLogLBoxes_inverted.pdf}" % (maxW,maxH,D)
-            qtys['bestGatesetLogLHistPlot']    = "\\includegraphics[width=4in,angle=0]{%s/bestLogLBoxes_hist.pdf}" % D
-            qtys['directLGSTLogLBoxPlot']      = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/directLGSTLogLBoxes.pdf}" % (maxW,maxH,D)
-            qtys['directLongSeqGSTLogLBoxPlot']      = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/directLongSeqGSTLogLBoxes.pdf}" % (maxW,maxH,D)
-        else: 
-            raise ValueError("Invalid objective value: %s" 
-                             % self.parameters['objective'])
-    
-        qtys['directLGSTDeviationBoxPlot'] = "\\includegraphics[width=4in,height=5in,keepaspectratio]{%s/directLGSTDeviationBoxes.pdf}" % D
-        qtys['directLongSeqGSTDeviationBoxPlot'] = "\\includegraphics[width=4in,height=5in,keepaspectratio]{%s/directLongSeqGSTDeviationBoxes.pdf}" % D
-        qtys['smallEvalErrRateBoxPlot'] = "\\includegraphics[width=4in,height=5in,keepaspectratio]{%s/smallEigvalErrRateBoxes.pdf}" % D
-        qtys['intermediate_pixel_plot_figures'] = pixplots
+
+        #Set template quantity (empty string if appendix disabled)
         qtys['whackamole_plot_figures'] = whackamoleplots
-    
+            
         if bWasInteractive:
             _matplotlib.pyplot.ion()
     
+
         # 3) populate template latex file => report latex file
         if verbosity > 0: 
             print "*** Merging into template file ***"; _sys.stdout.flush()
@@ -1532,8 +1635,8 @@ class Results(object):
 
 
     def create_brief_report_pdf(self, confidenceLevel=None, 
-                             filename="auto", title="auto", datasetLabel="auto",
-                             suffix="", m=0, M=10, verbosity=0):
+                           filename="auto", title="auto", datasetLabel="auto",
+                           suffix="", m=0, M=10, tips=False, verbosity=0):
         """
         Create a "brief" GST report.  This report is collects what are typically
         the most relevant tables and plots from the "full" report and presents
@@ -1571,6 +1674,13 @@ class Results(object):
            Minimum and Maximum values of the color scale used in the report's
            color box plots.
 
+        tips : boolean, optional
+           If True, additional markup and tooltips are included in the produced
+           PDF which indicate how tables and figures in the report correspond
+           to members of this Results object.  These "tips" can be useful if
+           you want to further manipulate the data contained in a table or
+           figure.
+
         verbosity : int, optional
            How much detail to send to stdout.
 
@@ -1581,6 +1691,16 @@ class Results(object):
         assert(self._bEssentialResultsSet)
         self.confidence_level = confidenceLevel 
         v = verbosity # shorthand
+
+        if tips:
+            def tooltiptex(directive):
+                return '\\pdftooltip{{\\color{blue}\\texttt{%s}}\\quad}' \
+                    % directive + '{Access this information in pyGSTi via' \
+                    + '<ResultsObject>%s}' % directive
+        else:
+            def tooltiptex(directive):
+                return "" #tooltips disabled
+
 
         #Get report output filename
         default_dir  = self.parameters['defaultDirectory']
@@ -1647,25 +1767,39 @@ class Results(object):
             qtys['confidenceIntervalScaleFctr'] = "NOT-SET"
             qtys['confidenceIntervalNumNonGaugeParams'] = "NOT-SET"
 
+        pdfInfo = [('Author','pyGSTi'), ('Title', title), ('Keywords', 'GST')]
+        for key,val in self.parameters.iteritems():
+            pdfInfo.append( (key, val) )
+        qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
+
             
         # 1) get latex tables
         if verbosity > 0: 
             print "*** Generating tables ***"; _sys.stdout.flush()
 
-        required_tables = ('bestGatesetSpamTable',
-                           'bestGatesetSpamParametersTable',
-                           'bestGatesetGatesTable',
-                           'bestGatesetDecompTable','bestGatesetRotnAxisTable',
-                           'bestGatesetVsTargetTable',
-                           'bestGatesetErrorGenTable')
-        for key in required_tables:
-            qtys[key] = self.tables.get(key, verbosity=v).render('latex')
+        std_tables = ('bestGatesetSpamTable',
+                      'bestGatesetSpamParametersTable',
+                      'bestGatesetGatesTable',
+                      'bestGatesetDecompTable','bestGatesetRotnAxisTable',
+                      'bestGatesetVsTargetTable',
+                      'bestGatesetErrorGenTable')
+        gof_tables = ('progressTable',)
+
+        tables_to_compute = std_tables
+        tables_to_blank = []
 
         if goodnessOfFitSection:
-            progress_tbl = 'logLProgressTable' \
-                if obj == "logl" else 'chi2ProgressTable'
-            qtys['progressTable'] = self.tables.get(progress_tbl,
-                                                    verbosity=v).render('latex')
+            tables_to_compute += gof_tables
+        else:
+            tables_to_blank += gof_tables
+
+        for key in tables_to_compute:
+            qtys[key] = self.tables.get(key, verbosity=v).render('latex')
+            qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
+
+        for key in tables_to_blank:
+            qtys[key] = _generation.get_blank_table(['latex']).render('latex')
+            qtys["tt_"+key] = ""
 
     
         # 2) generate plots
@@ -1699,15 +1833,18 @@ class Results(object):
         #
         #    if verbosity > 0: 
         #        print "1 ",; _sys.stdout.flush()
-        #    fig = self.figures.get("bestEstimateColorBoxPlot", verbosity=v)
-        #    fig.save_to(_os.path.join(report_dir, D,"best%sBoxes.pdf" % plotFnName))
+        #    figkey = 'bestEstimateColorBoxPlot'
+        #    figFilenm = "best%sBoxes.pdf" % plotFnName
+        #    fig = self.figures.get(figkey, verbosity=v)
+        #    fig.save_to(_os.path.join(report_dir, D, figFilenm))
         #    maxX = fig.get_extra_info()['nUsedXs']; maxY = fig.get_extra_info()['nUsedYs']
         #    maxW,maxH = 6.5,9.0 #max width and height of graphic in latex document (in inches)
         #
         #    if verbosity > 0: 
         #        print ""; _sys.stdout.flush()    
         #
-        #    qtys['bestGatesetBoxPlot']  = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/best%sBoxes.pdf}" % (maxW,maxH,D,plotFnName)
+        #    qtys[figkey]  = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/%s}" % (maxW,maxH,D,figFilenm)
+        #    qtys['tt_'+ figkey]  = tooltiptex(".figures['%s']" % figkey)
         
         if bWasInteractive:
             _matplotlib.pyplot.ion()
@@ -1832,6 +1969,10 @@ class Results(object):
         self.confidence_level = confidenceLevel 
         v = verbosity # shorthand
 
+        #Currently, no tooltip option for presentations
+        def tooltiptex(directive):
+            return "" #tooltips disabled
+
         #Get report output filename
         default_dir  = self.parameters['defaultDirectory']
         default_base = self.parameters['defaultBasename']
@@ -1898,29 +2039,42 @@ class Results(object):
             qtys['confidenceIntervalScaleFctr'] = "NOT-SET"
             qtys['confidenceIntervalNumNonGaugeParams'] = "NOT-SET"
 
+        pdfInfo = [('Author','pyGSTi'), ('Title', title), ('Keywords', 'GST')]
+        for key,val in self.parameters.iteritems():
+            pdfInfo.append( (key, val) )
+        qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
+
+
             
         # 1) get latex tables
         if verbosity > 0: 
             print "*** Generating tables ***"; _sys.stdout.flush()
 
-        required_tables = ('targetSpamTable','targetGatesTable','datasetOverviewTable',
-                           'bestGatesetSpamTable','bestGatesetSpamParametersTable','bestGatesetGatesTable','bestGatesetChoiTable',
-                           'bestGatesetDecompTable','bestGatesetRotnAxisTable','bestGatesetVsTargetTable','bestGatesetErrorGenTable')
-            
-        if self._LsAndGermInfoSet:
-            obj = self.parameters['objective']
-            progress_tbl = 'logLProgressTable' \
-                if obj == "logl" else 'chi2ProgressTable'
-            qtys['progressTable'] = self.tables.get(progress_tbl,
-                                                    verbosity=v).render('latex')
-            required_tables += ('fiducialListTable','prepStrListTable','effectStrListTable','germListTable')
-        else:
-            qtys['progressTable'] = self.tables['blankTable'].render('latex')
-            for key in ('fiducialListTable','prepStrListTable','effectStrListTable','germListTable'):
-                qtys[key] = self.tables['blankTable'].render('latex')
+        std_tables =('targetSpamTable','targetGatesTable',
+                     'datasetOverviewTable','bestGatesetSpamTable',
+                     'bestGatesetSpamParametersTable',
+                     'bestGatesetGatesTable','bestGatesetChoiTable',
+                     'bestGatesetDecompTable','bestGatesetRotnAxisTable',
+                     'bestGatesetVsTargetTable','bestGatesetErrorGenTable')
+        ls_and_germs_tables = ('fiducialListTable','prepStrListTable',
+                               'effectStrListTable','germListTable',
+                               'progressTable')
 
-        for key in required_tables:
+        tables_to_compute = std_tables
+        tables_to_blank = []
+
+        if self._LsAndGermInfoSet:
+            tables_to_compute += ls_and_germs_tables
+        else:
+            tables_to_blank += ls_and_germs_tables
+
+        for key in tables_to_compute:
             qtys[key] = self.tables.get(key, verbosity=v).render('latex')
+            qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
+
+        for key in tables_to_blank:
+            qtys[key] = _generation.get_blank_table(['latex']).render('latex')
+            qtys["tt_"+key] = ""
 
     
         # 2) generate plots
@@ -1938,6 +2092,19 @@ class Results(object):
 
         maxW,maxH = 4.0,3.0 #max width and height of graphic in latex presentation (in inches)
         maxHc = 2.5 #max height allowed for a figure with a caption (in inches)
+
+        def incgr(figFilenm,W=None,H=None): #includegraphics "macro"
+            if W is None: W = maxW
+            if H is None: H = maxH
+            return "\\includegraphics[width=%fin,height=%fin" % (W,H) + \
+                ",keepaspectratio]{%s/%s}" % (D,figFilenm)
+
+        def set_fig_qtys(figkey, figFilenm, W=None,H=None):
+            fig = self.figures.get(figkey, verbosity=v)
+            fig.save_to(_os.path.join(report_dir, D, figFilenm))
+            qtys[figkey] = incgr(figFilenm,W,H)
+            qtys['tt_' + figkey] = tooltiptex(".figures['%s']" % figkey)
+            return fig
 
         #Chi2 or logl plots
         if self._LsAndGermInfoSet:
@@ -1960,9 +2127,15 @@ class Results(object):
 
             if verbosity > 0: 
                 print "1 ",; _sys.stdout.flush()
-            fig = self.figures.get("bestEstimateColorBoxPlot", verbosity=v)
-            fig.save_to(_os.path.join(report_dir, D,"best%sBoxes.pdf" % plotFnName))
-            maxX = fig.get_extra_info()['nUsedXs']; maxY = fig.get_extra_info()['nUsedYs']
+            fig = set_fig_qtys("bestEstimateColorBoxPlot",
+                               "best%sBoxes.pdf" % plotFnName)
+            maxX = fig.get_extra_info()['nUsedXs']
+            maxY = fig.get_extra_info()['nUsedYs']
+
+        else:
+            for figkey in ["bestEstimateColorBoxPlot"]:
+                qtys[figkey] = qtys["tt_"+figkey] = ""
+
         
         pixplots = ""
         if pixelPlotAppendix:
@@ -1973,11 +2146,15 @@ class Results(object):
 
                 fig = self.figures.get("estimateForLIndex%dColorBoxPlot" % i,
                                        verbosity=v)
-                fig.save_to( _os.path.join(report_dir, D,"L%d_%sBoxes.pdf" % (i,plotFnName)) )
-                lx = fig.get_extra_info()['nUsedXs']; ly = fig.get_extra_info()['nUsedYs']
+                fig.save_to( _os.path.join(report_dir, D,
+                                           "L%d_%sBoxes.pdf" % (i,plotFnName)) )
+                lx = fig.get_extra_info()['nUsedXs']
+                ly = fig.get_extra_info()['nUsedYs']
 
-                W = float(lx+1)/float(maxX+1) * maxW #scale figure size according to number of rows 
-                H = float(ly)  /float(maxY)   * maxH # and columns+1 (+1 for labels ~ another col) relative to initial plot
+                #scale figure size according to number of rows and columns+1
+                # (+1 for labels ~ another col) relative to initial plot
+                W = float(lx+1)/float(maxX+1) * maxW
+                H = float(ly)  /float(maxY)   * maxH
             
                 pixplots += "\n"
                 pixplots += "\\begin{frame}\n"
@@ -1987,9 +2164,14 @@ class Results(object):
                 pixplots += "\\begin{center}\n"
                 #pixplots += "\\adjustbox{max height=\\dimexpr\\textheight-5.5cm\\relax, max width=\\textwidth}{"
                 pixplots += "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/L%d_%sBoxes.pdf}\n" % (W,H,D,i,plotFnName)
+                #FUTURE: add caption and conditional tooltip string?
                 pixplots += "\\end{center}\n"
                 pixplots += "\\end{figure}\n"
                 pixplots += "\\end{frame}\n"
+
+        #Set template quantity (empty string if appendix disabled)
+        qtys['intermediate_pixel_plot_slides'] = pixplots
+
     
         if verbosity > 0: 
             print ""; _sys.stdout.flush()
@@ -2001,14 +2183,13 @@ class Results(object):
 
             if verbosity > 0: 
                 print " 1",; _sys.stdout.flush()        
-            fig = self.figures.get("directLongSeqGSTColorBoxPlot", verbosity=v)
-            fig.save_to(_os.path.join(report_dir, D,"directLongSeqGST%sBoxes.pdf" % plotFnName))
+            fig = set_fig_qtys("directLongSeqGSTColorBoxPlot",
+                           "directLongSeqGST%sBoxes.pdf" % plotFnName,H=maxHc)
 
             if verbosity > 0: 
                 print " 2",; _sys.stdout.flush()
-            fig = self.figures.get("directLongSeqGSTDeviationColorBoxPlot",
-                                   verbosity=v)
-            fig.save_to(_os.path.join(report_dir, D,"directLongSeqGSTDeviationBoxes.pdf"))
+            fig = set_fig_qtys("directLongSeqGSTDeviationColorBoxPlot",
+                               "directLongSeqGSTDeviationBoxes.pdf",H=maxHc)
 
             if verbosity > 0: 
                 print ""; _sys.stdout.flush()
@@ -2017,8 +2198,15 @@ class Results(object):
             #Small eigenvalue error rate
             if verbosity > 0: 
                 print " -- Error rate plots..."; _sys.stdout.flush()
-            fig = self.figures.get("smallEigvalErrRateColorBoxPlot",verbosity=v)
-            fig.save_to(_os.path.join(report_dir, D,"smallEigvalErrRateBoxes.pdf"))
+            fig = set_fig_qtys("smallEigvalErrRateColorBoxPlot",
+                               "smallEigvalErrRateBoxes.pdf",H=maxHc)
+
+        else:
+            for figkey in ["directLongSeqGSTColorBoxPlot",
+                           "directLongSeqGSTDeviationColorBoxPlot",
+                           "smallEigvalErrRateColorBoxPlot"]:
+                qtys[figkey] = qtys["tt_"+figkey] = ""
+
 
 
         whackamoleplots = ""
@@ -2038,7 +2226,8 @@ class Results(object):
                     print "%d " % (i+1),; _sys.stdout.flush()
 
                 fig = self.figures.get("whack%sMoleBoxes" % germ[0],verbosity=v)
-                fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.pdf" % germ[0]))
+                fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.pdf"
+                                          % germ[0]))
         
                 whackamoleplots += "\n"
                 whackamoleplots += "\\begin{frame}\n"
@@ -2047,6 +2236,7 @@ class Results(object):
                 whackamoleplots += "\\begin{center}\n"
                 #whackamoleplots += "\\adjustbox{max height=\\dimexpr\\textheight-5.5cm\\relax, max width=\\textwidth}{"
                 whackamoleplots += "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/whack%sMoleBoxes.pdf}\n" % (maxW,maxH,D,germ[0])
+                #FUTURE: add caption and conditional tooltip?
                 whackamoleplots += "\\end{center}\n"
                 whackamoleplots += "\\end{figure}\n"
                 whackamoleplots += "\\end{frame}\n"
@@ -2066,6 +2256,7 @@ class Results(object):
                 whackamoleplots += "\\begin{center}\n"
                 #whackamoleplots += "\\adjustbox{max height=\\dimexpr\\textheight-5.5cm\\relax, max width=\\textwidth}{"
                 whackamoleplots += "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/whack%sMoleBoxesSummed.pdf}\n" % (maxW,maxH,D,germ[0])
+                #FUTURE: add caption and conditional tooltip?
                 whackamoleplots += "\\end{center}\n"
                 whackamoleplots += "\\end{figure}\n"
                 whackamoleplots += "\\end{frame}\n"
@@ -2073,27 +2264,12 @@ class Results(object):
             if verbosity > 0: 
                 print ""; _sys.stdout.flush()
         
-    
-        #Note: set qtys keys even if the plots were not created, since the template subsitution occurs before conditional latex inclusion.
-        #   Thus, these keys *must* exist otherwise substitution will process will generate an error.
-        if self.parameters['objective'] == "chi2":
-            qtys['bestGatesetBoxPlot']      = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/bestChi2Boxes.pdf}" % (maxW,maxH,D)
-            qtys['directLongSeqGSTBoxPlot'] = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/directLongSeqGSTChi2Boxes.pdf}" % (maxW,maxHc,D)
-    
-        elif self.parameters['objective'] == "logl":
-            qtys['bestGatesetBoxPlot']      = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/bestLogLBoxes.pdf}" % (maxW,maxH,D)
-            qtys['directLongSeqGSTBoxPlot'] = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/directLongSeqGSTLogLBoxes.pdf}" % (maxW,maxHc,D)
-        else: 
-            raise ValueError("Invalid objective value: %s" 
-                             % self.parameters['objective'])
-    
-        qtys['directLongSeqGSTDeviationBoxPlot'] = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/directLongSeqGSTDeviationBoxes.pdf}" % (maxW,maxHc,D)
-        qtys['smallEvalErrRateBoxPlot'] = "\\includegraphics[width=%fin,height=%fin,keepaspectratio]{%s/smallEigvalErrRateBoxes.pdf}" % (maxW,maxHc,D)
-        qtys['intermediate_pixel_plot_slides'] = pixplots
+        #Set template quantity (empty string if appendix disabled)
         qtys['whackamole_plot_slides'] = whackamoleplots
     
         if bWasInteractive:
             _matplotlib.pyplot.ion()
+
     
         # 3) populate template latex file => report latex file
         if verbosity > 0: 
@@ -2226,6 +2402,11 @@ class Results(object):
         self.confidence_level = confidenceLevel 
         v = verbosity # shorthand
 
+        #Currently, no tooltip option for presentations
+        def tooltiptext(directive):
+            return "" #tooltips disabled
+
+
         try:
             from pptx import Presentation
             from pptx.util import Inches, Pt
@@ -2293,21 +2474,34 @@ class Results(object):
         if verbosity > 0: 
             print "*** Generating tables ***"; _sys.stdout.flush()
 
-        required_tables = ('targetSpamTable','targetGatesTable','datasetOverviewTable',
-                           'bestGatesetSpamTable','bestGatesetSpamParametersTable','bestGatesetGatesTable','bestGatesetChoiTable',
-                           'bestGatesetDecompTable','bestGatesetRotnAxisTable','bestGatesetVsTargetTable','bestGatesetErrorGenTable')
-            
+        std_tables = ('targetSpamTable','targetGatesTable',
+                      'datasetOverviewTable', 'bestGatesetSpamTable',
+                      'bestGatesetSpamParametersTable','bestGatesetGatesTable',
+                      'bestGatesetChoiTable', 'bestGatesetDecompTable',
+                      'bestGatesetRotnAxisTable','bestGatesetVsTargetTable',
+                      'bestGatesetErrorGenTable')
+
+        ls_and_germs_tables = ('fiducialListTable','prepStrListTable',
+                               'effectStrListTable','germListTable',
+                               'progressTable')
+
+        tables_to_compute = std_tables
+        tables_to_blank = []
+
         if self._LsAndGermInfoSet:
-            obj = self.parameters['objective']
-            progress_tbl = 'logLProgressTable' \
-                if obj == "logl" else 'chi2ProgressTable'
-            qtys['progressTable'] = self.tables.get(progress_tbl, verbosity=v)
-            required_tables += ('fiducialListTable','prepStrListTable','effectStrListTable','germListTable')
+            tables_to_compute += ls_and_germs_tables
+        else:
+            tables_to_blank += ls_and_germs_tables
 
-        for key in required_tables:
+        for key in tables_to_compute:
             qtys[key] = self.tables.get(key, verbosity=v)
+            qtys["tt_"+key] = tooltiptext(".tables['%s']" % key)
 
+        for key in tables_to_blank:
+            qtys[key] = _generation.get_blank_table(['latex'])
+            qtys["tt_"+key] = ""
     
+
         # 2) generate plots
         if verbosity > 0: 
             print "*** Generating plots ***"; _sys.stdout.flush()
@@ -2320,8 +2514,19 @@ class Results(object):
         D = report_base + "_files" #figure directory relative to reportDir
         if not _os.path.isdir( _os.path.join(report_dir,D)):
             _os.mkdir( _os.path.join(report_dir,D))
-
+        fileDir = _os.path.join(report_dir, D)
         maxW,maxH = 4.0,3.0 #max width and height of graphic in latex presentation (in inches)
+
+        def incgr(figFilenm,W=None,H=None): #includegraphics "macro"
+            return "%s/%s" % (fileDir,figFilenm)
+
+        def set_fig_qtys(figkey, figFilenm, W=None,H=None):
+            fig = self.figures.get(figkey, verbosity=v)
+            fig.save_to(_os.path.join(report_dir, D, figFilenm))
+            qtys[figkey] = incgr(figFilenm,W,H)
+            qtys['tt_' + figkey] = tooltiptext(".figures['%s']" % figkey)
+            return fig
+
 
         #Chi2 or logl plots
         if self._LsAndGermInfoSet:
@@ -2344,9 +2549,15 @@ class Results(object):
 
             if verbosity > 0: 
                 print "1 ",; _sys.stdout.flush()
-            fig = self.figures.get("bestEstimateColorBoxPlot", verbosity=v)
-            fig.save_to(_os.path.join(report_dir, D,"best%sBoxes.png" % plotFnName))
-            maxX = fig.get_extra_info()['nUsedXs']; maxY = fig.get_extra_info()['nUsedYs']
+            fig = set_fig_qtys("bestEstimateColorBoxPlot",
+                               "best%sBoxes.png" % plotFnName)
+            maxX = fig.get_extra_info()['nUsedXs']
+            maxY = fig.get_extra_info()['nUsedYs']
+
+        else:
+            for figkey in ["bestEstimateColorBoxPlot"]:
+                qtys[figkey] = qtys["tt_"+figkey] = ""
+
 
         pixplots = []
         if pixelPlotAppendix:
@@ -2358,13 +2569,22 @@ class Results(object):
 
                 fig = self.figures.get("estimateForLIndex%dColorBoxPlot" % i,
                                        verbosity=v)
-                fig.save_to( _os.path.join(report_dir, D,"L%d_%sBoxes.png" % (i,plotFnName)) )
-                lx = fig.get_extra_info()['nUsedXs']; ly = fig.get_extra_info()['nUsedYs']
+                fig.save_to( _os.path.join(report_dir, D,"L%d_%sBoxes.png" %
+                                           (i,plotFnName)) )
+                lx = fig.get_extra_info()['nUsedXs']
+                ly = fig.get_extra_info()['nUsedYs']
 
-                W = float(lx+1)/float(maxX+1) * maxW #scale figure size according to number of rows 
-                H = float(ly)  /float(maxY)   * maxH # and columns+1 (+1 for labels ~ another col) relative to initial plot
+                #scale figure size according to number of rows and columns+1
+                # (+1 for labels ~ another col) relative to initial plot
+                W = float(lx+1)/float(maxX+1) * maxW
+                H = float(ly)  /float(maxY)   * maxH
             
-                pixplots.append( _os.path.join(report_dir, D,"L%d_%sBoxes.png" % (i,plotFnName)) )
+                pixplots.append( _os.path.join(
+                        report_dir, D, "L%d_%sBoxes.png" % (i,plotFnName)) )
+                #FUTURE: Add tooltip caption info further down?
+
+        #Set template quantity (empty array if appendix disabled)
+        qtys['intermediate_pixel_plot_slides'] = pixplots
     
         if verbosity > 0: 
             print ""; _sys.stdout.flush()
@@ -2376,14 +2596,13 @@ class Results(object):
 
             if verbosity > 0: 
                 print " 1",; _sys.stdout.flush()        
-            fig = self.figures.get("directLongSeqGSTColorBoxPlot", verbosity=v)
-            fig.save_to(_os.path.join(report_dir, D,"directLongSeqGST%sBoxes.png" % plotFnName))
+            fig = set_fig_qtys("directLongSeqGSTColorBoxPlot",
+                           "directLongSeqGST%sBoxes.png" % plotFnName)
 
             if verbosity > 0: 
                 print " 2",; _sys.stdout.flush()
-            fig = self.figures.get("directLongSeqGSTDeviationColorBoxPlot",
-                                   verbosity=v)
-            fig.save_to(_os.path.join(report_dir, D,"directLongSeqGSTDeviationBoxes.png"))
+            fig = set_fig_qtys("directLongSeqGSTDeviationColorBoxPlot",
+                               "directLongSeqGSTDeviationBoxes.png")
 
             if verbosity > 0: 
                 print ""; _sys.stdout.flush()
@@ -2391,8 +2610,14 @@ class Results(object):
             #Small eigenvalue error rate
             if verbosity > 0: 
                 print " -- Error rate plots..."; _sys.stdout.flush()
-            fig = self.figures.get("smallEigvalErrRateColorBoxPlot",verbosity=v)
-            fig.save_to(_os.path.join(report_dir, D,"smallEigvalErrRateBoxes.png"))
+            fig = set_fig_qtys("smallEigvalErrRateColorBoxPlot",
+                               "smallEigvalErrRateBoxes.png")
+
+        else:
+            for figkey in ["directLongSeqGSTColorBoxPlot",
+                           "directLongSeqGSTDeviationColorBoxPlot",
+                           "smallEigvalErrRateColorBoxPlot"]:
+                qtys[figkey] = qtys["tt_"+figkey] = ""
                 
     
         whackamoleplots = []
@@ -2405,15 +2630,19 @@ class Results(object):
                           if len(g) == 1 ]
 
             if verbosity > 0: 
-                print " -- Whack-a-mole plots (%d): " % (2*len(len1Germs)),; _sys.stdout.flush()
+                print " -- Whack-a-mole plots (%d): " % (2*len(len1Germs)),
+                _sys.stdout.flush()
 
             for i,germ in enumerate(len1Germs):
                 if verbosity > 0: 
                     print "%d " % (i+1),; _sys.stdout.flush()
 
                 fig = self.figures.get("whack%sMoleBoxes" % germ[0],verbosity=v)
-                fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.png" % germ[0]))
-                whackamoleplots.append( _os.path.join(report_dir, D,"whack%sMoleBoxes.png" % germ[0]) )
+                fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.png"
+                                          % germ[0]))
+                whackamoleplots.append( _os.path.join(
+                        report_dir, D, "whack%sMoleBoxes.png" % germ[0]) )
+                #FUTURE: Add tooltip caption info further down?
         
             for i,germ in enumerate(len1Germs):
                 if verbosity > 0: 
@@ -2421,34 +2650,21 @@ class Results(object):
 
                 fig = self.figures.get("whack%sMoleBoxesSummed" % germ[0],
                                        verbosity=v)
-                fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxesSummed.png" % germ[0]))
-                whackamoleplots.append( _os.path.join(report_dir, D,"whack%sMoleBoxesSummed.png" % germ[0]) )
+                fig.save_to(_os.path.join(
+                        report_dir, D, "whack%sMoleBoxesSummed.png" % germ[0]))
+                whackamoleplots.append( _os.path.join(
+                        report_dir, D,"whack%sMoleBoxesSummed.png" % germ[0]) )
+                #FUTURE: Add tooltip caption info further down?
     
             if verbosity > 0: 
                 print ""; _sys.stdout.flush()
-        
-    
-        #Note: set qtys keys even if the plots were not created, since the template subsitution occurs before conditional latex inclusion.
-        #   Thus, these keys *must* exist otherwise substitution will process will generate an error.
-        fileDir = _os.path.join(report_dir, D)
-        if self.parameters['objective'] == "chi2":
-            qtys['bestGatesetBoxPlot']      = "%s/bestChi2Boxes.png" % fileDir
-            qtys['directLongSeqGSTBoxPlot'] = "%s/directLongSeqGSTChi2Boxes.png" % fileDir
-    
-        elif self.parameters['objective'] == "logl":
-            qtys['bestGatesetBoxPlot']      = "%s/bestLogLBoxes.png" % fileDir
-            qtys['directLongSeqGSTBoxPlot'] = "%s/directLongSeqGSTLogLBoxes.png" % fileDir
-        else: 
-            raise ValueError("Invalid objective value: %s" 
-                             % self.parameters['objective'])
-    
-        qtys['directLongSeqGSTDeviationBoxPlot'] = "%s/directLongSeqGSTDeviationBoxes.png" % fileDir
-        qtys['smallEvalErrRateBoxPlot'] = "%s/smallEigvalErrRateBoxes.png" % fileDir
-        qtys['intermediate_pixel_plot_slides'] = pixplots
+
+        #Set template quantity (empty array if appendix disabled)
         qtys['whackamole_plot_slides'] = whackamoleplots
     
         if bWasInteractive:
             _matplotlib.pyplot.ion()
+
     
         # 3) create PPT file via python-pptx
         if verbosity > 0: 
@@ -2642,7 +2858,7 @@ class Results(object):
             drawTable(slide.shapes, 'progressTable', 1, 3, 8.5, 4, ptSize=10)
         
             slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Detailed %s Analysis" % plotFnName)
-            draw_pic(slide.shapes, qtys['bestGatesetBoxPlot'], 1, 1.5, 8, 5.5)
+            draw_pic(slide.shapes, qtys['bestEstimateColorBoxPlot'], 1, 1.5, 8, 5.5)
 
         # gate esimtates
         slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "GST Estimate vs. target")
@@ -2681,13 +2897,13 @@ class Results(object):
         if debugAidsAppendix:
             #Debugging aids slides
             slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Direct-GST")
-            draw_pic(slide.shapes, qtys['directLongSeqGSTBoxPlot'], 1, 1.5, 8, 5.5)
+            draw_pic(slide.shapes, qtys['directLongSeqGSTColorBoxPlot'], 1, 1.5, 8, 5.5)
 
             slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Direct-GST Deviation")
-            draw_pic(slide.shapes, qtys['directLongSeqGSTDeviationBoxPlot'], 1, 1.5, 8, 5.5)
+            draw_pic(slide.shapes, qtys['directLongSeqGSTDeviationColorBoxPlot'], 1, 1.5, 8, 5.5)
 
             slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Per-gate error rates")
-            draw_pic(slide.shapes, qtys['smallEvalErrRateBoxPlot'], 1, 1.5, 8, 5.5)
+            draw_pic(slide.shapes, qtys['smallEvalErrRateColorBoxPlot'], 1, 1.5, 8, 5.5)
 
         if pixelPlotAppendix:
             Ls = self.parameters['max length list']
@@ -2731,11 +2947,29 @@ class ResultOptions(object):
         self.template_path = "."
         self.latex_cmd = "pdflatex"
 
+    def describe(self,prefix):
+        s  = prefix + ".table_formats  -- computed table formats = %s\n" \
+            % str(self.table_formats)
+        s += prefix + ".long_tables    -- long latex tables?  %s\n" \
+            % str(self.long_tables)
+        s += prefix + ".table_class    -- HTML table class = %s\n" \
+            % str(self.table_class)
+        s += prefix + ".template_path  -- pyGSTi templates path = '%s'\n" \
+            % str(self.template_path)
+        s += prefix + ".latex_cmd      -- latex compiling command = '%s'\n" \
+            % str(self.latex_cmd)
+        return s
+
+
     def __str__(self):
         s  = "Display options:\n"
-        s += "  computed table formats = %s\n" % self.table_formats
-        s += "  long latex tables?  %s\n" % self.long_tables
-        s += "  HTML table class = %s\n" % self.table_class
-        s += "  pyGSTi templates path = %s\n" % self.template_path
-        s += "  latex compiling command = %s\n" % self.latex_cmd
+        s += self.describe("  ")
         return s
+
+
+def _to_pdfinfo(list_of_keyval_tuples):
+    sanitized_list = []
+    for key,val in list_of_keyval_tuples:
+        sanitized_val = str(val) #TODO BETTER LATER
+        sanitized_list.append( (key, sanitized_val) )
+    return ",\n".join( ["%s={%s}" % (key,val) for key,val in sanitized_list] )
