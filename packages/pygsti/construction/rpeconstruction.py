@@ -54,25 +54,28 @@ def make_paramterized_rpe_gate_set(alphaTrue, epsilonTrue, Yrot, SPAMdepol,
         outputGateset = _setc.build_gateset( 
             [2], [('Q0',)],['Gi','Gx','Gz'], 
             [ "I(Q0)", "X(%s,Q0)" % epsilonTrue, "Z(%s,Q0)" % alphaTrue],
-            rhoExpressions=["0"], EExpressions=["1"], 
-            spamLabelDict={'plus': (0,0), 'minus': (0,-1) } )
+            prepLabels=["rho0"], prepExpressions=["0"],
+            effectLabels=["E0"], effectExpressions=["1"], 
+            spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
     else:
         outputGateset = _setc.build_gateset( 
             [2], [('Q0',)],['Gx','Gz'], 
             [ "X(%s,Q0)" % epsilonTrue, "Z(%s,Q0)" % alphaTrue],
-            rhoExpressions=["0"], EExpressions=["1"], 
-            spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
+            prepLabels=["rho0"], prepExpressions=["0"],
+            effectLabels=["E0"], effectExpressions=["1"], 
+            spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
 
     if Yrot != 0:
         gatesetAux1 = _setc.build_gateset( 
             [2], [('Q0',)],['Gi','Gy','Gz'], 
             [ "I(Q0)", "Y(%s,Q0)" % Yrot, "Z(pi/2,Q0)"],
-            rhoExpressions=["0"], EExpressions=["1"], 
-            spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
+            prepLabels=["rho0"], prepExpressions=["0"],
+            effectLabels=["E0"], effectExpressions=["1"], 
+            spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
 
-        outputGateset.set_gate('Gx',_objs.FullyParameterizedGate(
-                _np.dot( _np.dot(_np.linalg.inv(gatesetAux1['Gy']),
-                               outputGateset['Gx']),gatesetAux1['Gy'])) )
+        outputGateset.gates['Gx'] = _objs.FullyParameterizedGate(
+            _np.dot( _np.dot(_np.linalg.inv(gatesetAux1.gates['Gy']),
+                             outputGateset.gates['Gx']),gatesetAux1.gates['Gy']))
 
     outputGateset = outputGateset.depolarize(gate_noise=gateDepol,
                                              spam_noise=SPAMdepol)
@@ -348,24 +351,27 @@ def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs
     percentEpsilonError = 100*_np.abs((_np.pi/4 - epsilonTrue)/epsilonTrue)
 
     simGateset = _setc.build_gateset( [2], [('Q0',)],['Gi','Gx','Gz'], 
-                                 [ "I(Q0)", "X("+str(epsilonTrue)+",Q0)", "Z("+str(alphaTrue)+",Q0)"],
-                                 rhoExpressions=["0"], EExpressions=["1"], 
-                                 spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
+                                      [ "I(Q0)", "X("+str(epsilonTrue)+",Q0)", "Z("+str(alphaTrue)+",Q0)"],
+                                      prepLabels=["rho0"], prepExpressions=["0"],
+                                      effectLabels=["E0"], effectExpressions=["1"], 
+                                      spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
+
 
     gatesetAux1 = _setc.build_gateset( [2], [('Q0',)],['Gi','Gy','Gz'], 
-                                 [ "I(Q0)", "Y("+str(Yrot)+",Q0)", "Z(pi/2,Q0)"],
-                                 rhoExpressions=["0"], EExpressions=["1"], 
-                                 spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
+                                       [ "I(Q0)", "Y("+str(Yrot)+",Q0)", "Z(pi/2,Q0)"],
+                                       prepLabels=["rho0"], prepExpressions=["0"],
+                                       effectLabels=["E0"], effectExpressions=["1"], 
+                                       spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
 
-    simGateset.set_gate('Gx', _objs.FullyParameterizedGate(
-            _np.dot(_np.dot(_np.linalg.inv(gatesetAux1['Gy']),simGateset['Gx']),
-                   gatesetAux1['Gy'])))
+    simGateset.gates['Gx'] =  _objs.FullyParameterizedGate(
+        _np.dot(_np.dot(_np.linalg.inv(gatesetAux1.gates['Gy']),simGateset.gates['Gx']),
+                gatesetAux1.gates['Gy']))
 
     simGateset = simGateset.depolarize(spam_noise=SPAMdepol)
 
     thetaTrue = _tools.rpe.extract_theta(simGateset)
 
-    SPAMerror = _np.dot(simGateset.EVecs[0].T,simGateset.rhoVecs[0])[0,0]
+    SPAMerror = _np.dot(simGateset.effects['E0'].T,simGateset.preps['rho0'])[0,0]
 
     jMax = runs
     

@@ -6,19 +6,23 @@ import numpy as np
 import os
 import Image, ImageChops
 
+
 class AnalysisTestCase(unittest.TestCase):
 
     def setUp(self):
+        #Set GateSet objects to "strict" mode for testing
+        pygsti.objects.GateSet._strict = True
+
         self.gateset = std.gs_target
         self.datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0.1)
         
         self.fiducials = std.fiducials
         self.germs = std.germs
-        self.specs = pygsti.construction.build_spam_specs(self.fiducials, EVecInds=[0]) #only use the first EVec
+        self.specs = pygsti.construction.build_spam_specs(self.fiducials, prep_labels=['rho0'], effect_labels=['E0'])
         self.strs = pygsti.construction.get_spam_strs(self.specs)
 
-        self.gateLabels = self.gateset.keys() # also == std.gates
-        self.lgstStrings = pygsti.construction.list_lgst_gatestrings(self.specs, self.gateset.keys())
+        self.gateLabels = self.gateset.gates.keys() # also == std.gates
+        self.lgstStrings = pygsti.construction.list_lgst_gatestrings(self.specs, self.gateLabels)
 
         self.maxLengthList = [0,1,2,4,8]
         

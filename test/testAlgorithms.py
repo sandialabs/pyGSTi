@@ -9,6 +9,9 @@ import sys
 class AlgorithmTestCase(unittest.TestCase):
 
     def setUp(self):
+        #Set GateSet objects to "strict" mode for testing
+        pygsti.objects.GateSet._strict = True
+
         self.gs_target_noisy = std.gs_target.randomize_with_unitary(0.001, seed=1234)
 
     def runSilent(self, callable, *args, **kwds):
@@ -37,7 +40,7 @@ class TestAlgorithmMethods(AlgorithmTestCase):
             returnAll=True, tol=1e-6, verbosity=4)
 
 
-        fiducials_to_try = pygsti.construction.list_all_gatestrings(std.gs_target.keys(), 0, 2)
+        fiducials_to_try = pygsti.construction.list_all_gatestrings(std.gs_target.gates.keys(), 0, 2)
         prepFidList2 = pygsti.alg.optimize_integer_fiducials_slack(
             std.gs_target, fiducials_to_try, prepOrMeas = "prep",
             initialWeights=None, maxIter=100, 
@@ -78,8 +81,9 @@ class TestAlgorithmMethods(AlgorithmTestCase):
 
     def test_germSelection(self):
         germsToTest = pygsti.construction.list_all_gatestrings_without_powers_and_cycles(
-            std.gs_target.keys(), 2)
+            std.gs_target.gates.keys(), 2)
 
+        
         bSuccess, eigvals_finiteL = pygsti.alg.test_germ_list_finitel(
             self.gs_target_noisy, germsToTest, L=16, returnSpectrum=True, tol=1e-3)
         self.assertFalse(bSuccess)
@@ -89,7 +93,7 @@ class TestAlgorithmMethods(AlgorithmTestCase):
         self.assertFalse(bSuccess)
 
         germsToTest = pygsti.construction.list_all_gatestrings_without_powers_and_cycles(
-            std.gs_target.keys(), 3)
+            std.gs_target.gates.keys(), 3)
 
         finalGerms = pygsti.alg.optimize_integer_germs_slack(
             self.gs_target_noisy, germsToTest, initialWeights=None, 

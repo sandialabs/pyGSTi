@@ -1,5 +1,5 @@
 ## Columns = plus count, minus count
-(Gi)^3  135  865
+(Gi)^3  135  864
 (Gi)^3Gx  197  803
 (Gi)^3Gy  197  803
 (Gi)^3GxGx  291  709

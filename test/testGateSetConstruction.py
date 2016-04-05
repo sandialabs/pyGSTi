@@ -3,10 +3,14 @@ import pygsti
 import numpy as np
 import warnings
 
+
 class GateSetConstructionTestCase(unittest.TestCase):
 
     def setUp(self):
-        pass
+        #OK for these tests, since we test user interface?
+        #Set GateSet objects to "strict" mode for testing
+        pygsti.objects.GateSet._strict = False
+
 
     def assertArraysAlmostEqual(self,a,b):
         self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
@@ -28,21 +32,21 @@ class TestGateSetConstructionMethods(GateSetConstructionTestCase):
         ue = True #unitary embedding
 
         old_build_gate = pygsti.construction.gatesetconstruction._oldBuildGate
-        leakA_old   = old_build_gate( [1,1,1], [('L0',),('L1',),('L2',)], "LX(pi,0,1)",b).matrix
-        ident_old   = old_build_gate( [2],[('Q0',)], "I(Q0)",b).matrix
-        rotXa_old   = old_build_gate( [2],[('Q0',)], "X(pi/2,Q0)",b).matrix
-        rotX2_old   = old_build_gate( [2],[('Q0',)], "X(pi,Q0)",b).matrix
-        rotYa_old   = old_build_gate( [2],[('Q0',)], "Y(pi/2,Q0)",b).matrix
-        rotZa_old   = old_build_gate( [2],[('Q0',)], "Z(pi/2,Q0)",b).matrix
-        rotLeak_old = old_build_gate( [2,1],[('Q0',),('L0',)], "X(pi,Q0):LX(pi,0,2)",b).matrix
-        leakB_old   = old_build_gate( [2,1],[('Q0',),('L0',)], "LX(pi,0,2)",b).matrix
-        rotXb_old   = old_build_gate( [2,1,1],[('Q0',),('L0',),('L1',)], "X(pi,Q0)",b).matrix
-        CnotA_old   = old_build_gate( [4],[('Q0','Q1')], "CX(pi,Q0,Q1)",b).matrix
-        CnotB_old   = old_build_gate( [4,1],[('Q0','Q1'),('L0',)], "CX(pi,Q0,Q1)",b).matrix
-        CY_old      = old_build_gate( [4],[('Q0','Q1')], "CY(pi,Q0,Q1)",b).matrix
-        CZ_old      = old_build_gate( [4],[('Q0','Q1')], "CZ(pi,Q0,Q1)",b).matrix
-        rotXstd_old = old_build_gate( [2],[('Q0',)], "X(pi/2,Q0)","std").matrix
-        rotXpp_old  = old_build_gate( [2],[('Q0',)], "X(pi/2,Q0)","pp").matrix
+        leakA_old   = old_build_gate( [1,1,1], [('L0',),('L1',),('L2',)], "LX(pi,0,1)",b)
+        ident_old   = old_build_gate( [2],[('Q0',)], "I(Q0)",b)
+        rotXa_old   = old_build_gate( [2],[('Q0',)], "X(pi/2,Q0)",b)
+        rotX2_old   = old_build_gate( [2],[('Q0',)], "X(pi,Q0)",b)
+        rotYa_old   = old_build_gate( [2],[('Q0',)], "Y(pi/2,Q0)",b)
+        rotZa_old   = old_build_gate( [2],[('Q0',)], "Z(pi/2,Q0)",b)
+        rotLeak_old = old_build_gate( [2,1],[('Q0',),('L0',)], "X(pi,Q0):LX(pi,0,2)",b)
+        leakB_old   = old_build_gate( [2,1],[('Q0',),('L0',)], "LX(pi,0,2)",b)
+        rotXb_old   = old_build_gate( [2,1,1],[('Q0',),('L0',),('L1',)], "X(pi,Q0)",b)
+        CnotA_old   = old_build_gate( [4],[('Q0','Q1')], "CX(pi,Q0,Q1)",b)
+        CnotB_old   = old_build_gate( [4,1],[('Q0','Q1'),('L0',)], "CX(pi,Q0,Q1)",b)
+        CY_old      = old_build_gate( [4],[('Q0','Q1')], "CY(pi,Q0,Q1)",b)
+        CZ_old      = old_build_gate( [4],[('Q0','Q1')], "CZ(pi,Q0,Q1)",b)
+        rotXstd_old = old_build_gate( [2],[('Q0',)], "X(pi/2,Q0)","std")
+        rotXpp_old  = old_build_gate( [2],[('Q0',)], "X(pi/2,Q0)","pp")
 
         with self.assertRaises(ValueError):
             old_build_gate( [2],[('Q0',)], "X(pi/2,Q0)","FooBar") #bad basis specifier
@@ -55,22 +59,22 @@ class TestGateSetConstructionMethods(GateSetConstructionTestCase):
 
 
         build_gate = pygsti.construction.build_gate
-        leakA   = build_gate( [1,1,1], [('L0',),('L1',),('L2',)], "LX(pi,0,1)",b,prm,ue).matrix
-        ident   = build_gate( [2],[('Q0',)], "I(Q0)",b,prm,ue).matrix
-        rotXa   = build_gate( [2],[('Q0',)], "X(pi/2,Q0)",b,prm,ue).matrix
-        rotX2   = build_gate( [2],[('Q0',)], "X(pi,Q0)",b,prm,ue).matrix
-        rotYa   = build_gate( [2],[('Q0',)], "Y(pi/2,Q0)",b,prm,ue).matrix
-        rotZa   = build_gate( [2],[('Q0',)], "Z(pi/2,Q0)",b,prm,ue).matrix
-        rotNa   = build_gate( [2],[('Q0',)], "N(pi/2,1.0,0.5,0,Q0)",b,prm,ue).matrix
-        rotLeak = build_gate( [2,1],[('Q0',),('L0',)], "X(pi,Q0):LX(pi,0,2)",b,prm,ue).matrix
-        leakB   = build_gate( [2,1],[('Q0',),('L0',)], "LX(pi,0,2)",b,prm,ue).matrix
-        rotXb   = build_gate( [2,1,1],[('Q0',),('L0',),('L1',)], "X(pi,Q0)",b,prm,ue).matrix
-        CnotA   = build_gate( [4],[('Q0','Q1')], "CX(pi,Q0,Q1)",b,prm,ue).matrix
-        CnotB   = build_gate( [4,1],[('Q0','Q1'),('L0',)], "CX(pi,Q0,Q1)",b,prm,ue).matrix
-        CY      = build_gate( [4],[('Q0','Q1')], "CY(pi,Q0,Q1)",b,prm,ue).matrix
-        CZ      = build_gate( [4],[('Q0','Q1')], "CZ(pi,Q0,Q1)",b,prm,ue).matrix
-        rotXstd = build_gate( [2],[('Q0',)], "X(pi/2,Q0)","std",prm,ue).matrix
-        rotXpp  = build_gate( [2],[('Q0',)], "X(pi/2,Q0)","pp",prm,ue).matrix
+        leakA   = build_gate( [1,1,1], [('L0',),('L1',),('L2',)], "LX(pi,0,1)",b,prm,ue)
+        ident   = build_gate( [2],[('Q0',)], "I(Q0)",b,prm,ue)
+        rotXa   = build_gate( [2],[('Q0',)], "X(pi/2,Q0)",b,prm,ue)
+        rotX2   = build_gate( [2],[('Q0',)], "X(pi,Q0)",b,prm,ue)
+        rotYa   = build_gate( [2],[('Q0',)], "Y(pi/2,Q0)",b,prm,ue)
+        rotZa   = build_gate( [2],[('Q0',)], "Z(pi/2,Q0)",b,prm,ue)
+        rotNa   = build_gate( [2],[('Q0',)], "N(pi/2,1.0,0.5,0,Q0)",b,prm,ue)
+        rotLeak = build_gate( [2,1],[('Q0',),('L0',)], "X(pi,Q0):LX(pi,0,2)",b,prm,ue)
+        leakB   = build_gate( [2,1],[('Q0',),('L0',)], "LX(pi,0,2)",b,prm,ue)
+        rotXb   = build_gate( [2,1,1],[('Q0',),('L0',),('L1',)], "X(pi,Q0)",b,prm,ue)
+        CnotA   = build_gate( [4],[('Q0','Q1')], "CX(pi,Q0,Q1)",b,prm,ue)
+        CnotB   = build_gate( [4,1],[('Q0','Q1'),('L0',)], "CX(pi,Q0,Q1)",b,prm,ue)
+        CY      = build_gate( [4],[('Q0','Q1')], "CY(pi,Q0,Q1)",b,prm,ue)
+        CZ      = build_gate( [4],[('Q0','Q1')], "CZ(pi,Q0,Q1)",b,prm,ue)
+        rotXstd = build_gate( [2],[('Q0',)], "X(pi/2,Q0)","std",prm,ue)
+        rotXpp  = build_gate( [2],[('Q0',)], "X(pi/2,Q0)","pp",prm,ue)
 
         with self.assertRaises(ValueError):
             build_gate( [2],[('Q0',)], "X(pi/2,Q0)","FooBar",prm,ue) #bad basis specifier
@@ -100,22 +104,22 @@ class TestGateSetConstructionMethods(GateSetConstructionTestCase):
 
         #Do it all again with unitary embedding == False
         ue = False #unitary embedding
-        leakA   = build_gate( [1,1,1], [('L0',),('L1',),('L2',)], "LX(pi,0,1)",b,prm,ue).matrix
-        ident   = build_gate( [2],[('Q0',)], "I(Q0)",b,prm,ue).matrix
-        rotXa   = build_gate( [2],[('Q0',)], "X(pi/2,Q0)",b,prm,ue).matrix
-        rotX2   = build_gate( [2],[('Q0',)], "X(pi,Q0)",b,prm,ue).matrix
-        rotYa   = build_gate( [2],[('Q0',)], "Y(pi/2,Q0)",b,prm,ue).matrix
-        rotZa   = build_gate( [2],[('Q0',)], "Z(pi/2,Q0)",b,prm,ue).matrix
-        rotNa   = build_gate( [2],[('Q0',)], "N(pi/2,1.0,0.5,0,Q0)",b,prm,ue).matrix
-        rotLeak = build_gate( [2,1],[('Q0',),('L0',)], "X(pi,Q0):LX(pi,0,2)",b,prm,ue).matrix
-        leakB   = build_gate( [2,1],[('Q0',),('L0',)], "LX(pi,0,2)",b,prm,ue).matrix
-        rotXb   = build_gate( [2,1,1],[('Q0',),('L0',),('L1',)], "X(pi,Q0)",b,prm,ue).matrix
-        CnotA   = build_gate( [4],[('Q0','Q1')], "CX(pi,Q0,Q1)",b,prm,ue).matrix
-        CnotB   = build_gate( [4,1],[('Q0','Q1'),('L0',)], "CX(pi,Q0,Q1)",b,prm,ue).matrix
-        CY      = build_gate( [4],[('Q0','Q1')], "CY(pi,Q0,Q1)",b,prm,ue).matrix
-        CZ      = build_gate( [4],[('Q0','Q1')], "CZ(pi,Q0,Q1)",b,prm,ue).matrix
-        rotXstd = build_gate( [2],[('Q0',)], "X(pi/2,Q0)","std",prm,ue).matrix
-        rotXpp  = build_gate( [2],[('Q0',)], "X(pi/2,Q0)","pp",prm,ue).matrix
+        leakA   = build_gate( [1,1,1], [('L0',),('L1',),('L2',)], "LX(pi,0,1)",b,prm,ue)
+        ident   = build_gate( [2],[('Q0',)], "I(Q0)",b,prm,ue)
+        rotXa   = build_gate( [2],[('Q0',)], "X(pi/2,Q0)",b,prm,ue)
+        rotX2   = build_gate( [2],[('Q0',)], "X(pi,Q0)",b,prm,ue)
+        rotYa   = build_gate( [2],[('Q0',)], "Y(pi/2,Q0)",b,prm,ue)
+        rotZa   = build_gate( [2],[('Q0',)], "Z(pi/2,Q0)",b,prm,ue)
+        rotNa   = build_gate( [2],[('Q0',)], "N(pi/2,1.0,0.5,0,Q0)",b,prm,ue)
+        rotLeak = build_gate( [2,1],[('Q0',),('L0',)], "X(pi,Q0):LX(pi,0,2)",b,prm,ue)
+        leakB   = build_gate( [2,1],[('Q0',),('L0',)], "LX(pi,0,2)",b,prm,ue)
+        rotXb   = build_gate( [2,1,1],[('Q0',),('L0',),('L1',)], "X(pi,Q0)",b,prm,ue)
+        CnotA   = build_gate( [4],[('Q0','Q1')], "CX(pi,Q0,Q1)",b,prm,ue)
+        CnotB   = build_gate( [4,1],[('Q0','Q1'),('L0',)], "CX(pi,Q0,Q1)",b,prm,ue)
+        CY      = build_gate( [4],[('Q0','Q1')], "CY(pi,Q0,Q1)",b,prm,ue)
+        CZ      = build_gate( [4],[('Q0','Q1')], "CZ(pi,Q0,Q1)",b,prm,ue)
+        rotXstd = build_gate( [2],[('Q0',)], "X(pi/2,Q0)","std",prm,ue)
+        rotXpp  = build_gate( [2],[('Q0',)], "X(pi/2,Q0)","pp",prm,ue)
 
         self.assertArraysAlmostEqual(leakA  , leakA_old  )
         self.assertArraysAlmostEqual(ident  , ident_old  )
@@ -255,11 +259,11 @@ class TestGateSetConstructionMethods(GateSetConstructionTestCase):
                               [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    A,    B ],
                               [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    A,    C,    D ],
                               [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    B,    D,    E ]], 'd')
-        self.assertArraysAlmostEqual(gate.matrix, gate_ans)
+        self.assertArraysAlmostEqual(gate, gate_ans)
 
         vec = gate.to_vector()
         self.assertEqual(vec.shape, (16,)) #should only have 16 parameters
-        self.assertEqual(gate.matrix.dtype, np.float64)  #should be real-valued
+        self.assertEqual(gate.dtype, np.float64)  #should be real-valued
 
         #Note: answer is all zeros b/c parameters give *deviation* from base matrix, and this case has no deviation
         vec_ans = np.array([ 0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0., 0.,  0.,  0.,  0.,  0., 0.], 'd')
@@ -271,52 +275,49 @@ class TestGateSetConstructionMethods(GateSetConstructionTestCase):
         stateSpace = [2] #density matrix is a 2x2 matrix
         spaceLabels = [('Q0',)] #interpret the 2x2 density matrix as a single qubit named 'Q0'
         gateset1 = pygsti.objects.GateSet()
-        gateset1.set_rhovec( pygsti.construction.build_vector(stateSpace,spaceLabels,"0") )
-        gateset1.set_evec(   pygsti.construction.build_vector(stateSpace,spaceLabels,"1") )
-        gateset1.set_gate('Gi', pygsti.construction.build_gate(stateSpace,spaceLabels,"I(Q0)"))
-        gateset1.set_gate('Gx', pygsti.construction.build_gate(stateSpace,spaceLabels,"X(pi/2,Q0)"))
-        gateset1.set_gate('Gy', pygsti.construction.build_gate(stateSpace,spaceLabels,"Y(pi/2,Q0)"))
-        gateset1.set_identity_vec( pygsti.construction.build_identity_vec(stateSpace) )
-        gateset1.add_spam_label(0,0,'plus')
-        gateset1.add_spam_label(0,-1,'minus')
+        gateset1['rho0'] = pygsti.construction.build_vector(stateSpace,spaceLabels,"0")
+        gateset1['E0']   = pygsti.construction.build_vector(stateSpace,spaceLabels,"1")
+        gateset1['Gi'] = pygsti.construction.build_gate(stateSpace,spaceLabels,"I(Q0)")
+        gateset1['Gx'] = pygsti.construction.build_gate(stateSpace,spaceLabels,"X(pi/2,Q0)")
+        gateset1['Gy'] = pygsti.construction.build_gate(stateSpace,spaceLabels,"Y(pi/2,Q0)")
+        gateset1['identity'] = pygsti.construction.build_identity_vec(stateSpace)
+        gateset1.spamdefs['plus']  = ('rho0','E0')
+        gateset1.spamdefs['minus_take_one'] = ('rho0','remainder')
+        gateset1.spamdefs['minus'] = ('rho0','remainder') #tests replacement of spam label
         
-        with self.assertRaises(ValueError):
-            gateset1.add_spam_label(0,0,'plus2') # "plus" already refers to this pair
-        with self.assertRaises(ValueError):
-            gateset1.add_spam_label(1,0,'badrho') # bad rho index
-        with self.assertRaises(ValueError):
-            gateset1.add_spam_label(0,1,'bade') # bad E index
+        #Removed checks for unset labels for now.
+        #with self.assertRaises(ValueError):
+        #    gateset1.spamdefs['badspam'] = ('rhoNonExistent','E0') # bad rho index
+        #with self.assertRaises(ValueError):
+        #    gateset1.spamdefs['bade'] = ('rho0','ENonExistent') # bad E index
 
 
         gateset_evec_first = pygsti.objects.GateSet() #set identity vector first
-        gateset_evec_first.set_evec( pygsti.construction.build_vector(stateSpace,spaceLabels,"1") )
+        gateset_evec_first['E0'] = pygsti.construction.build_vector(stateSpace,spaceLabels,"1")
 
         gateset_id_first = pygsti.objects.GateSet() #set identity vector first
-        gateset_id_first.set_identity_vec( pygsti.construction.build_identity_vec(stateSpace) )
+        gateset_id_first['identity'] =  pygsti.construction.build_identity_vec(stateSpace)
         with self.assertRaises(ValueError):
-            gateset_id_first.set_identity_vec( np.array([1,2,3],'d') ) #wrong dimension
+            gateset_id_first['identity'] = np.array([1,2,3],'d') #wrong dimension
         with self.assertRaises(ValueError):
-            gateset_id_first.set_rhovec( np.array([1,2,3],'d') ) #wrong dimension
+            gateset_id_first['rhoBad'] =  np.array([1,2,3],'d') #wrong dimension
         with self.assertRaises(ValueError):
-            gateset_id_first.set_evec( np.array([1,2,3],'d') ) #wrong dimension
-        with self.assertRaises(ValueError):
-            gateset_id_first.set_rhovec( np.array([1,2,3,4],'d'), 10) #index too large
-        with self.assertRaises(ValueError):
-            gateset_id_first.set_evec( np.array([1,2,3,4],'d'), 10) #index too large
-
-
-
+            gateset_id_first['E0'] =  np.array([1,2,3],'d') #wrong dimension
 
         gateset2 = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'], 
                                                       [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                                      rhoExpressions=["0"], EExpressions=["1"], 
-                                                      spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
-
+                                                      prepLabels=['rho0'], prepExpressions=["0"],
+                                                      effectLabels=['E0'], effectExpressions=["1"], 
+                                                      spamdefs={'plus': ('rho0','E0'),
+                                                                     'minus': ('rho0','remainder') })
+#HERE
         gateset3 = self.assertWarns(pygsti.construction.build_gateset, 
-                [2], [('Q0',)],['Gi','Gx','Gy'], 
-                [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                rhoExpressions=["0"], EExpressions=["1"], 
-                spamLabelDict={'plus': (0,0), 'minus': (-1,-1) })
+                                    [2], [('Q0',)],['Gi','Gx','Gy'], 
+                                    [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
+                                    prepLabels=['rho0'], prepExpressions=["0"],
+                                    effectLabels=['E0'], effectExpressions=["1"], 
+                                    spamdefs={'plus': ('rho0','E0'),
+                                                   'minus': ('remainder','remainder') })
 
         gateset4_txt = \
 """
@@ -362,44 +363,63 @@ SPAMLABEL minus = rho remainder
 
         std_gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'], 
                                                          [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
-                                                         rhoExpressions=["0"], EExpressions=["1"], 
-                                                         spamLabelDict={'plus': (0,0), 'minus': (0,-1) },
+                                                         prepLabels=['rho0'], prepExpressions=["0"],
+                                                         effectLabels=['E0'], effectExpressions=["1"], 
+                                                         spamdefs={'plus': ('rho0','E0'),
+                                                                        'minus': ('rho0','remainder') },
                                                          basis="std")
+
         pp_gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'], 
                                                         [ "I(Q0)","X(pi/8,Q0)", "Z(pi/8,Q0)"],
-                                                        rhoExpressions=["0"], EExpressions=["1"], 
-                                                        spamLabelDict={'plus': (0,0), 'minus': (0,-1) },
+                                                        prepLabels=['rho0'], prepExpressions=["0"],
+                                                        effectLabels=['E0'], effectExpressions=["1"], 
+                                                        spamdefs={'plus': ('rho0','E0'),
+                                                                       'minus': ('rho0','remainder') },
                                                         basis="pp")
 
         with self.assertRaises(ValueError):
             pygsti.construction.build_gateset( [2], [('A0',)],['Gi','Gx','Gy'], 
                                                [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
-                                               rhoExpressions=["FooBar"], EExpressions=["1"], 
-                                               spamLabelDict={'plus': (0,0), 'minus': (0,-1) }) # invalid state specifier (A0)
+                                               prepLabels=['rho0'], prepExpressions=["0"],
+                                               effectLabels=['E0'], effectExpressions=["1"], 
+                                               spamdefs={'plus': ('rho0','E0'),
+                                                              'minus': ('rho0','remainder') })
+                                               # invalid state specifier (A0)
 
         with self.assertRaises(ValueError):
             pygsti.construction.build_gateset( [4], [('Q0',)],['Gi','Gx','Gy'], 
                                                [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
-                                               rhoExpressions=["FooBar"], EExpressions=["1"], 
-                                               spamLabelDict={'plus': (0,0), 'minus': (0,-1) }) # state space dimension mismatch (4 != 2)
+                                               prepLabels=['rho0'], prepExpressions=["0"],
+                                               effectLabels=['E0'], effectExpressions=["1"], 
+                                               spamdefs={'plus': ('rho0','E0'),
+                                                              'minus': ('rho0','remainder') })
+                                               # state space dimension mismatch (4 != 2)
             
         with self.assertRaises(ValueError):
             pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'], 
                                                [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
-                                               rhoExpressions=["FooBar"], EExpressions=["1"], 
-                                               spamLabelDict={'plus': (0,0), 'minus': (0,-1) },
+                                               prepLabels=['rho0'], prepExpressions=["0"],
+                                               effectLabels=['E0'], effectExpressions=["1"], 
+                                               spamdefs={'plus': ('rho0','E0'),
+                                                              'minus': ('rho0','remainder') },
                                                basis="FooBar") #Bad basis
 
         with self.assertRaises(ValueError):
             pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'], 
                                                [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
-                                               rhoExpressions=["FooBar"], EExpressions=["1"], 
-                                               spamLabelDict={'plus': (0,0), 'minus': (0,-1) }) #Bad rhoExpression
+                                               prepLabels=['rho0'], prepExpressions=["FooBar"],
+                                               effectLabels=['E0'], effectExpressions=["1"], 
+                                               spamdefs={'plus': ('rho0','E0'),
+                                                              'minus': ('rho0','remainder') })
+                                               #Bad rhoExpression
         with self.assertRaises(ValueError):
             pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'], 
                                                [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
-                                               rhoExpressions=["0"], EExpressions=["FooBar"], 
-                                               spamLabelDict={'plus': (0,0), 'minus': (0,-1) }) #Bad EExpression
+                                               prepLabels=['rho0'], prepExpressions=["0"],
+                                               effectLabels=['E0'], effectExpressions=["FooBar"], 
+                                               spamdefs={'plus': ('rho0','E0'),
+                                                              'minus': ('rho0','remainder') })
+                                               #Bad EExpression
 
 
     def test_two_qubit_gate(self):
@@ -410,23 +430,26 @@ SPAMLABEL minus = rho remainder
 
         gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'], 
                                                      [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                                     rhoExpressions=["0"], EExpressions=["1"], 
-                                                     spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
+                                                     prepLabels=['rho0'], prepExpressions=["0"],
+                                                     effectLabels=['E0'], effectExpressions=["1"], 
+                                                     spamdefs={'plus': ('rho0','E0'),
+                                                                    'minus': ('rho0','remainder') })
 
         gateset_2q = pygsti.construction.build_gateset( 
             [4], [('Q0','Q1')],['GIX','GIY','GXI','GYI','GCNOT'], 
             [ "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)" ],
-            rhoExpressions=["0"], EExpressions=["0","1","2"], 
-            spamLabelDict={'upup': (0,0), 'updn': (0,1), 'dnup': (0,2), 'dndn': (0,-1) }, basis="pp" )
+            prepLabels=['rho0'], prepExpressions=["0"], effectLabels=['E0','E1','E2'], effectExpressions=["0","1","2"], 
+            spamdefs={'upup': ('rho0','E0'), 'updn': ('rho0','E1'),
+                           'dnup': ('rho0','E2'), 'dndn': ('rho0','remainder') }, basis="pp")
 
         gateset_rot = gateset.rotate( (np.pi/2,0,0) ) #rotate all gates by pi/2 about X axis
         gateset_randu = gateset.randomize_with_unitary(0.01)
         gateset_randu = gateset.randomize_with_unitary(0.01,seed=1234)
         #print gateset_rot
 
-        rotXPi   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi,Q0)").matrix
-        rotXPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi/2,Q0)").matrix        
-        rotYPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "Y(pi/2,Q0)").matrix        
+        rotXPi   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi,Q0)")
+        rotXPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi/2,Q0)")
+        rotYPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "Y(pi/2,Q0)")
 
         self.assertArraysAlmostEqual(gateset_rot['Gi'], rotXPiOv2)
         self.assertArraysAlmostEqual(gateset_rot['Gx'], rotXPi)
@@ -462,10 +485,10 @@ SPAMLABEL minus = rho remainder
 
         gateset_spam = gateset.depolarize(spam_noise=0.1)
         #print gateset_spam
-        self.assertAlmostEqual(np.dot(gateset.EVecs[0].T,gateset.rhoVecs[0]),0)
-        self.assertAlmostEqual(np.dot(gateset_spam.EVecs[0].T,gateset_spam.rhoVecs[0]),0.095)
-        self.assertArraysAlmostEqual(gateset_spam.rhoVecs[0], 1/np.sqrt(2)*np.array([1,0,0,0.9]).reshape(-1,1) )
-        self.assertArraysAlmostEqual(gateset_spam.EVecs[0], 1/np.sqrt(2)*np.array([1,0,0,-0.9]).reshape(-1,1) )
+        self.assertAlmostEqual(np.dot(gateset['E0'].T,gateset['rho0']), 0)
+        self.assertAlmostEqual(np.dot(gateset_spam['E0'].T,gateset_spam['rho0']),0.095)
+        self.assertArraysAlmostEqual(gateset_spam['rho0'], 1/np.sqrt(2)*np.array([1,0,0,0.9]).reshape(-1,1) )
+        self.assertArraysAlmostEqual(gateset_spam['E0'], 1/np.sqrt(2)*np.array([1,0,0,-0.9]).reshape(-1,1) )
 
         gateset_rand_rot = gateset.rotate(max_rotate=0.2)
         gateset_rand_rot = gateset.rotate(max_rotate=0.2,seed=1234)
@@ -507,41 +530,31 @@ SPAMLABEL minus = rho remainder
         
     def test_spamspecs(self):
         strs = pygsti.construction.gatestring_list( [('Gx',),('Gy',),('Gx','Gx')] )
-        rhoSpecs, ESpecs = pygsti.construction.build_spam_specs(fiducialGateStrings=strs)
+        prepSpecs, effectSpecs = pygsti.construction.build_spam_specs(fiducialGateStrings=strs)
 
         with self.assertRaises(ValueError):
-            pygsti.construction.build_spam_specs(rhoSpecs=rhoSpecs, rhoStrs=strs) #can't specify both...
+            pygsti.construction.build_spam_specs(prepSpecs=prepSpecs, prepStrs=strs) #can't specify both...
             
         with self.assertRaises(ValueError):
-            pygsti.construction.build_spam_specs(rhoStrs=strs, fiducialGateStrings=strs) #can't specify both...
+            pygsti.construction.build_spam_specs(prepStrs=strs, fiducialGateStrings=strs) #can't specify both...
 
         with self.assertRaises(ValueError):
             pygsti.construction.build_spam_specs() # must specify something!
 
         with self.assertRaises(ValueError):
-            pygsti.construction.build_spam_specs(rhoStrs=strs, ESpecs=ESpecs, EStrs=strs) #can't specify both...
+            pygsti.construction.build_spam_specs(prepStrs=strs, effectSpecs=effectSpecs, effectStrs=strs) #can't specify both...
             
         with self.assertRaises(ValueError):
-            pygsti.construction.build_spam_specs(EStrs=strs, fiducialGateStrings=strs) #can't specify both...
+            pygsti.construction.build_spam_specs(effectStrs=strs, fiducialGateStrings=strs) #can't specify both...
             
         with self.assertRaises(ValueError):
-            pygsti.construction.build_spam_specs(rhoStrs=strs) # must specify some E-thing!
+            pygsti.construction.build_spam_specs(prepStrs=strs) # must specify some E-thing!
 
     def test_gate_object(self):
         gate_full = pygsti.construction.build_gate( [2],[('Q0',)], "I(Q0)","gm", parameterization="full")
         gate_linear = pygsti.construction.build_gate( [2],[('Q0',)], "D(Q0)","gm", parameterization="linear")
         gate_linear_copy = gate_linear.copy()
         gate_full_copy = gate_full.copy()
-
-        value_dim_full = gate_full.value_dimension()
-        value_dim_linear = gate_linear.value_dimension()
-
-        with self.assertRaises(ValueError):
-            gate_full.set_value( np.zeros((5,5),'d') ) #wrong size - must be 4x4
-
-        gate_linear.set_value( np.zeros(value_dim_linear,'d') )
-        with self.assertRaises(ValueError):
-            gate_linear.set_value( np.zeros(value_dim_linear+1,'d') ) #wrong size
 
         full_as_str = str(gate_full)
         linear_as_str = str(gate_linear)
@@ -560,18 +573,6 @@ SPAMLABEL minus = rho remainder
         v = gate_linear_B.to_vector()
         gate_linear_B.from_vector(v)
         deriv = gate_linear_B.deriv_wrt_params()
-        with self.assertRaises(ValueError):
-            gate_linear_B.num_params(bG0=False) #not implemented
-        with self.assertRaises(ValueError):
-            gate_linear_B.to_vector(bG0=False) #not implemented
-        with self.assertRaises(ValueError):
-            gate_linear_B.from_vector(v,bG0=False) #not implemented
-        with self.assertRaises(ValueError):
-            gate_linear_B.deriv_wrt_params(bG0=False) #not implemented
-
-        I = np.identity(2)
-        gate_linear_B.transform(I,I)
-
 
         #Full from scratch
         mx = np.array( [[1,0],[0,1]], 'd' )
@@ -581,14 +582,6 @@ SPAMLABEL minus = rho remainder
         v = gate_full_B.to_vector()
         gate_full_B.from_vector(v)
         deriv = gate_full_B.deriv_wrt_params()
-
-        numParams_noG0 = gate_full_B.num_params(bG0=False)
-        v_noG0 = gate_full_B.to_vector(bG0=False)
-        gate_full_B.from_vector(v_noG0,bG0=False)
-        deriv_noG0 = gate_full_B.deriv_wrt_params(bG0=False)
-
-        I = np.identity(2)
-        gate_full_B.transform(I,I)
 
         
       

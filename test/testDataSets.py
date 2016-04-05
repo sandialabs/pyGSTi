@@ -3,17 +3,27 @@ import collections
 import pickle
 import pygsti
 import numpy as np
+import warnings
+
 
 class DataSetTestCase(unittest.TestCase):
 
     def setUp(self):
-        pass
+        #Set GateSet objects to "strict" mode for testing
+        pygsti.objects.GateSet._strict = True
 
     def assertEqualDatasets(self, ds1, ds2):
         self.assertEqual(len(ds1),len(ds2))
         for gatestring in ds1:
             self.assertAlmostEqual( ds1[gatestring]['plus'], ds2[gatestring]['plus'], places=3 )
             self.assertAlmostEqual( ds1[gatestring]['minus'], ds2[gatestring]['minus'], places=3 )
+
+    def assertWarns(self, callable, *args, **kwds):
+        with warnings.catch_warnings(record=True) as warning_list:
+            warnings.simplefilter('always')
+            result = callable(*args, **kwds)
+            self.assertTrue(len(warning_list) > 0)
+        return result
 
 
 class TestDataSetMethods(DataSetTestCase):
@@ -22,17 +32,19 @@ class TestDataSetMethods(DataSetTestCase):
         # Create a dataset from scratch
         ds = pygsti.objects.DataSet(spamLabels=['plus','minus'])
         ds.add_count_dict( ('Gx',), {'plus': 10, 'minus': 90} )
+        ds[ ('Gx',) ] = {'plus': 10, 'minus': 90}
+        ds[ ('Gx',) ]['plus'] = 10
+        ds[ ('Gx',) ]['minus'] = 90
         ds.add_counts_1q( ('Gx','Gy'), 10, 40 )
-        ds.add_counts_1q( ('Gx','Gy'), 40, 10 )
+        ds.add_counts_1q( ('Gx','Gy'), 40, 10 ) #freq much different from existing
         with self.assertRaises(ValueError):
             ds.add_count_dict( ('Gx',), {'FooBar': 10, 'minus': 90 }) #bad spam label
         with self.assertRaises(ValueError):
             ds.add_count_dict( ('Gx',), {'minus': 90 }) # not all spam labels
-        with self.assertRaises(ValueError):
-            ds[('Gx',)] = { 'plus':10, 'minus': 90 } #can't set counts directly -- use addData functions
-        with self.assertRaises(ValueError):
-            ds[('Gx',)]['plus'] = 10 #can't set counts directly -- use addData functions
         ds.done_adding_data()
+
+        dsWritable = ds.copy_nonstatic()
+        dsWritable[('Gy',)] = {'plus': 20, 'minus': 80}
         
         ds_str = str(ds)
 
@@ -172,8 +184,10 @@ Gx^4 0.2 100
 
         gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy','Gz'], 
                                                      [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)", "Z(pi/2,Q0)"],
-                                                     rhoExpressions=["0"], EExpressions=["1"], 
-                                                     spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
+                                                     prepLabels=['rho0'], prepExpressions=["0"],
+                                                     effectLabels=['E0'], effectExpressions=["1"], 
+                                                     spamdefs={'plus': ('rho0','E0'),
+                                                                    'minus': ('rho0','remainder') })
 
         depol_gateset = gateset.depolarize(gate_noise=0.1,spam_noise=0)
 
@@ -207,10 +221,10 @@ Gx^4 0.2 100
         
 
         # TO SEED SAVED FILE, RUN THIS: 
-        #pygsti.io.write_dataset("cmp_chk_files/Fake_Dataset_none.txt", gateStrings, ds_none) 
-        #pygsti.io.write_dataset("cmp_chk_files/Fake_Dataset_round.txt", gateStrings, ds_round) 
-        #pygsti.io.write_dataset("cmp_chk_files/Fake_Dataset_binom.txt", gateStrings, ds_binom) 
-        #pygsti.io.write_dataset("cmp_chk_files/Fake_Dataset_multi.txt", gateStrings, ds_multi) 
+        #pygsti.io.write_dataset("cmp_chk_files/Fake_Dataset_none.txt", ds_none,  gateStrings) 
+        #pygsti.io.write_dataset("cmp_chk_files/Fake_Dataset_round.txt", ds_round, gateStrings) 
+        #pygsti.io.write_dataset("cmp_chk_files/Fake_Dataset_binom.txt", ds_binom, gateStrings) 
+        #pygsti.io.write_dataset("cmp_chk_files/Fake_Dataset_multi.txt", ds_multi, gateStrings) 
 
         saved_ds = pygsti.io.load_dataset("cmp_chk_files/Fake_Dataset_none.txt", cache=True)
         self.assertEqualDatasets(ds_none, saved_ds)

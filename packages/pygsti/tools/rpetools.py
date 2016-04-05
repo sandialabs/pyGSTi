@@ -216,7 +216,7 @@ def extract_alpha(gateset):
     alphaVal : float
         The value of alpha for the input gateset.
     """
-    decomp = _gt.decompose_gate_matrix( gateset['Gz'] )
+    decomp = _gt.decompose_gate_matrix( gateset.gates['Gz'] )
     alphaVal = decomp['pi rotations'] * _np.pi
     return alphaVal
 
@@ -238,7 +238,7 @@ def extract_epsilon(gateset):
     epsilonVal : float
         The value of epsilon for the input gateset.
     """
-    decomp = _gt.decompose_gate_matrix( gateset['Gx'] )
+    decomp = _gt.decompose_gate_matrix( gateset.gates['Gx'] )
     epsilonVal = decomp['pi rotations'] * _np.pi
     return epsilonVal
 
@@ -261,7 +261,7 @@ def extract_theta(gateset):
     thetaVal : float
         The value of theta for the input gateset.
     """
-    decomp = _gt.decompose_gate_matrix( gateset['Gx'] )
+    decomp = _gt.decompose_gate_matrix( gateset.gates['Gx'] )
     thetaVal =  _np.real_if_close( [ _np.arccos(
                 _np.dot(decomp['axis of rotation'], [0,1,0,0]))])[0]
     if thetaVal > _np.pi/2:

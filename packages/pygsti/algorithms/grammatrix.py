@@ -86,7 +86,7 @@ def max_gram_rank_and_evals(dataset, maxBasisStringLength=10,
       Defaults to the spam dictionary of targetGateset
       e.g. spamDict[(0,0)] == "plus"
 
-    fixedLists : (rhoStrs, EStrs), optional
+    fixedLists : (prepStrs, effectStrs), optional
       2-tuple of gate string lists, specifying the preparation and
       measurement fiducials to use when constructing the Gram matrix,
       and thereby bypassing the search for such lists.
@@ -105,14 +105,16 @@ def max_gram_rank_and_evals(dataset, maxBasisStringLength=10,
 
     if spamDict is None:
         if targetGateset is not None: 
-            spamDict = targetGateset.get_spam_label_dict()
+            spamDict = targetGateset.get_reverse_spam_defs()
+            rhoLabels = targetGateset.preps.keys()
+            eLabels = targetGateset.effects.keys() # 'remainder' should *not* be an effectLabel here
         else:
             firstSpamLabel = dataset.get_spam_labels()[0]
-            spamDict = {(0,0): firstSpamLabel}
-    rhoInds = sorted(_tools.remove_duplicates( [rhoInd for (rhoInd,EInd) in spamDict] ))
-    EInds = sorted(_tools.remove_duplicates( [EInd for (rhoInd,EInd) in spamDict] ))
-    if -1 in EInds:  del EInds[EInds.index(-1)]  #remove "-1" as an Evec-index
+            spamDict = {('dummy_rho','dummy_E'): firstSpamLabel} 
+            rhoLabels = ['dummy_rho']; eLabels = ['dummy_E']
+            # Note: it doesn't actually matter what strings we use here
     
-    specs = _construction.build_spam_specs(rhoStrs=maxRhoStrs, EStrs=maxEStrs, rhoVecInds=rhoInds, EVecInds=EInds) 
+    specs = _construction.build_spam_specs(prepStrs=maxRhoStrs, effectStrs=maxEStrs,
+                                           prep_labels=rhoLabels, effect_labels=eLabels) 
     return _gramRankAndEvals(dataset, specs, targetGateset, spamDict)
 

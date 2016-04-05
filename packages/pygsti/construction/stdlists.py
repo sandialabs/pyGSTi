@@ -12,7 +12,7 @@ import gatestringconstruction as _gsc
 import spamspecconstruction as _ssc
 
 def make_lsgst_lists(gateLabels, fiducialList, germList, maxLengthList,
-                     rhoEPairs=None, truncScheme="whole germ powers"):
+                     fidPairs=None, truncScheme="whole germ powers"):
     """
     Create a set of gate string lists for LSGST based on germs and max-lengths.
 
@@ -50,9 +50,9 @@ def make_lsgst_lists(gateLabels, fiducialList, germList, maxLengthList,
         special behavior where LGST strings are included as the first 
         returned list.
 
-    rhoEPairs : list of 2-tuples, optional
+    fidPairs : list of 2-tuples, optional
         Specifies a subset of all fiducial string pairs (fiducial1, fiducial2)
-        to be used in the gate string lists.  Each element of rhoEPairs is a 
+        to be used in the gate string lists.  Each element of fidPairs is a 
         (iFiducial1, iFidicial2) 2-tuple of integers, each indexing a string
         within fiducialList so that fiducial1 = fiducialList[iFiducial1], etc.
 
@@ -76,22 +76,22 @@ def make_lsgst_lists(gateLabels, fiducialList, germList, maxLengthList,
         strings.
     """
     return make_lsgst_lists_asymmetric_fids(gateLabels, fiducialList, fiducialList,
-                                            germList, maxLengthList, rhoEPairs,
+                                            germList, maxLengthList, fidPairs,
                                             truncScheme)
     
-def make_lsgst_lists_asymmetric_fids(gateLabels, rhoStrs, EStrs, germList, maxLengthList,
-                                     rhoEPairs=None, truncScheme="whole germ powers"):
+def make_lsgst_lists_asymmetric_fids(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
+                                     fidPairs=None, truncScheme="whole germ powers"):
     '''
-    Same as make_lsgst_lists, except for asymmetric fiducial sets, specified by rhoStrs and EStrs.
+    Same as make_lsgst_lists, except for asymmetric fiducial sets, specified by prepStrs and effectStrs.
     '''
-    lgstStrings = _gsc.list_lgst_gatestrings( _ssc.build_spam_specs(rhoStrs = rhoStrs, EStrs = EStrs),
+    lgstStrings = _gsc.list_lgst_gatestrings( _ssc.build_spam_specs(prepStrs = prepStrs, effectStrs = effectStrs),
                                               gateLabels)
     lsgst_list = _gsc.gatestring_list([ () ]) #running list of all strings so far
 
-    if rhoEPairs is not None:
-        fiducialPairs = [ (rhoStrs[i],EStrs[j]) for (i,j) in rhoEPairs ]
+    if fidPairs is not None:
+        fiducialPairs = [ (prepStrs[i],effectStrs[j]) for (i,j) in fidPairs ]
     else:
-        fiducialPairs = list(_itertools.product(rhoStrs, EStrs))
+        fiducialPairs = list(_itertools.product(prepStrs, effectStrs))
     
     if maxLengthList[0] == 0:
         lsgst_listOfLists = [ lgstStrings ]

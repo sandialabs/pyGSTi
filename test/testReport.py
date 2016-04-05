@@ -8,15 +8,17 @@ import os
 class ReportTestCase(unittest.TestCase):
 
     def setUp(self):
+        #Set GateSet objects to "strict" mode for testing
+        pygsti.objects.GateSet._strict = True
 
         self.targetGateset = std.gs_target
         datagen_gateset = self.targetGateset.depolarize(gate_noise=0.05, spam_noise=0.1)
         
         self.fiducials = std.fiducials
         self.germs = std.germs
-        self.specs = pygsti.construction.build_spam_specs(self.fiducials, EVecInds=[0]) #only use the first EVec
+        self.specs = pygsti.construction.build_spam_specs(self.fiducials, effect_labels=['E0']) #only use the first EVec
 
-        self.gateLabels = self.targetGateset.keys() # also == std.gates
+        self.gateLabels = self.targetGateset.gates.keys() # also == std.gates
         self.lgstStrings = pygsti.construction.list_lgst_gatestrings(self.specs, self.gateLabels)
 
         self.maxLengthList = [0,1,2,4,8]
@@ -33,6 +35,9 @@ class ReportTestCase(unittest.TestCase):
         gs_lgst = pygsti.do_lgst(self.ds, self.specs, self.targetGateset, svdTruncateTo=4, verbosity=0)
         gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",targetGateset=self.targetGateset)
         self.gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
+        self.gs_clgst_tp = pygsti.contract(self.gs_clgst, "vSPAM")
+        self.gs_clgst_tp.set_all_parameterizations("TP")
+        
 
     def checkFile(self, fn):
         linesToTest = open("temp_test_files/%s" % fn).readlines()
@@ -44,9 +49,13 @@ class ReportTestCase(unittest.TestCase):
 class TestReport(ReportTestCase):
     
     def test_reports_chi2(self):
+
         lsgst_gatesets = pygsti.do_iterative_mc2gst(self.ds, self.gs_clgst, self.lsgstStrings, verbosity=0,
                                                    minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6),
                                                    returnAll=True)
+        lsgst_gatesets = [ pygsti.optimize_gauge(gs, "target", targetGateset=self.targetGateset,
+                                                 gateWeight=1,spamWeight=0.001) for gs in lsgst_gatesets]
+
         self.results = pygsti.report.Results()
         self.results.init_Ls_and_germs("chi2", self.targetGateset, self.ds, self.gs_clgst, self.maxLengthList, self.germs,
                                      lsgst_gatesets, self.lsgstStrings, self.fiducials, self.fiducials, 
@@ -103,11 +112,14 @@ class TestReport(ReportTestCase):
         self.checkFile("slidesB.tex")
 
     def test_reports_logL_TP(self):
-        lsgst_gatesets_TP = pygsti.do_iterative_mlgst(self.ds, self.gs_clgst, self.lsgstStrings, verbosity=0,
+        lsgst_gatesets_TP = pygsti.do_iterative_mlgst(self.ds, self.gs_clgst_tp, self.lsgstStrings, verbosity=0,
                                                    minProbClip=1e-4, probClipInterval=(-1e6,1e6),
-                                                   returnAll=True, opt_G0=False, opt_SP0=False)
+                                                   returnAll=True)
+        lsgst_gatesets_TP = [ pygsti.optimize_gauge(gs, "target", targetGateset=self.targetGateset, constrainToTP=True,
+                                                 gateWeight=1,spamWeight=0.001) for gs in lsgst_gatesets_TP]
+
         self.results_logL = pygsti.report.Results()
-        self.results_logL.init_Ls_and_germs("logl", self.targetGateset, self.ds, self.gs_clgst, self.maxLengthList, self.germs,
+        self.results_logL.init_Ls_and_germs("logl", self.targetGateset, self.ds, self.gs_clgst_tp, self.maxLengthList, self.germs,
                                      lsgst_gatesets_TP, self.lsgstStrings, self.fiducials, self.fiducials, 
                                      pygsti.construction.repeat_with_max_length, True)
 
@@ -177,36 +189,39 @@ class TestReport(ReportTestCase):
         chi2, chi2Hessian = pygsti.chi2(ds, gateset, returnHessian=True)
         ci = pygsti.obj.ConfidenceRegion(gateset, chi2Hessian, 95.0,
                                          hessianProjection="std")
-        chi2, chi2Hessian_TP = pygsti.chi2(ds, gateset, returnHessian=True, G0=False, SP0=False)
-        ci_TP = pygsti.obj.ConfidenceRegion(gateset, chi2Hessian_TP, 95.0,
-                                            hessianProjection="std", G0=False, SP0=False)
+        gateset_tp = pygsti.contract(gateset,"TP"); gateset_tp.set_all_parameterizations("TP")
+        chi2, chi2Hessian_TP = pygsti.chi2(ds, gateset_tp, returnHessian=True)
+        ci_TP = pygsti.obj.ConfidenceRegion(gateset_tp, chi2Hessian_TP, 95.0,
+                                            hessianProjection="std")
 
         chi2, chi2Hessian_tgt = pygsti.chi2(ds, std.gs_target, returnHessian=True)
         ci_tgt = pygsti.obj.ConfidenceRegion(std.gs_target, chi2Hessian_tgt, 95.0,
                                          hessianProjection="std")
-        chi2, chi2Hessian_tgt_TP = pygsti.chi2(ds, std.gs_target, returnHessian=True, G0=False, SP0=False)
-        ci_TP_tgt = pygsti.obj.ConfidenceRegion(std.gs_target, chi2Hessian_tgt_TP, 95.0,
-                                            hessianProjection="std", G0=False, SP0=False)
+        target_tp = std.gs_target.copy(); target_tp.set_all_parameterizations("TP")
+        chi2, chi2Hessian_tgt_TP = pygsti.chi2(ds, target_tp, returnHessian=True)
+        ci_TP_tgt = pygsti.obj.ConfidenceRegion(target_tp, chi2Hessian_tgt_TP, 95.0,
+                                            hessianProjection="std")
 
         gateset_2q = pygsti.construction.build_gateset( 
             [4], [('Q0','Q1')],['GIX','GIY','GXI','GYI','GCNOT'], 
             [ "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)" ],
-            rhoExpressions=["0"], EExpressions=["0","1","2"], 
-            spamLabelDict={'upup': (0,0), 'updn': (0,1), 'dnup': (0,2), 'dndn': (0,-1) }, basis="pp" )
+            prepLabels=['rho0'], prepExpressions=["0"], effectLabels=['E0','E1','E2'], effectExpressions=["0","1","2"], 
+            spamdefs={'upup': ('rho0','E0'), 'updn': ('rho0','E1'), 'dnup': ('rho0','E2'),
+                           'dndn': ('rho0','remainder') }, basis="pp" )
         
 
         #tests which fill in the cracks of the full-report tests
         with self.assertRaises(ValueError):
             gen.get_gateset_spam_table(gateset, formats, tableclass,
                                        longtable, None, mxBasis="fooBar")
-        gen.get_gateset_gates_table(gateset, formats, tableclass, longtable, ci_TP) #test zero-padding
+        gen.get_gateset_gates_table(gateset_tp, formats, tableclass, longtable, ci_TP) #test zero-padding
         gen.get_unitary_gateset_gates_table(std.gs_target, formats, tableclass, longtable, ci_tgt) #unitary gates w/CIs
-        gen.get_unitary_gateset_gates_table(std.gs_target, formats, tableclass, longtable, ci_TP_tgt) #unitary gates w/CIs
+        gen.get_unitary_gateset_gates_table(target_tp, formats, tableclass, longtable, ci_TP_tgt) #unitary gates w/CIs
         gen.get_gateset_closest_unitary_table(gateset_2q, formats, tableclass, longtable, None) #test higher-dim gateset
         gen.get_gateset_closest_unitary_table(gateset, formats, tableclass, longtable, ci) #test with CIs (long...)
         gen.get_gateset_rotn_axis_table(std.gs_target, formats, tableclass, longtable, None) #try to get "--"s and "X"s to display
-        gen.get_chi2_progress_table([0], [gateset], [ [('Gx',)],], ds, True, formats, tableclass, longtable) #TP case
-        gen.get_chi2_confidence_region(gateset, ds, 95, TPconstrained=True) #TP case
+        gen.get_chi2_progress_table([0], [gateset_tp], [ [('Gx',)],], ds, formats, tableclass, longtable) #TP case
+        gen.get_chi2_confidence_region(gateset_tp, ds, 95) #TP case
 
         gen.get_gatestring_multi_table([ [('Gx',),('Gz',)], [('Gy',)] ], ["list1","list2"], formats,
                                        tableclass, longtable, commonTitle=None) #commonTitle == None case w/diff length lists
@@ -217,13 +232,13 @@ class TestReport(ReportTestCase):
             gen.get_gateset_spam_parameters_table(std.gs_target, formats, tableclass, longtable, ci) #gateset-CI mismatch
 
         #LogL case tests
-        gen.get_logl_progress_table([0], [gateset], [ [('Gx',)],], ds, True, formats, tableclass, longtable) # logL case
-        gen.get_logl_progress_table([0], [gateset], [ [('Gx',)],], ds, False, formats, tableclass, longtable) # logL case
+        gen.get_logl_progress_table([0], [gateset_tp], [ [('Gx',)],], ds, formats, tableclass, longtable) # logL case
+        gen.get_logl_progress_table([0], [gateset], [ [('Gx',)],], ds, formats, tableclass, longtable) # logL case
 
-        gen.get_logl_confidence_region(gateset, ds, 95, TPconstrained=True,
+        gen.get_logl_confidence_region(gateset_tp, ds, 95,
                                        gatestring_list=None, probClipInterval=(-1e6,1e6),
                                        minProbClip=1e-4, radius=1e-4, hessianProjection="std")
-        gen.get_logl_confidence_region(gateset, ds, 95, TPconstrained=False,
+        gen.get_logl_confidence_region(gateset, ds, 95,
                                        gatestring_list=None, probClipInterval=(-1e6,1e6),
                                        minProbClip=1e-4, radius=1e-4, hessianProjection="std")
 
@@ -242,30 +257,37 @@ class TestReport(ReportTestCase):
                 return "weird"
         w = weirdType()
 
+        print "Float formatting"
         pygsti.report.html.html(f)
         pygsti.report.latex.latex(f)
         pygsti.report.ppt.ppt(f)
 
+        print "List formatting"
         pygsti.report.html.html(l)
         pygsti.report.latex.latex(l)
         pygsti.report.ppt.ppt(l)
 
+        print "Arbitrary class formatting"
         pygsti.report.html.html(w)
         pygsti.report.latex.latex(w)
         pygsti.report.ppt.ppt(w)
 
+        print "Vector formatting"
         pygsti.report.html.html(vec)
         pygsti.report.latex.latex(vec)
         pygsti.report.ppt.ppt(vec)
 
+        print "Vector formatting (w/brackets)"
         pygsti.report.html.html(vec, brackets=True)
         pygsti.report.latex.latex(vec, brackets=True)
         pygsti.report.ppt.ppt(vec, brackets=True)
 
+        print "Matrix formatting"
         pygsti.report.html.html_matrix(mx, fontsize=8, brackets=False)
         pygsti.report.latex.latex_matrix(mx, fontsize=8, brackets=False)
         pygsti.report.ppt.ppt_matrix(mx, fontsize=8, brackets=False)
 
+        print "Value formatting"
         ROUND = 2; complxAsPolar=True
         for complxAsPolar in (True,False):
             for x in (0.001,0.01,1.0,10.0,100.0,1000.0,10000.0,1.0+1.0j,10j,1.0+1e-10j,1e-10j,"N/A"):
