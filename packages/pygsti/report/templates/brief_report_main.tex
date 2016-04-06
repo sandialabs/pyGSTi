@@ -10,6 +10,9 @@
 \usepackage{etoolbox}
 \usepackage{units}
 \usepackage{multirow}
+\usepackage{hyperref}
+\usepackage{pdfcomment}
+\usepackage{color}
 
 \setcounter{topnumber}{3}
 \setcounter{bottomnumber}{3}
@@ -45,6 +48,11 @@
 \newtoggle{goodnessSection}
 \putfield{settoggles}{}
 
+\hypersetup{
+  pdfinfo={ \putfield{pdfinfo}{}  }
+}
+
+
 \begin{document}
 
 \title{\putfield{title}{Report Title Goes Here}}
@@ -63,20 +71,20 @@ This report presents a brief gate-set tomography (GST) analysis of a dataset cal
 \section{Goodness-of-model}
 \iftoggle{goodnessSection}{
 Table \ref{progressTable} shows how well GST was able to fit you data through its iterations.
-%, and Figure \ref{bestGatesetBoxPlot} shows in more detail the goodness of fit quantity for the final (best) gateset estimate.
+%, and Figure \ref{bestEstimateColorBoxPlot} shows in more detail the goodness of fit quantity for the final (best) gateset estimate.
 
 \begin{table}[h]
 \begin{center}
 \putfield{progressTable}{progress table will be placed here}
-\caption{\textbf{Comparison between the computed and expected \putfield{gofObjective}{??} for different values of $L$}.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively.  \putfield{gofObjective}{??} is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $P$ is the p-value derived from a $\chi^2_k$ distribution (i.e.~when $P <$ some threshold like $0.05$ there is grounds for rejecting the GST fit). The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.\label{progressTable}}
+\caption{\putfield{tt_progressTable}{}\textbf{Comparison between the computed and expected \putfield{gofObjective}{??} for different values of $L$}.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively.  \putfield{gofObjective}{??} is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $P$ is the p-value derived from a $\chi^2_k$ distribution (i.e.~when $P <$ some threshold like $0.05$ there is grounds for rejecting the GST fit). The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.\label{progressTable}}
 \end{center}
 \end{table}
 
 
 %\begin{figure}
 %\begin{center}
-%\XXputfield{bestGatesetBoxPlot}{Color box plot for best gateset}
-%\caption{\textbf{\XXputfield{objective}{??} values for every individual experiment in the dataset}.  Each pixel represents a single experiment (gate sequence), and its color indicates whether GST was able to fit the corresponding frequency well.  Blue is typical; dark red squares indicating $\chi^2>10$ should appear only once per 638 experiments on average.  Square blocks of pixels correspond to base sequences (arranged vertically by germ and horizontally by length); each pixel within a block corresponds to a specific choice of pre- and post-fiducial sequences.  See text for further details.\label{bestGatesetBoxPlot}}
+%\XXputfield{bestEstimateColorBoxPlot}{Color box plot for best gateset}
+%\caption{\XXputfield{tt_bestEstimateColorBoxPlot}{}\textbf{\XXputfield{objective}{??} values for every individual experiment in the dataset}.  Each pixel represents a single experiment (gate sequence), and its color indicates whether GST was able to fit the corresponding frequency well.  Blue is typical; dark red squares indicating $\chi^2>10$ should appear only once per 638 experiments on average.  Square blocks of pixels correspond to base sequences (arranged vertically by germ and horizontally by length); each pixel within a block corresponds to a specific choice of pre- and post-fiducial sequences.  See text for further details.\label{bestEstimateColorBoxPlot}}
 %\end{center}
 %\end{figure}
 
@@ -94,7 +102,7 @@ Below is a collection of GST's primary result tables, ordered in what we think i
 \putfield{bestGatesetVsTargetTable}{Best gateset overview table will be placed here}
 \vspace{2em}
 \putfield{bestGatesetErrorGenTable}{Best gateset error generator table will be placed here}
-\caption{\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The second table lists the ``Error Generator'' for each gate, which is the Lindbladian $\mathbb{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$. \label{bestGatesetVsTargetTable}}
+\caption{\putfield{tt_bestGatesetVsTargetTable}{}\putfield{tt_bestGatesetErrorGenTable}{}\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The second table lists the ``Error Generator'' for each gate, which is the Lindbladian $\mathbb{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$. \label{bestGatesetVsTargetTable}}
 \end{center}
 \end{table}
 
@@ -104,7 +112,7 @@ Below is a collection of GST's primary result tables, ordered in what we think i
 \putfield{bestGatesetDecompTable}{Best gateset overview table will be placed here}
 \vspace{2em}
 \putfield{bestGatesetRotnAxisTable}{Best gateset rotn axis table will be placed here}
-\caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay''); and (7) the angle between each gate's rotation axis and the rotation axes of the other gates.  ``X'' indicates that the decomposition failed or couldn't be interpreted. \label{bestGatesetDecompTable}}
+\caption{\putfield{tt_bestGatesetDecompTable}{}\putfield{tt_bestGatesetRotnAxisTable}{}\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay''); and (7) the angle between each gate's rotation axis and the rotation axes of the other gates.  ``X'' indicates that the decomposition failed or couldn't be interpreted. \label{bestGatesetDecompTable}}
 \end{center}
 \end{table}
 
@@ -115,21 +123,21 @@ Below is a collection of GST's primary result tables, ordered in what we think i
 \begin{table}[h]
 \begin{center}
 \putfield{bestGatesetSpamTable}{Best gateset rho and E vectors table will be placed here}
-\caption{\textbf{The GST estimate of the SPAM operations}.  Compare to Table \ref{targetSpamTable}.\label{bestGatesetSpamTable}}
+\caption{\putfield{tt_bestGatesetSpamTable}{}\textbf{The GST estimate of the SPAM operations}.  Compare to Table \ref{targetSpamTable}.\label{bestGatesetSpamTable}}
 \end{center}
 \end{table}
 
 \begin{table}[h]
 \begin{center}
 \putfield{bestGatesetSpamParametersTable}{Best gateset spam parametesr table will be placed here}
-\caption{\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestGatesetSpamTable}.\label{bestGatesetSpamParametersTable}}
+\caption{\putfield{tt_bestGatesetSpamParametersTable}{}\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestGatesetSpamTable}.\label{bestGatesetSpamParametersTable}}
 \end{center}
 \end{table}
 
 \begin{table}[h]
 \begin{center}
 \putfield{bestGatesetGatesTable}{Best gateset's gates table will be placed here}
-\caption{\textbf{The GST estimate of the logic gate operations}.  Compare to Table \ref{targetGatesTable}.\label{bestGatesetGatesTable}}
+\caption{\putfield{tt_bestGatesetGatesTable}{}\textbf{The GST estimate of the logic gate operations}.  Compare to Table \ref{targetGatesTable}.\label{bestGatesetGatesTable}}
 \end{center}
 \end{table}
 

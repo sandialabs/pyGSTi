@@ -8,25 +8,28 @@ import sys
 class DriversTestCase(unittest.TestCase):
 
     def setUp(self):
+        #Set GateSet objects to "strict" mode for testing
+        pygsti.objects.GateSet._strict = True
+
         self.gateset = std.gs_target
 
         self.germs = std.germs
         self.fiducials = std.fiducials
         self.maxLens = [0,1,2,4]
-        self.gateLabels = self.gateset.keys()
+        self.gateLabels = self.gateset.gates.keys()
         
         self.elgstStrings = pygsti.construction.make_elgst_lists(
             self.gateLabels, self.germs, self.maxLens )
         
         self.lsgstStrings = pygsti.construction.make_lsgst_lists(
-            self.gateLabels, self.fiducials, self.germs, self.maxLens )
+            self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLens )
 
         self.lsgstStrings_tgp = pygsti.construction.make_lsgst_lists(
-            self.gateLabels, self.fiducials, self.germs, self.maxLens, 
+            self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLens, 
             truncScheme="truncated germ powers" )
 
         self.lsgstStrings_lae = pygsti.construction.make_lsgst_lists(
-            self.gateLabels, self.fiducials, self.germs, self.maxLens, 
+            self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLens, 
             truncScheme='length as exponent' )
 
         # RUN BELOW LINES TO GENERATE SAVED DATASETS
@@ -79,7 +82,7 @@ class TestDriversMethods(DriversTestCase):
         #Try using files instead of objects
         pygsti.io.write_gateset(std.gs_target, "temp_test_files/driver.gateset")
         pygsti.io.write_dataset("temp_test_files/driver_test_dataset.txt",
-                                self.lsgstStrings[-1], ds)
+                                ds, self.lsgstStrings[-1])
         pygsti.io.write_gatestring_list("temp_test_files/driver_fiducials.txt", std.fiducials)
         pygsti.io.write_gatestring_list("temp_test_files/driver_germs.txt", std.germs)
 
@@ -91,7 +94,7 @@ class TestDriversMethods(DriversTestCase):
                                 "temp_test_files/driver_germs.txt",
                                 maxLens, truncScheme=ts)
 
-        #Try using EStrs == None and gaugeOptToCPTP
+        #Try using effectStrs == None and gaugeOptToCPTP
         result = self.runSilent(pygsti.do_long_sequence_gst,
                                 ds, std.gs_target, std.fiducials, None,
                                 std.germs, maxLens, truncScheme=ts,
@@ -146,13 +149,13 @@ class TestDriversMethods(DriversTestCase):
         ds = pygsti.objects.DataSet(fileToLoadFrom="cmp_chk_files/drivers.dataset")
         ts = "whole germ powers"
 
-        rhoEPairs = pygsti.alg.find_sufficient_fiducial_pairs(
+        fidPairs = pygsti.alg.find_sufficient_fiducial_pairs(
             std.gs_target, std.fiducials, std.fiducials, std.germs, verbosity=0)
 
         maxLens = self.maxLens
         result = self.runSilent(pygsti.do_long_sequence_gst,
                                 ds, std.gs_target, std.fiducials, std.fiducials,
-                                std.germs, maxLens, truncScheme=ts, rhoEPairs=rhoEPairs)
+                                std.germs, maxLens, truncScheme=ts, fidPairs=fidPairs)
 
         #create a report...
         result.create_full_report_pdf(filename="temp_test_files/full_report_FPR.pdf",
@@ -167,8 +170,10 @@ class TestDriversMethods(DriversTestCase):
 
         gs_target = pygsti.construction.build_gateset([2],[('Q0',)], ['Gi','Gx','Gy'], 
                                                       [ "D(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                                      rhoExpressions=["0"], EExpressions=["1"], 
-                                                      spamLabelDict={'plus': (0,0), 'minus': (0,-1) },
+                                                      prepLabels=['rho0'], prepExpressions=["0"],
+                                                      effectLabels=['E0'], effectExpressions=["1"], 
+                                                      spamdefs={'plus': ('rho0','E0'),
+                                                                     'minus': ('rho0','remainder') },
                                                       parameterization="linear")
 
         maxLens = self.maxLens
@@ -184,9 +189,9 @@ class TestDriversMethods(DriversTestCase):
 
 
 
-        #rhoStrsListOrFilename, EStrsListOrFilename,
+        #prepStrsListOrFilename, effectStrsListOrFilename,
         #germsListOrFilename, maxLengths, gateLabels, 
-        #weightsDict, rhoEPairs, constrainToTP, 
+        #weightsDict, fidPairs, constrainToTP, 
         #gaugeOptToCPTP, gaugeOptRatio, objective="logl",
         #advancedOptions={}, lsgstLists=None,
         #truncScheme="whole germ powers"):
@@ -218,19 +223,22 @@ class TestDriversMethods(DriversTestCase):
         def gsFn(gs):
             return gs.get_dimension()
 
+        tp_target = std.gs_target.copy()
+        tp_target.set_all_parameterizations("TP")
+        
         pygsti.drivers.gs_stdev(gsFn, bootgs_p)
         pygsti.drivers.gs_mean(gsFn, bootgs_p)
         pygsti.drivers.gs_stdev1(gsFn, bootgs_p)
         pygsti.drivers.gs_mean1(gsFn, bootgs_p)
         pygsti.drivers.to_vector(bootgs_p[0])
 
-        pygsti.drivers.to_mean_gateset(bootgs_p, std.gs_target)
-        pygsti.drivers.to_std_gateset(bootgs_p, std.gs_target)
-        pygsti.drivers.to_rms_gateset(bootgs_p, std.gs_target)
+        pygsti.drivers.to_mean_gateset(bootgs_p, tp_target)
+        pygsti.drivers.to_std_gateset(bootgs_p, tp_target)
+        pygsti.drivers.to_rms_gateset(bootgs_p, tp_target)
         
-        pygsti.drivers.gateset_jtracedist(bootgs_p[0], std.gs_target)
-        pygsti.drivers.gateset_process_fidelity(bootgs_p[0], std.gs_target)
-        pygsti.drivers.gateset_diamonddist(bootgs_p[0], std.gs_target)
+        pygsti.drivers.gateset_jtracedist(bootgs_p[0], tp_target)
+        pygsti.drivers.gateset_process_fidelity(bootgs_p[0], tp_target)
+        pygsti.drivers.gateset_diamonddist(bootgs_p[0], tp_target)
         pygsti.drivers.gateset_decomp_angle(bootgs_p[0])
         pygsti.drivers.gateset_decomp_decay_diag(bootgs_p[0])
         pygsti.drivers.gateset_decomp_decay_offdiag(bootgs_p[0])

@@ -9,6 +9,7 @@ import os as _os
 import warnings as _warnings
 import numpy as _np
 import sys as _sys
+import time as _time
 
 from .. import report as _report
 from .. import algorithms as _alg
@@ -18,9 +19,9 @@ from .. import objects as _objs
 from .. import tools as _tools
 
 def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
-                         rhoStrsListOrFilename, EStrsListOrFilename,
+                         prepStrsListOrFilename, effectStrsListOrFilename,
                          germsListOrFilename, maxLengths, gateLabels=None, 
-                         weightsDict=None, rhoEPairs=None, constrainToTP=True, 
+                         weightsDict=None, fidPairs=None, constrainToTP=True, 
                          gaugeOptToCPTP=False, gaugeOptRatio=0.001,
                          objective="logl", advancedOptions={}, lsgstLists=None,
                          truncScheme="whole germ powers", mxBasis="gm"):
@@ -55,14 +56,14 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         The target gate set, specified either directly or by the filename of a 
         gateset file (text format).
 
-    rhoStrsListOrFilename : (list of GateStrings) or string
+    prepStrsListOrFilename : (list of GateStrings) or string
         The state preparation fiducial gate strings, specified either directly 
         or by the filename of a gate string list file (text format).
 
-    EStrsListOrFilename : (list of GateStrings) or string or None
+    effectStrsListOrFilename : (list of GateStrings) or string or None
         The measurement fiducial gate strings, specified either directly 
         or by the filename of a gate string list file (text format).  If None,
-        then use the same strings as specified by rhoStrsListOrFilename.
+        then use the same strings as specified by prepStrsListOrFilename.
 
     germsListOrFilename : (list of GateStrings) or string
         The germ gate strings, specified either directly or by the filename of a
@@ -85,9 +86,9 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         A dictionary with keys == gate strings and values == multiplicative scaling 
         factor for the corresponding gate string. The default is no weight scaling at all.
 
-    rhoEPairs : list of 2-tuples, optional
-        Specifies a subset of all rhoStr,EStr string pairs to be used in this
-        analysis.  Each element of rhoEPairs is a (iRhoStr, iEStr) 2-tuple of integers,
+    fidPairs : list of 2-tuples, optional
+        Specifies a subset of all prepStr,effectStr string pairs to be used in this
+        analysis.  Each element of fidPairs is a (iRhoStr, iEStr) 2-tuple of integers,
         which index a string within the state preparation and measurement fiducial
         strings respectively.
 
@@ -135,6 +136,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     """
                     
     cwd = _os.getcwd()
+    tRef = _time.time(); times_list = []
 
     #Get target gateset
     if isinstance(targetGateFilenameOrSet, str):
@@ -153,33 +155,43 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
 
     #Get gate strings and labels
     if gateLabels is None:
-        gateLabels = gs_target.keys()
+        gateLabels = gs_target.gates.keys()
 
-    if isinstance(rhoStrsListOrFilename, str):
-        rhoStrs = _io.load_gatestring_list(rhoStrsListOrFilename)
-    else: rhoStrs = rhoStrsListOrFilename
+    if isinstance(prepStrsListOrFilename, str):
+        prepStrs = _io.load_gatestring_list(prepStrsListOrFilename)
+    else: prepStrs = prepStrsListOrFilename
 
-    if EStrsListOrFilename is None:
-        EStrs = rhoStrs #use same strings for EStrs if EStrsListOrFilename is None
+    if effectStrsListOrFilename is None:
+        effectStrs = prepStrs #use same strings for effectStrs if effectStrsListOrFilename is None
     else:
-        if isinstance(EStrsListOrFilename, str):
-            EStrs = _io.load_gatestring_list(EStrsListOrFilename)
-        else: EStrs = EStrsListOrFilename
+        if isinstance(effectStrsListOrFilename, str):
+            effectStrs = _io.load_gatestring_list(effectStrsListOrFilename)
+        else: effectStrs = effectStrsListOrFilename
 
     if isinstance(germsListOrFilename, str):
         germs = _io.load_gatestring_list(germsListOrFilename)
     else: germs = germsListOrFilename
     if lsgstLists is None:
-        lsgstLists = _construction.stdlists.make_lsgst_lists_asymmetric_fids(
-            gateLabels, rhoStrs, EStrs, germs, maxLengths, rhoEPairs, truncScheme)
+        nest = advancedOptions.get('nestedGateStringLists',True)
+        lsgstLists = _construction.stdlists.make_lsgst_lists(
+            gateLabels, prepStrs, effectStrs, germs, maxLengths, fidPairs,
+            truncScheme, nest)
+    
+    tNxt = _time.time()
+    times_list.append( ('Loading',tNxt-tRef) ); tRef=tNxt
 
     #Starting Point = LGST
     gate_dim = gs_target.get_dimension()
-    specs = _construction.build_spam_specs(rhoStrs=rhoStrs, EStrs=EStrs,
-                                           EVecInds=gs_target.get_evec_indices())
+    specs = _construction.build_spam_specs(prepStrs=prepStrs, effectStrs=effectStrs,
+                                           prep_labels=gs_target.get_prep_labels(),
+                                           effect_labels=gs_target.get_effect_labels())
     gs_lgst = _alg.do_lgst(ds, specs, gs_target, svdTruncateTo=gate_dim, verbosity=3)
 
+    tNxt = _time.time()
+    times_list.append( ('LGST',tNxt-tRef) ); tRef=tNxt
+
     if constrainToTP: #gauge optimize (and contract if needed) to TP, then lock down first basis element as the identity
+        #TODO: instead contract to vSPAM? (this could do more than just alter the 1st element...)
         firstElIdentityVec = _np.zeros( (gate_dim,1) )
         firstElIdentityVec[0] = gate_dim**0.25 # first basis el is assumed = sqrt(gate_dim)-dimensional identity density matrix 
         minPenalty, gaugeMx, gs_in_TP = _alg.optimize_gauge(gs_lgst, "TP",  returnAll=True, spamWeight=1.0, gateWeight=1.0, verbosity=3)
@@ -189,7 +201,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                 _warnings.warn("Could not gauge optimize to TP (penalty=%g), so contracted LGST gateset to TP" % minPenalty)
 
         gs_after_gauge_opt = _alg.optimize_gauge(gs_in_TP, "target", targetGateset=gs_target, constrainToTP=True, spamWeight=1.0, gateWeight=1.0)
-        gs_after_gauge_opt.set_identity_vec( firstElIdentityVec ) # declare that this basis has the identity as its first element
+        gs_after_gauge_opt.povm_identity = firstElIdentityVec # declare that this basis has the identity as its first element
 
     else: # no TP constraint
         gs_after_gauge_opt = _alg.optimize_gauge(gs_lgst, "target", targetGateset=gs_target, spamWeight=1.0, gateWeight=1.0)
@@ -201,59 +213,92 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     if advancedOptions.get('depolarizeLGST',0) > 0:
         gs_after_gauge_opt = gs_after_gauge_opt.depolarize(gate_noise=advancedOptions['depolarizeLGST'])
 
+    if constrainToTP:
+        gs_after_gauge_opt.set_all_parameterizations("TP")
+
+    tNxt = _time.time()
+    times_list.append( ('Prep LGST seed',tNxt-tRef) ); tRef=tNxt
+
     #Run LSGST on data
     if objective == "chi2":
-        gs_lsgst_list = _alg.do_iterative_mc2gst(ds, gs_after_gauge_opt, lsgstLists, 
-                                              minProbClipForWeighting=advancedOptions.get('minProbClipForWeighting',1e-4),
-                                              probClipInterval = advancedOptions.get('probClipInterval',(-1e6,1e6)),
-                                              returnAll=True, opt_G0=(not constrainToTP), opt_SP0=(not constrainToTP),
-                                              gatestringWeightsDict=weightsDict, verbosity=advancedOptions.get('verbosity',2),
-                                              memLimit=advancedOptions.get('memoryLimitInBytes',None),
-                                              useFreqWeightedChiSq=advancedOptions.get('useFreqWeightedChiSq',False))
+        gs_lsgst_list = _alg.do_iterative_mc2gst(
+            ds, gs_after_gauge_opt, lsgstLists, 
+            minProbClipForWeighting=advancedOptions.get(
+                'minProbClipForWeighting',1e-4),
+            probClipInterval = advancedOptions.get(
+                'probClipInterval',(-1e6,1e6)),
+            returnAll=True, gatestringWeightsDict=weightsDict,
+            verbosity=advancedOptions.get('verbosity',2),
+            memLimit=advancedOptions.get('memoryLimitInBytes',None),
+            useFreqWeightedChiSq=advancedOptions.get(
+                'useFreqWeightedChiSq',False), times=times_list)
     elif objective == "logl":
-        gs_lsgst_list = _alg.do_iterative_mlgst(ds, gs_after_gauge_opt, lsgstLists,
-                                               minProbClip = advancedOptions.get('minProbClip',1e-4),
-                                               minProbClipForWeighting=advancedOptions.get('minProbClipForWeighting',1e-4),
-                                               probClipInterval = advancedOptions.get('probClipInterval',(-1e6,1e6)),
-                                               radius=advancedOptions.get('radius',1e-4), 
-                                               returnAll=True, opt_G0=(not constrainToTP), opt_SP0=(not constrainToTP),
-                                               verbosity=advancedOptions.get('verbosity',2),
-                                               memLimit=advancedOptions.get('memoryLimitInBytes',None),
-                                               useFreqWeightedChiSq=advancedOptions.get('useFreqWeightedChiSq',False))
+        gs_lsgst_list = _alg.do_iterative_mlgst(
+          ds, gs_after_gauge_opt, lsgstLists,
+          minProbClip = advancedOptions.get('minProbClip',1e-4),
+          minProbClipForWeighting=advancedOptions.get('minProbClipForWeighting',1e-4),
+          probClipInterval = advancedOptions.get('probClipInterval',(-1e6,1e6)),
+          radius=advancedOptions.get('radius',1e-4), 
+          returnAll=True, verbosity=advancedOptions.get('verbosity',2),
+          memLimit=advancedOptions.get('memoryLimitInBytes',None),
+          useFreqWeightedChiSq=advancedOptions.get(
+                'useFreqWeightedChiSq',False), times=times_list)
     else:
         raise ValueError("Invalid longSequenceObjective: %s" % objective)
+
+    tNxt = _time.time()
+    times_list.append( ('Total long-seq. opt.',tNxt-tRef) ); tRef=tNxt
 
     #Run the gatesets through gauge optimization, first to CPTP then to target
     #   so fidelity and frobenius distance w/targets is more meaningful
     if gaugeOptToCPTP:
         print "\nGauge Optimizing to CPTP..."; _sys.stdout.flush()
-        go_gs_lsgst_list = [_alg.optimize_gauge(gs,'CPTP', constrainToTP=constrainToTP) for gs in gs_lsgst_list]
+        go_gs_lsgst_list = [_alg.optimize_gauge(
+                gs,'CPTP',constrainToTP=constrainToTP) for gs in gs_lsgst_list]
+
+        tNxt = _time.time()
+        times_list.append( ('Gauge opt to CPTP',tNxt-tRef) ); tRef=tNxt
     else:
         go_gs_lsgst_list = gs_lsgst_list
         
     for i,gs in enumerate(go_gs_lsgst_list):
-        if gaugeOptToCPTP and _tools.sum_of_negative_choi_evals(gs) < 1e-8:  #if a gateset is in CP, then don't let it out (constrain = True)
-            go_gs_lsgst_list[i] = _alg.optimize_gauge(gs,'target',targetGateset=gs_target,
-                                                      constrainToTP=constrainToTP, constrainToCP=True,
-                                                      gateWeight=1, spamWeight=gaugeOptRatio)
-        
+        if gaugeOptToCPTP and _tools.sum_of_negative_choi_evals(gs) < 1e-8:
+            #if gateset is in CP, then don't let it out (constrain = True)
+            go_gs_lsgst_list[i] = _alg.optimize_gauge(
+                gs,'target',targetGateset=gs_target,
+                constrainToTP=constrainToTP, constrainToCP=True,
+                gateWeight=1, spamWeight=gaugeOptRatio)
+            
         else: #otherwise just optimize to the target and forget about CPTP...
-            go_gs_lsgst_list[i] = _alg.optimize_gauge(gs,'target',targetGateset=gs_target,
-                                                      constrainToTP=constrainToTP, 
-                                                      gateWeight=1, spamWeight=gaugeOptRatio)
+            go_gs_lsgst_list[i] = _alg.optimize_gauge(
+                gs,'target',targetGateset=gs_target,
+                constrainToTP=constrainToTP, 
+                gateWeight=1, spamWeight=gaugeOptRatio)
+
+    tNxt = _time.time()
+    times_list.append( ('Gauge opt to target',tNxt-tRef) ); tRef=tNxt
 
     truncFn = _construction.stdlists._getTruncFunction(truncScheme)
 
     ret = _report.Results()
     ret.init_Ls_and_germs(objective, gs_target, ds, 
                         gs_after_gauge_opt, maxLengths, germs,
-                        go_gs_lsgst_list, lsgstLists, rhoStrs, EStrs,
-                        truncFn,  constrainToTP, rhoEPairs, gs_lsgst_list)
-    ret.set_additional_info(advancedOptions.get('minProbClip',1e-4),
-                          advancedOptions.get('minProbClipForWeighting',1e-4),
-                          advancedOptions.get('probClipInterval',(-1e6,1e6)),
-                          advancedOptions.get('radius',1e-4), 
-                          weightsDict, default_dir, default_base, mxBasis)
+                        go_gs_lsgst_list, lsgstLists, prepStrs, effectStrs,
+                        truncFn,  constrainToTP, fidPairs, gs_lsgst_list)
+    ret.parameters['minProbClip'] = \
+        advancedOptions.get('minProbClip',1e-4)
+    ret.parameters['minProbClipForWeighting'] = \
+        advancedOptions.get('minProbClipForWeighting',1e-4)
+    ret.parameters['probClipInterval'] = \
+        advancedOptions.get('probClipInterval',(-1e6,1e6))
+    ret.parameters['radius'] = advancedOptions.get('radius',1e-4)
+    ret.parameters['weights'] = weightsDict
+    ret.parameters['defaultDirectory'] = default_dir
+    ret.parameters['defaultBasename'] = default_base
+    ret.parameters['mxBasis'] = mxBasis
+
+    times_list.append( ('Results initialization',_time.time()-tRef) )
+    ret.parameters['times'] = times_list
 
     assert( len(maxLengths) == len(lsgstLists) == len(go_gs_lsgst_list) )
     return ret

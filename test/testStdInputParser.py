@@ -4,10 +4,12 @@ import pyparsing
 import pygsti
 import numpy as np
 
+
 class StdInputParserTestCase(unittest.TestCase):
 
     def setUp(self):
-        pass
+        #Set GateSet objects to "strict" mode for testing
+        pygsti.objects.GateSet._strict = True
 
     def assertArraysAlmostEqual(self,a,b):
         self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
@@ -550,20 +552,20 @@ SPAMLABEL plus = rho_up E
         #print " ==> gateset1:\n", gs1
         #print " ==> gateset2:\n", gs2
 
-        rotXPi   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi,Q0)").matrix
-        rotXPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi/2,Q0)").matrix        
-        rotYPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "Y(pi/2,Q0)").matrix        
+        rotXPi   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi,Q0)")
+        rotXPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi/2,Q0)")
+        rotYPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "Y(pi/2,Q0)")
 
-        self.assertArraysAlmostEqual(gs1['G1'],rotXPiOv2)
-        self.assertArraysAlmostEqual(gs1['G2'],rotYPiOv2)
-        self.assertArraysAlmostEqual(gs1.rhoVecs[0], 1/np.sqrt(2)*np.array([1,0,0,1]).reshape(-1,1) )
-        self.assertArraysAlmostEqual(gs1.EVecs[0], 1/np.sqrt(2)*np.array([1,0,0,-1]).reshape(-1,1) )
+        self.assertArraysAlmostEqual(gs1.gates['G1'],rotXPiOv2)
+        self.assertArraysAlmostEqual(gs1.gates['G2'],rotYPiOv2)
+        self.assertArraysAlmostEqual(gs1.preps['rho'], 1/np.sqrt(2)*np.array([1,0,0,1]).reshape(-1,1) )
+        self.assertArraysAlmostEqual(gs1.effects['E'], 1/np.sqrt(2)*np.array([1,0,0,-1]).reshape(-1,1) )
 
-        self.assertArraysAlmostEqual(gs2['G1'],rotXPiOv2)
-        self.assertArraysAlmostEqual(gs2['G2'],rotYPiOv2)
-        self.assertArraysAlmostEqual(gs2['G3'],rotXPi)
-        self.assertArraysAlmostEqual(gs2.rhoVecs[0], 1/np.sqrt(2)*np.array([1,0,0,1]).reshape(-1,1) )
-        self.assertArraysAlmostEqual(gs2.EVecs[0], 1/np.sqrt(2)*np.array([1,0,0,-1]).reshape(-1,1) )
+        self.assertArraysAlmostEqual(gs2.gates['G1'],rotXPiOv2)
+        self.assertArraysAlmostEqual(gs2.gates['G2'],rotYPiOv2)
+        self.assertArraysAlmostEqual(gs2.gates['G3'],rotXPi)
+        self.assertArraysAlmostEqual(gs2.preps['rho_up'], 1/np.sqrt(2)*np.array([1,0,0,1]).reshape(-1,1) )
+        self.assertArraysAlmostEqual(gs2.effects['E'], 1/np.sqrt(2)*np.array([1,0,0,-1]).reshape(-1,1) )
 
 
 

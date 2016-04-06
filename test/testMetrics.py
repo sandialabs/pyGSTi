@@ -3,9 +3,13 @@ import pygsti
 from pygsti.construction import std1Q_XYI as std
 import numpy as np
 
+
 class MetricsTestCase(unittest.TestCase):
 
     def setUp(self):
+        #Set GateSet objects to "strict" mode for testing
+        pygsti.objects.GateSet._strict = True
+
         self.gateset = std.gs_target
         self.gateset_dep = self.gateset.depolarize(gate_noise=0.05, spam_noise=0)
         self.gateset_rdm = self.gateset_dep.kick( absmag=0.1 )

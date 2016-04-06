@@ -11,6 +11,9 @@
 \usepackage{units}
 \usepackage{multirow}
 \usepackage{adjustbox}
+\usepackage{hyperref}
+\usepackage{pdfcomment}
+\usepackage{color}
 
 \setcounter{topnumber}{3}
 \setcounter{bottomnumber}{3}
@@ -55,6 +58,32 @@
 \toggletrue{pixelplotsappendix}
 \toggletrue{whackamoleappendix}
 
+
+\hypersetup{
+  pdfinfo={ Author={pyGSTi},
+Title={GST report for $\mathcal{D}$},
+Keywords={GST},
+pyGSTi_Version={0.9.1-alpha},
+opt_table_formats={[py, html, latex, ppt]},
+opt_long_tables={False},
+opt_table_class={dataTable},
+opt_template_path={None},
+opt_latex_cmd={pdflatex},
+defaultDirectory={None},
+max_length_list={[0, 1, 2, 4, 8]},
+defaultBasename={None},
+radius={0.0001},
+minProbClip={1e-06},
+fiducial_pairs={None},
+mxBasis={gm},
+minProbClipForWeighting={0.0001},
+L_germ_tuple_base_string_dict={Dict[[0, Gx]: {}, [0, Gy]: {}, [0, Gi]: {}, [0, GxGy]: {}, [0, GxGyGi]: {}, [0, GxGiGy]: {}, [0, GxGiGi]: {}, [0, GyGiGi]: {}, [0, GxGxGiGy]: {}, [0, GxGyGyGi]: {}, [0, GxGxGyGxGyGy]: {}, [1, Gx]: [Gx], [1, Gy]: [Gy], [1, Gi]: [Gi], [1, GxGy]: {}, [1, GxGyGi]: {}, [1, GxGiGy]: {}, [1, GxGiGi]: {}, [1, GyGiGi]: {}, [1, GxGxGiGy]: {}, [1, GxGyGyGi]: {}, [1, GxGxGyGxGyGy]: {}, [2, Gx]: [Gx]2, [2, Gy]: [Gy]2, [2, Gi]: [Gi]2, [2, GxGy]: [GxGy], [2, GxGyGi]: {}, [2, GxGiGy]: {}, [2, GxGiGi]: {}, [2, GyGiGi]: {}, [2, GxGxGiGy]: {}, [2, GxGyGyGi]: {}, [2, GxGxGyGxGyGy]: {}, [4, Gx]: [Gx]4, [4, Gy]: [Gy]4, [4, Gi]: [Gi]4, [4, GxGy]: [GxGy]2, [4, GxGyGi]: [GxGyGi], [4, GxGiGy]: [GxGiGy], [4, GxGiGi]: [GxGiGi], [4, GyGiGi]: [GyGiGi], [4, GxGxGiGy]: [GxGxGiGy], [4, GxGyGyGi]: [GxGyGyGi], [4, GxGxGyGxGyGy]: {}, [8, Gx]: [Gx]8, [8, Gy]: [Gy]8, [8, Gi]: [Gi]8, [8, GxGy]: [GxGy]4, [8, GxGyGi]: [GxGyGi]2, [8, GxGiGy]: [GxGiGy]2, [8, GxGiGi]: [GxGiGi]2, [8, GyGiGi]: [GyGiGi]2, [8, GxGxGiGy]: [GxGxGiGy]2, [8, GxGyGyGi]: [GxGyGyGi]2, [8, GxGxGyGxGyGy]: [GxGxGyGxGyGy]]},
+probClipInterval={[-1000000.0, 1000000.0]},
+weights={None},
+objective={logl},
+constrainToTP={True},
+hessianProjection={std}  }
+}
 
 
 \begin{document}
@@ -236,8 +265,8 @@ This table also contains one derived quantity, the spectrum of the largest \emph
 \end{tabular}
 
 }
-%putfield{rhoStrListTable}{List of state prep fiducials table will be placed here}
-%putfield{EStrListTable}{List of effect fiducials table will be placed here}
+%putfield{prepStrListTable}{List of state prep fiducials table will be placed here}
+%putfield{effectStrListTable}{List of effect fiducials table will be placed here}
 \end{minipage}
 \begin{minipage}[b]{0.40\linewidth}
 \adjustbox{max width=\linewidth}{
@@ -306,37 +335,37 @@ Tables \ref{bestGatesetSpamTable} and \ref{bestGatesetGatesTable} report 95\% co
 \hline
 Operator & Hilbert-Schmidt vector (Pauli basis) & 95\% C.I. $\nicefrac{1}{2}$-width & Matrix \\ \hline
 $\rho_{0}$ & $ \begin{array}{c}
-0.9503 \\ 
-0.4194 \\ 
--0.5638 \\ 
-0.2879
+0.7071 \\ 
+0.0016 \\ 
+0.0003 \\ 
+0.6396
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
-0.0018 \\ 
-0.001 \\ 
-0.0006
+0.0042 \\ 
+0.0044 \\ 
+0.0045
  \end{array} $
  & $ \left(\!\!\begin{array}{cc}
-0.8756 & 0.4969e^{i0.9} \\ 
-0.4969e^{-i0.9} & 0.4684
+0.9523 & 0.0012e^{-i0.2} \\ 
+0.0012e^{i0.2} & 0.0477
  \end{array}\!\!\right) $
  \\ \hline
 $E_{0}$ & $ \begin{array}{c}
-3.9955 \\ 
--1.3065 \\ 
-0.4888 \\ 
--10.011
+0.7078 \\ 
+-0.0002 \\ 
+-0.0031 \\ 
+-0.6407
  \end{array} $
  & $ \begin{array}{c}
-0.0025 \\ 
-0.0025 \\ 
-0.0035 \\ 
-0.0013
+0.0014 \\ 
+0.0047 \\ 
+0.0048 \\ 
+0.0045
  \end{array} $
  & $ \left(\!\!\begin{array}{cc}
--4.2536 & 0.9864e^{-i2.8} \\ 
-0.9864e^{i2.8} & 9.9042
+0.0475 & 0.0022e^{i1.6} \\ 
+0.0022e^{-i1.6} & 0.9535
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -349,8 +378,8 @@ $E_{0}$ & $ \begin{array}{c}
 \begin{center}
 \begin{tabular}[l]{|c|c|c|}
 \hline
- & $E_{0}$ & $E_{-1}$ \\ \hline
-$\rho_{0}$ & $ \begin{array}{c} 0.090934 \\ \pm 0.006178 \end{array} $ & $ \begin{array}{c} 0.909571 \\ \pm 0.006186 \end{array} $ \\ \hline
+ & $E_{0}$ & $E_C$ \\ \hline
+$\rho_{0}$ & $ \begin{array}{c} 0.090701 \\ \pm 0.00618 \end{array} $ & $ \begin{array}{c} 0.909299 \\ \pm 0.00618 \end{array} $ \\ \hline
 \end{tabular}
 
 \caption{\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestGatesetSpamTable}.\label{bestGatesetSpamParametersTable}}
@@ -364,41 +393,41 @@ $\rho_{0}$ & $ \begin{array}{c} 0.090934 \\ \pm 0.006178 \end{array} $ & $ \begi
 Gate & Superoperator (Pauli basis) & 95\% C.I. $\nicefrac{1}{2}$-width \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
-0.02 & 0.9457 & -0.0093 & -0.0053 \\ 
--0.0335 & 0.0007 & 0.9457 & 0.0015 \\ 
-0.0146 & 0.0002 & 0.0024 & 0.9489
+-0.001 & 0.9447 & -0.0063 & -0.0088 \\ 
+0.0004 & 0.0011 & 0.9471 & 0.0038 \\ 
+0.0011 & 3\e{-5} & 0.0007 & 0.9485
  \end{array}\!\!\right) $
  & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
-0.0076 & 0.006 & 0.009 & 0.0057 \\ 
-0.0054 & 0.0046 & 0.0064 & 0.0041 \\ 
-0.0093 & 0.0075 & 0.0112 & 0.0062
+0.0022 & 0.0056 & 0.006 & 0.0061 \\ 
+0.0022 & 0.0058 & 0.0056 & 0.006 \\ 
+0.0021 & 0.0056 & 0.0059 & 0.0051
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
--0.1747 & 1.0115 & -0.1855 & 0.2225 \\ 
--0.1679 & 0.0145 & 0.4695 & -0.6146 \\ 
-1.7013 & -0.5075 & 1.7847 & -0.5326
+0.0003 & 0.9505 & -0.0049 & -0.0054 \\ 
+0.0003 & 0.0002 & 0.0001 & -0.9491 \\ 
+0.0002 & 0.0003 & 0.949 & -0.0022
  \end{array}\!\!\right) $
  & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
-0.0066 & 0.0055 & 0.009 & 0.0083 \\ 
-0.0045 & 0.008 & 0.0054 & 0.0038 \\ 
-0.0015 & 0.0055 & 0.002 & 0.0041
+0.0022 & 0.0056 & 0.006 & 0.0057 \\ 
+0.0021 & 0.0046 & 0.0059 & 0.0029 \\ 
+0.002 & 0.0045 & 0.0029 & 0.0038
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
-0.0386 & 0.2862 & -0.115 & 0.8171 \\ 
-0.1997 & -0.4731 & 0.9176 & -0.1464 \\ 
-0.8525 & -1.2252 & -0.0326 & -0.2529
+0.0002 & 0.0001 & -0.004 & 0.9488 \\ 
+0.0003 & 0.0011 & 0.9512 & 0.0011 \\ 
+-0.0001 & -0.949 & -0.0062 & -0.0005
  \end{array}\!\!\right) $
  & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
-0.0124 & 0.0099 & 0.016 & 0.0058 \\ 
-0.0052 & 0.0072 & 0.0058 & 0.0064 \\ 
-0.011 & 0.004 & 0.0159 & 0.0087
+0.002 & 0.006 & 0.006 & 0.003 \\ 
+0.0022 & 0.0048 & 0.0057 & 0.0047 \\ 
+0.002 & 0.003 & 0.0053 & 0.0035
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -426,9 +455,9 @@ It's also useful to know \emph{how} the real gates (or, more precisely, GST's es
 \begin{tabular}[l]{|c|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm & \begin{tabular}{c}Frobenius\\Distance\end{tabular} \\ \hline
-Gi & $ \begin{array}{c} 0.039931 \\ \pm 0.00257 \end{array} $ & $ \begin{array}{c} 0.042033 \\ \pm 0.002734 \end{array} $ & $ \begin{array}{c} 0.048064 \\ \pm 0.004156 \end{array} $ & $ \begin{array}{c} 0.101842 \\ \pm 0.006706 \end{array} $ \\ \hline
-Gx & $ \begin{array}{c} -0.102707 \\ \pm 0.00175 \end{array} $ & $ \begin{array}{c} 0.925912 \\ \pm 0.000797 \end{array} $ & $ \begin{array}{c} 1.404888 \\ \pm 0.001155 \end{array} $ & $ \begin{array}{c} 2.136226 \\ \pm 0.001205 \end{array} $ \\ \hline
-Gy & $ \begin{array}{c} 0.010043 \\ \pm 0.003076 \end{array} $ & $ \begin{array}{c} 0.522965 \\ \pm 0.004381 \end{array} $ & $ \begin{array}{c} 0.683333 \\ \pm 0.006059 \end{array} $ & $ \begin{array}{c} 1.124471 \\ \pm 0.009553 \end{array} $ \\ \hline
+Gi & $ \begin{array}{c} 0.039929 \\ \pm 0.00257 \end{array} $ & $ \begin{array}{c} 0.0401 \\ \pm 0.002571 \end{array} $ & $ \begin{array}{c} 0.040106 \\ \pm 0.00257 \end{array} $ & $ \begin{array}{c} 0.092986 \\ \pm 0.00596 \end{array} $ \\ \hline
+Gx & $ \begin{array}{c} 0.037847 \\ \pm 0.002167 \end{array} $ & $ \begin{array}{c} 0.037919 \\ \pm 0.002167 \end{array} $ & $ \begin{array}{c} 0.03792 \\ \pm 0.002165 \end{array} $ & $ \begin{array}{c} 0.087746 \\ \pm 0.00499 \end{array} $ \\ \hline
+Gy & $ \begin{array}{c} 0.037738 \\ \pm 0.002227 \end{array} $ & $ \begin{array}{c} 0.037804 \\ \pm 0.002228 \end{array} $ & $ \begin{array}{c} 0.037804 \\ \pm 0.002229 \end{array} $ & $ \begin{array}{c} 0.0875 \\ \pm 0.005127 \end{array} $ \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -437,23 +466,23 @@ Gy & $ \begin{array}{c} 0.010043 \\ \pm 0.003076 \end{array} $ & $ \begin{array}
 Gate & Error Generator \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
-0.0204 & -0.0558 & -0.0099 & -0.0056 \\ 
--0.0345 & 0.0008 & -0.0559 & 0.0016 \\ 
-0.0151 & 0.0002 & 0.0025 & -0.0524
+-0.001 & -0.0569 & -0.0066 & -0.0093 \\ 
+0.0004 & 0.0011 & -0.0543 & 0.0041 \\ 
+0.0011 & 3\e{-5} & 0.0008 & -0.0529
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
--0.1417 & -0.0034 & -0.0942 & 0.2589 \\ 
-1.3661 & -0.407 & 0.482 & -0.4731 \\ 
-0.6238 & -0.1413 & -0.469 & -0.6339
+0.0003 & -0.0508 & -0.0051 & -0.0057 \\ 
+0.0002 & 0.0003 & -0.0523 & -0.0023 \\ 
+-0.0003 & -0.0003 & -0.0001 & -0.0523
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
--0.7914 & 0.181 & 0.0471 & 0.2597 \\ 
-0.0308 & -0.4321 & -0.0846 & -0.1081 \\ 
-0.1674 & 0.2612 & -0.1412 & -0.2513
+0.0001 & -0.0524 & 0.0065 & 0.0005 \\ 
+0.0003 & 0.0011 & -0.05 & 0.0012 \\ 
+0.0002 & 0.0001 & -0.0042 & -0.0525
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -483,18 +512,18 @@ Gi & $ \begin{array}{c}
 0
  \end{array} $
  & $ \begin{array}{c}
-0.6131 \\ 
-0.2737 \\ 
--0.3701 \\ 
-0.1593
+0.999 \\ 
+-0.0223 \\ 
+0.0093 \\ 
+0.0206
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
-0.8838 \\ 
--0.0211 \\ 
--0.4673
+0.9348 \\ 
+-0.1473 \\ 
+-0.3233
  \end{array} $
- & $ \begin{array}{c} 0.051276 \\ \pm 0.019037 \end{array} $ & $ \begin{array}{c} 0.054221 \\ \pm 0.010144 \end{array} $ \\ \hline
+ & $ \begin{array}{c} 0.05127 \\ \pm 0.019012 \end{array} $ & $ \begin{array}{c} 0.054222 \\ \pm 0.010132 \end{array} $ \\ \hline
 Gx & $ \begin{array}{c}
 0.9491e^{i1.6} \\ 
 0.9491e^{-i1.6} \\ 
@@ -508,18 +537,18 @@ Gx & $ \begin{array}{c}
 0
  \end{array} $
  & $ \begin{array}{c}
-0.6128 \\ 
-0.2743 \\ 
--0.3701 \\ 
-0.1585
+1 \\ 
+0.0064 \\ 
+3\e{-5} \\ 
+0.0002
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
-0.9766 \\ 
-0.1799 \\ 
--0.1177
+-1 \\ 
+3\e{-5} \\ 
+-0.0003
  \end{array} $
- & $ \begin{array}{c} 0.049515 \\ \pm 0.005638 \end{array} $ & $ \begin{array}{c} 0.050938 \\ \pm 0.002912 \end{array} $ \\ \hline
+ & $ \begin{array}{c} 0.049514 \\ \pm 0.005638 \end{array} $ & $ \begin{array}{c} 0.050938 \\ \pm 0.002912 \end{array} $ \\ \hline
 Gy & $ \begin{array}{c}
 0.9489e^{i1.6} \\ 
 0.9489e^{-i1.6} \\ 
@@ -533,18 +562,18 @@ Gy & $ \begin{array}{c}
 0
  \end{array} $
  & $ \begin{array}{c}
-0.6129 \\ 
-0.2742 \\ 
--0.3701 \\ 
-0.1585
+1 \\ 
+1\e{-5} \\ 
+0.0067 \\ 
+-0.0002
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
--0.091 \\ 
-0.9937 \\ 
-0.0657
+-0.0054 \\ 
+1 \\ 
+-0.0012
  \end{array} $
- & $ \begin{array}{c} 0.048792 \\ \pm 0.005692 \end{array} $ & $ \begin{array}{c} 0.051087 \\ \pm 0.00302 \end{array} $ \\ \hline
+ & $ \begin{array}{c} 0.048788 \\ \pm 0.005692 \end{array} $ & $ \begin{array}{c} 0.051084 \\ \pm 0.00302 \end{array} $ \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -552,9 +581,9 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & $ \begin{array}{c}(0.000627 \\ \pm 0.002734)\pi \end{array} $ &  & $ \begin{array}{c}(0.132677 \\ \pm 0.48353)\pi \end{array} $ & $ \begin{array}{c}(0.5 \\ \pm 0)\pi \end{array} $ \\ \hline
-Gx & $ \begin{array}{c}(0.500356 \\ \pm 0.001226)\pi \end{array} $ & $ \begin{array}{c}(0.132677 \\ \pm 0.48353)\pi \end{array} $ &  & $ \begin{array}{c}(0.473816 \\ \pm 0.002621)\pi \end{array} $ \\ \hline
-Gy & $ \begin{array}{c}(0.50007 \\ \pm 0.001144)\pi \end{array} $ & $ \begin{array}{c}(0.5 \\ \pm 0)\pi \end{array} $ & $ \begin{array}{c}(0.473816 \\ \pm 0.002621)\pi \end{array} $ &  \\ \hline
+Gi & $ \begin{array}{c}(0.000625 \\ \pm 0.002733)\pi \end{array} $ &  & $ \begin{array}{c}(0.884316 \\ \pm 0.485651)\pi \end{array} $ & $ \begin{array}{c}(0.548542 \\ \pm 0.631029)\pi \end{array} $ \\ \hline
+Gx & $ \begin{array}{c}(0.500356 \\ \pm 0.001226)\pi \end{array} $ & $ \begin{array}{c}(0.884316 \\ \pm 0.485651)\pi \end{array} $ &  & $ \begin{array}{c}(0.498284 \\ \pm 0.001851)\pi \end{array} $ \\ \hline
+Gy & $ \begin{array}{c}(0.50007 \\ \pm 0.001144)\pi \end{array} $ & $ \begin{array}{c}(0.548542 \\ \pm 0.631029)\pi \end{array} $ & $ \begin{array}{c}(0.498284 \\ \pm 0.001851)\pi \end{array} $ &  \\ \hline
 \end{tabular}
 
 \caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay''); and (7) the angle between each gate's rotation axis and the rotation axes of the other gates.  ``X'' indicates that the decomposition failed or couldn't be interpreted. \label{bestGatesetDecompTable}}
@@ -570,27 +599,27 @@ Table \ref{bestGatesetClosestUnitaryTable} lists, for each estimated gate, the p
 \begin{tabular}[l]{|c|c|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & \begin{tabular}{c}Rotation\\Axis\end{tabular} & \begin{tabular}{c}Rotation\\Angle\end{tabular} & Sanity \checkmark \\ \hline
-Gi & 0.039922 & 0.04188 & $ \begin{array}{c}
+Gi & 0.03992 & 0.039923 & $ \begin{array}{c}
 0 \\ 
-0.0737 \\ 
--0.4739 \\ 
-0.8775
+-0.2621 \\ 
+-0.7412 \\ 
+0.618
  \end{array} $
- & 0.001928$\pi$ & 0.002882 \\ \hline
-Gx & -0.114261 & 0.933172 & $ \begin{array}{c}
+ & 0.002002$\pi$ & 0.000004 \\ \hline
+Gx & 0.037844 & 0.037844 & $ \begin{array}{c}
 0 \\ 
--0.9856 \\ 
--0.1676 \\ 
--0.0208
+1 \\ 
+-0.0027 \\ 
+-2\e{-6}
  \end{array} $
- & 0.5022$\pi$ & -0.629081 \\ \hline
-Gy & -0.004738 & 0.487558 & $ \begin{array}{c}
+ & 0.500357$\pi$ & 4\e{-7} \\ \hline
+Gy & 0.037735 & 0.037735 & $ \begin{array}{c}
 0 \\ 
--0.1249 \\ 
-0.9864 \\ 
--0.1069
+0.0027 \\ 
+-1 \\ 
+1\e{-5}
  \end{array} $
- & 0.504589$\pi$ & -0.918691 \\ \hline
+ & 0.500072$\pi$ & 3\e{-7} \\ \hline
 \end{tabular}
 
 \caption{Information pertaining to the closest unitary gate to each of the estimated gates.\label{bestGatesetClosestUnitaryTable}}
@@ -610,60 +639,60 @@ Additionally, the condition of \emph{complete positivity} or CP (which all real 
 \hline
 Gate & Choi matrix (Pauli basis) & Eigenvalues \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
-0.9601 & 0.005e^{-i0.0} & 0.0085e^{-i0.2} & 0.0044e^{-i0.6} \\ 
-0.005e^{i0.0} & 0.0128 & 0.0042e^{-i1.0} & 0.0085e^{i1.7} \\ 
-0.0085e^{i0.2} & 0.0042e^{i1.0} & 0.0128 & 0.0051e^{-i1.8} \\ 
-0.0044e^{i0.6} & 0.0085e^{-i1.7} & 0.0051e^{i1.8} & 0.0144
+0.9601 & 0.0008e^{i1.9} & 0.0022e^{-i1.6} & 0.0019e^{-i1.4} \\ 
+0.0008e^{-i1.9} & 0.0123 & 0.0013e^{-i0.2} & 0.0022e^{-i3.1} \\ 
+0.0022e^{i1.6} & 0.0013e^{i0.2} & 0.0135 & 0.0012e^{i2.9} \\ 
+0.0019e^{i1.4} & 0.0022e^{i3.1} & 0.0012e^{-i2.9} & 0.0142
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
-0.0024 \\ 
-0.0135 \\ 
-0.024 \\ 
-0.9602
+0.0107 \\ 
+0.0127 \\ 
+0.0165 \\ 
+0.9601
  \end{array} $
  $\pm$ $ \begin{array}{c}
-0.0006 \\ 
 0.0024 \\ 
-0.0026 \\ 
+0.0023 \\ 
+0.0025 \\ 
 0.0026
  \end{array} $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
-0.4871 & 0.6014e^{-i1.6} & 0.1873e^{i1.3} & 0.4283e^{-i0.1} \\ 
-0.6014e^{i1.6} & 0.5186 & 0.4275e^{-i1.5} & 0.0827e^{i2.6} \\ 
-0.1873e^{-i1.3} & 0.4275e^{i1.5} & 0.2477 & 0.2958e^{i3.0} \\ 
-0.4283e^{i0.1} & 0.0827e^{-i2.6} & 0.2958e^{-i3.0} & -0.2534
+0.4871 & 0.4745e^{-i1.6} & 0.0014e^{-i1.6} & 0.0013e^{-i1.5} \\ 
+0.4745e^{i1.6} & 0.4882 & 0.0012e^{-i0.0} & 0.0013e^{-i3.1} \\ 
+0.0014e^{i1.6} & 0.0012e^{i0.0} & 0.013 & 0.0001e^{-i1.5} \\ 
+0.0013e^{i1.5} & 0.0013e^{i3.1} & 0.0001e^{i1.5} & 0.0118
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
--0.6977 \\ 
-0.0042 \\ 
-0.3854 \\ 
-1.308
+0.0105 \\ 
+0.0129 \\ 
+0.0144 \\ 
+0.9622
  \end{array} $
  $\pm$ $ \begin{array}{c}
-0.0005 \\ 
-0.0005 \\ 
-0.0008 \\ 
-0.0012
+0.0024 \\ 
+0.0022 \\ 
+0.0024 \\ 
+0.0022
  \end{array} $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-0.4877 & 0.03e^{-i1.2} & 0.513e^{i1.7} & 0.2312e^{i0.4} \\ 
-0.03e^{i1.2} & 0.1554 & 0.2589e^{-i1.0} & 0.1136e^{-i2.7} \\ 
-0.513e^{-i1.7} & 0.2589e^{i1.0} & 0.4711 & 0.0458e^{-i0.2} \\ 
-0.2312e^{-i0.4} & 0.1136e^{i2.7} & 0.0458e^{i0.2} & -0.1142
+0.4877 & 0.0018e^{i1.5} & 0.4745e^{i1.6} & 0.0013e^{-i1.6} \\ 
+0.0018e^{-i1.5} & 0.0123 & 0.0007e^{i0.0} & 0.0001e^{-i2.0} \\ 
+0.4745e^{-i1.6} & 0.0007e^{-i0.0} & 0.4879 & 0.0013e^{-i0.0} \\ 
+0.0013e^{i1.6} & 0.0001e^{i2.0} & 0.0013e^{i0.0} & 0.0121
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
--0.3273 \\ 
-0.0066 \\ 
-0.2625 \\ 
-1.0583
+0.0107 \\ 
+0.0123 \\ 
+0.0148 \\ 
+0.9623
  \end{array} $
  $\pm$ $ \begin{array}{c}
-0.0049 \\ 
-0.0013 \\ 
-0.0029 \\ 
-0.0032
+0.0022 \\ 
+0.002 \\ 
+0.0023 \\ 
+0.0022
  \end{array} $
  \\ \hline
 \end{tabular}
@@ -706,7 +735,7 @@ Thus, by comparing the difference $2\Delta\log(\mathcal{L}) - k$ to $\sqrt{2k}$ 
 \iftoggle{LsAndGermsSet}{
 The MLEGST algorithm used to generate this estimate is iterative.  It starts by fitting only data from the shortest gate sequences (which are easy to fit \emph{and} insensitive to most non-Markovian noise), then successively adds longer and longer sequences (with base sequence length $L\leq 1,2,4,8,\ldots$) to the mix.  Since we get an estimate at each intermediate $L$, it is possible to quantify not just the goodness of the \emph{best} fit (presented in the previous section), but how the goodness-of-fit behaves as longer and longer sequences are added in.
 
-This data is presented in Table \ref{logLProgressTable}.  What you should be looking for here is whether -- at each value of $L$ -- the $2\Delta\log(\mathcal{L})$ quantity is roughly the same as $k$.  More precisely, is $|2\Delta\log(\mathcal{L})-k|$ less than or equal to $\sqrt{2k}$?  If not, then the model is not fitting as well as it should, which usually indicates non-Markovian noise (or, rarely, that the GST algorithm has simply failed to find a good fit even though one exists).  
+This data is presented in Table \ref{progressTable}.  What you should be looking for here is whether -- at each value of $L$ -- the $2\Delta\log(\mathcal{L})$ quantity is roughly the same as $k$.  More precisely, is $|2\Delta\log(\mathcal{L})-k|$ less than or equal to $\sqrt{2k}$?  If not, then the model is not fitting as well as it should, which usually indicates non-Markovian noise (or, rarely, that the GST algorithm has simply failed to find a good fit even though one exists).  
 
 As a rough rule of thumb, for GST experiments involving relatively long sequences (e.g. $L\geq100$):
 %\begin{tabular}{rp{5.5in}}
@@ -729,14 +758,14 @@ As a rough rule of thumb, for GST experiments involving relatively long sequence
 \begin{tabular}[l]{|c|c|c|c|c|c|c|c|c|}
 \hline
 L & $2\Delta\log(\mathcal{L})$ & $k$ & $2\Delta\log(\mathcal{L})-k$ & $\sqrt{2k}$ & $P$ & $N_s$ & $N_p$ & Rating \\ \hline
-0 & 53.74042 & 61 & -7.259581 & 11.04536 & 0.73 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-1 & 53.74027 & 61 & -7.259733 & 11.04536 & 0.73 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-2 & 106.549 & 137 & -30.451 & 16.55295 & 0.97 & 168 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-4 & 354.2974 & 410 & -55.70262 & 28.63564 & 0.98 & 441 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-8 & 691.0505 & 786 & -94.94949 & 39.64846 & 0.99 & 817 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+0 & 53.74648 & 61 & -7.253515 & 11.04536 & 0.73 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+1 & 53.7465 & 61 & -7.253495 & 11.04536 & 0.73 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+2 & 106.745 & 137 & -30.25503 & 16.55295 & 0.97 & 168 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+4 & 354.3548 & 410 & -55.64517 & 28.63564 & 0.98 & 441 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+8 & 691.0838 & 786 & -94.91617 & 39.64846 & 0.99 & 817 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
 \end{tabular}
 
-\caption{\textbf{Comparison between the computed and expected maximum $\log(\mathcal{L})$ for different values of $L$}.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively.  The quantity $2\Delta\log(\mathcal{L})$ measures the goodness of fit of the GST model (small is better) and is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $P$ is the p-value derived from a $\chi^2_k$ distribution (i.e.~when $P <$ some threshold like $0.05$ there is grounds for rejecting the GST fit). The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.\label{logLProgressTable}}
+\caption{\textbf{Comparison between the computed and expected maximum $\log(\mathcal{L})$ for different values of $L$}.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively.  The quantity $2\Delta\log(\mathcal{L})$ measures the goodness of fit of the GST model (small is better) and is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $P$ is the p-value derived from a $\chi^2_k$ distribution (i.e.~when $P <$ some threshold like $0.05$ there is grounds for rejecting the GST fit). The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.\label{progressTable}}
 \end{center}
 \end{table}
 
@@ -749,27 +778,29 @@ L & $2\Delta\log(\mathcal{L})$ & $k$ & $2\Delta\log(\mathcal{L})-k$ & $\sqrt{2k}
 \iftoggle{LsAndGermsSet}{
 \subsection{Detailed likelihood analysis}
 
-The aggregated $2\Delta\log(\mathcal{L})$ numbers presented in Table \ref{logLProgressTable} tell you how well the GST estimate fits the \emph{entire} dataset.  If they are in line with theory ($2\Delta\log(\mathcal{L}) \approx k$), then there is little more to be said.  But if the best fit to the data is not good, we can debug it by identifying \emph{which} experiments are inconsistent with the fit.
+The aggregated $2\Delta\log(\mathcal{L})$ numbers presented in Table \ref{progressTable} tell you how well the GST estimate fits the \emph{entire} dataset.  If they are in line with theory ($2\Delta\log(\mathcal{L}) \approx k$), then there is little more to be said.  But if the best fit to the data is not good, we can debug it by identifying \emph{which} experiments are inconsistent with the fit.
 
-Figure \ref{bestGatesetLogLBoxPlot} displays the $2\Delta\log(\mathcal{L})$ contribution from each individual gate sequence (Eq.~\ref{eqGateStringLogL}).  Each gate sequence corresponds to a single colored ``pixel'' in the plot.  Each block of pixels corresponds to a single base sequence (i.e., a germ power), and the individual pixels within a block correspond to the various fiducial sequence pairs between which that base sequence was sandwiched.  (The column indicates the fiducial adjacent to state preparation, while the row indicates the fiducial adjacent to measurement).  Base sequences are arranged in a grid; different rows correspond to different germs, while different columns correspond to different maximum lengths $L$.  Pixels are labeled with the $2\Delta\log(\mathcal{L})$ contribution for that sequence, and colored appropriately.  Shades of blue indicate $2\Delta\log(\mathcal{L})$ contributions in the range 0-3 (``consistent''), while dark red indicates a $2\Delta\log(\mathcal{L})$ contribution of 10 or above.  Such events ($2\Delta\log(\mathcal{L})_s \geq 10$) should occur only once per 638 experiments if the model is correct.
+Figure \ref{bestEstimateColorBoxPlot} displays the $2\Delta\log(\mathcal{L})$ contribution from each individual gate sequence (Eq.~\ref{eqGateStringLogL}).  Each gate sequence corresponds to a single colored ``pixel'' in the plot.  Each block of pixels corresponds to a single base sequence (i.e., a germ power), and the individual pixels within a block correspond to the various fiducial sequence pairs between which that base sequence was sandwiched.  (The column indicates the fiducial adjacent to state preparation, while the row indicates the fiducial adjacent to measurement).  Base sequences are arranged in a grid; different rows correspond to different germs, while different columns correspond to different maximum lengths $L$.  Pixels are labeled with the $2\Delta\log(\mathcal{L})$ contribution for that sequence, and colored appropriately.  Shades of blue indicate $2\Delta\log(\mathcal{L})$ contributions in the range 0-3 (``consistent''), while dark red indicates a $2\Delta\log(\mathcal{L})$ contribution of 10 or above.  Such events ($2\Delta\log(\mathcal{L})_s \geq 10$) should occur only once per 638 experiments if the model is correct.
 
-Identifying patterns and trends within such ``pixel plots'' can aid in identifying specific sources and types of non-Markovian noise which may be to blame if the GST algorithms are unable to produce a ``good'' estimate.  For example, it is often the case that all the short sequences [$L = O(1)$] can be fit reasonably well, but the right-hand side of Figure \ref{bestGatesetLogLBoxPlot} becomes a sea of red.  This indicates that non-Markovian behavior (potentially due to slow drift of gateset parameters) is becoming more significant for longer experiments.  In other cases, a single row may be particularly bad, indicating that a particular gate or germ is especially problematic (e.g., was not stabilized using dynamical decoupling techniques).  Be cautious in debugging, however -- sometimes bad $\log(\mathcal{L})$ values for a particular gate or germ can result \emph{not} from faults in that operation, but because another operation failed so badly that it distorted the entire fit (e.g., in trying to fit catastrophically non-Markovian data at Point A, GST ended up failing to fit perfectly good data at Point B).
+Identifying patterns and trends within such ``pixel plots'' can aid in identifying specific sources and types of non-Markovian noise which may be to blame if the GST algorithms are unable to produce a ``good'' estimate.  For example, it is often the case that all the short sequences [$L = O(1)$] can be fit reasonably well, but the right-hand side of Figure \ref{bestEstimateColorBoxPlot} becomes a sea of red.  This indicates that non-Markovian behavior (potentially due to slow drift of gateset parameters) is becoming more significant for longer experiments.  In other cases, a single row may be particularly bad, indicating that a particular gate or germ is especially problematic (e.g., was not stabilized using dynamical decoupling techniques).  Be cautious in debugging, however -- sometimes bad $\log(\mathcal{L})$ values for a particular gate or germ can result \emph{not} from faults in that operation, but because another operation failed so badly that it distorted the entire fit (e.g., in trying to fit catastrophically non-Markovian data at Point A, GST ended up failing to fit perfectly good data at Point B).
 
-If the ``generate appendices'' option was selected for this report, similar pixel plots for the intermediate estimates whose total $2\Delta\log(\mathcal{L})$ is listed in Table \ref{logLProgressTable} can be found in Appendix \ref{appendix_logL_pixelplots}.
+Similar pixel plots for the intermediate estimates whose total $2\Delta\log(\mathcal{L})$ is listed in Table \ref{progressTable} \iftoggle{pixelplotsappendix}{can be found in Appendix \ref{appendix_logL_pixelplots}.}{are included when the ``pixel plots'' appendix is enabled.}
+
+Similar pixel plots for the intermediate estimates whose total $2\Delta\log(\mathcal{L})$ is listed in Table \ref{progressTable} can be found in Appendix
 
 \begin{figure}
 \begin{center}
-\includegraphics[width=6.500000in,height=9.000000in,keepaspectratio]{full_reportD_files/bestLogLBoxes.pdf}
-\caption{\textbf{$2\Delta\log(\mathcal{L})$ contributions for every individual experiment in the dataset}.  Each pixel represents a single experiment (gate sequence), and its color indicates whether GST was able to fit the corresponding frequency well.  Blue is typical; dark red squares indicating $2\Delta\log(\mathcal{L})_s>10$ should appear only once per 638 experiments on average.  Square blocks of pixels correspond to base sequences (arranged vertically by germ and horizontally by length); each pixel within a block corresponds to a specific choice of pre- and post-fiducial sequences.  See text for further details.\label{bestGatesetLogLBoxPlot}}
+\includegraphics[width=6.50in,height=9.00in,keepaspectratio]{full_reportD_files/bestLogLBoxes.pdf}
+\caption{\textbf{$2\Delta\log(\mathcal{L})$ contributions for every individual experiment in the dataset}.  Each pixel represents a single experiment (gate sequence), and its color indicates whether GST was able to fit the corresponding frequency well.  Blue is typical; dark red squares indicating $2\Delta\log(\mathcal{L})_s>10$ should appear only once per 638 experiments on average.  Square blocks of pixels correspond to base sequences (arranged vertically by germ and horizontally by length); each pixel within a block corresponds to a specific choice of pre- and post-fiducial sequences.  See text for further details.\label{bestEstimateColorBoxPlot}}
 \end{center}
 \end{figure}
 
-Figure \ref{bestGatesetLogLInvBoxPlot} shows exactly the same $\log(\mathcal{L})$ analysis as Figure \ref{bestGatesetLogLBoxPlot}, but arranged differently.  Here, blocks (not square) all correspond to a single fiducial pair (e.g., pre- and post-fiducial), and pixels within a block correspond to different base sequences.  This can be useful for diagnosing a single bad fiducial sequence.
+Figure \ref{invertedBestEstimateColorBoxPlot} shows exactly the same $\log(\mathcal{L})$ analysis as Figure \ref{bestEstimateColorBoxPlot}, but arranged differently.  Here, blocks (not square) all correspond to a single fiducial pair (e.g., pre- and post-fiducial), and pixels within a block correspond to different base sequences.  This can be useful for diagnosing a single bad fiducial sequence.
 
 \begin{figure}
 \begin{center}
-\includegraphics[width=6.500000in,height=9.000000in,keepaspectratio]{full_reportD_files/bestLogLBoxes_inverted.pdf}
-\caption{\textbf{$2\Delta\log(\mathcal{L})$ contributions for each experiment, arranged differently.}  This figure shows the same data as Figure \ref{bestGatesetLogLBoxPlot}, but arranged differently.  Each block now corresponds to a particular pair of fiducial sequences, while pixels within the block correspond to different base sequences sandwiched between those fiducials.\label{bestGatesetLogLInvBoxPlot}}
+\includegraphics[width=6.50in,height=9.00in,keepaspectratio]{full_reportD_files/bestLogLBoxes_inverted.pdf}
+\caption{\textbf{$2\Delta\log(\mathcal{L})$ contributions for each experiment, arranged differently.}  This figure shows the same data as Figure \ref{bestEstimateColorBoxPlot}, but arranged differently.  Each block now corresponds to a particular pair of fiducial sequences, while pixels within the block correspond to different base sequences sandwiched between those fiducials.\label{invertedBestEstimateColorBoxPlot}}
 \end{center}
 \end{figure}
 

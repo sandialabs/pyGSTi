@@ -72,25 +72,28 @@ def make_paramterized_rpe_gate_set(alphaTrue, epsilonTrue, auxRot, SPAMdepol,
         outputGateset = _setc.build_gateset( 
             [2], [('Q0',)],['Gi',loose_axis_gate_label,fixed_axis_gate_label], 
             [ "I(Q0)", loose_axis_label+"(%s,Q0)" % epsilonTrue, fixed_axis_label+"(%s,Q0)" % alphaTrue],
-            rhoExpressions=rhoExpressions, EExpressions=EExpressions, 
-            spamLabelDict=spamLabelDict )
+            prepLabels=["rho0"], prepExpressions=rhoExpressions,
+            effectLabels=["E0"], effectExpressions=EExpressions, 
+            spamdefs=spamLabelDict)
     else:
         outputGateset = _setc.build_gateset( 
             [2], [('Q0',)],[loose_axis_gate_label,fixed_axis_gate_label], 
             [ loose_axis_label+"(%s,Q0)" % epsilonTrue, fixed_axis_label+"(%s,Q0)" % alphaTrue],
-            rhoExpressions=rhoExpressions, EExpressions=EExpressions, 
-            spamLabelDict=spamLabelDict )
+            prepLabels=["rho0"], prepExpressions=rhoExpressions,
+            effectLabels=["E0"], effectExpressions=EExpressions, 
+            spamdefs=spamLabelDict)
 
     if auxRot != 0:
         gatesetAux1 = _setc.build_gateset( 
             [2], [('Q0',)],['Gi',auxiliary_axis_gate_label,fixed_axis_gate_label], 
             [ "I(Q0)", auxiliary_axis_label+"(%s,Q0)" % auxRot, fixed_axis_label+"(pi/2,Q0)"],
-            rhoExpressions=rhoExpressions, EExpressions=EExpressions, 
-            spamLabelDict=spamLabelDict)
+            prepLabels=["rho0"], prepExpressions=rhoExpressions,
+            effectLabels=["E0"], effectExpressions=EExpressions, 
+            spamdefs=spamLabelDict)
 
-        outputGateset.set_gate(loose_axis_gate_label,_objs.FullyParameterizedGate(
+        outputGateset[loose_axis_gate_label] =
                 _np.dot( _np.dot(_np.linalg.inv(gatesetAux1[auxiliary_axis_gate_label]),
-                               outputGateset[loose_axis_gate_label]),gatesetAux1[auxiliary_axis_gate_label])) )
+                               outputGateset[loose_axis_gate_label]),gatesetAux1[auxiliary_axis_gate_label])
 
     outputGateset = outputGateset.depolarize(gate_noise=gateDepol,
                                              spam_noise=SPAMdepol)
@@ -305,3 +308,4 @@ def make_rpe_data_set(gatesetOrDataset,stringListD,nSamples,sampleError='binomia
     return _dsc.generate_fake_data(gatesetOrDataset,
                                    stringListD['totalStrList'],
                                    nSamples,sampleError=sampleError,seed=seed)
+

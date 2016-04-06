@@ -5,6 +5,7 @@
 #*****************************************************************
 """ Defines the GateString class and derived classes which represent gate strings."""
 
+import numpy as _np
 
 def _gateSeqToStr(seq):
     if len(seq) == 0: return "{}" #special case of empty gate string
@@ -259,6 +260,145 @@ class WeightedGateString(GateString):
             return WeightedGateString( self.tup.__getitem__(key), None, self.weight, bCheck=False )
         return self.tup.__getitem__(key)
 
+
+class CompressedGateString(object):
+    """ 
+    A "compressed" GateString class which reduces the memory or disk space
+    required to hold the tuple part of a GateString by compressing it. 
+
+    One place where CompressedGateString objects can be useful is when saving
+    large lists of long gate sequences in some non-human-readable format (e.g.
+    pickle).  CompressedGateString objects *cannot* be used in place of 
+    GateString objects within pyGSTi, and so are *not* useful when manipulating
+    and running algorithms which use gate sequences.
+    """
+
+    def __init__(self, gatestring, minLenToCompress=20, maxPeriodToLookFor=20):
+        """ 
+        Create a new CompressedGateString object 
+
+        Parameters
+        ----------
+        gatestring : GateString
+            The gate string object which is compressed to create
+            a new CompressedGateString object.
+
+        minLenToCompress : int, optional
+            The minimum length string to compress.  If len(gatestring)
+            is less than this amount its tuple is returned.
+            
+        maxPeriodToLookFor : int, optional
+            The maximum period length to use when searching for periodic
+            structure within gatestring.  Larger values mean the method
+            takes more time but could result in better compressing.
+        """
+        if not isinstance(gatestring, GateString):
+            raise ValueError("CompressedGateStrings can only be created from existing GateString objects")
+        self.tup = CompressedGateString.compress_gate_label_tuple(
+            gatestring.tup, minLenToCompress, maxPeriodToLookFor)
+        self.str = gatestring.str
+
+    def expand(self):
+        """
+        Expands this compressed gate string into a GateString object.
+
+        Returns
+        -------
+        GateString
+        """
+        tup = CompressedGateString.expand_gate_label_tuple(self.tup)
+        return GateString(tup, self.str, bCheck=False)
+
+    @staticmethod
+    def _getNumPeriods(gateString, periodLen):
+        n = 0
+        if len(gateString) < periodLen: return 0
+        while gateString[0:periodLen] == gateString[n*periodLen:(n+1)*periodLen]: 
+            n += 1
+        return n
+        
+        
+    @staticmethod
+    def compress_gate_label_tuple(gateString, minLenToCompress=20, maxPeriodToLookFor=20):
+        """
+        Compress a gate string.  The result is tuple with a special compressed-
+        gate-string form form that is not useable by other GST methods but is
+        typically shorter (especially for long gate strings with a repetative
+        structure) than the original gate string tuple.
+    
+        Parameters
+        ----------
+        gateString : tuple of gate labels or GateString
+            The gate string to compress.
+    
+        minLenToCompress : int, optional
+            The minimum length string to compress.  If len(gateString)
+            is less than this amount its tuple is returned.
+            
+        maxPeriodToLookFor : int, optional
+            The maximum period length to use when searching for periodic
+            structure within gateString.  Larger values mean the method
+            takes more time but could result in better compressing.
+    
+        Returns
+        -------
+        tuple
+            The compressed (or raw) gate string tuple.
+        """
+        gateString = tuple(gateString) # converts from GateString or list to tuple if needed
+        L = len(gateString)
+        if L < minLenToCompress: return tuple(gateString)
+        compressed = ["CCC"] #list for appending, then make into tuple at the end
+        start = 0
+        while start < L:
+            #print "Start = ",start
+            score = _np.zeros( maxPeriodToLookFor+1, 'd' )
+            numperiods = _np.zeros( maxPeriodToLookFor+1, 'i' )
+            for periodLen in range(1,maxPeriodToLookFor+1):
+                n = CompressedGateString._getNumPeriods( gateString[start:], periodLen )
+                if n == 0: score[periodLen] = 0
+                elif n == 1: score[periodLen] = 4.1/periodLen
+                else: score[periodLen] = _np.sqrt(periodLen)*n
+                numperiods[periodLen] = n
+            bestPeriodLen = _np.argmax(score)
+            n = numperiods[bestPeriodLen]
+            bestPeriod = gateString[start:start+bestPeriodLen]
+            #print "Scores = ",score
+            #print "num per = ",numperiods
+            #print "best = %s ^ %d" % (str(bestPeriod), n)
+            assert(n > 0 and bestPeriodLen > 0)
+            if start > 0 and n == 1 and compressed[-1][1] == 1:
+                compressed[-1] = (compressed[-1][0]+bestPeriod, 1)
+            else:
+                compressed.append( (bestPeriod, n) )
+            start = start+bestPeriodLen*n
+                
+        return tuple(compressed)
+
+    @staticmethod
+    def expand_gate_label_tuple(compressedGateString):
+        """
+        Expand a compressed tuple created with compress_gate_label_tuple(...)
+        into a tuple of gate labels.
+    
+        Parameters
+        ----------
+        compressedGateString : tuple
+            a tuple in the compressed form created by
+            compress_gate_label_tuple(...).
+    
+        Returns
+        -------
+        tuple
+            A tuple of gate labels specifying the uncompressed gate string.
+        """
+        
+        if len(compressedGateString) == 0: return ()
+        if compressedGateString[0] != "CCC": return compressedGateString
+        expandedString = []
+        for (period,n) in compressedGateString[1:]:
+            expandedString += period*n
+        return tuple(expandedString)    
 
 
 

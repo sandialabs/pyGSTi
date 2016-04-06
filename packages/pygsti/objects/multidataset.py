@@ -7,13 +7,15 @@
 
 import numpy as _np
 import cPickle as _pickle
+import warnings as _warnings
 from collections import OrderedDict as _OrderedDict
 
-from gatestring import GateString as _GateString
 from dataset import DataSet as _DataSet
 import dataset as _ds
+import gatestring as _gs
 
-class MultiDataSet_KeyValIterator:
+
+class MultiDataSet_KeyValIterator(object):
   """ Iterator class for datasetName,DataSet pairs of a MultiDataSet """
   def __init__(self, multidataset):
     self.multidataset = multidataset
@@ -28,7 +30,7 @@ class MultiDataSet_KeyValIterator:
                                 spamLabelIndices=self.multidataset.slIndex, bStatic=True)
   
 
-class MultiDataSet_ValIterator:
+class MultiDataSet_ValIterator(object):
   """ Iterator class for DataSets of a MultiDataSet """
   def __init__(self, multidataset):
     self.multidataset = multidataset
@@ -43,7 +45,7 @@ class MultiDataSet_ValIterator:
                     spamLabelIndices=self.multidataset.slIndex, bStatic=True)
 
 
-class MultiDataSet:
+class MultiDataSet(object):
   """ 
   The MultiDataSet class allows for the combined access and storage of 
   several static DataSets that contain the same gate strings (in the same order).
@@ -102,10 +104,9 @@ class MultiDataSet:
     if gateStringIndices is not None:
       self.gsIndex = gateStringIndices
     elif gateStrings is not None:
-      if len(gateStrings) > 0 and isinstance(gateStrings[0], _GateString):
-        self.gsIndex = _OrderedDict( [(gs.tup,i) for (i,gs) in enumerate(gateStrings) ] )
-      else:
-        self.gsIndex = _OrderedDict( [(gs,i) for (i,gs) in enumerate(gateStrings) ] )
+      dictData = [ (gs if isinstance(gs,_gs.GateString) else _gs.GateString(gs),i) \
+                     for (i,gs) in enumerate(gateStrings) ] #convert to GateStrings if necessary
+      self.gsIndex = _OrderedDict( dictData )
     else:
       self.gsIndex = None
 
@@ -157,7 +158,9 @@ class MultiDataSet:
     return len(self.countsDict)
 
   def __getitem__(self, datasetName):  #return a static DataSet
-    return _DataSet(self.countsDict[datasetName], gateStringIndices=self.gsIndex, spamLabelIndices=self.slIndex, bStatic=True)
+    return _DataSet(self.countsDict[datasetName],
+                    gateStringIndices=self.gsIndex,
+                    spamLabelIndices=self.slIndex, bStatic=True)
 
   def __setitem__(self, datasetName, dataset):
     self.add_dataset(datasetName, dataset)
@@ -286,14 +289,15 @@ class MultiDataSet:
 
 
   def __getstate__(self):
-    toPickle = { 'gsIndexKeys': map(_ds.compress_gate_label_tuple, self.gsIndex.keys() if self.gsIndex else []),
+    toPickle = { 'gsIndexKeys': map(_gs.CompressedGateString, self.gsIndex.keys()) if self.gsIndex else [],
                  'gsIndexVals': self.gsIndex.values() if self.gsIndex else [],
                  'slIndex': self.slIndex,
                  'countsDict': self.countsDict }
     return toPickle
 
   def __setstate__(self, state_dict):
-    self.gsIndex = _OrderedDict( zip( map(_ds.expand_gate_label_tuple, state_dict['gsIndexKeys']), state_dict['gsIndexVals']) )
+    gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]
+    self.gsIndex = _OrderedDict( zip(gsIndexKeys, state_dict['gsIndexVals']) )
     self.slIndex = state_dict['slIndex']
     self.countsDict = state_dict['countsDict']
 
@@ -308,7 +312,7 @@ class MultiDataSet:
         filename ends in ".gz", the file will be gzip compressed.
     """
 
-    toPickle = { 'gsIndexKeys': map(_ds.compress_gate_label_tuple, self.gsIndex.keys() if self.gsIndex else []),
+    toPickle = { 'gsIndexKeys': map(_gs.CompressedGateString, self.gsIndex.keys()) if self.gsIndex else [],
                  'gsIndexVals': self.gsIndex.values() if self.gsIndex else [],
                  'slIndex': self.slIndex,
                  'countsKeys': self.countsDict.keys() }  #Don't pickle countsDict numpy data b/c it's inefficient
@@ -350,7 +354,16 @@ class MultiDataSet:
         f = fileOrFilename
 
     state_dict = _pickle.load(f)
-    self.gsIndex = _OrderedDict( zip( map(_ds.expand_gate_label_tuple, state_dict['gsIndexKeys']), state_dict['gsIndexVals']) )
+    def expand(x): #to be backward compatible
+      if isinstance(x,_gs.CompressedGateString): return x.expand()
+      else: 
+        _warnings.warn("Deprecated dataset format.  Please re-save " +
+                       "this dataset soon to avoid future incompatibility.")
+        return _gs.GateString(_gs.CompressedGateString.expand_gate_label_tuple(x))
+    gsIndexKeys = [ expand(cgs) for cgs in state_dict['gsIndexKeys'] ]
+
+    #gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]
+    self.gsIndex = _OrderedDict( zip(gsIndexKeys, state_dict['gsIndexVals']) )
     self.slIndex = state_dict['slIndex']
     self.countsDict = _OrderedDict()
     for key in state_dict['countsKeys']:

@@ -135,17 +135,16 @@ def make_qutrit_gateset(errorScale,Xangle = _np.pi/2, Yangle = _np.pi/2, MSgloba
     E2gm = _bt.std_to_gm(_np.reshape(E2,(9,1)))
 
     qutritGS = _objs.GateSet()
-    qutritGS.set_rhovec(rho0gm)
-    qutritGS.set_evec(E0gm,0)
-    qutritGS.set_evec(E1gm,1)
-    qutritGS.set_evec(E2gm,2)
-    qutritGS.set_identity_vec(identity3gm)
-    qutritGS.add_spam_label(0,0,'0bright')
-    qutritGS.add_spam_label(0,1,'1bright')
-    qutritGS.add_spam_label(0,2,'2bright')
-    qutritGS.make_spams()
-    qutritGS.set_gate('Gi',_objs.FullyParameterizedGate(arrType(gateISOgm)))
-    qutritGS.set_gate('Gx',_objs.FullyParameterizedGate(arrType(gateXSOgm)))
-    qutritGS.set_gate('Gy',_objs.FullyParameterizedGate(arrType(gateYSOgm)))
-    qutritGS.set_gate('Gm',_objs.FullyParameterizedGate(arrType(gateMSOgm)))
+    qutritGS['rho0'] = rho0gm
+    qutritGS['E0'] = E0gm
+    qutritGS['E1'] = E1gm
+    qutritGS['E2'] = E2gm
+    qutritGS['identity'] identity3gm
+    qutritGS.spamdefs['0bright'] = ('rho0','E0')
+    qutritGS.spamdefs['1bright'] = ('rho0','E1')
+    qutritGS.spamdefs['2bright'] = ('rho0','E2')
+    qutritGS['Gi'] = _objs.FullyParameterizedGate(arrType(gateISOgm))
+    qutritGS['Gx'] = _objs.FullyParameterizedGate(arrType(gateXSOgm))
+    qutritGS['Gy'] = _objs.FullyParameterizedGate(arrType(gateYSOgm))
+    qutritGS['Gm'] = _objs.FullyParameterizedGate(arrType(gateMSOgm))
     return qutritGS

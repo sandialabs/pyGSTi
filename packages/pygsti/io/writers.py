@@ -71,7 +71,7 @@ def write_empty_dataset(filename, gatestring_list,
     f.close()
 
 
-def write_dataset(filename, gatestring_list, dataset, spamLabelOrder=None):
+def write_dataset(filename, dataset, gatestring_list=None, spamLabelOrder=None):
     """
     Write a text-formatted dataset file.
 
@@ -80,18 +80,22 @@ def write_dataset(filename, gatestring_list, dataset, spamLabelOrder=None):
     filename : string
         The filename to write.
 
-    gatestring_list : list of GateStrings
-        The list of gate strings to include in the written dataset.
-
     dataset : DataSet
         The data set from which counts are obtained.
+
+    gatestring_list : list of GateStrings, optional
+        The list of gate strings to include in the written dataset.
+        If None, all gate strings are output.
 
     spamLabelOrder : list, optional
         A list of the SPAM labels in dataset which specifies
         the column order in the output file.
     """
-    if len(gatestring_list) > 0 and not isinstance(gatestring_list[0], _objs.GateString):
-        raise ValueError("Argument gatestring_list must be a list of GateString objects!")
+    if gatestring_list is not None:
+        if len(gatestring_list) > 0 and not isinstance(gatestring_list[0], _objs.GateString):
+            raise ValueError("Argument gatestring_list must be a list of GateString objects!")
+    else:
+        gatestring_list = dataset.keys()
 
     spamLabels = dataset.get_spam_labels()
     if spamLabelOrder is not None:
@@ -110,7 +114,7 @@ def write_dataset(filename, gatestring_list, dataset, spamLabelOrder=None):
         print >> f, gateString.str + "  " + "  ".join( [("%g" % dataRow[sl]) for sl in spamLabels] )
     f.close()
 
-def write_multidataset(filename, gatestring_list, multidataset, spamLabelOrder=None):
+def write_multidataset(filename, multidataset, gatestring_list=None, spamLabelOrder=None):
     """
     Write a text-formatted multi-dataset file.
 
@@ -119,18 +123,23 @@ def write_multidataset(filename, gatestring_list, multidataset, spamLabelOrder=N
     filename : string
         The filename to write.
 
-    gatestring_list : list of GateStrings
-        The list of gate strings to include in the written dataset.
-
     multidataset : MultiDataSet
         The multi data set from which counts are obtained.
+
+    gatestring_list : list of GateStrings
+        The list of gate strings to include in the written dataset.
+        If None, all gate strings are output.
 
     spamLabelOrder : list, optional
         A list of the SPAM labels in multidataset which specifies
         the column order in the output file.
     """
-    if len(gatestring_list) > 0 and not isinstance(gatestring_list[0], _objs.GateString):
-        raise ValueError("Argument gatestring_list must be a list of GateString objects!")
+
+    if gatestring_list is not None:
+        if len(gatestring_list) > 0 and not isinstance(gatestring_list[0], _objs.GateString):
+            raise ValueError("Argument gatestring_list must be a list of GateString objects!")
+    else:
+        gatestring_list = multidataset.gsIndex.keys() #TODO: make access function for gatestrings?
 
     spamLabels = multidataset.get_spam_labels()
     if spamLabelOrder is not None:
@@ -209,39 +218,30 @@ def write_gateset(gs,filename,title=None):
         print >> f, "# %s" % title
     print >> f, ""
 
-    for (i,rhoVec) in enumerate(gs.rhoVecs):
-        print >> f, "rho%s" % (str(i) if len(gs.rhoVecs) > 1 else "")
+    for (prepLabel,rhoVec) in gs.preps.iteritems():
+        print >> f, "%s" % prepLabel
         print >> f, "PauliVec"
         print >> f, " ".join( "%.8g" % el for el in rhoVec )
         print >> f, ""
 
-    for (i,EVec) in enumerate(gs.EVecs):
-        print >> f, "E%s" % (str(i) if len(gs.EVecs) > 1 else "")
+    for (ELabel,EVec) in gs.effects.iteritems():
+        print >> f, "%s" % ELabel
         print >> f, "PauliVec"
         print >> f, " ".join( "%.8g" % el for el in EVec )
         print >> f, ""
 
-    for (label,gate) in gs.iteritems():
+    for (label,gate) in gs.gates.iteritems():
         print >> f, label
         print >> f, "PauliMx"
         print >> f, _tools.mx_to_string(gate, width=16, prec=8)
         print >> f, ""
 
-    if gs.identityVec is not None:
-        print >> f, "IDENTITYVEC " + " ".join( "%.8g" % el for el in gs.identityVec )
+    if gs.povm_identity is not None:
+        print >> f, "IDENTITYVEC " + " ".join( "%.8g" % el for el in gs.povm_identity )
     else:
         print >> f, "IDENTITYVEC None"
 
-    for sl in gs.SPAM_labels:
-        (iR,iE) = gs.SPAM_labels[sl]
-        if iE == -1:
-            if iR == -1:
-                print >> f, "SPAMLABEL %s = remainder" % sl
-            else:
-                print >> f, "SPAMLABEL %s = %s remainder" % (sl, "rho%s" % (str(iR) if len(gs.rhoVecs) > 1 else ""))
-        else:
-            assert(iR >= 0)  #iR can only be -1 when iE == -1
-            print >> f, "SPAMLABEL %s = %s %s" % (sl, 
-                                                  "rho%s" % (str(iR) if len(gs.rhoVecs) > 1 else ""),
-                                                  "E%s" % (str(iE) if len(gs.EVecs) > 1 else "") )
+    for sl,(prepLabel,ELabel) in gs.spamdefs.iteritems():
+        print >> f, "SPAMLABEL %s = %s %s" % (sl, prepLabel, ELabel)
+
     f.close()

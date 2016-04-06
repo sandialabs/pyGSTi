@@ -237,7 +237,6 @@ def extract_alpha(gateset,rpeconfig_inst):
     alphaVal : float
         The value of alpha for the input gateset.
     """
-        
     gate_label = rpeconfig_inst.fixed_axis_gate_label
     decomp = _gt.decompose_gate_matrix( gateset[gate_label] )
     alphaVal = decomp['pi rotations'] * _np.pi
@@ -264,7 +263,6 @@ def extract_epsilon(gateset,rpeconfig_inst):
     epsilonVal : float
         The value of epsilon for the input gateset.
     """
-        
     gate_label = rpeconfig_inst.loose_axis_gate_label
     decomp = _gt.decompose_gate_matrix( gateset[gate_label] )
     
@@ -294,7 +292,6 @@ def extract_theta(gateset,rpeconfig_inst):
     thetaVal : float
         The value of theta for the input gateset.
     """
-    
     gate_label = rpeconfig_inst.loose_axis_gate_label
     decomp = _gt.decompose_gate_matrix( gateset[gate_label] )
     target_axis = rpeconfig_inst.loose_axis_target

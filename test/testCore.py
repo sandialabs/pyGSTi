@@ -9,16 +9,18 @@ import sys
 class CoreTestCase(unittest.TestCase):
 
     def setUp(self):
+        #Set GateSet objects to "strict" mode for testing
+        pygsti.objects.GateSet._strict = True
 
         self.gateset = std.gs_target
         self.datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0.1)
         
         self.fiducials = std.fiducials
         self.germs = std.germs
-        self.specs = pygsti.construction.build_spam_specs(self.fiducials, EVecInds=[0]) #only use the first EVec
+        self.specs = pygsti.construction.build_spam_specs(self.fiducials, effect_labels=['E0']) #only use the first EVec
 
-        self.gateLabels = self.gateset.keys() # also == std.gates
-        self.lgstStrings = pygsti.construction.list_lgst_gatestrings(self.specs, self.gateset.keys())
+        self.gateLabels = self.gateset.gates.keys() # also == std.gates
+        self.lgstStrings = pygsti.construction.list_lgst_gatestrings(self.specs, self.gateLabels)
 
         self.maxLengthList = [0,1,2,4,8]
         
@@ -26,7 +28,17 @@ class CoreTestCase(unittest.TestCase):
             self.gateLabels, self.germs, self.maxLengthList )
         
         self.lsgstStrings = pygsti.construction.make_lsgst_lists(
-            self.gateLabels, self.fiducials, self.germs, self.maxLengthList )
+            self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLengthList )
+        
+        #Created in testAnalysis...
+        self.ds = pygsti.objects.DataSet(fileToLoadFrom="cmp_chk_files/analysis.dataset")
+
+        ##UNCOMMENT to create LGST analysis dataset
+        #ds_lgst = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
+        #                                                 nSamples=10000,sampleError='binomial', seed=100)
+        #ds_lgst.save("cmp_chk_files/analysis_lgst.dataset")
+        self.ds_lgst = pygsti.objects.DataSet(fileToLoadFrom="cmp_chk_files/analysis_lgst.dataset")
+
 
     def runSilent(self, callable, *args, **kwds):
         orig_stdout = sys.stdout
@@ -40,8 +52,10 @@ class CoreTestCase(unittest.TestCase):
 class TestCoreMethods(CoreTestCase):
 
     def test_gram(self):
-        ds = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
-                                                    nSamples=1000, sampleError='none')
+        ds = self.ds
+        #pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
+        #                                            nSamples=1000, sampleError='none')
+
         rank,evals = pygsti.gram_rank_and_evals(ds, self.specs, self.gateset)
         print "gram rank = ",rank
         print "gram evals = ",evals
@@ -51,8 +65,9 @@ class TestCoreMethods(CoreTestCase):
 
     def test_LGST(self):
 
-        ds = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings, nSamples=1000,
-                                                    sampleError='binomial', seed=100)
+        ds = self.ds
+        #pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings, nSamples=1000,
+        #                                            sampleError='binomial', seed=None)
         
         gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
         gs_lgst_verb = self.runSilent(pygsti.do_lgst, ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=10)
@@ -69,7 +84,7 @@ class TestCoreMethods(CoreTestCase):
         gs_lgst_compare = pygsti.io.load_gateset("cmp_chk_files/lgst.gateset")
         gs_lgst_go_compare = pygsti.io.load_gateset("cmp_chk_files/lgst_go.gateset")
         gs_clgst_compare = pygsti.io.load_gateset("cmp_chk_files/clgst.gateset")
-        
+
         self.assertAlmostEqual( gs_lgst.frobeniusdist(gs_lgst_compare), 0)
         self.assertAlmostEqual( gs_lgst_go.frobeniusdist(gs_lgst_go_compare), 0)
         self.assertAlmostEqual( gs_clgst.frobeniusdist(gs_clgst_compare), 0)
@@ -79,17 +94,17 @@ class TestCoreMethods(CoreTestCase):
             gs_lgst = pygsti.do_lgst(ds, self.specs, None, svdTruncateTo=4, verbosity=0) #no gate labels
 
         with self.assertRaises(ValueError):
-            gs_lgst = pygsti.do_lgst(ds, self.specs, None, gateLabels=self.gateset.keys(),
+            gs_lgst = pygsti.do_lgst(ds, self.specs, None, gateLabels=self.gateset.gates.keys(),
                                      svdTruncateTo=4, verbosity=0) #no spam dict
 
         with self.assertRaises(ValueError):
-            gs_lgst = pygsti.do_lgst(ds, self.specs, None, gateLabels=self.gateset.keys(),
-                                     spamDict=self.gateset.get_spam_label_dict(),
+            gs_lgst = pygsti.do_lgst(ds, self.specs, None, gateLabels=self.gateset.gates.keys(),
+                                     spamDict=self.gateset.get_reverse_spam_defs(),
                                      svdTruncateTo=4, verbosity=0) #no identity vector
 
         with self.assertRaises(ValueError):
             bad_specs = pygsti.construction.build_spam_specs(
-                pygsti.construction.gatestring_list([('Gx',),('Gx',),('Gx',),('Gx',)]), EVecInds=[0]) #only use the first EVec            
+                pygsti.construction.gatestring_list([('Gx',),('Gx',),('Gx',),('Gx',)]), effect_labels=['E0'])
             gs_lgst = pygsti.do_lgst(ds, bad_specs, self.gateset, svdTruncateTo=4, verbosity=0) # bad specs (rank deficient)
 
         with self.assertRaises(KeyError):
@@ -111,8 +126,9 @@ class TestCoreMethods(CoreTestCase):
 
     def test_eLGST(self):
 
-        ds = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lsgstStrings[-1],
-                                                    nSamples=1000,sampleError='binomial', seed=100)
+        ds = self.ds
+        #pygsti.construction.generate_fake_data(self.datagen_gateset, self.lsgstStrings[-1],
+        #                                            nSamples=1000,sampleError='binomial', seed=100)
         
         gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
         gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",targetGateset=self.gateset, spamWeight=1.0, gateWeight=1.0)
@@ -158,8 +174,9 @@ class TestCoreMethods(CoreTestCase):
 
     def test_MC2GST(self):
 
-        ds = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lsgstStrings[-1],
-                                                    nSamples=1000, sampleError='binomial', seed=100)
+        ds = self.ds
+        #pygsti.construction.generate_fake_data(self.datagen_gateset, self.lsgstStrings[-1],
+        #                                            nSamples=1000, sampleError='binomial', seed=100)
         
         gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
         gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",targetGateset=self.gateset, spamWeight=1.0, gateWeight=1.0)
@@ -232,8 +249,9 @@ class TestCoreMethods(CoreTestCase):
 
     def test_MLGST(self):
 
-        ds = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lsgstStrings[-1],
-                                                    nSamples=1000, sampleError='binomial', seed=100)
+        ds = self.ds
+        #pygsti.construction.generate_fake_data(self.datagen_gateset, self.lsgstStrings[-1],
+        #                                            nSamples=1000, sampleError='binomial', seed=100)
         
         gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
         gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",targetGateset=self.gateset, spamWeight=1.0, gateWeight=1.0)
@@ -266,11 +284,11 @@ class TestCoreMethods(CoreTestCase):
                                                       minProbClip=1e-6, probClipInterval=(-1e2,1e2),
                                                       gateStringSetLabels=["Set1","Set2"], useFreqWeightedChiSq=True )
 
-        aliased_list = [ pygsti.obj.GateString( [ (x if x != "Gx" else "A1") for x in gs]) for gs in self.lsgstStrings[0] ]
-        gs_withA1 = gs_clgst.copy(); gs_withA1.set_gate("A1",gs_clgst.get_gate("Gx"))
+        aliased_list = [ pygsti.obj.GateString( [ (x if x != "Gx" else "GA1") for x in gs]) for gs in self.lsgstStrings[0] ]
+        gs_withA1 = gs_clgst.copy(); gs_withA1.gates["GA1"] = gs_clgst.gates["Gx"]
         gs_mlegst_chk_opts2 = pygsti.do_mlgst(ds, gs_withA1, aliased_list, minProbClip=1e-6,
                                               probClipInterval=(-1e2,1e2), verbosity=0,
-                                              gateLabelAliases={ 'A1': ('Gx',) })
+                                              gateLabelAliases={ 'GA1': ('Gx',) })
 
         #Other option variations - just make sure they run at this point
         gs_lsgst_chk_opts = pygsti.do_iterative_mc2gst(ds, gs_clgst, self.lsgstStrings[0:2], verbosity=0,
@@ -320,12 +338,15 @@ class TestCoreMethods(CoreTestCase):
 
     def test_model_selection(self):
 
-        ds = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lsgstStrings[-1],
-                                                    nSamples=1000,sampleError='binomial', seed=100)
+        ds = self.ds
+        #pygsti.construction.generate_fake_data(self.datagen_gateset, self.lsgstStrings[-1],
+        #                                            nSamples=1000,sampleError='binomial', seed=100)
         
 
         gs_lgst4 = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
         gs_lgst6 = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=6, verbosity=0)
+        sys.stdout.flush()
+        
         self.runSilent(pygsti.do_lgst, ds, self.specs, self.gateset, svdTruncateTo=6, verbosity=4) # test verbose prints
         
         chiSq4 = pygsti.chi2(ds, gs_lgst4, self.lgstStrings, minProbClipForWeighting=1e-4)
@@ -347,23 +368,26 @@ class TestCoreMethods(CoreTestCase):
                                                  returnAll=True, returnErrorVec=True)
 
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
-        #pygsti.io.write_gateset(gs_lsgst,"cmp_chk_files/lsgstMS.gateset", "Saved LSGST Gateset with model selection")
+        pygsti.io.write_gateset(gs_lsgst,"cmp_chk_files/lsgstMS.gateset", "Saved LSGST Gateset with model selection")
 
         gs_lsgst_compare = pygsti.io.load_gateset("cmp_chk_files/lsgstMS.gateset")
         
         self.assertAlmostEqual( gs_lsgst.frobeniusdist(gs_lsgst_compare), 0)
 
     def test_miscellaneous(self):
-        ds = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
-                                                    nSamples=1000, sampleError='none')
+        ds = self.ds
+        #pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
+        #                                            nSamples=1000, sampleError='none')
+
         strs = pygsti.construction.list_strings_lgst_can_estimate(ds, self.specs)
 
         self.runSilent(self.gateset.print_info) #just make sure it works
 
 
     def test_gaugeopt_and_contract(self):
-        ds = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
-                                                    nSamples=10000,sampleError='binomial', seed=100)
+        ds = self.ds_lgst
+        #pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
+        #                                            nSamples=10000,sampleError='binomial', seed=100)
         
         gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
 
@@ -379,18 +403,16 @@ class TestCoreMethods(CoreTestCase):
                                             targetSpamMetric='fidelity', verbosity=10)
         gs_lgst_targetAlt  = self.runSilent(pygsti.optimize_gauge, gs_lgst_target,"target",targetGateset=self.gateset,
                                             targetSpamMetric='tracedist', verbosity=10)
-
         
         #Contractions
-        gs_clgst_tp    = self.runSilent(pygsti.contract, gs_lgst_target, "TP",verbosity=10)
-        gs_clgst_cp    = self.runSilent(pygsti.contract, gs_lgst_target, "CP",verbosity=10)
-        gs_clgst_cptp  = self.runSilent(pygsti.contract, gs_lgst_target, "CPTP",verbosity=10)
+        gs_clgst_tp    = self.runSilent(pygsti.contract, gs_lgst_target, "TP",verbosity=10, tol=10.0)
+        gs_clgst_cp    = self.runSilent(pygsti.contract, gs_lgst_target, "CP",verbosity=10, tol=10.0)
+        gs_clgst_cptp  = self.runSilent(pygsti.contract, gs_lgst_target, "CPTP",verbosity=10, tol=10.0)
         gs_clgst_cptp2 = self.runSilent(pygsti.contract, gs_lgst_target, "CPTP",verbosity=10, useDirectCP=False)
-        gs_clgst_xp    = self.runSilent(pygsti.contract, gs_lgst_target, "XP", ds,verbosity=10)
-        gs_clgst_xptp  = self.runSilent(pygsti.contract, gs_lgst_target, "XPTP", ds,verbosity=10)
-        gs_clgst_xptp  = self.runSilent(pygsti.contract, gs_lgst_target, "XPTP", ds,verbosity=10)
-        gs_clgst_vsp   = self.runSilent(pygsti.contract, gs_lgst_target, "vSPAM",verbosity=10)
-        gs_clgst_none  = self.runSilent(pygsti.contract, gs_lgst_target, "nothing",verbosity=10)
+        gs_clgst_xp    = self.runSilent(pygsti.contract, gs_lgst_target, "XP", ds,verbosity=10, tol=10.0)
+        gs_clgst_xptp  = self.runSilent(pygsti.contract, gs_lgst_target, "XPTP", ds,verbosity=10, tol=10.0)
+        gs_clgst_vsp   = self.runSilent(pygsti.contract, gs_lgst_target, "vSPAM",verbosity=10, tol=10.0)
+        gs_clgst_none  = self.runSilent(pygsti.contract, gs_lgst_target, "nothing",verbosity=10, tol=10.0)
 
 
         #More gauge optimizations
@@ -411,15 +433,15 @@ class TestCoreMethods(CoreTestCase):
         # routines are more tested
         gs_bigkick = gs_lgst_target.kick(absmag=1.0)
         gs_badspam = gs_bigkick.copy()
-        gs_badspam.set_evec( np.array( [[2],[0],[0],[4]], 'd'), 0) #set a bad evec so vSPAM has to work...
+        gs_badspam.effects['E0'] =  np.array( [[2],[0],[0],[4]], 'd') #set a bad evec so vSPAM has to work...
 
-        gs_clgst_tp    = self.runSilent(pygsti.contract,gs_bigkick, "TP", verbosity=10)
-        gs_clgst_cp    = self.runSilent(pygsti.contract,gs_bigkick, "CP", verbosity=10)
-        gs_clgst_cptp  = self.runSilent(pygsti.contract,gs_bigkick, "CPTP", verbosity=10)
-        gs_clgst_xp    = self.runSilent(pygsti.contract,gs_bigkick, "XP", ds, verbosity=10)
-        gs_clgst_xptp  = self.runSilent(pygsti.contract,gs_bigkick, "XPTP", ds, verbosity=10)
-        gs_clgst_vsp   = self.runSilent(pygsti.contract,gs_badspam, "vSPAM", verbosity=10)
-        gs_clgst_none  = self.runSilent(pygsti.contract,gs_bigkick, "nothing", verbosity=10)
+        gs_clgst_tp    = self.runSilent(pygsti.contract,gs_bigkick, "TP", verbosity=10, tol=10.0)
+        gs_clgst_cp    = self.runSilent(pygsti.contract,gs_bigkick, "CP", verbosity=10, tol=10.0)
+        gs_clgst_cptp  = self.runSilent(pygsti.contract,gs_bigkick, "CPTP", verbosity=10, tol=10.0)
+        gs_clgst_xp    = self.runSilent(pygsti.contract,gs_bigkick, "XP", ds, verbosity=10, tol=10.0)
+        gs_clgst_xptp  = self.runSilent(pygsti.contract,gs_bigkick, "XPTP", ds, verbosity=10, tol=10.0)
+        gs_clgst_vsp   = self.runSilent(pygsti.contract,gs_badspam, "vSPAM", verbosity=10, tol=10.0)
+        gs_clgst_none  = self.runSilent(pygsti.contract,gs_bigkick, "nothing", verbosity=10, tol=10.0)
 
         #TODO: check output lies in space desired
 
