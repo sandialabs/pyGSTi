@@ -28,7 +28,7 @@ class CoreTestCase(unittest.TestCase):
             self.gateLabels, self.germs, self.maxLengthList )
         
         self.lsgstStrings = pygsti.construction.make_lsgst_lists(
-            self.gateLabels, self.fiducials, self.germs, self.maxLengthList )
+            self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLengthList )
         
         #Created in testAnalysis...
         self.ds = pygsti.objects.DataSet(fileToLoadFrom="cmp_chk_files/analysis.dataset")

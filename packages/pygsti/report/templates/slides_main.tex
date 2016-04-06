@@ -11,6 +11,8 @@
 \usepackage{etoolbox}
 \usepackage{units}
 \usepackage{multirow}
+\usepackage{hyperref}
+\usepackage{pdfcomment}
 
 \newcommand{\rrangle}{\rangle\!\rangle} \newcommand{\llangle}{\langle\!\langle}
 \newcommand{\ket}[1]{\ensuremath{\left|#1\right\rangle}}
@@ -40,6 +42,11 @@
 \newtoggle{pixelplotsappendix}
 \newtoggle{whackamoleappendix}
 \putfield{settoggles}{}
+
+\hypersetup{
+  pdfinfo={ \putfield{pdfinfo}{}  }
+}
+
 
 \title{\putfield{title}{Report Title Goes Here}}
 \subtitle{A projector-friendly look at your GST results}
@@ -89,7 +96,7 @@
 
 \begin{figure}
 \begin{center}
-\putfield{bestGatesetBoxPlot}{Box plot of best gateset}
+\putfield{bestEstimateColorBoxPlot}{Box plot of best gateset}
 \end{center}
 \end{figure}
 \end{frame}
@@ -280,7 +287,7 @@
 
 \begin{figure}
 \begin{center}
-\putfield{directLongSeqGSTBoxPlot}{Box plot for direct GST}
+\putfield{directLongSeqGSTColorBoxPlot}{Box plot for direct GST}
 \caption{How well direct GST analysis of each base sequence fits the observed data.}
 \end{center}
 \end{figure}
@@ -293,7 +300,7 @@
 
 \begin{figure}
 \begin{center}
-\putfield{directLongSeqGSTDeviationBoxPlot}{Box plot of direct LSGST Deviation}
+\putfield{directLongSeqGSTDeviationColorBoxPlot}{Box plot of direct LSGST Deviation}
 \caption{For each base sequence, the increase in ``upper bound of fidelity with unitary'' when using the direct-GST result for a gate sequence instead of the process given by the best gateset.}
 \end{center}
 \end{figure}
@@ -306,7 +313,7 @@
 
 \begin{figure}
 \begin{center}
-\putfield{smallEvalErrRateBoxPlot}{Box plot of small-eigenvalue error rates}
+\putfield{smallEigvalErrRateColorBoxPlot}{Box plot of small-eigenvalue error rates}
 \caption{Extrapolated from the smallest magnitude eigenvalue of the direct GST gate matrix.}
 \end{center}
 \end{figure}
