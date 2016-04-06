@@ -71,7 +71,7 @@ def extract_rotation_hat(xhat,yhat,k,Nx,Ny,angleName="epsilon",
     elif k>1:
 #        angle_j = 1./k * _np.arctan2((xhat-Nx/2.)/Nx,(yhat-Ny/2.)/Ny)
         angle_j = 1./k * arctan2Val
-        while not (angle_j > previousAngle - _np.pi/k and \
+        while not (angle_j >= previousAngle - _np.pi/k and \
                    angle_j <= previousAngle + _np.pi/k):
             if angle_j <= previousAngle - _np.pi/k:
                 angle_j += 2 * _np.pi/k
@@ -309,7 +309,26 @@ def extract_theta(gateset,rpeconfig_inst):
     return thetaVal
 
 
-def analyze_rpe_data(inputDataset,trueOrTargetGateset,stringListD,rpeconfig_inst):
+def consistency_check(angle_k, angle_final, k):
+    wedge_size = _np.pi/(2*k)
+    angle_k += _np.pi
+    angle_k = angle_k % (2*_np.pi)
+    angle_k -= _np.pi
+
+    angle_final += _np.pi
+    angle_final = angle_final % (2*_np.pi)
+    angle_final -= _np.pi
+
+    if _np.abs(angle_k - angle_final) <= wedge_size:
+        return 1.0
+    elif _np.abs(angle_k - (angle_final+2*_np.pi)) <= wedge_size:
+        return 1.0
+    elif _np.abs(angle_k - (angle_final-2*_np.pi)) <= wedge_size:
+        return 1.0
+    else:
+        return 0.0
+
+def analyze_rpe_data(inputDataset,trueOrTargetGateset,stringListD,rpeconfig_inst,do_consistency_check=False,k_list=None):
     """
     Compute angle estimates and compare to true or target values for alpha, epsilon,
     and theta.  ("True" will typically be used for simulated data, when the 
@@ -393,7 +412,31 @@ def analyze_rpe_data(inputDataset,trueOrTargetGateset,stringListD,rpeconfig_inst
         thetaErrorList.append(abs(thetaTrue - thetaTemp1))
 #    for PhiFunTemp1 in PhiFunList:
 #        PhiFunErrorList.append(PhiFunTemp1)
+
     resultsD = {}
+
+    if do_consistency_check:
+        if k_list is None:
+            raise Exception("Consistency check requested, but no k List given!")
+        else:
+            num_ks = len(k_list)
+            resultsD['alphaCheckMat'] = _np.zeros([num_ks,num_ks],float)
+            resultsD['epsilonCheckMat'] = _np.zeros([num_ks,num_ks],float)
+            resultsD['thetaCheckMat'] = _np.zeros([num_ks,num_ks],float)
+            for k_final_ind, k_final_val in enumerate(k_list):
+                alpha_final_k = alphaHatList[k_final_ind]
+                epsilon_final_k = epsilonHatList[k_final_ind]
+                theta_final_k = thetaHatList[k_final_ind]
+                k_list_temp = list(k_list[:k_final_ind+1])
+                for k_small_ind, k_small_val in enumerate(k_list_temp):
+#                    print k_small_ind, k_small_val, k_final_ind, k_final_val, k_list_temp
+                    alpha_small_k = alphaHatList[k_small_ind]
+                    epsilon_small_k = epsilonHatList[k_small_ind]
+                    theta_small_k = thetaHatList[k_small_ind]
+                    resultsD['alphaCheckMat'][k_small_ind,k_final_ind] = consistency_check(alpha_small_k,alpha_final_k,k_small_val)
+                    resultsD['epsilonCheckMat'][k_small_ind,k_final_ind] = consistency_check(epsilon_small_k,epsilon_final_k,k_small_val)
+                    resultsD['thetaCheckMat'][k_small_ind,k_final_ind] = consistency_check(theta_small_k,theta_final_k,k_small_val)
+                
     resultsD['alphaHatList'] = alphaHatList
     resultsD['epsilonHatList'] = epsilonHatList
     resultsD['thetaHatList'] = thetaHatList

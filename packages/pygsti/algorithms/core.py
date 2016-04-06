@@ -2148,7 +2148,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                       maxiter=100000, maxfev=None, tol=1e-6,
                       opt_gates=True, opt_G0=True, opt_SPAM=True, opt_SP0=True,
                       minProbClip=1e-4, probClipInterval=None, radius=1e-4, poissonPicture=True,
-                      returnMaxLogL=False, returnAll=False, 
+                      returnMaxLogL=False, returnAll=False, minProbClipForWeighting=1e-4,
                       gateStringSetLabels=None, useFreqWeightedChiSq=False, verbosity=0, 
                       check=False, memLimit=None):
   """
@@ -2201,6 +2201,11 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
       A penalty function replaces the true log-likelihood for probabilities that lie
       below this threshold so that the log-likelihood never becomes undefined (which improves
       optimizer performance).
+
+  minProbClipForWeighting : float, optional
+      Sets the minimum and maximum probability p allowed in the chi^2 weights: N/(p*(1-p))
+      by clipping probability p values to lie within the interval
+      [ minProbClipForWeighting, 1-minProbClipForWeighting ].
 
   probClipInterval : 2-tuple or None, optional
       (min,max) values used to clip the probabilities predicted by gatesets during MLEGST's
@@ -2278,7 +2283,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
     
     chi2Diff, mleGateset = do_mc2gst( dataset, mleGateset, stringsToEstimate,
                                     maxiter, maxfev, tol, opt_gates, opt_G0, opt_SPAM, opt_SP0,
-                                    0, minProbClip, probClipInterval, useFreqWeightedChiSq, 0, verbosity, check,
+                                    0, minProbClipForWeighting, probClipInterval, useFreqWeightedChiSq, 0, verbosity, check,
                                     False, None, None, memLimit) # so maxLogL is really chi2 number here
 
     logL_ub = _tools.logl_max(dataset, stringsToEstimate, None, poissonPicture, check)

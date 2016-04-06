@@ -213,6 +213,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     elif objective == "logl":
         gs_lsgst_list = _alg.do_iterative_mlgst(ds, gs_after_gauge_opt, lsgstLists,
                                                minProbClip = advancedOptions.get('minProbClip',1e-4),
+                                               minProbClipForWeighting=advancedOptions.get('minProbClipForWeighting',1e-4),
                                                probClipInterval = advancedOptions.get('probClipInterval',(-1e6,1e6)),
                                                radius=advancedOptions.get('radius',1e-4), 
                                                returnAll=True, opt_G0=(not constrainToTP), opt_SP0=(not constrainToTP),

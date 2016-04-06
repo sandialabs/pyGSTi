@@ -13,7 +13,7 @@ from .. import algorithms as _alg
 from .. import tools as _tools
 
 def make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=None,
-                           seed=None,spamLabels=None):
+                           seed=None,spamLabels=None,verbosity=1):
     """
     Creates a DataSet used for generating bootstrapped error bars.
 
@@ -42,6 +42,10 @@ def make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=None,
        The list of SPAM labels to include in the output dataset.  If None
        are specified, defaults to the spam labels of inputDataSet.
 
+    verbosity : int, optional
+       How verbose the function output is.  If 0, then printing is suppressed.
+       If 1 (or greater), then printing is not suppressed.
+
     Returns
     -------
     DataSet
@@ -54,12 +58,14 @@ def make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=None,
     rndm = _np.random.RandomState(seed)
     if inputGateSet is None:
         if generationMethod == 'nonparametric':
-            print "Generating non-parametric dataset."
+            if verbosity >= 1:
+                print "Generating non-parametric dataset."
         elif generationMethod == 'parametric':
             raise ValueError("For 'parmametric', must specify inputGateSet")
     else:
         if generationMethod == 'parametric':
-            print "Generating parametric dataset."
+            if verbosity >= 1:
+                print "Generating parametric dataset."
         elif generationMethod == 'nonparametric':
             raise ValueError("For 'nonparametric', inputGateSet must be None")
         possibleSpamLabels = inputGateSet.get_spam_labels()
