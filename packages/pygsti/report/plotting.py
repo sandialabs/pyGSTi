@@ -703,9 +703,11 @@ def color_boxplot(plt_data, cmapFactory, title=None, xlabels=None, ylabels=None,
     """
     if axes is None: fig,axes = _plt.subplots()  # create a new figure if no axes are given
 
+    cmap, norm = cmapFactory.get_cmap(), cmapFactory.get_norm()
+
     masked_data = _np.ma.array (plt_data, mask=_np.isnan(plt_data))
 
-    heatmap = axes.pcolormesh( masked_data, cmap=cmapFactory.get_cmap(), norm=cmapFactory.get_norm())
+    heatmap = axes.pcolormesh( masked_data, cmap=cmap, norm=norm)
 
     if size is not None and fig is not None:
         fig.set_size_inches(size[0],size[1]) # was 12,8 for "super" color plot
