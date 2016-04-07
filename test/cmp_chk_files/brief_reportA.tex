@@ -10,6 +10,9 @@
 \usepackage{etoolbox}
 \usepackage{units}
 \usepackage{multirow}
+\usepackage{hyperref}
+\usepackage{pdfcomment}
+\usepackage{color}
 
 \setcounter{topnumber}{3}
 \setcounter{bottomnumber}{3}
@@ -47,6 +50,33 @@
 \toggletrue{goodnessSection}
 
 
+\hypersetup{
+  pdfinfo={ Author={pyGSTi},
+Title={Brief GST report for MyDefaultReportName},
+Keywords={GST},
+pyGSTi_Version={0.9.1-alpha},
+opt_table_formats={[py, html, latex, ppt]},
+opt_long_tables={False},
+opt_table_class={dataTable},
+opt_template_path={None},
+opt_latex_cmd={pdflatex},
+defaultDirectory={temp_test_files},
+max_length_list={[0, 1, 2, 4, 8]},
+defaultBasename={MyDefaultReportName},
+radius={0.0001},
+minProbClip={1e-06},
+fiducial_pairs={None},
+mxBasis={gm},
+minProbClipForWeighting={0.0001},
+L_germ_tuple_base_string_dict={Dict[[0, Gx]: {}, [0, Gy]: {}, [0, Gi]: {}, [0, GxGy]: {}, [0, GxGyGi]: {}, [0, GxGiGy]: {}, [0, GxGiGi]: {}, [0, GyGiGi]: {}, [0, GxGxGiGy]: {}, [0, GxGyGyGi]: {}, [0, GxGxGyGxGyGy]: {}, [1, Gx]: [Gx], [1, Gy]: [Gy], [1, Gi]: [Gi], [1, GxGy]: {}, [1, GxGyGi]: {}, [1, GxGiGy]: {}, [1, GxGiGi]: {}, [1, GyGiGi]: {}, [1, GxGxGiGy]: {}, [1, GxGyGyGi]: {}, [1, GxGxGyGxGyGy]: {}, [2, Gx]: [Gx]2, [2, Gy]: [Gy]2, [2, Gi]: [Gi]2, [2, GxGy]: [GxGy], [2, GxGyGi]: {}, [2, GxGiGy]: {}, [2, GxGiGi]: {}, [2, GyGiGi]: {}, [2, GxGxGiGy]: {}, [2, GxGyGyGi]: {}, [2, GxGxGyGxGyGy]: {}, [4, Gx]: [Gx]4, [4, Gy]: [Gy]4, [4, Gi]: [Gi]4, [4, GxGy]: [GxGy]2, [4, GxGyGi]: [GxGyGi], [4, GxGiGy]: [GxGiGy], [4, GxGiGi]: [GxGiGi], [4, GyGiGi]: [GyGiGi], [4, GxGxGiGy]: [GxGxGiGy], [4, GxGyGyGi]: [GxGyGyGi], [4, GxGxGyGxGyGy]: {}, [8, Gx]: [Gx]8, [8, Gy]: [Gy]8, [8, Gi]: [Gi]8, [8, GxGy]: [GxGy]4, [8, GxGyGi]: [GxGyGi]2, [8, GxGiGy]: [GxGiGy]2, [8, GxGiGi]: [GxGiGi]2, [8, GyGiGi]: [GyGiGi]2, [8, GxGxGiGy]: [GxGxGiGy]2, [8, GxGyGyGi]: [GxGyGyGi]2, [8, GxGxGyGxGyGy]: [GxGxGyGxGyGy]]},
+probClipInterval={[-1000000.0, 1000000.0]},
+weights={None},
+objective={chi2},
+constrainToTP={False},
+hessianProjection={std}  }
+}
+
+
 \begin{document}
 
 \title{Brief GST report for MyDefaultReportName}
@@ -65,7 +95,7 @@ This report presents a brief gate-set tomography (GST) analysis of a dataset cal
 \section{Goodness-of-model}
 \iftoggle{goodnessSection}{
 Table \ref{progressTable} shows how well GST was able to fit you data through its iterations.
-%, and Figure \ref{bestGatesetBoxPlot} shows in more detail the goodness of fit quantity for the final (best) gateset estimate.
+%, and Figure \ref{bestEstimateColorBoxPlot} shows in more detail the goodness of fit quantity for the final (best) gateset estimate.
 
 \begin{table}[h]
 \begin{center}
@@ -86,8 +116,8 @@ L & $\chi^2$ & $k$ & $\chi^2-k$ & $\sqrt{2k}$ & $P$ & $N_s$ & $N_p$ & Rating \\ 
 
 %\begin{figure}
 %\begin{center}
-%\XXputfield{bestGatesetBoxPlot}{Color box plot for best gateset}
-%\caption{\textbf{\XXputfield{objective}{??} values for every individual experiment in the dataset}.  Each pixel represents a single experiment (gate sequence), and its color indicates whether GST was able to fit the corresponding frequency well.  Blue is typical; dark red squares indicating $\chi^2>10$ should appear only once per 638 experiments on average.  Square blocks of pixels correspond to base sequences (arranged vertically by germ and horizontally by length); each pixel within a block corresponds to a specific choice of pre- and post-fiducial sequences.  See text for further details.\label{bestGatesetBoxPlot}}
+%\XXputfield{bestEstimateColorBoxPlot}{Color box plot for best gateset}
+%\caption{\XXputfield{tt_bestEstimateColorBoxPlot}{}\textbf{\XXputfield{objective}{??} values for every individual experiment in the dataset}.  Each pixel represents a single experiment (gate sequence), and its color indicates whether GST was able to fit the corresponding frequency well.  Blue is typical; dark red squares indicating $\chi^2>10$ should appear only once per 638 experiments on average.  Square blocks of pixels correspond to base sequences (arranged vertically by germ and horizontally by length); each pixel within a block corresponds to a specific choice of pre- and post-fiducial sequences.  See text for further details.\label{bestEstimateColorBoxPlot}}
 %\end{center}
 %\end{figure}
 

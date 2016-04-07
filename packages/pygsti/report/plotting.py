@@ -10,7 +10,6 @@ import numpy as _np
 import matplotlib.pyplot as _plt
 import matplotlib as _matplotlib
 import os as _os
-import pickle as _pickle
 from matplotlib.ticker import AutoMinorLocator as _AutoMinorLocator
 from matplotlib.ticker import FixedLocator as _FixedLocator
 from scipy.stats import chi2 as _chi2
@@ -20,35 +19,7 @@ from .. import tools as _tools
 from .. import construction as _construction
 from .. import objects as _objs
 
-class GSTFigure(object):
-    def __init__(self, axes, extraInfo=None):
-        self.pickledAxes = _pickle.dumps(axes)
-        self.extraInfo = extraInfo
-
-    def save_to(self, filename):
-        if filename is not None and len(filename) > 0:
-            try:
-                axes = _pickle.loads(self.pickledAxes) #this creates a new (current) figure in matplotlib
-                curFig = _plt.gcf() # gcf == "get current figure"
-                curFig.callbacks.callbacks = {} # initialize fig's CallbackRegistry, which doesn't unpickle properly in matplotlib 1.5.1
-            except:
-                raise ValueError("GSTFigure unpickling error!  This could be caused by using matplotlib or pylab" +
-                                 " magic functions ('%pylab inline' or '%matplotlib inline') within an iPython" +
-                                 " notebook, so if you used either of these please remove it and all should be well.")
-            _plt.savefig(filename, bbox_extra_artists=(axes,), bbox_inches='tight') #need extra artists otherwise axis labels get clipped
-            _plt.close(curFig) # closes the figure created by unpickling
-
-    def set_extra_info(self, extraInfo):
-        self.extraInfo = extraInfo
-
-    def get_extra_info(self):
-        return self.extraInfo
-    
-    def check(self):
-        axes = _pickle.loads(self.pickledAxes) #this creates a new (current) figure in matplotlib
-        curFig = _plt.gcf() # gcf == "get current figure"
-        curFig.callbacks.callbacks = {} # initialize fig's CallbackRegistry, which doesn't unpickle properly in matplotlib 1.5.1
-        _plt.close(curFig) # gcf == "get current figure"; closes the figure created by unpickling
+from figure import ReportFigure as _ReportFigure
 
 
 def total_count_matrix( gateString, dataset, strs, fidPairs=None):
@@ -620,7 +591,7 @@ def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, 
     
     Returns
     -------
-    GSTFigure
+    ReportFigure
         The encapsulated matplotlib figure that was generated
     """
     if axes is None: fig,axes = _plt.subplots()  # create a new figure if no axes are given
@@ -731,14 +702,14 @@ def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, 
     if colorbar:
         _plt.colorbar(heatmap)
 
-    gstFig = GSTFigure(axes)
+    rptFig = _ReportFigure(axes)
 
     if save_to is not None:
         if len(save_to) > 0: #So you can pass save_to="" and figure will be closed but not saved to a file
             _plt.savefig(save_to, bbox_extra_artists=(axes,), bbox_inches='tight') #need extra artists otherwise axis labels get clipped
         if fig is not None: _plt.close(fig) #close the figure if we're saving it to a file
 
-    return gstFig
+    return rptFig
 
 
 
@@ -804,7 +775,7 @@ def nested_color_boxplot(plt_data_list_of_lists, title=None, xlabels=None, ylabe
     
     Returns
     -------
-    GSTFigure
+    ReportFigure
         The encapsulated matplotlib figure that was generated
     """
 
@@ -934,7 +905,7 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, xlabel=""
 
     Returns
     -------
-    gstFig : GSTFigure
+    rptFig : ReportFigure
         The encapsulated matplotlib figure that was generated.  Note that 
         figure extra info is a dict with keys:
 
@@ -994,11 +965,11 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, xlabel=""
             minclip = str_to_float( min_clip )
             maxclip = str_to_float( max_clip )
             fig,ax = _plt.subplots( 1, 1, figsize=(nXs*scale, nYs*scale))
-            gstFig = color_boxplot( subMxSums, fig=fig, axes=ax, title=title,
+            rptFig = color_boxplot( subMxSums, fig=fig, axes=ax, title=title,
                                    xlabels=val_filter(used_xvals), ylabels=val_filter(used_yvals),
                                    vmin=minclip, vmax=maxclip, colorbar=False, prec=prec, xlabel=xlabel, ylabel=ylabel,
                                    ticSize=ticSize, grid=grid)
-            gstFig.save_to(save_to)
+            rptFig.save_to(save_to)
 
             if histogram:
                 fig = _plt.figure()
@@ -1012,16 +983,16 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, xlabel=""
                     if len(save_to) > 0:
                         _plt.savefig( _makeHistFilename(save_to) )
                     _plt.close(fig)                    
-            return gstFig
+            return rptFig
 
 
         if interactive:
             interact(makeplot, 
                      min_clip=str(init_min_clip) if init_min_clip is not None else str(0),
                      max_clip=str(init_max_clip) if init_max_clip is not None else str(10) )
-            gstFig = None
+            rptFig = None
         else:
-            gstFig = makeplot(init_min_clip, init_max_clip)
+            rptFig = makeplot(init_min_clip, init_max_clip)
 
     else: #not summing up
 
@@ -1053,10 +1024,10 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, xlabel=""
             maxclip = str_to_float( max_clip )
             #print "data = ",subMxs
             fig,ax = _plt.subplots( 1, 1, figsize=(nXs*nIXs*scale*0.4, nYs*nIYs*scale*0.4))
-            gstFig = nested_color_boxplot(subMxs, fig=fig, axes=ax, title=title,vmin=minclip, vmax=maxclip, prec=prec, 
+            rptFig = nested_color_boxplot(subMxs, fig=fig, axes=ax, title=title,vmin=minclip, vmax=maxclip, prec=prec, 
                                         ylabels=val_filter(used_yvals), xlabels=val_filter(used_xvals), boxLabels=labels,
                                         colorbar=False, ylabel=ylabel, xlabel=xlabel, ticSize=ticSize, grid=grid)
-            gstFig.save_to(save_to)
+            rptFig.save_to(save_to)
 
             if histogram:
                 fig = _plt.figure()
@@ -1070,7 +1041,7 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, xlabel=""
                     if len(save_to) > 0:
                         _plt.savefig( _makeHistFilename(save_to) )
                     _plt.close(fig)
-            return gstFig
+            return rptFig
 
 
         if interactive:
@@ -1078,15 +1049,15 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, xlabel=""
                      min_clip=str(init_min_clip) if init_min_clip is not None else str(0),
                      max_clip=str(init_max_clip) if init_max_clip is not None else str(10),
                      labels=boxLabels)
-            gstFig = None
+            rptFig = None
         else:
-            gstFig = makeplot(init_min_clip, init_max_clip, boxLabels)
+            rptFig = makeplot(init_min_clip, init_max_clip, boxLabels)
 
-    if gstFig:
-        gstFig.set_extra_info( { 'nUsedXs': len(used_xvals),
+    if rptFig:
+        rptFig.set_extra_info( { 'nUsedXs': len(used_xvals),
                                  'nUsedYs': len(used_yvals) } )                     
-    # gstFig.check() #DEBUG - test that figure can unpickle correctly -- if not, probably used magic matplotlib (don't do that)
-    return gstFig
+    # rptFig.check() #DEBUG - test that figure can unpickle correctly -- if not, probably used magic matplotlib (don't do that)
+    return rptFig
 
 
 def generate_zoomed_boxplot(xvals, yvals, xyGateStringDict, subMxCreationFn, strs, 
@@ -1294,7 +1265,7 @@ def chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
 
     Returns
     -------
-    gstFig : GSTFigure
+    rptFig : ReportFigure
         The encapsulated matplotlib figure that was generated.  Extra figure
         info is a dict with keys:
 
@@ -1401,7 +1372,7 @@ def logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
 
     Returns
     -------
-    gstFig : GSTFigure
+    rptFig : ReportFigure
         The encapsulated matplotlib figure that was generated.  Extra figure
         info is a dict with keys:
 
@@ -1471,7 +1442,7 @@ def blank_boxplot( xvals, yvals, xy_gatestring_dict, strs, xlabel="", ylabel="",
 
     Returns
     -------
-    gstFig : GSTFigure
+    rptFig : ReportFigure
         The encapsulated matplotlib figure that was generated.  Extra figure
         info is a dict with keys:
 
@@ -1626,7 +1597,7 @@ def small_eigval_err_rate_boxplot( xvals, yvals, xy_gatestring_dict, dataset, di
 
     Returns
     -------
-    gstFig : GSTFigure
+    rptFig : ReportFigure
         The encapsulated matplotlib figure that was generated.  Extra figure
         info is a dict with keys:
 
@@ -2317,7 +2288,7 @@ def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
 
     Returns
     -------
-    gstFig : GSTFigure
+    rptFig : ReportFigure
         The encapsulated matplotlib figure that was generated.  Extra figure
         info is a dict with keys:
 
@@ -2545,7 +2516,7 @@ def direct_logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
 
     Returns
     -------
-    gstFig : GSTFigure
+    rptFig : ReportFigure
         The encapsulated matplotlib figure that was generated.  Extra figure
         info is a dict with keys:
 
@@ -2660,7 +2631,7 @@ def direct2x_comp_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGate
 
     Returns
     -------
-    gstFig : GSTFigure
+    rptFig : ReportFigure
         The encapsulated matplotlib figure that was generated.   Extra figure
         info is a dict with keys:
 
@@ -2784,7 +2755,7 @@ def direct_deviation_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset
 
     Returns
     -------
-    gstFig : GSTFigure
+    rptFig : ReportFigure
         The encapsulated matplotlib figure that was generated.  Extra figure
         info is a dict with keys:
 
@@ -2915,7 +2886,7 @@ def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
 
     Returns
     -------
-    gstFig : GSTFigure
+    rptFig : ReportFigure
         The encapsulated matplotlib figure that was generated.  Extra figure
         info is a dict with keys:
 
@@ -3095,7 +3066,7 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
 
     Returns
     -------
-    gstFig : GSTFigure
+    rptFig : ReportFigure
         The encapsulated matplotlib figure that was generated.  Extra figure
         info is a dict with keys:
 

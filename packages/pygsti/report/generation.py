@@ -22,15 +22,15 @@ from .. import objects as _objs
 
 import reportables as _cr
 import tableformat as _tf
+from table import ReportTable as _ReportTable
 
 
 
 def get_blank_table(formats):
     """ Create a blank table as a placeholder with the given formats """
-    tables = {}
-    _tf.create_table(formats, tables, ['Blank'], [None], "", False)
-    _tf.finish_table(formats, tables, False)
-    return tables
+    table = _ReportTable(formats, ['Blank'], [None], "", False)
+    table.finish()
+    return table
     
 
 def get_gateset_spam_table(gateset, formats, tableclass, longtable, 
@@ -44,7 +44,7 @@ def get_gateset_spam_table(gateset, formats, tableclass, longtable,
         The GateSet
 
     formats : list
-        List of formats to include in returned tables dictionary. Allowed
+        List of formats to include in returned table. Allowed
         formats are 'latex', 'html', 'py', and 'ppt'.
 
     tableclass : string
@@ -64,9 +64,8 @@ def get_gateset_spam_table(gateset, formats, tableclass, longtable,
 
     Returns
     -------
-    dict
-        Dictionary with keys equal to the requested formats (e.g. 'latex'),
-        and values equal to the table data in the corresponding format.
+    ReportTable
+        Table object containing the requested formats (e.g. 'latex').
     """
     
     basisNm = _tools.basis_longname(mxBasis, gateset.get_dimension())
@@ -81,9 +80,8 @@ def get_gateset_spam_table(gateset, formats, tableclass, longtable,
                        'Matrix')
         formatters = (None,None,_tf.TxtCnv,None)
 
-    tables = {}
-    _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable)
-
+    table = _ReportTable(formats, colHeadings, formatters,
+                         tableclass, longtable)
     for lbl,rhoVec in gateset.preps.iteritems():
         if mxBasis == "pp":   rhoMx = _tools.ppvec_to_stdmx(rhoVec)
         elif mxBasis == "gm": rhoMx = _tools.gmvec_to_stdmx(rhoVec)
@@ -91,12 +89,12 @@ def get_gateset_spam_table(gateset, formats, tableclass, longtable,
         else: raise ValueError("Invalid basis specifier: %s" % mxBasis)
 
         if confidenceRegionInfo is None:
-            _tf.add_table_row(formats, tables, (lbl, rhoVec, rhoMx), (_tf.Rho,_tf.Nml,_tf.Brk))
+            table.addrow((lbl, rhoVec, rhoMx), (_tf.Rho,_tf.Nml,_tf.Brk))
         else:
             intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(lbl)[:,None]
             if intervalVec.shape[0] == gateset.get_dimension()-1: #TP constrained, so pad with zero top row
                 intervalVec = _np.concatenate( (_np.zeros((1,1),'d'),intervalVec), axis=0 )
-            _tf.add_table_row(formats, tables, (lbl, rhoVec, intervalVec, rhoMx), (_tf.Rho,_tf.Nml,_tf.Nml,_tf.Brk))
+            table.addrow((lbl, rhoVec, intervalVec, rhoMx), (_tf.Rho,_tf.Nml,_tf.Nml,_tf.Brk))
 
     for lbl,EVec in gateset.effects.iteritems():
         if mxBasis == "pp":    EMx = _tools.ppvec_to_stdmx(EVec)
@@ -105,13 +103,13 @@ def get_gateset_spam_table(gateset, formats, tableclass, longtable,
         else: raise ValueError("Invalid basis specifier: %s" % mxBasis)
 
         if confidenceRegionInfo is None:
-            _tf.add_table_row(formats, tables, (lbl, EVec, EMx), (_tf.E,_tf.Nml,_tf.Brk))
+            table.addrow((lbl, EVec, EMx), (_tf.E,_tf.Nml,_tf.Brk))
         else:
             intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(lbl)[:,None]
-            _tf.add_table_row(formats, tables, (lbl, EVec, intervalVec, EMx), (_tf.E,_tf.Nml,_tf.Nml,_tf.Brk))
+            table.addrow((lbl, EVec, intervalVec, EMx), (_tf.E,_tf.Nml,_tf.Nml,_tf.Brk))
             
-    _tf.finish_table(formats, tables, longtable)
-    return tables
+    table.finish()
+    return table
 
 
 
@@ -126,7 +124,7 @@ def get_gateset_spam_parameters_table(gateset, formats, tableclass, longtable, c
         The GateSet
 
     formats : list
-        List of formats to include in returned tables dictionary. Allowed
+        List of formats to include in returned table. Allowed
         formats are 'latex', 'html', 'py', and 'ppt'.
 
     tableclass : string
@@ -141,15 +139,14 @@ def get_gateset_spam_parameters_table(gateset, formats, tableclass, longtable, c
 
     Returns
     -------
-    dict
-        Dictionary with keys equal to the requested formats (e.g. 'latex'),
-        and values equal to the table data in the corresponding format.
+    ReportTable
+        Table object containing the requested formats (e.g. 'latex').
     """
     colHeadings = [''] + list(gateset.get_effect_labels())
     formatters = [None] + [ _tf.E ]*len(gateset.get_effect_labels())
 
-    tables = {}
-    _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable)
+    table = _ReportTable(formats, colHeadings, formatters,
+                         tableclass, longtable)
 
     spamDotProdsQty = _cr.compute_gateset_qty("Spam DotProds", gateset, confidenceRegionInfo)
     DPs, DPEBs = spamDotProdsQty.get_value_and_err_bar()
@@ -163,10 +160,10 @@ def get_gateset_spam_parameters_table(gateset, formats, tableclass, longtable, c
                 rowData.append((DPs[ii,jj],None))
             else:
                 rowData.append((DPs[ii,jj],DPEBs[ii,jj]))
-        _tf.add_table_row(formats, tables, rowData, formatters)
+        table.addrow(rowData, formatters)
 
-    _tf.finish_table(formats, tables, longtable)
-    return tables
+    table.finish()
+    return table
 
 
 def get_gateset_gates_table(gateset, formats, tableclass, longtable,
@@ -180,7 +177,7 @@ def get_gateset_gates_table(gateset, formats, tableclass, longtable,
         The GateSet
 
     formats : list
-        List of formats to include in returned tables dictionary. Allowed
+        List of formats to include in returned table. Allowed
         formats are 'latex', 'html', 'py', and 'ppt'.
 
     tableclass : string
@@ -201,9 +198,8 @@ def get_gateset_gates_table(gateset, formats, tableclass, longtable,
 
     Returns
     -------
-    dict
-        Dictionary with keys equal to the requested formats (e.g. 'latex'),
-        and values equal to the table data in the corresponding format.
+    ReportTable
+        Table object containing the requested formats (e.g. 'latex').
     """
     gateLabels = gateset.gates.keys()  # gate labels
     basisNm = _tools.basis_longname(mxBasis, gateset.get_dimension())
@@ -216,12 +212,11 @@ def get_gateset_gates_table(gateset, formats, tableclass, longtable,
                        '%g%% C.I. half-width' % confidenceRegionInfo.level)
         formatters = (None,None,_tf.TxtCnv)
 
-    tables = {}
-    _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable)
-
+    table = _ReportTable(formats, colHeadings, formatters,
+                         tableclass, longtable)
     for gl in gateLabels:
         if confidenceRegionInfo is None:
-            _tf.add_table_row(formats, tables, (gl, gateset.gates[gl]), (None,_tf.Brk))
+            table.addrow((gl, gateset.gates[gl]), (None,_tf.Brk))
         else:
             intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(gl)[:,None]
             if isinstance(gateset.gates[gl], _objs.FullyParameterizedGate): #then we know how to reshape into a matrix
@@ -233,10 +228,10 @@ def get_gateset_gates_table(gateset, formats, tableclass, longtable,
                                                 intervalVec.reshape(gate_dim-1,gate_dim)), axis=0 )
             else: 
                 intervalMx = intervalVec # we don't know how best to reshape vector of parameter intervals, so don't
-            _tf.add_table_row(formats, tables, (gl, gateset.gates[gl], intervalMx), (None,_tf.Brk,_tf.Brk))
+            table.addrow((gl, gateset.gates[gl], intervalMx), (None,_tf.Brk,_tf.Brk))
 
-    _tf.finish_table(formats, tables, longtable)
-    return tables
+    table.finish()
+    return table
 
 
 def get_unitary_gateset_gates_table(gateset, formats, tableclass, longtable, 
@@ -250,7 +245,7 @@ def get_unitary_gateset_gates_table(gateset, formats, tableclass, longtable,
         The GateSet
 
     formats : list
-        List of formats to include in returned tables dictionary. Allowed
+        List of formats to include in returned table. Allowed
         formats are 'latex', 'html', 'py', and 'ppt'.
 
     tableclass : string
@@ -271,9 +266,8 @@ def get_unitary_gateset_gates_table(gateset, formats, tableclass, longtable,
 
     Returns
     -------
-    dict
-        Dictionary with keys equal to the requested formats (e.g. 'latex'),
-        and values equal to the table data in the corresponding format.
+    ReportTable
+        Table object containing the requested formats (e.g. 'latex').
     """
     gateLabels = gateset.gates.keys()  # gate labels
     basisNm = _tools.basis_longname(mxBasis, gateset.get_dimension())
@@ -290,13 +284,13 @@ def get_unitary_gateset_gates_table(gateset, formats, tableclass, longtable,
                        'Rotation axis','Angle')
         formatters = (None,None,_tf.TxtCnv,None,None)
     
-    tables = {}
-    _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable)
+    table = _ReportTable(formats, colHeadings, formatters,
+                         tableclass, longtable)
 
     for gl in gateLabels:
         decomp, decompEB = qtys['%s decomposition' % gl].get_value_and_err_bar()
         if confidenceRegionInfo is None:
-            _tf.add_table_row(formats, tables, 
+            table.addrow(
                         (gl, gateset.gates[gl],decomp.get('axis of rotation','X'),decomp.get('pi rotations','X')),
                         (None, _tf.Brk, _tf.Nml, _tf.Pi) )
         else:
@@ -309,13 +303,13 @@ def get_unitary_gateset_gates_table(gateset, formats, tableclass, longtable,
             else: 
                 intervalMx = intervalVec # we don't know how best to reshape vector of parameter intervals, so don't
 
-            _tf.add_table_row(formats, tables, 
+            table.addrow(
                         (gl, gateset.gates[gl],decomp.get('axis of rotation','X'), 
                          (decomp.get('pi rotations','X'), decompEB.get('pi rotations','X')) ),
                         (None, _tf.Brk, _tf.Nml, _tf.EBPi) )
 
-    _tf.finish_table(formats, tables, longtable)
-    return tables
+    table.finish()
+    return table
 
 
 def get_gateset_choi_table(gateset, formats, tableclass, longtable,
@@ -329,7 +323,7 @@ def get_gateset_choi_table(gateset, formats, tableclass, longtable,
         The GateSet
 
     formats : list
-        List of formats to include in returned tables dictionary. Allowed
+        List of formats to include in returned table. Allowed
         formats are 'latex', 'html', 'py', and 'ppt'.
 
     tableclass : string
@@ -350,9 +344,8 @@ def get_gateset_choi_table(gateset, formats, tableclass, longtable,
 
     Returns
     -------
-    dict
-        Dictionary with keys equal to the requested formats (e.g. 'latex'),
-        and values equal to the table data in the corresponding format.
+    ReportTable
+        Table object containing the requested formats (e.g. 'latex').
     """
     gateLabels = gateset.gates.keys()  # gate labels
 
@@ -368,20 +361,20 @@ def get_gateset_choi_table(gateset, formats, tableclass, longtable,
         colHeadings = ('Gate','Choi matrix (%s basis)' % basisNm,'Eigenvalues') # 'Confidence Intervals',
         formatters = (None,None,None)
 
-    tables = {}
-    _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable)
+    table = _ReportTable(formats, colHeadings, formatters,
+                         tableclass, longtable)
 
     for gl in gateLabels:
         choiMx,choiEB = qtys['%s choi matrix' % gl].get_value_and_err_bar()
         evals, evalsEB = qtys['%s choi eigenvalues' % gl].get_value_and_err_bar()
     
         if confidenceRegionInfo is None:
-            _tf.add_table_row(formats, tables, (gl, choiMx, evals), (None, _tf.Brk, _tf.Nml))
+            table.addrow((gl, choiMx, evals), (None, _tf.Brk, _tf.Nml))
         else:
-            _tf.add_table_row(formats, tables, (gl, choiMx, (evals,evalsEB)), (None, _tf.Brk, _tf.EBvec))
+            table.addrow((gl, choiMx, (evals,evalsEB)), (None, _tf.Brk, _tf.EBvec))
 
-    _tf.finish_table(formats, tables, longtable)
-    return tables
+    table.finish()
+    return table
 
 
 def get_gateset_vs_target_table(gateset, targetGateset, formats, tableclass, longtable, 
@@ -395,7 +388,7 @@ def get_gateset_vs_target_table(gateset, targetGateset, formats, tableclass, lon
         The gate sets to compare
 
     formats : list
-        List of formats to include in returned tables dictionary. Allowed
+        List of formats to include in returned table. Allowed
         formats are 'latex', 'html', 'py', and 'ppt'.
 
     tableclass : string
@@ -416,9 +409,8 @@ def get_gateset_vs_target_table(gateset, targetGateset, formats, tableclass, lon
 
     Returns
     -------
-    dict
-        Dictionary with keys equal to the requested formats (e.g. 'latex'),
-        and values equal to the table data in the corresponding format.
+    ReportTable
+        Table object containing the requested formats (e.g. 'latex').
     """
     gateLabels = gateset.gates.keys()  # gate labels
 
@@ -430,9 +422,8 @@ def get_gateset_vs_target_table(gateset, targetGateset, formats, tableclass, lon
     qtys = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
                                             confidenceRegionInfo, mxBasis)
 
-    tables = {}
-    _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable)
-
+    table = _ReportTable(formats, colHeadings, formatters,
+                         tableclass, longtable)
     formatters = [None] + [ _tf.EB ]*len(qtyNames)
     
     for gl in gateLabels:
@@ -440,10 +431,10 @@ def get_gateset_vs_target_table(gateset, targetGateset, formats, tableclass, lon
             rowData = [gl] + [ (qtys['%s %s' % (gl,qty)].get_value(),None) for qty in qtyNames ]
         else:
             rowData = [gl] + [ qtys['%s %s' % (gl,qty)].get_value_and_err_bar() for qty in qtyNames ]
-        _tf.add_table_row(formats, tables, rowData, formatters)
+        table.addrow(rowData, formatters)
 
-    _tf.finish_table(formats, tables, longtable)
-    return tables
+    table.finish()
+    return table
 
 
 def get_gateset_vs_target_err_gen_table(gateset, targetGateset, formats, tableclass, longtable, confidenceRegionInfo=None):
@@ -457,7 +448,7 @@ def get_gateset_vs_target_err_gen_table(gateset, targetGateset, formats, tablecl
         The gate sets to compare
 
     formats : list
-        List of formats to include in returned tables dictionary. Allowed
+        List of formats to include in returned table. Allowed
         formats are 'latex', 'html', 'py', and 'ppt'.
 
     tableclass : string
@@ -472,21 +463,20 @@ def get_gateset_vs_target_err_gen_table(gateset, targetGateset, formats, tablecl
 
     Returns
     -------
-    dict
-        Dictionary with keys equal to the requested formats (e.g. 'latex'),
-        and values equal to the table data in the corresponding format.
+    ReportTable
+        Table object containing the requested formats (e.g. 'latex').
     """
     gateLabels = gateset.gates.keys()  # gate labels
     colHeadings = ('Gate','Error Generator')
 
-    tables = {}
-    _tf.create_table(formats, tables, colHeadings, (None,None), tableclass, longtable)
+    table = _ReportTable(formats, colHeadings, (None,None),
+                         tableclass, longtable)
     for gl in gateLabels:
-        _tf.add_table_row(formats, tables, (gl, _spl.logm(_np.dot(_np.linalg.inv(
+        table.addrow((gl, _spl.logm(_np.dot(_np.linalg.inv(
                             targetGateset.gates[gl]),gateset.gates[gl]))),
                     (None, _tf.Brk))
-    _tf.finish_table(formats, tables, longtable)
-    return tables
+    table.finish()
+    return table
 
 
 
@@ -501,7 +491,7 @@ def get_gateset_vs_target_angles_table(gateset, targetGateset, formats, tablecla
         The gate sets to compare
 
     formats : list
-        List of formats to include in returned tables dictionary. Allowed
+        List of formats to include in returned table. Allowed
         formats are 'latex', 'html', 'py', and 'ppt'.
 
     tableclass : string
@@ -522,9 +512,8 @@ def get_gateset_vs_target_angles_table(gateset, targetGateset, formats, tablecla
 
     Returns
     -------
-    dict
-        Dictionary with keys equal to the requested formats (e.g. 'latex'),
-        and values equal to the table data in the corresponding format.
+    ReportTable
+        Table object containing the requested formats (e.g. 'latex').
     """
     gateLabels = gateset.gates.keys()  # gate labels
 
@@ -536,9 +525,8 @@ def get_gateset_vs_target_angles_table(gateset, targetGateset, formats, tablecla
     qtys = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
                                             confidenceRegionInfo, mxBasis)
 
-    tables = {}
-    _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable)
-
+    table = _ReportTable(formats, colHeadings, formatters,
+                         tableclass, longtable)
     formatters = [None] + [ _tf.EBPi ]*len(qtyNames)
     
     for gl in gateLabels:
@@ -546,10 +534,10 @@ def get_gateset_vs_target_angles_table(gateset, targetGateset, formats, tablecla
             rowData = [gl] + [ (qtys['%s %s' % (gl,qty)].get_value(),None) for qty in qtyNames ]
         else:
             rowData = [gl] + [ qtys['%s %s' % (gl,qty)].get_value_and_err_bar() for qty in qtyNames ]
-        _tf.add_table_row(formats, tables, rowData, formatters)
+        table.addrow(rowData, formatters)
 
-    _tf.finish_table(formats, tables, longtable)
-    return tables
+    table.finish()
+    return table
 
 
 def get_gateset_closest_unitary_table(gateset, formats, tableclass, longtable, confidenceRegionInfo=None):
@@ -562,7 +550,7 @@ def get_gateset_closest_unitary_table(gateset, formats, tableclass, longtable, c
         The GateSet
 
     formats : list
-        List of formats to include in returned tables dictionary. Allowed
+        List of formats to include in returned table. Allowed
         formats are 'latex', 'html', 'py', and 'ppt'.
 
     tableclass : string
@@ -577,9 +565,8 @@ def get_gateset_closest_unitary_table(gateset, formats, tableclass, longtable, c
 
     Returns
     -------
-    dict
-        Dictionary with keys equal to the requested formats (e.g. 'latex'),
-        and values equal to the table data in the corresponding format.
+    ReportTable
+        Table object containing the requested formats (e.g. 'latex').
     """
 
     gateLabels = gateset.gates.keys()  # gate labels
@@ -587,10 +574,10 @@ def get_gateset_closest_unitary_table(gateset, formats, tableclass, longtable, c
     formatters = (None,_tf.TxtCnv,_tf.TxtCnv,_tf.TxtCnv,_tf.TxtCnv,_tf.TxtCnv)
 
     if gateset.get_dimension() != 4:
-        tables = {}
-        _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable)
-        _tf.finish_table(formats, tables, longtable)
-        return tables
+        table = _ReportTable(formats, colHeadings, formatters,
+                             tableclass, longtable)
+        table.finish()
+        return table
 
     qtyNames = ('max fidelity with unitary', 'max trace dist with unitary',
                 'closest unitary decomposition', 'upper bound on fidelity with unitary')
@@ -599,8 +586,8 @@ def get_gateset_closest_unitary_table(gateset, formats, tableclass, longtable, c
     decompNames = ('axis of rotation','pi rotations')
     #Other possible qtyName: 'closest unitary choi matrix'
 
-    tables = {}
-    _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable)
+    table = _ReportTable(formats, colHeadings, formatters,
+                         tableclass, longtable)
 
     formatters = [None, _tf.EB, _tf.EB, _tf.EBvec, _tf.EBPi, _tf.Nml ] # Note len(decompNames)==2, 2nd el is rotn angle
 
@@ -617,15 +604,15 @@ def get_gateset_closest_unitary_table(gateset, formats, tableclass, longtable, c
             rowData = [gl, (1.0-fLB,fLB_EB), (td,td_EB)] + [(decomp.get(x,'X'),decompEB.get(x,None)) for x in decompNames]
         rowData.append(sanity)
 
-        _tf.add_table_row(formats, tables, rowData, formatters)
+        table.addrow(rowData, formatters)
 
-    _tf.finish_table(formats, tables, longtable)
-    return tables
+    table.finish()
+    return table
 
 
 def get_gateset_decomp_table(gateset, formats, tableclass, longtable, confidenceRegionInfo=None):
     """ 
-    Create tables for decomposing a gateset's gates.
+    Create table for decomposing a gateset's gates.
     
     Parameters
     ----------
@@ -633,7 +620,7 @@ def get_gateset_decomp_table(gateset, formats, tableclass, longtable, confidence
         The GateSet
 
     formats : list
-        List of formats to include in returned tables dictionary. Allowed
+        List of formats to include in returned table. Allowed
         formats are 'latex', 'html', 'py', and 'ppt'.
 
     tableclass : string
@@ -648,9 +635,8 @@ def get_gateset_decomp_table(gateset, formats, tableclass, longtable, confidence
 
     Returns
     -------
-    dict
-        Dictionary with keys equal to the requested formats (e.g. 'latex'),
-        and values equal to the table data in the corresponding format.
+    ReportTable
+        Table object containing the requested formats (e.g. 'latex').
     """
     gateLabels = gateset.gates.keys()  # gate labels
     colHeadings = ('Gate','Eigenvalues','Fixed pt','Rotn. axis','Diag. decay','Off-diag. decay')
@@ -664,8 +650,8 @@ def get_gateset_decomp_table(gateset, formats, tableclass, longtable, confidence
                    'decay of diagonal rotation terms',
                    'decay of off diagonal rotation terms')
 
-    tables = {}
-    _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable)
+    table = _ReportTable(formats, colHeadings, formatters,
+                         tableclass, longtable)
 
     formatters = (None, _tf.EBvec, _tf.Nml, _tf.Nml, _tf.EB, _tf.EB)
 
@@ -681,10 +667,10 @@ def get_gateset_decomp_table(gateset, formats, tableclass, longtable, confidence
             rowData = [gl, (evals,evalsEB)] + [decomp.get(x,'X') for x in decompNames[0:2] ] + \
                 [(decomp.get(x,'X'),decompEB.get(x,'X')) for x in decompNames[2:4] ]
 
-        _tf.add_table_row(formats, tables, rowData, formatters)
+        table.addrow(rowData, formatters)
 
-    _tf.finish_table(formats, tables, longtable)
-    return tables
+    table.finish()
+    return table
 
 
 def get_gateset_rotn_axis_table(gateset, formats, tableclass, longtable, 
@@ -699,7 +685,7 @@ def get_gateset_rotn_axis_table(gateset, formats, tableclass, longtable,
         The GateSet
 
     formats : list
-        List of formats to include in returned tables dictionary. Allowed
+        List of formats to include in returned table. Allowed
         formats are 'latex', 'html', 'py', and 'ppt'.
 
     tableclass : string
@@ -719,9 +705,8 @@ def get_gateset_rotn_axis_table(gateset, formats, tableclass, longtable,
 
     Returns
     -------
-    dict
-        Dictionary with keys equal to the requested formats (e.g. 'latex'),
-        and values equal to the table data in the corresponding format.
+    ReportTable
+        Table object containing the requested formats (e.g. 'latex').
     """
     gateLabels = gateset.gates.keys()
 
@@ -738,8 +723,8 @@ def get_gateset_rotn_axis_table(gateset, formats, tableclass, longtable,
                   "\\multicolumn{%d}{c|}{Angle between Rotation Axes} \\\\ \cline{3-%d}\n" % (len(gateLabels),nCols)
     latex_head += " & & %s \\\\ \hline\n" % (" & ".join(gateLabels))
 
-    tables = {}
-    _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable, customHeader={'latex': latex_head} )
+    table = _ReportTable(formats, colHeadings, formatters, tableclass,
+                         longtable, customHeader={'latex': latex_head} )
 
     formatters = [None, _tf.EBPi] + [ _tf.EBPi ] * len(gateLabels)
 
@@ -773,10 +758,10 @@ def get_gateset_rotn_axis_table(gateset, formats, tableclass, longtable,
             rowData = [gl, (rotnAngle,None)] + angles_btwn_rotn_axes
         else:
             rowData = [gl, (rotnAngle,decompEB.get('pi rotations','X'))] + angles_btwn_rotn_axes
-        _tf.add_table_row(formats, tables, rowData, formatters)
+        table.addrow(rowData, formatters)
 
-    _tf.finish_table(formats, tables, longtable)
-    return tables
+    table.finish()
+    return table
 
 
 def get_dataset_overview_table(dataset, target, formats, tableclass, longtable,
@@ -794,7 +779,7 @@ def get_dataset_overview_table(dataset, target, formats, tableclass, longtable,
         SPAM specifiers.
 
     formats : list
-        List of formats to include in returned tables dictionary. Allowed
+        List of formats to include in returned table. Allowed
         formats are 'latex', 'html', 'py', and 'ppt'.
 
     tableclass : string
@@ -816,24 +801,23 @@ def get_dataset_overview_table(dataset, target, formats, tableclass, longtable,
 
     Returns
     -------
-    dict
-        Dictionary with keys equal to the requested formats (e.g. 'latex'),
-        and values equal to the table data in the corresponding format.
+    ReportTable
+        Table object containing the requested formats (e.g. 'latex').
     """
     colHeadings = ('Quantity','Value')
     formatters = (None,None)
     rank,evals = _alg.max_gram_rank_and_evals( dataset, maxlen, target, fixedLists=fixedLists )
 
-    tables = {}
-    _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable)
+    table = _ReportTable(formats, colHeadings, formatters,
+                         tableclass, longtable)
 
-    _tf.add_table_row(formats, tables, ("Number of strings", str(len(dataset))), (None,None))
-    _tf.add_table_row(formats, tables, ("Gate labels", ", ".join(dataset.get_gate_labels()) ), (None,None))
-    _tf.add_table_row(formats, tables, ("SPAM labels",  ", ".join(dataset.get_spam_labels()) ), (None,None))
-    _tf.add_table_row(formats, tables, ("Gram singular vals", _np.sort(abs(evals)).reshape(-1,1) ), (None,_tf.Sml))
+    table.addrow(("Number of strings", str(len(dataset))), (None,None))
+    table.addrow(("Gate labels", ", ".join(dataset.get_gate_labels()) ), (None,None))
+    table.addrow(("SPAM labels",  ", ".join(dataset.get_spam_labels()) ), (None,None))
+    table.addrow(("Gram singular vals", _np.sort(abs(evals)).reshape(-1,1) ), (None,_tf.Sml))
 
-    _tf.finish_table(formats, tables, longtable)
-    return tables
+    table.finish()
+    return table
 
 
 def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, tableclass, longtable):
@@ -856,7 +840,7 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, t
         The data set used in the GST iterations.
 
     formats : list
-        List of formats to include in returned tables dictionary. Allowed
+        List of formats to include in returned table. Allowed
         formats are 'latex', 'html', 'py', and 'ppt'.
 
     tableclass : string
@@ -867,9 +851,8 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, t
 
     Returns
     -------
-    dict
-        Dictionary with keys equal to the requested formats (e.g. 'latex'),
-        and values equal to the table data in the corresponding format.
+    ReportTable
+        Table object containing the requested formats (e.g. 'latex').
     """
     colHeadings = { 'latex': ('L','$\\chi^2$','$k$','$\\chi^2-k$','$\sqrt{2k}$','$P$','$N_s$','$N_p$', 'Rating'),
                     'html': ('L','&chi;<sup>2</sup>','k','&chi;<sup>2</sup>-k',
@@ -878,9 +861,8 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, t
                     'py': ('L','chi^2','k','chi^2-k','sqrt{2k}','P','N_s','N_p', 'Rating'),
                     'ppt': ('L','chi^2','k','chi^2-k','sqrt{2k}','P','N_s','N_p', 'Rating')
                   }
-    tables = {}
-    _tf.create_table_preformatted(formats, tables, colHeadings, tableclass, longtable)
 
+    table = _ReportTable(formats, colHeadings, None, tableclass, longtable)
     for L,gs,gstrs in zip(Ls,gatesetsByL,gateStringsByL):
         chi2 = _tools.chi2( dataset, gs, gstrs, 
                                      minProbClipForWeighting=1e-4)
@@ -895,12 +877,12 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, t
         elif (chi2-k) < 5*k: rating = 3
         elif (chi2-k) < 10*k: rating = 2
         else: rating = 1
-        _tf.add_table_row(formats, tables, 
+        table.addrow(
                     (str(L),chi2,k,chi2-k,_np.sqrt(2*k),pv,Ns,Np,"<STAR>"*rating),
                     (None,_tf.Nml,_tf.Nml,_tf.Nml,_tf.Nml,_tf.Nml2,_tf.Nml,_tf.Nml,_tf.TxtCnv))
 
-    _tf.finish_table(formats, tables, longtable)
-    return tables
+    table.finish()
+    return table
 
 
 def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, tableclass, longtable):
@@ -923,7 +905,7 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, t
         The data set used in the GST iterations.
 
     formats : list
-        List of formats to include in returned tables dictionary. Allowed
+        List of formats to include in returned table. Allowed
         formats are 'latex', 'html', 'py', and 'ppt'.
 
     tableclass : string
@@ -934,9 +916,8 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, t
 
     Returns
     -------
-    dict
-        Dictionary with keys equal to the requested formats (e.g. 'latex'),
-        and values equal to the table data in the corresponding format.
+    ReportTable
+        Table object containing the requested formats (e.g. 'latex').
     """
     colHeadings = { 'latex': ('L','$2\Delta\\log(\\mathcal{L})$','$k$','$2\Delta\\log(\\mathcal{L})-k$',
                               '$\sqrt{2k}$','$P$','$N_s$','$N_p$', 'Rating'),
@@ -946,9 +927,7 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, t
                     'py': ('L','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','P','N_s','N_p', 'Rating'),
                     'ppt': ('L','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','P','N_s','N_p', 'Rating')
                   }
-    tables = {}
-    _tf.create_table_preformatted(formats, tables, colHeadings, tableclass, longtable)
-
+    table = _ReportTable(formats, colHeadings, None, tableclass, longtable)
     for L,gs,gstrs in zip(Ls,gatesetsByL,gateStringsByL):
         logL_upperbound = _tools.logl_max(dataset, gstrs)
         logl = _tools.logl( gs, dataset, gstrs )
@@ -967,12 +946,12 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, t
         elif (twoDeltaLogL-k) < 10*k: rating = 2
         else: rating = 1
 
-        _tf.add_table_row(formats, tables, 
+        table.addrow(
                     (str(L),twoDeltaLogL,k,twoDeltaLogL-k,_np.sqrt(2*k),pv,Ns,Np,"<STAR>"*rating),
                     (None,_tf.Nml,_tf.Nml,_tf.Nml,_tf.Nml,_tf.Nml2,_tf.Nml,_tf.Nml,_tf.TxtCnv))
 
-    _tf.finish_table(formats, tables, longtable)
-    return tables
+    table.finish()
+    return table
     
 
 def get_gatestring_table(gsList, title, formats, tableclass, longtable):
@@ -988,7 +967,7 @@ def get_gatestring_table(gsList, title, formats, tableclass, longtable):
         The title for the table column containing the strings.
 
     formats : list
-        List of formats to include in returned tables dictionary. Allowed
+        List of formats to include in returned table. Allowed
         formats are 'latex', 'html', 'py', and 'ppt'.
 
     tableclass : string
@@ -999,21 +978,20 @@ def get_gatestring_table(gsList, title, formats, tableclass, longtable):
 
     Returns
     -------
-    dict
-        Dictionary with keys equal to the requested formats (e.g. 'latex'),
-        and values equal to the table data in the corresponding format.
+    ReportTable
+        Table object containing the requested formats (e.g. 'latex').
     """
     colHeadings = ('#',title)
     formatters = (_tf.TxtCnv,_tf.Nml)
 
-    tables = {}
-    _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable)
+    table = _ReportTable(formats, colHeadings, formatters,
+                         tableclass, longtable)
 
     for i,gstr in enumerate(gsList,start=1):
-        _tf.add_table_row(formats, tables, (i, gstr), (_tf.Nml,_tf.GStr) )
+        table.addrow((i, gstr), (_tf.Nml,_tf.GStr) )
 
-    _tf.finish_table(formats, tables, longtable)
-    return tables
+    table.finish()
+    return table
 
 
 def get_gatestring_multi_table(gsLists, titles, formats, tableclass, longtable, commonTitle=None):
@@ -1029,7 +1007,7 @@ def get_gatestring_multi_table(gsLists, titles, formats, tableclass, longtable, 
         The titles for the table columns containing the strings.
 
     formats : list
-        List of formats to include in returned tables dictionary. Allowed
+        List of formats to include in returned table. Allowed
         formats are 'latex', 'html', 'py', and 'ppt'.
 
     tableclass : string
@@ -1044,17 +1022,15 @@ def get_gatestring_multi_table(gsLists, titles, formats, tableclass, longtable, 
 
     Returns
     -------
-    dict
-        Dictionary with keys equal to the requested formats (e.g. 'latex'),
-        and values equal to the table data in the corresponding format.
+    ReportTable
+        Table object containing the requested formats (e.g. 'latex').
     """
     colHeadings = ('#',) + tuple(titles)
     formatters = (_tf.TxtCnv,) + (_tf.Nml,)*len(titles)
 
-    tables = {}
-
     if commonTitle is None:
-        _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable)
+        table = _ReportTable(formats, colHeadings, formatters,
+                             tableclass, longtable)
     else:
         table = "longtable" if longtable else "tabular"
         colHeadings = ('\\#',) + tuple(titles)
@@ -1066,9 +1042,9 @@ def get_gatestring_multi_table(gsLists, titles, formats, tableclass, longtable, 
         html_head += '<tr><th></th><th colspan="%d">%s</th></tr>\n' % (len(titles),commonTitle)
         html_head += "<tr><th> %s </th></tr>" % (" </th><th> ".join(colHeadings))
         html_head += "</thead><tbody>"
-
-        _tf.create_table(formats, tables, colHeadings, formatters, tableclass, longtable, 
-                    customHeader={'latex': latex_head, 'html': html_head})
+        table = _ReportTable(formats, colHeadings, formatters, tableclass, 
+                             longtable, customHeader={'latex': latex_head,
+                                                      'html': html_head})
 
     formatters = (_tf.Nml,) + (_tf.GStr,)*len(gsLists)
 
@@ -1079,10 +1055,10 @@ def get_gatestring_multi_table(gsLists, titles, formats, tableclass, longtable, 
                 rowData.append( gsList[i] )
             else:
                 rowData.append( None ) #empty string
-        _tf.add_table_row(formats, tables, rowData, formatters)
+        table.addrow(rowData, formatters)
 
-    _tf.finish_table(formats, tables, longtable)
-    return tables
+    table.finish()
+    return table
 
 
 
