@@ -637,7 +637,7 @@ def make_cmap_norm(kind, vmin=None, vmax=None, n_boxes=None, linlg_pcntle=.05):
     cmap.set_bad('w',1)
     return cmap, norm
 
-def color_boxplot(plt_data, cmap, norm, title=None, xlabels=None, ylabels=None, xtics=None, ytics=None,
+def color_boxplot(plt_data, cmapFactory, title=None, xlabels=None, ylabels=None, xtics=None, ytics=None,
                  colorbar=True, fig=None, axes=None, size=None, prec=0, boxLabels=True,
                  xlabel=None, ylabel=None, save_to=None, ticSize=14, grid=False):
     """
@@ -650,11 +650,8 @@ def color_boxplot(plt_data, cmap, norm, title=None, xlabels=None, ylabels=None, 
     plt_data : numpy array
         A 2D array containing the values to be plotted.
 
-    cmap: matplotlib colormap
-        The colormap to be used.
-
-    norm: matplotlib norm
-        The norm to be used.
+    cmapFactory: ColormapFactory class
+        An instance of a ColormapFactory class
 
     title : string, optional
         Plot title (latex can be used)
@@ -708,7 +705,7 @@ def color_boxplot(plt_data, cmap, norm, title=None, xlabels=None, ylabels=None, 
 
     masked_data = _np.ma.array (plt_data, mask=_np.isnan(plt_data))
 
-    heatmap = axes.pcolormesh( masked_data, cmap=cmap, norm=norm)
+    heatmap = axes.pcolormesh( masked_data, cmap=cmapFactory.get_cmap(), norm=cmapFactory.get_norm())
 
     if size is not None and fig is not None:
         fig.set_size_inches(size[0],size[1]) # was 12,8 for "super" color plot
@@ -808,7 +805,7 @@ def color_boxplot(plt_data, cmap, norm, title=None, xlabels=None, ylabels=None, 
 
 
 
-def nested_color_boxplot(plt_data_list_of_lists, cmap, norm, title=None, xlabels=None, ylabels=None, xtics=None, ytics=None,
+def nested_color_boxplot(plt_data_list_of_lists, cmapFactory, title=None, xlabels=None, ylabels=None, xtics=None, ytics=None,
                        colorbar=True, fig=None, axes=None, size=None, prec=0, 
                        boxLabels=True, xlabel=None, ylabel=None, save_to=None, ticSize=14, grid=False):
     """
@@ -822,8 +819,7 @@ def nested_color_boxplot(plt_data_list_of_lists, cmap, norm, title=None, xlabels
         A complete square 2D list of lists, such that each element is a
         2D numpy array of the same size.
 
-    cmap: matplotlib colormap
-        The colormap to be used.
+    cmapFactory: instance of the ColormapFactory class
 
     norm: matplotlib norm
         The norm to be used.
@@ -897,7 +893,7 @@ def nested_color_boxplot(plt_data_list_of_lists, cmap, norm, title=None, xlabels
     for i in range(nRows):   ytics.append( float((elRows+1)*(i+0.5)) )
     for j in range(nCols):   xtics.append( float((elCols+1)*(j+0.5)) )
 
-    return color_boxplot(data, cmap, norm, title, xlabels, ylabels, _np.array(xtics), _np.array(ytics),
+    return color_boxplot(data, cmapFactory, title, xlabels, ylabels, _np.array(xtics), _np.array(ytics),
                         colorbar, fig, axes, size, prec, boxLabels, xlabel, ylabel,
                         save_to, ticSize, grid)
 
@@ -905,7 +901,7 @@ def _computeSubMxs(xvals, yvals, xyGateStringDict, subMxCreationFn):
     subMxs = [ [ subMxCreationFn( xyGateStringDict[(x,y)] ) for x in xvals ] for y in yvals]
     return subMxs #Note: subMxs[y-index][x-index] is proper usage
 
-def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, cmap, norm, xlabel="", ylabel="", scale=1.0, prec=0, 
+def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, cmapFactory, xlabel="", ylabel="", scale=1.0, prec=0,
                      title='sub-mx', sumUp=False, interactive=False, boxLabels=True, histogram=False, histBins=50, save_to=None,
                      ticSize=20, invert=False, inner_x_labels=None, inner_y_labels=None, inner_x_label=None, inner_y_label=None,
                      grid=False):
@@ -943,8 +939,7 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, cmap, nor
         should return an appropriately sized matrix of NaNs to indicate these elements should
         not be displayed.
 
-    cmap: matplotlib colormap
-        The colormap to be used.
+    cmapFactory: instance of the ColormapFactory class
 
     norm: matplotlib norm
         The norm to be used.
@@ -1066,7 +1061,7 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, cmap, nor
             minclip = str_to_float( min_clip )
             maxclip = str_to_float( max_clip )
             fig,ax = _plt.subplots( 1, 1, figsize=(nXs*scale, nYs*scale))
-            rptFig = color_boxplot( subMxSums, cmap, norm, fig=fig, axes=ax, title=title,
+            rptFig = color_boxplot( subMxSums, cmapFactory, fig=fig, axes=ax, title=title,
                                    xlabels=val_filter(used_xvals), ylabels=val_filter(used_yvals),
                                    vmin=minclip, vmax=maxclip, colorbar=False, prec=prec, xlabel=xlabel, ylabel=ylabel,
                                    ticSize=ticSize, grid=grid)
@@ -1125,7 +1120,7 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, cmap, nor
             maxclip = str_to_float( max_clip )
             #print "data = ",subMxs
             fig,ax = _plt.subplots( 1, 1, figsize=(nXs*nIXs*scale*0.4, nYs*nIYs*scale*0.4))
-            rptFig = nested_color_boxplot(subMxs, cmap, norm, fig=fig, axes=ax, title=title, prec=prec, 
+            rptFig = nested_color_boxplot(subMxs, cmapFactory, fig=fig, axes=ax, title=title, prec=prec, 
                                         ylabels=val_filter(used_yvals), xlabels=val_filter(used_xvals), boxLabels=labels,
                                         colorbar=False, ylabel=ylabel, xlabel=xlabel, ticSize=ticSize, grid=grid)
             rptFig.save_to(save_to)
