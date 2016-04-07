@@ -586,10 +586,9 @@ def make_cmap_norm(kind, vmin=None, vmax=None, n_boxes=None, linlg_pcntle=.05):
     cmap.set_bad('w',1)
     return cmap, norm
 
-def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, ytics=None,
-                 vmin=None, vmax=None, colorbar=True, fig=None, axes=None, size=None, prec=0, boxLabels=True,
-                 xlabel=None, ylabel=None, save_to=None, ticSize=14, grid=False,
-                 linlog_trans=None):
+def color_boxplot(plt_data, cmap, norm, title=None, xlabels=None, ylabels=None, xtics=None, ytics=None,
+                 colorbar=True, fig=None, axes=None, size=None, prec=0, boxLabels=True,
+                 xlabel=None, ylabel=None, save_to=None, ticSize=14, grid=False):
     """
     Create a color box plot.
 
@@ -600,6 +599,12 @@ def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, 
     plt_data : numpy array
         A 2D array containing the values to be plotted.
 
+    cmap: matplotlib colormap
+        The colormap to be used.
+
+    norm: matplotlib norm
+        The norm to be used.
+
     title : string, optional
         Plot title (latex can be used)
 
@@ -609,9 +614,6 @@ def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, 
     xtics, ytics : list or array of floats, optional
         Values of x and y axis tics.  If None, then half-integers from 0.5 to 
         0.5 + (nCols-1) or 0.5 + (nRows-1) are used, respectively.
-
-    vmin, vmax : float, optional
-        Min and max values of the color scale.
 
     colorbar : bool, optional
         Whether to display a colorbar or not.
@@ -645,10 +647,6 @@ def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, 
 
     grid : bool, optional
         Whether or not grid lines should be displayed.
-
-    linlog_tran : float, optional
-        The value at which the colormap should transition from a linear to a
-        logarithmic scale.
     
     Returns
     -------
@@ -657,25 +655,8 @@ def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, 
     """
     if axes is None: fig,axes = _plt.subplots()  # create a new figure if no axes are given
 
-    finite_plt_data_flat = _np.take(plt_data.flat, _np.where(_np.isfinite(plt_data.flat)))[0]
-    if vmin is None: vmin = min( finite_plt_data_flat )
-    if vmax is None: vmax = max( finite_plt_data_flat )
-    n_chi2boxes = len(finite_plt_data_flat)
-
-    if (linlog_trans is None) & (n_chi2boxes > 0):
-        linlog_trans = get_transition(n_chi2boxes)
-    else:
-        linlog_trans=1
-    # Colors ranging from white to gray on [0.0, 0.5) and pink to red on
-    # [0.5, 1.0] such that the perceived brightness of the pink matches the
-    # gray.
-    grayscale_cmap = make_linear_cmap((1, 1, 1), (0.5, 0.5, 0.5))
-    red_cmap = make_linear_cmap((.698, .13, .133), (1, 0, 0))
-    cmap = splice_cmaps([grayscale_cmap, red_cmap], 'linlog')
-    cmap.set_bad('w',1)
     masked_data = _np.ma.array (plt_data, mask=_np.isnan(plt_data))
-    norm = LinLogNorm(trans=linlog_trans)
-    #heatmap = ax.pcolor( plt_data, vmin=vmin, vmax=vmax)
+
     heatmap = axes.pcolormesh( masked_data, cmap=cmap, norm=norm)
 
     if size is not None and fig is not None:
