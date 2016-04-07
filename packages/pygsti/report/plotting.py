@@ -525,6 +525,57 @@ def get_transition(N, eps=.1):
 
     return trans
 
+class StdColormapFactory(object):
+    """
+    Class used to create a standard GST colormap.
+    """
+
+    def __init__(self, kind, vmin=None, vmax=None, n_boxes=None, linlg_pcntle=.05):
+
+        assert kind in ['linlog', 'div', 'seq'],\
+            'Please instantiate the StdColormapFactory with a valid kind of colormap.'
+
+        if kind != 'linlog':
+            if (vmin is None) or (vmax is None):
+                raise ValueError('vmin and vmax must both not be None for non-linlog colormap types.')
+        else:
+            if n_boxes is None:
+                raise ValueError('linlog colormap type requires a non-None vlaue for n_boxes.')
+
+        self.kind = kind
+        self.vmin = vmin
+        self.vmax = vmax
+        self.N = n_boxes
+        self.percentile = linlg_pcntle
+
+    def get_norm(self):
+        #Creates the normalization class
+        if self.kind != 'linlog':
+            norm = _matplotlib.colors.Normalize(vmin=self.vmin, vmax=self.vmax, clip=False)
+        else:
+            linlog_trans = _np.ceil(_chi2.ppf(1 - self.percentile / self.N, 1))
+            norm = LinLogNorm(trans=linlog_trans)
+
+        return norm
+
+    def get_cmap(self):
+        #Creates the colormap
+        if self.kind == 'seq':
+            cmap = _matplotlib.cm.get_cmap('Greys')
+        elif self.kind == 'div':
+            cmap = _matplotlib.cm.get_cmap('bwr')
+        else:
+            # Colors ranging from white to gray on [0.0, 0.5) and pink to red on
+            # [0.5, 1.0] such that the perceived brightness of the pink matches the
+            # gray.
+            grayscale_cmap = make_linear_cmap((1, 1, 1), (0.5, 0.5, 0.5))
+            red_cmap = make_linear_cmap((.698, .13, .133), (1, 0, 0))
+            cmap = splice_cmaps([grayscale_cmap, red_cmap], 'linlog')
+
+        cmap.set_bad('w',1)
+
+        return cmap
+
 def make_cmap_norm(kind, vmin=None, vmax=None, n_boxes=None, linlg_pcntle=.05):
     """
     Creates an appropriate colormap for the plots
