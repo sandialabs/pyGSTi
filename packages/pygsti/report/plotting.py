@@ -757,8 +757,8 @@ def color_boxplot(plt_data, cmap, norm, title=None, xlabels=None, ylabels=None, 
 
 
 
-def nested_color_boxplot(plt_data_list_of_lists, title=None, xlabels=None, ylabels=None, xtics=None, ytics=None,
-                       vmin=None, vmax=None, colorbar=True, fig=None, axes=None, size=None, prec=0, 
+def nested_color_boxplot(plt_data_list_of_lists, cmap, norm, title=None, xlabels=None, ylabels=None, xtics=None, ytics=None,
+                       colorbar=True, fig=None, axes=None, size=None, prec=0, 
                        boxLabels=True, xlabel=None, ylabel=None, save_to=None, ticSize=14, grid=False):
     """
     Create a color box plot.
@@ -771,6 +771,12 @@ def nested_color_boxplot(plt_data_list_of_lists, title=None, xlabels=None, ylabe
         A complete square 2D list of lists, such that each element is a
         2D numpy array of the same size.
 
+    cmap: matplotlib colormap
+        The colormap to be used.
+
+    norm: matplotlib norm
+        The norm to be used.
+
     title : string, optional
         Plot title (latex can be used)
 
@@ -780,9 +786,6 @@ def nested_color_boxplot(plt_data_list_of_lists, title=None, xlabels=None, ylabe
     xtics, ytics : list or array of floats, optional
         Values of x and y axis tics.  If None, then half-integers from 0.5 to 
         0.5 + (nCols-1) or 0.5 + (nRows-1) are used, respectively.
-
-    vmin, vmax : float, optional
-        Min and max values of the color scale.
 
     colorbar : bool, optional
         Whether to display a colorbar or not.
@@ -843,15 +846,15 @@ def nested_color_boxplot(plt_data_list_of_lists, title=None, xlabels=None, ylabe
     for i in range(nRows):   ytics.append( float((elRows+1)*(i+0.5)) )
     for j in range(nCols):   xtics.append( float((elCols+1)*(j+0.5)) )
 
-    return color_boxplot(data,title, xlabels, ylabels, _np.array(xtics), _np.array(ytics),
-                        vmin, vmax, colorbar, fig, axes, size, prec, boxLabels, xlabel, ylabel,
+    return color_boxplot(data, cmap, norm, title, xlabels, ylabels, _np.array(xtics), _np.array(ytics),
+                        colorbar, fig, axes, size, prec, boxLabels, xlabel, ylabel,
                         save_to, ticSize, grid)
 
 def _computeSubMxs(xvals, yvals, xyGateStringDict, subMxCreationFn):
     subMxs = [ [ subMxCreationFn( xyGateStringDict[(x,y)] ) for x in xvals ] for y in yvals]
     return subMxs #Note: subMxs[y-index][x-index] is proper usage
 
-def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, xlabel="", ylabel="", m=None, M=None, scale=1.0, prec=0, 
+def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, cmap, norm, xlabel="", ylabel="", scale=1.0, prec=0, 
                      title='sub-mx', sumUp=False, interactive=False, boxLabels=True, histogram=False, histBins=50, save_to=None,
                      ticSize=20, invert=False, inner_x_labels=None, inner_y_labels=None, inner_x_label=None, inner_y_label=None,
                      grid=False):
@@ -889,11 +892,14 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, xlabel=""
         should return an appropriately sized matrix of NaNs to indicate these elements should
         not be displayed.
 
+    cmap: matplotlib colormap
+        The colormap to be used.
+
+    norm: matplotlib norm
+        The norm to be used.
+
     xlabel, ylabel : str, optional
         X and Y axis labels
-
-    m, M : float, optional
-        Min and max values of the color scale.
 
     scale : float, optional
         Scaling factor to adjust the size of the final figure.
@@ -959,8 +965,8 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, xlabel=""
             The number of used Y-values, proportional to the overall final figure height
     """
 
-    init_min_clip = m
-    init_max_clip = M
+    init_min_clip = 0
+    init_max_clip = 10
 
     used_xvals = [ x for x in xvals if any([ (xyGateStringDict[(x,y)] is not None) for y in yvals]) ]
     used_yvals = [ y for y in yvals if any([ (xyGateStringDict[(x,y)] is not None) for x in xvals]) ]
@@ -1009,7 +1015,7 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, xlabel=""
             minclip = str_to_float( min_clip )
             maxclip = str_to_float( max_clip )
             fig,ax = _plt.subplots( 1, 1, figsize=(nXs*scale, nYs*scale))
-            rptFig = color_boxplot( subMxSums, fig=fig, axes=ax, title=title,
+            rptFig = color_boxplot( subMxSums, cmap, norm, fig=fig, axes=ax, title=title,
                                    xlabels=val_filter(used_xvals), ylabels=val_filter(used_yvals),
                                    vmin=minclip, vmax=maxclip, colorbar=False, prec=prec, xlabel=xlabel, ylabel=ylabel,
                                    ticSize=ticSize, grid=grid)
@@ -1068,7 +1074,7 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, xlabel=""
             maxclip = str_to_float( max_clip )
             #print "data = ",subMxs
             fig,ax = _plt.subplots( 1, 1, figsize=(nXs*nIXs*scale*0.4, nYs*nIYs*scale*0.4))
-            rptFig = nested_color_boxplot(subMxs, fig=fig, axes=ax, title=title,vmin=minclip, vmax=maxclip, prec=prec, 
+            rptFig = nested_color_boxplot(subMxs, cmap, norm, fig=fig, axes=ax, title=title, prec=prec, 
                                         ylabels=val_filter(used_yvals), xlabels=val_filter(used_xvals), boxLabels=labels,
                                         colorbar=False, ylabel=ylabel, xlabel=xlabel, ticSize=ticSize, grid=grid)
             rptFig.save_to(save_to)
@@ -1206,7 +1212,7 @@ def generate_zoomed_boxplot(xvals, yvals, xyGateStringDict, subMxCreationFn, str
 
         fig, ax = _plt.subplots( 1, 1, figsize=(len(prepStrs)*scale, len(effectStrs)*scale))
         ix,iy = xvals.index(zoomToX), yvals.index(zoomToY)
-        color_boxplot( subMxs[iy][ix], fig=fig, axes=ax, 
+        color_boxplot( subMxs[iy][ix], cmap, norm, fig=fig, axes=ax, 
                       title=title + " for %s=%s, %s=%s" % (xlabel,str(zoomToX),ylabel,str(zoomToY)),
                       xlabels=val_filter(prepStrs), ylabels=val_filter(effectStrs), vmin=minclip, vmax=maxclip, colorbar=False, 
                       prec=prec, save_to=save_to, ticSize=ticSize)
