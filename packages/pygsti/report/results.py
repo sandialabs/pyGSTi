@@ -1075,6 +1075,13 @@ class Results(object):
         if confidenceLevel is None:
             return None
 
+        #Negative confidence levels ==> non-Markovian error bars
+        if confidenceLevel < 0:
+            confidenceLevel = -confidenceLevel
+            regionType = "non-markovian"
+        else:
+            regionType = "std"
+
         if confidenceLevel not in self._confidence_regions:
             if self.parameters['objective'] == "logl":
                 cr = _generation.get_logl_confidence_region(
@@ -1084,7 +1091,8 @@ class Results(object):
                     self.parameters['probClipInterval'],
                     self.parameters['minProbClip'],
                     self.parameters['radius'],
-                    self.parameters['hessianProjection'])
+                    self.parameters['hessianProjection'],
+                    regionType)
             elif self.parameters['objective'] == "chi2":
                 cr = _generation.get_chi2_confidence_region(
                     self.gatesets['final estimate'], self.dataset,
@@ -1092,7 +1100,8 @@ class Results(object):
                     self.gatestring_lists['final'],
                     self.parameters['probClipInterval'],
                     self.parameters['minProbClipForWeighting'],
-                    self.parameters['hessianProjection'])
+                    self.parameters['hessianProjection'],
+                    regionType)
             else:
                 raise ValueError("Invalid objective given in essential" +
                                  " info: %s" % self.parameters['objective'])

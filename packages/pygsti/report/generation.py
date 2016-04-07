@@ -1065,7 +1065,8 @@ def get_gatestring_multi_table(gsLists, titles, formats, tableclass, longtable, 
 
 def get_logl_confidence_region(gateset, dataset, confidenceLevel,
                                gatestring_list=None, probClipInterval=(-1e6,1e6),
-                               minProbClip=1e-4, radius=1e-4, hessianProjection="std"):
+                               minProbClip=1e-4, radius=1e-4, hessianProjection="std",
+                               regionType="std"):
 
     """ 
     Constructs a ConfidenceRegion given a gateset and dataset using the log-likelihood Hessian.
@@ -1116,6 +1117,12 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
           which minimizes the (average) size of the confidence intervals
           corresponding to gate (as opposed to SPAM vector) parameters.
 
+    regionType : {'std', 'non-markovian'}, optional
+        The type of confidence region to create.  'std' creates a standard
+        confidence region, while 'non-markovian' creates a region which 
+        attempts to account for the non-markovian-ness of the data.
+
+
     Returns
     -------
     ConfidenceRegion
@@ -1127,8 +1134,25 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
     hessian = _tools.logl_hessian(gateset, dataset, gatestring_list,
                                   minProbClip, probClipInterval, radius) 
 
+    #Compute the non-Markovian "radius" if required
+    if regionType == "std":
+        nonMarkRadiusSq = 0.0
+    elif regionType == "non-markovian":
+        nGateStrings = len(gatestring_list)
+        nModelParams = gateset.num_nongauge_params()
+        nDataParams  = nGateStrings*(len(dataset.get_spam_labels())-1) 
+          #number of independent parameters in dataset (max. model # of params)
+
+        nonMarkRadiusSq = 2*(_tools.logl_max(dataset) 
+                             - _tools.logl(gateset, dataset)) \
+                             - (nDataParams-nModelParams)
+    else:
+        raise ValueError("Invalid confidence region type: %s" % regionType)
+
+
     cri = _objs.ConfidenceRegion(gateset, hessian, confidenceLevel,
-                                 hessianProjection)
+                                 hessianProjection,
+                                 nonMarkRadiusSq=nonMarkRadiusSq)
 
     #Check that number of gauge parameters reported by gateset is consistent with confidence region
     # since the parameter number computed this way is used in chi2 or logl progress tables
@@ -1142,8 +1166,9 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
 
 
 def get_chi2_confidence_region(gateset, dataset, confidenceLevel,
-                                  gatestring_list=None, probClipInterval=(-1e6,1e6),
-                                  minProbClipForWeighting=1e-4, hessianProjection="std"):
+                               gatestring_list=None, probClipInterval=(-1e6,1e6),
+                               minProbClipForWeighting=1e-4, hessianProjection="std",
+                               regionType='std'):
 
     """ 
     Constructs a ConfidenceRegion given a gateset and dataset using the Chi2 Hessian.
@@ -1190,6 +1215,11 @@ def get_chi2_confidence_region(gateset, dataset, confidenceLevel,
           which minimizes the (average) size of the confidence intervals
           corresponding to gate (as opposed to SPAM vector) parameters.
 
+    regionType : {'std', 'non-markovian'}, optional
+        The type of confidence region to create.  'std' creates a standard
+        confidence region, while 'non-markovian' creates a region which 
+        attempts to account for the non-markovian-ness of the data.
+
 
     Returns
     -------
@@ -1199,12 +1229,27 @@ def get_chi2_confidence_region(gateset, dataset, confidenceLevel,
         gatestring_list = dataset.keys()
         
     #Compute appropriate Hessian
-    dummy_chi2, hessian = _tools.chi2(dataset, gateset, gatestring_list,
-                                      False, True, minProbClipForWeighting,
-                                      probClipInterval)
+    chi2, hessian = _tools.chi2(dataset, gateset, gatestring_list,
+                                False, True, minProbClipForWeighting,
+                                probClipInterval)
+
+    #Compute the non-Markovian "radius" if required
+    if regionType == "std":
+        nonMarkRadiusSq = 0.0
+    elif regionType == "non-markovian":
+        nGateStrings = len(gatestring_list)
+        nModelParams = gateset.num_nongauge_params()
+        nDataParams  = nGateStrings*(len(dataset.get_spam_labels())-1) 
+          #number of independent parameters in dataset (max. model # of params)
+
+        nonMarkRadiusSq = chi2 - (nDataParams-nModelParams)
+    else:
+        raise ValueError("Invalid confidence region type: %s" % regionType)
+
 
     cri = _objs.ConfidenceRegion(gateset, hessian, confidenceLevel,
-                                 hessianProjection)
+                                 hessianProjection, 
+                                 nonMarkRadiusSq=nonMarkRadiusSq)
 
     #Check that number of gauge parameters reported by gateset is consistent with confidence region
     # since the parameter number computed this way is used in chi2 or logl progress tables
