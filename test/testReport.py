@@ -1,4 +1,5 @@
 import unittest
+import warnings
 import pygsti
 from pygsti.construction import std1Q_XYI as std
 
@@ -38,6 +39,15 @@ class ReportTestCase(unittest.TestCase):
         self.gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
         self.gs_clgst_tp = pygsti.contract(self.gs_clgst, "vSPAM")
         self.gs_clgst_tp.set_all_parameterizations("TP")
+
+        try:
+            import python_pptx
+            self.have_python_pptx = True
+        except ImportError:
+            warnings.warn("**** IMPORT: Cannot import pptx (python-pptx), and so" +
+                         " Powerpoint slide generation tests have been disabled.")
+            self.have_python_pptx = False
+            
         
 
     def checkFile(self, fn):
@@ -72,8 +82,9 @@ class TestReport(ReportTestCase):
         self.results.create_brief_report_pdf(filename="temp_test_files/brief_reportA.pdf", confidenceLevel=None)
         self.results.create_presentation_pdf(filename="temp_test_files/slidesA.pdf", confidenceLevel=None,
                                            debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False)
-        self.results.create_presentation_ppt(filename="temp_test_files/slidesA.ppt", confidenceLevel=None,
-                                           debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False)
+        if self.have_python_pptx:
+            self.results.create_presentation_ppt(filename="temp_test_files/slidesA.ppt", confidenceLevel=None,
+                                                 debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False)
 
         #Run again using default filenames
         self.results.create_full_report_pdf(filename="auto", confidenceLevel=None,
@@ -82,8 +93,9 @@ class TestReport(ReportTestCase):
         self.results.create_brief_report_pdf(filename="auto", confidenceLevel=None)
         self.results.create_presentation_pdf(filename="auto", confidenceLevel=None,
                                            debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False)
-        self.results.create_presentation_ppt(filename="auto", confidenceLevel=None,
-                                           debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False)
+        if self.have_python_pptx:
+            self.results.create_presentation_ppt(filename="auto", confidenceLevel=None,
+                                                 debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False)
 
         #Compare the text files, assume if these match the PDFs are equivalent
         self.checkFile("full_reportA.tex")
@@ -102,9 +114,10 @@ class TestReport(ReportTestCase):
         self.results.create_presentation_pdf(filename="temp_test_files/slidesB.pdf", confidenceLevel=95,
                                            debugAidsAppendix=True, pixelPlotAppendix=True, whackamoleAppendix=True,
                                            verbosity=2)
-        self.results.create_presentation_ppt(filename="temp_test_files/slidesB.ppt", confidenceLevel=95,
-                                           debugAidsAppendix=True, pixelPlotAppendix=True, whackamoleAppendix=True,
-                                           verbosity=2)
+        if self.have_python_pptx:
+            self.results.create_presentation_ppt(filename="temp_test_files/slidesB.ppt", confidenceLevel=95,
+                                                 debugAidsAppendix=True, pixelPlotAppendix=True, whackamoleAppendix=True,
+                                                 verbosity=2)
 
         #Compare the text files, assume if these match the PDFs are equivalent
         self.checkFile("full_reportB.tex")
@@ -148,9 +161,10 @@ class TestReport(ReportTestCase):
         self.results_logL.create_presentation_pdf(filename="temp_test_files/slidesC.pdf", confidenceLevel=None,
                                                   debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False,
                                                   verbosity=2)
-        self.results_logL.create_presentation_ppt(filename="temp_test_files/slidesC.ppt", confidenceLevel=None,
-                                                  debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False,
-                                                  verbosity=2)
+        if self.have_python_pptx:
+            self.results_logL.create_presentation_ppt(filename="temp_test_files/slidesC.ppt", confidenceLevel=None,
+                                                      debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False,
+                                                      verbosity=2)
 
         ##Compare the text files, assume if these match the PDFs are equivalent
         self.checkFile("full_reportC.tex")
@@ -166,9 +180,10 @@ class TestReport(ReportTestCase):
         self.results_logL.create_presentation_pdf(filename="temp_test_files/slidesD.pdf", confidenceLevel=95,
                                                   debugAidsAppendix=True, pixelPlotAppendix=True, whackamoleAppendix=True,
                                                   verbosity=2)
-        self.results_logL.create_presentation_ppt(filename="temp_test_files/slidesD.ppt", confidenceLevel=95,
-                                                  debugAidsAppendix=True, pixelPlotAppendix=True, whackamoleAppendix=True,
-                                                  verbosity=2)
+        if self.have_python_pptx:
+            self.results_logL.create_presentation_ppt(filename="temp_test_files/slidesD.ppt", confidenceLevel=95,
+                                                      debugAidsAppendix=True, pixelPlotAppendix=True, whackamoleAppendix=True,
+                                                      verbosity=2)
 
         ##Compare the text files, assume if these match the PDFs are equivalent
         self.checkFile("full_reportD.tex")
@@ -355,7 +370,8 @@ class TestReport(ReportTestCase):
 
         results.create_full_report_pdf(filename="temp_test_files/singleReport.pdf")
         results.create_presentation_pdf(filename="temp_test_files/singleSlides.pdf")
-        results.create_presentation_ppt(filename="temp_test_files/singleSlides.ppt", pptTables=True)
+        if self.have_python_pptx:
+            results.create_presentation_ppt(filename="temp_test_files/singleSlides.ppt", pptTables=True)
 
         results2 = pygsti.report.Results(restrictToFormats=('py','latex'))
         results2.options.template_path = "/some/path/to/templates"
@@ -377,8 +393,9 @@ class TestReport(ReportTestCase):
             results_badObjective.create_full_report_pdf(filename="temp_test_files/badReport.pdf")
         with self.assertRaises(ValueError):
             results_badObjective.create_presentation_pdf(filename="temp_test_files/badSlides.pdf")
-        with self.assertRaises(ValueError):
-            results_badObjective.create_presentation_ppt(filename="temp_test_files/badSlides.pptx")
+        if self.have_python_pptx:
+            with self.assertRaises(ValueError):
+                results_badObjective.create_presentation_ppt(filename="temp_test_files/badSlides.pptx")
         
         
     

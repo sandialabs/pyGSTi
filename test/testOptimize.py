@@ -2,6 +2,7 @@ import unittest
 import pygsti
 import numpy as np
 import sys
+import warnings
 
 def f(x):
     return np.dot(x,x)
@@ -44,8 +45,18 @@ class TestOptimizeMethods(OptimizeTestCase):
         result = pygsti.optimize.minimize(f, self.x0, "brute", maxiter=10)
         self.assertArraysAlmostEqual(result.x, self.answer)
 
-        result = pygsti.optimize.minimize(f, self.x0, "evolve", maxiter=20)
-        self.assertLess(np.linalg.norm(result.x-self.answer), 0.01) #takes too long to converge...
+        try:
+            import deap
+            doTest = True
+        except ImportError:
+            warnings.warn("**** IMPORT: Cannot import deap, and so evolutionary"
+                          + " optimization test has been skipped")
+            doTest = False
+
+        if doTest:
+            result = pygsti.optimize.minimize(f, self.x0, "evolve", maxiter=20)
+            self.assertLess(np.linalg.norm(result.x-self.answer), 0.01) 
+              #takes too long to converge...
         
         sys.stdout.close()
         sys.stdout = old_stdout
