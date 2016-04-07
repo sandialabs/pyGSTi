@@ -2245,7 +2245,7 @@ def direct_chi2_matrix( sigma, dataset, directGateset, strs,
     return chiSqMx
 
 def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatesets, strs, xlabel="", ylabel="",
-                        m=None, M=None, scale=1.0, prec='compact', title="Direct Chi^2", sumUp=False,
+                        scale=1.0, prec='compact', title="Direct Chi^2", sumUp=False,
                         interactive=False, boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
                         save_to=None, ticSize=20, invert=False, fidPairs=None):
     """
@@ -2277,9 +2277,6 @@ def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
 
     xlabel, ylabel : str, optional
         X and Y axis labels
-
-    m, M : float, optional
-        Min and max values of the color scale.
 
     scale : float, optional
         Scaling factor to adjust the size of the final figure.
@@ -2348,7 +2345,9 @@ def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
     prepStrs, effectStrs = strs
     def mx_fn(gateStr):
         return direct_chi2_matrix( gateStr, dataset, directGatesets.get(gateStr,None), strs, minProbClipForWeighting, fidPairs)
-    return generate_boxplot( xvals, yvals, xy_gatestring_dict, mx_fn, xlabel, ylabel, m,M,
+
+    cmap, norm = make_cmap_norm('linlog', n_boxes=10, linlg_pcntle=.05)
+    return generate_boxplot( xvals, yvals, xy_gatestring_dict, mx_fn, cmap, norm, xlabel, ylabel,
                             scale,prec,title,sumUp,interactive,boxLabels,histogram,histBins,save_to,ticSize,
                             invert, prepStrs, effectStrs, r"$\rho_i$", r"$E_i$",  )
 
@@ -2473,7 +2472,7 @@ def direct_logl_matrix( sigma, dataset, directGateset, strs,
 
 
 def direct_logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatesets, strs, xlabel="", ylabel="",
-                        m=None, M=None, scale=1.0, prec='compact', title="Direct Log(L)", sumUp=False,
+                        scale=1.0, prec='compact', title="Direct Log(L)", sumUp=False,
                         interactive=False, boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
                         save_to=None, ticSize=20, invert=False, fidPairs=None):
     """
@@ -2505,9 +2504,6 @@ def direct_logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
 
     xlabel, ylabel : str, optional
         X and Y axis labels
-
-    m, M : float, optional
-        Min and max values of the color scale.
 
     scale : float, optional
         Scaling factor to adjust the size of the final figure.
@@ -2576,7 +2572,9 @@ def direct_logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
     prepStrs, effectStrs = strs
     def mx_fn(gateStr):
         return direct_logl_matrix( gateStr, dataset, directGatesets.get(gateStr,None), strs, minProbClipForWeighting, fidPairs)
-    return generate_boxplot( xvals, yvals, xy_gatestring_dict, mx_fn, xlabel, ylabel, m,M,
+
+    cmap, norm = make_cmap_norm('linlog', n_boxes=10, linlg_pcntle=.05)
+    return generate_boxplot( xvals, yvals, xy_gatestring_dict, mx_fn, cmap, norm, xlabel, ylabel,
                             scale,prec,title,sumUp,interactive,boxLabels,histogram,histBins,save_to,ticSize,
                             invert, prepStrs, effectStrs, r"$\rho_i$", r"$E_i$",  )
 
