@@ -1374,8 +1374,9 @@ def chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
     def mx_fn(gateStr):
         return chi2_matrix( gateStr, dataset, gateset, strs, minProbClipForWeighting, fidPairs)
 
-    cmap, norm = make_cmap_norm('linlog', n_boxes=10, linlg_pcntle=.05)
-    return generate_boxplot( xvals, yvals, xy_gatestring_dict, mx_fn, cmap, norm, xlabel,ylabel,
+    stdcmap = StdColormapFactory('linlog', n_boxes=10, linlg_pcntle=.05)
+
+    return generate_boxplot( xvals, yvals, xy_gatestring_dict, mx_fn, stdcmap, xlabel,ylabel,
                             scale,prec,title,sumUp,interactive,boxLabels,histogram,histBins,save_to,ticSize,
                             invert, prepStrs, effectStrs, r"$\rho_i$", r"$E_i$")
 
@@ -1480,10 +1481,11 @@ def logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
     def mx_fn(gateStr):
         return logl_matrix( gateStr, dataset, gateset, strs, minProbClipForWeighting, fidPairs)
 
-    cmap, norm = make_cmap_norm('linlog', n_boxes=10, linlg_pcntle=.05)
-    return generate_boxplot( xvals, yvals, xy_gatestring_dict, mx_fn, cmap, norm, xlabel,ylabel,
-                            scale,prec,title,sumUp,interactive,boxLabels,histogram,histBins,save_to,ticSize,
-                            invert, prepStrs, effectStrs, r"$\rho_i$", r"$E_i$")
+    stdcmap = StdColormapFactory('linlog', n_boxes=10, linlg_pcntle=.05)
+
+    return generate_boxplot( xvals, yvals, xy_gatestring_dict, mx_fn, stdcmap, xlabel,ylabel,
+                        scale,prec,title,sumUp,interactive,boxLabels,histogram,histBins,save_to,ticSize,
+                        invert, prepStrs, effectStrs, r"$\rho_i$", r"$E_i$")
 
 
 
