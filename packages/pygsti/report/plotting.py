@@ -600,9 +600,11 @@ def color_boxplot(plt_data, title=None, xlabels=None, ylabels=None, xtics=None, 
     if vmin is None: vmin = min( finite_plt_data_flat )
     if vmax is None: vmax = max( finite_plt_data_flat )
     n_chi2boxes = len(finite_plt_data_flat)
-    if linlog_trans is None:
-        linlog_trans = get_transition(n_chi2boxes)
 
+    if (linlog_trans is None) & (n_chi2boxes > 0):
+        linlog_trans = get_transition(n_chi2boxes)
+    else:
+        linlog_trans=1
     # Colors ranging from white to gray on [0.0, 0.5) and pink to red on
     # [0.5, 1.0] such that the perceived brightness of the pink matches the
     # gray.
