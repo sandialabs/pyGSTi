@@ -2295,7 +2295,7 @@ def direct_chi2_matrix( sigma, dataset, directGateset, strs,
     return chiSqMx
 
 def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatesets, strs, xlabel="", ylabel="",
-                        scale=1.0, prec='compact', title="Direct Chi^2", sumUp=False,
+                        scale=1.0, prec='compact', title=r"Direct $\chi^2$", sumUp=False,
                         interactive=False, boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
                         save_to=None, ticSize=20, invert=False, fidPairs=None):
     """
@@ -2523,7 +2523,7 @@ def direct_logl_matrix( sigma, dataset, directGateset, strs,
 
 
 def direct_logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatesets, strs, xlabel="", ylabel="",
-                        scale=1.0, prec='compact', title="Direct Log(L)", sumUp=False,
+                        scale=1.0, prec='compact', title=r"Direct $\log(\mathcal{L})$", sumUp=False,
                         interactive=False, boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
                         save_to=None, ticSize=20, invert=False, fidPairs=None):
     """
