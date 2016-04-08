@@ -576,67 +576,6 @@ class StdColormapFactory(object):
 
         return cmap
 
-def make_cmap_norm(kind, vmin=None, vmax=None, n_boxes=None, linlg_pcntle=.05):
-    """
-    Creates an appropriate colormap for the plots
-
-    Parameters
-    -----------
-    kind: string
-        What kind of colormap is to be used. Acceptable inputs include
-        'linlog', 'seq', and 'div'.
-
-    vmin, vmax: float
-
-    linlg_pcntle: float, optional
-        Specifies where the break from linear to logarithmic
-        Specifies the (1-ling_pcntle) percentile. Used when kind='linlog'
-
-    Returns
-    ---------
-    cmap, norm: The colormap and normalization
-    """
-
-    assert kind in ['linlog', 'div', 'seq'], 'Please enter a valid kind of colormap to create.'
-
-    if kind != 'linlog':
-        if (vmin is None) or (vmax is None):
-            raise ValueError("For non linlog-type colormaps, vmin and vmax must be specified.")
-    else:
-        if vmin is not None:
-            print('vmin not required for linlog-type colormaps. Ignoring.')
-        elif vmax is not None:
-            print('vmax not required for linlog-type colormaps. Ignoring.')
-        if n_boxes is None:
-            raise ValueError("The number of boxes being plotted must be specified when the colormap\
-                type is linlog.")
-        if n_boxes == 0:
-            raise ValueError("n_boxes being plotted must be non-zero when the colormap\
-                type is linlog.")
-
-    #Creates the normalization class
-    if kind != 'linlog':
-        norm = _matplotlib.colors.Normalize(vmin=vmin, vmax=vmax, clip=False)
-    else:
-        linlog_trans = _np.ceil(_chi2.ppf(1 - linlg_pcntle / n_boxes, 1))
-        norm = LinLogNorm(trans=linlog_trans)
-
-    #Creates the colormap
-    if kind == 'seq':
-        cmap = _matplotlib.cm.get_cmap('Greys')
-    elif kind == 'div':
-        cmap = _matplotlib.cm.get_cmap('bwr')
-    else:
-        # Colors ranging from white to gray on [0.0, 0.5) and pink to red on
-        # [0.5, 1.0] such that the perceived brightness of the pink matches the
-        # gray.
-        grayscale_cmap = make_linear_cmap((1, 1, 1), (0.5, 0.5, 0.5))
-        red_cmap = make_linear_cmap((.698, .13, .133), (1, 0, 0))
-        cmap = splice_cmaps([grayscale_cmap, red_cmap], 'linlog')
-
-    cmap.set_bad('w',1)
-    return cmap, norm
-
 def color_boxplot(plt_data, cmapFactory, title=None, xlabels=None, ylabels=None, xtics=None, ytics=None,
                  colorbar=True, fig=None, axes=None, size=None, prec=0, boxLabels=True,
                  xlabel=None, ylabel=None, save_to=None, ticSize=14, grid=False):
