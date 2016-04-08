@@ -1065,7 +1065,7 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, cmapFacto
             fig,ax = _plt.subplots( 1, 1, figsize=(nXs*scale, nYs*scale))
             rptFig = color_boxplot( subMxSums, cmapFactory, fig=fig, axes=ax, title=title,
                                    xlabels=val_filter(used_xvals), ylabels=val_filter(used_yvals),
-                                   vmin=minclip, vmax=maxclip, colorbar=False, prec=prec, xlabel=xlabel, ylabel=ylabel,
+                                   colorbar=False, prec=prec, xlabel=xlabel, ylabel=ylabel,
                                    ticSize=ticSize, grid=grid)
             rptFig.save_to(save_to)
 
