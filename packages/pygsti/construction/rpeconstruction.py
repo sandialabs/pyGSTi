@@ -91,7 +91,7 @@ def make_paramterized_rpe_gate_set(alphaTrue, epsilonTrue, auxRot, SPAMdepol,
             effectLabels=["E0"], effectExpressions=EExpressions, 
             spamdefs=spamLabelDict)
 
-        outputGateset[loose_axis_gate_label] =
+        outputGateset[loose_axis_gate_label] = \
                 _np.dot( _np.dot(_np.linalg.inv(gatesetAux1[auxiliary_axis_gate_label]),
                                outputGateset[loose_axis_gate_label]),gatesetAux1[auxiliary_axis_gate_label])
 
