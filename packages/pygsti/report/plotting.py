@@ -3,7 +3,7 @@
 #    This Software is released under the GPL license detailed    
 #    in the file "license.txt" in the top-level pyGSTi directory 
 #*****************************************************************
-""" Functions for generating plots and computing chi^2 """
+""" Functions for generating plots """
 
 from __future__ import division
 import numpy as _np
@@ -762,9 +762,6 @@ def nested_color_boxplot(plt_data_list_of_lists, cmapFactory, title=None, xlabel
 
     cmapFactory: instance of the ColormapFactory class
 
-    norm: matplotlib norm
-        The norm to be used.
-
     title : string, optional
         Plot title (latex can be used)
 
@@ -839,11 +836,16 @@ def nested_color_boxplot(plt_data_list_of_lists, cmapFactory, title=None, xlabel
                         save_to, ticSize, grid)
 
 def _computeSubMxs(xvals, yvals, xyGateStringDict, subMxCreationFn):
-    subMxs = [ [ subMxCreationFn( xyGateStringDict[(x,y)] ) for x in xvals ] for y in yvals]
-    return subMxs #Note: subMxs[y-index][x-index] is proper usage
+    used_xvals = [ x for x in xvals if any([ (xyGateStringDict[(x,y)] is not None) for y in yvals]) ]
+    used_yvals = [ y for y in yvals if any([ (xyGateStringDict[(x,y)] is not None) for x in xvals]) ]
+    subMxs = [ [ subMxCreationFn( xyGateStringDict[(x,y)] ) for x in used_xvals ] for y in used_yvals]
+    n_boxes = sum([ _np.sum(_np.isnan(subMxs[iy][ix])) 
+                    for ix in range(len(used_xvals)) 
+                    for iy in range(len(used_yvals)) ])
+    return used_xvals, used_yvals, subMxs, n_boxes #Note: subMxs[y-index][x-index] is proper usage
 
-def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, cmapFactory, xlabel="", ylabel="", scale=1.0, prec=0,
-                     title='sub-mx', sumUp=False, interactive=False, boxLabels=True, histogram=False, histBins=50, save_to=None,
+def generate_boxplot( xvals, yvals, xyGateStringDict, subMxs, cmapFactory, xlabel="", ylabel="", scale=1.0, prec=0,
+                     title='sub-mx', sumUp=False, boxLabels=True, histogram=False, histBins=50, save_to=None,
                      ticSize=20, invert=False, inner_x_labels=None, inner_y_labels=None, inner_x_label=None, inner_y_label=None,
                      grid=False):
     """
@@ -857,9 +859,7 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, cmapFacto
     2. As a color box plot containing the sum of the elements in the (x,y) matrix as
        the (x,y) box.
 
-    A histogram of the values can also be computed and displayed.  Setting
-    interactive == True allows the user to interactively change the color scale's min and
-    max values.
+    A histogram of the values can also be computed and displayed.
     
     Parameters
     ----------
@@ -874,16 +874,12 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, cmapFacto
         the mapping between x,y pairs and gate strings.  None values are allowed, and 
         indicate that there is not data for that x,y pair and nothing should be plotted.
     
-    subMxCreationFn : function
-        A function that takes a singe gate string parameter and returns a matrix of values to 
-        display.  If the function is passed None instead of a gate string, the function 
-        should return an appropriately sized matrix of NaNs to indicate these elements should
-        not be displayed.
+    subMxs : list
+        A list of lists of 2D numpy.ndarrays.  subMxs[iy][ix] specifies the matrix of values
+        or sum (if sumUp == True) displayed in iy-th row and ix-th column of the plot.  NaNs
+        indicate elements should not be displayed.
 
     cmapFactory: instance of the ColormapFactory class
-
-    norm: matplotlib norm
-        The norm to be used.
 
     xlabel, ylabel : str, optional
         X and Y axis labels
@@ -905,11 +901,6 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, cmapFacto
         False displays each matrix element as it's own color box
         True sums the elements of each (x,y) matrix and displays
         a single color box for the sum.
-
-    interactive : bool, optional
-        If true and wihin an iPython notebook, widgets are used
-        to create an interactive plot whereby the user can adjust
-        the min and max of the colorscale.
 
     boxLabels : bool, optional
         Whether box labels are displayed.  It takes much longer to 
@@ -952,13 +943,7 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, cmapFacto
             The number of used Y-values, proportional to the overall final figure height
     """
 
-    init_min_clip = 0
-    init_max_clip = 10
-
-    used_xvals = [ x for x in xvals if any([ (xyGateStringDict[(x,y)] is not None) for y in yvals]) ]
-    used_yvals = [ y for y in yvals if any([ (xyGateStringDict[(x,y)] is not None) for x in xvals]) ]
-
-    nXs,nYs = len(used_xvals),len(used_yvals)
+    nXs,nYs = len(xvals),len(yvals)
 
     def val_filter(vals):  #filter to latex-ify gate strings.  Later add filter as a possible parameter
         formatted_vals = []
@@ -972,18 +957,6 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, cmapFacto
                 formatted_vals.append(val)
         return formatted_vals
                 
-
-    if interactive:
-        from IPython.html import widgets
-        from IPython.html.widgets import interact, fixed
-
-    #Compute sub-matrices (which are either displayed as nested sub-boxes of plot or are summed)
-    subMxs = _computeSubMxs(used_xvals, used_yvals, xyGateStringDict, subMxCreationFn)
-
-    def str_to_float(s):
-        if s is None or s == "None" or len(str(s)) == 0: return None
-        else: return float(s)
-
     def sum_up_mx(mx):
         flat_mx = mx.flatten()
         if any([_np.isnan(x) for x in flat_mx]):
@@ -998,38 +971,26 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, cmapFacto
         subMxSums = _np.array( [ [ sum_up_mx(subMxs[iy][ix]) for ix in range(nXs) ] for iy in range(nYs) ], 'd' )
         if invert: print "Warning: cannot invert a summed-up plot.  Ignoring invert=True."
 
-        def makeplot(min_clip, max_clip):
-            minclip = str_to_float( min_clip )
-            maxclip = str_to_float( max_clip )
-            fig,ax = _plt.subplots( 1, 1, figsize=(nXs*scale, nYs*scale))
-            rptFig = color_boxplot( subMxSums, cmapFactory, fig=fig, axes=ax, title=title,
-                                   xlabels=val_filter(used_xvals), ylabels=val_filter(used_yvals),
-                                   colorbar=False, prec=prec, xlabel=xlabel, ylabel=ylabel,
-                                   ticSize=ticSize, grid=grid)
-            rptFig.save_to(save_to)
+        fig,ax = _plt.subplots( 1, 1, figsize=(nXs*scale, nYs*scale))
+        rptFig = color_boxplot( subMxSums, cmapFactory, fig=fig, axes=ax, title=title,
+                               xlabels=val_filter(xvals), ylabels=val_filter(yvals),
+                               colorbar=False, prec=prec, xlabel=xlabel, ylabel=ylabel,
+                               ticSize=ticSize, grid=grid)
+        rptFig.save_to(save_to)
 
-            if histogram:
-                fig = _plt.figure()
-                histdata = subMxSums.flatten()
-                histdata_finite = _np.take(histdata, _np.where(_np.isfinite(histdata)))[0] #take gives back (1,N) shaped array (why?)
-                histMin = min( histdata_finite ) if minclip is None else minclip
-                histMax = max( histdata_finite ) if maxclip is None else maxclip
-                _plt.hist(_np.clip(histdata_finite,histMin,histMax), histBins,
-                          range=[histMin, histMax], facecolor='gray', align='mid')
-                if save_to is not None:
-                    if len(save_to) > 0:
-                        _plt.savefig( _makeHistFilename(save_to) )
-                    _plt.close(fig)                    
-            return rptFig
+        if histogram:
+            fig = _plt.figure()
+            histdata = subMxSums.flatten()
+            histdata_finite = _np.take(histdata, _np.where(_np.isfinite(histdata)))[0] #take gives back (1,N) shaped array (why?)
+            histMin = min( histdata_finite ) if cmapFactory.vmin is None else cmapFactory.vmin
+            histMax = max( histdata_finite ) if cmapFactory.vmax is None else cmapFactory.vmax
+            _plt.hist(_np.clip(histdata_finite,histMin,histMax), histBins,
+                      range=[histMin, histMax], facecolor='gray', align='mid')
+            if save_to is not None:
+                if len(save_to) > 0:
+                    _plt.savefig( _makeHistFilename(save_to) )
+                _plt.close(fig)                    
 
-
-        if interactive:
-            interact(makeplot, 
-                     min_clip=str(init_min_clip) if init_min_clip is not None else str(0),
-                     max_clip=str(init_max_clip) if init_max_clip is not None else str(10) )
-            rptFig = None
-        else:
-            rptFig = makeplot(init_min_clip, init_max_clip)
 
     else: #not summing up
 
@@ -1050,171 +1011,43 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxCreationFn, cmapFacto
 
             #Replace usual params with ones corresponding to "inverted" plot
             subMxs = invertedSubMxs
-            used_xvals = inner_x_labels if inner_x_labels else [""]*nIXs
-            used_yvals = inner_y_labels if inner_y_labels else [""]*nIYs
+            xvals = inner_x_labels if inner_x_labels else [""]*nIXs
+            yvals = inner_y_labels if inner_y_labels else [""]*nIYs
             xlabel = inner_x_label if inner_x_label else ""
             ylabel = inner_y_label if inner_y_label else ""
             nXs, nYs, nIXs, nIYs = nIXs, nIYs, nXs, nYs #swap nXs <=> nIXs b/c of inversion
 
-        def makeplot(min_clip, max_clip, labels):
-            minclip = str_to_float( min_clip )
-            maxclip = str_to_float( max_clip )
-            #print "data = ",subMxs
-            fig,ax = _plt.subplots( 1, 1, figsize=(nXs*nIXs*scale*0.4, nYs*nIYs*scale*0.4))
-            rptFig = nested_color_boxplot(subMxs, cmapFactory, fig=fig, axes=ax, title=title, prec=prec, 
-                                        ylabels=val_filter(used_yvals), xlabels=val_filter(used_xvals), boxLabels=labels,
-                                        colorbar=False, ylabel=ylabel, xlabel=xlabel, ticSize=ticSize, grid=grid)
-            rptFig.save_to(save_to)
+        fig,ax = _plt.subplots( 1, 1, figsize=(nXs*nIXs*scale*0.4, nYs*nIYs*scale*0.4))
+        rptFig = nested_color_boxplot(subMxs, cmapFactory, fig=fig, axes=ax, title=title, prec=prec, 
+                                      ylabels=val_filter(yvals), xlabels=val_filter(xvals), boxLabels=boxLabels,
+                                      colorbar=False, ylabel=ylabel, xlabel=xlabel, ticSize=ticSize, grid=grid)
+        rptFig.save_to(save_to)
 
-            if histogram:
-                fig = _plt.figure()
-                histdata = _np.concatenate( [ subMxs[iy][ix].flatten() for ix in range(nXs) for iy in range(nYs)] )
-                histdata_finite = _np.take(histdata, _np.where(_np.isfinite(histdata)))[0] #take gives back (1,N) shaped array (why?)
-                histMin = min( histdata_finite ) if minclip is None else minclip
-                histMax = max( histdata_finite ) if maxclip is None else maxclip
-                _plt.hist(_np.clip(histdata_finite,histMin,histMax), histBins,
-                          range=[histMin, histMax], facecolor='gray', align='mid')
-                if save_to is not None:
-                    if len(save_to) > 0:
-                        _plt.savefig( _makeHistFilename(save_to) )
-                    _plt.close(fig)
-            return rptFig
-
-
-        if interactive:
-            interact(makeplot,
-                     min_clip=str(init_min_clip) if init_min_clip is not None else str(0),
-                     max_clip=str(init_max_clip) if init_max_clip is not None else str(10),
-                     labels=boxLabels)
-            rptFig = None
-        else:
-            rptFig = makeplot(init_min_clip, init_max_clip, boxLabels)
+        if histogram:
+            fig = _plt.figure()
+            histdata = _np.concatenate( [ subMxs[iy][ix].flatten() for ix in range(nXs) for iy in range(nYs)] )
+            histdata_finite = _np.take(histdata, _np.where(_np.isfinite(histdata)))[0] #take gives back (1,N) shaped array (why?)
+            histMin = min( histdata_finite ) if cmapFactory.vmin is None else cmapFactory.vmin
+            histMax = max( histdata_finite ) if cmapFactory.vmax is None else cmapFactory.vmax
+            _plt.hist(_np.clip(histdata_finite,histMin,histMax), histBins,
+                      range=[histMin, histMax], facecolor='gray', align='mid')
+            if save_to is not None:
+                if len(save_to) > 0:
+                    _plt.savefig( _makeHistFilename(save_to) )
+                _plt.close(fig)
 
     if rptFig:
-        rptFig.set_extra_info( { 'nUsedXs': len(used_xvals),
-                                 'nUsedYs': len(used_yvals) } )                     
-    # rptFig.check() #DEBUG - test that figure can unpickle correctly -- if not, probably used magic matplotlib (don't do that)
+        rptFig.set_extra_info( { 'nUsedXs': len(xvals),
+                                 'nUsedYs': len(yvals) } )                     
+    # rptFig.check() #DEBUG - test that figure can unpickle correctly -- 
+    #                # if not, probably used magic matplotlib (don't do that)
     return rptFig
-
-
-def generate_zoomed_boxplot(xvals, yvals, xyGateStringDict, subMxCreationFn, strs, 
-                          xlabel="", ylabel="", m=None, M=None, scale=1.0, prec=0, title='sub-mx',
-                          save_to=None, ticSize=14):
-    """
-    Creates an interactive view of one (x,y) matrix of nested box plot data.
-
-    Given lists of x and y values, a dictionary to convert (x,y) pairs into gate strings,
-    and a function to convert a "base" gate string into a matrix of floating point values,
-    this function computes (x,y) => matrix data and interactively displays a single (x,y)
-    matrix as a color box plot.  The user can change x and y interactively to display 
-    the color box plots corresponding to different (x,y) pairs.
-    
-    Parameters
-    ----------
-    xvals, yvals : list
-        List of x and y values. Elements can be any hashable quantity, and will be converted
-        into x and y tic labels.  Tuples of strings are converted specially for nice latex
-        rendering of gate strings.
-
-    xyGateStringDict : dict
-        Dictionary with keys == (x_value,y_value) tuples and values == gate strings, where
-        a gate string can either be a GateString object or a tuple of gate labels.  Provides
-        the mapping between x,y pairs and gate strings.  None values are allowed, and 
-        indicate that there is not data for that x,y pair and nothing should be plotted.
-    
-    subMxCreationFn : function
-        A function that takes a singe gate string parameter and returns a matrix of values to 
-        display.  If the function is passed None instead of a gate string, the function 
-        should return an appropriately sized matrix of NaNs to indicate these elements should
-        not be displayed.
-
-    strs : 2-tuple
-        A (prepStrs,effectStrs) tuple usually generated by calling get_spam_strs(...)
-
-    xlabel, ylabel : str, optional
-        X and Y axis labels
-
-    m, M : float, optional
-        Min and max values of the color scale.
-
-    scale : float, optional
-        Scaling factor to adjust the size of the final figure.
-
-    prec : int, optional
-        Precision for box labels.  Allowed values are:
-          'compact' = round to nearest whole number using at most 3 characters
-          'compacthp' = show as much precision as possible using at most 3 characters
-          int >= 0 = fixed precision given by int
-          int <  0 = number of significant figures given by -int
-
-    title : string, optional
-        Plot title (latex can be used)
-
-    save_to : str, optional
-        save figure to this filename (usually ending in .pdf)
-
-    ticSize : int, optional
-        size of tic marks
-
-    Returns
-    -------
-    None
-    """
-
-    prepStrs, effectStrs = strs
-    init_min_clip = m
-    init_max_clip = M
-    nXs, nYs = len(xvals), len(yvals)
-
-    from IPython.html import widgets
-    from IPython.html.widgets import interact, fixed
-
-    def val_filter(vals):  #filter to latex-ify gate strings.  Later add filter as a possible parameter
-        formatted_vals = []
-        for val in vals:
-            if len(val) == 1 and val[0] == 0:
-                formatted_vals.append(r"$\{\}$")
-            elif type(val) == tuple and all([type(el) == str for el in val[1:]]) and val[0] == 0:
-                formatted_vals.append( "$" + "\\cdot".join([("\\mathrm{%s}" % el) for el in val[1:]]) + "$" )
-            elif type(val) == tuple and all([type(el) == str for el in val[:-1]]) and val[-1] == 0:
-                formatted_vals.append( "$" + "\\cdot".join([("\\mathrm{%s}" % el) for el in val[:-1]]) + "$" )
-            else:
-                formatted_vals.append(val)
-        return formatted_vals
-
-
-    #Compute sub-matrices
-    subMxs = _computeSubMxs(xvals, yvals, xyGateStringDict, subMxCreationFn)
-
-    def str_to_float(s):
-        if s is None or s == "None" or len(str(s)) == 0: return None
-        else: return float(s)
-
-    cb = False; prefix = "Chi squareds for "
-
-    def makeplot(min_clip, max_clip, x,y):
-        minclip = str_to_float(min_clip)
-        maxclip = str_to_float(max_clip)
-        zoomToX,zoomToY = x,y
-
-        fig, ax = _plt.subplots( 1, 1, figsize=(len(prepStrs)*scale, len(effectStrs)*scale))
-        ix,iy = xvals.index(zoomToX), yvals.index(zoomToY)
-        color_boxplot( subMxs[iy][ix], cmap, norm, fig=fig, axes=ax, 
-                      title=title + " for %s=%s, %s=%s" % (xlabel,str(zoomToX),ylabel,str(zoomToY)),
-                      xlabels=val_filter(prepStrs), ylabels=val_filter(effectStrs), vmin=minclip, vmax=maxclip, colorbar=False, 
-                      prec=prec, save_to=save_to, ticSize=ticSize)
-
-    interact(makeplot,
-             min_clip=str(init_min_clip) if init_min_clip is not None else str(0),
-             max_clip=str(init_max_clip) if init_max_clip is not None else str(10),
-             y=dict([(str(y),y) for y in yvals]),
-             x=dict([(str(x),x) for x in xvals]) )
 
 
 
 def chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
                   xlabel="", ylabel="",  scale=1.0, prec='compact', title='$\\chi^2$', sumUp=False,
-                  interactive=False, boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
+                  boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
                   save_to=None, ticSize=20, invert=False, fidPairs=None):
     """
     Create a color box plot of chi^2 values.
@@ -1262,11 +1095,6 @@ def chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
         True sums the elements of each (x,y) matrix and displays
         a single color box for the sum.
 
-    interactive : bool, optional
-        If true and wihin an iPython notebook, widgets are used
-        to create an interactive plot whereby the user can adjust
-        the min and max of the colorscale.
-
     boxLabels : bool, optional
         Whether box labels are displayed.  It takes much longer to 
         generate the figure when this is set to True.
@@ -1312,16 +1140,16 @@ def chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
     prepStrs, effectStrs = strs
     def mx_fn(gateStr):
         return chi2_matrix( gateStr, dataset, gateset, strs, minProbClipForWeighting, fidPairs)
+    xvals,yvals,subMxs,n_boxes = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn)
+    stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=.05)
 
-    stdcmap = StdColormapFactory('linlog', n_boxes=10, linlg_pcntle=.05)
-
-    return generate_boxplot( xvals, yvals, xy_gatestring_dict, mx_fn, stdcmap, xlabel,ylabel,
-                            scale,prec,title,sumUp,interactive,boxLabels,histogram,histBins,save_to,ticSize,
+    return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel,ylabel,
+                            scale,prec,title,sumUp,boxLabels,histogram,histBins,save_to,ticSize,
                             invert, prepStrs, effectStrs, r"$\rho_i$", r"$E_i$")
 
 def logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
                   xlabel="", ylabel="", scale=1.0, prec='compact', title='$\\log(\\mathcal{L})$', sumUp=False,
-                  interactive=False, boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
+                  boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
                   save_to=None, ticSize=20, invert=False, fidPairs=None):
     """
     Create a color box plot of log-likelihood values.
@@ -1369,11 +1197,6 @@ def logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
         True sums the elements of each (x,y) matrix and displays
         a single color box for the sum.
 
-    interactive : bool, optional
-        If true and wihin an iPython notebook, widgets are used
-        to create an interactive plot whereby the user can adjust
-        the min and max of the colorscale.
-
     boxLabels : bool, optional
         Whether box labels are displayed.  It takes much longer to 
         generate the figure when this is set to True.
@@ -1419,11 +1242,11 @@ def logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
     prepStrs, effectStrs = strs
     def mx_fn(gateStr):
         return logl_matrix( gateStr, dataset, gateset, strs, minProbClipForWeighting, fidPairs)
+    xvals,yvals,subMxs,n_boxes = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn)
+    stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=.05)
 
-    stdcmap = StdColormapFactory('linlog', n_boxes=10, linlg_pcntle=.05)
-
-    return generate_boxplot( xvals, yvals, xy_gatestring_dict, mx_fn, stdcmap, xlabel,ylabel,
-                        scale,prec,title,sumUp,interactive,boxLabels,histogram,histBins,save_to,ticSize,
+    return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel,ylabel,
+                        scale,prec,title,sumUp,boxLabels,histogram,histBins,save_to,ticSize,
                         invert, prepStrs, effectStrs, r"$\rho_i$", r"$E_i$")
 
 
@@ -1491,82 +1314,19 @@ def blank_boxplot( xvals, yvals, xy_gatestring_dict, strs, xlabel="", ylabel="",
     prepStrs, effectStrs = strs
     def mx_fn(gateStr):
         return _np.nan * _np.zeros( (len(strs[1]),len(strs[0])), 'd')
-    return generate_boxplot( xvals, yvals, xy_gatestring_dict, mx_fn, xlabel,ylabel, 0,1,
-                            scale,'compact',title,sumUp,False,False,False,0,save_to,ticSize,
+    xvals,yvals,subMxs,n_boxes = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn)
+    stdcmap = StdColormapFactory('seq', n_boxes=n_boxes, vmin=0, vmax=1)
+
+    return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs,stdcmap,xlabel,ylabel,
+                            scale,'compact',title,sumUp,False,False,0,save_to,ticSize,
                             invert, prepStrs, effectStrs, r"$\rho_i$", r"$E_i$",True)
 
-
-
-def zoomed_chi2_boxplot(xvals, yvals, xy_gatestring_dict, dataset, gateset, strs, 
-                       xlabel="", ylabel="", m=None, M=None, scale=1.0, prec='compact', title='$\\chi^2$',
-                       minProbClipForWeighting=1e-4, save_to=None, ticSize=14):
-    """
-    Create an interactive zoomed color box plot of chi^2 values (within an iPython notebook)
-
-    Parameters
-    ----------
-    xvals, yvals : list
-        List of x and y values. Elements can be any hashable quantity, and will be converted
-        into x and y tic labels.  Tuples of strings are converted specially for nice latex
-        rendering of gate strings.
-
-    xy_gatestring_dict : dict
-        Dictionary with keys == (x_value,y_value) tuples and values == gate strings, where
-        a gate string can either be a GateString object or a tuple of gate labels.  Provides
-        the mapping between x,y pairs and gate strings.  None values are allowed, and 
-        indicate that there is not data for that x,y pair and nothing should be plotted.
-
-    dataset : DataSet
-        The data used to specify frequencies and counts
-
-    gateset : GateSet
-        The gate set used to specify the probabilities and SPAM labels
-
-    strs : 2-tuple
-        A (prepStrs,effectStrs) tuple usually generated by calling get_spam_strs(...)
-
-    xlabel, ylabel : str, optional
-        X and Y axis labels
-
-    m, M : float, optional
-        Min and max values of the color scale.
-
-    scale : float, optional
-        Scaling factor to adjust the size of the final figure.
-
-    prec : int, optional
-        Precision for box labels.  Allowed values are:
-          'compact' = round to nearest whole number using at most 3 characters
-          'compacthp' = show as much precision as possible using at most 3 characters
-          int >= 0 = fixed precision given by int
-          int <  0 = number of significant figures given by -int
-
-    title : string, optional
-        Plot title (latex can be used)
-
-    minProbClipForWeighting : float, optional
-        defines the clipping interval for the statistical weight used
-        within the chi^2 function (see chi2fn).
-
-    save_to : str, optional
-        save figure to this filename (usually ending in .pdf)
-
-    ticSize : int, optional
-        size of tic marks
-
-    Returns
-    -------
-    None
-    """
-    def mx_fn(gateStr):
-        return chi2_matrix( gateStr, dataset, gateset, strs, minProbClipForWeighting)
-    generate_zoomed_boxplot( xvals, yvals, xy_gatestring_dict, mx_fn, strs, xlabel, ylabel, m,M,scale,prec,title,save_to,ticSize)
 
 
 def small_eigval_err_rate_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGSTgatesets,
                                xlabel="", ylabel="", m=None, M=None, scale=1.0, prec=-1, 
                                title='Error rate, extrap. from small eigenvalue of Direct GST estimate',
-                               interactive=False, boxLabels=True, histogram=False, histBins=50,
+                               boxLabels=True, histogram=False, histBins=50,
                                save_to=None, ticSize=14):
     """
     Create a color box plot of per-gate error rates.
@@ -1610,11 +1370,6 @@ def small_eigval_err_rate_boxplot( xvals, yvals, xy_gatestring_dict, dataset, di
     title : string, optional
         Plot title (latex can be used)
 
-    interactive : bool, optional
-        If true and wihin an iPython notebook, widgets are used
-        to create an interactive plot whereby the user can adjust
-        the min and max of the colorscale.
-
     boxLabels : bool, optional
         Whether box labels are displayed.  It takes much longer to 
         generate the figure when this is set to True.
@@ -1646,8 +1401,16 @@ def small_eigval_err_rate_boxplot( xvals, yvals, xy_gatestring_dict, dataset, di
 
     def mx_fn(gateStr): #error rate as 1x1 matrix which we have plotting function sum up
         return _np.array( [[ small_eigval_err_rate(gateStr, dataset,  directGSTgatesets) ]] )
-    return generate_boxplot( xvals, yvals, xy_gatestring_dict, mx_fn, xlabel,ylabel, m,M,
-                            scale,prec,title, True,interactive,boxLabels,histogram,histBins,save_to,ticSize)
+    xvals,yvals,subMxs,n_boxes = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn)
+    max_abs = max([ _np.max(_np.abs(subMxs[iy][ix])) 
+                    for ix in range(len(xvals)) 
+                    for iy in range(len(yvals)) ])
+    m = 0 if m is None else m
+    M = max_abs if M is None else M
+    stdcmap = StdColormapFactory('seq', n_boxes=n_boxes, vmin=m, vmax=M)
+
+    return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel,ylabel,
+                            scale,prec,title, True,boxLabels,histogram,histBins,save_to,ticSize)
 
 
             
@@ -2235,7 +1998,7 @@ def direct_chi2_matrix( sigma, dataset, directGateset, strs,
 
 def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatesets, strs, xlabel="", ylabel="",
                         scale=1.0, prec='compact', title=r"Direct $\chi^2$", sumUp=False,
-                        interactive=False, boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
+                        boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
                         save_to=None, ticSize=20, invert=False, fidPairs=None):
     """
     Create a color box plot of Direct-X chi^2 values.
@@ -2285,11 +2048,6 @@ def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
         True sums the elements of each (x,y) matrix and displays
         a single color box for the sum.
 
-    interactive : bool, optional
-        If true and wihin an iPython notebook, widgets are used
-        to create an interactive plot whereby the user can adjust
-        the min and max of the colorscale.
-
     boxLabels : bool, optional
         Whether box labels are displayed.  It takes much longer to 
         generate the figure when this is set to True.
@@ -2333,81 +2091,16 @@ def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
     """
     prepStrs, effectStrs = strs
     def mx_fn(gateStr):
-        return direct_chi2_matrix( gateStr, dataset, directGatesets.get(gateStr,None), strs, minProbClipForWeighting, fidPairs)
+        return direct_chi2_matrix( gateStr, dataset, directGatesets.get(gateStr,None),
+                                   strs, minProbClipForWeighting, fidPairs)
 
-    stdcmap = StdColormapFactory('linlog', n_boxes=10, linlg_pcntle=.05)
+    xvals,yvals,subMxs,n_boxes = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn)
+    stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=.05)
 
-    return generate_boxplot( xvals, yvals, xy_gatestring_dict, mx_fn, stdcmap, xlabel, ylabel,
-                            scale,prec,title,sumUp,interactive,boxLabels,histogram,histBins,save_to,ticSize,
+    return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel, ylabel,
+                            scale,prec,title,sumUp,boxLabels,histogram,histBins,save_to,ticSize,
                             invert, prepStrs, effectStrs, r"$\rho_i$", r"$E_i$",  )
 
-
-def zoomed_direct_chi2_boxplot(xvals, yvals, xy_gatestring_dict, dataset, directGatesets, strs, xlabel="", ylabel="",
-                                  m=None, M=None, scale=1.0, prec='compact', title="Direct Chi^2",
-                                  minProbClipForWeighting=1e-4, save_to=None,ticSize=14):
-    """
-    Create an interactive zoomed color box plot of Direct-X chi^2 values (within an iPython notebook)
-
-    Parameters
-    ----------
-    xvals, yvals : list
-        List of x and y values. Elements can be any hashable quantity, and will be converted
-        into x and y tic labels.  Tuples of strings are converted specially for nice latex
-        rendering of gate strings.
-
-    xy_gatestring_dict : dict
-        Dictionary with keys == (x_value,y_value) tuples and values == gate strings, where
-        a gate string can either be a GateString object or a tuple of gate labels.  Provides
-        the mapping between x,y pairs and gate strings.  None values are allowed, and 
-        indicate that there is not data for that x,y pair and nothing should be plotted.
-
-    dataset : DataSet
-        The data used to specify frequencies and counts
-
-    directGatesets : dict
-        Dictionary with keys == gate strings and values == GateSets.  
-        directGatesets[sigma] must be a GateSet which contains an estimate
-        of sigma stored under the gate label "GsigmaLbl".
-
-    strs : 2-tuple
-        A (prepStrs,effectStrs) tuple usually generated by calling get_spam_strs(...)
-
-    xlabel, ylabel : str, optional
-        X and Y axis labels
-
-    m, M : float, optional
-        Min and max values of the color scale.
-
-    scale : float, optional
-        Scaling factor to adjust the size of the final figure.
-
-    prec : int, optional
-        Precision for box labels.  Allowed values are:
-          'compact' = round to nearest whole number using at most 3 characters
-          'compacthp' = show as much precision as possible using at most 3 characters
-          int >= 0 = fixed precision given by int
-          int <  0 = number of significant figures given by -int
-
-    title : string, optional
-        Plot title (latex can be used)
-
-    minProbClipForWeighting : float, optional
-        defines the clipping interval for the statistical weight used
-        within the chi^2 function (see chi2fn).
-
-    save_to : str, optional
-        save figure to this filename (usually ending in .pdf)
-
-    ticSize : int, optional
-        size of tic marks
-
-    Returns
-    -------
-    None
-    """
-    def mx_fn(gateStr):
-        return direct_chi2_matrix( gateStr, dataset, directGatesets.get(gateStr,None), strs, minProbClipForWeighting)
-    generate_zoomed_boxplot( xvals, yvals, xy_gatestring_dict, mx_fn, strs, xlabel, ylabel, m,M,scale,prec,title,save_to,ticSize )
 
 
 def direct_logl_matrix( sigma, dataset, directGateset, strs,
@@ -2463,7 +2156,7 @@ def direct_logl_matrix( sigma, dataset, directGateset, strs,
 
 def direct_logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatesets, strs, xlabel="", ylabel="",
                         scale=1.0, prec='compact', title=r"Direct $\log(\mathcal{L})$", sumUp=False,
-                        interactive=False, boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
+                        boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
                         save_to=None, ticSize=20, invert=False, fidPairs=None):
     """
     Create a color box plot of Direct-X log-likelihood values.
@@ -2513,11 +2206,6 @@ def direct_logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
         True sums the elements of each (x,y) matrix and displays
         a single color box for the sum.
 
-    interactive : bool, optional
-        If true and wihin an iPython notebook, widgets are used
-        to create an interactive plot whereby the user can adjust
-        the min and max of the colorscale.
-
     boxLabels : bool, optional
         Whether box labels are displayed.  It takes much longer to 
         generate the figure when this is set to True.
@@ -2561,18 +2249,20 @@ def direct_logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
     """
     prepStrs, effectStrs = strs
     def mx_fn(gateStr):
-        return direct_logl_matrix( gateStr, dataset, directGatesets.get(gateStr,None), strs, minProbClipForWeighting, fidPairs)
+        return direct_logl_matrix( gateStr, dataset, directGatesets.get(gateStr,None),
+                                   strs, minProbClipForWeighting, fidPairs)
 
-    stdcmap = StdColormapFactory('linlog', n_boxes=10, linlg_pcntle=.05)
+    xvals,yvals,subMxs,n_boxes = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn)
+    stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=.05)
 
-    return generate_boxplot( xvals, yvals, xy_gatestring_dict, mx_fn, stdcmap, xlabel, ylabel,
-                            scale,prec,title,sumUp,interactive,boxLabels,histogram,histBins,save_to,ticSize,
+    return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel, ylabel,
+                            scale,prec,title,sumUp,boxLabels,histogram,histBins,save_to,ticSize,
                             invert, prepStrs, effectStrs, r"$\rho_i$", r"$E_i$",  )
 
 
 def direct2x_comp_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatesets, strs, xlabel="", ylabel="",
                              m=None, M=None, scale=1.0, prec='compact', title="Direct 2x Chi^2 Comparison", sumUp=False,
-                             interactive=False, boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
+                             boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
                              save_to=None, ticSize=20, invert=False):
     """
     Create a box plot indicating how well the Direct-X estimates of string s 
@@ -2635,11 +2325,6 @@ def direct2x_comp_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGate
         True sums the elements of each (x,y) matrix and displays
         a single color box for the sum.
 
-    interactive : bool, optional
-        If true and wihin an iPython notebook, widgets are used
-        to create an interactive plot whereby the user can adjust
-        the min and max of the colorscale.
-
     boxLabels : bool, optional
         Whether box labels are displayed.  It takes much longer to 
         generate the figure when this is set to True.
@@ -2695,14 +2380,22 @@ def direct2x_comp_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGate
             return _np.nan*chiSqMx #if something fails, just punt
         return chiSqMx
 
-    return generate_boxplot( xvals, yvals, xy_gatestring_dict, mx_fn, xlabel, ylabel, m,M,
-                            scale,prec,title,sumUp,interactive,boxLabels,histogram,histBins,
+    xvals,yvals,subMxs,n_boxes = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn)
+    max_abs = max([ _np.max(_np.abs(subMxs[iy][ix])) 
+                    for ix in range(len(xvals)) 
+                    for iy in range(len(yvals)) ])
+    m = -max_abs if m is None else m
+    M = +max_abs if M is None else M
+    stdcmap = StdColormapFactory('div', n_boxes=n_boxes, vmin=m, vmax=M)
+
+    return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel, ylabel,
+                            scale,prec,title,sumUp,boxLabels,histogram,histBins,
                             save_to,ticSize,invert, prepStrs, effectStrs, r"$\rho_i$", r"$E_i$" )
 
 
 def direct_deviation_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, directGatesets,
                                  xlabel="", ylabel="", m=None, M=None, scale=1.0, prec='compact', title="Direct Deviation",
-                                 interactive=False, boxLabels=True, histogram=False, histBins=50, save_to=None, ticSize=20):
+                                 boxLabels=True, histogram=False, histBins=50, save_to=None, ticSize=20):
     """
     Create a box plot showing the difference in max-fidelity-with-unitary
     between gateset's estimate for each base gate string and the Direct-X estimate.
@@ -2768,11 +2461,6 @@ def direct_deviation_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset
     title : string, optional
         Plot title (latex can be used)
 
-    interactive : bool, optional
-        If true and wihin an iPython notebook, widgets are used
-        to create an interactive plot whereby the user can adjust
-        the min and max of the colorscale.
-
     boxLabels : bool, optional
         Whether box labels are displayed.  It takes much longer to 
         generate the figure when this is set to True.
@@ -2811,15 +2499,22 @@ def direct_deviation_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset
         ubF_direct, ubGateMx = _tools.fidelity_upper_bound(gate_direct)
         return _np.array( [[ max(ubF_direct - ubF,0.0) ]], 'd' ) 
 
-    return generate_boxplot( xvals, yvals, xy_gatestring_dict, mx_fn, xlabel, ylabel, m,M,
-                            scale,prec,title,True,interactive,boxLabels,histogram,histBins,save_to,ticSize)
+    xvals,yvals,subMxs,n_boxes = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn)
+    max_abs = max([ _np.max(_np.abs(subMxs[iy][ix])) 
+                    for ix in range(len(xvals)) 
+                    for iy in range(len(yvals)) ])
+    m = -max_abs if m is None else m
+    M = +max_abs if M is None else M
+    stdcmap = StdColormapFactory('div', n_boxes=n_boxes, vmin=m, vmax=M)
+    return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel, ylabel,
+                            scale,prec,title,True,boxLabels,histogram,histBins,save_to,ticSize)
 
 
 
 def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt, 
                            xvals, yvals, xy_gatestring_dict, dataset, gateset, strs, xlabel="", ylabel="",
                            m=None, M=None, scale=1.0, prec='compact', title="Whack a Chi^2 Mole", sumUp=False,
-                           interactive=False, boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
+                           boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
                            save_to=None, ticSize=20, whackWith=10.0, invert=False, fidPairs=None):
     """
     Create a box plot indicating how the chi^2 would change if the chi^2 of one
@@ -2884,11 +2579,6 @@ def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
         False displays each matrix element as it's own color box
         True sums the elements of each (x,y) matrix and displays
         a single color box for the sum.
-
-    interactive : bool, optional
-        If true and wihin an iPython notebook, widgets are used
-        to create an interactive plot whereby the user can adjust
-        the min and max of the colorscale.
 
     boxLabels : bool, optional
         Whether box labels are displayed.  It takes much longer to 
@@ -2991,8 +2681,16 @@ def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
                 ret[j,i] = delta[ allGatestringsUsedInChi2Opt.index(prepStrs[i] + gateStr + effectStrs[j]) ]
             return ret
 
-    return generate_boxplot( xvals, yvals, xy_gatestring_dict, mx_fn, xlabel, ylabel, m,M,
-                            scale,prec,title,sumUp,interactive,boxLabels,histogram,histBins,save_to,ticSize,
+    xvals,yvals,subMxs,n_boxes = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn)
+    xvals,yvals,subMxs,n_boxes = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn)
+    max_abs = max([ _np.max(_np.abs(subMxs[iy][ix])) 
+                    for ix in range(len(xvals)) 
+                    for iy in range(len(yvals)) ])
+    m = -max_abs if m is None else m
+    M = +max_abs if M is None else M
+    stdcmap = StdColormapFactory('div', n_boxes=n_boxes, vmin=m, vmax=M)
+    return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel, ylabel,
+                            scale,prec,title,sumUp,boxLabels,histogram,histBins,save_to,ticSize,
                             invert, prepStrs, effectStrs, r"$\rho_i$", r"$E_i$" )
 
 
@@ -3000,7 +2698,7 @@ def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
 def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt, 
                            xvals, yvals, xy_gatestring_dict, dataset, gateset, strs, xlabel="", ylabel="",
                            m=None, M=None, scale=1.0, prec='compact', title="Whack a log(L) Mole", sumUp=False,
-                           interactive=False, boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
+                           boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
                            save_to=None, ticSize=20, whackWith=10.0, invert=False, fidPairs=None):
     """
     Create a box plot indicating how the log-likelihood would change if the log(L)
@@ -3065,11 +2763,6 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
         False displays each matrix element as it's own color box
         True sums the elements of each (x,y) matrix and displays
         a single color box for the sum.
-
-    interactive : bool, optional
-        If true and wihin an iPython notebook, widgets are used
-        to create an interactive plot whereby the user can adjust
-        the min and max of the colorscale.
 
     boxLabels : bool, optional
         Whether box labels are displayed.  It takes much longer to 
@@ -3170,8 +2863,16 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
                 ret[j,i] = delta[ allGatestringsUsedInLogLOpt.index(prepStrs[i] + gateStr + effectStrs[j]) ]
             return ret
 
-    return generate_boxplot( xvals, yvals, xy_gatestring_dict, mx_fn, xlabel, ylabel, m,M,
-                            scale,prec,title,sumUp,interactive,boxLabels,histogram,histBins,save_to,ticSize,
+    xvals,yvals,subMxs,n_boxes = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn)
+    xvals,yvals,subMxs,n_boxes = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn)
+    max_abs = max([ _np.max(_np.abs(subMxs[iy][ix])) 
+                    for ix in range(len(xvals)) 
+                    for iy in range(len(yvals)) ])
+    m = -max_abs if m is None else m
+    M = +max_abs if M is None else M
+    stdcmap = StdColormapFactory('div', n_boxes=n_boxes, vmin=m, vmax=M)
+    return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel, ylabel,
+                            scale,prec,title,sumUp,boxLabels,histogram,histBins,save_to,ticSize,
                             invert, prepStrs, effectStrs, r"$\rho_i$", r"$E_i$" )
 
 
