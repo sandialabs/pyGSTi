@@ -836,14 +836,25 @@ def nested_color_boxplot(plt_data_list_of_lists, cmapFactory, title=None, xlabel
                         colorbar, fig, axes, size, prec, boxLabels, xlabel, ylabel,
                         save_to, ticSize, grid)
 
-def _computeSubMxs(xvals, yvals, xyGateStringDict, subMxCreationFn):
+def _computeSubMxs(xvals, yvals, xyGateStringDict, subMxCreationFn, sumUp):
     used_xvals = [ x for x in xvals if any([ (xyGateStringDict[(x,y)] is not None) for y in yvals]) ]
     used_yvals = [ y for y in yvals if any([ (xyGateStringDict[(x,y)] is not None) for x in xvals]) ]
     subMxs = [ [ subMxCreationFn( xyGateStringDict[(x,y)] ) for x in used_xvals ] for y in used_yvals]
-    n_boxes = sum([ _np.sum(_np.isnan(subMxs[iy][ix])) 
-                    for ix in range(len(used_xvals)) 
-                    for iy in range(len(used_yvals)) ])
-    return used_xvals, used_yvals, subMxs, n_boxes #Note: subMxs[y-index][x-index] is proper usage
+    if sumUp:
+        dof_per_box = subMxs[0][0].size
+        n_boxes = 0
+        for ix in range(len(used_xvals)):
+            for iy in range(len(used_yvals)):
+                if _np.any(_np.isnan(subMxs[iy][ix])): continue #skip
+                n_boxes += 1
+    else:
+        dof_per_box = 1
+        n_boxes = sum([ _np.sum(_np.isnan(subMxs[iy][ix])) 
+                        for ix in range(len(used_xvals)) 
+                        for iy in range(len(used_yvals)) ])
+        
+    return used_xvals, used_yvals, subMxs, n_boxes, dof_per_box
+      #Note: subMxs[y-index][x-index] is proper usage
 
 def generate_boxplot( xvals, yvals, xyGateStringDict, subMxs, cmapFactory, xlabel="", ylabel="", scale=1.0, prec=0,
                      title='sub-mx', sumUp=False, boxLabels=True, histogram=False, histBins=50, save_to=None,
@@ -1141,8 +1152,8 @@ def chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
     prepStrs, effectStrs = strs
     def mx_fn(gateStr):
         return chi2_matrix( gateStr, dataset, gateset, strs, minProbClipForWeighting, fidPairs)
-    xvals,yvals,subMxs,n_boxes = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn)
-    stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=.05)
+    xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
+    stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=.05, dof=dof)
 
     return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel,ylabel,
                             scale,prec,title,sumUp,boxLabels,histogram,histBins,save_to,ticSize,
@@ -1243,8 +1254,8 @@ def logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
     prepStrs, effectStrs = strs
     def mx_fn(gateStr):
         return logl_matrix( gateStr, dataset, gateset, strs, minProbClipForWeighting, fidPairs)
-    xvals,yvals,subMxs,n_boxes = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn)
-    stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=.05)
+    xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
+    stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=.05, dof=dof)
 
     return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel,ylabel,
                         scale,prec,title,sumUp,boxLabels,histogram,histBins,save_to,ticSize,
@@ -1315,8 +1326,8 @@ def blank_boxplot( xvals, yvals, xy_gatestring_dict, strs, xlabel="", ylabel="",
     prepStrs, effectStrs = strs
     def mx_fn(gateStr):
         return _np.nan * _np.zeros( (len(strs[1]),len(strs[0])), 'd')
-    xvals,yvals,subMxs,n_boxes = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn)
-    stdcmap = StdColormapFactory('seq', n_boxes=n_boxes, vmin=0, vmax=1)
+    xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
+    stdcmap = StdColormapFactory('seq', n_boxes=n_boxes, vmin=0, vmax=1, dof=dof)
 
     return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs,stdcmap,xlabel,ylabel,
                             scale,'compact',title,sumUp,False,False,0,save_to,ticSize,
@@ -1402,13 +1413,13 @@ def small_eigval_err_rate_boxplot( xvals, yvals, xy_gatestring_dict, dataset, di
 
     def mx_fn(gateStr): #error rate as 1x1 matrix which we have plotting function sum up
         return _np.array( [[ small_eigval_err_rate(gateStr, dataset,  directGSTgatesets) ]] )
-    xvals,yvals,subMxs,n_boxes = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn)
+    xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,True)
     max_abs = max([ _np.max(_np.abs(subMxs[iy][ix])) 
                     for ix in range(len(xvals)) 
                     for iy in range(len(yvals)) ])
     m = 0 if m is None else m
     M = max_abs if M is None else M
-    stdcmap = StdColormapFactory('seq', n_boxes=n_boxes, vmin=m, vmax=M)
+    stdcmap = StdColormapFactory('seq', n_boxes=n_boxes, vmin=m, vmax=M, dof=dof)
 
     return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel,ylabel,
                             scale,prec,title, True,boxLabels,histogram,histBins,save_to,ticSize)
@@ -2095,8 +2106,8 @@ def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
         return direct_chi2_matrix( gateStr, dataset, directGatesets.get(gateStr,None),
                                    strs, minProbClipForWeighting, fidPairs)
 
-    xvals,yvals,subMxs,n_boxes = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn)
-    stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=.05)
+    xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
+    stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=.05, dof=dof)
 
     return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel, ylabel,
                             scale,prec,title,sumUp,boxLabels,histogram,histBins,save_to,ticSize,
@@ -2253,8 +2264,8 @@ def direct_logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
         return direct_logl_matrix( gateStr, dataset, directGatesets.get(gateStr,None),
                                    strs, minProbClipForWeighting, fidPairs)
 
-    xvals,yvals,subMxs,n_boxes = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn)
-    stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=.05)
+    xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
+    stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=.05, dof=dof)
 
     return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel, ylabel,
                             scale,prec,title,sumUp,boxLabels,histogram,histBins,save_to,ticSize,
@@ -2381,13 +2392,13 @@ def direct2x_comp_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGate
             return _np.nan*chiSqMx #if something fails, just punt
         return chiSqMx
 
-    xvals,yvals,subMxs,n_boxes = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn)
+    xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
     max_abs = max([ _np.max(_np.abs(subMxs[iy][ix])) 
                     for ix in range(len(xvals)) 
                     for iy in range(len(yvals)) ])
     m = -max_abs if m is None else m
     M = +max_abs if M is None else M
-    stdcmap = StdColormapFactory('div', n_boxes=n_boxes, vmin=m, vmax=M)
+    stdcmap = StdColormapFactory('div', n_boxes=n_boxes, vmin=m, vmax=M, dof=dof)
 
     return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel, ylabel,
                             scale,prec,title,sumUp,boxLabels,histogram,histBins,
@@ -2500,13 +2511,13 @@ def direct_deviation_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset
         ubF_direct, ubGateMx = _tools.fidelity_upper_bound(gate_direct)
         return _np.array( [[ max(ubF_direct - ubF,0.0) ]], 'd' ) 
 
-    xvals,yvals,subMxs,n_boxes = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn)
+    xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,True)
     max_abs = max([ _np.max(_np.abs(subMxs[iy][ix])) 
                     for ix in range(len(xvals)) 
                     for iy in range(len(yvals)) ])
     m = -max_abs if m is None else m
     M = +max_abs if M is None else M
-    stdcmap = StdColormapFactory('div', n_boxes=n_boxes, vmin=m, vmax=M)
+    stdcmap = StdColormapFactory('div', n_boxes=n_boxes, vmin=m, vmax=M, dof=dof)
     return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel, ylabel,
                             scale,prec,title,True,boxLabels,histogram,histBins,save_to,ticSize)
 
@@ -2682,14 +2693,13 @@ def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
                 ret[j,i] = delta[ allGatestringsUsedInChi2Opt.index(prepStrs[i] + gateStr + effectStrs[j]) ]
             return ret
 
-    xvals,yvals,subMxs,n_boxes = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn)
-    xvals,yvals,subMxs,n_boxes = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn)
+    xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
     max_abs = max([ _np.max(_np.abs(subMxs[iy][ix])) 
                     for ix in range(len(xvals)) 
                     for iy in range(len(yvals)) ])
     m = -max_abs if m is None else m
     M = +max_abs if M is None else M
-    stdcmap = StdColormapFactory('div', n_boxes=n_boxes, vmin=m, vmax=M)
+    stdcmap = StdColormapFactory('div', n_boxes=n_boxes, vmin=m, vmax=M, dof=dof)
     return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel, ylabel,
                             scale,prec,title,sumUp,boxLabels,histogram,histBins,save_to,ticSize,
                             invert, prepStrs, effectStrs, r"$\rho_i$", r"$E_i$" )
@@ -2864,14 +2874,13 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
                 ret[j,i] = delta[ allGatestringsUsedInLogLOpt.index(prepStrs[i] + gateStr + effectStrs[j]) ]
             return ret
 
-    xvals,yvals,subMxs,n_boxes = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn)
-    xvals,yvals,subMxs,n_boxes = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn)
+    xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
     max_abs = max([ _np.max(_np.abs(subMxs[iy][ix])) 
                     for ix in range(len(xvals)) 
                     for iy in range(len(yvals)) ])
     m = -max_abs if m is None else m
     M = +max_abs if M is None else M
-    stdcmap = StdColormapFactory('div', n_boxes=n_boxes, vmin=m, vmax=M)
+    stdcmap = StdColormapFactory('div', n_boxes=n_boxes, vmin=m, vmax=M, dof=dof)
     return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel, ylabel,
                             scale,prec,title,sumUp,boxLabels,histogram,histBins,save_to,ticSize,
                             invert, prepStrs, effectStrs, r"$\rho_i$", r"$E_i$" )
