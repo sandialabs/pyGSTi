@@ -1058,7 +1058,7 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxs, cmapFactory, xlabe
 
 
 def chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
-                  xlabel="", ylabel="",  scale=1.0, prec='compact', title='$\\chi^2$', sumUp=False,
+                  xlabel="", ylabel="",  scale=1.0, prec='compact', title='$\\chi^2$', linlg_pcntle=.05, sumUp=False,
                   boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
                   save_to=None, ticSize=20, invert=False, fidPairs=None):
     """
@@ -1101,6 +1101,9 @@ def chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
 
     title : string, optional
         Plot title (latex can be used)
+
+    linlg_pcntle: float, optional
+        Specifies the (1 - linlg_pcntle) percentile to compute for the boxplots
 
     sumUp : bool, optional
         False displays each matrix element as it's own color box
@@ -1153,14 +1156,14 @@ def chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
     def mx_fn(gateStr):
         return chi2_matrix( gateStr, dataset, gateset, strs, minProbClipForWeighting, fidPairs)
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
-    stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=.05, dof=dof)
+    stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=linlg_pcntle, dof=dof)
 
     return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel,ylabel,
                             scale,prec,title,sumUp,boxLabels,histogram,histBins,save_to,ticSize,
                             invert, prepStrs, effectStrs, r"$\rho_i$", r"$E_i$")
 
 def logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
-                  xlabel="", ylabel="", scale=1.0, prec='compact', title='$\\log(\\mathcal{L})$', sumUp=False,
+                  xlabel="", ylabel="", scale=1.0, prec='compact', title='$\\log(\\mathcal{L})$', linlg_pcntle=.05, sumUp=False,
                   boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
                   save_to=None, ticSize=20, invert=False, fidPairs=None):
     """
@@ -1203,6 +1206,9 @@ def logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
 
     title : string, optional
         Plot title (latex can be used)
+
+    linlg_pcntle: float, optional
+        Specifies the (1 - linlg_pcntle) percentile to compute for the boxplots
 
     sumUp : bool, optional
         False displays each matrix element as it's own color box
@@ -1255,7 +1261,7 @@ def logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
     def mx_fn(gateStr):
         return logl_matrix( gateStr, dataset, gateset, strs, minProbClipForWeighting, fidPairs)
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
-    stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=.05, dof=dof)
+    stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=linlg_pcntle, dof=dof)
 
     return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel,ylabel,
                         scale,prec,title,sumUp,boxLabels,histogram,histBins,save_to,ticSize,
