@@ -60,7 +60,8 @@ class ReportTable(object):
                 colHeadings_formatted = colHeadings['py']
     
             self._raw_tables['py'] = \
-                { 'column names': colHeadings_formatted }
+                { 'column names': colHeadings_formatted,
+                  'row data': [] }
     
         if "ppt" in formats:
     
@@ -75,7 +76,8 @@ class ReportTable(object):
                 colHeadings_formatted = colHeadings['ppt']
     
             self._raw_tables['ppt'] = \
-                { 'column names': colHeadings_formatted }
+                { 'column names': colHeadings_formatted,
+                  'row data' : [] }
 
         
 
@@ -102,16 +104,12 @@ class ReportTable(object):
             assert("py" in self._raw_tables)
             formatted_rowData = _tf.formatList(rowData, formatters, "py")
             if len(formatted_rowData) > 0:
-                if "row data" not in self._raw_tables["py"]:
-                    self._raw_tables["py"]['row data'] = []
                 self._raw_tables["py"]['row data'].append( formatted_rowData )
     
         if "ppt" in self.formats:
             assert("ppt" in self._raw_tables)
             formatted_rowData = _tf.formatList(rowData, formatters, "ppt")
             if len(formatted_rowData) > 0:
-                if "row data" not in self._raw_tables["ppt"]:
-                    self._raw_tables["ppt"]['row data'] = []
                 self._raw_tables["ppt"]['row data'].append( formatted_rowData )
 
     def finish(self):
@@ -135,6 +133,58 @@ class ReportTable(object):
             #nothing to do to mark table dict as finished
 
         self._finished = True #mark table as finished
+
+    def __str__(self):
+        if "py" not in self.formats:
+            return repr(self)
+
+        def strlen(x):
+            return max([len(p) for p in str(x).split('\n')])
+        def nlines(x):
+            return len(str(x).split('\n'))
+        def getline(x,i):
+            lines = str(x).split('\n')
+            return lines[i] if i < len(lines) else ""
+        
+        data = self._raw_tables["py"]
+        col_widths = [0]*len(data['column names'])
+        row_lines = [0]*len(data['row data'])
+        header_lines = 0
+
+        for i,nm in enumerate(data['column names']):
+            col_widths[i] = max( strlen(nm), col_widths[i] )
+            header_lines = max(header_lines, nlines(nm))
+        for k,d in enumerate(data['row data']):
+            for i,el in enumerate(d):
+                col_widths[i] = max( strlen(el), col_widths[i] )
+                row_lines[k] = max(row_lines[k], nlines(el))
+
+        row_separator = "|" + '-'*(sum([w+5 for w in col_widths])-1) + "|\n"
+          # +5 for pipe & spaces, -1 b/c don't count first pipe
+
+        s  = "*** ReportTable object ***\n"
+        s += row_separator
+
+        for k in range(header_lines):
+            for i,nm in enumerate(data['column names']):
+                s += "|  %*s  " % (col_widths[i],getline(nm,k))
+            s += "|\n"
+        s += row_separator
+
+        for rowIndex,rowEls in enumerate(data['row data']):
+            for k in range(row_lines[rowIndex]):
+                for i,el in enumerate(rowEls):
+                    s += "|  %*s  " % (col_widths[i],getline(el,k))
+                s += "|\n"
+            s += row_separator
+            
+        s += "\n"
+        s += "Access row and column data by indexing into this object\n"
+        s += " as a dictionary using the column header followed by the\n"
+        s += " value of the first element of each row, i.e.,\n"
+        s += " tableObj[<column header>][<first row element>].\n"
+
+        return s
 
     def _checkpy(self):
         if "py" not in self.formats:
