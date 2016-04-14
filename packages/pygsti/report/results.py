@@ -260,6 +260,14 @@ class Results(object):
         self._LsAndGermInfoSet = True
 
 
+    def __setstate__(self, stateDict):
+        #Must set ResultCache parent & functions, since these are
+        # not pickled (to avoid circular pickle references)
+        self.__dict__.update(stateDict)
+        self._specials._setparent(self._get_special_fns(), self)
+        self.tables._setparent(self._get_table_fns(), self)
+        self.figures._setparent(self._get_figure_fns(), self)
+
     def __str__(self):
         s  = "----------------------------------------------------------\n"
         s += "---------------- pyGSTi Results Object -------------------\n"

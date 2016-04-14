@@ -19,6 +19,16 @@ class ResultCache(object):
            #key = confidence level, value = ordered dict of actual data
            # (so dict of dicts where outer dict key is confidence level)
 
+    def _setparent(self, computeFns, parent):
+        """
+        Set compute functions and parent.  These items
+        are *not* pickled to avoid circular pickle references, so this
+        method should be called by a parent object's _setstate_ 
+        function.
+        """
+        self._computeFns = computeFns
+        self._parent = parent
+
     def get(self, key, confidence_level="current",verbosity=0):
         """
         Retrieve the data associated with a given key, optionally
