@@ -108,18 +108,24 @@ class TestCoreMethods(CoreTestCase):
             gs_lgst = pygsti.do_lgst(ds, bad_specs, self.gateset, svdTruncateTo=4, verbosity=0) # bad specs (rank deficient)
 
 
-        #Want this to raise ValueError at line 331 in core.py ... TODO
-        incomplete_strings = self.lgstStrings[5:] #drop first 5 strings...
-        bad_ds = pygsti.construction.generate_fake_data(self.datagen_gateset, incomplete_strings,
-                                                        nSamples=10, sampleError='none')
-        gs_lgst = pygsti.do_lgst(bad_ds, bad_specs, self.gateset, svdTruncateTo=4, verbosity=0) # incomplete dataset
-
-
-        with self.assertRaises(KeyError):
+        with self.assertRaises(KeyError): # AB-matrix construction error
             incomplete_strings = self.lgstStrings[5:] #drop first 5 strings...
-            bad_ds = pygsti.construction.generate_fake_data(self.datagen_gateset, incomplete_strings,
-                                                        nSamples=10, sampleError='none')
-            gs_lgst = pygsti.do_lgst(bad_ds, bad_specs, self.gateset, svdTruncateTo=4, verbosity=0) # incomplete dataset
+            bad_ds = pygsti.construction.generate_fake_data(
+                self.datagen_gateset, incomplete_strings,
+                nSamples=10, sampleError='none')
+            gs_lgst = pygsti.do_lgst(bad_ds, self.specs, self.gateset,
+                                     svdTruncateTo=4, verbosity=0)
+                      # incomplete dataset
+
+        with self.assertRaises(KeyError): # X-matrix construction error
+            incomplete_strings = self.lgstStrings[:-5] #drop last 5 strings...
+            bad_ds = pygsti.construction.generate_fake_data(
+                self.datagen_gateset, incomplete_strings,
+                nSamples=10, sampleError='none')
+            gs_lgst = pygsti.do_lgst(bad_ds, self.specs, self.gateset,
+                                     svdTruncateTo=4, verbosity=0) 
+                      # incomplete dataset
+
 
 
 
@@ -206,9 +212,11 @@ class TestCoreMethods(CoreTestCase):
         gs_lsgst_verb = self.runSilent(pygsti.do_iterative_mc2gst, ds, gs_clgst, self.lsgstStrings, verbosity=10,
                                              minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6),
                                              memLimit=10*1024**2)
-        gs_lsgst_reg = self.runSilent(pygsti.do_iterative_mc2gst(ds, gs_clgst, self.lsgstStrings, verbosity=10,
-                                                 minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6),
-                                                 regularizeFactor=10, memLimit=100*1024**2))
+        gs_lsgst_reg = self.runSilent(pygsti.do_iterative_mc2gst,ds, gs_clgst,
+                                      self.lsgstStrings, verbosity=10,
+                                      minProbClipForWeighting=1e-6,
+                                      probClipInterval=(-1e6,1e6),
+                                      regularizeFactor=10, memLimit=100*1024**2)
         self.assertAlmostEqual(gs_lsgst.frobeniusdist(gs_lsgst_verb),0)
         self.assertAlmostEqual(gs_lsgst.frobeniusdist(all_gs_lsgst_tups[-1]),0)
 
@@ -489,8 +497,10 @@ class TestCoreMethods(CoreTestCase):
         with self.assertRaises(ValueError):
             pygsti.contract(gs_lgst_target, "FooBar",verbosity=0) # bad toWhat argument
 
-        with self.assertRaises(ValueError):
-            self.runSilent(pygsti.contract,gs_bigkick, "CP", verbosity=10, maxiter=1) # fail to contract to CP
+        # No longer raise value error for failure to contract...
+        #with self.assertRaises(ValueError):
+        #    self.runSilent(pygsti.contract,gs_bigkick, "CP", verbosity=10,
+        #                   maxiter=1) # fail to contract to CP
         
     
       

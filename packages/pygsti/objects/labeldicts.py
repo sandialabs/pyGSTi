@@ -22,9 +22,10 @@ class PrefixOrderedDict(_collections.OrderedDict):
                            "beginning with the prefix '%s'" % self._prefix)
         super(PrefixOrderedDict,self).__setitem__(key, val)
 
-    def __reduce__(self):
-        items = [(k,v) for k,v in self.iteritems()]
-        return (PrefixOrderedDict, (self._prefix, items), None) 
+    #Handled by derived classes
+    #def __reduce__(self):
+    #    items = [(k,v) for k,v in self.iteritems()]
+    #    return (PrefixOrderedDict, (self._prefix, items), None) 
 
 
 
@@ -79,8 +80,21 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
 
             super(OrderedSPAMVecDict,self).__setitem__(key, vecObj)
 
-    def copy(self):
-        return OrderedSPAMVecDict(self.parent, self.default_param,
+    def copy(self, parent):
+        """
+        Returns a copy of this OrderedSPAMVecDict.
+
+        Parameters
+        ----------
+        parent : GateSet
+            The new parent GateSet, if one exists.  Typically, when copying
+            an OrderedSPAMVecDict you want to reset the parent.
+        
+        Returns
+        -------
+        OrderedSPAMVecDict
+        """
+        return OrderedSPAMVecDict(parent, self.default_param,
                            self.remainderLabel, self._prefix,
                            [(lbl,val.copy()) for lbl,val in self.iteritems()])
 
@@ -153,8 +167,22 @@ class OrderedGateDict(PrefixOrderedDict):
 
             super(OrderedGateDict,self).__setitem__(key, gateObj)
 
-    def copy(self):
-        return OrderedGateDict(self.parent, self.default_param, self._prefix,
+    def copy(self, parent):
+        """
+        Returns a copy of this OrderedGateDict.
+
+        Parameters
+        ----------
+        parent : GateSet, optional
+            The new parent GateSet, if one exists.  Typically, when copying
+            an OrderedGateDict you want to reset the parent.
+        
+        Returns
+        -------
+        OrderedGateDict
+        """
+
+        return OrderedGateDict(parent, self.default_param, self._prefix,
                            [(lbl,val.copy()) for lbl,val in self.iteritems()])
 
     def __reduce__(self):

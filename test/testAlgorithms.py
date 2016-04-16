@@ -48,6 +48,12 @@ class TestAlgorithmMethods(AlgorithmTestCase):
             returnAll=False, tol=1e-6, verbosity=4)
 
 
+        self.runSilent(pygsti.alg.optimize_integer_fiducials_slack,
+            std.gs_target, fiducials_to_try, prepOrMeas = "prep",
+            initialWeights=None, maxIter=1, 
+            fixedSlack=False, slackFrac=0.1, 
+            returnAll=False, tol=1e-6, verbosity=4) #check max iterations
+
         with self.assertRaises(ValueError):
             pygsti.alg.optimize_integer_fiducials_slack(
             std.gs_target, std.fiducials, prepOrMeas = "meas") #neither fixedSlack nor slackFrac given
@@ -74,7 +80,6 @@ class TestAlgorithmMethods(AlgorithmTestCase):
                        std.gs_target, std.fiducials, std.fiducials,
                        std.germs, searchMode="random", nRandom=300,
                        seed=1234, verbosity=2)
-
         
         self.assertEqual(suffPairs, [(0, 0), (0, 1), (1, 0)])
 
@@ -102,9 +107,20 @@ class TestAlgorithmMethods(AlgorithmTestCase):
         finalGerms, wts, scoreDict = pygsti.alg.optimize_integer_germs_slack(
             self.gs_target_noisy, germsToTest, initialWeights=np.ones( len(germsToTest), 'd' ), 
             fixedSlack=False, slackFrac=0.1, returnAll=True, tol=1e-6, verbosity=4)
-    
 
-
+        self.runSilent(pygsti.alg.optimize_integer_germs_slack,
+                       self.gs_target_noisy, germsToTest, 
+                       initialWeights=np.ones( len(germsToTest), 'd' ), 
+                       fixedSlack=False, slackFrac=0.1, 
+                       returnAll=True, tol=1e-6, verbosity=4, maxIter=1)
+                       # test hitting max iterations
+        
+        with self.assertRaises(ValueError):
+            pygsti.alg.optimize_integer_germs_slack(
+                self.gs_target_noisy, germsToTest, 
+                initialWeights=np.ones( len(germsToTest), 'd' ), 
+                returnAll=True, tol=1e-6, verbosity=4)
+                # must specify either fixedSlack or slackFrac
 
         
     

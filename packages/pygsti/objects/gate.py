@@ -58,7 +58,7 @@ def optimize_gate(gateToOptimize, targetGate):
     print "DEBUG: optimized gate to min frobenius distance %g" % _mt.frobeniusnorm(gateToOptimize-targetMatrix)
 
 
-def compose(gate1, gate2):
+def compose(gate1, gate2, parameterization="auto"):
     """
     Returns a new Gate that is the composition of gate1 and gate2.
 
@@ -74,6 +74,10 @@ def compose(gate1, gate2):
 
     gate2 : Gate
         Gate to compose as right term of matrix product (applied first).
+
+    parameterization : {"auto","full","TP","linear","static"}, optional
+        The parameterization of the resulting gates.  The default, "auto",
+        attempts to convert to the most restrictive common parameterization.
 
     Returns
     -------
@@ -91,15 +95,21 @@ def compose(gate1, gate2):
     # Linear => Full    
     # TP => Full
 
-    if any([isinstance(g, FullyParameterizedGate) for g in (gate1,gate2)]):
-        paramType = "full"
-    elif any([isinstance(g, TPParameterizedGate) for g in (gate1,gate2)]):
-        paramType = "TP" #may update to "full" below if TP-conversion not possible
-    elif any([isinstance(g, LinearlyParameterizedGate) for g in (gate1,gate2)]):
-        paramType = "linear"
+    if parameterization == "auto":
+        if any([isinstance(g, FullyParameterizedGate) for g in (gate1,gate2)]):
+            paramType = "full"
+        elif any([isinstance(g, TPParameterizedGate) for g in (gate1,gate2)]):
+            paramType = "TP" #update to "full" below if TP-conversion
+                             #not possible?
+        elif any([isinstance(g, LinearlyParameterizedGate) 
+                  for g in (gate1,gate2)]):
+            paramType = "linear"
+        else:
+            assert( isinstance(gate1, StaticGate) 
+                    and isinstance(gate2, StaticGate) )
+            paramType = "static"
     else:
-        assert( isinstance(gate1, StaticGate) and isinstance(gate2, StaticGate) )
-        paramType = "static"
+        paramType = parameterization #user-specified final parameterization
 
     #Convert to paramType as necessary
     cgate1 = convert(gate1, paramType)
@@ -107,6 +117,7 @@ def compose(gate1, gate2):
         
     # cgate1 and cgate2 are the same type, so can invoke the gate's compose method
     return cgate1.compose(cgate2) 
+    
 
 
 def convert(gate, toType):
@@ -218,6 +229,7 @@ class Gate(object):
     def __mul__(self,x):      return self.base * x
     def __rmul__(self,x):     return x * self.base
     def __div__(self,x):      return self.base / x
+    def __rdiv__(self,x):     return x / self.base
     def __floordiv__(self,x): return self.base // x
     def __pow__(self,x):      return self.base ** x
     def __eq__(self,x):       return self.base == x
@@ -451,7 +463,8 @@ class FullyParameterizedGate(Gate):
             a square 2D array-like or Gate object representing the gate action.
             The shape of M sets the dimension of the gate.
         """
-        Gate.__init__(self,Gate.convert_to_matrix(M))
+        M2 = Gate.convert_to_matrix(M)
+        Gate.__init__(self,M2)
 
 
     def set_matrix(self, M):
@@ -587,6 +600,7 @@ class FullyParameterizedGate(Gate):
         """
         assert( isinstance(otherGate, FullyParameterizedGate) )
         return FullyParameterizedGate( _np.dot( self.base, otherGate.base) )
+    
 
     def __reduce__(self):
         return (FullyParameterizedGate, (_np.identity(self.dim,'d'),), self.__dict__)

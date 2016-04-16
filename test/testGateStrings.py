@@ -1,4 +1,5 @@
 import unittest
+import copy
 import pygsti
 import numpy as np
 
@@ -185,6 +186,18 @@ class TestGateStringMethods(GateStringTestCase):
             gateLabels, strs, strs, germs, maxLens, fidPairs=None,
             truncScheme="whole germ powers", nest=False)
 
+        lsgstExpList = pygsti.construction.make_lsgst_experiment_list(
+            gateLabels, strs, strs, germs, maxLens, fidPairs=None,
+            truncScheme="whole germ powers")
+
+        with self.assertRaises(ValueError):
+            pygsti.construction.make_lsgst_lists(
+                gateLabels, strs, strs, germs, maxLens, fidPairs=None,
+                truncScheme="foobar")
+
+
+        
+
         # ELGST
         maxLens = [0,1,2]
         elgstLists = pygsti.construction.make_elgst_lists(
@@ -195,6 +208,15 @@ class TestGateStringMethods(GateStringTestCase):
             gateLabels, germs, maxLens, truncScheme="whole germ powers",
             nest=False)        
 
+        elgstExpLists = pygsti.construction.make_elgst_experiment_list(
+            gateLabels, germs, maxLens, truncScheme="whole germ powers")
+
+        with self.assertRaises(ValueError):
+            pygsti.construction.make_elgst_lists(
+                gateLabels, germs, maxLens, truncScheme="foobar")
+
+
+
         #TODO: check values here
 
     def test_gatestring_object(self):
@@ -203,12 +225,16 @@ class TestGateStringMethods(GateStringTestCase):
         s3 = s1 + s2
         s4 = s1**3
         s5 = s4
+        s6 = copy.copy(s1)
+        s7 = copy.deepcopy(s1)
 
         self.assertEqual( s1, ('Gx','Gx') )
         self.assertEqual( s2, ('Gx','Gx') )
         self.assertEqual( s3, ('Gx','Gx','Gx','Gx') )
         self.assertEqual( s4, ('Gx','Gx','Gx','Gx','Gx','Gx') )
         self.assertEqual( s5, s4 )
+        self.assertEqual( s1, s6 )
+        self.assertEqual( s1, s7 )
         
         b1 = s1 < s2
         b2 = s1 > s2
@@ -228,8 +254,13 @@ class TestGateStringMethods(GateStringTestCase):
         w4 = w2**2
         w5 = s1 + w2
         w6 = w2 + s1
+        w7 = copy.copy(w1)
+
+        with self.assertRaises(ValueError):
+            w1 + ('Gx',) #can only add to other GateStrings
 
         w1_str = str(w1)
+        w1_repr = repr(w1)
         x = w1[0]
         x2 = w1[0:2]
         
@@ -241,6 +272,14 @@ class TestGateStringMethods(GateStringTestCase):
         self.assertEqual( w6, ('Gy','Gx','Gx') ); self.assertEqual(w6.weight, 0.5)
         self.assertEqual( x, 'Gx' )
         self.assertEqual( x2, ('Gx','Gy') )
+        self.assertEqual( w1, w7)
+
+        c1 = pygsti.objects.gatestring.CompressedGateString(s1)
+        s1_expanded = c1.expand()
+        self.assertEqual(s1,s1_expanded)
+
+        with self.assertRaises(ValueError):
+            pygsti.objects.gatestring.CompressedGateString( ('Gx',) ) #can only create from GateStrings
         
         
 

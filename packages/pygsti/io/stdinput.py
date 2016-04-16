@@ -363,8 +363,11 @@ class StdInputParser(object):
             try:
                 gateStringTuple, gateStringStr, valueList = self.parse_dataline(line, lookupDict, nDataCols)
             except _pp.ParseException as e:
-                raise _pp.ParseException("Parse error in file %s in line:\n%s\nError = %s" % \
-                    (filename, line, str(e)))
+                raise ValueError("Parse error in file %s in line:\n" +
+                                 "%s\nError = %s" % (filename, line, str(e)))
+            except ValueError as e:
+                raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
+
             self._fillDataCountDict( countDict, fillInfo, valueList )
             if all([ (abs(v) < 1e-9) for v in countDict.values()]):
                 _warnings.warn( "Dataline for gateString '%s' has zero counts and will be ignored" % gateStringStr)
@@ -499,8 +502,11 @@ class StdInputParser(object):
             try:
                 gateStringTuple, gateStringStr, valueList = self.parse_dataline(line, lookupDict, nDataCols)
             except _pp.ParseException as e:
-                raise _pp.ParseException("Parse error in file %s in line:\n%s\nError = %s" % \
-                    (filename, line, str(e)))
+                raise ValueError("Parse error in file %s in line:\n" +
+                                 "%s\nError = %s" % (filename, line, str(e)))
+            except ValueError as e:
+                raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
+
             self._fillMultiDataCountDicts(dsCountDicts, fillInfo, valueList)
             for dsLabel, countDict in dsCountDicts.iteritems():
                 datasets[dsLabel].add_count_dict(gateStringTuple, countDict)

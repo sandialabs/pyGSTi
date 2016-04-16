@@ -1,4 +1,5 @@
 import unittest
+import pickle
 import pygsti
 import numpy as np
 import warnings
@@ -30,6 +31,7 @@ class TestGateSetConstructionMethods(GateSetConstructionTestCase):
         b = "gm" #basis -- "gm" (Gell-Mann) or "std" (Standard)
         prm = "full" #parameterization "full" or "linear"
         ue = True #unitary embedding
+        #TODO: loop over different b, prm
 
         old_build_gate = pygsti.construction.gatesetconstruction._oldBuildGate
         leakA_old   = old_build_gate( [1,1,1], [('L0',),('L1',),('L2',)], "LX(pi,0,1)",b)
@@ -40,6 +42,7 @@ class TestGateSetConstructionMethods(GateSetConstructionTestCase):
         rotZa_old   = old_build_gate( [2],[('Q0',)], "Z(pi/2,Q0)",b)
         rotLeak_old = old_build_gate( [2,1],[('Q0',),('L0',)], "X(pi,Q0):LX(pi,0,2)",b)
         leakB_old   = old_build_gate( [2,1],[('Q0',),('L0',)], "LX(pi,0,2)",b)
+        iwL_old     = old_build_gate( [2],[('Q0','L0')], "I(Q0,L0)",b)
         rotXb_old   = old_build_gate( [2,1,1],[('Q0',),('L0',),('L1',)], "X(pi,Q0)",b)
         CnotA_old   = old_build_gate( [4],[('Q0','Q1')], "CX(pi,Q0,Q1)",b)
         CnotB_old   = old_build_gate( [4,1],[('Q0','Q1'),('L0',)], "CX(pi,Q0,Q1)",b)
@@ -68,6 +71,7 @@ class TestGateSetConstructionMethods(GateSetConstructionTestCase):
         rotNa   = build_gate( [2],[('Q0',)], "N(pi/2,1.0,0.5,0,Q0)",b,prm,ue)
         rotLeak = build_gate( [2,1],[('Q0',),('L0',)], "X(pi,Q0):LX(pi,0,2)",b,prm,ue)
         leakB   = build_gate( [2,1],[('Q0',),('L0',)], "LX(pi,0,2)",b,prm,ue)
+        iwL     = build_gate( [2],[('Q0','L0')], "I(Q0)",b,prm,ue)
         rotXb   = build_gate( [2,1,1],[('Q0',),('L0',),('L1',)], "X(pi,Q0)",b,prm,ue)
         CnotA   = build_gate( [4],[('Q0','Q1')], "CX(pi,Q0,Q1)",b,prm,ue)
         CnotB   = build_gate( [4,1],[('Q0','Q1'),('L0',)], "CX(pi,Q0,Q1)",b,prm,ue)
@@ -83,9 +87,19 @@ class TestGateSetConstructionMethods(GateSetConstructionTestCase):
         with self.assertRaises(ValueError):
             build_gate( [2],[('A0',)], "I(Q0)",b,prm,ue) #bad state specifier (A0)
         with self.assertRaises(ValueError):
+            build_gate( [2],[('Q0','L0')], "I(Q0,A0)",b,prm,ue) #bad label A0
+
+        with self.assertRaises(ValueError):
             build_gate( [4],[('Q0',)], "I(Q0)",b,prm,ue) #state space dim mismatch
         with self.assertRaises(ValueError):
             build_gate( [2,2],[('Q0',),('Q1',)], "CZ(pi,Q0,Q1)",b,prm,ue) # Q0 & Q1 must be in same tensor-prod block of state space
+
+        with self.assertRaises(ValueError):
+            build_gate( [2],[('Q0',)], "D(Q0)",b,prm,ue) # D gate only for ue=False
+        with self.assertRaises(ValueError):
+            build_gate( [2,1],[('Q0',),('L0',)], "LX(pi,0,2)","foobar",prm,ue)
+              #LX with bad basis spec
+
 
         self.assertArraysAlmostEqual(leakA  , leakA_old  )
         self.assertArraysAlmostEqual(ident  , ident_old  )
@@ -95,6 +109,7 @@ class TestGateSetConstructionMethods(GateSetConstructionTestCase):
         self.assertArraysAlmostEqual(rotZa  , rotZa_old  )
         self.assertArraysAlmostEqual(rotLeak, rotLeak_old)
         self.assertArraysAlmostEqual(leakB  , leakB_old  )
+        self.assertArraysAlmostEqual(iwL    , iwL_old  )
         self.assertArraysAlmostEqual(rotXb  , rotXb_old  )
         self.assertArraysAlmostEqual(CnotA  , CnotA_old  )
         self.assertArraysAlmostEqual(CnotB  , CnotB_old  )
@@ -113,6 +128,7 @@ class TestGateSetConstructionMethods(GateSetConstructionTestCase):
         rotNa   = build_gate( [2],[('Q0',)], "N(pi/2,1.0,0.5,0,Q0)",b,prm,ue)
         rotLeak = build_gate( [2,1],[('Q0',),('L0',)], "X(pi,Q0):LX(pi,0,2)",b,prm,ue)
         leakB   = build_gate( [2,1],[('Q0',),('L0',)], "LX(pi,0,2)",b,prm,ue)
+        iwL     = build_gate( [2],[('Q0','L0')], "I(Q0)",b,prm,ue)
         rotXb   = build_gate( [2,1,1],[('Q0',),('L0',),('L1',)], "X(pi,Q0)",b,prm,ue)
         CnotA   = build_gate( [4],[('Q0','Q1')], "CX(pi,Q0,Q1)",b,prm,ue)
         CnotB   = build_gate( [4,1],[('Q0','Q1'),('L0',)], "CX(pi,Q0,Q1)",b,prm,ue)
@@ -120,6 +136,9 @@ class TestGateSetConstructionMethods(GateSetConstructionTestCase):
         CZ      = build_gate( [4],[('Q0','Q1')], "CZ(pi,Q0,Q1)",b,prm,ue)
         rotXstd = build_gate( [2],[('Q0',)], "X(pi/2,Q0)","std",prm,ue)
         rotXpp  = build_gate( [2],[('Q0',)], "X(pi/2,Q0)","pp",prm,ue)
+
+        with self.assertRaises(ValueError):
+            build_gate( [2],[('Q0',)], "X(pi/2,Q0)","FooBar",prm,ue) #bad basis specifier
 
         self.assertArraysAlmostEqual(leakA  , leakA_old  )
         self.assertArraysAlmostEqual(ident  , ident_old  )
@@ -129,6 +148,7 @@ class TestGateSetConstructionMethods(GateSetConstructionTestCase):
         self.assertArraysAlmostEqual(rotZa  , rotZa_old  )
         self.assertArraysAlmostEqual(rotLeak, rotLeak_old)
         self.assertArraysAlmostEqual(leakB  , leakB_old  )
+        self.assertArraysAlmostEqual(iwL    , iwL_old  )
         self.assertArraysAlmostEqual(rotXb  , rotXb_old  )
         self.assertArraysAlmostEqual(CnotA  , CnotA_old  )
         self.assertArraysAlmostEqual(CnotB  , CnotB_old  )
@@ -290,6 +310,9 @@ class TestGateSetConstructionMethods(GateSetConstructionTestCase):
         #    gateset1.spamdefs['badspam'] = ('rhoNonExistent','E0') # bad rho index
         #with self.assertRaises(ValueError):
         #    gateset1.spamdefs['bade'] = ('rho0','ENonExistent') # bad E index
+
+        with self.assertRaises(ValueError):
+            pygsti.construction.build_identity_vec(stateSpace, basis="foobar")
 
 
         gateset_evec_first = pygsti.objects.GateSet() #set identity vector first
@@ -551,13 +574,273 @@ SPAMLABEL minus = rho remainder
             pygsti.construction.build_spam_specs(prepStrs=strs) # must specify some E-thing!
 
     def test_gate_object(self):
-        gate_full = pygsti.construction.build_gate( [2],[('Q0',)], "I(Q0)","gm", parameterization="full")
-        gate_linear = pygsti.construction.build_gate( [2],[('Q0',)], "D(Q0)","gm", parameterization="linear")
-        gate_linear_copy = gate_linear.copy()
-        gate_full_copy = gate_full.copy()
 
-        full_as_str = str(gate_full)
-        linear_as_str = str(gate_linear)
+        #Build each type of gate
+        gate_full = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi/8,Q0)","gm", parameterization="full")
+        gate_linear = pygsti.construction.build_gate( [2],[('Q0',)], "D(Q0)","gm", parameterization="linear")
+        gate_tp = pygsti.construction.build_gate( [2],[('Q0',)], "Y(pi/4,Q0)","gm", parameterization="TP")
+        gate_static = pygsti.construction.build_gate( [2],[('Q0',)], "Z(pi/3,Q0)","gm", parameterization="static")
+        gate_objs = [gate_full, gate_linear, gate_tp, gate_static]
+
+        self.assertEqual(gate_full.num_params(), 16)
+        self.assertEqual(gate_linear.num_params(), 4)
+        self.assertEqual(gate_tp.num_params(), 12)
+        self.assertEqual(gate_static.num_params(), 0)
+
+        #Test gate methods
+        for gate in gate_objs:
+            gate_copy = gate.copy()
+            self.assertArraysAlmostEqual(gate_copy, gate)
+            self.assertEqual(type(gate_copy), type(gate))
+
+            self.assertEqual(gate.get_dimension(), 4)
+            
+            M = np.asarray(gate) #gate as a matrix
+            if type(gate) == pygsti.obj.LinearlyParameterizedGate:
+                with self.assertRaises(ValueError):
+                    gate.set_matrix(M)
+            else:
+                gate.set_matrix(M)                    
+
+            with self.assertRaises(ValueError):
+                gate.set_matrix( np.zeros((1,1),'d') ) #bad size
+
+            v = gate.to_vector()
+            gate.from_vector(v)
+            deriv = gate.deriv_wrt_params()
+            #test results?
+
+            gate_copy.transform(np.identity(4,'d'), np.identity(4,'d'))
+            self.assertArraysAlmostEqual(gate_copy, gate)
+
+            gate_as_str = str(gate)
+
+            pklstr = pickle.dumps(gate)
+            gate_copy = pickle.loads(pklstr)
+            self.assertArraysAlmostEqual(gate_copy, gate)
+            self.assertEqual(type(gate_copy), type(gate))
+
+              #math ops
+            result = gate + gate
+            self.assertEqual(type(result), np.ndarray)
+            result = gate + (-gate)
+            self.assertEqual(type(result), np.ndarray)
+            result = gate - gate
+            self.assertEqual(type(result), np.ndarray)
+            result = gate - abs(gate)
+            self.assertEqual(type(result), np.ndarray)
+            result = 2*gate
+            self.assertEqual(type(result), np.ndarray)
+            result = gate*2
+            self.assertEqual(type(result), np.ndarray)
+            result = 2/gate
+            self.assertEqual(type(result), np.ndarray)
+            result = gate/2
+            self.assertEqual(type(result), np.ndarray)
+            result = gate//2
+            self.assertEqual(type(result), np.ndarray)
+            result = gate**2
+            self.assertEqual(type(result), np.ndarray)
+    
+            M = np.identity(4,'d')
+
+            result = gate + M
+            self.assertEqual(type(result), np.ndarray)
+            result = gate - M
+            self.assertEqual(type(result), np.ndarray)
+            result = M + gate
+            self.assertEqual(type(result), np.ndarray)
+            result = M - gate
+            self.assertEqual(type(result), np.ndarray)
+
+            
+
+
+        #Test compositions (and conversions)
+        c = pygsti.obj.compose(gate_full, gate_full, "full")
+        self.assertArraysAlmostEqual(c, np.dot(gate_full,gate_full) )
+        self.assertEqual(type(c), pygsti.obj.FullyParameterizedGate)
+
+        c = pygsti.obj.compose(gate_full, gate_tp)
+        self.assertArraysAlmostEqual(c, np.dot(gate_full,gate_tp) )
+        self.assertEqual(type(c), pygsti.obj.FullyParameterizedGate)
+
+        c = pygsti.obj.compose(gate_full, gate_static)
+        self.assertArraysAlmostEqual(c, np.dot(gate_full,gate_static) )
+        self.assertEqual(type(c), pygsti.obj.FullyParameterizedGate)
+
+        c = pygsti.obj.compose(gate_full, gate_linear)
+        self.assertArraysAlmostEqual(c, np.dot(gate_full,gate_linear) )
+        self.assertEqual(type(c), pygsti.obj.FullyParameterizedGate)
+
+
+        c = pygsti.obj.compose(gate_linear, gate_full)
+        self.assertArraysAlmostEqual(c, np.dot(gate_linear,gate_full) )
+        self.assertEqual(type(c), pygsti.obj.FullyParameterizedGate)
+
+        c = pygsti.obj.compose(gate_linear, gate_tp)
+        self.assertArraysAlmostEqual(c, np.dot(gate_linear,gate_tp) )
+        self.assertEqual(type(c), pygsti.obj.TPParameterizedGate)
+
+        c = pygsti.obj.compose(gate_linear, gate_static)
+        self.assertArraysAlmostEqual(c, np.dot(gate_linear,gate_static) )
+        self.assertEqual(type(c), pygsti.obj.LinearlyParameterizedGate)
+
+        c = pygsti.obj.compose(gate_linear, gate_linear)
+        self.assertArraysAlmostEqual(c, np.dot(gate_linear,gate_linear) )
+        self.assertEqual(type(c), pygsti.obj.LinearlyParameterizedGate)
+
+
+        c = pygsti.obj.compose(gate_tp, gate_full)
+        self.assertArraysAlmostEqual(c, np.dot(gate_tp,gate_full) )
+        self.assertEqual(type(c), pygsti.obj.FullyParameterizedGate)
+
+        c = pygsti.obj.compose(gate_tp, gate_tp)
+        self.assertArraysAlmostEqual(c, np.dot(gate_tp,gate_tp) )
+        self.assertEqual(type(c), pygsti.obj.TPParameterizedGate)
+
+        c = pygsti.obj.compose(gate_tp, gate_static)
+        self.assertArraysAlmostEqual(c, np.dot(gate_tp,gate_static) )
+        self.assertEqual(type(c), pygsti.obj.TPParameterizedGate)
+
+        c = pygsti.obj.compose(gate_tp, gate_linear)
+        self.assertArraysAlmostEqual(c, np.dot(gate_tp,gate_linear) )
+        self.assertEqual(type(c), pygsti.obj.TPParameterizedGate)
+
+
+        c = pygsti.obj.compose(gate_static, gate_full)
+        self.assertArraysAlmostEqual(c, np.dot(gate_static,gate_full) )
+        self.assertEqual(type(c), pygsti.obj.FullyParameterizedGate)
+
+        c = pygsti.obj.compose(gate_static, gate_tp)
+        self.assertArraysAlmostEqual(c, np.dot(gate_static,gate_tp) )
+        self.assertEqual(type(c), pygsti.obj.TPParameterizedGate)
+
+        c = pygsti.obj.compose(gate_static, gate_static)
+        self.assertArraysAlmostEqual(c, np.dot(gate_static,gate_static) )
+        self.assertEqual(type(c), pygsti.obj.StaticGate)
+
+        c = pygsti.obj.compose(gate_static, gate_linear)
+        self.assertArraysAlmostEqual(c, np.dot(gate_static,gate_linear) )
+        self.assertEqual(type(c), pygsti.obj.LinearlyParameterizedGate)
+
+        #Test element access/setting
+        
+          #full
+        e1 = gate_full[1,1]
+        e2 = gate_full[1][1]
+        self.assertAlmostEqual(e1,e2)
+
+        s1 = gate_full[1,:]
+        s2 = gate_full[1]
+        s3 = gate_full[1][:]
+        self.assertArraysAlmostEqual(s1,s2)
+        self.assertArraysAlmostEqual(s1,s3)        
+
+        s4 = gate_full[2:4,1]
+
+        gate_full[1,1] = e1
+        gate_full[1,:] = s1
+        gate_full[1] = s1
+        gate_full[2:4,1] = s4
+        
+        result = len(gate_full)
+        with self.assertRaises(TypeError):
+            result = int(gate_full) #can't convert
+        with self.assertRaises(TypeError):
+            result = long(gate_full) #can't convert
+        with self.assertRaises(TypeError):
+            result = float(gate_full) #can't convert
+        with self.assertRaises(TypeError):
+            result = complex(gate_full) #can't convert
+
+
+          #static (same as full case)
+        e1 = gate_static[1,1]
+        e2 = gate_static[1][1]
+        self.assertAlmostEqual(e1,e2)
+
+        s1 = gate_static[1,:]
+        s2 = gate_static[1]
+        s3 = gate_static[1][:]
+        self.assertArraysAlmostEqual(s1,s2)
+        self.assertArraysAlmostEqual(s1,s3)        
+
+        s4 = gate_static[2:4,1]
+
+        gate_static[1,1] = e1
+        gate_static[1,:] = s1
+        gate_static[1] = s1
+        gate_static[2:4,1] = s4
+
+
+          #TP (can't modify first row)
+        e1 = gate_tp[0,0]
+        e2 = gate_tp[0][0]
+        self.assertAlmostEqual(e1,e2)
+        self.assertAlmostEqual(e1,1.0)
+
+        s1 = gate_tp[1,:]
+        s2 = gate_tp[1]
+        s3 = gate_tp[1][:]
+        self.assertArraysAlmostEqual(s1,s2)
+        self.assertArraysAlmostEqual(s1,s3)        
+
+        s4 = gate_tp[2:4,1]
+
+        # check that first row is read-only
+        with self.assertRaises(ValueError):
+            gate_tp[0,0] = e1  
+        with self.assertRaises(ValueError):
+            gate_tp[0][0] = e1
+        with self.assertRaises(ValueError):
+            gate_tp[0,:] = [ e1, 0, 0, 0 ]
+        with self.assertRaises(ValueError):
+            gate_tp[0][:] = [ e1, 0, 0, 0 ]
+        with self.assertRaises(ValueError):
+            gate_tp[0,1:2] = [ 0 ]
+        with self.assertRaises(ValueError):
+            gate_tp[0][1:2] = [ 0 ]
+
+        gate_tp[1,:] = s1
+        gate_tp[1] = s1
+        gate_tp[2:4,1] = s4
+
+
+          #linear
+        e1 = gate_linear[1,1]
+        e2 = gate_linear[1][1]
+        self.assertAlmostEqual(e1,e2)
+
+        s1 = gate_linear[1,:]
+        s2 = gate_linear[1]
+        s3 = gate_linear[1][:]
+        self.assertArraysAlmostEqual(s1,s2)
+        self.assertArraysAlmostEqual(s1,s3)        
+
+        s4 = gate_linear[2:4,1]
+
+        # check that cannot set anything
+        with self.assertRaises(ValueError):
+            gate_linear[1,1] = e1
+        with self.assertRaises(ValueError):
+            gate_linear[1,:] = s1
+        with self.assertRaises(ValueError):
+            gate_linear[1] = s1
+        with self.assertRaises(ValueError):
+            gate_linear[2:4,1] = s4
+
+
+
+        #Full from scratch
+        mx = np.array( [[1,0],[0,1]], 'd' )
+        gate_full_B = pygsti.obj.FullyParameterizedGate(mx)
+            
+        numParams = gate_full_B.num_params()
+        v = gate_full_B.to_vector()
+        gate_full_B.from_vector(v)
+        deriv = gate_full_B.deriv_wrt_params()
+
 
         #Linear from scratch
         baseMx = np.zeros( (2,2) )
@@ -574,14 +857,85 @@ SPAMLABEL minus = rho remainder
         gate_linear_B.from_vector(v)
         deriv = gate_linear_B.deriv_wrt_params()
 
-        #Full from scratch
-        mx = np.array( [[1,0],[0,1]], 'd' )
-        gate_full_B = pygsti.obj.FullyParameterizedGate(mx)
+
+    def test_spamvec_object(self):
+        full_spamvec = pygsti.obj.FullyParameterizedSPAMVec([ 1.0/np.sqrt(2), 0, 0, 1.0/np.sqrt(2) ] )
+        tp_spamvec = pygsti.obj.TPParameterizedSPAMVec([ 1.0/np.sqrt(2), 0, 0, 1.0/np.sqrt(2) ] )
+        static_spamvec = pygsti.obj.StaticSPAMVec([ 1.0/np.sqrt(2), 0, 0, 1.0/np.sqrt(2) ] )
+        spamvec_objs = [full_spamvec, tp_spamvec, static_spamvec]
+
+        self.assertEqual(full_spamvec.num_params(), 4)
+        self.assertEqual(tp_spamvec.num_params(), 3)
+        self.assertEqual(static_spamvec.num_params(), 0)
+
+        for svec in spamvec_objs:
+            svec_copy = svec.copy()
+            self.assertArraysAlmostEqual(svec_copy, svec)
+            self.assertEqual(type(svec_copy), type(svec))
+
+            self.assertEqual(svec.get_dimension(), 4)
+    
+            v = np.asarray(svec)
+            svec.set_vector(svec)
+
+            with self.assertRaises(ValueError):
+                svec.set_vector( np.zeros((1,1),'d') ) #bad size
+
+            v = svec.to_vector()
+            svec.from_vector(v)
+            deriv = svec.deriv_wrt_params()
+            #test results?
+
+            svec_as_str = str(svec)
+
+            pklstr = pickle.dumps(svec)
+            svec_copy = pickle.loads(pklstr)
+            self.assertArraysAlmostEqual(svec_copy, svec)
+            self.assertEqual(type(svec_copy), type(svec))
+
+              #math ops
+            result = svec + svec
+            self.assertEqual(type(result), np.ndarray)
+            result = svec + (-svec)
+            self.assertEqual(type(result), np.ndarray)
+            result = svec - svec
+            self.assertEqual(type(result), np.ndarray)
+            result = svec - abs(svec)
+            self.assertEqual(type(result), np.ndarray)
+            result = 2*svec
+            self.assertEqual(type(result), np.ndarray)
+            result = svec*2
+            self.assertEqual(type(result), np.ndarray)
+            result = 2/svec
+            self.assertEqual(type(result), np.ndarray)
+            result = svec/2
+            self.assertEqual(type(result), np.ndarray)
+            result = svec//2
+            self.assertEqual(type(result), np.ndarray)
+            result = svec**2
+            self.assertEqual(type(result), np.ndarray)
+    
+            V = np.ones((4,1),'d')
+
+            result = svec + V
+            self.assertEqual(type(result), np.ndarray)
+            result = svec - V
+            self.assertEqual(type(result), np.ndarray)
+            result = V + svec
+            self.assertEqual(type(result), np.ndarray)
+            result = V - svec
+            self.assertEqual(type(result), np.ndarray)
+
+
+
+    def test_labeldicts(self):
+        d = pygsti.objects.labeldicts.OrderedSPAMVecDict(None,"foobar","remainder","rho")
+
+        with self.assertRaises(ValueError):
+            d['rho0'] = [0] # bad default parameter type
+        
             
-        numParams = gate_full_B.num_params()
-        v = gate_full_B.to_vector()
-        gate_full_B.from_vector(v)
-        deriv = gate_full_B.deriv_wrt_params()
+
 
         
       

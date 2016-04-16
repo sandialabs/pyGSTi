@@ -296,10 +296,12 @@ def get_unitary_gateset_gates_table(gateset, formats, tableclass, longtable,
         else:
             intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(gl)[:,None]
             if isinstance(gateset.gates[gl], _objs.FullyParameterizedGate): #then we know how to reshape into a matrix
-                nCols = gateset.get_dimension(); nRows = intervalVec.size / nCols
-                intervalMx = intervalVec.reshape(nRows,nCols)
-                if nRows == (nCols-1): #TP constrained, so pad with zero top row
-                    intervalMx = _np.concatenate( (_np.zeros((1,nCols),'d'),intervalMx), axis=0 )
+                gate_dim = gateset.get_dimension()
+                intervalMx = intervalVec.reshape(gate_dim,gate_dim)
+            elif isinstance(gateset.gates[gl], _objs.TPParameterizedGate): #then we know how to reshape into a matrix
+                gate_dim = gateset.get_dimension()
+                intervalMx = _np.concatenate( ( _np.zeros((1,gate_dim),'d'),
+                                                intervalVec.reshape(gate_dim-1,gate_dim)), axis=0 )
             else: 
                 intervalMx = intervalVec # we don't know how best to reshape vector of parameter intervals, so don't
 

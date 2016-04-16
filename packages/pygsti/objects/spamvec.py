@@ -110,6 +110,7 @@ class SPAMVec(object):
     def __mul__(self,x):      return self.base * x
     def __rmul__(self,x):     return x * self.base
     def __div__(self,x):      return self.base / x
+    def __rdiv__(self,x):     return x / self.base
     def __floordiv__(self,x): return self.base // x
     def __pow__(self,x):      return self.base ** x
     def __eq__(self,x):       return self.base == x
@@ -546,7 +547,7 @@ class TPParameterizedSPAMVec(SPAMVec):
         return s 
 
     def __reduce__(self):
-        return (TPParameterizedSPAMVec, (_np.empty((self.dim,1),'d'),), self.__dict__)
+        return (TPParameterizedSPAMVec, (self.base,), self.__dict__)
 
 
 

@@ -65,7 +65,7 @@ class Results(object):
         self.figures = _ResultCache(self._get_figure_fns(), self, "figure")
         #self.qtys = _ResultCache(self._get_qty_fns(), self, "computable qty")
 
-        #Public ApI parameters
+        #Public API parameters
         self.gatesets = {}
         self.gatestring_lists = {}
         self.dataset = None

@@ -45,6 +45,9 @@ class TestDataSetMethods(DataSetTestCase):
 
         dsWritable = ds.copy_nonstatic()
         dsWritable[('Gy',)] = {'plus': 20, 'minus': 80}
+
+        dsWritable2 = dsWritable.copy_nonstatic() 
+         #test copy_nonstatic on already non-static dataset
         
         ds_str = str(ds)
 
@@ -151,6 +154,9 @@ class TestDataSetMethods(DataSetTestCase):
         nStrs = len(ds)
         cntDict = ds[('Gx',)].as_dict()
         asStr = str(ds[('Gx',)])
+
+        #Test loading a deprecated dataset file
+        dsDeprecated = pygsti.objects.DataSet(fileToLoadFrom="cmp_chk_files/deprecated.dataset")
 
                 
 
@@ -273,6 +279,10 @@ Gx^4 0.2 100
         basis = pygsti.get_max_gram_basis( ('Gx','Gy'), ds)
         self.assertEqual(basis, [ ('Gx',), ('Gy',) ] )
 
+        rank, evals = pygsti.max_gram_rank_and_evals(ds)
+        self.assertEqual(rank, 1)
+
+
     def test_multi_dataset(self):
         multi_dataset_txt = \
 """## Columns = DS0 plus count, DS0 minus count, DS1 plus frequency, DS1 count total
@@ -308,6 +318,7 @@ Gx^4 20 80 0.2 100
         mds5 = pygsti.objects.MultiDataSet()
 
         mds2.add_dataset_counts("new_ds1", ds1_cnts)
+        sl_none = mds5.get_spam_labels()
 
         #Create some datasets to test adding datasets to multidataset
         ds = pygsti.objects.DataSet(spamLabels=['plus','minus'])
@@ -359,6 +370,9 @@ Gx^4 20 80 0.2 100
         sumDS = multiDS.get_datasets_sum('DS0','DS1')
         multiDS_str = str(multiDS)
         multiDS_copy = multiDS.copy()
+
+        with self.assertRaises(ValueError):
+            sumDS = multiDS.get_datasets_sum('DS0','foobar') #bad dataset name
 
 
         #Pickle and unpickle

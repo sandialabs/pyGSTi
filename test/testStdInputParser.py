@@ -216,6 +216,16 @@ G3            0.1 100
         f.write(datafile_test)
         f.close()
 
+        datafile_test = \
+"""#Data File with bad syntax
+## Columns = plus count, count total
+{xx}            10  100
+"""
+        f = open("temp_test_files/sip_test8.data","w")
+        f.write(datafile_test)
+        f.close()
+
+
 
         multidatafile_test = \
 """#Multi Data File
@@ -263,11 +273,11 @@ G2            0.2  0.3  5  200
         f.close()
 
         multidatafile_test = \
-"""#Multi Data File frequency out of range
-## Columns = ds1 plus frequency, ds1 count total, ds2 plus count, ds2 count total
-{}            0.3  100  20 200
-G1            10   100  10 200
-G2            0.2  100  5  200
+"""#Multi Data File frequency out of range and count before frequency
+## Columns = ds1 count total, ds1 plus frequency, ds2 plus count, ds2 count total
+{}            100  0.3  20 200
+G1            100  10   10 200
+G2            100  0.2  5  200
 """
         f = open("temp_test_files/sip_test5.multidata","w")
         f.write(multidatafile_test)
@@ -281,6 +291,15 @@ G1            0.1   100  10 200
 G2            20  100  5  200
 """
         f = open("temp_test_files/sip_test6.multidata","w")
+        f.write(multidatafile_test)
+        f.close()
+
+        multidatafile_test = \
+"""#Multi Data File with bad syntax
+## Columns = ds1 plus count, ds1 count total, ds2 plus count, ds2 count total
+{xxx}         0.3  100  20 200
+"""
+        f = open("temp_test_files/sip_test7.multidata","w")
         f.write(multidatafile_test)
         f.close()
 
@@ -326,16 +345,21 @@ G2            20  100  5  200
         with self.assertRaises(ValueError):
             std.parse_datafile("temp_test_files/sip_test7.data")
 
+        #test file with bad syntax
+        with self.assertRaises(ValueError):
+            std.parse_datafile("temp_test_files/sip_test8.data")
+
+
 
         #Multi-dataset tests
         mds = std.parse_multidatafile("temp_test_files/sip_test.multidata")
 
         #test file with no header
-        mds = std.parse_datafile("temp_test_files/sip_test2.multidata") 
+        mds = std.parse_multidatafile("temp_test_files/sip_test2.multidata") 
 
         #test file with bad data
         with self.assertRaises(ValueError):
-            std.parse_datafile("temp_test_files/sip_test3.multidata")
+            std.parse_multidatafile("temp_test_files/sip_test3.multidata")
 
         #test file with frequency columns but no count total
         with self.assertRaises(ValueError):
@@ -348,6 +372,10 @@ G2            20  100  5  200
         #test file with out-of-range counts
         with self.assertRaises(ValueError):
             std.parse_multidatafile("temp_test_files/sip_test6.multidata")
+
+        #test file with bad syntax
+        with self.assertRaises(ValueError):
+            std.parse_multidatafile("temp_test_files/sip_test7.multidata")
 
 
         #TODO: add asserts

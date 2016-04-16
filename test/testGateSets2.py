@@ -20,6 +20,25 @@ class GateSetTestCase(unittest.TestCase):
             spamdefs={'plus': ('rho0','E0'), 
                            'minus': ('remainder','remainder') } )
 
+        self.tp_gateset = pygsti.construction.build_gateset(
+            [2], [('Q0',)],['Gi','Gx','Gy'], 
+            [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
+            prepLabels=["rho0"], prepExpressions=["0"],
+            effectLabels=["E0"], effectExpressions=["1"], 
+            spamdefs={'plus': ('rho0','E0'), 
+                           'minus': ('rho0','remainder') },
+            parameterization="TP")
+
+        self.static_gateset = pygsti.construction.build_gateset(
+            [2], [('Q0',)],['Gi','Gx','Gy'], 
+            [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
+            prepLabels=["rho0"], prepExpressions=["0"],
+            effectLabels=["E0"], effectExpressions=["1"], 
+            spamdefs={'plus': ('rho0','E0'), 
+                           'minus': ('rho0','remainder') },
+            parameterization="static")
+
+
     def assertArraysAlmostEqual(self,a,b):
         self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
 
@@ -55,36 +74,53 @@ class TestGateSetMethods(GateSetTestCase):
       self.assertEqual(self.gateset.get_effect_labels(), ["E0"]) 
 
 
+  def test_getset_full(self):
+      self.getset_tests(self.gateset)
 
-  def test_getset(self):
+  def test_getset_tp(self):
+      self.getset_tests(self.tp_gateset)
 
-      v = np.array( [[1],[2],[3],[4]], 'd')
+  def test_getset_static(self):
+      self.getset_tests(self.static_gateset)
       
-      self.gateset['identity'] = v
-      w = self.gateset['identity']
+  def getset_tests(self, gs):
+
+      v = np.array( [[1.0/np.sqrt(2)],[0],[0],[1.0/np.sqrt(2)]], 'd')
+      
+      gs['identity'] = v
+      w = gs['identity']
       self.assertArraysAlmostEqual(w,v)
 
-      self.gateset['rho1'] = v
-      w = self.gateset['rho1']
+      gs['rho1'] = v
+      w = gs['rho1']
       self.assertArraysAlmostEqual(w,v)
 
-      self.gateset['E1'] = v
-      w = self.gateset['E1']
+      gs['E1'] = v
+      w = gs['E1']
       self.assertArraysAlmostEqual(w,v)
 
-      self.gateset.spamdefs["TEST"] = ("rho0","E1")
-      self.assertTrue("TEST" in self.gateset.get_spam_labels())
-      d = self.gateset.get_reverse_spam_defs()
+      gs.spamdefs["TEST"] = ("rho0","E1")
+      self.assertTrue("TEST" in gs.get_spam_labels())
+      d = gs.get_reverse_spam_defs()
       self.assertEqual( d[("rho0","E1")], "TEST" )
 
       Gi_matrix = np.identity(4, 'd')
-      self.assertTrue( isinstance(self.gateset['Gi'], pygsti.objects.Gate) )
+      self.assertTrue( isinstance(gs['Gi'], pygsti.objects.Gate) )
 
       Gi_test_matrix = np.random.random( (4,4) )
+      Gi_test_matrix[0,:] = [1,0,0,0] # so TP mode works
       Gi_test = pygsti.objects.FullyParameterizedGate( Gi_test_matrix  )
-      self.gateset["Gi"] = Gi_test_matrix #set gate matrix
-      self.gateset["Gi"] = Gi_test #set gate object
-      self.assertArraysAlmostEqual( self.gateset['Gi'], Gi_test_matrix )
+      gs["Gi"] = Gi_test_matrix #set gate matrix
+      gs["Gi"] = Gi_test #set gate object
+      self.assertArraysAlmostEqual( gs['Gi'], Gi_test_matrix )
+
+      with self.assertRaises(KeyError):
+          gs.preps['foobar'] = [1,0,0,0] #bad key prefix
+
+      with self.assertRaises(KeyError):
+          gs2 = gs.copy()
+          gs2['identity'] = None
+          error = gs2.effects['remainder'] #no identity vector set
 
 
   def test_copy(self):

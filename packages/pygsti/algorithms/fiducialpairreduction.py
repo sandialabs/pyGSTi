@@ -159,10 +159,14 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
                     iEStr   = i - iRhoStr*nEStrs
                     ret.append( (iRhoStr,iEStr) )
                 return ret
-    if verbosity > 0: print " --> Higheset number of amplified parameters was %d" % bestAmplified
+
+    if verbosity > 0: 
+        print " --> Higheset number of amplified parameters was %d" % bestAmplified
 
     #if we tried all the way to nPossiblePairs-1 and no success, just return all the pairs
-    listOfAllPairs = [ (iRhoStr,iEStr) for iRhoStr in xrange(nRhoStrs) for iEStr in xrange(nEStrs) ]
+    listOfAllPairs = [ (iRhoStr,iEStr)
+                       for iRhoStr in xrange(nRhoStrs)
+                       for iEStr in xrange(nEStrs) ]
     return listOfAllPairs
 
 
