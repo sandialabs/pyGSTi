@@ -547,8 +547,7 @@ class TPParameterizedSPAMVec(SPAMVec):
         return s 
 
     def __reduce__(self):
-        return (TPParameterizedSPAMVec, (self.base,), self.__dict__)
-
+        return (TPParameterizedSPAMVec, (self.base.copy(),), self.__dict__)
 
 
 
