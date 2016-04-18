@@ -25,6 +25,28 @@ class AlgorithmTestCase(unittest.TestCase):
 
 class TestAlgorithmMethods(AlgorithmTestCase):
 
+    def test_strict(self):
+        #test strict mode, which forbids all these accesses
+        with self.assertRaises(KeyError):
+            self.gs_target_noisy['identity'] = [1,0,0,0]
+        with self.assertRaises(KeyError):
+            self.gs_target_noisy['Gx'] = np.identity(4,'d')
+        with self.assertRaises(KeyError):
+            self.gs_target_noisy['E0'] = [1,0,0,0]
+        with self.assertRaises(KeyError):
+            self.gs_target_noisy['rho0'] = [1,0,0,0]
+
+        with self.assertRaises(KeyError):
+            x = self.gs_target_noisy['identity']
+        with self.assertRaises(KeyError):
+            x = self.gs_target_noisy['Gx']
+        with self.assertRaises(KeyError):
+            x = self.gs_target_noisy['E0']
+        with self.assertRaises(KeyError):
+            x = self.gs_target_noisy['rho0']
+
+
+
     def test_fiducialSelection(self):
 
         prepFidList = pygsti.alg.optimize_integer_fiducials_slack(
@@ -72,6 +94,12 @@ class TestAlgorithmMethods(AlgorithmTestCase):
         suffPairs = self.runSilent(pygsti.alg.find_sufficient_fiducial_pairs,
             std.gs_target, std.fiducials, std.fiducials, std.germs, verbosity=4)
 
+        small_fiducials = pygsti.construction.gatestring_list([('Gx',)])
+        small_germs = pygsti.construction.gatestring_list([('Gx',),('Gy',)])
+        self.runSilent(pygsti.alg.find_sufficient_fiducial_pairs,
+                       std.gs_target, small_fiducials, small_fiducials,
+                       small_germs, searchMode="sequential", verbosity=2)
+
         self.runSilent(pygsti.alg.find_sufficient_fiducial_pairs,
                        std.gs_target, std.fiducials, std.fiducials,
                        std.germs, searchMode="random", nRandom=3,
@@ -100,12 +128,15 @@ class TestAlgorithmMethods(AlgorithmTestCase):
         germsToTest = pygsti.construction.list_all_gatestrings_without_powers_and_cycles(
             std.gs_target.gates.keys(), 3)
 
+        germsToTest2 = pygsti.construction.list_all_gatestrings_without_powers_and_cycles(
+            std.gs_target.gates.keys(), 4)
+
         finalGerms = pygsti.alg.optimize_integer_germs_slack(
             self.gs_target_noisy, germsToTest, initialWeights=None, 
             fixedSlack=0.1, slackFrac=False, returnAll=False, tol=1e-6, verbosity=4)
 
         finalGerms, wts, scoreDict = pygsti.alg.optimize_integer_germs_slack(
-            self.gs_target_noisy, germsToTest, initialWeights=np.ones( len(germsToTest), 'd' ), 
+            self.gs_target_noisy, germsToTest2, initialWeights=np.ones( len(germsToTest2), 'd' ), 
             fixedSlack=False, slackFrac=0.1, returnAll=True, tol=1e-6, verbosity=4)
 
         self.runSilent(pygsti.alg.optimize_integer_germs_slack,

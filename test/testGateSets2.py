@@ -75,15 +75,15 @@ class TestGateSetMethods(GateSetTestCase):
 
 
   def test_getset_full(self):
-      self.getset_tests(self.gateset)
+      self.getset_helper(self.gateset)
 
   def test_getset_tp(self):
-      self.getset_tests(self.tp_gateset)
+      self.getset_helper(self.tp_gateset)
 
   def test_getset_static(self):
-      self.getset_tests(self.static_gateset)
+      self.getset_helper(self.static_gateset)
       
-  def getset_tests(self, gs):
+  def getset_helper(self, gs):
 
       v = np.array( [[1.0/np.sqrt(2)],[0],[0],[1.0/np.sqrt(2)]], 'd')
       
@@ -205,6 +205,11 @@ class TestGateSetMethods(GateSetTestCase):
       self.assertArraysAlmostEqual(p1,p2)
       self.assertArraysAlmostEqual(p1,p3)
 
+      p2 = self.gateset.pr('minus',gatestring)
+      p3 = self.gateset.pr('minus',gatestring,bUseScaling=False)
+      self.assertArraysAlmostEqual(1.0-p1,p2)
+      self.assertArraysAlmostEqual(1.0-p1,p3)
+
       dp = self.gateset.dpr('plus',gatestring)
       dp4,p4 = self.gateset.dpr('plus',gatestring,returnPr=True)
       self.assertArraysAlmostEqual(dp,dp4)
@@ -280,20 +285,22 @@ class TestGateSetMethods(GateSetTestCase):
       dP0 = self.gateset.dpr("plus", gatestring0)
       dP1 = self.gateset.dpr("plus", gatestring1)
       dP2 = self.gateset.dpr("plus", gatestring2)
-      #dP0m = self.gateset.dpr("minus", gatestring0)
-      #dP1m = self.gateset.dpr("minus", gatestring1)
-      #dP2m = self.gateset.dpr("minus", gatestring2)
+      dP0m = self.gateset.dpr("minus", gatestring0)
+      dP1m = self.gateset.dpr("minus", gatestring1)
+      dP2m = self.gateset.dpr("minus", gatestring2)
 
       bulk_dP = self.gateset.bulk_dpr("plus", evt, returnPr=False, check=True)
       bulk_dP_m = self.gateset.bulk_dpr("minus", evt, returnPr=False, check=True)
       bulk_dP_chk, bulk_P = self.gateset.bulk_dpr("plus", evt, returnPr=True, check=False)
+      bulk_dP_m_chk, bulk_Pm = self.gateset.bulk_dpr("minus", evt, returnPr=True, check=False)
       self.assertArraysAlmostEqual(bulk_dP,bulk_dP_chk)
       self.assertArraysAlmostEqual(bulk_dP[0,:],dP0)
       self.assertArraysAlmostEqual(bulk_dP[1,:],dP1)
       self.assertArraysAlmostEqual(bulk_dP[2,:],dP2)
-      #self.assertArraysAlmostEqual(bulk_dP_m[0,:],dP0m)
-      #self.assertArraysAlmostEqual(bulk_dP_m[1,:],dP1m)
-      #self.assertArraysAlmostEqual(bulk_dP_m[2,:],dP2m)
+      self.assertArraysAlmostEqual(bulk_dP_m,bulk_dP_m_chk)
+      self.assertArraysAlmostEqual(bulk_dP_m[0,:],dP0m)
+      self.assertArraysAlmostEqual(bulk_dP_m[1,:],dP1m)
+      self.assertArraysAlmostEqual(bulk_dP_m[2,:],dP2m)
 
 
 
@@ -345,25 +352,27 @@ class TestGateSetMethods(GateSetTestCase):
       hP0 = self.gateset.hpr("plus", gatestring0)
       hP1 = self.gateset.hpr("plus", gatestring1)
       hP2 = self.gateset.hpr("plus", gatestring2)
-      #hP0m = self.gateset.hpr("minus", gatestring0)
-      #hP1m = self.gateset.hpr("minus", gatestring1)
-      #hP2m = self.gateset.hpr("minus", gatestring2)
+      hP0m = self.gateset.hpr("minus", gatestring0)
+      hP1m = self.gateset.hpr("minus", gatestring1)
+      hP2m = self.gateset.hpr("minus", gatestring2)
 
       hP0b,P0 = self.gateset.hpr("plus", gatestring0, returnPr=True)
       hP0b,dP0 = self.gateset.hpr("plus", gatestring0, returnDeriv=True)
-      #hP0mb,P0m = self.gateset.hpr("minus", gatestring0, returnPr=True)
-      #hP0mb,dP0m = self.gateset.hpr("minus", gatestring0, returnDeriv=True)
+      hP0mb,P0m = self.gateset.hpr("minus", gatestring0, returnPr=True)
+      hP0mb,dP0m = self.gateset.hpr("minus", gatestring0, returnDeriv=True)
 
       bulk_hP = self.gateset.bulk_hpr("plus", evt, returnPr=False, returnDeriv=False, check=True)
       bulk_hP_m = self.gateset.bulk_hpr("minus", evt, returnPr=False, returnDeriv=False, check=True)
       bulk_hP_chk, bulk_dP, bulk_P = self.gateset.bulk_hpr("plus", evt, returnPr=True, returnDeriv=True, check=False)
+      bulk_hP_m_chk, bulk_dP_m, bulk_P_m = self.gateset.bulk_hpr("minus", evt, returnPr=True, returnDeriv=True, check=False)
       self.assertArraysAlmostEqual(bulk_hP,bulk_hP_chk)
       self.assertArraysAlmostEqual(bulk_hP[0,:,:],hP0)
       self.assertArraysAlmostEqual(bulk_hP[1,:,:],hP1)
       self.assertArraysAlmostEqual(bulk_hP[2,:,:],hP2)
-      #self.assertArraysAlmostEqual(bulk_hP_m[0,:,:],hP0m)
-      #self.assertArraysAlmostEqual(bulk_hP_m[1,:,:],hP1m)
-      #self.assertArraysAlmostEqual(bulk_hP_m[2,:,:],hP2m)
+      self.assertArraysAlmostEqual(bulk_hP_m,bulk_hP_m_chk)
+      self.assertArraysAlmostEqual(bulk_hP_m[0,:,:],hP0m)
+      self.assertArraysAlmostEqual(bulk_hP_m[1,:,:],hP1m)
+      self.assertArraysAlmostEqual(bulk_hP_m[2,:,:],hP2m)
 
       hProbs0 = self.gateset.hprobs(gatestring0)
       hProbs1 = self.gateset.hprobs(gatestring1)

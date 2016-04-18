@@ -93,7 +93,7 @@ class ResultCache(object):
 
     def _get_compute_fn(self, key):
         for expr,(computeFn, validateFn) in self._computeFns.iteritems():
-            if _re.match(expr, key) and validateFn(key) is not None:
+            if _re.match(expr, key) and len(validateFn(key)) > 0:
                 return computeFn
         return None
 
@@ -114,7 +114,7 @@ class ResultCache(object):
 
     def __iter__(self):
         #return self.dataset.slIndex.__iter__() #iterator over spam labels
-        pass
+        raise NotImplementedError("Would require mass evaluation of all keys.")
 
     def __contains__(self, key):
         return key in self._compute_keys()
@@ -156,102 +156,3 @@ class ResultCache(object):
         """
         pass
 
-
-
-
-class FigureCache(_collections.OrderedDict):
-    pass
-
-
-class SpecialsCache(_collections.OrderedDict):
-    pass
-
-class QtysCache(_collections.OrderedDict):
-    pass
-
-
-
-
-    def get_table(self, tableName, confidenceLevel=None, fmt="py", verbosity=0):
-        """
-        Get a report table in a specified format.  Tables are created on 
-        the first request then cached for later requests for the same table.
-        This method is typically used internally by other Results methods.
-
-        Parameters
-        ----------
-        tableName : string
-           The name of the table.
-
-        confidenceLevel : float, optional
-           If not None, then the confidence level (between 0 and 100) used to
-           put error bars on the table's values (if possible). If None, no 
-           confidence regions or intervals are included.
-
-        fmt : { 'py', 'html', 'latex', 'ppt' }, optional
-           The format of the table to be returned.
-
-        verbosity : int, optional
-           How much detail to send to stdout.
-
-        Returns
-        -------
-        string or object
-           The requested table in the requested format.  'py' and 'ppt'
-           tables are objects, 'html' and 'latex' tables are strings.
-        """
-        assert(self.bEssentialResultsSet)
-        if self.tables.has_key(confidenceLevel) == False:
-            self.tables[confidenceLevel] = {}
-        if tableName not in self.tables[confidenceLevel]:
-            self.tables[confidenceLevel][tableName] = self._generateTable(tableName, confidenceLevel, verbosity)
-        return self.tables[confidenceLevel][tableName][fmt]
-
-
-    def get_figure(self, figureName, verbosity=0):
-        """
-        Get a report figure.  Figures are created on the first
-        request then cached for later requests for the same figure.
-        This method is typically used internally by other Results methods.
-
-        Parameters
-        ----------
-        figureName : string
-           The name of the figure.
-
-        verbosity : int, optional
-           How much detail to send to stdout.
-
-        Returns
-        -------
-        ReportFigure
-            The requested figure object.
-        """
-        assert(self.bEssentialResultsSet)
-        if figureName not in self.figures:
-            self.figures[figureName] = self._generateFigure(figureName, verbosity)
-        return self.figures[figureName]
-
-
-
-    def get_special(self, specialName, verbosity=0):
-        """
-        Get a "special item", which can be almost anything used in report
-        or presentation construction.  This method is almost solely used 
-        internally by other Results methods.
-
-        Parameters
-        ----------
-        tableName : string
-           The name of the special item.
-
-        verbosity : int, optional
-           How much detail to send to stdout.
-
-        Returns
-        -------
-        special item (type varies)
-        """
-        if specialName not in self.specials:
-            self.specials[specialName] = self._generateSpecial(specialName, verbosity)
-        return self.specials[specialName]

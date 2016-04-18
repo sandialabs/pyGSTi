@@ -258,6 +258,8 @@ class TestGateStringMethods(GateStringTestCase):
 
         with self.assertRaises(ValueError):
             w1 + ('Gx',) #can only add to other GateStrings
+        with self.assertRaises(ValueError):
+            ('Gx',) + w1 #can only add to other GateStrings
 
         w1_str = str(w1)
         w1_repr = repr(w1)

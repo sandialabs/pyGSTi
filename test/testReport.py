@@ -1,5 +1,6 @@
 import unittest
 import warnings
+import pickle
 import pygsti
 from pygsti.construction import std1Q_XYI as std
 
@@ -41,7 +42,7 @@ class ReportTestCase(unittest.TestCase):
         self.gs_clgst_tp.set_all_parameterizations("TP")
 
         try:
-            import python_pptx
+            import pptx
             self.have_python_pptx = True
         except ImportError:
             warnings.warn("**** IMPORT: Cannot import pptx (python-pptx), and so" +
@@ -61,20 +62,35 @@ class TestReport(ReportTestCase):
     
     def test_reports_chi2(self):
 
-        lsgst_gatesets = pygsti.do_iterative_mc2gst(self.ds, self.gs_clgst, self.lsgstStrings, verbosity=0,
-                                                   minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6),
-                                                   returnAll=True)
+        lsgst_gatesets_prego = pygsti.do_iterative_mc2gst(self.ds, self.gs_clgst, self.lsgstStrings, verbosity=0,
+                                                          minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6),
+                                                          returnAll=True)
         lsgst_gatesets = [ pygsti.optimize_gauge(gs, "target", targetGateset=self.targetGateset,
-                                                 gateWeight=1,spamWeight=0.001) for gs in lsgst_gatesets]
+                                                 gateWeight=1,spamWeight=0.001) for gs in lsgst_gatesets_prego]
 
         self.results = pygsti.report.Results()
-        self.results.init_Ls_and_germs("chi2", self.targetGateset, self.ds, self.gs_clgst, self.maxLengthList, self.germs,
-                                     lsgst_gatesets, self.lsgstStrings, self.fiducials, self.fiducials, 
-                                     pygsti.construction.repeat_with_max_length, False)
+        self.results.init_Ls_and_germs("chi2", self.targetGateset, self.ds, self.gs_clgst,
+                                       self.maxLengthList, self.germs,
+                                       lsgst_gatesets, self.lsgstStrings, self.fiducials, self.fiducials, 
+                                       pygsti.construction.repeat_with_max_length, False, None, lsgst_gatesets_prego)
         self.results.parameters.update({'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
                                         'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
                                         'weights': None, 'defaultDirectory': "temp_test_files",
                                         'defaultBasename': "MyDefaultReportName" } )
+
+        #db = lsgst_gatesets[-1]
+        #firstElIdentityVec = np.zeros( (db.dim,1) )
+        #firstElIdentityVec[0] = db.dim**0.25
+        #db.povm_identity = firstElIdentityVec
+        #
+        #print "Target Identity = ", np.asarray(self.targetGateset.povm_identity)
+        #print "Identity = ", np.asarray(db.povm_identity)
+        #print "rho0 = ", np.asarray(db.preps['rho0'])
+        #for plbl in db.get_prep_labels():
+        #    for elbl in db.get_effect_labels():
+        #        print "DB: dot(%s,%s) = " % (plbl,elbl), np.dot(np.transpose(db.effects[elbl]),db.preps[plbl])
+        #return
+
 
         self.results.create_full_report_pdf(filename="temp_test_files/full_reportA.pdf", confidenceLevel=None,
                                          debugAidsAppendix=False, gaugeOptAppendix=False,
@@ -98,9 +114,9 @@ class TestReport(ReportTestCase):
                                                  debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False)
 
         #Compare the text files, assume if these match the PDFs are equivalent
-        #self.checkFile("full_reportA.tex")
-        #self.checkFile("brief_reportA.tex")
-        #self.checkFile("slidesA.tex")
+        self.checkFile("full_reportA.tex")
+        self.checkFile("brief_reportA.tex")
+        self.checkFile("slidesA.tex")
 
 
         self.results.create_full_report_pdf(filename="temp_test_files/full_reportB.pdf", confidenceLevel=95,
@@ -120,21 +136,23 @@ class TestReport(ReportTestCase):
                                                  verbosity=2)
 
         #Compare the text files, assume if these match the PDFs are equivalent
-        #self.checkFile("full_reportB.tex")
-        #self.checkFile("full_reportB_appendices.tex")
-        #self.checkFile("brief_reportB.tex")
-        #self.checkFile("slidesB.tex")
+        self.checkFile("full_reportB.tex")
+        self.checkFile("full_reportB_appendices.tex")
+        self.checkFile("brief_reportB.tex")
+        self.checkFile("slidesB.tex")
 
 
-        #Non-markovian error bars (negative confidenceLevel)
+        #Non-markovian error bars (negative confidenceLevel) & tooltips
         self.results.create_full_report_pdf(filename="temp_test_files/full_reportE.pdf", confidenceLevel=-95,
                                          debugAidsAppendix=True, gaugeOptAppendix=True,
                                          pixelPlotAppendix=True, whackamoleAppendix=True,
-                                         verbosity=2)
+                                         verbosity=2, tips=True)
+        self.results.create_brief_report_pdf(filename="temp_test_files/brief_reportE.pdf", confidenceLevel=-95,
+                                             verbosity=2, tips=True)
 
         #Compare the text files, assume if these match the PDFs are equivalent
-        #self.checkFile("full_reportE.tex")
-        #self.checkFile("full_reportE_appendices.tex")
+        self.checkFile("full_reportE.tex")
+        self.checkFile("full_reportE_appendices.tex")
 
 
 
@@ -150,7 +168,23 @@ class TestReport(ReportTestCase):
                                      lsgst_gatesets_TP, self.lsgstStrings, self.fiducials, self.fiducials, 
                                      pygsti.construction.repeat_with_max_length, True)
 
-        #Run a few tests to generate figures we don't use in reports
+        #db = lsgst_gatesets_TP[-1]
+        #firstElIdentityVec = np.zeros( (db.dim,1) )
+        #firstElIdentityVec[0] = db.dim**0.25
+        #db.povm_identity = firstElIdentityVec
+        #
+        #print "Target Identity = ", np.asarray(self.targetGateset.povm_identity)
+        #print "Identity = ", np.asarray(db.povm_identity)
+        #print "rho0 = ", np.asarray(db.preps['rho0'])
+        #for plbl in db.get_prep_labels():
+        #    for elbl in db.get_effect_labels():
+        #        print "DB: dot(%s,%s) = " % (plbl,elbl), np.dot(np.transpose(db.effects[elbl]),db.preps[plbl])
+        #return
+        
+
+        #Run a few tests to generate tables & figures we don't use in reports
+        self.results_logL.tables["chi2ProgressTable"]
+        self.results_logL.tables["logLProgressTable"]
         self.results_logL.figures["bestEstimateSummedColorBoxPlot"]
         self.results_logL.figures["blankBoxPlot"]
         self.results_logL.figures["blankSummedBoxPlot"]
@@ -180,9 +214,9 @@ class TestReport(ReportTestCase):
                                                       verbosity=2)
 
         ##Compare the text files, assume if these match the PDFs are equivalent
-        #self.checkFile("full_reportC.tex")
-        #self.checkFile("brief_reportC.tex")
-        #self.checkFile("slidesC.tex")
+        self.checkFile("full_reportC.tex")
+        self.checkFile("brief_reportC.tex")
+        self.checkFile("slidesC.tex")
 
 
         self.results_logL.create_full_report_pdf(filename="temp_test_files/full_reportD.pdf", confidenceLevel=95,
@@ -199,10 +233,10 @@ class TestReport(ReportTestCase):
                                                       verbosity=2)
 
         ##Compare the text files, assume if these match the PDFs are equivalent
-        #self.checkFile("full_reportD.tex")
-        #self.checkFile("full_reportD_appendices.tex")
-        #self.checkFile("brief_reportD.tex")
-        #self.checkFile("slidesD.tex")
+        self.checkFile("full_reportD.tex")
+        self.checkFile("full_reportD_appendices.tex")
+        self.checkFile("brief_reportD.tex")
+        self.checkFile("slidesD.tex")
 
 
     def test_table_generation(self):
@@ -244,6 +278,7 @@ class TestReport(ReportTestCase):
             gen.get_gateset_spam_table(gateset, formats, tableclass,
                                        longtable, None, mxBasis="fooBar")
         tab = gen.get_gateset_spam_table(gateset, formats, tableclass, longtable, None, mxBasis="gm")
+        tab_wCI = gen.get_gateset_spam_table(gateset, formats, tableclass, longtable, ci, mxBasis="gm")
         gen.get_gateset_spam_table(gateset, formats, tableclass, longtable, None, mxBasis="std")
         gen.get_gateset_spam_table(gateset, formats, tableclass, longtable, None, mxBasis="pp")
         gen.get_gateset_gates_table(gateset_tp, formats, tableclass, longtable, ci_TP) #test zero-padding
@@ -277,12 +312,15 @@ class TestReport(ReportTestCase):
         self.assertTrue( rowLabels[0] in tab )
         self.assertTrue( tab.has_key(rowLabels[0]) )
 
-        print str(tab)
-        print "column labels = ",colLabels
+        table_len = len(tab)
+        self.assertEqual(table_len, tab.num_rows)
+
+        table_as_str = str(tab)
+        table_wCI_as_str = str(tab_wCI)
         row1a = tab.row(key=rowLabels[0])
-        col1a = tab.row(key=colLabels[0])
+        col1a = tab.col(key=colLabels[0])
         row1b = tab.row(index=0)
-        col1b = tab.row(index=0)
+        col1b = tab.col(index=0)
         self.assertEqual(row1a,row1b)
         self.assertEqual(col1a,col1b)
 
@@ -294,12 +332,25 @@ class TestReport(ReportTestCase):
             tab.row(index=100000) #out of bounds
         with self.assertRaises(ValueError):
             tab.row() #must specify key or index
+        with self.assertRaises(ValueError):
+            tab.row(key='foobar',index=1) #cannot specify key and index
         with self.assertRaises(KeyError):
             tab.col(key='foobar') #invalid key
         with self.assertRaises(ValueError):
             tab.col(index=100000) #out of bounds
         with self.assertRaises(ValueError):
             tab.col() #must specify key or index
+        with self.assertRaises(ValueError):
+            tab.col(key='foobar',index=1) #cannot specify key and index
+
+        with self.assertRaises(ValueError):
+            tab.render(fmt="foobar") #invalid format
+
+        latexOnlyTab = pygsti.report.table.ReportTable(['latex'], ['Col1','Col2'], (None,None),
+                                                       "tableClass",False)
+        with self.assertRaises(KeyError):
+            x = str(latexOnlyTab) #must have 'py' format
+            
 
 
 
@@ -428,12 +479,18 @@ class TestReport(ReportTestCase):
     def test_results_object(self):
         results = pygsti.report.Results()
         results.init_single("logl", self.targetGateset, self.ds, self.gs_clgst,
-                            self.lgstStrings, False)
+                            self.lgstStrings, False, self.targetGateset)
 
         results.parameters.update({'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
                                    'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
                                    'weights': None, 'defaultDirectory': "temp_test_files",
                                    'defaultBasename': "MyDefaultReportName" } )
+
+        results.create_full_report_pdf(filename="temp_test_files/singleReport.pdf")
+        results.create_brief_report_pdf(filename="temp_test_files/singleBrief.pdf")
+        results.create_presentation_pdf(filename="temp_test_files/singleSlides.pdf")
+        if self.have_python_pptx:
+            results.create_presentation_ppt(filename="temp_test_files/singleSlides.ppt", pptTables=True)
 
         results_str = str(results)
         tableNames = results.tables.keys()
@@ -445,11 +502,28 @@ class TestReport(ReportTestCase):
         s = str(results.dataset)
         s = str(results.options)
 
+        self.assertTrue(results.tables.has_key(tableNames[0]))
 
-        results.create_full_report_pdf(filename="temp_test_files/singleReport.pdf")
-        results.create_presentation_pdf(filename="temp_test_files/singleSlides.pdf")
-        if self.have_python_pptx:
-            results.create_presentation_ppt(filename="temp_test_files/singleSlides.ppt", pptTables=True)
+        with self.assertRaises(KeyError):
+            x = results.tables.get('foobar')
+        with self.assertRaises(ValueError):
+            results.tables['newKey'] = "notAllowed"
+        with self.assertRaises(NotImplementedError):
+            for x in results.tables: # cannot __iter__
+                print x
+        with self.assertRaises(NotImplementedError):
+            for x in results.tables.iteritems(): # cannot iter
+                print x
+        with self.assertRaises(NotImplementedError):
+            for x in results.tables.values(): # cannot iter
+                print x
+
+        pkl = pickle.dumps(results)
+        results_copy = pickle.loads(pkl)
+        self.assertEqual(tableNames, results_copy.tables.keys())
+        self.assertEqual(figNames, results_copy.figures.keys())
+        #self.assertEqual(results.options, results_copy.options) #need to add equal test to ResultsOptions
+        self.assertEqual(results.parameters, results_copy.parameters)
 
         results2 = pygsti.report.Results(restrictToFormats=('py','latex'))
         results2.options.template_path = "/some/path/to/templates"

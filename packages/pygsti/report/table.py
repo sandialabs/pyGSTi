@@ -135,8 +135,7 @@ class ReportTable(object):
         self._finished = True #mark table as finished
 
     def __str__(self):
-        if "py" not in self.formats:
-            return repr(self)
+        self._checkpy()
 
         def strlen(x):
             return max([len(p) for p in str(x).split('\n')])

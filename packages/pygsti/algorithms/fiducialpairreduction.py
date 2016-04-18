@@ -53,8 +53,8 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
             s0 = _np.linalg.svd(M0, compute_uv=False)
             s1 = _np.linalg.svd(M1, compute_uv=False)
         except:
-            print "Warning: SVD error!!"
-            return 0 #SVD did not converge -> just say no amplified params...
+            print "Warning: SVD error!!"; return 0
+            #SVD did not converge -> just say no amplified params...
 
         numAmplified = 0
         if verb > 3: 
@@ -107,6 +107,7 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
         print "Number of amplified parameters = ",nAmplified
         return None
 
+    bestAmplified = 0
     for nNeededPairs in range(1,nPossiblePairs):
         if verbosity > 0: 
             print "Beginning search for a good set of %d pairs (%d pair lists to test)" % \
@@ -161,9 +162,9 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
                 return ret
 
     if verbosity > 0: 
-        print " --> Higheset number of amplified parameters was %d" % bestAmplified
-
-    #if we tried all the way to nPossiblePairs-1 and no success, just return all the pairs
+        print " --> Highest number of amplified parameters was %d" % bestAmplified
+    
+    #if we tried all the way to nPossiblePairs-1 and no success, just return all the pairs, which by definition will hit the "max-amplified" target
     listOfAllPairs = [ (iRhoStr,iEStr)
                        for iRhoStr in xrange(nRhoStrs)
                        for iEStr in xrange(nEStrs) ]

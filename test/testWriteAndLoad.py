@@ -102,7 +102,9 @@ Gx^4 20 80 0.2 100
         strList = pygsti.construction.gatestring_list( [(), ('Gx',), ('Gx','Gy') ] )
         pygsti.io.write_gatestring_list("temp_test_files/gatestringlist_loadwrite.txt", strList, "My Header")
         strList2 = pygsti.io.load_gatestring_list("temp_test_files/gatestringlist_loadwrite.txt")
-        pythonStrList = pygsti.io.load_gatestring_list("temp_test_files/gatestringlist_loadwrite.txt", readRawStrings=True)
+
+        pythonStrList = pygsti.io.load_gatestring_list("temp_test_files/gatestringlist_loadwrite.txt",
+                                                       readRawStrings=True)
         self.assertEqual(strList, strList2)
         self.assertEqual(pythonStrList[2], 'GxGy')
 
@@ -110,13 +112,6 @@ Gx^4 20 80 0.2 100
             pygsti.io.write_gatestring_list(
                 "temp_test_files/gatestringlist_bad.txt", 
                 [ ('Gx',)], "My Header") #Must be GateStrings
-
-
-    def test_gatestring_list_file(self):
-        strList = pygsti.construction.gatestring_list( [(), ('Gx',), ('Gx','Gy') ] )
-        pygsti.io.write_gatestring_list("temp_test_files/gatestringlist_loadwrite.txt", strList, "My Header")
-        strList2 = pygsti.io.load_gatestring_list("temp_test_files/gatestringlist_loadwrite.txt")
-        self.assertEqual(strList, strList2)
 
         
     def test_gateset_file(self):

@@ -1830,7 +1830,7 @@ class GateSet(object):
             an iterator over all (gateLabel,gate) pairs
         """
         for (label,gate) in self.gates.iteritems():
-            yield (label, gatemx)
+            yield (label, gate)
 
     def iter_preps(self):  
         """

@@ -290,6 +290,25 @@ class TestGateSetConstructionMethods(GateSetConstructionTestCase):
         self.assertArraysAlmostEqual(vec, vec_ans)
 
 
+    def test_iter_gatesets(self):
+        gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'], 
+                                                     [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
+                                                     prepLabels=['rho0'], prepExpressions=["0"],
+                                                     effectLabels=['E0'], effectExpressions=["1"], 
+                                                     spamdefs={'plus': ('rho0','E0'),
+                                                               'minus': ('rho0','remainder') })
+        gateset2 = pygsti.objects.GateSet()
+        for label,gate in gateset.iter_gates():
+            gateset2[label] = gate
+        for label,vec in gateset.iter_preps():
+            gateset2[label] = vec
+        for label,vec in gateset.iter_effects():
+            gateset2[label] = vec
+        gateset2['identity'] = gateset['identity']
+
+        self.assertAlmostEqual( gateset.frobeniusdist(gateset2), 0.0 )
+
+
     def test_build_gatesets(self):
 
         stateSpace = [2] #density matrix is a 2x2 matrix
@@ -304,6 +323,44 @@ class TestGateSetConstructionMethods(GateSetConstructionTestCase):
         gateset1.spamdefs['plus']  = ('rho0','E0')
         gateset1.spamdefs['minus_take_one'] = ('rho0','remainder')
         gateset1.spamdefs['minus'] = ('rho0','remainder') #tests replacement of spam label
+
+        SQ2 = 1/np.sqrt(2)
+        for defParamType in ("full", "TP", "static"):
+            gateset_simple = pygsti.objects.GateSet(defParamType)
+            gateset_simple['rho0'] = [SQ2, 0, 0, SQ2]
+            gateset_simple['E0'] = [SQ2, 0, 0, -SQ2]
+            gateset_simple['identity'] = [SQ2, 0, 0, 0]
+            gateset_simple['Gi'] = [ [1, 0, 0, 0], 
+                                     [0, 1, 0, 0],
+                                     [0, 0, 1, 0],
+                                     [0, 0, 0, 1] ]
+
+            with self.assertRaises(TypeError):
+                gateset_simple['rho0'] = 3.0
+            with self.assertRaises(ValueError):
+                gateset_simple['rho0'] = [3.0]
+            with self.assertRaises(ValueError):
+                gateset_simple['Gx'] = [1,2,3,4]
+            with self.assertRaises(ValueError):
+                gateset_simple['Gx'] = [[1,2,3,4],[5,6,7]]
+            with self.assertRaises(KeyError):
+                gateset_simple.spamdefs[1] = ('rho0','E0') #spam labels must be strings
+            with self.assertRaises(KeyError):
+                gateset_simple.spamdefs['plus'] = 'not-a-2-tuple'
+            with self.assertRaises(ValueError):
+                gateset_simple.spamdefs['plus'] = ('remainder','E0') 
+                  # 2nd el must be 'remainder' when first is
+
+
+        gateset_badDefParam = pygsti.objects.GateSet("full")
+        gateset_badDefParam.preps.default_param = "foobar"
+        gateset_badDefParam.gates.default_param = "foobar"
+        with self.assertRaises(ValueError):
+            gateset_badDefParam['rho0'] = [1, 0, 0, 0]
+        with self.assertRaises(ValueError):
+            gateset_badDefParam['Gi'] = np.identity(4,'d')
+            
+        
         
         #Removed checks for unset labels for now.
         #with self.assertRaises(ValueError):
@@ -332,8 +389,8 @@ class TestGateSetConstructionMethods(GateSetConstructionTestCase):
                                                       prepLabels=['rho0'], prepExpressions=["0"],
                                                       effectLabels=['E0'], effectExpressions=["1"], 
                                                       spamdefs={'plus': ('rho0','E0'),
-                                                                     'minus': ('rho0','remainder') })
-#HERE
+                                                                'minus': ('rho0','remainder') })
+
         gateset3 = self.assertWarns(pygsti.construction.build_gateset, 
                                     [2], [('Q0',)],['Gi','Gx','Gy'], 
                                     [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
@@ -480,6 +537,7 @@ SPAMLABEL minus = rho remainder
         self.assertArraysAlmostEqual(gateset_rot['Gy'], np.dot(rotXPiOv2,rotYPiOv2))
 
         gateset_2q_rot = gateset_2q.rotate(rotate=list(np.zeros(15,'d')))
+        gateset_2q_rot_same = gateset_2q.rotate(rotate=0.01)
         gateset_2q_randu = gateset_2q.randomize_with_unitary(0.01)
         gateset_2q_randu = gateset_2q.randomize_with_unitary(0.01,seed=1234)
 
@@ -573,6 +631,32 @@ SPAMLABEL minus = rho remainder
         with self.assertRaises(ValueError):
             pygsti.construction.build_spam_specs(prepStrs=strs) # must specify some E-thing!
 
+    def test_protected_array(self):
+        pa1 = pygsti.objects.protectedarray.ProtectedArray( np.zeros((3,3),'d') ) #nothing protected
+        pa2 = pygsti.objects.protectedarray.ProtectedArray( np.zeros((3,3),'d'), 0 ) 
+            # protect first row (index 0 in 1st dimension) but no cols - so nothing protected
+        pa3 = pygsti.objects.protectedarray.ProtectedArray( np.zeros((3,3),'d'), (0,0) ) #protect (0,0) element
+        pa4 = pygsti.objects.protectedarray.ProtectedArray( np.zeros((3,3),'d'), (0,slice(None,None,None)) )
+           #protect first row
+        pa5 = pygsti.objects.protectedarray.ProtectedArray( np.zeros((3,3),'d'), (0,[0,1]) )
+           #protect (0,0) and (0,1) elements
+
+        s1 = pa5[0,:] #slice s1 should have first two elements protected:
+        self.assertEqual(s1.indicesToProtect, ([0,1],) )
+
+        with self.assertRaises(IndexError):
+            pa5[10,0] = 4 #index out of range
+        with self.assertRaises(TypeError):
+            pa5["str"] = 4 #index invalid type
+
+        with self.assertRaises(IndexError):
+            pa_bad = pygsti.objects.protectedarray.ProtectedArray( np.zeros((3,3),'d'), (0,10) )
+              #index out of range
+        with self.assertRaises(TypeError):
+            pa_bad = pygsti.objects.protectedarray.ProtectedArray( np.zeros((3,3),'d'), (0,"str") )
+              #invalid index type
+        
+
     def test_gate_object(self):
 
         #Build each type of gate
@@ -641,6 +725,9 @@ SPAMLABEL minus = rho remainder
             self.assertEqual(type(result), np.ndarray)
             result = gate**2
             self.assertEqual(type(result), np.ndarray)
+            result = gate.transpose()
+            self.assertEqual(type(result), np.ndarray)
+            
     
             M = np.identity(4,'d')
 
@@ -724,6 +811,17 @@ SPAMLABEL minus = rho remainder
         self.assertArraysAlmostEqual(c, np.dot(gate_static,gate_linear) )
         self.assertEqual(type(c), pygsti.obj.LinearlyParameterizedGate)
 
+        #Test specific conversions that don't get tested by compose
+        conv = pygsti.obj.gate.convert(gate_tp, "full")
+        conv = pygsti.obj.gate.convert(gate_tp, "TP")
+        conv = pygsti.obj.gate.convert(gate_static, "static")
+
+        with self.assertRaises(ValueError):
+            pygsti.obj.gate.convert(gate_full, "linear") #unallowed
+        with self.assertRaises(ValueError):
+            pygsti.obj.gate.convert(gate_full, "foobar")
+
+
         #Test element access/setting
         
           #full
@@ -734,6 +832,7 @@ SPAMLABEL minus = rho remainder
         s1 = gate_full[1,:]
         s2 = gate_full[1]
         s3 = gate_full[1][:]
+        a1 = gate_full[:]
         self.assertArraysAlmostEqual(s1,s2)
         self.assertArraysAlmostEqual(s1,s3)        
 
@@ -763,6 +862,7 @@ SPAMLABEL minus = rho remainder
         s1 = gate_static[1,:]
         s2 = gate_static[1]
         s3 = gate_static[1][:]
+        a1 = gate_static[:]
         self.assertArraysAlmostEqual(s1,s2)
         self.assertArraysAlmostEqual(s1,s3)        
 
@@ -783,6 +883,7 @@ SPAMLABEL minus = rho remainder
         s1 = gate_tp[1,:]
         s2 = gate_tp[1]
         s3 = gate_tp[1][:]
+        a1 = gate_tp[:]
         self.assertArraysAlmostEqual(s1,s2)
         self.assertArraysAlmostEqual(s1,s3)        
 
@@ -815,6 +916,7 @@ SPAMLABEL minus = rho remainder
         s1 = gate_linear[1,:]
         s2 = gate_linear[1]
         s3 = gate_linear[1][:]
+        a1 = gate_linear[:]
         self.assertArraysAlmostEqual(s1,s2)
         self.assertArraysAlmostEqual(s1,s3)        
 
@@ -833,8 +935,7 @@ SPAMLABEL minus = rho remainder
 
 
         #Full from scratch
-        mx = np.array( [[1,0],[0,1]], 'd' )
-        gate_full_B = pygsti.obj.FullyParameterizedGate(mx)
+        gate_full_B = pygsti.obj.FullyParameterizedGate([[1,0],[0,1]])
             
         numParams = gate_full_B.num_params()
         v = gate_full_B.to_vector()
@@ -864,6 +965,17 @@ SPAMLABEL minus = rho remainder
         static_spamvec = pygsti.obj.StaticSPAMVec([ 1.0/np.sqrt(2), 0, 0, 1.0/np.sqrt(2) ] )
         spamvec_objs = [full_spamvec, tp_spamvec, static_spamvec]
 
+        with self.assertRaises(ValueError):
+            pygsti.obj.FullyParameterizedSPAMVec([[ 1.0/np.sqrt(2), 0, 0, 1.0/np.sqrt(2) ],[0,0,0,0]] )
+            # 2nd dimension must == 1
+        with self.assertRaises(ValueError):
+            pygsti.obj.TPParameterizedSPAMVec([ 1.0, 0, 0, 0 ])
+            # incorrect initial element for TP!
+        with self.assertRaises(ValueError):
+            tp_spamvec.set_vector([1.0 ,0, 0, 0])
+            # incorrect initial element for TP!
+
+
         self.assertEqual(full_spamvec.num_params(), 4)
         self.assertEqual(tp_spamvec.num_params(), 3)
         self.assertEqual(static_spamvec.num_params(), 0)
@@ -887,6 +999,7 @@ SPAMLABEL minus = rho remainder
             #test results?
 
             svec_as_str = str(svec)
+            a1 = svec[:] #invoke getslice method
 
             pklstr = pickle.dumps(svec)
             svec_copy = pickle.loads(pklstr)
@@ -913,6 +1026,8 @@ SPAMLABEL minus = rho remainder
             result = svec//2
             self.assertEqual(type(result), np.ndarray)
             result = svec**2
+            self.assertEqual(type(result), np.ndarray)
+            result = svec.transpose()
             self.assertEqual(type(result), np.ndarray)
     
             V = np.ones((4,1),'d')

@@ -248,8 +248,9 @@ Gx^4 0.2 100
         rbDS = pygsti.construction.generate_sim_rb_data(depol_gateset, ds_binom, seed=1234)
         rbDS_perfect = pygsti.construction.generate_sim_rb_data_perfect(depol_gateset, ds_binom)
         
-        rpeGS = pygsti.construction.make_paramterized_rpe_gate_set(np.pi/2, np.pi/4, 0, 0.1, 0.1, True)
-        rpeGS2 = pygsti.construction.make_paramterized_rpe_gate_set(np.pi/2, np.pi/4, 0, 0.1, 0.1, False)
+        rpeGS = pygsti.construction.make_parameterized_rpe_gate_set(np.pi/2, np.pi/4, 0, 0.1, 0.1, True)
+        rpeGS2 = pygsti.construction.make_parameterized_rpe_gate_set(np.pi/2, np.pi/4, 0, 0.1, 0.1, False)        
+        rpeGS3 = pygsti.construction.make_parameterized_rpe_gate_set(np.pi/2, np.pi/4, np.pi/4, 0.1, 0.1, False)
         
         kList = [0,1,2]
         lst1 = pygsti.construction.make_rpe_alpha_str_lists_gx_gz(kList)

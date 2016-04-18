@@ -12,7 +12,7 @@ from .. import objects as _objs
 from .. import tools as _tools
 
 
-def make_paramterized_rpe_gate_set(alphaTrue, epsilonTrue, Yrot, SPAMdepol,
+def make_parameterized_rpe_gate_set(alphaTrue, epsilonTrue, Yrot, SPAMdepol,
                                    gateDepol=None, withId=True):
     """
     Make a gateset for simulating RPE, paramaterized by rotation angles.  Note

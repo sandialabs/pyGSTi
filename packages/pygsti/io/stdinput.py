@@ -345,8 +345,7 @@ class StdInputParser(object):
                 import time
                 from IPython.display import clear_output
                 def display_progress(i,N): 
-                    time.sleep(0.001)
-                    clear_output()
+                    time.sleep(0.001); clear_output()
                     print "Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N))
                     _sys.stdout.flush()
             except:
@@ -362,9 +361,6 @@ class StdInputParser(object):
             if len(line) == 0 or line[0] == '#': continue
             try:
                 gateStringTuple, gateStringStr, valueList = self.parse_dataline(line, lookupDict, nDataCols)
-            except _pp.ParseException as e:
-                raise ValueError("Parse error in file %s in line:\n" +
-                                 "%s\nError = %s" % (filename, line, str(e)))
             except ValueError as e:
                 raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 
@@ -485,8 +481,7 @@ class StdInputParser(object):
                 import time
                 from IPython.display import clear_output
                 def display_progress(i,N): 
-                    time.sleep(0.001)
-                    clear_output()
+                    time.sleep(0.001); clear_output()
                     print "Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N))
                     _sys.stdout.flush()
             except:
@@ -501,9 +496,6 @@ class StdInputParser(object):
             if len(line) == 0 or line[0] == '#': continue
             try:
                 gateStringTuple, gateStringStr, valueList = self.parse_dataline(line, lookupDict, nDataCols)
-            except _pp.ParseException as e:
-                raise ValueError("Parse error in file %s in line:\n" +
-                                 "%s\nError = %s" % (filename, line, str(e)))
             except ValueError as e:
                 raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 

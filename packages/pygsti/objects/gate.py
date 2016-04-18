@@ -189,10 +189,11 @@ class Gate(object):
         """ Return the dimension of the gate matrix. """
         return self.dim
 
-    def __str__(self):
-        s = "Gate with shape %s\n" % str(self.base.shape)
-        s += _mt.mx_to_string(self.base, width=4, prec=2)
-        return s
+    #Handled by derived classes
+    #def __str__(self):
+    #    s = "Gate with shape %s\n" % str(self.base.shape)
+    #    s += _mt.mx_to_string(self.base, width=4, prec=2)
+    #    return s
 
 
     #Pickle plumbing

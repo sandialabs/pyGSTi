@@ -33,7 +33,7 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
     def __init__(self, parent, default_param, remainderLabel, prefix, items=[]):
         #** Note: if change __init__ signature, update __reduce__ below
         self.parent = parent # dimension == parent.dim
-        self.default_param = default_param  # "tp" or "full"
+        self.default_param = default_param  # "TP" or "full"
         self.remainderLabel = remainderLabel
         super(OrderedSPAMVecDict,self).__init__(prefix, items)
 
@@ -69,7 +69,7 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
         else:
             #otherwise, we've been given a non-SPAMVec-object that doesn't 
             # exist yet, so use default creation flags to make one:
-            if self.default_param == "tp":
+            if self.default_param == "TP":
                 vecObj = _sv.TPParameterizedSPAMVec(vec)
             elif self.default_param == "full":
                 vecObj = _sv.FullyParameterizedSPAMVec(vec)
@@ -114,7 +114,7 @@ class OrderedGateDict(PrefixOrderedDict):
     def __init__(self, parent, default_param, prefix, items=[]):
         #** Note: if change __init__ signature, update __reduce__ below
         self.parent = parent # dimension == parent.dim
-        self.default_param = default_param  # "tp" or "full"
+        self.default_param = default_param  # "TP" or "full"
         super(OrderedGateDict,self).__init__(prefix, items)
 
 
@@ -155,7 +155,7 @@ class OrderedGateDict(PrefixOrderedDict):
         else:
             #otherwise, we've been given a non-Gate-object that doesn't 
             # exist yet, so use default creation flags to make one:
-            if self.default_param == "tp":
+            if self.default_param == "TP":
                 gateObj = _gate.TPParameterizedGate(M)
             elif self.default_param == "full":
                 gateObj = _gate.FullyParameterizedGate(M)

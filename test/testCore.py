@@ -381,13 +381,20 @@ class TestCoreMethods(CoreTestCase):
                                   verbosity=10, minProbClipForWeighting=1e-3, probClipInterval=(-1e5,1e5))
 
         # Run again with other parameters
+        tuple_strings = [ map(tuple, gsList) for gsList in self.lsgstStrings[0:3] ] #to test tuple argument
         errorVecs, gs_lsgst_wts = self.runSilent(pygsti.do_iterative_mc2gst_with_model_selection, ds, gs_lgst4,
-                                                 1, self.lsgstStrings[0:3], verbosity=10, minProbClipForWeighting=1e-3,
+                                                 1, tuple_strings, verbosity=10, minProbClipForWeighting=1e-3,
                                                  probClipInterval=(-1e5,1e5), gatestringWeightsDict={ ('Gx',): 2.0 },
                                                  returnAll=True, returnErrorVec=True)
 
+        # Do non-iterative to cover GateString->tuple conversion
+        gs_non_iterative = self.runSilent( pygsti.do_mc2gst_with_model_selection, ds,
+                                           gs_lgst4, 1, self.lsgstStrings[0],
+                                           verbosity=10, probClipInterval=(-1e5,1e5) )
+
+
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
-        pygsti.io.write_gateset(gs_lsgst,"cmp_chk_files/lsgstMS.gateset", "Saved LSGST Gateset with model selection")
+        #pygsti.io.write_gateset(gs_lsgst,"cmp_chk_files/lsgstMS.gateset", "Saved LSGST Gateset with model selection")
 
         gs_lsgst_compare = pygsti.io.load_gateset("cmp_chk_files/lsgstMS.gateset")
         
@@ -450,9 +457,9 @@ class TestCoreMethods(CoreTestCase):
 
           #test bad effect vector cases
         gs_bad_effect = gs_lgst_target.copy()
-        gs_bad_effect.effects['E0'] = [1,0,0,0]
+        gs_bad_effect.effects['E0'] = [100.0,0,0,0] # E eigvals all > 1.0
         self.runSilent(pygsti.contract, gs_bad_effect, "vSPAM",verbosity=10, tol=10.0)
-        gs_bad_effect.effects['E0'] = [0,0,0,0]
+        gs_bad_effect.effects['E0'] = [-100.0,0,0,0] # E eigvals all < 0
         self.runSilent(pygsti.contract, gs_bad_effect, "vSPAM",verbosity=10, tol=10.0)
 
         with self.assertRaises(ValueError):

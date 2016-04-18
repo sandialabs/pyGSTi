@@ -71,10 +71,11 @@ class SPAMVec(object):
         """ Return the dimension of the gate matrix. """
         return self.dim
 
-    def __str__(self):
-        s = "Spam vector with length %d\n" % len(self.base)
-        s += _mt.mx_to_string(self.base, width=4, prec=2)
-        return s 
+    #Handled by derived classes
+    #def __str__(self):
+    #    s = "Spam vector with length %d\n" % len(self.base)
+    #    s += _mt.mx_to_string(self.base, width=4, prec=2)
+    #    return s 
 
 
     #Pickle plumbing
