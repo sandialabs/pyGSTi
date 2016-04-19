@@ -45,6 +45,9 @@ class TestDataSetMethods(DataSetTestCase):
 
         dsWritable = ds.copy_nonstatic()
         dsWritable[('Gy',)] = {'plus': 20, 'minus': 80}
+
+        dsWritable2 = dsWritable.copy_nonstatic() 
+         #test copy_nonstatic on already non-static dataset
         
         ds_str = str(ds)
 
@@ -152,6 +155,9 @@ class TestDataSetMethods(DataSetTestCase):
         cntDict = ds[('Gx',)].as_dict()
         asStr = str(ds[('Gx',)])
 
+        #Test loading a deprecated dataset file
+        dsDeprecated = pygsti.objects.DataSet(fileToLoadFrom="cmp_chk_files/deprecated.dataset")
+
                 
 
     def test_from_file(self):
@@ -242,8 +248,9 @@ Gx^4 0.2 100
         rbDS = pygsti.construction.generate_sim_rb_data(depol_gateset, ds_binom, seed=1234)
         rbDS_perfect = pygsti.construction.generate_sim_rb_data_perfect(depol_gateset, ds_binom)
         
-        rpeGS = pygsti.construction.make_paramterized_rpe_gate_set(np.pi/2, np.pi/4, 0, 0.1, 0.1, True)
-        rpeGS2 = pygsti.construction.make_paramterized_rpe_gate_set(np.pi/2, np.pi/4, 0, 0.1, 0.1, False)
+        rpeGS = pygsti.construction.make_parameterized_rpe_gate_set(np.pi/2, np.pi/4, 0, 0.1, 0.1, True)
+        rpeGS2 = pygsti.construction.make_parameterized_rpe_gate_set(np.pi/2, np.pi/4, 0, 0.1, 0.1, False)        
+        rpeGS3 = pygsti.construction.make_parameterized_rpe_gate_set(np.pi/2, np.pi/4, np.pi/4, 0.1, 0.1, False)
         
         kList = [0,1,2]
         lst1 = pygsti.construction.make_rpe_alpha_str_lists_gx_gz(kList)
@@ -272,6 +279,10 @@ Gx^4 0.2 100
 
         basis = pygsti.get_max_gram_basis( ('Gx','Gy'), ds)
         self.assertEqual(basis, [ ('Gx',), ('Gy',) ] )
+
+        rank, evals = pygsti.max_gram_rank_and_evals(ds)
+        self.assertEqual(rank, 1)
+
 
     def test_multi_dataset(self):
         multi_dataset_txt = \
@@ -308,6 +319,7 @@ Gx^4 20 80 0.2 100
         mds5 = pygsti.objects.MultiDataSet()
 
         mds2.add_dataset_counts("new_ds1", ds1_cnts)
+        sl_none = mds5.get_spam_labels()
 
         #Create some datasets to test adding datasets to multidataset
         ds = pygsti.objects.DataSet(spamLabels=['plus','minus'])
@@ -359,6 +371,9 @@ Gx^4 20 80 0.2 100
         sumDS = multiDS.get_datasets_sum('DS0','DS1')
         multiDS_str = str(multiDS)
         multiDS_copy = multiDS.copy()
+
+        with self.assertRaises(ValueError):
+            sumDS = multiDS.get_datasets_sum('DS0','foobar') #bad dataset name
 
 
         #Pickle and unpickle

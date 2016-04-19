@@ -204,9 +204,9 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
             cohBlk = stateSpaceLabels[iTensorProdBlk]
             basisInds = []
             for l in cohBlk:
+                assert(l[0] in ('L','Q')) #should have been checked above
                 if l.startswith('L'): basisInds.append([0])
                 elif l.startswith('Q'): basisInds.append([0,1])
-                else: raise ValueError("Invalid state space label: %s" % l)
 
             tensorBlkBasis = list(_itertools.product(*basisInds))
             K = cohBlk.index(label)
@@ -250,9 +250,9 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
             cohBlk = stateSpaceLabels[iTensorProdBlk]
             basisInds = []
             for l in cohBlk:
+                assert(l[0] in ('L','Q')) #should have been checked above
                 if l.startswith('L'): basisInds.append([0])
                 elif l.startswith('Q'): basisInds.append([0,1])
-                else: raise ValueError("Invalid state space label: %s" % l)
 
             tensorBlkBasis = list(_itertools.product(*basisInds))
             K1 = cohBlk.index(label1)
@@ -401,18 +401,21 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
         - "gm"  = gate matrix operates on dentity mx expressed as sum of normalized Gell-Mann matrices
         - "pp"  = gate matrix operates on density mx expresses as sum of tensor-product of Pauli matrices
 
-    parameterization : {"full","linear"}, optional
+    parameterization : {"full","TP","static","linear"}, optional
         How to parameterize the resulting gate.
 
         - "full" = return a FullyParameterizedGate.
+        - "TP" = return a TPParameterizedGate.
+        - "static" = return a StaticGate.
         - "linear" = if possible, return a LinearlyParameterizedGate that parameterizes
           ,          only the pieces explicitly present in gateExpr.
 
     unitaryEmbedding : bool, optional
-        An interal switch determining how the gate is constructed.  Should have no
-        bearing on the output except in determining how to parameterized a non-
-        FullyParameterizedGate.  It's best to leave this to False unless you
-        really know what you're doing.
+        An interal switch determining how the gate is constructed.  Should have
+        no bearing on the output except in determining how to parameterize a 
+        non-FullyParameterizedGate.  It's best to leave this to False unless
+        you really know what you're doing.  Currently, only works for 
+        parameterization == 'full'.
 
     Returns
     -------
@@ -466,9 +469,9 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
         tensorProdBlkLabels = stateSpaceLabels[iTensorProdBlk]
         basisInds = [] # list of *state* indices of each component of the tensor product block
         for l in tensorProdBlkLabels:
+            assert(l[0] in ('L','Q')) #should have been checked above
             if l.startswith('L'): basisInds.append([0])
             elif l.startswith('Q'): basisInds.append([0,1])
-            else: raise ValueError("Invalid state space label: %s" % l)
 
         tensorBlkBasis = list(_itertools.product(*basisInds)) #state-space basis (remember tensor-prod-blocks are in state space)
         N = len(tensorBlkBasis) #size of state space (not density matrix space, which is N**2)
@@ -523,16 +526,17 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
     def embed_gate(gatemx, labels, indicesToParameterize="all"):
         #print "DEBUG: embed_gate gatemx = \n", gatemx
         iTensorProdBlks = [ tensorBlkIndices[label] for label in labels ] # index of tensor product block (of state space) a bit label is part of
-        if len(set(iTensorProdBlks)) > 1:
-            raise ValueError("All qubit labels of a multi-qubit gate must correspond to the same tensor-product-block of the state space")
+        assert( len(set(iTensorProdBlks)) == 1 )
+          #All qubit labels of a multi-qubit gate must correspond to the
+          # same tensor-product-block of the state space -- checked previously
 
         iTensorProdBlk = iTensorProdBlks[0] #because they're all the same (tested above)
         tensorProdBlkLabels = stateSpaceLabels[iTensorProdBlk]
         basisInds = [] # list of possible *density-matrix-space* indices of each component of the tensor product block
         for l in tensorProdBlkLabels:
+            assert(l[0] in ('L','Q')) #should have already been checked
             if l.startswith('L'): basisInds.append([0]) # I
             elif l.startswith('Q'): basisInds.append([0,1,2,3])  # I, X, Y, Z
-            else: raise ValueError("Invalid state space label: %s" % l)
 
         tensorBlkEls = list(_itertools.product(*basisInds)) #dm-space basis
         lookup_blkElIndex = { tuple(b):i for i,b in enumerate(tensorBlkEls) } # index within vec(tensor prod blk) of each basis el
@@ -639,20 +643,45 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
 
         else: raise ValueError("Invalid 'basis' parameter: %s (must by 'std', 'gm', or 'pp')" % basis)
 
-        if parameterization == "full": # or gatemx.shape == gateBlk.shape:
-            finalGateInFinalBasis = _np.dot(full_ppToFinal, _np.dot( finalGate, full_finalToPP))
-            return _gate.FullyParameterizedGate( _np.real(finalGateInFinalBasis) if realMx else finalGateInFinalBasis )
+        if parameterization == "full":
+            finalGateInFinalBasis = _np.dot(full_ppToFinal, 
+                                            _np.dot( finalGate, full_finalToPP))
+            return _gate.FullyParameterizedGate( 
+                _np.real(finalGateInFinalBasis) 
+                if realMx else finalGateInFinalBasis )
+
+        if parameterization == "static":
+            finalGateInFinalBasis = _np.dot(full_ppToFinal, 
+                                            _np.dot( finalGate, full_finalToPP))
+            return _gate.StaticGate( 
+                _np.real(finalGateInFinalBasis) 
+                if realMx else finalGateInFinalBasis )
+
+        if parameterization == "TP":
+            finalGateInFinalBasis = _np.dot(full_ppToFinal, 
+                                            _np.dot( finalGate, full_finalToPP))
+            if not realMx:
+                raise ValueError("TP gates must be real. Failed to build gate!")
+            return _gate.TPParameterizedGate(_np.real(finalGateInFinalBasis))
+
         elif parameterization == "linear":
             #OLD (INCORRECT) -- but could give this as paramArray if gave zeros as base matrix instead of finalGate
             # paramArray = gatemx.flatten() if indicesToParameterize == "all" else _np.array([gatemx[t] for t in indicesToParameterize])
 
             #Set all params to *zero* since base matrix contains all initial elements -- parameters just give deviation
-            paramArray = _np.zeros( gatemx.size if indicesToParameterize == "all" else len(indicesToParameterize), 'd' )
+            paramArray = _np.zeros( 
+                gatemx.size if indicesToParameterize == "all" else 
+                len(indicesToParameterize), 'd' )
 
-            return _gate.LinearlyParameterizedGate( finalGate, paramArray, parameterToBaseIndicesMap,
-                                                    full_ppToFinal, full_finalToPP, realMx )
+            return _gate.LinearlyParameterizedGate( 
+                finalGate, paramArray, parameterToBaseIndicesMap,
+                full_ppToFinal, full_finalToPP, realMx )
+        
+        
         else:
-            raise ValueError("Invalid 'parameterization' parameter: %s (must by 'full' or 'linear')" % parameterization)
+            raise ValueError("Invalid 'parameterization' parameter: " + 
+                             "%s (must by 'full', 'TP', 'static' or 'linear')"
+                             % parameterization)
 
 
     # ----------------------------------------------------------------------------------------------------------------------------------------
@@ -675,8 +704,8 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
             labels = args # qubit labels (TODO: what about 'L' labels? -- not sure if they work with this...)
             stateSpaceDim = 1
             for l in labels:
-                if s.startswith('Q'): stateSpaceDim *= 2   
-                elif s.startswith('L'): stateSpaceDim *= 1
+                if l.startswith('Q'): stateSpaceDim *= 2   
+                elif l.startswith('L'): stateSpaceDim *= 1
                 else: raise ValueError("Invalid state space label: %s" % l)
 
             if unitaryEmbedding:
@@ -690,8 +719,8 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
             labels = args # qubit labels (TODO: what about 'L' labels? -- not sure if they work with this...)
             stateSpaceDim = 1
             for l in labels:
-                if s.startswith('Q'): stateSpaceDim *= 2   
-                elif s.startswith('L'): stateSpaceDim *= 1
+                if l.startswith('Q'): stateSpaceDim *= 2   
+                elif l.startswith('L'): stateSpaceDim *= 1
                 else: raise ValueError("Invalid state space label: %s" % l)
 
             if unitaryEmbedding or parameterization != "linear":

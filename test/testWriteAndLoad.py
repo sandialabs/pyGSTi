@@ -80,33 +80,48 @@ Gx^4 20 80 0.2 100
         ds2 = pygsti.io.load_multidataset("temp_test_files/TestMultiDataset.txt", cache=True)
         ds3 = pygsti.io.load_multidataset("temp_test_files/TestMultiDataset.txt", cache=True) #load from cache
 
-        pygsti.io.write_multidataset("temp_test_files/emptyMultiDataset2.txt", ds, strList)
-        ds_copy = pygsti.io.load_multidataset("temp_test_files/emptyMultiDataset2.txt")
+        pygsti.io.write_multidataset("temp_test_files/TestMultiDataset2.txt", ds, strList)
+        ds_copy = pygsti.io.load_multidataset("temp_test_files/TestMultiDataset2.txt")
+
         self.assertEqual(ds_copy['DS0'][('Gx',)]['plus'], ds['DS0'][('Gx',)]['plus'] )
         self.assertEqual(ds_copy['DS0'][('Gx','Gy')]['minus'], ds['DS1'][('Gx','Gy')]['minus'] )
+
+        #write all strings in ds to file with given spam label ordering
+        pygsti.io.write_multidataset("temp_test_files/TestMultiDataset3.txt",
+                                     ds, spamLabelOrder=('plus','minus'))
+        
+        with self.assertRaises(ValueError):
+            pygsti.io.write_multidataset(
+                "temp_test_files/TestMultiDatasetErr.txt",ds, [('Gx',)])
+              # gate string list must be GateString objects
+
+
 
 
     def test_gatestring_list_file(self):
         strList = pygsti.construction.gatestring_list( [(), ('Gx',), ('Gx','Gy') ] )
         pygsti.io.write_gatestring_list("temp_test_files/gatestringlist_loadwrite.txt", strList, "My Header")
         strList2 = pygsti.io.load_gatestring_list("temp_test_files/gatestringlist_loadwrite.txt")
-        pythonStrList = pygsti.io.load_gatestring_list("temp_test_files/gatestringlist_loadwrite.txt", readRawStrings=True)
+
+        pythonStrList = pygsti.io.load_gatestring_list("temp_test_files/gatestringlist_loadwrite.txt",
+                                                       readRawStrings=True)
         self.assertEqual(strList, strList2)
         self.assertEqual(pythonStrList[2], 'GxGy')
 
         with self.assertRaises(ValueError):
-            pygsti.io.write_gatestring_list("temp_test_files/gatestringlist_bad.txt", [ ('Gx',)], "My Header") #Must be GateStrings
-
-
-    def test_gatestring_list_file(self):
-        strList = pygsti.construction.gatestring_list( [(), ('Gx',), ('Gx','Gy') ] )
-        pygsti.io.write_gatestring_list("temp_test_files/gatestringlist_loadwrite.txt", strList, "My Header")
-        strList2 = pygsti.io.load_gatestring_list("temp_test_files/gatestringlist_loadwrite.txt")
-        self.assertEqual(strList, strList2)
+            pygsti.io.write_gatestring_list(
+                "temp_test_files/gatestringlist_bad.txt", 
+                [ ('Gx',)], "My Header") #Must be GateStrings
 
         
     def test_gateset_file(self):
         pygsti.io.write_gateset(std.gs_target, "temp_test_files/gateset_loadwrite.txt", "My title")
+
+        gs_no_identity = std.gs_target.copy()
+        gs_no_identity.povm_identity = None
+        pygsti.io.write_gateset(gs_no_identity,
+                                "temp_test_files/gateset_noidentity.txt")
+
         gs = pygsti.io.load_gateset("temp_test_files/gateset_loadwrite.txt")
         self.assertAlmostEqual(gs.frobeniusdist(std.gs_target), 0)
 

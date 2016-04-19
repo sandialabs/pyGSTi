@@ -107,11 +107,25 @@ class TestCoreMethods(CoreTestCase):
                 pygsti.construction.gatestring_list([('Gx',),('Gx',),('Gx',),('Gx',)]), effect_labels=['E0'])
             gs_lgst = pygsti.do_lgst(ds, bad_specs, self.gateset, svdTruncateTo=4, verbosity=0) # bad specs (rank deficient)
 
-        with self.assertRaises(KeyError):
+
+        with self.assertRaises(KeyError): # AB-matrix construction error
             incomplete_strings = self.lgstStrings[5:] #drop first 5 strings...
-            bad_ds = pygsti.construction.generate_fake_data(self.datagen_gateset, incomplete_strings,
-                                                        nSamples=10, sampleError='none')
-            gs_lgst = pygsti.do_lgst(bad_ds, bad_specs, self.gateset, svdTruncateTo=4, verbosity=0) # incomplete dataset
+            bad_ds = pygsti.construction.generate_fake_data(
+                self.datagen_gateset, incomplete_strings,
+                nSamples=10, sampleError='none')
+            gs_lgst = pygsti.do_lgst(bad_ds, self.specs, self.gateset,
+                                     svdTruncateTo=4, verbosity=0)
+                      # incomplete dataset
+
+        with self.assertRaises(KeyError): # X-matrix construction error
+            incomplete_strings = self.lgstStrings[:-5] #drop last 5 strings...
+            bad_ds = pygsti.construction.generate_fake_data(
+                self.datagen_gateset, incomplete_strings,
+                nSamples=10, sampleError='none')
+            gs_lgst = pygsti.do_lgst(bad_ds, self.specs, self.gateset,
+                                     svdTruncateTo=4, verbosity=0) 
+                      # incomplete dataset
+
 
 
 
@@ -137,6 +151,9 @@ class TestCoreMethods(CoreTestCase):
         gs_single_exlgst = pygsti.do_exlgst(ds, gs_clgst, self.elgstStrings[0], self.specs, 
                                             self.gateset, regularizeFactor=1e-3, svdTruncateTo=4,
                                             verbosity=0)
+        gs_single_exlgst_verb = self.runSilent(pygsti.do_exlgst, ds, gs_clgst, self.elgstStrings[0], self.specs, 
+                                               self.gateset, regularizeFactor=1e-3, svdTruncateTo=4,
+                                               verbosity=10)
 
         gs_exlgst = pygsti.do_iterative_exlgst(ds, gs_clgst, self.specs, self.elgstStrings,
                                                targetGateset=self.gateset, svdTruncateTo=4, verbosity=0)
@@ -195,9 +212,11 @@ class TestCoreMethods(CoreTestCase):
         gs_lsgst_verb = self.runSilent(pygsti.do_iterative_mc2gst, ds, gs_clgst, self.lsgstStrings, verbosity=10,
                                              minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6),
                                              memLimit=10*1024**2)
-        gs_lsgst_reg = pygsti.do_iterative_mc2gst(ds, gs_clgst, self.lsgstStrings, verbosity=0,
-                                                 minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6),
-                                                 regularizeFactor=10, memLimit=100*1024**2)
+        gs_lsgst_reg = self.runSilent(pygsti.do_iterative_mc2gst,ds, gs_clgst,
+                                      self.lsgstStrings, verbosity=10,
+                                      minProbClipForWeighting=1e-6,
+                                      probClipInterval=(-1e6,1e6),
+                                      regularizeFactor=10, memLimit=100*1024**2)
         self.assertAlmostEqual(gs_lsgst.frobeniusdist(gs_lsgst_verb),0)
         self.assertAlmostEqual(gs_lsgst.frobeniusdist(all_gs_lsgst_tups[-1]),0)
 
@@ -217,9 +236,9 @@ class TestCoreMethods(CoreTestCase):
                                                       gatestringWeightsDict={ ('Gx',): 2.0 } )
 
         #Check with small but ok memlimit
-        pygsti.do_mc2gst(ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
+        self.runSilent(pygsti.do_mc2gst,ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
                          probClipInterval=(-1e6,1e6), regularizeFactor=1e-3, 
-                         verbosity=0, memLimit=300000)
+                         verbosity=10, memLimit=300000)
 
 
         #Check errors:
@@ -362,13 +381,20 @@ class TestCoreMethods(CoreTestCase):
                                   verbosity=10, minProbClipForWeighting=1e-3, probClipInterval=(-1e5,1e5))
 
         # Run again with other parameters
+        tuple_strings = [ map(tuple, gsList) for gsList in self.lsgstStrings[0:3] ] #to test tuple argument
         errorVecs, gs_lsgst_wts = self.runSilent(pygsti.do_iterative_mc2gst_with_model_selection, ds, gs_lgst4,
-                                                 1, self.lsgstStrings[0:3], verbosity=10, minProbClipForWeighting=1e-3,
+                                                 1, tuple_strings, verbosity=10, minProbClipForWeighting=1e-3,
                                                  probClipInterval=(-1e5,1e5), gatestringWeightsDict={ ('Gx',): 2.0 },
                                                  returnAll=True, returnErrorVec=True)
 
+        # Do non-iterative to cover GateString->tuple conversion
+        gs_non_iterative = self.runSilent( pygsti.do_mc2gst_with_model_selection, ds,
+                                           gs_lgst4, 1, self.lsgstStrings[0],
+                                           verbosity=10, probClipInterval=(-1e5,1e5) )
+
+
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
-        pygsti.io.write_gateset(gs_lsgst,"cmp_chk_files/lsgstMS.gateset", "Saved LSGST Gateset with model selection")
+        #pygsti.io.write_gateset(gs_lsgst,"cmp_chk_files/lsgstMS.gateset", "Saved LSGST Gateset with model selection")
 
         gs_lsgst_compare = pygsti.io.load_gateset("cmp_chk_files/lsgstMS.gateset")
         
@@ -403,16 +429,42 @@ class TestCoreMethods(CoreTestCase):
                                             targetSpamMetric='fidelity', verbosity=10)
         gs_lgst_targetAlt  = self.runSilent(pygsti.optimize_gauge, gs_lgst_target,"target",targetGateset=self.gateset,
                                             targetSpamMetric='tracedist', verbosity=10)
+
+        with self.assertRaises(ValueError):
+            self.runSilent(pygsti.optimize_gauge, gs_lgst_target,"target",targetGateset=self.gateset,
+                           targetGatesMetric='foobar', verbosity=10) #bad targetGatesMetric
+
+        with self.assertRaises(ValueError):
+            self.runSilent(pygsti.optimize_gauge, gs_lgst_target,"target",targetGateset=self.gateset,
+                           targetSpamMetric='foobar', verbosity=10) #bad targetSpamMetric
+
+        with self.assertRaises(ValueError):
+            self.runSilent(pygsti.optimize_gauge, gs_lgst_target,"foobar",targetGateset=self.gateset,
+                           targetSpamMetric='target', verbosity=10) #bad toGetTo
+
+
         
         #Contractions
         gs_clgst_tp    = self.runSilent(pygsti.contract, gs_lgst_target, "TP",verbosity=10, tol=10.0)
         gs_clgst_cp    = self.runSilent(pygsti.contract, gs_lgst_target, "CP",verbosity=10, tol=10.0)
         gs_clgst_cptp  = self.runSilent(pygsti.contract, gs_lgst_target, "CPTP",verbosity=10, tol=10.0)
         gs_clgst_cptp2 = self.runSilent(pygsti.contract, gs_lgst_target, "CPTP",verbosity=10, useDirectCP=False)
+        gs_clgst_cptp3 = self.runSilent(pygsti.contract, gs_lgst_target, "CPTP",verbosity=10, tol=10.0, maxiter=0)
         gs_clgst_xp    = self.runSilent(pygsti.contract, gs_lgst_target, "XP", ds,verbosity=10, tol=10.0)
         gs_clgst_xptp  = self.runSilent(pygsti.contract, gs_lgst_target, "XPTP", ds,verbosity=10, tol=10.0)
         gs_clgst_vsp   = self.runSilent(pygsti.contract, gs_lgst_target, "vSPAM",verbosity=10, tol=10.0)
         gs_clgst_none  = self.runSilent(pygsti.contract, gs_lgst_target, "nothing",verbosity=10, tol=10.0)
+
+          #test bad effect vector cases
+        gs_bad_effect = gs_lgst_target.copy()
+        gs_bad_effect.effects['E0'] = [100.0,0,0,0] # E eigvals all > 1.0
+        self.runSilent(pygsti.contract, gs_bad_effect, "vSPAM",verbosity=10, tol=10.0)
+        gs_bad_effect.effects['E0'] = [-100.0,0,0,0] # E eigvals all < 0
+        self.runSilent(pygsti.contract, gs_bad_effect, "vSPAM",verbosity=10, tol=10.0)
+
+        with self.assertRaises(ValueError):
+            self.runSilent(pygsti.contract, gs_lgst_target, "foobar",verbosity=10, tol=10.0) #bad toWhat
+
 
 
         #More gauge optimizations
@@ -452,8 +504,10 @@ class TestCoreMethods(CoreTestCase):
         with self.assertRaises(ValueError):
             pygsti.contract(gs_lgst_target, "FooBar",verbosity=0) # bad toWhat argument
 
-        with self.assertRaises(ValueError):
-            self.runSilent(pygsti.contract,gs_bigkick, "CP", verbosity=10, maxiter=1) # fail to contract to CP
+        # No longer raise value error for failure to contract...
+        #with self.assertRaises(ValueError):
+        #    self.runSilent(pygsti.contract,gs_bigkick, "CP", verbosity=10,
+        #                   maxiter=1) # fail to contract to CP
         
     
       

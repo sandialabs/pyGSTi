@@ -71,10 +71,11 @@ class SPAMVec(object):
         """ Return the dimension of the gate matrix. """
         return self.dim
 
-    def __str__(self):
-        s = "Spam vector with length %d\n" % len(self.base)
-        s += _mt.mx_to_string(self.base, width=4, prec=2)
-        return s 
+    #Handled by derived classes
+    #def __str__(self):
+    #    s = "Spam vector with length %d\n" % len(self.base)
+    #    s += _mt.mx_to_string(self.base, width=4, prec=2)
+    #    return s 
 
 
     #Pickle plumbing
@@ -110,6 +111,7 @@ class SPAMVec(object):
     def __mul__(self,x):      return self.base * x
     def __rmul__(self,x):     return x * self.base
     def __div__(self,x):      return self.base / x
+    def __rdiv__(self,x):     return x / self.base
     def __floordiv__(self,x): return self.base // x
     def __pow__(self,x):      return self.base ** x
     def __eq__(self,x):       return self.base == x
@@ -547,7 +549,6 @@ class TPParameterizedSPAMVec(SPAMVec):
 
     def __reduce__(self):
         return (TPParameterizedSPAMVec, (self.base.copy(),), self.__dict__)
-
 
 
 

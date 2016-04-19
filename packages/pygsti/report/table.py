@@ -135,8 +135,7 @@ class ReportTable(object):
         self._finished = True #mark table as finished
 
     def __str__(self):
-        if "py" not in self.formats:
-            return repr(self)
+        self._checkpy()
 
         def strlen(x):
             return max([len(p) for p in str(x).split('\n')])
@@ -233,8 +232,6 @@ class ReportTable(object):
             raise KeyError("%s not found as a first-column value" % key)
         
         elif index is not None:
-            if key is not None:
-                raise ValueError("Cannot specify *both* key and index")
             if 0 <= index < len(tblDict['row data']):
                 return tblDict['row data'][index]
             else:
@@ -257,8 +254,6 @@ class ReportTable(object):
             raise KeyError("%s is not a column name." % key)
         
         elif index is not None:
-            if key is not None:
-                raise ValueError("Cannot specify *both* key and index")
             if 0 <= index < len(tblDict['column names']):
                 return [ d[index] for d in tblDict['row data'] ] #if len(d)>iCol
             else:

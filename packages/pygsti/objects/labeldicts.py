@@ -22,9 +22,10 @@ class PrefixOrderedDict(_collections.OrderedDict):
                            "beginning with the prefix '%s'" % self._prefix)
         super(PrefixOrderedDict,self).__setitem__(key, val)
 
-    def __reduce__(self):
-        items = [(k,v) for k,v in self.iteritems()]
-        return (PrefixOrderedDict, (self._prefix, items), None) 
+    #Handled by derived classes
+    #def __reduce__(self):
+    #    items = [(k,v) for k,v in self.iteritems()]
+    #    return (PrefixOrderedDict, (self._prefix, items), None) 
 
 
 
@@ -32,7 +33,7 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
     def __init__(self, parent, default_param, remainderLabel, prefix, items=[]):
         #** Note: if change __init__ signature, update __reduce__ below
         self.parent = parent # dimension == parent.dim
-        self.default_param = default_param  # "tp" or "full"
+        self.default_param = default_param  # "TP" or "full"
         self.remainderLabel = remainderLabel
         super(OrderedSPAMVecDict,self).__init__(prefix, items)
 
@@ -68,7 +69,7 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
         else:
             #otherwise, we've been given a non-SPAMVec-object that doesn't 
             # exist yet, so use default creation flags to make one:
-            if self.default_param == "tp":
+            if self.default_param == "TP":
                 vecObj = _sv.TPParameterizedSPAMVec(vec)
             elif self.default_param == "full":
                 vecObj = _sv.FullyParameterizedSPAMVec(vec)
@@ -79,8 +80,21 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
 
             super(OrderedSPAMVecDict,self).__setitem__(key, vecObj)
 
-    def copy(self):
-        return OrderedSPAMVecDict(self.parent, self.default_param,
+    def copy(self, parent):
+        """
+        Returns a copy of this OrderedSPAMVecDict.
+
+        Parameters
+        ----------
+        parent : GateSet
+            The new parent GateSet, if one exists.  Typically, when copying
+            an OrderedSPAMVecDict you want to reset the parent.
+        
+        Returns
+        -------
+        OrderedSPAMVecDict
+        """
+        return OrderedSPAMVecDict(parent, self.default_param,
                            self.remainderLabel, self._prefix,
                            [(lbl,val.copy()) for lbl,val in self.iteritems()])
 
@@ -100,7 +114,7 @@ class OrderedGateDict(PrefixOrderedDict):
     def __init__(self, parent, default_param, prefix, items=[]):
         #** Note: if change __init__ signature, update __reduce__ below
         self.parent = parent # dimension == parent.dim
-        self.default_param = default_param  # "tp" or "full"
+        self.default_param = default_param  # "TP" or "full"
         super(OrderedGateDict,self).__init__(prefix, items)
 
 
@@ -141,7 +155,7 @@ class OrderedGateDict(PrefixOrderedDict):
         else:
             #otherwise, we've been given a non-Gate-object that doesn't 
             # exist yet, so use default creation flags to make one:
-            if self.default_param == "tp":
+            if self.default_param == "TP":
                 gateObj = _gate.TPParameterizedGate(M)
             elif self.default_param == "full":
                 gateObj = _gate.FullyParameterizedGate(M)
@@ -153,8 +167,22 @@ class OrderedGateDict(PrefixOrderedDict):
 
             super(OrderedGateDict,self).__setitem__(key, gateObj)
 
-    def copy(self):
-        return OrderedGateDict(self.parent, self.default_param, self._prefix,
+    def copy(self, parent):
+        """
+        Returns a copy of this OrderedGateDict.
+
+        Parameters
+        ----------
+        parent : GateSet, optional
+            The new parent GateSet, if one exists.  Typically, when copying
+            an OrderedGateDict you want to reset the parent.
+        
+        Returns
+        -------
+        OrderedGateDict
+        """
+
+        return OrderedGateDict(parent, self.default_param, self._prefix,
                            [(lbl,val.copy()) for lbl,val in self.iteritems()])
 
     def __reduce__(self):

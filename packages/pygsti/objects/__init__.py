@@ -29,7 +29,8 @@ from gatestring import WeightedGateString
 from multidataset import MultiDataSet
 from spamspec import SpamSpec
 
-from gigateset import GaugeInvGateSet
+#Experimental only: don't import in production pyGSTi
+#from gigateset import GaugeInvGateSet  
 
 #Functions
 from gate import compose, optimize_gate
