@@ -856,12 +856,12 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, t
     ReportTable
         Table object containing the requested formats (e.g. 'latex').
     """
-    colHeadings = { 'latex': ('L','$\\chi^2$','$k$','$\\chi^2-k$','$\sqrt{2k}$','$P$','$N_s$','$N_p$', 'Rating'),
+    colHeadings = { 'latex': ('L','$\\chi^2$','$k$','$\\chi^2-k$','$\sqrt{2k}$','$p$','$N_s$','$N_p$', 'Rating'),
                     'html': ('L','&chi;<sup>2</sup>','k','&chi;<sup>2</sup>-k',
                              '&radic;<span style="text-decoration:overline;">2k</span>',
-                             'P','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
-                    'py': ('L','chi^2','k','chi^2-k','sqrt{2k}','P','N_s','N_p', 'Rating'),
-                    'ppt': ('L','chi^2','k','chi^2-k','sqrt{2k}','P','N_s','N_p', 'Rating')
+                             'p','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
+                    'py': ('L','chi^2','k','chi^2-k','sqrt{2k}','p','N_s','N_p', 'Rating'),
+                    'ppt': ('L','chi^2','k','chi^2-k','sqrt{2k}','p','N_s','N_p', 'Rating')
                   }
 
     table = _ReportTable(formats, colHeadings, None, tableclass, longtable)
@@ -922,12 +922,12 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, t
         Table object containing the requested formats (e.g. 'latex').
     """
     colHeadings = { 'latex': ('L','$2\Delta\\log(\\mathcal{L})$','$k$','$2\Delta\\log(\\mathcal{L})-k$',
-                              '$\sqrt{2k}$','$P$','$N_s$','$N_p$', 'Rating'),
+                              '$\sqrt{2k}$','$p$','$N_s$','$N_p$', 'Rating'),
                     'html': ('L','2&Delta;(log L)','k','2&Delta;(log L)-k',
                              '&radic;<span style="text-decoration:overline;">2k</span>',
-                             'P','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
-                    'py': ('L','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','P','N_s','N_p', 'Rating'),
-                    'ppt': ('L','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','P','N_s','N_p', 'Rating')
+                             'p','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
+                    'py': ('L','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','p','N_s','N_p', 'Rating'),
+                    'ppt': ('L','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','p','N_s','N_p', 'Rating')
                   }
     table = _ReportTable(formats, colHeadings, None, tableclass, longtable)
     for L,gs,gstrs in zip(Ls,gatesetsByL,gateStringsByL):
