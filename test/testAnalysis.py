@@ -4,7 +4,13 @@ from pygsti.construction import std1Q_XYI as std
 
 import numpy as np
 import os
-import Image, ImageChops
+import warnings
+
+try:
+    import Image, ImageChops
+    haveImageLibs = True
+except ImportError:
+    haveImageLibs = False
 
 
 class AnalysisTestCase(unittest.TestCase):
@@ -60,8 +66,14 @@ class AnalysisTestCase(unittest.TestCase):
                 else: runningList.append( self.gateStrDict[(x,y)] )
 
     def assertEqualImages(self, fn1, fn2):
-        im1 = Image.open(fn1); im2 = Image.open(fn2)
-        return ImageChops.difference(im1, im2).getbbox() is None
+        if haveImageLibs:
+            im1 = Image.open(fn1); im2 = Image.open(fn2)
+            return ImageChops.difference(im1, im2).getbbox() is None
+        else:
+            warnings.warn("**** IMPORT: Cannot import Image and/or ImageChops" +
+                          ", so Image comparisons in testAnalysis have been" +
+                          " disabled.")
+            return True
         
 
 class TestAnalysis(AnalysisTestCase):

@@ -63,18 +63,18 @@ def _fmtE_ppt(lbl): return '%s' % lbl
 E = { 'html': _fmtE_html, 'latex': _fmtE_latex, 'py': _fmtE_py, 'ppt': _fmtE_ppt }
 
 
-#Gate Label formatting
-def _fmtG_html(lbl):
-    if lbl[0] == 'G':
-        lbl = lbl[0] + "<sub>%s</sub>" % lbl[1:]
-    return lbl
-def _fmtG_latex(lbl):
-    if lbl[0] == 'G':
-        lbl = lbl[0] + "_{%s}" % lbl[1:]
-    return '$%s$' % lbl
-def _fmtG_py(lbl): return '%s' % lbl
-def _fmtG_ppt(lbl): return '%s' % lbl
-G = { 'html': _fmtG_html, 'latex': _fmtG_latex, 'py': _fmtG_py, 'ppt': _fmtG_ppt }
+##Gate Label formatting
+#def _fmtG_html(lbl):
+#    if lbl[0] == 'G':
+#        lbl = lbl[0] + "<sub>%s</sub>" % lbl[1:]
+#    return lbl
+#def _fmtG_latex(lbl):
+#    if lbl[0] == 'G':
+#        lbl = lbl[0] + "_{%s}" % lbl[1:]
+#    return '$%s$' % lbl
+#def _fmtG_py(lbl): return '%s' % lbl
+#def _fmtG_ppt(lbl): return '%s' % lbl
+#G = { 'html': _fmtG_html, 'latex': _fmtG_latex, 'py': _fmtG_py, 'ppt': _fmtG_ppt }
 
 # 'normal' formatting
 def _fmtNml_html(x):  return _hu.html(x)
