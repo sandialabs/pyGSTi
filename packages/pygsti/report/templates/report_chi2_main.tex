@@ -304,7 +304,7 @@ Its expected value is $\expec{\chi^2}=k$, and its standard deviation is $\sqrt{2
 Thus, by comparing the difference $\chi^2 - k$ to $\sqrt{2k}$, one can determine how well the GST estimate was able to fit the data in dataset ``\putfield{datasetLabel}{DATASET LABEL HERE}''.
 
 \iftoggle{LsAndGermsSet}{
-The LSGST algorithm used to generate this estimate is iterative.  It starts by fitting only data from the shortest gate sequences (which are easy to fit \emph{and} insensitive to most non-Markovian noise), then successively adds longer and longer sequences (with base sequence length $L\leq 1,2,4,8,\ldots$) to the mix.  Since we get an estimate at each intermediate $L$, it is possible to quantify not just the goodness of the \emph{best} fit (presented in the previous section), but how the goodness-of-fit behaves as longer and longer sequences are added in.
+The LSGST algorithm used to generate this estimate is iterative.  It starts by fitting only data from the shortest gate sequences (which are easy to fit \emph{and} insensitive to most non-Markovian noise), then successively adds longer and longer sequences (with base sequence length $L\leq 1,2,4,8,\ldots$) to the mix.  Since we get an estimate at each intermediate $L$, it is possible to quantify not just the goodness of the \emph{best} fit (presented in the previous section), but how the goodness-of-fit behaves as longer and longer sequences are added in.}
 
 This data is presented in Table \ref{progressTable}.  What you should be looking for here is whether -- at each value of $L$ -- the $\chi^2$ quantity is roughly the same as $k$.  More precisely, is $|\chi^2-k|$ less than or equal to $\sqrt{2k}$?  If not, then the model is not fitting as well as it should, which usually indicates non-Markovian noise (or, rarely, that the GST algorithm has simply failed to find a good fit even though one exists).
 
@@ -328,11 +328,11 @@ As a rough rule of thumb, for GST experiments involving relatively long sequence
 \begin{table}[h]
 \begin{center}
 \putfield{progressTable}{$\chi^2$ progress table will be placed here}
-\caption{\putfield{tt_progressTable}{}\textbf{Comparison between the computed and expected $\chi^2$ for different values of $L$}.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively.  $\chi^2$ measures the goodness of fit of the GST model (small is better) and is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $p$ is the p-value derived from a $\chi^2_k$ distribution (e.g.~if $p=0.05$, there is a 5\% chance of seeing the observed $\chi%2$ value when the model is valid). The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.\label{progressTable}}
+\caption{\putfield{tt_progressTable}{}\textbf{Comparison between the computed and expected $\chi^2$ for different values of $L$}.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively.  $\chi^2$ measures the goodness of fit of the GST model (small is better) and is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $p$ is the p-value derived from a $\chi^2_k$ distribution (e.g.~if $p=0.05$, there is a 5\% chance of seeing the observed $\chi^2$ value when the model is valid). The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.\label{progressTable}}
 \end{center}
 \end{table}
 
-}{
+{
 \textbf{NOTE: Not enough information was given at the time of this report generation to know provide a goodness-of-model analysis}
 }
 
