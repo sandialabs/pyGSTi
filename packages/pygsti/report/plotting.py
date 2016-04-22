@@ -2507,8 +2507,7 @@ def direct_deviation_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset
     The plotted quantity indicates how much more "unitary", i.e. how 
     much less "depolarized", the map corresponding to each base gate
     sequence is when considering only the data immediately relevant
-    to predicting that map.  If 2. is larger than 1., a zero is displayed
-    so that all results are non-negative.  Large values indicate that
+    to predicting that map. Large absolute values indicate that
     the data used for fitting other gate sequences has made the estimate
     for the subject gate sequence more depolarized (~worse) than the
     data for the sequence alone would suggest.
@@ -2589,7 +2588,7 @@ def direct_deviation_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset
         #evals_direct = _np.linalg.eigvals(gate_direct)
         ubF, ubGateMx = _tools.fidelity_upper_bound(gate)
         ubF_direct, ubGateMx = _tools.fidelity_upper_bound(gate_direct)
-        return _np.array( [[ max(ubF_direct - ubF,0.0) ]], 'd' ) 
+        return _np.array( [[ubF_direct - ubF]], 'd' )
 
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,True)
     max_abs = max([ _np.max(_np.abs(subMxs[iy][ix])) 
@@ -2597,7 +2596,7 @@ def direct_deviation_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset
                     for iy in range(len(yvals)) ])
     m = -max_abs if m is None else m
     M = +max_abs if M is None else M
-    stdcmap = StdColormapFactory('div', n_boxes=n_boxes, vmin=m, vmax=M, dof=dof)
+    stdcmap = StdColormapFactory('div', vmin=m, vmax=M, midpoint=0)
     return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel, ylabel,
                             scale,prec,title,True,boxLabels,histogram,histBins,save_to,ticSize)
 
