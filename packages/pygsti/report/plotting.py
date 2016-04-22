@@ -611,7 +611,7 @@ class StdColormapFactory(object):
                 raise ValueError('vmin and vmax must both not be None for non-linlog colormap types.')
         else:
             if n_boxes is None:
-                raise ValueError('linlog colormap type requires a non-None vlaue for n_boxes.')
+                raise ValueError('linlog colormap type requires a non-None value for n_boxes.')
 
         self.kind = kind
         self.vmin = vmin
