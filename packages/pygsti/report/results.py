@@ -577,7 +577,7 @@ class Results(object):
             Ls,germs,gsBest,fidPairs,m,M,baseStr_dict,strs,st = plot_setup()
             return plotFn(Ls[st:], germs, baseStr_dict,
                           self.dataset, gsBest, strs,
-                          "L", "germ", M=M, m=m, scale=1.0, sumUp=False,
+                          r"$L$", "germ", scale=1.0, sumUp=False,
                           histogram=True, title="", fidPairs=fidPairs,
                           minProbClipForWeighting=mpc, save_to="", ticSize=20)
         fns["bestEstimateColorBoxPlot"] = (fn,validate_LsAndGerms)
@@ -589,7 +589,7 @@ class Results(object):
             Ls,germs,gsBest,fidPairs,m,M,baseStr_dict,strs,st = plot_setup()
             return plotFn( Ls[st:], germs, baseStr_dict,
                            self.dataset, gsBest, strs,
-                           "L", "germ", M=M, m=m, scale=1.0, sumUp=False,
+                           r"$L$", "germ", scale=1.0, sumUp=False,
                            histogram=True, title="", fidPairs=fidPairs,
                            save_to="", ticSize=20, minProbClipForWeighting=mpc,
                            invert=True)
@@ -603,7 +603,7 @@ class Results(object):
                 if fidPairs is None else len(fidPairs)
             return plotFn( Ls[st:], germs, baseStr_dict,
                            self.dataset, gsBest, strs,
-                          "L", "germ", M=M*sumScale, m=m*sumScale, scale=1.0,
+                          r"$L$", "germ", scale=1.0,
                            sumUp=True, histogram=False, title="",
                            fidPairs=fidPairs, minProbClipForWeighting=mpc,
                            save_to="", ticSize=14)    
@@ -618,7 +618,7 @@ class Results(object):
             i = int(_re.match(expr1,key).group(1))
             return plotFn( Ls[st:i+1], germs, baseStr_dict,
                         self.dataset, self.gatesets['iteration estimates'][i],
-                        strs, "L", "germ", M=M, m=m, scale=1.0, sumUp=False,
+                        strs, r"$L$", "germ", scale=1.0, sumUp=False,
                         histogram=False, title="", fidPairs=fidPairs,
                         save_to="", minProbClipForWeighting=mpc, ticSize=20 )
         def fn_validate(key):
@@ -635,7 +635,7 @@ class Results(object):
             noConfidenceLevelDependence(confidenceLevel)
             Ls,germs,gsBest,fidPairs,m,M,baseStr_dict,strs,st = plot_setup()
             return _plotting.blank_boxplot( 
-                Ls[st:], germs, baseStr_dict, strs, "L", "germ",
+                Ls[st:], germs, baseStr_dict, strs, r"$L$", "germ",
                 scale=1.0, title="", sumUp=False, save_to="", ticSize=20)
         fns["blankBoxPlot"] = (fn,validate_LsAndGerms)
 
@@ -643,7 +643,7 @@ class Results(object):
             noConfidenceLevelDependence(confidenceLevel)
             Ls,germs,gsBest,fidPairs,m,M,baseStr_dict,strs,st = plot_setup()
             return _plotting.blank_boxplot( 
-                Ls[st:], germs, baseStr_dict, strs, "L", "germ",
+                Ls[st:], germs, baseStr_dict, strs, r"$L$", "germ",
                 scale=1.0, title="", sumUp=True, save_to="", ticSize=20)
         fns["blankSummedBoxPlot"] = (fn,validate_LsAndGerms)
 
@@ -654,7 +654,7 @@ class Results(object):
             Ls,germs,gsBest,fidPairs,m,M,baseStr_dict,strs,st = plot_setup()
             directLGST = self._specials.get('direct_lgst_gatesets',verbosity=vb)
             return directPlotFn( Ls[st:], germs, baseStr_dict, self.dataset,
-                                 directLGST, strs, "L", "germ", M=M, m=m,
+                                 directLGST, strs, r"$L$", "germ",
                                  scale=1.0, sumUp=False, title="",
                                  minProbClipForWeighting=mpc, fidPairs=fidPairs,
                                  save_to="", ticSize=20)
@@ -667,7 +667,7 @@ class Results(object):
             directLongSeqGST = self._specials.get('DirectLongSeqGatesets',
                                                   verbosity=vb)
             return directPlotFn( Ls[st:], germs, baseStr_dict, self.dataset,
-                                 directLongSeqGST, strs, "L", "germ", M=M, m=m,
+                                 directLongSeqGST, strs, r"$L$", "germ",
                                  scale=1.0, sumUp=False, title="",
                                  minProbClipForWeighting=mpc, fidPairs=fidPairs,
                                  save_to="", ticSize=20)
@@ -679,7 +679,7 @@ class Results(object):
             directLGST = self._specials.get('direct_lgst_gatesets',verbosity=vb)
             return _plotting.direct_deviation_boxplot( 
                 Ls[st:], germs, baseStr_dict, self.dataset,
-                gsBest, directLGST, "L", "germ", m=0, scale=1.0,
+                gsBest, directLGST, r"$L$", "germ", scale=1.0,
                 prec=-1, title="", save_to="", ticSize=20)
         fns["directLGSTDeviationColorBoxPlot"] = (fn,validate_LsAndGerms)
 
@@ -690,7 +690,7 @@ class Results(object):
                                                   verbosity=vb)
             return _plotting.direct_deviation_boxplot(
                 Ls[st:], germs, baseStr_dict, self.dataset,
-                gsBest, directLongSeqGST, "L", "germ", m=0,
+                gsBest, directLongSeqGST, r"$L$", "germ",
                 scale=1.0, prec=-1, title="", save_to="", ticSize=20)
         fns["directLongSeqGSTDeviationColorBoxPlot"] = (fn,validate_LsAndGerms)
 
@@ -701,7 +701,7 @@ class Results(object):
                                                   verbosity=vb)
             return _plotting.small_eigval_err_rate_boxplot(
                 Ls[st:], germs, baseStr_dict, self.dataset,
-                directLongSeqGST, "L", "germ", m=0, scale=1.0, title="",
+                directLongSeqGST, r"$L$", "germ", scale=1.0, title="",
                 save_to="", ticSize=20)
         fns["smallEigvalErrRateColorBoxPlot"] = (fn,validate_LsAndGerms)
 
@@ -716,10 +716,10 @@ class Results(object):
             whackAMolePlotFn = getWhackAMolePlotFn()
             return whackAMolePlotFn(strToWhack, self.gatestring_lists['all'],
                                     Ls[st:], germs, baseStr_dict, self.dataset,
-                                    gsBest, strs, "L", "germ", scale=1.0,
+                                    gsBest, strs, r"$L$", "germ", scale=1.0,
                                     sumUp=False,title="",whackWith=hammerWeight,
                                     save_to="", minProbClipForWeighting=mpc,
-                                    ticSize=20, fidPairs=fidPairs, m=0)
+                                    ticSize=20, fidPairs=fidPairs)
         def fn_validate(key):
             if not self._LsAndGermInfoSet: return []
 
@@ -744,10 +744,10 @@ class Results(object):
             whackAMolePlotFn = getWhackAMolePlotFn()
             return whackAMolePlotFn(strToWhack, self.gatestring_lists['all'],
                                     Ls[st:], germs, baseStr_dict, self.dataset,
-                                    gsBest, strs, "L", "germ", scale=1.0,
+                                    gsBest, strs, r"$L$", "germ", scale=1.0,
                                     sumUp=True, title="",whackWith=hammerWeight,
                                     save_to="", minProbClipForWeighting=mpc,
-                                    ticSize=20, fidPairs=fidPairs, m=0)
+                                    ticSize=20, fidPairs=fidPairs)
         def fn_validate(key):
             if not self._LsAndGermInfoSet: return []
 
