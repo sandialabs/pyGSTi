@@ -600,7 +600,8 @@ class StdColormapFactory(object):
     Class used to create a standard GST colormap.
     """
 
-    def __init__(self, kind, vmin=None, vmax=None, n_boxes=None, linlg_pcntle=.05, dof=1):
+    def __init__(self, kind, vmin=None, vmax=None, n_boxes=None, linlg_pcntle=.05, dof=1,\
+                        midpoint=0):
 
         assert kind in ['linlog', 'div', 'seq'],\
             'Please instantiate the StdColormapFactory with a valid kind of colormap.'
@@ -618,11 +619,14 @@ class StdColormapFactory(object):
         self.N = n_boxes
         self.percentile = linlg_pcntle
         self.dof = dof
+        self.midpoint = midpoint
 
     def get_norm(self):
         #Creates the normalization class
-        if self.kind != 'linlog':
+        if self.kind == 'seq':
             norm = _matplotlib.colors.Normalize(vmin=self.vmin, vmax=self.vmax, clip=False)
+        elif self.kind == 'div':
+            norm = MidPointNorm(midpoint=self.midpoint, vmin=self.vmin, vmax=self.vmax)
         else:
             linlog_trans = _np.ceil(_chi2.ppf(1 - self.percentile / self.N, self.dof))
             norm = LinLogNorm(trans=linlog_trans)
