@@ -94,7 +94,8 @@ class Results(object):
                             'hessianProjection': 'std',
                             'defaultDirectory': None,
                             'defaultBasename': None,
-                            'mxBasis': "gm"}
+                            'mxBasis': "gm",
+                            'linlogPercentile':  5}
 
 
     def init_single(self, objective, targetGateset, dataset, gatesetEstimate,
@@ -1319,7 +1320,8 @@ class Results(object):
             ("true" if whackamoleAppendix else "false")
         qtys['confidenceLevel'] = "%g" % \
             confidenceLevel if confidenceLevel is not None else "NOT-SET"
-    
+        qtys['linlg_pcntle'] = self.parameters['linlogPercentile']
+
         if confidenceLevel is not None:
             cri = self._get_confidence_region(confidenceLevel)
             qtys['confidenceIntervalScaleFctr'] = \
