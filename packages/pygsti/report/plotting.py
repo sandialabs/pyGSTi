@@ -2091,7 +2091,7 @@ def direct_chi2_matrix( sigma, dataset, directGateset, strs,
 def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatesets, strs, xlabel="", ylabel="",
                         scale=1.0, prec='compact', title=r"Direct $\chi^2$", sumUp=False,
                         boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
-                        save_to=None, ticSize=20, invert=False, fidPairs=None):
+                        save_to=None, ticSize=20, invert=False, fidPairs=None, linlg_pcntle=.05):
     """
     Create a color box plot of Direct-X chi^2 values.
 
@@ -2170,6 +2170,9 @@ def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
         A list of (iRhoStr,iEStr) tuples specifying a subset of all the prepStr,effectStr
         pairs to include in the plot.
 
+    linlg_pcntle: float, optional
+        Specifies the (1 - linlg_pcntle) percentile to compute for the boxplots
+
     Returns
     -------
     rptFig : ReportFigure
@@ -2187,7 +2190,7 @@ def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
                                    strs, minProbClipForWeighting, fidPairs)
 
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
-    stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=.05, dof=dof)
+    stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=linlg_pcntle, dof=dof)
 
     return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel, ylabel,
                             scale,prec,title,sumUp,boxLabels,histogram,histBins,save_to,ticSize,
@@ -2249,7 +2252,7 @@ def direct_logl_matrix( sigma, dataset, directGateset, strs,
 def direct_logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatesets, strs, xlabel="", ylabel="",
                         scale=1.0, prec='compact', title=r"Direct $\log(\mathcal{L})$", sumUp=False,
                         boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
-                        save_to=None, ticSize=20, invert=False, fidPairs=None):
+                        save_to=None, ticSize=20, invert=False, fidPairs=None, linlg_pcntle=.05):
     """
     Create a color box plot of Direct-X log-likelihood values.
 
@@ -2328,6 +2331,9 @@ def direct_logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
         A list of (iRhoStr,iEStr) tuples specifying a subset of all the prepStr,effectStr
         pairs to include in the plot.
 
+    linlg_pcntle: float, optional
+        Specifies the (1 - linlg_pcntle) percentile to compute for the boxplots
+
     Returns
     -------
     rptFig : ReportFigure
@@ -2345,7 +2351,7 @@ def direct_logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
                                    strs, minProbClipForWeighting, fidPairs)
 
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
-    stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=.05, dof=dof)
+    stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=linlg_pcntle, dof=dof)
 
     return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel, ylabel,
                             scale,prec,title,sumUp,boxLabels,histogram,histBins,save_to,ticSize,
