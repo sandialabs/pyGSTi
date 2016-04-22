@@ -1499,7 +1499,7 @@ def small_eigval_err_rate_boxplot( xvals, yvals, xy_gatestring_dict, dataset, di
                     for iy in range(len(yvals)) ])
     m = 0 if m is None else m
     M = max_abs if M is None else M
-    stdcmap = StdColormapFactory('seq', n_boxes=n_boxes, vmin=m, vmax=M, dof=dof)
+    stdcmap = StdColormapFactory('seq', vmin=m, vmax=M)
 
     return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel,ylabel,
                             scale,prec,title, True,boxLabels,histogram,histBins,save_to,ticSize)
@@ -2778,7 +2778,7 @@ def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
                     for iy in range(len(yvals)) ])
     m = -max_abs if m is None else m
     M = +max_abs if M is None else M
-    stdcmap = StdColormapFactory('div', n_boxes=n_boxes, vmin=m, vmax=M, dof=dof)
+    stdcmap = StdColormapFactory('div', n_boxes=n_boxes, vmin=m, vmax=M, dof=dof, midpoint=0)
     return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel, ylabel,
                             scale,prec,title,sumUp,boxLabels,histogram,histBins,save_to,ticSize,
                             invert, prepStrs, effectStrs, r"$\rho_i$", r"$E_i$" )
@@ -2959,7 +2959,7 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
                     for iy in range(len(yvals)) ])
     m = -max_abs if m is None else m
     M = +max_abs if M is None else M
-    stdcmap = StdColormapFactory('div', n_boxes=n_boxes, vmin=m, vmax=M, dof=dof)
+    stdcmap = StdColormapFactory('div', n_boxes=n_boxes, vmin=m, vmax=M, dof=dof, midpoint=0)
     return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel, ylabel,
                             scale,prec,title,sumUp,boxLabels,histogram,histBins,save_to,ticSize,
                             invert, prepStrs, effectStrs, r"$\rho_i$", r"$E_i$" )
