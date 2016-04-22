@@ -578,7 +578,7 @@ class Results(object):
             return plotFn(Ls[st:], germs, baseStr_dict,
                           self.dataset, gsBest, strs,
                           r"$L$", "germ", scale=1.0, sumUp=False,
-                          histogram=True, title="", fidPairs=fidPairs,
+                          histogram=True, title="", fidPairs=fidPairs, linlg_pcntle=float(self.parameters['linlogPercentile']) / 100,
                           minProbClipForWeighting=mpc, save_to="", ticSize=20)
         fns["bestEstimateColorBoxPlot"] = (fn,validate_LsAndGerms)
 
@@ -590,7 +590,7 @@ class Results(object):
             return plotFn( Ls[st:], germs, baseStr_dict,
                            self.dataset, gsBest, strs,
                            r"$L$", "germ", scale=1.0, sumUp=False,
-                           histogram=True, title="", fidPairs=fidPairs,
+                           histogram=True, title="", fidPairs=fidPairs, linlg_pcntle=float(self.parameters['linlogPercentile']) / 100,
                            save_to="", ticSize=20, minProbClipForWeighting=mpc,
                            invert=True)
         fns["invertedBestEstimateColorBoxPlot"] = (fn,validate_LsAndGerms)
@@ -606,7 +606,7 @@ class Results(object):
                           r"$L$", "germ", scale=1.0,
                            sumUp=True, histogram=False, title="",
                            fidPairs=fidPairs, minProbClipForWeighting=mpc,
-                           save_to="", ticSize=14)    
+                           save_to="", ticSize=14, linlg_pcntle=float(self.parameters['linlogPercentile']) / 100)
         fns["bestEstimateSummedColorBoxPlot"] = (fn,validate_LsAndGerms)
             
 
@@ -619,8 +619,8 @@ class Results(object):
             return plotFn( Ls[st:i+1], germs, baseStr_dict,
                         self.dataset, self.gatesets['iteration estimates'][i],
                         strs, r"$L$", "germ", scale=1.0, sumUp=False,
-                        histogram=False, title="", fidPairs=fidPairs,
-                        save_to="", minProbClipForWeighting=mpc, ticSize=20 )
+                        histogram=False, title="", fidPairs=fidPairs, linlg_pcntle=float(self.parameters['linlogPercentile']) / 100,
+                        save_to="", minProbClipForWeighting=mpc, ticSize=20)
         def fn_validate(key):
             if not self._LsAndGermInfoSet: return []
             
@@ -657,7 +657,7 @@ class Results(object):
                                  directLGST, strs, r"$L$", "germ",
                                  scale=1.0, sumUp=False, title="",
                                  minProbClipForWeighting=mpc, fidPairs=fidPairs,
-                                 save_to="", ticSize=20)
+                                 save_to="", ticSize=20, linlg_pcntle=float(self.parameters['linlogPercentile']) / 100)
         fns["directLGSTColorBoxPlot"] = (fn,validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
@@ -670,7 +670,7 @@ class Results(object):
                                  directLongSeqGST, strs, r"$L$", "germ",
                                  scale=1.0, sumUp=False, title="",
                                  minProbClipForWeighting=mpc, fidPairs=fidPairs,
-                                 save_to="", ticSize=20)
+                                 save_to="", ticSize=20, linlg_pcntle=float(self.parameters['linlogPercentile']) / 100)
         fns["directLongSeqGSTColorBoxPlot"] = (fn,validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
