@@ -404,7 +404,7 @@ def gram_rank_and_evals(dataset, specs, targetGateset=None, spamDict=None):
 def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs, 
              targetGateset=None, spamDict=None, guessGatesetForGauge=None,
              svdTruncateTo=0, maxiter=100000, maxfev=None, tol=1e-6, 
-             regularizeFactor=0, verbosity=0,
+             regularizeFactor=0, verbosity=0, comm=None,
              check_jacobian=False):
   """
   Performs Extended Linear-inversion Gate Set Tomography on the dataset.
@@ -463,6 +463,10 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs,
 
   verbosity : int, optional
       How much detail to send to stdout.
+
+  comm : mpi4py.MPI.Comm, optional
+      When not None, an MPI communicator for distributing the computation
+      across multiple processors.
 
   check_jacobian : bool, optional
       If True, compare the analytic jacobian with a forward finite difference jacobean
@@ -529,14 +533,14 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs,
     if regularizeFactor == 0:
       def objective_func(vectorGS):
         gs.from_vector(vectorGS)
-        prods = gs.bulk_product(evTree)
+        prods = gs.bulk_product(evTree, comm=comm)
         ret = (prods - estimates).flatten()
         #assert( len( (_np.isnan(ret)).nonzero()[0] ) == 0 )
         return ret
     else:
       def objective_func(vectorGS):
         gs.from_vector(vectorGS)
-        prods = gs.bulk_product(evTree)
+        prods = gs.bulk_product(evTree, comm=comm)
         gsVecNorm = regularizeFactor * _np.array( [ max(0,absx-1.0) for absx in map(abs,vectorGS) ], 'd')
         ret = _np.concatenate( ((prods - estimates).flatten(), gsVecNorm) )
         #assert( len( (_np.isnan(ret)).nonzero()[0] ) == 0 )
@@ -545,7 +549,7 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs,
   else:
     def objective_func(vectorGS):
       gs.from_vector(vectorGS)
-      prods = gs.bulk_product(evTree)
+      prods = gs.bulk_product(evTree, comm=comm)
       ret = (prods - estimates).flatten()
 
       #OLD (uncomment to check)
@@ -578,14 +582,16 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs,
     if regularizeFactor == 0:
       def jacobian(vectorGS):
         gs.from_vector(vectorGS)
-        jac = gs.bulk_dproduct(evTree, flat=True) # shape == nGateStrings*nFlatGate, nDerivCols
+        jac = gs.bulk_dproduct(evTree, flat=True, comm=comm)
+          # shape == nGateStrings*nFlatGate, nDerivCols
         if check_jacobian: _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
         return jac
     else:
       def jacobian(vectorGS):
         gs.from_vector(vectorGS)
         gsVecGrad = _np.diag( [ (regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in vectorGS ] )
-        jac = gs.bulk_dproduct(evTree, flat=True) # shape == nGateStrings*nFlatGate, nDerivCols
+        jac = gs.bulk_dproduct(evTree, flat=True, comm=comm)
+          # shape == nGateStrings*nFlatGate, nDerivCols
         jac = _np.concatenate( (jac, gsVecGrad), axis=0 )  # shape == nGateStrings*nFlatGate+nDerivCols, nDerivCols
         if check_jacobian: _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
         return jac
@@ -595,7 +601,8 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs,
   else:
     def jacobian(vectorGS):
       gs.from_vector(vectorGS)
-      jac = gs.bulk_dproduct(evTree, flat=True) # shape == nGateStrings*nFlatGate, nDerivCols
+      jac = gs.bulk_dproduct(evTree, flat=True, comm=comm) 
+        # shape == nGateStrings*nFlatGate, nDerivCols
       if regularizeFactor > 0:
         gsVecGrad = _np.diag( [ (regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in vectorGS ] )
         jac = _np.concatenate( (jac, gsVecGrad), axis=0 )
@@ -657,11 +664,13 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs,
   return minErrVec, gs    
 
 
-def do_iterative_exlgst(dataset, startGateset, specs, gateStringSetsToUseInEstimation, 
-                      targetGateset=None, spamDict=None, guessGatesetForGauge=None,
-                      svdTruncateTo=0, maxiter=100000, maxfev=None, tol=1e-6, 
-                      regularizeFactor=0, returnErrorVec=False, returnAll=False,
-                      gateStringSetLabels=None, verbosity=0, check_jacobian=False):
+def do_iterative_exlgst(
+  dataset, startGateset, specs, gateStringSetsToUseInEstimation, 
+  targetGateset=None, spamDict=None, guessGatesetForGauge=None,
+  svdTruncateTo=0, maxiter=100000, maxfev=None, tol=1e-6, 
+  regularizeFactor=0, returnErrorVec=False, returnAll=False,
+  gateStringSetLabels=None, verbosity=0, comm=None,
+  check_jacobian=False):
   """
   Performs Iterated Extended Linear-inversion Gate Set Tomography on the dataset.
 
@@ -733,6 +742,10 @@ def do_iterative_exlgst(dataset, startGateset, specs, gateStringSetsToUseInEstim
   verbosity : int, optional
       How much detail to send to stdout.
 
+  comm : mpi4py.MPI.Comm, optional
+      When not None, an MPI communicator for distributing the computation
+      across multiple processors.
+
   check_jacobian : boolean, optional
       If True, compare the analytic jacobian with a forward finite difference jacobean
       and print warning messages if there is disagreement.
@@ -776,11 +789,14 @@ def do_iterative_exlgst(dataset, startGateset, specs, gateStringSetsToUseInEstim
       _sys.stdout.flush()
 
     if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
-    minErr, elgstGateset = do_exlgst( dataset, elgstGateset, stringsToEstimate, specs,
-                                     targetGateset, spamDict, guessGatesetForGauge,
-                                     svdTruncateTo, maxiter, maxfev, tol, 
-                                     regularizeFactor, verbosity,
-                                     check_jacobian )
+
+    minErr, elgstGateset = do_exlgst( 
+      dataset, elgstGateset, stringsToEstimate, specs,
+      targetGateset, spamDict, guessGatesetForGauge,
+      svdTruncateTo, maxiter, maxfev, tol, 
+      regularizeFactor, verbosity, comm,
+      check_jacobian )
+
     if returnAll: 
       elgstGatesets.append(elgstGateset)
       minErrs.append(minErr)
@@ -796,11 +812,12 @@ def do_iterative_exlgst(dataset, startGateset, specs, gateStringSetsToUseInEstim
 ##################################################################################
 
 def do_mc2gst(dataset, startGateset, gateStringsToUse, 
-            maxiter=100000, maxfev=None, tol=1e-6, 
-            cptp_penalty_factor=0, minProbClipForWeighting=1e-4, probClipInterval=None,
-            useFreqWeightedChiSq=False, regularizeFactor=0, verbosity=0,
-            check=False, check_jacobian=False, gatestringWeights=None, gateLabelAliases=None,
-            memLimit=None):
+              maxiter=100000, maxfev=None, tol=1e-6, 
+              cptp_penalty_factor=0, minProbClipForWeighting=1e-4,
+              probClipInterval=None, useFreqWeightedChiSq=False,
+              regularizeFactor=0, verbosity=0, check=False,
+              check_jacobian=False, gatestringWeights=None,
+              gateLabelAliases=None, memLimit=None, comm=None):
   """
   Performs Least-Squares Gate Set Tomography on the dataset.
 
@@ -878,6 +895,11 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
   memLimit : int, optional
       A rough memory limit in bytes which restricts the amount of intermediate
       values that are computed and stored.
+
+  comm : mpi4py.MPI.Comm, optional
+      When not None, an MPI communicator for distributing the computation
+      across multiple processors.
+
 
   Returns
   -------
@@ -969,10 +991,13 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
   maxGateStringLength = max([len(x) for x in gateStringsToUse])  
 
   if maxEvalSubTreeSize is not None:
-    evTree.split(maxEvalSubTreeSize)
-    if verbosity > 2: 
+    evTree.split(maxEvalSubTreeSize, None)
+    if verbosity > 2 and (comm is None or comm.Get_rank() == 0):
       print "Memory limit has imposed a division of the evaluation tree:"
       evTree.print_analysis()
+      #Note: do *not* split based on comm here, since any split that occurs
+      # here will be looped over in bulk_pr (which expects a split tree for
+      # the sole purpose of memory limiting)
 
   if useFreqWeightedChiSq:
     def get_weights(p):
@@ -998,15 +1023,16 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
       if regularizeFactor == 0:
         def objective_func(vectorGS):
           gs.from_vector(vectorGS)
-          gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval, check) 
+          gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval,
+                             check, comm) 
           v = (probs-f)*get_weights(probs) # dims K x M (K = nSpamLabels, M = nGateStrings)
           return v.reshape([KM])
 
       else:
         def objective_func(vectorGS):
           gs.from_vector(vectorGS)
-          #p = gs.bulk_pr('plus', evTree, clipTo=probClipInterval, check=check) #RESTRICTION
-          gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval, check) 
+          gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval,
+                             check, comm) 
           weights = get_weights(probs)
           v = (probs-f)*weights # dims K x M (K = nSpamLabels, M = nGateStrings)
           gsVecNorm = regularizeFactor * _np.array( [ max(0,absx-1.0) for absx in map(abs,vectorGS) ], 'd')
@@ -1016,9 +1042,8 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
       
       def objective_func(vectorGS):
         gs.from_vector(vectorGS)
-        #p = gs.bulk_pr('plus', evTree, clipTo=probClipInterval, check=check) #RESTRICTION
-        #p = _np.array( [ gs.pr('plus',gateStr) for gateStr in gateStringsToUse ] ) #OLD
-        gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval, check) 
+        gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval,
+                           check, comm) 
         weights = get_weights(probs)
 
         v = (probs - f) * weights;  chisq = _np.sum(v*v)
@@ -1039,7 +1064,8 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         def jacobian(vectorGS):
           gs.from_vector(vectorGS)
           gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree, 
-                             prMxToFill=probs, clipTo=probClipInterval, check=check)
+                              prMxToFill=probs, clipTo=probClipInterval,
+                              check=check, comm=comm)
           weights  = get_weights( probs )
           #jac = dpr * (weights+(pr-f)*get_dweights( pr, weights ))[:,None] #OLD  # (M,N) * (M,1) = (M,N)
           jac = dprobs * (weights+(probs-f)*get_dweights(probs, weights ))[:,:,None]  # (K,M,N) * (K,M,1)   (N = dim of vectorized gateset)
@@ -1054,7 +1080,8 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         def jacobian(vectorGS): # Fast regularized version
           gs.from_vector(vectorGS)
           gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree, 
-                             prMxToFill=probs, clipTo=probClipInterval, check=check)
+                              prMxToFill=probs, clipTo=probClipInterval,
+                              check=check, comm=comm)
           weights  = get_weights( probs )
           gsVecGrad = _np.diag( [ (regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in vectorGS ] ) # (N,N)
           jac = dprobs * (weights+(probs-f)*get_dweights( probs, weights ))[:,:,None]  # (K,M,N) * (K,M,1)   (N = dim of vectorized gateset)
@@ -1069,7 +1096,8 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
       def jacobian(vectorGS):
         gs.from_vector(vectorGS)
         gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree, 
-                           prMxToFill=probs, clipTo=probClipInterval, check=check)
+                            prMxToFill=probs, clipTo=probClipInterval,
+                            check=check, comm=comm)
         weights  = get_weights( probs )
 
         #Attempt to control leastsq by zeroing clipped weights -- this doesn't seem to help (nor should it)
@@ -1117,7 +1145,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
       # jacobian[k,l] = derivative of p[k] wrt vectorGS[l].  Just concatenate derivative of p[k]'s multiplied by weights
 
   else:
-    raise NotImplementedError("CPTP-penalized LSGST not implemented yet.")
+    raise NotImplementedError("CPTP-penalized LSGST not implemented.")
     #def objective_func(vectorGS):  #TODO: Upgrade from 'plus' restricted case
     #  gs.from_vector(vectorGS)
     #  p = gs.bulk_pr('plus', evTree, clipTo=probClipInterval, check=check) #RESTRICTION: 'plus' assumes only a single 'plus' spam label
@@ -1169,11 +1197,13 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
   #  return minErrVec, soln_gs, targetErrVec
   return minErrVec, soln_gs
 
-def do_mc2gst_with_model_selection(dataset, startGateset, dimDelta, gateStringsToUse, 
-                              maxiter=100000, maxfev=None, tol=1e-6, 
-                              cptp_penalty_factor=0, minProbClipForWeighting=1e-4, probClipInterval=None,
-                              useFreqWeightedChiSq=False, regularizeFactor=0, verbosity=0,
-                              check=False, check_jacobian=False, gatestringWeights=None, memLimit=None):
+def do_mc2gst_with_model_selection(
+  dataset, startGateset, dimDelta, gateStringsToUse, 
+  maxiter=100000, maxfev=None, tol=1e-6, 
+  cptp_penalty_factor=0, minProbClipForWeighting=1e-4, probClipInterval=None,
+  useFreqWeightedChiSq=False, regularizeFactor=0, verbosity=0,
+  check=False, check_jacobian=False, gatestringWeights=None, memLimit=None,
+  comm=None):
   """
   Performs Least-Squares Gate Set Tomography on the dataset.
 
@@ -1251,12 +1281,16 @@ def do_mc2gst_with_model_selection(dataset, startGateset, dimDelta, gateStringsT
       A rough memory limit in bytes which restricts the amount of intermediate
       values that are computed and stored.
 
+  comm : mpi4py.MPI.Comm, optional
+      When not None, an MPI communicator for distributing the computation
+      across multiple processors.
 
 
   Returns
   -------
   errorVec : numpy array
-      Minimum error values v = f(x_best), where f(x)**2 is the function being minimized
+      Minimum error values v = f(x_best), where f(x)**2 is the function
+      being minimized.
   gateset : GateSet
       GateSet containing the estimated gates.
   """
@@ -1274,10 +1308,12 @@ def do_mc2gst_with_model_selection(dataset, startGateset, dimDelta, gateStringsT
   if len(gateStringsToUse) > 0 and isinstance(gateStringsToUse[0],_objs.GateString):
     gateStringsToUse = [ gstr.tup for gstr in gateStringsToUse ]
 
-  minErr, gs = do_mc2gst(dataset, startGateset, gateStringsToUse, maxiter, maxfev, tol, 
-                       cptp_penalty_factor, minProbClipForWeighting, probClipInterval,
-                       useFreqWeightedChiSq, regularizeFactor, verbosity,
-                       check, check_jacobian, gatestringWeights, None, memLimit)
+  minErr, gs = do_mc2gst(dataset, startGateset, gateStringsToUse, maxiter,
+                         maxfev, tol, cptp_penalty_factor,
+                         minProbClipForWeighting, probClipInterval,
+                         useFreqWeightedChiSq, regularizeFactor, verbosity,
+                         check, check_jacobian, gatestringWeights, None,
+                         memLimit, comm)
   chiSqBest = sum([x**2 for x in minErr]) #using only gateStringsToUse
   nParamsBest = len(startGateset.to_vector())
   origGS = bestGS = gs
@@ -1302,10 +1338,12 @@ def do_mc2gst_with_model_selection(dataset, startGateset, dimDelta, gateStringsT
     curStartGateset = curStartGateset.decrease_dimension(curDim)
     nParams = curStartGateset.num_params()
 
-    minErr, gs = do_mc2gst(dataset, curStartGateset, gateStringsToUse, maxiter, maxfev, tol, 
-                       cptp_penalty_factor, minProbClipForWeighting, probClipInterval,
-                       useFreqWeightedChiSq, regularizeFactor, verbosity,
-                       check, check_jacobian, gatestringWeights, None, memLimit)
+    minErr, gs = do_mc2gst(dataset, curStartGateset, gateStringsToUse, maxiter,
+                           maxfev, tol, cptp_penalty_factor,
+                           minProbClipForWeighting, probClipInterval,
+                           useFreqWeightedChiSq, regularizeFactor, verbosity,
+                           check, check_jacobian, gatestringWeights, None,
+                           memLimit, comm)
 
     chiSq = sum([x**2 for x in minErr]) #using only gateStringsToUse
 
@@ -1338,10 +1376,12 @@ def do_mc2gst_with_model_selection(dataset, startGateset, dimDelta, gateStringsT
       tryIncreasedDim = False
       continue
 
-    minErr, gs = do_mc2gst(dataset, curStartGateset, gateStringsToUse, maxiter, maxfev, tol, 
-                           cptp_penalty_factor, minProbClipForWeighting, probClipInterval,
+    minErr, gs = do_mc2gst(dataset, curStartGateset, gateStringsToUse, maxiter,
+                           maxfev, tol, cptp_penalty_factor,
+                           minProbClipForWeighting, probClipInterval,
                            useFreqWeightedChiSq, regularizeFactor, verbosity,
-                           check, check_jacobian, gatestringWeights, None, memLimit)
+                           check, check_jacobian, gatestringWeights, None,
+                           memLimit, comm)
 
     chiSq = sum([x**2 for x in minErr]) #using only gateStringsToUse
   
@@ -1370,7 +1410,8 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
                         regularizeFactor=0, returnErrorVec=False, 
                         returnAll=False, gateStringSetLabels=None, verbosity=0,
                         check=False, check_jacobian=False,
-                        gatestringWeightsDict=None, memLimit=None, times=None):
+                        gatestringWeightsDict=None, memLimit=None, times=None,
+                        comm=None):
   """
   Performs Iterative Least Squares Gate Set Tomography on the dataset.
 
@@ -1459,6 +1500,10 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
       comprised of a descriptive string and a duration in seconds.  Default
       value of None means no timing information should be saved.
 
+  comm : mpi4py.MPI.Comm, optional
+      When not None, an MPI communicator for distributing the computation
+      across multiple processors.
+
 
   Returns
   -------
@@ -1506,7 +1551,7 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
                                       minProbClipForWeighting, probClipInterval,
                                       useFreqWeightedChiSq, regularizeFactor,
                                       verbosity, check, check_jacobian,
-                                      gatestringWeights, None, memLimit)
+                                      gatestringWeights, None, memLimit, comm)
     if returnAll: 
       lsgstGatesets.append(lsgstGateset)
       minErrs.append(minErr)
@@ -1524,12 +1569,13 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
 
 
 
-def do_iterative_mc2gst_with_model_selection(dataset, startGateset, dimDelta, gateStringSetsToUseInEstimation, 
-                                       maxiter=100000, maxfev=None, tol=1e-6, 
-                                       cptp_penalty_factor=0, minProbClipForWeighting=1e-4, probClipInterval=None,
-                                       useFreqWeightedChiSq=False, regularizeFactor=0, returnErrorVec=False, returnAll=False,
-                                       gateStringSetLabels=None, verbosity=0, check=False, check_jacobian=False,
-                                       gatestringWeightsDict=None, memLimit=None):
+def do_iterative_mc2gst_with_model_selection(
+  dataset, startGateset, dimDelta, gateStringSetsToUseInEstimation, 
+  maxiter=100000, maxfev=None, tol=1e-6, 
+  cptp_penalty_factor=0, minProbClipForWeighting=1e-4, probClipInterval=None,
+  useFreqWeightedChiSq=False, regularizeFactor=0, returnErrorVec=False,
+  returnAll=False, gateStringSetLabels=None, verbosity=0, check=False,
+  check_jacobian=False, gatestringWeightsDict=None, memLimit=None, comm=None):
   """
   Performs Iterative Least Squares Gate Set Tomography on the dataset, and at
   each iteration tests the current gateset model against gateset models with
@@ -1619,6 +1665,9 @@ def do_iterative_mc2gst_with_model_selection(dataset, startGateset, dimDelta, ga
       A rough memory limit in bytes which restricts the amount of intermediate
       values that are computed and stored.
 
+  comm : mpi4py.MPI.Comm, optional
+      When not None, an MPI communicator for distributing the computation
+      across multiple processors.
 
 
   Returns
@@ -1660,11 +1709,13 @@ def do_iterative_mc2gst_with_model_selection(dataset, startGateset, dimDelta, ga
           gatestringWeights[ stringsToEstimate.index(gatestr) ] = weight
     else: gatestringWeights = None
 
-    minErr, lsgstGateset = do_mc2gst_with_model_selection( dataset, lsgstGateset, dimDelta, stringsToEstimate,
-                                                           maxiter, maxfev, tol, cptp_penalty_factor,
-                                                           minProbClipForWeighting, probClipInterval,
-                                                           useFreqWeightedChiSq, regularizeFactor, verbosity,
-                                                           check, check_jacobian, gatestringWeights, memLimit)
+    minErr, lsgstGateset = do_mc2gst_with_model_selection(
+      dataset, lsgstGateset, dimDelta, stringsToEstimate,
+      maxiter, maxfev, tol, cptp_penalty_factor,
+      minProbClipForWeighting, probClipInterval,
+      useFreqWeightedChiSq, regularizeFactor, verbosity,
+      check, check_jacobian, gatestringWeights, memLimit, comm)
+
     if returnAll: 
       lsgstGatesets.append(lsgstGateset)
       minErrs.append(minErr)
@@ -1718,8 +1769,9 @@ def do_iterative_mc2gst_with_model_selection(dataset, startGateset, dimDelta, ga
 
 def do_mlgst(dataset, startGateset, gateStringsToUse, 
              maxiter=100000, maxfev=None, tol=1e-6,
-             minProbClip=1e-4, probClipInterval=None, radius=1e-4, poissonPicture=True,
-             verbosity=0, check=False, gateLabelAliases=None, memLimit=None):
+             minProbClip=1e-4, probClipInterval=None, radius=1e-4,
+             poissonPicture=True, verbosity=0, check=False,
+             gateLabelAliases=None, memLimit=None, comm=None):
 
     """
     Performs Maximum Likelihood Estimation Gate Set Tomography on the dataset.
@@ -1772,6 +1824,10 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     memLimit : int, optional
       A rough memory limit in bytes which restricts the amount of intermediate
       values that are computed and stored.
+
+    comm : mpi4py.MPI.Comm, optional
+      When not None, an MPI communicator for distributing the computation
+      across multiple processors.
 
   
     Returns
@@ -1833,9 +1889,12 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
 
     if maxEvalSubTreeSize is not None:
       evTree.split(maxEvalSubTreeSize)
-      if verbosity > 2: 
+      if verbosity > 2 and (comm is None or comm.Get_rank() == 0):
         print "Memory limit has imposed a division of the evaluation tree:"
         evTree.print_analysis()
+        #Note: do *not* split based on comm here, since any split that occurs
+        # here will be looped over in bulk_pr (which expects a split tree for
+        # the sole purpose of memory limiting)
 
 
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
@@ -1882,7 +1941,8 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
       
       def objective_func(vectorGS): 
         gs.from_vector(vectorGS)
-        gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval, check)
+        gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval,
+                           check, comm)
         pos_probs = _np.where(probs < min_p, min_p, probs)
         S = minusCntVecMx / min_p + totalCntVec[None,:]
         S2 = -0.5 * minusCntVecMx / (min_p**2) 
@@ -1903,7 +1963,8 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
       def jacobian(vectorGS):
           gs.from_vector(vectorGS)
           gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree, 
-                             prMxToFill=probs, clipTo=probClipInterval, check=check)
+                              prMxToFill=probs, clipTo=probClipInterval,
+                              check=check, comm=comm)
           
           pos_probs = _np.where(probs < min_p, min_p, probs)
           S = minusCntVecMx / min_p + totalCntVec[None,:]
@@ -1945,7 +2006,8 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
       
       def objective_func(vectorGS): 
         gs.from_vector(vectorGS)
-        gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval, check)
+        gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval,
+                           check, comm)
         pos_probs = _np.where(probs < min_p, min_p, probs)
         S = minusCntVecMx / min_p 
         S2 = -0.5 * minusCntVecMx / (min_p**2) 
@@ -1965,7 +2027,8 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
       def jacobian(vectorGS):
           gs.from_vector(vectorGS)
           gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree, 
-                             prMxToFill=probs, clipTo=probClipInterval, check=check)
+                              prMxToFill=probs, clipTo=probClipInterval,
+                              check=check, comm=comm)
           
           pos_probs = _np.where(probs < min_p, min_p, probs)
           S = minusCntVecMx / min_p
@@ -2069,11 +2132,12 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
 
 
 def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
-                      maxiter=100000, maxfev=None, tol=1e-6,
-                      minProbClip=1e-4, probClipInterval=None, radius=1e-4, poissonPicture=True,
-                      returnMaxLogL=False, returnAll=False, 
-                      gateStringSetLabels=None, useFreqWeightedChiSq=False, verbosity=0, 
-                      check=False, memLimit=None, times=None):
+                       maxiter=100000, maxfev=None, tol=1e-6,
+                       minProbClip=1e-4, probClipInterval=None, radius=1e-4,
+                       poissonPicture=True,returnMaxLogL=False,returnAll=False, 
+                       gateStringSetLabels=None, useFreqWeightedChiSq=False,
+                       verbosity=0, check=False, memLimit=None, times=None,
+                       comm=None):
   """
   Performs Iterative Maximum Liklihood Estimation Gate Set Tomography on the dataset.
 
@@ -2152,6 +2216,10 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
       comprised of a descriptive string and a duration in seconds.  Default
       value of None means no timing information should be saved.
 
+  comm : mpi4py.MPI.Comm, optional
+      When not None, an MPI communicator for distributing the computation
+      across multiple processors.
+
 
   Returns
   -------
@@ -2193,7 +2261,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                                       maxiter, maxfev, tol, 0, minProbClip, 
                                       probClipInterval, useFreqWeightedChiSq,
                                       0, verbosity, check,
-                                      False, None, None, memLimit) 
+                                      False, None, None, memLimit, comm) 
                           # Note maxLogL is really chi2 number here
     if times is not None:
       tNxt = _time.time(); 
@@ -2216,14 +2284,15 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
     #maxLogL, mleGateset = do_mlgst( dataset, mleGateset, stringsToEstimate,
     #                                maxiter, maxfev, tol, 
     #                                minProbClip, probClipInterval, radius, poissonPicture,
-    #                                verbosity, check, None, memLimit)
+    #                                verbosity, check, None, memLimit, comm)
 
     if i == len(gateStringLists)-1: #on the last iteration, do ML
       if verbosity > 0: print "--- Last Iteration: switching to ML objective ---"
-      maxLogL_p, mleGateset_p = do_mlgst( dataset, mleGateset, stringsToEstimate,
-                                          maxiter, maxfev, tol, minProbClip, 
-                                          probClipInterval, radius, poissonPicture,
-                                          verbosity, check, None, memLimit)
+      maxLogL_p, mleGateset_p = do_mlgst( 
+        dataset, mleGateset, stringsToEstimate, maxiter, maxfev, tol,
+        minProbClip, probClipInterval, radius, poissonPicture, verbosity,
+        check, None, memLimit, comm)
+
       if verbosity > 0:
         print "    2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL_p))
 

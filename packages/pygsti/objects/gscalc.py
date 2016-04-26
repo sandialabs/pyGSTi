@@ -187,7 +187,7 @@ class GateSetCalculator(object):
     # vec( A * E(0,1) * B ) = vec( mx w/ col_i = A[col0] * B[0,1] ) = B^T tensor A * vec( E(0,1) )
     # In general: vec( A * X * B ) = B^T tensor A * vec( X )
 
-    def dproduct(self, gatestring, flat=False):
+    def dproduct(self, gatestring, flat=False, wrtFilter=None):
         """
         Compute the derivative of a specified sequence of gate labels.  
 
@@ -237,6 +237,24 @@ class GateSetCalculator(object):
 
         dim = self.dim
 
+        
+        #Create per-gate with-respect-to paramter filters, used to 
+        # select a subset of all the derivative columns, essentially taking
+        # a derivative of only a *subset* of all the gate's parameters
+        fltr = {} #keys = gate labels, values = per-gate param indices
+        if wrtFilter is not None: 
+            wrtIndexToGatelableIndexPair = []
+            for lbl,g in self.gates.iteritems():
+                for k in range(g.num_params()):
+                    wrtIndexToGatelableIndexPair.append((lbl,k))
+
+            for gateLabel in self.gates.keys():
+                fltr[gateLabel] = []
+
+            for i in wrtFilter:
+                lbl,k = wrtIndexToGatelableIndexPair[i]
+                fltr[lbl].append(k)
+
         #Cache partial products
         leftProds = [ ]
         G = _np.identity( dim ); leftProds.append(G)
@@ -253,8 +271,12 @@ class GateSetCalculator(object):
         # Initialize storage
         dprod_dgateLabel = { }; dgate_dgateLabel = {}
         for gateLabel,gate in self.gates.iteritems():
-            dprod_dgateLabel[gateLabel] = _np.zeros( (dim**2, gate.num_params() ) )
-            dgate_dgateLabel[gateLabel] = gate.deriv_wrt_params() # (dim**2, nParams[gateLabel])
+            iCols = fltr.get(gateLabel,None)
+            nDerivCols = gate.num_params() if (iCols is None) else len(iCols)
+            dprod_dgateLabel[gateLabel] = _np.zeros((dim**2, nDerivCols))
+            dgate_dgateLabel[gateLabel] = gate.deriv_wrt_params(iCols)
+              # (dim**2, nParams[gateLabel])
+
             #Note: replace gate.num_params()  and .deriv_wrt_params() with something more
             # general like parameterizer.get_num_params(gateLabel), etc, to allow for non-gate-local
             # gatesets params? In this case, would expect output to be of shape (dim**2, nTotParams)
@@ -274,7 +296,17 @@ class GateSetCalculator(object):
             return flattened_dprod
         else:
             vec_gs_size = flattened_dprod.shape[1]
-            return _np.swapaxes( flattened_dprod, 0, 1 ).reshape( (vec_gs_size, dim, dim) ) # axes = (gate_ij, prod_row, prod_col)
+            ret= _np.swapaxes( flattened_dprod, 0, 1 ).reshape( (vec_gs_size, dim, dim) ) # axes = (gate_ij, prod_row, prod_col)
+
+            #DEBUG!!!
+            #if wrtFilter is not None:
+            #    chk_prod = self.dproduct(gatestring, flat, wrtFilter=None)
+            #    for ii,i in enumerate(wrtFilter):
+            #        assert(_np.linalg.norm(chk_prod[i]-ret[ii]) < 1e-6)
+            #    taken_chk_prod = chk_prod.take( wrtFilter, axis=0 )
+            #    assert(_np.linalg.norm(taken_chk_prod-ret) < 1e-6)
+
+            return ret
 
     def hproduct(self, gatestring, flat=False):
         """
@@ -924,8 +956,80 @@ class GateSetCalculator(object):
 #        evalTree.initialize([""] + self.gates.keys(), gatestring_list)
 #        return evalTree
 
+    def _distribute_indices(self, indices, comm, verbosity=0):
+        #Doesn't need to be a member function: TODO - move to 
+        # an MPI helper class?            
+        if comm is None:
+            nprocs, rank = 1, 0
+        else:
+            nprocs = comm.Get_size()
+            rank = comm.Get_rank()
 
-    def bulk_product(self, evalTree, bScale=False):
+        nIndices = len(indices)
+        if nprocs >= nIndices:
+            loc_indices = [ indices[rank] ] if rank < nIndices else []
+            owners = { indices[r]: r for r in range(nIndices) }
+        else:
+            nloc_std =  nIndices / nprocs
+            nloc_last = nIndices - nloc_std*(nprocs-1)
+            nloc = nloc_last if rank == nprocs-1 else nloc_std
+            nstart = rank * nloc_std
+            loc_indices = [ indices[i] for i in range(nstart,nstart+nloc)]
+
+            owners = { } #which rank "owns" each index
+            for r in range(nprocs-1): 
+                nstart = r * nloc_std
+                for i in range(nstart,nstart+nloc_std):
+                    owners[indices[i]] = r
+            nstart = (nprocs-1)*nloc_std
+            for i in range(nstart,nstart+nloc_last):
+                owners[indices[i]] = (nprocs-1)
+
+        if verbosity > 2:
+            if rank == 0:
+                print "*** Distributing %d indices amongst %s processors ***"% \
+                (nIndices, nprocs)
+            print "    Rank %d (%d): %s" % (rank, len(loc_indices),
+                                            str(loc_indices))
+
+        return loc_indices, owners
+
+    def _gather_subtree_results(self, evt, gIndex_owners, my_gIndices,
+                                my_results, result_index, per_string_dim, comm):
+        #Doesn't need to be a member function: TODO - move to 
+        # an MPI helper class?            
+        S = evt.num_final_strings() # number of strings
+        assert(per_string_dim[0] == 1) #when this isn't true, (e.g. flat==True
+          # for bulk_dproduct), we need to copy blocks instead of single indices
+          # in the myFinalToParentFinalMap line below...
+        dims = (S*per_string_dim[0],) + tuple(per_string_dim[1:])
+        result = _np.empty( dims, 'd' )
+
+        for i,subtree in enumerate(evt.get_sub_trees()):
+            if i in my_gIndices:
+                li = my_gIndices.index(i)
+                if result_index is None:
+                    sub_result = my_results[li]
+                else:
+                    sub_result = my_results[li][result_index]
+            else:
+                sub_result = None
+
+            if comm is None:
+                #No comm; rank 0 owns everything
+                assert(gIndex_owners[i] == 0)
+            else:
+                sub_result = comm.bcast(sub_result, root=gIndex_owners[i])
+
+            if evt.is_split():
+                result[ subtree.myFinalToParentFinalMap ] = sub_result
+            else: #subtree is actually the entire tree (evt), so just copy all
+                result = sub_result
+        return result
+
+
+
+    def bulk_product(self, evalTree, bScale=False, comm=None):
         """
         Compute the products of many gate strings at once.
 
@@ -937,6 +1041,10 @@ class GateSetCalculator(object):
 
         bScale : bool, optional
            When True, return a scaling factor (see below).
+
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.
               
         Returns
         -------
@@ -953,7 +1061,55 @@ class GateSetCalculator(object):
         """
 
         dim = self.dim
-        assert(not evalTree.is_split()) #product functions can't use split trees (as there's really no point)
+
+        if comm is not None or evalTree.is_split():
+            #Try to parallelize by gatestring sub-tree
+
+            #DEBUG!!! compare answer with no parallelization
+            chk_ret = self.bulk_product(evalTree, bScale, comm=None)
+
+            #If tree is not split already, split it here.  This is less 
+            # efficient than having it "pre-split" since the split is being
+            # done on *each* call to bulk_product, but the hope is that split()
+            # is fast enough it will still yield a speedup
+            if comm is not None and comm.Get_size() > 1 \
+                    and evalTree.is_split() == False:
+                evalTree = evalTree.copy() #don't change tree passed in...
+                evalTree.split(None, comm.Get_size())
+                #if comm.Get_rank() == 0: #DEBUG
+                #    print "bulk_product: dividing evaluation tree for MPI"
+                #    evalTree.print_analysis()
+
+            subtrees = evalTree.get_sub_trees()
+            allSubTreeIndices = range(len(subtrees))
+            mySubTreeIndices, subTreeOwners = \
+                self._distribute_indices(allSubTreeIndices, comm)
+            
+            my_results = [ self.bulk_product(subtrees[iSubTree],bScale,None)
+                             for iSubTree in mySubTreeIndices ]
+
+            def gather_subtree_results(result_index, per_string_dim, comm):
+                return self._gather_subtree_results(
+                    evalTree, subTreeOwners, mySubTreeIndices, my_results,
+                    result_index, per_string_dim, comm)
+
+            if bScale:
+                Gs = gather_subtree_results(0,(1,dim,dim), comm)
+                scaleVals = gather_subtree_results(1,(1,), comm)
+                #DEBUG!!! compare answer with no parallelization
+                assert(_np.linalg.norm(chk_ret[0]-Gs) < 1e-6)
+                assert(_np.linalg.norm(chk_ret[1]-scaleVals) < 1e-6)
+                return Gs, scaleVals
+            else:
+                Gs = gather_subtree_results(None,(1,dim,dim), comm)
+                #DEBUG!!! compare answer with no parallelization
+                assert(_np.linalg.norm(chk_ret-Gs) < 1e-6)
+                return Gs
+
+            
+        # ------------------------------------------------------------------
+
+        assert(not evalTree.is_split()) #block above handles split trees
 
         cacheSize = len(evalTree)
         prodCache = _np.zeros( (cacheSize, dim, dim) )
@@ -1011,7 +1167,8 @@ class GateSetCalculator(object):
             return Gs
 
 
-    def bulk_dproduct(self, evalTree, flat=False, bReturnProds=False, bScale=False, memLimit=None):
+    def bulk_dproduct(self, evalTree, flat=False, bReturnProds=False,
+                      bScale=False, memLimit=None, comm=None, wrtFilter=None):
         """
         Compute the derivative of a many gate strings at once.
 
@@ -1033,7 +1190,19 @@ class GateSetCalculator(object):
         memLimit : int, optional
           A rough memory limit in bytes which restricts the amount of
           intermediate values that are computed and stored.
-        
+
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.
+
+        wrtFilter : list of ints, optional
+          If not None, a list of integers specifying which gate parameters
+          to include in the derivative.  Each element is an index into an
+          array of gate parameters ordered by concatenating each gate's 
+          parameters (in the order specified by the gate set).  This argument
+          is used internally for distributing derivative calculations across
+          multiple processors.
+
            
         Returns
         -------
@@ -1069,12 +1238,203 @@ class GateSetCalculator(object):
         """
 
         dim = self.dim
-        assert(not evalTree.is_split()) #product functions can't use split trees (as there's really no point)
-
-        nGateStrings = evalTree.num_final_strings() #len(gatestring_list)
-        nGateDerivCols = sum([g.num_params() for g in self.gates.values()])
+        nGateStrings = evalTree.num_final_strings()
+        if wrtFilter is None:
+            nGateDerivCols = sum([g.num_params() for g in self.gates.values()])
+        else:
+            nGateDerivCols = len(wrtFilter)
         deriv_shape = (nGateDerivCols, dim, dim)
         cacheSize = len(evalTree)
+
+        # ------------------------------------------------------------------
+
+        if comm is not None: #then we need to parallelize this call
+
+            #DEBUG!!! compare answer with no parallelization
+            chk_ret = self.bulk_dproduct(evalTree, flat, bReturnProds,
+                            bScale, memLimit, comm=None, wrtFilter=None)
+
+            if wrtFilter is None: #then we have *not* yet parallelized over
+                                  # taking derivatives with-respect-to different
+                                  # gate parameters, so do this now.
+
+                allDerivColIndices = range(nGateDerivCols)
+                myDerivColIndices, derivColOwners = \
+                    self._distribute_indices(allDerivColIndices, comm)
+                
+                #pass *same* (possibly split) evalTree. We could parallelize
+                # further using split trees by passing a non-None comm along
+                # with the non-None wrtFilter (e.g. passing a comm for a sub-
+                # group of the procs when  nprocs > nGateDerivCols could be 
+                # useful). Currently, we don't do this (comm = None) and so
+                # there will be no further parallelization.
+                my_results = self.bulk_dproduct(evalTree,flat,bReturnProds,
+                                                  bScale,memLimit,comm=None,
+                                                  wrtFilter=myDerivColIndices)
+
+                all_results = comm.allgather(my_results)
+                all_results = map(list,all_results) #so writeable
+
+                def concat_dGs(dGs_index):
+                    if dGs_index is None:
+                        to_concat = all_results
+                    else:
+                        if bScale: #scale all procs results to proc0 scaling
+                            r0 = all_results[0] # proc0 results
+                            si = 2 if bReturnProds else 1 #index of scale fctrs
+                            if flat: # then 1st dim of dGs is S*N, so must
+                                     # scale in groups of N=dim*2
+                                for r in all_results[1:]: 
+                                    S = _np.repeat(r[si],scale_rep) \
+                                        / _np.repeat(r0[si],scale_rep)
+                                    r[dGs_index] *= S[:,_np.newaxis]
+                            else:
+                                nw = _np.newaxis
+                                for r in all_results[1:]: 
+                                    r[dGs_index] *= (r[si]/r0[si])[:,nw,nw,nw]
+                        to_concat = [ r[dGs_index] for r in all_results]
+                    return _np.concatenate(to_concat, axis=1)
+
+
+                if not bReturnProds and not bScale:
+                    #Single case when results elements are *not* tuples
+                    dGs = concat_dGs(None)
+
+                    #DEBUG!!! compare answer with no parallelization
+                    assert(_np.linalg.norm(chk_ret-dGs) < 1e-6)
+                    return dGs
+                else:
+                    dGs = concat_dGs(0)
+                    rest_of_result = all_results[0][1:] #use proc 0 results
+
+                    #DEBUG!!! compare answer with no parallelization
+                    if bScale:
+                        assert(not flat) # for testing.  We don't ever used
+                              #scaling & flat together (and it's hard to scale
+                              # in this case b/c we need to use repeat as above)
+                        nw = _np.newaxis
+                        scaled_dGs = rest_of_result[-1][:,nw,nw,nw] * dGs
+                        scaled_chk = chk_ret[-1][:,nw,nw,nw] * chk_ret[0]
+                        assert(_np.linalg.norm(scaled_chk-scaled_dGs)< 1e-6)
+                    else:
+                        assert(_np.linalg.norm(chk_ret[0]-dGs) < 1e-6)
+
+                    if bReturnProds:
+                        if bScale:
+                            scaled_Gs = rest_of_result[-1][:,nw,nw] * \
+                                rest_of_result[0]
+                            scaled_chk = chk_ret[-1][:,nw,nw] * chk_ret[1]
+                            assert(_np.linalg.norm(scaled_chk-scaled_Gs)< 1e-6)
+                        else:
+                            assert(_np.linalg.norm(chk_ret[1]-rest_of_result[0])
+                                   < 1e-6 )
+
+
+                    if False and _np.linalg.norm(chk_ret[0]-dGs) >= 1e-6:
+                        #if bScale:
+                        #    print "SCALED"
+                        #    print chk_ret[-1]
+
+                        rank = comm.Get_rank()
+                        if rank == 0:
+                            print "DEBUG: parallel mismatch"
+                            print "len(all_results) = ",len(all_results)
+                            print "diff = ",_np.linalg.norm(chk_ret[0]-dGs)
+                            for row in range(dGs.shape[0]):
+                                rowA = my_results[0][row,:].flatten()
+                                rowB = all_results[rank][0][row,:].flatten()
+                                rowC = dGs[row,:].flatten()
+                                chk_C = chk_ret[0][row,:].flatten()
+
+                                def sp(ar):
+                                    for i,x in enumerate(ar):
+                                        if abs(x) > 1e-4:
+                                            print i,":", x
+                                def spc(ar1,ar2):
+                                    for i,x in enumerate(ar1):
+                                        if (abs(x) > 1e-4 or abs(ar2[i]) > 1e-4): # and abs(x-ar2[i]) > 1e-6:
+                                            print i,":", x, ar2[i], "(", (x-ar2[i]), ")", "[",x/ar2[i],"]"
+
+                                assert( _np.linalg.norm(rowA-rowB) < 1e-6)
+                                assert( _np.linalg.norm(rowC[0:len(rowA)]-rowA) < 1e-6)
+                                #if _np.linalg.norm(rowA) > 1e-6:
+                                if _np.linalg.norm(rowC - chk_C) > 1e-6:
+                                    print "SCALE for row%d = %g" % (row,rest_of_result[-1][row])
+                                    print "CHKSCALE for row%d = %g" % (row,chk_ret[-1][row])
+                                    print "row%d diff = " % row, _np.linalg.norm(rowC - chk_C)
+                                    print "row%d (rank%d)A = " % (row,rank)
+                                    sp(rowA)
+                                    print "row%d (all vs check) = " % row
+                                    spc(rowC, chk_C)
+
+                                    assert(False)
+                        assert(False)
+                    return (dGs,) + tuple(rest_of_result)
+
+            else: # we've already parallelized over wrtFilter, and still have
+                  # a non-None comm, so use this comm to parallelize over
+                  # sub-trees if we have them.  Since we also want to "mock-
+                  # parallelize" over subtrees whenever the tree is split,
+                  # we just drop out of this else block.
+                pass
+
+
+        if comm is not None or evalTree.is_split():  
+            #similar to in bulk_product, parallelize over sub-trees
+
+            #If tree is not split already, split it here.  This is less 
+            # efficient than having it "pre-split" since the split is being
+            # done on *each* call to bulk_dproduct, but the hope is that split()
+            # is fast enough it will still yield a speedup
+            if comm is not None and comm.Get_size() > 1 \
+                    and evalTree.is_split() == False:
+                evalTree = evalTree.copy() #don't change tree passed in...
+                evalTree.split(None, comm.Get_size())
+                #if comm.Get_rank() == 0:  #DEBUG
+                #    print "bulk_dproduct: dividing evaluation tree for MPI"
+                #    evalTree.print_analysis()
+
+            subtrees = evalTree.get_sub_trees()
+            allSubTreeIndices = range(len(subtrees))
+            mySubTreeIndices, subTreeOwners = \
+                self._distribute_indices(allSubTreeIndices, comm)
+            
+            my_results = [ self.bulk_dproduct(subtrees[iSubTree],flat,
+                                              bReturnProds,bScale,memLimit,
+                                              comm=None, wrtFilter=wrtFilter)
+                           for iSubTree in mySubTreeIndices ]
+
+            def gather_subtree_results(result_index, per_string_dim, comm):
+                return self._gather_subtree_results(
+                    evalTree, subTreeOwners, mySubTreeIndices, my_results,
+                    result_index, per_string_dim, comm)
+
+            if flat == False:
+                psd = (1,nGateDerivCols,dim,dim) # per string dimension of dGs
+            else:
+                psd = (dim*dim,nGateDerivCols)
+
+            if bReturnProds:
+                dGs = gather_subtree_results(0, psd, comm)
+                Gs = gather_subtree_results(1,(1,dim,dim), comm)
+                if bScale:
+                    scaleVals = gather_subtree_results(2,(1,), comm)
+                    return (dGs, Gs, scaleVals)
+                else:
+                    return (dGs, Gs)
+            else:
+                if bScale:
+                    dGs = gather_subtree_results(0, psd, comm)
+                    scaleVals = gather_subtree_results(1,(1,), comm)
+                    return (dGs, scaleVals) 
+                else:
+                    dGs = gather_subtree_results(None, psd, comm)
+                    return dGs
+
+
+        # ------------------------------------------------------------------
+
+        assert(not evalTree.is_split()) #product functions can't use split trees (as there's really no point)
 
         ##DEBUG
         #nc = cacheSize; gd = dim; nd = nGateDerivCols; C = 8.0/1024.0**3
@@ -1107,7 +1467,7 @@ class GateSetCalculator(object):
             if gateLabel == "": #special case of empty label == no gate
                 prodCache[i] = _np.identity( dim ); dProdCache[0] = _np.zeros( deriv_shape )
             else:
-                dgate = self.dproduct( (gateLabel,) )
+                dgate = self.dproduct( (gateLabel,) , wrtFilter=wrtFilter)
                 nG = max(_nla.norm(self.gates[gateLabel]),1.0)
                 prodCache[i]  = self.gates[gateLabel].base / nG
                 scaleCache[i] = _np.log(nG)
@@ -1201,7 +1561,8 @@ class GateSetCalculator(object):
             return (dGs, scaleVals) if bScale else dGs
 
 
-    def bulk_hproduct(self, evalTree, flat=False, bReturnDProdsAndProds=False, bScale=False):
+    def bulk_hproduct(self, evalTree, flat=False, bReturnDProdsAndProds=False,
+                      bScale=False, comm=None, wrtFilter=None):
         
         """
         Return the Hessian of a many gate strings at once.
@@ -1218,6 +1579,22 @@ class GateSetCalculator(object):
         bReturnDProdsAndProds : bool, optional
           when set to True, additionally return the probabilities and
           their derivatives.
+
+        bScale : bool, optional
+          When True, return a scaling factor (see below).
+
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.
+
+        wrtFilter : list of ints, optional
+          If not None, a list of integers specifying which gate parameters
+          to include in the derivative.  Each element is an index into an
+          array of gate parameters ordered by concatenating each gate's 
+          parameters (in the order specified by the gate set).  This argument
+          is used internally for distributing derivative calculations across
+          multiple processors.
+
            
         Returns
         -------
@@ -1272,8 +1649,10 @@ class GateSetCalculator(object):
           Only returned when bScale == True.  An array of shape S such that
           scaleVals[i] contains the multiplicative scaling needed for
           the hessians, derivatives, and/or products for the i-th gate string.
-        """
 
+        """
+        assert(comm is None and wrtFilter is None) #TODO: parallelize this fn!
+        
         dim = self.dim
         assert(not evalTree.is_split()) #product functions can't use split trees (as there's really no point)
 
@@ -1408,7 +1787,8 @@ class GateSetCalculator(object):
 
     
 
-    def bulk_pr(self, spamLabel, evalTree, clipTo=None, check=False):
+    def bulk_pr(self, spamLabel, evalTree, clipTo=None, check=False,
+                comm=None):
         """ 
         Compute the probabilities of the gate sequences given by evalTree,
         where initialization & measurement operations are always the same
@@ -1430,6 +1810,11 @@ class GateSetCalculator(object):
           If True, perform extra checks within code to verify correctness,
           generating warnings when checks fail.  Used for testing, and runs
           much slower when True.
+
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.
+
            
         Returns
         -------
@@ -1447,7 +1832,7 @@ class GateSetCalculator(object):
         E   = _np.conjugate(_np.transpose(self._get_evec(elabel)))
 
         for evalSubTree in evalTree.get_sub_trees():
-            Gs, scaleVals = self.bulk_product(evalSubTree, bScale=True)
+            Gs, scaleVals = self.bulk_product(evalSubTree, True, comm)
 
             #Compute probability and save in return array
             # want vp[iFinal] = float(dot(E, dot(G, rho)))  ##OLD, slightly slower version: p = trace(dot(self.SPAMs[spamLabel], G))
@@ -1496,11 +1881,17 @@ class GateSetCalculator(object):
                 #        print "   %s => p=%g, check_p=%g, diff=%g" % (str(gs),vp[i],check_vp[i],abs(vp[i]-check_vp[i]))
                 #        raise ValueError("STOP")
 
+        #DEBUG!!!
+        if comm is not None:
+            chk_vp = self.bulk_pr(spamLabel, evalTree, clipTo, check, comm=None)
+            assert(_np.linalg.norm(chk_vp-vp) < 1e-6)
+
         return vp
 
 
     def bulk_dpr(self, spamLabel, evalTree, 
-                 returnPr=False,clipTo=None,check=False,memLimit=None):
+                 returnPr=False,clipTo=None,check=False,memLimit=None,
+                 comm=None):
 
         """
         Compute the derivatives of the probabilities generated by a each gate 
@@ -1529,6 +1920,11 @@ class GateSetCalculator(object):
           generating warnings when checks fail.  Used for testing, and runs
           much slower when True.
 
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.
+
+
         Returns
         -------
         dprobs : numpy array
@@ -1549,7 +1945,9 @@ class GateSetCalculator(object):
             #then compute Deriv[ 1.0 - (all other spam label probabilities) ]
             otherSpamdefs = self.spamdefs.keys()[:]; del otherSpamdefs[ otherSpamdefs.index(spamLabel) ]
             assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamdefs]) )
-            otherResults = [self.bulk_dpr(sl, evalTree, returnPr, clipTo) for sl in otherSpamdefs]
+            otherResults = [self.bulk_dpr(sl, evalTree, returnPr,
+                                          clipTo, check, memLimit, comm)
+                            for sl in otherSpamdefs]
             if returnPr:
                 return ( -1.0 * _np.sum([dpr for dpr,p in otherResults],axis=0),
                           1.0 - _np.sum([p   for dpr,p in otherResults],axis=0) )
@@ -1573,8 +1971,9 @@ class GateSetCalculator(object):
 
         for evalSubTree in evalTree.get_sub_trees():
             sub_nGateStrings = evalSubTree.num_final_strings()
-            dGs, Gs, scaleVals = self.bulk_dproduct(evalSubTree, bScale=True,
-                                                    bReturnProds=True, memLimit=memLimit)
+            dGs, Gs, scaleVals = self.bulk_dproduct(
+                evalSubTree, bReturnProds=True, bScale=True, memLimit=memLimit,
+                comm=comm)
 
             old_err = _np.seterr(over='ignore')
     
@@ -1667,6 +2066,16 @@ class GateSetCalculator(object):
             if _nla.norm(vdp - check_vdp) > 1e-6:
                 _warnings.warn("Norm(vdp-check_vdp) = %g - %g = %g" % (_nla.norm(vdp), _nla.norm(check_vdp), _nla.norm(vdp - check_vdp)))
 
+        #DEBUG!!!
+        if comm is not None:
+            chk = self.bulk_dpr(spamLabel, evalTree, 
+                                returnPr,clipTo,check,memLimit,comm=None)
+            if returnPr:
+                assert(_np.linalg.norm(chk[0]-vdp) < 1e-6)
+                assert(_np.linalg.norm(chk[1]-vp) < 1e-6)
+            else:
+                assert(_np.linalg.norm(chk-vdp) < 1e-6)
+
         if returnPr: return vdp, vp
         else:        return vdp
 
@@ -1674,7 +2083,7 @@ class GateSetCalculator(object):
 
     def bulk_hpr(self, spamLabel, evalTree, 
                  returnPr=False,returnDeriv=False,
-                 clipTo=None,check=False):
+                 clipTo=None,check=False,comm=None):
 
         """
         Compute the derivatives of the probabilities generated by a each gate 
@@ -1705,6 +2114,11 @@ class GateSetCalculator(object):
           generating warnings when checks fail.  Used for testing, and runs
           much slower when True.
 
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.
+
+
         Returns
         -------
         hessians : numpy array
@@ -1730,7 +2144,8 @@ class GateSetCalculator(object):
             #then compute Hessian[ 1.0 - (all other spam label probabilities) ]
             otherSpamdefs = self.spamdefs.keys()[:]; del otherSpamdefs[ otherSpamdefs.index(spamLabel) ]
             assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamdefs]) )
-            otherResults = [self.bulk_hpr(sl, evalTree, returnPr, returnDeriv, clipTo) for sl in otherSpamdefs]
+            otherResults = [self.bulk_hpr(sl, evalTree, returnPr, returnDeriv,
+                                   clipTo,check,comm) for sl in otherSpamdefs]
             if returnDeriv: 
                 if returnPr: return ( -1.0 * _np.sum([hpr for hpr,dpr,p in otherResults],axis=0),
                                       -1.0 * _np.sum([dpr for hpr,dpr,p in otherResults],axis=0), 
@@ -1760,7 +2175,8 @@ class GateSetCalculator(object):
 
         for evalSubTree in evalTree.get_sub_trees():
             sub_nGateStrings = evalSubTree.num_final_strings()
-            hGs, dGs, Gs, scaleVals = self.bulk_hproduct(evalSubTree, bScale=True, bReturnDProdsAndProds=True)
+            hGs, dGs, Gs, scaleVals = self.bulk_hproduct(
+                evalSubTree, bReturnDProdsAndProds=True, bScale=True, comm=comm)
             old_err = _np.seterr(over='ignore')
     
             #Compute probability and save in return array
@@ -1919,7 +2335,7 @@ class GateSetCalculator(object):
             else:        return vhp
 
 
-    def bulk_probs(self, evalTree, clipTo=None, check=False):
+    def bulk_probs(self, evalTree, clipTo=None, check=False, comm=None):
         """ 
         Construct a dictionary containing the bulk-probabilities
         for every spam label (each possible initialization &
@@ -1939,6 +2355,11 @@ class GateSetCalculator(object):
           If True, perform extra checks within code to verify correctness,
           generating warnings when checks fail.  Used for testing, and runs
           much slower when True.
+
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.
+
            
         Returns
         -------
@@ -1950,14 +2371,16 @@ class GateSetCalculator(object):
         probs = { }
         if not self.assumeSumToOne:
             for spamLabel in self.spamdefs:
-                probs[spamLabel] = self.bulk_pr(spamLabel, evalTree, clipTo, check)
+                probs[spamLabel] = self.bulk_pr(spamLabel, evalTree,
+                                                clipTo, check, comm)
         else:
             s = _np.zeros( evalTree.num_final_strings(), 'd'); lastLabel = None
             for spamLabel in self.spamdefs:
                 if self._is_remainder_spamlabel(spamLabel):
                     assert(lastLabel is None) # ensure there is at most one dummy spam label
                     lastLabel = spamLabel; continue
-                probs[spamLabel] = self.bulk_pr(spamLabel, evalTree, clipTo, check)
+                probs[spamLabel] = self.bulk_pr(spamLabel, evalTree, clipTo,
+                                                check,comm)
                 s += probs[spamLabel]
             if lastLabel is not None: probs[lastLabel] = 1.0 - s  #last spam label is computed so sum == 1
         return probs
@@ -1965,7 +2388,7 @@ class GateSetCalculator(object):
 
     def bulk_dprobs(self, evalTree, 
                     returnPr=False,clipTo=None,
-                    check=False,memLimit=None):
+                    check=False,memLimit=None,comm=None):
 
         """
         Construct a dictionary containing the bulk-probability-
@@ -1995,6 +2418,11 @@ class GateSetCalculator(object):
           A rough memory limit in bytes which restricts the amount of
           intermediate values that are computed and stored.
 
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.
+
+
         Returns
         -------
         dprobs : dictionary
@@ -2005,8 +2433,8 @@ class GateSetCalculator(object):
         dprobs = { }
         if not self.assumeSumToOne:
             for spamLabel in self.spamdefs:
-                dprobs[spamLabel] = self.bulk_dpr(spamLabel, evalTree,
-                                                  returnPr,clipTo,check,memLimit)
+                dprobs[spamLabel] = self.bulk_dpr(
+                   spamLabel, evalTree, returnPr, clipTo, check, memLimit, comm)
         else:
             ds = None; lastLabel = None
             s = _np.zeros( evalTree.num_final_strings(), 'd')
@@ -2014,8 +2442,8 @@ class GateSetCalculator(object):
                 if self._is_remainder_spamlabel(spamLabel):
                     assert(lastLabel is None) # ensure there is at most one dummy spam label
                     lastLabel = spamLabel; continue
-                dprobs[spamLabel] = self.bulk_dpr(spamLabel, evalTree,
-                                                  returnPr,clipTo,check,memLimit)
+                dprobs[spamLabel] = self.bulk_dpr(
+                   spamLabel, evalTree, returnPr, clipTo, check, memLimit, comm)
                 if returnPr:
                     ds = dprobs[spamLabel][0] if ds is None else ds + dprobs[spamLabel][0]
                     s += dprobs[spamLabel][1]
@@ -2028,7 +2456,7 @@ class GateSetCalculator(object):
 
     def bulk_hprobs(self, evalTree, 
                     returnPr=False,returnDeriv=False,clipTo=None,
-                    check=False):
+                    check=False,comm=None):
 
         """
         Construct a dictionary containing the bulk-probability-
@@ -2057,6 +2485,11 @@ class GateSetCalculator(object):
           generating warnings when checks fail.  Used for testing, and runs
           much slower when True.
 
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.
+
+
         Returns
         -------
         hprobs : dictionary
@@ -2067,8 +2500,8 @@ class GateSetCalculator(object):
         hprobs = { }
         if not self.assumeSumToOne:
             for spamLabel in self.spamdefs:
-                hprobs[spamLabel] = self.bulk_hpr(spamLabel, evalTree,
-                                                  returnPr,returnDeriv,clipTo,check)
+                hprobs[spamLabel] = self.bulk_hpr(
+                    spamLabel,evalTree,returnPr,returnDeriv,clipTo,check,comm)
         else:
             hs = None; ds = None; lastLabel = None
             s = _np.zeros( evalTree.num_final_strings(), 'd')
@@ -2076,8 +2509,8 @@ class GateSetCalculator(object):
                 if self._is_remainder_spamlabel(spamLabel):
                     assert(lastLabel is None) # ensure there is at most one dummy spam label
                     lastLabel = spamLabel; continue
-                hprobs[spamLabel] = self.bulk_hpr(spamLabel, evalTree,
-                                                  returnPr,returnDeriv,clipTo,check)
+                hprobs[spamLabel] = self.bulk_hpr(
+                    spamLabel,evalTree,returnPr,returnDeriv,clipTo,check,comm)
 
                 if returnPr:
                     if returnDeriv:
@@ -2105,7 +2538,7 @@ class GateSetCalculator(object):
 
 
     def bulk_fill_probs(self, mxToFill, spam_label_rows, 
-                       evalTree, clipTo=None, check=False):
+                       evalTree, clipTo=None, check=False, comm=None):
         """ 
         Identical to bulk_probs(...) except results are 
         placed into rows of a pre-allocated array instead
@@ -2138,6 +2571,11 @@ class GateSetCalculator(object):
           If True, perform extra checks within code to verify correctness,
           generating warnings when checks fail.  Used for testing, and runs
           much slower when True.
+
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.
+
            
         Returns
         -------
@@ -2145,14 +2583,15 @@ class GateSetCalculator(object):
         """
         if not self.assumeSumToOne:
             for spamLabel,rowIndex in spam_label_rows.iteritems():
-                mxToFill[rowIndex] = self.bulk_pr(spamLabel, evalTree, clipTo, check)
+                mxToFill[rowIndex] = self.bulk_pr(spamLabel, evalTree,
+                                                  clipTo, check, comm)
         else:
             s = _np.zeros( evalTree.num_final_strings(), 'd'); lastLabel = None
             for spamLabel in self.spamdefs: #Note: must loop through all spam labels, even if not requested
                 if self._is_remainder_spamlabel(spamLabel):
                     assert(lastLabel is None) # ensure there is at most one dummy spam label
                     lastLabel = spamLabel; continue
-                probs = self.bulk_pr(spamLabel, evalTree, clipTo, check)
+                probs = self.bulk_pr(spamLabel, evalTree, clipTo, check, comm)
                 s += probs
 
                 if spam_label_rows.has_key(spamLabel):
@@ -2163,7 +2602,8 @@ class GateSetCalculator(object):
 
 
     def bulk_fill_dprobs(self, mxToFill, spam_label_rows, evalTree,
-                         prMxToFill=None,clipTo=None,check=False,memLimit=None):
+                         prMxToFill=None,clipTo=None,check=False,memLimit=None,
+                         comm=None):
 
         """
         Identical to bulk_dprobs(...) except results are 
@@ -2207,6 +2647,15 @@ class GateSetCalculator(object):
           generating warnings when checks fail.  Used for testing, and runs
           much slower when True.
 
+        memLimit : int, optional
+          A rough memory limit in bytes which restricts the amount of
+          intermediate values that are computed and stored.
+
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.
+
+
         Returns
         -------
         None
@@ -2215,10 +2664,12 @@ class GateSetCalculator(object):
             if prMxToFill is not None:
                 for spamLabel,rowIndex in spam_label_rows.iteritems():
                     mxToFill[rowIndex], prMxToFill[rowIndex] = \
-                        self.bulk_dpr(spamLabel,evalTree,True,clipTo,check,memLimit)
+                        self.bulk_dpr(spamLabel,evalTree,True,clipTo,
+                                      check,memLimit,comm)
             else:
                 for spamLabel,rowIndex in spam_label_rows.iteritems():
-                    mxToFill[rowIndex] = self.bulk_dpr(spamLabel,evalTree,False,clipTo,check,memLimit)
+                    mxToFill[rowIndex] = self.bulk_dpr(
+                        spamLabel,evalTree,False,clipTo,check,memLimit,comm)
 
         else:
             ds = None; lastLabel = None
@@ -2229,7 +2680,8 @@ class GateSetCalculator(object):
                     if self._is_remainder_spamlabel(spamLabel):
                         assert(lastLabel is None) # ensure there is at most one dummy spam label
                         lastLabel = spamLabel; continue
-                    dprobs, probs = self.bulk_dpr(spamLabel,evalTree,True,clipTo,check,memLimit)
+                    dprobs, probs = self.bulk_dpr(spamLabel,evalTree,True,
+                                                  clipTo,check,memLimit,comm)
                     ds = dprobs if ds is None else ds + dprobs
                     s += probs
                     if spam_label_rows.has_key(spamLabel):
@@ -2245,7 +2697,8 @@ class GateSetCalculator(object):
                     if self._is_remainder_spamlabel(spamLabel):
                         assert(lastLabel is None) # ensure there is at most one dummy spam label
                         lastLabel = spamLabel; continue
-                    dprobs = self.bulk_dpr(spamLabel,evalTree,False,clipTo,check,memLimit)
+                    dprobs = self.bulk_dpr(spamLabel,evalTree,False,clipTo,
+                                           check,memLimit,comm)
                     ds = dprobs if ds is None else ds + dprobs
                     if spam_label_rows.has_key(spamLabel):
                         mxToFill[ spam_label_rows[spamLabel] ] = dprobs
@@ -2256,7 +2709,7 @@ class GateSetCalculator(object):
 
     def bulk_fill_hprobs(self, mxToFill, spam_label_rows, evalTree,
                          prMxToFill=None, derivMxToFill=None, clipTo=None,
-                         check=False):
+                         check=False, comm=None):
 
         """
         Identical to bulk_hprobs(...) except results are 
@@ -2306,6 +2759,11 @@ class GateSetCalculator(object):
           generating warnings when checks fail.  Used for testing, and runs
           much slower when True.
 
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.
+
+
         Returns
         -------
         None
@@ -2315,21 +2773,24 @@ class GateSetCalculator(object):
                 if derivMxToFill is not None:
                     for spamLabel,rowIndex in spam_label_rows.iteritems():
                         mxToFill[rowIndex], derivMxToFill[rowIndex], prMxToFill[rowIndex] = \
-                            self.bulk_hpr(spamLabel,evalTree,True,True,clipTo,check)
+                            self.bulk_hpr(spamLabel,evalTree,True,True,
+                                          clipTo,check,comm)
                 else:
                     for spamLabel,rowIndex in spam_label_rows.iteritems():
                         mxToFill[rowIndex], prMxToFill[rowIndex] = \
-                            self.bulk_hpr(spamLabel,evalTree,True,False,clipTo,check)
+                            self.bulk_hpr(spamLabel,evalTree,True,False,
+                                          clipTo,check,comm)
 
             else:
                 if derivMxToFill is not None:
                     for spamLabel,rowIndex in spam_label_rows.iteritems():
                         mxToFill[rowIndex], derivMxToFill[rowIndex] = \
-                            self.bulk_hpr(spamLabel,evalTree,False,True,clipTo,check)
+                            self.bulk_hpr(spamLabel,evalTree,False,True,
+                                          clipTo,check,comm)
                 else:
                     for spamLabel,rowIndex in spam_label_rows.iteritems():
-                        mxToFill[rowIndex] = self.bulk_hpr(spamLabel, evalTree,
-                                                           False,False,clipTo,check)
+                        mxToFill[rowIndex] = self.bulk_hpr(
+                            spamLabel,evalTree,False,False,clipTo,check,comm)
 
         else:  # assumeSumToOne == True
 
@@ -2342,8 +2803,8 @@ class GateSetCalculator(object):
                         if self._is_remainder_spamlabel(spamLabel):
                             assert(lastLabel is None) # ensure there is at most one dummy spam label
                             lastLabel = spamLabel; continue
-                        hprobs, dprobs, probs = self.bulk_hpr(spamLabel, evalTree,
-                                                              True,True,clipTo,check)
+                        hprobs, dprobs, probs = self.bulk_hpr(
+                            spamLabel,evalTree,True,True,clipTo,check,comm)
                         hs = hprobs if hs is None else hs + hprobs
                         ds = dprobs if ds is None else ds + dprobs
                         s += probs
@@ -2363,8 +2824,8 @@ class GateSetCalculator(object):
                         if self._is_remainder_spamlabel(spamLabel):
                             assert(lastLabel is None) # ensure there is at most one dummy spam label
                             lastLabel = spamLabel; continue
-                        hprobs, probs = self.bulk_hpr(spamLabel, evalTree,
-                                                      True,False,clipTo,check)
+                        hprobs, probs = self.bulk_hpr(
+                            spamLabel,evalTree,True,False,clipTo,check,comm)
                         hs = hprobs if hs is None else hs + hprobs
                         s += probs
                         if spam_label_rows.has_key(spamLabel):
@@ -2383,8 +2844,8 @@ class GateSetCalculator(object):
                         if self._is_remainder_spamlabel(spamLabel):
                             assert(lastLabel is None) # ensure there is at most one dummy spam label
                             lastLabel = spamLabel; continue
-                        hprobs, dprobs = self.bulk_hpr(spamLabel, evalTree,
-                                                       False,True,clipTo,check)
+                        hprobs, dprobs = self.bulk_hpr(
+                            spamLabel,evalTree,False,True,clipTo,check,comm)
                         hs = hprobs if hs is None else hs + hprobs
                         ds = dprobs if ds is None else ds + dprobs
                         if spam_label_rows.has_key(spamLabel):
@@ -2401,8 +2862,8 @@ class GateSetCalculator(object):
                         if self._is_remainder_spamlabel(spamLabel):
                             assert(lastLabel is None) # ensure there is at most one dummy spam label
                             lastLabel = spamLabel; continue
-                        hprobs = self.bulk_hpr(spamLabel, evalTree,
-                                               False,False,clipTo,check)
+                        hprobs = self.bulk_hpr(spamLabel,evalTree,False,False,
+                                               clipTo,check,comm)
                         hs = hprobs if hs is None else hs + hprobs
                         if spam_label_rows.has_key(spamLabel):
                             mxToFill[ spam_label_rows[spamLabel] ] = hprobs

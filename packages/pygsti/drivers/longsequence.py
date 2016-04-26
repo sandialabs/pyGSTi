@@ -24,7 +24,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                          weightsDict=None, fidPairs=None, constrainToTP=True, 
                          gaugeOptToCPTP=False, gaugeOptRatio=0.001,
                          objective="logl", advancedOptions={}, lsgstLists=None,
-                         truncScheme="whole germ powers", mxBasis="gm"):
+                         truncScheme="whole germ powers", mxBasis="gm",
+                         comm=None):
     """
     Perform end-to-end GST analysis using Ls and germs, with L as a maximum length.
 
@@ -129,6 +130,10 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     mxBasis : {"std", "gm", "pp"}, optional
         The basis used to interpret the gate matrices.
 
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
         
     Returns
     -------
@@ -231,7 +236,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
             verbosity=advancedOptions.get('verbosity',2),
             memLimit=advancedOptions.get('memoryLimitInBytes',None),
             useFreqWeightedChiSq=advancedOptions.get(
-                'useFreqWeightedChiSq',False), times=times_list)
+                'useFreqWeightedChiSq',False), times=times_list, comm=comm)
     elif objective == "logl":
         gs_lsgst_list = _alg.do_iterative_mlgst(
           ds, gs_after_gauge_opt, lsgstLists,
@@ -241,7 +246,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
           returnAll=True, verbosity=advancedOptions.get('verbosity',2),
           memLimit=advancedOptions.get('memoryLimitInBytes',None),
           useFreqWeightedChiSq=advancedOptions.get(
-                'useFreqWeightedChiSq',False), times=times_list)
+                'useFreqWeightedChiSq',False), times=times_list, comm=comm)
     else:
         raise ValueError("Invalid longSequenceObjective: %s" % objective)
 

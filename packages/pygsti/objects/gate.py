@@ -370,7 +370,7 @@ class StaticGate(Gate):
         assert(len(v) == 0) #should be no parameters, and nothing to do
 
 
-    def deriv_wrt_params(self):
+    def deriv_wrt_params(self, wrtFilter=None):
         """ 
         Construct a matrix whose columns are the vectorized
         derivatives of the flattened gate matrix with respect to a
@@ -532,7 +532,7 @@ class FullyParameterizedGate(Gate):
         self.base[:,:] = v.reshape( (self.dim,self.dim) )
 
 
-    def deriv_wrt_params(self):
+    def deriv_wrt_params(self, wrtFilter=None):
         """ 
         Construct a matrix whose columns are the vectorized
         derivatives of the flattened gate matrix with respect to a
@@ -544,7 +544,11 @@ class FullyParameterizedGate(Gate):
         numpy array 
             Array of derivatives with shape (dimension^2, num_params)
         """
-        return _np.identity( self.dim**2, 'd' )
+        derivMx = _np.identity( self.dim**2, 'd' )
+        if wrtFilter is None:
+            return derivMx
+        else:
+            return _np.take( derivMx, wrtFilter, axis=1 )
 
 
     def copy(self):
@@ -703,7 +707,7 @@ class TPParameterizedGate(Gate):
         self.base[1:,:] = v.reshape((self.dim-1,self.dim))
 
 
-    def deriv_wrt_params(self):
+    def deriv_wrt_params(self, wrtFilter=None):
         """ 
         Construct a matrix whose columns are the vectorized
         derivatives of the flattened gate matrix with respect to a
@@ -717,7 +721,12 @@ class TPParameterizedGate(Gate):
         """
         derivMx = _np.identity( self.dim**2, 'd' )
         derivMx = derivMx[:,self.dim:] #remove first gate_dim cols ( <=> first-row parameters )
-        return derivMx
+
+        if wrtFilter is None:
+            return derivMx
+        else:
+            return _np.take( derivMx, wrtFilter, axis=1 )
+
 
     def copy(self):
         """
@@ -948,7 +957,7 @@ class LinearlyParameterizedGate(Gate):
         self._construct_matrix()
 
             
-    def deriv_wrt_params(self):
+    def deriv_wrt_params(self, wrtFilter=None):
         """ 
         Construct a matrix whose columns are the vectorized
         derivatives of the flattened gate matrix with respect to a
@@ -969,7 +978,11 @@ class LinearlyParameterizedGate(Gate):
                 for i,p in enumerate(term.paramIndices):
                     param_partial_prod = _np.prod( params_to_mult[0:i] + params_to_mult[i+1:] ) # exclude i-th factor
                     derivMx[vec_ij, p] += term.coeff * param_partial_prod
-        return derivMx
+
+        if wrtFilter is None:
+            return derivMx
+        else:
+            return _np.take( derivMx, wrtFilter, axis=1 )
 
         
     def copy(self):
