@@ -909,6 +909,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
       GateSet containing the estimated gates.
   """
 
+  #tBegin = _time.time() #TIMER!!!
   gs = startGateset.copy()
   if maxfev is None: maxfev = maxiter
 
@@ -999,6 +1000,20 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
       # here will be looped over in bulk_pr (which expects a split tree for
       # the sole purpose of memory limiting)
 
+  #BLOCK for splitting trees
+  bDistributeViaTreeSplitting = True
+  if bDistributeViaTreeSplitting:
+    if not evTree.is_split():
+      evTree.split(None,1)
+    assert(evTree.is_split())
+
+    if comm is not None:
+      for i,subTree in enumerate(evTree.get_sub_trees()):
+        subTree.split(None, comm.Get_size())
+        if verbosity > 2 and comm.Get_rank() == 0:
+          print "Division of sub-tree %d (size %d) for MPI:" % (i,len(subTree))
+          subTree.print_analysis()
+
   if useFreqWeightedChiSq:
     def get_weights(p):
       return fweights
@@ -1014,7 +1029,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
       dw[ _np.logical_or(p < minProbClipForWeighting, p>(1-minProbClipForWeighting)) ] = 0.0
       return dw
 
-      
+  #tStart = 0 #TIMER!!!      
 
   if cptp_penalty_factor == 0:
 
@@ -1022,10 +1037,12 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     if verbosity <= 2:  # Fast versions of functions
       if regularizeFactor == 0:
         def objective_func(vectorGS):
+          #tm = _time.time() #TIMER!!!
           gs.from_vector(vectorGS)
           gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval,
                              check, comm) 
           v = (probs-f)*get_weights(probs) # dims K x M (K = nSpamLabels, M = nGateStrings)
+          #print "OBJECTIVE: ",(_time.time()-tm) #TIMER!!!
           return v.reshape([KM])
 
       else:
@@ -1062,6 +1079,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     if verbosity <= 3: # Fast versions of functions
       if regularizeFactor == 0: # Fast un-regularized version
         def jacobian(vectorGS):
+          #tm = _time.time() #TIMER!!!
           gs.from_vector(vectorGS)
           gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree, 
                               prMxToFill=probs, clipTo=probClipInterval,
@@ -1074,6 +1092,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
           # dpr has shape == (nGateStrings, nDerivCols), weights has shape == (nGateStrings,)
           # return shape == (nGateStrings, nDerivCols) where ret[i,j] = dP[i,j]*(weights+dweights*(p-f))[i]
+          #print "JACOBIAN: ",(_time.time()-tm) #TIMER!!!
           return jac
 
       else:
@@ -1163,6 +1182,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
 
   #Step 3: solve least squares minimization problem
+  #tStart = _time.time() #TIMER!!!
   x0 = gs.to_vector()
   opt_x, opt_jac, info, msg, flag = \
       _spo.leastsq( objective_func, x0, xtol=tol, ftol=tol, gtol=tol,
@@ -1171,6 +1191,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
   minErrVec = full_minErrVec if regularizeFactor == 0 else full_minErrVec[0:-len(x0)] #don't include regularization terms
   soln_gs = gs.copy();
   #soln_gs.log("LSGST", { 'method': "leastsq", 'tol': tol,  'maxiter': maxiter } )
+  #print "*** leastSQ TIME = ",(_time.time()-tStart) #TIMER!!!
 
   #opt_jac = _np.abs(jacobian(opt_x))
   #print "DEBUG: Jacobian (shape %s) at opt_x: min=%g, max=%g" % (str(opt_jac.shape),_np.min(opt_jac), _np.max(opt_jac))
@@ -1191,6 +1212,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     print "  Sum of Chi^2 = %g (%d data params - %d model params = expected mean of %g; p-value = %g)" % \
         (totChi2, nDataParams,  nModelParams, nDataParams-nModelParams, pvalue)
   
+  #print "*** mc2gst TIME = ",(_time.time()-tBegin) #TIMER!!!
   #if targetGateset is not None:
   #  target_vec = targetGateset.to_vector()
   #  targetErrVec = objective_func(target_vec)

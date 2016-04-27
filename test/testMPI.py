@@ -131,7 +131,7 @@ def runMC2GSTAnalysis(myspecs, mygerms, gsTarget, seed,
 def runOneQubit(comm=None):
     from pygsti.construction import std1Q_XYI as std
 
-    maxLengths = [0,1,2,4,8,16,32] #still need to define this manually
+    maxLengths = [0,1,2,4,8,16,32,64,128,256,512,1024] #still need to define this manually
     specs = pygsti.construction.build_spam_specs(
         std.fiducials, prep_labels=std.gs_target.get_prep_labels(),
         effect_labels=std.gs_target.get_effect_labels())
@@ -142,8 +142,119 @@ def runOneQubit(comm=None):
     return gsets
 
 
+# from inline tests
+# dproduct return ret:
+            #DEBUG!!!
+            #if wrtFilter is not None:
+            #    chk_prod = self.dproduct(gatestring, flat, wrtFilter=None)
+            #    for ii,i in enumerate(wrtFilter):
+            #        assert(_np.linalg.norm(chk_prod[i]-ret[ii]) < 1e-6)
+            #    taken_chk_prod = chk_prod.take( wrtFilter, axis=0 )
+            #    assert(_np.linalg.norm(taken_chk_prod-ret) < 1e-6)
 
-@mpitest(2)
+
+#bulk_product
+            #DEBUG!!! compare answer with no parallelization
+            #chk_ret = self.bulk_product(evalTree, bScale, comm=None)
+#     if bScale
+                #DEBUG!!! compare answer with no parallelization
+                #assert(_np.linalg.norm(chk_ret[0]-Gs) < 1e-6)
+                #assert(_np.linalg.norm(chk_ret[1]-scaleVals) < 1e-6)
+  # else:
+                #DEBUG!!! compare answer with no parallelization
+                #assert(_np.linalg.norm(chk_ret-Gs) < 1e-6)
+
+# bulk_dproduct
+            #DEBUG!!! compare answer with no parallelization
+            #chk_ret = self.bulk_dproduct(evalTree, flat, bReturnProds,
+            #                             bScale, memLimit, comm=None, wrtFilter=None)
+# if not bReturnProds and not bScale
+                #DEBUG!!! compare answer with no parallelization
+                #assert(_np.linalg.norm(chk_ret-dGs) < 1e-6)
+# else:
+                #DEBUG!!! compare answer with no parallelization
+                #if bScale:
+                #    assert(not flat) # for testing.  We don't ever used
+                #          #scaling & flat together (and it's hard to scale
+                #          # in this case b/c we need to use repeat as above)
+                #    nw = _np.newaxis
+                #    scaled_dGs = rest_of_result[-1][:,nw,nw,nw] * dGs
+                #    scaled_chk = chk_ret[-1][:,nw,nw,nw] * chk_ret[0]
+                #    assert(_np.linalg.norm(scaled_chk-scaled_dGs)< 1e-6)
+                #else:
+                #    assert(_np.linalg.norm(chk_ret[0]-dGs) < 1e-6)
+                #
+                #if bReturnProds:
+                #    if bScale:
+                #        scaled_Gs = rest_of_result[-1][:,nw,nw] * \
+                #            rest_of_result[0]
+                #        scaled_chk = chk_ret[-1][:,nw,nw] * chk_ret[1]
+                #        assert(_np.linalg.norm(scaled_chk-scaled_Gs)< 1e-6)
+                #    else:
+                #        assert(_np.linalg.norm(chk_ret[1]-rest_of_result[0])
+                #               < 1e-6 )
+                #
+                #
+                #if False and _np.linalg.norm(chk_ret[0]-dGs) >= 1e-6:
+                #    #if bScale:
+                #    #    print "SCALED"
+                #    #    print chk_ret[-1]
+                #
+                #    rank = comm.Get_rank()
+                #    if rank == 0:
+                #        print "DEBUG: parallel mismatch"
+                #        print "len(all_results) = ",len(all_results)
+                #        print "diff = ",_np.linalg.norm(chk_ret[0]-dGs)
+                #        for row in range(dGs.shape[0]):
+                #            rowA = my_results[0][row,:].flatten()
+                #            rowB = all_results[rank][0][row,:].flatten()
+                #            rowC = dGs[row,:].flatten()
+                #            chk_C = chk_ret[0][row,:].flatten()
+                #
+                #            def sp(ar):
+                #                for i,x in enumerate(ar):
+                #                    if abs(x) > 1e-4:
+                #                        print i,":", x
+                #            def spc(ar1,ar2):
+                #                for i,x in enumerate(ar1):
+                #                    if (abs(x) > 1e-4 or abs(ar2[i]) > 1e-4): # and abs(x-ar2[i]) > 1e-6:
+                #                        print i,":", x, ar2[i], "(", (x-ar2[i]), ")", "[",x/ar2[i],"]"
+                #
+                #            assert( _np.linalg.norm(rowA-rowB) < 1e-6)
+                #            assert( _np.linalg.norm(rowC[0:len(rowA)]-rowA) < 1e-6)
+                #            #if _np.linalg.norm(rowA) > 1e-6:
+                #            if _np.linalg.norm(rowC - chk_C) > 1e-6:
+                #                print "SCALE for row%d = %g" % (row,rest_of_result[-1][row])
+                #                print "CHKSCALE for row%d = %g" % (row,chk_ret[-1][row])
+                #                print "row%d diff = " % row, _np.linalg.norm(rowC - chk_C)
+                #                print "row%d (rank%d)A = " % (row,rank)
+                #                sp(rowA)
+                #                print "row%d (all vs check) = " % row
+                #                spc(rowC, chk_C)
+                #
+                #                assert(False)
+                #    assert(False)
+# bulk_pr
+        #DEBUG!!!
+        #if comm is not None:
+        #    chk_vp = self.bulk_pr(spamLabel, evalTree, clipTo, check, comm=None)
+        #    assert(_np.linalg.norm(chk_vp-vp) < 1e-6)
+# bulk_dpr:
+        #DEBUG!!!
+        #if comm is not None:
+        #    chk = self.bulk_dpr(spamLabel, evalTree, 
+        #                        returnPr,clipTo,check,memLimit,comm=None)
+        #    if returnPr:
+        #        assert(_np.linalg.norm(chk[0]-vdp) < 1e-6)
+        #        assert(_np.linalg.norm(chk[1]-vp) < 1e-6)
+        #    else:
+        #        assert(_np.linalg.norm(chk-vdp) < 1e-6)
+
+
+
+
+
+@mpitest(4)
 def test_MPI(comm):
     #Individual processors
     my1ProcResults = runOneQubit(None)

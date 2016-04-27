@@ -330,7 +330,12 @@ class EvalTree(list):
 
         #Don't split at all if it's unnecessary
         if maxSubTreeSize is not None and len(self) < maxSubTreeSize: return 
-        if numSubTrees is not None and numSubTrees <= 1: return 
+        if numSubTrees is not None and numSubTrees <= 1:
+            assert(numSubTrees == 1)
+            self.subTrees = [self.copy()]
+            self.subTrees[0].myFinalToParentFinalMap = \
+                range(len(self.finalList))
+            return
 
         self.subTrees = []
         subTreesFinalList = [None]*len(self.finalList)
@@ -361,18 +366,60 @@ class EvalTree(list):
         #   Part 2: determine whether we need to split/merge "single" trees
         if numSubTrees is not None:
 
+            #OLD
             #start with first numSubTrees single item trees
-            subTreeSetList = singleItemTreeSetList[0:numSubTrees]
+            #subTreeSetList = singleItemTreeSetList[0:numSubTrees]
 
             #Merges: find the best merges to perform if any are required
             if nSingleItemTrees > numSubTrees:
-                for singleItemTreeSet in singleItemTreeSetList[numSubTrees:]:
 
-                    #Merge this single-item-generated tree into the smallest
-                    # existing tree
+                #find trees that have least intersection to begin
+                intersectSizes = {}
+                for i in range(nSingleItemTrees):
+                    s1 = singleItemTreeSetList[i]
+                    for j in range(i+1,nSingleItemTrees):
+                        s2 = singleItemTreeSetList[j]
+                        intersectSizes[(i,j)] = len(s1.intersection(s2))
+    
+                sortedIntersects = sorted(intersectSizes.iteritems(),
+                                            key=lambda x: x[1])
+                iStartingTrees = []
+                for (i,j),intSize in sortedIntersects:
+                    if i in iStartingTrees or j in iStartingTrees: continue
+                    iStartingTrees.append(i)
+                    iStartingTrees.append(j)
+                    if len(iStartingTrees) == numSubTrees:
+                        break
+                else:
+                    raise ValueError("Could not find set of starting trees!")
+                subTreeSetList = [singleItemTreeSetList[i] for i in iStartingTrees]
+                assert(len(subTreeSetList) == numSubTrees)
+                
+                indicesLeft = range(nSingleItemTrees)
+                for i in iStartingTrees:
+                    del indicesLeft[indicesLeft.index(i)]
+    
+                while len(indicesLeft) > 0:
                     iToMergeInto = _np.argmin(map(len,subTreeSetList))
+                    setToMergeInto = subTreeSetList[iToMergeInto]
+                    intersectionSizes = [ len(setToMergeInto.intersection(
+                                singleItemTreeSetList[i])) for i in indicesLeft ]
+                    iMaxIntsct = _np.argmax(intersectionSizes)
+                    setToMerge = singleItemTreeSetList[indicesLeft[iMaxIntsct]]
                     subTreeSetList[iToMergeInto] = \
-                      subTreeSetList[iToMergeInto].union(singleItemTreeSet)
+                          subTreeSetList[iToMergeInto].union(setToMerge)
+                    del indicesLeft[iMaxIntsct]
+                        
+                assert(len(subTreeSetList) == numSubTrees)
+
+                #OLD
+                #for singleItemTreeSet in singleItemTreeSetList[numSubTrees:]:
+                #
+                #    #Merge this single-item-generated tree into the smallest
+                #    # existing tree
+                #    iToMergeInto = _np.argmin(map(len,subTreeSetList))
+                #    subTreeSetList[iToMergeInto] = \
+                #      subTreeSetList[iToMergeInto].union(singleItemTreeSet)
 
             #Splits: 
             else: 

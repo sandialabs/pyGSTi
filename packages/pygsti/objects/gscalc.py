@@ -8,10 +8,12 @@
 import warnings as _warnings
 import numpy as _np
 import numpy.linalg as _nla
+import time as _time
 
 from ..tools import gatetools as _gt
 
 #import evaltree as _evaltree
+
 
 
 # Smallness tolerances, used internally for conditional scaling required
@@ -296,15 +298,7 @@ class GateSetCalculator(object):
             return flattened_dprod
         else:
             vec_gs_size = flattened_dprod.shape[1]
-            ret= _np.swapaxes( flattened_dprod, 0, 1 ).reshape( (vec_gs_size, dim, dim) ) # axes = (gate_ij, prod_row, prod_col)
-
-            #DEBUG!!!
-            #if wrtFilter is not None:
-            #    chk_prod = self.dproduct(gatestring, flat, wrtFilter=None)
-            #    for ii,i in enumerate(wrtFilter):
-            #        assert(_np.linalg.norm(chk_prod[i]-ret[ii]) < 1e-6)
-            #    taken_chk_prod = chk_prod.take( wrtFilter, axis=0 )
-            #    assert(_np.linalg.norm(taken_chk_prod-ret) < 1e-6)
+            return _np.swapaxes( flattened_dprod, 0, 1 ).reshape( (vec_gs_size, dim, dim) ) # axes = (gate_ij, prod_row, prod_col)
 
             return ret
 
@@ -1064,22 +1058,6 @@ class GateSetCalculator(object):
 
         if comm is not None or evalTree.is_split():
             #Try to parallelize by gatestring sub-tree
-
-            #DEBUG!!! compare answer with no parallelization
-            chk_ret = self.bulk_product(evalTree, bScale, comm=None)
-
-            #If tree is not split already, split it here.  This is less 
-            # efficient than having it "pre-split" since the split is being
-            # done on *each* call to bulk_product, but the hope is that split()
-            # is fast enough it will still yield a speedup
-            if comm is not None and comm.Get_size() > 1 \
-                    and evalTree.is_split() == False:
-                evalTree = evalTree.copy() #don't change tree passed in...
-                evalTree.split(None, comm.Get_size())
-                #if comm.Get_rank() == 0: #DEBUG
-                #    print "bulk_product: dividing evaluation tree for MPI"
-                #    evalTree.print_analysis()
-
             subtrees = evalTree.get_sub_trees()
             allSubTreeIndices = range(len(subtrees))
             mySubTreeIndices, subTreeOwners = \
@@ -1096,14 +1074,9 @@ class GateSetCalculator(object):
             if bScale:
                 Gs = gather_subtree_results(0,(1,dim,dim), comm)
                 scaleVals = gather_subtree_results(1,(1,), comm)
-                #DEBUG!!! compare answer with no parallelization
-                assert(_np.linalg.norm(chk_ret[0]-Gs) < 1e-6)
-                assert(_np.linalg.norm(chk_ret[1]-scaleVals) < 1e-6)
                 return Gs, scaleVals
             else:
                 Gs = gather_subtree_results(None,(1,dim,dim), comm)
-                #DEBUG!!! compare answer with no parallelization
-                assert(_np.linalg.norm(chk_ret-Gs) < 1e-6)
                 return Gs
 
             
@@ -1237,6 +1210,7 @@ class GateSetCalculator(object):
           the derivatives and/or products for the i-th gate string.
         """
 
+        #tStart = _time.time() #TIMER!!!
         dim = self.dim
         nGateStrings = evalTree.num_final_strings()
         if wrtFilter is None:
@@ -1248,161 +1222,20 @@ class GateSetCalculator(object):
 
         # ------------------------------------------------------------------
 
-        if comm is not None: #then we need to parallelize this call
-
-            #DEBUG!!! compare answer with no parallelization
-            chk_ret = self.bulk_dproduct(evalTree, flat, bReturnProds,
-                            bScale, memLimit, comm=None, wrtFilter=None)
-
-            if wrtFilter is None: #then we have *not* yet parallelized over
-                                  # taking derivatives with-respect-to different
-                                  # gate parameters, so do this now.
-
-                allDerivColIndices = range(nGateDerivCols)
-                myDerivColIndices, derivColOwners = \
-                    self._distribute_indices(allDerivColIndices, comm)
-                
-                #pass *same* (possibly split) evalTree. We could parallelize
-                # further using split trees by passing a non-None comm along
-                # with the non-None wrtFilter (e.g. passing a comm for a sub-
-                # group of the procs when  nprocs > nGateDerivCols could be 
-                # useful). Currently, we don't do this (comm = None) and so
-                # there will be no further parallelization.
-                my_results = self.bulk_dproduct(evalTree,flat,bReturnProds,
-                                                  bScale,memLimit,comm=None,
-                                                  wrtFilter=myDerivColIndices)
-
-                all_results = comm.allgather(my_results)
-                all_results = map(list,all_results) #so writeable
-
-                def concat_dGs(dGs_index):
-                    if dGs_index is None:
-                        to_concat = all_results
-                    else:
-                        if bScale: #scale all procs results to proc0 scaling
-                            r0 = all_results[0] # proc0 results
-                            si = 2 if bReturnProds else 1 #index of scale fctrs
-                            if flat: # then 1st dim of dGs is S*N, so must
-                                     # scale in groups of N=dim*2
-                                for r in all_results[1:]: 
-                                    S = _np.repeat(r[si],scale_rep) \
-                                        / _np.repeat(r0[si],scale_rep)
-                                    r[dGs_index] *= S[:,_np.newaxis]
-                            else:
-                                nw = _np.newaxis
-                                for r in all_results[1:]: 
-                                    r[dGs_index] *= (r[si]/r0[si])[:,nw,nw,nw]
-                        to_concat = [ r[dGs_index] for r in all_results]
-                    return _np.concatenate(to_concat, axis=1)
-
-
-                if not bReturnProds and not bScale:
-                    #Single case when results elements are *not* tuples
-                    dGs = concat_dGs(None)
-
-                    #DEBUG!!! compare answer with no parallelization
-                    assert(_np.linalg.norm(chk_ret-dGs) < 1e-6)
-                    return dGs
-                else:
-                    dGs = concat_dGs(0)
-                    rest_of_result = all_results[0][1:] #use proc 0 results
-
-                    #DEBUG!!! compare answer with no parallelization
-                    if bScale:
-                        assert(not flat) # for testing.  We don't ever used
-                              #scaling & flat together (and it's hard to scale
-                              # in this case b/c we need to use repeat as above)
-                        nw = _np.newaxis
-                        scaled_dGs = rest_of_result[-1][:,nw,nw,nw] * dGs
-                        scaled_chk = chk_ret[-1][:,nw,nw,nw] * chk_ret[0]
-                        assert(_np.linalg.norm(scaled_chk-scaled_dGs)< 1e-6)
-                    else:
-                        assert(_np.linalg.norm(chk_ret[0]-dGs) < 1e-6)
-
-                    if bReturnProds:
-                        if bScale:
-                            scaled_Gs = rest_of_result[-1][:,nw,nw] * \
-                                rest_of_result[0]
-                            scaled_chk = chk_ret[-1][:,nw,nw] * chk_ret[1]
-                            assert(_np.linalg.norm(scaled_chk-scaled_Gs)< 1e-6)
-                        else:
-                            assert(_np.linalg.norm(chk_ret[1]-rest_of_result[0])
-                                   < 1e-6 )
-
-
-                    if False and _np.linalg.norm(chk_ret[0]-dGs) >= 1e-6:
-                        #if bScale:
-                        #    print "SCALED"
-                        #    print chk_ret[-1]
-
-                        rank = comm.Get_rank()
-                        if rank == 0:
-                            print "DEBUG: parallel mismatch"
-                            print "len(all_results) = ",len(all_results)
-                            print "diff = ",_np.linalg.norm(chk_ret[0]-dGs)
-                            for row in range(dGs.shape[0]):
-                                rowA = my_results[0][row,:].flatten()
-                                rowB = all_results[rank][0][row,:].flatten()
-                                rowC = dGs[row,:].flatten()
-                                chk_C = chk_ret[0][row,:].flatten()
-
-                                def sp(ar):
-                                    for i,x in enumerate(ar):
-                                        if abs(x) > 1e-4:
-                                            print i,":", x
-                                def spc(ar1,ar2):
-                                    for i,x in enumerate(ar1):
-                                        if (abs(x) > 1e-4 or abs(ar2[i]) > 1e-4): # and abs(x-ar2[i]) > 1e-6:
-                                            print i,":", x, ar2[i], "(", (x-ar2[i]), ")", "[",x/ar2[i],"]"
-
-                                assert( _np.linalg.norm(rowA-rowB) < 1e-6)
-                                assert( _np.linalg.norm(rowC[0:len(rowA)]-rowA) < 1e-6)
-                                #if _np.linalg.norm(rowA) > 1e-6:
-                                if _np.linalg.norm(rowC - chk_C) > 1e-6:
-                                    print "SCALE for row%d = %g" % (row,rest_of_result[-1][row])
-                                    print "CHKSCALE for row%d = %g" % (row,chk_ret[-1][row])
-                                    print "row%d diff = " % row, _np.linalg.norm(rowC - chk_C)
-                                    print "row%d (rank%d)A = " % (row,rank)
-                                    sp(rowA)
-                                    print "row%d (all vs check) = " % row
-                                    spc(rowC, chk_C)
-
-                                    assert(False)
-                        assert(False)
-                    return (dGs,) + tuple(rest_of_result)
-
-            else: # we've already parallelized over wrtFilter, and still have
-                  # a non-None comm, so use this comm to parallelize over
-                  # sub-trees if we have them.  Since we also want to "mock-
-                  # parallelize" over subtrees whenever the tree is split,
-                  # we just drop out of this else block.
-                pass
-
-
-        if comm is not None or evalTree.is_split():  
+        if evalTree.is_split():  
             #similar to in bulk_product, parallelize over sub-trees
-
-            #If tree is not split already, split it here.  This is less 
-            # efficient than having it "pre-split" since the split is being
-            # done on *each* call to bulk_dproduct, but the hope is that split()
-            # is fast enough it will still yield a speedup
-            if comm is not None and comm.Get_size() > 1 \
-                    and evalTree.is_split() == False:
-                evalTree = evalTree.copy() #don't change tree passed in...
-                evalTree.split(None, comm.Get_size())
-                #if comm.Get_rank() == 0:  #DEBUG
-                #    print "bulk_dproduct: dividing evaluation tree for MPI"
-                #    evalTree.print_analysis()
 
             subtrees = evalTree.get_sub_trees()
             allSubTreeIndices = range(len(subtrees))
             mySubTreeIndices, subTreeOwners = \
                 self._distribute_indices(allSubTreeIndices, comm)
-            
+
+            #tStart = _time.time() #TIMER!!!
             my_results = [ self.bulk_dproduct(subtrees[iSubTree],flat,
                                               bReturnProds,bScale,memLimit,
                                               comm=None, wrtFilter=wrtFilter)
                            for iSubTree in mySubTreeIndices ]
+            #t1 = _time.time() #TIMER!!!
 
             def gather_subtree_results(result_index, per_string_dim, comm):
                 return self._gather_subtree_results(
@@ -1419,6 +1252,9 @@ class GateSetCalculator(object):
                 Gs = gather_subtree_results(1,(1,dim,dim), comm)
                 if bScale:
                     scaleVals = gather_subtree_results(2,(1,), comm)
+                    #t2 = _time.time() #TIMER!!!
+                    #print "bulk_dproduct (MPI-tree): ",(t1-tStart), \
+                    #    (t2-tStart) #TIMER!!!
                     return (dGs, Gs, scaleVals)
                 else:
                     return (dGs, Gs)
@@ -1430,6 +1266,70 @@ class GateSetCalculator(object):
                 else:
                     dGs = gather_subtree_results(None, psd, comm)
                     return dGs
+
+
+        if comm is not None: # (and tree is not split)
+            # then we need to parallelize over
+            # taking derivatives with-respect-to different
+            # gate parameters.
+
+            assert(wrtFilter is None)
+              #We shouldn't be already using wrtFilter
+
+            allDerivColIndices = range(nGateDerivCols)
+            myDerivColIndices, derivColOwners = \
+                self._distribute_indices(allDerivColIndices, comm)
+            
+            #pass *same* (possibly split) evalTree. We could parallelize
+            # further using split trees by passing a non-None comm along
+            # with the non-None wrtFilter (e.g. passing a comm for a sub-
+            # group of the procs when  nprocs > nGateDerivCols could be 
+            # useful). Currently, we don't do this (comm = None) and so
+            # there will be no further parallelization.
+            my_results = self.bulk_dproduct(evalTree,flat,bReturnProds,
+                                              bScale,memLimit,comm=None,
+                                              wrtFilter=myDerivColIndices)
+            #t1 = _time.time() #TIMER!!!
+
+            all_results = comm.allgather(my_results)
+            all_results = map(list,all_results) #so writeable
+            #t2 = _time.time() #TIMER!!!
+
+
+            def concat_dGs(dGs_index):
+                if dGs_index is None:
+                    to_concat = all_results
+                else:
+                    if bScale: #scale all procs results to proc0 scaling
+                        r0 = all_results[0] # proc0 results
+                        si = 2 if bReturnProds else 1 #index of scale fctrs
+                        if flat: # then 1st dim of dGs is S*N, so must
+                                 # scale in groups of N=dim*2
+                            for r in all_results[1:]: 
+                                S = _np.repeat(r[si],scale_rep) \
+                                    / _np.repeat(r0[si],scale_rep)
+                                r[dGs_index] *= S[:,_np.newaxis]
+                        else:
+                            nw = _np.newaxis
+                            for r in all_results[1:]: 
+                                r[dGs_index] *= (r[si]/r0[si])[:,nw,nw,nw]
+                    to_concat = [ r[dGs_index] for r in all_results]
+                return _np.concatenate(to_concat, axis=1)
+
+
+            if not bReturnProds and not bScale:
+                #Single case when results elements are *not* tuples
+                dGs = concat_dGs(None)
+                return dGs
+            else:
+                dGs = concat_dGs(0)
+                rest_of_result = all_results[0][1:] #use proc 0 results
+
+                #t3 = _time.time() #TIMER!!!
+                #print "bulk_dproduct (MPI-wrt): ",(t1-tStart), \
+                #    (t2-tStart),(t3-tStart) #TIMER!!!
+
+                return (dGs,) + tuple(rest_of_result)
 
 
         # ------------------------------------------------------------------
@@ -1450,6 +1350,7 @@ class GateSetCalculator(object):
         prodCache = _np.zeros( (cacheSize, dim, dim) )
         dProdCache = _np.zeros( (cacheSize,) + deriv_shape )
         scaleCache = _np.zeros( cacheSize, 'd' )
+        #nnzCache = _np.zeros( cacheSize, 'i' )
 
 
 
@@ -1465,15 +1366,21 @@ class GateSetCalculator(object):
         #   in order to associate the right single-gate-strings w/indices
         for i,gateLabel in enumerate(evalTree.get_init_labels()):
             if gateLabel == "": #special case of empty label == no gate
-                prodCache[i] = _np.identity( dim ); dProdCache[0] = _np.zeros( deriv_shape )
+                assert(i == 0) #tree convention
+                prodCache[i] = _np.identity( dim ); dProdCache[i] = _np.zeros( deriv_shape )
+                scaleCache[i] = 1.0; #nnzCache[i] = 0
             else:
                 dgate = self.dproduct( (gateLabel,) , wrtFilter=wrtFilter)
                 nG = max(_nla.norm(self.gates[gateLabel]),1.0)
                 prodCache[i]  = self.gates[gateLabel].base / nG
                 scaleCache[i] = _np.log(nG)
                 dProdCache[i] = dgate / nG 
+                #nnzCache[i] = _np.count_nonzero(dProdCache[i])
                 
         nZeroAndSingleStrs = len(evalTree.get_init_labels())
+
+        #nScaleCnt = nNonScaleCnt = dScaleCnt = 0 #TIMER!!!
+        #dotTimes = [] #TIMER!!!
 
         #evaluate gate strings using tree (skip over the zero and single-gate-strings)
         for (i,tup) in enumerate(evalTree[nZeroAndSingleStrs:],start=nZeroAndSingleStrs):
@@ -1487,25 +1394,40 @@ class GateSetCalculator(object):
 
             #if not prodCache[i].any(): #same as norm(prodCache[i]) == 0 but faster
             if prodCache[i].max() < PSMALL and prodCache[i].min() > -PSMALL:
-                nL,nR = max(_nla.norm(L), _np.exp(-scaleCache[iLeft]),1e-300), max(_nla.norm(R), _np.exp(-scaleCache[iRight]),1e-300)
+                #nScaleCnt += 1 #TIMER!!!
+                nL = max(_nla.norm(L), _np.exp(-scaleCache[iLeft]),1e-300)
+                nR = max(_nla.norm(R), _np.exp(-scaleCache[iRight]),1e-300)
                 sL, sR, sdL, sdR = L/nL, R/nR, dProdCache[iLeft]/nL, dProdCache[iRight]/nR
-                prodCache[i] = _np.dot(sL,sR); dProdCache[i] = _np.dot(sdL, sR) + _np.swapaxes(_np.dot(sL, sdR),0,1)
+                prodCache[i] = _np.dot(sL,sR)
+                dProdCache[i] = _np.dot(sdL, sR) + _np.swapaxes(_np.dot(sL, sdR),0,1)
                 scaleCache[i] = scaleCache[iLeft] + scaleCache[iRight] + _np.log(nL) + _np.log(nR)
+                #nnzCache[i] = _np.count_nonzero(dProdCache[i])
+
                 if dProdCache[i].max() < DSMALL and dProdCache[i].min() > -DSMALL:
                     _warnings.warn("Scaled dProd small in order to keep prod managable.")
             else:
+                #nNonScaleCnt += 1 #TIMER!!!
+                #tempTm = _time.time() #TIMER!!!
                 dL,dR = dProdCache[iLeft], dProdCache[iRight]
-                dProdCache[i] = _np.dot(dL, R) + _np.swapaxes(_np.dot(L, dR),0,1) #dot(dS, T) + dot(S, dT)
+                dProdCache[i] = _np.dot(dL, R) + \
+                    _np.swapaxes(_np.dot(L, dR),0,1) #dot(dS, T) + dot(S, dT)
+                #dotTimes.append(_time.time()-tempTm) #TIMER!!!
                 scaleCache[i] = scaleCache[iLeft] + scaleCache[iRight]
+                #nnzCache[i] = _np.count_nonzero(dProdCache[i])
                 
-                if dProdCache[i].max() < DSMALL and dProdCache[i].min() > -DSMALL:
+                if _np.count_nonzero(dProdCache[i]) and dProdCache[i].max() < DSMALL and dProdCache[i].min() > -DSMALL:
+                    #dScaleCnt += 1 #TIMER!!!
                     nL,nR = max(_nla.norm(dL), _np.exp(-scaleCache[iLeft]),1e-300), max(_nla.norm(dR), _np.exp(-scaleCache[iRight]),1e-300)
                     sL, sR, sdL, sdR = L/nL, R/nR, dL/nL, dR/nR
-                    prodCache[i] = _np.dot(sL,sR); dProdCache[i] = _np.dot(sdL, sR) + _np.swapaxes(_np.dot(sL, sdR),0,1)
+                    prodCache[i] = _np.dot(sL,sR)
+                    dProdCache[i] = _np.dot(sdL, sR) + _np.swapaxes(_np.dot(sL, sdR),0,1)
                     scaleCache[i] = scaleCache[iLeft] + scaleCache[iRight] + _np.log(nL) + _np.log(nR)
+                    #nnzCache[i] = _np.count_nonzero(dProdCache[i])
                     if prodCache[i].max() < PSMALL and prodCache[i].min() > -PSMALL:
                         _warnings.warn("Scaled prod small in order to keep dProd managable.")
+
                 
+
         nanOrInfCacheIndices = (~_np.isfinite(prodCache)).nonzero()[0] 
         assert( len(nanOrInfCacheIndices) == 0 ) # since all scaled gates start with norm <= 1, products should all have norm <= 1
         
@@ -1542,6 +1464,13 @@ class GateSetCalculator(object):
                 _np.seterr(**old_err)
 
             if flat: dGs =  _np.swapaxes( _np.swapaxes(dGs,0,1).reshape( (nGateDerivCols, nGateStrings*dim**2) ), 0,1 ) # cols = deriv cols, rows = flattened everything else
+
+            #TIMER!!!
+            #tEnd = _time.time()
+            #print " bulk_dproduct(tsz=%d,cols=%d) scl=[%d,%d,%d]: " % \
+            #    (len(evalTree), nGateDerivCols, nScaleCnt, nNonScaleCnt,
+            #     dScaleCnt), "time=",(tEnd-tStart),"dot=",_np.average(dotTimes)
+
             return (dGs, Gs, scaleVals) if bScale else (dGs, Gs)
 
         else:
@@ -1881,11 +1810,6 @@ class GateSetCalculator(object):
                 #        print "   %s => p=%g, check_p=%g, diff=%g" % (str(gs),vp[i],check_vp[i],abs(vp[i]-check_vp[i]))
                 #        raise ValueError("STOP")
 
-        #DEBUG!!!
-        if comm is not None:
-            chk_vp = self.bulk_pr(spamLabel, evalTree, clipTo, check, comm=None)
-            assert(_np.linalg.norm(chk_vp-vp) < 1e-6)
-
         return vp
 
 
@@ -2065,16 +1989,6 @@ class GateSetCalculator(object):
                 #        print "   %s => p=%g, check_p=%g, diff=%g" % (str(gs),vp[i],check_vp[i],abs(vp[i]-check_vp[i]))
             if _nla.norm(vdp - check_vdp) > 1e-6:
                 _warnings.warn("Norm(vdp-check_vdp) = %g - %g = %g" % (_nla.norm(vdp), _nla.norm(check_vdp), _nla.norm(vdp - check_vdp)))
-
-        #DEBUG!!!
-        if comm is not None:
-            chk = self.bulk_dpr(spamLabel, evalTree, 
-                                returnPr,clipTo,check,memLimit,comm=None)
-            if returnPr:
-                assert(_np.linalg.norm(chk[0]-vdp) < 1e-6)
-                assert(_np.linalg.norm(chk[1]-vp) < 1e-6)
-            else:
-                assert(_np.linalg.norm(chk-vdp) < 1e-6)
 
         if returnPr: return vdp, vp
         else:        return vdp
