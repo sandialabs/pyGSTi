@@ -910,10 +910,12 @@ def nested_color_boxplot(plt_data_list_of_lists, cmapFactory, title=None, xlabel
                         colorbar, fig, axes, size, prec, boxLabels, xlabel, ylabel,
                         save_to, ticSize, grid)
 
-def _computeSubMxs(xvals, yvals, xyGateStringDict, subMxCreationFn, sumUp):
-    used_xvals = [ x for x in xvals if any([ (xyGateStringDict[(x,y)] is not None) for y in yvals]) ]
-    used_yvals = [ y for y in yvals if any([ (xyGateStringDict[(x,y)] is not None) for x in xvals]) ]
-    subMxs = [ [ subMxCreationFn( xyGateStringDict[(x,y)] ) for x in used_xvals ] for y in used_yvals]
+def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp):
+    """
+    A helper function to compute the number of boxes, and corresponding
+    number of degrees of freedom, for the GST chi2/logl boxplots.
+
+    """
     if sumUp:
         dof_per_box = subMxs[0][0].size
         n_boxes = 0
@@ -926,9 +928,18 @@ def _computeSubMxs(xvals, yvals, xyGateStringDict, subMxCreationFn, sumUp):
         n_boxes = sum([ _np.sum(_np.isnan(subMxs[iy][ix])) 
                         for ix in range(len(used_xvals)) 
                         for iy in range(len(used_yvals)) ])
-        
+    #Note: subMxs[y-index][x-index] is proper usage
+
+    return n_boxes, dof_per_box
+
+def _computeSubMxs(xvals, yvals, xyGateStringDict, subMxCreationFn, sumUp):
+    used_xvals = [ x for x in xvals if any([ (xyGateStringDict[(x,y)] is not None) for y in yvals]) ]
+    used_yvals = [ y for y in yvals if any([ (xyGateStringDict[(x,y)] is not None) for x in xvals]) ]
+    subMxs = [ [ subMxCreationFn( xyGateStringDict[(x,y)] ) for x in used_xvals ] for y in used_yvals]
+    n_boxes, dof_per_box = _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp)
+
     return used_xvals, used_yvals, subMxs, n_boxes, dof_per_box
-      #Note: subMxs[y-index][x-index] is proper usage
+
 
 def generate_boxplot( xvals, yvals, xyGateStringDict, subMxs, cmapFactory, xlabel="", ylabel="", scale=1.0, prec=0,
                      title='sub-mx', sumUp=False, boxLabels=True, histogram=False, histBins=50, save_to=None,
