@@ -929,7 +929,7 @@ def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp):
 
         # Gets all the non-NaN boxes, flattens the resulting
         # array, and does the sum.
-        n_boxes = np.sum(~np.isnan(subMxs).flatten())
+        n_boxes = _np.sum(~_np.isnan(subMxs).flatten())
 
     return n_boxes, dof_per_box
 
