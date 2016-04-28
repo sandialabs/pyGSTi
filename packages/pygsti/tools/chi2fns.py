@@ -130,7 +130,7 @@ def chi2(dataset, gateset, gateStrings=None,
     #DEBUG - no verbosity passed in to just leave commented out
     #if memLimit is not None:
     #    print "Chi2 Memory estimates: (%d spam labels," % ns + \
-    #        "%d gate strings, %d gatese params, %d gate dim)" % (ng,ne,gd)
+    #        "%d gate strings, %d gateset params, %d gate dim)" % (ng,ne,gd)
     #    print "Peristent: %g GB " % (persistentMem*C)
     #    print "Intermediate: %g GB " % (intermedMem*C)
     #    print "Limit: %g GB" % (memLimit*C)

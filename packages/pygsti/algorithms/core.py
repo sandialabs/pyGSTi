@@ -981,7 +981,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
   if memLimit is not None and verbosity > 2:
     print "Memory estimates: (%d spam labels," % ns + \
-        "%d gate strings, %d gatese params, %d gate dim)" % (ng,ne,gd)
+        "%d gate strings, %d gateset params, %d gate dim)" % (ng,ne,gd)
     print "Peristent: %g GB " % (persistentMem*C)
     print "Intermediate: %g GB " % (intermedMem*C)
     print "Limit: %g GB" % (memLimit*C)
@@ -1943,7 +1943,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
   
     if memLimit is not None and verbosity > 2:
       print "Memory estimates: (%d spam labels," % ns + \
-          "%d gate strings, %d gatese params, %d gate dim)" % (ng,ne,gd)
+          "%d gate strings, %d gateset params, %d gate dim)" % (ng,ne,gd)
       print "Peristent: %g GB " % (persistentMem*C)
       print "Intermediate: %g GB " % (intermedMem*C)
       print "Limit: %g GB" % (memLimit*C)
