@@ -951,7 +951,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
   #Memory allocation
   ns = len(spamLabels); ng = len(gateStringsToUse)
-  ne = gs.numParams(); gd = gs.get_dimension()
+  ne = gs.num_params(); gd = gs.get_dimension()
   C = 1.0/1024.0**3
 
   #  Estimate & check persistent memory (from allocs directly below)
@@ -982,8 +982,8 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
   if memLimit is not None and verbosity > 2:
     print "Memory estimates: (%d spam labels," % ns + \
         "%d gate strings, %d gatese params, %d gate dim)" % (ng,ne,gd)
-    print "Peristent: %g GB " % persistentMem*C
-    print "Intermediate: %g GB " % intermedMem*C
+    print "Peristent: %g GB " % (persistentMem*C)
+    print "Intermediate: %g GB " % (intermedMem*C)
     print "Limit: %g GB" % (memLimit*C)
     if maxEvalSubTreeSize is not None: 
       print "Maximum eval sub-tree size = %d" % maxEvalSubTreeSize
@@ -1918,7 +1918,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
 
     #Memory allocation
     ns = len(spamLabels); ng = len(gateStringsToUse)
-    ne = gs.numParams(); gd = gs.get_dimension()
+    ne = gs.num_params(); gd = gs.get_dimension()
     C = 1.0/1024.0**3
 
     #  Estimate & check persistent memory (from allocs directly below)
@@ -1944,8 +1944,8 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     if memLimit is not None and verbosity > 2:
       print "Memory estimates: (%d spam labels," % ns + \
           "%d gate strings, %d gatese params, %d gate dim)" % (ng,ne,gd)
-      print "Peristent: %g GB " % persistentMem*C
-      print "Intermediate: %g GB " % intermedMem*C
+      print "Peristent: %g GB " % (persistentMem*C)
+      print "Intermediate: %g GB " % (intermedMem*C)
       print "Limit: %g GB" % (memLimit*C)
       if maxEvalSubTreeSize is not None: 
         print "Maximum eval sub-tree size = %d" % maxEvalSubTreeSize
