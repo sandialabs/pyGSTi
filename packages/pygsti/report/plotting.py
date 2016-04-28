@@ -924,11 +924,12 @@ def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp):
                 if _np.any(_np.isnan(subMxs[iy][ix])): continue #skip
                 n_boxes += 1
     else:
+        # Each box is a chi2_1 random variable
         dof_per_box = 1
-        n_boxes = sum([ _np.sum(_np.isnan(subMxs[iy][ix])) 
-                        for ix in range(len(used_xvals)) 
-                        for iy in range(len(used_yvals)) ])
-    #Note: subMxs[y-index][x-index] is proper usage
+
+        # Gets all the non-NaN boxes, flattens the resulting
+        # array, and does the sum.
+        n_boxes = np.sum(~np.isnan(subMxs).flatten())
 
     return n_boxes, dof_per_box
 
@@ -936,6 +937,7 @@ def _computeSubMxs(xvals, yvals, xyGateStringDict, subMxCreationFn, sumUp):
     used_xvals = [ x for x in xvals if any([ (xyGateStringDict[(x,y)] is not None) for y in yvals]) ]
     used_yvals = [ y for y in yvals if any([ (xyGateStringDict[(x,y)] is not None) for x in xvals]) ]
     subMxs = [ [ subMxCreationFn( xyGateStringDict[(x,y)] ) for x in used_xvals ] for y in used_yvals]
+    #Note: subMxs[y-index][x-index] is proper usage
     n_boxes, dof_per_box = _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp)
 
     return used_xvals, used_yvals, subMxs, n_boxes, dof_per_box
