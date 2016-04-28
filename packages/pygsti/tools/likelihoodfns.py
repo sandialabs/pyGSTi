@@ -407,7 +407,8 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
 
 def logl_hessian(gateset, dataset, gatestring_list=None, 
                  minProbClip=1e-6, probClipInterval=None, radius=1e-4, 
-                 evalTree=None, countVecMx=None, poissonPicture=True, check=False):
+                 evalTree=None, countVecMx=None, poissonPicture=True,
+                 check=False, memLimit=None):
     """
     The hessian of the log-likelihood function.
 
@@ -457,6 +458,11 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
         If True, perform extra checks within code to verify correctness.  Used
         for testing, and runs much slower when True.
 
+    memLimit : int, optional
+        A rough memory limit in bytes which restricts the amount of intermediate
+        values that are computed and stored.
+
+
     Returns
     -------
     numpy array
@@ -469,9 +475,25 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
     if gatestring_list is None:
         gatestring_list = dataset.keys()
 
-    spamLabels = gateset.get_spam_labels() #this list fixes the ordering of the spam labels
+    spamLabels = gateset.get_spam_labels() #fixes the ordering of the spam labels
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
 
+    if evalTree is None:
+        evalTree = gateset.bulk_evaltree(gatestring_list)
+
+    #Memory allocation
+    ns = len(spamLabels); ng = len(gatestring_list)
+    ne = gateset.num_params(); gd = gateset.get_dimension()
+    C = 1.0/1024.0**3
+
+    #  Estimate & check persistent memory (from allocs directly below)
+    persistentMem = 8* (ng*(2*ns + ns*ne + ns*ne**2)) # in bytes
+    if memLimit is not None and memLimit < persistentMem:
+        raise MemoryError("HLogL Memory limit (%g GB) is " % (memLimit*C) +
+                          "< memory required to hold final results (%g GB)"
+                          % (persistentMem*C))
+
+    #  Allocate peristent memory
     if countVecMx is None:
         countVecMx = _np.empty( (len(spamLabels),len(gatestring_list)), 'd' )
         fill_count_vecs(countVecMx, spam_lbl_rows, dataset, gatestring_list)
@@ -481,11 +503,33 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
     hprobs = _np.empty( (len(spamLabels),len(gatestring_list),nP,nP), 'd' )
     totalCntVec = _np.sum(countVecMx, axis=0)
 
+    #  Estimate & check intermediate memory
+    #    - maybe make GateSet methods get intermediate estimates?
+    intermedMem = 8*ng*gd**2*(ne**2 + ne + 1) # ~ bulk_hproduct
+    if memLimit is not None and memLimit < intermedMem:
+        reductionFactor = float(intermedMem) / float(memLimit)
+        maxEvalSubTreeSize = int(ng / reductionFactor)
+    else:
+        maxEvalSubTreeSize = None
+
+    if maxEvalSubTreeSize is not None and not evalTree.is_split():
+      evalTree.split(maxEvalSubTreeSize, None)
+
+    #DEBUG - no verbosity passed in to just leave commented out
+    #if memLimit is not None:
+    #    print "HLogL Memory estimates: (%d spam labels," % ns + \
+    #        "%d gate strings, %d gatese params, %d gate dim)" % (ng,ne,gd)
+    #    print "Peristent: %g GB " % (persistentMem*C)
+    #    print "Intermediate: %g GB " % (intermedMem*C)
+    #    print "Limit: %g GB" % (memLimit*C)
+    #    if maxEvalSubTreeSize is not None: 
+    #        print "Maximum eval sub-tree size = %d" % maxEvalSubTreeSize
+    #        print "HLogL mem limit has imposed a division of evaluation tree:"
+    #        evalTree.print_analysis()
+
+
     a = radius # parameterizes "roundness" of f == 0 terms 
     min_p = minProbClip
-
-    if evalTree is None:
-        evalTree = gateset.bulk_evaltree(gatestring_list)
 
     gateset.bulk_fill_hprobs(hprobs, spam_lbl_rows, evalTree, 
                             prMxToFill=probs, derivMxToFill=dprobs, 

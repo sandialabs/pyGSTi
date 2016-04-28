@@ -924,15 +924,17 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     print "--- Least Squares GST ---"
 
   #convert list of GateStrings to list of raw tuples since that's all we'll need
-  if len(gateStringsToUse) > 0 and isinstance(gateStringsToUse[0],_objs.GateString):
+  if len(gateStringsToUse) > 0 and \
+        isinstance(gateStringsToUse[0],_objs.GateString):
     gateStringsToUse = [ gstr.tup for gstr in gateStringsToUse ]
 
-  spamLabels = gs.get_spam_labels() #this list fixes the ordering of the spam labels
+  spamLabels = gs.get_spam_labels() #fixes the ordering of the spam labels
   spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
-  vec_gs_len = len(gs.to_vector())
-  KM = len(spamLabels)*len(gateStringsToUse) #shorthand for this combined dimension used below
+  vec_gs_len = gs.num_params()
+  KM = len(spamLabels)*len(gateStringsToUse) #shorthand for combined dimension
 
-  if gateLabelAliases is not None: #then find & replace aliased gate labels with their expanded form
+  if gateLabelAliases is not None: 
+    #then find & replace aliased gate labels with their expanded form
     dsGateStringsToUse = []
     for s in gateStringsToUse:
       for label,expandedStr in gateLabelAliases.iteritems():
@@ -941,40 +943,76 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
           s = tuple(s)[:i] + tuple(expandedStr) + tuple(s)[i+1:]
       dsGateStringsToUse.append(s)
   else:
-    dsGateStringsToUse = gateStringsToUse # no difference in the strings used by the alias
-    
+    dsGateStringsToUse = gateStringsToUse 
+      # no difference in the strings used by the alias
+
+  #Get evaluation tree (now so can use length in mem estimates)
+  evTree = gs.bulk_evaltree(gateStringsToUse)
+
+  #Memory allocation
+  ns = len(spamLabels); ng = len(gateStringsToUse)
+  ne = gs.numParams(); gd = gs.get_dimension()
+  C = 1.0/1024.0**3
+
+  #  Estimate & check persistent memory (from allocs directly below)
+  persistentMem = 8* (ng*(ns + ns*ne + 1 + 3*ns)) # final results in bytes
+  if memLimit is not None and memLimit < persistentMem:
+    raise MemoryError("Memory limit (%g GB) is " % (memLimit*C) +
+                      "< memory required to hold final results (%g GB)"
+                      % (persistentMem*C))
+
+  #  Allocate peristent memory
   probs  = _np.empty( (len(spamLabels),len(gateStringsToUse)) )
   dprobs = _np.empty( (len(spamLabels),len(gateStringsToUse),vec_gs_len) )
 
-  N = _np.array( [ dataset[gateStr].total() for gateStr in dsGateStringsToUse ], 'd')
-  f = _np.empty( (len(spamLabels),len(gateStringsToUse)) )
+  N =_np.array([dataset[gateStr].total() for gateStr in dsGateStringsToUse],'d')
+  f =_np.empty( (len(spamLabels),len(gateStringsToUse)) )
   fweights = _np.empty( (len(spamLabels),len(gateStringsToUse)) )
-  z = _np.zeros( (len(spamLabels),len(gateStringsToUse)) ) #always zeros - used for derivative below
+  z = _np.zeros( (len(spamLabels),len(gateStringsToUse)) ) # for deriv below
 
-  #Memory estimates - maybe make GateSet methods to get intermediate memory estimates
-  ns = len(spamLabels); ng = len(gateStringsToUse); ne = vec_gs_len; gd = gs.get_dimension()
-  persistentMem = 8* (ng*(ns + ns*ne + 1 + 3*ns)) # Memory needed by final results in bytes
-  intermedMem   = 8* (ng*(1 + gd**2 * (1 + ne))) # Memory needed by intermediate results in bytes (now just ~ that of dproduct)
-  C = 1.0/1024.0**3 #; print "DEBUG: MEM",persistentMem," , ", intermedMem
+  #  Estimate & check intermediate memory
+  #    - maybe make GateSet methods get intermediate estimates?
+  intermedMem   = 8*(ng + ng*gd**2 * ng*gd**2*ne) # ~ bulk_dproduct
+  if memLimit is not None and memLimit < intermedMem:
+    reductionFactor = float(intermedMem) / float(memLimit)
+    maxEvalSubTreeSize = int(ng / reductionFactor)
+  else:
+    maxEvalSubTreeSize = None
 
-  maxEvalSubTreeSize = None
-  if memLimit is not None:
-    if memLimit < persistentMem:
-      raise MemoryError("Memory limit (%g GB) is < memory required to hold final results (%g GB)" % (memLimit*C, persistentMem*C))
-    if memLimit < intermedMem:
-      reductionFactor = float(intermedMem) / float(memLimit)
-      maxEvalSubTreeSize = int(ng / reductionFactor)
+  if memLimit is not None and verbosity > 2:
+    print "Memory estimates: (%d spam labels," % ns + \
+        "%d gate strings, %d gatese params, %d gate dim)" % (ng,ne,gd)
+    print "Peristent: %g GB " % persistentMem*C
+    print "Intermediate: %g GB " % intermedMem*C
+    print "Limit: %g GB" % (memLimit*C)
+    if maxEvalSubTreeSize is not None: 
+      print "Maximum eval sub-tree size = %d" % maxEvalSubTreeSize
 
-  if verbosity > 2:
-    print "Peristent Memory estimate: %d spam labels, %d gate strings, %d gateset params" % (ns,ng,ne)
-    print "    ==> %g GB (p) + %g GB (dp) + %g GB (other) = %g GB (total)" % \
-        (8*ns*ng*C, 8*ns*ng*ne*C,8*(ng+3*ns*ng)*C, persistentMem*C)
-    print "Intermediate Memory estimate: %d gate strings, %d gate dimension, %d gateset params" % (ng,gd,ne)
-    print "    ==> %g GB (p) + %g GB (dp) + %g GB (other) = %g GB (total)" % \
-        (8*ng*gd*gd*C, 8*ng*gd*gd*ne*C,8*ng*C, intermedMem*C)
-    if memLimit is not None: print "Memory limit = %g GB" % (memLimit*C)
-    if maxEvalSubTreeSize is not None: print "Maximum eval sub-tree size = %d" % maxEvalSubTreeSize
+  if maxEvalSubTreeSize is not None:
+    evTree.split(maxEvalSubTreeSize, None)
+    if verbosity > 2 and (comm is None or comm.Get_rank() == 0):
+      print "Memory limit has imposed a division of the evaluation tree:"
+      evTree.print_analysis()
+      #Note: do *not* split based on comm here, since any split that occurs
+      # here will be looped over in bulk_pr (which expects a split tree for
+      # the sole purpose of memory limiting)
 
+  if distributeMethod == "gatestrings":
+    #Split tree at *2nd* level for MPI (1st level = for memory/"pr"-level)
+    if not evTree.is_split():
+      evTree.split(None,1) # for bulk_pr
+    assert(evTree.is_split())
+
+    if comm is not None:
+      for i,subTree in enumerate(evTree.get_sub_trees()):
+        subTree.split(None, comm.Get_size())
+        if verbosity > 2 and comm.Get_rank() == 0:
+          print "Division of sub-tree %d (size %d) for MPI:" % (i,len(subTree))
+          subTree.print_analysis()
+  elif distributeMethod == "deriv":
+    pass #nothing more to do in this case
+  else:
+    raise ValueError("Invalid distribute method: %s" % distributeMethod)
 
   #NOTE on chi^2 expressions:
   #in general case:   chi^2 = sum (p_i-f_i)^2/p_i  (for i summed over outcomes)
@@ -994,35 +1032,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     fweights *= gatestringWeights[None,:] #b/c we necessarily used unweighted N[i]'s above
     N *= gatestringWeights #multiply N's by weights
 
-  evTree = gs.bulk_evaltree(gateStringsToUse)
   maxGateStringLength = max([len(x) for x in gateStringsToUse])  
-
-  if maxEvalSubTreeSize is not None:
-    evTree.split(maxEvalSubTreeSize, None)
-    if verbosity > 2 and (comm is None or comm.Get_rank() == 0):
-      print "Memory limit has imposed a division of the evaluation tree:"
-      evTree.print_analysis()
-      #Note: do *not* split based on comm here, since any split that occurs
-      # here will be looped over in bulk_pr (which expects a split tree for
-      # the sole purpose of memory limiting)
-
-
-  if distributeMethod == "gatestrings":
-    #Split tree at *2nd* level for MPI (1st level = for memory/"pr"-level)
-    if not evTree.is_split():
-      evTree.split(None,1) # for bulk_pr
-    assert(evTree.is_split())
-
-    if comm is not None:
-      for i,subTree in enumerate(evTree.get_sub_trees()):
-        subTree.split(None, comm.Get_size())
-        if verbosity > 2 and comm.Get_rank() == 0:
-          print "Division of sub-tree %d (size %d) for MPI:" % (i,len(subTree))
-          subTree.print_analysis()
-  elif distributeMethod == "deriv":
-    pass #nothing more to do in this case
-  else:
-    raise ValueError("Invalid distribute method: %s" % distributeMethod)
 
   if useFreqWeightedChiSq:
     def get_weights(p):
@@ -1887,10 +1897,11 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     if verbosity > 1:
         print "--- MLGST ---"
         
-    spamLabels = gs.get_spam_labels() #this list fixes the ordering of the spam labels
+    spamLabels = gs.get_spam_labels() #fixes the ordering of the spam labels
     vec_gs_len = gs.num_params()
 
-    if gateLabelAliases is not None: #then find & replace aliased gate labels with their expanded form
+    if gateLabelAliases is not None: 
+      #then find & replace aliased gate labels with their expanded form
       dsGateStringsToUse = []
       for s in gateStringsToUse:
         for label,expandedStr in gateLabelAliases.iteritems():
@@ -1899,36 +1910,45 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
             s = tuple(s)[:i] + tuple(expandedStr) + tuple(s)[i+1:]
         dsGateStringsToUse.append(s)
     else:
-      dsGateStringsToUse = gateStringsToUse # no difference in the strings used by the alias
+      dsGateStringsToUse = gateStringsToUse 
+         # no difference in the strings used by the alias
 
-
-    #Memory estimates - maybe make GateSet methods to get intermediate memory estimates
-    #FOR NOW - just taken from LSGST which should be ballpark correct -- TODO: recalc these estimates for ML...
-    ns = len(spamLabels); ng = len(gateStringsToUse); ne = vec_gs_len; gd = gs.get_dimension()
-    persistentMem = 8* (ng*(ns + ns*ne + 1 + 3*ns)) # Memory needed by final results in bytes
-    intermedMem   = 8* (ng*(1 + gd**2 * (1 + ne))) # Memory needed by intermediate results in bytes (now just ~ that of dproduct)
-    C = 1.0/1024.0**3 #; print "DEBUG: MEM2 ",persistentMem,",",intermedMem
-
-    maxEvalSubTreeSize = None
-    if memLimit is not None:
-      if memLimit < persistentMem:
-        raise MemoryError("Memory limit (%g GB) is < memory required to hold final results (%g GB)" % (memLimit*C, persistentMem*C))
-      if memLimit < intermedMem:
-        reductionFactor = float(intermedMem) / float(memLimit)
-        maxEvalSubTreeSize = int(ng / reductionFactor)
-  
-    if verbosity > 2:
-      print "Peristent Memory estimate: %d spam labels, %d gate strings, %d gateset params" % (ns,ng,ne)
-      print "    ==> %g GB (p) + %g GB (dp) + %g GB (other) = %g GB (total)" % \
-          (8*ns*ng*C, 8*ns*ng*ne*C,8*(ng+3*ns*ng)*C, persistentMem*C)
-      print "Intermediate Memory estimate: %d gate strings, %d gate dimension, %d gateset params" % (ng,gd,ne)
-      print "    ==> %g GB (p) + %g GB (dp) + %g GB (other) = %g GB (total)" % \
-          (8*ng*gd*gd*C, 8*ng*gd*gd*ne*C,8*ng*C, intermedMem*C)
-      if memLimit is not None: print "Memory limit = %g GB" % (memLimit*C)
-      if maxEvalSubTreeSize is not None: print "Maximum eval sub-tree size = %d" % maxEvalSubTreeSize
-
-
+    #Get evaluation tree (now so can use length in mem estimates)
     evTree = gs.bulk_evaltree(gateStringsToUse)
+
+    #Memory allocation
+    ns = len(spamLabels); ng = len(gateStringsToUse)
+    ne = gs.numParams(); gd = gs.get_dimension()
+    C = 1.0/1024.0**3
+
+    #  Estimate & check persistent memory (from allocs directly below)
+    persistentMem = 8* (ng*(ns + ns*ne + 1*ns)) # final results in bytes
+    if memLimit is not None and memLimit < persistentMem:
+      raise MemoryError("Memory limit (%g GB) is " % (memLimit*C) +
+                        "< memory required to hold final results (%g GB)"
+                        % (persistentMem*C))
+
+    cntVecMx = _np.empty( (len(spamLabels),len(gateStringsToUse)), 'd' )
+    probs = _np.empty( (len(spamLabels),len(gateStringsToUse)), 'd' )
+    dprobs = _np.empty( (len(spamLabels),len(gateStringsToUse),vec_gs_len) )
+
+    #  Estimate & check intermediate memory
+    #    - maybe make GateSet methods get intermediate estimates?
+    intermedMem   = 8*(ng + ng*gd**2 * ng*gd**2*ne) # ~ bulk_dproduct
+    if memLimit is not None and memLimit < intermedMem:
+      reductionFactor = float(intermedMem) / float(memLimit)
+      maxEvalSubTreeSize = int(ng / reductionFactor)
+    else:
+      maxEvalSubTreeSize = None
+  
+    if memLimit is not None and verbosity > 2:
+      print "Memory estimates: (%d spam labels," % ns + \
+          "%d gate strings, %d gatese params, %d gate dim)" % (ng,ne,gd)
+      print "Peristent: %g GB " % persistentMem*C
+      print "Intermediate: %g GB " % intermedMem*C
+      print "Limit: %g GB" % (memLimit*C)
+      if maxEvalSubTreeSize is not None: 
+        print "Maximum eval sub-tree size = %d" % maxEvalSubTreeSize
 
     if maxEvalSubTreeSize is not None:
       evTree.split(maxEvalSubTreeSize, None)
@@ -1956,12 +1976,8 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     else:
       raise ValueError("Invalid distribute method: %s" % distributeMethod)
 
+
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
-
-    cntVecMx = _np.empty( (len(spamLabels),len(gateStringsToUse)), 'd' )
-    probs = _np.empty( (len(spamLabels),len(gateStringsToUse)), 'd' )
-    dprobs = _np.empty( (len(spamLabels),len(gateStringsToUse),vec_gs_len) )
-
     _tools.fill_count_vecs(cntVecMx, spam_lbl_rows, dataset, dsGateStringsToUse)
     logL_upperbound = _tools.logl_max(dataset, dsGateStringsToUse, cntVecMx, poissonPicture) # The theoretical upper bound on the log(likelihood)
 
@@ -1970,6 +1986,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     
     freqs = cntVecMx / totalCntVec[None,:]
     freqs_nozeros = _np.where(cntVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
+
     if poissonPicture:
       freqTerm = cntVecMx * ( _np.log(freqs_nozeros) - 1.0 ) 
     else:

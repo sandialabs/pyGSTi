@@ -1367,8 +1367,10 @@ class GateSetCalculator(object):
         for i,gateLabel in enumerate(evalTree.get_init_labels()):
             if gateLabel == "": #special case of empty label == no gate
                 assert(i == 0) #tree convention
-                prodCache[i] = _np.identity( dim ); dProdCache[i] = _np.zeros( deriv_shape )
-                scaleCache[i] = 0.0; #nnzCache[i] = 0
+                prodCache[i] = _np.identity( dim )
+                dProdCache[i] = _np.zeros( deriv_shape )
+                # Note: scaleCache[i] = 0.0 from initialization
+                #nnzCache[i] = 0
             else:
                 dgate = self.dproduct( (gateLabel,) , wrtFilter=wrtFilter)
                 nG = max(_nla.norm(self.gates[gateLabel]),1.0)
@@ -2149,8 +2151,7 @@ class GateSetCalculator(object):
                     eIndex = self.effects.keys().index(elabel)
                     dp_dEs[:,e_offset[eIndex]:e_offset[eIndex+1]] = \
                         _np.dot(dp_dAnyE, self.effects[elabel].deriv_wrt_params())
-                vdp = _np.concatenate( (dp_drhos,dp_dEs,dp_dGates), axis=1 )
-                sub_vdp = vdp
+                sub_vdp = _np.concatenate( (dp_drhos,dp_dEs,dp_dGates), axis=1 )
     
             vec_gs_size = dGs.shape[1]
     
@@ -2212,8 +2213,10 @@ class GateSetCalculator(object):
             _np.seterr(**old_err)
 
             if evalTree.is_split():
-                if returnPr: vp[ evalSubTree.myFinalToParentFinalMap ] = sub_vp
-                if returnDeriv: vdp[ evalSubTree.myFinalToParentFinalMap, : ] = sub_vdp
+                if returnPr:
+                    vp[ evalSubTree.myFinalToParentFinalMap ] = sub_vp
+                if returnDeriv:
+                    vdp[ evalSubTree.myFinalToParentFinalMap, : ] = sub_vdp
                 vhp[ evalSubTree.myFinalToParentFinalMap, :, : ] = sub_vhp
             else: 
                 if returnPr: vp = sub_vp

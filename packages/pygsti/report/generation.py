@@ -1068,7 +1068,7 @@ def get_gatestring_multi_table(gsLists, titles, formats, tableclass, longtable, 
 def get_logl_confidence_region(gateset, dataset, confidenceLevel,
                                gatestring_list=None, probClipInterval=(-1e6,1e6),
                                minProbClip=1e-4, radius=1e-4, hessianProjection="std",
-                               regionType="std"):
+                               regionType="std", memLimit=None):
 
     """ 
     Constructs a ConfidenceRegion given a gateset and dataset using the log-likelihood Hessian.
@@ -1124,6 +1124,10 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
         confidence region, while 'non-markovian' creates a region which 
         attempts to account for the non-markovian-ness of the data.
 
+    memLimit : int, optional
+        A rough memory limit in bytes which restricts the amount of intermediate
+        values that are computed and stored.
+
 
     Returns
     -------
@@ -1134,7 +1138,8 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
         
     #Compute appropriate Hessian
     hessian = _tools.logl_hessian(gateset, dataset, gatestring_list,
-                                  minProbClip, probClipInterval, radius) 
+                                  minProbClip, probClipInterval, radius,
+                                  memLimit=memLimit) 
 
     #Compute the non-Markovian "radius" if required
     if regionType == "std":
@@ -1170,7 +1175,7 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
 def get_chi2_confidence_region(gateset, dataset, confidenceLevel,
                                gatestring_list=None, probClipInterval=(-1e6,1e6),
                                minProbClipForWeighting=1e-4, hessianProjection="std",
-                               regionType='std'):
+                               regionType='std', memLimit=None):
 
     """ 
     Constructs a ConfidenceRegion given a gateset and dataset using the Chi2 Hessian.
@@ -1222,6 +1227,10 @@ def get_chi2_confidence_region(gateset, dataset, confidenceLevel,
         confidence region, while 'non-markovian' creates a region which 
         attempts to account for the non-markovian-ness of the data.
 
+    memLimit : int, optional
+        A rough memory limit in bytes which restricts the amount of intermediate
+        values that are computed and stored.
+
 
     Returns
     -------
@@ -1233,7 +1242,7 @@ def get_chi2_confidence_region(gateset, dataset, confidenceLevel,
     #Compute appropriate Hessian
     chi2, hessian = _tools.chi2(dataset, gateset, gatestring_list,
                                 False, True, minProbClipForWeighting,
-                                probClipInterval)
+                                probClipInterval, memLimit=memLimit)
 
     #Compute the non-Markovian "radius" if required
     if regionType == "std":

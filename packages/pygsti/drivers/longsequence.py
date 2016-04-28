@@ -304,6 +304,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     ret.parameters['defaultDirectory'] = default_dir
     ret.parameters['defaultBasename'] = default_base
     ret.parameters['mxBasis'] = mxBasis
+    ret.parameters['memLimit'] = advancedOptions.get('memoryLimitInBytes',None)
 
     times_list.append( ('Results initialization',_time.time()-tRef) )
     ret.parameters['times'] = times_list
