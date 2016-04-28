@@ -817,7 +817,8 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
               probClipInterval=None, useFreqWeightedChiSq=False,
               regularizeFactor=0, verbosity=0, check=False,
               check_jacobian=False, gatestringWeights=None,
-              gateLabelAliases=None, memLimit=None, comm=None):
+              gateLabelAliases=None, memLimit=None, comm=None,
+              distributeMethod = "gatestrings"):
   """
   Performs Least-Squares Gate Set Tomography on the dataset.
 
@@ -899,6 +900,11 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
   comm : mpi4py.MPI.Comm, optional
       When not None, an MPI communicator for distributing the computation
       across multiple processors.
+
+  distributeMethod : {"gatestrings", "deriv"}
+      How to distribute calculation amongst processors (only has effect
+      when comm is not None).  "gatestrings" will divide the list of 
+      gatestrings; "deriv" will divide the columns of the jacobian matrix.      
 
 
   Returns
@@ -1000,11 +1006,11 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
       # here will be looped over in bulk_pr (which expects a split tree for
       # the sole purpose of memory limiting)
 
-  #BLOCK for splitting trees
-  bDistributeViaTreeSplitting = True
-  if bDistributeViaTreeSplitting:
+
+  if distributeMethod == "gatestrings":
+    #Split tree at *2nd* level for MPI (1st level = for memory/"pr"-level)
     if not evTree.is_split():
-      evTree.split(None,1)
+      evTree.split(None,1) # for bulk_pr
     assert(evTree.is_split())
 
     if comm is not None:
@@ -1013,6 +1019,10 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         if verbosity > 2 and comm.Get_rank() == 0:
           print "Division of sub-tree %d (size %d) for MPI:" % (i,len(subTree))
           subTree.print_analysis()
+  elif distributeMethod == "deriv":
+    pass #nothing more to do in this case
+  else:
+    raise ValueError("Invalid distribute method: %s" % distributeMethod)
 
   if useFreqWeightedChiSq:
     def get_weights(p):
@@ -1433,7 +1443,7 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
                         returnAll=False, gateStringSetLabels=None, verbosity=0,
                         check=False, check_jacobian=False,
                         gatestringWeightsDict=None, memLimit=None, times=None,
-                        comm=None):
+                        comm=None, distributeMethod = "gatestrings"):
   """
   Performs Iterative Least Squares Gate Set Tomography on the dataset.
 
@@ -1525,6 +1535,11 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
   comm : mpi4py.MPI.Comm, optional
       When not None, an MPI communicator for distributing the computation
       across multiple processors.
+
+  distributeMethod : {"gatestrings", "deriv"}
+      How to distribute calculation amongst processors (only has effect
+      when comm is not None).  "gatestrings" will divide the list of 
+      gatestrings; "deriv" will divide the columns of the jacobian matrix.      
 
 
   Returns
@@ -1793,7 +1808,8 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
              maxiter=100000, maxfev=None, tol=1e-6,
              minProbClip=1e-4, probClipInterval=None, radius=1e-4,
              poissonPicture=True, verbosity=0, check=False,
-             gateLabelAliases=None, memLimit=None, comm=None):
+             gateLabelAliases=None, memLimit=None, comm=None,
+             distributeMethod = "gatestrings"):
 
     """
     Performs Maximum Likelihood Estimation Gate Set Tomography on the dataset.
@@ -1850,6 +1866,11 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     comm : mpi4py.MPI.Comm, optional
       When not None, an MPI communicator for distributing the computation
       across multiple processors.
+
+    distributeMethod : {"gatestrings", "deriv"}
+      How to distribute calculation amongst processors (only has effect
+      when comm is not None).  "gatestrings" will divide the list of 
+      gatestrings; "deriv" will divide the columns of the jacobian matrix.      
 
   
     Returns
@@ -1910,14 +1931,30 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     evTree = gs.bulk_evaltree(gateStringsToUse)
 
     if maxEvalSubTreeSize is not None:
-      evTree.split(maxEvalSubTreeSize)
+      evTree.split(maxEvalSubTreeSize, None)
       if verbosity > 2 and (comm is None or comm.Get_rank() == 0):
         print "Memory limit has imposed a division of the evaluation tree:"
         evTree.print_analysis()
         #Note: do *not* split based on comm here, since any split that occurs
         # here will be looped over in bulk_pr (which expects a split tree for
         # the sole purpose of memory limiting)
-
+  
+    if distributeMethod == "gatestrings":
+      #Split tree at *2nd* level for MPI (1st level = for memory/"pr"-level)
+      if not evTree.is_split():
+        evTree.split(None,1) # for bulk_pr
+      assert(evTree.is_split())
+  
+      if comm is not None:
+        for i,subTree in enumerate(evTree.get_sub_trees()):
+          subTree.split(None, comm.Get_size())
+          if verbosity > 2 and comm.Get_rank() == 0:
+            print "Division of sub-tree %d (size %d) for MPI:" %(i,len(subTree))
+            subTree.print_analysis()
+    elif distributeMethod == "deriv":
+      pass #nothing more to do in this case
+    else:
+      raise ValueError("Invalid distribute method: %s" % distributeMethod)
 
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
 
@@ -2159,7 +2196,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                        poissonPicture=True,returnMaxLogL=False,returnAll=False, 
                        gateStringSetLabels=None, useFreqWeightedChiSq=False,
                        verbosity=0, check=False, memLimit=None, times=None,
-                       comm=None):
+                       comm=None, distributeMethod = "gatestrings"):
   """
   Performs Iterative Maximum Liklihood Estimation Gate Set Tomography on the dataset.
 
@@ -2241,6 +2278,11 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
   comm : mpi4py.MPI.Comm, optional
       When not None, an MPI communicator for distributing the computation
       across multiple processors.
+
+  distributeMethod : {"gatestrings", "deriv"}
+      How to distribute calculation amongst processors (only has effect
+      when comm is not None).  "gatestrings" will divide the list of 
+      gatestrings; "deriv" will divide the columns of the jacobian matrix.      
 
 
   Returns

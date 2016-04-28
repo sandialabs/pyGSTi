@@ -1368,7 +1368,7 @@ class GateSetCalculator(object):
             if gateLabel == "": #special case of empty label == no gate
                 assert(i == 0) #tree convention
                 prodCache[i] = _np.identity( dim ); dProdCache[i] = _np.zeros( deriv_shape )
-                scaleCache[i] = 1.0; #nnzCache[i] = 0
+                scaleCache[i] = 0.0; #nnzCache[i] = 0
             else:
                 dgate = self.dproduct( (gateLabel,) , wrtFilter=wrtFilter)
                 nG = max(_nla.norm(self.gates[gateLabel]),1.0)

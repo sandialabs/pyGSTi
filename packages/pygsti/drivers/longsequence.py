@@ -236,7 +236,9 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
             verbosity=advancedOptions.get('verbosity',2),
             memLimit=advancedOptions.get('memoryLimitInBytes',None),
             useFreqWeightedChiSq=advancedOptions.get(
-                'useFreqWeightedChiSq',False), times=times_list, comm=comm)
+                'useFreqWeightedChiSq',False), times=times_list,
+            comm=comm, distributeMethod=advancedOptions.get(
+                'distributeMethod',"gatestrings") )
     elif objective == "logl":
         gs_lsgst_list = _alg.do_iterative_mlgst(
           ds, gs_after_gauge_opt, lsgstLists,
@@ -246,7 +248,9 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
           returnAll=True, verbosity=advancedOptions.get('verbosity',2),
           memLimit=advancedOptions.get('memoryLimitInBytes',None),
           useFreqWeightedChiSq=advancedOptions.get(
-                'useFreqWeightedChiSq',False), times=times_list, comm=comm)
+                'useFreqWeightedChiSq',False), times=times_list,
+          comm=comm, distributeMethod=advancedOptions.get(
+                'distributeMethod',"gatestrings"))
     else:
         raise ValueError("Invalid longSequenceObjective: %s" % objective)
 

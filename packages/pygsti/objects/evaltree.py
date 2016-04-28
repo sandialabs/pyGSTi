@@ -387,9 +387,9 @@ class EvalTree(list):
                 for (i,j),intSize in sortedIntersects:
                     if i in iStartingTrees or j in iStartingTrees: continue
                     iStartingTrees.append(i)
+                    if len(iStartingTrees) == numSubTrees:  break
                     iStartingTrees.append(j)
-                    if len(iStartingTrees) == numSubTrees:
-                        break
+                    if len(iStartingTrees) == numSubTrees:  break
                 else:
                     raise ValueError("Could not find set of starting trees!")
                 subTreeSetList = [singleItemTreeSetList[i] for i in iStartingTrees]
