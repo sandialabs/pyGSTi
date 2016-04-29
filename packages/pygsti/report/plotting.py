@@ -719,7 +719,7 @@ def color_boxplot(plt_data, cmapFactory, title=None, xlabels=None, ylabels=None,
 
     cmap, norm = cmapFactory.get_cmap(), cmapFactory.get_norm()
 
-    masked_data = _np.ma.array (plt_data, mask=_np.isnan(plt_data))
+    masked_data = _np.ma.array(plt_data, mask=_np.isnan(plt_data))
 
     heatmap = axes.pcolormesh( masked_data, cmap=cmap, norm=norm)
 
@@ -910,6 +910,14 @@ def nested_color_boxplot(plt_data_list_of_lists, cmapFactory, title=None, xlabel
                         colorbar, fig, axes, size, prec, boxLabels, xlabel, ylabel,
                         save_to, ticSize, grid)
 
+def _num_non_nan(array):
+    ixs = _np.where(_np.isnan(_np.array(array).flatten()) == False)[0]
+
+    return int(len(ixs))
+
+def _all_same(items):
+    return all(x == items[0] for x in items)
+
 def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp):
     """
     A helper function to compute the number of boxes, and corresponding
@@ -917,12 +925,22 @@ def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp):
 
     """
     if sumUp:
-        dof_per_box = subMxs[0][0].size
-        n_boxes = 0
-        for ix in range(len(used_xvals)):
-            for iy in range(len(used_yvals)):
-                if _np.any(_np.isnan(subMxs[iy][ix])): continue #skip
-                n_boxes += 1
+        s = _np.shape(subMxs)
+        # Reshape the subMxs into a "flattened" form (as opposed to a
+        # two-dimensional one)
+        reshape_subMxs = _np.array(_np.reshape(subMxs, (s[0] * s[1], s[2], s[3])))
+
+        #Get all the boxes where the entries are not all NaN
+        non_all_NaN = reshape_subMxs[_np.where(_np.array([_np.isnan(k).all() for k in reshape_subMxs]) == False)]
+
+        s = _np.shape(non_all_NaN)
+        dof_each_box = map(lambda k: _num_non_nan(k), non_all_NaN)
+        assert _all_same(dof_each_box), 'Number of degrees of freedom different for different boxes!'
+
+        # Each box is a chi2_(sum) random variable
+        dof_per_box = dof_each_box[0]
+        # The number of boxes is equal to the number of rows in non_all_NaN
+        n_boxes = s[0]
     else:
         # Each box is a chi2_1 random variable
         dof_per_box = 1
