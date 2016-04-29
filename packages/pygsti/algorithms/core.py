@@ -972,7 +972,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
   #  Estimate & check intermediate memory
   #    - maybe make GateSet methods get intermediate estimates?
-  intermedMem   = 8*(ng + ng*gd**2 * ng*gd**2*ne) # ~ bulk_dproduct
+  intermedMem   = 8*(ng + ng*gd**2 + ng*gd**2*ne) # ~ bulk_dproduct
   if memLimit is not None and memLimit < intermedMem:
     reductionFactor = float(intermedMem) / float(memLimit)
     maxEvalSubTreeSize = int(ng / reductionFactor)
@@ -1934,7 +1934,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
 
     #  Estimate & check intermediate memory
     #    - maybe make GateSet methods get intermediate estimates?
-    intermedMem   = 8*(ng + ng*gd**2 * ng*gd**2*ne) # ~ bulk_dproduct
+    intermedMem   = 8*(ng + ng*gd**2 + ng*gd**2*ne) # ~ bulk_dproduct
     if memLimit is not None and memLimit < intermedMem:
       reductionFactor = float(intermedMem) / float(memLimit)
       maxEvalSubTreeSize = int(ng / reductionFactor)
