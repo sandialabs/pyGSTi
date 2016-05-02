@@ -2625,7 +2625,7 @@ def direct_deviation_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset
         #evals_direct = _np.linalg.eigvals(gate_direct)
         ubF, ubGateMx = _tools.fidelity_upper_bound(gate)
         ubF_direct, ubGateMx = _tools.fidelity_upper_bound(gate_direct)
-        return _np.array( [[ubF_direct - ubF]], 'd' )
+        return _np.array( ubF_direct - ubF, dtype='float64' )
 
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,True)
     max_abs = max([ _np.max(_np.abs(subMxs[iy][ix])) 
