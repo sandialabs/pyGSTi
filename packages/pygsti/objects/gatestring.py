@@ -181,8 +181,8 @@ class GateString(object):
     def __copy__(self):
         return GateString( self.tup, self.str, bCheck=False)
 
-    def __deepcopy__(self):
-        return GateString( self.tup, self.str, bCheck=False)
+    #def __deepcopy__(self, memo):
+    #    return GateString( self.tup, self.str, bCheck=False)
 
     def __getitem__(self, key):
         if isinstance( key, slice ):
@@ -252,8 +252,8 @@ class WeightedGateString(GateString):
     def __copy__(self):
         return WeightedGateString( self.tup, self.str, self.weight, bCheck=False )
 
-    def __deepcopy__(self):
-        return WeightedGateString( self.tup, self.str, self.weight, bCheck=False )
+#    def __deepcopy__(self, memo):
+#        return WeightedGateString( self.tup, self.str, self.weight, bCheck=False )
 
     def __getitem__(self, key):
         if isinstance( key, slice ):

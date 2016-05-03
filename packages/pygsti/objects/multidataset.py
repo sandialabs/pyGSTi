@@ -355,11 +355,12 @@ class MultiDataSet(object):
 
     state_dict = _pickle.load(f)
     def expand(x): #to be backward compatible
-      if isinstance(x,_gs.CompressedGateString): return x.expand()
-      else: 
-        _warnings.warn("Deprecated dataset format.  Please re-save " +
-                       "this dataset soon to avoid future incompatibility.")
-        return _gs.GateString(_gs.CompressedGateString.expand_gate_label_tuple(x))
+      assert isinstance(x,_gs.CompressedGateString)
+      return x.expand()
+      #else: 
+      #  _warnings.warn("Deprecated dataset format.  Please re-save " +
+      #                 "this dataset soon to avoid future incompatibility.")
+      #  return _gs.GateString(_gs.CompressedGateString.expand_gate_label_tuple(x))
     gsIndexKeys = [ expand(cgs) for cgs in state_dict['gsIndexKeys'] ]
 
     #gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]

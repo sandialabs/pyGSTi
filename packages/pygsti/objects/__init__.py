@@ -30,7 +30,9 @@ from multidataset import MultiDataSet
 from spamspec import SpamSpec
 
 from rpeconfig import rpeconfig
-from gigateset import GaugeInvGateSet
+#from gigateset import GaugeInvGateSet
+#Experimental only: don't import in production pyGSTi
+#from gigateset import GaugeInvGateSet  
 
 #Functions
 from gate import compose, optimize_gate

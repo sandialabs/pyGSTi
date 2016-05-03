@@ -94,11 +94,13 @@ class TestDriversMethods(DriversTestCase):
                                 "temp_test_files/driver_germs.txt",
                                 maxLens, truncScheme=ts)
 
-        #Try using effectStrs == None and gaugeOptToCPTP
+        #Try using effectStrs == None, gaugeOptToCPTP, and advanced options
         result = self.runSilent(pygsti.do_long_sequence_gst,
                                 ds, std.gs_target, std.fiducials, None,
                                 std.germs, maxLens, truncScheme=ts,
-                                gaugeOptToCPTP=True)
+                                gaugeOptToCPTP=True, 
+                                advancedOptions={'contractLGSTtoCPTP': True,
+                                                 'depolarizeLGST': 0.05 })
 
 
         #Check errors
@@ -201,8 +203,21 @@ class TestDriversMethods(DriversTestCase):
         specs = pygsti.construction.build_spam_specs(std.fiducials)
         gs = pygsti.do_lgst(ds, specs, targetGateset=std.gs_target, svdTruncateTo=4, verbosity=0)
 
-        bootds_p = pygsti.drivers.make_bootstrap_dataset(ds,'parametric',gs, seed=1234 )
-        bootds_np = pygsti.drivers.make_bootstrap_dataset(ds,'nonparametric', seed=1234 )
+        bootds_p = pygsti.drivers.make_bootstrap_dataset(
+            ds,'parametric', gs, seed=1234 )
+        bootds_np = pygsti.drivers.make_bootstrap_dataset(
+            ds,'nonparametric', seed=1234 )
+
+        with self.assertRaises(ValueError):
+            pygsti.drivers.make_bootstrap_dataset(ds,'foobar', seed=1)
+              #bad generationMethod
+        with self.assertRaises(ValueError):
+            pygsti.drivers.make_bootstrap_dataset(ds,'parametric', seed=1)
+              # must specify gateset for parametric mode
+        with self.assertRaises(ValueError):
+            pygsti.drivers.make_bootstrap_dataset(ds,'nonparametric',gs,seed=1)
+              # must *not* specify gateset for nonparametric mode
+
         
         maxLengths = [0] #just do LGST strings to make this fast...
         bootgs_p = self.runSilent(pygsti.drivers.make_bootstrap_gatesets,
@@ -210,13 +225,50 @@ class TestDriversMethods(DriversTestCase):
             std.germs, maxLengths, inputGateSet=gs, constrainToTP=True,
             returnData=False)
 
-        bootgs_np, bootds_np2 = self.runSilent(pygsti.drivers.make_bootstrap_gatesets,
+        default_maxLens = [0]+[2**k for k in range(10)]
+        gateStrings = pygsti.construction.make_lsgst_experiment_list(
+            self.gateLabels, self.fiducials, self.fiducials, self.germs,
+            default_maxLens, fidPairs=None, truncScheme="whole germ powers")
+        ds_defaultMaxLens = pygsti.construction.generate_fake_data(
+            gs, gateStrings, nSamples=1000, sampleError='round')
+
+        bootgs_p_defaultMaxLens = self.runSilent(
+            pygsti.drivers.make_bootstrap_gatesets,
+            2, ds_defaultMaxLens, 'parametric', std.fiducials, std.fiducials,
+            std.germs, None, inputGateSet=gs, constrainToTP=True,
+            returnData=False) #test when maxLengths == None
+
+        bootgs_np, bootds_np2 = self.runSilent(
+            pygsti.drivers.make_bootstrap_gatesets,
             2, ds, 'nonparametric', std.fiducials, std.fiducials,
             std.germs, maxLengths, targetGateSet=gs, 
             constrainToTP=True, returnData=True)
 
-        self.runSilent(pygsti.drivers.gauge_optimize_gs_list, bootgs_p, std.gs_target, constrainToTP=True,
-                           gateMetric = 'frobenius', spamMetric = 'frobenius', plot=False)
+        with self.assertRaises(ValueError):
+            pygsti.drivers.make_bootstrap_gatesets(
+                2, ds, 'parametric', std.fiducials, std.fiducials,
+                std.germs, maxLengths, constrainToTP=True,
+                returnData=False) 
+                #must specify either inputGateSet or targetGateSet
+
+        with self.assertRaises(ValueError):
+            pygsti.drivers.make_bootstrap_gatesets(
+                2, ds, 'parametric', std.fiducials, std.fiducials,
+                std.germs, maxLengths, inputGateSet=gs, targetGateSet=gs,
+                constrainToTP=True, returnData=False) 
+                #cannot specify both inputGateSet and targetGateSet
+
+
+        self.runSilent(pygsti.drivers.gauge_optimize_gs_list,
+                       bootgs_p, std.gs_target, constrainToTP=True,
+                       gateMetric = 'frobenius', spamMetric = 'frobenius',
+                       plot=False)
+
+        #Test plotting -- seems to work.
+        self.runSilent(pygsti.drivers.gauge_optimize_gs_list,
+                       bootgs_p, std.gs_target, constrainToTP=True,
+                       gateMetric = 'frobenius', spamMetric = 'frobenius',
+                       plot=True)
 
 
         #Test utility functions -- just make sure they run for now...

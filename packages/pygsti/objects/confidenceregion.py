@@ -12,6 +12,32 @@ from .. import optimize as _opt
 
 from gateset import P_RANK_TOL
 
+# NON-MARKOVIAN ERROR BARS
+#Connection with Robin's notes:
+#
+# Robins notes: pg 21 : want to set radius delta'(alpha,r2)
+#   via: lambda(G) = lambda(G_mle) + delta'
+#
+# Connecting with pyGSTi Hessian (H) calculations:
+#   lambda(G) = 2(maxLogL - logL(G)) ~ chi2_k   (as defined in notes)
+#   lambda(G_mle) = 2(maxLogL - logL(G_mle))
+#
+#  expand logL around max:
+#    logL(G_mle + dx) ~= logL(G_mle) - 1/2 dx*H*dx (no first order term) 
+#
+#  Thus, delta'
+#    delta' = lambda(G) - lambda(G_mle) = -2(log(G)-log(G_mle))
+#           = dx*H*dx ==> delta' is just like C1 or Ck scaling factors
+#                         used for computing normal confidence regions
+#    (recall delta' is computed as the alpha-th quantile of a 
+#     non-central chi^2_{K',r2} where K' = #of gateset params and
+#     r2 = lambda(G_mle) - (K-K'), where K = #max-model params (~#gatestrings)
+#     is the difference between the expected (mean) lambda (=K-K') and what
+#     we actually observe (=lambda(G_mle)).
+#
+#TODO: add "type" argument to ConfidenceRegion constructor? 
+#   ==> "std" or "non-markovian"
+
 class ConfidenceRegion(object):
     """
     Encapsulates a hessian-based confidence region in gate-set space.
@@ -22,7 +48,8 @@ class ConfidenceRegion(object):
     """
 
     def __init__(self, gateset, hessian, confidenceLevel, 
-                 hessianProjection="std", tol=1e-6, maxiter=10000):
+                 hessianProjection="std", tol=1e-6, maxiter=10000,
+                 nonMarkRadiusSq=0):
         """ 
         Initializes a new ConfidenceRegion.
 
@@ -60,6 +87,17 @@ class ConfidenceRegion(object):
         maxiter : int, optional
             Maximum iterations for optimal Hessian projection.  Only used when 
             hessianProjection == 'optimal gate CIs'
+
+        nonMarkRadiusSq : float, optional
+            When non-zero, "a non-Markovian error region" is constructed using 
+            this value as the squared "non-markovian radius". This specifies the
+            portion of 2*(max-log-likelihood - gateset-log-likelihood) that we
+            attribute to non-Markovian errors (typically the previous
+            difference minus it's expected value, the difference in number of
+            parameters between the maximal and gateset models).  If set to 
+            zero (the default), a standard and thereby statistically rigorous
+            conficence region is created.  Non-zero values should only be 
+            supplied if you really know what you're doing.
         """
 
         proj_non_gauge = gateset.get_nongauge_projector()
@@ -93,19 +131,45 @@ class ConfidenceRegion(object):
         # Get constants C such that xT*Hessian*x = C gives contour for the desired confidence region.
         #  C1 == Single DOF case: constant for a single-DOF likelihood, (or a profile likelihood in our case)
         #  Ck == Total DOF case: constant for a region of the likelihood as a function of *all non-gauge* gateset parameters
-        C1 = _stats.chi2.ppf(confidenceLevel/100.0, 1)
-        Ck = _stats.chi2.ppf(confidenceLevel/100.0, self.nNonGaugeParams)
-
-          # Alt. method to get C1: square the result of a single gaussian (normal distribution)
-          #Note: scipy's ppf gives inverse of cdf, so want to know where cdf == the leftover probability on left side
-        seScaleFctr = -_stats.norm.ppf((1.0 - confidenceLevel/100.0)/2.0) #std error scaling factor for desired confidence region
-        assert(_np.isclose(C1, seScaleFctr**2))
-
-        # save quadratic form Q s.t. xT*Q*x = 1 gives confidence region using C1, i.e. a
-        #  region appropriate for generating 1-D confidence intervals.
-        self.regionQuadcForm = projected_hessian / C1
-        self.intervalScaling = _np.sqrt( Ck / C1 ) # multiplicative scaling required to convert intervals
+        if _np.isclose(nonMarkRadiusSq,0.0):
+            C1 = _stats.chi2.ppf(confidenceLevel/100.0, 1)
+            Ck = _stats.chi2.ppf(confidenceLevel/100.0, self.nNonGaugeParams)
+    
+              # Alt. method to get C1: square the result of a single gaussian (normal distribution)
+              #Note: scipy's ppf gives inverse of cdf, so want to know where cdf == the leftover probability on left side
+            seScaleFctr = -_stats.norm.ppf((1.0 - confidenceLevel/100.0)/2.0) #std error scaling factor for desired confidence region
+            assert(_np.isclose(C1, seScaleFctr**2))
+    
+            # save quadratic form Q s.t. xT*Q*x = 1 gives confidence region using C1, i.e. a
+            #  region appropriate for generating 1-D confidence intervals.
+            self.regionQuadcForm = projected_hessian / C1
+            self.intervalScaling = _np.sqrt( Ck / C1 ) # multiplicative scaling required to convert intervals
                                                    # to those obtained using a full (using Ck) confidence region.
+            self.stdIntervalScaling = 1.0 # multiplicative scaling required to convert intervals
+                                          # to *standard* (e.g. not non-Mark.) intervals.
+            self.stdRegionScaling = self.intervalScaling # multiplicative scaling required to convert intervals
+                                                  # to those obtained using a full *standard* confidence region.
+
+        else:
+            C1 = _stats.ncx2.ppf(confidenceLevel/100.0, 1, nonMarkRadiusSq)
+            Ck = _stats.ncx2.ppf(confidenceLevel/100.0, self.nNonGaugeParams, nonMarkRadiusSq)
+        
+            # save quadratic form Q s.t. xT*Q*x = 1 gives confidence region using C1, i.e. a
+            #  region appropriate for generating 1-D confidence intervals.
+            self.regionQuadcForm = projected_hessian / C1
+            self.regionQuadcForm *=  _np.sqrt(self.nNonGaugeParams) #make a *worst case* non-mark. region...
+            self.intervalScaling = _np.sqrt( Ck / C1 ) # multiplicative scaling required to convert intervals
+                                                   # to those obtained using a full (using Ck) confidence region.
+
+            stdC1 = _stats.chi2.ppf(confidenceLevel/100.0, 1)
+            stdCk = _stats.chi2.ppf(confidenceLevel/100.0, self.nNonGaugeParams)
+            self.stdIntervalScaling = _np.sqrt( stdC1 / C1 ) # see above description
+            self.stdRegionScaling = _np.sqrt( stdCk / C1 ) # see above description
+
+            _warnings.warn("Non-Markovian error bars are experimental and" +
+                           " cannot be interpreted as standard error bars." +
+                           " Proceed with caution!")
+            
         #print "DEBUG: C1 =",C1," Ck =",Ck," scaling =",self.intervalScaling
 
         #Invert *non-gauge-part* of quadratic by eigen-decomposing -> 

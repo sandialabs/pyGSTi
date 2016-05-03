@@ -506,19 +506,6 @@ class DataSet(object):
     else:
       return self.copy()
 
-    """ 
-    Promotes a non-static DataSet to a static (read-only) DataSet.  This
-     method should be called after all data has been added.
-    """     
-    if self.bStatic: return
-    #Convert normal dataset to static mode.
-    #  gsIndex and slIndex stay the same ; counts is transformed to a 2D numpy array
-    if len(self.counts) > 0:
-      newCounts = _np.concatenate( [el.reshape(1,-1) for el in self.counts], axis=0 )
-    else:
-      newCounts = _np.empty( (0,len(self.slIndex)), 'd')
-    self.counts, self.bStatic = newCounts, True
-
 
   def done_adding_data(self):
     """ 

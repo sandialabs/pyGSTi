@@ -458,7 +458,8 @@ class GateSetCalculator(object):
         if _np.isnan(p): 
             if len(gatestring) < 10:
                 strToPrint = str(gatestring)
-            else: strToPrint = str(gatestring[0:10]) + " ... (len %d)" % len(gatestring)
+            else: 
+                strToPrint = str(gatestring[0:10]) + " ... (len %d)" % len(gatestring)
             _warnings.warn("pr(%s) == nan" % strToPrint)
             #DEBUG: print "backtrace" of product leading up to nan
 

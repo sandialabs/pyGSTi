@@ -65,7 +65,7 @@ class Results(object):
         self.figures = _ResultCache(self._get_figure_fns(), self, "figure")
         #self.qtys = _ResultCache(self._get_qty_fns(), self, "computable qty")
 
-        #Public ApI parameters
+        #Public API parameters
         self.gatesets = {}
         self.gatestring_lists = {}
         self.dataset = None
@@ -327,10 +327,10 @@ class Results(object):
         def validate_none(key):
             return [key]
         def validate_essential(key):
-            return [key] if self._bEssentialResultsSet else None
+            return [key] if self._bEssentialResultsSet else []
         def validate_LsAndGerms(key):
             return [key] if (self._bEssentialResultsSet and
-                             self._LsAndGermInfoSet) else None
+                             self._LsAndGermInfoSet) else []
 
         def setup():
             return (self.gatesets['target'], self.gatesets['final estimate'],
@@ -521,29 +521,29 @@ class Results(object):
 
         def getPlotFn():
             obj = self.parameters['objective']
+            assert(obj in ("chi2","logl"))
             if   obj == "chi2": return _plotting.chi2_boxplot
             elif obj == "logl": return _plotting.logl_boxplot
-            else: raise ValueError("Invalid objective: %s" % obj)
 
         def getDirectPlotFn():
             obj = self.parameters['objective']
+            assert(obj in ("chi2","logl"))
             if   obj == "chi2": return _plotting.direct_chi2_boxplot
             elif obj == "logl": return _plotting.direct_logl_boxplot
-            else: raise ValueError("Invalid objective: %s" % obj)
 
         def getWhackAMolePlotFn():
             obj = self.parameters['objective']
+            assert(obj in ("chi2","logl"))
             if   obj == "chi2": return _plotting.whack_a_chi2_mole_boxplot
             elif obj == "logl": return _plotting.whack_a_logl_mole_boxplot
-            else: raise ValueError("Invalid objective: %s" % obj)
 
         def getMPC():
             obj = self.parameters['objective']
+            assert(obj in ("chi2","logl"))
             if obj == "chi2":
                 return self.parameters['minProbClipForWeighting']
             elif obj == "logl": 
                 return self.parameters['minProbClip']
-            else: raise ValueError("Invalid objective: %s" % obj)
 
         def plot_setup():
             m = 0
@@ -565,7 +565,7 @@ class Results(object):
 
         def validate_LsAndGerms(key):
             return [key] if (self._bEssentialResultsSet and
-                             self._LsAndGermInfoSet) else None
+                             self._LsAndGermInfoSet) else []
 
 
         fns = _collections.OrderedDict()
@@ -621,13 +621,13 @@ class Results(object):
                         histogram=False, title="", fidPairs=fidPairs,
                         save_to="", minProbClipForWeighting=mpc, ticSize=20 )
         def fn_validate(key):
-            if not self._LsAndGermInfoSet: return None
+            if not self._LsAndGermInfoSet: return []
             
             keys = ["estimateForLIndex%dColorBoxPlot" % i 
                     for i in range(len(self.parameters['max length list']))]
             if key == expr1: return keys # all computable keys
             elif key in keys: return [key]
-            else: return None
+            else: return []
         fns[expr1] = (fn, fn_validate)
 
         def fn(key, confidenceLevel, vb):
@@ -720,7 +720,7 @@ class Results(object):
                                     save_to="", minProbClipForWeighting=mpc,
                                     ticSize=20, fidPairs=fidPairs, m=0)
         def fn_validate(key):
-            if not self._LsAndGermInfoSet: return None
+            if not self._LsAndGermInfoSet: return []
 
             #only whack-a-mole plots for the length-1 germs are available
             len1GermFirstEls = [ g[0] for g in self.gatestring_lists['germs'] 
@@ -729,7 +729,7 @@ class Results(object):
             keys = ["whack%sMoleBoxes" % gl for gl in len1GermFirstEls]
             if key == expr2: return keys # all computable keys
             elif key in keys: return [key]
-            else: return None
+            else: return []
         fns[expr2] = (fn, fn_validate)
 
 
@@ -748,7 +748,7 @@ class Results(object):
                                     save_to="", minProbClipForWeighting=mpc,
                                     ticSize=20, fidPairs=fidPairs, m=0)
         def fn_validate(key):
-            if not self._LsAndGermInfoSet: return None
+            if not self._LsAndGermInfoSet: return []
 
             #only whack-a-mole plots for the length-1 germs are available
             len1GermFirstEls = [ g[0] for g in self.gatestring_lists['germs'] 
@@ -757,7 +757,7 @@ class Results(object):
             keys = ["whack%sMoleBoxesSummed" % gl for gl in len1GermFirstEls]
             if key == expr3: return keys # all computable keys
             elif key in keys: return [key]
-            else: return None
+            else: return []
         fns[expr3] = (fn, fn_validate)
 
         return fns
@@ -772,10 +772,10 @@ class Results(object):
         """
 
         def validate_essential(key):
-            return [key] if self._bEssentialResultsSet else None
+            return [key] if self._bEssentialResultsSet else []
         def validate_LsAndGerms(key):
             return [key] if (self._bEssentialResultsSet and
-                             self._LsAndGermInfoSet) else None
+                             self._LsAndGermInfoSet) else []
 
         def noConfidenceLevelDependence(level):
             """ Designates a "special" as independent of the confidence level"""
@@ -1084,6 +1084,14 @@ class Results(object):
             return None
 
         if confidenceLevel not in self._confidence_regions:
+
+            #Negative confidence levels ==> non-Markovian error bars
+            if confidenceLevel < 0:
+                confidenceLevel = -confidenceLevel
+                regionType = "non-markovian"
+            else:
+                regionType = "std"
+
             if self.parameters['objective'] == "logl":
                 cr = _generation.get_logl_confidence_region(
                     self.gatesets['final estimate'], self.dataset,
@@ -1092,7 +1100,8 @@ class Results(object):
                     self.parameters['probClipInterval'],
                     self.parameters['minProbClip'],
                     self.parameters['radius'],
-                    self.parameters['hessianProjection'])
+                    self.parameters['hessianProjection'],
+                    regionType)
             elif self.parameters['objective'] == "chi2":
                 cr = _generation.get_chi2_confidence_region(
                     self.gatesets['final estimate'], self.dataset,
@@ -1100,7 +1109,8 @@ class Results(object):
                     self.gatestring_lists['final'],
                     self.parameters['probClipInterval'],
                     self.parameters['minProbClipForWeighting'],
-                    self.parameters['hessianProjection'])
+                    self.parameters['hessianProjection'],
+                    regionType)
             else:
                 raise ValueError("Invalid objective given in essential" +
                                  " info: %s" % self.parameters['objective'])

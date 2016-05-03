@@ -105,6 +105,10 @@ class GateSet(object):
 
     @povm_identity.setter
     def povm_identity(self, value):
+        if value is None: 
+            self._povm_identity = None
+            return 
+
         if self._dim is None:     self._dim = len(value)
         if self._dim != len(value):
             raise ValueError("Cannot add vector with dimension" +
@@ -1795,9 +1799,9 @@ class GateSet(object):
             a (deep) copy of this gateset.
         """
         newGateset = GateSet()
-        newGateset.preps = self.preps.copy()
-        newGateset.effects = self.effects.copy()
-        newGateset.gates = self.gates.copy()
+        newGateset.preps = self.preps.copy(newGateset)
+        newGateset.effects = self.effects.copy(newGateset)
+        newGateset.gates = self.gates.copy(newGateset)
         newGateset.spamdefs = self.spamdefs.copy()
         newGateset.povm_identity = self.povm_identity.copy()
         newGateset._dim = self._dim
@@ -1826,7 +1830,7 @@ class GateSet(object):
             an iterator over all (gateLabel,gate) pairs
         """
         for (label,gate) in self.gates.iteritems():
-            yield (label, gatemx)
+            yield (label, gate)
 
     def iter_preps(self):  
         """

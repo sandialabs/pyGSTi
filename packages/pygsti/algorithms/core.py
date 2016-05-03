@@ -2809,7 +2809,7 @@ def _contractToCP(gateset,verbosity,method='Nelder-Mead',
 
     gs.from_vector(optSol.x)
     #gs.log("Contract to CP", { 'method': method, 'tol': tol, 'maxiter': maxiter } )
-    if optSol.fun >= CLIFF: raise ValueError("Failed to contract_to_cp")
+    if optSol.fun >= CLIFF: _warnings.warn("Failed to contract gateset to CP")
 
     if verbosity > 1:
         print 'The closest legal point found was distance: ' + str(optSol.fun)        

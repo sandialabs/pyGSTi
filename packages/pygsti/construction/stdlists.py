@@ -324,8 +324,8 @@ def make_elgst_experiment_list(gateLabels, germList, maxLengthList,
     """
 
     #When nest == True the final list contains all of the strings
-    return make_elgst_lists(gateLabels, prepStrs, effectStrs, germList,
-                            maxLengthList, fidPairs, truncScheme, nest=True)[-1]
+    return make_elgst_lists(gateLabels, germList,
+                            maxLengthList, truncScheme, nest=True)[-1]
 
 
 
@@ -337,7 +337,7 @@ def _getTruncFunction(truncScheme):
     elif truncScheme == "length as exponent":
         def Rfn(germ,N): return germ*N
     else:
-        raise ValueError("Invalid truncation scheme: %s" % truncSheme)
+        raise ValueError("Invalid truncation scheme: %s" % truncScheme)
     return Rfn
 
 
