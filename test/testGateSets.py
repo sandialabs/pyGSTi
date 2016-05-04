@@ -220,7 +220,7 @@ class TestGateSetMethods(GateSetTestCase):
   def test_bulk_multiplication(self):
       gatestring1 = ('Gx','Gy')
       gatestring2 = ('Gx','Gy','Gy')
-      evt = self.gateset.bulk_evaltree( [gatestring1,gatestring2] )      
+      evt = self.gateset.bulk_evaltree( [gatestring1,gatestring2] )
 
       p1 = np.dot( self.gateset['Gy'], self.gateset['Gx'] )
       p2 = np.dot( self.gateset['Gy'], np.dot( self.gateset['Gy'], self.gateset['Gx'] ))
@@ -531,6 +531,50 @@ class TestGateSetMethods(GateSetTestCase):
       self.assertArraysAlmostEqual(hProdsFlat, np.repeat(S3,N)[:,None,None]*hProdsF2)
       self.assertArraysAlmostEqual(dProdsF, np.repeat(S3,N)[:,None]*dProdsF2)
       self.assertArraysAlmostEqual(prodsF, S3[:,None,None]*prodsF2)
+
+
+  def test_tree_splitting(self):
+      gatestrings = [('Gx',),
+                     ('Gy',),
+                     ('Gx','Gy'),
+                     ('Gy','Gy'),
+                     ('Gy','Gx'),
+                     ('Gx','Gx','Gx'),
+                     ('Gx','Gy','Gx'),
+                     ('Gx','Gy','Gy'),
+                     ('Gy','Gy','Gy'),
+                     ('Gy','Gx','Gx') ]
+      evtA = self.gateset.bulk_evaltree( gatestrings )
+
+      evtB = self.gateset.bulk_evaltree( gatestrings )
+      evtB.split(maxSubTreeSize=4)
+
+      evtC = self.gateset.bulk_evaltree( gatestrings )
+      evtC.split(numSubTrees=3)
+
+      with self.assertRaises(ValueError):
+          evtBad = self.gateset.bulk_evaltree( gatestrings )
+          evtBad.split(numSubTrees=3, maxSubTreeSize=4) #can't specify both
+
+      self.assertFalse(evtA.is_split())
+      self.assertTrue(evtB.is_split())
+      self.assertTrue(evtC.is_split())
+      self.assertEqual(len(evtA.get_sub_trees()), 1)
+      self.assertEqual(len(evtB.get_sub_trees()), 5) #empirically
+      self.assertEqual(len(evtC.get_sub_trees()), 3)
+      self.assertLessEqual(max([len(subTree) 
+                           for subTree in evtB.get_sub_trees()]), 4)
+
+      #print "Lenghts = ",len(evtA.get_sub_trees()),len(evtB.get_sub_trees()),len(evtC.get_sub_trees())
+      #print "SubTree sizes = ",[len(subTree) for subTree in evtC.get_sub_trees()]
+      
+      bulk_prA = self.gateset.bulk_pr('plus',evtA)
+      bulk_prB = self.gateset.bulk_pr('plus',evtB)
+      bulk_prC = self.gateset.bulk_pr('plus',evtC)
+
+      self.assertArraysAlmostEqual(bulk_prA,bulk_prB)
+      self.assertArraysAlmostEqual(bulk_prA,bulk_prC)
+      
 
 
   def test_failures(self):

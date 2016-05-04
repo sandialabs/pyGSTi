@@ -856,12 +856,12 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, t
     ReportTable
         Table object containing the requested formats (e.g. 'latex').
     """
-    colHeadings = { 'latex': ('L','$\\chi^2$','$k$','$\\chi^2-k$','$\sqrt{2k}$','$P$','$N_s$','$N_p$', 'Rating'),
+    colHeadings = { 'latex': ('L','$\\chi^2$','$k$','$\\chi^2-k$','$\sqrt{2k}$','$p$','$N_s$','$N_p$', 'Rating'),
                     'html': ('L','&chi;<sup>2</sup>','k','&chi;<sup>2</sup>-k',
                              '&radic;<span style="text-decoration:overline;">2k</span>',
-                             'P','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
-                    'py': ('L','chi^2','k','chi^2-k','sqrt{2k}','P','N_s','N_p', 'Rating'),
-                    'ppt': ('L','chi^2','k','chi^2-k','sqrt{2k}','P','N_s','N_p', 'Rating')
+                             'p','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
+                    'py': ('L','chi^2','k','chi^2-k','sqrt{2k}','p','N_s','N_p', 'Rating'),
+                    'ppt': ('L','chi^2','k','chi^2-k','sqrt{2k}','p','N_s','N_p', 'Rating')
                   }
 
     table = _ReportTable(formats, colHeadings, None, tableclass, longtable)
@@ -922,12 +922,12 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, t
         Table object containing the requested formats (e.g. 'latex').
     """
     colHeadings = { 'latex': ('L','$2\Delta\\log(\\mathcal{L})$','$k$','$2\Delta\\log(\\mathcal{L})-k$',
-                              '$\sqrt{2k}$','$P$','$N_s$','$N_p$', 'Rating'),
+                              '$\sqrt{2k}$','$p$','$N_s$','$N_p$', 'Rating'),
                     'html': ('L','2&Delta;(log L)','k','2&Delta;(log L)-k',
                              '&radic;<span style="text-decoration:overline;">2k</span>',
-                             'P','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
-                    'py': ('L','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','P','N_s','N_p', 'Rating'),
-                    'ppt': ('L','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','P','N_s','N_p', 'Rating')
+                             'p','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
+                    'py': ('L','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','p','N_s','N_p', 'Rating'),
+                    'ppt': ('L','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','p','N_s','N_p', 'Rating')
                   }
     table = _ReportTable(formats, colHeadings, None, tableclass, longtable)
     for L,gs,gstrs in zip(Ls,gatesetsByL,gateStringsByL):
@@ -1068,7 +1068,7 @@ def get_gatestring_multi_table(gsLists, titles, formats, tableclass, longtable, 
 def get_logl_confidence_region(gateset, dataset, confidenceLevel,
                                gatestring_list=None, probClipInterval=(-1e6,1e6),
                                minProbClip=1e-4, radius=1e-4, hessianProjection="std",
-                               regionType="std"):
+                               regionType="std", memLimit=None):
 
     """ 
     Constructs a ConfidenceRegion given a gateset and dataset using the log-likelihood Hessian.
@@ -1124,6 +1124,10 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
         confidence region, while 'non-markovian' creates a region which 
         attempts to account for the non-markovian-ness of the data.
 
+    memLimit : int, optional
+        A rough memory limit in bytes which restricts the amount of intermediate
+        values that are computed and stored.
+
 
     Returns
     -------
@@ -1134,7 +1138,8 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
         
     #Compute appropriate Hessian
     hessian = _tools.logl_hessian(gateset, dataset, gatestring_list,
-                                  minProbClip, probClipInterval, radius) 
+                                  minProbClip, probClipInterval, radius,
+                                  memLimit=memLimit) 
 
     #Compute the non-Markovian "radius" if required
     if regionType == "std":
@@ -1170,7 +1175,7 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
 def get_chi2_confidence_region(gateset, dataset, confidenceLevel,
                                gatestring_list=None, probClipInterval=(-1e6,1e6),
                                minProbClipForWeighting=1e-4, hessianProjection="std",
-                               regionType='std'):
+                               regionType='std', memLimit=None):
 
     """ 
     Constructs a ConfidenceRegion given a gateset and dataset using the Chi2 Hessian.
@@ -1222,6 +1227,10 @@ def get_chi2_confidence_region(gateset, dataset, confidenceLevel,
         confidence region, while 'non-markovian' creates a region which 
         attempts to account for the non-markovian-ness of the data.
 
+    memLimit : int, optional
+        A rough memory limit in bytes which restricts the amount of intermediate
+        values that are computed and stored.
+
 
     Returns
     -------
@@ -1233,7 +1242,7 @@ def get_chi2_confidence_region(gateset, dataset, confidenceLevel,
     #Compute appropriate Hessian
     chi2, hessian = _tools.chi2(dataset, gateset, gatestring_list,
                                 False, True, minProbClipForWeighting,
-                                probClipInterval)
+                                probClipInterval, memLimit=memLimit)
 
     #Compute the non-Markovian "radius" if required
     if regionType == "std":

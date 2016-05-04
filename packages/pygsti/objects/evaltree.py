@@ -7,6 +7,7 @@
 
 import re as _re
 import gatestring as _gs
+import numpy as _np
 
 class EvalTree(list):
     """
@@ -24,7 +25,7 @@ class EvalTree(list):
         """ Create a new, empty, evaluation tree. """
         self.gateLabels = []
         self.finalList = []
-        self.myFinalToParentFinalMap = []
+        self.myFinalToParentFinalMap = None
         self.subTrees = []
         super(EvalTree, self).__init__(items)
 
@@ -131,8 +132,18 @@ class EvalTree(list):
         
         #see if there are superfluous tree nodes: those with iFinal == -1 and 
         self.finalList = finalIndxList
-        self.myFinalToParentFinalMap = [] #this tree has no "children", i.e. has not been created by a 'split'
+        self.myFinalToParentFinalMap = None #this tree has no "children",
+                                 # i.e. has not been created by a 'split'
         self.subTrees = [] #no subtrees yet
+
+    def copy(self):
+        """ Create a copy of this evaluation tree. """
+        newTree = EvalTree(self[:])
+        newTree.gateLabels = self.gateLabels
+        newTree.finalList = self.finalList
+        newTree.myFinalToParentFinalMap = self.myFinalToParentFinalMap
+        newTree.subTrees = [ st.copy() for st in self.subTrees ]
+        return newTree
 
     def get_init_labels(self):
         """ Return a tuple of the gate labels (strings)
@@ -231,7 +242,7 @@ class EvalTree(list):
 #            print repGateStr, ":", repCntList
 #
 #        self.finalList = []
-#        self.myFinalToParentFinalMap = [] #this tree has no "children", i.e. has not been created by a 'split'
+#        self.myFinalToParentFinalMap = None #this tree has no "children", i.e. has not been created by a 'split'
 #        self.subTrees = []
 
     def num_final_strings(self):
@@ -276,14 +287,48 @@ class EvalTree(list):
             
         return finalGateStrings
 
-    def split(self, maxSubTreeSize):
+#Future MPI API??
+#    def is_distributed(self):
+#        pass
+#
+#    #get_sub_trees => returns only *local* subtrees (call these "branches"?)
+#    # OR add "get_local_tree(...)" -- then calc routines always, only 
+#    #  compute that single tree, then ask if they need to gather in the end?
+#
+#    def distribute(self, comm): 
+#        # split tree into local subtrees, each which contains one/group of
+#        # processors (group could parallelize derivative calcs over 
+#        # gate set parameters?  or maybe that partitioning is done first?)
+#        self.comm = comm
+#        return self.split(self, numSubTrees=comm.Get_size())
+
+
+    def get_min_tree_size(self):
+        """
+        Returns the minimum sub tree size required to compute each
+        of the tree entries individually.  This minimum size is the
+        smallest "maxSubTreeSize" that can be passed to split(),
+        as any smaller value will result in at least one entry being
+        uncomputable.
+        """
+        singleItemTreeSetList = self._createSingleItemTrees()
+        return max(map(len,singleItemTreeSetList))
+
+    def split(self, maxSubTreeSize=None, numSubTrees=None):
         """ 
-        Split this tree into sub-tree in order to reduce the
-          maximum size of any tree (useful for limiting memory consumption).
+        Split this tree into sub-trees in order to reduce the
+          maximum size of any tree (useful for limiting memory consumption
+          or for using multiple cores).  Must specify either maxSubTreeSize
+          or numSubTrees.
 
         Parameters
         ----------
-        maxSubTreeSize : int
+        maxSubTreeSize : int, optional
+            The maximum size (i.e. list length) of each sub-tree.  If the
+            original tree is smaller than this size, no splitting will occur.
+            If None, then there is no limit.
+
+        numSubTrees : int, optional
             The maximum size (i.e. list length) of each sub-tree.  If the
             original tree is smaller than this size, no splitting will occur.
 
@@ -291,38 +336,130 @@ class EvalTree(list):
         -------
         None
         """
-        if len(self) < maxSubTreeSize: return #Don't split at all if it's unnecessary
+        if (maxSubTreeSize is not None and numSubTrees is not None) or \
+           (maxSubTreeSize is None and numSubTrees is None):
+            raise ValueError("Specify *either* maxSubTreeSize or numSubTrees")
+
+        #Don't split at all if it's unnecessary
+        if maxSubTreeSize is not None and len(self) < maxSubTreeSize: return 
+        if numSubTrees is not None and numSubTrees <= 1:
+            assert(numSubTrees == 1)
+            self.subTrees = [self.copy()]
+            self.subTrees[0].myFinalToParentFinalMap = \
+                range(len(self.finalList))
+            return
 
         self.subTrees = []
-        self.subTreesFinalList = [None]*len(self.finalList)
+        subTreesFinalList = [None]*len(self.finalList)
 
         #First pass - identify which indices go in which subtree
-        need_to_compute = [False]*len(self)
-        for idx in self.finalList: 
-            need_to_compute[idx] = True #could speed up using numpy arrays
+        #   Part 1: create disjoint set of subtrees generated by single items
+        singleItemTreeSetList = self._createSingleItemTrees()
+          #each element represents a subtree, and
+          # is a set of the indices owned by that subtree
+        nSingleItemTrees = len(singleItemTreeSetList)
 
-        subTreeSetList = [] #each element of this represents a subtree, and is a set of the indices owned by that subtree
-        for i in reversed(range(len(self))):
-            if not need_to_compute[i]: continue # move to the last element of evalTree that needs
-                                                #  to be computed (i.e. is not in a subTree)
-            subTreeIndices = [] # create subtree for uncomputed item
-            self._walkSubTree(i,subTreeIndices)
-            newTreeSize = len(subTreeIndices)
-            newTreeSet = set(subTreeIndices)
-            for k in subTreeIndices: need_to_compute[k] = False #mark all the elements of the new tree as computed
+        #   Part 2: determine whether we need to split/merge "single" trees
+        if numSubTrees is not None:
 
-            #See if we should merge this single-item-generated tree with another one or make it a new subtree
-            highIntersectSize = None; iHighIntersectSize = None
-            for k,existingSubTreeSet in enumerate(subTreeSetList):
-                if (len(existingSubTreeSet) + newTreeSize) < maxSubTreeSize:
-                    intersectionSize = len(newTreeSet.intersection(existingSubTreeSet))
-                    if highIntersectSize is None or highIntersectSize < intersectionSize:
-                        highIntersectSize = intersectionSize
-                        iHighIntersectSize = k
-            if iHighIntersectSize is not None: # then we merge the new tree with this existing set
-                subTreeSetList[iHighIntersectSize] = subTreeSetList[iHighIntersectSize].union(newTreeSet)
-            else: # we create a new subtree
-                subTreeSetList.append( newTreeSet ) 
+            #OLD
+            #start with first numSubTrees single item trees
+            #subTreeSetList = singleItemTreeSetList[0:numSubTrees]
+
+            #Merges: find the best merges to perform if any are required
+            if nSingleItemTrees > numSubTrees:
+
+                #find trees that have least intersection to begin
+                intersectSizes = {}
+                for i in range(nSingleItemTrees):
+                    s1 = singleItemTreeSetList[i]
+                    for j in range(i+1,nSingleItemTrees):
+                        s2 = singleItemTreeSetList[j]
+                        intersectSizes[(i,j)] = len(s1.intersection(s2))
+    
+                sortedIntersects = sorted(intersectSizes.iteritems(),
+                                            key=lambda x: x[1])
+                iStartingTrees = []
+                for (i,j),intSize in sortedIntersects:
+                    if i in iStartingTrees or j in iStartingTrees: continue
+                    iStartingTrees.append(i)
+                    if len(iStartingTrees) == numSubTrees:  break
+                    iStartingTrees.append(j)
+                    if len(iStartingTrees) == numSubTrees:  break
+                else:
+                    raise ValueError("Could not find set of starting trees!")
+                subTreeSetList = [singleItemTreeSetList[i] for i in iStartingTrees]
+                assert(len(subTreeSetList) == numSubTrees)
+                
+                indicesLeft = range(nSingleItemTrees)
+                for i in iStartingTrees:
+                    del indicesLeft[indicesLeft.index(i)]
+    
+                while len(indicesLeft) > 0:
+                    iToMergeInto = _np.argmin(map(len,subTreeSetList))
+                    setToMergeInto = subTreeSetList[iToMergeInto]
+                    intersectionSizes = [ len(setToMergeInto.intersection(
+                                singleItemTreeSetList[i])) for i in indicesLeft ]
+                    iMaxIntsct = _np.argmax(intersectionSizes)
+                    setToMerge = singleItemTreeSetList[indicesLeft[iMaxIntsct]]
+                    subTreeSetList[iToMergeInto] = \
+                          subTreeSetList[iToMergeInto].union(setToMerge)
+                    del indicesLeft[iMaxIntsct]
+                        
+                assert(len(subTreeSetList) == numSubTrees)
+
+                #OLD
+                #for singleItemTreeSet in singleItemTreeSetList[numSubTrees:]:
+                #
+                #    #Merge this single-item-generated tree into the smallest
+                #    # existing tree
+                #    iToMergeInto = _np.argmin(map(len,subTreeSetList))
+                #    subTreeSetList[iToMergeInto] = \
+                #      subTreeSetList[iToMergeInto].union(singleItemTreeSet)
+
+            #Splits: 
+            else: 
+                #Splits: find the best splits to perform
+                #TODO: how to split a tree intelligently -- for now, just do
+                # trivial splits by making empty trees.
+                nSplitsNeeded = numSubTrees - nSingleItemTrees
+                while nSplitsNeeded > 0:
+                    # LATER... 
+                    # for iSubTree,subTreeSet in enumerate(subTreeSetList):
+                    subTreeSetList.append( [] ) # create empty subtree
+                    nSplitsNeeded -= 1
+
+        else:
+            assert(maxSubTreeSize is not None)
+            subTreeSetList = []
+    
+            #Merges: find the best merges to perform if any are allowed given
+            # the maximum tree size
+            for singleItemTreeSet in singleItemTreeSetList:
+                if len(singleItemTreeSet) > maxSubTreeSize:
+                    raise ValueError("Max. sub tree size (%d) is too low (<%d)!"
+                                   % (maxSubTreeSize, self.get_min_tree_size()))                        
+    
+                #See if we should merge this single-item-generated tree with
+                # another one or make it a new subtree.
+                newTreeSize = len(singleItemTreeSet)
+                maxIntersectSize = None; iMaxIntersectSize = None
+                for k,existingSubTreeSet in enumerate(subTreeSetList):
+                    mergedSize = len(existingSubTreeSet) + newTreeSize
+                    if mergedSize <= maxSubTreeSize:
+                        intersectionSize = \
+                            len(singleItemTreeSet.intersection(existingSubTreeSet))
+                        if maxIntersectSize is None or \
+                                maxIntersectSize < intersectionSize:
+                            maxIntersectSize = intersectionSize
+                            iMaxIntersectSize = k
+    
+                if iMaxIntersectSize is not None: 
+                    # then we merge the new tree with this existing set
+                    subTreeSetList[iMaxIntersectSize] = \
+                      subTreeSetList[iMaxIntersectSize].union(singleItemTreeSet)
+                else: # we create a new subtree
+                    subTreeSetList.append( singleItemTreeSet ) 
 
         #Second pass - create subtrees from index sets
         need_to_compute = [False]*len(self)
@@ -334,6 +471,7 @@ class EvalTree(list):
             subTreeIndices.sort() # so that we can map order here directly as a subTree (no dependency issues)
             mapIndxToSubTreeIndx = { k: ik for ik,k in enumerate(subTreeIndices) }
             subTree = EvalTree()
+            subTree.myFinalToParentFinalMap = [] #prep for appends below
             for ik,k in enumerate(subTreeIndices):
                 (oLeft,oRight,oFinal) = self[k] #original tree indices
 
@@ -350,7 +488,7 @@ class EvalTree(list):
                     iFinal = len(subTree.finalList) #the index within subTree.finalList where this item will go
                     subTree.finalList.append(ik) #added in iFinal position
                     subTree.myFinalToParentFinalMap.append(oFinal)
-                    self.subTreesFinalList[oFinal] = (iSubTree,iFinal) #tells which subtree and final list position to find final value
+                    subTreesFinalList[oFinal] = (iSubTree,iFinal) #tells which subtree and final list position to find final value
                 else:
                     iFinal = -1
                     
@@ -379,6 +517,31 @@ class EvalTree(list):
         (iLeft,iRight,iFinal) = self[indx]
         if iLeft is not None: self._walkSubTree(iLeft,out)
         if iRight is not None: self._walkSubTree(iRight,out)
+
+    def _createSingleItemTrees(self):
+        #  Create disjoint set of subtrees generated by single items
+        need_to_compute = [False]*len(self)
+        for idx in self.finalList: 
+            need_to_compute[idx] = True #could speed up using numpy arrays
+
+        singleItemTreeSetList = [] #each element represents a subtree, and
+                            # is a set of the indices owned by that subtree
+        for i in reversed(range(len(self))):
+            if not need_to_compute[i]: continue # move to the last element
+              #of evalTree that needs to be computed (i.e. is not in a subTree)
+
+            subTreeIndices = [] # create subtree for uncomputed item
+            self._walkSubTree(i,subTreeIndices)
+            newTreeSet = set(subTreeIndices)
+            for k in subTreeIndices: 
+                need_to_compute[k] = False #mark all the elements of 
+                                           #the new tree as computed
+
+            # Add this single-item-generated tree as a new subtree. Later
+            #  we merge and/or split these trees based on constraints.
+            singleItemTreeSetList.append( newTreeSet )
+        return singleItemTreeSetList
+
 
     def print_analysis(self):
         """ 
@@ -417,7 +580,6 @@ class EvalTree(list):
         else: #tree is split
             print "Tree is split into %d sub-trees" % len(self.subTrees)
             print "Sub-tree lengths = ", list(map(len,self.subTrees)), " (Sum = %d)" % sum(map(len,self.subTrees))
-            #print "Final list: ",self.subTreesFinalList
             for i,t in enumerate(self.subTrees):
                 print ">> sub-tree %d: " % i
                 t.print_analysis()

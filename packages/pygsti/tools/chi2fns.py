@@ -8,9 +8,10 @@
 import numpy as _np
 
 def chi2(dataset, gateset, gateStrings=None,
-                    returnGradient=False, returnHessian=False, 
-                    minProbClipForWeighting=1e-4, clipTo=None,
-                    useFreqWeightedChiSq=False, check=False):
+         returnGradient=False, returnHessian=False, 
+         minProbClipForWeighting=1e-4, clipTo=None,
+         useFreqWeightedChiSq=False, check=False,
+         memLimit=None):
     """ 
     Computes the total chi^2 for a set of gate strings.
 
@@ -49,6 +50,11 @@ def chi2(dataset, gateset, gateStrings=None,
         If True, perform extra checks within code to verify correctness.  Used
         for testing, and runs much slower when True.
 
+    memLimit : int, optional
+        A rough memory limit in bytes which restricts the amount of intermediate
+        values that are computed and stored.
+
+
     Returns
     -------
     chi2 : float
@@ -80,7 +86,24 @@ def chi2(dataset, gateset, gateStrings=None,
 
     nSpamLabels = len(spamLabels)
     nGateStrings = len(gateStrings)
-    
+
+    evTree = gateset.bulk_evaltree(gateStrings)
+
+    #Memory allocation
+    ns = nSpamLabels; ng = nGateStrings
+    ne = gateset.num_params(); gd = gateset.get_dimension()
+    C = 1.0/1024.0**3
+
+    #  Estimate & check persistent memory (from allocs directly below)
+    persistentMem = 8* (ng*(1 + 2*ns)) # in bytes
+    if returnGradient or returnHessian: persistentMem += 8*ng*ns*ne
+    if returnHessian: persistentMem += 8*ng*ns*ne**2
+    if memLimit is not None and memLimit < persistentMem:
+        raise MemoryError("Chi2 Memory limit (%g GB) is " % (memLimit*C) +
+                          "< memory required to hold final results (%g GB)"
+                          % (persistentMem*C))
+
+    #  Allocate peristent memory
     N      = _np.empty( nGateStrings )
     f      = _np.empty( (nSpamLabels, nGateStrings) )
     probs  = _np.empty( (nSpamLabels, nGateStrings) )
@@ -90,12 +113,38 @@ def chi2(dataset, gateset, gateStrings=None,
     if returnHessian:
       hprobs = _np.empty( (nSpamLabels, nGateStrings,vec_gs_len,vec_gs_len) )
 
+    #  Estimate & check intermediate memory
+    #    - maybe make GateSet methods get intermediate estimates?
+    intermedMem = 8*ng*gd**2 # ~ bulk_product
+    if returnGradient: intermedMem += 8*ng*gd**2*ne # ~ bulk_dproduct
+    if returnHessian: intermedMem += 8*ng*gd**2*ne**2 # ~ bulk_hproduct
+    if memLimit is not None and memLimit < intermedMem:
+        reductionFactor = float(intermedMem) / float(memLimit)
+        maxEvalSubTreeSize = int(ng / reductionFactor)
+    else:
+        maxEvalSubTreeSize = None
+
+    if maxEvalSubTreeSize is not None:
+      evTree.split(maxEvalSubTreeSize, None)
+
+    #DEBUG - no verbosity passed in to just leave commented out
+    #if memLimit is not None:
+    #    print "Chi2 Memory estimates: (%d spam labels," % ns + \
+    #        "%d gate strings, %d gateset params, %d gate dim)" % (ng,ne,gd)
+    #    print "Peristent: %g GB " % (persistentMem*C)
+    #    print "Intermediate: %g GB " % (intermedMem*C)
+    #    print "Limit: %g GB" % (memLimit*C)
+    #    if maxEvalSubTreeSize is not None: 
+    #        print "Maximum eval sub-tree size = %d" % maxEvalSubTreeSize
+    #        print "Chi2 mem limit has imposed a division of evaluation tree:"
+    #  evTree.print_analysis()
+
+
     for (i,gateStr) in enumerate(gateStrings):
         N[i] = float(dataset[gateStr].total())
         for k,sl in enumerate(spamLabels):
             f[k,i] = dataset[gateStr].fraction(sl)
 
-    evTree = gateset.bulk_evaltree(gateStrings)
     
     if returnHessian:
       gateset.bulk_fill_hprobs(hprobs, spam_lbl_rows, evTree, 
