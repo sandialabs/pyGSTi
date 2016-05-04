@@ -95,7 +95,7 @@ class Results(object):
                             'defaultDirectory': None,
                             'defaultBasename': None,
                             'mxBasis': "gm",
-                            'linlogPercentile':  5}
+                            'linlogPercentile':  5,
                             'memLimit': None}
 
 
