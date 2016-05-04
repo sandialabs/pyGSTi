@@ -932,15 +932,19 @@ def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp):
 
         #Get all the boxes where the entries are not all NaN
         non_all_NaN = reshape_subMxs[_np.where(_np.array([_np.isnan(k).all() for k in reshape_subMxs]) == False)]
-
         s = _np.shape(non_all_NaN)
         dof_each_box = map(lambda k: _num_non_nan(k), non_all_NaN)
+
         assert _all_same(dof_each_box), 'Number of degrees of freedom different for different boxes!'
 
-        # Each box is a chi2_(sum) random variable
-        dof_per_box = dof_each_box[0]
         # The number of boxes is equal to the number of rows in non_all_NaN
         n_boxes = s[0]
+
+        if n_boxes > 0:
+            # Each box is a chi2_(sum) random variable
+            dof_per_box = dof_each_box[0]
+        else:
+            dof_per_box = None #unknown, since there are no boxes
     else:
         # Each box is a chi2_1 random variable
         dof_per_box = 1
