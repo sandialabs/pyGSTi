@@ -481,16 +481,51 @@ class TestReport(ReportTestCase):
         results.init_single("logl", self.targetGateset, self.ds, self.gs_clgst,
                             self.lgstStrings, False, self.targetGateset)
 
-        results.parameters.update({'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
-                                   'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
-                                   'weights': None, 'defaultDirectory': "temp_test_files",
-                                   'defaultBasename': "MyDefaultReportName" } )
-
-        results.create_full_report_pdf(filename="temp_test_files/singleReport.pdf")
-        results.create_brief_report_pdf(filename="temp_test_files/singleBrief.pdf")
-        results.create_presentation_pdf(filename="temp_test_files/singleSlides.pdf")
+        results.parameters.update(
+            {'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
+             'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
+             'weights': None, 'defaultDirectory': "temp_test_files",
+             'defaultBasename': "MyDefaultReportName" } )
+        
+        results.create_full_report_pdf(
+            filename="temp_test_files/singleReport.pdf")
+        results.create_brief_report_pdf(
+            filename="temp_test_files/singleBrief.pdf")
+        results.create_presentation_pdf(
+            filename="temp_test_files/singleSlides.pdf")
         if self.have_python_pptx:
-            results.create_presentation_ppt(filename="temp_test_files/singleSlides.ppt", pptTables=True)
+            results.create_presentation_ppt(
+                filename="temp_test_files/singleSlides.ppt", pptTables=True)
+
+        #test tree splitting of hessian
+        results.parameters['memLimit'] = 10*(1024)**2 #10MB
+        results.create_brief_report_pdf(confidenceLevel=95,
+            filename="temp_test_files/singleBriefMemLimit.pdf")
+        results.parameters['memLimit'] = 10 #10 bytes => too small
+        with self.assertRaises(MemoryError):
+            results.create_brief_report_pdf(confidenceLevel=90,
+               filename="temp_test_files/singleBriefMemLimit.pdf")
+
+
+        #similar test for chi2 hessian
+        results2 = pygsti.report.Results()
+        results2.init_single("chi2", self.targetGateset, self.ds, self.gs_clgst,
+                            self.lgstStrings, False, self.targetGateset)
+        results2.parameters.update(
+            {'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
+             'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
+             'weights': None, 'defaultDirectory': "temp_test_files",
+             'defaultBasename': "MyDefaultReportName" } )
+        results2.parameters['memLimit'] = 10*(1024)**2 #10MB
+        results2.create_brief_report_pdf(confidenceLevel=95,
+            filename="temp_test_files/singleBriefMemLimit2.pdf")
+        results2.parameters['memLimit'] = 10 #10 bytes => too small
+        with self.assertRaises(MemoryError):
+            results2.create_brief_report_pdf(confidenceLevel=90,
+               filename="temp_test_files/singleBriefMemLimit2.pdf")
+
+
+
 
         results_str = str(results)
         tableNames = results.tables.keys()

@@ -123,7 +123,7 @@ class TestHessianMethods(HessianTestCase):
                4.00195245e+06,   4.42427797e+06,   5.06956256e+06,   7.31166332e+06,
                9.19432790e+06,   9.99944236e+06,   1.31027722e+07,   5.80310818e+07] )
         for val,chk in zip(eigvals,eigvals_chk):
-            self.assertAlmostEqual((val-chk)/chk, 0.0)
+            self.assertAlmostEqual(abs(val-chk)/(abs(chk)+1e-6), 0.0, places=3)
         #print "eigvals = ",eigvals
 
     def test_confidenceRegion(self):

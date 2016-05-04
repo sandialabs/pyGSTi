@@ -96,6 +96,7 @@ class Results(object):
                             'defaultBasename': None,
                             'mxBasis': "gm",
                             'linlogPercentile':  5}
+                            'memLimit': None}
 
 
     def init_single(self, objective, targetGateset, dataset, gatesetEstimate,
@@ -1102,7 +1103,8 @@ class Results(object):
                     self.parameters['minProbClip'],
                     self.parameters['radius'],
                     self.parameters['hessianProjection'],
-                    regionType)
+                    regionType,
+                    self.parameters['memLimit'])
             elif self.parameters['objective'] == "chi2":
                 cr = _generation.get_chi2_confidence_region(
                     self.gatesets['final estimate'], self.dataset,
@@ -1111,7 +1113,8 @@ class Results(object):
                     self.parameters['probClipInterval'],
                     self.parameters['minProbClipForWeighting'],
                     self.parameters['hessianProjection'],
-                    regionType)
+                    regionType,
+                    self.parameters['memLimit'])
             else:
                 raise ValueError("Invalid objective given in essential" +
                                  " info: %s" % self.parameters['objective'])
