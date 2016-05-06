@@ -85,19 +85,19 @@ class TestAnalysis(AnalysisTestCase):
 
     def test_chi2_boxes(self):
         pygsti.report.chi2_boxplot( self.Xs, self.Ys, self.gateStrDict, self.ds, self.lsgst_gateset, self.strs, 
-                         self.xlbl, self.ylbl, M=10, scale=1.0, sumUp=False, interactive=False, histogram=True, 
+                         self.xlbl, self.ylbl, linlg_pcntle=.05, scale=1.0, sumUp=False, histogram=True, 
                          save_to="temp_test_files/chi2boxes.jpg")
         self.assertEqualImages("temp_test_files/chi2boxes.jpg", "cmp_chk_files/chi2boxes_ok.jpg")
         self.assertEqualImages("temp_test_files/chi2boxes_hist.jpg", "cmp_chk_files/chi2boxes_hist_ok.jpg")
 
         pygsti.report.chi2_boxplot( self.Xs, self.Ys, self.gateStrDict, self.ds, self.lsgst_gateset, self.strs, 
-                         self.xlbl, self.ylbl, M=10, scale=1.0, sumUp=False, interactive=False, histogram=True, invert=True,
+                         self.xlbl, self.ylbl, linlg_pcntle=.05, scale=1.0, sumUp=False, histogram=True, invert=True,
                          save_to="temp_test_files/chi2boxes_inv.jpg")
         self.assertEqualImages("temp_test_files/chi2boxes_inv.jpg", "cmp_chk_files/chi2boxes_inv_ok.jpg")
         self.assertEqualImages("temp_test_files/chi2boxes_inv_hist.jpg", "cmp_chk_files/chi2boxes_inv_hist_ok.jpg")
 
         pygsti.report.chi2_boxplot( self.Xs, self.Ys, self.gateStrDict, self.ds, self.lsgst_gateset, self.strs, 
-                         self.xlbl, self.ylbl, M=100, scale=1.0, sumUp=True, interactive=False,
+                         self.xlbl, self.ylbl, linlg_pcntle=.05, scale=1.0, sumUp=True,
                          save_to="temp_test_files/chi2boxes_summed.jpg")
         self.assertEqualImages("temp_test_files/chi2boxes_summed.jpg", "cmp_chk_files/chi2boxes_summed_ok.jpg")
 
@@ -111,24 +111,24 @@ class TestAnalysis(AnalysisTestCase):
 
         pygsti.report.direct_chi2_boxplot( self.Xs, self.Ys, self.gateStrDict, self.ds, directLSGST, 
                                    self.strs, self.xlbl, self.ylbl,
-                                   M=10, scale=1.0, interactive=False, boxLabels=True,
+                                   linlg_pcntle=.05, scale=1.0, boxLabels=True,
                                    save_to="temp_test_files/direct_chi2_boxes.jpg")
         self.assertEqualImages("temp_test_files/direct_chi2_boxes.jpg", "cmp_chk_files/direct_chi2_boxes_ok.jpg")
 
         pygsti.report.direct_deviation_boxplot(self.Xs, self.Ys, self.gateStrDict, self.ds, self.lsgst_gateset, 
                                       directLSGST, self.xlbl, self.ylbl, prec=4,
-                                      m=0, scale=1.0, interactive=False, boxLabels=True,
+                                      scale=1.0, boxLabels=True,
                                       save_to="temp_test_files/direct_deviation.jpg")
         self.assertEqualImages("temp_test_files/direct_deviation.jpg", "cmp_chk_files/direct_deviation_ok.jpg")
 
         pygsti.report.direct2x_comp_boxplot( self.Xs, self.Ys, self.gateStrDict, self.ds, directLSGST, 
                                     self.strs, self.xlbl, self.ylbl,
-                                    M=10, scale=1.0, interactive=False, boxLabels=True,
+                                    M=10, scale=1.0, boxLabels=True,
                                     save_to="temp_test_files/direct_2x_compare.jpg")
         self.assertEqualImages("temp_test_files/direct_2x_compare.jpg", "cmp_chk_files/direct_2x_compare_ok.jpg")
 
         pygsti.report.small_eigval_err_rate_boxplot(self.Xs, self.Ys, self.gateStrDict, self.ds, directLSGST,
-                                         self.xlbl, self.ylbl, scale=1.0, interactive=False, boxLabels=True,
+                                         self.xlbl, self.ylbl, scale=1.0, boxLabels=True,
                                          save_to="temp_test_files/small_eigval_err.jpg")
         self.assertEqualImages("temp_test_files/small_eigval_err.jpg", "cmp_chk_files/small_eigval_err_ok.jpg")
 
@@ -138,7 +138,7 @@ class TestAnalysis(AnalysisTestCase):
         fullGatestringList = self.lsgstStrings[-1]
         pygsti.report.whack_a_chi2_mole_boxplot( whack, fullGatestringList, self.Xs, self.Ys, self.gateStrDict, 
                                        self.ds, self.lsgst_gateset, self.strs, self.xlbl, self.ylbl,
-                                       m=0, scale=1.0, sumUp=False, interactive=False, histogram=True,
+                                       scale=1.0, sumUp=False, histogram=True,
                                        save_to="temp_test_files/whackamole.jpg")
         self.assertEqualImages("temp_test_files/whackamole.jpg", "cmp_chk_files/whackamole_ok.jpg")
         self.assertEqualImages("temp_test_files/whackamole_hist.jpg", "cmp_chk_files/whackamole_hist_ok.jpg")

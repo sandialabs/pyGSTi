@@ -106,7 +106,7 @@ class TutorialsMethods(TutorialsTestCase):
         self.runTutorial_ipython("04 Algorithms.ipynb")
 
     def test_tutorial_05(self):
-        self.runTutorial_ipython("05 Analysis.ipynb")
+        self.runTutorial_ipython("05 Plotting.ipynb")
 
     def test_tutorial_06(self):
         self.runTutorial_ipython("06 Advanced Algorithms.ipynb")

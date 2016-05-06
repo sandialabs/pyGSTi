@@ -433,11 +433,12 @@ class TestReport(ReportTestCase):
                                [1e-4,1e-3,1e-2,1e-1],
                                [1.0,10.0,100.0,1000.0],
                                [1.0e4,1.0e5,1.0e6,1.0e7]],'d' )
-        gstFig = pygsti.report.plotting.color_boxplot( test_data, size=(10,10), prec="compacthp",save_to="temp_test_files/test.pdf")
-        gstFig = pygsti.report.plotting.color_boxplot( test_data, size=(10,10), prec="compact",save_to="")
-        gstFig = pygsti.report.plotting.color_boxplot( test_data, size=(10,10), prec=3,save_to="")
-        gstFig = pygsti.report.plotting.color_boxplot( test_data, size=(10,10), prec=-3,save_to="")
-        gstFig = pygsti.report.plotting.color_boxplot( test_data, size=(10,10), prec="foobar",colorbar=True,save_to="")
+        cmap = pygsti.report.plotting.StdColormapFactory('seq', n_boxes=10, vmin=0, vmax=1, dof=1)
+        gstFig = pygsti.report.plotting.color_boxplot( test_data, cmap, size=(10,10), prec="compacthp",save_to="temp_test_files/test.pdf")
+        gstFig = pygsti.report.plotting.color_boxplot( test_data, cmap, size=(10,10), prec="compact",save_to="")
+        gstFig = pygsti.report.plotting.color_boxplot( test_data, cmap, size=(10,10), prec=3,save_to="")
+        gstFig = pygsti.report.plotting.color_boxplot( test_data, cmap, size=(10,10), prec=-3,save_to="")
+        gstFig = pygsti.report.plotting.color_boxplot( test_data, cmap, size=(10,10), prec="foobar",colorbar=True,save_to="")
         gstFig.check()
 
         pygsti.report.plotting.gateset_with_lgst_gatestring_estimates( [('Gx','Gx')], self.ds, self.specs,
@@ -481,16 +482,51 @@ class TestReport(ReportTestCase):
         results.init_single("logl", self.targetGateset, self.ds, self.gs_clgst,
                             self.lgstStrings, False, self.targetGateset)
 
-        results.parameters.update({'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
-                                   'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
-                                   'weights': None, 'defaultDirectory': "temp_test_files",
-                                   'defaultBasename': "MyDefaultReportName" } )
-
-        results.create_full_report_pdf(filename="temp_test_files/singleReport.pdf")
-        results.create_brief_report_pdf(filename="temp_test_files/singleBrief.pdf")
-        results.create_presentation_pdf(filename="temp_test_files/singleSlides.pdf")
+        results.parameters.update(
+            {'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
+             'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
+             'weights': None, 'defaultDirectory': "temp_test_files",
+             'defaultBasename': "MyDefaultReportName" } )
+        
+        results.create_full_report_pdf(
+            filename="temp_test_files/singleReport.pdf")
+        results.create_brief_report_pdf(
+            filename="temp_test_files/singleBrief.pdf")
+        results.create_presentation_pdf(
+            filename="temp_test_files/singleSlides.pdf")
         if self.have_python_pptx:
-            results.create_presentation_ppt(filename="temp_test_files/singleSlides.ppt", pptTables=True)
+            results.create_presentation_ppt(
+                filename="temp_test_files/singleSlides.ppt", pptTables=True)
+
+        #test tree splitting of hessian
+        results.parameters['memLimit'] = 10*(1024)**2 #10MB
+        results.create_brief_report_pdf(confidenceLevel=95,
+            filename="temp_test_files/singleBriefMemLimit.pdf")
+        results.parameters['memLimit'] = 10 #10 bytes => too small
+        with self.assertRaises(MemoryError):
+            results.create_brief_report_pdf(confidenceLevel=90,
+               filename="temp_test_files/singleBriefMemLimit.pdf")
+
+
+        #similar test for chi2 hessian
+        results2 = pygsti.report.Results()
+        results2.init_single("chi2", self.targetGateset, self.ds, self.gs_clgst,
+                            self.lgstStrings, False, self.targetGateset)
+        results2.parameters.update(
+            {'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
+             'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
+             'weights': None, 'defaultDirectory': "temp_test_files",
+             'defaultBasename': "MyDefaultReportName" } )
+        results2.parameters['memLimit'] = 10*(1024)**2 #10MB
+        results2.create_brief_report_pdf(confidenceLevel=95,
+            filename="temp_test_files/singleBriefMemLimit2.pdf")
+        results2.parameters['memLimit'] = 10 #10 bytes => too small
+        with self.assertRaises(MemoryError):
+            results2.create_brief_report_pdf(confidenceLevel=90,
+               filename="temp_test_files/singleBriefMemLimit2.pdf")
+
+
+
 
         results_str = str(results)
         tableNames = results.tables.keys()

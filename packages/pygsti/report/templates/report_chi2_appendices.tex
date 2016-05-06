@@ -5,11 +5,11 @@
 \iftoggle{debuggingaidsappendix}{
 \section{Debugging aids}
 
-If the $\chi^2$ plots in Figures \ref{bestEstimateColorBoxPlot}-\ref{invertedBestEstimateColorBoxPlot} indicate that the data is poorly fit by GST, the next step is to begin ``debugging'' the experiments and/or the fit.  Most commonly, a poor fit is due to non-Markovian behavior.  However, there are many kinds of non-Markovian behavior.  The most straightforward occurs when the gateset fluctuates over time, or when there is other time correlation in the experiments (e.g., due to memory effects).  However, another possibility that must be considered is that repeated gate operations cause changes in the system, e.g. heating it up (as is seen in 2-qubit trapped-ion gates) so that the data from long gate sequences is simply chaotic and inconsistent with shorter experiments.
+If the $\chi^2$ plots in Figures \ref{bestEstimateColorBoxPlot}-\ref{invertedBestEstimateColorBoxPlot} indicate that the data is poorly fit by GST, the next step is to begin ``debugging'' the experiments and/or the fit.  Most commonly, a poor fit is due to non-Markovian behavior.  However, there are many kinds of non-Markovian behavior.  The most straightforward occurs when the gate set fluctuates over time, or when there is other time correlation in the experiments (e.g., due to memory effects).  However, another possibility that must be considered is that repeated gate operations cause changes in the system, e.g. heating it up (as is seen in 2-qubit trapped-ion gates) so that the data from long gate sequences is simply chaotic and inconsistent with shorter experiments.
 
-Figure \ref{directLSGSTChi2BoxPlot} provides a test (albeit currently an unreliable one) for such an effect.  Like Figures \ref{bestEstimateColorBoxPlot}-\ref{invertedBestEstimateColorBoxPlot}, it displays per-experiment $\chi^2$ values -- but \emph{not} for any single gateset.  Instead, this \emph{direct GST} analysis treats each base sequence as an independent process (\emph{not} as a product of many gates), and analyzes it using LSGST together with the individual gates (which are necessary to model the effect of the fiducial sequences that precede and follow the base sequence being analyzed).  The resulting direct GST estimate is then used to assign probabilities for the corresponding experiments.  
+Figure \ref{directLSGSTChi2BoxPlot} provides a test (albeit currently an unreliable one) for such an effect.  Like Figures \ref{bestEstimateColorBoxPlot}-\ref{invertedBestEstimateColorBoxPlot}, it displays per-experiment $\chi^2$ values -- but \emph{not} for any single gate set.  Instead, this \emph{direct GST} analysis treats each base sequence as an independent process (\emph{not} as a product of many gates), and analyzes it using LSGST together with the individual gates (which are necessary to model the effect of the fiducial sequences that precede and follow the base sequence being analyzed).  The resulting direct GST estimate is then used to assign probabilities for the corresponding experiments.  
 
-This analysis decouples the various germs and base sequences from each other.  Unlike a standard GST analysis, it does not model different base sequences as being generated from the same gates.  Therefore, this analysis \emph{should} be fairly consistent (i.e., lots of blue squares and few or no red ones) even if Figures \ref{bestEstimateColorBoxPlot}-\ref{invertedBestEstimateColorBoxPlot} indicate severe fit problems.  
+This analysis decouples the various germs and base sequences from each other.  Unlike a standard GST analysis, it does not model different base sequences as being generated from the same gates.  Therefore, this analysis \emph{should} be fairly consistent (i.e., lots of gray/white squares and few or no red ones) even if Figures \ref{bestEstimateColorBoxPlot}-\ref{invertedBestEstimateColorBoxPlot} indicate severe fit problems.
 %However, beware one caveat.  Because this analysis uses \emph{only} LGST, it is not aware of $\chi^2$ (unlike the full GST analysis, which explicitly seeks to minimize $\chi^2$).  In particular, it can and often does assign slightly negative probabilities to experiments with frequencies close to zero.  This produces implausibly high $\chi^2$ values for those experiments.  Therefore, we recommend ignoring sporadic red squares in this analysis.
 
 \begin{figure}
@@ -24,7 +24,7 @@ Figure \ref{directLSGSTDeviationBoxPlot} uses direct GST analysis in another way
 \begin{figure}
 \begin{center}
 \putfield{directLongSeqGSTDeviationColorBoxPlot}{Box plot of direct LSGST Deviation}
-\caption{\putfield{tt_directLongSeqGSTDeviationColorBoxPlot}{}\textbf{Inconsistency of unitarity between GST and direct GST.}  This plot shows, for each base sequence, the increase in ``upper bound of fidelity with unitary'' (see Table \ref{bestGatesetClosestUnitaryTable}) when using the direct-GST result for a gate sequence instead of the process given by the best gateset.\label{directLSGSTDeviationBoxPlot}}
+\caption{\putfield{tt_directLongSeqGSTDeviationColorBoxPlot}{}\textbf{Inconsistency of unitarity between GST and direct GST.}  This plot shows, for each base sequence, the increase in ``upper bound of fidelity with unitary'' (see Table \ref{bestGatesetClosestUnitaryTable}) when using the direct-GST result for a gate sequence instead of the process given by the best gate set.\label{directLSGSTDeviationBoxPlot}}
 \end{center}
 \end{figure}
 
@@ -39,55 +39,55 @@ Finally, for various reasons including the diagnosis of non-Markovian behavior, 
 
 %\begin{figure}
 %\begin{center}
-%\XXputfield{bestEstimateColorBoxPlot_hist}{Histogram of best gateset chi2}
-%\caption{\XXputfield{tt_bestEstimateColorBoxPlot_hist}{}Histogram plot of best gateset $\chi^2$ values.}
+%\XXputfield{bestEstimateColorBoxPlot_hist}{Histogram of best gate set chi2}
+%\caption{\XXputfield{tt_bestEstimateColorBoxPlot_hist}{}Histogram plot of best gate set $\chi^2$ values.}
 %\end{center}
 %\end{figure}
 }{}
 
 \iftoggle{gaugeoptappendix}{
-\section{Best gateset in different gauges\label{appendix_gauge_opts}}
+\section{Best gate set in different gauges\label{appendix_gauge_opts}}
 
-In this appendix, we report the non-gauge-invariant quantities from the main text for different gauge choices.  In each section, GST's best gateset estimate is gauge optimized according to a different objective function, as specified within the section.
+In this appendix, we report the non-gauge-invariant quantities from the main text for different gauge choices.  In each section, GST's best gate set estimate is gauge optimized according to a different objective function, as specified within the section.
 
-\subsection{Gauge optimization to the target gateset}
+\subsection{Gauge optimization to the target gate set}
 The gauge is chosen to minimize the Frobenius distance between the estimate and the target gates, with equal weight given to the gate and SPAM parameters.
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTargetGatesetSpamTable}{BestTarget gateset rho and E vectors table will be placed here}
+\putfield{bestTargetGatesetSpamTable}{BestTarget gate set rho and E vectors table will be placed here}
 \caption{\textbf{The GST estimate of the SPAM operations}.  Compare to Table \ref{targetSpamTable}.\label{bestTargetGatesetSpamTable}}
 \end{center}
 \end{table}
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTargetGatesetSpamParametersTable}{BestTarget gateset spam parametesr table will be placed here}
+\putfield{bestTargetGatesetSpamParametersTable}{BestTarget gate set spam parametesr table will be placed here}
 \caption{\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestTargetGatesetSpamTable}.\label{bestTargetGatesetSpamParametersTable}}
 \end{center}
 \end{table}
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTargetGatesetGatesTable}{BestTarget gateset's gates table will be placed here}
+\putfield{bestTargetGatesetGatesTable}{BestTarget gate set's gates table will be placed here}
 \caption{\textbf{The GST estimate of the logic gate operations}.  Compare to Table \ref{targetGatesTable}.\label{bestTargetGatesetGatesTable}}
 \end{center}
 \end{table}
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTargetGatesetVsTargetTable}{BestTarget gateset overview table will be placed here}
+\putfield{bestTargetGatesetVsTargetTable}{BestTarget gate set overview table will be placed here}
 \vspace{2em}
-\putfield{bestTargetGatesetErrorGenTable}{Best gateset error generator table will be placed here}
-\caption{\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The column labeled ``Error Generator'' gives the Lindbladian $\mathcal{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathcal{L}}$. \label{bestTargetGatesetVsTargetTable}}
+\putfield{bestTargetGatesetErrorGenTable}{Best gate set error generator table will be placed here}
+\caption{\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The column labeled ``Error Generator'' gives the Lindbladian $\mathbb{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$. \label{bestTargetGatesetVsTargetTable}}
 \end{center}
 \end{table}
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTargetGatesetDecompTable}{BestTarget gateset overview table will be placed here}
+\putfield{bestTargetGatesetDecompTable}{BestTarget gate set overview table will be placed here}
 \vspace{2em}
-\putfield{bestTargetGatesetRotnAxisTable}{Best gateset rotn axis table will be placed here}
+\putfield{bestTargetGatesetRotnAxisTable}{Best gate set rotn axis table will be placed here}
 \caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); and (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay'').  ``--'' indicates that the decomposition failed or couldn't be interpreted. \label{bestTargetGatesetDecompTable}}
 \end{center}
 \end{table}
@@ -95,7 +95,7 @@ The gauge is chosen to minimize the Frobenius distance between the estimate and 
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTargetGatesetClosestUnitaryTable}{BestTarget gateset overview table will be placed here}
+\putfield{bestTargetGatesetClosestUnitaryTable}{BestTarget gate set overview table will be placed here}
 \caption{Information pertaining to the closest unitary gate to each of the estimated gates.\label{bestTargetGatesetClosestUnitaryTable}}
 \end{center}
 \end{table}
@@ -103,8 +103,8 @@ The gauge is chosen to minimize the Frobenius distance between the estimate and 
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTargetGatesetChoiTable}{BestTarget gateset's choi matrix table will be placed here}
-\caption{\textbf{Choi matrix representation of the GST estimated gateset}.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestTargetGatesetChoiTable}}
+\putfield{bestTargetGatesetChoiTable}{BestTarget gate set's choi matrix table will be placed here}
+\caption{\textbf{Choi matrix representation of the GST estimated gate set}.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestTargetGatesetChoiTable}}
 \end{center}
 \end{table}
 
@@ -116,39 +116,39 @@ The gauge is chosen to minimize the Frobenius distance between the estimate and 
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTargetSpamGatesetSpamTable}{BestTarget gateset rho and E vectors table will be placed here}
+\putfield{bestTargetSpamGatesetSpamTable}{BestTarget gate set rho and E vectors table will be placed here}
 \caption{\textbf{The GST estimate of the SPAM operations}.  Compare to Table \ref{targetSpamTable}.\label{bestTargetSpamGatesetSpamTable}}
 \end{center}
 \end{table}
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTargetSpamGatesetSpamParametersTable}{BestTarget gateset spam parametesr table will be placed here}
+\putfield{bestTargetSpamGatesetSpamParametersTable}{BestTarget gate set spam parametesr table will be placed here}
 \caption{\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestTargetSpamGatesetSpamTable}.\label{bestTargetSpamGatesetSpamParametersTable}}
 \end{center}
 \end{table}
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTargetSpamGatesetGatesTable}{BestTarget gateset's gates table will be placed here}
+\putfield{bestTargetSpamGatesetGatesTable}{BestTarget gate set's gates table will be placed here}
 \caption{\textbf{The GST estimate of the logic gate operations}.  Compare to Table \ref{targetGatesTable}.\label{bestTargetSpamGatesetGatesTable}}
 \end{center}
 \end{table}
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTargetSpamGatesetVsTargetTable}{BestTarget gateset overview table will be placed here}
+\putfield{bestTargetSpamGatesetVsTargetTable}{BestTarget gate set overview table will be placed here}
 \vspace{2em}
-\putfield{bestTargetSpamGatesetErrorGenTable}{Best gateset error generator table will be placed here}
-\caption{\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The column labeled ``Error Generator'' gives the Lindbladian $\mathcal{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathcal{L}}$. \label{bestTargetSpamGatesetVsTargetTable}}
+\putfield{bestTargetSpamGatesetErrorGenTable}{Best gate set error generator table will be placed here}
+\caption{\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The column labeled ``Error Generator'' gives the Lindbladian $\mathbb{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$. \label{bestTargetSpamGatesetVsTargetTable}}
 \end{center}
 \end{table}
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTargetSpamGatesetDecompTable}{BestTarget gateset overview table will be placed here}
+\putfield{bestTargetSpamGatesetDecompTable}{BestTarget gate set overview table will be placed here}
 \vspace{2em}
-\putfield{bestTargetSpamGatesetRotnAxisTable}{Best gateset rotn axis table will be placed here}
+\putfield{bestTargetSpamGatesetRotnAxisTable}{Best gate set rotn axis table will be placed here}
 \caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); and (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay'').  ``--'' indicates that the decomposition failed or couldn't be interpreted. \label{bestTargetSpamGatesetDecompTable}}
 \end{center}
 \end{table}
@@ -156,7 +156,7 @@ The gauge is chosen to minimize the Frobenius distance between the estimate and 
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTargetSpamGatesetClosestUnitaryTable}{BestTarget gateset overview table will be placed here}
+\putfield{bestTargetSpamGatesetClosestUnitaryTable}{BestTarget gate set overview table will be placed here}
 \caption{Information pertaining to the closest unitary gate to each of the estimated gates.\label{bestTargetSpamGatesetClosestUnitaryTable}}
 \end{center}
 \end{table}
@@ -164,8 +164,8 @@ The gauge is chosen to minimize the Frobenius distance between the estimate and 
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTargetSpamGatesetChoiTable}{BestTarget gateset's choi matrix table will be placed here}
-\caption{\textbf{Choi matrix representation of the GST estimated gateset}.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestTargetSpamGatesetChoiTable}}
+\putfield{bestTargetSpamGatesetChoiTable}{BestTarget gate set's choi matrix table will be placed here}
+\caption{\textbf{Choi matrix representation of the GST estimated gate set}.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestTargetSpamGatesetChoiTable}}
 \end{center}
 \end{table}
 
@@ -177,39 +177,39 @@ The gauge is chosen to minimize the Frobenius distance between the estimate and 
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTargetGatesGatesetSpamTable}{BestTarget gateset rho and E vectors table will be placed here}
+\putfield{bestTargetGatesGatesetSpamTable}{BestTarget gate set rho and E vectors table will be placed here}
 \caption{\textbf{The GST estimate of the SPAM operations}.  Compare to Table \ref{targetSpamTable}.\label{bestTargetGatesGatesetSpamTable}}
 \end{center}
 \end{table}
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTargetGatesGatesetSpamParametersTable}{BestTarget gateset spam parametesr table will be placed here}
+\putfield{bestTargetGatesGatesetSpamParametersTable}{BestTarget gate set spam parametesr table will be placed here}
 \caption{\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestTargetGatesGatesetSpamTable}.\label{bestTargetGatesGatesetSpamParametersTable}}
 \end{center}
 \end{table}
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTargetGatesGatesetGatesTable}{BestTarget gateset's gates table will be placed here}
+\putfield{bestTargetGatesGatesetGatesTable}{BestTarget gate set's gates table will be placed here}
 \caption{\textbf{The GST estimate of the logic gate operations}.  Compare to Table \ref{targetGatesTable}.\label{bestTargetGatesGatesetGatesTable}}
 \end{center}
 \end{table}
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTargetGatesGatesetVsTargetTable}{BestTarget gateset overview table will be placed here}
+\putfield{bestTargetGatesGatesetVsTargetTable}{BestTarget gate set overview table will be placed here}
 \vspace{2em}
-\putfield{bestTargetGatesGatesetErrorGenTable}{Best gateset error generator table will be placed here}
-\caption{\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The column labeled ``Error Generator'' gives the Lindbladian $\mathcal{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathcal{L}}$. \label{bestTargetGatesGatesetVsTargetTable}}
+\putfield{bestTargetGatesGatesetErrorGenTable}{Best gate set error generator table will be placed here}
+\caption{\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The column labeled ``Error Generator'' gives the Lindbladian $\mathbb{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$. \label{bestTargetGatesGatesetVsTargetTable}}
 \end{center}
 \end{table}
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTargetGatesGatesetDecompTable}{BestTarget gateset overview table will be placed here}
+\putfield{bestTargetGatesGatesetDecompTable}{BestTarget gate set overview table will be placed here}
 \vspace{2em}
-\putfield{bestTargetGatesGatesetRotnAxisTable}{Best gateset rotn axis table will be placed here}
+\putfield{bestTargetGatesGatesetRotnAxisTable}{Best gate set rotn axis table will be placed here}
 \caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); and (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay'').  ``--'' indicates that the decomposition failed or couldn't be interpreted. \label{bestTargetGatesGatesetDecompTable}}
 \end{center}
 \end{table}
@@ -217,7 +217,7 @@ The gauge is chosen to minimize the Frobenius distance between the estimate and 
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTargetGatesGatesetClosestUnitaryTable}{BestTarget gateset overview table will be placed here}
+\putfield{bestTargetGatesGatesetClosestUnitaryTable}{BestTarget gate set overview table will be placed here}
 \caption{Information pertaining to the closest unitary gate to each of the estimated gates.\label{bestTargetGatesGatesetClosestUnitaryTable}}
 \end{center}
 \end{table}
@@ -225,51 +225,51 @@ The gauge is chosen to minimize the Frobenius distance between the estimate and 
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTargetGatesGatesetChoiTable}{BestTarget gateset's choi matrix table will be placed here}
-\caption{\textbf{Choi matrix representation of the GST estimated gateset}.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestTargetGatesGatesetChoiTable}}
+\putfield{bestTargetGatesGatesetChoiTable}{BestTarget gate set's choi matrix table will be placed here}
+\caption{\textbf{Choi matrix representation of the GST estimated gate set}.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestTargetGatesGatesetChoiTable}}
 \end{center}
 \end{table}
 
 \clearpage
 
 \subsection{Gauge optimization to TP}
-The gauge is chosen to make the gateset as trace-preserving as possible.  This is done by minimizing the sum of the squared euclidian distance between the first row of each estimated gate matrix and the vector $(1,0,\cdots 0)$.  The Frobenius distance between the estimate and the target gateset, weighted by $10^{-4}$, is added to the aforementioned sum of distances is to give the final objective function.  Ideally, a perfectly TP gateset will be found and the Frobenius distance term causes the optimization to choose the gateset closest to the target gates that is also in TP.  If a perfectly TP gateset cannot be gauge-optimized to, then the resulting gateset compromises between being TP and being close to the target gateset, with the intent that the TP penalty term dominates.
+The gauge is chosen to make the gate set as trace-preserving as possible.  This is done by minimizing the sum of the squared euclidian distance between the first row of each estimated gate matrix and the vector $(1,0,\cdots 0)$.  The Frobenius distance between the estimate and the target gate set, weighted by $10^{-4}$, is added to the aforementioned sum of distances is to give the final objective function.  Ideally, a perfectly TP gate set will be found and the Frobenius distance term causes the optimization to choose the gate set closest to the target gates that is also in TP.  If a perfectly TP gate set cannot be gauge-optimized to, then the resulting gate set compromises between being TP and being close to the target gate set, with the intent that the TP penalty term dominates.
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTPGatesetSpamTable}{BestTarget gateset rho and E vectors table will be placed here}
+\putfield{bestTPGatesetSpamTable}{BestTarget gate set rho and E vectors table will be placed here}
 \caption{\textbf{The GST estimate of the SPAM operations}.  Compare to Table \ref{targetSpamTable}.\label{bestTPGatesetSpamTable}}
 \end{center}
 \end{table}
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTPGatesetSpamParametersTable}{BestTarget gateset spam parametesr table will be placed here}
+\putfield{bestTPGatesetSpamParametersTable}{BestTarget gate set spam parametesr table will be placed here}
 \caption{\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestTPGatesetSpamTable}.\label{bestTPGatesetSpamParametersTable}}
 \end{center}
 \end{table}
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTPGatesetGatesTable}{BestTarget gateset's gates table will be placed here}
+\putfield{bestTPGatesetGatesTable}{BestTarget gate set's gates table will be placed here}
 \caption{\textbf{The GST estimate of the logic gate operations}.  Compare to Table \ref{targetGatesTable}.\label{bestTPGatesetGatesTable}}
 \end{center}
 \end{table}
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTPGatesetVsTargetTable}{BestTarget gateset overview table will be placed here}
+\putfield{bestTPGatesetVsTargetTable}{BestTarget gate set overview table will be placed here}
 \vspace{2em}
-\putfield{bestTPGatesetErrorGenTable}{Best gateset error generator table will be placed here}
-\caption{\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The column labeled ``Error Generator'' gives the Lindbladian $\mathcal{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathcal{L}}$. \label{bestTPGatesetVsTargetTable}}
+\putfield{bestTPGatesetErrorGenTable}{Best gate set error generator table will be placed here}
+\caption{\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The column labeled ``Error Generator'' gives the Lindbladian $\mathbb{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$. \label{bestTPGatesetVsTargetTable}}
 \end{center}
 \end{table}
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTPGatesetDecompTable}{BestTarget gateset overview table will be placed here}
+\putfield{bestTPGatesetDecompTable}{BestTarget gate set overview table will be placed here}
 \vspace{2em}
-\putfield{bestTPGatesetRotnAxisTable}{Best gateset rotn axis table will be placed here}
+\putfield{bestTPGatesetRotnAxisTable}{Best gate set rotn axis table will be placed here}
 \caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); and (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay'').  ``--'' indicates that the decomposition failed or couldn't be interpreted. \label{bestTPGatesetDecompTable}}
 \end{center}
 \end{table}
@@ -277,7 +277,7 @@ The gauge is chosen to make the gateset as trace-preserving as possible.  This i
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTPGatesetClosestUnitaryTable}{BestTarget gateset overview table will be placed here}
+\putfield{bestTPGatesetClosestUnitaryTable}{BestTarget gate set overview table will be placed here}
 \caption{Information pertaining to the closest unitary gate to each of the estimated gates.\label{bestTPGatesetClosestUnitaryTable}}
 \end{center}
 \end{table}
@@ -285,58 +285,58 @@ The gauge is chosen to make the gateset as trace-preserving as possible.  This i
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestTPGatesetChoiTable}{BestTarget gateset's choi matrix table will be placed here}
-\caption{\textbf{Choi matrix representation of the GST estimated gateset}.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestTPGatesetChoiTable}}
+\putfield{bestTPGatesetChoiTable}{BestTarget gate set's choi matrix table will be placed here}
+\caption{\textbf{Choi matrix representation of the GST estimated gate set}.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestTPGatesetChoiTable}}
 \end{center}
 \end{table}
 
 \clearpage
 
 \subsection{Gauge optimization to CPTP}
-The gauge is chosen to minimize a quantity indicating the ``non-CPTP-ness'' of the gateset, along with a slight preference for being close to the target gateset.  In particular, we first optimize the gateset to TP (as described above), and then minimize the logarithm of a CP ``penalty term'' which we take as the sum of
+The gauge is chosen to minimize a quantity indicating the ``non-CPTP-ness'' of the gate set, along with a slight preference for being close to the target gate set.  In particular, we first optimize the gate set to TP (as described above), and then minimize the logarithm of a CP ``penalty term'' which we take as the sum of
 \begin{enumerate}
 \item the absolute values of any negative eigenvalues possessed by a gate's Choi matrix
 \item the absolute value of any negative eigenvalues of a state preparation density matrix
 \item the absolute difference between the trace of a state preparation density matrix and one
 \item the distance between an eigenvalue of an effect operator and the interval $[0,1]$.
 \end{enumerate}
-within the space of TP-preserving gauge transformations.  This CP penalty term is added to the Frobenius distance between the estimate and the target gateset, weighted by $10^{-4}$ to give the final objective function.
+within the space of TP-preserving gauge transformations.  This CP penalty term is added to the Frobenius distance between the estimate and the target gate set, weighted by $10^{-4}$ to give the final objective function.
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestCPTPGatesetSpamTable}{BestTarget gateset rho and E vectors table will be placed here}
+\putfield{bestCPTPGatesetSpamTable}{BestTarget gate set rho and E vectors table will be placed here}
 \caption{\textbf{The GST estimate of the SPAM operations}.  Compare to Table \ref{targetSpamTable}.\label{bestCPTPGatesetSpamTable}}
 \end{center}
 \end{table}
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestCPTPGatesetSpamParametersTable}{BestTarget gateset spam parametesr table will be placed here}
+\putfield{bestCPTPGatesetSpamParametersTable}{BestTarget gate set spam parametesr table will be placed here}
 \caption{\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestCPTPGatesetSpamTable}.\label{bestCPTPGatesetSpamParametersTable}}
 \end{center}
 \end{table}
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestCPTPGatesetGatesTable}{BestTarget gateset's gates table will be placed here}
+\putfield{bestCPTPGatesetGatesTable}{BestTarget gate set's gates table will be placed here}
 \caption{\textbf{The GST estimate of the logic gate operations}.  Compare to Table \ref{targetGatesTable}.\label{bestCPTPGatesetGatesTable}}
 \end{center}
 \end{table}
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestCPTPGatesetVsTargetTable}{BestTarget gateset overview table will be placed here}
+\putfield{bestCPTPGatesetVsTargetTable}{BestTarget gate set overview table will be placed here}
 \vspace{2em}
-\putfield{bestCPTPGatesetErrorGenTable}{Best gateset error generator table will be placed here}
-\caption{\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The column labeled ``Error Generator'' gives the Lindbladian $\mathcal{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathcal{L}}$. \label{bestCPTPGatesetVsTargetTable}}
+\putfield{bestCPTPGatesetErrorGenTable}{Best gate set error generator table will be placed here}
+\caption{\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The column labeled ``Error Generator'' gives the Lindbladian $\mathbb{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$. \label{bestCPTPGatesetVsTargetTable}}
 \end{center}
 \end{table}
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestCPTPGatesetDecompTable}{BestTarget gateset overview table will be placed here}
+\putfield{bestCPTPGatesetDecompTable}{BestTarget gate set overview table will be placed here}
 \vspace{2em}
-\putfield{bestCPTPGatesetRotnAxisTable}{Best gateset rotn axis table will be placed here}
+\putfield{bestCPTPGatesetRotnAxisTable}{Best gate set rotn axis table will be placed here}
 \caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); and (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay'').  ``--'' indicates that the decomposition failed or couldn't be interpreted. \label{bestCPTPGatesetDecompTable}}
 \end{center}
 \end{table}
@@ -344,7 +344,7 @@ within the space of TP-preserving gauge transformations.  This CP penalty term i
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestCPTPGatesetClosestUnitaryTable}{BestTarget gateset overview table will be placed here}
+\putfield{bestCPTPGatesetClosestUnitaryTable}{BestTarget gate set overview table will be placed here}
 \caption{Information pertaining to the closest unitary gate to each of the estimated gates.\label{bestCPTPGatesetClosestUnitaryTable}}
 \end{center}
 \end{table}
@@ -352,8 +352,8 @@ within the space of TP-preserving gauge transformations.  This CP penalty term i
 
 \begin{table}[h]
 \begin{center}
-\putfield{bestCPTPGatesetChoiTable}{BestTarget gateset's choi matrix table will be placed here}
-\caption{\textbf{Choi matrix representation of the GST estimated gateset}.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestCPTPGatesetChoiTable}}
+\putfield{bestCPTPGatesetChoiTable}{BestTarget gate set's choi matrix table will be placed here}
+\caption{\textbf{Choi matrix representation of the GST estimated gate set}.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestCPTPGatesetChoiTable}}
 \end{center}
 \end{table}
 
@@ -361,11 +361,11 @@ within the space of TP-preserving gauge transformations.  This CP penalty term i
 }{}
 
 \iftoggle{pixelplotsappendix}{
-\section{Pixel plots for intermediate gatesets\label{appendix_chi2_pixelplots}}
+\section{Pixel plots for intermediate gate sets\label{appendix_chi2_pixelplots}}
 
-This appendix contains $\chi^2$ pixel-plots for the intermediate estimates computed by GST on dataset ``\putfield{datasetLabel}{DATASET LABEL HERE}'' using a subset of the available data.  Each estimate was computed using only base sequences of length up to $L$, for $L=1,2,4,8,\ldots$.  These plots are \emph{not} identical to subsets of Figure \ref{bestEstimateColorBoxPlot}, because the estimated gateset is different.  Since these estimates only attempt to fit a subset of the data, they generally do much better at fitting that subset.  (They do very badly, in general, at predicting longer sequences; for this reason the $\chi^2$ values of those out-of-sample sequences are not shown).  See main text and caption of Figure \ref{bestEstimateColorBoxPlot} for more details.
+This appendix contains $\chi^2$ pixel-plots for the intermediate estimates computed by GST on dataset ``\putfield{datasetLabel}{DATASET LABEL HERE}'' using a subset of the available data.  Each estimate was computed using only base sequences of length up to $L$, for $L=1,2,4,8,\ldots$.  These plots are \emph{not} identical to subsets of Figure \ref{bestEstimateColorBoxPlot}, because the estimated gate set is different.  Since these estimates only attempt to fit a subset of the data, they generally do much better at fitting that subset.  (They do very badly, in general, at predicting longer sequences; for this reason the $\chi^2$ values of those out-of-sample sequences are not shown).  See main text and caption of Figure \ref{bestEstimateColorBoxPlot} for more details.
 
-\putfield{intermediate_pixel_plot_figures}{Chi2 pixel plots for intermediate gatesets will be placed here}
+\putfield{intermediate_pixel_plot_figures}{Chi2 pixel plots for intermediate gate sets will be placed here}
 }{}
 
 \iftoggle{whackamoleappendix}{
@@ -373,9 +373,9 @@ This appendix contains $\chi^2$ pixel-plots for the intermediate estimates compu
 
 This appendix shows whimsically named ``Whack-a-mole'' plots.  The point of these plots is to answer the question ``Why is GST failing to fit the data in the block corresponding to base sequence XXX?''  This question usually comes up after examining Figure \ref{bestEstimateColorBoxPlot} and identifying a particularly bad block.  Usually, the answer is ``Because GST was also trying to fit other data, in block YYY.''  It's often useful to know specifically \emph{which} experiments are the stumbling block -- i.e., which experiments would be even more badly fit by the estimate \emph{if} we demanded that the data in base sequence XXX be fit better.
 
-This question can be answered by examining the derivatives of the aggregated $\chi^2$ function with respect to  the gateset, evaluated at the stationary point (local minimum) corresponding to the GST estimate.  By doing so, it is possible to simulate what would happen if, by demanding a better fit to the data in block XXX, we attempted to ``whack'' the large $\chi^2$ values in block XXX.  Unsurprisingly, whacking the XXX mole causes another one to pop up somewhere else (the GST fit is a local minimum of $\chi^2$, and hopefully a global one too, so there is no way to improve aggregate $\chi^2$).  Where this occurs can provide some insight into what is stopping GST from fitting the data better (and therefore into what's wrong with the gates).
+This question can be answered by examining the derivatives of the aggregated $\chi^2$ function with respect to  the gate set, evaluated at the stationary point (local minimum) corresponding to the GST estimate.  By doing so, it is possible to simulate what would happen if, by demanding a better fit to the data in block XXX, we attempted to ``whack'' the large $\chi^2$ values in block XXX.  Unsurprisingly, whacking the XXX mole causes another one to pop up somewhere else (the GST fit is a local minimum of $\chi^2$, and hopefully a global one too, so there is no way to improve aggregate $\chi^2$).  Where this occurs can provide some insight into what is stopping GST from fitting the data better (and therefore into what's wrong with the gates).
 
 In the Whack-a-mole plots shown below, each of the longest base sequences is independently ``whacked'' -- i.e., the analysis attempts to reduce the $\chi^2$ for that particular base sequence.  The plots answer the question, ``If the $\chi^2$ for this base sequence was forced downward by 10 units, how much would the $\chi^2$ for other experiments have to rise?''  Thus, the number on the ``whacked'' block is always $-10$.  Blocks with negative values in this analysis are correlated tightly with the whacked block (improving the fit on the whacked block improves their fit as well).  Blocks with large positive values are incompatible with the whacked block (improving the fit on the whacked block makes the fit on such a block worse).  These plots can thus be used to identify inconsistencies in the data.
 
-\putfield{whackamole_plot_figures}{Whack-a-mole plots for select gatesets will be placed here}
+\putfield{whackamole_plot_figures}{Whack-a-mole plots for select gate sets will be placed here}
 }{}
