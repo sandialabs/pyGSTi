@@ -461,6 +461,20 @@ class EvalTree(list):
                 else: # we create a new subtree
                     subTreeSetList.append( singleItemTreeSet ) 
 
+        #TODO: improve tree efficiency via better splitting?
+        #print "DEBUG TREE SPLITTING:"
+        #for k,dbTreeSet in enumerate(subTreeSetList):
+        #    print "Tree %d (size %d): " % (k,len(dbTreeSet)), [ len(dbTreeSet.intersection(x)) for kk,x in enumerate(subTreeSetList) if kk != k ]
+        #cnts = [0]*len(self)
+        #for k,dbTreeSet in enumerate(subTreeSetList):
+        #    for i in dbTreeSet:
+        #        cnts[i] += 1
+        #sorted_cnts = sorted( list(enumerate(cnts)), key=lambda x: x[1], reverse=True)
+        #print "Top index : cnts"
+        #for ii,(i,cnt) in enumerate(sorted_cnts):
+        #    print ii,":", i,", ",cnt
+        #raise ValueError("STOP")
+
         #Second pass - create subtrees from index sets
         need_to_compute = [False]*len(self)
         for idx in self.finalList: 
