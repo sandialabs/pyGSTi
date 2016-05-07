@@ -80,13 +80,54 @@ def make_meas_mxs(gs,prepMeasList):
 #    score = len(fidList) * _np.sum(1./_np.linalg.eigvalsh(matToScore))
 #    return score
 
+
+def test_fiducial_list(gateset,fidList,prepOrMeas=None,returnSpectrum=False,threshold=1e3):
+    nFids = len(fidList)
+
+    dimRho = gateset.get_dimension()
+
+    fidLengths = _np.array( map(len,fidList), 'i')
+    if prepOrMeas == 'prep':
+        fidArrayList = make_prep_mxs(gateset,fidList)
+    elif prepOrMeas == 'meas':
+        fidArrayList = make_meas_mxs(gateset,fidList)
+    else:
+        raise Exception('prepOrMeas must be specified!')
+    numMxs = len(fidArrayList)
+
+    numFids = len(fidList)
+    scoreMx = _np.zeros([dimRho,numFids *  numMxs],float)
+    colInd = 0
+#    wts = _np.array(wts)
+#    wtsLoc = _np.where(wts)[0]
+    for fidArray in fidArrayList:
+        scoreMx[:,colInd:colInd+numFids] = fidArray
+        colInd += numFids
+    scoreSqMx = _np.dot(scoreMx,scoreMx.T)
+    score = numFids * _np.sum(1./_np.linalg.eigvalsh(scoreSqMx))
+    if (score <= 0 or _np.isinf(score)) or score > threshold:
+        if returnSpectrum:
+            return False, numFids * 1./_np.linalg.eigvalsh(scoreSqMx)
+        else:
+            return False
+    else:
+        if returnSpectrum:
+            return True, numFids * 1./_np.linalg.eigvalsh(scoreSqMx)
+        else:
+            return True
+    
+
+
+                        
+
 def optimize_integer_fiducials_slack(gateset, fidList, 
                               prepOrMeas = None,
                               initialWeights=None, 
-#                              gates=True, G0=True, 
                               maxIter=100, 
                               fixedSlack=False, slackFrac=False, 
-                              returnAll=False, tol=1e-6, verbosity=1):
+                              returnAll=False, tol=1e-6, 
+                              forceEmpty = True, forceEmptyScore = 1e100,
+                              verbosity=1):
     """
     Find a locally optimal subset of the fiducials in fidList.
 
@@ -117,10 +158,6 @@ def optimize_integer_fiducials_slack(gateset, fidList,
       - True = all gates
       - False = no gates
       - list of gate labels = those particular gates.
-
-    G0 : bool, optional
-        Whether the first row of gate matrices should be included
-        as gateset parameters.
 
     maxIter : int, optional
         The maximum number of iterations before giving up.
@@ -165,44 +202,40 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         raise ValueError("Either fixedSlack *or* slackFrac should be specified")
     lessWeightOnly = False  #Initially allow adding to weight. -- maybe make this an argument??
 
-#    nGaugeParams = gateset.num_gauge_params(gates, G0, SPAM=False)
-#    nGerms = len(germsList)
     nFids = len(fidList)
 
     dimRho = gateset.get_dimension()
 
     if verbosity > 0:
         print "Starting fiducial set optimization. Lower score is better."
-#        print "Gateset has %d gauge params." % nGaugeParams
 
-    #score dictionary:
-    #  keys = tuple-ized weight vector of 1's and 0's only
-    #  values = 1.0/critical_eval
     scoreD = {} 
 
-    #twirledDerivDaggerDeriv == array J.H*J contributions from each germ (J=Jacobian)
-    # indexed by (iGerm, iGatesetParam1, iGatesetParam2)
-    # size (nGerms, vec_gateset_dim, vec_gateset_dim)
     fidLengths = _np.array( map(len,fidList), 'i')
     if prepOrMeas == 'prep':
         fidArrayList = make_prep_mxs(gateset,fidList)
     elif prepOrMeas == 'meas':
         fidArrayList = make_meas_mxs(gateset,fidList)
+    else:
+        raise Exception('prepOrMeas must be specified!')
     numMxs = len(fidArrayList)
         
     def compute_score(wts):
-        numFids = _np.sum(wts)
-        scoreMx = _np.zeros([dimRho,numFids *  numMxs],float)
-        colInd = 0
-        wts = _np.array(wts)
-        wtsLoc = _np.where(wts)[0]
-        for fidArray in fidArrayList:
-            scoreMx[:,colInd:colInd+numFids] = fidArray[:,wtsLoc]
-            colInd += numFids
-        scoreSqMx = _np.dot(scoreMx,scoreMx.T)
-        score = numFids * _np.sum(1./_np.linalg.eigvalsh(scoreSqMx))
-        if score <= 0:
-            score = 1e10
+        if forceEmpty and _np.count_nonzero(wts[:1]) != 1:
+            score = forceEmptyScore
+        else:
+            numFids = _np.sum(wts)
+            scoreMx = _np.zeros([dimRho,numFids *  numMxs],float)
+            colInd = 0
+            wts = _np.array(wts)
+            wtsLoc = _np.where(wts)[0]
+            for fidArray in fidArrayList:
+                scoreMx[:,colInd:colInd+numFids] = fidArray[:,wtsLoc]
+                colInd += numFids
+            scoreSqMx = _np.dot(scoreMx,scoreMx.T)
+            score = numFids * _np.sum(1./_np.linalg.eigvalsh(scoreSqMx))
+            if score <= 0 or _np.isinf(score):
+                score = 1e10
         scoreD[tuple(wts)] = score
         return score
 
