@@ -5,11 +5,11 @@
 \iftoggle{debuggingaidsappendix}{
 \section{Debugging aids}
 
-If the $\chi^2$ plots in Figures \ref{bestEstimateColorBoxPlot}-\ref{invertedBestEstimateColorBoxPlot} indicate that the data is poorly fit by GST, the next step is to begin ``debugging'' the experiments and/or the fit.  Most commonly, a poor fit is due to non-Markovian behavior.  However, there are many kinds of non-Markovian behavior.  The most straightforward occurs when the gateset fluctuates over time, or when there is other time correlation in the experiments (e.g., due to memory effects).  However, another possibility that must be considered is that repeated gate operations cause changes in the system, e.g. heating it up (as is seen in 2-qubit trapped-ion gates) so that the data from long gate sequences is simply chaotic and inconsistent with shorter experiments.
+If the $\chi^2$ plots in Figures \ref{bestEstimateColorBoxPlot}-\ref{invertedBestEstimateColorBoxPlot} indicate that the data is poorly fit by GST, the next step is to begin ``debugging'' the experiments and/or the fit.  Most commonly, a poor fit is due to non-Markovian behavior.  However, there are many kinds of non-Markovian behavior.  The most straightforward occurs when the gate set fluctuates over time, or when there is other time correlation in the experiments (e.g., due to memory effects).  However, another possibility that must be considered is that repeated gate operations cause changes in the system, e.g. heating it up (as is seen in 2-qubit trapped-ion gates) so that the data from long gate sequences is simply chaotic and inconsistent with shorter experiments.
 
-Figure \ref{directLSGSTChi2BoxPlot} provides a test (albeit currently an unreliable one) for such an effect.  Like Figures \ref{bestEstimateColorBoxPlot}-\ref{invertedBestEstimateColorBoxPlot}, it displays per-experiment $\chi^2$ values -- but \emph{not} for any single gateset.  Instead, this \emph{direct GST} analysis treats each base sequence as an independent process (\emph{not} as a product of many gates), and analyzes it using LSGST together with the individual gates (which are necessary to model the effect of the fiducial sequences that precede and follow the base sequence being analyzed).  The resulting direct GST estimate is then used to assign probabilities for the corresponding experiments.  
+Figure \ref{directLSGSTChi2BoxPlot} provides a test (albeit currently an unreliable one) for such an effect.  Like Figures \ref{bestEstimateColorBoxPlot}-\ref{invertedBestEstimateColorBoxPlot}, it displays per-experiment $\chi^2$ values -- but \emph{not} for any single gate set.  Instead, this \emph{direct GST} analysis treats each base sequence as an independent process (\emph{not} as a product of many gates), and analyzes it using LSGST together with the individual gates (which are necessary to model the effect of the fiducial sequences that precede and follow the base sequence being analyzed).  The resulting direct GST estimate is then used to assign probabilities for the corresponding experiments.  
 
-This analysis decouples the various germs and base sequences from each other.  Unlike a standard GST analysis, it does not model different base sequences as being generated from the same gates.  Therefore, this analysis \emph{should} be fairly consistent (i.e., lots of blue squares and few or no red ones) even if Figures \ref{bestEstimateColorBoxPlot}-\ref{invertedBestEstimateColorBoxPlot} indicate severe fit problems.  
+This analysis decouples the various germs and base sequences from each other.  Unlike a standard GST analysis, it does not model different base sequences as being generated from the same gates.  Therefore, this analysis \emph{should} be fairly consistent (i.e., lots of gray/white squares and few or no red ones) even if Figures \ref{bestEstimateColorBoxPlot}-\ref{invertedBestEstimateColorBoxPlot} indicate severe fit problems.
 %However, beware one caveat.  Because this analysis uses \emph{only} LGST, it is not aware of $\chi^2$ (unlike the full GST analysis, which explicitly seeks to minimize $\chi^2$).  In particular, it can and often does assign slightly negative probabilities to experiments with frequencies close to zero.  This produces implausibly high $\chi^2$ values for those experiments.  Therefore, we recommend ignoring sporadic red squares in this analysis.
 
 \begin{figure}
@@ -24,7 +24,7 @@ Figure \ref{directLSGSTDeviationBoxPlot} uses direct GST analysis in another way
 \begin{figure}
 \begin{center}
 \includegraphics[width=4.00in,height=5.00in,keepaspectratio]{full_reportB_files/directLongSeqGSTDeviationBoxes.pdf}
-\caption{\textbf{Inconsistency of unitarity between GST and direct GST.}  This plot shows, for each base sequence, the increase in ``upper bound of fidelity with unitary'' (see Table \ref{bestGatesetClosestUnitaryTable}) when using the direct-GST result for a gate sequence instead of the process given by the best gateset.\label{directLSGSTDeviationBoxPlot}}
+\caption{\textbf{Inconsistency of unitarity between GST and direct GST.}  This plot shows, for each base sequence, the increase in ``upper bound of fidelity with unitary'' (see Table \ref{bestGatesetClosestUnitaryTable}) when using the direct-GST result for a gate sequence instead of the process given by the best gate set.\label{directLSGSTDeviationBoxPlot}}
 \end{center}
 \end{figure}
 
@@ -39,18 +39,18 @@ Finally, for various reasons including the diagnosis of non-Markovian behavior, 
 
 %\begin{figure}
 %\begin{center}
-%\XXputfield{bestEstimateColorBoxPlot_hist}{Histogram of best gateset chi2}
-%\caption{\XXputfield{tt_bestEstimateColorBoxPlot_hist}{}Histogram plot of best gateset $\chi^2$ values.}
+%\XXputfield{bestEstimateColorBoxPlot_hist}{Histogram of best gate set chi2}
+%\caption{\XXputfield{tt_bestEstimateColorBoxPlot_hist}{}Histogram plot of best gate set $\chi^2$ values.}
 %\end{center}
 %\end{figure}
 }{}
 
 \iftoggle{gaugeoptappendix}{
-\section{Best gateset in different gauges\label{appendix_gauge_opts}}
+\section{Best gate set in different gauges\label{appendix_gauge_opts}}
 
-In this appendix, we report the non-gauge-invariant quantities from the main text for different gauge choices.  In each section, GST's best gateset estimate is gauge optimized according to a different objective function, as specified within the section.
+In this appendix, we report the non-gauge-invariant quantities from the main text for different gauge choices.  In each section, GST's best gate set estimate is gauge optimized according to a different objective function, as specified within the section.
 
-\subsection{Gauge optimization to the target gateset}
+\subsection{Gauge optimization to the target gate set}
 The gauge is chosen to minimize the Frobenius distance between the estimate and the target gates, with equal weight given to the gate and SPAM parameters.
 
 \begin{table}[h]
@@ -167,7 +167,7 @@ Gy & $ \left(\!\!\begin{array}{cccc}
  \\ \hline
 \end{tabular}
 
-\caption{\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The column labeled ``Error Generator'' gives the Lindbladian $\mathcal{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathcal{L}}$. \label{bestTargetGatesetVsTargetTable}}
+\caption{\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The column labeled ``Error Generator'' gives the Lindbladian $\mathbb{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$. \label{bestTargetGatesetVsTargetTable}}
 \end{center}
 \end{table}
 
@@ -329,7 +329,7 @@ Gy & $ \left(\!\!\begin{array}{cccc}
  \\ \hline
 \end{tabular}
 
-\caption{\textbf{Choi matrix representation of the GST estimated gateset}.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestTargetGatesetChoiTable}}
+\caption{\textbf{Choi matrix representation of the GST estimated gate set}.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestTargetGatesetChoiTable}}
 \end{center}
 \end{table}
 
@@ -453,7 +453,7 @@ Gy & $ \left(\!\!\begin{array}{cccc}
  \\ \hline
 \end{tabular}
 
-\caption{\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The column labeled ``Error Generator'' gives the Lindbladian $\mathcal{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathcal{L}}$. \label{bestTargetSpamGatesetVsTargetTable}}
+\caption{\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The column labeled ``Error Generator'' gives the Lindbladian $\mathbb{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$. \label{bestTargetSpamGatesetVsTargetTable}}
 \end{center}
 \end{table}
 
@@ -615,7 +615,7 @@ Gy & $ \left(\!\!\begin{array}{cccc}
  \\ \hline
 \end{tabular}
 
-\caption{\textbf{Choi matrix representation of the GST estimated gateset}.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestTargetSpamGatesetChoiTable}}
+\caption{\textbf{Choi matrix representation of the GST estimated gate set}.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestTargetSpamGatesetChoiTable}}
 \end{center}
 \end{table}
 
@@ -739,7 +739,7 @@ Gy & $ \left(\!\!\begin{array}{cccc}
  \\ \hline
 \end{tabular}
 
-\caption{\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The column labeled ``Error Generator'' gives the Lindbladian $\mathcal{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathcal{L}}$. \label{bestTargetGatesGatesetVsTargetTable}}
+\caption{\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The column labeled ``Error Generator'' gives the Lindbladian $\mathbb{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$. \label{bestTargetGatesGatesetVsTargetTable}}
 \end{center}
 \end{table}
 
@@ -901,14 +901,14 @@ Gy & $ \left(\!\!\begin{array}{cccc}
  \\ \hline
 \end{tabular}
 
-\caption{\textbf{Choi matrix representation of the GST estimated gateset}.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestTargetGatesGatesetChoiTable}}
+\caption{\textbf{Choi matrix representation of the GST estimated gate set}.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestTargetGatesGatesetChoiTable}}
 \end{center}
 \end{table}
 
 \clearpage
 
 \subsection{Gauge optimization to TP}
-The gauge is chosen to make the gateset as trace-preserving as possible.  This is done by minimizing the sum of the squared euclidian distance between the first row of each estimated gate matrix and the vector $(1,0,\cdots 0)$.  The Frobenius distance between the estimate and the target gateset, weighted by $10^{-4}$, is added to the aforementioned sum of distances is to give the final objective function.  Ideally, a perfectly TP gateset will be found and the Frobenius distance term causes the optimization to choose the gateset closest to the target gates that is also in TP.  If a perfectly TP gateset cannot be gauge-optimized to, then the resulting gateset compromises between being TP and being close to the target gateset, with the intent that the TP penalty term dominates.
+The gauge is chosen to make the gate set as trace-preserving as possible.  This is done by minimizing the sum of the squared euclidian distance between the first row of each estimated gate matrix and the vector $(1,0,\cdots 0)$.  The Frobenius distance between the estimate and the target gate set, weighted by $10^{-4}$, is added to the aforementioned sum of distances is to give the final objective function.  Ideally, a perfectly TP gate set will be found and the Frobenius distance term causes the optimization to choose the gate set closest to the target gates that is also in TP.  If a perfectly TP gate set cannot be gauge-optimized to, then the resulting gate set compromises between being TP and being close to the target gate set, with the intent that the TP penalty term dominates.
 
 \begin{table}[h]
 \begin{center}
@@ -1024,7 +1024,7 @@ Gy & $ \left(\!\!\begin{array}{cccc}
  \\ \hline
 \end{tabular}
 
-\caption{\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The column labeled ``Error Generator'' gives the Lindbladian $\mathcal{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathcal{L}}$. \label{bestTPGatesetVsTargetTable}}
+\caption{\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The column labeled ``Error Generator'' gives the Lindbladian $\mathbb{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$. \label{bestTPGatesetVsTargetTable}}
 \end{center}
 \end{table}
 
@@ -1186,21 +1186,21 @@ Gy & $ \left(\!\!\begin{array}{cccc}
  \\ \hline
 \end{tabular}
 
-\caption{\textbf{Choi matrix representation of the GST estimated gateset}.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestTPGatesetChoiTable}}
+\caption{\textbf{Choi matrix representation of the GST estimated gate set}.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestTPGatesetChoiTable}}
 \end{center}
 \end{table}
 
 \clearpage
 
 \subsection{Gauge optimization to CPTP}
-The gauge is chosen to minimize a quantity indicating the ``non-CPTP-ness'' of the gateset, along with a slight preference for being close to the target gateset.  In particular, we first optimize the gateset to TP (as described above), and then minimize the logarithm of a CP ``penalty term'' which we take as the sum of
+The gauge is chosen to minimize a quantity indicating the ``non-CPTP-ness'' of the gate set, along with a slight preference for being close to the target gate set.  In particular, we first optimize the gate set to TP (as described above), and then minimize the logarithm of a CP ``penalty term'' which we take as the sum of
 \begin{enumerate}
 \item the absolute values of any negative eigenvalues possessed by a gate's Choi matrix
 \item the absolute value of any negative eigenvalues of a state preparation density matrix
 \item the absolute difference between the trace of a state preparation density matrix and one
 \item the distance between an eigenvalue of an effect operator and the interval $[0,1]$.
 \end{enumerate}
-within the space of TP-preserving gauge transformations.  This CP penalty term is added to the Frobenius distance between the estimate and the target gateset, weighted by $10^{-4}$ to give the final objective function.
+within the space of TP-preserving gauge transformations.  This CP penalty term is added to the Frobenius distance between the estimate and the target gate set, weighted by $10^{-4}$ to give the final objective function.
 
 \begin{table}[h]
 \begin{center}
@@ -1316,7 +1316,7 @@ Gy & $ \left(\!\!\begin{array}{cccc}
  \\ \hline
 \end{tabular}
 
-\caption{\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The column labeled ``Error Generator'' gives the Lindbladian $\mathcal{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathcal{L}}$. \label{bestCPTPGatesetVsTargetTable}}
+\caption{\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The column labeled ``Error Generator'' gives the Lindbladian $\mathbb{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$. \label{bestCPTPGatesetVsTargetTable}}
 \end{center}
 \end{table}
 
@@ -1478,7 +1478,7 @@ Gy & $ \left(\!\!\begin{array}{cccc}
  \\ \hline
 \end{tabular}
 
-\caption{\textbf{Choi matrix representation of the GST estimated gateset}.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestCPTPGatesetChoiTable}}
+\caption{\textbf{Choi matrix representation of the GST estimated gate set}.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestCPTPGatesetChoiTable}}
 \end{center}
 \end{table}
 
@@ -1486,9 +1486,9 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 }{}
 
 \iftoggle{pixelplotsappendix}{
-\section{Pixel plots for intermediate gatesets\label{appendix_chi2_pixelplots}}
+\section{Pixel plots for intermediate gate sets\label{appendix_chi2_pixelplots}}
 
-This appendix contains $\chi^2$ pixel-plots for the intermediate estimates computed by GST on dataset ``MyDefaultReportName'' using a subset of the available data.  Each estimate was computed using only base sequences of length up to $L$, for $L=1,2,4,8,\ldots$.  These plots are \emph{not} identical to subsets of Figure \ref{bestEstimateColorBoxPlot}, because the estimated gateset is different.  Since these estimates only attempt to fit a subset of the data, they generally do much better at fitting that subset.  (They do very badly, in general, at predicting longer sequences; for this reason the $\chi^2$ values of those out-of-sample sequences are not shown).  See main text and caption of Figure \ref{bestEstimateColorBoxPlot} for more details.
+This appendix contains $\chi^2$ pixel-plots for the intermediate estimates computed by GST on dataset ``MyDefaultReportName'' using a subset of the available data.  Each estimate was computed using only base sequences of length up to $L$, for $L=1,2,4,8,\ldots$.  These plots are \emph{not} identical to subsets of Figure \ref{bestEstimateColorBoxPlot}, because the estimated gate set is different.  Since these estimates only attempt to fit a subset of the data, they generally do much better at fitting that subset.  (They do very badly, in general, at predicting longer sequences; for this reason the $\chi^2$ values of those out-of-sample sequences are not shown).  See main text and caption of Figure \ref{bestEstimateColorBoxPlot} for more details.
 
 
 \begin{figure}
@@ -1519,7 +1519,7 @@ This appendix contains $\chi^2$ pixel-plots for the intermediate estimates compu
 
 This appendix shows whimsically named ``Whack-a-mole'' plots.  The point of these plots is to answer the question ``Why is GST failing to fit the data in the block corresponding to base sequence XXX?''  This question usually comes up after examining Figure \ref{bestEstimateColorBoxPlot} and identifying a particularly bad block.  Usually, the answer is ``Because GST was also trying to fit other data, in block YYY.''  It's often useful to know specifically \emph{which} experiments are the stumbling block -- i.e., which experiments would be even more badly fit by the estimate \emph{if} we demanded that the data in base sequence XXX be fit better.
 
-This question can be answered by examining the derivatives of the aggregated $\chi^2$ function with respect to  the gateset, evaluated at the stationary point (local minimum) corresponding to the GST estimate.  By doing so, it is possible to simulate what would happen if, by demanding a better fit to the data in block XXX, we attempted to ``whack'' the large $\chi^2$ values in block XXX.  Unsurprisingly, whacking the XXX mole causes another one to pop up somewhere else (the GST fit is a local minimum of $\chi^2$, and hopefully a global one too, so there is no way to improve aggregate $\chi^2$).  Where this occurs can provide some insight into what is stopping GST from fitting the data better (and therefore into what's wrong with the gates).
+This question can be answered by examining the derivatives of the aggregated $\chi^2$ function with respect to  the gate set, evaluated at the stationary point (local minimum) corresponding to the GST estimate.  By doing so, it is possible to simulate what would happen if, by demanding a better fit to the data in block XXX, we attempted to ``whack'' the large $\chi^2$ values in block XXX.  Unsurprisingly, whacking the XXX mole causes another one to pop up somewhere else (the GST fit is a local minimum of $\chi^2$, and hopefully a global one too, so there is no way to improve aggregate $\chi^2$).  Where this occurs can provide some insight into what is stopping GST from fitting the data better (and therefore into what's wrong with the gates).
 
 In the Whack-a-mole plots shown below, each of the longest base sequences is independently ``whacked'' -- i.e., the analysis attempts to reduce the $\chi^2$ for that particular base sequence.  The plots answer the question, ``If the $\chi^2$ for this base sequence was forced downward by 10 units, how much would the $\chi^2$ for other experiments have to rise?''  Thus, the number on the ``whacked'' block is always $-10$.  Blocks with negative values in this analysis are correlated tightly with the whacked block (improving the fit on the whacked block improves their fit as well).  Blocks with large positive values are incompatible with the whacked block (improving the fit on the whacked block makes the fit on such a block worse).  These plots can thus be used to identify inconsistencies in the data.
 
