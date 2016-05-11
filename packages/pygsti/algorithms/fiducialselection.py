@@ -415,7 +415,7 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         code_file.close()
         import fiducialselection_temp_script
         reload(fiducialselection_temp_script)#Need this line because this script (fiducialselection.py) may be run in an iPython notebook multiple times.
-        os.system('rm fiducialselection_temp_script.py')        
+        os.system('rm fiducialselection_temp_script.py')  
         bitVecMat = fiducialselection_temp_script.bitVecMat
         if forceEmpty:
             bitVecMat = _np.concatenate((_np.array([[1]*numFidLists]).T,bitVecMat),axis=1)
