@@ -335,10 +335,7 @@ class TestGateSetMethods(GateSetTestCase):
       self.assertNoWarnings(self.gateset.bulk_fill_dprobs, dprobs_to_fillB, spam_label_rows, evt, check=True)
       self.assertArraysAlmostEqual(dprobs_to_fill,dprobs_to_fillB)
 
-
       dProds = self.gateset.bulk_dproduct(evt) #TODO: test output?
-      with self.assertRaises(MemoryError):
-          self.gateset.bulk_dproduct(evt,memLimit=1)
 
 
 

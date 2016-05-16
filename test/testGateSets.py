@@ -404,8 +404,6 @@ class TestGateSetMethods(GateSetTestCase):
       self.assertArraysAlmostEqual(dprobs_to_fill,dprobs_to_fillB)
 
       dProds = self.gateset.bulk_dproduct(evt) #TODO: test output?
-      with self.assertRaises(MemoryError):
-          self.gateset.bulk_dproduct(evt,memLimit=1)
 
 
 
