@@ -3376,7 +3376,7 @@ class GateSetCalculator(object):
         #Function for "symmetric dLdR" ("dLdR + swapaxes(dLdR)") term for Hessian
         if wrtFilter is None:
             def compute_sym_dLdR(dL,dR): 
-                dLdR = _np.swapaxes(_np.dot(dL,dR_filtered),1,2) 
+                dLdR = _np.swapaxes(_np.dot(dL,dR),1,2) 
                 return dLdR + _np.swapaxes(dLdR,0,1)
                   #same as (but faster than) _np.einsum('ikm,jml->ijkl',dL,dR)
         else:
@@ -3473,7 +3473,7 @@ class GateSetCalculator(object):
 
 
     def bulk_dproduct_new(self, evalTree, flat=False, bReturnProds=False,
-                      bScale=False, memLimit=None, comm=None, wrtFilter=None):
+                      bScale=False, comm=None, wrtFilter=None):
         """
         Compute the derivative of a many gate strings at once.
 
@@ -3491,10 +3491,6 @@ class GateSetCalculator(object):
 
         bScale : bool, optional
           When True, return a scaling factor (see below).
-
-        memLimit : int, optional
-          A rough memory limit in bytes which restricts the amount of
-          intermediate values that are computed and stored.
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
@@ -3685,6 +3681,10 @@ class GateSetCalculator(object):
           the hessians, derivatives, and/or products for the i-th gate string.
 
         """
+        dim = self.dim
+        nGateDerivCols = self.tot_gate_params
+        nGateStrings = evalTree.num_final_strings() #len(gatestring_list)
+
         prodCache, scaleCache = self._compute_product_cache(evalTree, comm)
         dProdCache = self._compute_dproduct_cache(evalTree, prodCache, scaleCache,
                                                   comm, None) #wrtFilter *not* for 1st derivs
@@ -3982,7 +3982,7 @@ class GateSetCalculator(object):
         return tuple(values) if (nVals > 1) else values[0]
 
 
-    def _check(self, evalTree, spam_label_rows, prMxToFill=None, dprMxToFill=None, hprMxToFill=None):
+    def _check(self, evalTree, spam_label_rows, prMxToFill=None, dprMxToFill=None, hprMxToFill=None, clipTo=None):
         # compare with older slower version that should do the same thing (for debugging)
         for spamLabel,rowIndex in spam_label_rows.iteritems():
             gatestring_list = evalTree.generate_gatestring_list()
@@ -3990,7 +3990,10 @@ class GateSetCalculator(object):
             if prMxToFill is not None:
                 check_vp = _np.array( [ self.pr(spamLabel, gateString, clipTo) for gateString in gatestring_list ] )
                 if _nla.norm(prMxToFill[rowIndex] - check_vp) > 1e-6:
-                    _warnings.warn("norm(vp-check_vp) = %g - %g = %g" % (_nla.norm(vp), _nla.norm(check_vp), _nla.norm(vp - check_vp)))
+                    _warnings.warn("norm(vp-check_vp) = %g - %g = %g" % \
+                                       (_nla.norm(prMxToFill[rowIndex]),
+                                        _nla.norm(check_vp),
+                                        _nla.norm(prMxToFill[rowIndex] - check_vp)))
                     #for i,gs in enumerate(gatestring_list):
                     #    if abs(vp[i] - check_vp[i]) > 1e-7: 
                     #        print "   %s => p=%g, check_p=%g, diff=%g" % (str(gs),vp[i],check_vp[i],abs(vp[i]-check_vp[i]))
@@ -4078,7 +4081,7 @@ class GateSetCalculator(object):
             
             for spamLabel,rowIndex in spam_label_rows.iteritems():
                 if rowIndex == remainder_row_index: continue #skip remainder label
-                sub_vp, sub_vdp = calc_from_spamlabel(spamLabel)
+                sub_vp = calc_from_spamlabel(spamLabel)
                 self._fill_arrays(evalTree, evalSubTree, (mxToFill,),
                                   (sub_vp,), rowIndex, clipTo)
 
@@ -4099,7 +4102,7 @@ class GateSetCalculator(object):
                                   remainder_row_index, clipTo)
 
         if check: 
-            self._check(evalTree, spam_label_rows, mxToFill)
+            self._check(evalTree, spam_label_rows, mxToFill, clipTo=clipTo)
 
 
     def bulk_fill_dprobs_new(self, mxToFill, spam_label_rows, evalTree,
@@ -4185,9 +4188,10 @@ class GateSetCalculator(object):
             finalIndxList = evalSubTree.get_list_of_final_value_tree_indices()
 
             #Fill cache info
+            gatesFilter = wrtFilters['gates'] if (wrtFilters is not None) else None
             prodCache, scaleCache = self._compute_product_cache(evalSubTree, comm)
             dProdCache = self._compute_dproduct_cache(evalSubTree, prodCache, scaleCache,
-                                                      comm, wrtFilters['gates'])
+                                                      comm, gatesFilter)
 
             #use cached data to final values
             scaleVals = self._scaleExp( scaleCache.take( finalIndxList ) )
@@ -4211,7 +4215,7 @@ class GateSetCalculator(object):
                 if rowIndex == remainder_row_index: continue #skip remainder label
                 sub_vp, sub_vdp = calc_from_spamlabel(spamLabel)
                 self._fill_arrays(evalTree, evalSubTree,
-                                  (prMxToFill, mxToFill)
+                                  (prMxToFill, mxToFill),
                                   (sub_vp, sub_vdp), rowIndex, clipTo)
 
             #compute remainder label
@@ -4232,7 +4236,8 @@ class GateSetCalculator(object):
                                   remainder_row_index, clipTo)
 
         if check: 
-            self._check(evalTree, spam_label_rows, prMxToFill, mxToFill)
+            self._check(evalTree, spam_label_rows, prMxToFill, mxToFill,
+                        clipTo=clipTo)
 
 
 
@@ -4321,11 +4326,12 @@ class GateSetCalculator(object):
             finalIndxList = evalSubTree.get_list_of_final_value_tree_indices()
 
             #Fill cache info
+            gatesFilter = wrtFilters['gates'] if (wrtFilters is not None) else None
             prodCache, scaleCache = self._compute_product_cache(evalSubTree, comm)
             dProdCache = self._compute_dproduct_cache(evalSubTree, prodCache, scaleCache,
                                                       comm, None) #wrtFilter *not* for 1st derivs
             hProdCache = self._compute_hproduct_cache(evalSubTree, prodCache, dProdCache,
-                                                      scaleCache, comm, wrtFilters['gates'])
+                                                      scaleCache, comm, gatesFilter)
 
             #use cached data to final values
             scaleVals = self._scaleExp( scaleCache.take( finalIndxList ) )
@@ -4351,7 +4357,7 @@ class GateSetCalculator(object):
                 if rowIndex == remainder_row_index: continue #skip remainder label
                 sub_vp, sub_vdp, sub_vhp = calc_from_spamlabel(spamLabel)
                 self._fill_arrays(evalTree, evalSubTree,
-                                  (prMxToFill, derivMxToFill, mxToFill)
+                                  (prMxToFill, derivMxToFill, mxToFill),
                                   (sub_vp, sub_vdp, sub_vhp), rowIndex, clipTo)
 
             #compute remainder label
@@ -4375,7 +4381,7 @@ class GateSetCalculator(object):
 
         if check: 
             self._check(evalTree, spam_label_rows, 
-                        prMxToFill, derivMxToFill, mxToFill)
+                        prMxToFill, derivMxToFill, mxToFill, clipTo)
 
 
     def bulk_pr_new(self, spamLabel, evalTree, clipTo=None,
@@ -4463,7 +4469,7 @@ class GateSetCalculator(object):
 
     def bulk_dpr_new(self, spamLabel, evalTree, 
                      returnPr=False,clipTo=None,check=False,
-                     memLimit=None, comm=None):
+                     comm=None):
         """
         Compute the derivatives of the probabilities generated by a each gate 
         sequence given by evalTree, where initialization
@@ -4524,7 +4530,7 @@ class GateSetCalculator(object):
 
     def bulk_dprobs_new(self, evalTree, 
                     returnPr=False,clipTo=None,
-                    check=False,memLimit=None,comm=None):
+                    check=False,comm=None):
 
         """
         Construct a dictionary containing the bulk-probability-
@@ -4550,10 +4556,6 @@ class GateSetCalculator(object):
           generating warnings when checks fail.  Used for testing, and runs
           much slower when True.
 
-        memLimit : int, optional
-          A rough memory limit in bytes which restricts the amount of
-          intermediate values that are computed and stored.
-
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
            across multiple processors.
@@ -4563,7 +4565,7 @@ class GateSetCalculator(object):
         -------
         dprobs : dictionary
             A dictionary such that 
-            ``dprobs[SL] = bulk_dpr(SL,evalTree,gates,G0,SPAM,SP0,returnPr,clipTo,check,memLimit)``
+            ``dprobs[SL] = bulk_dpr(SL,evalTree,gates,G0,SPAM,SP0,returnPr,clipTo,check)``
             for each spam label (string) SL.
         """
         spam_label_rows = \
