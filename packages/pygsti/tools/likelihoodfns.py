@@ -411,7 +411,7 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
 def logl_hessian(gateset, dataset, gatestring_list=None, 
                  minProbClip=1e-6, probClipInterval=None, radius=1e-4, 
                  evalTree=None, countVecMx=None, poissonPicture=True,
-                 check=False, memLimit=None):
+                 check=False, comm=None, memLimit=None):
     """
     The hessian of the log-likelihood function.
 
@@ -460,6 +460,10 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
     check : boolean, optional
         If True, perform extra checks within code to verify correctness.  Used
         for testing, and runs much slower when True.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
 
     memLimit : int, optional
         A rough memory limit in bytes which restricts the amount of intermediate
@@ -524,6 +528,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
             maxEvalSubTreeSize = ng
     else:
         mode = "all at once"
+        maxEvalSubTreeSize = ng
                     
     #  Allocate memory (alloc max required & take views)
     maxNumGatestrings = maxEvalSubTreeSize
@@ -618,6 +623,9 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
     tStart = _time.time() #TIMER
 
     final_hessian = None #final computed quantity
+
+    #HERE - use comm to distribute over subtrees and/or columns...
+    # if "by column", parallelize over columns
     
     #Loop over subtrees
     for iTree,evalSubTree in enumerate(evalTree.get_sub_trees()):
@@ -643,9 +651,9 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
             hprobs = hprobs_mem[:,0:sub_nGateStrings,:,:]
 
             #TODO: call GateSet routine directly
-            gateset._calc().bulk_fill_hprobs_new(hprobs, spam_lbl_rows, evalSubTree, 
-                                                 prMxToFill=probs, derivMxToFill=dprobs, 
-                                                 clipTo=probClipInterval, check=check)
+            gateset.bulk_fill_hprobs(hprobs, spam_lbl_rows, evalSubTree, 
+                                     prMxToFill=probs, derivMxToFill=dprobs, 
+                                     clipTo=probClipInterval, check=check)
 
             pos_probs = _np.where(probs < min_p, min_p, probs)
             dprobs12 = dprobs[:,:,:,None] * dprobs[:,:,None,:] # (K,M,N,1) * (K,M,1,N) = (K,M,N,N)
@@ -665,10 +673,11 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
             assert(not evalSubTree.is_split()) #sub trees should not be split further
             hessian_cols = [] # holds columns for this subtree
             for hprobs, dprobs12 in gateset._calc().bulk_hprobs_by_column(
-                spam_lbl_rows, evalSubTree, True, clipTo=probClipInterval, check=check):
+                spam_lbl_rows, evalSubTree, True, clipTo=probClipInterval,
+                check=check, wrtFilter=None):
 
                 #DEBUG
-                print "DEBUG: %gs: column %d/%d, sub-tree %d/%d, sub-tree-len = %d" \
+                #print "DEBUG: %gs: column %d/%d, sub-tree %d/%d, sub-tree-len = %d" \
                     % (_time.time()-tStart,k,gateset.num_params(),iTree,
                        len(evalTree.get_sub_trees()), len(evalSubTree))
                 sys.stdout.flush(); k += 1
@@ -682,9 +691,9 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
 
         #Add sub-tree contribution to final hessian
         if final_hessian is None:
-            final_hessian = final_hessian_blk
+            final_hessian = subtree_hessian
         else:
-            final_hessian += final_hessian_blk
+            final_hessian += subtree_hessian
 
     return final_hessian # (N,N)
 

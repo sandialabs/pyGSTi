@@ -133,7 +133,7 @@ class EvalTree(list):
         #see if there are superfluous tree nodes: those with iFinal == -1 and 
         self.finalList = finalIndxList
         self.myFinalToParentFinalMap = None #this tree has no "children",
-                                 # i.e. has not been created by a 'split'
+        self.parentIndexMap = None          # i.e. has not been created by a 'split'
         self.subTrees = [] #no subtrees yet
 
     def copy(self):
@@ -142,6 +142,7 @@ class EvalTree(list):
         newTree.gateLabels = self.gateLabels
         newTree.finalList = self.finalList
         newTree.myFinalToParentFinalMap = self.myFinalToParentFinalMap
+        newTree.parentIndexMap = self.parentIndexMap
         newTree.subTrees = [ st.copy() for st in self.subTrees ]
         return newTree
 
@@ -347,6 +348,8 @@ class EvalTree(list):
             self.subTrees = [self.copy()]
             self.subTrees[0].myFinalToParentFinalMap = \
                 range(len(self.finalList))
+            self.subTrees[0].parentIndexMap = \
+                range(len(self))
             return
 
         self.subTrees = []
@@ -506,7 +509,8 @@ class EvalTree(list):
                 else:
                     iFinal = -1
                     
-                subTree.append( (iLeft,iRight,iFinal) )                
+                subTree.append( (iLeft,iRight,iFinal) )
+            subTree.parentIndexMap = subTreeIndices #parent index of each subtree index
             self.subTrees.append( subTree )    
 
         return
