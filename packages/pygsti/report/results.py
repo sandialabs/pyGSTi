@@ -42,15 +42,18 @@ class Results(object):
 
         Parameters
         ----------
-        restrictToFormats : tuple or None
+        restrictToFormats : tuple or None, optional
             A tuple of format names to restrict internal computation
             to.  This parameter should be left as None unless you 
             know what you're doing.
 
-        templatePath : string or None
+        templatePath : string or None, optional
             A local path to the stored GST report template files.  The
             default value of None means to use the default path, which
             is almost always what you want.
+            
+        latexCmd : string or None, optional
+            The system command used to compile latex documents.
         """
 
         # Internal Flags
@@ -1103,7 +1106,7 @@ class Results(object):
                     self.parameters['minProbClip'],
                     self.parameters['radius'],
                     self.parameters['hessianProjection'],
-                    regionType,
+                    regionType, self._comm,
                     self.parameters['memLimit'])
             elif self.parameters['objective'] == "chi2":
                 cr = _generation.get_chi2_confidence_region(
@@ -1113,7 +1116,7 @@ class Results(object):
                     self.parameters['probClipInterval'],
                     self.parameters['minProbClipForWeighting'],
                     self.parameters['hessianProjection'],
-                    regionType,
+                    regionType, self._comm,
                     self.parameters['memLimit'])
             else:
                 raise ValueError("Invalid objective given in essential" +
@@ -1171,7 +1174,7 @@ class Results(object):
                             title="auto", datasetLabel="auto", suffix="",
                             debugAidsAppendix=False, gaugeOptAppendix=False,
                             pixelPlotAppendix=False, whackamoleAppendix=False,
-                            m=0, M=10, tips=False, verbosity=0):
+                            m=0, M=10, tips=False, verbosity=0, comm=None):
         """
         Create a "full" GST report.  This report is the most detailed of any of
         the GST reports, and includes background and explanation text to help
@@ -1242,12 +1245,17 @@ class Results(object):
         verbosity : int, optional
            How much detail to send to stdout.
 
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
         Returns
         -------
         None
         """
         assert(self._bEssentialResultsSet)
         self.confidence_level = confidenceLevel 
+        self._comm = comm
           #set "current" level, used by ResultCache member dictionaries
 
         if tips:
@@ -1673,7 +1681,8 @@ class Results(object):
 
     def create_brief_report_pdf(self, confidenceLevel=None, 
                            filename="auto", title="auto", datasetLabel="auto",
-                           suffix="", m=0, M=10, tips=False, verbosity=0):
+                           suffix="", m=0, M=10, tips=False, verbosity=0,
+                           comm=None):
         """
         Create a "brief" GST report.  This report is collects what are typically
         the most relevant tables and plots from the "full" report and presents
@@ -1721,12 +1730,17 @@ class Results(object):
         verbosity : int, optional
            How much detail to send to stdout.
 
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
         Returns
         -------
         None
         """
         assert(self._bEssentialResultsSet)
         self.confidence_level = confidenceLevel 
+        self._comm = comm
         v = verbosity # shorthand
 
         if tips:
@@ -1944,7 +1958,7 @@ class Results(object):
                               title="auto", datasetLabel="auto", suffix="",
                               debugAidsAppendix=False, 
                               pixelPlotAppendix=False, whackamoleAppendix=False,
-                              m=0, M=10, verbosity=0):
+                              m=0, M=10, verbosity=0, comm=None):
         """
         Create a GST presentation (i.e. slides) using the beamer latex package.
 
@@ -2004,12 +2018,18 @@ class Results(object):
         verbosity : int, optional
            How much detail to send to stdout.
 
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
+
         Returns
         -------
         None
         """
         assert(self._bEssentialResultsSet)
         self.confidence_level = confidenceLevel 
+        self._comm = comm
         v = verbosity # shorthand
 
         #Currently, no tooltip option for presentations
@@ -2372,7 +2392,7 @@ class Results(object):
                             title="auto", datasetLabel="auto", suffix="",
                             debugAidsAppendix=False,
                             pixelPlotAppendix=False, whackamoleAppendix=False,
-                            m=0, M=10, verbosity=0, pptTables=False):
+                            m=0, M=10, verbosity=0, pptTables=False, comm=None):
         """
         Create a GST Microsoft Powerpoint presentation.
 
@@ -2442,6 +2462,11 @@ class Results(object):
            are used when False).  This option can be useful when you want to
            modify or extract a part of a table.
 
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
+
         Returns
         -------
         None
@@ -2449,6 +2474,7 @@ class Results(object):
 
         assert(self._bEssentialResultsSet)
         self.confidence_level = confidenceLevel 
+        self._comm = comm
         v = verbosity # shorthand
 
         #Currently, no tooltip option for presentations

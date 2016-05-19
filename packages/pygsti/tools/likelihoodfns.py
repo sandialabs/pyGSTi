@@ -624,8 +624,12 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
 
     final_hessian = None #final computed quantity
 
-    #HERE - use comm to distribute over subtrees and/or columns...
-    # if "by column", parallelize over columns
+    #Note - we could in the future use comm to distribute over
+    # subtrees here.  We currently don't because we parallelize
+    # over columns and it seems that in almost all cases of
+    # interest there will be more hessian columns than processors,
+    # so adding the additional ability to parallelize over 
+    # subtrees would just add unnecessary complication.
     
     #Loop over subtrees
     for iTree,evalSubTree in enumerate(evalTree.get_sub_trees()):
@@ -653,7 +657,8 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
             #TODO: call GateSet routine directly
             gateset.bulk_fill_hprobs(hprobs, spam_lbl_rows, evalSubTree, 
                                      prMxToFill=probs, derivMxToFill=dprobs, 
-                                     clipTo=probClipInterval, check=check)
+                                     clipTo=probClipInterval, check=check,
+                                     comm=comm)
 
             pos_probs = _np.where(probs < min_p, min_p, probs)
             dprobs12 = dprobs[:,:,:,None] * dprobs[:,:,None,:] # (K,M,N,1) * (K,M,1,N) = (K,M,N,N)
@@ -664,30 +669,57 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
 
             #compute pos_probs separately
             gateset.bulk_fill_probs(probs, spam_lbl_rows, evalSubTree,
-                                    clipTo=probClipInterval, check=check)
+                                    clipTo=probClipInterval, check=check,
+                                    comm=comm)
             pos_probs = _np.where(probs < min_p, min_p, probs)
 
             k = 0 #DEBUG
+
+
+            #perform parallelization over columns
+            if comm is None:
+                nprocs, rank = 1, 0
+            else:
+                nprocs = comm.Get_size()
+                rank = comm.Get_rank()
+
+            nCols = gateset.num_params()
+            if nprocs > nCols:
+                raise ValueError("Too many (>%d) processors!" % nCols)
+            loc_iCols = range(rank,nCols,nprocs)
             
             #  iterate over columns of hessian via bulk_hprobs_by_column
             assert(not evalSubTree.is_split()) #sub trees should not be split further
-            hessian_cols = [] # holds columns for this subtree
+            loc_hessian_cols = [] # holds columns for this subtree (for this processor)
             for hprobs, dprobs12 in gateset._calc().bulk_hprobs_by_column(
                 spam_lbl_rows, evalSubTree, True, clipTo=probClipInterval,
-                check=check, wrtFilter=None):
+                check=check, wrtFilter=loc_iCols):
 
                 #DEBUG
-                #print "DEBUG: %gs: column %d/%d, sub-tree %d/%d, sub-tree-len = %d" \
-                #    % (_time.time()-tStart,k,gateset.num_params(),iTree,
-                #       len(evalTree.get_sub_trees()), len(evalSubTree))
-                #sys.stdout.flush(); k += 1
+                print "DEBUG: rank%d: %gs: column %d/%d, sub-tree %d/%d, sub-tree-len = %d" \
+                    % (rank,_time.time()-tStart,k,len(loc_iCols),iTree,
+                       len(evalTree.get_sub_trees()), len(evalSubTree))
+                sys.stdout.flush(); k += 1
 
                 hessian_col = hessian_from_hprobs(hprobs, dprobs12, cntVecMx, totalCntVec, pos_probs)    
-                hessian_cols.append(hessian_col)
-                  #add current hessian column to list to be concatenated
+                loc_hessian_cols.append(hessian_col)
+                  #add current hessian column to list of columns on this proc
 
-            subtree_hessian = _np.concatenate(hessian_cols, axis=1)
+            #gather columns for this subtree (from all processors)
+            if comm is None:
+                proc_hessian_cols = [ loc_hessian_cols ]
+            else:
+                proc_hessian_cols = comm.allgather(loc_hessian_cols)
+            proc_nCols = map(len,proc_hessian_cols) # num cols on each proc
+
+            #Untangle interleaved column ordering and concatenate
+            max_loc_cols = max(proc_nCols) #max. cols computed on a single proc
+            to_concat = [ proc_hessian_cols[rank][k] for k in range(max_loc_cols) \
+                              for rank in range(nprocs) if proc_nCols[rank] > k  ]
+            subtree_hessian = _np.concatenate(to_concat, axis=1)
               #same shape as final hessian, but only contribs from this subtree
+
+            #OLD: subtree_hessian = _np.concatenate(hessian_cols, axis=1)
 
         #Add sub-tree contribution to final hessian
         if final_hessian is None:

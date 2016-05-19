@@ -2514,9 +2514,9 @@ class GateSetCalculator(object):
             finalIndxList = evalSubTree.get_list_of_final_value_tree_indices()
 
             #Fill cache info (not requiring column distribution)
-            prodCache, scaleCache = self._compute_product_cache(evalSubTree, comm)
+            prodCache, scaleCache = self._compute_product_cache(evalSubTree, mySubComm)
             dProdCache = self._compute_dproduct_cache(evalSubTree, prodCache, scaleCache,
-                                                      comm, None) #wrtFilter *not* for 1st derivs
+                                                      mySubComm, None) #wrtFilter *not* for 1st derivs
 
             #use cached data to final values
             scaleVals = self._scaleExp( scaleCache.take( finalIndxList ) )
@@ -2540,7 +2540,7 @@ class GateSetCalculator(object):
                 #Fill hessian cache info
                 gatesFilter = wrtFilters['gates'] if (wrtFilters is not None) else None
                 hProdCache = self._compute_hproduct_cache(evalSubTree, prodCache, dProdCache,
-                                                          scaleCache, comm, gatesFilter)
+                                                          scaleCache, mySubComm, gatesFilter)
                 hGs = hProdCache.take( finalIndxList, axis=0 ) 
                    #( nGateStrings, nGateDerivCols, len(wrtFilter), dim, dim )
 
@@ -2582,7 +2582,7 @@ class GateSetCalculator(object):
                 blk_results = []
                 for iBlk in myBlkIndices:
                     hProdCache = self._compute_hproduct_cache(evalSubTree, prodCache, dProdCache,
-                                                              scaleCache, comm, blocks[iBlk])
+                                                              scaleCache, blkComm, blocks[iBlk])
                     hGs = hProdCache.take( finalIndxList, axis=0 ) 
                     hG_results = self._compute_sub_result(
                         spam_label_rows, lambda sl: calc_vhp_from_spamlabel(sl,blocks[iBlk]))
