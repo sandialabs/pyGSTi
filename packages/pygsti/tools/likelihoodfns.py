@@ -678,9 +678,9 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
 
                 #DEBUG
                 #print "DEBUG: %gs: column %d/%d, sub-tree %d/%d, sub-tree-len = %d" \
-                    % (_time.time()-tStart,k,gateset.num_params(),iTree,
-                       len(evalTree.get_sub_trees()), len(evalSubTree))
-                sys.stdout.flush(); k += 1
+                #    % (_time.time()-tStart,k,gateset.num_params(),iTree,
+                #       len(evalTree.get_sub_trees()), len(evalSubTree))
+                #sys.stdout.flush(); k += 1
 
                 hessian_col = hessian_from_hprobs(hprobs, dprobs12, cntVecMx, totalCntVec, pos_probs)    
                 hessian_cols.append(hessian_col)
