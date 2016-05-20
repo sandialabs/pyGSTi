@@ -2875,7 +2875,7 @@ class GateSetCalculator(object):
 
 
     def frobeniusdist(self, otherCalc, transformMx=None,
-                      gateWeight=1.0, spamWeight=1.0, normalize=True):
+                      gateWeight=1.0, spamWeight=1.0, normalize=True,indGateWeightD = None):
         """
         Compute the weighted frobenius norm of the difference between two
         gatesets.  Differences in each corresponding gate matrix and spam
@@ -2913,7 +2913,12 @@ class GateSetCalculator(object):
         """
         d = 0; T = transformMx
         nSummands = 0.0
+        if indGateWeightD == None:
+            indGateWeightD = {gateLabel:1.0 for gateLabel in self.gates}
+#        else:
+#            print indGateWeightD
         if T is not None:
+#            print "Here!"
             Ti = _nla.inv(T)
             for gateLabel in self.gates:
                 d += gateWeight * _gt.frobeniusdist2(_np.dot(
@@ -2938,8 +2943,10 @@ class GateSetCalculator(object):
 
         else:
             for gateLabel in self.gates:
-                d += gateWeight * _gt.frobeniusdist2(self.gates[gateLabel],
+#                print gateLabel, indGateWeightD[gateLabel]
+                d += indGateWeightD[gateLabel] * gateWeight * _gt.frobeniusdist2(self.gates[gateLabel],
                                                      otherCalc.gates[gateLabel])
+#                nSummands += indGateWeightD[gateLabel] * gateWeight * _np.size(self.gates[gateLabel])
                 nSummands += gateWeight * _np.size(self.gates[gateLabel])
 
             for (lbl,rhoV) in self.preps.iteritems(): 

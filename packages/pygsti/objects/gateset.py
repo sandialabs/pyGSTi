@@ -1786,7 +1786,7 @@ class GateSet(object):
 
 
     def frobeniusdist(self, otherGateSet, transformMx=None,
-                      gateWeight=1.0, spamWeight=1.0, normalize=True):
+                      gateWeight=1.0, spamWeight=1.0, normalize=True,indGateWeightD = None):
         """
         Compute the weighted frobenius norm of the difference between this
         gateset and otherGateSet.  Differences in each corresponding gate
@@ -1823,7 +1823,7 @@ class GateSet(object):
         float
         """
         return self._calc().frobeniusdist(otherGateSet._calc(), transformMx,
-                                          gateWeight, spamWeight, normalize)
+                                          gateWeight, spamWeight, normalize,indGateWeightD = indGateWeightD)
 
 
     def jtracedist(self, otherGateSet, transformMx=None):

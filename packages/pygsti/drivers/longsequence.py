@@ -25,7 +25,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                          gaugeOptToCPTP=False, gaugeOptRatio=0.001,
                          objective="logl", advancedOptions={}, lsgstLists=None,
                          truncScheme="whole germ powers", mxBasis="gm",
-                         comm=None):
+                         comm=None,indGateWeightD=None):
     """
     Perform end-to-end GST analysis using Ls and germs, with L as a maximum length.
 
@@ -199,17 +199,17 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         #TODO: instead contract to vSPAM? (this could do more than just alter the 1st element...)
         firstElIdentityVec = _np.zeros( (gate_dim,1) )
         firstElIdentityVec[0] = gate_dim**0.25 # first basis el is assumed = sqrt(gate_dim)-dimensional identity density matrix 
-        minPenalty, gaugeMx, gs_in_TP = _alg.optimize_gauge(gs_lgst, "TP",  returnAll=True, spamWeight=1.0, gateWeight=1.0, verbosity=3)
+        minPenalty, gaugeMx, gs_in_TP = _alg.optimize_gauge(gs_lgst, "TP",  returnAll=True, spamWeight=1.0, gateWeight=1.0, verbosity=3,indGateWeightD=indGateWeightD)
         if minPenalty > 0:
             gs_in_TP = _alg.contract(gs_in_TP, "TP")
             if minPenalty > 1e-5: 
                 _warnings.warn("Could not gauge optimize to TP (penalty=%g), so contracted LGST gateset to TP" % minPenalty)
 
-        gs_after_gauge_opt = _alg.optimize_gauge(gs_in_TP, "target", targetGateset=gs_target, constrainToTP=True, spamWeight=1.0, gateWeight=1.0)
+        gs_after_gauge_opt = _alg.optimize_gauge(gs_in_TP, "target", targetGateset=gs_target, constrainToTP=True, spamWeight=1.0, gateWeight=1.0,indGateWeightD=indGateWeightD)
         gs_after_gauge_opt.povm_identity = firstElIdentityVec # declare that this basis has the identity as its first element
 
     else: # no TP constraint
-        gs_after_gauge_opt = _alg.optimize_gauge(gs_lgst, "target", targetGateset=gs_target, spamWeight=1.0, gateWeight=1.0)
+        gs_after_gauge_opt = _alg.optimize_gauge(gs_lgst, "target", targetGateset=gs_target, spamWeight=1.0, gateWeight=1.0,indGateWeightD=indGateWeightD)
         #TODO: set identity vector, or leave as is, which assumes LGST had the right one and contraction doesn't change it ??
 
     #Advanced Options can specify further manipulation of LGST seed
@@ -262,7 +262,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     if gaugeOptToCPTP:
         print "\nGauge Optimizing to CPTP..."; _sys.stdout.flush()
         go_gs_lsgst_list = [_alg.optimize_gauge(
-                gs,'CPTP',constrainToTP=constrainToTP) for gs in gs_lsgst_list]
+                gs,'CPTP',constrainToTP=constrainToTP,indGateWeightD=indGateWeightD) for gs in gs_lsgst_list]
 
         tNxt = _time.time()
         times_list.append( ('Gauge opt to CPTP',tNxt-tRef) ); tRef=tNxt
@@ -275,13 +275,13 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
             go_gs_lsgst_list[i] = _alg.optimize_gauge(
                 gs,'target',targetGateset=gs_target,
                 constrainToTP=constrainToTP, constrainToCP=True,
-                gateWeight=1, spamWeight=gaugeOptRatio)
+                gateWeight=1, spamWeight=gaugeOptRatio,indGateWeightD=indGateWeightD)
             
         else: #otherwise just optimize to the target and forget about CPTP...
             go_gs_lsgst_list[i] = _alg.optimize_gauge(
                 gs,'target',targetGateset=gs_target,
                 constrainToTP=constrainToTP, 
-                gateWeight=1, spamWeight=gaugeOptRatio)
+                gateWeight=1, spamWeight=gaugeOptRatio,indGateWeightD=indGateWeightD)
 
     tNxt = _time.time()
     times_list.append( ('Gauge opt to target',tNxt-tRef) ); tRef=tNxt
