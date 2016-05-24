@@ -11,6 +11,7 @@ import math as _math
 import sys as _sys
 import scipy
 import os
+import pickle
 
 #def bool_list_to_ind_list(boolList):
 #    output = _np.array([])
@@ -227,7 +228,8 @@ def write_fixed_hamming_weight_code(n,k):
     assert type(n) is int
     assert type(k) is int
     code = 'import numpy as _np\n'
-    code += 'import scipy\n'
+    code += 'import scipy.special\n'
+    code += 'import pickle\n'
     code += 'bitVecMat = _np.zeros([scipy.special.binom('+str(n)+','+str(k)+'),'+str(n)+'])\n'
     code += 'counter = 0\n'
     code += 'for bit_loc_0 in range('+str(n)+'-'+str(k)+'+1):\n'
@@ -238,7 +240,10 @@ def write_fixed_hamming_weight_code(n,k):
         index_string += 'bit_loc_'+str(sub_k)+','
     index_string += ']]'
     code += (k)*'\t'+'bitVecMat[counter]'+index_string+'=1\n'
-    code += (k)*'\t'+'counter += 1'
+    code += (k)*'\t'+'counter += 1\n'
+    code += 'fiducialselection_temp_pkl = open("fiducialselection_temp_pkl.pkl","w")\n'
+    code += 'pickle.dump(bitVecMat,fiducialselection_temp_pkl)\n'
+    code += 'fiducialselection_temp_pkl.close()\n'
     return code
 
 def optimize_integer_fiducials_slack(gateset, fidList, 
@@ -397,12 +402,12 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         return score
 
     if not (fixedNum is None):
-        if not forceEmpty:
-            hammingWeight = fixedNum
-            numBits = len(fidList)
-        else:
+        if forceEmpty:
             hammingWeight = fixedNum - 1
             numBits = len(fidList) - 1
+        else:
+            hammingWeight = fixedNum
+            numBits = len(fidList)
         numFidLists = scipy.special.binom(numBits,hammingWeight)
         print "Output set is required to be of size", fixedNum
         print "Total number of fiducial sets to be checked is", numFidLists
@@ -413,10 +418,13 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         code_file = open('fiducialselection_temp_script.py','w')
         code_file.writelines(code)
         code_file.close()
-        import fiducialselection_temp_script
-        reload(fiducialselection_temp_script)#Need this line because this script (fiducialselection.py) may be run in an iPython notebook multiple times.
-        os.system('rm fiducialselection_temp_script.py')  
-        bitVecMat = fiducialselection_temp_script.bitVecMat
+        os.system('python fiducialselection_temp_script.py')
+#        import fiducialselection_temp_script
+#        reload(fiducialselection_temp_script)#Need this line because this script (fiducialselection.py) may be run in an iPython notebook multiple times.
+        bitVecMat = pickle.load(open('fiducialselection_temp_pkl.pkl','r'))   
+#        os.system('rm fiducialselection_temp_script.py')  
+#        os.system('rm fiducialselection_temp_pkl.pkl')  
+#        bitVecMat = fiducialselection_temp_script.bitVecMat
         if forceEmpty:
             bitVecMat = _np.concatenate((_np.array([[1]*numFidLists]).T,bitVecMat),axis=1)
         best_score = _np.inf
