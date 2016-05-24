@@ -221,9 +221,9 @@ def write_fixed_hamming_weight_code(n,k):
     Returns
     ----------
     code : str
-        A string that is to be written to disk, imported, then deleted.  The file contains
-        the array bitVecMat in its namespace; this is the array of binary vectors of a
-        fixed length n and fixed Hamming weight k. 
+        A string that is to be written to disk, run, then deleted.  When executed, the 
+        resulting file will write to disk (as a pickle object) the array bitVecMat;
+        this is the array of binary vectors of a fixed length n and fixed Hamming weight k. 
     """
     assert type(n) is int
     assert type(k) is int
@@ -419,12 +419,9 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         code_file.writelines(code)
         code_file.close()
         os.system('python fiducialselection_temp_script.py')
-#        import fiducialselection_temp_script
-#        reload(fiducialselection_temp_script)#Need this line because this script (fiducialselection.py) may be run in an iPython notebook multiple times.
         bitVecMat = pickle.load(open('fiducialselection_temp_pkl.pkl','r'))   
-#        os.system('rm fiducialselection_temp_script.py')  
-#        os.system('rm fiducialselection_temp_pkl.pkl')  
-#        bitVecMat = fiducialselection_temp_script.bitVecMat
+        os.system('rm fiducialselection_temp_script.py')  
+        os.system('rm fiducialselection_temp_pkl.pkl')  
         if forceEmpty:
             bitVecMat = _np.concatenate((_np.array([[1]*numFidLists]).T,bitVecMat),axis=1)
         best_score = _np.inf
