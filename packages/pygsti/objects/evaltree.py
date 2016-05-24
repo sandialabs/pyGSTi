@@ -337,20 +337,24 @@ class EvalTree(list):
         -------
         None
         """
-        if (maxSubTreeSize is not None and numSubTrees is not None) or \
-           (maxSubTreeSize is None and numSubTrees is None):
+        if (maxSubTreeSize is None and numSubTrees is None) or \
+           (maxSubTreeSize is not None and numSubTrees is not None):
             raise ValueError("Specify *either* maxSubTreeSize or numSubTrees")
+        if numSubTrees is not None and numSubTrees <= 0:
+            raise ValueError("EvalTree split() error: numSubTrees must be > 0!")
 
         #Don't split at all if it's unnecessary
-        if maxSubTreeSize is not None and len(self) < maxSubTreeSize: return 
-        if numSubTrees is not None and numSubTrees <= 1:
-            assert(numSubTrees == 1)
-            self.subTrees = [self.copy()]
-            self.subTrees[0].myFinalToParentFinalMap = \
-                range(len(self.finalList))
-            self.subTrees[0].parentIndexMap = \
-                range(len(self))
-            return
+        if maxSubTreeSize is None or len(self) < maxSubTreeSize:
+            if numSubTrees is None or numSubTrees == 1: return
+
+            ##Split into a *single* subtree: not needed anymore (used for "tier-ed" splitting)
+            #assert(numSubTrees == 1)
+            #self.subTrees = [self.copy()]
+            #self.subTrees[0].myFinalToParentFinalMap = \
+            #    range(len(self.finalList))
+            #self.subTrees[0].parentIndexMap = \
+            #    range(len(self))
+            #return
 
         self.subTrees = []
         subTreesFinalList = [None]*len(self.finalList)
@@ -364,10 +368,6 @@ class EvalTree(list):
 
         #   Part 2: determine whether we need to split/merge "single" trees
         if numSubTrees is not None:
-
-            #OLD
-            #start with first numSubTrees single item trees
-            #subTreeSetList = singleItemTreeSetList[0:numSubTrees]
 
             #Merges: find the best merges to perform if any are required
             if nSingleItemTrees > numSubTrees:
@@ -410,15 +410,6 @@ class EvalTree(list):
                     del indicesLeft[iMaxIntsct]
                         
                 assert(len(subTreeSetList) == numSubTrees)
-
-                #OLD
-                #for singleItemTreeSet in singleItemTreeSetList[numSubTrees:]:
-                #
-                #    #Merge this single-item-generated tree into the smallest
-                #    # existing tree
-                #    iToMergeInto = _np.argmin(map(len,subTreeSetList))
-                #    subTreeSetList[iToMergeInto] = \
-                #      subTreeSetList[iToMergeInto].union(singleItemTreeSet)
 
             #Splits: 
             else: 

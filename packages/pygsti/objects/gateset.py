@@ -1786,6 +1786,16 @@ class GateSet(object):
                                      clipTo, check, comm, None, wrtBlockSize)
 
 
+    def bulk_hprobs_by_column(self, spam_label_rows, evalTree,
+                              bReturnDProbs12=False,clipTo=None,
+                              check=False,comm=None, wrtFilter=None):
+        """ TODO: docstring """
+        return self._calc().bulk_hprobs_by_column(
+            spam_label_rows, evalTree, bReturnDProbs12,
+            clipTo, check,comm, wrtFilter)
+        
+
+
     def frobeniusdist(self, otherGateSet, transformMx=None,
                       gateWeight=1.0, spamWeight=1.0, normalize=True):
         """

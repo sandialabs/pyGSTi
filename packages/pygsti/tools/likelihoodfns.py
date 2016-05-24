@@ -691,7 +691,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
             #  iterate over columns of hessian via bulk_hprobs_by_column
             assert(not evalSubTree.is_split()) #sub trees should not be split further
             loc_hessian_cols = [] # holds columns for this subtree (for this processor)
-            for hprobs, dprobs12 in gateset._calc().bulk_hprobs_by_column(
+            for hprobs, dprobs12 in gateset.bulk_hprobs_by_column(
                 spam_lbl_rows, evalSubTree, True, clipTo=probClipInterval,
                 check=check, wrtFilter=loc_iCols):
 

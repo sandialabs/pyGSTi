@@ -989,30 +989,29 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
       print "Maximum eval sub-tree size = %d" % maxEvalSubTreeSize
 
   if maxEvalSubTreeSize is not None:
-    evTree.split(maxEvalSubTreeSize, None)
-    if verbosity > 2 and (comm is None or comm.Get_rank() == 0):
-      print "Memory limit has imposed a division of the evaluation tree:"
-      evTree.print_analysis()
-      #Note: do *not* split based on comm here, since any split that occurs
-      # here will be looped over in bulk_pr (which expects a split tree for
-      # the sole purpose of memory limiting)
+    evTree.split(maxEvalSubTreeSize, None) # split for memory
 
-  if distributeMethod == "gatestrings":
-    #Split tree at *2nd* level for MPI (1st level = for memory/"pr"-level)
-    if not evTree.is_split():
-      evTree.split(None,1) # for bulk_pr
-    assert(evTree.is_split())
+  #FUTURE: could use distributeMethod for memory distribution also via 
+  #  wrtBlockSize (even when comm is None)
+  if comm is not None:
+    nprocs = comm.Get_size()
+    if distributeMethod == "gatestrings":
+      if not evTree.is_split():
+        evTree.split(None,nprocs)
+      else:
+        assert(maxEvalSubTreeSize is not None)
+        if len(evTree.get_sub_trees()) < nprocs:
+          evTree.split(None,nprocs)
+          if any([ len(sub)>maxEvalSubTreeSize for sub in evTree.get_sub_trees()]):
+            evTree.split(maxEvalSubTreeSize, None) # fall back to split for memory
+    elif distributeMethod == "deriv":
+      pass #nothing more to do in this case
+    else:
+      raise ValueError("Invalid distribute method: %s" % distributeMethod)
 
-    if comm is not None:
-      for i,subTree in enumerate(evTree.get_sub_trees()):
-        subTree.split(None, comm.Get_size())
-        if verbosity > 2 and comm.Get_rank() == 0:
-          print "Division of sub-tree %d (size %d) for MPI:" % (i,len(subTree))
-          subTree.print_analysis()
-  elif distributeMethod == "deriv":
-    pass #nothing more to do in this case
-  else:
-    raise ValueError("Invalid distribute method: %s" % distributeMethod)
+  if verbosity > 2 and (comm is None or comm.Get_rank() == 0) and evTree.is_split():
+    print "Memory limit and/or MPI has imposed a division of the evaluation tree:"
+    evTree.print_analysis()
 
   #NOTE on chi^2 expressions:
   #in general case:   chi^2 = sum (p_i-f_i)^2/p_i  (for i summed over outcomes)
@@ -1598,7 +1597,8 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
                                       minProbClipForWeighting, probClipInterval,
                                       useFreqWeightedChiSq, regularizeFactor,
                                       verbosity, check, check_jacobian,
-                                      gatestringWeights, None, memLimit, comm)
+                                      gatestringWeights, None, memLimit, comm,
+                                      distributeMethod)
     if returnAll: 
       lsgstGatesets.append(lsgstGateset)
       minErrs.append(minErr)
@@ -1952,29 +1952,28 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
 
     if maxEvalSubTreeSize is not None:
       evTree.split(maxEvalSubTreeSize, None)
-      if verbosity > 2 and (comm is None or comm.Get_rank() == 0):
-        print "Memory limit has imposed a division of the evaluation tree:"
-        evTree.print_analysis()
-        #Note: do *not* split based on comm here, since any split that occurs
-        # here will be looped over in bulk_pr (which expects a split tree for
-        # the sole purpose of memory limiting)
   
-    if distributeMethod == "gatestrings":
-      #Split tree at *2nd* level for MPI (1st level = for memory/"pr"-level)
-      if not evTree.is_split():
-        evTree.split(None,1) # for bulk_pr
-      assert(evTree.is_split())
-  
-      if comm is not None:
-        for i,subTree in enumerate(evTree.get_sub_trees()):
-          subTree.split(None, comm.Get_size())
-          if verbosity > 2 and comm.Get_rank() == 0:
-            print "Division of sub-tree %d (size %d) for MPI:" %(i,len(subTree))
-            subTree.print_analysis()
-    elif distributeMethod == "deriv":
-      pass #nothing more to do in this case
-    else:
-      raise ValueError("Invalid distribute method: %s" % distributeMethod)
+    #FUTURE: could use distributeMethod for memory distribution also via 
+    #  wrtBlockSize (even when comm is None)
+    if comm is not None:
+      nprocs = comm.Get_size()
+      if distributeMethod == "gatestrings":
+        if not evTree.is_split():
+          evTree.split(None,nprocs)
+        else:
+          assert(maxEvalSubTreeSize is not None)
+          if len(evTree.get_sub_trees()) < nprocs:
+            evTree.split(None,nprocs)
+            if any([ len(sub)>maxEvalSubTreeSize for sub in evTree.get_sub_trees()]):
+              evTree.split(maxEvalSubTreeSize, None) # fall back to split for memory
+      elif distributeMethod == "deriv":
+        pass #nothing more to do in this case
+      else:
+        raise ValueError("Invalid distribute method: %s" % distributeMethod)
+
+    if verbosity > 2 and (comm is None or comm.Get_rank() == 0) and evTree.is_split():
+      print "Memory limit and/or MPI has imposed a division of the evaluation tree:"
+      evTree.print_analysis()
 
 
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
@@ -2342,7 +2341,8 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                                       maxiter, maxfev, tol, 0, minProbClip, 
                                       probClipInterval, useFreqWeightedChiSq,
                                       0, verbosity, check,
-                                      False, None, None, memLimit, comm) 
+                                      False, None, None, memLimit, comm,
+                                      distributeMethod) 
                           # Note maxLogL is really chi2 number here
     if times is not None:
       tNxt = _time.time(); 
