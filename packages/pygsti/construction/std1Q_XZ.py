@@ -4,7 +4,7 @@
 #    in the file "license.txt" in the top-level pyGSTi directory 
 #*****************************************************************
 """ 
-Variables for working with the a gatest containing X(pi/2) and Z(pi/2) gates.
+Variables for working with the a gate set containing X(pi/2) and Z(pi/2) gates.
 """
 
 import gatestringconstruction as _strc
@@ -29,7 +29,7 @@ measFiducials = _strc.gatestring_list([(),
                                                
 germs = _strc.gatestring_list( [('Gx',), ('Gz',), ('Gz','Gx','Gx'), ('Gz','Gz','Gx')] )
 
-#Construct a target gateset:  X(pi/2), Y(pi/2)
+#Construct a target gateset:  X(pi/2), Z(pi/2)
 gs_target = _setc.build_gateset([2],[('Q0',)], ['Gx','Gz'], 
                                 [ "X(pi/2,Q0)", "Z(pi/2,Q0)"],
                                 prepLabels=["rho0"], prepExpressions=["0"],
