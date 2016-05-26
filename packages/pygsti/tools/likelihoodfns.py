@@ -695,11 +695,11 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
                 spam_lbl_rows, evalSubTree, True, clipTo=probClipInterval,
                 check=check, wrtFilter=loc_iCols):
 
-                #DEBUG
-                print "DEBUG: rank%d: %gs: column %d/%d, sub-tree %d/%d, sub-tree-len = %d" \
-                    % (rank,_time.time()-tStart,k,len(loc_iCols),iTree,
-                       len(evalTree.get_sub_trees()), len(evalSubTree))
-                sys.stdout.flush(); k += 1
+                #DEBUG!!!
+                #print "DEBUG: rank%d: %gs: column %d/%d, sub-tree %d/%d, sub-tree-len = %d" \
+                #    % (rank,_time.time()-tStart,k,len(loc_iCols),iTree,
+                #       len(evalTree.get_sub_trees()), len(evalSubTree))
+                #sys.stdout.flush(); k += 1
 
                 hessian_col = hessian_from_hprobs(hprobs, dprobs12, cntVecMx, totalCntVec, pos_probs)    
                 loc_hessian_cols.append(hessian_col)

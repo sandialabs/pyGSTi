@@ -35,6 +35,7 @@ def latex(x, brackets=False):
         d = 0
         for l in x.shape:
             if l > 1: d += 1
+        x = _np.squeeze(x)
         if d == 0: return latex_value(x)
         if d == 1: return latex_vector(x, brackets=brackets)
         if d == 2: return latex_matrix(x, brackets=brackets)
@@ -161,6 +162,7 @@ def latex_value(el,ROUND=6,complexAsPolar=True):
     """
     # ROUND = digits to round values to
     TOL = 1e-9  #tolerance for printing zero values
+    PHIROUND = 1
     if el is None or el == _np.nan: return "--"
 
     def render(x):
@@ -169,7 +171,7 @@ def latex_value(el,ROUND=6,complexAsPolar=True):
         elif abs(x) < 1:
             s = "%.*f" % (ROUND,x)
         elif abs(x) <= 10**ROUND:
-            s = "%.*f" % (ROUND-int(_np.log10(abs(x))),x)  #round to get ROUND digits when x is < 1
+            s = "%.*f" % (ROUND-int(_np.log10(abs(x))),x)  #round to get ROUND digits when x is > 1
             #str(round(x,ROUND))  #OLD
         else:
             s = "%.0e" % x # one significant figure
@@ -194,7 +196,8 @@ def latex_value(el,ROUND=6,complexAsPolar=True):
             if abs(el.imag) > TOL:
                 if complexAsPolar:
                     r,phi = cmath.polar(el)
-                    ex = ("i%.1f" % phi) if phi >= 0 else ("-i%.1f" % -phi)
+                    ex = ("i%.*f" % (PHIROUND,phi)) if phi >= 0 \
+                        else ("-i%.*f" % (PHIROUND,-phi))
                     s = "%se^{%s}" % (render(r),ex)
                 else:
                     s = "%s%s%si" % (render(el.real),'+' if el.imag > 0 else '-', render(abs(el.imag)))

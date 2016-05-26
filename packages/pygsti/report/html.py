@@ -36,6 +36,7 @@ def html(x, brackets=False):
         d = 0
         for l in x.shape:
             if l > 1: d += 1
+        x = _np.squeeze(x)
         if d == 0: return html_value(x)
         if d == 1: return html_vector(x, brackets=brackets)
         if d == 2: return html_matrix(x, brackets=brackets)

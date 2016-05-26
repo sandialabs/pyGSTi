@@ -208,6 +208,9 @@ class TestReport(ReportTestCase):
         self.results_logL.create_presentation_pdf(filename="temp_test_files/slidesC.pdf", confidenceLevel=None,
                                                   debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False,
                                                   verbosity=2)
+        self.results_logL.create_general_report_pdf(filename="temp_test_files/general_reportC.pdf", confidenceLevel=None,
+                                                    verbosity=2)
+
         if self.have_python_pptx:
             self.results_logL.create_presentation_ppt(filename="temp_test_files/slidesC.ppt", confidenceLevel=None,
                                                       debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False,
@@ -217,6 +220,7 @@ class TestReport(ReportTestCase):
         self.checkFile("full_reportC.tex")
         self.checkFile("brief_reportC.tex")
         self.checkFile("slidesC.tex")
+        #self.checkFile("general_reportC.tex")
 
 
         self.results_logL.create_full_report_pdf(filename="temp_test_files/full_reportD.pdf", confidenceLevel=95,
@@ -227,6 +231,9 @@ class TestReport(ReportTestCase):
         self.results_logL.create_presentation_pdf(filename="temp_test_files/slidesD.pdf", confidenceLevel=95,
                                                   debugAidsAppendix=True, pixelPlotAppendix=True, whackamoleAppendix=True,
                                                   verbosity=2)
+        self.results_logL.create_general_report_pdf(filename="temp_test_files/general_reportD.pdf", confidenceLevel=95,
+                                                    verbosity=2, tips=True) #test tips here too
+
         if self.have_python_pptx:
             self.results_logL.create_presentation_ppt(filename="temp_test_files/slidesD.ppt", confidenceLevel=95,
                                                       debugAidsAppendix=True, pixelPlotAppendix=True, whackamoleAppendix=True,
@@ -237,6 +244,8 @@ class TestReport(ReportTestCase):
         self.checkFile("full_reportD_appendices.tex")
         self.checkFile("brief_reportD.tex")
         self.checkFile("slidesD.tex")
+        #self.checkFile("general_reportD.tex")
+
 
 
     def test_table_generation(self):

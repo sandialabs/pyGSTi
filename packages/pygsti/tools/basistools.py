@@ -342,6 +342,42 @@ def contract_to_std_direct_sum_mx(mxInStdBasis, dimOrBlockDims):
                 mx[i,j] = mxInStdBasis[fi,fj]
         
         return mx
+
+def hamiltonian_to_lindbladian(hamiltonian):
+    """
+    Construct the Lindbladian corresponding to a given Hamiltonian.
+
+    Mathematically, for a d-dimensional Hamiltonian matrix H, this
+    routine constructs the d^2-dimension Lindbladian matrix L whose
+    action is given by L(rho) = -1j*[ H, rho ], where square brackets
+    denote the commutator and rho is a density matrix.  L is returned
+    as a superoperator matrix that acts on a vectorized density matrices.
+
+    Parameters
+    ----------
+    hamiltonian : ndarray
+      The hamiltonian matrix used to construct the Lindbladian.
+
+    Returns
+    -------
+    ndarray
+    """
+    
+    #TODO: there's probably a fast & slick way to so this computation
+    #  using vectorization identities
+    assert(len(hamiltonian.shape) == 2)
+    assert(hamiltonian.shape[0] == hamiltonian.shape[1])
+    d = hamiltonian.shape[0]
+    lindbladian = _np.empty( (d**2,d**2), dtype=hamiltonian.dtype )
+    
+    for i,rho0 in enumerate(std_matrices(d)): #rho0 == input density mx
+        rho1 = -1j*(_np.dot(hamiltonian,rho0) - _np.dot(rho0,hamiltonian))
+        lindbladian[:,i] = rho1.flatten()
+          # vectorize rho1 & set as linbladian column
+
+    return lindbladian
+            
+    
     
 
 
@@ -602,7 +638,7 @@ def gm_to_std(mxInGellMannBasis, dimOrBlockDims=None):
 def pp_matrices(dim):
     """ 
     Get the elements of the Pauil-product basis
-    spanning the space of dim x dim density matricies
+    spanning the space of dim x dim density matrices
     (matrix-dimension dim, space dimension dim^2).
     
     The returned matrices are given in the standard basis of the 

@@ -34,7 +34,8 @@ def get_blank_table(formats):
     
 
 def get_gateset_spam_table(gateset, formats, tableclass, longtable, 
-                           confidenceRegionInfo=None, mxBasis="gm"):
+                           confidenceRegionInfo=None, mxBasis="gm",
+                           includeHSVec=True):
     """
     Create a table for gateset's SPAM vectors.
     
@@ -57,10 +58,14 @@ def get_gateset_spam_table(gateset, formats, tableclass, longtable,
         If not None, specifies a confidence-region
         used to display error intervals.
 
-    mxBasis : {'std', 'gm','pp'}
+    mxBasis : {'std', 'gm','pp'}, optional
         Which basis the gateset is represented in.  Allowed
         options are Matrix-unit (std), Gell-Mann (gm) and
         Pauli-product (pp).
+
+    includeHSVec : boolean, optional
+        Whether or not to include the Hilbert-Schmidt
+        vector representation column in the table.
 
     Returns
     -------
@@ -71,14 +76,25 @@ def get_gateset_spam_table(gateset, formats, tableclass, longtable,
     basisNm = _tools.basis_longname(mxBasis, gateset.get_dimension())
 
     if confidenceRegionInfo is None:
-        colHeadings = ('Operator','Hilbert-Schmidt vector (%s basis)' % basisNm,'Matrix')
-        formatters = (None,None,None)
+        if includeHSVec:
+            colHeadings = ('Operator','Hilbert-Schmidt vector (%s basis)' % basisNm,'Matrix')
+            formatters = (None,None,None)
+        else:
+            colHeadings = ('Operator','Matrix')
+            formatters = (None,None)
+
     else:
-        colHeadings = ('Operator',
-                       'Hilbert-Schmidt vector (%s basis)' % basisNm,
-                       '%g%% C.I. half-width' % confidenceRegionInfo.level,
-                       'Matrix')
-        formatters = (None,None,_tf.TxtCnv,None)
+        if includeHSVec:
+            colHeadings = ('Operator',
+                           'Hilbert-Schmidt vector (%s basis)' % basisNm,
+                           '%g%% C.I. half-width' % confidenceRegionInfo.level,
+                           'Matrix')
+            formatters = (None,None,_tf.TxtCnv,None)
+        else:
+            colHeadings = ('Operator',
+                           'Matrix')
+            formatters = (None,None)
+
 
     table = _ReportTable(formats, colHeadings, formatters,
                          tableclass, longtable)
@@ -88,13 +104,18 @@ def get_gateset_spam_table(gateset, formats, tableclass, longtable,
         elif mxBasis == "std": rhoMx = _tools.stdvec_to_stdmx(rhoVec)
         else: raise ValueError("Invalid basis specifier: %s" % mxBasis)
 
-        if confidenceRegionInfo is None:
-            table.addrow((lbl, rhoVec, rhoMx), (_tf.Rho,_tf.Nml,_tf.Brk))
+        if includeHSVec:
+            if confidenceRegionInfo is None:
+                table.addrow((lbl, rhoVec, rhoMx), (_tf.Rho,_tf.Nml,_tf.Brk))
+            else:
+                intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(lbl)[:,None]
+                if intervalVec.shape[0] == gateset.get_dimension()-1: #TP constrained, so pad with zero top row
+                    intervalVec = _np.concatenate( (_np.zeros((1,1),'d'),intervalVec), axis=0 )
+                table.addrow((lbl, rhoVec, intervalVec, rhoMx), (_tf.Rho,_tf.Nml,_tf.Nml,_tf.Brk))
         else:
-            intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(lbl)[:,None]
-            if intervalVec.shape[0] == gateset.get_dimension()-1: #TP constrained, so pad with zero top row
-                intervalVec = _np.concatenate( (_np.zeros((1,1),'d'),intervalVec), axis=0 )
-            table.addrow((lbl, rhoVec, intervalVec, rhoMx), (_tf.Rho,_tf.Nml,_tf.Nml,_tf.Brk))
+            #no dependence on confidence region (yet) when HS vector is not shown...
+            table.addrow((lbl, rhoMx), (_tf.Rho,_tf.Brk))
+
 
     for lbl,EVec in gateset.effects.iteritems():
         if mxBasis == "pp":    EMx = _tools.ppvec_to_stdmx(EVec)
@@ -102,11 +123,15 @@ def get_gateset_spam_table(gateset, formats, tableclass, longtable,
         elif mxBasis == "std": EMx = _tools.stdvec_to_stdmx(EVec)
         else: raise ValueError("Invalid basis specifier: %s" % mxBasis)
 
-        if confidenceRegionInfo is None:
-            table.addrow((lbl, EVec, EMx), (_tf.E,_tf.Nml,_tf.Brk))
+        if includeHSVec:
+            if confidenceRegionInfo is None:
+                table.addrow((lbl, EVec, EMx), (_tf.E,_tf.Nml,_tf.Brk))
+            else:
+                intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(lbl)[:,None]
+                table.addrow((lbl, EVec, intervalVec, EMx), (_tf.E,_tf.Nml,_tf.Nml,_tf.Brk))
         else:
-            intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(lbl)[:,None]
-            table.addrow((lbl, EVec, intervalVec, EMx), (_tf.E,_tf.Nml,_tf.Nml,_tf.Brk))
+            #no dependence on confidence region (yet) when HS vector is not shown...
+            table.addrow((lbl, EMx), (_tf.E,_tf.Brk))
             
     table.finish()
     return table
@@ -315,7 +340,8 @@ def get_unitary_gateset_gates_table(gateset, formats, tableclass, longtable,
 
 
 def get_gateset_choi_table(gateset, formats, tableclass, longtable,
-                           confidenceRegionInfo=None, mxBasis="gm"):
+                           confidenceRegionInfo=None, mxBasis="gm",
+                           includeChoiMx=True):
     """ 
     Create a table for the Choi matrices of a gateset's gates.
     
@@ -343,6 +369,11 @@ def get_gateset_choi_table(gateset, formats, tableclass, longtable,
         options are Matrix-unit (std), Gell-Mann (gm) and
         Pauli-product (pp).
 
+    includeChoiMx : boolean, optional
+        Whether or not to include the full Choi matrix 
+        column of the table.  It can be useful to *not*
+        show this column when the Choi matrix is very
+        large, e.g. for multiple qubits.
 
     Returns
     -------
@@ -351,29 +382,41 @@ def get_gateset_choi_table(gateset, formats, tableclass, longtable,
     """
     gateLabels = gateset.gates.keys()  # gate labels
 
-    qtys_to_compute = [ ('%s choi matrix' % gl) for gl in gateLabels ]
+    qtys_to_compute = []
     qtys_to_compute += [ ('%s choi eigenvalues' % gl) for gl in gateLabels ]
+    if includeChoiMx:
+        qtys_to_compute += [ ('%s choi matrix' % gl) for gl in gateLabels ]
+
     qtys = _cr.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo, mxBasis)
     basisNm = _tools.basis_longname(mxBasis, gateset.get_dimension())
     
-    if confidenceRegionInfo is None:
+    if includeChoiMx:
         colHeadings = ('Gate','Choi matrix (%s basis)' % basisNm,'Eigenvalues')
         formatters = (None,None,None)        
     else:
-        colHeadings = ('Gate','Choi matrix (%s basis)' % basisNm,'Eigenvalues') # 'Confidence Intervals',
-        formatters = (None,None,None)
+        colHeadings = ('Gate','Eigenvalues')
+        formatters = (None,None)        
 
     table = _ReportTable(formats, colHeadings, formatters,
                          tableclass, longtable)
 
     for gl in gateLabels:
-        choiMx,choiEB = qtys['%s choi matrix' % gl].get_value_and_err_bar()
         evals, evalsEB = qtys['%s choi eigenvalues' % gl].get_value_and_err_bar()
-    
-        if confidenceRegionInfo is None:
-            table.addrow((gl, choiMx, evals), (None, _tf.Brk, _tf.Nml))
+
+        if includeChoiMx:
+            choiMx,choiEB = qtys['%s choi matrix' % gl].get_value_and_err_bar()    
+            if confidenceRegionInfo is None:
+                table.addrow((gl, choiMx, evals), (None, _tf.Brk, _tf.Nml))
+            else:
+                table.addrow((gl, choiMx, (evals,evalsEB)), (None, _tf.Brk, _tf.EBvec))
+
         else:
-            table.addrow((gl, choiMx, (evals,evalsEB)), (None, _tf.Brk, _tf.EBvec))
+            evals = evals.reshape(evals.size/4, 4) #assumes len(evals) is multiple of 4!
+            if confidenceRegionInfo is None:
+                table.addrow((gl, evals), (None, _tf.Nml))
+            else:
+                evalsEB = evalsEB.reshape(evalsEB.size/4, 4)
+                table.addrow((gl, (evals,evalsEB)), (None, _tf.EBvec))
 
     table.finish()
     return table
@@ -612,7 +655,8 @@ def get_gateset_closest_unitary_table(gateset, formats, tableclass, longtable, c
     return table
 
 
-def get_gateset_decomp_table(gateset, formats, tableclass, longtable, confidenceRegionInfo=None):
+def get_gateset_decomp_table(gateset, formats, tableclass, longtable,
+                             confidenceRegionInfo=None, mxBasis="gm"):
     """ 
     Create table for decomposing a gateset's gates.
     
@@ -760,6 +804,82 @@ def get_gateset_rotn_axis_table(gateset, formats, tableclass, longtable,
             rowData = [gl, (rotnAngle,None)] + angles_btwn_rotn_axes
         else:
             rowData = [gl, (rotnAngle,decompEB.get('pi rotations','X'))] + angles_btwn_rotn_axes
+        table.addrow(rowData, formatters)
+
+    table.finish()
+    return table
+
+
+def get_gateset_eigenval_table(gateset, targetGateset, formats, tableclass,
+                               longtable, confidenceRegionInfo=None, mxBasis=None):
+    """ 
+    Create table for decomposing a gateset's gates.
+    
+    Parameters
+    ----------
+    gateset : GateSet
+        The GateSet
+
+    targetGateset : GateSet
+        The target gate set used to compute eigenvalues of
+        gate*inv(target_gate).
+
+    formats : list
+        List of formats to include in returned table. Allowed
+        formats are 'latex', 'html', 'py', and 'ppt'.
+
+    tableclass : string
+        CSS class to apply to the HTML table.
+
+    longtable : bool
+        Whether table should be a latex longtable or not.
+
+    confidenceRegionInfo : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+
+    mxBasis : {'std', 'gm','pp'}
+        Which basis the gateset is represented in.  Allowed
+        options are Matrix-unit (std), Gell-Mann (gm) and
+        Pauli-product (pp).
+
+    Returns
+    -------
+    ReportTable
+        Table object containing the requested formats (e.g. 'latex').
+    """
+    gateLabels = gateset.gates.keys()  # gate labels
+    colHeadings = ('Gate','Eigenvalues','Relative Evals') # ,'Hamiltonian'
+    formatters = [None]*3
+
+    qtyNames = ('eigenvalues',)
+    qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames for gl in gateLabels ]
+    qtys = _cr.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo)
+
+    qtyNames2 = ('relative eigenvalues',)
+    qtys_to_compute2 = [ '%s %s' % (gl,qty) for qty in qtyNames2 for gl in gateLabels ]
+    qtys2 = _cr.compute_gateset_gateset_qtys(qtys_to_compute2, gateset, targetGateset,
+                                            confidenceRegionInfo, mxBasis)
+
+    table = _ReportTable(formats, colHeadings, formatters,
+                         tableclass, longtable)
+
+    formatters = (None, _tf.EBvec, _tf.EBvec)
+
+    for gl in gateLabels:
+        if confidenceRegionInfo is None:
+            evals = qtys['%s eigenvalues' % gl].get_value()
+            rel_evals = qtys2['%s relative eigenvalues' % gl].get_value()
+            evals = evals.reshape(evals.size/2, 2) #assumes len(evals) is even!
+            rel_evals = rel_evals.reshape(rel_evals.size/2, 2)
+            rowData = [gl, (evals,None), (rel_evals,None)]
+        else:
+            evals, evalsEB = qtys['%s eigenvalues' % gl].get_value_and_err_bar()
+            rel_evals, rel_evalsEB = qtys2['%s relative eigenvalues' % gl].get_value_and_err_bar()
+            evals = evals.reshape(evals.size/2, 2) #assumes len(evals) is even!
+            rel_evals = rel_evals.reshape(rel_evals.size/2, 2)
+            rowData = [gl, (evals,evalsEB), (rel_evals,rel_evalsEB)]
+
         table.addrow(rowData, formatters)
 
     table.finish()
@@ -956,9 +1076,9 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, t
     return table
     
 
-def get_gatestring_table(gsList, title, formats, tableclass, longtable):
+def get_gatestring_table(gsList, title, formats, tableclass, longtable, nCols=1):
     """ 
-    Creates a 2-column table enumerating a list of gate strings.
+    Creates a 2*nCols-column table enumerating a list of gate strings.
     
     Parameters
     ----------
@@ -978,19 +1098,30 @@ def get_gatestring_table(gsList, title, formats, tableclass, longtable):
     longtable : bool
         Whether table should be a latex longtable or not.
 
+    nCols : int, optional
+        The number of *data* columns, i.e. those containing
+        gate strings.  Actual number of columns is twice this
+        due to columns containing enumeration indices.
+
     Returns
     -------
     ReportTable
         Table object containing the requested formats (e.g. 'latex').
     """
-    colHeadings = ('#',title)
-    formatters = (_tf.TxtCnv,_tf.Nml)
+    colHeadings = ('#',title)*nCols
+    formatters = (_tf.TxtCnv,_tf.Nml)*nCols
 
     table = _ReportTable(formats, colHeadings, formatters,
                          tableclass, longtable)
-
-    for i,gstr in enumerate(gsList,start=1):
-        table.addrow((i, gstr), (_tf.Nml,_tf.GStr) )
+    nRows = (len(gsList)+(nCols-1)) // nCols
+    
+    for i in range(nRows):
+        formatters = (_tf.Nml,_tf.GStr)*nCols
+        rowdata = []
+        for k in range(nCols):
+            l = i+nRows*k #index of gatestring
+            rowdata.extend( [l+1, gsList[l] if l<len(gsList) else "" ] )
+        table.addrow(rowdata, formatters)
 
     table.finish()
     return table
