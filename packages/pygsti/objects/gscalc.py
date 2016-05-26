@@ -1090,7 +1090,7 @@ class GateSetCalculator(object):
         from using a split tree.
         """
 
-        #TODO: tailor this function for use only within this function and other cache functions?
+        #LATER: tailor this function for use only within this function and other cache functions
         def gather_subtree_results(evt, gIndex_owners, my_gIndices,
                                    my_results, result_index, per_string_dim, comm):
             #Doesn't need to be a member function: TODO - move to 
@@ -1493,7 +1493,8 @@ class GateSetCalculator(object):
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.
+           across multiple processors.  This is done over gate strings when a
+           *split* evalTree is given, otherwise no parallelization is performed.
               
         Returns
         -------
@@ -1552,7 +1553,10 @@ class GateSetCalculator(object):
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.
+           across multiple processors.  Distribution is first done over the
+           set of parameters being differentiated with respect to.  If there are
+           more processors than gateset parameters, distribution over a split
+           evalTree (if given) is possible.
 
         wrtFilter : list of ints, optional
           If not None, a list of integers specifying which gate parameters
@@ -1658,7 +1662,7 @@ class GateSetCalculator(object):
                       bScale=False, comm=None, wrtFilter=None):
         
         """
-        Return the Hessian of a many gate strings at once.
+        Return the Hessian of many gate string products at once.
 
         Parameters
         ----------
@@ -1678,7 +1682,11 @@ class GateSetCalculator(object):
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.
+           across multiple processors.  Distribution is first done over the
+           set of parameters being differentiated with respect to when the
+           *second* derivative is taken.  If there are more processors than
+           gateset parameters, distribution over a split evalTree (if given)
+           is possible.
 
         wrtFilter : list of ints, optional
           If not None, a list of integers specifying which gate parameters
@@ -2179,7 +2187,8 @@ class GateSetCalculator(object):
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.
+           across multiple processors.  Distribution is performed over
+           subtrees of evalTree (if it is split).
 
         Returns
         -------
@@ -2281,19 +2290,24 @@ class GateSetCalculator(object):
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.
+           across multiple processors.  Distribution is first performed over
+           subtrees of evalTree (if it is split), and then over blocks (subsets)
+           of the parameters being differentiated with respect to (see 
+           wrtBlockSize).
 
         wrtFilter : list of ints, optional
           If not None, a list of integers specifying which parameters
           to include in the derivative dimension. This argument is used
-          internally for distributing calculations across
-          multiple processors and to control memory usage.
+          internally for distributing calculations across multiple 
+          processors and to control memory usage.  Cannot be specified
+          in conjuction with wrtBlockSize.
 
         wrtBlockSize : int, optional
           The maximum number of derivative columns to compute *products*
           for simultaneously.  None means compute all requested columns
-          (may be less than all if wrtFilter is not None) at once.  This
-          argument must be None if wrtFilter is not None.  Set this to
+          at once.  The  minimum of wrtBlockSize and the size that makes
+          maximal use of available processors is used as the final block size.
+          This argument must be None if wrtFilter is not None.  Set this to
           non-None to reduce amount of intermediate memory required.
 
         Returns
@@ -2350,11 +2364,14 @@ class GateSetCalculator(object):
                 return vp,vdp
 
             #Set wrtBlockSize to use available processors if it isn't specified
-            if (wrtBlockSize is None) and (wrtFilter is None) and \
-                    (mySubComm is not None) and (mySubComm.Get_size() > 1):
-                blkSize = self.tot_gate_params // mySubComm.Get_size()
+            if wrtFilter is None:
+                blkSize = wrtBlockSize #could be None
+                if (mySubComm is not None) and (mySubComm.Get_size() > 1):
+                    comm_blkSize = self.tot_gate_params // mySubComm.Get_size()
+                    blkSize = comm_blkSize if (blkSize is None) \
+                        else min(comm_blkSize, blkSize) #override with smaller comm_blkSize
             else:
-                blkSize = wrtBlockSize 
+                blkSize = None # wrtFilter dictates block
 
 
             if blkSize is None:
@@ -2438,29 +2455,49 @@ class GateSetCalculator(object):
     def bulk_fill_hprobs(self, mxToFill, spam_label_rows, evalTree, 
                          prMxToFill=None, derivMxToFill=None, clipTo=None,
                          check=False,comm=None, wrtFilter=None, wrtBlockSize=None):
+
         """
-        Compute the derivatives of the probabilities generated by a each gate 
-        sequence given by evalTree, where initialization & measurement 
-        operations are always the same and are together specified by spamLabel.
+        Identical to bulk_hprobs(...) except results are 
+        placed into rows of a pre-allocated array instead
+        of being returned in a dictionary.
+
+        Specifically, the probability hessians for all gate
+        strings and a given SPAM label are placed into 
+        mxToFill[ spam_label_rows[spamLabel] ].  
+        Optionally, probabilities and/or derivatives can be placed into 
+        prMxToFill[ spam_label_rows[spamLabel] ] and
+        derivMxToFill[ spam_label_rows[spamLabel] ] respectively.
 
         Parameters
         ----------
-        spamLabel : string
-          the label specifying the state prep and measure operations
-                   
+        mxToFill : numpy array
+          an already-allocated KxSxMxM numpy array, where K is larger
+          than the maximum value in spam_label_rows, S is equal
+          to the number of gate strings (i.e. evalTree.num_final_strings()),
+          and M is the length of the vectorized gateset.
+
+        spam_label_rows : dictionary
+          a dictionary with keys == spam labels and values which 
+          are integer row indices into mxToFill, specifying the
+          correspondence between rows of mxToFill and spam labels.
+
         evalTree : EvalTree
-          given by a prior call to bulk_evaltree.  Specifies the gate strings
-          to compute the bulk operation on.
+           given by a prior call to bulk_evaltree.  Specifies the gate strings
+           to compute the bulk operation on.
 
-        returnPr : bool, optional
-          when set to True, additionally return the probabilities.
+        prMxToFill : numpy array, optional
+          when not None, an already-allocated KxS numpy array that is filled
+          with the probabilities as per spam_label_rows, similar to
+          bulk_fill_probs(...).
 
-        returnDeriv : bool, optional
-          when set to True, additionally return the probability derivatives.
+        derivMxToFill : numpy array, optional
+          when not None, an already-allocated KxSxM numpy array that is filled
+          with the probability derivatives as per spam_label_rows, similar to
+          bulk_fill_dprobs(...).
 
-        clipTo : 2-tuple, optional
+        clipTo : 2-tuple
           (min,max) to clip returned probability to if not None.
-          Only relevant when returnPr == True.
+          Only relevant when prMxToFill is not None.
            
         check : boolean, optional
           If True, perform extra checks within code to verify correctness,
@@ -2469,41 +2506,23 @@ class GateSetCalculator(object):
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.
-
-        wrtFilter : list of ints, optional
-          If not None, a list of integers specifying which parameters
-          to include in the *2nd* derivative dimension. This argument
-          is used internally for distributing calculations across
-          multiple processors and to control memory usage.
+           across multiple processors.  Distribution is first performed over
+           subtrees of evalTree (if it is split), and then over blocks (subsets)
+           of the parameters being differentiated with respect to (see 
+           wrtBlockSize).
 
         wrtBlockSize : int, optional
           The maximum number of *2nd* derivative columns to compute *products*
           for simultaneously.  None means compute all requested columns
-          (may be less than all if wrtFilter is not None) at once.  This
-          argument must be None if wrtFilter is not None.  Set this to
+          at once.  The  minimum of wrtBlockSize and the size that makes
+          maximal use of available processors is used as the final block size.
+          This argument must be None if wrtFilter is not None.  Set this to
           non-None to reduce amount of intermediate memory required.
 
 
         Returns
         -------
-        hessians : numpy array
-            a S x M x M array, where 
-
-            - S == the number of gate strings
-            - M == the length of the vectorized gateset
-
-            and hessians[i,j,k] is the derivative of the i-th probability
-            w.r.t. the k-th then the j-th gateset parameter.
-
-        derivs : numpy array
-            only returned if returnDeriv == True. A S x M array where
-            derivs[i,j] holds the derivative of the i-th probability
-            w.r.t. the j-th gateset parameter.
-
-        probabilities : numpy array
-            only returned if returnPr == True.  A length-S array 
-            containing the probabilities for each gate string.
+        None
         """
         remainder_row_index = None
         for spamLabel,rowIndex in spam_label_rows.iteritems():
@@ -2559,12 +2578,14 @@ class GateSetCalculator(object):
                 return vp, vdp, vhp
 
             #Set wrtBlockSize to use available processors if it isn't specified
-            if (wrtBlockSize is None) and (wrtFilter is None) and \
-                    (mySubComm is not None) and (mySubComm.Get_size() > 1):
-                blkSize = self.tot_gate_params // mySubComm.Get_size()
+            if wrtFilter is None:
+                blkSize = wrtBlockSize #could be None
+                if (mySubComm is not None) and (mySubComm.Get_size() > 1):
+                    comm_blkSize = self.tot_gate_params // mySubComm.Get_size()
+                    blkSize = comm_blkSize if (blkSize is None) \
+                        else min(comm_blkSize, blkSize) #override with smaller comm_blkSize
             else:
-                blkSize = wrtBlockSize 
-
+                blkSize = None # wrtFilter dictates block
 
             if blkSize is None:
                 #Fill hessian cache info
@@ -2674,7 +2695,8 @@ class GateSetCalculator(object):
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.
+           across multiple processors.  Distribution is performed over
+           subtrees of evalTree (if it is split).
 
            
         Returns
@@ -2763,19 +2785,24 @@ class GateSetCalculator(object):
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.
+           across multiple processors.  Distribution is first performed over
+           subtrees of evalTree (if it is split), and then over blocks (subsets)
+           of the parameters being differentiated with respect to (see 
+           wrtBlockSize).
 
         wrtFilter : list of ints, optional
           If not None, a list of integers specifying which parameters
           to include in the derivative dimension. This argument is used
-          internally for distributing calculations across
-          multiple processors and to control memory usage.
+          internally for distributing calculations across multiple 
+          processors and to control memory usage.  Cannot be specified
+          in conjuction with wrtBlockSize.
 
         wrtBlockSize : int, optional
           The maximum number of derivative columns to compute *products*
           for simultaneously.  None means compute all requested columns
-          (may be less than all if wrtFilter is not None) at once.  This
-          argument must be None if wrtFilter is not None.  Set this to
+          at once.  The  minimum of wrtBlockSize and the size that makes
+          maximal use of available processors is used as the final block size.
+          This argument must be None if wrtFilter is not None.  Set this to
           non-None to reduce amount of intermediate memory required.
 
         Returns
@@ -2836,19 +2863,24 @@ class GateSetCalculator(object):
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.
+           across multiple processors.  Distribution is first performed over
+           subtrees of evalTree (if it is split), and then over blocks (subsets)
+           of the parameters being differentiated with respect to (see 
+           wrtBlockSize).
 
         wrtFilter : list of ints, optional
           If not None, a list of integers specifying which parameters
           to include in the derivative dimension. This argument is used
-          internally for distributing calculations across
-          multiple processors and to control memory usage.
+          internally for distributing calculations across multiple 
+          processors and to control memory usage.  Cannot be specified
+          in conjuction with wrtBlockSize.
 
         wrtBlockSize : int, optional
           The maximum number of derivative columns to compute *products*
           for simultaneously.  None means compute all requested columns
-          (may be less than all if wrtFilter is not None) at once.  This
-          argument must be None if wrtFilter is not None.  Set this to
+          at once.  The  minimum of wrtBlockSize and the size that makes
+          maximal use of available processors is used as the final block size.
+          This argument must be None if wrtFilter is not None.  Set this to
           non-None to reduce amount of intermediate memory required.
 
 
@@ -2889,7 +2921,7 @@ class GateSetCalculator(object):
                  wrtFilter=None, wrtBlockSize=None):
 
         """
-        Compute the derivatives of the probabilities generated by a each gate 
+        Compute the 2nd derivatives of the probabilities generated by a each gate 
         sequence given by evalTree, where initialization & measurement 
         operations are always the same and are together specified by spamLabel.
 
@@ -2919,19 +2951,24 @@ class GateSetCalculator(object):
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.
+           across multiple processors.  Distribution is first performed over
+           subtrees of evalTree (if it is split), and then over blocks (subsets)
+           of the parameters being differentiated with respect to (see 
+           wrtBlockSize).
 
         wrtFilter : list of ints, optional
           If not None, a list of integers specifying which parameters
           to include in the *2nd* derivative dimension. This argument
-          is used internally for distributing calculations across
-          multiple processors and to control memory usage.
+          is used internally for distributing calculations across multiple
+          processors and to control memory usage.  Cannot be specified
+          in conjuction with wrtBlockSize.
 
         wrtBlockSize : int, optional
           The maximum number of *2nd* derivative columns to compute *products*
           for simultaneously.  None means compute all requested columns
-          (may be less than all if wrtFilter is not None) at once.  This
-          argument must be None if wrtFilter is not None.  Set this to
+          at once.  The  minimum of wrtBlockSize and the size that makes
+          maximal use of available processors is used as the final block size.
+          This argument must be None if wrtFilter is not None.  Set this to
           non-None to reduce amount of intermediate memory required.
 
 
@@ -3007,19 +3044,24 @@ class GateSetCalculator(object):
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.
+           across multiple processors.  Distribution is first performed over
+           subtrees of evalTree (if it is split), and then over blocks (subsets)
+           of the parameters being differentiated with respect to (see 
+           wrtBlockSize).
 
         wrtFilter : list of ints, optional
           If not None, a list of integers specifying which parameters
           to include in the *2nd* derivative dimension. This argument
-          is used internally for distributing calculations across
-          multiple processors and to control memory usage.
+          is used internally for distributing calculations across multiple
+          processors and to control memory usage.  Cannot be specified
+          in conjuction with wrtBlockSize.
 
         wrtBlockSize : int, optional
           The maximum number of *2nd* derivative columns to compute *products*
           for simultaneously.  None means compute all requested columns
-          (may be less than all if wrtFilter is not None) at once.  This
-          argument must be None if wrtFilter is not None.  Set this to
+          at once.  The  minimum of wrtBlockSize and the size that makes
+          maximal use of available processors is used as the final block size.
+          This argument must be None if wrtFilter is not None.  Set this to
           non-None to reduce amount of intermediate memory required.
 
 
@@ -3061,66 +3103,60 @@ class GateSetCalculator(object):
 
 
     def bulk_hprobs_by_column(self, spam_label_rows, evalTree,
-                              bReturnDProbs12=False,clipTo=None,
-                              check=False,comm=None, wrtFilter=None):
-
+                              bReturnDProbs12=False, comm=None, wrtFilter=None):
         """
-        Compute the derivatives of the probabilities generated by a each gate 
-        sequence given by evalTree, where initialization & measurement 
-        operations are always the same and are together specified by spamLabel.
+        Constructs a generator that computes the 2nd derivatives of the
+        probabilities generated by a each gate sequence given by evalTree
+        column-by-column.
+
+        This routine can be useful when memory constraints make constructing
+        the entire Hessian at once impractical, and one is able to compute 
+        reduce results from a single column of the Hessian at a time.  For
+        example, the Hessian of a function of many gate sequence probabilities 
+        can often be computed column-by-column from the using the columns of
+        the gate sequences.
+
 
         Parameters
         ----------
-        spamLabel : string
-          the label specifying the state prep and measure operations
-                   
+        spam_label_rows : dictionary
+          a dictionary with keys == spam labels and values which 
+          are integer row indices into mxToFill, specifying the
+          correspondence between rows of mxToFill and spam labels.
+
         evalTree : EvalTree
-          given by a prior call to bulk_evaltree.  Specifies the gate strings
-          to compute the bulk operation on.
+           given by a prior call to bulk_evaltree.  Specifies the gate strings
+           to compute the bulk operation on.  This tree *cannot* be split.
 
-        returnPr : bool, optional
-          when set to True, additionally return the probabilities.
-
-        returnDeriv : bool, optional
-          when set to True, additionally return the probability derivatives.
-
-        clipTo : 2-tuple, optional
-          (min,max) to clip returned probability to if not None.
-          Only relevant when returnPr == True.
-           
-        check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
+        bReturnDProbs12 : boolean, optional
+           If true, the generator computes a 2-tuple: (hessian_col, d12_col),
+           where d12_col is a column of the matrix d12 defined by:
+           d12[iSpamLabel,iGateStr,p1,p2] = dP/d(p1)*dP/d(p2) where P is is
+           the probability generated by the sequence and spam label indexed
+           by iGateStr and iSpamLabel.  d12 has the same dimensions as the
+           Hessian, and turns out to be useful when computing the Hessian 
+           of functions of the probabilities.
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.
+           across multiple processors.  Distribution is performed as in 
+           bulk_product, bulk_dproduct, and bulk_hproduct.
 
         wrtFilter : list of ints, optional
-          If not None, a list of integers specifying which parameters
-          to include in the *2nd* derivative dimension.
-
+          If not None, a list of integers specifying the indices of the
+          parameters to include in the *2nd* derivative dimension, i.e.,
+          which Hessian columns to compute.
+          
 
         Returns
         -------
-        hessians : numpy array
-            a S x M x M array, where 
-
-            - S == the number of gate strings
-            - M == the length of the vectorized gateset
-
-            and hessians[i,j,k] is the derivative of the i-th probability
-            w.r.t. the k-th then the j-th gateset parameter.
-
-        derivs : numpy array
-            only returned if returnDeriv == True. A S x M array where
-            derivs[i,j] holds the derivative of the i-th probability
-            w.r.t. the j-th gateset parameter.
-
-        probabilities : numpy array
-            only returned if returnPr == True.  A length-S array 
-            containing the probabilities for each gate string.
+        column_generator
+          A generator which, when iterated, yields an array of 
+          shape K x S x M x 1 numpy array (a Hessian column), where K is the 
+          length of spam_label_rows, S is equal to the number of gate strings
+          (i.e. evalTree.num_final_strings()), and M is the number of gateset
+          parameters.  If bReturnDProbs12 == True, then two such arrays
+          are given (as a 2-tuple).
         """
         assert(not evalTree.is_split()) #no split trees allowed - unduly complicates generator
 
@@ -3275,9 +3311,6 @@ class GateSetCalculator(object):
                     _np.concatenate( (dGates_row1[remainder_row_index,:,:,i:i+1],
                                       dGates_row2[remainder_row_index,:,:,i:i+1],
                                       -d2pr_sum), axis=1 )
-
-            if check:
-                raise NotImplementedError("Checking capability has not been added for this function yet.")
 
             if bReturnDProbs12:
                 j = nSpamDerivCols + i
