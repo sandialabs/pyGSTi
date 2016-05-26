@@ -1,0 +1,6 @@
+pygsti.report.splice_cmaps
+==========================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: splice_cmaps

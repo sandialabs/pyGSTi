@@ -1,0 +1,6 @@
+pygsti.spamrameter
+==================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: spamrameter

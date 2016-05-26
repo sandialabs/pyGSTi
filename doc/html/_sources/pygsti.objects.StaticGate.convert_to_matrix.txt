@@ -1,0 +1,6 @@
+pygsti.objects.StaticGate.convert_to_matrix
+===========================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: StaticGate.convert_to_matrix

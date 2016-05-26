@@ -1,0 +1,6 @@
+pygsti.report.make_linear_cmap
+==============================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: make_linear_cmap

@@ -53,9 +53,9 @@ class GateSet(object):
             Specifies the default gate and SPAM vector parameterization type.
             "full" : by default gates and vectors are fully parameterized.
             "TP" : by default the first row of gates and the first element of
-             vectors is not parameterized and fixed so gate set is trace-
-             preserving.
-             "static" : by default gates and vectors are not parameterized.
+            vectors is not parameterized and fixed so gate set is trace-
+            preserving.
+            "static" : by default gates and vectors are not parameterized.
 
         prep_prefix, effect_prefix, gate_prefix : string, optional
             Key prefixes designating state preparations, POVM effects,

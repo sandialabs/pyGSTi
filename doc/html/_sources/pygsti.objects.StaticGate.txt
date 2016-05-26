@@ -1,0 +1,34 @@
+pygsti.objects.StaticGate
+=========================
+
+.. currentmodule:: pygsti.objects
+
+.. autoclass:: StaticGate
+
+   
+   .. automethod:: __init__
+       :noindex:
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree:
+   
+      ~StaticGate.__init__
+      ~StaticGate.compose
+      ~StaticGate.convert_to_matrix
+      ~StaticGate.copy
+      ~StaticGate.deriv_wrt_params
+      ~StaticGate.from_vector
+      ~StaticGate.get_dimension
+      ~StaticGate.num_params
+      ~StaticGate.set_matrix
+      ~StaticGate.to_vector
+      ~StaticGate.transform
+   
+   
+
+   
+   
+   

@@ -1,0 +1,6 @@
+pygsti.objects.TPParameterizedGate.convert_to_matrix
+====================================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: TPParameterizedGate.convert_to_matrix

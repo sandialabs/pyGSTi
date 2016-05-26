@@ -1,0 +1,6 @@
+pygsti.objects.FullyParameterizedSPAMVec.deriv_wrt_params
+=========================================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: FullyParameterizedSPAMVec.deriv_wrt_params

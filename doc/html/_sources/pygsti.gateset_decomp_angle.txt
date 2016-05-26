@@ -1,0 +1,6 @@
+pygsti.gateset_decomp_angle
+===========================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: gateset_decomp_angle

@@ -1,0 +1,6 @@
+pygsti.objects.StaticGate.to_vector
+===================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: StaticGate.to_vector

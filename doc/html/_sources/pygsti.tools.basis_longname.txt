@@ -1,0 +1,6 @@
+pygsti.tools.basis_longname
+===========================
+
+.. currentmodule:: pygsti.tools
+
+.. autofunction:: basis_longname

@@ -1,0 +1,29 @@
+pygsti.report.MidPointNorm
+==========================
+
+.. currentmodule:: pygsti.report
+
+.. autoclass:: MidPointNorm
+
+   
+   .. automethod:: __init__
+       :noindex:
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree:
+   
+      ~MidPointNorm.__init__
+      ~MidPointNorm.autoscale
+      ~MidPointNorm.autoscale_None
+      ~MidPointNorm.inverse
+      ~MidPointNorm.process_value
+      ~MidPointNorm.scaled
+   
+   
+
+   
+   
+   

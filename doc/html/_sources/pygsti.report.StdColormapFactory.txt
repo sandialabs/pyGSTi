@@ -1,0 +1,26 @@
+pygsti.report.StdColormapFactory
+================================
+
+.. currentmodule:: pygsti.report
+
+.. autoclass:: StdColormapFactory
+
+   
+   .. automethod:: __init__
+       :noindex:
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree:
+   
+      ~StdColormapFactory.__init__
+      ~StdColormapFactory.get_cmap
+      ~StdColormapFactory.get_norm
+   
+   
+
+   
+   
+   

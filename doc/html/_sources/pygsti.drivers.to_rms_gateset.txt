@@ -1,0 +1,6 @@
+pygsti.drivers.to_rms_gateset
+=============================
+
+.. currentmodule:: pygsti.drivers
+
+.. autofunction:: to_rms_gateset

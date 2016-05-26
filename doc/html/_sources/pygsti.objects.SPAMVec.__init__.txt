@@ -1,0 +1,6 @@
+pygsti.objects.SPAMVec.__init__
+===============================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: SPAMVec.__init__

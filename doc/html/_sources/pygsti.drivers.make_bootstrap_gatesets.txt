@@ -1,0 +1,6 @@
+pygsti.drivers.make_bootstrap_gatesets
+======================================
+
+.. currentmodule:: pygsti.drivers
+
+.. autofunction:: make_bootstrap_gatesets

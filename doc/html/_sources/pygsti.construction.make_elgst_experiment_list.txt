@@ -1,0 +1,6 @@
+pygsti.construction.make_elgst_experiment_list
+==============================================
+
+.. currentmodule:: pygsti.construction
+
+.. autofunction:: make_elgst_experiment_list

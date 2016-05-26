@@ -1,0 +1,6 @@
+pygsti.report.StdColormapFactory.__init__
+=========================================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: StdColormapFactory.__init__

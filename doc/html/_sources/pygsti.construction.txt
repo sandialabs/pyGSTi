@@ -21,6 +21,8 @@ pygsti.construction
       gen_all_gatestrings
       gen_all_gatestrings_onelen
       generate_fake_data
+      generate_sim_rb_data
+      generate_sim_rb_data_perfect
       get_spam_strs
       list_all_gatestrings
       list_all_gatestrings_onelen
@@ -29,14 +31,22 @@ pygsti.construction
       list_partial_strings
       list_random_gatestrings_onelen
       list_strings_lgst_can_estimate
+      make_elgst_experiment_list
       make_elgst_lists
+      make_lsgst_experiment_list
       make_lsgst_lists
-      make_lsgst_lists_asymmetric_fids
+      make_parameterized_rpe_gate_set
+      make_rpe_alpha_str_lists_gx_gz
+      make_rpe_data_set
+      make_rpe_epsilon_str_lists_gx_gz
+      make_rpe_string_list_d
+      make_rpe_theta_str_lists_gx_gz
       repeat
       repeat_and_truncate
       repeat_count_with_max_length
       repeat_remainder_for_truncation
       repeat_with_max_length
+      rpe_ensemble_test
       simplify_str
    
    

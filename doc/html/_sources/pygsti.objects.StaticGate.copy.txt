@@ -1,0 +1,6 @@
+pygsti.objects.StaticGate.copy
+==============================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: StaticGate.copy

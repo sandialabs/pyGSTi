@@ -1,0 +1,6 @@
+pygsti.gateset_process_fidelity
+===============================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: gateset_process_fidelity

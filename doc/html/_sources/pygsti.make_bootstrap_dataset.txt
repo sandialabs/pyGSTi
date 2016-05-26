@@ -1,0 +1,6 @@
+pygsti.make_bootstrap_dataset
+=============================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: make_bootstrap_dataset

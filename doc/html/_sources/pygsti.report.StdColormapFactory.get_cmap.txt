@@ -1,0 +1,6 @@
+pygsti.report.StdColormapFactory.get_cmap
+=========================================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: StdColormapFactory.get_cmap

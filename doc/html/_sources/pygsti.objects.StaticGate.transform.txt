@@ -1,0 +1,6 @@
+pygsti.objects.StaticGate.transform
+===================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: StaticGate.transform

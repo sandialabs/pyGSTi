@@ -1,0 +1,6 @@
+pygsti.drivers.to_vector
+========================
+
+.. currentmodule:: pygsti.drivers
+
+.. autofunction:: to_vector

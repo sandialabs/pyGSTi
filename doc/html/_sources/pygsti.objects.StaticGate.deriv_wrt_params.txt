@@ -1,0 +1,6 @@
+pygsti.objects.StaticGate.deriv_wrt_params
+==========================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: StaticGate.deriv_wrt_params

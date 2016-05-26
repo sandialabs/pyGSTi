@@ -1,0 +1,6 @@
+pygsti.report.MidPointNorm.scaled
+=================================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: MidPointNorm.scaled

@@ -1,0 +1,6 @@
+pygsti.objects.TPParameterizedSPAMVec.get_dimension
+===================================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: TPParameterizedSPAMVec.get_dimension

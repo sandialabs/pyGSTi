@@ -29,11 +29,18 @@ pygsti.objects
       DataSet
       EvalTree
       FullyParameterizedGate
+      FullyParameterizedSPAMVec
+      Gate
       GateSet
       GateString
       LinearlyParameterizedGate
       MultiDataSet
+      SPAMVec
       SpamSpec
+      StaticGate
+      StaticSPAMVec
+      TPParameterizedGate
+      TPParameterizedSPAMVec
       WeightedGateString
    
    

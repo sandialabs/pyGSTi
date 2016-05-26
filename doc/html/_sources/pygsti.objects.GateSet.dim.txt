@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.dim
+==========================
+
+.. currentmodule:: pygsti.objects
+
+.. autoattribute:: GateSet.dim

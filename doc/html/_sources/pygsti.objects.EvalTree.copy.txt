@@ -1,0 +1,6 @@
+pygsti.objects.EvalTree.copy
+============================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: EvalTree.copy

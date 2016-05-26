@@ -1,0 +1,6 @@
+pygsti.objects.TPParameterizedSPAMVec.num_params
+================================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: TPParameterizedSPAMVec.num_params

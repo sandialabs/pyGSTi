@@ -1,0 +1,32 @@
+pygsti.objects.TPParameterizedSPAMVec
+=====================================
+
+.. currentmodule:: pygsti.objects
+
+.. autoclass:: TPParameterizedSPAMVec
+
+   
+   .. automethod:: __init__
+       :noindex:
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree:
+   
+      ~TPParameterizedSPAMVec.__init__
+      ~TPParameterizedSPAMVec.convert_to_vector
+      ~TPParameterizedSPAMVec.copy
+      ~TPParameterizedSPAMVec.deriv_wrt_params
+      ~TPParameterizedSPAMVec.from_vector
+      ~TPParameterizedSPAMVec.get_dimension
+      ~TPParameterizedSPAMVec.num_params
+      ~TPParameterizedSPAMVec.set_vector
+      ~TPParameterizedSPAMVec.to_vector
+   
+   
+
+   
+   
+   

@@ -1,0 +1,6 @@
+pygsti.gs_stdev
+===============
+
+.. currentmodule:: pygsti
+
+.. autofunction:: gs_stdev

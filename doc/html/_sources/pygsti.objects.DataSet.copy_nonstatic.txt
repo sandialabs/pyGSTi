@@ -1,0 +1,6 @@
+pygsti.objects.DataSet.copy_nonstatic
+=====================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: DataSet.copy_nonstatic

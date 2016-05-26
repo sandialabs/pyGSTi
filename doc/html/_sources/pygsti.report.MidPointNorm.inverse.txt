@@ -1,0 +1,6 @@
+pygsti.report.MidPointNorm.inverse
+==================================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: MidPointNorm.inverse
