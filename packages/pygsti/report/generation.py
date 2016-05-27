@@ -1285,9 +1285,11 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
         nDataParams  = nGateStrings*(len(dataset.get_spam_labels())-1) 
           #number of independent parameters in dataset (max. model # of params)
 
-        nonMarkRadiusSq = 2*(_tools.logl_max(dataset) 
-                             - _tools.logl(gateset, dataset)) \
-                             - (nDataParams-nModelParams)
+        MIN_NON_MARK_RADIUS = 1e-8 #must be >= 0
+        nonMarkRadiusSq = max( 2*(_tools.logl_max(dataset) 
+                                  - _tools.logl(gateset, dataset)) \
+                                   - (nDataParams-nModelParams),
+                               MIN_NON_MARK_RADIUS )
     else:
         raise ValueError("Invalid confidence region type: %s" % regionType)
 
@@ -1392,7 +1394,8 @@ def get_chi2_confidence_region(gateset, dataset, confidenceLevel,
         nDataParams  = nGateStrings*(len(dataset.get_spam_labels())-1) 
           #number of independent parameters in dataset (max. model # of params)
 
-        nonMarkRadiusSq = chi2 - (nDataParams-nModelParams)
+        MIN_NON_MARK_RADIUS = 1e-8 #must be >= 0
+        nonMarkRadiusSq = max(chi2 - (nDataParams-nModelParams), MIN_NON_MARK_RADIUS)
     else:
         raise ValueError("Invalid confidence region type: %s" % regionType)
 
