@@ -1063,7 +1063,7 @@ class GateSetCalculator(object):
                             my_blk_results, comm):
 
         if comm is None:
-            assert(all([x == 0 for x in blk_owners]))
+            assert(all([x == 0 for x in blk_owners.values()]))
             assert(nBlocks == len(my_blk_results))
             all_blk_results = [ my_blk_results ]
             all_blk_indices = [ my_blkIndices ]

@@ -1874,8 +1874,7 @@ class GateSet(object):
           are given (as a 2-tuple).
         """
         return self._calc().bulk_hprobs_by_column(
-            spam_label_rows, evalTree, bReturnDProbs12,
-            clipTo, check,comm, wrtFilter)
+            spam_label_rows, evalTree, bReturnDProbs12, comm, wrtFilter)
         
 
 

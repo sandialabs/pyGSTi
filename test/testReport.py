@@ -48,20 +48,9 @@ class ReportTestCase(unittest.TestCase):
             warnings.warn("**** IMPORT: Cannot import pptx (python-pptx), and so" +
                          " Powerpoint slide generation tests have been disabled.")
             self.have_python_pptx = False
-            
-        
-
-    def checkFile(self, fn):
-        linesToTest = open("temp_test_files/%s" % fn).readlines()
-        linesOK = open("cmp_chk_files/%s" % fn).readlines()
-        self.assertEqual(linesToTest,linesOK)
 
 
-
-class TestReport(ReportTestCase):
-    
-    def test_reports_chi2(self):
-
+        #Compute results for MC2GST
         lsgst_gatesets_prego = pygsti.do_iterative_mc2gst(self.ds, self.gs_clgst, self.lsgstStrings, verbosity=0,
                                                           minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6),
                                                           returnAll=True)
@@ -78,19 +67,33 @@ class TestReport(ReportTestCase):
                                         'weights': None, 'defaultDirectory': "temp_test_files",
                                         'defaultBasename': "MyDefaultReportName" } )
 
-        #db = lsgst_gatesets[-1]
-        #firstElIdentityVec = np.zeros( (db.dim,1) )
-        #firstElIdentityVec[0] = db.dim**0.25
-        #db.povm_identity = firstElIdentityVec
-        #
-        #print "Target Identity = ", np.asarray(self.targetGateset.povm_identity)
-        #print "Identity = ", np.asarray(db.povm_identity)
-        #print "rho0 = ", np.asarray(db.preps['rho0'])
-        #for plbl in db.get_prep_labels():
-        #    for elbl in db.get_effect_labels():
-        #        print "DB: dot(%s,%s) = " % (plbl,elbl), np.dot(np.transpose(db.effects[elbl]),db.preps[plbl])
-        #return
 
+        #Compute results for MLGST with TP constraint
+        lsgst_gatesets_TP = pygsti.do_iterative_mlgst(self.ds, self.gs_clgst_tp, self.lsgstStrings, verbosity=0,
+                                                   minProbClip=1e-4, probClipInterval=(-1e6,1e6),
+                                                   returnAll=True)
+        lsgst_gatesets_TP = [ pygsti.optimize_gauge(gs, "target", targetGateset=self.targetGateset, constrainToTP=True,
+                                                 gateWeight=1,spamWeight=0.001) for gs in lsgst_gatesets_TP]
+
+        self.results_logL = pygsti.report.Results()
+        self.results_logL.init_Ls_and_germs("logl", self.targetGateset, self.ds, self.gs_clgst_tp, self.maxLengthList, self.germs,
+                                     lsgst_gatesets_TP, self.lsgstStrings, self.fiducials, self.fiducials, 
+                                     pygsti.construction.repeat_with_max_length, True)
+
+
+            
+        
+
+    def checkFile(self, fn):
+        linesToTest = open("temp_test_files/%s" % fn).readlines()
+        linesOK = open("cmp_chk_files/%s" % fn).readlines()
+        self.assertEqual(linesToTest,linesOK)
+
+
+
+class TestReport(ReportTestCase):
+    
+    def test_reports_chi2_noCIs(self):
 
         self.results.create_full_report_pdf(filename="temp_test_files/full_reportA.pdf", confidenceLevel=None,
                                          debugAidsAppendix=False, gaugeOptAppendix=False,
@@ -119,6 +122,9 @@ class TestReport(ReportTestCase):
         self.checkFile("slidesA.tex")
 
 
+
+    def test_reports_chi2_wCIs(self):
+
         self.results.create_full_report_pdf(filename="temp_test_files/full_reportB.pdf", confidenceLevel=95,
                                          debugAidsAppendix=True, gaugeOptAppendix=True,
                                          pixelPlotAppendix=True, whackamoleAppendix=True,
@@ -142,6 +148,7 @@ class TestReport(ReportTestCase):
         self.checkFile("slidesB.tex")
 
 
+    def test_reports_chi2_nonMarkCIs(self):
         #Non-markovian error bars (negative confidenceLevel) & tooltips
         self.results.create_full_report_pdf(filename="temp_test_files/full_reportE.pdf", confidenceLevel=-95,
                                          debugAidsAppendix=True, gaugeOptAppendix=True,
@@ -155,50 +162,7 @@ class TestReport(ReportTestCase):
         self.checkFile("full_reportE_appendices.tex")
 
 
-
-    def test_reports_logL_TP(self):
-        lsgst_gatesets_TP = pygsti.do_iterative_mlgst(self.ds, self.gs_clgst_tp, self.lsgstStrings, verbosity=0,
-                                                   minProbClip=1e-4, probClipInterval=(-1e6,1e6),
-                                                   returnAll=True)
-        lsgst_gatesets_TP = [ pygsti.optimize_gauge(gs, "target", targetGateset=self.targetGateset, constrainToTP=True,
-                                                 gateWeight=1,spamWeight=0.001) for gs in lsgst_gatesets_TP]
-
-        self.results_logL = pygsti.report.Results()
-        self.results_logL.init_Ls_and_germs("logl", self.targetGateset, self.ds, self.gs_clgst_tp, self.maxLengthList, self.germs,
-                                     lsgst_gatesets_TP, self.lsgstStrings, self.fiducials, self.fiducials, 
-                                     pygsti.construction.repeat_with_max_length, True)
-
-        #db = lsgst_gatesets_TP[-1]
-        #firstElIdentityVec = np.zeros( (db.dim,1) )
-        #firstElIdentityVec[0] = db.dim**0.25
-        #db.povm_identity = firstElIdentityVec
-        #
-        #print "Target Identity = ", np.asarray(self.targetGateset.povm_identity)
-        #print "Identity = ", np.asarray(db.povm_identity)
-        #print "rho0 = ", np.asarray(db.preps['rho0'])
-        #for plbl in db.get_prep_labels():
-        #    for elbl in db.get_effect_labels():
-        #        print "DB: dot(%s,%s) = " % (plbl,elbl), np.dot(np.transpose(db.effects[elbl]),db.preps[plbl])
-        #return
-        
-
-        #Run a few tests to generate tables & figures we don't use in reports
-        self.results_logL.tables["chi2ProgressTable"]
-        self.results_logL.tables["logLProgressTable"]
-        self.results_logL.figures["bestEstimateSummedColorBoxPlot"]
-        self.results_logL.figures["blankBoxPlot"]
-        self.results_logL.figures["blankSummedBoxPlot"]
-        self.results_logL.figures["directLGSTColorBoxPlot"]
-        self.results_logL.figures["directLGSTDeviationColorBoxPlot"]
-        with self.assertRaises(KeyError):
-            self.results_logL.figures["FooBar"]
-        with self.assertRaises(KeyError):
-            self.results_logL._specials['FooBar']
-
-        #Run tests to generate tables we don't use in reports
-        self.results_logL.tables["bestGatesetVsTargetAnglesTable"]
-
-
+    def test_reports_logL_TP_noCIs(self):
 
         self.results_logL.create_full_report_pdf(filename="temp_test_files/full_reportC.pdf", confidenceLevel=None,
                                                  debugAidsAppendix=False, gaugeOptAppendix=False,
@@ -223,6 +187,8 @@ class TestReport(ReportTestCase):
         #self.checkFile("general_reportC.tex")
 
 
+    def test_reports_logL_TP_wCIs(self):
+
         self.results_logL.create_full_report_pdf(filename="temp_test_files/full_reportD.pdf", confidenceLevel=95,
                                                  debugAidsAppendix=True, gaugeOptAppendix=True,
                                                  pixelPlotAppendix=True, whackamoleAppendix=True,
@@ -245,6 +211,26 @@ class TestReport(ReportTestCase):
         self.checkFile("brief_reportD.tex")
         self.checkFile("slidesD.tex")
         #self.checkFile("general_reportD.tex")
+
+
+
+    def test_extra_logL_TP_figs_and_tables(self):
+
+        #Run a few tests to generate tables & figures we don't use in reports
+        self.results_logL.tables["chi2ProgressTable"]
+        self.results_logL.tables["logLProgressTable"]
+        self.results_logL.figures["bestEstimateSummedColorBoxPlot"]
+        self.results_logL.figures["blankBoxPlot"]
+        self.results_logL.figures["blankSummedBoxPlot"]
+        self.results_logL.figures["directLGSTColorBoxPlot"]
+        self.results_logL.figures["directLGSTDeviationColorBoxPlot"]
+        with self.assertRaises(KeyError):
+            self.results_logL.figures["FooBar"]
+        with self.assertRaises(KeyError):
+            self.results_logL._specials['FooBar']
+
+        #Run tests to generate tables we don't use in reports
+        self.results_logL.tables["bestGatesetVsTargetAnglesTable"]
 
 
 

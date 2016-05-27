@@ -692,8 +692,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
             assert(not evalSubTree.is_split()) #sub trees should not be split further
             loc_hessian_cols = [] # holds columns for this subtree (for this processor)
             for hprobs, dprobs12 in gateset.bulk_hprobs_by_column(
-                spam_lbl_rows, evalSubTree, True, clipTo=probClipInterval,
-                check=check, wrtFilter=loc_iCols):
+                spam_lbl_rows, evalSubTree, True, wrtFilter=loc_iCols):
 
                 #DEBUG!!!
                 #print "DEBUG: rank%d: %gs: column %d/%d, sub-tree %d/%d, sub-tree-len = %d" \
