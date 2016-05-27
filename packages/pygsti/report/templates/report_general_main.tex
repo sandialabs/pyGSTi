@@ -225,7 +225,7 @@ It's also useful to know \emph{how} the real gates (or, more precisely, GST's es
 \begin{table}[h]
 \begin{center}
 \putfield{bestGatesetErrGenBoxTable}{Best gate set error generator table will be placed here}
-\caption{\putfield{tt_bestGatesetErrGenBoxTable}{}\textbf{The GST estimate of the logic gate operation generators}. A heat map of the ``Error Generator'' for each gate, which is the Lindbladian $\mathbb{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$. When all elements of these matrices is zero, the estimated gates match the target gates (Table \ref{targetGatesTable}).  Note that the range of the color scale is variable, being determined by the data. \label{bestGatesetErrGenTable} }
+\caption{\putfield{tt_bestGatesetErrGenBoxTable}{}\textbf{The GST estimate of the logic gate operation generators}. A heat map of the ``Error Generator'' for each gate, which is the Lindbladian $\mathbb{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$. When all elements of these matrices is zero, the estimated gates match the target gates (Table \ref{targetGatesTable}).  Note that the range of the color scale is variable, being determined by the data.  In the final column, these generators are projected onto each of the ``Pauli-product generators'' given by the action of commutation with each Pauli-product basis element.  Columns and rows correspond to Pauli operators on the first and second (if present) qubit.\label{bestGatesetErrGenTable} }
 \end{center}
 \end{table}
 
@@ -241,12 +241,12 @@ It's usually useful to understand \emph{how} gates fail.  The error generators i
 \end{center}
 \end{table}
 
-\begin{table}[h]
+\begin{figure}
 \begin{center}
 \putfield{bestEstimatePolarEvalPlots}{Polar eigenvalue plots for gates placed here}
 \caption{\putfield{tt_bestEstimatePolarEvalPlots}\textbf{Polar plots of gate eigenvalues}.  The eigenvalues from Table \ref{bestGatesetEigenvalueTable} plotted over the complex disc.  Large \textbf{black} and \textcolor{blue}{\textbf{blue}} circles plot the spectrum of the \textbf{ideal target gate} and \textcolor{blue}{\textbf{estimated gate}}, respectively.  Small \textcolor{red}{\textbf{red}} circles plot the \textcolor{red}{\textbf{``relative'' eigenvalues}} (see Table \ref{bestGatesetEigenvalueTable}), and \textcolor{darkgreen}{\textbf{green}} circles plot the relative eigenvalues of the gate \textcolor{darkgreen}{\textbf{repeated 10 times}} (to increase visibility).\label{bestGatesetPolarEigvalTable}}
 \end{center}
-\end{table}
+\end{figure}
 
 
 %REMOVE It might be useful to know the closest \emph{unitary} operation to the estimated gate, and how close it is.  Usually, you were trying to implement a unitary.  If the closest unitary to $G$ was indeed $G_{\mathrm{target}}$, then all errors are incoherent; if not, you might be able to tweak the gate parameters to get closer relatively easily.  Also, implementing a particular unitary may be less important than just achieving \emph{some} set of mutually independent unitaries.  In these and other cases, the distance from an estimated gate to its closest unitary approximation is of interest.
