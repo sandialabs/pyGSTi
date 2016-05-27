@@ -587,6 +587,8 @@ class EvalTree(list):
             print "Max in use at once = (smallest tree size for mem) = %d" % maxInUse
             
         else: #tree is split
+            print "Size of original tree = %d" % len(self)
+            print "Size of original gatestring_list = %d" % len(self.finalList)
             print "Tree is split into %d sub-trees" % len(self.subTrees)
             print "Sub-tree lengths = ", list(map(len,self.subTrees)), " (Sum = %d)" % sum(map(len,self.subTrees))
             for i,t in enumerate(self.subTrees):
