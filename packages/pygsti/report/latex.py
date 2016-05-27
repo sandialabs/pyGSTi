@@ -163,7 +163,6 @@ def latex_value(el,ROUND=6,complexAsPolar=True):
     # ROUND = digits to round values to
     TOL = 1e-9  #tolerance for printing zero values
     PHIROUND = 1
-    if el is None or el == _np.nan: return "--"
 
     def render(x):
         if abs(x) < 5*10**(-(ROUND+1)):
@@ -188,8 +187,10 @@ def latex_value(el,ROUND=6,complexAsPolar=True):
             if s.endswith("."): s = s[:-1]
         return s
 
+    if type(el) == str: return el
     if type(el) in (int,_np.int64):
         return "%d" % el
+    if el is None or _np.isnan(el): return "--"
 
     try:
         if abs(el.real) > TOL: 

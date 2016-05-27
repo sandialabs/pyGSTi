@@ -1515,6 +1515,7 @@ class Results(object):
                    ('opt_table_class', self.options.table_class),
                    ('opt_template_path', self.options.template_path),
                    ('opt_latex_cmd', self.options.latex_cmd) ]
+                   #('opt_latex_postcmd', self.options.latex_postcmd) #TODO: add this
         for key,val in self.parameters.iteritems():
             pdfInfo.append( (key, val) )
         qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
@@ -1813,9 +1814,10 @@ class Results(object):
             _os.chdir(report_dir)
     
         try:
-            ret = _os.system( "%s %s > /dev/null" % 
+            ret = _os.system( "%s %s %s" % 
                               (self.options.latex_cmd,
-                               _os.path.basename(mainTexFilename)) )
+                               _os.path.basename(mainTexFilename),
+                               self.options.latex_postcmd) )
             if ret == 0:
                 #We could check if the log file contains "Rerun" in it, 
                 # but we'll just re-run all the time now
@@ -1823,9 +1825,10 @@ class Results(object):
                     print "Initial output PDF %s successfully generated." \
                         % pdfFilename
 
-                ret = _os.system( "%s %s > /dev/null" % 
+                ret = _os.system( "%s %s %s" % 
                                   (self.options.latex_cmd,
-                                   _os.path.basename(mainTexFilename)) )
+                                   _os.path.basename(mainTexFilename),
+                                   self.options.latex_postcmd) )
                 if ret == 0:
                     if verbosity > 0: 
                         print "Final output PDF %s successfully generated. Cleaning up .aux and .log files." % pdfFilename #mainTexFilename
@@ -2089,18 +2092,20 @@ class Results(object):
             _os.chdir(report_dir)
     
         try:
-            ret = _os.system( "%s %s > /dev/null" %
+            ret = _os.system( "%s %s %s" %
                               (self.options.latex_cmd,
-                               _os.path.basename(mainTexFilename)) )
+                               _os.path.basename(mainTexFilename),
+                               self.options.latex_postcmd) )
             if ret == 0:
                 #We could check if the log file contains "Rerun" in it, 
                 # but we'll just re-run all the time now
                 if verbosity > 0: 
                     print "Initial output PDF %s successfully generated." % \
                         pdfFilename
-                ret = _os.system( "%s %s > /dev/null" % 
+                ret = _os.system( "%s %s %s" % 
                                   (self.options.latex_cmd,
-                                   _os.path.basename(mainTexFilename)) )
+                                   _os.path.basename(mainTexFilename),
+                                   self.options.latex_postcmd) )
                 if ret == 0:
                     if verbosity > 0: 
                         print "Final output PDF %s successfully generated. Cleaning up .aux and .log files." % pdfFilename #mainTexFilename
@@ -2523,16 +2528,18 @@ class Results(object):
             _os.chdir(report_dir)
     
         try:
-            ret = _os.system( "%s %s > /dev/null" % 
+            ret = _os.system( "%s %s %s" % 
                               (self.options.latex_cmd, 
-                               _os.path.basename(mainTexFilename)) )
+                               _os.path.basename(mainTexFilename),
+                               self.options.latex_postcmd) )
             if ret == 0:
                 #We could check if the log file contains "Rerun" in it, but we'll just re-run all the time now
                 if verbosity > 0: 
                     print "Initial output PDF %s successfully generated." % pdfFilename #mainTexFilename
-                ret = _os.system( "%s %s > /dev/null" % 
+                ret = _os.system( "%s %s %s" % 
                                   (self.options.latex_cmd,
-                                   _os.path.basename(mainTexFilename)) )
+                                   _os.path.basename(mainTexFilename),
+                                   self.options.latex_postcmd) )
                 if ret == 0:
                     if verbosity > 0: 
                         print "Final output PDF %s successfully generated. Cleaning up .aux and .log files." % pdfFilename #mainTexFilename
@@ -3021,8 +3028,9 @@ class Results(object):
             cwd = _os.getcwd()
             _os.chdir(fileDir)
             try:
-                ret = _os.system("%s -shell-escape %s.tex > /dev/null" \
-                                     % (self.options.latex_cmd,key) )
+                ret = _os.system("%s -shell-escape %s.tex %s" \
+                                     % (self.options.latex_cmd, key,
+                                        self.options.latex_postcmd) )
                 if ret == 0:
                     _os.remove( "%s.tex" % key )
                     _os.remove( "%s.log" % key )
@@ -3295,14 +3303,14 @@ class Results(object):
             ("false" if confidenceLevel is None else "true")
         qtys['settoggles'] += "\\toggle%s{LsAndGermsSet}\n" % \
             ("true" if self._LsAndGermInfoSet else "false")
-        qtys['settoggles'] += "\\toggle%s{debuggingaidsappendix}\n" % \
-            ("true" if debugAidsAppendix else "false")
-        qtys['settoggles'] += "\\toggle%s{gaugeoptappendix}\n" % \
-            ("true" if gaugeOptAppendix else "false")
-        qtys['settoggles'] += "\\toggle%s{pixelplotsappendix}\n" % \
-            ("true" if pixelPlotAppendix else "false")
-        qtys['settoggles'] += "\\toggle%s{whackamoleappendix}\n" % \
-            ("true" if whackamoleAppendix else "false")
+        #qtys['settoggles'] += "\\toggle%s{debuggingaidsappendix}\n" % \
+        #    ("true" if debugAidsAppendix else "false")
+        #qtys['settoggles'] += "\\toggle%s{gaugeoptappendix}\n" % \
+        #    ("true" if gaugeOptAppendix else "false")
+        #qtys['settoggles'] += "\\toggle%s{pixelplotsappendix}\n" % \
+        #    ("true" if pixelPlotAppendix else "false")
+        #qtys['settoggles'] += "\\toggle%s{whackamoleappendix}\n" % \
+        #    ("true" if whackamoleAppendix else "false")
         qtys['confidenceLevel'] = "%g" % \
             confidenceLevel if confidenceLevel is not None else "NOT-SET"
         qtys['linlg_pcntle'] = self.parameters['linlogPercentile']
@@ -3446,7 +3454,7 @@ class Results(object):
         if self._LsAndGermInfoSet:
             Ls = self.parameters['max length list']
             st = 1 if Ls[0] == 0 else 0 #start index: skip LGST column in plots
-            nPlots = (len(Ls[st:])-1)+2 if pixelPlotAppendix else 2
+            nPlots = 3 #(len(Ls[st:])-1)+2 if pixelPlotAppendix else 2
 
             if self.parameters['objective'] == "chi2":
                 plotFnName,plotFnLatex = "Chi2", "$\chi^2$"
@@ -3467,6 +3475,9 @@ class Results(object):
             h = min(len(self.gatestring_lists['effect fiducials']) * 0.3,maxH)
             fig = set_fig_qtys("colorBoxPlotKeyPlot",
                                "colorBoxPlotKey.png", w,h)
+
+            if verbosity > 0:
+                print "2 ",; _sys.stdout.flush()
 
             figkey = "bestEstimateColorBoxPlotPages"
             figs = self._specials.get(figkey, verbosity=v)
@@ -3505,6 +3516,9 @@ class Results(object):
             #    print "2 ",; _sys.stdout.flush()
             #fig = set_fig_qtys("invertedBestEstimateColorBoxPlot",
             #                   "best%sBoxes_inverted.pdf" % plotFnName)
+
+            if verbosity > 0:
+                print "3 ",; _sys.stdout.flush()
 
             qtys["bestEstimatePolarEvalPlots"] = ""
             qtys["tt_bestEstimatePolarEvalPlots"] = ""
@@ -3702,9 +3716,10 @@ class Results(object):
             _os.chdir(report_dir)
     
         try:
-            ret = _os.system( "%s %s > /dev/null" % 
+            ret = _os.system( "%s %s %s" % 
                               (self.options.latex_cmd,
-                               _os.path.basename(mainTexFilename)) )
+                               _os.path.basename(mainTexFilename),
+                               self.options.latex_postcmd) )
             if ret == 0:
                 #We could check if the log file contains "Rerun" in it, 
                 # but we'll just re-run all the time now
@@ -3712,9 +3727,10 @@ class Results(object):
                     print "Initial output PDF %s successfully generated." \
                         % pdfFilename
 
-                ret = _os.system( "%s %s > /dev/null" % 
+                ret = _os.system( "%s %s %s" % 
                                   (self.options.latex_cmd,
-                                   _os.path.basename(mainTexFilename)) )
+                                   _os.path.basename(mainTexFilename),
+                                   self.options.latex_postcmd) )
                 if ret == 0:
                     if verbosity > 0: 
                         print "Final output PDF %s successfully generated. Cleaning up .aux and .log files." % pdfFilename #mainTexFilename
@@ -3749,6 +3765,11 @@ class ResultOptions(object):
         self.table_class = "dataTable"
         self.template_path = "."
         self.latex_cmd = "pdflatex"
+        if _os.path.exists("/dev/null"):
+            self.latex_postcmd = "-halt-on-error </dev/null >/dev/null"
+        else:
+            self.latex_postcmd = "" #no /dev/null, so probably not Unix,
+                                    #so don't assume halt-on-error works either.
 
     def describe(self,prefix):
         s  = prefix + ".table_formats  -- computed table formats = %s\n" \
@@ -3761,6 +3782,9 @@ class ResultOptions(object):
             % str(self.template_path)
         s += prefix + ".latex_cmd      -- latex compiling command = '%s'\n" \
             % str(self.latex_cmd)
+        s += prefix + ".latex_postcmd  -- latex compiling command postfix = '%s'\n" \
+            % str(self.latex_postcmd)
+
         return s
 
 
