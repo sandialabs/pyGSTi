@@ -33,3 +33,13 @@ class SpamSpec(object):
         self.lbl = label
         self.str = _gatestring.GateString(gatestring) 
           #this makes sure self.str is always a gatestring object
+
+    def __str__(self):
+        return str(self.str)+"("+str(self.lbl)+")"
+
+    def __eq__(self,x):
+        try:
+            if self.str == x.str and self.lbl == x.lbl:
+                return True
+        except: pass
+        return False
