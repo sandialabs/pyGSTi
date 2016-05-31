@@ -354,11 +354,18 @@ class LinLogNorm(_matplotlib.colors.Normalize):
             # Ignore the division-by-zero error that occurs when 0 is passed to
             # log10 (the resulting NaN is filtered out by the where and is
             # harmless).
-            return_value = _np.where(_np.greater(norm_trans, lin_norm_value),
-                                     lin_norm_value/(2*norm_trans),
-                                     (log10_norm_trans -
-                                      _np.log10(lin_norm_value)) /
-                                     (2*log10_norm_trans) + 0.5)
+
+            #deal with numpy bug in handling masked nan values (nan still gives
+            # "invalid value" warnings/errors even when masked)
+            if _np.ma.is_masked(lin_norm_value):
+                lin_norm_value = _np.ma.array(lin_norm_value.filled(1e100),
+                                              mask=_np.ma.getmask(lin_norm_value))
+            return_value = _np.ma.where(_np.ma.greater(norm_trans, lin_norm_value),
+                                        lin_norm_value/(2*norm_trans),
+                                        (log10_norm_trans -
+                                         _np.ma.log10(lin_norm_value)) /
+                                        (2*log10_norm_trans) + 0.5)
+
         if return_value.shape==():
             return return_value.item()
         else:
