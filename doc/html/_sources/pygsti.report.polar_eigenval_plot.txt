@@ -1,0 +1,6 @@
+pygsti.report.polar_eigenval_plot
+=================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: polar_eigenval_plot

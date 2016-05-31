@@ -120,7 +120,7 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False):
       An array of shape (num_gate_strings, gate_dim^2, num_gateset_params) 
     """
     evalTree = gateset.bulk_evaltree(gatestrings)
-    dProds, prods = gateset.bulk_dproduct(evalTree, flat=True, bReturnProds=True, memLimit=None)
+    dProds, prods = gateset.bulk_dproduct(evalTree, flat=True, bReturnProds=True)
     gate_dim = gateset.get_dimension()
     fd = gate_dim**2 # flattened gate dimension
     

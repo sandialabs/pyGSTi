@@ -1,0 +1,6 @@
+pygsti.construction.generate_sim_rb_data
+========================================
+
+.. currentmodule:: pygsti.construction
+
+.. autofunction:: generate_sim_rb_data

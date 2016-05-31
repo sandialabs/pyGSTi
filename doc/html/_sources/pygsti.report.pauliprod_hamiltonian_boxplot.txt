@@ -1,0 +1,6 @@
+pygsti.report.pauliprod_hamiltonian_boxplot
+===========================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: pauliprod_hamiltonian_boxplot

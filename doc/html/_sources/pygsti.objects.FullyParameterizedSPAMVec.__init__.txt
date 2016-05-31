@@ -1,0 +1,6 @@
+pygsti.objects.FullyParameterizedSPAMVec.__init__
+=================================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: FullyParameterizedSPAMVec.__init__

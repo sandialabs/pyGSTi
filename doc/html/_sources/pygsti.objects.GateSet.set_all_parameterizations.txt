@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.set_all_parameterizations
+================================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.set_all_parameterizations

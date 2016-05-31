@@ -714,14 +714,14 @@ def do_iterative_exlgst(
       Defaults to 0 (no truncation)
 
   maxiter : int, optional
-      Maximum number of iterations in each of the least squares optimizations
+      Maximum number of iterations in each of the chi^2 optimizations
 
   maxfev : int, optional
-      Maximum number of function evaluations for each of the least squares optimizations
+      Maximum number of function evaluations for each of the chi^2 optimizations
       Defaults to maxiter
 
   tol : float, optional
-      The tolerance for each of the least squares optimizations.
+      The tolerance for each of the chi^2 optimizations.
 
   regularizeFactor : float, optional
       Multiplicative prefactor of L2-like regularization term that penalizes gateset entries
@@ -808,7 +808,7 @@ def do_iterative_exlgst(
 
 
 ###################################################################################
-#                 Least-squares GST (LSGST)
+#                 Minimum-Chi2 GST (MC2GST)
 ##################################################################################
 
 def do_mc2gst(dataset, startGateset, gateStringsToUse, 
@@ -838,14 +838,14 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
       e.g. [ (), ('Gx',), ('Gx','Gy') ] 
 
   maxiter : int, optional
-      Maximum number of iterations for the least squares optimization.
+      Maximum number of iterations for the chi^2 optimization.
 
   maxfev : int, optional
-      Maximum number of function evaluations for the least squares optimization.
+      Maximum number of function evaluations for the chi^2 optimization.
       Defaults to maxiter.
 
   tol : float, optional
-      The tolerance for the least squares optimization.
+      The tolerance for the chi^2 optimization.
 
   cptp_penalty_factor : float, optional
       If greater than zero, the least squares optimization also contains CPTP penalty
@@ -858,7 +858,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
       [ minProbClipForWeighting, 1-minProbClipForWeighting ].
 
   probClipInterval : 2-tuple or None, optional
-     (min,max) values used to clip the probabilities predicted by gatesets during LSGST's
+     (min,max) values used to clip the probabilities predicted by gatesets during MC2GST's
      least squares search for an optimal gateset (if not None).  Defaults to no clipping.
 
   useFreqWeightedChiSq : bool, optional
@@ -921,7 +921,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
   if verbosity > 2: print ""
   if verbosity > 1:
-    print "--- Least Squares GST ---"
+    print "--- Minimum Chi^2 GST ---"
 
   #convert list of GateStrings to list of raw tuples since that's all we'll need
   if len(gateStringsToUse) > 0 and \
@@ -989,30 +989,29 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
       print "Maximum eval sub-tree size = %d" % maxEvalSubTreeSize
 
   if maxEvalSubTreeSize is not None:
-    evTree.split(maxEvalSubTreeSize, None)
-    if verbosity > 2 and (comm is None or comm.Get_rank() == 0):
-      print "Memory limit has imposed a division of the evaluation tree:"
-      evTree.print_analysis()
-      #Note: do *not* split based on comm here, since any split that occurs
-      # here will be looped over in bulk_pr (which expects a split tree for
-      # the sole purpose of memory limiting)
+    evTree.split(maxEvalSubTreeSize, None) # split for memory
 
-  if distributeMethod == "gatestrings":
-    #Split tree at *2nd* level for MPI (1st level = for memory/"pr"-level)
-    if not evTree.is_split():
-      evTree.split(None,1) # for bulk_pr
-    assert(evTree.is_split())
+  #FUTURE: could use distributeMethod for memory distribution also via 
+  #  wrtBlockSize (even when comm is None)
+  if comm is not None:
+    nprocs = comm.Get_size()
+    if distributeMethod == "gatestrings":
+      if not evTree.is_split():
+        evTree.split(None,nprocs)
+      else:
+        assert(maxEvalSubTreeSize is not None)
+        if len(evTree.get_sub_trees()) < nprocs:
+          evTree.split(None,nprocs)
+          if any([ len(sub)>maxEvalSubTreeSize for sub in evTree.get_sub_trees()]):
+            evTree.split(maxEvalSubTreeSize, None) # fall back to split for memory
+    elif distributeMethod == "deriv":
+      pass #nothing more to do in this case
+    else:
+      raise ValueError("Invalid distribute method: %s" % distributeMethod)
 
-    if comm is not None:
-      for i,subTree in enumerate(evTree.get_sub_trees()):
-        subTree.split(None, comm.Get_size())
-        if verbosity > 2 and comm.Get_rank() == 0:
-          print "Division of sub-tree %d (size %d) for MPI:" % (i,len(subTree))
-          subTree.print_analysis()
-  elif distributeMethod == "deriv":
-    pass #nothing more to do in this case
-  else:
-    raise ValueError("Invalid distribute method: %s" % distributeMethod)
+  if verbosity > 2 and (comm is None or comm.Get_rank() == 0) and evTree.is_split():
+    print "Memory limit and/or MPI has imposed a division of the evaluation tree:"
+    evTree.print_analysis()
 
   #NOTE on chi^2 expressions:
   #in general case:   chi^2 = sum (p_i-f_i)^2/p_i  (for i summed over outcomes)
@@ -1184,7 +1183,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
       # jacobian[k,l] = derivative of p[k] wrt vectorGS[l].  Just concatenate derivative of p[k]'s multiplied by weights
 
   else:
-    raise NotImplementedError("CPTP-penalized LSGST not implemented.")
+    raise NotImplementedError("CPTP-penalized MC2GST not implemented.")
     #def objective_func(vectorGS):  #TODO: Upgrade from 'plus' restricted case
     #  gs.from_vector(vectorGS)
     #  p = gs.bulk_pr('plus', evTree, clipTo=probClipInterval, check=check) #RESTRICTION: 'plus' assumes only a single 'plus' spam label
@@ -1210,7 +1209,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
   full_minErrVec = objective_func(opt_x)  #note: calls gs.from_vector(opt_x,...) so don't need to call this again
   minErrVec = full_minErrVec if regularizeFactor == 0 else full_minErrVec[0:-len(x0)] #don't include regularization terms
   soln_gs = gs.copy();
-  #soln_gs.log("LSGST", { 'method': "leastsq", 'tol': tol,  'maxiter': maxiter } )
+  #soln_gs.log("MC2GST", { 'method': "leastsq", 'tol': tol,  'maxiter': maxiter } )
   #print "*** leastSQ TIME = ",(_time.time()-tStart) #TIMER!!!
 
   #opt_jac = _np.abs(jacobian(opt_x))
@@ -1270,17 +1269,17 @@ def do_mc2gst_with_model_selection(
       e.g. [ (), ('Gx',), ('Gx','Gy') ] 
 
   maxiter : int, optional
-      Maximum number of iterations for the least squares optimization.
+      Maximum number of iterations for the chi^2 optimization.
 
   maxfev : int, optional
-      Maximum number of function evaluations for the least squares optimization.
+      Maximum number of function evaluations for the chi^2 optimization.
       Defaults to maxiter.
 
   tol : float, optional
-      The tolerance for the least squares optimization.
+      The tolerance for the chi^2 optimization.
 
   cptp_penalty_factor : float, optional
-      If greater than zero, the least squares optimization also contains CPTP penalty
+      If greater than zero, the optimization also contains CPTP penalty
       terms which penalize non-CPTP-ness of the gateset being optimized.  This factor
       multiplies these CPTP penalty terms.
 
@@ -1290,7 +1289,7 @@ def do_mc2gst_with_model_selection(
       [ minProbClipForWeighting, 1-minProbClipForWeighting ].  
 
   probClipInterval : 2-tuple or None, optional
-     (min,max) values used to clip the probabilities predicted by gatesets during LSGST's
+     (min,max) values used to clip the probabilities predicted by gatesets during MC2GST's
      least squares search for an optimal gateset (if not None).  Defaults to no clipping.
 
   useFreqWeightedChiSq : bool, optional
@@ -1344,7 +1343,7 @@ def do_mc2gst_with_model_selection(
   # with increased or decreased dimension as per dimDelta
   if verbosity > 2: print ""
   if verbosity > 1: 
-    print "--- Least Squares GST with model selection (starting dim = %d) ---" % dim
+    print "--- Minimum Chi^2 GST with model selection (starting dim = %d) ---" % dim
 
   #convert list of GateStrings to list of raw tuples since that's all we'll need
   if len(gateStringsToUse) > 0 and isinstance(gateStringsToUse[0],_objs.GateString):
@@ -1414,7 +1413,7 @@ def do_mc2gst_with_model_selection(
     curStartGateset = curStartGateset.kick(0.01) #give random kick here??
     nParams = curStartGateset.num_params()
     if nParams > nStrings: 
-      #Future: do "LSGST" for underconstrained nonlinear problems -- or just double up?
+      #Future: do "MC2GST" for underconstrained nonlinear problems -- or just double up?
       tryIncreasedDim = False
       continue
 
@@ -1455,12 +1454,12 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
                         gatestringWeightsDict=None, memLimit=None, times=None,
                         comm=None, distributeMethod = "gatestrings"):
   """
-  Performs Iterative Least Squares Gate Set Tomography on the dataset.
+  Performs Iterative Minimum Chi^2 Gate Set Tomography on the dataset.
 
   Parameters
   ----------
   dataset : DataSet
-      The data used to generate LSGST gate estimates
+      The data used to generate MC2GST gate estimates
 
   startGateset : GateSet
       The GateSet used as a starting point for the least-squares
@@ -1468,22 +1467,22 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
 
   gateStringSetsToUseInEstimation : list of lists of (tuples or GateStrings)
       The i-th element is a list of the gate strings to be used in the i-th iteration 
-      of LSGST.  Each element of these lists is a gate string, specifed as
+      of MC2GST.  Each element of these lists is a gate string, specifed as
       either a GateString object or as a tuple of gate labels (but all must be specified
       using the same type).
       e.g. [ [ (), ('Gx',) ], [ (), ('Gx',), ('Gy',) ], [ (), ('Gx',), ('Gy',), ('Gx','Gy') ]  ]
 
   maxiter : int, optional
-      Maximum number of iterations for the least squares optimization.
+      Maximum number of iterations for the chi^2 optimization.
 
   maxfev : int, optional
-      Maximum number of function evaluations for the least squares optimization.
+      Maximum number of function evaluations for the chi^2 optimization.
 
   tol : float, optional
-      The tolerance for the least squares optimization.
+      The tolerance for the chi^2 optimization.
 
   cptp_penalty_factor : float, optional
-      If greater than zero, the least squares optimization also contains CPTP penalty
+      If greater than zero, the optimization also contains CPTP penalty
       terms which penalize non-CPTP-ness of the gateset being optimized.  This factor
       multiplies these CPTP penalty terms.
 
@@ -1493,7 +1492,7 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
       [ minProbClipForWeighting, 1-minProbClipForWeighting ].
 
   probClipInterval : 2-tuple or None, optional
-     (min,max) values used to clip the probabilities predicted by gatesets during LSGST's
+     (min,max) values used to clip the probabilities predicted by gatesets during MC2GST's
      least squares search for an optimal gateset (if not None).  Defaults to no clipping.
 
   useFreqWeightedChiSq : bool, optional
@@ -1572,7 +1571,7 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
   else:
     gateStringLists = gateStringSetsToUseInEstimation 
 
-  #Run extended LSGST iteratively on given sets of estimatable strings
+  #Run MC2GST iteratively on given sets of estimatable strings
   lsgstGatesets = [ ]; minErrs = [ ] #for returnAll == True case
   lsgstGateset = startGateset.copy(); nIters = len(gateStringLists)
   tRef = _time.time() #start time
@@ -1580,7 +1579,7 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
   for (i,stringsToEstimate) in enumerate(gateStringLists):
     if verbosity > 1: print ""
     if verbosity > 0:
-      print "--- Iterative LSGST: Beginning iter %d of %d %s: %d gate strings ---" \
+      print "--- Iterative MC2GST: Beginning iter %d of %d %s: %d gate strings ---" \
                   % (i+1,nIters,("(%s) " % gateStringSetLabels[i]) if gateStringSetLabels else "", len(stringsToEstimate))
       _sys.stdout.flush()
 
@@ -1598,14 +1597,15 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
                                       minProbClipForWeighting, probClipInterval,
                                       useFreqWeightedChiSq, regularizeFactor,
                                       verbosity, check, check_jacobian,
-                                      gatestringWeights, None, memLimit, comm)
+                                      gatestringWeights, None, memLimit, comm,
+                                      distributeMethod)
     if returnAll: 
       lsgstGatesets.append(lsgstGateset)
       minErrs.append(minErr)
 
     if times is not None:
       tNxt = _time.time(); 
-      times.append(('LSGST Iteration %d: chi2-opt' % (i+1),tNxt-tRef))
+      times.append(('MC2GST Iteration %d: chi2-opt' % (i+1),tNxt-tRef))
       tRef=tNxt
 
 
@@ -1624,14 +1624,14 @@ def do_iterative_mc2gst_with_model_selection(
   returnAll=False, gateStringSetLabels=None, verbosity=0, check=False,
   check_jacobian=False, gatestringWeightsDict=None, memLimit=None, comm=None):
   """
-  Performs Iterative Least Squares Gate Set Tomography on the dataset, and at
+  Performs Iterative Minimum Chi^2 Gate Set Tomography on the dataset, and at
   each iteration tests the current gateset model against gateset models with
   an increased and/or decreased dimension (model selection).
 
   Parameters
   ----------
   dataset : DataSet
-      The data used to generate LSGST gate estimates
+      The data used to generate MC2GST gate estimates
 
   startGateset : GateSet
       The GateSet used as a starting point for the least-squares
@@ -1642,22 +1642,22 @@ def do_iterative_mc2gst_with_model_selection(
       current gateset when performing model selection
 
   gateStringSetsToUseInEstimation : list of lists of (tuples or GateStrings)
-      The i-th element lists the gate strings to be used in the i-th iteration of LSGST. 
+      The i-th element lists the gate strings to be used in the i-th iteration of MC2GST. 
       Each element is a list of gate label tuples.
       e.g. [ [ (), ('Gx',) ], [ (), ('Gx',), ('Gy',) ], [ (), ('Gx',), ('Gy',), ('Gx','Gy') ]  ]
 
   maxiter : int, optional
-      Maximum number of iterations for the least squares optimization.
+      Maximum number of iterations for the chi^2 optimization.
 
   maxfev : int, optional
-      Maximum number of function evaluations for the least squares optimization.
+      Maximum number of function evaluations for the chi^2 optimization.
       Defaults to maxiter.
 
   tol : float, optional
-      The tolerance for the least squares optimization.
+      The tolerance for the chi^2 optimization.
 
   cptp_penalty_factor : float, optional
-      If greater than zero, the least squares optimization also contains CPTP penalty
+      If greater than zero, the optimization also contains CPTP penalty
       terms which penalize non-CPTP-ness of the gateset being optimized.  This factor
       multiplies these CPTP penalty terms.
 
@@ -1667,7 +1667,7 @@ def do_iterative_mc2gst_with_model_selection(
       [ minProbClipForWeighting, 1-minProbClipForWeighting ].
 
   probClipInterval : 2-tuple or None, optional
-     (min,max) values used to clip the probabilities predicted by gatesets during LSGST's
+     (min,max) values used to clip the probabilities predicted by gatesets during MC2GST's
      least squares search for an optimal gateset (if not None).  Defaults to no clipping.
 
   useFreqWeightedChiSq : bool, optional
@@ -1737,13 +1737,13 @@ def do_iterative_mc2gst_with_model_selection(
   else:
     gateStringLists = gateStringSetsToUseInEstimation 
 
-  #Run extended LSGST iteratively on given sets of estimatable strings
+  #Run MC2GST iteratively on given sets of estimatable strings
   lsgstGatesets = [ ]; minErrs = [ ] #for returnAll == True case
   lsgstGateset = startGateset.copy(); nIters = len(gateStringLists)
   for (i,stringsToEstimate) in enumerate(gateStringLists):
     if verbosity > 1: print ""
     if verbosity > 0:
-      print "--- Iterative LSGST: Beginning iter %d of %d %s: %d gate strings ---" \
+      print "--- Iterative MC2GST: Beginning iter %d of %d %s: %d gate strings ---" \
                   % (i+1,nIters,("(%s) " % gateStringSetLabels[i]) if gateStringSetLabels else "", len(stringsToEstimate))
       _sys.stdout.flush()
 
@@ -1833,14 +1833,14 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
         The GateSet used as a starting point for the maximum-likelihood estimation.
   
     maxiter : int, optional
-        Maximum number of iterations for the optimization.
+        Maximum number of iterations for the logL optimization.
   
     maxfev : int, optional
-        Maximum number of function evaluations for the optimization.
+        Maximum number of function evaluations for the logL optimization.
         Defaults to maxiter.
   
     tol : float, optional
-        The tolerance for the least squares optimization.
+        The tolerance for the logL optimization.
     
     minProbClip : float, optional
         The minimum probability treated normally in the evaluation of the log-likelihood.
@@ -1952,29 +1952,28 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
 
     if maxEvalSubTreeSize is not None:
       evTree.split(maxEvalSubTreeSize, None)
-      if verbosity > 2 and (comm is None or comm.Get_rank() == 0):
-        print "Memory limit has imposed a division of the evaluation tree:"
-        evTree.print_analysis()
-        #Note: do *not* split based on comm here, since any split that occurs
-        # here will be looped over in bulk_pr (which expects a split tree for
-        # the sole purpose of memory limiting)
   
-    if distributeMethod == "gatestrings":
-      #Split tree at *2nd* level for MPI (1st level = for memory/"pr"-level)
-      if not evTree.is_split():
-        evTree.split(None,1) # for bulk_pr
-      assert(evTree.is_split())
-  
-      if comm is not None:
-        for i,subTree in enumerate(evTree.get_sub_trees()):
-          subTree.split(None, comm.Get_size())
-          if verbosity > 2 and comm.Get_rank() == 0:
-            print "Division of sub-tree %d (size %d) for MPI:" %(i,len(subTree))
-            subTree.print_analysis()
-    elif distributeMethod == "deriv":
-      pass #nothing more to do in this case
-    else:
-      raise ValueError("Invalid distribute method: %s" % distributeMethod)
+    #FUTURE: could use distributeMethod for memory distribution also via 
+    #  wrtBlockSize (even when comm is None)
+    if comm is not None:
+      nprocs = comm.Get_size()
+      if distributeMethod == "gatestrings":
+        if not evTree.is_split():
+          evTree.split(None,nprocs)
+        else:
+          assert(maxEvalSubTreeSize is not None)
+          if len(evTree.get_sub_trees()) < nprocs:
+            evTree.split(None,nprocs)
+            if any([ len(sub)>maxEvalSubTreeSize for sub in evTree.get_sub_trees()]):
+              evTree.split(maxEvalSubTreeSize, None) # fall back to split for memory
+      elif distributeMethod == "deriv":
+        pass #nothing more to do in this case
+      else:
+        raise ValueError("Invalid distribute method: %s" % distributeMethod)
+
+    if verbosity > 2 and (comm is None or comm.Get_rank() == 0) and evTree.is_split():
+      print "Memory limit and/or MPI has imposed a division of the evaluation tree:"
+      evTree.print_analysis()
 
 
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
@@ -2220,7 +2219,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
   Parameters
   ----------
   dataset : DataSet
-      The data used to generate LSGST gate estimates
+      The data used to generate MLGST gate estimates
 
   startGateset : GateSet
       The GateSet used as a starting point for the least-squares
@@ -2228,19 +2227,19 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
 
   gateStringSetsToUseInEstimation : list of lists of (tuples or GateStrings)
       The i-th element is a list of the gate strings to be used in the i-th iteration 
-      of LSGST.  Each element of these lists is a gate string, specifed as
+      of MLGST.  Each element of these lists is a gate string, specifed as
       either a GateString object or as a tuple of gate labels (but all must be specified
       using the same type).
       e.g. [ [ (), ('Gx',) ], [ (), ('Gx',), ('Gy',) ], [ (), ('Gx',), ('Gy',), ('Gx','Gy') ]  ]
 
   maxiter : int, optional
-      Maximum number of iterations for the least squares optimization.
+      Maximum number of iterations for the logL optimization.
 
   maxfev : int, optional
-      Maximum number of function evaluations for the least squares optimization.
+      Maximum number of function evaluations for the logL optimization.
 
   tol : float, optional
-      The tolerance for the least squares optimization.
+      The tolerance for the logL optimization.
 
   minProbClip : float, optional
       The minimum probability treated normally in the evaluation of the log-likelihood.
@@ -2342,7 +2341,8 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                                       maxiter, maxfev, tol, 0, minProbClip, 
                                       probClipInterval, useFreqWeightedChiSq,
                                       0, verbosity, check,
-                                      False, None, None, memLimit, comm) 
+                                      False, None, None, memLimit, comm,
+                                      distributeMethod) 
                           # Note maxLogL is really chi2 number here
     if times is not None:
       tNxt = _time.time(); 

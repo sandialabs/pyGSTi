@@ -1,0 +1,6 @@
+pygsti.objects.StaticSPAMVec.get_dimension
+==========================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: StaticSPAMVec.get_dimension

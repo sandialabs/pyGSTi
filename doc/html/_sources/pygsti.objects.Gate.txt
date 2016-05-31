@@ -1,0 +1,26 @@
+pygsti.objects.Gate
+===================
+
+.. currentmodule:: pygsti.objects
+
+.. autoclass:: Gate
+
+   
+   .. automethod:: __init__
+       :noindex:
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree:
+   
+      ~Gate.__init__
+      ~Gate.convert_to_matrix
+      ~Gate.get_dimension
+   
+   
+
+   
+   
+   

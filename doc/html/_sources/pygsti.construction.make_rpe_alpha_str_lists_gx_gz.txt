@@ -1,0 +1,6 @@
+pygsti.construction.make_rpe_alpha_str_lists_gx_gz
+==================================================
+
+.. currentmodule:: pygsti.construction
+
+.. autofunction:: make_rpe_alpha_str_lists_gx_gz

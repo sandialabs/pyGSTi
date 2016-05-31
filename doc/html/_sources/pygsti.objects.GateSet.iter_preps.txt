@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.iter_preps
+=================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.iter_preps

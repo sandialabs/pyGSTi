@@ -18,7 +18,7 @@ pygsti.objects.ConfidenceRegion
       ~ConfidenceRegion.__init__
       ~ConfidenceRegion.get_gate_fn_confidence_interval
       ~ConfidenceRegion.get_gateset
-      ~ConfidenceRegion.get_parameterization_flags
+      ~ConfidenceRegion.get_gateset_fn_confidence_interval
       ~ConfidenceRegion.get_profile_likelihood_confidence_intervals
       ~ConfidenceRegion.get_spam_fn_confidence_interval
    

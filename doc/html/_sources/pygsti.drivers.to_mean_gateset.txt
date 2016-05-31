@@ -1,0 +1,6 @@
+pygsti.drivers.to_mean_gateset
+==============================
+
+.. currentmodule:: pygsti.drivers
+
+.. autofunction:: to_mean_gateset

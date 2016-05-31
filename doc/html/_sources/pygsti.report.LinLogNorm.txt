@@ -1,0 +1,29 @@
+pygsti.report.LinLogNorm
+========================
+
+.. currentmodule:: pygsti.report
+
+.. autoclass:: LinLogNorm
+
+   
+   .. automethod:: __init__
+       :noindex:
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree:
+   
+      ~LinLogNorm.__init__
+      ~LinLogNorm.autoscale
+      ~LinLogNorm.autoscale_None
+      ~LinLogNorm.inverse
+      ~LinLogNorm.process_value
+      ~LinLogNorm.scaled
+   
+   
+
+   
+   
+   

@@ -4,7 +4,7 @@
 #    in the file "license.txt" in the top-level pyGSTi directory 
 #*****************************************************************
 """ 
-Variables for working with the a gatest containing X(pi/2) and Y(pi/2) gates.
+Variables for working with the a gate set containing X(pi/2) and Y(pi/2) gates.
 """
 
 import gatestringconstruction as _strc

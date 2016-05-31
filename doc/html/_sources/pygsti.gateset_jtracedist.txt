@@ -1,0 +1,6 @@
+pygsti.gateset_jtracedist
+=========================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: gateset_jtracedist

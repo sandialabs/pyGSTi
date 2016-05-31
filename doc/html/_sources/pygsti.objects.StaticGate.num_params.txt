@@ -1,0 +1,6 @@
+pygsti.objects.StaticGate.num_params
+====================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: StaticGate.num_params

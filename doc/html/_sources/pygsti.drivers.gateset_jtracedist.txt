@@ -1,0 +1,6 @@
+pygsti.drivers.gateset_jtracedist
+=================================
+
+.. currentmodule:: pygsti.drivers
+
+.. autofunction:: gateset_jtracedist

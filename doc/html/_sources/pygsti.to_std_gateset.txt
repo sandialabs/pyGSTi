@@ -1,0 +1,6 @@
+pygsti.to_std_gateset
+=====================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: to_std_gateset

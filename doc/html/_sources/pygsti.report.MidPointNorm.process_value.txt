@@ -1,0 +1,6 @@
+pygsti.report.MidPointNorm.process_value
+========================================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: MidPointNorm.process_value

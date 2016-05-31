@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.iter_gates
+=================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.iter_gates

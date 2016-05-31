@@ -1,0 +1,6 @@
+pygsti.objects.LinearlyParameterizedGate.get_dimension
+======================================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: LinearlyParameterizedGate.get_dimension

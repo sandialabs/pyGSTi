@@ -1,0 +1,6 @@
+pygsti.objects.StaticSPAMVec.copy
+=================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: StaticSPAMVec.copy

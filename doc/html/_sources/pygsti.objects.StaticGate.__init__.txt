@@ -1,0 +1,6 @@
+pygsti.objects.StaticGate.__init__
+==================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: StaticGate.__init__

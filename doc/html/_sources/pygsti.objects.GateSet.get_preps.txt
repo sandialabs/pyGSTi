@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.get_preps
+================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.get_preps

@@ -17,12 +17,14 @@ pygsti.objects.EvalTree
    
       ~EvalTree.__init__
       ~EvalTree.append
+      ~EvalTree.copy
       ~EvalTree.count
       ~EvalTree.extend
       ~EvalTree.generate_gatestring_list
       ~EvalTree.get_analysis_plot_infos
       ~EvalTree.get_init_labels
       ~EvalTree.get_list_of_final_value_tree_indices
+      ~EvalTree.get_min_tree_size
       ~EvalTree.get_sub_trees
       ~EvalTree.get_tree_index_of_final_value
       ~EvalTree.index

@@ -1,0 +1,6 @@
+pygsti.objects.StaticGate.set_matrix
+====================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: StaticGate.set_matrix

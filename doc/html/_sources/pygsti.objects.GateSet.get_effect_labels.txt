@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.get_effect_labels
+========================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.get_effect_labels

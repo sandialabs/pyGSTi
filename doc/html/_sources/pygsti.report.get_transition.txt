@@ -1,0 +1,6 @@
+pygsti.report.get_transition
+============================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: get_transition

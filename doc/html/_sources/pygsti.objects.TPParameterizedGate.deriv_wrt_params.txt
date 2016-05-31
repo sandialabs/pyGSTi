@@ -1,0 +1,6 @@
+pygsti.objects.TPParameterizedGate.deriv_wrt_params
+===================================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: TPParameterizedGate.deriv_wrt_params

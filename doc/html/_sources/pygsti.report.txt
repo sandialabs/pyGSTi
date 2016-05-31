@@ -40,9 +40,10 @@ pygsti.report
       focused_mc2gst_gateset
       focused_mc2gst_gatesets
       frequency_matrix
+      gate_matrix_boxplot
+      gate_matrix_errgen_boxplot
       gateset_with_lgst_gatestring_estimates
       generate_boxplot
-      generate_zoomed_boxplot
       get_blank_table
       get_chi2_confidence_region
       get_chi2_progress_table
@@ -50,28 +51,34 @@ pygsti.report
       get_gateset_choi_table
       get_gateset_closest_unitary_table
       get_gateset_decomp_table
+      get_gateset_eigenval_table
       get_gateset_gates_table
       get_gateset_rotn_axis_table
       get_gateset_spam_parameters_table
       get_gateset_spam_table
+      get_gateset_vs_target_angles_table
       get_gateset_vs_target_err_gen_table
       get_gateset_vs_target_table
       get_gatestring_multi_table
       get_gatestring_table
       get_logl_confidence_region
       get_logl_progress_table
+      get_transition
       get_unitary_gateset_gates_table
+      gof_boxplot_keyplot
       logl_boxplot
       logl_matrix
+      make_linear_cmap
       nested_color_boxplot
+      pauliprod_hamiltonian_boxplot
+      polar_eigenval_plot
       probability_matrix
       small_eigval_err_rate
       small_eigval_err_rate_boxplot
+      splice_cmaps
       total_count_matrix
       whack_a_chi2_mole_boxplot
       whack_a_logl_mole_boxplot
-      zoomed_chi2_boxplot
-      zoomed_direct_chi2_boxplot
    
    
 
@@ -84,9 +91,11 @@ pygsti.report
       :toctree:
 
    
-      GSTFigure
+      LinLogNorm
+      MidPointNorm
       ReportableQty
       Results
+      StdColormapFactory
    
    
 

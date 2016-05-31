@@ -133,7 +133,7 @@ class EvalTree(list):
         #see if there are superfluous tree nodes: those with iFinal == -1 and 
         self.finalList = finalIndxList
         self.myFinalToParentFinalMap = None #this tree has no "children",
-                                 # i.e. has not been created by a 'split'
+        self.parentIndexMap = None          # i.e. has not been created by a 'split'
         self.subTrees = [] #no subtrees yet
 
     def copy(self):
@@ -142,6 +142,7 @@ class EvalTree(list):
         newTree.gateLabels = self.gateLabels
         newTree.finalList = self.finalList
         newTree.myFinalToParentFinalMap = self.myFinalToParentFinalMap
+        newTree.parentIndexMap = self.parentIndexMap
         newTree.subTrees = [ st.copy() for st in self.subTrees ]
         return newTree
 
@@ -336,18 +337,24 @@ class EvalTree(list):
         -------
         None
         """
-        if (maxSubTreeSize is not None and numSubTrees is not None) or \
-           (maxSubTreeSize is None and numSubTrees is None):
+        if (maxSubTreeSize is None and numSubTrees is None) or \
+           (maxSubTreeSize is not None and numSubTrees is not None):
             raise ValueError("Specify *either* maxSubTreeSize or numSubTrees")
+        if numSubTrees is not None and numSubTrees <= 0:
+            raise ValueError("EvalTree split() error: numSubTrees must be > 0!")
 
         #Don't split at all if it's unnecessary
-        if maxSubTreeSize is not None and len(self) < maxSubTreeSize: return 
-        if numSubTrees is not None and numSubTrees <= 1:
-            assert(numSubTrees == 1)
-            self.subTrees = [self.copy()]
-            self.subTrees[0].myFinalToParentFinalMap = \
-                range(len(self.finalList))
-            return
+        if maxSubTreeSize is None or len(self) < maxSubTreeSize:
+            if numSubTrees is None or numSubTrees == 1: return
+
+            ##Split into a *single* subtree: not needed anymore (used for "tier-ed" splitting)
+            #assert(numSubTrees == 1)
+            #self.subTrees = [self.copy()]
+            #self.subTrees[0].myFinalToParentFinalMap = \
+            #    range(len(self.finalList))
+            #self.subTrees[0].parentIndexMap = \
+            #    range(len(self))
+            #return
 
         self.subTrees = []
         subTreesFinalList = [None]*len(self.finalList)
@@ -361,10 +368,6 @@ class EvalTree(list):
 
         #   Part 2: determine whether we need to split/merge "single" trees
         if numSubTrees is not None:
-
-            #OLD
-            #start with first numSubTrees single item trees
-            #subTreeSetList = singleItemTreeSetList[0:numSubTrees]
 
             #Merges: find the best merges to perform if any are required
             if nSingleItemTrees > numSubTrees:
@@ -407,15 +410,6 @@ class EvalTree(list):
                     del indicesLeft[iMaxIntsct]
                         
                 assert(len(subTreeSetList) == numSubTrees)
-
-                #OLD
-                #for singleItemTreeSet in singleItemTreeSetList[numSubTrees:]:
-                #
-                #    #Merge this single-item-generated tree into the smallest
-                #    # existing tree
-                #    iToMergeInto = _np.argmin(map(len,subTreeSetList))
-                #    subTreeSetList[iToMergeInto] = \
-                #      subTreeSetList[iToMergeInto].union(singleItemTreeSet)
 
             #Splits: 
             else: 
@@ -461,6 +455,20 @@ class EvalTree(list):
                 else: # we create a new subtree
                     subTreeSetList.append( singleItemTreeSet ) 
 
+        #TODO: improve tree efficiency via better splitting?
+        #print "DEBUG TREE SPLITTING:"
+        #for k,dbTreeSet in enumerate(subTreeSetList):
+        #    print "Tree %d (size %d): " % (k,len(dbTreeSet)), [ len(dbTreeSet.intersection(x)) for kk,x in enumerate(subTreeSetList) if kk != k ]
+        #cnts = [0]*len(self)
+        #for k,dbTreeSet in enumerate(subTreeSetList):
+        #    for i in dbTreeSet:
+        #        cnts[i] += 1
+        #sorted_cnts = sorted( list(enumerate(cnts)), key=lambda x: x[1], reverse=True)
+        #print "Top index : cnts"
+        #for ii,(i,cnt) in enumerate(sorted_cnts):
+        #    print ii,":", i,", ",cnt
+        #raise ValueError("STOP")
+
         #Second pass - create subtrees from index sets
         need_to_compute = [False]*len(self)
         for idx in self.finalList: 
@@ -492,7 +500,8 @@ class EvalTree(list):
                 else:
                     iFinal = -1
                     
-                subTree.append( (iLeft,iRight,iFinal) )                
+                subTree.append( (iLeft,iRight,iFinal) )
+            subTree.parentIndexMap = subTreeIndices #parent index of each subtree index
             self.subTrees.append( subTree )    
 
         return
@@ -578,6 +587,8 @@ class EvalTree(list):
             print "Max in use at once = (smallest tree size for mem) = %d" % maxInUse
             
         else: #tree is split
+            print "Size of original tree = %d" % len(self)
+            print "Size of original gatestring_list = %d" % len(self.finalList)
             print "Tree is split into %d sub-trees" % len(self.subTrees)
             print "Sub-tree lengths = ", list(map(len,self.subTrees)), " (Sum = %d)" % sum(map(len,self.subTrees))
             for i,t in enumerate(self.subTrees):

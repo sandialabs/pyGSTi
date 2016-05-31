@@ -1,0 +1,6 @@
+pygsti.rb_decay
+===============
+
+.. currentmodule:: pygsti
+
+.. autofunction:: rb_decay

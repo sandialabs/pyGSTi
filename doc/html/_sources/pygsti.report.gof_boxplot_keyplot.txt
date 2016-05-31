@@ -1,0 +1,6 @@
+pygsti.report.gof_boxplot_keyplot
+=================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: gof_boxplot_keyplot

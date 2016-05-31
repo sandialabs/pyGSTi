@@ -1,0 +1,6 @@
+pygsti.gs_mean1
+===============
+
+.. currentmodule:: pygsti
+
+.. autofunction:: gs_mean1

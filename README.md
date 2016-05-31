@@ -6,8 +6,8 @@ Overview:
 --------
 This is the root directory of the pyGSTi software, which is a Python
  implementation of Gate Set Tomography.  pyGSTi free software, licensed
- under the GNU public license (GPL).  Copyright and license information
- can be found in license.txt, and the GPL itself in COPYING.
+ under the GNU General Public License (GPL).  Copyright and license information
+ can be found in ``license.txt``, and the GPL itself in ``COPYING``.
 
 
 Getting Started:
@@ -92,7 +92,7 @@ install_locally.py :  A Python script that sets up the software to run
                   not copy any files to any system directories, making it
 		      a good option for a user without administrative access.
 
-COPYING  :  A text version of the GNU Public License.
+COPYING  :  A text version of the GNU General Public License.
 
 license.txt  :  A text file giving copyright and licensing information
 	        about pyGSTi.

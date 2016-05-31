@@ -1,0 +1,6 @@
+pygsti.prep_penalty
+===================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: prep_penalty

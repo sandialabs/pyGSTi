@@ -617,3 +617,31 @@ def unitary_to_process_mx(U):
     # U -> kron(U,Uc) since U rho U_dag -> kron(U,Uc)
     #  since AXB --row-vectorize--> kron(A,B.T)*vec(X)
     return _np.kron(U,_np.conjugate(U))
+
+
+
+def error_generator(gate, target_gate):
+    """
+    Construct the error generator from a gate and its target.
+
+    Computes the value of the error generator given by
+    errgen = log( inv(target_gate) * gate ), so that 
+    gate = target_gate * exp(errgen).
+
+    Parameters
+    ----------
+    gate : ndarray
+      The gate matrix
+
+    target_gate : ndarray
+      The target gate matrix
+
+    Returns
+    -------
+    errgen : ndarray
+      The error generator.
+    """
+    target_gate_inv = _spl.inv(target_gate)
+    error_gen = _np.real_if_close(_spl.logm(_np.dot(target_gate_inv,gate)))
+    return error_gen
+

@@ -1,0 +1,6 @@
+pygsti.objects.StaticSPAMVec.num_params
+=======================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: StaticSPAMVec.num_params

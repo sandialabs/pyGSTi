@@ -21,7 +21,7 @@ def _nCr(n,r):
 def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList, 
                                    testLs=(256,2048), spamLabels="all", tol=0.75,
                                    searchMode="sequential", nRandom=100, seed=None,
-                                   verbosity=0, testPairList=None):
+                                   verbosity=0, testPairList=None, memLimit=None):
 
     """ Still in experimental stages.  TODO docstring. """
     #trim LSGST list of all f1+germ^exp+f2 strings to just those needed to get full rank jacobian. (compressed sensing like)
@@ -42,7 +42,27 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
             lst = _gsc.create_gatestring_list("f0+expGerm+f1", f0=prepStrs, f1=effectStrs,
                                                          expGerm=expGerm, order=('f0','f1'))
             evTree = targetGateset.bulk_evaltree(lst)
-            dprobs = targetGateset.bulk_dprobs(evTree)
+            blkSz = None
+
+            if memLimit is not None:
+                #nSpam = targetGateset.num_preps() * targetGateset.num_effects()
+                dim = targetGateset.get_dimension()
+                nParams = targetGateset.num_params()
+                memEstimate = 8.0*len(evTree)*dim**2*nParams #*nSPAM
+                if memEstimate > memLimit:
+                    print "Germ %d/%d: Memory estimate = %.1fGB > %.1fGB" % \
+                        (iGerm+1,len(germList),memEstimate/(1024.0**3),memLimit/(1024.0**3))
+                    if memEstimate/nParams < memLimit:
+                        blkSz = int(nParams * memLimit / memEstimate)
+                        print " --> Setting max block size = ",blkSz
+                    else:
+                        #Tree splitting method
+                        maxTreeLength = len(evTree) * memLimit / memEstimate
+                        evTree.split(maxTreeLength)
+                        print " --> Setting max subtree size = ",maxTreeLength
+                        evTree.print_analysis()
+
+            dprobs = targetGateset.bulk_dprobs(evTree, wrtBlockSize=blkSz)
             for iSpamLabel,spamLabel in enumerate(spamLabels):
                 dP[iGerm, iSpamLabel, :,:] = dprobs[spamLabel]
         return dP

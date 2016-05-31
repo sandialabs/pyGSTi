@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.get_reverse_spam_defs
+============================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.get_reverse_spam_defs
