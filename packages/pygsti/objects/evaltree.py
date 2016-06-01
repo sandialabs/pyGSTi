@@ -416,6 +416,7 @@ class EvalTree(list):
                 #Splits: find the best splits to perform
                 #TODO: how to split a tree intelligently -- for now, just do
                 # trivial splits by making empty trees.
+                subTreeSetList = singleItemTreeSetList[:]
                 nSplitsNeeded = numSubTrees - nSingleItemTrees
                 while nSplitsNeeded > 0:
                     # LATER... 

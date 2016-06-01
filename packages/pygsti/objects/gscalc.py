@@ -2112,15 +2112,15 @@ class GateSetCalculator(object):
     def _fill_sub_result(self, result_tup, spam_label_rows, calc_from_spamlabel_fn):
 
         remainder_index = None
-        result_range = range(len(result_tup))
         for spamLabel,rowIndex in spam_label_rows.iteritems():
             if self._is_remainder_spamlabel(spamLabel):
                 remainder_index = rowIndex
                 continue
             sub = calc_from_spamlabel_fn(spamLabel)
             for i,val in enumerate(sub):
-                if val is not None:
+                if result_tup[i] is not None:
                     result_tup[i][rowIndex] = val
+                else: assert(val is None)
     
         #compute remainder label
         if remainder_index is not None: 
@@ -2130,7 +2130,11 @@ class GateSetCalculator(object):
 
                 rowIndex = spam_label_rows.get(spamLabel,None)
                 if rowIndex is not None:
-                    sub = [result_tup[i][rowIndex] for i in result_range]
+                    sub = [ ]
+                    for i in range(len(result_tup)):
+                        if result_tup[i] is not None:
+                            sub.append( result_tup[i][rowIndex] )
+                        else: sub.append(None)
                 else:
                     sub = calc_from_spamlabel_fn(spamLabel)
 

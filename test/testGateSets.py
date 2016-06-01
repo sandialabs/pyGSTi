@@ -319,6 +319,14 @@ class TestGateSetMethods(GateSetTestCase):
       self.assertAlmostEqual(bulk_probs['minus'][0],1.0-p1)
       self.assertAlmostEqual(bulk_probs['minus'][1],1.0-p2)
 
+      #test with split eval tree
+      evt_split = evt.copy(); evt_split.split(numSubTrees=2)
+      bulk_probs_splt = self.assertNoWarnings(self.gateset.bulk_probs,
+                                   evt_split, check=True)
+      self.assertArraysAlmostEqual(bulk_probs['plus'], bulk_probs_splt['plus'])
+      self.assertArraysAlmostEqual(bulk_probs['minus'], bulk_probs_splt['minus'])
+
+
       nGateStrings = 2; nSpamLabels = 2
       probs_to_fill = np.empty( (nSpamLabels,nGateStrings), 'd')
       spam_label_rows = { 'plus': 0, 'minus': 1 }
@@ -375,8 +383,10 @@ class TestGateSetMethods(GateSetTestCase):
       dProbs0 = self.gateset.dprobs(gatestring0)
       dProbs1 = self.gateset.dprobs(gatestring1)
       dProbs2 = self.gateset.dprobs(gatestring2)
-      bulk_dProbs = self.gateset.bulk_dprobs(evt, returnPr=False, check=True)
-      bulk_dProbs_chk = self.gateset.bulk_dprobs(evt, returnPr=True, check=True)
+      bulk_dProbs = self.assertNoWarnings(self.gateset.bulk_dprobs,
+                                          evt, returnPr=False, check=True)
+      bulk_dProbs_chk = self.assertNoWarnings(self.gateset.bulk_dprobs,
+                                              evt, returnPr=True, check=True)
       self.assertArraysAlmostEqual(bulk_dProbs['plus'],bulk_dProbs_chk['plus'][0])
       self.assertArraysAlmostEqual(bulk_dProbs['plus'][0,:],dP0)
       self.assertArraysAlmostEqual(bulk_dProbs['plus'][1,:],dP1)
@@ -385,8 +395,15 @@ class TestGateSetMethods(GateSetTestCase):
       self.assertArraysAlmostEqual(bulk_dProbs['plus'][1,:],dProbs1['plus'])
       self.assertArraysAlmostEqual(bulk_dProbs['plus'][2,:],dProbs2['plus'])
 
-      dProbs0b = self.gateset.dprobs(gatestring0, returnPr=True)
+      #test with split eval tree
+      evt_split = evt.copy(); evt_split.split(numSubTrees=2)
+      bulk_dProbs_splt = self.assertNoWarnings(self.gateset.bulk_dprobs,
+                                   evt_split, returnPr=False, check=True)
+      self.assertArraysAlmostEqual(bulk_dProbs['plus'], bulk_dProbs_splt['plus'])
+      self.assertArraysAlmostEqual(bulk_dProbs['minus'], bulk_dProbs_splt['minus'])
 
+
+      dProbs0b = self.gateset.dprobs(gatestring0, returnPr=True)
 
       nGateStrings = 3; nSpamLabels = 2; nParams = self.gateset.num_params()
       probs_to_fill = np.empty( (nSpamLabels,nGateStrings), 'd')
@@ -456,8 +473,10 @@ class TestGateSetMethods(GateSetTestCase):
       hProbs0 = self.gateset.hprobs(gatestring0)
       hProbs1 = self.gateset.hprobs(gatestring1)
       hProbs2 = self.gateset.hprobs(gatestring2)
-      bulk_hProbs = self.gateset.bulk_hprobs(evt, returnPr=False, check=True)
-      bulk_hProbs_chk = self.gateset.bulk_hprobs(evt, returnPr=True, check=True)
+      bulk_hProbs = self.assertNoWarnings(self.gateset.bulk_hprobs,
+                                          evt, returnPr=False, check=True)
+      bulk_hProbs_chk = self.assertNoWarnings(self.gateset.bulk_hprobs,
+                                              evt, returnPr=True, check=True)
       self.assertArraysAlmostEqual(bulk_hProbs['plus'],bulk_hProbs_chk['plus'][0])
       self.assertArraysAlmostEqual(bulk_hProbs['plus'][0,:,:],hP0)
       self.assertArraysAlmostEqual(bulk_hProbs['plus'][1,:,:],hP1)
@@ -465,6 +484,14 @@ class TestGateSetMethods(GateSetTestCase):
       self.assertArraysAlmostEqual(bulk_hProbs['plus'][0,:,:],hProbs0['plus'])
       self.assertArraysAlmostEqual(bulk_hProbs['plus'][1,:,:],hProbs1['plus'])
       self.assertArraysAlmostEqual(bulk_hProbs['plus'][2,:,:],hProbs2['plus'])
+
+      #test with split eval tree
+      evt_split = evt.copy(); evt_split.split(maxSubTreeSize=4)
+      bulk_hProbs_splt = self.assertNoWarnings(self.gateset.bulk_hprobs,
+                                   evt_split, returnPr=False, check=True)
+      self.assertArraysAlmostEqual(bulk_hProbs['plus'], bulk_hProbs_splt['plus'])
+      self.assertArraysAlmostEqual(bulk_hProbs['minus'], bulk_hProbs_splt['minus'])
+
 
       #Vary keyword args
       hProbs0b = self.gateset.hprobs(gatestring0,returnPr=True)
@@ -529,6 +556,21 @@ class TestGateSetMethods(GateSetTestCase):
       self.assertArraysAlmostEqual(hProdsFlat, np.repeat(S3,N)[:,None,None]*hProdsF2)
       self.assertArraysAlmostEqual(dProdsF, np.repeat(S3,N)[:,None]*dProdsF2)
       self.assertArraysAlmostEqual(prodsF, S3[:,None,None]*prodsF2)
+
+
+      hcols = []
+      d12cols = []
+      for hprobs, dprobs12 in self.gateset.bulk_hprobs_by_column(
+          spam_label_rows, evt, True, clipTo=(-1e6,1e6) ):
+          hcols.append(hprobs)
+          d12cols.append(dprobs12)
+      all_hcols = np.concatenate( hcols, axis=3 )
+      all_d12cols = np.concatenate( d12cols, axis=3 )
+      dprobs12 = dprobs_to_fill[:,:,:,None] * dprobs_to_fill[:,:,None,:]
+      self.assertArraysAlmostEqual(all_hcols,hprobs_to_fill)
+      self.assertArraysAlmostEqual(all_d12cols,dprobs12)
+
+
 
 
   def test_tree_splitting(self):

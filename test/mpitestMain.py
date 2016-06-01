@@ -32,11 +32,11 @@ def runOneQubit_Tutorial():
     #    filename="tutorial_files/MyEvenEasierReport.pdf",verbosity=2)
 
 
-def runMC2GSTAnalysis(myspecs, mygerms, gsTarget, seed,
-                      maxLs = [1,2,4,8],
-                      nSamples=1000, useFreqWeightedChiSq=False,
-                      minProbClipForWeighting=1e-4, fidPairList=None,
-                      comm=None, distributeMethod="gatestrings"):
+def runAnalysis(obj, myspecs, mygerms, gsTarget, seed,
+                maxLs = [1,2,4,8],
+                nSamples=1000, useFreqWeightedChiSq=False,
+                minProbClipForWeighting=1e-4, fidPairList=None,
+                comm=None, distributeMethod="gatestrings"):
     rhoStrs, EStrs = pygsti.construction.get_spam_strs(myspecs)
     lgstStrings = pygsti.construction.list_lgst_gatestrings(
         myspecs, gsTarget.gates.keys())
@@ -66,28 +66,38 @@ def runMC2GSTAnalysis(myspecs, mygerms, gsTarget, seed,
     
     #Run full iterative LSGST
     tStart = time.time()
-    all_gs_lsgst = pygsti.do_iterative_mc2gst(
-        dsFake, gs_lgst_go, lsgstStringsToUse,
-        minProbClipForWeighting=minProbClipForWeighting,
-        probClipInterval=(-1e5,1e5),
-        verbosity=1, memLimit=3*(1024)**3, returnAll=True, 
-        useFreqWeightedChiSq=useFreqWeightedChiSq, comm=comm,
-        distributeMethod=distributeMethod)
+    if obj == "chi2":
+        all_gs_lsgst = pygsti.do_iterative_mc2gst(
+            dsFake, gs_lgst_go, lsgstStringsToUse,
+            minProbClipForWeighting=minProbClipForWeighting,
+            probClipInterval=(-1e5,1e5),
+            verbosity=1, memLimit=3*(1024)**3, returnAll=True, 
+            useFreqWeightedChiSq=useFreqWeightedChiSq, comm=comm,
+            distributeMethod=distributeMethod)
+    elif obj == "logl":
+        all_gs_lsgst = pygsti.do_iterative_mlgst(
+            dsFake, gs_lgst_go, lsgstStringsToUse,
+            minProbClip=minProbClipForWeighting,
+            probClipInterval=(-1e5,1e5),
+            verbosity=1, memLimit=3*(1024)**3, returnAll=True, 
+            useFreqWeightedChiSq=useFreqWeightedChiSq, comm=comm,
+            distributeMethod=distributeMethod)
+
     tEnd = time.time()
     print "Time = ",(tEnd-tStart)/3600.0,"hours"
     
     return all_gs_lsgst, gs_dataGen
     
     
-def runOneQubit(comm=None, distributeMethod="gatestrings"):
+def runOneQubit(obj, comm=None, distributeMethod="gatestrings"):
     maxLengths = [0,1,2,4,8,16] #still need to define this manually
     specs = pygsti.construction.build_spam_specs(
         std.fiducials, prep_labels=std.gs_target.get_prep_labels(),
         effect_labels=std.gs_target.get_effect_labels())
 
-    gsets, dsGen = runMC2GSTAnalysis(specs, std.germs, std.gs_target,
-                                          1234, maxLengths, nSamples=1000,
-                                          comm=comm, distributeMethod=distributeMethod)
+    gsets, dsGen = runAnalysis(obj, specs, std.germs, std.gs_target,
+                               1234, maxLengths, nSamples=1000,
+                               comm=comm, distributeMethod=distributeMethod)
     return gsets
 
 
@@ -555,12 +565,30 @@ def test_MPI_by_columns(comm):
 
 
 @mpitest(4)
-def test_MPI_gatestrings(comm):
+def test_MPI_gatestrings_chi2(comm):
     #Individual processors
-    my1ProcResults = runOneQubit()
+    my1ProcResults = runOneQubit("chi2")
 
     #Using all processors
-    myManyProcResults = runOneQubit(comm,"gatestrings")
+    myManyProcResults = runOneQubit("chi2",comm,"gatestrings")
+
+    #compare on root proc
+    if comm.Get_rank() == 0:
+        for gs1,gs2 in zip(my1ProcResults,myManyProcResults):
+            gs2_go = pygsti.optimize_gauge(gs2, "target", targetGateset=gs1,
+                                           gateWeight=1.0, spamWeight=1.0)
+            print "Frobenius distance = ", gs1.frobeniusdist(gs2_go)
+            assert(gs1.frobeniusdist(gs2_go) < 1e-5)
+    return
+
+
+@mpitest(4)
+def test_MPI_gatestrings_logl(comm):
+    #Individual processors
+    my1ProcResults = runOneQubit("logl")
+
+    #Using all processors
+    myManyProcResults = runOneQubit("logl",comm,"gatestrings")
 
     #compare on root proc
     if comm.Get_rank() == 0:
@@ -574,10 +602,10 @@ def test_MPI_gatestrings(comm):
 @mpitest(4)
 def test_MPI_derivcols(comm):
     #Individual processors
-    my1ProcResults = runOneQubit()
+    my1ProcResults = runOneQubit("chi2")
 
     #Using all processors
-    myManyProcResults = runOneQubit(comm,"deriv")
+    myManyProcResults = runOneQubit("chi2",comm,"deriv")
 
     #compare on root proc
     if comm.Get_rank() == 0:
