@@ -814,7 +814,7 @@ def do_iterative_exlgst(
 def do_mc2gst(dataset, startGateset, gateStringsToUse, 
               maxiter=100000, maxfev=None, tol=1e-6, 
               cptp_penalty_factor=0, minProbClipForWeighting=1e-4,
-              probClipInterval=None, useFreqWeightedChiSq=False,
+              probClipInterval=(-1e6,1e6), useFreqWeightedChiSq=False,
               regularizeFactor=0, verbosity=0, check=False,
               check_jacobian=False, gatestringWeights=None,
               gateLabelAliases=None, memLimit=None, comm=None,
@@ -859,7 +859,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
   probClipInterval : 2-tuple or None, optional
      (min,max) values used to clip the probabilities predicted by gatesets during MC2GST's
-     least squares search for an optimal gateset (if not None).  Defaults to no clipping.
+     least squares search for an optimal gateset (if not None).  if None, no clipping is performed.
 
   useFreqWeightedChiSq : bool, optional
       If True, objective function uses only an approximate chi^2 weighting:  N/(f*(1-f)) 
@@ -1241,7 +1241,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 def do_mc2gst_with_model_selection(
   dataset, startGateset, dimDelta, gateStringsToUse, 
   maxiter=100000, maxfev=None, tol=1e-6, 
-  cptp_penalty_factor=0, minProbClipForWeighting=1e-4, probClipInterval=None,
+  cptp_penalty_factor=0, minProbClipForWeighting=1e-4, probClipInterval=(-1e6,1e6),
   useFreqWeightedChiSq=False, regularizeFactor=0, verbosity=0,
   check=False, check_jacobian=False, gatestringWeights=None, memLimit=None,
   comm=None):
@@ -1290,7 +1290,7 @@ def do_mc2gst_with_model_selection(
 
   probClipInterval : 2-tuple or None, optional
      (min,max) values used to clip the probabilities predicted by gatesets during MC2GST's
-     least squares search for an optimal gateset (if not None).  Defaults to no clipping.
+     least squares search for an optimal gateset (if not None).  if None, no clipping is performed.
 
   useFreqWeightedChiSq : bool, optional
       If True, objective function uses only an approximate chi^2 weighting:  N/(f*(1-f)) 
@@ -1447,7 +1447,7 @@ def do_mc2gst_with_model_selection(
 def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation, 
                         maxiter=100000, maxfev=None, tol=1e-6, 
                         cptp_penalty_factor=0, minProbClipForWeighting=1e-4,
-                        probClipInterval=None, useFreqWeightedChiSq=False,
+                        probClipInterval=(-1e6,1e6), useFreqWeightedChiSq=False,
                         regularizeFactor=0, returnErrorVec=False, 
                         returnAll=False, gateStringSetLabels=None, verbosity=0,
                         check=False, check_jacobian=False,
@@ -1493,7 +1493,7 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
 
   probClipInterval : 2-tuple or None, optional
      (min,max) values used to clip the probabilities predicted by gatesets during MC2GST's
-     least squares search for an optimal gateset (if not None).  Defaults to no clipping.
+     least squares search for an optimal gateset (if not None).  if None, no clipping is performed.
 
   useFreqWeightedChiSq : bool, optional
       If True, objective function uses only an approximate chi^2 weighting:  N/(f*(1-f)) 
@@ -1619,7 +1619,7 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
 def do_iterative_mc2gst_with_model_selection(
   dataset, startGateset, dimDelta, gateStringSetsToUseInEstimation, 
   maxiter=100000, maxfev=None, tol=1e-6, 
-  cptp_penalty_factor=0, minProbClipForWeighting=1e-4, probClipInterval=None,
+  cptp_penalty_factor=0, minProbClipForWeighting=1e-4, probClipInterval=(-1e6,1e6),
   useFreqWeightedChiSq=False, regularizeFactor=0, returnErrorVec=False,
   returnAll=False, gateStringSetLabels=None, verbosity=0, check=False,
   check_jacobian=False, gatestringWeightsDict=None, memLimit=None, comm=None):
@@ -1668,7 +1668,7 @@ def do_iterative_mc2gst_with_model_selection(
 
   probClipInterval : 2-tuple or None, optional
      (min,max) values used to clip the probabilities predicted by gatesets during MC2GST's
-     least squares search for an optimal gateset (if not None).  Defaults to no clipping.
+     least squares search for an optimal gateset (if not None).  if None, no clipping is performed.
 
   useFreqWeightedChiSq : bool, optional
       If True, objective function uses only an approximate chi^2 weighting:  N/(f*(1-f)) 
@@ -1816,7 +1816,7 @@ def do_iterative_mc2gst_with_model_selection(
 
 def do_mlgst(dataset, startGateset, gateStringsToUse, 
              maxiter=100000, maxfev=None, tol=1e-6,
-             minProbClip=1e-4, probClipInterval=None, radius=1e-4,
+             minProbClip=1e-4, probClipInterval=(-1e6,1e6), radius=1e-4,
              poissonPicture=True, verbosity=0, check=False,
              gateLabelAliases=None, memLimit=None, comm=None,
              distributeMethod = "gatestrings"):
@@ -1850,7 +1850,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
 
     probClipInterval : 2-tuple or None, optional
         (min,max) values used to clip the probabilities predicted by gatesets during MLGST's
-        search for an optimal gateset (if not None).  Defaults to no clipping.
+        search for an optimal gateset (if not None).  if None, no clipping is performed.
 
     radius : float, optional
         Specifies the severity of rounding used to "patch" the zero-frequency
@@ -2208,7 +2208,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
 
 def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                        maxiter=100000, maxfev=None, tol=1e-6,
-                       minProbClip=1e-4, probClipInterval=None, radius=1e-4,
+                       minProbClip=1e-4, probClipInterval=(-1e6,1e6), radius=1e-4,
                        poissonPicture=True,returnMaxLogL=False,returnAll=False, 
                        gateStringSetLabels=None, useFreqWeightedChiSq=False,
                        verbosity=0, check=False, memLimit=None, times=None,
@@ -2249,7 +2249,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
 
   probClipInterval : 2-tuple or None, optional
       (min,max) values used to clip the probabilities predicted by gatesets during MLGST's
-      search for an optimal gateset (if not None).  Defaults to no clipping.
+      search for an optimal gateset (if not None).  if None, no clipping is performed.
 
   radius : float, optional
       Specifies the severity of rounding used to "patch" the zero-frequency

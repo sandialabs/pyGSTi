@@ -1815,7 +1815,7 @@ def direct_lgst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncate
 
 
 def direct_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs, targetGateset, svdTruncateTo=0,
-                        minProbClipForWeighting=1e-4, probClipInterval=None, verbosity=0 ):
+                        minProbClipForWeighting=1e-4, probClipInterval=(-1e6,1e6), verbosity=0 ):
     """
     Constructs a gateset of LSGST estimates for target gates and gateStringToEstimate.
 
@@ -1892,7 +1892,7 @@ def direct_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs
     
     
 def direct_mc2gst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncateTo=0,
-                        minProbClipForWeighting=1e-4, probClipInterval=None, verbosity=0):
+                        minProbClipForWeighting=1e-4, probClipInterval=(-1e6,1e6), verbosity=0):
     """
     Constructs a dictionary with keys == gate strings and values == Direct-LSGST GateSets.
 
@@ -1946,7 +1946,7 @@ def direct_mc2gst_gatesets(gateStrings, dataset, specs, targetGateset, svdTrunca
 
 
 def direct_mlgst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs, targetGateset, svdTruncateTo=0,
-                        minProbClip=1e-6, probClipInterval=None, verbosity=0 ):
+                        minProbClip=1e-6, probClipInterval=(-1e6,1e6), verbosity=0 ):
     """
     Constructs a gateset of MLEGST estimates for target gates and gateStringToEstimate.
 
@@ -2021,7 +2021,7 @@ def direct_mlgst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs,
 
 
 def direct_mlgst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncateTo=0,
-                        minProbClip=1e-6, probClipInterval=None, verbosity=0):
+                        minProbClip=1e-6, probClipInterval=(-1e6,1e6), verbosity=0):
     """
     Constructs a dictionary with keys == gate strings and values == Direct-MLEGST GateSets.
 
@@ -2074,7 +2074,7 @@ def direct_mlgst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncat
 
 
 def focused_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs, startGateset,
-                         minProbClipForWeighting=1e-4, probClipInterval=None, verbosity=0 ):
+                         minProbClipForWeighting=1e-4, probClipInterval=(-1e6,1e6), verbosity=0 ):
     """
     Constructs a gateset containing a single LSGST estimate of gateStringToEstimate.
 
@@ -2131,7 +2131,8 @@ def focused_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, spec
 
 
 def focused_mc2gst_gatesets(gateStrings, dataset, specs, startGateset,
-                         minProbClipForWeighting=1e-4, probClipInterval=None, verbosity=0):
+                            minProbClipForWeighting=1e-4, 
+                            probClipInterval=(-1e6,1e6), verbosity=0):
     """
     Constructs a dictionary with keys == gate strings and values == Focused-LSGST GateSets.
 

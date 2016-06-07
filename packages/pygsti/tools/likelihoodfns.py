@@ -167,7 +167,7 @@ def fill_count_vecs(mxToFill, spam_label_rows, dataset, gatestring_list):
 
 
 def logl(gateset, dataset, gatestring_list=None, 
-         minProbClip=1e-6, probClipInterval=None, radius=1e-4, 
+         minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4, 
          evalTree=None, countVecMx=None, poissonPicture=True, check=False):
     """
     The log-likelihood function.
@@ -193,7 +193,7 @@ def logl(gateset, dataset, gatestring_list=None,
 
     probClipInterval : 2-tuple or None, optional
         (min,max) values used to clip the probabilities predicted by gatesets during MLEGST's
-        search for an optimal gateset (if not None).  Defaults to no clipping.
+        search for an optimal gateset (if not None).  if None, no clipping is performed.
 
     radius : float, optional
         Specifies the severity of rounding used to "patch" the zero-frequency
@@ -282,7 +282,7 @@ def logl(gateset, dataset, gatestring_list=None,
 
     
 def logl_jacobian(gateset, dataset, gatestring_list=None, 
-                  minProbClip=1e-6, probClipInterval=None, radius=1e-4, 
+                  minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4, 
                   evalTree=None, countVecMx=None, poissonPicture=True, check=False):
     """
     The jacobian of the log-likelihood function.
@@ -308,7 +308,7 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
 
     probClipInterval : 2-tuple or None, optional
         (min,max) values used to clip the probabilities predicted by gatesets during MLEGST's
-        search for an optimal gateset (if not None).  Defaults to no clipping.
+        search for an optimal gateset (if not None).  if None, no clipping is performed.
 
     radius : float, optional
         Specifies the severity of rounding used to "patch" the zero-frequency
@@ -409,7 +409,7 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
 
 
 def logl_hessian(gateset, dataset, gatestring_list=None, 
-                 minProbClip=1e-6, probClipInterval=None, radius=1e-4, 
+                 minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4, 
                  evalTree=None, countVecMx=None, poissonPicture=True,
                  check=False, comm=None, memLimit=None):
     """
@@ -435,8 +435,9 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
         optimizer performance).
 
     probClipInterval : 2-tuple or None, optional
-        (min,max) values used to clip the probabilities predicted by gatesets during MLEGST's
-        search for an optimal gateset (if not None).  Defaults to no clipping.
+        (min,max) values used to clip the probabilities predicted by 
+        gatesets during MLEGST's search for an optimal gateset (if not None).
+        if None, no clipping is performed.
 
     radius : float, optional
         Specifies the severity of rounding used to "patch" the zero-frequency
