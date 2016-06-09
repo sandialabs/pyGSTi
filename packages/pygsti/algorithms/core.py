@@ -2752,6 +2752,11 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
     newGateset.transform(gaugeMat)
     #newGateset.log("Optimize Gauge", { 'method': method, 'tol': tol, 'toGetTo': toGetTo } )
 
+    #If we've optimized to a target, set the basis of the new gatset
+    if toGetTo in ("target", "TP and target", "CPTP and target"):
+      newGateset.set_basis(targetGateset.get_basis_name(), 
+                           targetGateset.get_basis_dimension())
+
     if verbosity > 1:
       if toGetTo == "target":
         print 'The resulting Frobenius-norm distance is: %g' % minSol.fun

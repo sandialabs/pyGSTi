@@ -919,6 +919,7 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
         ret.gates[gateLabel] = build_gate(stateSpaceDims, stateSpaceLabels,
                                           gateExpr, basis, parameterization)
 
+    ret.set_basis(basis, stateSpaceDims)
     return ret
 
 

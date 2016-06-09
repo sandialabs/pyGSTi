@@ -24,8 +24,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                          weightsDict=None, fidPairs=None, constrainToTP=True, 
                          gaugeOptToCPTP=False, gaugeOptRatio=0.001,
                          objective="logl", advancedOptions={}, lsgstLists=None,
-                         truncScheme="whole germ powers", mxBasis="gm",
-                         comm=None):
+                         truncScheme="whole germ powers", comm=None):
     """
     Perform end-to-end GST analysis using Ls and germs, with L as a maximum length.
 
@@ -126,9 +125,6 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
           to be exactly equal to the max (partial germ at end is ok).
         - 'length as exponent' -- max. length is instead interpreted
           as the germ exponent (the number of germ repetitions).
-
-    mxBasis : {"std", "gm", "pp"}, optional
-        The basis used to interpret the gate matrices.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -303,7 +299,6 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     ret.parameters['weights'] = weightsDict
     ret.parameters['defaultDirectory'] = default_dir
     ret.parameters['defaultBasename'] = default_base
-    ret.parameters['mxBasis'] = mxBasis
     ret.parameters['memLimit'] = advancedOptions.get('memoryLimitInBytes',None)
 
     times_list.append( ('Results initialization',_time.time()-tRef) )
