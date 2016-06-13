@@ -194,15 +194,22 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
 
     if constrainToTP: #gauge optimize (and contract if needed) to TP, then lock down first basis element as the identity
         #TODO: instead contract to vSPAM? (this could do more than just alter the 1st element...)
-        firstElIdentityVec = _np.zeros( (gate_dim,1) )
-        firstElIdentityVec[0] = gate_dim**0.25 # first basis el is assumed = sqrt(gate_dim)-dimensional identity density matrix 
-        minPenalty, gaugeMx, gs_in_TP = _alg.optimize_gauge(gs_lgst, "TP",  returnAll=True, spamWeight=1.0, gateWeight=1.0, verbosity=3)
+        gs_lgst.set_all_parameterizations("full") #make sure we can do gauge optimization
+        minPenalty, gaugeMx, gs_in_TP = _alg.optimize_gauge(
+            gs_lgst, "TP",  returnAll=True, spamWeight=1.0, gateWeight=1.0,
+            verbosity=3)
+
         if minPenalty > 0:
             gs_in_TP = _alg.contract(gs_in_TP, "TP")
             if minPenalty > 1e-5: 
                 _warnings.warn("Could not gauge optimize to TP (penalty=%g), so contracted LGST gateset to TP" % minPenalty)
 
-        gs_after_gauge_opt = _alg.optimize_gauge(gs_in_TP, "target", targetGateset=gs_target, constrainToTP=True, spamWeight=1.0, gateWeight=1.0)
+        gs_after_gauge_opt = _alg.optimize_gauge(
+            gs_in_TP, "target", targetGateset=gs_target, constrainToTP=True,
+            spamWeight=1.0, gateWeight=1.0)
+
+        firstElIdentityVec = _np.zeros( (gate_dim,1) )
+        firstElIdentityVec[0] = gate_dim**0.25 # first basis el is assumed = sqrt(gate_dim)-dimensional identity density matrix 
         gs_after_gauge_opt.povm_identity = firstElIdentityVec # declare that this basis has the identity as its first element
 
     else: # no TP constraint

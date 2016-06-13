@@ -2052,6 +2052,27 @@ class GateSet(object):
         return self._calc().diamonddist(otherGateSet._calc(), transformMx)
 
 
+    def tpdist(self):
+        """
+        Compute the "distance" between this gateset and the space of 
+        trace-preserving (TP) maps, defined as the sqrt of the sum-of-squared
+        deviations among the first row of all gate matrices and the 
+        first element of all state preparations.
+        """
+        penalty = 0.0
+        for gateMx in self.gates.values():
+            penalty += abs(gateMx[0,0] - 1.0)**2
+            for k in range(1,gateMx.shape[1]):
+                penalty += abs(gateMx[0,k])**2
+
+        gate_dim = self.get_dimension()
+        firstEl = 1.0 / gate_dim**0.25
+        for rhoVec in self.preps.values():
+            penalty += abs(rhoVec[0,0] - firstEl)**2
+
+        return _np.sqrt(penalty)
+
+
     def copy(self):
         """ 
         Copy this gateset
