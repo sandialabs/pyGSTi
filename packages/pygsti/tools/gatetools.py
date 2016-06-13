@@ -107,6 +107,21 @@ def frobeniusdist2(A, B):
     return _mt.frobeniusnorm2(A-B)
 
 
+def tracedist(A, B):
+    """
+    Compute the trace distance between matrices A and B,
+    given by:
+
+      D = 0.5 * Tr( sqrt{ (A-B)^2 } ) 
+      
+    Parameters
+    ----------
+    A, B : numpy array
+        The matrices to compute the distance between.
+    """
+    evals = _np.linalg.eigvals( A-B )
+    return 0.5 * sum( [abs(ev) for ev in evals] )
+
 
 
 def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
@@ -335,8 +350,7 @@ def jtracedist(A, B, mxBasis="gm"): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)
     """
     JA = _jam.jamiolkowski_iso(A, gateMxBasis=mxBasis)
     JB = _jam.jamiolkowski_iso(B, gateMxBasis=mxBasis)
-    evals = _np.linalg.eigvals( JA-JB )
-    return 0.5 * sum( [abs(ev) for ev in evals] )
+    return tracedist(JA,JB)
 
 
 def process_fidelity(A, B, mxBasis="gm"):

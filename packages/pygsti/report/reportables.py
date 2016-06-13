@@ -79,12 +79,44 @@ def _getGateQuantity(fnOfGate, gateset, gateLabel, eps, confidenceRegionInfo, ve
 
     # make sure the gateset we're given is the one used to generate the confidence region
     if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
-        raise ValueError("Gate quantity confidence region is being requested for " +
+        raise ValueError("Prep quantity confidence region is being requested for " +
                          "a different gateset than the given confidenceRegionInfo")
 
     df, f0 = confidenceRegionInfo.get_gate_fn_confidence_interval(fnOfGate, gateLabel,
                                                               eps, returnFnVal=True,
                                                               verbosity=verbosity)
+    return ReportableQty(f0,df)
+
+def _getPrepQuantity(fnOfPrep, gateset, prepLabel, eps, confidenceRegionInfo, verbosity=0):
+    """ For constructing a ReportableQty from a function of a state preparation. """
+
+    if confidenceRegionInfo is None: # No Error bars
+        return ReportableQty(fnOfPrep(gateset.preps[prepLabel]))
+
+    # make sure the gateset we're given is the one used to generate the confidence region
+    if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
+        raise ValueError("Gate quantity confidence region is being requested for " +
+                         "a different gateset than the given confidenceRegionInfo")
+
+    df, f0 = confidenceRegionInfo.get_prep_fn_confidence_interval(fnOfPrep, prepLabel,
+                                                              eps, returnFnVal=True,
+                                                              verbosity=verbosity)
+    return ReportableQty(f0,df)
+
+
+def _getEffectQuantity(fnOfEffect, gateset, effectLabel, eps, confidenceRegionInfo, verbosity=0):
+    """ For constructing a ReportableQty from a function of a POVM effect. """
+
+    if confidenceRegionInfo is None: # No Error bars
+        return ReportableQty(fnOfEffect(gateset.effects[effectLabel]))
+
+    # make sure the gateset we're given is the one used to generate the confidence region
+    if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
+        raise ValueError("Effect quantity confidence region is being requested for " +
+                         "a different gateset than the given confidenceRegionInfo")
+
+    df, f0 = confidenceRegionInfo.get_effect_fn_confidence_interval(
+        fnOfEffect, effectLabel, eps, returnFnVal=True, verbosity=verbosity)
     return ReportableQty(f0,df)
 
 
@@ -221,7 +253,7 @@ def compute_dataset_qtys(qtynames, dataset, gatestrings=None):
     return ret
 
 
-def compute_gateset_qty(qtyname, gateset, confidenceRegionInfo=None, mxBasis="gm"):
+def compute_gateset_qty(qtyname, gateset, confidenceRegionInfo=None):
     """
     Compute the named "GateSet" quantity.
 
@@ -238,20 +270,17 @@ def compute_gateset_qty(qtyname, gateset, confidenceRegionInfo=None, mxBasis="gm
         contained in the returned quantity.  If None, then no error bars are
         computed.
 
-    mxBasis : {"std", "gm", "pp"}, optional
-        The basis used to interpret the gate matrices.
-
     Returns
     -------
     ReportableQty
         The quantity requested, or None if quantity could not be computed.
     """
-    ret = compute_gateset_qtys( [qtyname], gateset, confidenceRegionInfo, mxBasis )
+    ret = compute_gateset_qtys( [qtyname], gateset, confidenceRegionInfo)
     if qtyname is None: return ret
     elif ret.has_key(qtyname): return ret[qtyname]
     else: return None
 
-def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None, mxBasis="gm"):
+def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
     """
     Compute the named "GateSet" quantities.
 
@@ -268,9 +297,6 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None, mxBasis="
         contained in the returned quantities.  If None, then no error bars are
         computed.
 
-    mxBasis : {"std", "gm", "pp"}, optional
-        The basis used to interpret the gate matrices.
-
     Returns
     -------
     dict
@@ -280,7 +306,7 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None, mxBasis="
     ret = _OrderedDict()
     possible_qtys = [ ]
     eps = FINITE_DIFF_EPS
-
+    mxBasis = gateset.get_basis_name()
 
     def choi_matrix(gate):
         return _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
@@ -589,7 +615,7 @@ def compute_gateset_dataset_qtys(qtynames, gateset, dataset, gatestrings=None):
 
 
 def compute_gateset_gateset_qty(qtyname, gateset1, gateset2, 
-                                confidenceRegionInfo=None, mxBasis="gm"):
+                                confidenceRegionInfo=None):
     """
     Compute the named "GateSet vs. GateSet" quantity.
 
@@ -609,21 +635,18 @@ def compute_gateset_gateset_qty(qtyname, gateset1, gateset2,
         contained in the returned quantity.  If None, then no error bars are
         computed.
 
-    mxBasis : {"std", "gm", "pp"}, optional
-        The basis used to interpret the gate matrices.
-        
     Returns
     -------
     ReportableQty
         The quantity requested, or None if quantity could not be computed.
     """
-    ret = compute_gateset_gateset_qtys( [qtyname], gateset1, gateset2, confidenceRegionInfo, mxBasis)
+    ret = compute_gateset_gateset_qtys( [qtyname], gateset1, gateset2, confidenceRegionInfo)
     if qtyname is None: return ret
     elif ret.has_key(qtyname): return ret[qtyname]
     else: return None
 
 def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
-                                 confidenceRegionInfo=None, mxBasis="gm"):
+                                 confidenceRegionInfo=None):
     """
     Compute the named "GateSet vs. GateSet" quantities.
 
@@ -643,9 +666,6 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
         contained in the returned quantities.  If None, then no error bars are
         computed.
 
-    mxBasis : {"std", "gm", "pp"}, optional
-        The basis used to interpret the gate matrices.
-        
     Returns
     -------
     dict
@@ -663,6 +683,11 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
         if gateLabel not in gateset1.gates:
             raise ValueError("%s gate is missing from first gateset - cannot compare gatesets", gateLabel)
 
+    mxBasis = gateset1.get_basis_name()
+    if mxBasis != gateset2.get_basis_name():
+        raise ValueError("Basis mismatch: %s != %s" % 
+                         (mxBasis, gateset2.get_basis_name()))
+
     ### per gate quantities           
     #############################################
     for gateLabel in gateset1.gates:
@@ -671,7 +696,7 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
         key2 = '%s infidelity' % gateLabel; possible_qtys.append(key)
         if key in qtynames or key2 in qtynames:
 
-            def process_fidelity(gate): #Note: default 'gm' basis
+            def process_fidelity(gate):
                 return _tools.process_fidelity(gate, gateset2.gates[gateLabel], mxBasis) 
                   #vary elements of gateset1 (assume gateset2 is fixed)
 
@@ -768,6 +793,67 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
 
             ret[key] = _getGateQuantity(rel_eigvals, gateset1, gateLabel,
                                         eps, confidenceRegionInfo) 
+
+    ### per prep vector quantities           
+    #############################################
+    for prepLabel in gateset1.get_prep_labels():
+
+        key = '%s prep state fidelity' % prepLabel; possible_qtys.append(key)
+        key2 = '%s prep state infidelity' % prepLabel; possible_qtys.append(key)
+        if key in qtynames or key2 in qtynames:
+
+            def fidelity(vec):
+                rhoMx1 = _tools.vec_to_stdmx(vec, mxBasis)
+                rhoMx2 = _tools.vec_to_stdmx(gateset2.preps[prepLabel], mxBasis)
+                return _tools.fidelity(rhoMx1, rhoMx2) 
+                  #vary elements of gateset1 (assume gateset2 is fixed)
+
+            FQty = _getPrepQuantity(fidelity, gateset1, prepLabel,
+                                    eps, confidenceRegionInfo) 
+
+            InFQty = ReportableQty( 1.0-FQty.get_value(), FQty.get_err_bar() )
+            if key in qtynames: ret[key] = FQty
+            if key2 in qtynames: ret[key2] = InFQty
+        
+        key = "%s prep trace dist" % prepLabel; possible_qtys.append(key)
+        if key in qtynames: 
+            def tr_diff(vec): # assume vary gateset1, gateset2 fixed
+                rhoMx1 = _tools.vec_to_stdmx(vec, mxBasis)
+                rhoMx2 = _tools.vec_to_stdmx(gateset2.preps[prepLabel], mxBasis)
+                return _tools.tracedist(rhoMx1, rhoMx2)
+            ret[key] = _getPrepQuantity(tr_diff, gateset1, prepLabel,
+                                        eps, confidenceRegionInfo) 
+
+
+    ### per effect vector quantities           
+    #############################################
+    for effectLabel in gateset1.get_effect_labels():
+
+        key = '%s effect state fidelity' % effectLabel; possible_qtys.append(key)
+        key2 = '%s effect state infidelity' % effectLabel; possible_qtys.append(key)
+        if key in qtynames or key2 in qtynames:
+
+            def fidelity(vec):
+                EMx1 = _tools.vec_to_stdmx(vec, mxBasis)
+                EMx2 = _tools.vec_to_stdmx(gateset2.effects[effectLabel], mxBasis)
+                return _tools.fidelity(EMx1,EMx2) 
+                  #vary elements of gateset1 (assume gateset2 is fixed)
+
+            FQty = _getEffectQuantity(fidelity, gateset1, effectLabel,
+                                      eps, confidenceRegionInfo) 
+
+            InFQty = ReportableQty( 1.0-FQty.get_value(), FQty.get_err_bar() )
+            if key in qtynames: ret[key] = FQty
+            if key2 in qtynames: ret[key2] = InFQty
+        
+        key = "%s effect trace dist" % effectLabel; possible_qtys.append(key)
+        if key in qtynames: 
+            def tr_diff(vec): # assume vary gateset1, gateset2 fixed
+                EMx1 = _tools.vec_to_stdmx(vec, mxBasis)
+                EMx2 = _tools.vec_to_stdmx(gateset2.effects[effectLabel], mxBasis)
+                return _tools.tracedist(EMx1, EMx2)
+            ret[key] = _getEffectQuantity(tr_diff, gateset1, effectLabel,
+                                          eps, confidenceRegionInfo) 
 
 
     ###  per gateset quantities

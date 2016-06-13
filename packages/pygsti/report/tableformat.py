@@ -11,6 +11,12 @@ import ppt as _pu
 import cgi as _cgi
 import numpy as _np
 import re as _re
+import os as _os
+
+#Dangerous (!) Global variable -- to be removed when formatters 
+# get rolled into a class that can be instantiated with a
+# scratch directory
+SCRATCHDIR = None
 
 ##############################################################################
 #Formatting functions
@@ -224,6 +230,33 @@ def _fmtPre_latex(x): return x['latex']
 def _fmtPre_py(x): return x['py']
 def _fmtPre_ppt(x): return x['ppt']
 Pre = { 'html': _fmtPre_html, 'latex': _fmtPre_latex, 'py': _fmtPre_py, 'ppt': _fmtPre_ppt }
+
+
+# Figure formatting, where a GST figure is displayed in a table cell
+def _fmtFig_html(figInfo): 
+    fig, name, W, H = figInfo
+    fig.save_to(_os.path.join(SCRATCHDIR, name + ".png"))
+    return "<img width='%.2f' height='%.2f' src='%s/%s'>" \
+        % (W,H,SCRATCHDIR,name + ".png")
+def _fmtFig_latex(figInfo):
+    fig, name, W, H = figInfo
+    fig.save_to(_os.path.join(SCRATCHDIR, name + ".pdf"))
+    return "\\vcenteredhbox{\\includegraphics[width=%.2fin,height=%.2fin" \
+        % (W,H) + ",keepaspectratio]{%s/%s}}" % (SCRATCHDIR,name + ".pdf")
+def _fmtFig_py(figInfo): 
+    fig, name, W, H = figInfo
+    return fig
+def _fmtFig_ppt(figInfo): 
+    return "Not Impl."
+Fig = { 'html': _fmtFig_html, 'latex': _fmtFig_latex, 'py': _fmtFig_py, 'ppt': _fmtFig_ppt }
+
+
+# 'normal' formatting
+def _fmtBold_html(x):  return "<b>%s</b>" % _hu.html(x)
+def _fmtBold_latex(x): return "\\textbf{%s}" % _lu.latex(x)
+def _fmtBold_py(x): return "**%s**" % x
+def _fmtBold_ppt(x): return _pu.ppt(x) #don't know how to bold in ppt...
+Bold = { 'html': _fmtBold_html, 'latex': _fmtBold_latex, 'py': _fmtBold_py, 'ppt': _fmtBold_ppt }
 
 
 

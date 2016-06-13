@@ -36,18 +36,12 @@ class Results(object):
     different output formats).
     """
 
-    def __init__(self, restrictToFormats=None, templatePath=None,
-                 latexCmd="pdflatex"):
+    def __init__(self, templatePath=None, latexCmd="pdflatex"):
         """ 
         Initialize a Results object.
 
         Parameters
         ----------
-        restrictToFormats : tuple or None, optional
-            A tuple of format names to restrict internal computation
-            to.  This parameter should be left as None unless you 
-            know what you're doing.
-
         templatePath : string or None, optional
             A local path to the stored GST report template files.  The
             default value of None means to use the default path, which
@@ -78,12 +72,8 @@ class Results(object):
         self.confidence_level = None #holds "current" (i.e. "last")
         
         # Set default display options (affect how results are displayed)
-        if restrictToFormats is not None:
-            self.options.table_formats = restrictToFormats
-        else:
-            self.options.table_formats = ('py','html','latex','ppt') #all formats
         self.options.long_tables = False
-        self.options.table_class = "dataTable"
+        self.options.table_class = "pygstiTbl"
         self.options.template_path = templatePath
         self.options.latex_cmd = latexCmd
 
@@ -98,9 +88,9 @@ class Results(object):
                             'hessianProjection': 'std',
                             'defaultDirectory': None,
                             'defaultBasename': None,
-                            'mxBasis': "gm",
                             'linlogPercentile':  5,
-                            'memLimit': None}
+                            'memLimit': None,
+                            'gaugeOptParams': {} }
 
 
     def init_single(self, objective, targetGateset, dataset, gatesetEstimate,
@@ -151,6 +141,7 @@ class Results(object):
         self.dataset = dataset
         self.parameters['objective'] = objective
         self.parameters['constrainToTP'] = constrainToTP
+
         if gatesetEstimate_noGaugeOpt is not None:
             self.gatesets['iteration estimates pre gauge opt'] = \
                 [ gatesetEstimate_noGaugeOpt ]
@@ -339,35 +330,31 @@ class Results(object):
                              self._LsAndGermInfoSet) else []
 
         def setup():
-            return (self.gatesets['target'], self.gatesets['final estimate'],
-                    self.options.table_formats, self.options.table_class,
-                    self.options.long_tables,  self.parameters['mxBasis'] )
+            return (self.gatesets['target'], self.gatesets['final estimate'])
 
         fns = _collections.OrderedDict()
 
         def fn(key, confidenceLevel, vb):
-            return _generation.get_blank_table(self.options.table_formats)
+            return _generation.get_blank_table()
         fns['blankTable'] = (fn, validate_none)
 
         # target gateset tables
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
-            return _generation.get_gateset_spam_table(
-                gsTgt, fmts, tblCl, longT, None, mxBasis)
+            gsTgt, gsBest = setup()
+            return _generation.get_gateset_spam_table(gsTgt, None)
         fns['targetSpamTable'] = (fn, validate_essential)
 
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
-            return _generation.get_gateset_spam_table(
-                gsTgt, fmts, tblCl, longT, None, mxBasis, False)
+            gsTgt, gsBest = setup()
+            return _generation.get_gateset_spam_table(gsTgt, None, False)
         fns['targetSpamBriefTable'] = (fn, validate_essential)
              
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
+            gsTgt, gsBest = setup()
             return _generation.get_unitary_gateset_gates_table(
-                gsTgt, fmts, tblCl, longT, None, mxBasis)
+                gsTgt, None)
         fns['targetGatesTable'] = (fn, validate_essential)
 
 
@@ -375,181 +362,209 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             #maxLen = max( 2*max( map(len,self.prepStrs + self.effectStrs) ),
             #             10 ) #heuristic (unused)
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
+            gsTgt, gsBest = setup()
             if self._LsAndGermInfoSet:
                 strs = ( self.gatestring_lists['prep fiducials'], 
                          self.gatestring_lists['effect fiducials'] )
             else: strs = None
             return _generation.get_dataset_overview_table(
-                self.dataset, gsTgt, fmts, tblCl, longT, 10, strs)
+                self.dataset, gsTgt, 10, strs)
         fns['datasetOverviewTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
+            gsTgt, gsBest = setup()
             strs = ( self.gatestring_lists['prep fiducials'], 
                      self.gatestring_lists['effect fiducials'] )
 
             return _generation.get_gatestring_multi_table(
-                strs, ["Prep.","Measure"], fmts, tblCl, longT, "Fiducials")
+                strs, ["Prep.","Measure"], "Fiducials")
         fns['fiducialListTable'] = (fn, validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
+            gsTgt, gsBest = setup()
             return _generation.get_gatestring_table(
                 self.gatestring_lists['prep fiducials'],
-                "Preparation Fiducial", fmts, tblCl, longT)
+                "Preparation Fiducial")
         fns['prepStrListTable'] = (fn, validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
+            gsTgt, gsBest = setup()
             return _generation.get_gatestring_table(
                 self.gatestring_lists['effect fiducials'],
-                "Measurement Fiducial", fmts, tblCl, longT)
+                "Measurement Fiducial")
         fns['effectStrListTable'] = (fn, validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
+            gsTgt, gsBest = setup()
             return _generation.get_gatestring_table(
-                self.gatestring_lists['germs'], "Germ", fmts, tblCl, longT)
+                self.gatestring_lists['germs'], "Germ")
         fns['germListTable'] = (fn, validate_LsAndGerms)
 
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
+            gsTgt, gsBest = setup()
             return _generation.get_gatestring_table(
-                self.gatestring_lists['germs'], "Germ", fmts, tblCl, longT, nCols=2)
+                self.gatestring_lists['germs'], "Germ", nCols=2)
         fns['germList2ColTable'] = (fn, validate_LsAndGerms)
 
 
         # Estimated gateset tables
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
+            gsTgt, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
-            return _generation.get_gateset_spam_table(
-                gsBest, fmts, tblCl, longT, cri, mxBasis)
+            return _generation.get_gateset_spam_table(gsBest, cri)
         fns['bestGatesetSpamTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
+            gsTgt, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
-            return _generation.get_gateset_spam_table(
-                gsBest, fmts, tblCl, longT, cri, mxBasis, False)
+            return _generation.get_gateset_spam_table(gsBest, cri, False)
         fns['bestGatesetSpamBriefTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
+            gsTgt, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
-            return _generation.get_gateset_spam_parameters_table(
-                gsBest, fmts, tblCl, longT, cri)
+            return _generation.get_gateset_spam_parameters_table(gsBest, cri)
         fns['bestGatesetSpamParametersTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
+            gsTgt, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
-            return _generation.get_gateset_gates_table(
-                gsBest, fmts, tblCl, longT, cri, mxBasis)
+            return _generation.get_gateset_gates_table(gsBest, cri)
         fns['bestGatesetGatesTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
+            gsTgt, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
-            return _generation.get_gateset_choi_table(
-                gsBest, fmts, tblCl, longT, cri, mxBasis)
+            return _generation.get_gateset_choi_table(gsBest, cri)
         fns['bestGatesetChoiTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
+            gsTgt, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
-            return _generation.get_gateset_choi_table(
-                gsBest, fmts, tblCl, longT, cri, mxBasis, False)
-        fns['bestGatesetChoiEvalTable'] = (fn, validate_essential)
-
-        def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
-            cri = self._get_confidence_region(confidenceLevel)
-            return _generation.get_gateset_decomp_table(
-                gsBest, fmts, tblCl, longT, cri)
+            return _generation.get_gateset_decomp_table(gsBest, cri)
         fns['bestGatesetDecompTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
+            gsTgt, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
-            return _generation.get_gateset_rotn_axis_table(
-                gsBest, fmts, tblCl, longT, cri, True)
+            return _generation.get_gateset_rotn_axis_table(gsBest, cri, True)
         fns['bestGatesetRotnAxisTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
+            gsTgt, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
-            return _generation.get_gateset_eigenval_table(
-                gsBest, gsTgt, fmts, tblCl, longT, cri, mxBasis)
+            return _generation.get_gateset_eigenval_table(gsBest, gsTgt, cri)
         fns['bestGatesetEvalTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
+            gsTgt, gsBest = setup()
             #cri = self._get_confidence_region(confidenceLevel)
-            return _generation.get_gateset_closest_unitary_table(
-                gsBest, fmts, tblCl, longT) #, cri)
+            return _generation.get_gateset_closest_unitary_table(gsBest) #, cri)
         fns['bestGatesetClosestUnitaryTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
+            gsTgt, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
-            return _generation.get_gateset_vs_target_table(
-                gsBest, gsTgt, fmts, tblCl, longT, cri, mxBasis)
+            return _generation.get_gates_vs_target_table(gsBest, gsTgt, cri)
         fns['bestGatesetVsTargetTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
+            gsTgt, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
-            return _generation.get_gateset_vs_target_err_gen_table(
-                gsBest, gsTgt, fmts, tblCl, longT, cri)
+            return _generation.get_spam_vs_target_table(gsBest, gsTgt, cri)
+        fns['bestGatesetSpamVsTargetTable'] = (fn, validate_essential)
+
+        def fn(key, confidenceLevel, vb):
+            gsTgt, gsBest = setup()
+            cri = self._get_confidence_region(confidenceLevel)
+            return _generation.get_gates_vs_target_err_gen_table(
+                gsBest, gsTgt, cri)
         fns['bestGatesetErrorGenTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
+            gsTgt, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
-            return _generation.get_gateset_vs_target_angles_table(
-                gsBest, gsTgt, fmts, tblCl, longT, cri, mxBasis)
+            return _generation.get_gates_vs_target_angles_table(
+                gsBest, gsTgt, cri)
         fns['bestGatesetVsTargetAnglesTable'] = (fn, validate_essential)
+
+        def fn(key, confidenceLevel, vb):
+            gsTgt, gsBest = setup()
+            cri = self._get_confidence_region(confidenceLevel)
+            return _generation.get_gaugeopt_params_table(
+                self.parameters['gaugeOptParams'])
+        fns['bestGatesetGaugeOptParamsTable'] = (fn, validate_essential)
+
 
 
         # progress tables
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
+            gsTgt, gsBest = setup()
             return _generation.get_chi2_progress_table(
                 self.parameters['max length list'],
                 self.gatesets['iteration estimates'],
-                self.gatestring_lists['iteration'], self.dataset,
-                fmts, tblCl, longT)
+                self.gatestring_lists['iteration'], self.dataset)
         fns['chi2ProgressTable'] = (fn, validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
+            gsTgt, gsBest = setup()
             return _generation.get_logl_progress_table(
                 self.parameters['max length list'],
                 self.gatesets['iteration estimates'],
-                self.gatestring_lists['iteration'], self.dataset,
-                fmts, tblCl, longT)
+                self.gatestring_lists['iteration'], self.dataset)
         fns['logLProgressTable'] = (fn, validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest, fmts, tblCl, longT, mxBasis = setup()
+            gsTgt, gsBest = setup()
             if self.parameters['objective'] == "logl":
                 return _generation.get_logl_progress_table(
                     self.parameters['max length list'],
                     self.gatesets['iteration estimates'],
-                    self.gatestring_lists['iteration'], self.dataset,
-                    fmts, tblCl, longT)
+                    self.gatestring_lists['iteration'], self.dataset)
             elif self.parameters['objective'] == "chi2":
                 return _generation.get_chi2_progress_table(
                     self.parameters['max length list'],
                     self.gatesets['iteration estimates'],
-                    self.gatestring_lists['iteration'], self.dataset,
-                    fmts, tblCl, longT)
+                    self.gatestring_lists['iteration'], self.dataset)
             else: raise ValueError("Invalid Objective: %s" % 
                                    self.parameters['objective'])
         fns['progressTable'] = (fn, validate_LsAndGerms)
+
+
+        # figure-containing tables
+        def fn(key, confidenceLevel, vb):
+            gsTgt, gsBest = setup()
+            return _generation.get_gateset_gate_boxes_table(
+                gsTgt, "targetGatesBoxes")
+        fns['targetGatesBoxTable'] = (fn, validate_essential)
+
+        def fn(key, confidenceLevel, vb):
+            gsTgt, gsBest = setup()
+            return _generation.get_gates_vs_target_err_gen_boxes_table(
+                gsBest, gsTgt, "bestErrgenBoxes")
+        fns['bestGatesetErrGenBoxTable'] = (fn, validate_essential)
+
+        def fn(key, confidenceLevel, vb):
+            gsTgt, gsBest = setup()
+            return _generation.get_gateset_eigenval_table(
+                gsBest, gsTgt, "bestEvalPolarPlt")
+        fns['bestGatesetEvalTable'] = (fn, validate_essential)
+
+        def fn(key, confidenceLevel, vb):
+            gsTgt, gsBest = setup()
+            return _generation.get_gateset_relative_eigenval_table(
+                gsBest, gsTgt, "bestRelEvalPolarPlt")
+        fns['bestGatesetRelEvalTable'] = (fn, validate_essential)
+
+        def fn(key, confidenceLevel, vb):
+            gsTgt, gsBest = setup()
+            cri = self._get_confidence_region(confidenceLevel)
+            return _generation.get_gateset_choi_eigenval_table(
+                gsBest, "bestChoiEvalBars", confidenceRegionInfo=cri)
+        fns['bestGatesetChoiEvalTable'] = (fn, validate_essential)
+
+
 
         return fns
 
@@ -818,7 +833,12 @@ class Results(object):
             gateLabel = _re.match(expr4,key).group(1)
             gate = self.gatesets['final estimate'].gates[gateLabel]
             targetGate = self.gatesets['target'].gates[gateLabel]
-            return _plotting.gate_matrix_errgen_boxplot(gate, targetGate, save_to="")
+            basisNm   = self.gatesets['final estimate'].get_basis_name()
+            basisDims = self.gatesets['final estimate'].get_basis_dimension()
+            assert(basisNm == self.gatesets['target'].get_basis_name())
+            return _plotting.gate_matrix_errgen_boxplot(
+                gate, targetGate, save_to="", mxBasis=basisNm,
+                mxBasisDims=basisDims)
 
         def fn_validate(key):
             if not self._bEssentialResultsSet: return []            
@@ -835,8 +855,10 @@ class Results(object):
             #cri = self._get_confidence_region(confidenceLevel)
             noConfidenceLevelDependence(confidenceLevel)
             gateLabel = _re.match(expr5,key).group(1)
-            gate = self.gatesets['target'].gates[gateLabel]
-            return _plotting.gate_matrix_boxplot(gate, save_to="")
+            gate = self.gatesets['target'].gates[gateLabel]            
+            return _plotting.gate_matrix_boxplot(gate, save_to="", 
+                mxBasis=self.gatesets['target'].get_basis_name(),
+                mxBasisDims=self.gatesets['target'].get_basis_dimension())
 
         def fn_validate(key):
             if not self._bEssentialResultsSet: return []            
@@ -874,8 +896,10 @@ class Results(object):
             gateLabel = _re.match(expr7,key).group(1)
             gate = self.gatesets['final estimate'].gates[gateLabel]
             target_gate = self.gatesets['target'].gates[gateLabel]
+            basisNm   = self.gatesets['final estimate'].get_basis_name()
+            assert(basisNm == self.gatesets['target'].get_basis_name())
             return _plotting.pauliprod_hamiltonian_boxplot(
-                gate, target_gate, save_to="", mxBasis=self.parameters['mxBasis'])
+                gate, target_gate, save_to="", mxBasis=basisNm, boxLabels=True)
 
         def fn_validate(key):
             if not self._bEssentialResultsSet: return []            
@@ -961,10 +985,6 @@ class Results(object):
             best_gs_gauges = self._specials.get('gaugeOptAppendixGatesets',
                                                 verbosity=vb)
             gsTarget = self.gatesets['target']
-            mxBasis = self.parameters['mxBasis']
-            fmts = self.options.table_formats
-            tblCl = self.options.table_class
-            longT = self.options.long_tables
 
             ret = {}
 
@@ -974,32 +994,25 @@ class Results(object):
                 #    for each gauge-optimized gateset, gopt_gs and pass
                 #    to appropriate functions below
                 ret['best%sGatesetSpamTable' % gaugeKey] = \
-                    _generation.get_gateset_spam_table(
-                    gopt_gs, fmts, tblCl, longT)
+                    _generation.get_gateset_spam_table(gopt_gs)
                 ret['best%sGatesetSpamParametersTable' % gaugeKey] = \
-                    _generation.get_gateset_spam_parameters_table(
-                    gopt_gs, fmts, tblCl, longT)
+                    _generation.get_gateset_spam_parameters_table(gopt_gs)
                 ret['best%sGatesetGatesTable' % gaugeKey] = \
-                    _generation.get_gateset_gates_table(
-                    gopt_gs, fmts, tblCl, longT)
+                    _generation.get_gateset_gates_table(gopt_gs)
                 ret['best%sGatesetChoiTable' % gaugeKey] = \
-                    _generation.get_gateset_choi_table(
-                    gopt_gs, fmts, tblCl, longT)
+                    _generation.get_gateset_choi_table(gopt_gs)
                 ret['best%sGatesetDecompTable' % gaugeKey] = \
-                    _generation.get_gateset_decomp_table(
-                    gopt_gs, fmts, tblCl, longT)
+                    _generation.get_gateset_decomp_table(gopt_gs)
                 ret['best%sGatesetRotnAxisTable' % gaugeKey] = \
-                    _generation.get_gateset_rotn_axis_table(
-                    gopt_gs, fmts, tblCl, longT)
+                    _generation.get_gateset_rotn_axis_table(gopt_gs)
                 ret['best%sGatesetClosestUnitaryTable' % gaugeKey] = \
-                    _generation.get_gateset_closest_unitary_table(
-                    gopt_gs, fmts, tblCl, longT)
+                    _generation.get_gateset_closest_unitary_table(gopt_gs)
                 ret['best%sGatesetVsTargetTable' % gaugeKey] = \
-                    _generation.get_gateset_vs_target_table(
-                    gopt_gs, gsTarget, fmts, tblCl, longT, None, mxBasis)
+                    _generation.get_gates_vs_target_table(
+                    gopt_gs, gsTarget, None)
                 ret['best%sGatesetErrorGenTable' % gaugeKey] = \
-                    _generation.get_gateset_vs_target_err_gen_table(
-                    gopt_gs, gsTarget, fmts, tblCl, longT)
+                    _generation.get_gates_vs_target_err_gen_table(
+                    gopt_gs, gsTarget)
 
             return ret
         fns['gaugeOptAppendixTables'] = (fn, validate_essential)
@@ -1007,29 +1020,27 @@ class Results(object):
 
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
-
-            fmts = self.options.table_formats
             ret = {}
 
             for gaugeKey in ('Target','TargetSpam','TargetGates','CPTP','TP'):
                 ret['best%sGatesetSpamTable' % gaugeKey] = \
-                    _generation.get_blank_table(fmts)
+                    _generation.get_blank_table()
                 ret['best%sGatesetSpamParametersTable' % gaugeKey] = \
-                    _generation.get_blank_table(fmts)
+                    _generation.get_blank_table()
                 ret['best%sGatesetGatesTable' % gaugeKey] = \
-                    _generation.get_blank_table(fmts)
+                    _generation.get_blank_table()
                 ret['best%sGatesetChoiTable' % gaugeKey] = \
-                    _generation.get_blank_table(fmts)
+                    _generation.get_blank_table()
                 ret['best%sGatesetDecompTable' % gaugeKey] = \
-                    _generation.get_blank_table(fmts)
+                    _generation.get_blank_table()
                 ret['best%sGatesetRotnAxisTable' % gaugeKey] = \
-                    _generation.get_blank_table(fmts)
+                    _generation.get_blank_table()
                 ret['best%sGatesetClosestUnitaryTable' % gaugeKey] = \
-                    _generation.get_blank_table(fmts)
+                    _generation.get_blank_table()
                 ret['best%sGatesetVsTargetTable' % gaugeKey] = \
-                    _generation.get_blank_table(fmts)
+                    _generation.get_blank_table()
                 ret['best%sGatesetErrorGenTable' % gaugeKey] = \
-                    _generation.get_blank_table(fmts)
+                    _generation.get_blank_table()
 
             return ret
         fns['blankGaugeOptAppendixTables'] = (fn, validate_essential)
@@ -1126,7 +1137,7 @@ class Results(object):
             maxGermsPerFig = max(int(maxH / germH - 2), 1)
             figs = []; n = 0
             while( n < len(germs) ):
-                fig_germs = germs[n:n+maxGermsPerFig]
+                fig_germs = list(reversed(germs[n:n+maxGermsPerFig]))
                 fig = plotFn(Ls[st:], fig_germs, baseStr_dict,
                              self.dataset, gsBest, strs,
                              r"$L$", "germ", scale=1.0, sumUp=False,
@@ -1510,7 +1521,6 @@ class Results(object):
 
         pdfInfo = [('Author','pyGSTi'), ('Title', title),
                    ('Keywords', 'GST'), ('pyGSTi Version',_version.__version__),
-                   ('opt_table_formats', self.options.table_formats),
                    ('opt_long_tables', self.options.long_tables),
                    ('opt_table_class', self.options.table_class),
                    ('opt_template_path', self.options.template_path),
@@ -1519,6 +1529,13 @@ class Results(object):
         for key,val in self.parameters.iteritems():
             pdfInfo.append( (key, val) )
         qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
+
+
+        #Get figure directory for figure generation *and* as a 
+        # scratch space for tables.
+        D = report_base + "_files" #figure directory relative to reportDir
+        if not _os.path.isdir( _os.path.join(report_dir,D)):
+            _os.mkdir( _os.path.join(report_dir,D))
 
             
         # 1) get latex tables
@@ -1547,24 +1564,28 @@ class Results(object):
             tables_to_blank += ls_and_germs_tables
 
         for key in tables_to_compute:
-            qtys[key] = self.tables.get(key, verbosity=v).render('latex')
+            qtys[key] = self.tables.get(key, verbosity=v).render(
+                'latex',longtables=self.options.long_tables, scratchDir=D)
             qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
 
         for key in tables_to_blank:
-            qtys[key] = _generation.get_blank_table(['latex']).render('latex')
+            qtys[key] = _generation.get_blank_table().render(
+                'latex',longtables=self.options.long_tables)
             qtys["tt_"+key] = ""
 
         #get appendix tables if needed
         if gaugeOptAppendix: 
             goaTables = self._specials.get('gaugeOptAppendixTables',verbosity=v)
-            qtys.update( { key : goaTables[key].render('latex') 
+            qtys.update( { key : goaTables[key].render(
+                        'latex', longtables=self.options.long_tables, scratchDir=D)
                            for key in goaTables }  )
             #TODO: tables[ref] and then tooltips?
 
         elif any((debugAidsAppendix, pixelPlotAppendix, whackamoleAppendix)):
             goaTables = self._specials.get('blankGaugeOptAppendixTables',
                               verbosity=v)   # fill keys with blank tables
-            qtys.update( { key : goaTables[key].render('latex') 
+            qtys.update( { key : goaTables[key].render(
+                        'latex',longtables=self.options.long_tables)
                            for key in goaTables }  )  # for format substitution
             #TODO: tables[ref] and then tooltips?
 
@@ -1578,10 +1599,6 @@ class Results(object):
             bWasInteractive = True
         else: bWasInteractive = False
     
-        D = report_base + "_files" #figure directory relative to reportDir
-        if not _os.path.isdir( _os.path.join(report_dir,D)):
-            _os.mkdir( _os.path.join(report_dir,D))
-
         maxW,maxH = 6.5,9.0 #max width and height of graphic in latex document (in inches)
 
         def incgr(figFilenm,W=None,H=None): #includegraphics "macro"
@@ -1987,7 +2004,6 @@ class Results(object):
 
         pdfInfo = [('Author','pyGSTi'), ('Title', title),
                    ('Keywords', 'GST'), ('pyGSTi Version',_version.__version__),
-                   ('opt_table_formats', self.options.table_formats),
                    ('opt_long_tables', self.options.long_tables),
                    ('opt_table_class', self.options.table_class),
                    ('opt_template_path', self.options.template_path),
@@ -2018,11 +2034,13 @@ class Results(object):
             tables_to_blank += gof_tables
 
         for key in tables_to_compute:
-            qtys[key] = self.tables.get(key, verbosity=v).render('latex')
+            qtys[key] = self.tables.get(key, verbosity=v).render(
+                'latex',longtables=self.options.long_tables, scratchDir=D)
             qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
 
         for key in tables_to_blank:
-            qtys[key] = _generation.get_blank_table(['latex']).render('latex')
+            qtys[key] = _generation.get_blank_table().render(
+                'latex',longtables=self.options.long_tables)
             qtys["tt_"+key] = ""
 
     
@@ -2273,7 +2291,6 @@ class Results(object):
 
         pdfInfo = [('Author','pyGSTi'), ('Title', title),
                    ('Keywords', 'GST'), ('pyGSTi Version',_version.__version__),
-                   ('opt_table_formats', self.options.table_formats),
                    ('opt_long_tables', self.options.long_tables),
                    ('opt_table_class', self.options.table_class),
                    ('opt_template_path', self.options.template_path),
@@ -2282,6 +2299,12 @@ class Results(object):
             pdfInfo.append( (key, val) )
         qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
 
+
+        #Get figure directory for figure generation *and* as a 
+        # scratch space for tables.
+        D = report_base + "_files" #figure directory relative to reportDir
+        if not _os.path.isdir( _os.path.join(report_dir,D)):
+            _os.mkdir( _os.path.join(report_dir,D))
 
             
         # 1) get latex tables
@@ -2307,11 +2330,13 @@ class Results(object):
             tables_to_blank += ls_and_germs_tables
 
         for key in tables_to_compute:
-            qtys[key] = self.tables.get(key, verbosity=v).render('latex')
+            qtys[key] = self.tables.get(key, verbosity=v).render(
+                'latex',longtables=self.options.long_tables, scratchDir=D)
             qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
 
         for key in tables_to_blank:
-            qtys[key] = _generation.get_blank_table(['latex']).render('latex')
+            qtys[key] = _generation.get_blank_table().render(
+                'latex',longtables=self.options.long_tables)
             qtys["tt_"+key] = ""
 
     
@@ -2324,10 +2349,6 @@ class Results(object):
             bWasInteractive = True
         else: bWasInteractive = False
     
-        D = report_base + "_files" #figure directory relative to reportDir
-        if not _os.path.isdir( _os.path.join(report_dir,D)):
-            _os.mkdir( _os.path.join(report_dir,D))
-
         maxW,maxH = 4.0,3.0 #max width and height of graphic in latex presentation (in inches)
         maxHc = 2.5 #max height allowed for a figure with a caption (in inches)
 
@@ -2715,6 +2736,11 @@ class Results(object):
             qtys['confidenceIntervalScaleFctr'] = "NOT-SET"
             qtys['confidenceIntervalNumNonGaugeParams'] = "NOT-SET"
 
+        #Get figure directory for figure generation *and* as a 
+        # scratch space for tables.
+        D = report_base + "_files" #figure directory relative to reportDir
+        if not _os.path.isdir( _os.path.join(report_dir,D)):
+            _os.mkdir( _os.path.join(report_dir,D))
             
         # 1) get ppt tables
         if verbosity > 0: 
@@ -2740,11 +2766,13 @@ class Results(object):
             tables_to_blank += ls_and_germs_tables
 
         for key in tables_to_compute:
-            qtys[key] = self.tables.get(key, verbosity=v)
+            qtys[key] = self.tables.get(key, verbosity=v).render(
+                'latex',longtables=self.options.long_tables, scratchDir=D)
             qtys["tt_"+key] = tooltiptext(".tables['%s']" % key)
 
         for key in tables_to_blank:
-            qtys[key] = _generation.get_blank_table(['latex'])
+            qtys[key] = _generation.get_blank_table().render(
+                'latex',longtables=self.options.long_tables)
             qtys["tt_"+key] = ""
     
 
@@ -2757,9 +2785,6 @@ class Results(object):
             bWasInteractive = True
         else: bWasInteractive = False
     
-        D = report_base + "_files" #figure directory relative to reportDir
-        if not _os.path.isdir( _os.path.join(report_dir,D)):
-            _os.mkdir( _os.path.join(report_dir,D))
         fileDir = _os.path.join(report_dir, D)
         maxW,maxH = 4.0,3.0 #max width and height of graphic in latex presentation (in inches)
 
@@ -3019,7 +3044,9 @@ class Results(object):
             return table
 
         def draw_table_latex(shapes, key, left, top, width, height, ptSize=10):
-            latexTabStr = qtys[key].render('latex')
+            latexTabStr = qtys[key].render('latex',
+                                           longtables=self.options.long_tables,
+                                           scratchDir=D)
             d = {'toLatex': latexTabStr }
             print "Latexing %s table..." % key; _sys.stdout.flush()
             outputFilename = _os.path.join(fileDir, "%s.tex" % key)
@@ -3328,7 +3355,6 @@ class Results(object):
 
         pdfInfo = [('Author','pyGSTi'), ('Title', title),
                    ('Keywords', 'GST'), ('pyGSTi Version',_version.__version__),
-                   ('opt_table_formats', self.options.table_formats),
                    ('opt_long_tables', self.options.long_tables),
                    ('opt_table_class', self.options.table_class),
                    ('opt_template_path', self.options.template_path),
@@ -3337,7 +3363,12 @@ class Results(object):
             pdfInfo.append( (key, val) )
         qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
 
-            
+        #Get figure directory for figure generation *and* as a 
+        # scratch space for tables.
+        D = report_base + "_files" #figure directory relative to reportDir
+        if not _os.path.isdir( _os.path.join(report_dir,D)):
+            _os.mkdir( _os.path.join(report_dir,D))
+ 
         # 1) get latex tables
         if verbosity > 0: 
             print "*** Generating tables ***"; _sys.stdout.flush()
@@ -3346,8 +3377,10 @@ class Results(object):
         std_tables = \
             ('targetSpamBriefTable', 'bestGatesetSpamBriefTable',
              'bestGatesetSpamParametersTable', 'bestGatesetVsTargetTable',
+             'bestGatesetSpamVsTargetTable', 'bestGatesetGaugeOptParamsTable',
              'bestGatesetChoiEvalTable', 'datasetOverviewTable',
-             'bestGatesetEvalTable')
+             'bestGatesetEvalTable', 'bestGatesetRelEvalTable',
+             'targetGatesBoxTable', 'bestGatesetErrGenBoxTable')
              
 #'bestGatesetDecompTable','bestGatesetRotnAxisTable',
 #'bestGatesetClosestUnitaryTable',
@@ -3366,11 +3399,13 @@ class Results(object):
             tables_to_blank += ls_and_germs_tables
 
         for key in tables_to_compute:
-            qtys[key] = self.tables.get(key, verbosity=v).render('latex')
+            qtys[key] = self.tables.get(key, verbosity=v).render(
+                'latex',longtables=self.options.long_tables, scratchDir=D)
             qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
 
         for key in tables_to_blank:
-            qtys[key] = _generation.get_blank_table(['latex']).render('latex')
+            qtys[key] = _generation.get_blank_table().render(
+                'latex',longtables=self.options.long_tables)
             qtys["tt_"+key] = ""
 
         #get appendix tables if needed
@@ -3397,10 +3432,6 @@ class Results(object):
             bWasInteractive = True
         else: bWasInteractive = False
     
-        D = report_base + "_files" #figure directory relative to reportDir
-        if not _os.path.isdir( _os.path.join(report_dir,D)):
-            _os.mkdir( _os.path.join(report_dir,D))
-
         maxW,maxH = 6.5,9.0 #max width and height of graphic in latex document (in inches)
 
         def incgr(figFilenm,W=None,H=None): #includegraphics "macro"
@@ -3416,45 +3447,49 @@ class Results(object):
             qtys['tt_' + figkey] = tooltiptex(".figures['%s']" % figkey)
             return fig
 
-        # Gate/SPAM box tables for visualizing large matrices.
-        #  - these tables are "special" in that they contain figures, so 
-        #    there's no way to simply incorporate them into the figures or
-        #    tables member dictionaries.
-        def make_gateset_box_table(gsKey, tablekey, figPrefixes, figColWidths, figHeadings):
-            gs = self.gatesets[gsKey]
-            latex = "\\begin{tabular}[l]{| >{\\centering\\arraybackslash}m{0.75in} | %s |}\n\hline\n" % \
-                " | ".join([ ">{\\centering\\arraybackslash}m{%.1fin}" % w for w in figColWidths ])
-            latex += "Gate & %s \\\\ \hline\n" % " & ".join(figHeadings)
-
-            for gateLabel in gs.gates:
-                latex += gateLabel
-                for figprefix,colW in zip(figPrefixes,figColWidths):
-                    figkey = figprefix + gateLabel
-                    figFilenm = figkey + ".pdf"
-                    fig = self.figures.get(figkey, verbosity=v)
-                    fig.save_to(_os.path.join(report_dir, D, figFilenm))
-                    maxFigH = min(0.95*(maxH / len(gs.gates)),colW)
-                    sz = min(gs.gates[gateLabel].shape[0] * 0.15, maxFigH)
-                    latex += " & " + incgr(figFilenm,sz,sz)
-                latex += "\\\\ \hline\n"
-                
-            latex += "\end{tabular}\n"
-                
-            qtys['tt_' + tablekey] = "" #tooltiptex(".tables['%s']" % tablekey)
-            qtys[tablekey] = latex
-
-        basisNm = _bt.basis_longname(self.parameters['mxBasis'], self.gatesets['target'].get_dimension())
-        make_gateset_box_table('target', 'targetGatesBoxTable',
-                               ("targetGateBoxes",), (3,), ("Matrix (%s basis)" % basisNm,) )
-        make_gateset_box_table('final estimate', 'bestGatesetErrGenBoxTable',
-                               ("bestGateErrGenBoxes","pauliProdHamiltonianDecompBoxes"), (3,1.5),
-                               ("Error Generator (%s basis)" % basisNm, "Pauli-product projections") )
+        ## Gate/SPAM box tables for visualizing large matrices.
+        ##  - these tables are "special" in that they contain figures, so 
+        ##    there's no way to simply incorporate them into the figures or
+        ##    tables member dictionaries.
+        #def make_gateset_box_table(gsKey, tablekey, figPrefixes, figColWidths, figHeadings):
+        #    gs = self.gatesets[gsKey]
+        #    latex = "\\begin{tabular}[l]{| >{\\centering\\arraybackslash}m{0.75in} | %s |}\n\hline\n" % \
+        #        " | ".join([ ">{\\centering\\arraybackslash}m{%.1fin}" % w for w in figColWidths ])
+        #    latex += "Gate & %s \\\\ \hline\n" % " & ".join(figHeadings)
+        #
+        #    for gateLabel in gs.gates:
+        #        latex += gateLabel
+        #        for figprefix,colW in zip(figPrefixes,figColWidths):
+        #            figkey = figprefix + gateLabel
+        #            figFilenm = figkey + ".pdf"
+        #            fig = self.figures.get(figkey, verbosity=v)
+        #            fig.save_to(_os.path.join(report_dir, D, figFilenm))
+        #            maxFigH = min(0.95*(maxH / len(gs.gates)),colW)
+        #            sz = min(gs.gates[gateLabel].shape[0] * 0.15, maxFigH)
+        #            latex += " & " + incgr(figFilenm,sz,sz)
+        #        latex += "\\\\ \hline\n"
+        #        
+        #    latex += "\end{tabular}\n"
+        #        
+        #    qtys['tt_' + tablekey] = "" #tooltiptex(".tables['%s']" % tablekey)
+        #    qtys[tablekey] = latex
+        #
+        #basisNm = _bt.basis_longname(self.gatesets['target'].get_basis_name(),
+        #                             self.gatesets['target'].get_basis_dimension())
+        #make_gateset_box_table('target', 'targetGatesBoxTable',
+        #                       ("targetGateBoxes",), (3,), ("Matrix (%s basis)" % basisNm,) )
+        #
+        #basisNm = _bt.basis_longname(self.gatesets['final estimate'].get_basis_name(),
+        #                             self.gatesets['final estimate'].get_basis_dimension())
+        #make_gateset_box_table('final estimate', 'bestGatesetErrGenBoxTable',
+        #                       ("bestGateErrGenBoxes","pauliProdHamiltonianDecompBoxes"), (3,1.5),
+        #                       ("Error Generator (%s basis)" % basisNm, "Pauli-product projections") )
 
         #Chi2 or logl plots
         if self._LsAndGermInfoSet:
             Ls = self.parameters['max length list']
             st = 1 if Ls[0] == 0 else 0 #start index: skip LGST column in plots
-            nPlots = 3 #(len(Ls[st:])-1)+2 if pixelPlotAppendix else 2
+            nPlots = 4 #(len(Ls[st:])-1)+2 if pixelPlotAppendix else 2
 
             if self.parameters['objective'] == "chi2":
                 plotFnName,plotFnLatex = "Chi2", "$\chi^2$"
@@ -3479,6 +3514,14 @@ class Results(object):
             if verbosity > 0:
                 print "2 ",; _sys.stdout.flush()
 
+            fig = set_fig_qtys("bestEstimateSummedColorBoxPlot",
+                               "best%sBoxesSummed.png" % plotFnName,
+                               maxW, maxH-1.0) # -1 for room for caption
+
+            if verbosity > 0:
+                print "3 ",; _sys.stdout.flush()
+
+
             figkey = "bestEstimateColorBoxPlotPages"
             figs = self._specials.get(figkey, verbosity=v)
             incgr_list = []
@@ -3488,7 +3531,7 @@ class Results(object):
                 if iFig == 0:
                     maxX = fig.get_extra_info()['nUsedXs']
                     maxY = fig.get_extra_info()['nUsedYs']
-                    incgr_list.append(incgr(figFilenm))
+                    incgr_list.append(incgr(figFilenm,maxW,maxH-1.25),)
                 else:
                     lx = fig.get_extra_info()['nUsedXs']
                     ly = fig.get_extra_info()['nUsedYs']
@@ -3496,10 +3539,10 @@ class Results(object):
                     #scale figure size according to number of rows and columns+1
                     # (+1 for labels ~ another col) relative to initial plot
                     W = float(lx+1)/float(maxX+1) * maxW 
-                    H = float(ly)  /float(maxY)   * maxH 
+                    H = float(ly)  /float(maxY)   * (maxH - 1.25) # -1 for caption
                     incgr_list.append(incgr(figFilenm,W,H))
             qtys[figkey] = "\\end{center}\\end{figure}\\begin{figure}\\begin{center}".join(
-                           reversed(incgr_list))
+                           incgr_list)
             qtys['tt_' + figkey] = tooltiptex(".figures['%s']" % "bestEstimateColorBoxPlot")
 
             #fig = set_fig_qtys("bestEstimateColorBoxPlot",
@@ -3517,19 +3560,20 @@ class Results(object):
             #fig = set_fig_qtys("invertedBestEstimateColorBoxPlot",
             #                   "best%sBoxes_inverted.pdf" % plotFnName)
 
-            if verbosity > 0:
-                print "3 ",; _sys.stdout.flush()
-
-            qtys["bestEstimatePolarEvalPlots"] = ""
-            qtys["tt_bestEstimatePolarEvalPlots"] = ""
-            for gl in self.gatesets['final estimate'].gates:
-                figkey = "bestEstimatePolar%sEvalPlot" % gl
-                figFilenm = "best%sPolarEvals.png" % gl
-                fig = self.figures.get(figkey, verbosity=v)
-                fig.save_to(_os.path.join(report_dir, D, figFilenm))
-                W = H = 2.5
-                qtys["bestEstimatePolarEvalPlots"] += incgr(figFilenm,W,H) + "\n"
-                qtys['tt_bestEstimatePolarEvalPlots'] += tooltiptex(".figures['%s']" % figkey)
+            #Unused polar plots figure...
+            #if verbosity > 0:
+            #    print "4 ",; _sys.stdout.flush()
+            #
+            #qtys["bestEstimatePolarEvalPlots"] = ""
+            #qtys["tt_bestEstimatePolarEvalPlots"] = ""
+            #for gl in self.gatesets['final estimate'].gates:
+            #    figkey = "bestEstimatePolar%sEvalPlot" % gl
+            #    figFilenm = "best%sPolarEvals.png" % gl
+            #    fig = self.figures.get(figkey, verbosity=v)
+            #    fig.save_to(_os.path.join(report_dir, D, figFilenm))
+            #    W = H = 2.5
+            #    qtys["bestEstimatePolarEvalPlots"] += incgr(figFilenm,W,H) + "\n"
+            #    qtys['tt_bestEstimatePolarEvalPlots'] += tooltiptex(".figures['%s']" % figkey)
 
         else:
             for figkey in ["colorBoxPlotKeyPlot", 
@@ -3760,9 +3804,8 @@ class Results(object):
 class ResultOptions(object):
     """ Class encapsulating the display options of a Results instance """
     def __init__(self):
-        self.table_formats = ()
         self.long_tables = False
-        self.table_class = "dataTable"
+        self.table_class = "pygstiTbl"
         self.template_path = "."
         self.latex_cmd = "pdflatex"
         if _os.path.exists("/dev/null"):
@@ -3772,8 +3815,6 @@ class ResultOptions(object):
                                     #so don't assume halt-on-error works either.
 
     def describe(self,prefix):
-        s  = prefix + ".table_formats  -- computed table formats = %s\n" \
-            % str(self.table_formats)
         s += prefix + ".long_tables    -- long latex tables?  %s\n" \
             % str(self.long_tables)
         s += prefix + ".table_class    -- HTML table class = %s\n" \

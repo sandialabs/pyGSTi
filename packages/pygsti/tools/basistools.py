@@ -1079,6 +1079,34 @@ def unitary_to_pauligate_2q(U):
     return op_mx
 
 
+def vec_to_stdmx(v, basis):
+    """
+    Convert a vector in the given basis to a matrix in the standard basis.
+
+    A convenience function for calling [pp,gm,std]vec_to_stdmx(v) based on
+    the value of basis.
+    
+
+    Parameters
+    ----------
+    v : numpy array
+        The vector
+
+    basis : {"std", "gm", "pp"}
+        The abbreviation for the basis used to interpret v ("gm" = Gell-Mann,
+        "pp" = Pauli-product, "std" = matrix unit, or standard).
+
+    Returns
+    -------
+    numpy array
+    """
+    if basis == "pp":   return ppvec_to_stdmx(v)
+    elif basis == "gm": return gmvec_to_stdmx(v)
+    elif basis == "std": return stdvec_to_stdmx(v)
+    else: raise ValueError("Invalid basis specifier: %s" % basis)
+
+
+
 def ppvec_to_stdmx(v):
     """
     Convert a vector in the Pauli basis to a matrix

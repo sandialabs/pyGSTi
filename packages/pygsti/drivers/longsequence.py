@@ -10,6 +10,7 @@ import warnings as _warnings
 import numpy as _np
 import sys as _sys
 import time as _time
+import collections as _collections
 
 from .. import report as _report
 from .. import algorithms as _alg
@@ -265,20 +266,26 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     else:
         go_gs_lsgst_list = gs_lsgst_list
         
-    for i,gs in enumerate(go_gs_lsgst_list):
-        if gaugeOptToCPTP and _tools.sum_of_negative_choi_evals(gs) < 1e-8:
-            #if gateset is in CP, then don't let it out (constrain = True)
-            go_gs_lsgst_list[i] = _alg.optimize_gauge(
-                gs,'target',targetGateset=gs_target,
-                constrainToTP=constrainToTP, constrainToCP=True,
-                gateWeight=1, spamWeight=gaugeOptRatio)
-            
-        else: #otherwise just optimize to the target and forget about CPTP...
-            go_gs_lsgst_list[i] = _alg.optimize_gauge(
-                gs,'target',targetGateset=gs_target,
-                constrainToTP=constrainToTP, 
-                gateWeight=1, spamWeight=gaugeOptRatio)
+    #Note: we used to make constrainToCP contingent on whether each
+    # gateset was already in CP, i.e. only constrain if 
+    # _tools.sum_of_negative_choi_evals(gs) < 1e-8.  But we rarely use
+    # CP constraints, and this complicates the logic -- so now when
+    # gaugeOptToCPTP == True, always constrain to CP.
+    go_params = _collections.OrderedDict([
+            ('toGetTo', 'target'),
+            ('constrainToTP', constrainToTP),
+            ('constrainToCP', gaugeOptToCPTP),
+            ('gateWeight', 1.0),
+            ('spamWeight', gaugeOptRatio),
+            ('targetGatesMetric',"frobenius"),
+            ('targetSpamMetric',"frobenius") ])
 
+    for i,gs in enumerate(go_gs_lsgst_list):
+        args = go_params.copy()
+        args['gateset'] = gs
+        args['targetGateset'] = gs_target
+        go_gs_lsgst_list[i] = _alg.optimize_gauge(**args)
+            
     tNxt = _time.time()
     times_list.append( ('Gauge opt to target',tNxt-tRef) ); tRef=tNxt
 
@@ -300,6 +307,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     ret.parameters['defaultDirectory'] = default_dir
     ret.parameters['defaultBasename'] = default_base
     ret.parameters['memLimit'] = advancedOptions.get('memoryLimitInBytes',None)
+    ret.parameters['gaugeOptParams'] = go_params
 
     times_list.append( ('Results initialization',_time.time()-tRef) )
     ret.parameters['times'] = times_list
