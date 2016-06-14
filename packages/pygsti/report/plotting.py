@@ -454,7 +454,7 @@ def splice_cmaps(cmaps, name=None, splice_points=None):
 
     name : string
         The name for the colormap. If no name is given, the name
-        'spliced_cmap1name_cmap2name_...' is assigned to the colormap.
+        "spliced_cmap1name_cmap2name_..." is assigned to the colormap.
 
     splice_points : ordered list of floats in (0, 1), optional
         The transition points when one colormap should end and the next should
@@ -586,16 +586,18 @@ def get_transition(N, eps=.1):
     Computes the transition point for the LinLogNorm class.
 
     Parameters
-    -------------
+    ----------
+    N : int
+      number of chi2_1 random variables
 
-    N: number of chi2_1 random variables, integer
-    eps: The quantile, float
+    eps : float
+      The quantile
 
     Returns
-    ---------
-
-    trans: An approximate 1-eps quantile for the maximum of N chi2_1 random
-    variables
+    -------
+    trans : float
+       An approximate 1-eps quantile for the maximum of N chi2_1 random
+       variables.
     '''
 
     trans = _np.ceil(_chi2.ppf(1 - eps / N, 1))
@@ -3172,12 +3174,13 @@ def gate_matrix_boxplot(gateMatrix, size=None, m=-1.0, M=1.0,
         displayed to the right of the box plot.
 
     prec : int or {'compact','compacthp'}, optional
-        Precision for box labels.  Only relevant when boxLabels == True.
-        Allowed values are:
-          'compact' = round to nearest whole number using at most 3 characters
-          'compacthp' = show as much precision as possible using at most 3 characters
-          int >= 0 = fixed precision given by int
-          int <  0 = number of significant figures given by -int
+        Precision for box labels.  Only relevant when boxLabels == True. Allowed
+        values are:
+
+        - 'compact' = round to nearest whole number using at most 3 characters
+        - 'compacthp' = show as much precision as possible using at most 3 characters
+        - int >= 0 = fixed precision given by int
+        - int <  0 = number of significant figures given by -int
 
     mxBasisDimsY : int or list, optional
         Specifies the dimension of the basis along the Y-axis direction
@@ -3319,12 +3322,13 @@ def gate_matrix_errgen_boxplot(gateMatrix, targetMatrix, size=None,
         displayed to the right of the box plot.
 
     prec : int or {'compact','compacthp'}, optional
-        Precision for box labels.  Only relevant when boxLabels == True.
-        Allowed values are:
-          'compact' = round to nearest whole number using at most 3 characters
-          'compacthp' = show as much precision as possible using at most 3 characters
-          int >= 0 = fixed precision given by int
-          int <  0 = number of significant figures given by -int
+        Precision for box labels.  Only relevant when boxLabels == True. Allowed
+        values are:
+
+        - 'compact' = round to nearest whole number using at most 3 characters
+        - 'compacthp' = show as much precision as possible using at most 3 characters
+        - int >= 0 = fixed precision given by int
+        - int <  0 = number of significant figures given by -int
 
 
     Returns
@@ -3477,12 +3481,13 @@ def pauliprod_hamiltonian_boxplot(gate, targetGate, size=None, title=None,
         displayed to the right of the box plot.
 
     prec : int or {'compact','compacthp'}, optional
-        Precision for box labels.  Only relevant when boxLabels == True.
-        Allowed values are:
-          'compact' = round to nearest whole number using at most 3 characters
-          'compacthp' = show as much precision as possible using at most 3 characters
-          int >= 0 = fixed precision given by int
-          int <  0 = number of significant figures given by -int
+        Precision for box labels.  Only relevant when boxLabels == True. Allowed
+        values are:
+
+        - 'compact' = round to nearest whole number using at most 3 characters
+        - 'compacthp' = show as much precision as possible using at most 3 characters
+        - int >= 0 = fixed precision given by int
+        - int <  0 = number of significant figures given by -int
 
 
     Returns

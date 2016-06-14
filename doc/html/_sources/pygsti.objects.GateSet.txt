@@ -40,6 +40,8 @@ pygsti.objects.GateSet
       ~GateSet.dproduct
       ~GateSet.frobeniusdist
       ~GateSet.from_vector
+      ~GateSet.get_basis_dimension
+      ~GateSet.get_basis_name
       ~GateSet.get_dimension
       ~GateSet.get_effect_labels
       ~GateSet.get_effects
@@ -70,9 +72,12 @@ pygsti.objects.GateSet
       ~GateSet.probs
       ~GateSet.product
       ~GateSet.randomize_with_unitary
+      ~GateSet.reset_basis
       ~GateSet.rotate
       ~GateSet.set_all_parameterizations
+      ~GateSet.set_basis
       ~GateSet.to_vector
+      ~GateSet.tpdist
       ~GateSet.transform
    
    

@@ -31,6 +31,7 @@ pygsti
       :toctree:
 
    
+      basis_element_labels
       basis_longname
       chi2
       chi2fn
@@ -132,11 +133,13 @@ pygsti
       to_std_gateset
       to_vector
       trace
+      tracedist
       two_delta_loglfn
       two_qubit_gate
       unitary_to_pauligate_1q
       unitary_to_pauligate_2q
       unitary_to_process_mx
+      vec_to_stdmx
    
    
 

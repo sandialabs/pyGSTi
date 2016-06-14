@@ -954,15 +954,16 @@ def get_dataset_overview_table(dataset, target, maxlen=10, fixedLists=None,
 
     table = _ReportTable(colHeadings, formatters)
 
-    minN = min([ row.total() for row in dataset.itervalues()])
-    maxN = max([ row.total() for row in dataset.itervalues()])
-    cntStr = "[%d,%d]" % (minN,maxN) if (minN != maxN) else str(minN)
+    minN = round(min([ row.total() for row in dataset.itervalues()]))
+    maxN = round(max([ row.total() for row in dataset.itervalues()]))
+    cntStr = "[%d,%d]" % (minN,maxN) if (minN != maxN) else "%d" % round(minN)
 
     table.addrow(("Number of strings", str(len(dataset))), (None,None))
     table.addrow(("Gate labels", ", ".join(dataset.get_gate_labels()) ), (None,None))
     table.addrow(("SPAM labels",  ", ".join(dataset.get_spam_labels()) ), (None,None))
     table.addrow(("Counts per string", cntStr  ), (None,None))
-    table.addrow(("Gram singular vals", svals_2col), (None,_tf.Sml))
+    table.addrow(("Gram singular values| (right column gives the values|when using the target gate set)",
+                  svals_2col), (_tf.TxtCnv,_tf.Sml))
     if maxLengthList is not None:
         table.addrow(("Max. Lengths", ", ".join(map(str,maxLengthList)) ), (None,None))
 

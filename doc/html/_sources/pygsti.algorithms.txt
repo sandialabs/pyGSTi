@@ -32,9 +32,12 @@ pygsti.algorithms
       optimize_gauge
       optimize_integer_fiducials_slack
       optimize_integer_germs_slack
+      test_fiducial_list
       test_germ_list_finitel
       test_germ_list_infl
       twirled_deriv
+      write_fixed_hamming_weight_code
+      xor
    
    
 
