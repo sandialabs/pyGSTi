@@ -269,29 +269,25 @@ class TestReport(ReportTestCase):
         
 
         #tests which fill in the cracks of the full-report tests
-        with self.assertRaises(ValueError):
-            gen.get_gateset_spam_table(gateset, formats, tableclass,
-                                       longtable, None, mxBasis="fooBar")
-        tab = gen.get_gateset_spam_table(gateset, formats, tableclass, longtable, None, mxBasis="gm")
-        tab_wCI = gen.get_gateset_spam_table(gateset, formats, tableclass, longtable, ci, mxBasis="gm")
-        gen.get_gateset_spam_table(gateset, formats, tableclass, longtable, None, mxBasis="std")
-        gen.get_gateset_spam_table(gateset, formats, tableclass, longtable, None, mxBasis="pp")
-        gen.get_gateset_gates_table(gateset_tp, formats, tableclass, longtable, ci_TP) #test zero-padding
-        gen.get_unitary_gateset_gates_table(std.gs_target, formats, tableclass, longtable, ci_tgt) #unitary gates w/CIs
-        gen.get_unitary_gateset_gates_table(target_tp, formats, tableclass, longtable, ci_TP_tgt) #unitary gates w/CIs
-        gen.get_gateset_closest_unitary_table(gateset_2q, formats, tableclass, longtable, None) #test higher-dim gateset
-        gen.get_gateset_closest_unitary_table(gateset, formats, tableclass, longtable, ci) #test with CIs (long...)
-        gen.get_gateset_rotn_axis_table(std.gs_target, formats, tableclass, longtable, None) #try to get "--"s and "X"s to display
-        gen.get_chi2_progress_table([0], [gateset_tp], [ [('Gx',)],], ds, formats, tableclass, longtable) #TP case
+        tab = gen.get_gateset_spam_table(gateset, None)
+        tab_wCI = gen.get_gateset_spam_table(gateset, ci)
+        gen.get_gateset_spam_table(gateset, None)
+        gen.get_gateset_gates_table(gateset_tp, ci_TP) #test zero-padding
+        gen.get_unitary_gateset_gates_table(std.gs_target, ci_tgt) #unitary gates w/CIs
+        gen.get_unitary_gateset_gates_table(target_tp, ci_TP_tgt) #unitary gates w/CIs
+        gen.get_gateset_closest_unitary_table(gateset_2q, None) #test higher-dim gateset
+        gen.get_gateset_closest_unitary_table(gateset, ci) #test with CIs (long...)
+        gen.get_gateset_rotn_axis_table(std.gs_target, None) #try to get "--"s and "X"s to display
+        gen.get_chi2_progress_table([0], [gateset_tp], [ [('Gx',)],], ds) #TP case
         gen.get_chi2_confidence_region(gateset_tp, ds, 95) #TP case
 
-        gen.get_gatestring_multi_table([ [('Gx',),('Gz',)], [('Gy',)] ], ["list1","list2"], formats,
-                                       tableclass, longtable, commonTitle=None) #commonTitle == None case w/diff length lists
+        gen.get_gatestring_multi_table([ [('Gx',),('Gz',)], [('Gy',)] ],
+                                       ["list1","list2"], commonTitle=None) #commonTitle == None case w/diff length lists
 
         with self.assertRaises(ValueError):
-            gen.get_unitary_gateset_gates_table(std.gs_target, formats, tableclass, longtable, ci) #gateset-CI mismatch
+            gen.get_unitary_gateset_gates_table(std.gs_target, ci) #gateset-CI mismatch
         with self.assertRaises(ValueError):
-            gen.get_gateset_spam_parameters_table(std.gs_target, formats, tableclass, longtable, ci) #gateset-CI mismatch
+            gen.get_gateset_spam_parameters_table(std.gs_target, ci) #gateset-CI mismatch
 
         #Test ReportTable object
         rowLabels = tab.keys()
@@ -339,19 +335,13 @@ class TestReport(ReportTestCase):
             tab.col(key='foobar',index=1) #cannot specify key and index
 
         with self.assertRaises(ValueError):
-            tab.render(fmt="foobar") #invalid format
-
-        latexOnlyTab = pygsti.report.table.ReportTable(['latex'], ['Col1','Col2'], (None,None),
-                                                       "tableClass",False)
-        with self.assertRaises(KeyError):
-            x = str(latexOnlyTab) #must have 'py' format
-            
+            tab.render(fmt="foobar") #invalid format            
 
 
 
         #LogL case tests
-        gen.get_logl_progress_table([0], [gateset_tp], [ [('Gx',)],], ds, formats, tableclass, longtable) # logL case
-        gen.get_logl_progress_table([0], [gateset], [ [('Gx',)],], ds, formats, tableclass, longtable) # logL case
+        gen.get_logl_progress_table([0], [gateset_tp], [ [('Gx',)],], ds) # logL case
+        gen.get_logl_progress_table([0], [gateset], [ [('Gx',)],], ds) # logL case
 
         gen.get_logl_confidence_region(gateset_tp, ds, 95,
                                        gatestring_list=None, probClipInterval=(-1e6,1e6),
@@ -556,7 +546,7 @@ class TestReport(ReportTestCase):
         #self.assertEqual(results.options, results_copy.options) #need to add equal test to ResultsOptions
         self.assertEqual(results.parameters, results_copy.parameters)
 
-        results2 = pygsti.report.Results(restrictToFormats=('py','latex'))
+        results2 = pygsti.report.Results()
         results2.options.template_path = "/some/path/to/templates"
         results2.options.latex_cmd = "myCustomLatex"
 

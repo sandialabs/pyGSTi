@@ -56,9 +56,10 @@ class TestCoreMethods(CoreTestCase):
         #pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
         #                                            nSamples=1000, sampleError='none')
 
-        rank,evals = pygsti.gram_rank_and_evals(ds, self.specs, self.gateset)
+        rank,evals,target_evals = pygsti.gram_rank_and_evals(ds, self.specs, self.gateset)
         print "gram rank = ",rank
         print "gram evals = ",evals
+        print "target gram evals = ",target_evals
 
         with self.assertRaises(ValueError):
             pygsti.gram_rank_and_evals(ds, self.specs, None) #no spam labels

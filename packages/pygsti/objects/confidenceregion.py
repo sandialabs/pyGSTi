@@ -359,7 +359,7 @@ class ConfidenceRegion(object):
 
         prepObj = self.gateset.preps[prepLabel].copy() # copy because we add eps to this gate
         spamVec = _np.asarray(prepObj).copy()
-        gpo = self.gateset_offsets[spamLabel][0] #starting "gateset parameter offset"        
+        gpo = self.gateset_offsets[prepLabel][0] #starting "gateset parameter offset"        
 
         f0 = fnOfPrep(spamVec) #function value at "base point"
         nPrepParams = prepObj.num_params()
@@ -420,9 +420,14 @@ class ConfidenceRegion(object):
 
         effectObj = self.gateset.effects[effectLabel].copy() # copy because we add eps to this gate
         spamVec = _np.asarray(effectObj).copy()
-        gpo = self.gateset_offsets[spamLabel][0] #starting "gateset parameter offset"        
-
         f0 = fnOfEffect(spamVec) #function value at "base point"
+        
+        if effectLabel not in self.gateset_offsets: #e.g. "remainder" is not...
+            #Assume this effect label has not official "parameters" and just
+            # return 0 as the confidence interval.
+            return (0.0,f0) if returnFnVal else 0.0
+
+        gpo = self.gateset_offsets[effectLabel][0] #starting "gateset parameter offset"                    
         nEffectParams = effectObj.num_params()
         effectVec0 = effectObj.to_vector()
 

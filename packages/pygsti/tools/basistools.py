@@ -200,10 +200,10 @@ def basis_longname(basis, dimOrBlockDims=None):
     """
     if basis == "std": return "Matrix-unit"
     elif basis == "gm":
-        if dimOrBlockDims == 2: return "Pauli"
+        if dimOrBlockDims in (2,[2],(2,)): return "Pauli"
         else: return "Gell-Mann"
     elif basis == "pp":
-        if dimOrBlockDims == 2: return "Pauli"
+        if dimOrBlockDims in (2,[2],(2,)): return "Pauli"
         else: return "Pauli-prod"
     else: return "?Unknown?"
 
@@ -287,7 +287,10 @@ def basis_element_labels(basis, dimOrBlockDims):
             def is_integer(x):
                 return bool( abs(x - round(x)) < 1e-6 )
             if type(dimOrBlockDims) != int:
-                raise ValueError("Dimension for Pauli tensor product matrices must be an *integer* power of 2")
+                if type(dimOrBlockDims) in (list,tuple) and len(dimOrBlockDims) == 1:
+                    dimOrBlockDims = dimOrBlockDims[0]
+                else:
+                    raise ValueError("Dimension for Pauli tensor product matrices must be an *integer* power of 2")
             nQubits = _np.log2(dimOrBlockDims)
             if not is_integer(nQubits):
                 raise ValueError("Dimension for Pauli tensor product matrices must be an integer *power of 2*")
@@ -774,7 +777,10 @@ def pp_matrices(dim):
         return bool( abs(x - round(x)) < 1e-6 )
 
     if type(dim) != int:
-        raise ValueError("Dimension for Pauli tensor product matrices must be an *integer* power of 2")
+        if type(dim) in (list,tuple) and len(dim) == 1:
+            dim = dim[0]
+        else:
+            raise ValueError("Dimension for Pauli tensor product matrices must be an *integer* power of 2")
 
     nQubits = _np.log2(dim)
     if not is_integer(nQubits):

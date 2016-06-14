@@ -2012,6 +2012,11 @@ class Results(object):
             pdfInfo.append( (key, val) )
         qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
 
+        #Get figure directory for figure generation *and* as a 
+        # scratch space for tables.
+        D = report_base + "_files" #figure directory relative to reportDir
+        if not _os.path.isdir( _os.path.join(report_dir,D)):
+            _os.mkdir( _os.path.join(report_dir,D))
             
         # 1) get latex tables
         if verbosity > 0: 
@@ -2766,13 +2771,11 @@ class Results(object):
             tables_to_blank += ls_and_germs_tables
 
         for key in tables_to_compute:
-            qtys[key] = self.tables.get(key, verbosity=v).render(
-                'latex',longtables=self.options.long_tables, scratchDir=D)
+            qtys[key] = self.tables.get(key, verbosity=v)
             qtys["tt_"+key] = tooltiptext(".tables['%s']" % key)
 
         for key in tables_to_blank:
-            qtys[key] = _generation.get_blank_table().render(
-                'latex',longtables=self.options.long_tables)
+            qtys[key] = _generation.get_blank_table()
             qtys["tt_"+key] = ""
     
 
@@ -3398,10 +3401,16 @@ class Results(object):
         else:
             tables_to_blank += ls_and_germs_tables
 
+        #Change to report directory so figure generation works correctly
+        cwd = _os.getcwd()
+        if len(report_dir) > 0: _os.chdir(report_dir)
+
         for key in tables_to_compute:
             qtys[key] = self.tables.get(key, verbosity=v).render(
                 'latex',longtables=self.options.long_tables, scratchDir=D)
             qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
+
+        _os.chdir(cwd) #change back to original directory
 
         for key in tables_to_blank:
             qtys[key] = _generation.get_blank_table().render(
@@ -3815,6 +3824,7 @@ class ResultOptions(object):
                                     #so don't assume halt-on-error works either.
 
     def describe(self,prefix):
+        s = ""
         s += prefix + ".long_tables    -- long latex tables?  %s\n" \
             % str(self.long_tables)
         s += prefix + ".table_class    -- HTML table class = %s\n" \
@@ -3825,7 +3835,6 @@ class ResultOptions(object):
             % str(self.latex_cmd)
         s += prefix + ".latex_postcmd  -- latex compiling command postfix = '%s'\n" \
             % str(self.latex_postcmd)
-
         return s
 
 

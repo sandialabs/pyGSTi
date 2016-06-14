@@ -641,6 +641,9 @@ def read_gateset(filename):
     spam_vecs = _OrderedDict(); spam_labels = _OrderedDict(); remainder_spam_label = ""
     identity_vec = _np.transpose( _np.array( [ _np.sqrt(2.0), 0,0,0] ) )  #default = 1-QUBIT identity vector
 
+    basis_abbrev = "pp" #default assumed basis
+    basis_dims = None
+
     state = "look for label"
     cur_label = ""; cur_format = ""; cur_rows = []
     for line in open(filename):
@@ -668,6 +671,19 @@ def read_gateset(filename):
             elif line.startswith("IDENTITYVEC "):  #Vectorized form of identity density matrix in whatever basis is used
                 if line != "IDENTITYVEC None":  #special case for designating no identity vector, so default is not used
                     identity_vec  = _np.transpose( _evalRowList( [ line[len("IDENTITYVEC "):].split() ], bComplex=False ) )
+
+            elif line.startswith("BASIS "): # Line of form "BASIS <abbrev> [<dims>]", where optional <dims> is comma-separated integers
+                parts = line[len("BASIS "):].split()
+                basis_abbrev = parts[0]
+                if len(parts) > 1:
+                    basis_dims = map(int, "".join(parts[1:]).split(","))
+                    if len(basis_dims) == 1: basis_dims = basis_dims[0]
+                elif gs.get_dimension() is not None:
+                    basis_dims = int(round(_np.sqrt(gs.get_dimension())))
+                elif len(spam_vecs) > 0:
+                    basis_dims = int(round(_np.sqrt(spam_vecs.values()[0].size)))
+                else:
+                    raise ValueError("BASIS directive without dimension, and cannot infer dimension!")
             else:
                 cur_label = line
                 state = "expect format"
@@ -683,6 +699,18 @@ def read_gateset(filename):
 
     if len(cur_label) > 0:
         add_current_label()
+
+    #Try to infer basis dimension if none is given
+    if basis_dims is None:
+        if gs.get_dimension() is not None:
+            basis_dims = int(round(_np.sqrt(gs.get_dimension())))
+        elif len(spam_vecs) > 0:
+            basis_dims = int(round(_np.sqrt(spam_vecs.values()[0].size)))
+        else:
+            raise ValueError("Cannot infer basis dimension!")
+    
+    #Set basis
+    gs.set_basis(basis_abbrev, basis_dims)
 
     #Default SPAMLABEL directive if none are give and rho and E vectors are:
     if len(spam_labels) == 0 and spam_vecs.has_key("rho") and spam_vecs.has_key("E"):

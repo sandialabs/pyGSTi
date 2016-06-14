@@ -244,4 +244,13 @@ def write_gateset(gs,filename,title=None):
     for sl,(prepLabel,ELabel) in gs.spamdefs.iteritems():
         print >> f, "SPAMLABEL %s = %s %s" % (sl, prepLabel, ELabel)
 
+    dims = gs.get_basis_dimension()
+    if dims is None:
+        print >> f, "BASIS %s" % gs.get_basis_name()
+    else:
+        if type(dims) != int:
+            dimStr = ",".join(map(str,dims))
+        else: dimStr = str(dims)
+        print >> f, "BASIS %s %s" % (gs.get_basis_name(), dimStr)
+
     f.close()

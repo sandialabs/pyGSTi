@@ -29,7 +29,7 @@ from table import ReportTable as _ReportTable
 
 def get_blank_table():
     """ Create a blank table as a placeholder."""
-    table = _ReportTable(['Blank'], [None], "", False)
+    table = _ReportTable(['Blank'], [None])
     table.finish()
     return table
     
@@ -455,8 +455,8 @@ def get_gates_vs_target_err_gen_table(gateset, targetGateset,
 
 
 
-def get_gateset_vs_target_angles_table(gateset, targetGateset,
-                                       confidenceRegionInfo=None):
+def get_gates_vs_target_angles_table(gateset, targetGateset,
+                                     confidenceRegionInfo=None):
     """ 
     Create a table comparing a gateset to a target gateset.
     
@@ -907,7 +907,7 @@ def get_gateset_choi_eigenval_table(gateset, figFilePrefix,
             evalsEB = evalsEB.reshape(evalsEB.size/4, 4)
             fig = _plotting.choi_eigenvalue_barplot(evals, evalsEB, ylabel="")
             figInfo = (fig,nm,sz,sz)
-            table.addrow((gl, (evals,evalsEB), figInfo), (None, _tf.EBvec, _tf_Fig))
+            table.addrow((gl, (evals,evalsEB), figInfo), (None, _tf.EBvec, _tf.Fig))
 
     table.finish()
     return table
@@ -1236,7 +1236,7 @@ def get_gateset_gate_boxes_table(gateset, figFilePrefix, maxWidth=6.5,
             mxBasis=basisNm, mxBasisDims=basisDims)
 
         maxFigSz = min(0.95*(maxHeight/nRows), 0.95*(maxWidth - 1.0))
-        sz = min(gateset[gl].shape[0] * 0.5, maxFigSz)
+        sz = min(gateset.gates[gl].shape[0] * 0.5, maxFigSz)
         nm = figFilePrefix + "_" + gl
 
         figInfo = (fig,nm,sz,sz)
@@ -1303,12 +1303,12 @@ def get_gates_vs_target_err_gen_boxes_table(gateset, targetGateset,
             gate, targetGate, save_to="", mxBasis=basisNm, boxLabels=True)
 
         maxFigSz = min(0.95*(maxHeight/nRows), 0.95*(2./3.)*(maxWidth-1.0))
-        sz = min(gateset[gl].shape[0] * 0.5, maxFigSz)
+        sz = min(gateset.gates[gl].shape[0] * 0.5, maxFigSz)
         nm = figFilePrefix + "_" + gl + "_errgen"
         errgen_figInfo = (errgen_fig,nm,sz,sz)
 
         maxFigSz = min(0.95*(maxHeight/nRows), 0.95*(1./3.)*(maxWidth-1.0))
-        sz = min( (gateset[gl].size/4) * 0.5, maxFigSz)
+        sz = min( (gateset.gates[gl].size/4) * 0.5, maxFigSz)
         nm = figFilePrefix + "_" + gl + "_hamdecomp"
         hamdecomp_figInfo = (hamdecomp_fig,nm,sz,sz)
 

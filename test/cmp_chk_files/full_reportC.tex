@@ -64,24 +64,23 @@
 Title={GST report for $\mathcal{D}$},
 Keywords={GST},
 pyGSTi_Version={0.9.1-alpha},
-opt_table_formats={[py, html, latex, ppt]},
 opt_long_tables={False},
-opt_table_class={dataTable},
+opt_table_class={pygstiTbl},
 opt_template_path={None},
 opt_latex_cmd={pdflatex},
-defaultDirectory={None},
 L_germ_tuple_base_string_dict={Dict[[0, Gx]: {}, [0, Gy]: {}, [0, Gi]: {}, [0, GxGy]: {}, [0, GxGyGi]: {}, [0, GxGiGy]: {}, [0, GxGiGi]: {}, [0, GyGiGi]: {}, [0, GxGxGiGy]: {}, [0, GxGyGyGi]: {}, [0, GxGxGyGxGyGy]: {}, [1, Gx]: [Gx], [1, Gy]: [Gy], [1, Gi]: [Gi], [1, GxGy]: {}, [1, GxGyGi]: {}, [1, GxGiGy]: {}, [1, GxGiGi]: {}, [1, GyGiGi]: {}, [1, GxGxGiGy]: {}, [1, GxGyGyGi]: {}, [1, GxGxGyGxGyGy]: {}, [2, Gx]: [Gx]2, [2, Gy]: [Gy]2, [2, Gi]: [Gi]2, [2, GxGy]: [GxGy], [2, GxGyGi]: {}, [2, GxGiGy]: {}, [2, GxGiGi]: {}, [2, GyGiGi]: {}, [2, GxGxGiGy]: {}, [2, GxGyGyGi]: {}, [2, GxGxGyGxGyGy]: {}, [4, Gx]: [Gx]4, [4, Gy]: [Gy]4, [4, Gi]: [Gi]4, [4, GxGy]: [GxGy]2, [4, GxGyGi]: [GxGyGi], [4, GxGiGy]: [GxGiGy], [4, GxGiGi]: [GxGiGi], [4, GyGiGi]: [GyGiGi], [4, GxGxGiGy]: [GxGxGiGy], [4, GxGyGyGi]: [GxGyGyGi], [4, GxGxGyGxGyGy]: {}, [8, Gx]: [Gx]8, [8, Gy]: [Gy]8, [8, Gi]: [Gi]8, [8, GxGy]: [GxGy]4, [8, GxGyGi]: [GxGyGi]2, [8, GxGiGy]: [GxGiGy]2, [8, GxGiGi]: [GxGiGi]2, [8, GyGiGi]: [GyGiGi]2, [8, GxGxGiGy]: [GxGxGiGy]2, [8, GxGyGyGi]: [GxGyGyGi]2, [8, GxGxGyGxGyGy]: [GxGxGyGxGyGy]]},
 max_length_list={[0, 1, 2, 4, 8]},
 defaultBasename={None},
 radius={0.0001},
 minProbClip={1e-06},
 fiducial_pairs={None},
-mxBasis={gm},
+defaultDirectory={None},
 minProbClipForWeighting={0.0001},
 linlogPercentile={5},
 probClipInterval={[-1000000.0, 1000000.0]},
 memLimit={None},
 weights={None},
+gaugeOptParams={Dict[]},
 objective={logl},
 constrainToTP={True},
 hessianProjection={std}  }
@@ -130,7 +129,7 @@ This document is organized into three main sections, which address three broad q
 \end{itemize}
 Section \ref{secInput} is primarily useful to verify that the inputs were correct.  Section \ref{secOutput} is the most important:  it presents the raw estimates derived by the GST algorithm, and also provides a variety of derived quantities that may be useful in interpreting what this estimate means.
 
-Section \ref{secGoodness} is dedicated to summarizing how well the model imposed by GST was able to fit the data, relative to what is expected of a ``good'' model.  This is \emph{not} related to ``How close is the GST estimate to the target gates?'', which is addressed in Section \ref{secOutput}.  It is also not the same as ``How large are the error bars on the GST estimate?'', which is a good question that we do not directly address at this time.  Instead, Section \ref{secGoodness} is intended to tell you whether (a) you should take the GST estimate at face value, or (b) it should be treated skeptically because \emph{no} gate set was capable of fitting the data.
+Section \ref{secGoodness} is dedicated to summarizing how well the model imposed by GST was able to fit the data, relative to what is expected of a ``good'' model.  This is \emph{not} related to ``How close is the GST estimate to the target gates?'', which is addressed in Section \ref{secOutput}.  It is also not the same as ``How large are the error bars on the GST estimate?'', which is a good question that is addressed in section \ref{secOutput} when this report is generated with the confidence intervals option turned on.  Instead, Section \ref{secGoodness} is intended to tell you whether (a) you should take the GST estimate at face value, or (b) it should be treated skeptically because \emph{no} gate set was capable of fitting the data.
 
 Finally, appendices may be present (depending on which options were chosen when this report was generated).  Appendices present more detailed debugging information, elaborating on the goodness-of-fit metrics presented in Section \ref{secGoodness}.
 
@@ -139,7 +138,7 @@ The input for this GST analysis comprised: (1) a target gate set (see Tables \re
 
 \subsection{Target Gate set}
 
-The target gate set describes the ideal initial state (density matrix), measurement (POVM effect), and gate operations (superoperators).  Typically, density matrices and POVM effects are represented as square $d\times d$ matrices on a Hilbert space $\mathcal{H}$.  In GST, it is often more convenient to represent them as $d^2$-element vectors in the Hilbert-Schmidt space $\mathcal{B}(\mathcal{H})$ of linear operators on $\mathcal{H}$.  Both representations are shown in Table \ref{targetGatesTable}.  Superoperators are sometimes represented in Choi or Kraus form, but for GST it is more convenient to represent them as square $d^2\times d^2$ matrices that multiply associatively and act on $\mathcal{B}(\mathcal{H})$.  These are shown in Table \ref{targetGatesTable}.
+The target gate set describes the ideal initial state (density matrix), measurement (POVM effect), and gate operations (superoperators).  Typically, density matrices and POVM effects are represented as square $d\times d$ matrices on a Hilbert space $\mathcal{H}$.  In GST, it is often more convenient to represent them as $d^2$-element vectors in the Hilbert-Schmidt space $\mathcal{B}(\mathcal{H})$ of linear operators on $\mathcal{H}$.  Both representations are shown in Table \ref{targetSpamTable}.  Superoperators are sometimes represented in Choi or Kraus form, but for GST it is more convenient to represent them as square $d^2\times d^2$ matrices that multiply associatively and act on $\mathcal{B}(\mathcal{H})$.  These are shown in Table \ref{targetGatesTable}.
 
 These Hilbert-Schmidt space representations require choosing a basis $\{M_i\}$ for $\mathcal{B}(\mathcal{H})$.  We use the \emph{Pauli basis}, comprising the four $2\times2$ Pauli matrices (including the identity $\Id$) for $d=2$.  In $d>2$, we use the analogous Gell-Mann matrices as a basis.   The choice of this basis is what is meant when state preparations and measurements are written as vectors and gate operations are written as matrices in the ``Pauli basis''.  Keep in mind that we want to use an orthonormal basis, so the basis matrices are normalized so that $\sbraket{M_i}{M_j} = \Tr M_i^\dagger M_j = \delta_{ij}$.  In $d=2$, this means that the basis matrices are $M_i = \frac{1}{\sqrt{2}}\sigma_i$.
 
@@ -304,13 +303,14 @@ Quantity & Value \\ \hline
 Number of strings & 817 \\ \hline
 Gate labels & Gx, Gy, Gi \\ \hline
 SPAM labels & plus, minus \\ \hline
-Gram singular vals & \small$ \begin{array}{c}
-0.0029 \\ 
-0.0205 \\ 
-0.6626 \\ 
-0.6789 \\ 
-0.7472 \\ 
-3.0074
+Counts per string & 1000 \\ \hline
+\begin{tabular}{c}Gram singular values\\ (right column gives the values\\when using the target gate set)\end{tabular} & \small$ \begin{array}{cc}
+0.0029 & 0 \\ 
+0.0205 & 0 \\ 
+0.6626 & 1 \\ 
+0.6789 & 1 \\ 
+0.7472 & 1 \\ 
+3.0074 & 3
  \end{array} $
  \\ \hline
 \end{tabular}
@@ -343,8 +343,8 @@ $\rho_{0}$ & $ \begin{array}{c}
 0.6373
  \end{array} $
  & $ \left(\!\!\begin{array}{cc}
-0.9506 & 0.0012e^{-i0.2} \\ 
-0.0012e^{i0.2} & 0.0494
+0.9506 & 0.0012e^{-i0.159} \\ 
+0.0012e^{i0.159} & 0.0494
  \end{array}\!\!\right) $
  \\ \hline
 $E_{0}$ & $ \begin{array}{c}
@@ -354,8 +354,8 @@ $E_{0}$ & $ \begin{array}{c}
 -0.6429
  \end{array} $
  & $ \left(\!\!\begin{array}{cc}
-0.0458 & 0.0022e^{i1.6} \\ 
-0.0022e^{-i1.6} & 0.9551
+0.0458 & 0.0022e^{i1.648} \\ 
+0.0022e^{-i1.648} & 0.9551
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -425,12 +425,12 @@ It's also useful to know \emph{how} the real gates (or, more precisely, GST's es
 
 \begin{table}[h]
 \begin{center}
-\begin{tabular}[l]{|c|c|c|c|c|}
+\begin{tabular}[l]{|c|c|c|c|}
 \hline
-Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm & \begin{tabular}{c}Frobenius\\Distance\end{tabular} \\ \hline
-Gi & 0.039929 & 0.0401 & 0.040106 & 0.092986 \\ \hline
-Gx & 0.037847 & 0.037918 & 0.037919 & 0.087744 \\ \hline
-Gy & 0.037738 & 0.037805 & 0.037805 & 0.087502 \\ \hline
+Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
+Gi & 0.039929 & 0.0401 & 0.040106 \\ \hline
+Gx & 0.037847 & 0.037918 & 0.037919 \\ \hline
+Gy & 0.037738 & 0.037805 & 0.037805 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -474,8 +474,8 @@ It's usually useful to understand \emph{how} gates fail.  The error generators i
 Gate & Eigenvalues & Fixed pt & Rotn. axis & Diag. decay & Off-diag. decay \\ \hline
 Gi & $ \begin{array}{c}
 0.9487 \\ 
-0.9458e^{i0.0} \\ 
-0.9458e^{-i0.0} \\ 
+0.9458e^{i0.002} \\ 
+0.9458e^{-i0.002} \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
@@ -492,8 +492,8 @@ Gi & $ \begin{array}{c}
  \end{array} $
  & 0.05127 & 0.054222 \\ \hline
 Gx & $ \begin{array}{c}
-0.9491e^{i1.6} \\ 
-0.9491e^{-i1.6} \\ 
+0.9491e^{i1.572} \\ 
+0.9491e^{-i1.572} \\ 
 0.9505 \\ 
 1
  \end{array} $
@@ -511,8 +511,8 @@ Gx & $ \begin{array}{c}
  \end{array} $
  & 0.049514 & 0.050938 \\ \hline
 Gy & $ \begin{array}{c}
-0.9489e^{i1.6} \\ 
-0.9489e^{-i1.6} \\ 
+0.9489e^{i1.571} \\ 
+0.9489e^{-i1.571} \\ 
 0.9512 \\ 
 1
  \end{array} $
@@ -594,10 +594,10 @@ Additionally, the condition of \emph{complete positivity} or CP (which all real 
 \hline
 Gate & Choi matrix (Pauli basis) & Eigenvalues \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
-0.9601 & 0.0008e^{i1.9} & 0.0022e^{-i1.6} & 0.0019e^{-i1.4} \\ 
-0.0008e^{-i1.9} & 0.0123 & 0.0013e^{-i0.2} & 0.0022e^{-i3.1} \\ 
-0.0022e^{i1.6} & 0.0013e^{i0.2} & 0.0135 & 0.0012e^{i2.9} \\ 
-0.0019e^{i1.4} & 0.0022e^{i3.1} & 0.0012e^{-i2.9} & 0.0142
+0.9601 & 0.0008e^{i1.878} & 0.0022e^{-i1.620} & 0.0019e^{-i1.429} \\ 
+0.0008e^{-i1.878} & 0.0123 & 0.0013e^{-i0.199} & 0.0022e^{-i3.092} \\ 
+0.0022e^{i1.620} & 0.0013e^{i0.199} & 0.0135 & 0.0012e^{i2.928} \\ 
+0.0019e^{i1.429} & 0.0022e^{i3.092} & 0.0012e^{-i2.928} & 0.0142
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.0107 \\ 
@@ -607,10 +607,10 @@ Gi & $ \left(\!\!\begin{array}{cccc}
  \end{array} $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
-0.4871 & 0.4745e^{-i1.6} & 0.0014e^{-i1.6} & 0.0013e^{-i1.5} \\ 
-0.4745e^{i1.6} & 0.4882 & 0.0012e^{-i0.0} & 0.0013e^{-i3.1} \\ 
-0.0014e^{i1.6} & 0.0012e^{i0.0} & 0.013 & 0.0001e^{-i1.2} \\ 
-0.0013e^{i1.5} & 0.0013e^{i3.1} & 0.0001e^{i1.2} & 0.0118
+0.4871 & 0.4745e^{-i1.571} & 0.0014e^{-i1.601} & 0.0013e^{-i1.532} \\ 
+0.4745e^{i1.571} & 0.4882 & 0.0012e^{-i0.043} & 0.0013e^{-i3.108} \\ 
+0.0014e^{i1.601} & 0.0012e^{i0.043} & 0.013 & 0.0001e^{-i1.247} \\ 
+0.0013e^{i1.532} & 0.0013e^{i3.108} & 0.0001e^{i1.247} & 0.0118
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.0105 \\ 
@@ -620,10 +620,10 @@ Gx & $ \left(\!\!\begin{array}{cccc}
  \end{array} $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-0.4877 & 0.0018e^{i1.5} & 0.4745e^{i1.6} & 0.0013e^{-i1.6} \\ 
-0.0018e^{-i1.5} & 0.0123 & 0.0007e^{i0.1} & 0.0001e^{-i2.1} \\ 
-0.4745e^{-i1.6} & 0.0007e^{-i0.1} & 0.4879 & 0.0013e^{-i0.0} \\ 
-0.0013e^{i1.6} & 0.0001e^{i2.1} & 0.0013e^{i0.0} & 0.0121
+0.4877 & 0.0018e^{i1.539} & 0.4745e^{i1.571} & 0.0013e^{-i1.607} \\ 
+0.0018e^{-i1.539} & 0.0123 & 0.0007e^{i0.063} & 0.0001e^{-i2.116} \\ 
+0.4745e^{-i1.571} & 0.0007e^{-i0.063} & 0.4879 & 0.0013e^{-i0.046} \\ 
+0.0013e^{i1.607} & 0.0001e^{i2.116} & 0.0013e^{i0.046} & 0.0121
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.0107 \\ 
