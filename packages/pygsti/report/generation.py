@@ -22,19 +22,20 @@ from .. import objects as _objs
 
 import reportables as _cr
 import tableformat as _tf
+import plotting as _plotting
 from table import ReportTable as _ReportTable
 
 
 
-def get_blank_table(formats):
-    """ Create a blank table as a placeholder with the given formats """
-    table = _ReportTable(formats, ['Blank'], [None], "", False)
+def get_blank_table():
+    """ Create a blank table as a placeholder."""
+    table = _ReportTable(['Blank'], [None])
     table.finish()
     return table
     
 
-def get_gateset_spam_table(gateset, formats, tableclass, longtable, 
-                           confidenceRegionInfo=None, mxBasis="gm"):
+def get_gateset_spam_table(gateset, confidenceRegionInfo=None,
+                           includeHSVec=True):
     """
     Create a table for gateset's SPAM vectors.
     
@@ -43,77 +44,81 @@ def get_gateset_spam_table(gateset, formats, tableclass, longtable,
     gateset : GateSet
         The GateSet
 
-    formats : list
-        List of formats to include in returned table. Allowed
-        formats are 'latex', 'html', 'py', and 'ppt'.
-
-    tableclass : string
-        CSS class to apply to the HTML table.
-
-    longtable : bool
-        Whether table should be a latex longtable or not.
-
     confidenceRegionInfo : ConfidenceRegion, optional
         If not None, specifies a confidence-region
         used to display error intervals.
 
-    mxBasis : {'std', 'gm','pp'}
-        Which basis the gateset is represented in.  Allowed
-        options are Matrix-unit (std), Gell-Mann (gm) and
-        Pauli-product (pp).
+    includeHSVec : boolean, optional
+        Whether or not to include the Hilbert-Schmidt
+        vector representation column in the table.
 
     Returns
     -------
     ReportTable
-        Table object containing the requested formats (e.g. 'latex').
     """
     
-    basisNm = _tools.basis_longname(mxBasis, gateset.get_dimension())
+    mxBasis = gateset.get_basis_name()
+    mxBasisDim = gateset.get_basis_dimension()
+    basisNm = _tools.basis_longname(mxBasis, mxBasisDim)
 
     if confidenceRegionInfo is None:
-        colHeadings = ('Operator','Hilbert-Schmidt vector (%s basis)' % basisNm,'Matrix')
-        formatters = (None,None,None)
-    else:
-        colHeadings = ('Operator',
-                       'Hilbert-Schmidt vector (%s basis)' % basisNm,
-                       '%g%% C.I. half-width' % confidenceRegionInfo.level,
-                       'Matrix')
-        formatters = (None,None,_tf.TxtCnv,None)
-
-    table = _ReportTable(formats, colHeadings, formatters,
-                         tableclass, longtable)
-    for lbl,rhoVec in gateset.preps.iteritems():
-        if mxBasis == "pp":   rhoMx = _tools.ppvec_to_stdmx(rhoVec)
-        elif mxBasis == "gm": rhoMx = _tools.gmvec_to_stdmx(rhoVec)
-        elif mxBasis == "std": rhoMx = _tools.stdvec_to_stdmx(rhoVec)
-        else: raise ValueError("Invalid basis specifier: %s" % mxBasis)
-
-        if confidenceRegionInfo is None:
-            table.addrow((lbl, rhoVec, rhoMx), (_tf.Rho,_tf.Nml,_tf.Brk))
+        if includeHSVec:
+            colHeadings = ('Operator','Hilbert-Schmidt vector (%s basis)' % basisNm,'Matrix')
+            formatters = (None,None,None)
         else:
-            intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(lbl)[:,None]
-            if intervalVec.shape[0] == gateset.get_dimension()-1: #TP constrained, so pad with zero top row
-                intervalVec = _np.concatenate( (_np.zeros((1,1),'d'),intervalVec), axis=0 )
-            table.addrow((lbl, rhoVec, intervalVec, rhoMx), (_tf.Rho,_tf.Nml,_tf.Nml,_tf.Brk))
+            colHeadings = ('Operator','Matrix')
+            formatters = (None,None)
+
+    else:
+        if includeHSVec:
+            colHeadings = ('Operator',
+                           'Hilbert-Schmidt vector (%s basis)' % basisNm,
+                           '%g%% C.I. half-width' % confidenceRegionInfo.level,
+                           'Matrix')
+            formatters = (None,None,_tf.TxtCnv,None)
+        else:
+            colHeadings = ('Operator',
+                           'Matrix')
+            formatters = (None,None)
+
+
+    table = _ReportTable(colHeadings, formatters)
+
+    for lbl,rhoVec in gateset.preps.iteritems():
+        rhoMx = _tools.vec_to_stdmx(rhoVec, mxBasis)
+
+        if includeHSVec:
+            if confidenceRegionInfo is None:
+                table.addrow((lbl, rhoVec, rhoMx), (_tf.Rho,_tf.Nml,_tf.Brk))
+            else:
+                intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(lbl)[:,None]
+                if intervalVec.shape[0] == gateset.get_dimension()-1: #TP constrained, so pad with zero top row
+                    intervalVec = _np.concatenate( (_np.zeros((1,1),'d'),intervalVec), axis=0 )
+                table.addrow((lbl, rhoVec, intervalVec, rhoMx), (_tf.Rho,_tf.Nml,_tf.Nml,_tf.Brk))
+        else:
+            #no dependence on confidence region (yet) when HS vector is not shown...
+            table.addrow((lbl, rhoMx), (_tf.Rho,_tf.Brk))
+
 
     for lbl,EVec in gateset.effects.iteritems():
-        if mxBasis == "pp":    EMx = _tools.ppvec_to_stdmx(EVec)
-        elif mxBasis == "gm":  EMx = _tools.gmvec_to_stdmx(EVec)
-        elif mxBasis == "std": EMx = _tools.stdvec_to_stdmx(EVec)
-        else: raise ValueError("Invalid basis specifier: %s" % mxBasis)
+        EMx = _tools.vec_to_stdmx(EVec, mxBasis)
 
-        if confidenceRegionInfo is None:
-            table.addrow((lbl, EVec, EMx), (_tf.E,_tf.Nml,_tf.Brk))
+        if includeHSVec:
+            if confidenceRegionInfo is None:
+                table.addrow((lbl, EVec, EMx), (_tf.E,_tf.Nml,_tf.Brk))
+            else:
+                intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(lbl)[:,None]
+                table.addrow((lbl, EVec, intervalVec, EMx), (_tf.E,_tf.Nml,_tf.Nml,_tf.Brk))
         else:
-            intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(lbl)[:,None]
-            table.addrow((lbl, EVec, intervalVec, EMx), (_tf.E,_tf.Nml,_tf.Nml,_tf.Brk))
+            #no dependence on confidence region (yet) when HS vector is not shown...
+            table.addrow((lbl, EMx), (_tf.E,_tf.Brk))
             
     table.finish()
     return table
 
 
 
-def get_gateset_spam_parameters_table(gateset, formats, tableclass, longtable, confidenceRegionInfo=None):
+def get_gateset_spam_parameters_table(gateset, confidenceRegionInfo=None):
     """ 
     Create a table for gateset's "SPAM parameters", that is, the
     dot products of prep-vectors and effect-vectors.
@@ -123,16 +128,6 @@ def get_gateset_spam_parameters_table(gateset, formats, tableclass, longtable, c
     gateset : GateSet
         The GateSet
 
-    formats : list
-        List of formats to include in returned table. Allowed
-        formats are 'latex', 'html', 'py', and 'ppt'.
-
-    tableclass : string
-        CSS class to apply to the HTML table.
-
-    longtable : bool
-        Whether table should be a latex longtable or not.
-
     confidenceRegionInfo : ConfidenceRegion, optional
         If not None, specifies a confidence-region
         used to display error intervals.
@@ -140,13 +135,11 @@ def get_gateset_spam_parameters_table(gateset, formats, tableclass, longtable, c
     Returns
     -------
     ReportTable
-        Table object containing the requested formats (e.g. 'latex').
     """
     colHeadings = [''] + list(gateset.get_effect_labels())
     formatters = [None] + [ _tf.E ]*len(gateset.get_effect_labels())
 
-    table = _ReportTable(formats, colHeadings, formatters,
-                         tableclass, longtable)
+    table = _ReportTable(colHeadings, formatters)
 
     spamDotProdsQty = _cr.compute_gateset_qty("Spam DotProds", gateset, confidenceRegionInfo)
     DPs, DPEBs = spamDotProdsQty.get_value_and_err_bar()
@@ -166,8 +159,7 @@ def get_gateset_spam_parameters_table(gateset, formats, tableclass, longtable, c
     return table
 
 
-def get_gateset_gates_table(gateset, formats, tableclass, longtable,
-                            confidenceRegionInfo=None, mxBasis="gm"):
+def get_gateset_gates_table(gateset, confidenceRegionInfo=None):
     """ 
     Create a table for gateset's gates.
     
@@ -176,33 +168,19 @@ def get_gateset_gates_table(gateset, formats, tableclass, longtable,
     gateset : GateSet
         The GateSet
 
-    formats : list
-        List of formats to include in returned table. Allowed
-        formats are 'latex', 'html', 'py', and 'ppt'.
-
-    tableclass : string
-        CSS class to apply to the HTML table.
-
-    longtable : bool
-        Whether table should be a latex longtable or not.
-
     confidenceRegionInfo : ConfidenceRegion, optional
         If not None, specifies a confidence-region
         used to display error intervals.
-
-    mxBasis : {'std', 'gm','pp'}
-        Which basis the gateset is represented in.  Allowed
-        options are Matrix-unit (std), Gell-Mann (gm) and
-        Pauli-product (pp).
 
 
     Returns
     -------
     ReportTable
-        Table object containing the requested formats (e.g. 'latex').
     """
     gateLabels = gateset.gates.keys()  # gate labels
-    basisNm = _tools.basis_longname(mxBasis, gateset.get_dimension())
+    mxBasis = gateset.get_basis_name()
+    mxBasisDim = gateset.get_basis_dimension()
+    basisNm = _tools.basis_longname(mxBasis, mxBasisDim)
 
     if confidenceRegionInfo is None:    
         colHeadings = ('Gate','Superoperator (%s basis)' % basisNm)
@@ -212,8 +190,8 @@ def get_gateset_gates_table(gateset, formats, tableclass, longtable,
                        '%g%% C.I. half-width' % confidenceRegionInfo.level)
         formatters = (None,None,_tf.TxtCnv)
 
-    table = _ReportTable(formats, colHeadings, formatters,
-                         tableclass, longtable)
+    table = _ReportTable(colHeadings, formatters)
+
     for gl in gateLabels:
         if confidenceRegionInfo is None:
             table.addrow((gl, gateset.gates[gl]), (None,_tf.Brk))
@@ -234,8 +212,7 @@ def get_gateset_gates_table(gateset, formats, tableclass, longtable,
     return table
 
 
-def get_unitary_gateset_gates_table(gateset, formats, tableclass, longtable, 
-                                    confidenceRegionInfo=None, mxBasis="gm"):
+def get_unitary_gateset_gates_table(gateset, confidenceRegionInfo=None):
     """ 
     Create a table for gateset's gates assuming they're unitary.
     
@@ -244,33 +221,19 @@ def get_unitary_gateset_gates_table(gateset, formats, tableclass, longtable,
     gateset : GateSet
         The GateSet
 
-    formats : list
-        List of formats to include in returned table. Allowed
-        formats are 'latex', 'html', 'py', and 'ppt'.
-
-    tableclass : string
-        CSS class to apply to the HTML table.
-
-    longtable : bool
-        Whether table should be a latex longtable or not.
-
     confidenceRegionInfo : ConfidenceRegion, optional
         If not None, specifies a confidence-region
         used to display error intervals.
-
-    mxBasis : {'std', 'gm','pp'}
-        Which basis the gateset is represented in.  Allowed
-        options are Matrix-unit (std), Gell-Mann (gm) and
-        Pauli-product (pp).
 
 
     Returns
     -------
     ReportTable
-        Table object containing the requested formats (e.g. 'latex').
     """
     gateLabels = gateset.gates.keys()  # gate labels
-    basisNm = _tools.basis_longname(mxBasis, gateset.get_dimension())
+    mxBasis = gateset.get_basis_name()
+    mxBasisDim = gateset.get_basis_dimension()
+    basisNm = _tools.basis_longname(mxBasis, mxBasisDim)
 
     qtys_to_compute = [ ('%s decomposition' % gl) for gl in gateLabels ]
     qtys = _cr.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo)
@@ -284,8 +247,7 @@ def get_unitary_gateset_gates_table(gateset, formats, tableclass, longtable,
                        'Rotation axis','Angle')
         formatters = (None,None,_tf.TxtCnv,None,None)
     
-    table = _ReportTable(formats, colHeadings, formatters,
-                         tableclass, longtable)
+    table = _ReportTable(colHeadings, formatters)
 
     for gl in gateLabels:
         decomp, decompEB = qtys['%s decomposition' % gl].get_value_and_err_bar()
@@ -314,8 +276,7 @@ def get_unitary_gateset_gates_table(gateset, formats, tableclass, longtable,
     return table
 
 
-def get_gateset_choi_table(gateset, formats, tableclass, longtable,
-                           confidenceRegionInfo=None, mxBasis="gm"):
+def get_gateset_choi_table(gateset, confidenceRegionInfo=None):
     """ 
     Create a table for the Choi matrices of a gateset's gates.
     
@@ -324,52 +285,34 @@ def get_gateset_choi_table(gateset, formats, tableclass, longtable,
     gateset : GateSet
         The GateSet
 
-    formats : list
-        List of formats to include in returned table. Allowed
-        formats are 'latex', 'html', 'py', and 'ppt'.
-
-    tableclass : string
-        CSS class to apply to the HTML table.
-
-    longtable : bool
-        Whether table should be a latex longtable or not.
-
     confidenceRegionInfo : ConfidenceRegion, optional
         If not None, specifies a confidence-region
         used to display error intervals.
 
-    mxBasis : {'std', 'gm','pp'}
-        Which basis the gateset is represented in.  Allowed
-        options are Matrix-unit (std), Gell-Mann (gm) and
-        Pauli-product (pp).
-
-
     Returns
     -------
     ReportTable
-        Table object containing the requested formats (e.g. 'latex').
     """
     gateLabels = gateset.gates.keys()  # gate labels
 
-    qtys_to_compute = [ ('%s choi matrix' % gl) for gl in gateLabels ]
+    qtys_to_compute = []
     qtys_to_compute += [ ('%s choi eigenvalues' % gl) for gl in gateLabels ]
-    qtys = _cr.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo, mxBasis)
-    basisNm = _tools.basis_longname(mxBasis, gateset.get_dimension())
-    
-    if confidenceRegionInfo is None:
-        colHeadings = ('Gate','Choi matrix (%s basis)' % basisNm,'Eigenvalues')
-        formatters = (None,None,None)        
-    else:
-        colHeadings = ('Gate','Choi matrix (%s basis)' % basisNm,'Eigenvalues') # 'Confidence Intervals',
-        formatters = (None,None,None)
+    qtys_to_compute += [ ('%s choi matrix' % gl) for gl in gateLabels ]
 
-    table = _ReportTable(formats, colHeadings, formatters,
-                         tableclass, longtable)
+    mxBasis = gateset.get_basis_name()
+    mxBasisDim = gateset.get_basis_dimension()
+    qtys = _cr.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo)
+    basisNm = _tools.basis_longname(mxBasis, mxBasisDim)
+    
+    colHeadings = ('Gate','Choi matrix (%s basis)' % basisNm,'Eigenvalues')
+    formatters = (None,None,None)        
+
+    table = _ReportTable(colHeadings, formatters)
 
     for gl in gateLabels:
-        choiMx,choiEB = qtys['%s choi matrix' % gl].get_value_and_err_bar()
         evals, evalsEB = qtys['%s choi eigenvalues' % gl].get_value_and_err_bar()
-    
+
+        choiMx,choiEB = qtys['%s choi matrix' % gl].get_value_and_err_bar()    
         if confidenceRegionInfo is None:
             table.addrow((gl, choiMx, evals), (None, _tf.Brk, _tf.Nml))
         else:
@@ -379,53 +322,37 @@ def get_gateset_choi_table(gateset, formats, tableclass, longtable,
     return table
 
 
-def get_gateset_vs_target_table(gateset, targetGateset, formats, tableclass, longtable, 
-                                confidenceRegionInfo=None, mxBasis="gm"):
+def get_gates_vs_target_table(gateset, targetGateset,
+                              confidenceRegionInfo=None):
     """ 
-    Create a table comparing a gateset to a target gateset.
+    Create a table comparing a gateset's gates to a target gateset.
     
     Parameters
     ----------
     gateset, targetGateset : GateSet
         The gate sets to compare
 
-    formats : list
-        List of formats to include in returned table. Allowed
-        formats are 'latex', 'html', 'py', and 'ppt'.
-
-    tableclass : string
-        CSS class to apply to the HTML table.
-
-    longtable : bool
-        Whether table should be a latex longtable or not.
-
     confidenceRegionInfo : ConfidenceRegion, optional
         If not None, specifies a confidence-region
         used to display error intervals.
-
-    mxBasis : {'std', 'gm','pp'}
-        Which basis the gateset is represented in.  Allowed
-        options are Matrix-unit (std), Gell-Mann (gm) and
-        Pauli-product (pp).
 
 
     Returns
     -------
     ReportTable
-        Table object containing the requested formats (e.g. 'latex').
     """
     gateLabels = gateset.gates.keys()  # gate labels
 
-    colHeadings = ('Gate', "Process|Infidelity", "1/2 Trace|Distance", "1/2 Diamond-Norm", "Frobenius|Distance")
-    formatters = (None,_tf.TxtCnv,_tf.TxtCnv,_tf.TxtCnv,_tf.TxtCnv)
+    colHeadings = ('Gate', "Process|Infidelity", "1/2 Trace|Distance", "1/2 Diamond-Norm") #, "Frobenius|Distance"
+    formatters = (None,_tf.TxtCnv,_tf.TxtCnv,_tf.TxtCnv) # ,_tf.TxtCnv
 
-    qtyNames = ('infidelity','Jamiolkowski trace dist','diamond norm','Frobenius diff')
+    qtyNames = ('infidelity','Jamiolkowski trace dist','diamond norm') #,'Frobenius diff'
     qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames for gl in gateLabels ]
     qtys = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
-                                            confidenceRegionInfo, mxBasis)
+                                            confidenceRegionInfo)
 
-    table = _ReportTable(formats, colHeadings, formatters,
-                         tableclass, longtable)
+    table = _ReportTable(colHeadings, formatters)
+
     formatters = [None] + [ _tf.EB ]*len(qtyNames)
     
     for gl in gateLabels:
@@ -439,25 +366,72 @@ def get_gateset_vs_target_table(gateset, targetGateset, formats, tableclass, lon
     return table
 
 
-def get_gateset_vs_target_err_gen_table(gateset, targetGateset, formats, tableclass, longtable, confidenceRegionInfo=None):
+def get_spam_vs_target_table(gateset, targetGateset,
+                             confidenceRegionInfo=None):
     """ 
-    Create a table listing the error generators obtained by 
-    comparing a gateset to a target gateset.
+    Create a table comparing a gateset's SPAM operations to a target gateset.
     
     Parameters
     ----------
     gateset, targetGateset : GateSet
         The gate sets to compare
 
-    formats : list
-        List of formats to include in returned table. Allowed
-        formats are 'latex', 'html', 'py', and 'ppt'.
+    confidenceRegionInfo : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
 
-    tableclass : string
-        CSS class to apply to the HTML table.
 
-    longtable : bool
-        Whether table should be a latex longtable or not.
+    Returns
+    -------
+    ReportTable
+    """
+    prepLabels = gateset.get_prep_labels()
+    effectLabels = gateset.get_effect_labels()
+
+    colHeadings = ('Prep/POVM', "State|Infidelity", "1/2 Trace|Distance")
+    formatters = (None,_tf.TxtCnv,_tf.TxtCnv)
+
+    table = _ReportTable(colHeadings, formatters)
+
+    qtyNames = ('state infidelity','trace dist')
+
+    formatters = [ _tf.Rho ] + [ _tf.EB ]*len(qtyNames)
+    qtys_to_compute = [ '%s prep %s' % (l,qty) for qty in qtyNames for l in prepLabels ]
+    qtys = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
+                                            confidenceRegionInfo)    
+    for l in prepLabels:
+        if confidenceRegionInfo is None:
+            rowData = [l] + [ (qtys['%s prep %s' % (l,qty)].get_value(),None) for qty in qtyNames ]
+        else:
+            rowData = [l] + [ qtys['%s prep %s' % (l,qty)].get_value_and_err_bar() for qty in qtyNames ]
+        table.addrow(rowData, formatters)
+
+    formatters = [ _tf.E ] + [ _tf.EB ]*len(qtyNames)
+    qtys_to_compute = [ '%s effect %s' % (l,qty) for qty in qtyNames for l in effectLabels ]
+    qtys = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
+                                            confidenceRegionInfo)
+    for l in effectLabels:
+        if confidenceRegionInfo is None:
+            rowData = [l] + [ (qtys['%s effect %s' % (l,qty)].get_value(),None) for qty in qtyNames ]
+        else:
+            rowData = [l] + [ qtys['%s effect %s' % (l,qty)].get_value_and_err_bar() for qty in qtyNames ]
+        table.addrow(rowData, formatters)
+
+    table.finish()
+    return table
+
+
+
+def get_gates_vs_target_err_gen_table(gateset, targetGateset,
+                                        confidenceRegionInfo=None):
+    """ 
+    Create a table listing the error generators obtained by 
+    comparing a gateset's gates to a target gateset.
+    
+    Parameters
+    ----------
+    gateset, targetGateset : GateSet
+        The gate sets to compare
 
     confidenceRegionInfo : ConfidenceRegion, optional
         If not None, specifies a confidence-region
@@ -466,24 +440,23 @@ def get_gateset_vs_target_err_gen_table(gateset, targetGateset, formats, tablecl
     Returns
     -------
     ReportTable
-        Table object containing the requested formats (e.g. 'latex').
     """
     gateLabels = gateset.gates.keys()  # gate labels
     colHeadings = ('Gate','Error Generator')
 
-    table = _ReportTable(formats, colHeadings, (None,None),
-                         tableclass, longtable)
+    table = _ReportTable(colHeadings, (None,None))
+
     for gl in gateLabels:
-        table.addrow((gl, _spl.logm(_np.dot(_np.linalg.inv(
-                            targetGateset.gates[gl]),gateset.gates[gl]))),
-                    (None, _tf.Brk))
+        table.addrow((gl, _tools.error_generator(gateset.gates[gl],
+                                                 targetGateset.gates[gl])),
+                     (None, _tf.Brk))
     table.finish()
     return table
 
 
 
-def get_gateset_vs_target_angles_table(gateset, targetGateset, formats, tableclass, longtable, 
-                                       confidenceRegionInfo=None, mxBasis="gm"):
+def get_gates_vs_target_angles_table(gateset, targetGateset,
+                                     confidenceRegionInfo=None):
     """ 
     Create a table comparing a gateset to a target gateset.
     
@@ -492,30 +465,14 @@ def get_gateset_vs_target_angles_table(gateset, targetGateset, formats, tablecla
     gateset, targetGateset : GateSet
         The gate sets to compare
 
-    formats : list
-        List of formats to include in returned table. Allowed
-        formats are 'latex', 'html', 'py', and 'ppt'.
-
-    tableclass : string
-        CSS class to apply to the HTML table.
-
-    longtable : bool
-        Whether table should be a latex longtable or not.
-
     confidenceRegionInfo : ConfidenceRegion, optional
         If not None, specifies a confidence-region
         used to display error intervals.
-
-    mxBasis : {'std', 'gm','pp'}
-        Which basis the gateset is represented in.  Allowed
-        options are Matrix-unit (std), Gell-Mann (gm) and
-        Pauli-product (pp).
 
 
     Returns
     -------
     ReportTable
-        Table object containing the requested formats (e.g. 'latex').
     """
     gateLabels = gateset.gates.keys()  # gate labels
 
@@ -525,10 +482,10 @@ def get_gateset_vs_target_angles_table(gateset, targetGateset, formats, tablecla
     qtyNames = ('angle btwn rotn axes',)
     qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames for gl in gateLabels ]
     qtys = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
-                                            confidenceRegionInfo, mxBasis)
+                                            confidenceRegionInfo)
 
-    table = _ReportTable(formats, colHeadings, formatters,
-                         tableclass, longtable)
+    table = _ReportTable(colHeadings, formatters)
+
     formatters = [None] + [ _tf.EBPi ]*len(qtyNames)
     
     for gl in gateLabels:
@@ -542,7 +499,7 @@ def get_gateset_vs_target_angles_table(gateset, targetGateset, formats, tablecla
     return table
 
 
-def get_gateset_closest_unitary_table(gateset, formats, tableclass, longtable, confidenceRegionInfo=None):
+def get_gateset_closest_unitary_table(gateset, confidenceRegionInfo=None):
     """ 
     Create a table for gateset that contains closest-unitary gates.
     
@@ -551,16 +508,6 @@ def get_gateset_closest_unitary_table(gateset, formats, tableclass, longtable, c
     gateset : GateSet
         The GateSet
 
-    formats : list
-        List of formats to include in returned table. Allowed
-        formats are 'latex', 'html', 'py', and 'ppt'.
-
-    tableclass : string
-        CSS class to apply to the HTML table.
-
-    longtable : bool
-        Whether table should be a latex longtable or not.
-
     confidenceRegionInfo : ConfidenceRegion, optional
         If not None, specifies a confidence-region
         used to display error intervals.
@@ -568,7 +515,6 @@ def get_gateset_closest_unitary_table(gateset, formats, tableclass, longtable, c
     Returns
     -------
     ReportTable
-        Table object containing the requested formats (e.g. 'latex').
     """
 
     gateLabels = gateset.gates.keys()  # gate labels
@@ -576,8 +522,8 @@ def get_gateset_closest_unitary_table(gateset, formats, tableclass, longtable, c
     formatters = (None,_tf.TxtCnv,_tf.TxtCnv,_tf.TxtCnv,_tf.TxtCnv,_tf.TxtCnv)
 
     if gateset.get_dimension() != 4:
-        table = _ReportTable(formats, colHeadings, formatters,
-                             tableclass, longtable)
+        table = _ReportTable(colHeadings, formatters)
+
         table.finish()
         return table
 
@@ -588,8 +534,7 @@ def get_gateset_closest_unitary_table(gateset, formats, tableclass, longtable, c
     decompNames = ('axis of rotation','pi rotations')
     #Other possible qtyName: 'closest unitary choi matrix'
 
-    table = _ReportTable(formats, colHeadings, formatters,
-                         tableclass, longtable)
+    table = _ReportTable(colHeadings, formatters)
 
     formatters = [None, _tf.EB, _tf.EB, _tf.EBvec, _tf.EBPi, _tf.Nml ] # Note len(decompNames)==2, 2nd el is rotn angle
 
@@ -612,7 +557,7 @@ def get_gateset_closest_unitary_table(gateset, formats, tableclass, longtable, c
     return table
 
 
-def get_gateset_decomp_table(gateset, formats, tableclass, longtable, confidenceRegionInfo=None):
+def get_gateset_decomp_table(gateset, confidenceRegionInfo=None):
     """ 
     Create table for decomposing a gateset's gates.
     
@@ -621,16 +566,6 @@ def get_gateset_decomp_table(gateset, formats, tableclass, longtable, confidence
     gateset : GateSet
         The GateSet
 
-    formats : list
-        List of formats to include in returned table. Allowed
-        formats are 'latex', 'html', 'py', and 'ppt'.
-
-    tableclass : string
-        CSS class to apply to the HTML table.
-
-    longtable : bool
-        Whether table should be a latex longtable or not.
-
     confidenceRegionInfo : ConfidenceRegion, optional
         If not None, specifies a confidence-region
         used to display error intervals.
@@ -638,7 +573,6 @@ def get_gateset_decomp_table(gateset, formats, tableclass, longtable, confidence
     Returns
     -------
     ReportTable
-        Table object containing the requested formats (e.g. 'latex').
     """
     gateLabels = gateset.gates.keys()  # gate labels
     colHeadings = ('Gate','Eigenvalues','Fixed pt','Rotn. axis','Diag. decay','Off-diag. decay')
@@ -652,8 +586,7 @@ def get_gateset_decomp_table(gateset, formats, tableclass, longtable, confidence
                    'decay of diagonal rotation terms',
                    'decay of off diagonal rotation terms')
 
-    table = _ReportTable(formats, colHeadings, formatters,
-                         tableclass, longtable)
+    table = _ReportTable(colHeadings, formatters)
 
     formatters = (None, _tf.EBvec, _tf.Nml, _tf.Nml, _tf.EB, _tf.EB)
 
@@ -675,8 +608,8 @@ def get_gateset_decomp_table(gateset, formats, tableclass, longtable, confidence
     return table
 
 
-def get_gateset_rotn_axis_table(gateset, formats, tableclass, longtable, 
-                                confidenceRegionInfo=None, showAxisAngleErrBars=True):
+def get_gateset_rotn_axis_table(gateset, confidenceRegionInfo=None,
+                                showAxisAngleErrBars=True):
     """ 
     Create a table of the angle between a gate rotation axes for 
      gates belonging to a gateset
@@ -685,16 +618,6 @@ def get_gateset_rotn_axis_table(gateset, formats, tableclass, longtable,
     ----------
     gateset : GateSet
         The GateSet
-
-    formats : list
-        List of formats to include in returned table. Allowed
-        formats are 'latex', 'html', 'py', and 'ppt'.
-
-    tableclass : string
-        CSS class to apply to the HTML table.
-
-    longtable : bool
-        Whether table should be a latex longtable or not.
 
     confidenceRegionInfo : ConfidenceRegion, optional
         If not None, specifies a confidence-region
@@ -708,7 +631,6 @@ def get_gateset_rotn_axis_table(gateset, formats, tableclass, longtable,
     Returns
     -------
     ReportTable
-        Table object containing the requested formats (e.g. 'latex').
     """
     gateLabels = gateset.gates.keys()
 
@@ -719,14 +641,14 @@ def get_gateset_rotn_axis_table(gateset, formats, tableclass, longtable,
     nCols = len(colHeadings)
     formatters = [None] * nCols
 
-    table = "longtable" if longtable else "tabular"
+    table = "tabular"
     latex_head =  "\\begin{%s}[l]{%s}\n\hline\n" % (table, "|c" * nCols + "|")
     latex_head += "\\multirow{2}{*}{Gate} & \\multirow{2}{*}{Angle} & " + \
                   "\\multicolumn{%d}{c|}{Angle between Rotation Axes} \\\\ \cline{3-%d}\n" % (len(gateLabels),nCols)
     latex_head += " & & %s \\\\ \hline\n" % (" & ".join(gateLabels))
 
-    table = _ReportTable(formats, colHeadings, formatters, tableclass,
-                         longtable, customHeader={'latex': latex_head} )
+    table = _ReportTable(colHeadings, formatters,
+                         customHeader={'latex': latex_head} )
 
     formatters = [None, _tf.EBPi] + [ _tf.EBPi ] * len(gateLabels)
 
@@ -766,8 +688,234 @@ def get_gateset_rotn_axis_table(gateset, formats, tableclass, longtable,
     return table
 
 
-def get_dataset_overview_table(dataset, target, formats, tableclass, longtable,
-                               maxlen=10, fixedLists=None):
+def get_gateset_eigenval_table(gateset, targetGateset, 
+                               figFilePrefix, 
+                               maxWidth=6.5, maxHeight=8.0,
+                               confidenceRegionInfo=None):
+    """ 
+    Create table which lists and plots the eigenvalues of a
+    gateset's gates.
+    
+    Parameters
+    ----------
+    gateset : GateSet
+        The GateSet
+
+    targetGateset : GateSet
+        The target gate set.
+
+    figFilePrefix : str
+        A filename prefix (not including any directories!) to use
+        when rendering figures as a part of rendering this table.
+
+    maxWidth : float
+        The maximum width (in inches) of the entire figure.
+
+    maxHeight : float
+        The maximum height (in inches) of the entire figure.
+
+    confidenceRegionInfo : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+
+
+    Returns
+    -------
+    ReportTable
+    """
+    gateLabels = gateset.gates.keys()  # gate labels
+
+    colHeadings = ('Gate','Eigenvalues','Polar Plot') # ,'Hamiltonian'
+    formatters = [None]*3
+
+    qtyNames = ('eigenvalues',)
+    qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames for gl in gateLabels ]
+    qtys = _cr.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo)
+
+    table = _ReportTable(colHeadings, formatters)
+
+    formatters = (None, _tf.EBvec, _tf.Fig)
+    nRows = len(gateLabels)
+
+    for gl in gateLabels:
+
+        gate = gateset.gates[gl]
+        targetGate = targetGateset.gates[gl]
+
+        fig = _plotting.polar_eigenval_plot(
+            gate, targetGate, title=gl, save_to="",
+            showNormal=True, showRelative=False)
+
+        sz = min(0.95*(maxHeight/nRows), 0.95*0.75*(maxWidth - 0.5))
+        sz = min(sz, 2.0)
+        nm = figFilePrefix + "_" + gl
+        figInfo = (fig,nm,sz,sz)
+
+        if confidenceRegionInfo is None:
+            evals = qtys['%s eigenvalues' % gl].get_value()
+            evals = evals.reshape(evals.size/2, 2) #assumes len(evals) is even!
+            rowData = [gl, (evals,None), figInfo]
+        else:
+            evals, evalsEB = qtys['%s eigenvalues' % gl].get_value_and_err_bar()
+            evals = evals.reshape(evals.size/2, 2) #assumes len(evals) is even!
+            rowData = [gl, (evals,evalsEB), figInfo]
+
+        table.addrow(rowData, formatters)
+
+    table.finish()
+    return table
+
+
+def get_gateset_relative_eigenval_table(gateset, targetGateset, 
+                                        figFilePrefix, 
+                                        maxWidth=6.5, maxHeight=8.0,
+                                        confidenceRegionInfo=None):
+    """ 
+    Create table which lists and plots the *relative* eigenvalues of a
+    gateset's gates.
+
+    Relative eigenvalues are defined as the eigenvalues of 
+    inv(G_target) * G.
+    
+    Parameters
+    ----------
+    gateset : GateSet
+        The GateSet
+
+    targetGateset : GateSet
+        The target gate set used to compute eigenvalues of
+        gate*inv(target_gate).
+
+    figFilePrefix : str
+        A filename prefix (not including any directories!) to use
+        when rendering figures as a part of rendering this table.
+
+    maxWidth : float
+        The maximum width (in inches) of the entire figure.
+
+    maxHeight : float
+        The maximum height (in inches) of the entire figure.
+
+    confidenceRegionInfo : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+
+
+    Returns
+    -------
+    ReportTable
+    """
+    gateLabels = gateset.gates.keys()  # gate labels
+
+    colHeadings = ('Gate','Relative Evals','Polar Plot') # ,'Hamiltonian'
+    formatters = [None]*3
+
+    qtyNames = ('relative eigenvalues',)
+    qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames for gl in gateLabels ]
+    qtys = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
+                                            confidenceRegionInfo)
+
+    table = _ReportTable(colHeadings, formatters)
+
+    formatters = (None, _tf.EBvec, _tf.Fig)
+    nRows = len(gateLabels)
+
+    for gl in gateLabels:
+        gate = gateset.gates[gl]
+        targetGate = targetGateset.gates[gl]
+
+        fig = _plotting.polar_eigenval_plot(
+            gate, targetGate, title=gl, save_to="",
+            showNormal=False, showRelative=True)
+
+        sz = min(0.95*(maxHeight/nRows), 0.95*0.75*(maxWidth - 0.5))
+        sz = min(sz, 2.0)
+        nm = figFilePrefix + "_" + gl
+        figInfo = (fig,nm,sz,sz)
+
+        if confidenceRegionInfo is None:
+            rel_evals = qtys['%s relative eigenvalues' % gl].get_value()
+            rel_evals = rel_evals.reshape(rel_evals.size/2, 2)
+            rowData = [gl, (rel_evals,None), figInfo]
+        else:
+            rel_evals, rel_evalsEB = qtys['%s relative eigenvalues' % gl].get_value_and_err_bar()
+            rel_evals = rel_evals.reshape(rel_evals.size/2, 2)
+            rowData = [gl, (rel_evals,rel_evalsEB), figInfo]
+
+        table.addrow(rowData, formatters)
+
+    table.finish()
+    return table
+
+
+def get_gateset_choi_eigenval_table(gateset, figFilePrefix, 
+                                    maxWidth=6.5, maxHeight=8.0,
+                                    confidenceRegionInfo=None):
+    """ 
+    Create a table for the Choi matrices of a gateset's gates.
+    
+    Parameters
+    ----------
+    gateset : GateSet
+        The GateSet
+
+    figFilePrefix : str
+        A filename prefix (not including any directories!) to use
+        when rendering figures as a part of rendering this table.
+
+    maxWidth : float
+        The maximum width (in inches) of the entire figure.
+
+    maxHeight : float
+        The maximum height (in inches) of the entire figure.
+
+    confidenceRegionInfo : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+
+    Returns
+    -------
+    ReportTable
+    """
+    gateLabels = gateset.gates.keys()  # gate labels
+
+    qtys_to_compute = []
+    qtys_to_compute += [ ('%s choi eigenvalues' % gl) for gl in gateLabels ]
+
+    mxBasis = gateset.get_basis_name()
+    mxBasisDim = gateset.get_basis_dimension()
+    qtys = _cr.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo)
+    
+    colHeadings = ('Gate','Eigenvalues','Eigenvalue Magnitudes')
+    formatters = (None,None,None)        
+    table = _ReportTable(colHeadings, formatters)
+
+    nRows = len(gateLabels)
+    sz = min(0.95*(maxHeight/nRows), 0.95*(maxWidth - 3.0))
+
+    for gl in gateLabels:
+
+        evals, evalsEB = qtys['%s choi eigenvalues' % gl].get_value_and_err_bar()
+        evals = evals.reshape(evals.size/4, 4) #assumes len(evals) is multiple of 4!
+        nm = figFilePrefix + "_" + gl
+
+        if confidenceRegionInfo is None:
+            fig = _plotting.choi_eigenvalue_barplot(evals, ylabel="")
+            figInfo = (fig,nm,sz,sz)
+            table.addrow((gl, evals, figInfo), (None, _tf.Nml, _tf.Fig))
+        else:
+            evalsEB = evalsEB.reshape(evalsEB.size/4, 4)
+            fig = _plotting.choi_eigenvalue_barplot(evals, evalsEB, ylabel="")
+            figInfo = (fig,nm,sz,sz)
+            table.addrow((gl, (evals,evalsEB), figInfo), (None, _tf.EBvec, _tf.Fig))
+
+    table.finish()
+    return table
+
+
+
+def get_dataset_overview_table(dataset, target, maxlen=10, fixedLists=None,
+                               maxLengthList=None):
     """ 
     Create a table overviewing a data set.
     
@@ -780,49 +928,50 @@ def get_dataset_overview_table(dataset, target, formats, tableclass, longtable,
         A target gateset which is used for it's mapping of SPAM labels to
         SPAM specifiers.
 
-    formats : list
-        List of formats to include in returned table. Allowed
-        formats are 'latex', 'html', 'py', and 'ppt'.
-
-    tableclass : string
-        CSS class to apply to the HTML table.
-
-    longtable : bool
-        Whether table should be a latex longtable or not.
-
     maxlen : integer, optional
         The maximum length string used when searching for the 
         maximal (best) Gram matrix.  It's useful to make this
         at least twice the maximum length fiducial sequence.
 
     fixedLists : (prepStrs, effectStrs), optional
-      2-tuple of gate string lists, specifying the preparation and
-      measurement fiducials to use when constructing the Gram matrix,
-      and thereby bypassing the search for such lists.
+        2-tuple of gate string lists, specifying the preparation and
+        measurement fiducials to use when constructing the Gram matrix,
+        and thereby bypassing the search for such lists.
 
+    maxLengthList : list of ints, optional
+        A list of the maximum lengths used, if available.
 
     Returns
     -------
     ReportTable
-        Table object containing the requested formats (e.g. 'latex').
     """
     colHeadings = ('Quantity','Value')
     formatters = (None,None)
-    rank,evals = _alg.max_gram_rank_and_evals( dataset, maxlen, target, fixedLists=fixedLists )
+    rank,svals,target_svals = _alg.max_gram_rank_and_evals( dataset, maxlen, target, fixedLists=fixedLists )
+    svals = _np.sort(_np.abs(svals)).reshape(-1,1)
+    target_svals = _np.sort(_np.abs(target_svals)).reshape(-1,1)
+    svals_2col = _np.concatenate( (svals,target_svals), axis=1 )
 
-    table = _ReportTable(formats, colHeadings, formatters,
-                         tableclass, longtable)
+    table = _ReportTable(colHeadings, formatters)
+
+    minN = round(min([ row.total() for row in dataset.itervalues()]))
+    maxN = round(max([ row.total() for row in dataset.itervalues()]))
+    cntStr = "[%d,%d]" % (minN,maxN) if (minN != maxN) else "%d" % round(minN)
 
     table.addrow(("Number of strings", str(len(dataset))), (None,None))
     table.addrow(("Gate labels", ", ".join(dataset.get_gate_labels()) ), (None,None))
     table.addrow(("SPAM labels",  ", ".join(dataset.get_spam_labels()) ), (None,None))
-    table.addrow(("Gram singular vals", _np.sort(abs(evals)).reshape(-1,1) ), (None,_tf.Sml))
+    table.addrow(("Counts per string", cntStr  ), (None,None))
+    table.addrow(("Gram singular values| (right column gives the values|when using the target gate set)",
+                  svals_2col), (_tf.TxtCnv,_tf.Sml))
+    if maxLengthList is not None:
+        table.addrow(("Max. Lengths", ", ".join(map(str,maxLengthList)) ), (None,None))
 
     table.finish()
     return table
 
 
-def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, tableclass, longtable):
+def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset):
     """ 
     Create a table showing how Chi2 changes with GST iteration.
     
@@ -841,20 +990,9 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, t
     dataset : DataSet
         The data set used in the GST iterations.
 
-    formats : list
-        List of formats to include in returned table. Allowed
-        formats are 'latex', 'html', 'py', and 'ppt'.
-
-    tableclass : string
-        CSS class to apply to the HTML table.
-
-    longtable : bool
-        Whether table should be a latex longtable or not.
-
     Returns
     -------
     ReportTable
-        Table object containing the requested formats (e.g. 'latex').
     """
     colHeadings = { 'latex': ('L','$\\chi^2$','$k$','$\\chi^2-k$','$\sqrt{2k}$','$p$','$N_s$','$N_p$', 'Rating'),
                     'html': ('L','&chi;<sup>2</sup>','k','&chi;<sup>2</sup>-k',
@@ -864,7 +1002,8 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, t
                     'ppt': ('L','chi^2','k','chi^2-k','sqrt{2k}','p','N_s','N_p', 'Rating')
                   }
 
-    table = _ReportTable(formats, colHeadings, None, tableclass, longtable)
+    table = _ReportTable(colHeadings, None)
+
     for L,gs,gstrs in zip(Ls,gatesetsByL,gateStringsByL):
         chi2 = _tools.chi2( dataset, gs, gstrs, 
                                      minProbClipForWeighting=1e-4)
@@ -887,7 +1026,7 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, t
     return table
 
 
-def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, tableclass, longtable):
+def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset):
     """ 
     Create a table showing how the log-likelihood changes with GST iteration.
     
@@ -906,20 +1045,9 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, t
     dataset : DataSet
         The data set used in the GST iterations.
 
-    formats : list
-        List of formats to include in returned table. Allowed
-        formats are 'latex', 'html', 'py', and 'ppt'.
-
-    tableclass : string
-        CSS class to apply to the HTML table.
-
-    longtable : bool
-        Whether table should be a latex longtable or not.
-
     Returns
     -------
     ReportTable
-        Table object containing the requested formats (e.g. 'latex').
     """
     colHeadings = { 'latex': ('L','$2\Delta\\log(\\mathcal{L})$','$k$','$2\Delta\\log(\\mathcal{L})-k$',
                               '$\sqrt{2k}$','$p$','$N_s$','$N_p$', 'Rating'),
@@ -929,7 +1057,8 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, t
                     'py': ('L','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','p','N_s','N_p', 'Rating'),
                     'ppt': ('L','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','p','N_s','N_p', 'Rating')
                   }
-    table = _ReportTable(formats, colHeadings, None, tableclass, longtable)
+    table = _ReportTable(colHeadings, None)
+
     for L,gs,gstrs in zip(Ls,gatesetsByL,gateStringsByL):
         logL_upperbound = _tools.logl_max(dataset, gstrs)
         logl = _tools.logl( gs, dataset, gstrs )
@@ -956,9 +1085,9 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset, formats, t
     return table
     
 
-def get_gatestring_table(gsList, title, formats, tableclass, longtable):
+def get_gatestring_table(gsList, title, nCols=1):
     """ 
-    Creates a 2-column table enumerating a list of gate strings.
+    Creates a 2*nCols-column table enumerating a list of gate strings.
     
     Parameters
     ----------
@@ -968,35 +1097,35 @@ def get_gatestring_table(gsList, title, formats, tableclass, longtable):
     title : string
         The title for the table column containing the strings.
 
-    formats : list
-        List of formats to include in returned table. Allowed
-        formats are 'latex', 'html', 'py', and 'ppt'.
-
-    tableclass : string
-        CSS class to apply to the HTML table.
-
-    longtable : bool
-        Whether table should be a latex longtable or not.
+    nCols : int, optional
+        The number of *data* columns, i.e. those containing
+        gate strings.  Actual number of columns is twice this
+        due to columns containing enumeration indices.
 
     Returns
     -------
     ReportTable
-        Table object containing the requested formats (e.g. 'latex').
     """
-    colHeadings = ('#',title)
-    formatters = (_tf.TxtCnv,_tf.Nml)
+    colHeadings = ('#',title)*nCols
+    formatters = (_tf.TxtCnv,_tf.Nml)*nCols
 
-    table = _ReportTable(formats, colHeadings, formatters,
-                         tableclass, longtable)
+    table = _ReportTable(colHeadings, formatters)
 
-    for i,gstr in enumerate(gsList,start=1):
-        table.addrow((i, gstr), (_tf.Nml,_tf.GStr) )
+    nRows = (len(gsList)+(nCols-1)) // nCols
+    
+    for i in range(nRows):
+        formatters = (_tf.Nml,_tf.GStr)*nCols
+        rowdata = []
+        for k in range(nCols):
+            l = i+nRows*k #index of gatestring
+            rowdata.extend( [l+1, gsList[l] if l<len(gsList) else "" ] )
+        table.addrow(rowdata, formatters)
 
     table.finish()
     return table
 
 
-def get_gatestring_multi_table(gsLists, titles, formats, tableclass, longtable, commonTitle=None):
+def get_gatestring_multi_table(gsLists, titles, commonTitle=None):
     """ 
     Creates an N-column table enumerating a N-1 lists of gate strings.
     
@@ -1008,16 +1137,6 @@ def get_gatestring_multi_table(gsLists, titles, formats, tableclass, longtable, 
     titles : list of strings
         The titles for the table columns containing the strings.
 
-    formats : list
-        List of formats to include in returned table. Allowed
-        formats are 'latex', 'html', 'py', and 'ppt'.
-
-    tableclass : string
-        CSS class to apply to the HTML table.
-
-    longtable : bool
-        Whether table should be a latex longtable or not.
-
     commonTitle : string, optional
         A single title string to place in a cell spanning across
         all the gate string columns.
@@ -1025,28 +1144,26 @@ def get_gatestring_multi_table(gsLists, titles, formats, tableclass, longtable, 
     Returns
     -------
     ReportTable
-        Table object containing the requested formats (e.g. 'latex').
     """
     colHeadings = ('#',) + tuple(titles)
     formatters = (_tf.TxtCnv,) + (_tf.Nml,)*len(titles)
 
     if commonTitle is None:
-        table = _ReportTable(formats, colHeadings, formatters,
-                             tableclass, longtable)
+        table = _ReportTable(colHeadings, formatters)
     else:
-        table = "longtable" if longtable else "tabular"
+        table = "tabular"
         colHeadings = ('\\#',) + tuple(titles)
         latex_head  = "\\begin{%s}[l]{%s}\n\hline\n" % (table, "|c" * len(colHeadings) + "|")
         latex_head += " & \multicolumn{%d}{c|}{%s} \\\\ \hline\n" % (len(titles),commonTitle)
         latex_head += "%s \\\\ \hline\n" % (" & ".join(colHeadings))
 
-        html_head = "<table class=%s><thead>" % tableclass
+        html_head = "<table><thead>"
         html_head += '<tr><th></th><th colspan="%d">%s</th></tr>\n' % (len(titles),commonTitle)
         html_head += "<tr><th> %s </th></tr>" % (" </th><th> ".join(colHeadings))
         html_head += "</thead><tbody>"
-        table = _ReportTable(formats, colHeadings, formatters, tableclass, 
-                             longtable, customHeader={'latex': latex_head,
-                                                      'html': html_head})
+        table = _ReportTable(colHeadings, formatters, 
+                             customHeader={'latex': latex_head,
+                                           'html': html_head})
 
     formatters = (_tf.Nml,) + (_tf.GStr,)*len(gsLists)
 
@@ -1064,11 +1181,197 @@ def get_gatestring_multi_table(gsLists, titles, formats, tableclass, longtable, 
 
 
 
+def get_gateset_gate_boxes_table(gateset, figFilePrefix, maxWidth=6.5,
+                                maxHeight=8.0, confidenceRegionInfo=None):
+    """ 
+    Create a table for a gateset's gates, where each gate is a grid of boxes.
+
+    Similar to get_gateset_gates_table(...), except the gates are displayed
+    as grids of colored boxes instead of printing the actual numerical elements.
+    This is useful for displaying large gate matrices.
+    
+    Parameters
+    ----------
+    gateset : GateSet
+        The GateSet
+
+    figFilePrefix : str
+        A filename prefix (not including any directories!) to use
+        when rendering figures as a part of rendering this table.
+
+    maxWidth : float
+        The maximum width (in inches) of the entire figure.
+
+    maxHeight : float
+        The maximum height (in inches) of the entire figure.
+
+    confidenceRegionInfo : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+
+
+    Returns
+    -------
+    ReportTable
+    """
+    gateLabels = gateset.gates.keys()  # gate labels
+    basisNm = gateset.get_basis_name()
+    basisDims = gateset.get_basis_dimension()
+    basisLongNm = _tools.basis_longname(basisNm, basisDims)
+
+    if confidenceRegionInfo is None:    
+        colHeadings = ('Gate','Superoperator (%s basis)' % basisLongNm)
+        formatters = (None,None)
+    else:
+        colHeadings = ('Gate','Superoperator (%s basis)' % basisLongNm,
+                       '%g%% C.I. half-width' % confidenceRegionInfo.level)
+        formatters = (None,None,_tf.TxtCnv)
+
+    table = _ReportTable(colHeadings, formatters)
+    nRows = len(gateset.gates)
+
+    for gl in gateLabels:
+        #Note: currently, we don't use confidence region...        
+        fig = _plotting.gate_matrix_boxplot(
+            gateset.gates[gl], save_to="",
+            mxBasis=basisNm, mxBasisDims=basisDims)
+
+        maxFigSz = min(0.95*(maxHeight/nRows), 0.95*(maxWidth - 1.0))
+        sz = min(gateset.gates[gl].shape[0] * 0.5, maxFigSz)
+        nm = figFilePrefix + "_" + gl
+
+        figInfo = (fig,nm,sz,sz)
+        table.addrow((gl, figInfo ), (None,_tf.Fig))
+
+    table.finish()
+    return table
+
+
+def get_gates_vs_target_err_gen_boxes_table(gateset, targetGateset,
+                                            figFilePrefix, maxWidth=6.5,
+                                            maxHeight=8.0,
+                                            confidenceRegionInfo=None):
+    """ 
+    Create a table of gate error generators, where each is shown as grid of boxes.
+
+    Parameters
+    ----------
+    gateset, targetGateset : GateSet
+        The gate sets to compare
+
+    figFilePrefix : str
+        A filename prefix (not including any directories!) to use
+        when rendering figures as a part of rendering this table.
+
+    maxWidth : float
+        The maximum width (in inches) of the entire figure.
+
+    maxHeight : float
+        The maximum height (in inches) of the entire figure.
+
+    confidenceRegionInfo : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+
+
+    Returns
+    -------
+    ReportTable
+    """
+    gateLabels = gateset.gates.keys()  # gate labels
+    basisNm = gateset.get_basis_name()
+    basisDims = gateset.get_basis_dimension()
+
+    if basisNm != targetGateset.get_basis_name():
+        raise ValueError("Basis mismatch between gateset (%s) and target (%s)!"\
+                             % (basisNm, targetGateset.get_basis_name()))
+
+    colHeadings = ('Gate','Error Generator','Pauli projections')
+
+    table = _ReportTable(colHeadings, (None,None,None))
+    nRows = len(gateset.gates)
+    nCols = len(colHeadings)
+
+    for gl in gateLabels:
+        gate = gateset.gates[gl]
+        targetGate = targetGateset.gates[gl]
+        
+        errgen_fig = _plotting.gate_matrix_errgen_boxplot(
+            gate, targetGate, save_to="", mxBasis=basisNm,
+            mxBasisDims=basisDims)
+        
+        hamdecomp_fig = _plotting.pauliprod_hamiltonian_boxplot(
+            gate, targetGate, save_to="", mxBasis=basisNm, boxLabels=True)
+
+        maxFigSz = min(0.95*(maxHeight/nRows), 0.95*(2./3.)*(maxWidth-1.0))
+        sz = min(gateset.gates[gl].shape[0] * 0.5, maxFigSz)
+        nm = figFilePrefix + "_" + gl + "_errgen"
+        errgen_figInfo = (errgen_fig,nm,sz,sz)
+
+        maxFigSz = min(0.95*(maxHeight/nRows), 0.95*(1./3.)*(maxWidth-1.0))
+        sz = min( (gateset.gates[gl].size/4) * 0.5, maxFigSz)
+        nm = figFilePrefix + "_" + gl + "_hamdecomp"
+        hamdecomp_figInfo = (hamdecomp_fig,nm,sz,sz)
+
+        table.addrow((gl, errgen_figInfo, hamdecomp_figInfo),
+                     (None, _tf.Fig, _tf.Fig))
+    table.finish()
+    return table
+
+
+
+def get_gaugeopt_params_table(gaugeOptArgs):
+    """ 
+    Create a table displaying a list of gauge 
+    optimzation parameters.
+    
+    Parameters
+    ----------
+    gaugeOptArgs : dict
+        A dictionary of specifying values for zero or more
+        of the *arguments* of pyGSTi's optimize_gauge
+        function.
+
+    Returns
+    -------
+    ReportTable
+    """
+    colHeadings = ('Quantity','Value')
+    formatters = (_tf.Bold,_tf.Bold)
+
+    table = _ReportTable(colHeadings, formatters)
+
+    if 'toGetTo' in gaugeOptArgs:
+        table.addrow(("Gauge optimize to", gaugeOptArgs['toGetTo']), (None,None))
+    if 'method' in gaugeOptArgs:
+        table.addrow(("Method", str(gaugeOptArgs['method'])), (None,None))
+    if 'constrainToTP' in gaugeOptArgs:
+        table.addrow(("TP constrained", str(gaugeOptArgs['constrainToTP'])), (None,None))
+    if 'constrainToCP' in gaugeOptArgs:
+        table.addrow(("CP constrained", str(gaugeOptArgs['constrainToCP'])), (None,None))
+    if 'constrainToValidSpam' in gaugeOptArgs:
+        table.addrow(("Valid-SPAM constrained", str(gaugeOptArgs['constrainToValidSpam'])), (None,None))
+    if 'targetFactor' in gaugeOptArgs:
+        table.addrow(("Target weighting", str(gaugeOptArgs['targetFactor'])), (None,None))
+    if 'targetGatesMetric' in gaugeOptArgs:
+        table.addrow(("Metric for gate-to-target", str(gaugeOptArgs['targetGatesMetric'])), (None,None))
+    if 'targetSpamMetric' in gaugeOptArgs:
+        table.addrow(("Metric for SPAM-to-target", str(gaugeOptArgs['targetSpamMetric'])), (None,None))
+    if 'gateWeight' in gaugeOptArgs:
+        table.addrow(("Gate weighting", str(gaugeOptArgs['gateWeight'])), (None,None))
+    if 'spamWeight' in gaugeOptArgs:
+        table.addrow(("SPAM weighting", str(gaugeOptArgs['spamWeight'])), (None,None))
+
+    table.finish()
+    return table
+
+
+
 
 def get_logl_confidence_region(gateset, dataset, confidenceLevel,
                                gatestring_list=None, probClipInterval=(-1e6,1e6),
                                minProbClip=1e-4, radius=1e-4, hessianProjection="std",
-                               regionType="std", memLimit=None):
+                               regionType="std", comm=None, memLimit=None):
 
     """ 
     Constructs a ConfidenceRegion given a gateset and dataset using the log-likelihood Hessian.
@@ -1124,6 +1427,10 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
         confidence region, while 'non-markovian' creates a region which 
         attempts to account for the non-markovian-ness of the data.
 
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
     memLimit : int, optional
         A rough memory limit in bytes which restricts the amount of intermediate
         values that are computed and stored.
@@ -1139,7 +1446,7 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
     #Compute appropriate Hessian
     hessian = _tools.logl_hessian(gateset, dataset, gatestring_list,
                                   minProbClip, probClipInterval, radius,
-                                  memLimit=memLimit) 
+                                  comm=comm, memLimit=memLimit) 
 
     #Compute the non-Markovian "radius" if required
     if regionType == "std":
@@ -1150,9 +1457,11 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
         nDataParams  = nGateStrings*(len(dataset.get_spam_labels())-1) 
           #number of independent parameters in dataset (max. model # of params)
 
-        nonMarkRadiusSq = 2*(_tools.logl_max(dataset) 
-                             - _tools.logl(gateset, dataset)) \
-                             - (nDataParams-nModelParams)
+        MIN_NON_MARK_RADIUS = 1e-8 #must be >= 0
+        nonMarkRadiusSq = max( 2*(_tools.logl_max(dataset) 
+                                  - _tools.logl(gateset, dataset)) \
+                                   - (nDataParams-nModelParams),
+                               MIN_NON_MARK_RADIUS )
     else:
         raise ValueError("Invalid confidence region type: %s" % regionType)
 
@@ -1175,7 +1484,7 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
 def get_chi2_confidence_region(gateset, dataset, confidenceLevel,
                                gatestring_list=None, probClipInterval=(-1e6,1e6),
                                minProbClipForWeighting=1e-4, hessianProjection="std",
-                               regionType='std', memLimit=None):
+                               regionType='std', comm=None, memLimit=None):
 
     """ 
     Constructs a ConfidenceRegion given a gateset and dataset using the Chi2 Hessian.
@@ -1227,6 +1536,10 @@ def get_chi2_confidence_region(gateset, dataset, confidenceLevel,
         confidence region, while 'non-markovian' creates a region which 
         attempts to account for the non-markovian-ness of the data.
 
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
     memLimit : int, optional
         A rough memory limit in bytes which restricts the amount of intermediate
         values that are computed and stored.
@@ -1253,7 +1566,8 @@ def get_chi2_confidence_region(gateset, dataset, confidenceLevel,
         nDataParams  = nGateStrings*(len(dataset.get_spam_labels())-1) 
           #number of independent parameters in dataset (max. model # of params)
 
-        nonMarkRadiusSq = chi2 - (nDataParams-nModelParams)
+        MIN_NON_MARK_RADIUS = 1e-8 #must be >= 0
+        nonMarkRadiusSq = max(chi2 - (nDataParams-nModelParams), MIN_NON_MARK_RADIUS)
     else:
         raise ValueError("Invalid confidence region type: %s" % regionType)
 

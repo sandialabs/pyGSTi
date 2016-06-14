@@ -131,7 +131,7 @@ class ConfidenceRegion(object):
         # Get constants C such that xT*Hessian*x = C gives contour for the desired confidence region.
         #  C1 == Single DOF case: constant for a single-DOF likelihood, (or a profile likelihood in our case)
         #  Ck == Total DOF case: constant for a region of the likelihood as a function of *all non-gauge* gateset parameters
-        if _np.isclose(nonMarkRadiusSq,0.0):
+        if nonMarkRadiusSq == 0.0: #use == to test for *exact* zero floating pt value as herald
             C1 = _stats.chi2.ppf(confidenceLevel/100.0, 1)
             Ck = _stats.chi2.ppf(confidenceLevel/100.0, self.nNonGaugeParams)
     
@@ -314,6 +314,133 @@ class ConfidenceRegion(object):
         for i in range(nGateParams):
             gateVec = gateVec0.copy(); gateVec[i] += eps; gateObj.from_vector(gateVec)
             gradF[gpo + i] = ( fnOfGate( gateObj ) - f0 ) / eps        
+            
+        return self._compute_df_from_gradF(gradF, f0, returnFnVal, verbosity)
+
+
+    def get_prep_fn_confidence_interval(self, fnOfPrep, prepLabel, eps=1e-7,
+                                        returnFnVal=False, verbosity=0):
+        """
+        Compute the confidence interval for a function of a single state prep.
+
+        Parameters
+        ----------
+        fnOfPrep : function
+            A function which takes as its only argument a prepration vector.  The
+            returned confidence interval is based on linearizing this function
+            and propagating the gateset-space confidence region.
+
+        prepLabel : string
+            The label specifying which preparation to use in evaluations of fnOfPrep.
+
+        eps : float, optional
+            Step size used when taking finite-difference derivatives of fnOfPrep.
+
+        returnFnVal : bool, optional
+            If True, return the value of fnOfPrep along with it's confidence
+            region half-widths.
+
+        verbosity : int, optional
+            Specifies level of detail in standard output.
+
+        Returns
+        -------
+        df : float or numpy array
+            Half-widths of confidence intervals for each of the elements
+            in the float or array returned by fnOfPrep.  Thus, shape of
+            df matches that returned by fnOfPrep.
+
+        f0 : float or numpy array
+            Only returned when returnFnVal == True. Value of fnOfPrep
+            at the state preparation specified by prepLabel.
+        """
+
+        nParams = self.gateset.num_params()
+
+        prepObj = self.gateset.preps[prepLabel].copy() # copy because we add eps to this gate
+        spamVec = _np.asarray(prepObj).copy()
+        gpo = self.gateset_offsets[prepLabel][0] #starting "gateset parameter offset"        
+
+        f0 = fnOfPrep(spamVec) #function value at "base point"
+        nPrepParams = prepObj.num_params()
+        prepVec0 = prepObj.to_vector()
+
+        #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
+        if type(f0) == float:
+            gradF = _np.zeros( nParams, 'd' ) #assume all functions are real-valued for now...
+        else:
+            gradSize = (nParams,) + tuple(f0.shape)
+            gradF = _np.zeros( gradSize, f0.dtype ) #assume all functions are real-valued for now...
+
+        for i in range(nPrepParams):
+            prepVec = prepVec0.copy(); prepVec[i] += eps; prepObj.from_vector(prepVec)
+            gradF[gpo + i] = ( fnOfPrep( prepObj ) - f0 ) / eps        
+            
+        return self._compute_df_from_gradF(gradF, f0, returnFnVal, verbosity)
+
+
+    def get_effect_fn_confidence_interval(self, fnOfEffect, effectLabel, eps=1e-7,
+                                        returnFnVal=False, verbosity=0):
+        """
+        Compute the confidence interval for a function of a single POVM effect.
+
+        Parameters
+        ----------
+        fnOfEffect : function
+            A function which takes as its only argument a POVM vector.  The
+            returned confidence interval is based on linearizing this function
+            and propagating the gateset-space confidence region.
+
+        effectLabel : string
+            The label specifying which POVM to use in evaluations of fnOfEffect.
+
+        eps : float, optional
+            Step size used when taking finite-difference derivatives of fnOfEffect.
+
+        returnFnVal : bool, optional
+            If True, return the value of fnOfEffect along with it's confidence
+            region half-widths.
+
+        verbosity : int, optional
+            Specifies level of detail in standard output.
+
+        Returns
+        -------
+        df : float or numpy array
+            Half-widths of confidence intervals for each of the elements
+            in the float or array returned by fnOfEffect.  Thus, shape of
+            df matches that returned by fnOfEffect.
+
+        f0 : float or numpy array
+            Only returned when returnFnVal == True. Value of fnOfEffect
+            at the POVM effect specified by effectLabel.
+        """
+
+        nParams = self.gateset.num_params()
+
+        effectObj = self.gateset.effects[effectLabel].copy() # copy because we add eps to this gate
+        spamVec = _np.asarray(effectObj).copy()
+        f0 = fnOfEffect(spamVec) #function value at "base point"
+        
+        if effectLabel not in self.gateset_offsets: #e.g. "remainder" is not...
+            #Assume this effect label has not official "parameters" and just
+            # return 0 as the confidence interval.
+            return (0.0,f0) if returnFnVal else 0.0
+
+        gpo = self.gateset_offsets[effectLabel][0] #starting "gateset parameter offset"                    
+        nEffectParams = effectObj.num_params()
+        effectVec0 = effectObj.to_vector()
+
+        #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
+        if type(f0) == float:
+            gradF = _np.zeros( nParams, 'd' ) #assume all functions are real-valued for now...
+        else:
+            gradSize = (nParams,) + tuple(f0.shape)
+            gradF = _np.zeros( gradSize, f0.dtype ) #assume all functions are real-valued for now...
+
+        for i in range(nEffectParams):
+            effectVec = effectVec0.copy(); effectVec[i] += eps; effectObj.from_vector(effectVec)
+            gradF[gpo + i] = ( fnOfEffect( effectObj ) - f0 ) / eps        
             
         return self._compute_df_from_gradF(gradF, f0, returnFnVal, verbosity)
 

@@ -1,0 +1,6 @@
+pygsti.drivers.gs_mean1
+=======================
+
+.. currentmodule:: pygsti.drivers
+
+.. autofunction:: gs_mean1

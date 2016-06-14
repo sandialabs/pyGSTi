@@ -1,0 +1,6 @@
+pygsti.objects.Gate.__init__
+============================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: Gate.__init__

@@ -1,0 +1,6 @@
+pygsti.gateset_decomp_decay_diag
+================================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: gateset_decomp_decay_diag

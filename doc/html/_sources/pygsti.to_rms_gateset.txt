@@ -1,0 +1,6 @@
+pygsti.to_rms_gateset
+=====================
+
+.. currentmodule:: pygsti
+
+.. autofunction:: to_rms_gateset

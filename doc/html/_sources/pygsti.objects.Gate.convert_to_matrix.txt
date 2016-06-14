@@ -1,0 +1,6 @@
+pygsti.objects.Gate.convert_to_matrix
+=====================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: Gate.convert_to_matrix

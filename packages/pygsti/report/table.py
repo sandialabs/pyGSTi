@@ -1,141 +1,141 @@
 import tableformat as _tf
 
 class ReportTable(object):
-    def __init__(self, formats, colHeadings, formatters, tableclass,
-                 longtable, customHeader=None):
-        self.formats = formats
-        self.tableclass = tableclass
-        self.longtable = longtable
-        self._finished = False
-        self._raw_tables = {} 
-        
-        if "latex" in formats:
-    
-            table = "longtable" if longtable else "tabular"
-            if customHeader is not None and "latex" in customHeader:
-                latex = customHeader['latex']
+    def __init__(self, colHeadings, formatters, customHeader=None):
+        self._headings = colHeadings
+        self._headingFormatters = formatters
+        self._customHeadings = customHeader
+        self._rows = []
+
+        if self._headingFormatters is not None:
+            self._columnNames = self._headings
+        else: #headingFormatters is None => headings is dict w/formats
+            self._columnNames = self._headings['py'] #use python heading
+
+
+    def addrow(self, rowData, formatters):
+        self._rows.append( (rowData, formatters) )
+
+    def finish(self):
+        pass #nothing to do currently
+
+    def render(self, fmt, longtables=False, tableclass='pygstiTbl',
+               scratchDir=None):
+
+
+        if fmt == "latex":
+
+            _tf.SCRATCHDIR = scratchDir #Dangerous global     
+            table = "longtable" if longtables else "tabular"
+            if self._customHeadings is not None \
+                    and "latex" in self._customHeadings:
+                latex = self._customHeadings['latex']
             else:
-                if formatters is not None:
+                if self._headingFormatters is not None:
                     colHeadings_formatted = \
-                        _tf.formatList(colHeadings, formatters, "latex")
-                else: #formatters is None => colHeadings is dict w/formats
-                    colHeadings_formatted = colHeadings['latex']
+                        _tf.formatList(self._headings,
+                                       self._headingFormatters, "latex")
+                else: #headingFormatters is None => headings is dict w/formats
+                    colHeadings_formatted = self._headings['latex']
                 
                 latex  = "\\begin{%s}[l]{%s}\n\hline\n" % \
                     (table, "|c" * len(colHeadings_formatted) + "|")
                 latex += "%s \\\\ \hline\n" % \
                     (" & ".join(colHeadings_formatted))
-                
-            self._raw_tables['latex'] = latex
+
+            for rowData,formatters in self._rows:
+                formatted_rowData = _tf.formatList(rowData, formatters, "latex")
+                if len(formatted_rowData) > 0:
+                    latex += " & ".join(formatted_rowData) + " \\\\ \hline\n"
+
+            latex += "\end{%s}\n" % table
+            _tf.SCRATCHDIR = None #Dangerous global     
+            return latex
 
     
-        if "html" in formats:
-    
-            if customHeader is not None and "html" in customHeader:
-                html = customHeader['html']
+        elif fmt == "html":
+
+            _tf.SCRATCHDIR = scratchDir #Dangerous global     
+            if self._customHeadings is not None \
+                    and "html" in self._customHeadings:
+                html = self._customHeadings['html']
             else:
-                if formatters is not None:
+                if self._headingFormatters is not None:
                     colHeadings_formatted = \
-                        _tf.formatList(colHeadings, formatters, "html")
-                else: #formatters is None => colHeadings is dict w/formats
-                    colHeadings_formatted = colHeadings['html']
+                        _tf.formatList(self._headings,
+                                       self._headingFormatters, "html")
+                else: #headingFormatters is None => headings is dict w/formats
+                    colHeadings_formatted = self._headings['html']
 
                 html  = "<table class=%s><thead>" % tableclass
                 html += "<tr><th> %s </th></tr>" % \
                     (" </th><th> ".join(colHeadings_formatted))
                 html += "</thead><tbody>"
+
+            for rowData,formatters in self._rows:
+                formatted_rowData = _tf.formatList(rowData, formatters, "html")
+                if len(formatted_rowData) > 0:
+                    html += "<tr><td>" + \
+                        "</td><td>".join(formatted_rowData) + "</td></tr>\n"
+
+            html += "</tbody></table>"
+            _tf.SCRATCHDIR = None #Dangerous global     
+            return html
             
-            self._raw_tables['html'] = html
+
+        elif fmt == "py":
     
-    
-        if "py" in formats:
-    
-            if customHeader is not None and "py" in customHeader:
+            if self._customHeadings is not None \
+                    and "py" in self._customHeadings:
                 raise ValueError("custom headers unsupported for python format")
 
-            if formatters is not None:
+            if self._headingFormatters is not None:
                 colHeadings_formatted = \
-                    _tf.formatList(colHeadings, formatters, "py")
-            else: #formatters is None => colHeadings is dict w/formats
-                colHeadings_formatted = colHeadings['py']
+                    _tf.formatList(self._headings,
+                                   self._headingFormatters, "py")
+            else: #headingFormatters is None => headings is dict w/formats
+                colHeadings_formatted = self._headings['py']
     
-            self._raw_tables['py'] = \
-                { 'column names': colHeadings_formatted,
-                  'row data': [] }
+            py = { 'column names': colHeadings_formatted,
+                   'row data': [] }
+
+            for rowData,formatters in self._rows:
+                formatted_rowData = _tf.formatList(rowData, formatters, "py")
+                if len(formatted_rowData) > 0:
+                    py['row data'].append( formatted_rowData )
+
+            return py
+
     
-        if "ppt" in formats:
-    
-            if customHeader is not None and "ppt" in customHeader:
+        elif fmt == "ppt":
+
+            if self._customHeadings is not None \
+                    and "ppt" in self._customHeadings:
                 raise ValueError("custom headers unsupported for " +
                                  "powerpoint format")
 
-            if formatters is not None:
+            if self._headingFormatters is not None:
                 colHeadings_formatted = \
-                    _tf.formatList(colHeadings, formatters, "ppt")
-            else: #formatters is None => colHeadings is dict w/formats
-                colHeadings_formatted = colHeadings['ppt']
+                    _tf.formatList(self._headings,
+                                   self._headingFormatters, "ppt")
+            else: #headingFormatters is None => headings is dict w/formats
+                colHeadings_formatted = self._headings['ppt']
     
-            self._raw_tables['ppt'] = \
-                { 'column names': colHeadings_formatted,
-                  'row data' : [] }
+            ppt = { 'column names': colHeadings_formatted,
+                    'row data' : [] }
 
-        
+            for rowData,formatters in self._rows:
+                formatted_rowData = _tf.formatList(rowData, formatters, "ppt")
+                if len(formatted_rowData) > 0:
+                    ppt['row data'].append( formatted_rowData )
 
-    def addrow(self, rowData, formatters):
-        if self._finished:
-            raise ValueError("Cannot add rows to a ReportTable after finish()")
+            return ppt
 
-        if "latex" in self.formats:
-            assert("latex" in self._raw_tables)
-            formatted_rowData = _tf.formatList(rowData, formatters, "latex")
-            if len(formatted_rowData) > 0:
-                self._raw_tables['latex'] += " & ".join(formatted_rowData) \
-                    + " \\\\ \hline\n"
+        else:
+            raise ValueError("Unknown format: %s" % fmt)
     
-        if "html" in self.formats:
-            assert("html" in self._raw_tables)
-            formatted_rowData = _tf.formatList(rowData, formatters, "html")
-            if len(formatted_rowData) > 0:
-                self._raw_tables['html'] += "<tr><td>" + \
-                    "</td><td>".join(formatted_rowData) + "</td></tr>\n"
-    
-    
-        if "py" in self.formats:
-            assert("py" in self._raw_tables)
-            formatted_rowData = _tf.formatList(rowData, formatters, "py")
-            if len(formatted_rowData) > 0:
-                self._raw_tables["py"]['row data'].append( formatted_rowData )
-    
-        if "ppt" in self.formats:
-            assert("ppt" in self._raw_tables)
-            formatted_rowData = _tf.formatList(rowData, formatters, "ppt")
-            if len(formatted_rowData) > 0:
-                self._raw_tables["ppt"]['row data'].append( formatted_rowData )
-
-    def finish(self):
-        """ Finish (end) this table."""
-    
-        if "latex" in self.formats:
-            assert("latex" in self._raw_tables)
-            table = "longtable" if self.longtable else "tabular"
-            self._raw_tables['latex'] += "\end{%s}\n" % table        
-    
-        if "html" in self.formats:
-            assert("html" in self._raw_tables)
-            self._raw_tables['html'] += "</tbody></table>"
-    
-        if "py" in self.formats:
-            assert("py" in self._raw_tables)
-            #nothing to do to mark table dict as finished
-    
-        if "ppt" in self.formats:
-            assert("ppt" in self._raw_tables)
-            #nothing to do to mark table dict as finished
-
-        self._finished = True #mark table as finished
 
     def __str__(self):
-        self._checkpy()
 
         def strlen(x):
             return max([len(p) for p in str(x).split('\n')])
@@ -145,15 +145,15 @@ class ReportTable(object):
             lines = str(x).split('\n')
             return lines[i] if i < len(lines) else ""
         
-        data = self._raw_tables["py"]
-        col_widths = [0]*len(data['column names'])
-        row_lines = [0]*len(data['row data'])
+        data = self.render('py')
+        col_widths = [0]*len(self._columnNames)
+        row_lines = [0]*len(self._rows)
         header_lines = 0
 
-        for i,nm in enumerate(data['column names']):
+        for i,nm in enumerate(self._columnNames):
             col_widths[i] = max( strlen(nm), col_widths[i] )
             header_lines = max(header_lines, nlines(nm))
-        for k,d in enumerate(data['row data']):
+        for k,(d,f) in enumerate(self._rows):
             for i,el in enumerate(d):
                 col_widths[i] = max( strlen(el), col_widths[i] )
                 row_lines[k] = max(row_lines[k], nlines(el))
@@ -165,12 +165,12 @@ class ReportTable(object):
         s += row_separator
 
         for k in range(header_lines):
-            for i,nm in enumerate(data['column names']):
+            for i,nm in enumerate(self._columnNames):
                 s += "|  %*s  " % (col_widths[i],getline(nm,k))
             s += "|\n"
         s += row_separator
 
-        for rowIndex,rowEls in enumerate(data['row data']):
+        for rowIndex,(rowEls,rowFormatters) in enumerate(self._rows):
             for k in range(row_lines[rowIndex]):
                 for i,el in enumerate(rowEls):
                     s += "|  %*s  " % (col_widths[i],getline(el,k))
@@ -185,24 +185,17 @@ class ReportTable(object):
 
         return s
 
-    def _checkpy(self):
-        if "py" not in self.formats:
-            raise KeyError("Must include 'py' format to access" + 
-                           "specific data within this object.")
 
     def __getitem__(self, key):
         """Indexes the first column rowdata"""
-        self._checkpy()
-        tblDict = self._raw_tables['py']
-        for row_data in tblDict['row data']:
+        for row_data,formatters in self._rows:
             if len(row_data) > 0 and row_data[0] == key:
                 return { key:val for key,val in \
-                             zip(tblDict['column names'],row_data) }
+                             zip(self._columnNames,row_data) }
         raise KeyError("%s not found as a first-column value" % key)
 
     def __len__(self):
-        self._checkpy()
-        return len(self._raw_tables['py']['row data'])
+        return len(self._rows)
 
     def __contains__(self, key):
         return key in self.keys()
@@ -212,28 +205,23 @@ class ReportTable(object):
         Return a list of the first element of each row, which can be
         used for indexing.
         """
-        self._checkpy()
-        tblDict = self._raw_tables['py']
-        return [ d[0] for d in tblDict['row data'] if len(d) > 0 ]
+        return [ d[0] for (d,f) in self._rows if len(d) > 0 ]
 
     def has_key(self, key):
         return key in self.keys()
 
     def row(self, key=None, index=None):
-        self._checkpy()
-        tblDict = self._raw_tables['py']
-
         if key is not None:
             if index is not None:
                 raise ValueError("Cannot specify *both* key and index")
-            for row_data in tblDict['row data']:
+            for row_data,formatters in self._rows:
                 if len(row_data) > 0 and row_data[0] == key:
                     return row_data
             raise KeyError("%s not found as a first-column value" % key)
         
         elif index is not None:
-            if 0 <= index < len(tblDict['row data']):
-                return tblDict['row data'][index]
+            if 0 <= index < len(self):
+                return self._rows[index][0]
             else:
                 raise ValueError("Index %d is out of bounds" % index)
 
@@ -242,20 +230,17 @@ class ReportTable(object):
 
 
     def col(self, key=None, index=None):
-        self._checkpy()
-        tblDict = self._raw_tables['py']
-
         if key is not None:
             if index is not None:
                 raise ValueError("Cannot specify *both* key and index")
-            if key in tblDict['column names']:
-                iCol = tblDict['column names'].index(key)
-                return [ d[iCol] for d in tblDict['row data'] ] #if len(d)>iCol
+            if key in self._columnNames:
+                iCol = self._columnNames.index(key)
+                return [ d[iCol] for (d,f) in self._rows ] #if len(d)>iCol
             raise KeyError("%s is not a column name." % key)
         
         elif index is not None:
-            if 0 <= index < len(tblDict['column names']):
-                return [ d[index] for d in tblDict['row data'] ] #if len(d)>iCol
+            if 0 <= index < len(self._columnNames):
+                return [ d[index] for (d,f) in self._rows ] #if len(d)>iCol
             else:
                 raise ValueError("Index %d is out of bounds" % index)
 
@@ -265,13 +250,11 @@ class ReportTable(object):
 
     @property
     def num_rows(self):
-        self._checkpy()
-        return len(self._raw_tables['py']['row data'])
+        return len(self._rows)
     
     @property
     def num_cols(self):
-        self._checkpy()
-        return len(self._raw_tables['py']['column names'])
+        return len(self._columnNames)
 
     @property
     def row_names(self):
@@ -279,189 +262,6 @@ class ReportTable(object):
 
     @property
     def col_names(self):
-        self._checkpy()
-        return self._raw_tables['py']['column names'][:]
-
-    def render(self, fmt):
-        if fmt in self._raw_tables:
-            return self._raw_tables[fmt]
-        raise ValueError("Unrecognized format %s.  Valid formats are %s" \
-                             % (fmt, self.formats) )
-
+        return self._columnNames
         
     
-
-
-
-
-
-#OLD: SCRATCH -- TODO: REMOVE
-
-#def create_table(formats, tables, colHeadings, formatters, tableclass, longtable, customHeader=None):
-#    """ Create a new table for each specified format in the tables dictionary """
-#
-#    if "latex" in formats:
-#
-#        table = "longtable" if longtable else "tabular"
-#        if customHeader is not None and "latex" in customHeader:
-#            latex = customHeader['latex']
-#        else:
-#            colHeadings_formatted = _formatList(colHeadings, formatters, "latex")
-#            latex  = "\\begin{%s}[l]{%s}\n\hline\n" % (table, "|c" * len(colHeadings) + "|")
-#            latex += "%s \\\\ \hline\n" % (" & ".join(colHeadings_formatted))
-#        
-#        if "latex" not in tables: tables['latex'] = ""
-#        tables['latex'] += latex
-#
-#
-#    if "html" in formats:
-#
-#        if customHeader is not None and "html" in customHeader:
-#            html = customHeader['html']
-#        else:
-#            colHeadings_formatted = _formatList(colHeadings, formatters, "html")
-#            html  = "<table class=%s><thead>" % tableclass
-#            html += "<tr><th> %s </th></tr>" % (" </th><th> ".join(colHeadings_formatted))
-#            html += "</thead><tbody>"
-#        
-#        if "html" not in tables: tables['html'] = ""
-#        tables['html'] += html
-#
-#
-#    if "py" in formats:
-#
-#        if customHeader is not None and "py" in customHeader:
-#            raise ValueError("custom headers not supported for python format")
-#        colHeadings_formatted = _formatList(colHeadings, formatters, "py")
-#
-#        if "py" not in tables: tables['py'] = []
-#        tableDict = { 'column names': colHeadings_formatted }
-#        tables['py'].append( tableDict )
-#
-#    if "ppt" in formats:
-#
-#        if customHeader is not None and "ppt" in customHeader:
-#            raise ValueError("custom headers not supported for powerpoint format")
-#        colHeadings_formatted = _formatList(colHeadings, formatters, "ppt")
-#
-#        if "ppt" not in tables: tables['ppt'] = []
-#        tableDict = { 'column names': colHeadings_formatted }
-#        tables['ppt'].append( tableDict )
-#
-#
-#
-#def create_table_preformatted(formats, tables, colHeadings, tableclass, longtable):
-#    """ Create a new table for each specified format in the tables dictionary
-#        colHeadings is assumed to be a dictionary with pre-formatted column
-#        heading appropriate for each format
-#    """
-#
-#    if "latex" in formats:
-#
-#        table = "longtable" if longtable else "tabular"
-#        latex  = "\\begin{%s}[l]{%s}\n\hline\n" % (table, "|c" * len(colHeadings['latex']) + "|")
-#        latex += "%s \\\\ \hline\n" % (" & ".join(colHeadings['latex']))
-#        
-#        if "latex" not in tables: tables['latex'] = ""
-#        tables['latex'] += latex
-#
-#    if "html" in formats:
-#        
-#        html  = "<table class=%s><thead>" % tableclass
-#        html += "<tr><th> %s </th></tr>" % (" </th><th> ".join(colHeadings['html']))
-#        html += "</thead><tbody>"
-#        
-#        if "html" not in tables: tables['html'] = ""
-#        tables['html'] += html
-#
-#    if "py" in formats:
-#
-#        if "py" not in tables: tables['py'] = []
-#        tableDict = { 'column names': colHeadings['py'] }
-#        tables['py'].append( tableDict )
-#
-#    if "ppt" in formats:
-#
-#        if "ppt" not in tables: tables['ppt'] = []
-#        tableDict = { 'column names': colHeadings['ppt'] }
-#        tables['ppt'].append( tableDict )
-#
-#
-#def add_table_row(formats, tables, rowData, formatters):
-#    """ Add a row to each table in tables dictionary """
-#
-#    if "latex" in formats:
-#        assert("latex" in tables)
-#        formatted_rowData = _formatList(rowData, formatters, "latex")
-#        if len(formatted_rowData) > 0:
-#            tables['latex'] += " & ".join(formatted_rowData) + " \\\\ \hline\n"
-#
-#    if "html" in formats:
-#        assert("html" in tables)
-#        formatted_rowData = _formatList(rowData, formatters, "html")
-#        if len(formatted_rowData) > 0:
-#            tables['html'] += "<tr><td>" + "</td><td>".join(formatted_rowData) + "</td></tr>\n"
-#
-#
-#    if "py" in formats:
-#        assert("py" in tables)
-#        formatted_rowData = _formatList(rowData, formatters, "py")
-#        if len(formatted_rowData) > 0:
-#            curTableDict = tables["py"][-1] #last table dict is "current" one
-#            if "row data" not in curTableDict: curTableDict['row data'] = []
-#            curTableDict['row data'].append( formatted_rowData )
-#
-#    if "ppt" in formats:
-#        assert("ppt" in tables)
-#        formatted_rowData = _formatList(rowData, formatters, "ppt")
-#        if len(formatted_rowData) > 0:
-#            curTableDict = tables["ppt"][-1] #last table dict is "current" one
-#            if "row data" not in curTableDict: curTableDict['row data'] = []
-#            curTableDict['row data'].append( formatted_rowData )
-#
-#
-#
-#def finish_table(formats, tables, longtable):
-#    """ Finish (end) each table in tables dictionary """
-#
-#    if "latex" in formats:
-#        assert("latex" in tables)
-#        table = "longtable" if longtable else "tabular"
-#        tables['latex'] += "\end{%s}\n" % table        
-#
-#    if "html" in formats:
-#        assert("html" in tables)
-#        tables['html'] += "</tbody></table>"
-#
-#    if "py" in formats:
-#        assert("py" in tables)
-#        #pass #nothing to do to mark table dict as finished
-#
-#    if "ppt" in formats:
-#        assert("ppt" in tables)
-#        #pass
-
-
-#        curTableDict = tables["ppt"][-1] #last table dict is "current" one
-#        tables["ppt"][-1] = _pu.PPTTable(curTableDict) # convert dict to a ppt table object for later rendering
-
-
-#def add_inter_table_space(formats, tables):
-#    """ Add some space (if appropriate) to each table in tables dictionary.
-#        Should only be used after calling finish_table """
-#
-#    if "latex" in formats:
-#        assert("latex" in tables)
-#        tables['latex'] += "\n\n\\vspace{2em}\n\n"
-#
-#    if "html" in formats:
-#        assert("html" in tables)
-#        tables['html'] += "<br/>"
-#
-#    if "py" in formats:
-#        assert("py" in tables)
-#        pass #adding space N/A for python format
-#
-#    if "ppt" in formats:
-#        assert("ppt" in tables)
-#        pass #adding space N/A for powerpoint format

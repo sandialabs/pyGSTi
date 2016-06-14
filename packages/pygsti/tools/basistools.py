@@ -172,7 +172,7 @@ def _processBlockDims(dimOrBlockDims):
 #    #return dmiToVi, dmDim, dim  #Note dim == len(dmiToVi)
 #    return dmDim, dim
 
-def basis_longname(basis, dim=None):
+def basis_longname(basis, dimOrBlockDims=None):
     """
     Get the "long name" for a particular basis,
     which is typically used in reports, etc.
@@ -184,11 +184,15 @@ def basis_longname(basis, dim=None):
         options are Matrix-unit (std), Gell-Mann (gm) and
         Pauli-product (pp).
 
-    dim : int, optional
-        Dimension of gates, to aid in creating a long-name.
-        For example, a basis of the 4-dimensional Gell-Mann
-        matrices is the same as the Pauli matrices, and thus
-        the long name is just "Pauli" in this case.
+    dimOrBlockDims : int or list, optional
+        Dimension of basis matrices, to aid in creating a
+        long-name.  For example, a basis of the 2-dimensional
+        Gell-Mann matrices is the same as the Pauli matrices,
+        and thus the long name is just "Pauli" in this case.
+        If a list of integers, then gives the dimensions of 
+        the terms in a direct-sum decomposition of the density
+        matrix space acted on by the basis.
+        .
 
     Returns
     -------
@@ -196,12 +200,110 @@ def basis_longname(basis, dim=None):
     """
     if basis == "std": return "Matrix-unit"
     elif basis == "gm":
-        if dim == 4: return "Pauli"
+        if dimOrBlockDims in (2,[2],(2,)): return "Pauli"
         else: return "Gell-Mann"
     elif basis == "pp":
-        if dim == 4: return "Pauli"
+        if dimOrBlockDims in (2,[2],(2,)): return "Pauli"
         else: return "Pauli-prod"
     else: return "?Unknown?"
+
+
+def basis_element_labels(basis, dimOrBlockDims):
+    """
+    Returns a list of short labels corresponding to to the
+    elements of the described basis.  These labels are 
+    typically used to label the rows/columns of a box-plot
+    of a matrix in the basis.
+    
+    Parameters
+    ----------
+    basis : {'std', 'gm','pp'}
+        Which basis the gateset is represented in.  Allowed
+        options are Matrix-unit (std), Gell-Mann (gm) and
+        Pauli-product (pp).  If the basis is not known, then
+        an empty list is returned.
+
+    dimOrBlockDims : int or list
+        Dimension of basis matrices.  If a list of integers,
+        then gives the dimensions of the terms in a 
+        direct-sum decomposition of the density
+        matrix space acted on by the basis.
+
+
+    Returns
+    -------
+    list of strings
+        A list of length dim, whose elements label the basis
+        elements.
+    """
+
+    if dimOrBlockDims == 1: #Special case of single element basis, in which
+        return [ "" ]       # case we return a single label.
+    
+    #Note: the loops constructing the labels in this function
+    # must be in-sync with those for constructing the matrices
+    # in std_matrices, gm_matrices, and pp_matrices.
+    dmDim, gateDim, blockDims = _processBlockDims(dimOrBlockDims)
+
+    lblList = []; start = 0
+    if basis == "std":
+        for blockDim in blockDims:
+            for i in range(start,start+blockDim):
+                for j in range(start,start+blockDim):
+                    lblList.append( "(%d,%d)" % (i,j) )
+            start += blockDim
+
+    elif basis == "gm":
+        if dimOrBlockDims == 2: #Special case of Pauli's 
+            lblList = ["I","X","Y","Z"]
+
+        else:
+            for i,blockDim in enumerate(blockDims):
+                d = blockDim
+    
+                #labels for gm_matrices of dim "blockDim":
+                lblList.append("I^{(%d)}" % i) #identity on i-th block
+    
+                #X-like matrices, containing 1's on two off-diagonal elements (k,j) & (j,k)
+                lblList.extend( [ "X^{(%d)}_{%d,%d}" % (i,k,j) 
+                                  for k in range(d) for j in range(k+1,d) ] )
+    
+                #Y-like matrices, containing -1j & 1j on two off-diagonal elements (k,j) & (j,k)
+                lblList.extend( [ "Y^{(%d)}_{%d,%d}" % (i,k,j) 
+                                  for k in range(d) for j in range(k+1,d) ] )
+    
+                #Z-like matrices, diagonal mxs with 1's on diagonal until (k,k) element == 1-d,
+                # then diagonal elements beyond (k,k) are zero.  This matrix is then scaled 
+                # by sqrt( 2.0 / (d*(d-1)) ) to ensure proper normalization.
+                lblList.extend( [ "Z^{(%d)}_{%d}" % (i,k) for k in range(1,d) ] )
+
+
+    elif basis == "pp":
+        if dimOrBlockDims == 2: #Special case of Pauli's 
+            lblList = ["I","X","Y","Z"]
+
+        else:
+            #Some extra checking, since list-of-dims not supported for pp matrices yet.
+            def is_integer(x):
+                return bool( abs(x - round(x)) < 1e-6 )
+            if type(dimOrBlockDims) != int:
+                if type(dimOrBlockDims) in (list,tuple) and len(dimOrBlockDims) == 1:
+                    dimOrBlockDims = dimOrBlockDims[0]
+                else:
+                    raise ValueError("Dimension for Pauli tensor product matrices must be an *integer* power of 2")
+            nQubits = _np.log2(dimOrBlockDims)
+            if not is_integer(nQubits):
+                raise ValueError("Dimension for Pauli tensor product matrices must be an integer *power of 2*")
+            nQubits = int(round(nQubits))
+
+            basisLblList = [ ['I','X','Y','Z'] ]*nQubits
+            for sigmaLbls in _itertools.product(*basisLblList):
+                lblList.append( ''.join(sigmaLbls) )
+
+    else: 
+        lblList = [] #Unknown basis
+        
+    return lblList
 
 
 def std_matrices(dimOrBlockDims):
@@ -342,6 +444,42 @@ def contract_to_std_direct_sum_mx(mxInStdBasis, dimOrBlockDims):
                 mx[i,j] = mxInStdBasis[fi,fj]
         
         return mx
+
+def hamiltonian_to_lindbladian(hamiltonian):
+    """
+    Construct the Lindbladian corresponding to a given Hamiltonian.
+
+    Mathematically, for a d-dimensional Hamiltonian matrix H, this
+    routine constructs the d^2-dimension Lindbladian matrix L whose
+    action is given by L(rho) = -1j*[ H, rho ], where square brackets
+    denote the commutator and rho is a density matrix.  L is returned
+    as a superoperator matrix that acts on a vectorized density matrices.
+
+    Parameters
+    ----------
+    hamiltonian : ndarray
+      The hamiltonian matrix used to construct the Lindbladian.
+
+    Returns
+    -------
+    ndarray
+    """
+    
+    #TODO: there's probably a fast & slick way to so this computation
+    #  using vectorization identities
+    assert(len(hamiltonian.shape) == 2)
+    assert(hamiltonian.shape[0] == hamiltonian.shape[1])
+    d = hamiltonian.shape[0]
+    lindbladian = _np.empty( (d**2,d**2), dtype=hamiltonian.dtype )
+    
+    for i,rho0 in enumerate(std_matrices(d)): #rho0 == input density mx
+        rho1 = -1j*(_np.dot(hamiltonian,rho0) - _np.dot(rho0,hamiltonian))
+        lindbladian[:,i] = rho1.flatten()
+          # vectorize rho1 & set as linbladian column
+
+    return lindbladian
+            
+    
     
 
 
@@ -602,7 +740,7 @@ def gm_to_std(mxInGellMannBasis, dimOrBlockDims=None):
 def pp_matrices(dim):
     """ 
     Get the elements of the Pauil-product basis
-    spanning the space of dim x dim density matricies
+    spanning the space of dim x dim density matrices
     (matrix-dimension dim, space dimension dim^2).
     
     The returned matrices are given in the standard basis of the 
@@ -610,7 +748,10 @@ def pp_matrices(dim):
     the standard representation of the Pauli matrices, (i.e. where
     sigma_y == [[ 0, -i ], [i, 0]] ) normalized so that the 
     resulting basis is orthonormal under the trace inner product,
-    i.e. Tr( dot(Mi,Mj) ) == delta_ij.
+    i.e. Tr( dot(Mi,Mj) ) == delta_ij.  In the returned list,
+    the right-most factor of the kronecker product varies the
+    fastsest, so, for example, when dim == 4 the returned list
+    is [ II,IX,IY,IZ,XI,XX,XY,XY,YI,YX,YY,YZ,ZI,ZX,ZY,ZZ ].
 
     Parameters
     ----------
@@ -636,7 +777,10 @@ def pp_matrices(dim):
         return bool( abs(x - round(x)) < 1e-6 )
 
     if type(dim) != int:
-        raise ValueError("Dimension for Pauli tensor product matrices must be an *integer* power of 2")
+        if type(dim) in (list,tuple) and len(dim) == 1:
+            dim = dim[0]
+        else:
+            raise ValueError("Dimension for Pauli tensor product matrices must be an *integer* power of 2")
 
     nQubits = _np.log2(dim)
     if not is_integer(nQubits):
@@ -648,7 +792,7 @@ def pp_matrices(dim):
     matrices = []
     nQubits = int(round(nQubits))
     basisIndList = [ [0,1,2,3] ]*nQubits
-    for k,sigmaInds in enumerate(_itertools.product(*basisIndList)): # each b == indices of tensor product basis element
+    for sigmaInds in _itertools.product(*basisIndList):
         M = _np.identity(1,'complex')
         for i in sigmaInds:
             M = _np.kron(M,sigmaVec[i])
@@ -939,6 +1083,34 @@ def unitary_to_pauligate_2q(U):
             op_mx[i,j] = _np.real(_mt.trace(_np.dot(sigmaVec_2Q[i],_np.dot(U,_np.dot(sigmaVec_2Q[j],Udag)))))
         # in clearer notation: op_mx[i,j] = trace( sigma[i] * U * sigma[j] * Udag )
     return op_mx
+
+
+def vec_to_stdmx(v, basis):
+    """
+    Convert a vector in the given basis to a matrix in the standard basis.
+
+    A convenience function for calling [pp,gm,std]vec_to_stdmx(v) based on
+    the value of basis.
+    
+
+    Parameters
+    ----------
+    v : numpy array
+        The vector
+
+    basis : {"std", "gm", "pp"}
+        The abbreviation for the basis used to interpret v ("gm" = Gell-Mann,
+        "pp" = Pauli-product, "std" = matrix unit, or standard).
+
+    Returns
+    -------
+    numpy array
+    """
+    if basis == "pp":   return ppvec_to_stdmx(v)
+    elif basis == "gm": return gmvec_to_stdmx(v)
+    elif basis == "std": return stdvec_to_stdmx(v)
+    else: raise ValueError("Invalid basis specifier: %s" % basis)
+
 
 
 def ppvec_to_stdmx(v):

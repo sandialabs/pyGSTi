@@ -1,0 +1,6 @@
+pygsti.report.MidPointNorm.__init__
+===================================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: MidPointNorm.__init__

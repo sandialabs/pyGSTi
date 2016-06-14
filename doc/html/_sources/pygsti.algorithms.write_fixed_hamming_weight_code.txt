@@ -1,0 +1,6 @@
+pygsti.algorithms.write_fixed_hamming_weight_code
+=================================================
+
+.. currentmodule:: pygsti.algorithms
+
+.. autofunction:: write_fixed_hamming_weight_code

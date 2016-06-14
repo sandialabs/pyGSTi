@@ -118,7 +118,23 @@ class TutorialsMethods(TutorialsTestCase):
         self.runTutorial_ipython("08 Fiducial Reduction.ipynb")
 
     def test_tutorial_09(self):
-        self.runTutorial_ipython("09 Boostrapped Error Bars.ipynb")
+        self.runTutorial_ipython("09 Bootstrapped Error Bars.ipynb")
+
+    def test_tutorial_10(self):
+        self.runTutorial_ipython("10 Fiducial Selection - 1 qubit (X, Y).ipynb")
+
+    def test_tutorial_11(self):
+        self.runTutorial_ipython("11 Fiducial Selection - 2 qubits (IX, IY, XI, XY, Entangling).ipynb")
+
+    def test_tutorial_12(self):
+        self.runTutorial_ipython("12 Germ Selection.ipynb")
+
+    def test_tutorial_13(self):
+        self.runTutorial_ipython("13 GST on 2 qubits.ipynb")
+
+    def test_tutorial_14(self):
+        self.runTutorial_ipython("14 GST on 2 qubits - custom 2Q gate.ipynb")
+
 
       
 if __name__ == "__main__":

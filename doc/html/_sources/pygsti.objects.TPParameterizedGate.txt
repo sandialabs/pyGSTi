@@ -1,0 +1,34 @@
+pygsti.objects.TPParameterizedGate
+==================================
+
+.. currentmodule:: pygsti.objects
+
+.. autoclass:: TPParameterizedGate
+
+   
+   .. automethod:: __init__
+       :noindex:
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree:
+   
+      ~TPParameterizedGate.__init__
+      ~TPParameterizedGate.compose
+      ~TPParameterizedGate.convert_to_matrix
+      ~TPParameterizedGate.copy
+      ~TPParameterizedGate.deriv_wrt_params
+      ~TPParameterizedGate.from_vector
+      ~TPParameterizedGate.get_dimension
+      ~TPParameterizedGate.num_params
+      ~TPParameterizedGate.set_matrix
+      ~TPParameterizedGate.to_vector
+      ~TPParameterizedGate.transform
+   
+   
+
+   
+   
+   

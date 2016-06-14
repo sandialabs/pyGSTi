@@ -1,0 +1,6 @@
+pygsti.report.get_gateset_relative_eigenval_table
+=================================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: get_gateset_relative_eigenval_table

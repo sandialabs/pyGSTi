@@ -12,6 +12,24 @@ pygsti.drivers
 
    
       do_long_sequence_gst
+      gateset_decomp_angle
+      gateset_decomp_decay_diag
+      gateset_decomp_decay_offdiag
+      gateset_diamonddist
+      gateset_jtracedist
+      gateset_process_fidelity
+      gauge_optimize_gs_list
+      gs_mean
+      gs_mean1
+      gs_stdev
+      gs_stdev1
+      make_bootstrap_dataset
+      make_bootstrap_gatesets
+      spamrameter
+      to_mean_gateset
+      to_rms_gateset
+      to_std_gateset
+      to_vector
    
    
 

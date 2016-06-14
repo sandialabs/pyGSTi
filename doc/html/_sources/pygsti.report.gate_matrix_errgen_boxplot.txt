@@ -1,0 +1,6 @@
+pygsti.report.gate_matrix_errgen_boxplot
+========================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: gate_matrix_errgen_boxplot

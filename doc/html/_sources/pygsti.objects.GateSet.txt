@@ -16,7 +16,6 @@ pygsti.objects.GateSet
       :toctree:
    
       ~GateSet.__init__
-      ~GateSet.add_spam_label
       ~GateSet.bulk_dpr
       ~GateSet.bulk_dprobs
       ~GateSet.bulk_dproduct
@@ -26,11 +25,11 @@ pygsti.objects.GateSet
       ~GateSet.bulk_fill_probs
       ~GateSet.bulk_hpr
       ~GateSet.bulk_hprobs
+      ~GateSet.bulk_hprobs_by_column
       ~GateSet.bulk_hproduct
       ~GateSet.bulk_pr
       ~GateSet.bulk_probs
       ~GateSet.bulk_product
-      ~GateSet.clear
       ~GateSet.copy
       ~GateSet.decrease_dimension
       ~GateSet.depolarize
@@ -41,66 +40,56 @@ pygsti.objects.GateSet
       ~GateSet.dproduct
       ~GateSet.frobeniusdist
       ~GateSet.from_vector
-      ~GateSet.fromkeys
-      ~GateSet.get
+      ~GateSet.get_basis_dimension
+      ~GateSet.get_basis_name
       ~GateSet.get_dimension
-      ~GateSet.get_evec
-      ~GateSet.get_evec_indices
-      ~GateSet.get_evecs
-      ~GateSet.get_gate
-      ~GateSet.get_identity_vec
+      ~GateSet.get_effect_labels
+      ~GateSet.get_effects
       ~GateSet.get_nongauge_projector
-      ~GateSet.get_nongauge_projector_ex
-      ~GateSet.get_rhovec
-      ~GateSet.get_rhovec_indices
-      ~GateSet.get_rhovecs
-      ~GateSet.get_spam_label_dict
+      ~GateSet.get_prep_labels
+      ~GateSet.get_preps
+      ~GateSet.get_reverse_spam_defs
       ~GateSet.get_spam_labels
+      ~GateSet.get_spamgate
       ~GateSet.get_vector_offsets
-      ~GateSet.has_key
       ~GateSet.hpr
       ~GateSet.hprobs
       ~GateSet.hproduct
       ~GateSet.increase_dimension
-      ~GateSet.items
-      ~GateSet.iterall
-      ~GateSet.iteritems
-      ~GateSet.iterkeys
-      ~GateSet.itervalues
+      ~GateSet.iter_effects
+      ~GateSet.iter_gates
+      ~GateSet.iter_preps
       ~GateSet.jtracedist
-      ~GateSet.keys
       ~GateSet.kick
-      ~GateSet.log
-      ~GateSet.make_spams
+      ~GateSet.num_effects
       ~GateSet.num_elements
-      ~GateSet.num_evecs
       ~GateSet.num_gauge_params
       ~GateSet.num_nongauge_params
       ~GateSet.num_params
-      ~GateSet.num_rhovecs
-      ~GateSet.pop
-      ~GateSet.popitem
+      ~GateSet.num_preps
       ~GateSet.pr
       ~GateSet.print_info
       ~GateSet.probs
       ~GateSet.product
       ~GateSet.randomize_with_unitary
+      ~GateSet.reset_basis
       ~GateSet.rotate
-      ~GateSet.set_evec
-      ~GateSet.set_gate
-      ~GateSet.set_identity_vec
-      ~GateSet.set_rhovec
-      ~GateSet.setdefault
+      ~GateSet.set_all_parameterizations
+      ~GateSet.set_basis
       ~GateSet.to_vector
+      ~GateSet.tpdist
       ~GateSet.transform
-      ~GateSet.update
-      ~GateSet.values
-      ~GateSet.viewitems
-      ~GateSet.viewkeys
-      ~GateSet.viewvalues
    
    
 
    
+   
+   .. rubric:: Attributes
+
+   .. autosummary::
+      :toctree:
+   
+      ~GateSet.dim
+      ~GateSet.povm_identity
    
    

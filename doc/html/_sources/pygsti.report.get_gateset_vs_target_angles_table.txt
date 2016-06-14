@@ -1,0 +1,6 @@
+pygsti.report.get_gateset_vs_target_angles_table
+================================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: get_gateset_vs_target_angles_table

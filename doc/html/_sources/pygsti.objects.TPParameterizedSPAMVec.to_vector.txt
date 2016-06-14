@@ -1,0 +1,6 @@
+pygsti.objects.TPParameterizedSPAMVec.to_vector
+===============================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: TPParameterizedSPAMVec.to_vector

@@ -6,8 +6,8 @@ Overview:
 --------
 This is the root directory of the pyGSTi software, which is a Python
  implementation of Gate Set Tomography.  pyGSTi free software, licensed
- under the GNU public license (GPL).  Copyright and license information
- can be found in license.txt, and the GPL itself in COPYING.
+ under the GNU General Public License (GPL).  Copyright and license information
+ can be found in ``license.txt``, and the GPL itself in ``COPYING``.
 
 
 Getting Started:
@@ -22,6 +22,12 @@ tell your Python distribution where pyGSTi lives, which can be done in one
 
   This adds the current pyGSTi path to Python's list of search paths, and
   doesn't required administrative access (but only applies to the current user).
+  Typically you want to do this if you've cloned the pyGSTi GitHub repository
+  and want any changes you make to your local file to have effect when you
+  ``import pygsti`` from Python.  You'd also want to use this option if you'd
+  like long-term access the tutorial notebook files in the ipython_notebooks 
+  directory under this one, since this means you'll be keeping this directory
+  around anyway.
 
 2) run: ``python setup.py install``
 
@@ -29,13 +35,17 @@ tell your Python distribution where pyGSTi lives, which can be done in one
   search directories.  This typically requires administrative privileges, and
   is the way most Python packages are installed.  Installing this way has the
   advantage that it makes the package available to all users and then allows 
-  you to move or delete the directory you're installing from.
+  you to move or delete the directory you're installing from.  If you don't
+  use this method **you must not delete this directory** so long as you 
+  want to use pyGSTi.
 
-  The reason why you may **not** want to use this installation method is that 
-  pyGSTi comes with (iPython notebook) tutorials that you may want to access.
-  And if you're keeping the tutorial files somewhere in your local user
-  directories, you may want to just place the entire pyGSTi directory there
-  use method 1) above.
+  Reasons you may **not** want to use this installation method are 
+  
+  - pyGSTi comes with (iPython notebook) tutorials that you may want to
+    access for weeks and years to come (i.e. you plan to *keep* this
+    pyGSTi directory around for a while).
+  - you've cloned the pyGSTi repository and want this local set of files
+    to be the one Python uses when you ``import pygsti``.
 
 After you've installed pyGSTi, you should be able to import the 
 `pygsti` Python package.  The next thing to do is take a look at
@@ -92,7 +102,7 @@ install_locally.py :  A Python script that sets up the software to run
                   not copy any files to any system directories, making it
 		      a good option for a user without administrative access.
 
-COPYING  :  A text version of the GNU Public License.
+COPYING  :  A text version of the GNU General Public License.
 
 license.txt  :  A text file giving copyright and licensing information
 	        about pyGSTi.

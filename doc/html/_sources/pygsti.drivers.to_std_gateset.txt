@@ -1,0 +1,6 @@
+pygsti.drivers.to_std_gateset
+=============================
+
+.. currentmodule:: pygsti.drivers
+
+.. autofunction:: to_std_gateset

@@ -107,6 +107,21 @@ def frobeniusdist2(A, B):
     return _mt.frobeniusnorm2(A-B)
 
 
+def tracedist(A, B):
+    """
+    Compute the trace distance between matrices A and B,
+    given by:
+
+      D = 0.5 * Tr( sqrt{ (A-B)^2 } ) 
+      
+    Parameters
+    ----------
+    A, B : numpy array
+        The matrices to compute the distance between.
+    """
+    evals = _np.linalg.eigvals( A-B )
+    return 0.5 * sum( [abs(ev) for ev in evals] )
+
 
 
 def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
@@ -335,8 +350,7 @@ def jtracedist(A, B, mxBasis="gm"): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)
     """
     JA = _jam.jamiolkowski_iso(A, gateMxBasis=mxBasis)
     JB = _jam.jamiolkowski_iso(B, gateMxBasis=mxBasis)
-    evals = _np.linalg.eigvals( JA-JB )
-    return 0.5 * sum( [abs(ev) for ev in evals] )
+    return tracedist(JA,JB)
 
 
 def process_fidelity(A, B, mxBasis="gm"):
@@ -617,3 +631,31 @@ def unitary_to_process_mx(U):
     # U -> kron(U,Uc) since U rho U_dag -> kron(U,Uc)
     #  since AXB --row-vectorize--> kron(A,B.T)*vec(X)
     return _np.kron(U,_np.conjugate(U))
+
+
+
+def error_generator(gate, target_gate):
+    """
+    Construct the error generator from a gate and its target.
+
+    Computes the value of the error generator given by
+    errgen = log( inv(target_gate) * gate ), so that 
+    gate = target_gate * exp(errgen).
+
+    Parameters
+    ----------
+    gate : ndarray
+      The gate matrix
+
+    target_gate : ndarray
+      The target gate matrix
+
+    Returns
+    -------
+    errgen : ndarray
+      The error generator.
+    """
+    target_gate_inv = _spl.inv(target_gate)
+    error_gen = _np.real_if_close(_spl.logm(_np.dot(target_gate_inv,gate)))
+    return error_gen
+

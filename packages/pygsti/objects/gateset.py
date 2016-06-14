@@ -53,9 +53,9 @@ class GateSet(object):
             Specifies the default gate and SPAM vector parameterization type.
             "full" : by default gates and vectors are fully parameterized.
             "TP" : by default the first row of gates and the first element of
-             vectors is not parameterized and fixed so gate set is trace-
-             preserving.
-             "static" : by default gates and vectors are not parameterized.
+            vectors is not parameterized and fixed so gate set is trace-
+            preserving.
+            "static" : by default gates and vectors are not parameterized.
 
         prep_prefix, effect_prefix, gate_prefix : string, optional
             Key prefixes designating state preparations, POVM effects,
@@ -79,6 +79,12 @@ class GateSet(object):
 
         #Gate dimension of this GateSet (None => unset, to be determined)
         self._dim = None
+
+        #Name and dimension (or list of dims) of the *basis*
+        # that the gates and SPAM vectors are expressed in.  This
+        # is for interpretational purposes only, and is reset often
+        # (for instance, when reading GateSet params from a vector)
+        self._basisNameAndDim = ("unknown",None) 
 
         #SPAM vectors
         self.preps = _ld.OrderedSPAMVecDict(self,default_param,
@@ -132,6 +138,7 @@ class GateSet(object):
         """
         return self._dim
 
+
     def get_dimension(self):
         """ 
         Get the dimension of the gateset, which equals d when the gate
@@ -144,6 +151,76 @@ class GateSet(object):
             gateset dimension
         """
         return self._dim
+
+
+    def get_basis_name(self):
+        """ 
+        Returns the name abbreviation of the basis, essentially identifying
+        its type.  The gate matrices and SPAM vectors within the GateSet 
+        are to be interpreted within this basis.  Note that the dimension of
+        the (matrix) elements of the basis can be obtained by 
+        get_basis_dimension(...).  The basis abbreviations use by pyGSTi are
+        "gm" (a Gell-Mann basis), "pp" (a Pauli-product basis), and "std"
+        (a matrix unit, or "standard" basis).  If the basis is unknown, the
+        string "unknown" is returned.
+
+        Returns
+        -------
+        str
+            basis abbreviation (or "unknown")
+        """
+        return self._basisNameAndDim[0]
+
+
+    def get_basis_dimension(self):
+        """ 
+        Get the dimension of the basis matrices, or more generally,
+        the structure of the density matrix space as a list of integer
+        dimensions.  In the latter case, the dimension of each basis
+        element (a matrix) is d x d, where d equals the sum of the 
+        returned list of integers. (In the former case, d equals the
+        single returned integers.)  This density-matrix-space 
+        structure can be used, along with the basis name (cf. 
+        get_basis_name), to construct that basis of matrices used
+        to express the gate matrices and SPAM vectors of this
+        GateSet.
+
+        Returns
+        -------
+        int or list
+            density-matrix dimension or a list of integers
+            specifying the dimension of each term in a
+            direct sum decomposition of the density matrix
+            space.
+        """
+        return self._basisNameAndDim[1]
+
+
+    def set_basis(self, basisName, basisDimension):
+        """ 
+        Sets the basis name and dimension.  See
+        get_basis_name and gate_basis_dimension for
+        details on these quantities.
+
+        Parameters
+        ----------
+        basisName : str
+           The name abbreviation for the basis. Typically in {"pp","gm","std"}
+
+        basisDimension : int or list
+           The dimension of the density matrix space this basis spans, or a
+           list specifying the dimensions of terms in a direct-sum 
+           decomposition of the density matrix space.
+        """
+        self._basisNameAndDim = (basisName, basisDimension)
+
+
+    def reset_basis(self):
+        """
+        "Forgets" the basis name and dimension by setting
+        these quantities to "unkown" and None, respectively.
+        """
+        self._basisNameAndDim = ("unknown", None)
 
 
     def get_prep_labels(self):
@@ -491,6 +568,10 @@ class GateSet(object):
         for obj in objs_to_vectorize:
             np = obj.num_params()
             obj.from_vector( v[off:off+np] ); off += np
+
+        self.reset_basis() 
+          # assume the vector we're loading isn't producing gates & vectors in
+          # a known basis.
 
 
     def get_vector_offsets(self):
@@ -1133,7 +1214,8 @@ class GateSet(object):
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.
+           across multiple processors.  This is done over gate strings when a
+           *split* evalTree is given, otherwise no parallelization is performed.
 
               
         Returns
@@ -1153,7 +1235,7 @@ class GateSet(object):
 
 
     def bulk_dproduct(self, evalTree, flat=False, bReturnProds=False,
-                      bScale=False, memLimit=None, comm=None):
+                      bScale=False, comm=None):
         """
         Compute the derivative of a many gate strings at once.
 
@@ -1172,13 +1254,12 @@ class GateSet(object):
         bScale : bool, optional
           When True, return a scaling factor (see below).
 
-        memLimit : int, optional
-          A rough memory limit in bytes which restricts the amount of
-          intermediate values that are computed and stored.
-
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.
+           across multiple processors.  Distribution is first done over the
+           set of parameters being differentiated with respect to.  If there are
+           more processors than gateset parameters, distribution over a split
+           evalTree (if given) is possible.
         
            
         Returns
@@ -1214,13 +1295,13 @@ class GateSet(object):
           the derivatives and/or products for the i-th gate string.
         """
         return self._calc().bulk_dproduct(evalTree, flat, bReturnProds,
-                                          bScale, memLimit, comm)
+                                          bScale, comm)
 
 
     def bulk_hproduct(self, evalTree, flat=False, bReturnDProdsAndProds=False,
                       bScale=False, comm=None):
         """
-        Return the Hessian of a many gate strings at once.
+        Return the Hessian of many gate string products at once.
 
         Parameters
         ----------
@@ -1240,7 +1321,11 @@ class GateSet(object):
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.
+           across multiple processors.  Distribution is first done over the
+           set of parameters being differentiated with respect to when the
+           *second* derivative is taken.  If there are more processors than
+           gateset parameters, distribution over a split evalTree (if given)
+           is possible.
 
            
         Returns
@@ -1327,7 +1412,8 @@ class GateSet(object):
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.
+           across multiple processors.  Distribution is performed over
+           subtrees of evalTree (if it is split).
 
            
         Returns
@@ -1340,8 +1426,8 @@ class GateSet(object):
 
 
     def bulk_dpr(self, spamLabel, evalTree, 
-                 returnPr=False,clipTo=None,check=False,memLimit=None,
-                 comm=None):
+                 returnPr=False,clipTo=None,check=False,
+                 comm=None,wrtBlockSize=None):
 
         """
         Compute the derivatives of the probabilities generated by a each gate 
@@ -1370,13 +1456,19 @@ class GateSet(object):
           generating warnings when checks fail.  Used for testing, and runs
           much slower when True.
 
-        memLimit : int, optional
-          A rough memory limit in bytes which restricts the amount of
-          intermediate values that are computed and stored.
-
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.
+           across multiple processors.  Distribution is first performed over
+           subtrees of evalTree (if it is split), and then over blocks (subsets)
+           of the parameters being differentiated with respect to (see 
+           wrtBlockSize).
+
+        wrtBlockSize : int, optional
+          The maximum number of derivative columns to compute *products*
+          for simultaneously.  None means compute all columns at once.
+          The minimum of wrtBlockSize and the size that makes maximal
+          use of available processors is used as the final block size. Use
+          this argument to reduce amount of intermediate memory required.
 
 
         Returns
@@ -1395,16 +1487,16 @@ class GateSet(object):
             the probabilities of each gate string.
         """
         return self._calc().bulk_dpr(spamLabel, evalTree, returnPr,clipTo,
-                                     check, memLimit, comm)
+                                     check, comm, None, wrtBlockSize)
 
 
     def bulk_hpr(self, spamLabel, evalTree, 
                  returnPr=False,returnDeriv=False,
                  clipTo=None,check=False,comm=None,
-                 wrtFilter=None):
+                 wrtBlockSize=None):
 
         """
-        Compute the derivatives of the probabilities generated by a each gate 
+        Compute the 2nd derivatives of the probabilities generated by a each gate 
         sequence given by evalTree, where initialization & measurement 
         operations are always the same and are together specified by spamLabel.
 
@@ -1436,13 +1528,12 @@ class GateSet(object):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.
 
-        wrtFilter : list of ints, optional
-          If not None, a list of integers specifying which gate parameters
-          to include in the *2nd* derivative dimension.  Each element is an
-          index into an array of gate parameters ordered by concatenating each
-          gate's parameters (in the order specified by the gate set).  This
-          argument is used internally for distributing calculations across
-          multiple processors and to control memory usage.
+        wrtBlockSize : int, optional
+          The maximum number of *2nd* derivative columns to compute *products*
+          for simultaneously.  None means compute all columns at once.
+          The minimum of wrtBlockSize and the size that makes maximal
+          use of available processors is used as the final block size. Use
+          this argument to reduce amount of intermediate memory required.
 
 
         Returns
@@ -1466,7 +1557,7 @@ class GateSet(object):
             containing the probabilities for each gate string.
         """
         return self._calc().bulk_hpr(spamLabel, evalTree, returnPr,returnDeriv,
-                                    clipTo, check, comm, wrtFilter)
+                                    clipTo, check, comm, None, wrtBlockSize)
 
 
     def bulk_probs(self, evalTree, clipTo=None, check=False, comm=None):
@@ -1492,7 +1583,8 @@ class GateSet(object):
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.
+           across multiple processors.  Distribution is performed over
+           subtrees of evalTree (if it is split).
 
            
         Returns
@@ -1506,7 +1598,7 @@ class GateSet(object):
 
 
     def bulk_dprobs(self, evalTree, returnPr=False,clipTo=None,
-                    check=False,memLimit=None,comm=None):
+                    check=False,comm=None,wrtBlockSize=None):
 
         """
         Construct a dictionary containing the bulk-probability-
@@ -1532,28 +1624,34 @@ class GateSet(object):
           generating warnings when checks fail.  Used for testing, and runs
           much slower when True.
 
-        memLimit : int, optional
-          A rough memory limit in bytes which restricts the amount of
-          intermediate values that are computed and stored.
-
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.
+           across multiple processors.  Distribution is first performed over
+           subtrees of evalTree (if it is split), and then over blocks (subsets)
+           of the parameters being differentiated with respect to (see 
+           wrtBlockSize).
+
+        wrtBlockSize : int, optional
+          The maximum number of derivative columns to compute *products*
+          for simultaneously.  None means compute all columns at once.
+          The minimum of wrtBlockSize and the size that makes maximal
+          use of available processors is used as the final block size. Use
+          this argument to reduce amount of intermediate memory required.
 
 
         Returns
         -------
         dprobs : dictionary
             A dictionary such that 
-            ``dprobs[SL] = bulk_dpr(SL,evalTree,gates,G0,SPAM,SP0,returnPr,clipTo,check,memLimit)``
+            ``dprobs[SL] = bulk_dpr(SL,evalTree,gates,G0,SPAM,SP0,returnPr,clipTo,check)``
             for each spam label (string) SL.
         """
         return self._calc().bulk_dprobs(evalTree, returnPr,clipTo,
-                                        check, memLimit, comm)
+                                        check, comm, None, wrtBlockSize)
 
 
     def bulk_hprobs(self, evalTree, returnPr=False,returnDeriv=False,
-                    clipTo=None, check=False, comm=None):
+                    clipTo=None, check=False, comm=None, wrtBlockSize=None):
 
         """
         Construct a dictionary containing the bulk-probability-
@@ -1586,6 +1684,13 @@ class GateSet(object):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.
 
+        wrtBlockSize : int, optional
+          The maximum number of *2nd* derivative columns to compute *products*
+          for simultaneously.  None means compute all columns at once.
+          The minimum of wrtBlockSize and the size that makes maximal
+          use of available processors is used as the final block size. Use
+          this argument to reduce amount of intermediate memory required.
+
 
         Returns
         -------
@@ -1595,7 +1700,7 @@ class GateSet(object):
             for each spam label (string) SL.
         """
         return self._calc().bulk_hprobs(evalTree, returnPr, returnDeriv,
-                                        clipTo, check, comm)
+                                        clipTo, check, comm, None, wrtBlockSize)
 
 
     def bulk_fill_probs(self, mxToFill, spam_label_rows, 
@@ -1635,7 +1740,8 @@ class GateSet(object):
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.
+           across multiple processors.  Distribution is performed over
+           subtrees of evalTree (if it is split).
 
            
         Returns
@@ -1648,7 +1754,7 @@ class GateSet(object):
 
     def bulk_fill_dprobs(self, mxToFill, spam_label_rows,
                         evalTree, prMxToFill=None,clipTo=None,
-                        check=False,memLimit=None,comm=None):
+                        check=False,comm=None, wrtBlockSize=None):
 
         """
         Identical to bulk_dprobs(...) except results are 
@@ -1692,14 +1798,19 @@ class GateSet(object):
           generating warnings when checks fail.  Used for testing, and runs
           much slower when True.
 
-        memLimit : int, optional
-          A rough memory limit in bytes which restricts the amount of
-          intermediate values that are computed and stored.
-
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.
+           across multiple processors.  Distribution is first performed over
+           subtrees of evalTree (if it is split), and then over blocks (subsets)
+           of the parameters being differentiated with respect to (see 
+           wrtBlockSize).
 
+        wrtBlockSize : int, optional
+          The maximum number of derivative columns to compute *products*
+          for simultaneously.  None means compute all columns at once.
+          The minimum of wrtBlockSize and the size that makes maximal
+          use of available processors is used as the final block size. Use
+          this argument to reduce amount of intermediate memory required.
 
         Returns
         -------
@@ -1707,12 +1818,12 @@ class GateSet(object):
         """
         return self._calc().bulk_fill_dprobs(mxToFill, spam_label_rows,
                                              evalTree, prMxToFill, clipTo,
-                                             check, memLimit, comm)
+                                             check, comm, None, wrtBlockSize)
 
 
     def bulk_fill_hprobs(self, mxToFill, spam_label_rows,
                          evalTree=None, prMxToFill=None, derivMxToFill=None,
-                         clipTo=None, check=False, comm=None, wrtFilter=None):
+                         clipTo=None, check=False, comm=None, wrtBlockSize=None):
 
         """
         Identical to bulk_hprobs(...) except results are 
@@ -1764,16 +1875,17 @@ class GateSet(object):
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.
+           across multiple processors.  Distribution is first performed over
+           subtrees of evalTree (if it is split), and then over blocks (subsets)
+           of the parameters being second-differentiated with respect to (see 
+           wrtBlockSize).
 
-        wrtFilter : list of ints, optional
-          If not None, a list of integers specifying which gate parameters
-          to include in the *2nd* derivative dimension.  Each element is an
-          index into an array of gate parameters ordered by concatenating each
-          gate's parameters (in the order specified by the gate set).  This
-          argument is used internally for distributing calculations across
-          multiple processors and to control memory usage.
-
+        wrtBlockSize : int, optional
+          The maximum number of *2nd* derivative columns to compute *products*
+          for simultaneously.  None means compute all columns at once.
+          The minimum of wrtBlockSize and the size that makes maximal
+          use of available processors is used as the final block size. Use
+          this argument to reduce amount of intermediate memory required.
 
 
         Returns
@@ -1782,7 +1894,69 @@ class GateSet(object):
         """
         return self._calc().bulk_fill_hprobs(mxToFill, spam_label_rows,
                                      evalTree, prMxToFill, derivMxToFill,
-                                     clipTo, check, comm, wrtFilter)
+                                     clipTo, check, comm, None, wrtBlockSize)
+
+
+    def bulk_hprobs_by_column(self, spam_label_rows, evalTree,
+                              bReturnDProbs12=False,clipTo=None,
+                              check=False,comm=None, wrtFilter=None):
+        """
+        Constructs a generator that computes the 2nd derivatives of the
+        probabilities generated by a each gate sequence given by evalTree
+        column-by-column.
+
+        This routine can be useful when memory constraints make constructing
+        the entire Hessian at once impractical, and one is able to compute 
+        reduce results from a single column of the Hessian at a time.  For
+        example, the Hessian of a function of many gate sequence probabilities 
+        can often be computed column-by-column from the using the columns of
+        the gate sequences.
+
+
+        Parameters
+        ----------
+        spam_label_rows : dictionary
+          a dictionary with keys == spam labels and values which 
+          are integer row indices into mxToFill, specifying the
+          correspondence between rows of mxToFill and spam labels.
+
+        evalTree : EvalTree
+           given by a prior call to bulk_evaltree.  Specifies the gate strings
+           to compute the bulk operation on.  This tree *cannot* be split.
+
+        bReturnDProbs12 : boolean, optional
+           If true, the generator computes a 2-tuple: (hessian_col, d12_col),
+           where d12_col is a column of the matrix d12 defined by:
+           d12[iSpamLabel,iGateStr,p1,p2] = dP/d(p1)*dP/d(p2) where P is is
+           the probability generated by the sequence and spam label indexed
+           by iGateStr and iSpamLabel.  d12 has the same dimensions as the
+           Hessian, and turns out to be useful when computing the Hessian 
+           of functions of the probabilities.
+
+        comm : mpi4py.MPI.Comm, optional
+           When not None, an MPI communicator for distributing the computation
+           across multiple processors.  Distribution is performed as in 
+           bulk_product, bulk_dproduct, and bulk_hproduct.
+
+        wrtFilter : list of ints, optional
+          If not None, a list of integers specifying the indices of the
+          parameters to include in the *2nd* derivative dimension, i.e.,
+          which Hessian columns to compute.
+          
+
+        Returns
+        -------
+        column_generator
+          A generator which, when iterated, yields an array of 
+          shape K x S x M x 1 numpy array (a Hessian column), where K is the 
+          length of spam_label_rows, S is equal to the number of gate strings
+          (i.e. evalTree.num_final_strings()), and M is the number of gateset
+          parameters.  If bReturnDProbs12 == True, then two such arrays
+          are given (as a 2-tuple).
+        """
+        return self._calc().bulk_hprobs_by_column(
+            spam_label_rows, evalTree, bReturnDProbs12, comm, wrtFilter)
+        
 
 
     def frobeniusdist(self, otherGateSet, transformMx=None,
@@ -1878,6 +2052,27 @@ class GateSet(object):
         return self._calc().diamonddist(otherGateSet._calc(), transformMx)
 
 
+    def tpdist(self):
+        """
+        Compute the "distance" between this gateset and the space of 
+        trace-preserving (TP) maps, defined as the sqrt of the sum-of-squared
+        deviations among the first row of all gate matrices and the 
+        first element of all state preparations.
+        """
+        penalty = 0.0
+        for gateMx in self.gates.values():
+            penalty += abs(gateMx[0,0] - 1.0)**2
+            for k in range(1,gateMx.shape[1]):
+                penalty += abs(gateMx[0,k])**2
+
+        gate_dim = self.get_dimension()
+        firstEl = 1.0 / gate_dim**0.25
+        for rhoVec in self.preps.values():
+            penalty += abs(rhoVec[0,0] - firstEl)**2
+
+        return _np.sqrt(penalty)
+
+
     def copy(self):
         """ 
         Copy this gateset
@@ -1894,6 +2089,7 @@ class GateSet(object):
         newGateset.spamdefs = self.spamdefs.copy()
         newGateset.povm_identity = self.povm_identity.copy()
         newGateset._dim = self._dim
+        newGateset._basisNameAndDim = self._basisNameAndDim
         newGateset._remainderlabel = self._remainderlabel
         newGateset._identitylabel = self._identitylabel
         return newGateset
@@ -2239,6 +2435,7 @@ class GateSet(object):
                               self.gates._prefix, self._remainderlabel,
                               self._identitylabel)
         new_gateset._dim = newDimension
+        new_gateset.reset_basis() #FUTURE: maybe user can specify how increase is being done?
         new_gateset.spamdefs.update( self.spamdefs )
     
         addedDim = newDimension-curDim
@@ -2297,6 +2494,7 @@ class GateSet(object):
                               self.gates._prefix, self._remainderlabel,
                               self._identitylabel)
         new_gateset._dim = newDimension
+        new_gateset.reset_basis() #FUTURE: maybe user can specify how decrease is being done?
         new_gateset.spamdefs.update( self.spamdefs )
     
         #Decrease dimension of rhoVecs and EVecs by truncation

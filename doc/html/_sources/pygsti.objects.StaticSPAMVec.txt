@@ -1,0 +1,32 @@
+pygsti.objects.StaticSPAMVec
+============================
+
+.. currentmodule:: pygsti.objects
+
+.. autoclass:: StaticSPAMVec
+
+   
+   .. automethod:: __init__
+       :noindex:
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+      :toctree:
+   
+      ~StaticSPAMVec.__init__
+      ~StaticSPAMVec.convert_to_vector
+      ~StaticSPAMVec.copy
+      ~StaticSPAMVec.deriv_wrt_params
+      ~StaticSPAMVec.from_vector
+      ~StaticSPAMVec.get_dimension
+      ~StaticSPAMVec.num_params
+      ~StaticSPAMVec.set_vector
+      ~StaticSPAMVec.to_vector
+   
+   
+
+   
+   
+   

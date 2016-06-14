@@ -1,0 +1,6 @@
+pygsti.report.StdColormapFactory.get_norm
+=========================================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: StdColormapFactory.get_norm

@@ -1,0 +1,6 @@
+pygsti.objects.StaticSPAMVec.from_vector
+========================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: StaticSPAMVec.from_vector

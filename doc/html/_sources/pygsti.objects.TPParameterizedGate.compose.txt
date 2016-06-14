@@ -1,0 +1,6 @@
+pygsti.objects.TPParameterizedGate.compose
+==========================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: TPParameterizedGate.compose

@@ -349,16 +349,23 @@ class LinLogNorm(_matplotlib.colors.Normalize):
         if self.trans is None:
             self.trans = (self.vmax - self.vmin)/10 + self.vmin
         norm_trans = super(LinLogNorm, self).__call__(self.trans)
-        log10_norm_trans = _np.log10(norm_trans)
+        log10_norm_trans = _np.ma.log10(norm_trans)
         with _np.errstate(divide='ignore'):
             # Ignore the division-by-zero error that occurs when 0 is passed to
             # log10 (the resulting NaN is filtered out by the where and is
             # harmless).
-            return_value = _np.where(_np.greater(norm_trans, lin_norm_value),
-                                     lin_norm_value/(2*norm_trans),
-                                     (log10_norm_trans -
-                                      _np.log10(lin_norm_value)) /
-                                     (2*log10_norm_trans) + 0.5)
+
+            #deal with numpy bug in handling masked nan values (nan still gives
+            # "invalid value" warnings/errors even when masked)
+            if _np.ma.is_masked(lin_norm_value):
+                lin_norm_value = _np.ma.array(lin_norm_value.filled(1e100),
+                                              mask=_np.ma.getmask(lin_norm_value))
+            return_value = _np.ma.where(_np.ma.greater(norm_trans, lin_norm_value),
+                                        lin_norm_value/(2*norm_trans),
+                                        (log10_norm_trans -
+                                         _np.ma.log10(lin_norm_value)) /
+                                        (2*log10_norm_trans) + 0.5)
+
         if return_value.shape==():
             return return_value.item()
         else:
@@ -447,7 +454,7 @@ def splice_cmaps(cmaps, name=None, splice_points=None):
 
     name : string
         The name for the colormap. If no name is given, the name
-        'spliced_cmap1name_cmap2name_...' is assigned to the colormap.
+        "spliced_cmap1name_cmap2name_..." is assigned to the colormap.
 
     splice_points : ordered list of floats in (0, 1), optional
         The transition points when one colormap should end and the next should
@@ -579,16 +586,18 @@ def get_transition(N, eps=.1):
     Computes the transition point for the LinLogNorm class.
 
     Parameters
-    -------------
+    ----------
+    N : int
+      number of chi2_1 random variables
 
-    N: number of chi2_1 random variables, integer
-    eps: The quantile, float
+    eps : float
+      The quantile
 
     Returns
-    ---------
-
-    trans: An approximate 1-eps quantile for the maximum of N chi2_1 random
-    variables
+    -------
+    trans : float
+       An approximate 1-eps quantile for the maximum of N chi2_1 random
+       variables.
     '''
 
     trans = _np.ceil(_chi2.ppf(1 - eps / N, 1))
@@ -650,6 +659,48 @@ class StdColormapFactory(object):
         cmap.set_bad('w',1)
 
         return cmap
+
+
+def _eformat(f, prec):
+    """ 
+    Formatting routine for writing compact representations of
+    numbers in plot boxes
+    """
+    if prec == 'compact' or prec == 'compacthp':
+        if f < 0: 
+            return "-" + _eformat(-f,prec)
+
+        if prec == 'compacthp':
+            if f < 0.005: #can't fit in 2 digits; would just be .00, so just print "0"
+                return "0"
+            if f < 1:
+                z = "%.2f" % f # print first two decimal places
+                if z.startswith("0."): return z[1:]  # fails for '1.00'; then thunk down to next f<10 case
+            if f < 10:
+                return "%.1f" % f # print whole number and tenths
+
+        if f < 100: 
+            return "%.0f" % f # print nearest whole number if only 1 or 2 digits
+        
+        #if f >= 100, minimal scientific notation, such as "4e7", not "4e+07"
+        s = "%.0e" % f
+        try:
+            mantissa, exp = s.split('e')
+            exp = int(exp)
+            if exp >= 100: return "B" #if number is too big to print
+            if exp >= 10: return "*%d" % exp
+            return "%se%d" % (mantissa, exp)
+        except:
+            return str(s)[0:3]
+
+    elif type(prec) == int:
+        if prec >= 0:
+            return "%.*f" % (prec,f)
+        else: 
+            return "%.*g" % (-prec,f)
+    else:
+        return "%g" % f #fallback to general format
+
 
 def color_boxplot(plt_data, cmapFactory, title=None, xlabels=None, ylabels=None, xtics=None, ytics=None,
                  colorbar=True, fig=None, axes=None, size=None, prec=0, boxLabels=True,
@@ -762,48 +813,12 @@ def color_boxplot(plt_data, cmapFactory, title=None, xlabels=None, ylabels=None,
     if ylabel is not None:
         axes.set_ylabel( ylabel, fontsize=(ticSize+4) )
 
-    def eformat(f, prec):
-        if prec == 'compact' or prec == 'compacthp':
-            if f < 0: 
-                return "-" + eformat(-f,prec)
-
-            if prec == 'compacthp':
-                if f < 0.005: #can't fit in 2 digits; would just be .00, so just print "0"
-                    return "0"
-                if f < 1:
-                    z = "%.2f" % f # print first two decimal places
-                    if z.startswith("0."): return z[1:]  # fails for '1.00'; then thunk down to next f<10 case
-                if f < 10:
-                    return "%.1f" % f # print whole number and tenths
-
-            if f < 100: 
-                return "%.0f" % f # print nearest whole number if only 1 or 2 digits
-            
-            #if f >= 100, minimal scientific notation, such as "4e7", not "4e+07"
-            s = "%.0e" % f
-            try:
-                mantissa, exp = s.split('e')
-                exp = int(exp)
-                if exp >= 100: return "B" #if number is too big to print
-                if exp >= 10: return "*%d" % exp
-                return "%se%d" % (mantissa, exp)
-            except:
-                return str(s)[0:3]
-
-        elif type(prec) == int:
-            if prec >= 0:
-                return "%.*f" % (prec,f)
-            else: 
-                return "%.*g" % (-prec,f)
-        else:
-            return "%g" % f #fallback to general format
-
     if boxLabels:
         # Write values on colored squares
         for y in range(plt_data.shape[0]):
             for x in range(plt_data.shape[1]):
                 if _np.isnan(plt_data[y, x]): continue
-                axes.text(x + 0.5, y + 0.5, eformat(plt_data[y, x], prec),
+                axes.text(x + 0.5, y + 0.5, _eformat(plt_data[y, x], prec),
                         horizontalalignment='center',
                         verticalalignment='center', color=besttxtcolor( plt_data[y,x], cmap, norm) )
 
@@ -1069,7 +1084,7 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxs, cmapFactory, xlabe
     def val_filter(vals):  #filter to latex-ify gate strings.  Later add filter as a possible parameter
         formatted_vals = []
         for val in vals:
-            if type(val) == tuple and all([type(el) == str for el in val]):
+            if type(val) in (tuple,_objs.GateString) and all([type(el) == str for el in val]):
                 if len(val) == 0:
                     formatted_vals.append(r"$\{\}$")
                 else:
@@ -1090,6 +1105,7 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxs, cmapFactory, xlabe
     #Setup and create plotting functions
     if sumUp:
         subMxSums = _np.array( [ [ sum_up_mx(subMxs[iy][ix]) for ix in range(nXs) ] for iy in range(nYs) ], 'd' )
+        subMxSums = _np.flipud(subMxSums) #so [0,0] el of original subMxSums is at *top*-left (FLIP)
         if invert: print "Warning: cannot invert a summed-up plot.  Ignoring invert=True."
 
         fig,ax = _plt.subplots( 1, 1, figsize=(nXs*scale, nYs*scale))
@@ -1121,6 +1137,9 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxs, cmapFactory, xlabe
                 if subMxs[iy][ix] is not None:
                     nIYs,nIXs = subMxs[iy][ix].shape
                     break
+
+        # flip so [0,0] el of original subMxs is at *top*-left (FLIP)
+        subMxs = [ [ _np.flipud(subMx) for subMx in row ] for row in subMxs]
         
         if invert:
             invertedSubMxs = []  #will be indexed as invertedSubMxs[inner-y][inner-x]
@@ -1134,6 +1153,7 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxs, cmapFactory, xlabe
             subMxs = invertedSubMxs
             xvals = inner_x_labels if inner_x_labels else [""]*nIXs
             yvals = inner_y_labels if inner_y_labels else [""]*nIYs
+            yvals = list(reversed(yvals)) # to match flipud call above (FLIP)
             xlabel = inner_x_label if inner_x_label else ""
             ylabel = inner_y_label if inner_y_label else ""
             nXs, nYs, nIXs, nIYs = nIXs, nIYs, nXs, nYs #swap nXs <=> nIXs b/c of inversion
@@ -1163,6 +1183,98 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxs, cmapFactory, xlabe
     # rptFig.check() #DEBUG - test that figure can unpickle correctly -- 
     #                # if not, probably used magic matplotlib (don't do that)
     return rptFig
+
+
+def gof_boxplot_keyplot(strs, xlabel="$\\rho_i$", ylabel="$E_i$",
+                        title="", size=None, save_to=None, ticSize=15):
+    """
+    Create a color box plot of chi^2 values.
+
+    Parameters
+    ----------
+    strs : 2-tuple
+        A (prepStrs,effectStrs) tuple usually generated by calling get_spam_strs(...)
+
+    xlabel, ylabel : str, optional
+        X and Y axis labels
+
+    title : string, optional
+        Plot title (latex can be used)
+
+    size : tuple, optional
+      The (width,height) figure size in inches.  None 
+      enables automatic calculation based on gateMatrix
+      size.
+
+    save_to : str, optional
+        save figure to this filename (usually ending in .pdf)
+
+    ticSize : int, optional
+        size of tic marks
+
+    Returns
+    -------
+    rptFig : ReportFigure
+        The encapsulated matplotlib figure that was generated.
+    """
+    prepStrs, effectStrs = strs
+
+    fig, axes = _plt.subplots()
+    if size is not None:
+        fig.set_size_inches(size[0],size[1])
+    else:
+        fig.set_size_inches(len(prepStrs)*0.5,
+                            len(effectStrs)*0.5)
+
+    if title is not None:
+        axes.set_title( title, fontsize=(ticSize+4) )
+
+    if xlabel is not None:
+        axes.set_xlabel( xlabel, fontsize=(ticSize+4) )
+
+    if ylabel is not None:
+        axes.set_ylabel( ylabel, fontsize=(ticSize+4) )
+
+    #Copied from generate_boxplot
+    def val_filter(vals):  #filter to latex-ify gate strings.  Later add filter as a possible parameter
+        formatted_vals = []
+        for val in vals:
+            if type(val) in (tuple,_objs.GateString) and all([type(el) == str for el in val]):
+                if len(val) == 0:
+                    formatted_vals.append(r"$\{\}$")
+                else:
+                    formatted_vals.append( "$" + "\\cdot".join([("\\mathrm{%s}" % el) for el in val]) + "$" )
+            else:
+                formatted_vals.append(val)
+        return formatted_vals
+
+    axes.yaxis.tick_right()
+    axes.xaxis.set_label_position("top")
+    axes.set_xticklabels(val_filter(prepStrs), rotation=90, ha='center', fontsize=ticSize)
+    axes.set_yticklabels(list(reversed(val_filter(effectStrs))), fontsize=ticSize) # FLIP
+    axes.set_xticks(_np.arange(len(prepStrs))+.5)
+    axes.set_xticks(_np.arange(len(prepStrs)+1), minor = True)
+    axes.set_yticks(_np.arange(len(effectStrs))+.5)
+    axes.set_yticks(_np.arange(len(effectStrs)+1), minor = True)
+    axes.tick_params(which='major', bottom='off', top='off', left='off', right='off', pad=5 )
+    axes.yaxis.grid(True,linestyle='-',linewidth=1.0, which='minor')
+    axes.xaxis.grid(True,linestyle='-',linewidth=1.0, which='minor')
+
+    rptFig = _ReportFigure(axes)
+
+    if save_to is not None:
+        if len(save_to) > 0: #So you can pass save_to="" and figure will be closed but not saved to a file
+            _plt.savefig(save_to, bbox_extra_artists=(axes,), bbox_inches='tight')
+        if fig is not None: _plt.close(fig) #close the figure if we're saving it to a file
+
+    return rptFig
+
+
+
+
+    return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel,ylabel,
+                            scale,prec,title,sumUp,boxLabels,histogram,histBins,save_to,ticSize,
+                            invert, prepStrs, effectStrs, r"$\rho_i$", r"$E_i$")
 
 
 
@@ -1711,7 +1823,7 @@ def direct_lgst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncate
 
 
 def direct_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs, targetGateset, svdTruncateTo=0,
-                        minProbClipForWeighting=1e-4, probClipInterval=None, verbosity=0 ):
+                        minProbClipForWeighting=1e-4, probClipInterval=(-1e6,1e6), verbosity=0 ):
     """
     Constructs a gateset of LSGST estimates for target gates and gateStringToEstimate.
 
@@ -1788,7 +1900,7 @@ def direct_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs
     
     
 def direct_mc2gst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncateTo=0,
-                        minProbClipForWeighting=1e-4, probClipInterval=None, verbosity=0):
+                        minProbClipForWeighting=1e-4, probClipInterval=(-1e6,1e6), verbosity=0):
     """
     Constructs a dictionary with keys == gate strings and values == Direct-LSGST GateSets.
 
@@ -1842,7 +1954,7 @@ def direct_mc2gst_gatesets(gateStrings, dataset, specs, targetGateset, svdTrunca
 
 
 def direct_mlgst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs, targetGateset, svdTruncateTo=0,
-                        minProbClip=1e-6, probClipInterval=None, verbosity=0 ):
+                        minProbClip=1e-6, probClipInterval=(-1e6,1e6), verbosity=0 ):
     """
     Constructs a gateset of MLEGST estimates for target gates and gateStringToEstimate.
 
@@ -1917,7 +2029,7 @@ def direct_mlgst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs,
 
 
 def direct_mlgst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncateTo=0,
-                        minProbClip=1e-6, probClipInterval=None, verbosity=0):
+                        minProbClip=1e-6, probClipInterval=(-1e6,1e6), verbosity=0):
     """
     Constructs a dictionary with keys == gate strings and values == Direct-MLEGST GateSets.
 
@@ -1970,7 +2082,7 @@ def direct_mlgst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncat
 
 
 def focused_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs, startGateset,
-                         minProbClipForWeighting=1e-4, probClipInterval=None, verbosity=0 ):
+                         minProbClipForWeighting=1e-4, probClipInterval=(-1e6,1e6), verbosity=0 ):
     """
     Constructs a gateset containing a single LSGST estimate of gateStringToEstimate.
 
@@ -2027,7 +2139,8 @@ def focused_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, spec
 
 
 def focused_mc2gst_gatesets(gateStrings, dataset, specs, startGateset,
-                         minProbClipForWeighting=1e-4, probClipInterval=None, verbosity=0):
+                            minProbClipForWeighting=1e-4, 
+                            probClipInterval=(-1e6,1e6), verbosity=0):
     """
     Constructs a dictionary with keys == gate strings and values == Focused-LSGST GateSets.
 
@@ -3006,6 +3119,526 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
                             invert, prepStrs, effectStrs, r"$\rho_i$", r"$E_i$" )
 
 
+
+def gate_matrix_boxplot(gateMatrix, size=None, m=-1.0, M=1.0, 
+                        save_to=None, fontSize=20, mxBasis=None,
+                        mxBasisDims=None, xlabel=None, ylabel=None,
+                        title=None, boxLabels=False, prec=0, mxBasisDimsY=None):
+    """
+    Creates a color box plot of a gate matrix using a diverging color map.
+
+    This can be a useful way to display large matrices which have so many 
+    entries that their entries cannot easily fit within the width of a page.
+
+    Parameters
+    ----------
+    gateMatrix : ndarray
+      The gate matrix data to display.
+      
+    size : tuple, optional
+      The (width,height) figure size in inches.  None 
+      enables automatic calculation based on gateMatrix
+      size.
+
+    m, M : float, optional
+      Min and max values of the color scale.
+
+    save_to : str, optional
+      save figure as this filename (usually ending in .pdf)
+
+    fontSize : int, optional
+      size of font for title
+
+    mxBasis : str, optional
+      The name abbreviation for the basis. Typically in {"pp","gm","std"}.
+      Used to label the rows & columns.  If you don't want labels, leave as
+      None.
+
+    mxBasisDims : int or list, optional
+      The dimension of the density matrix space this basis spans, or a
+      list specifying the dimensions of terms in a direct-sum 
+      decomposition of the density matrix space.  Used to label the 
+      rows & columns.  If you don't want labels, leave as None.
+        
+    xlabel : str, optional
+      An x-axis label for the plot.
+
+    ylabel : str, optional
+      A y-axis label for the plot.
+
+    title : str, optional
+      A title for the plot.
+
+    boxLabels : bool, optional
+        Whether box labels are displayed.  If False, then a colorbar is
+        displayed to the right of the box plot.
+
+    prec : int or {'compact','compacthp'}, optional
+        Precision for box labels.  Only relevant when boxLabels == True. Allowed
+        values are:
+
+        - 'compact' = round to nearest whole number using at most 3 characters
+        - 'compacthp' = show as much precision as possible using at most 3 characters
+        - int >= 0 = fixed precision given by int
+        - int <  0 = number of significant figures given by -int
+
+    mxBasisDimsY : int or list, optional
+        Specifies the dimension of the basis along the Y-axis direction
+        if and when this is *different* from the X-axis direction.  If
+        the two are the same, this parameter can be set to None.
+
+
+    Returns
+    -------
+    ReportFigure
+    """
+    fig, axes = _plt.subplots()
+    if size is not None:
+        fig.set_size_inches(size[0],size[1])
+    else:
+        fig.set_size_inches(gateMatrix.shape[1]*0.5,
+                            gateMatrix.shape[0]*0.5)
+
+    if title is not None:
+        axes.set_title( title, fontsize=fontSize, y=1.3) 
+          # y argument specified b/c labels are *above* plot
+
+    if xlabel is not None:
+        axes.set_xlabel( xlabel, fontsize=fontSize )
+    if ylabel is not None:
+        axes.set_ylabel( ylabel, fontsize=fontSize )
+
+    def one_sigfig(x):
+        if abs(x) < 1e-9: return 0
+        if x < 0: return -one_sigfig(-x)
+        e = -int(_np.floor(_np.log10(abs(x)))) #exponent
+        trunc_x = _np.floor(x * 10**e)/ 10**e #truncate decimal to make sure it gets *smaller*
+        return round(trunc_x, e) #round to truncation point just to be sure
+
+    cmapFactory = StdColormapFactory('div',vmin=m,vmax=M)
+    cmap, norm = cmapFactory.get_cmap(), cmapFactory.get_norm()
+
+    cax = axes.imshow(gateMatrix,interpolation='nearest',cmap=cmap, norm=norm)
+
+    xlabels=[("$%s$" % x) if len(x) else "" \
+                 for x in _tools.basis_element_labels(mxBasis,mxBasisDims)]
+    ylabels=[("$%s$" % x) if len(x) else "" \
+                 for x in _tools.basis_element_labels(mxBasis,mxBasisDimsY)] \
+                 if (mxBasisDimsY is not None) else xlabels
+    axes.set_xticklabels(xlabels,rotation='vertical')
+    axes.set_yticklabels(ylabels)
+    axes.set_xticks(_np.arange(gateMatrix.shape[1]))
+    axes.set_yticks(_np.arange(gateMatrix.shape[0]))
+    axes.set_xticks(_np.arange(gateMatrix.shape[1])+.5, minor=True)
+    axes.set_yticks(_np.arange(gateMatrix.shape[0])+.5, minor=True)
+    axes.tick_params(which='major', bottom='off', top='off', left='off', right='off', pad=5 )
+    axes.xaxis.grid(True, which='minor', linestyle='-',linewidth=1.5)
+    axes.yaxis.grid(True, which='minor', linestyle='-',linewidth=1.5)
+
+    axes.xaxis.tick_top() # move xticks to top of plot
+    axes.xaxis.set_label_position('top') #move xlabel to top also
+
+    if mxBasis == "pp": #add darker lines at multiples of 4 boxes
+        for i in _np.arange(0,gateMatrix.shape[1],4):
+            axes.axvline(i-0.5, linestyle='-', linewidth=3, color='k')
+        for i in _np.arange(0,gateMatrix.shape[0],4):
+            axes.axhline(i-0.5, linestyle='-', linewidth=3, color='k')
+
+    if boxLabels:
+        for iy in range(gateMatrix.shape[0]):
+            for ix in range(gateMatrix.shape[1]):
+                axes.text(ix, iy, _eformat(gateMatrix[iy,ix],prec),
+                          horizontalalignment='center',
+                          verticalalignment='center', 
+                          color=besttxtcolor(gateMatrix[iy,ix], cmap, norm))
+        
+    else: #display a color bar
+        tickVals = [one_sigfig(m), one_sigfig((m+M)/2), one_sigfig(M)]
+        cbar = _plt.colorbar(cax,shrink=.75, pad=.1, aspect=18, ticks=tickVals)
+
+    rptFig = _ReportFigure(axes)
+
+    if save_to is not None:
+        if len(save_to) > 0: #So you can pass save_to="" and figure will be closed but not saved to a file
+            _plt.savefig(save_to, bbox_extra_artists=(axes,), bbox_inches='tight')
+        if fig is not None: _plt.close(fig) #close the figure if we're saving it to a file
+
+    return rptFig
+
+
+def gate_matrix_errgen_boxplot(gateMatrix, targetMatrix, size=None,
+                               save_to=None, fontSize=20, mxBasis=None,
+                               mxBasisDims=None, xlabel=None, ylabel=None,
+                               title=None, boxLabels=False, prec=0):
+    """
+    Creates a color box plot of a the error generator of a gate matrix.
+
+    The error generator is given by log( inv(targetMatrix) * gateMatrix ).
+    This can be a useful way to display large matrices which have so many 
+    entries that their entries cannot easily fit within the width of a page.
+
+    Parameters
+    ----------
+    gateMatrix : ndarray
+      The gate matrix data used when constructing the generator.
+
+    targetMatrix : ndarray
+      The target gate matrix data to use when constructing the the
+      generator.
+      
+    size : tuple, optional
+      The (width,height) figure size in inches.  None 
+      enables automatic calculation based on gateMatrix
+      size.
+
+    save_to : str, optional
+      save figure as this filename (usually ending in .pdf)
+
+    fontSize : int, optional
+        size of font for title
+
+    mxBasis : str, optional
+      The name abbreviation for the basis. Typically in {"pp","gm","std"}.
+      Used to label the rows & columns.  If you don't want labels, leave as
+      None.
+
+    mxBasisDims : int or list, optional
+      The dimension of the density matrix space this basis spans, or a
+      list specifying the dimensions of terms in a direct-sum 
+      decomposition of the density matrix space.  Used to label the 
+      rows & columns.  If you don't want labels, leave as None.
+        
+    xlabel : str, optional
+      An x-axis label for the plot.
+
+    ylabel : str, optional
+      A y-axis label for the plot.
+
+    title : str, optional
+      A title for the plot.
+
+    boxLabels : bool, optional
+        Whether box labels are displayed.  If False, then a colorbar is
+        displayed to the right of the box plot.
+
+    prec : int or {'compact','compacthp'}, optional
+        Precision for box labels.  Only relevant when boxLabels == True. Allowed
+        values are:
+
+        - 'compact' = round to nearest whole number using at most 3 characters
+        - 'compacthp' = show as much precision as possible using at most 3 characters
+        - int >= 0 = fixed precision given by int
+        - int <  0 = number of significant figures given by -int
+
+
+    Returns
+    -------
+    ReportFigure
+    """
+    errgen = _tools.error_generator(gateMatrix, targetMatrix)
+    absMax = _np.max(_np.abs(errgen))
+    m,M = -absMax, absMax
+    return gate_matrix_boxplot(errgen, size, m,M, save_to, fontSize,
+                               mxBasis, mxBasisDims, xlabel, ylabel, title,
+                               boxLabels, prec)
+
+
+def polar_eigenval_plot(gate, targetGate, size=(4,4), title=None,
+                        save_to=None, fontSize=20, showNormal=True,
+                        showRelative=True):
+    """
+    Creates a color box plot of a the error generator of a gate matrix.
+
+    The error generator is given by log( inv(targetMatrix) * gateMatrix ).
+    This can be a useful way to display large matrices which have so many 
+    entries that their entries cannot easily fit within the width of a page.
+
+    Parameters
+    ----------
+    gate : ndarray
+      The gate matrix data used when constructing the generator.
+
+    targetGate : ndarray
+      The target gate matrix data to use when constructing the the
+      generator.
+      
+    size : tuple, optional
+      The (width,height) figure size in inches.
+
+    title : str, optional
+      A title for the plot.
+
+    save_to : str, optional
+      save figure as this filename (usually ending in .pdf)
+
+    fontSize : int, optional
+      size of font for title
+
+    showNormal : bool, optional
+      whether to display the actual eigenvalues of the gate
+      and the target gate on the plot.
+
+    showRelative : bool, optional
+      whether to display the relative eigenvalues of the gate
+      relative to the target gate on the plot.
+
+    Returns
+    -------
+    ReportFigure
+    """
+    evals = _np.linalg.eigvals(gate)
+    target_evals = _np.linalg.eigvals(targetGate)
+    rel_gate = _np.dot(_np.linalg.inv(targetGate), gate)
+    rel_evals = _np.linalg.eigvals(rel_gate)
+    
+    gatePow10 = _np.linalg.matrix_power(gate, 10)
+    targetPow10 = _np.linalg.matrix_power(targetGate, 10)
+    rel_gate10 = _np.dot(_np.linalg.inv(targetPow10), gatePow10)
+    rel_evals10 = _np.linalg.eigvals(rel_gate10)
+
+    fig = _plt.figure()
+    axes = fig.add_axes([0,0,1,1], polar=True, axisbg='#F8F8F8')
+    if size is not None:
+        fig.set_size_inches(size[0],size[1])
+
+    if title is not None:
+        #axes.set_title( title, fontsize=fontSize )
+        axes.text( _np.pi,0.0, title, fontsize=fontSize, ha='center' )
+
+    if showNormal:
+        r = _np.absolute(target_evals)
+        theta = _np.angle(target_evals)
+        axes.plot(theta, r, linestyle='None', marker='o', color='k', markersize=8)
+    
+        r = _np.absolute(evals)
+        theta = _np.angle(evals)
+        axes.plot(theta, r, linestyle='None', marker='o', color='c', markersize=8)
+
+    if showRelative:
+        r = _np.absolute(rel_evals10)
+        theta = _np.angle(rel_evals10)
+        axes.plot(theta, r, linestyle='None', marker='o', color='g', markersize=5)
+        
+        r = _np.absolute(rel_evals)
+        theta = _np.angle(rel_evals)
+        axes.plot(theta, r, linestyle='None', marker='o', color='r', markersize=5)
+
+    axes.grid(True)
+    axes.set_rmax(1.25)
+    axes.set_yticks([0.5,1.0])
+    axes.set_theta_zero_location('N')
+    axes.set_rlabel_position(135)
+
+    rptFig = _ReportFigure(axes)
+
+    if save_to is not None:
+        if len(save_to) > 0: #So you can pass save_to="" and figure will be closed but not saved to a file
+            _plt.savefig(save_to, bbox_extra_artists=(axes,), bbox_inches='tight')
+        if fig is not None: _plt.close(fig) #close the figure if we're saving it to a file
+
+    return rptFig
+
+
+
+def pauliprod_hamiltonian_boxplot(gate, targetGate, size=None, title=None,
+                                  save_to=None, fontSize=15, mxBasis="gm",
+                                  boxLabels=False, prec="compacthp"):
+    """
+    Creates a color box plot showing the projection of the error generator
+    of gateMatrix onto each of the Pauli or Pauli-product Hamiltonian
+    generators.
+
+    Parameters
+    ----------
+    gate : ndarray
+      The gate matrix data used when constructing the generator.
+
+    targetGate : ndarray
+      The target gate matrix data to use when constructing the the
+      generator.
+      
+    size : tuple, optional
+      The (width,height) figure size in inches.  None 
+      enables automatic calculation based on gateMatrix
+      size.
+
+    title : str, optional
+      A title for the plot.
+
+    save_to : str, optional
+      save figure as this filename (usually ending in .pdf)
+
+    fontSize : int, optional
+        size of font for title
+
+    mxBasis : {'std', 'gm','pp'}, optional
+        Which basis the gateset is represented in.  Allowed
+        options are Matrix-unit (std), Gell-Mann (gm) and
+        Pauli-product (pp).
+
+    boxLabels : bool, optional
+        Whether box labels are displayed.  If False, then a colorbar is
+        displayed to the right of the box plot.
+
+    prec : int or {'compact','compacthp'}, optional
+        Precision for box labels.  Only relevant when boxLabels == True. Allowed
+        values are:
+
+        - 'compact' = round to nearest whole number using at most 3 characters
+        - 'compacthp' = show as much precision as possible using at most 3 characters
+        - int >= 0 = fixed precision given by int
+        - int <  0 = number of significant figures given by -int
+
+
+    Returns
+    -------
+    ReportFigure
+    """
+
+    errgen = _tools.error_generator(gate, targetGate)
+    if mxBasis == "pp":   errgen_std = _tools.pp_to_std(errgen)
+    elif mxBasis == "gm": errgen_std = _tools.gm_to_std(errgen)
+    elif mxBasis == "std": errgen_std = errgen
+    else: raise ValueError("Invalid basis specifier: %s" % mxBasis)
+
+    d2 = gate.shape[0]
+    d = int(_np.sqrt(d2))
+    nQubits = _np.log2(d)
+
+    #Get a list of the d2 Pauli-product matrices
+    # (in the standard basis)
+    hamMxs = _tools.pp_matrices(d) 
+
+    assert(_np.isclose(d*d,d2)) #d2 must be a perfect square
+    assert(_np.isclose(nQubits, round(nQubits))) # d must be a pow of 2
+    nQubits = int(nQubits)
+
+    hamProjections = _np.empty( len(hamMxs), 'd' )
+    for i,hamMx in enumerate(hamMxs):
+        lindbladMx = _tools.hamiltonian_to_lindbladian(hamMx) # in std basis
+        #lindbladMx_pp = _tools.std_to_pp(lindbladMx)
+        proj = _np.real_if_close(_np.dot( errgen_std.flatten(), lindbladMx.flatten() ))
+        #if not _np.isreal(proj):
+        #    print "DEBUG NOT REAL:"
+        #    print "p=",proj
+        #    print "ham=\n",hamMx
+        #    print "errgen=\n",errgen
+        #    print "errgen_std=\n",errgen_std
+        #    print "LMx=\n",lindbladMx
+        #    #print "LMx_pp=\n",lindbladMx_pp
+
+        assert(_np.isreal(proj))
+        hamProjections[i] = proj
+
+    absMax = _np.max(_np.abs(hamProjections))
+    m,M = -absMax, absMax
+
+    if nQubits == 1:
+        hamProjections = hamProjections.reshape( (1,4) )
+        xlabel = "Q1"; ylabel = ""
+    elif nQubits == 2:
+        hamProjections = hamProjections.reshape( (4,4) )
+        xlabel = "Q2"; ylabel="Q1"
+    else:
+        hamProjections = hamProjections.reshape( (4,hamProjections.size/4) )
+        xlabel = "Q*"; ylabel="Q1"
+    
+    xd = int(round(_np.sqrt(hamProjections.shape[1]))) #x-basis-dim
+    yd = int(round(_np.sqrt(hamProjections.shape[0]))) #y-basis-dim
+    return gate_matrix_boxplot(hamProjections, size, m,M, save_to, fontSize,
+                               "pp", xd, xlabel, ylabel, title, boxLabels,
+                               prec, yd)
+
+
+def choi_eigenvalue_barplot(evals, errbars=None, size=(8,5), barWidth=1,
+                            save_to=None, fontSize=15, xlabel="index",
+                            ylabel="Re[eigenvalue]", title=None):
+    """ 
+    Creates a bar plot showing the real parts of each of the eigenvalues
+    given.  This is useful for plotting the eigenvalues of Choi matrices,
+    since all elements are positive for a CPTP map.
+
+    Parameters
+    ----------
+    evals : ndarray
+       An array containing the eigenvalues to plot.
+
+    errbars : ndarray, optional
+       An array containing the lengths of the error bars
+       to place on each bar of the plot.
+
+    size : tuple, optional
+      The (width,height) figure size in inches.
+
+    barWidth : float, optional
+      The width of the bars in the plot.
+
+    save_to : str, optional
+      save figure as this filename (usually ending in .pdf)
+
+    fontSize : int, optional
+      size of font for title
+
+    xlabel : str, optional
+      An x-axis label for the plot.
+
+    ylabel : str, optional
+      A y-axis label for the plot.
+
+    title : str, optional
+      A title for the plot.
+
+    Returns
+    -------
+    ReportFigure
+    """
+    fig, axes = _plt.subplots()
+    fig.set_size_inches(size[0],size[1])
+
+    if title is not None:
+        axes.set_title( title, fontsize=fontSize) 
+    if xlabel is not None:
+        axes.set_xlabel( xlabel, fontsize=fontSize )
+    if ylabel is not None:
+        axes.set_ylabel( ylabel, fontsize=fontSize )
+
+    evals = _np.asarray(evals)
+    ind = _np.arange(evals.size)
+
+    if errbars is None:
+        pos_evals = _np.maximum(evals.flatten().real,0.0)
+        neg_evals = _np.abs(_np.minimum(evals.flatten().real,0.0))
+        rects = axes.bar(ind, pos_evals, barWidth, color=(0.5,0.5,0.5))
+        rects = axes.bar(ind, neg_evals, barWidth, color='r')
+    else:
+        evalsEB = _np.asarray(errbars)
+        pos_evals = []; pos_err = []
+        neg_evals = []; neg_err = []
+        for val,eb in zip(evals.flatten().real, evalsEB.flatten().real):
+            if (val+eb) < 0.0: #if entire error interval is less than zero
+                neg_evals.append(abs(val)); neg_err.append(eb)
+                pos_evals.append(0);   pos_err.append(0)
+            else:
+                pos_evals.append(abs(val)); pos_err.append(eb)
+                neg_evals.append(0);   neg_err.append(0)
+        rects = axes.bar(ind, pos_evals, barWidth, color=(0.5,0.5,0.5),
+                         yerr=pos_err)
+        rects = axes.bar(ind, neg_evals, barWidth, color='r',yerr=neg_err)
+
+    axes.set_yscale("log")
+    axes.set_xticks(ind + barWidth/2.0)
+    axes.set_xticklabels(map(str,range(len(ind))))
+
+    rptFig = _ReportFigure(axes)
+
+    if save_to is not None:
+        if len(save_to) > 0: #So you can pass save_to="" and figure will be closed but not saved to a file
+            _plt.savefig(save_to, bbox_extra_artists=(axes,), bbox_inches='tight')
+        if fig is not None: _plt.close(fig) #close the figure if we're saving it to a file
+
+    return rptFig
+
+    
 
 def _makeHistFilename(mainFilename):
     #Insert "_hist" before extension, e.g. /one/two.txt ==> /one/two_hist.txt

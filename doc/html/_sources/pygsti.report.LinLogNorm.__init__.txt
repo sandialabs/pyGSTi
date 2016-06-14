@@ -1,0 +1,6 @@
+pygsti.report.LinLogNorm.__init__
+=================================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: LinLogNorm.__init__

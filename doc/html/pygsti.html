@@ -32,7 +32,7 @@
   
     <link rel="top" title="pyGSTi 1.0 documentation" href="index.html"/>
         <link rel="next" title="pygsti.algorithms" href="pygsti.algorithms.html"/>
-        <link rel="prev" title="pygsti.unitary_to_process_mx" href="pygsti.unitary_to_process_mx.html"/> 
+        <link rel="prev" title="pygsti.vec_to_stdmx" href="pygsti.vec_to_stdmx.html"/> 
 
   
   <script src="_static/js/modernizr.min.js"></script>
@@ -95,9 +95,12 @@
 <li class="toctree-l3"><a class="reference internal" href="pygsti.algorithms.optimize_gauge.html">pygsti.algorithms.optimize_gauge</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.algorithms.optimize_integer_fiducials_slack.html">pygsti.algorithms.optimize_integer_fiducials_slack</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.algorithms.optimize_integer_germs_slack.html">pygsti.algorithms.optimize_integer_germs_slack</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.algorithms.test_fiducial_list.html">pygsti.algorithms.test_fiducial_list</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.algorithms.test_germ_list_finitel.html">pygsti.algorithms.test_germ_list_finitel</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.algorithms.test_germ_list_infl.html">pygsti.algorithms.test_germ_list_infl</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.algorithms.twirled_deriv.html">pygsti.algorithms.twirled_deriv</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.algorithms.write_fixed_hamming_weight_code.html">pygsti.algorithms.write_fixed_hamming_weight_code</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.algorithms.xor.html">pygsti.algorithms.xor</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.construction.html">pygsti.construction</a><ul>
@@ -111,6 +114,8 @@
 <li class="toctree-l3"><a class="reference internal" href="pygsti.construction.gen_all_gatestrings.html">pygsti.construction.gen_all_gatestrings</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.construction.gen_all_gatestrings_onelen.html">pygsti.construction.gen_all_gatestrings_onelen</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.construction.generate_fake_data.html">pygsti.construction.generate_fake_data</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.construction.generate_sim_rb_data.html">pygsti.construction.generate_sim_rb_data</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.construction.generate_sim_rb_data_perfect.html">pygsti.construction.generate_sim_rb_data_perfect</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.construction.get_spam_strs.html">pygsti.construction.get_spam_strs</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.construction.list_all_gatestrings.html">pygsti.construction.list_all_gatestrings</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.construction.list_all_gatestrings_onelen.html">pygsti.construction.list_all_gatestrings_onelen</a></li>
@@ -119,19 +124,45 @@
 <li class="toctree-l3"><a class="reference internal" href="pygsti.construction.list_partial_strings.html">pygsti.construction.list_partial_strings</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.construction.list_random_gatestrings_onelen.html">pygsti.construction.list_random_gatestrings_onelen</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.construction.list_strings_lgst_can_estimate.html">pygsti.construction.list_strings_lgst_can_estimate</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.construction.make_elgst_experiment_list.html">pygsti.construction.make_elgst_experiment_list</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.construction.make_elgst_lists.html">pygsti.construction.make_elgst_lists</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.construction.make_lsgst_experiment_list.html">pygsti.construction.make_lsgst_experiment_list</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.construction.make_lsgst_lists.html">pygsti.construction.make_lsgst_lists</a></li>
-<li class="toctree-l3"><a class="reference internal" href="pygsti.construction.make_lsgst_lists_asymmetric_fids.html">pygsti.construction.make_lsgst_lists_asymmetric_fids</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.construction.make_parameterized_rpe_gate_set.html">pygsti.construction.make_parameterized_rpe_gate_set</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.construction.make_rpe_alpha_str_lists_gx_gz.html">pygsti.construction.make_rpe_alpha_str_lists_gx_gz</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.construction.make_rpe_data_set.html">pygsti.construction.make_rpe_data_set</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.construction.make_rpe_epsilon_str_lists_gx_gz.html">pygsti.construction.make_rpe_epsilon_str_lists_gx_gz</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.construction.make_rpe_string_list_d.html">pygsti.construction.make_rpe_string_list_d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.construction.make_rpe_theta_str_lists_gx_gz.html">pygsti.construction.make_rpe_theta_str_lists_gx_gz</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.construction.repeat.html">pygsti.construction.repeat</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.construction.repeat_and_truncate.html">pygsti.construction.repeat_and_truncate</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.construction.repeat_count_with_max_length.html">pygsti.construction.repeat_count_with_max_length</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.construction.repeat_remainder_for_truncation.html">pygsti.construction.repeat_remainder_for_truncation</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.construction.repeat_with_max_length.html">pygsti.construction.repeat_with_max_length</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.construction.rpe_ensemble_test.html">pygsti.construction.rpe_ensemble_test</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.construction.simplify_str.html">pygsti.construction.simplify_str</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.drivers.html">pygsti.drivers</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.drivers.do_long_sequence_gst.html">pygsti.drivers.do_long_sequence_gst</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.drivers.gateset_decomp_angle.html">pygsti.drivers.gateset_decomp_angle</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.drivers.gateset_decomp_decay_diag.html">pygsti.drivers.gateset_decomp_decay_diag</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.drivers.gateset_decomp_decay_offdiag.html">pygsti.drivers.gateset_decomp_decay_offdiag</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.drivers.gateset_diamonddist.html">pygsti.drivers.gateset_diamonddist</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.drivers.gateset_jtracedist.html">pygsti.drivers.gateset_jtracedist</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.drivers.gateset_process_fidelity.html">pygsti.drivers.gateset_process_fidelity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.drivers.gauge_optimize_gs_list.html">pygsti.drivers.gauge_optimize_gs_list</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.drivers.gs_mean.html">pygsti.drivers.gs_mean</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.drivers.gs_mean1.html">pygsti.drivers.gs_mean1</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.drivers.gs_stdev.html">pygsti.drivers.gs_stdev</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.drivers.gs_stdev1.html">pygsti.drivers.gs_stdev1</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.drivers.make_bootstrap_dataset.html">pygsti.drivers.make_bootstrap_dataset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.drivers.make_bootstrap_gatesets.html">pygsti.drivers.make_bootstrap_gatesets</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.drivers.spamrameter.html">pygsti.drivers.spamrameter</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.drivers.to_mean_gateset.html">pygsti.drivers.to_mean_gateset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.drivers.to_rms_gateset.html">pygsti.drivers.to_rms_gateset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.drivers.to_std_gateset.html">pygsti.drivers.to_std_gateset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.drivers.to_vector.html">pygsti.drivers.to_vector</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.io.html">pygsti.io</a><ul>
@@ -166,9 +197,11 @@
 <li class="toctree-l3"><a class="reference internal" href="pygsti.objects.optimize_gate.html">pygsti.objects.optimize_gate</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.objects.ConfidenceRegion.html">pygsti.objects.ConfidenceRegion</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.ConfidenceRegion.__init__.html">pygsti.objects.ConfidenceRegion.__init__</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.ConfidenceRegion.get_effect_fn_confidence_interval.html">pygsti.objects.ConfidenceRegion.get_effect_fn_confidence_interval</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.ConfidenceRegion.get_gate_fn_confidence_interval.html">pygsti.objects.ConfidenceRegion.get_gate_fn_confidence_interval</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.ConfidenceRegion.get_gateset.html">pygsti.objects.ConfidenceRegion.get_gateset</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.ConfidenceRegion.get_parameterization_flags.html">pygsti.objects.ConfidenceRegion.get_parameterization_flags</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.ConfidenceRegion.get_gateset_fn_confidence_interval.html">pygsti.objects.ConfidenceRegion.get_gateset_fn_confidence_interval</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.ConfidenceRegion.get_prep_fn_confidence_interval.html">pygsti.objects.ConfidenceRegion.get_prep_fn_confidence_interval</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.ConfidenceRegion.get_profile_likelihood_confidence_intervals.html">pygsti.objects.ConfidenceRegion.get_profile_likelihood_confidence_intervals</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.ConfidenceRegion.get_spam_fn_confidence_interval.html">pygsti.objects.ConfidenceRegion.get_spam_fn_confidence_interval</a></li>
 </ul>
@@ -180,6 +213,7 @@
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.DataSet.add_counts_1q.html">pygsti.objects.DataSet.add_counts_1q</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.DataSet.add_counts_from_dataset.html">pygsti.objects.DataSet.add_counts_from_dataset</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.DataSet.copy.html">pygsti.objects.DataSet.copy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.DataSet.copy_nonstatic.html">pygsti.objects.DataSet.copy_nonstatic</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.DataSet.done_adding_data.html">pygsti.objects.DataSet.done_adding_data</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.DataSet.get_gate_labels.html">pygsti.objects.DataSet.get_gate_labels</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.DataSet.get_spam_labels.html">pygsti.objects.DataSet.get_spam_labels</a></li>
@@ -195,12 +229,14 @@
 <li class="toctree-l3"><a class="reference internal" href="pygsti.objects.EvalTree.html">pygsti.objects.EvalTree</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.EvalTree.__init__.html">pygsti.objects.EvalTree.__init__</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.EvalTree.append.html">pygsti.objects.EvalTree.append</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.EvalTree.copy.html">pygsti.objects.EvalTree.copy</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.EvalTree.count.html">pygsti.objects.EvalTree.count</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.EvalTree.extend.html">pygsti.objects.EvalTree.extend</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.EvalTree.generate_gatestring_list.html">pygsti.objects.EvalTree.generate_gatestring_list</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.EvalTree.get_analysis_plot_infos.html">pygsti.objects.EvalTree.get_analysis_plot_infos</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.EvalTree.get_init_labels.html">pygsti.objects.EvalTree.get_init_labels</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.EvalTree.get_list_of_final_value_tree_indices.html">pygsti.objects.EvalTree.get_list_of_final_value_tree_indices</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.EvalTree.get_min_tree_size.html">pygsti.objects.EvalTree.get_min_tree_size</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.EvalTree.get_sub_trees.html">pygsti.objects.EvalTree.get_sub_trees</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.EvalTree.get_tree_index_of_final_value.html">pygsti.objects.EvalTree.get_tree_index_of_final_value</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.EvalTree.index.html">pygsti.objects.EvalTree.index</a></li>
@@ -219,19 +255,37 @@
 <li class="toctree-l3"><a class="reference internal" href="pygsti.objects.FullyParameterizedGate.html">pygsti.objects.FullyParameterizedGate</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.FullyParameterizedGate.__init__.html">pygsti.objects.FullyParameterizedGate.__init__</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.FullyParameterizedGate.compose.html">pygsti.objects.FullyParameterizedGate.compose</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.FullyParameterizedGate.convert_to_matrix.html">pygsti.objects.FullyParameterizedGate.convert_to_matrix</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.FullyParameterizedGate.copy.html">pygsti.objects.FullyParameterizedGate.copy</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.FullyParameterizedGate.deriv_wrt_params.html">pygsti.objects.FullyParameterizedGate.deriv_wrt_params</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.FullyParameterizedGate.from_vector.html">pygsti.objects.FullyParameterizedGate.from_vector</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.FullyParameterizedGate.get_dimension.html">pygsti.objects.FullyParameterizedGate.get_dimension</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.FullyParameterizedGate.num_params.html">pygsti.objects.FullyParameterizedGate.num_params</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.FullyParameterizedGate.set_value.html">pygsti.objects.FullyParameterizedGate.set_value</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.FullyParameterizedGate.set_matrix.html">pygsti.objects.FullyParameterizedGate.set_matrix</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.FullyParameterizedGate.to_vector.html">pygsti.objects.FullyParameterizedGate.to_vector</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.FullyParameterizedGate.transform.html">pygsti.objects.FullyParameterizedGate.transform</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.FullyParameterizedGate.value_dimension.html">pygsti.objects.FullyParameterizedGate.value_dimension</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.objects.FullyParameterizedSPAMVec.html">pygsti.objects.FullyParameterizedSPAMVec</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.FullyParameterizedSPAMVec.__init__.html">pygsti.objects.FullyParameterizedSPAMVec.__init__</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.FullyParameterizedSPAMVec.convert_to_vector.html">pygsti.objects.FullyParameterizedSPAMVec.convert_to_vector</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.FullyParameterizedSPAMVec.copy.html">pygsti.objects.FullyParameterizedSPAMVec.copy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.FullyParameterizedSPAMVec.deriv_wrt_params.html">pygsti.objects.FullyParameterizedSPAMVec.deriv_wrt_params</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.FullyParameterizedSPAMVec.from_vector.html">pygsti.objects.FullyParameterizedSPAMVec.from_vector</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.FullyParameterizedSPAMVec.get_dimension.html">pygsti.objects.FullyParameterizedSPAMVec.get_dimension</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.FullyParameterizedSPAMVec.num_params.html">pygsti.objects.FullyParameterizedSPAMVec.num_params</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.FullyParameterizedSPAMVec.set_vector.html">pygsti.objects.FullyParameterizedSPAMVec.set_vector</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.FullyParameterizedSPAMVec.to_vector.html">pygsti.objects.FullyParameterizedSPAMVec.to_vector</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.objects.Gate.html">pygsti.objects.Gate</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.Gate.__init__.html">pygsti.objects.Gate.__init__</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.Gate.convert_to_matrix.html">pygsti.objects.Gate.convert_to_matrix</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.Gate.get_dimension.html">pygsti.objects.Gate.get_dimension</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.objects.GateSet.html">pygsti.objects.GateSet</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.__init__.html">pygsti.objects.GateSet.__init__</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.add_spam_label.html">pygsti.objects.GateSet.add_spam_label</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.bulk_dpr.html">pygsti.objects.GateSet.bulk_dpr</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.bulk_dprobs.html">pygsti.objects.GateSet.bulk_dprobs</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.bulk_dproduct.html">pygsti.objects.GateSet.bulk_dproduct</a></li>
@@ -241,11 +295,11 @@
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.bulk_fill_probs.html">pygsti.objects.GateSet.bulk_fill_probs</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.bulk_hpr.html">pygsti.objects.GateSet.bulk_hpr</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.bulk_hprobs.html">pygsti.objects.GateSet.bulk_hprobs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.bulk_hprobs_by_column.html">pygsti.objects.GateSet.bulk_hprobs_by_column</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.bulk_hproduct.html">pygsti.objects.GateSet.bulk_hproduct</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.bulk_pr.html">pygsti.objects.GateSet.bulk_pr</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.bulk_probs.html">pygsti.objects.GateSet.bulk_probs</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.bulk_product.html">pygsti.objects.GateSet.bulk_product</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.clear.html">pygsti.objects.GateSet.clear</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.copy.html">pygsti.objects.GateSet.copy</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.decrease_dimension.html">pygsti.objects.GateSet.decrease_dimension</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.depolarize.html">pygsti.objects.GateSet.depolarize</a></li>
@@ -256,63 +310,47 @@
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.dproduct.html">pygsti.objects.GateSet.dproduct</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.frobeniusdist.html">pygsti.objects.GateSet.frobeniusdist</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.from_vector.html">pygsti.objects.GateSet.from_vector</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.fromkeys.html">pygsti.objects.GateSet.fromkeys</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.get.html">pygsti.objects.GateSet.get</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.get_basis_dimension.html">pygsti.objects.GateSet.get_basis_dimension</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.get_basis_name.html">pygsti.objects.GateSet.get_basis_name</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.get_dimension.html">pygsti.objects.GateSet.get_dimension</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.get_evec.html">pygsti.objects.GateSet.get_evec</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.get_evec_indices.html">pygsti.objects.GateSet.get_evec_indices</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.get_evecs.html">pygsti.objects.GateSet.get_evecs</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.get_gate.html">pygsti.objects.GateSet.get_gate</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.get_identity_vec.html">pygsti.objects.GateSet.get_identity_vec</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.get_effect_labels.html">pygsti.objects.GateSet.get_effect_labels</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.get_effects.html">pygsti.objects.GateSet.get_effects</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.get_nongauge_projector.html">pygsti.objects.GateSet.get_nongauge_projector</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.get_nongauge_projector_ex.html">pygsti.objects.GateSet.get_nongauge_projector_ex</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.get_rhovec.html">pygsti.objects.GateSet.get_rhovec</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.get_rhovec_indices.html">pygsti.objects.GateSet.get_rhovec_indices</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.get_rhovecs.html">pygsti.objects.GateSet.get_rhovecs</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.get_spam_label_dict.html">pygsti.objects.GateSet.get_spam_label_dict</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.get_prep_labels.html">pygsti.objects.GateSet.get_prep_labels</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.get_preps.html">pygsti.objects.GateSet.get_preps</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.get_reverse_spam_defs.html">pygsti.objects.GateSet.get_reverse_spam_defs</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.get_spam_labels.html">pygsti.objects.GateSet.get_spam_labels</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.get_spamgate.html">pygsti.objects.GateSet.get_spamgate</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.get_vector_offsets.html">pygsti.objects.GateSet.get_vector_offsets</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.has_key.html">pygsti.objects.GateSet.has_key</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.hpr.html">pygsti.objects.GateSet.hpr</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.hprobs.html">pygsti.objects.GateSet.hprobs</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.hproduct.html">pygsti.objects.GateSet.hproduct</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.increase_dimension.html">pygsti.objects.GateSet.increase_dimension</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.items.html">pygsti.objects.GateSet.items</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.iterall.html">pygsti.objects.GateSet.iterall</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.iteritems.html">pygsti.objects.GateSet.iteritems</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.iterkeys.html">pygsti.objects.GateSet.iterkeys</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.itervalues.html">pygsti.objects.GateSet.itervalues</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.iter_effects.html">pygsti.objects.GateSet.iter_effects</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.iter_gates.html">pygsti.objects.GateSet.iter_gates</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.iter_preps.html">pygsti.objects.GateSet.iter_preps</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.jtracedist.html">pygsti.objects.GateSet.jtracedist</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.keys.html">pygsti.objects.GateSet.keys</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.kick.html">pygsti.objects.GateSet.kick</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.log.html">pygsti.objects.GateSet.log</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.make_spams.html">pygsti.objects.GateSet.make_spams</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.num_effects.html">pygsti.objects.GateSet.num_effects</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.num_elements.html">pygsti.objects.GateSet.num_elements</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.num_evecs.html">pygsti.objects.GateSet.num_evecs</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.num_gauge_params.html">pygsti.objects.GateSet.num_gauge_params</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.num_nongauge_params.html">pygsti.objects.GateSet.num_nongauge_params</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.num_params.html">pygsti.objects.GateSet.num_params</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.num_rhovecs.html">pygsti.objects.GateSet.num_rhovecs</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.pop.html">pygsti.objects.GateSet.pop</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.popitem.html">pygsti.objects.GateSet.popitem</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.num_preps.html">pygsti.objects.GateSet.num_preps</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.pr.html">pygsti.objects.GateSet.pr</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.print_info.html">pygsti.objects.GateSet.print_info</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.probs.html">pygsti.objects.GateSet.probs</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.product.html">pygsti.objects.GateSet.product</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.randomize_with_unitary.html">pygsti.objects.GateSet.randomize_with_unitary</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.reset_basis.html">pygsti.objects.GateSet.reset_basis</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.rotate.html">pygsti.objects.GateSet.rotate</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.set_evec.html">pygsti.objects.GateSet.set_evec</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.set_gate.html">pygsti.objects.GateSet.set_gate</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.set_identity_vec.html">pygsti.objects.GateSet.set_identity_vec</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.set_rhovec.html">pygsti.objects.GateSet.set_rhovec</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.setdefault.html">pygsti.objects.GateSet.setdefault</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.set_all_parameterizations.html">pygsti.objects.GateSet.set_all_parameterizations</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.set_basis.html">pygsti.objects.GateSet.set_basis</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.to_vector.html">pygsti.objects.GateSet.to_vector</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.tpdist.html">pygsti.objects.GateSet.tpdist</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.transform.html">pygsti.objects.GateSet.transform</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.update.html">pygsti.objects.GateSet.update</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.values.html">pygsti.objects.GateSet.values</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.viewitems.html">pygsti.objects.GateSet.viewitems</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.viewkeys.html">pygsti.objects.GateSet.viewkeys</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.viewvalues.html">pygsti.objects.GateSet.viewvalues</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.dim.html">pygsti.objects.GateSet.dim</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.GateSet.povm_identity.html">pygsti.objects.GateSet.povm_identity</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.objects.GateString.html">pygsti.objects.GateString</a><ul>
@@ -324,14 +362,15 @@
 <li class="toctree-l3"><a class="reference internal" href="pygsti.objects.LinearlyParameterizedGate.html">pygsti.objects.LinearlyParameterizedGate</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.LinearlyParameterizedGate.__init__.html">pygsti.objects.LinearlyParameterizedGate.__init__</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.LinearlyParameterizedGate.compose.html">pygsti.objects.LinearlyParameterizedGate.compose</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.LinearlyParameterizedGate.convert_to_matrix.html">pygsti.objects.LinearlyParameterizedGate.convert_to_matrix</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.LinearlyParameterizedGate.copy.html">pygsti.objects.LinearlyParameterizedGate.copy</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.LinearlyParameterizedGate.deriv_wrt_params.html">pygsti.objects.LinearlyParameterizedGate.deriv_wrt_params</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.LinearlyParameterizedGate.from_vector.html">pygsti.objects.LinearlyParameterizedGate.from_vector</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.LinearlyParameterizedGate.get_dimension.html">pygsti.objects.LinearlyParameterizedGate.get_dimension</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.LinearlyParameterizedGate.num_params.html">pygsti.objects.LinearlyParameterizedGate.num_params</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.LinearlyParameterizedGate.set_value.html">pygsti.objects.LinearlyParameterizedGate.set_value</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.LinearlyParameterizedGate.set_matrix.html">pygsti.objects.LinearlyParameterizedGate.set_matrix</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.LinearlyParameterizedGate.to_vector.html">pygsti.objects.LinearlyParameterizedGate.to_vector</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.LinearlyParameterizedGate.transform.html">pygsti.objects.LinearlyParameterizedGate.transform</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.LinearlyParameterizedGate.value_dimension.html">pygsti.objects.LinearlyParameterizedGate.value_dimension</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.objects.MultiDataSet.html">pygsti.objects.MultiDataSet</a><ul>
@@ -349,8 +388,66 @@
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.MultiDataSet.save.html">pygsti.objects.MultiDataSet.save</a></li>
 </ul>
 </li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.objects.SPAMVec.html">pygsti.objects.SPAMVec</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.SPAMVec.__init__.html">pygsti.objects.SPAMVec.__init__</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.SPAMVec.convert_to_vector.html">pygsti.objects.SPAMVec.convert_to_vector</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.SPAMVec.get_dimension.html">pygsti.objects.SPAMVec.get_dimension</a></li>
+</ul>
+</li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.objects.SpamSpec.html">pygsti.objects.SpamSpec</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.objects.SpamSpec.__init__.html">pygsti.objects.SpamSpec.__init__</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.objects.StaticGate.html">pygsti.objects.StaticGate</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.StaticGate.__init__.html">pygsti.objects.StaticGate.__init__</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.StaticGate.compose.html">pygsti.objects.StaticGate.compose</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.StaticGate.convert_to_matrix.html">pygsti.objects.StaticGate.convert_to_matrix</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.StaticGate.copy.html">pygsti.objects.StaticGate.copy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.StaticGate.deriv_wrt_params.html">pygsti.objects.StaticGate.deriv_wrt_params</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.StaticGate.from_vector.html">pygsti.objects.StaticGate.from_vector</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.StaticGate.get_dimension.html">pygsti.objects.StaticGate.get_dimension</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.StaticGate.num_params.html">pygsti.objects.StaticGate.num_params</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.StaticGate.set_matrix.html">pygsti.objects.StaticGate.set_matrix</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.StaticGate.to_vector.html">pygsti.objects.StaticGate.to_vector</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.StaticGate.transform.html">pygsti.objects.StaticGate.transform</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.objects.StaticSPAMVec.html">pygsti.objects.StaticSPAMVec</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.StaticSPAMVec.__init__.html">pygsti.objects.StaticSPAMVec.__init__</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.StaticSPAMVec.convert_to_vector.html">pygsti.objects.StaticSPAMVec.convert_to_vector</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.StaticSPAMVec.copy.html">pygsti.objects.StaticSPAMVec.copy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.StaticSPAMVec.deriv_wrt_params.html">pygsti.objects.StaticSPAMVec.deriv_wrt_params</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.StaticSPAMVec.from_vector.html">pygsti.objects.StaticSPAMVec.from_vector</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.StaticSPAMVec.get_dimension.html">pygsti.objects.StaticSPAMVec.get_dimension</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.StaticSPAMVec.num_params.html">pygsti.objects.StaticSPAMVec.num_params</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.StaticSPAMVec.set_vector.html">pygsti.objects.StaticSPAMVec.set_vector</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.StaticSPAMVec.to_vector.html">pygsti.objects.StaticSPAMVec.to_vector</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.objects.TPParameterizedGate.html">pygsti.objects.TPParameterizedGate</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.TPParameterizedGate.__init__.html">pygsti.objects.TPParameterizedGate.__init__</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.TPParameterizedGate.compose.html">pygsti.objects.TPParameterizedGate.compose</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.TPParameterizedGate.convert_to_matrix.html">pygsti.objects.TPParameterizedGate.convert_to_matrix</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.TPParameterizedGate.copy.html">pygsti.objects.TPParameterizedGate.copy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.TPParameterizedGate.deriv_wrt_params.html">pygsti.objects.TPParameterizedGate.deriv_wrt_params</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.TPParameterizedGate.from_vector.html">pygsti.objects.TPParameterizedGate.from_vector</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.TPParameterizedGate.get_dimension.html">pygsti.objects.TPParameterizedGate.get_dimension</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.TPParameterizedGate.num_params.html">pygsti.objects.TPParameterizedGate.num_params</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.TPParameterizedGate.set_matrix.html">pygsti.objects.TPParameterizedGate.set_matrix</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.TPParameterizedGate.to_vector.html">pygsti.objects.TPParameterizedGate.to_vector</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.TPParameterizedGate.transform.html">pygsti.objects.TPParameterizedGate.transform</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.objects.TPParameterizedSPAMVec.html">pygsti.objects.TPParameterizedSPAMVec</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.TPParameterizedSPAMVec.__init__.html">pygsti.objects.TPParameterizedSPAMVec.__init__</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.TPParameterizedSPAMVec.convert_to_vector.html">pygsti.objects.TPParameterizedSPAMVec.convert_to_vector</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.TPParameterizedSPAMVec.copy.html">pygsti.objects.TPParameterizedSPAMVec.copy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.TPParameterizedSPAMVec.deriv_wrt_params.html">pygsti.objects.TPParameterizedSPAMVec.deriv_wrt_params</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.TPParameterizedSPAMVec.from_vector.html">pygsti.objects.TPParameterizedSPAMVec.from_vector</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.TPParameterizedSPAMVec.get_dimension.html">pygsti.objects.TPParameterizedSPAMVec.get_dimension</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.TPParameterizedSPAMVec.num_params.html">pygsti.objects.TPParameterizedSPAMVec.num_params</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.TPParameterizedSPAMVec.set_vector.html">pygsti.objects.TPParameterizedSPAMVec.set_vector</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.objects.TPParameterizedSPAMVec.to_vector.html">pygsti.objects.TPParameterizedSPAMVec.to_vector</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.objects.WeightedGateString.html">pygsti.objects.WeightedGateString</a><ul>
@@ -379,6 +476,7 @@
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.blank_boxplot.html">pygsti.report.blank_boxplot</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.chi2_boxplot.html">pygsti.report.chi2_boxplot</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.chi2_matrix.html">pygsti.report.chi2_matrix</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.report.choi_eigenvalue_barplot.html">pygsti.report.choi_eigenvalue_barplot</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.color_boxplot.html">pygsti.report.color_boxplot</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.compute_dataset_qty.html">pygsti.report.compute_dataset_qty</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.compute_dataset_qtys.html">pygsti.report.compute_dataset_qtys</a></li>
@@ -404,44 +502,67 @@
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.focused_mc2gst_gateset.html">pygsti.report.focused_mc2gst_gateset</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.focused_mc2gst_gatesets.html">pygsti.report.focused_mc2gst_gatesets</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.frequency_matrix.html">pygsti.report.frequency_matrix</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.report.gate_matrix_boxplot.html">pygsti.report.gate_matrix_boxplot</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.report.gate_matrix_errgen_boxplot.html">pygsti.report.gate_matrix_errgen_boxplot</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.gateset_with_lgst_gatestring_estimates.html">pygsti.report.gateset_with_lgst_gatestring_estimates</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.generate_boxplot.html">pygsti.report.generate_boxplot</a></li>
-<li class="toctree-l3"><a class="reference internal" href="pygsti.report.generate_zoomed_boxplot.html">pygsti.report.generate_zoomed_boxplot</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_blank_table.html">pygsti.report.get_blank_table</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_chi2_confidence_region.html">pygsti.report.get_chi2_confidence_region</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_chi2_progress_table.html">pygsti.report.get_chi2_progress_table</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_dataset_overview_table.html">pygsti.report.get_dataset_overview_table</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_gates_vs_target_angles_table.html">pygsti.report.get_gates_vs_target_angles_table</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_gates_vs_target_err_gen_boxes_table.html">pygsti.report.get_gates_vs_target_err_gen_boxes_table</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_gates_vs_target_err_gen_table.html">pygsti.report.get_gates_vs_target_err_gen_table</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_gates_vs_target_table.html">pygsti.report.get_gates_vs_target_table</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_gateset_choi_eigenval_table.html">pygsti.report.get_gateset_choi_eigenval_table</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_gateset_choi_table.html">pygsti.report.get_gateset_choi_table</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_gateset_closest_unitary_table.html">pygsti.report.get_gateset_closest_unitary_table</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_gateset_decomp_table.html">pygsti.report.get_gateset_decomp_table</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_gateset_eigenval_table.html">pygsti.report.get_gateset_eigenval_table</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_gateset_gate_boxes_table.html">pygsti.report.get_gateset_gate_boxes_table</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_gateset_gates_table.html">pygsti.report.get_gateset_gates_table</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_gateset_relative_eigenval_table.html">pygsti.report.get_gateset_relative_eigenval_table</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_gateset_rotn_axis_table.html">pygsti.report.get_gateset_rotn_axis_table</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_gateset_spam_parameters_table.html">pygsti.report.get_gateset_spam_parameters_table</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_gateset_spam_table.html">pygsti.report.get_gateset_spam_table</a></li>
-<li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_gateset_vs_target_err_gen_table.html">pygsti.report.get_gateset_vs_target_err_gen_table</a></li>
-<li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_gateset_vs_target_table.html">pygsti.report.get_gateset_vs_target_table</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_gatestring_multi_table.html">pygsti.report.get_gatestring_multi_table</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_gatestring_table.html">pygsti.report.get_gatestring_table</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_gaugeopt_params_table.html">pygsti.report.get_gaugeopt_params_table</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_logl_confidence_region.html">pygsti.report.get_logl_confidence_region</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_logl_progress_table.html">pygsti.report.get_logl_progress_table</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_spam_vs_target_table.html">pygsti.report.get_spam_vs_target_table</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_transition.html">pygsti.report.get_transition</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.get_unitary_gateset_gates_table.html">pygsti.report.get_unitary_gateset_gates_table</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.report.gof_boxplot_keyplot.html">pygsti.report.gof_boxplot_keyplot</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.logl_boxplot.html">pygsti.report.logl_boxplot</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.logl_matrix.html">pygsti.report.logl_matrix</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.report.make_linear_cmap.html">pygsti.report.make_linear_cmap</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.nested_color_boxplot.html">pygsti.report.nested_color_boxplot</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.report.pauliprod_hamiltonian_boxplot.html">pygsti.report.pauliprod_hamiltonian_boxplot</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.report.polar_eigenval_plot.html">pygsti.report.polar_eigenval_plot</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.probability_matrix.html">pygsti.report.probability_matrix</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.small_eigval_err_rate.html">pygsti.report.small_eigval_err_rate</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.small_eigval_err_rate_boxplot.html">pygsti.report.small_eigval_err_rate_boxplot</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.report.splice_cmaps.html">pygsti.report.splice_cmaps</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.total_count_matrix.html">pygsti.report.total_count_matrix</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.whack_a_chi2_mole_boxplot.html">pygsti.report.whack_a_chi2_mole_boxplot</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.whack_a_logl_mole_boxplot.html">pygsti.report.whack_a_logl_mole_boxplot</a></li>
-<li class="toctree-l3"><a class="reference internal" href="pygsti.report.zoomed_chi2_boxplot.html">pygsti.report.zoomed_chi2_boxplot</a></li>
-<li class="toctree-l3"><a class="reference internal" href="pygsti.report.zoomed_direct_chi2_boxplot.html">pygsti.report.zoomed_direct_chi2_boxplot</a></li>
-<li class="toctree-l3"><a class="reference internal" href="pygsti.report.GSTFigure.html">pygsti.report.GSTFigure</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.report.GSTFigure.__init__.html">pygsti.report.GSTFigure.__init__</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.report.GSTFigure.check.html">pygsti.report.GSTFigure.check</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.report.GSTFigure.get_extra_info.html">pygsti.report.GSTFigure.get_extra_info</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.report.GSTFigure.save_to.html">pygsti.report.GSTFigure.save_to</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.report.GSTFigure.set_extra_info.html">pygsti.report.GSTFigure.set_extra_info</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.report.LinLogNorm.html">pygsti.report.LinLogNorm</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.report.LinLogNorm.__init__.html">pygsti.report.LinLogNorm.__init__</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.report.LinLogNorm.autoscale.html">pygsti.report.LinLogNorm.autoscale</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.report.LinLogNorm.autoscale_None.html">pygsti.report.LinLogNorm.autoscale_None</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.report.LinLogNorm.inverse.html">pygsti.report.LinLogNorm.inverse</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.report.LinLogNorm.process_value.html">pygsti.report.LinLogNorm.process_value</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.report.LinLogNorm.scaled.html">pygsti.report.LinLogNorm.scaled</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.report.MidPointNorm.html">pygsti.report.MidPointNorm</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.report.MidPointNorm.__init__.html">pygsti.report.MidPointNorm.__init__</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.report.MidPointNorm.autoscale.html">pygsti.report.MidPointNorm.autoscale</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.report.MidPointNorm.autoscale_None.html">pygsti.report.MidPointNorm.autoscale_None</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.report.MidPointNorm.inverse.html">pygsti.report.MidPointNorm.inverse</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.report.MidPointNorm.process_value.html">pygsti.report.MidPointNorm.process_value</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.report.MidPointNorm.scaled.html">pygsti.report.MidPointNorm.scaled</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.report.ReportableQty.html">pygsti.report.ReportableQty</a><ul>
@@ -455,22 +576,24 @@
 <li class="toctree-l4"><a class="reference internal" href="pygsti.report.Results.__init__.html">pygsti.report.Results.__init__</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.report.Results.create_brief_report_pdf.html">pygsti.report.Results.create_brief_report_pdf</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.report.Results.create_full_report_pdf.html">pygsti.report.Results.create_full_report_pdf</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.report.Results.create_general_report_pdf.html">pygsti.report.Results.create_general_report_pdf</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.report.Results.create_presentation_pdf.html">pygsti.report.Results.create_presentation_pdf</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.report.Results.create_presentation_ppt.html">pygsti.report.Results.create_presentation_ppt</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.report.Results.get_confidence_region.html">pygsti.report.Results.get_confidence_region</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.report.Results.get_figure.html">pygsti.report.Results.get_figure</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.report.Results.get_special.html">pygsti.report.Results.get_special</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.report.Results.get_table.html">pygsti.report.Results.get_table</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.report.Results.init_Ls_and_germs.html">pygsti.report.Results.init_Ls_and_germs</a></li>
 <li class="toctree-l4"><a class="reference internal" href="pygsti.report.Results.init_single.html">pygsti.report.Results.init_single</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.report.Results.set_additional_info.html">pygsti.report.Results.set_additional_info</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.report.Results.set_latex_cmd.html">pygsti.report.Results.set_latex_cmd</a></li>
-<li class="toctree-l4"><a class="reference internal" href="pygsti.report.Results.set_template_path.html">pygsti.report.Results.set_template_path</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.report.StdColormapFactory.html">pygsti.report.StdColormapFactory</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.report.StdColormapFactory.__init__.html">pygsti.report.StdColormapFactory.__init__</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.report.StdColormapFactory.get_cmap.html">pygsti.report.StdColormapFactory.get_cmap</a></li>
+<li class="toctree-l4"><a class="reference internal" href="pygsti.report.StdColormapFactory.get_norm.html">pygsti.report.StdColormapFactory.get_norm</a></li>
 </ul>
 </li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.tools.html">pygsti.tools</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.tools.basis_element_labels.html">pygsti.tools.basis_element_labels</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.tools.basis_longname.html">pygsti.tools.basis_longname</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.chi2.html">pygsti.tools.chi2</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.chi2fn.html">pygsti.tools.chi2fn</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.chi2fn_2outcome.html">pygsti.tools.chi2fn_2outcome</a></li>
@@ -481,7 +604,8 @@
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.create_count_vec_dict.html">pygsti.tools.create_count_vec_dict</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.decompose_gate_matrix.html">pygsti.tools.decompose_gate_matrix</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.diamonddist.html">pygsti.tools.diamonddist</a></li>
-<li class="toctree-l3"><a class="reference internal" href="pygsti.tools.evec_penalty.html">pygsti.tools.evec_penalty</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.tools.effect_penalty.html">pygsti.tools.effect_penalty</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.tools.error_generator.html">pygsti.tools.error_generator</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.expand_from_std_direct_sum_mx.html">pygsti.tools.expand_from_std_direct_sum_mx</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.fidelity.html">pygsti.tools.fidelity</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.fidelity_upper_bound.html">pygsti.tools.fidelity_upper_bound</a></li>
@@ -498,6 +622,7 @@
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.gm_to_std.html">pygsti.tools.gm_to_std</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.gm_to_std_transform_matrix.html">pygsti.tools.gm_to_std_transform_matrix</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.gmvec_to_stdmx.html">pygsti.tools.gmvec_to_stdmx</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.tools.hamiltonian_to_lindbladian.html">pygsti.tools.hamiltonian_to_lindbladian</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.is_hermitian.html">pygsti.tools.is_hermitian</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.is_pos_def.html">pygsti.tools.is_pos_def</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.is_valid_density_mx.html">pygsti.tools.is_valid_density_mx</a></li>
@@ -516,11 +641,13 @@
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.pp_to_std.html">pygsti.tools.pp_to_std</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.pp_to_std_transform_matrix.html">pygsti.tools.pp_to_std_transform_matrix</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.ppvec_to_stdmx.html">pygsti.tools.ppvec_to_stdmx</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.tools.prep_penalty.html">pygsti.tools.prep_penalty</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.print_mx.html">pygsti.tools.print_mx</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.process_fidelity.html">pygsti.tools.process_fidelity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.tools.rb_decay.html">pygsti.tools.rb_decay</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.tools.rb_decay_rate.html">pygsti.tools.rb_decay_rate</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.remove_duplicates.html">pygsti.tools.remove_duplicates</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.remove_duplicates_in_place.html">pygsti.tools.remove_duplicates_in_place</a></li>
-<li class="toctree-l3"><a class="reference internal" href="pygsti.tools.rhovec_penalty.html">pygsti.tools.rhovec_penalty</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.single_qubit_gate.html">pygsti.tools.single_qubit_gate</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.state_to_pauli_density_vec.html">pygsti.tools.state_to_pauli_density_vec</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.std_matrices.html">pygsti.tools.std_matrices</a></li>
@@ -528,16 +655,22 @@
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.std_to_pp.html">pygsti.tools.std_to_pp</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.stdmx_to_gmvec.html">pygsti.tools.stdmx_to_gmvec</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.stdmx_to_ppvec.html">pygsti.tools.stdmx_to_ppvec</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.tools.stdmx_to_stdvec.html">pygsti.tools.stdmx_to_stdvec</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.tools.stdvec_to_stdmx.html">pygsti.tools.stdvec_to_stdmx</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.sum_of_negative_choi_evals.html">pygsti.tools.sum_of_negative_choi_evals</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.sums_of_negative_choi_evals.html">pygsti.tools.sums_of_negative_choi_evals</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.trace.html">pygsti.tools.trace</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.tools.tracedist.html">pygsti.tools.tracedist</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.two_delta_loglfn.html">pygsti.tools.two_delta_loglfn</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.two_qubit_gate.html">pygsti.tools.two_qubit_gate</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.unitary_to_pauligate_1q.html">pygsti.tools.unitary_to_pauligate_1q</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.unitary_to_pauligate_2q.html">pygsti.tools.unitary_to_pauligate_2q</a></li>
 <li class="toctree-l3"><a class="reference internal" href="pygsti.tools.unitary_to_process_mx.html">pygsti.tools.unitary_to_process_mx</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pygsti.tools.vec_to_stdmx.html">pygsti.tools.vec_to_stdmx</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.basis_element_labels.html">pygsti.basis_element_labels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.basis_longname.html">pygsti.basis_longname</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.chi2.html">pygsti.chi2</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.chi2fn.html">pygsti.chi2fn</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.chi2fn_2outcome.html">pygsti.chi2fn_2outcome</a></li>
@@ -559,7 +692,8 @@
 <li class="toctree-l2"><a class="reference internal" href="pygsti.do_mc2gst.html">pygsti.do_mc2gst</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.do_mc2gst_with_model_selection.html">pygsti.do_mc2gst_with_model_selection</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.do_mlgst.html">pygsti.do_mlgst</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pygsti.evec_penalty.html">pygsti.evec_penalty</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.effect_penalty.html">pygsti.effect_penalty</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.error_generator.html">pygsti.error_generator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.expand_from_std_direct_sum_mx.html">pygsti.expand_from_std_direct_sum_mx</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.fidelity.html">pygsti.fidelity</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.fidelity_upper_bound.html">pygsti.fidelity_upper_bound</a></li>
@@ -571,6 +705,13 @@
 <li class="toctree-l2"><a class="reference internal" href="pygsti.frobeniusnorm.html">pygsti.frobeniusnorm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.frobeniusnorm2.html">pygsti.frobeniusnorm2</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.gate_string_chi2.html">pygsti.gate_string_chi2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.gateset_decomp_angle.html">pygsti.gateset_decomp_angle</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.gateset_decomp_decay_diag.html">pygsti.gateset_decomp_decay_diag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.gateset_decomp_decay_offdiag.html">pygsti.gateset_decomp_decay_offdiag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.gateset_diamonddist.html">pygsti.gateset_diamonddist</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.gateset_jtracedist.html">pygsti.gateset_jtracedist</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.gateset_process_fidelity.html">pygsti.gateset_process_fidelity</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.gauge_optimize_gs_list.html">pygsti.gauge_optimize_gs_list</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.get_max_gram_basis.html">pygsti.get_max_gram_basis</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.gm_matrices.html">pygsti.gm_matrices</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.gm_matrices_unnormalized.html">pygsti.gm_matrices_unnormalized</a></li>
@@ -579,6 +720,11 @@
 <li class="toctree-l2"><a class="reference internal" href="pygsti.gm_to_std_transform_matrix.html">pygsti.gm_to_std_transform_matrix</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.gmvec_to_stdmx.html">pygsti.gmvec_to_stdmx</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.gram_rank_and_evals.html">pygsti.gram_rank_and_evals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.gs_mean.html">pygsti.gs_mean</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.gs_mean1.html">pygsti.gs_mean1</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.gs_stdev.html">pygsti.gs_stdev</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.gs_stdev1.html">pygsti.gs_stdev1</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.hamiltonian_to_lindbladian.html">pygsti.hamiltonian_to_lindbladian</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.is_hermitian.html">pygsti.is_hermitian</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.is_pos_def.html">pygsti.is_pos_def</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.is_valid_density_mx.html">pygsti.is_valid_density_mx</a></li>
@@ -590,6 +736,8 @@
 <li class="toctree-l2"><a class="reference internal" href="pygsti.logl_jacobian.html">pygsti.logl_jacobian</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.logl_max.html">pygsti.logl_max</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.mags_of_negative_choi_evals.html">pygsti.mags_of_negative_choi_evals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.make_bootstrap_dataset.html">pygsti.make_bootstrap_dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.make_bootstrap_gatesets.html">pygsti.make_bootstrap_gatesets</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.max_gram_rank_and_evals.html">pygsti.max_gram_rank_and_evals</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.mx_to_string.html">pygsti.mx_to_string</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.mx_to_string_complex.html">pygsti.mx_to_string_complex</a></li>
@@ -599,26 +747,37 @@
 <li class="toctree-l2"><a class="reference internal" href="pygsti.pp_to_std.html">pygsti.pp_to_std</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.pp_to_std_transform_matrix.html">pygsti.pp_to_std_transform_matrix</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.ppvec_to_stdmx.html">pygsti.ppvec_to_stdmx</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.prep_penalty.html">pygsti.prep_penalty</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.print_mx.html">pygsti.print_mx</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.process_fidelity.html">pygsti.process_fidelity</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.rb_decay.html">pygsti.rb_decay</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.rb_decay_rate.html">pygsti.rb_decay_rate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.remove_duplicates.html">pygsti.remove_duplicates</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.remove_duplicates_in_place.html">pygsti.remove_duplicates_in_place</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pygsti.rhovec_penalty.html">pygsti.rhovec_penalty</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.single_qubit_gate.html">pygsti.single_qubit_gate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.spamrameter.html">pygsti.spamrameter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.state_to_pauli_density_vec.html">pygsti.state_to_pauli_density_vec</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.std_matrices.html">pygsti.std_matrices</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.std_to_gm.html">pygsti.std_to_gm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.std_to_pp.html">pygsti.std_to_pp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.stdmx_to_gmvec.html">pygsti.stdmx_to_gmvec</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.stdmx_to_ppvec.html">pygsti.stdmx_to_ppvec</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.stdmx_to_stdvec.html">pygsti.stdmx_to_stdvec</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.stdvec_to_stdmx.html">pygsti.stdvec_to_stdmx</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.sum_of_negative_choi_evals.html">pygsti.sum_of_negative_choi_evals</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.sums_of_negative_choi_evals.html">pygsti.sums_of_negative_choi_evals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.to_mean_gateset.html">pygsti.to_mean_gateset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.to_rms_gateset.html">pygsti.to_rms_gateset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.to_std_gateset.html">pygsti.to_std_gateset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.to_vector.html">pygsti.to_vector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.trace.html">pygsti.trace</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.tracedist.html">pygsti.tracedist</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.two_delta_loglfn.html">pygsti.two_delta_loglfn</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.two_qubit_gate.html">pygsti.two_qubit_gate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.unitary_to_pauligate_1q.html">pygsti.unitary_to_pauligate_1q</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.unitary_to_pauligate_2q.html">pygsti.unitary_to_pauligate_2q</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pygsti.unitary_to_process_mx.html">pygsti.unitary_to_process_mx</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pygsti.vec_to_stdmx.html">pygsti.vec_to_stdmx</a></li>
 </ul>
 </li>
 </ul>
@@ -660,7 +819,7 @@
             
   <div class="section" id="module-pygsti">
 <span id="pygsti"></span><h1>pygsti<a class="headerlink" href="#module-pygsti" title="Permalink to this headline">¶</a></h1>
-<p>A python implementation of Gate Set Tomography</p>
+<p>A Python implementation of Gate Set Tomography</p>
 <p class="rubric">Sub-packages</p>
 <table border="1" class="longtable docutils">
 <colgroup>
@@ -701,6 +860,12 @@
 <col width="90%" />
 </colgroup>
 <tbody valign="top">
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.basis_element_labels.html#pygsti.basis_element_labels" title="pygsti.basis_element_labels"><code class="xref py py-obj docutils literal"><span class="pre">basis_element_labels</span></code></a>(basis,&nbsp;dimOrBlockDims)</td>
+<td>Returns a list of short labels corresponding to to the elements of the described basis.</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.basis_longname.html#pygsti.basis_longname" title="pygsti.basis_longname"><code class="xref py py-obj docutils literal"><span class="pre">basis_longname</span></code></a>(basis[,&nbsp;dimOrBlockDims])</td>
+<td>Get the &#8220;long name&#8221; for a particular basis, which is typically used in reports, etc.</td>
+</tr>
 <tr class="row-odd"><td><a class="reference internal" href="pygsti.chi2.html#pygsti.chi2" title="pygsti.chi2"><code class="xref py py-obj docutils literal"><span class="pre">chi2</span></code></a>(dataset,&nbsp;gateset[,&nbsp;gateStrings,&nbsp;...])</td>
 <td>Computes the total chi^2 for a set of gate strings.</td>
 </tr>
@@ -741,10 +906,10 @@
 <td>Performs Iterated Extended Linear-inversion Gate Set Tomography on the dataset.</td>
 </tr>
 <tr class="row-even"><td><a class="reference internal" href="pygsti.do_iterative_mc2gst.html#pygsti.do_iterative_mc2gst" title="pygsti.do_iterative_mc2gst"><code class="xref py py-obj docutils literal"><span class="pre">do_iterative_mc2gst</span></code></a>(dataset,&nbsp;startGateset,&nbsp;...)</td>
-<td>Performs Iterative Least Squares Gate Set Tomography on the dataset.</td>
+<td>Performs Iterative Minimum Chi^2 Gate Set Tomography on the dataset.</td>
 </tr>
 <tr class="row-odd"><td><a class="reference internal" href="pygsti.do_iterative_mc2gst_with_model_selection.html#pygsti.do_iterative_mc2gst_with_model_selection" title="pygsti.do_iterative_mc2gst_with_model_selection"><code class="xref py py-obj docutils literal"><span class="pre">do_iterative_mc2gst_with_model_selection</span></code></a>(...)</td>
-<td>Performs Iterative Least Squares Gate Set Tomography on the dataset, and at each iteration tests the current gateset model against gateset models with an increased and/or decreased dimension (model selection).</td>
+<td>Performs Iterative Minimum Chi^2 Gate Set Tomography on the dataset, and at each iteration tests the current gateset model against gateset models with an increased and/or decreased dimension (model selection).</td>
 </tr>
 <tr class="row-even"><td><a class="reference internal" href="pygsti.do_iterative_mlgst.html#pygsti.do_iterative_mlgst" title="pygsti.do_iterative_mlgst"><code class="xref py py-obj docutils literal"><span class="pre">do_iterative_mlgst</span></code></a>(dataset,&nbsp;startGateset,&nbsp;...)</td>
 <td>Performs Iterative Maximum Liklihood Estimation Gate Set Tomography on the dataset.</td>
@@ -764,41 +929,65 @@
 <tr class="row-odd"><td><a class="reference internal" href="pygsti.do_mlgst.html#pygsti.do_mlgst" title="pygsti.do_mlgst"><code class="xref py py-obj docutils literal"><span class="pre">do_mlgst</span></code></a>(dataset,&nbsp;startGateset,&nbsp;gateStringsToUse)</td>
 <td>Performs Maximum Likelihood Estimation Gate Set Tomography on the dataset.</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="pygsti.evec_penalty.html#pygsti.evec_penalty" title="pygsti.evec_penalty"><code class="xref py py-obj docutils literal"><span class="pre">evec_penalty</span></code></a>(EVec)</td>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.effect_penalty.html#pygsti.effect_penalty" title="pygsti.effect_penalty"><code class="xref py py-obj docutils literal"><span class="pre">effect_penalty</span></code></a>(EVec)</td>
 <td>Penalty assigned to a POVM effect vector EVec.</td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="pygsti.expand_from_std_direct_sum_mx.html#pygsti.expand_from_std_direct_sum_mx" title="pygsti.expand_from_std_direct_sum_mx"><code class="xref py py-obj docutils literal"><span class="pre">expand_from_std_direct_sum_mx</span></code></a>(mxInStdBasis,&nbsp;...)</td>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.error_generator.html#pygsti.error_generator" title="pygsti.error_generator"><code class="xref py py-obj docutils literal"><span class="pre">error_generator</span></code></a>(gate,&nbsp;target_gate)</td>
+<td>Construct the error generator from a gate and its target.</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.expand_from_std_direct_sum_mx.html#pygsti.expand_from_std_direct_sum_mx" title="pygsti.expand_from_std_direct_sum_mx"><code class="xref py py-obj docutils literal"><span class="pre">expand_from_std_direct_sum_mx</span></code></a>(mxInStdBasis,&nbsp;...)</td>
 <td>Convert a gate matrix in the standard basis of a &#8220;direct-sum&#8221; space to a matrix in the standard basis of the embedding space.</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="pygsti.fidelity.html#pygsti.fidelity" title="pygsti.fidelity"><code class="xref py py-obj docutils literal"><span class="pre">fidelity</span></code></a>(A,&nbsp;B)</td>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.fidelity.html#pygsti.fidelity" title="pygsti.fidelity"><code class="xref py py-obj docutils literal"><span class="pre">fidelity</span></code></a>(A,&nbsp;B)</td>
 <td>Returns the quantum state fidelity between density</td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="pygsti.fidelity_upper_bound.html#pygsti.fidelity_upper_bound" title="pygsti.fidelity_upper_bound"><code class="xref py py-obj docutils literal"><span class="pre">fidelity_upper_bound</span></code></a>(gateMx)</td>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.fidelity_upper_bound.html#pygsti.fidelity_upper_bound" title="pygsti.fidelity_upper_bound"><code class="xref py py-obj docutils literal"><span class="pre">fidelity_upper_bound</span></code></a>(gateMx)</td>
 <td>Get an upper bound on the fidelity of the given   gate matrix with any unitary gate matrix.</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="pygsti.fill_count_vecs.html#pygsti.fill_count_vecs" title="pygsti.fill_count_vecs"><code class="xref py py-obj docutils literal"><span class="pre">fill_count_vecs</span></code></a>(mxToFill,&nbsp;spam_label_rows,&nbsp;...)</td>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.fill_count_vecs.html#pygsti.fill_count_vecs" title="pygsti.fill_count_vecs"><code class="xref py py-obj docutils literal"><span class="pre">fill_count_vecs</span></code></a>(mxToFill,&nbsp;spam_label_rows,&nbsp;...)</td>
 <td>Fill a matrix of counts that is useful for speeding up multiple evaluations of logl(...).</td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="pygsti.find_closest_unitary_gatemx.html#pygsti.find_closest_unitary_gatemx" title="pygsti.find_closest_unitary_gatemx"><code class="xref py py-obj docutils literal"><span class="pre">find_closest_unitary_gatemx</span></code></a>(gateMx)</td>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.find_closest_unitary_gatemx.html#pygsti.find_closest_unitary_gatemx" title="pygsti.find_closest_unitary_gatemx"><code class="xref py py-obj docutils literal"><span class="pre">find_closest_unitary_gatemx</span></code></a>(gateMx)</td>
 <td>Get the closest gate matrix (by maximizing fidelity)   to gateMx that describes a unitary quantum gate.</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="pygsti.forbidden_prob.html#pygsti.forbidden_prob" title="pygsti.forbidden_prob"><code class="xref py py-obj docutils literal"><span class="pre">forbidden_prob</span></code></a>(gateset,&nbsp;dataset)</td>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.forbidden_prob.html#pygsti.forbidden_prob" title="pygsti.forbidden_prob"><code class="xref py py-obj docutils literal"><span class="pre">forbidden_prob</span></code></a>(gateset,&nbsp;dataset)</td>
 <td>Compute the sum of the out-of-range probabilities generated by gateset, using only those gate strings contained in dataset.</td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="pygsti.frobeniusdist.html#pygsti.frobeniusdist" title="pygsti.frobeniusdist"><code class="xref py py-obj docutils literal"><span class="pre">frobeniusdist</span></code></a>(A,&nbsp;B)</td>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.frobeniusdist.html#pygsti.frobeniusdist" title="pygsti.frobeniusdist"><code class="xref py py-obj docutils literal"><span class="pre">frobeniusdist</span></code></a>(A,&nbsp;B)</td>
 <td>Returns the frobenius distance between gate</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="pygsti.frobeniusdist2.html#pygsti.frobeniusdist2" title="pygsti.frobeniusdist2"><code class="xref py py-obj docutils literal"><span class="pre">frobeniusdist2</span></code></a>(A,&nbsp;B)</td>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.frobeniusdist2.html#pygsti.frobeniusdist2" title="pygsti.frobeniusdist2"><code class="xref py py-obj docutils literal"><span class="pre">frobeniusdist2</span></code></a>(A,&nbsp;B)</td>
 <td>Returns the square of the frobenius distance between gate</td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="pygsti.frobeniusnorm.html#pygsti.frobeniusnorm" title="pygsti.frobeniusnorm"><code class="xref py py-obj docutils literal"><span class="pre">frobeniusnorm</span></code></a>(ar)</td>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.frobeniusnorm.html#pygsti.frobeniusnorm" title="pygsti.frobeniusnorm"><code class="xref py py-obj docutils literal"><span class="pre">frobeniusnorm</span></code></a>(ar)</td>
 <td>Compute the frobenius norm of an array (or matrix),</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="pygsti.frobeniusnorm2.html#pygsti.frobeniusnorm2" title="pygsti.frobeniusnorm2"><code class="xref py py-obj docutils literal"><span class="pre">frobeniusnorm2</span></code></a>(ar)</td>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.frobeniusnorm2.html#pygsti.frobeniusnorm2" title="pygsti.frobeniusnorm2"><code class="xref py py-obj docutils literal"><span class="pre">frobeniusnorm2</span></code></a>(ar)</td>
 <td>Compute the squared frobenius norm of an array (or matrix),</td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="pygsti.gate_string_chi2.html#pygsti.gate_string_chi2" title="pygsti.gate_string_chi2"><code class="xref py py-obj docutils literal"><span class="pre">gate_string_chi2</span></code></a>(gatestring,&nbsp;dataset,&nbsp;gateset)</td>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.gate_string_chi2.html#pygsti.gate_string_chi2" title="pygsti.gate_string_chi2"><code class="xref py py-obj docutils literal"><span class="pre">gate_string_chi2</span></code></a>(gatestring,&nbsp;dataset,&nbsp;gateset)</td>
 <td>Computes the chi-squared term for a single gate string.</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.gateset_decomp_angle.html#pygsti.gateset_decomp_angle" title="pygsti.gateset_decomp_angle"><code class="xref py py-obj docutils literal"><span class="pre">gateset_decomp_angle</span></code></a>(gs)</td>
+<td></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.gateset_decomp_decay_diag.html#pygsti.gateset_decomp_decay_diag" title="pygsti.gateset_decomp_decay_diag"><code class="xref py py-obj docutils literal"><span class="pre">gateset_decomp_decay_diag</span></code></a>(gs)</td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.gateset_decomp_decay_offdiag.html#pygsti.gateset_decomp_decay_offdiag" title="pygsti.gateset_decomp_decay_offdiag"><code class="xref py py-obj docutils literal"><span class="pre">gateset_decomp_decay_offdiag</span></code></a>(gs)</td>
+<td></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.gateset_diamonddist.html#pygsti.gateset_diamonddist" title="pygsti.gateset_diamonddist"><code class="xref py py-obj docutils literal"><span class="pre">gateset_diamonddist</span></code></a>(gs,&nbsp;gs_target[,&nbsp;mxBasis])</td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.gateset_jtracedist.html#pygsti.gateset_jtracedist" title="pygsti.gateset_jtracedist"><code class="xref py py-obj docutils literal"><span class="pre">gateset_jtracedist</span></code></a>(gs,&nbsp;gs_target[,&nbsp;mxBasis])</td>
+<td></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.gateset_process_fidelity.html#pygsti.gateset_process_fidelity" title="pygsti.gateset_process_fidelity"><code class="xref py py-obj docutils literal"><span class="pre">gateset_process_fidelity</span></code></a>(gs,&nbsp;gs_target)</td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.gauge_optimize_gs_list.html#pygsti.gauge_optimize_gs_list" title="pygsti.gauge_optimize_gs_list"><code class="xref py py-obj docutils literal"><span class="pre">gauge_optimize_gs_list</span></code></a>(gsList,&nbsp;targetGateset)</td>
+<td>Optimizes the &#8220;spam weight&#8221; parameter used in gauge optimization by attempting spam a range of spam weights and taking the one the minimizes the average spam error multiplied by the average gate error (with respect to a target gate set).</td>
 </tr>
 <tr class="row-even"><td><a class="reference internal" href="pygsti.get_max_gram_basis.html#pygsti.get_max_gram_basis" title="pygsti.get_max_gram_basis"><code class="xref py py-obj docutils literal"><span class="pre">get_max_gram_basis</span></code></a>(gateLabels,&nbsp;dataset[,&nbsp;...])</td>
 <td>Compute a maximal set of gate strings that can be used as a basis for a Gram   matrix.</td>
@@ -822,67 +1011,91 @@
 <td>Convert a vector in the Gell-Mann basis to a matrix  in the standard basis.</td>
 </tr>
 <tr class="row-odd"><td><a class="reference internal" href="pygsti.gram_rank_and_evals.html#pygsti.gram_rank_and_evals" title="pygsti.gram_rank_and_evals"><code class="xref py py-obj docutils literal"><span class="pre">gram_rank_and_evals</span></code></a>(dataset,&nbsp;specs[,&nbsp;...])</td>
-<td>Returns the rank and eigenvalues of the Gram matrix for a dataset.</td>
+<td>Returns the rank and singular values of the Gram matrix for a dataset.</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="pygsti.is_hermitian.html#pygsti.is_hermitian" title="pygsti.is_hermitian"><code class="xref py py-obj docutils literal"><span class="pre">is_hermitian</span></code></a>(mx[,&nbsp;TOL])</td>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.gs_mean.html#pygsti.gs_mean" title="pygsti.gs_mean"><code class="xref py py-obj docutils literal"><span class="pre">gs_mean</span></code></a>(gsFunc,&nbsp;gsEnsemble[,&nbsp;axis])</td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.gs_mean1.html#pygsti.gs_mean1" title="pygsti.gs_mean1"><code class="xref py py-obj docutils literal"><span class="pre">gs_mean1</span></code></a>(gsFunc,&nbsp;gsEnsemble[,&nbsp;axis])</td>
+<td></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.gs_stdev.html#pygsti.gs_stdev" title="pygsti.gs_stdev"><code class="xref py py-obj docutils literal"><span class="pre">gs_stdev</span></code></a>(gsFunc,&nbsp;gsEnsemble[,&nbsp;ddof])</td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.gs_stdev1.html#pygsti.gs_stdev1" title="pygsti.gs_stdev1"><code class="xref py py-obj docutils literal"><span class="pre">gs_stdev1</span></code></a>(gsFunc,&nbsp;gsEnsemble[,&nbsp;ddof,&nbsp;axis])</td>
+<td></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.hamiltonian_to_lindbladian.html#pygsti.hamiltonian_to_lindbladian" title="pygsti.hamiltonian_to_lindbladian"><code class="xref py py-obj docutils literal"><span class="pre">hamiltonian_to_lindbladian</span></code></a>(hamiltonian)</td>
+<td>Construct the Lindbladian corresponding to a given Hamiltonian.</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.is_hermitian.html#pygsti.is_hermitian" title="pygsti.is_hermitian"><code class="xref py py-obj docutils literal"><span class="pre">is_hermitian</span></code></a>(mx[,&nbsp;TOL])</td>
 <td>Test whether mx is a hermitian matrix.</td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="pygsti.is_pos_def.html#pygsti.is_pos_def" title="pygsti.is_pos_def"><code class="xref py py-obj docutils literal"><span class="pre">is_pos_def</span></code></a>(mx[,&nbsp;TOL])</td>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.is_pos_def.html#pygsti.is_pos_def" title="pygsti.is_pos_def"><code class="xref py py-obj docutils literal"><span class="pre">is_pos_def</span></code></a>(mx[,&nbsp;TOL])</td>
 <td>Test whether mx is a positive-definite matrix.</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="pygsti.is_valid_density_mx.html#pygsti.is_valid_density_mx" title="pygsti.is_valid_density_mx"><code class="xref py py-obj docutils literal"><span class="pre">is_valid_density_mx</span></code></a>(mx[,&nbsp;TOL])</td>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.is_valid_density_mx.html#pygsti.is_valid_density_mx" title="pygsti.is_valid_density_mx"><code class="xref py py-obj docutils literal"><span class="pre">is_valid_density_mx</span></code></a>(mx[,&nbsp;TOL])</td>
 <td>Test whether mx is a valid density matrix (hermitian,   positive-definite, and unit trace).</td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="pygsti.jamiolkowski_iso.html#pygsti.jamiolkowski_iso" title="pygsti.jamiolkowski_iso"><code class="xref py py-obj docutils literal"><span class="pre">jamiolkowski_iso</span></code></a>(gateMx[,&nbsp;gateMxBasis,&nbsp;...])</td>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.jamiolkowski_iso.html#pygsti.jamiolkowski_iso" title="pygsti.jamiolkowski_iso"><code class="xref py py-obj docutils literal"><span class="pre">jamiolkowski_iso</span></code></a>(gateMx[,&nbsp;gateMxBasis,&nbsp;...])</td>
 <td>Given a gate matrix, return the corresponding Choi matrix that is normalized to have trace == 1.</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="pygsti.jamiolkowski_iso_inv.html#pygsti.jamiolkowski_iso_inv" title="pygsti.jamiolkowski_iso_inv"><code class="xref py py-obj docutils literal"><span class="pre">jamiolkowski_iso_inv</span></code></a>(choiMx[,&nbsp;choiMxBasis,&nbsp;...])</td>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.jamiolkowski_iso_inv.html#pygsti.jamiolkowski_iso_inv" title="pygsti.jamiolkowski_iso_inv"><code class="xref py py-obj docutils literal"><span class="pre">jamiolkowski_iso_inv</span></code></a>(choiMx[,&nbsp;choiMxBasis,&nbsp;...])</td>
 <td>Given a choi matrix, return the corresponding gate matrix.</td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="pygsti.jtracedist.html#pygsti.jtracedist" title="pygsti.jtracedist"><code class="xref py py-obj docutils literal"><span class="pre">jtracedist</span></code></a>(A,&nbsp;B[,&nbsp;mxBasis])</td>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.jtracedist.html#pygsti.jtracedist" title="pygsti.jtracedist"><code class="xref py py-obj docutils literal"><span class="pre">jtracedist</span></code></a>(A,&nbsp;B[,&nbsp;mxBasis])</td>
 <td>Compute the Jamiolkowski trace distance between gate matrices A and B,</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="pygsti.logl.html#pygsti.logl" title="pygsti.logl"><code class="xref py py-obj docutils literal"><span class="pre">logl</span></code></a>(gateset,&nbsp;dataset[,&nbsp;gatestring_list,&nbsp;...])</td>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.logl.html#pygsti.logl" title="pygsti.logl"><code class="xref py py-obj docutils literal"><span class="pre">logl</span></code></a>(gateset,&nbsp;dataset[,&nbsp;gatestring_list,&nbsp;...])</td>
 <td>The log-likelihood function.</td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="pygsti.logl_hessian.html#pygsti.logl_hessian" title="pygsti.logl_hessian"><code class="xref py py-obj docutils literal"><span class="pre">logl_hessian</span></code></a>(gateset,&nbsp;dataset[,&nbsp;...])</td>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.logl_hessian.html#pygsti.logl_hessian" title="pygsti.logl_hessian"><code class="xref py py-obj docutils literal"><span class="pre">logl_hessian</span></code></a>(gateset,&nbsp;dataset[,&nbsp;...])</td>
 <td>The hessian of the log-likelihood function.</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="pygsti.logl_jacobian.html#pygsti.logl_jacobian" title="pygsti.logl_jacobian"><code class="xref py py-obj docutils literal"><span class="pre">logl_jacobian</span></code></a>(gateset,&nbsp;dataset[,&nbsp;...])</td>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.logl_jacobian.html#pygsti.logl_jacobian" title="pygsti.logl_jacobian"><code class="xref py py-obj docutils literal"><span class="pre">logl_jacobian</span></code></a>(gateset,&nbsp;dataset[,&nbsp;...])</td>
 <td>The jacobian of the log-likelihood function.</td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="pygsti.logl_max.html#pygsti.logl_max" title="pygsti.logl_max"><code class="xref py py-obj docutils literal"><span class="pre">logl_max</span></code></a>(dataset[,&nbsp;gatestring_list,&nbsp;...])</td>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.logl_max.html#pygsti.logl_max" title="pygsti.logl_max"><code class="xref py py-obj docutils literal"><span class="pre">logl_max</span></code></a>(dataset[,&nbsp;gatestring_list,&nbsp;...])</td>
 <td>The maximum log-likelihood possible for a DataSet.</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="pygsti.mags_of_negative_choi_evals.html#pygsti.mags_of_negative_choi_evals" title="pygsti.mags_of_negative_choi_evals"><code class="xref py py-obj docutils literal"><span class="pre">mags_of_negative_choi_evals</span></code></a>(gateset)</td>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.mags_of_negative_choi_evals.html#pygsti.mags_of_negative_choi_evals" title="pygsti.mags_of_negative_choi_evals"><code class="xref py py-obj docutils literal"><span class="pre">mags_of_negative_choi_evals</span></code></a>(gateset)</td>
 <td>Compute the magnitudes of the negative eigenvalues of the Choi matricies for each gate in gateset.</td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="pygsti.max_gram_rank_and_evals.html#pygsti.max_gram_rank_and_evals" title="pygsti.max_gram_rank_and_evals"><code class="xref py py-obj docutils literal"><span class="pre">max_gram_rank_and_evals</span></code></a>(dataset[,&nbsp;...])</td>
-<td>Compute the rank and eigenvalues of a maximal Gram matrix,that is, the Gram matrix using a basis computed by: get_max_gram_basis(dataset.get_gate_labels(), dataset, maxBasisStringLength).</td>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.make_bootstrap_dataset.html#pygsti.make_bootstrap_dataset" title="pygsti.make_bootstrap_dataset"><code class="xref py py-obj docutils literal"><span class="pre">make_bootstrap_dataset</span></code></a>(inputDataSet,&nbsp;...[,&nbsp;...])</td>
+<td>Creates a DataSet used for generating bootstrapped error bars.</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="pygsti.mx_to_string.html#pygsti.mx_to_string" title="pygsti.mx_to_string"><code class="xref py py-obj docutils literal"><span class="pre">mx_to_string</span></code></a>(m[,&nbsp;width,&nbsp;prec])</td>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.make_bootstrap_gatesets.html#pygsti.make_bootstrap_gatesets" title="pygsti.make_bootstrap_gatesets"><code class="xref py py-obj docutils literal"><span class="pre">make_bootstrap_gatesets</span></code></a>(numGateSets,&nbsp;...[,&nbsp;...])</td>
+<td>Creates a series of &#8220;bootstrapped&#8221; GateSets form a single DataSet (and possibly GateSet) used for generating bootstrapped error bars.</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.max_gram_rank_and_evals.html#pygsti.max_gram_rank_and_evals" title="pygsti.max_gram_rank_and_evals"><code class="xref py py-obj docutils literal"><span class="pre">max_gram_rank_and_evals</span></code></a>(dataset[,&nbsp;...])</td>
+<td>Compute the rank and singular values of a maximal Gram matrix,that is, the Gram matrix using a basis computed by: get_max_gram_basis(dataset.get_gate_labels(), dataset, maxBasisStringLength).</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.mx_to_string.html#pygsti.mx_to_string" title="pygsti.mx_to_string"><code class="xref py py-obj docutils literal"><span class="pre">mx_to_string</span></code></a>(m[,&nbsp;width,&nbsp;prec])</td>
 <td>Generate a &#8220;pretty-format&#8221; string for a matrix.</td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="pygsti.mx_to_string_complex.html#pygsti.mx_to_string_complex" title="pygsti.mx_to_string_complex"><code class="xref py py-obj docutils literal"><span class="pre">mx_to_string_complex</span></code></a>(m[,&nbsp;real_width,&nbsp;...])</td>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.mx_to_string_complex.html#pygsti.mx_to_string_complex" title="pygsti.mx_to_string_complex"><code class="xref py py-obj docutils literal"><span class="pre">mx_to_string_complex</span></code></a>(m[,&nbsp;real_width,&nbsp;...])</td>
 <td>Generate a &#8220;pretty-format&#8221; string for a complex-valued matrix.</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="pygsti.optimize_gauge.html#pygsti.optimize_gauge" title="pygsti.optimize_gauge"><code class="xref py py-obj docutils literal"><span class="pre">optimize_gauge</span></code></a>(gateset,&nbsp;toGetTo[,&nbsp;maxiter,&nbsp;...])</td>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.optimize_gauge.html#pygsti.optimize_gauge" title="pygsti.optimize_gauge"><code class="xref py py-obj docutils literal"><span class="pre">optimize_gauge</span></code></a>(gateset,&nbsp;toGetTo[,&nbsp;maxiter,&nbsp;...])</td>
 <td>Optimize the gauge of a GateSet using some &#8216;goodness&#8217; function.</td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="pygsti.pp_matrices.html#pygsti.pp_matrices" title="pygsti.pp_matrices"><code class="xref py py-obj docutils literal"><span class="pre">pp_matrices</span></code></a>(dim)</td>
-<td>Get the elements of the Pauil-product basis spanning the space of dim x dim density matricies (matrix-dimension dim, space dimension dim^2).</td>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.pp_matrices.html#pygsti.pp_matrices" title="pygsti.pp_matrices"><code class="xref py py-obj docutils literal"><span class="pre">pp_matrices</span></code></a>(dim)</td>
+<td>Get the elements of the Pauil-product basis spanning the space of dim x dim density matrices (matrix-dimension dim, space dimension dim^2).</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="pygsti.pp_to_gm.html#pygsti.pp_to_gm" title="pygsti.pp_to_gm"><code class="xref py py-obj docutils literal"><span class="pre">pp_to_gm</span></code></a>(mxInPauliProdBasis[,&nbsp;dimOrBlockDims])</td>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.pp_to_gm.html#pygsti.pp_to_gm" title="pygsti.pp_to_gm"><code class="xref py py-obj docutils literal"><span class="pre">pp_to_gm</span></code></a>(mxInPauliProdBasis[,&nbsp;dimOrBlockDims])</td>
 <td>Convert a gate matrix in the Pauli-product basis of a density matrix space to the Gell-Mann basis (of the same space).</td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="pygsti.pp_to_std.html#pygsti.pp_to_std" title="pygsti.pp_to_std"><code class="xref py py-obj docutils literal"><span class="pre">pp_to_std</span></code></a>(mxInPauliProdBasis[,&nbsp;dimOrBlockDims])</td>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.pp_to_std.html#pygsti.pp_to_std" title="pygsti.pp_to_std"><code class="xref py py-obj docutils literal"><span class="pre">pp_to_std</span></code></a>(mxInPauliProdBasis[,&nbsp;dimOrBlockDims])</td>
 <td>Convert a gate matrix in the Pauli-product basis of a density matrix space to the Standard basis (of the same space).</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="pygsti.pp_to_std_transform_matrix.html#pygsti.pp_to_std_transform_matrix" title="pygsti.pp_to_std_transform_matrix"><code class="xref py py-obj docutils literal"><span class="pre">pp_to_std_transform_matrix</span></code></a>(dimOrBlockDims)</td>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.pp_to_std_transform_matrix.html#pygsti.pp_to_std_transform_matrix" title="pygsti.pp_to_std_transform_matrix"><code class="xref py py-obj docutils literal"><span class="pre">pp_to_std_transform_matrix</span></code></a>(dimOrBlockDims)</td>
 <td>Construct the matrix which transforms a gate matrix in the Pauil-product basis for a density matrix space to the Standard basis (for the same space).</td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="pygsti.ppvec_to_stdmx.html#pygsti.ppvec_to_stdmx" title="pygsti.ppvec_to_stdmx"><code class="xref py py-obj docutils literal"><span class="pre">ppvec_to_stdmx</span></code></a>(v)</td>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.ppvec_to_stdmx.html#pygsti.ppvec_to_stdmx" title="pygsti.ppvec_to_stdmx"><code class="xref py py-obj docutils literal"><span class="pre">ppvec_to_stdmx</span></code></a>(v)</td>
 <td>Convert a vector in the Pauli basis to a matrix  in the standard basis.</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.prep_penalty.html#pygsti.prep_penalty" title="pygsti.prep_penalty"><code class="xref py py-obj docutils literal"><span class="pre">prep_penalty</span></code></a>(rhoVec)</td>
+<td>Penalty assigned to a state preparation (rho) vector rhoVec.</td>
 </tr>
 <tr class="row-even"><td><a class="reference internal" href="pygsti.print_mx.html#pygsti.print_mx" title="pygsti.print_mx"><code class="xref py py-obj docutils literal"><span class="pre">print_mx</span></code></a>(mx[,&nbsp;width,&nbsp;prec])</td>
 <td>Print matrix in pretty format.</td>
@@ -890,17 +1103,23 @@
 <tr class="row-odd"><td><a class="reference internal" href="pygsti.process_fidelity.html#pygsti.process_fidelity" title="pygsti.process_fidelity"><code class="xref py py-obj docutils literal"><span class="pre">process_fidelity</span></code></a>(A,&nbsp;B[,&nbsp;mxBasis])</td>
 <td>Returns the process fidelity between gate</td>
 </tr>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.rb_decay.html#pygsti.rb_decay" title="pygsti.rb_decay"><code class="xref py py-obj docutils literal"><span class="pre">rb_decay</span></code></a>(x,&nbsp;a,&nbsp;b)</td>
+<td>Return the Randomized Benchmarking (RB) decay function:</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.rb_decay_rate.html#pygsti.rb_decay_rate" title="pygsti.rb_decay_rate"><code class="xref py py-obj docutils literal"><span class="pre">rb_decay_rate</span></code></a>(dataset[,&nbsp;showPlot,&nbsp;xlim,&nbsp;...])</td>
+<td>Compute the Randomized Benchmarking (RB) decay rate given an data set containing counts for RB gate strings.</td>
+</tr>
 <tr class="row-even"><td><a class="reference internal" href="pygsti.remove_duplicates.html#pygsti.remove_duplicates" title="pygsti.remove_duplicates"><code class="xref py py-obj docutils literal"><span class="pre">remove_duplicates</span></code></a>(l[,&nbsp;indexToTest])</td>
 <td>Remove duplicates from the a list and return the result.</td>
 </tr>
 <tr class="row-odd"><td><a class="reference internal" href="pygsti.remove_duplicates_in_place.html#pygsti.remove_duplicates_in_place" title="pygsti.remove_duplicates_in_place"><code class="xref py py-obj docutils literal"><span class="pre">remove_duplicates_in_place</span></code></a>(l[,&nbsp;indexToTest])</td>
 <td>Remove duplicates from the list passed as an argument.</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="pygsti.rhovec_penalty.html#pygsti.rhovec_penalty" title="pygsti.rhovec_penalty"><code class="xref py py-obj docutils literal"><span class="pre">rhovec_penalty</span></code></a>(rhoVec)</td>
-<td>Penalty assigned to a state preparation (rho) vector rhoVec.</td>
-</tr>
-<tr class="row-odd"><td><a class="reference internal" href="pygsti.single_qubit_gate.html#pygsti.single_qubit_gate" title="pygsti.single_qubit_gate"><code class="xref py py-obj docutils literal"><span class="pre">single_qubit_gate</span></code></a>(hx,&nbsp;hy,&nbsp;hz[,&nbsp;noise])</td>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.single_qubit_gate.html#pygsti.single_qubit_gate" title="pygsti.single_qubit_gate"><code class="xref py py-obj docutils literal"><span class="pre">single_qubit_gate</span></code></a>(hx,&nbsp;hy,&nbsp;hz[,&nbsp;noise])</td>
 <td>Construct the single-qubit gate matrix.</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.spamrameter.html#pygsti.spamrameter" title="pygsti.spamrameter"><code class="xref py py-obj docutils literal"><span class="pre">spamrameter</span></code></a>(gs)</td>
+<td></td>
 </tr>
 <tr class="row-even"><td><a class="reference internal" href="pygsti.state_to_pauli_density_vec.html#pygsti.state_to_pauli_density_vec" title="pygsti.state_to_pauli_density_vec"><code class="xref py py-obj docutils literal"><span class="pre">state_to_pauli_density_vec</span></code></a>(state_vec)</td>
 <td>Convert a single qubit state vector into a density matrix.</td>
@@ -920,29 +1139,53 @@
 <tr class="row-odd"><td><a class="reference internal" href="pygsti.stdmx_to_ppvec.html#pygsti.stdmx_to_ppvec" title="pygsti.stdmx_to_ppvec"><code class="xref py py-obj docutils literal"><span class="pre">stdmx_to_ppvec</span></code></a>(m)</td>
 <td>Convert a matrix in the standard basis to  a vector in the Pauli basis.</td>
 </tr>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.stdmx_to_stdvec.html#pygsti.stdmx_to_stdvec" title="pygsti.stdmx_to_stdvec"><code class="xref py py-obj docutils literal"><span class="pre">stdmx_to_stdvec</span></code></a>(m)</td>
+<td>Convert a matrix in the standard basis to  a vector in the standard basis.</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.stdvec_to_stdmx.html#pygsti.stdvec_to_stdmx" title="pygsti.stdvec_to_stdmx"><code class="xref py py-obj docutils literal"><span class="pre">stdvec_to_stdmx</span></code></a>(v)</td>
+<td>Convert a vector in the standard basis to a matrix  in the standard basis.</td>
+</tr>
 <tr class="row-even"><td><a class="reference internal" href="pygsti.sum_of_negative_choi_evals.html#pygsti.sum_of_negative_choi_evals" title="pygsti.sum_of_negative_choi_evals"><code class="xref py py-obj docutils literal"><span class="pre">sum_of_negative_choi_evals</span></code></a>(gateset)</td>
 <td>Compute the amount of non-CP-ness of a gateset by summing the negative eigenvalues of the Choi matrix for each gate in gateset.</td>
 </tr>
 <tr class="row-odd"><td><a class="reference internal" href="pygsti.sums_of_negative_choi_evals.html#pygsti.sums_of_negative_choi_evals" title="pygsti.sums_of_negative_choi_evals"><code class="xref py py-obj docutils literal"><span class="pre">sums_of_negative_choi_evals</span></code></a>(gateset)</td>
 <td>Compute the amount of non-CP-ness of a gateset by summing the negative eigenvalues of the Choi matrix for each gate in gateset separately.</td>
 </tr>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.to_mean_gateset.html#pygsti.to_mean_gateset" title="pygsti.to_mean_gateset"><code class="xref py py-obj docutils literal"><span class="pre">to_mean_gateset</span></code></a>(gsList,&nbsp;target_gs)</td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.to_rms_gateset.html#pygsti.to_rms_gateset" title="pygsti.to_rms_gateset"><code class="xref py py-obj docutils literal"><span class="pre">to_rms_gateset</span></code></a>(gsList,&nbsp;target_gs)</td>
+<td></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.to_std_gateset.html#pygsti.to_std_gateset" title="pygsti.to_std_gateset"><code class="xref py py-obj docutils literal"><span class="pre">to_std_gateset</span></code></a>(gsList,&nbsp;target_gs[,&nbsp;ddof])</td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.to_vector.html#pygsti.to_vector" title="pygsti.to_vector"><code class="xref py py-obj docutils literal"><span class="pre">to_vector</span></code></a>(gs)</td>
+<td></td>
+</tr>
 <tr class="row-even"><td><a class="reference internal" href="pygsti.trace.html#pygsti.trace" title="pygsti.trace"><code class="xref py py-obj docutils literal"><span class="pre">trace</span></code></a>(M)</td>
 <td>The trace of a matrix, sum_i M[i,i].</td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="pygsti.two_delta_loglfn.html#pygsti.two_delta_loglfn" title="pygsti.two_delta_loglfn"><code class="xref py py-obj docutils literal"><span class="pre">two_delta_loglfn</span></code></a>(N,&nbsp;p,&nbsp;f[,&nbsp;minProbClip,&nbsp;...])</td>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.tracedist.html#pygsti.tracedist" title="pygsti.tracedist"><code class="xref py py-obj docutils literal"><span class="pre">tracedist</span></code></a>(A,&nbsp;B)</td>
+<td>Compute the trace distance between matrices A and B,</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.two_delta_loglfn.html#pygsti.two_delta_loglfn" title="pygsti.two_delta_loglfn"><code class="xref py py-obj docutils literal"><span class="pre">two_delta_loglfn</span></code></a>(N,&nbsp;p,&nbsp;f[,&nbsp;minProbClip,&nbsp;...])</td>
 <td>Term of the 2*[log(L)-upper-bound - log(L)] sum corresponding  to a single gate string and spam label.</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="pygsti.two_qubit_gate.html#pygsti.two_qubit_gate" title="pygsti.two_qubit_gate"><code class="xref py py-obj docutils literal"><span class="pre">two_qubit_gate</span></code></a>([ix,&nbsp;iy,&nbsp;iz,&nbsp;xi,&nbsp;xx,&nbsp;xy,&nbsp;xz,&nbsp;...])</td>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.two_qubit_gate.html#pygsti.two_qubit_gate" title="pygsti.two_qubit_gate"><code class="xref py py-obj docutils literal"><span class="pre">two_qubit_gate</span></code></a>([ix,&nbsp;iy,&nbsp;iz,&nbsp;xi,&nbsp;xx,&nbsp;xy,&nbsp;xz,&nbsp;...])</td>
 <td>Construct the single-qubit gate matrix.</td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="pygsti.unitary_to_pauligate_1q.html#pygsti.unitary_to_pauligate_1q" title="pygsti.unitary_to_pauligate_1q"><code class="xref py py-obj docutils literal"><span class="pre">unitary_to_pauligate_1q</span></code></a>(U)</td>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.unitary_to_pauligate_1q.html#pygsti.unitary_to_pauligate_1q" title="pygsti.unitary_to_pauligate_1q"><code class="xref py py-obj docutils literal"><span class="pre">unitary_to_pauligate_1q</span></code></a>(U)</td>
 <td>Get the linear operator on (vectorized) density matrices corresponding to a 1-qubit unitary operator on states.</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="pygsti.unitary_to_pauligate_2q.html#pygsti.unitary_to_pauligate_2q" title="pygsti.unitary_to_pauligate_2q"><code class="xref py py-obj docutils literal"><span class="pre">unitary_to_pauligate_2q</span></code></a>(U)</td>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.unitary_to_pauligate_2q.html#pygsti.unitary_to_pauligate_2q" title="pygsti.unitary_to_pauligate_2q"><code class="xref py py-obj docutils literal"><span class="pre">unitary_to_pauligate_2q</span></code></a>(U)</td>
 <td>Get the linear operator on (vectorized) density matrices corresponding to a 2-qubit unitary operator on states.</td>
 </tr>
-<tr class="row-odd"><td><a class="reference internal" href="pygsti.unitary_to_process_mx.html#pygsti.unitary_to_process_mx" title="pygsti.unitary_to_process_mx"><code class="xref py py-obj docutils literal"><span class="pre">unitary_to_process_mx</span></code></a>(U)</td>
+<tr class="row-even"><td><a class="reference internal" href="pygsti.unitary_to_process_mx.html#pygsti.unitary_to_process_mx" title="pygsti.unitary_to_process_mx"><code class="xref py py-obj docutils literal"><span class="pre">unitary_to_process_mx</span></code></a>(U)</td>
 <td>Compute the super-operator which acts on (row)-vectorized density matrices from a unitary operator (matrix) U which acts on state vectors.</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="pygsti.vec_to_stdmx.html#pygsti.vec_to_stdmx" title="pygsti.vec_to_stdmx"><code class="xref py py-obj docutils literal"><span class="pre">vec_to_stdmx</span></code></a>(v,&nbsp;basis)</td>
+<td>Convert a vector in the given basis to a matrix in the standard basis.</td>
 </tr>
 </tbody>
 </table>
@@ -957,7 +1200,7 @@
         <a href="pygsti.algorithms.html" class="btn btn-neutral float-right" title="pygsti.algorithms" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="pygsti.unitary_to_process_mx.html" class="btn btn-neutral" title="pygsti.unitary_to_process_mx" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="pygsti.vec_to_stdmx.html" class="btn btn-neutral" title="pygsti.vec_to_stdmx" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

@@ -1,0 +1,6 @@
+pygsti.report.LinLogNorm.inverse
+================================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: LinLogNorm.inverse

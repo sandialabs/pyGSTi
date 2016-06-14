@@ -1,0 +1,6 @@
+pygsti.drivers.gateset_decomp_decay_diag
+========================================
+
+.. currentmodule:: pygsti.drivers
+
+.. autofunction:: gateset_decomp_decay_diag

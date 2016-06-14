@@ -1,0 +1,6 @@
+pygsti.construction.rpe_ensemble_test
+=====================================
+
+.. currentmodule:: pygsti.construction
+
+.. autofunction:: rpe_ensemble_test

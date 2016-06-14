@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.num_effects
+==================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.num_effects

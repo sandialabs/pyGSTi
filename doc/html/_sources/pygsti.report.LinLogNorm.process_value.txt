@@ -1,0 +1,6 @@
+pygsti.report.LinLogNorm.process_value
+======================================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: LinLogNorm.process_value

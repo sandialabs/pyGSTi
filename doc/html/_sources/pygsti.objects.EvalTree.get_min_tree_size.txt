@@ -1,0 +1,6 @@
+pygsti.objects.EvalTree.get_min_tree_size
+=========================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: EvalTree.get_min_tree_size

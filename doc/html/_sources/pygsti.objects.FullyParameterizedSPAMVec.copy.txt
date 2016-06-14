@@ -1,0 +1,6 @@
+pygsti.objects.FullyParameterizedSPAMVec.copy
+=============================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: FullyParameterizedSPAMVec.copy

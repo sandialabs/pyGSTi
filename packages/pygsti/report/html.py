@@ -36,6 +36,7 @@ def html(x, brackets=False):
         d = 0
         for l in x.shape:
             if l > 1: d += 1
+        x = _np.squeeze(x)
         if d == 0: return html_value(x)
         if d == 1: return html_vector(x, brackets=brackets)
         if d == 2: return html_matrix(x, brackets=brackets)
@@ -171,7 +172,6 @@ def html_value(el,ROUND=6,complexAsPolar=True):
 
     # ROUND = digits to round values to
     TOL = 1e-9  #tolerance for printing zero values
-    if el == _np.nan: return "--"
 
     def render(x):
         if abs(x) < 5*10**(-(ROUND+1)):
@@ -196,8 +196,11 @@ def html_value(el,ROUND=6,complexAsPolar=True):
             if s.endswith("."): s = s[:-1]
         return s
 
+
+    if type(el) == str: return el
     if type(el) in (int,_np.int64):
         return "%d" % el
+    if el is None or _np.isnan(el): return "--"
 
     try:
         if abs(el.real) > TOL: 

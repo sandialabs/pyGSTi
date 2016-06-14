@@ -10,6 +10,7 @@ import warnings as _warnings
 import numpy as _np
 import sys as _sys
 import time as _time
+import collections as _collections
 
 from .. import report as _report
 from .. import algorithms as _alg
@@ -24,8 +25,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                          weightsDict=None, fidPairs=None, constrainToTP=True, 
                          gaugeOptToCPTP=False, gaugeOptRatio=0.001,
                          objective="logl", advancedOptions={}, lsgstLists=None,
-                         truncScheme="whole germ powers", mxBasis="gm",
-                         comm=None):
+                         truncScheme="whole germ powers", comm=None):
     """
     Perform end-to-end GST analysis using Ls and germs, with L as a maximum length.
 
@@ -127,9 +127,6 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         - 'length as exponent' -- max. length is instead interpreted
           as the germ exponent (the number of germ repetitions).
 
-    mxBasis : {"std", "gm", "pp"}, optional
-        The basis used to interpret the gate matrices.
-
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
@@ -197,15 +194,22 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
 
     if constrainToTP: #gauge optimize (and contract if needed) to TP, then lock down first basis element as the identity
         #TODO: instead contract to vSPAM? (this could do more than just alter the 1st element...)
-        firstElIdentityVec = _np.zeros( (gate_dim,1) )
-        firstElIdentityVec[0] = gate_dim**0.25 # first basis el is assumed = sqrt(gate_dim)-dimensional identity density matrix 
-        minPenalty, gaugeMx, gs_in_TP = _alg.optimize_gauge(gs_lgst, "TP",  returnAll=True, spamWeight=1.0, gateWeight=1.0, verbosity=3)
+        gs_lgst.set_all_parameterizations("full") #make sure we can do gauge optimization
+        minPenalty, gaugeMx, gs_in_TP = _alg.optimize_gauge(
+            gs_lgst, "TP",  returnAll=True, spamWeight=1.0, gateWeight=1.0,
+            verbosity=3)
+
         if minPenalty > 0:
             gs_in_TP = _alg.contract(gs_in_TP, "TP")
             if minPenalty > 1e-5: 
                 _warnings.warn("Could not gauge optimize to TP (penalty=%g), so contracted LGST gateset to TP" % minPenalty)
 
-        gs_after_gauge_opt = _alg.optimize_gauge(gs_in_TP, "target", targetGateset=gs_target, constrainToTP=True, spamWeight=1.0, gateWeight=1.0)
+        gs_after_gauge_opt = _alg.optimize_gauge(
+            gs_in_TP, "target", targetGateset=gs_target, constrainToTP=True,
+            spamWeight=1.0, gateWeight=1.0)
+
+        firstElIdentityVec = _np.zeros( (gate_dim,1) )
+        firstElIdentityVec[0] = gate_dim**0.25 # first basis el is assumed = sqrt(gate_dim)-dimensional identity density matrix 
         gs_after_gauge_opt.povm_identity = firstElIdentityVec # declare that this basis has the identity as its first element
 
     else: # no TP constraint
@@ -269,20 +273,26 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     else:
         go_gs_lsgst_list = gs_lsgst_list
         
-    for i,gs in enumerate(go_gs_lsgst_list):
-        if gaugeOptToCPTP and _tools.sum_of_negative_choi_evals(gs) < 1e-8:
-            #if gateset is in CP, then don't let it out (constrain = True)
-            go_gs_lsgst_list[i] = _alg.optimize_gauge(
-                gs,'target',targetGateset=gs_target,
-                constrainToTP=constrainToTP, constrainToCP=True,
-                gateWeight=1, spamWeight=gaugeOptRatio)
-            
-        else: #otherwise just optimize to the target and forget about CPTP...
-            go_gs_lsgst_list[i] = _alg.optimize_gauge(
-                gs,'target',targetGateset=gs_target,
-                constrainToTP=constrainToTP, 
-                gateWeight=1, spamWeight=gaugeOptRatio)
+    #Note: we used to make constrainToCP contingent on whether each
+    # gateset was already in CP, i.e. only constrain if 
+    # _tools.sum_of_negative_choi_evals(gs) < 1e-8.  But we rarely use
+    # CP constraints, and this complicates the logic -- so now when
+    # gaugeOptToCPTP == True, always constrain to CP.
+    go_params = _collections.OrderedDict([
+            ('toGetTo', 'target'),
+            ('constrainToTP', constrainToTP),
+            ('constrainToCP', gaugeOptToCPTP),
+            ('gateWeight', 1.0),
+            ('spamWeight', gaugeOptRatio),
+            ('targetGatesMetric',"frobenius"),
+            ('targetSpamMetric',"frobenius") ])
 
+    for i,gs in enumerate(go_gs_lsgst_list):
+        args = go_params.copy()
+        args['gateset'] = gs
+        args['targetGateset'] = gs_target
+        go_gs_lsgst_list[i] = _alg.optimize_gauge(**args)
+            
     tNxt = _time.time()
     times_list.append( ('Gauge opt to target',tNxt-tRef) ); tRef=tNxt
 
@@ -303,8 +313,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     ret.parameters['weights'] = weightsDict
     ret.parameters['defaultDirectory'] = default_dir
     ret.parameters['defaultBasename'] = default_base
-    ret.parameters['mxBasis'] = mxBasis
     ret.parameters['memLimit'] = advancedOptions.get('memoryLimitInBytes',None)
+    ret.parameters['gaugeOptParams'] = go_params
 
     times_list.append( ('Results initialization',_time.time()-tRef) )
     ret.parameters['times'] = times_list

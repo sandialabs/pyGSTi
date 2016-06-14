@@ -1,0 +1,6 @@
+pygsti.report.LinLogNorm.scaled
+===============================
+
+.. currentmodule:: pygsti.report
+
+.. automethod:: LinLogNorm.scaled

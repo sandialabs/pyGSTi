@@ -1,0 +1,6 @@
+pygsti.objects.TPParameterizedGate.to_vector
+============================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: TPParameterizedGate.to_vector

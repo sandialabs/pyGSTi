@@ -1,0 +1,6 @@
+pygsti.objects.FullyParameterizedSPAMVec.set_vector
+===================================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: FullyParameterizedSPAMVec.set_vector

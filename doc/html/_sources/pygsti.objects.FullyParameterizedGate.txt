@@ -17,14 +17,15 @@ pygsti.objects.FullyParameterizedGate
    
       ~FullyParameterizedGate.__init__
       ~FullyParameterizedGate.compose
+      ~FullyParameterizedGate.convert_to_matrix
       ~FullyParameterizedGate.copy
       ~FullyParameterizedGate.deriv_wrt_params
       ~FullyParameterizedGate.from_vector
+      ~FullyParameterizedGate.get_dimension
       ~FullyParameterizedGate.num_params
-      ~FullyParameterizedGate.set_value
+      ~FullyParameterizedGate.set_matrix
       ~FullyParameterizedGate.to_vector
       ~FullyParameterizedGate.transform
-      ~FullyParameterizedGate.value_dimension
    
    
 

@@ -31,6 +31,8 @@ pygsti
       :toctree:
 
    
+      basis_element_labels
+      basis_longname
       chi2
       chi2fn
       chi2fn_2outcome
@@ -52,7 +54,8 @@ pygsti
       do_mc2gst
       do_mc2gst_with_model_selection
       do_mlgst
-      evec_penalty
+      effect_penalty
+      error_generator
       expand_from_std_direct_sum_mx
       fidelity
       fidelity_upper_bound
@@ -64,6 +67,13 @@ pygsti
       frobeniusnorm
       frobeniusnorm2
       gate_string_chi2
+      gateset_decomp_angle
+      gateset_decomp_decay_diag
+      gateset_decomp_decay_offdiag
+      gateset_diamonddist
+      gateset_jtracedist
+      gateset_process_fidelity
+      gauge_optimize_gs_list
       get_max_gram_basis
       gm_matrices
       gm_matrices_unnormalized
@@ -72,6 +82,11 @@ pygsti
       gm_to_std_transform_matrix
       gmvec_to_stdmx
       gram_rank_and_evals
+      gs_mean
+      gs_mean1
+      gs_stdev
+      gs_stdev1
+      hamiltonian_to_lindbladian
       is_hermitian
       is_pos_def
       is_valid_density_mx
@@ -83,6 +98,8 @@ pygsti
       logl_jacobian
       logl_max
       mags_of_negative_choi_evals
+      make_bootstrap_dataset
+      make_bootstrap_gatesets
       max_gram_rank_and_evals
       mx_to_string
       mx_to_string_complex
@@ -92,26 +109,37 @@ pygsti
       pp_to_std
       pp_to_std_transform_matrix
       ppvec_to_stdmx
+      prep_penalty
       print_mx
       process_fidelity
+      rb_decay
+      rb_decay_rate
       remove_duplicates
       remove_duplicates_in_place
-      rhovec_penalty
       single_qubit_gate
+      spamrameter
       state_to_pauli_density_vec
       std_matrices
       std_to_gm
       std_to_pp
       stdmx_to_gmvec
       stdmx_to_ppvec
+      stdmx_to_stdvec
+      stdvec_to_stdmx
       sum_of_negative_choi_evals
       sums_of_negative_choi_evals
+      to_mean_gateset
+      to_rms_gateset
+      to_std_gateset
+      to_vector
       trace
+      tracedist
       two_delta_loglfn
       two_qubit_gate
       unitary_to_pauligate_1q
       unitary_to_pauligate_2q
       unitary_to_process_mx
+      vec_to_stdmx
    
    
 
