@@ -1,0 +1,6 @@
+pygsti.algorithms.test_fiducial_list
+====================================
+
+.. currentmodule:: pygsti.algorithms
+
+.. autofunction:: test_fiducial_list

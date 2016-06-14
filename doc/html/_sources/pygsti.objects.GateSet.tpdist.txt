@@ -1,0 +1,6 @@
+pygsti.objects.GateSet.tpdist
+=============================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: GateSet.tpdist

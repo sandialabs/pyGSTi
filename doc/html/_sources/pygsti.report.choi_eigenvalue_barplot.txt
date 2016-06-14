@@ -1,0 +1,6 @@
+pygsti.report.choi_eigenvalue_barplot
+=====================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: choi_eigenvalue_barplot

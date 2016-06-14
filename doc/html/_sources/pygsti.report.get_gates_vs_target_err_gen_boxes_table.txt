@@ -1,0 +1,6 @@
+pygsti.report.get_gates_vs_target_err_gen_boxes_table
+=====================================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: get_gates_vs_target_err_gen_boxes_table

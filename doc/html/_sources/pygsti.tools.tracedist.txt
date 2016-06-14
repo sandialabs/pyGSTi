@@ -1,0 +1,6 @@
+pygsti.tools.tracedist
+======================
+
+.. currentmodule:: pygsti.tools
+
+.. autofunction:: tracedist

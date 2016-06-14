@@ -1,0 +1,6 @@
+pygsti.report.get_gaugeopt_params_table
+=======================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: get_gaugeopt_params_table

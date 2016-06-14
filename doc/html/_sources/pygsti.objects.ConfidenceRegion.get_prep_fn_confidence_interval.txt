@@ -1,0 +1,6 @@
+pygsti.objects.ConfidenceRegion.get_prep_fn_confidence_interval
+===============================================================
+
+.. currentmodule:: pygsti.objects
+
+.. automethod:: ConfidenceRegion.get_prep_fn_confidence_interval

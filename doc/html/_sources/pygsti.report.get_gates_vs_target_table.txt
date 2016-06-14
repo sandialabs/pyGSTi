@@ -1,0 +1,6 @@
+pygsti.report.get_gates_vs_target_table
+=======================================
+
+.. currentmodule:: pygsti.report
+
+.. autofunction:: get_gates_vs_target_table
