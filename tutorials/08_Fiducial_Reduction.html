@@ -3,7 +3,7 @@
 <head>
 
 <meta charset="utf-8" />
-<title>01 GateSets</title>
+<title>08 Fiducial Reduction</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.1.10/require.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
@@ -172,44 +172,72 @@ div#notebook {
   <div tabindex="-1" id="notebook" class="border-box-sizing">
     <div class="container" id="notebook-container">
 
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>The purpose of GST's fiducials is to generate an informationally-complete set of states and measurements. However, it's possible to <em>reduce</em> the number of fiducials necessary to do so.</p>
+<p>In this tutorial, we use the <code>pygsti.alg.find_sufficient_fiducial_pairs</code> function to reduce the number of fiducials necessary for GST.</p>
+
+</div>
+</div>
+</div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 <div class="prompt input_prompt">In&nbsp;[1]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="c">#Import the pyGSTi module -- you probably want this at the beginning of every notebook</span>
-<span class="kn">import</span> <span class="nn">pygsti</span>
-<span class="kn">import</span> <span class="nn">pygsti.construction</span> <span class="kn">as</span> <span class="nn">pc</span>
+<div class=" highlight hl-ipython2"><pre><span class="kn">import</span> <span class="nn">pygsti</span>
+<span class="kn">import</span> <span class="nn">json</span>
 </pre></div>
 
 </div>
 </div>
 </div>
 
-</div>
-<div class="cell border-box-sizing text_cell rendered">
-<div class="prompt input_prompt">
-</div>
-<div class="inner_cell">
-<div class="text_cell_render border-box-sizing rendered_html">
-<h2 id="Creating-Gatesets">Creating Gatesets<a class="anchor-link" href="#Creating-Gatesets">&#182;</a></h2>
-</div>
-</div>
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 <div class="prompt input_prompt">In&nbsp;[2]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="c">#There are more or less three ways to create GateSet objects in GST.</span>
-<span class="c"># 1) By creating an empty GateSet and populating with calls to build_gate and build_vector</span>
-<span class="c"># 2) By a single call to build_gateset, which automates 1)</span>
-<span class="c"># 3) By loading from a text-format gateset file</span>
+<div class=" highlight hl-ipython2"><pre><span class="c"># Follow Algorithm tutorial to generate LGST gatesets</span>
+<span class="n">gs_target</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">load_gateset</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_Gateset.txt&quot;</span><span class="p">)</span>
+<span class="n">ds</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">load_dataset</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_Dataset.txt&quot;</span><span class="p">,</span> <span class="n">cache</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="n">fiducialList</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">load_gatestring_list</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_FiducialList.txt&quot;</span><span class="p">)</span>
 
-<span class="c"># We&#39;ll do each of these in turn</span>
+<span class="c">#Run LGST to get an initial estimate for the gates in gs_target based on the data in ds</span>
+<span class="n">specs</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">construction</span><span class="o">.</span><span class="n">build_spam_specs</span><span class="p">(</span><span class="n">fiducialGateStrings</span><span class="o">=</span><span class="n">fiducialList</span><span class="p">)</span>
+<span class="n">gs_lgst</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">do_lgst</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">specs</span><span class="p">,</span> <span class="n">targetGateset</span><span class="o">=</span><span class="n">gs_target</span><span class="p">,</span> <span class="n">svdTruncateTo</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">verbosity</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c">#Gauge optimize the result to match the target gateset</span>
+<span class="n">gs_lgst_after_gauge_opt</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">optimize_gauge</span><span class="p">(</span><span class="n">gs_lgst</span><span class="p">,</span> <span class="s">&quot;target&quot;</span><span class="p">,</span> <span class="n">targetGateset</span><span class="o">=</span><span class="n">gs_target</span><span class="p">)</span>
+
+<span class="c">#Contract the result to CPTP</span>
+<span class="n">gs_clgst</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">contract</span><span class="p">(</span><span class="n">gs_lgst_after_gauge_opt</span><span class="p">,</span> <span class="s">&quot;CPTP&quot;</span><span class="p">)</span>
+
+<span class="c">#Get lists of gate strings for successive iterations of LGST to use</span>
+<span class="n">specs</span>  <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">construction</span><span class="o">.</span><span class="n">build_spam_specs</span><span class="p">(</span><span class="n">fiducialGateStrings</span><span class="o">=</span><span class="n">fiducialList</span><span class="p">)</span>
+<span class="n">germList</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">load_gatestring_list</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_GermsList.txt&quot;</span><span class="p">)</span>
+<span class="n">maxLengthList</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="nb">open</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_maxLengths.json&quot;</span><span class="p">,</span><span class="s">&quot;r&quot;</span><span class="p">))</span>
 </pre></div>
 
 </div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area"><div class="prompt"></div>
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>Loading from cache file:  tutorial_files/Example_Dataset.txt.cache
+</pre>
+</div>
+</div>
+
 </div>
 </div>
 
@@ -219,21 +247,33 @@ div#notebook {
 <div class="prompt input_prompt">In&nbsp;[3]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="c">#1) Create an empty gateset and build gates, rho-vectors, and E-vectors manually</span>
-<span class="n">stateSpace</span> <span class="o">=</span> <span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="c">#density matrix is a 2x2 matrix</span>
-<span class="n">spaceLabels</span> <span class="o">=</span> <span class="p">[(</span><span class="s">&#39;Q0&#39;</span><span class="p">,)]</span> <span class="c">#interpret the 2x2 density matrix as a single qubit named &#39;Q0&#39;</span>
-<span class="n">gateset1</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">GateSet</span><span class="p">()</span>
-<span class="n">gateset1</span><span class="o">.</span><span class="n">set_rhovec</span><span class="p">(</span> <span class="n">pc</span><span class="o">.</span><span class="n">build_vector</span><span class="p">(</span><span class="n">stateSpace</span><span class="p">,</span><span class="n">spaceLabels</span><span class="p">,</span><span class="s">&quot;0&quot;</span><span class="p">)</span> <span class="p">)</span>
-<span class="n">gateset1</span><span class="o">.</span><span class="n">set_evec</span><span class="p">(</span>   <span class="n">pc</span><span class="o">.</span><span class="n">build_vector</span><span class="p">(</span><span class="n">stateSpace</span><span class="p">,</span><span class="n">spaceLabels</span><span class="p">,</span><span class="s">&quot;1&quot;</span><span class="p">)</span> <span class="p">)</span>
-<span class="n">gateset1</span><span class="o">.</span><span class="n">set_gate</span><span class="p">(</span><span class="s">&#39;Gi&#39;</span><span class="p">,</span> <span class="n">pc</span><span class="o">.</span><span class="n">build_gate</span><span class="p">(</span><span class="n">stateSpace</span><span class="p">,</span><span class="n">spaceLabels</span><span class="p">,</span><span class="s">&quot;I(Q0)&quot;</span><span class="p">))</span>
-<span class="n">gateset1</span><span class="o">.</span><span class="n">set_gate</span><span class="p">(</span><span class="s">&#39;Gx&#39;</span><span class="p">,</span> <span class="n">pc</span><span class="o">.</span><span class="n">build_gate</span><span class="p">(</span><span class="n">stateSpace</span><span class="p">,</span><span class="n">spaceLabels</span><span class="p">,</span><span class="s">&quot;X(pi/2,Q0)&quot;</span><span class="p">))</span>
-<span class="n">gateset1</span><span class="o">.</span><span class="n">set_gate</span><span class="p">(</span><span class="s">&#39;Gy&#39;</span><span class="p">,</span> <span class="n">pc</span><span class="o">.</span><span class="n">build_gate</span><span class="p">(</span><span class="n">stateSpace</span><span class="p">,</span><span class="n">spaceLabels</span><span class="p">,</span><span class="s">&quot;Y(pi/2,Q0)&quot;</span><span class="p">))</span>
-<span class="n">gateset1</span><span class="o">.</span><span class="n">set_identity_vec</span><span class="p">(</span> <span class="n">pc</span><span class="o">.</span><span class="n">build_identity_vec</span><span class="p">(</span><span class="n">stateSpace</span><span class="p">)</span> <span class="p">)</span>
-<span class="n">gateset1</span><span class="o">.</span><span class="n">add_spam_label</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="s">&#39;plus&#39;</span><span class="p">)</span>
-<span class="n">gateset1</span><span class="o">.</span><span class="n">add_spam_label</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="s">&#39;minus&#39;</span><span class="p">)</span>
+<div class=" highlight hl-ipython2"><pre><span class="c">#Get sufficient set of fiducial pairs, meaning that with these fidicual pairs and the given set of germs,</span>
+<span class="c"># the number of gateset parameters which are amplified when all pairs are used are also amplified when using</span>
+<span class="c"># the returned subset.</span>
+<span class="n">fidPairs</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">alg</span><span class="o">.</span><span class="n">find_sufficient_fiducial_pairs</span><span class="p">(</span><span class="n">gs_target</span><span class="p">,</span> <span class="n">fiducialList</span><span class="p">,</span> <span class="n">fiducialList</span><span class="p">,</span> <span class="n">germList</span><span class="p">,</span> <span class="n">verbosity</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="k">print</span> <span class="n">fidPairs</span>
 </pre></div>
 
 </div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area"><div class="prompt"></div>
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>------  Fiducial Pair Reduction --------
+maximum number of amplified parameters =  34
+Beginning search for a good set of 1 pairs (36 pair lists to test)
+Beginning search for a good set of 2 pairs (630 pair lists to test)
+Beginning search for a good set of 3 pairs (7140 pair lists to test)
+[(0, 0), (0, 1), (1, 0)]
+</pre>
+</div>
+</div>
+
 </div>
 </div>
 
@@ -243,11 +283,8 @@ div#notebook {
 <div class="prompt input_prompt">In&nbsp;[4]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="c">#2) Create a gateset in a single call to build_gateset</span>
-<span class="n">gateset2</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">build_gateset</span><span class="p">(</span> <span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="p">[(</span><span class="s">&#39;Q0&#39;</span><span class="p">,)],[</span><span class="s">&#39;Gi&#39;</span><span class="p">,</span><span class="s">&#39;Gx&#39;</span><span class="p">,</span><span class="s">&#39;Gy&#39;</span><span class="p">],</span> 
-                             <span class="p">[</span> <span class="s">&quot;I(Q0)&quot;</span><span class="p">,</span><span class="s">&quot;X(pi/2,Q0)&quot;</span><span class="p">,</span> <span class="s">&quot;Y(pi/2,Q0)&quot;</span><span class="p">],</span>
-                             <span class="n">rhoExpressions</span><span class="o">=</span><span class="p">[</span><span class="s">&quot;0&quot;</span><span class="p">],</span> <span class="n">EExpressions</span><span class="o">=</span><span class="p">[</span><span class="s">&quot;1&quot;</span><span class="p">],</span> 
-                             <span class="n">spamLabelDict</span><span class="o">=</span><span class="p">{</span><span class="s">&#39;plus&#39;</span><span class="p">:</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="s">&#39;minus&#39;</span><span class="p">:</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">})</span> <span class="c">#basis=&quot;gm&quot; )</span>
+<div class=" highlight hl-ipython2"><pre><span class="c">#Test a specific set of fiducial pairs: see how many gateset parameter are amplified</span>
+<span class="c">#FPR.find_sufficient_fiducial_pairs(gs_target, fiducialList, germList, testPairList=[(0,0),(0,1),(1,0)], verbosity=4)</span>
 </pre></div>
 
 </div>
@@ -260,65 +297,12 @@ div#notebook {
 <div class="prompt input_prompt">In&nbsp;[5]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="c">#3) Write a text-format gateset file and read it in.</span>
-<span class="n">gateset3_txt</span> <span class="o">=</span> \
-<span class="sd">&quot;&quot;&quot;</span>
-<span class="sd"># Example text file describing a gateset</span>
+<div class=" highlight hl-ipython2"><pre><span class="n">lsgstListOfLists</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">construction</span><span class="o">.</span><span class="n">make_lsgst_lists</span><span class="p">(</span><span class="n">gs_target</span><span class="o">.</span><span class="n">gates</span><span class="o">.</span><span class="n">keys</span><span class="p">(),</span> <span class="n">fiducialList</span><span class="p">,</span> <span class="n">fiducialList</span><span class="p">,</span>
+                                                        <span class="n">germList</span><span class="p">,</span> <span class="n">maxLengthList</span><span class="p">,</span> <span class="n">fidPairs</span><span class="p">)</span>
 
-<span class="sd"># State prepared, specified as a state in the Pauli basis (I,X,Y,Z)</span>
-<span class="sd">rho</span>
-<span class="sd">PauliVec</span>
-<span class="sd">1/sqrt(2) 0 0 1/sqrt(2)</span>
-
-<span class="sd"># State measured as yes outcome, also specified as a state in the Pauli basis</span>
-<span class="sd">E</span>
-<span class="sd">PauliVec</span>
-<span class="sd">1/sqrt(2) 0 0 -1/sqrt(2)</span>
-
-<span class="sd">Gi</span>
-<span class="sd">PauliMx</span>
-<span class="sd">1 0 0 0</span>
-<span class="sd">0 1 0 0</span>
-<span class="sd">0 0 1 0</span>
-<span class="sd">0 0 0 1</span>
-
-<span class="sd">Gx</span>
-<span class="sd">PauliMx</span>
-<span class="sd">1 0 0 0</span>
-<span class="sd">0 1 0 0</span>
-<span class="sd">0 0 0 1</span>
-<span class="sd">0 0 -1 0</span>
-
-<span class="sd">Gy</span>
-<span class="sd">PauliMx</span>
-<span class="sd">1 0 0 0</span>
-<span class="sd">0 0 0 -1</span>
-<span class="sd">0 0 1 0</span>
-<span class="sd">0 1 0 0</span>
-
-<span class="sd">IDENTITYVEC sqrt(2) 0 0 0</span>
-<span class="sd">SPAMLABEL plus = rho E</span>
-<span class="sd">SPAMLABEL minus = rho remainder</span>
-<span class="sd">&quot;&quot;&quot;</span>
-<span class="nb">open</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_Gateset.txt&quot;</span><span class="p">,</span><span class="s">&quot;w&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">gateset3_txt</span><span class="p">)</span>
-
-<span class="n">gateset3</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">load_gateset</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_Gateset.txt&quot;</span><span class="p">)</span>
-</pre></div>
-
-</div>
-</div>
-</div>
-
-</div>
-<div class="cell border-box-sizing code_cell rendered">
-<div class="input">
-<div class="prompt input_prompt">In&nbsp;[6]:</div>
-<div class="inner_cell">
-    <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="c">#All three of the above gatesets are identical.  See for yourself by printing each one:</span>
-<span class="k">print</span> <span class="s">&quot;Gateset 1:</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span><span class="n">gateset1</span>
-<span class="k">print</span> <span class="s">&quot;Gateset 2:</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span><span class="n">gateset2</span>
-<span class="k">print</span> <span class="s">&quot;Gateset 3:</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span><span class="n">gateset3</span>
+<span class="n">gs_lsgst_list</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">do_iterative_mc2gst</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">gs_clgst</span><span class="p">,</span> <span class="n">lsgstListOfLists</span><span class="p">,</span> <span class="n">verbosity</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+                                         <span class="n">minProbClipForWeighting</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">,</span> <span class="n">probClipInterval</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mf">1e6</span><span class="p">,</span><span class="mf">1e6</span><span class="p">),</span>
+                                         <span class="n">returnAll</span><span class="o">=</span><span class="bp">True</span> <span class="p">)</span>
 </pre></div>
 
 </div>
@@ -331,93 +315,46 @@ div#notebook {
 
 <div class="output_area"><div class="prompt"></div>
 <div class="output_subarea output_stream output_stdout output_text">
-<pre>Gateset 1:
-rhoVec[0] =    0.7071        0        0   0.7071
+<pre>
+--- Iterative MC2GST: Beginning iter 1 of 10 : 92 gate strings ---
+--- Minimum Chi^2 GST ---
+  Sum of Chi^2 = 48.2157 (92 data params - 40 model params = expected mean of 52; p-value = 0.623488)
 
+--- Iterative MC2GST: Beginning iter 2 of 10 : 92 gate strings ---
+--- Minimum Chi^2 GST ---
+  Sum of Chi^2 = 48.2156 (92 data params - 40 model params = expected mean of 52; p-value = 0.623489)
 
-EVec[0] =    0.7071        0        0  -0.7071
+--- Iterative MC2GST: Beginning iter 3 of 10 : 95 gate strings ---
+--- Minimum Chi^2 GST ---
+  Sum of Chi^2 = 51.0054 (95 data params - 40 model params = expected mean of 55; p-value = 0.627974)
 
+--- Iterative MC2GST: Beginning iter 4 of 10 : 114 gate strings ---
+--- Minimum Chi^2 GST ---
+  Sum of Chi^2 = 76.4803 (114 data params - 40 model params = expected mean of 74; p-value = 0.398848)
 
-Gi = 
-   1.0000        0        0        0
-        0   1.0000        0        0
-        0        0   1.0000        0
-        0        0        0   1.0000
+--- Iterative MC2GST: Beginning iter 5 of 10 : 146 gate strings ---
+--- Minimum Chi^2 GST ---
+  Sum of Chi^2 = 117.179 (146 data params - 40 model params = expected mean of 106; p-value = 0.215419)
 
+--- Iterative MC2GST: Beginning iter 6 of 10 : 178 gate strings ---
+--- Minimum Chi^2 GST ---
+  Sum of Chi^2 = 145.915 (178 data params - 40 model params = expected mean of 138; p-value = 0.305874)
 
-Gx = 
-   1.0000        0        0        0
-        0   1.0000        0        0
-        0        0        0  -1.0000
-        0        0   1.0000        0
+--- Iterative MC2GST: Beginning iter 7 of 10 : 210 gate strings ---
+--- Minimum Chi^2 GST ---
+  Sum of Chi^2 = 190.552 (210 data params - 40 model params = expected mean of 170; p-value = 0.13384)
 
+--- Iterative MC2GST: Beginning iter 8 of 10 : 242 gate strings ---
+--- Minimum Chi^2 GST ---
+  Sum of Chi^2 = 233.121 (242 data params - 40 model params = expected mean of 202; p-value = 0.0657696)
 
-Gy = 
-   1.0000        0        0        0
-        0        0        0   1.0000
-        0        0   1.0000        0
-        0  -1.0000        0        0
+--- Iterative MC2GST: Beginning iter 9 of 10 : 274 gate strings ---
+--- Minimum Chi^2 GST ---
+  Sum of Chi^2 = 267.547 (274 data params - 40 model params = expected mean of 234; p-value = 0.065175)
 
-
-
-Gateset 2:
-rhoVec[0] =    0.7071        0        0   0.7071
-
-
-EVec[0] =    0.7071        0        0  -0.7071
-
-
-Gi = 
-   1.0000        0        0        0
-        0   1.0000        0        0
-        0        0   1.0000        0
-        0        0        0   1.0000
-
-
-Gx = 
-   1.0000        0        0        0
-        0   1.0000        0        0
-        0        0        0  -1.0000
-        0        0   1.0000        0
-
-
-Gy = 
-   1.0000        0        0        0
-        0        0        0   1.0000
-        0        0   1.0000        0
-        0  -1.0000        0        0
-
-
-
-Gateset 3:
-rhoVec[0] =    0.7071        0        0   0.7071
-
-
-EVec[0] =    0.7071        0        0  -0.7071
-
-
-Gi = 
-   1.0000        0        0        0
-        0   1.0000        0        0
-        0        0   1.0000        0
-        0        0        0   1.0000
-
-
-Gx = 
-   1.0000        0        0        0
-        0   1.0000        0        0
-        0        0        0   1.0000
-        0        0  -1.0000        0
-
-
-Gy = 
-   1.0000        0        0        0
-        0        0        0  -1.0000
-        0        0   1.0000        0
-        0   1.0000        0        0
-
-
-
+--- Iterative MC2GST: Beginning iter 10 of 10 : 306 gate strings ---
+--- Minimum Chi^2 GST ---
+  Sum of Chi^2 = 291.434 (306 data params - 40 model params = expected mean of 266; p-value = 0.136086)
 </pre>
 </div>
 </div>
@@ -426,22 +363,36 @@ Gy =
 </div>
 
 </div>
-<div class="cell border-box-sizing text_cell rendered">
-<div class="prompt input_prompt">
-</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[6]:</div>
 <div class="inner_cell">
-<div class="text_cell_render border-box-sizing rendered_html">
-<h2 id="Basic-Operations-with-Gatesets">Basic Operations with Gatesets<a class="anchor-link" href="#Basic-Operations-with-Gatesets">&#182;</a></h2>
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span class="c"># Compute a few additional quantities needed to generate the report</span>
+<span class="n">Ls</span> <span class="o">=</span> <span class="n">maxLengthList</span>
+<span class="n">gateStrDict</span> <span class="o">=</span> <span class="p">{</span> <span class="p">(</span><span class="n">L</span><span class="p">,</span><span class="n">germ</span><span class="p">):</span><span class="n">pygsti</span><span class="o">.</span><span class="n">construction</span><span class="o">.</span><span class="n">repeat_with_max_length</span><span class="p">(</span><span class="n">germ</span><span class="p">,</span><span class="n">L</span><span class="p">,</span><span class="bp">False</span><span class="p">)</span> <span class="k">for</span> <span class="n">L</span> <span class="ow">in</span> <span class="n">Ls</span> <span class="k">for</span> <span class="n">germ</span> <span class="ow">in</span> <span class="n">germList</span> <span class="p">}</span>
+
+<span class="c">#remove duplicates by replacing duplicate strings with None</span>
+<span class="n">runningList</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">L</span> <span class="ow">in</span> <span class="n">Ls</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">germ</span> <span class="ow">in</span> <span class="n">germList</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">gateStrDict</span><span class="p">[(</span><span class="n">L</span><span class="p">,</span><span class="n">germ</span><span class="p">)]</span> <span class="ow">in</span> <span class="n">runningList</span><span class="p">:</span>
+            <span class="n">gateStrDict</span><span class="p">[(</span><span class="n">L</span><span class="p">,</span><span class="n">germ</span><span class="p">)]</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">else</span><span class="p">:</span> <span class="n">runningList</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="n">gateStrDict</span><span class="p">[(</span><span class="n">L</span><span class="p">,</span><span class="n">germ</span><span class="p">)]</span> <span class="p">)</span>
+</pre></div>
+
 </div>
 </div>
+</div>
+
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 <div class="prompt input_prompt">In&nbsp;[7]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="c">#Once you have a gateset, you can use the functions in GST.GateSetTools to modify them:</span>
-<span class="n">depol_gateset3</span> <span class="o">=</span> <span class="n">gateset3</span><span class="o">.</span><span class="n">depolarize</span><span class="p">(</span><span class="n">gate_noise</span><span class="o">=</span><span class="mf">0.1</span><span class="p">)</span> <span class="c"># 10% depolarization on gates</span>
+<div class=" highlight hl-ipython2"><pre><span class="c">#optimize each gateset to the target</span>
+<span class="n">gs_lsgst_list</span> <span class="o">=</span> <span class="p">[</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">optimize_gauge</span><span class="p">(</span><span class="n">gs</span><span class="p">,</span> <span class="s">&quot;target&quot;</span><span class="p">,</span> <span class="n">targetGateset</span><span class="o">=</span><span class="n">gs_target</span><span class="p">)</span> <span class="k">for</span> <span class="n">gs</span> <span class="ow">in</span> <span class="n">gs_lsgst_list</span> <span class="p">]</span>
 </pre></div>
 
 </div>
@@ -454,8 +405,64 @@ Gy =
 <div class="prompt input_prompt">In&nbsp;[8]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="c">#Writing a gateset as a text file</span>
-<span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">write_gateset</span><span class="p">(</span><span class="n">depol_gateset3</span><span class="p">,</span> <span class="s">&quot;tutorial_files/Example_depolarizedGateset.txt&quot;</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s">&quot;My Gateset&quot;</span><span class="p">)</span>
+<div class=" highlight hl-ipython2"><pre><span class="n">res</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">report</span><span class="o">.</span><span class="n">Results</span><span class="p">()</span>
+<span class="n">res</span><span class="o">.</span><span class="n">init_Ls_and_germs</span><span class="p">(</span><span class="s">&quot;chi2&quot;</span><span class="p">,</span> <span class="n">gs_target</span><span class="p">,</span> <span class="n">ds</span><span class="p">,</span> <span class="n">gs_clgst</span><span class="p">,</span> <span class="n">maxLengthList</span><span class="p">,</span> <span class="n">germList</span><span class="p">,</span>
+                    <span class="n">gs_lsgst_list</span><span class="p">,</span> <span class="n">lsgstListOfLists</span><span class="p">,</span> <span class="n">fiducialList</span><span class="p">,</span> <span class="n">fiducialList</span><span class="p">,</span> 
+                    <span class="n">pygsti</span><span class="o">.</span><span class="n">construction</span><span class="o">.</span><span class="n">repeat_with_max_length</span><span class="p">,</span> <span class="bp">False</span><span class="p">,</span> <span class="n">fidPairs</span><span class="p">)</span>
+
+<span class="n">res</span><span class="o">.</span><span class="n">create_full_report_pdf</span><span class="p">(</span><span class="n">filename</span><span class="o">=</span><span class="s">&quot;tutorial_files/Example_report_FR.pdf&quot;</span><span class="p">,</span> <span class="n">verbosity</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area"><div class="prompt"></div>
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>*** Generating tables ***
+Generating table: targetSpamTable
+Generating table: targetGatesTable
+Generating table: datasetOverviewTable
+Generating table: bestGatesetSpamTable
+Generating table: bestGatesetSpamParametersTable
+Generating table: bestGatesetGatesTable
+Generating table: bestGatesetChoiTable
+Generating table: bestGatesetDecompTable
+Generating table: bestGatesetRotnAxisTable
+Generating table: bestGatesetClosestUnitaryTable
+Generating table: bestGatesetVsTargetTable
+Generating table: bestGatesetErrorGenTable
+Generating table: fiducialListTable
+Generating table: prepStrListTable
+Generating table: effectStrListTable
+Generating table: germListTable
+Generating table: progressTable
+*** Generating plots ***
+ -- Chi2 plots (2):  1  Generating figure: bestEstimateColorBoxPlot
+2  Generating figure: invertedBestEstimateColorBoxPlot
+
+*** Merging into template file ***
+Latex file(s) successfully generated.  Attempting to compile with pdflatex...
+Initial output PDF tutorial_files/Example_report_FR.pdf successfully generated.
+Final output PDF tutorial_files/Example_report_FR.pdf successfully generated. Cleaning up .aux and .log files.
+</pre>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[9]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre> 
 </pre></div>
 
 </div>
@@ -468,163 +475,17 @@ Gy =
 <div class="prompt input_prompt">In&nbsp;[9]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="c">#Printing more detailed information about a gateset</span>
-<span class="n">depol_gateset3</span><span class="o">.</span><span class="n">print_info</span><span class="p">()</span>
+<div class=" highlight hl-ipython2"><pre> 
 </pre></div>
 
 </div>
 </div>
 </div>
 
-<div class="output_wrapper">
-<div class="output">
-
-
-<div class="output_area"><div class="prompt"></div>
-<div class="output_subarea output_stream output_stdout output_text">
-<pre>rhoVec[0] =    0.7071        0        0   0.7071
-
-
-EVec[0] =    0.7071        0        0  -0.7071
-
-
-Gi = 
-   1.0000        0        0        0
-        0   0.9000        0        0
-        0        0   0.9000        0
-        0        0        0   0.9000
-
-
-Gx = 
-   1.0000        0        0        0
-        0   0.9000        0        0
-        0        0        0   0.9000
-        0        0  -0.9000        0
-
-
-Gy = 
-   1.0000        0        0        0
-        0        0        0  -0.9000
-        0        0   0.9000        0
-        0   0.9000        0        0
-
-
-
-
-
-Choi Matrices:
-Choi(Gi) in pauli basis = 
-  --eigenvals =  [0.024999999999999977, 0.024999999999999998, 0.024999999999999998, 0.92500000000000016] 
-
-Choi(Gx) in pauli basis = 
-  --eigenvals =  [0.025000000000000005, 0.025000000000000005, 0.025000000000000071, 0.92500000000000049] 
-
-Choi(Gy) in pauli basis = 
-  --eigenvals =  [0.025000000000000005, 0.025000000000000005, 0.025000000000000071, 0.92500000000000049] 
-
-Sum of negative Choi eigenvalues =  0.0
-rhoVec Penalty (&gt;0 if invalid rhoVecs) =  0.0
-EVec Penalty (&gt;0 if invalid EVecs) =  0
-</pre>
-</div>
-</div>
-
-</div>
-</div>
-
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[10]:</div>
-<div class="inner_cell">
-    <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
-<span class="k">def</span> <span class="nf">SPAM</span><span class="p">(</span> <span class="n">G</span> <span class="p">):</span>
-    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span> <span class="n">G</span><span class="o">.</span><span class="n">rhoVecs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="n">G</span><span class="o">.</span><span class="n">EVecs</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
-<span class="n">dp3</span> <span class="o">=</span> <span class="n">depol_gateset3</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
-<span class="c">#dp3.set_evec( dp3.get_rho_vec(0), 0)</span>
-<span class="n">dp4</span> <span class="o">=</span> <span class="n">dp3</span><span class="o">.</span><span class="n">depolarize</span><span class="p">(</span><span class="n">spam_noise</span><span class="o">=</span><span class="mf">0.1</span><span class="p">)</span>
-<span class="n">SPAM</span><span class="p">(</span><span class="n">dp4</span><span class="p">)</span>
-</pre></div>
-
-</div>
-</div>
-</div>
-
-<div class="output_wrapper">
-<div class="output">
-
-
-<div class="output_area"><div class="prompt output_prompt">Out[10]:</div>
-
-
-<div class="output_text output_subarea output_execute_result">
-<pre>array([[ 0.095]])</pre>
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-<div class="cell border-box-sizing code_cell rendered">
-<div class="input">
-<div class="prompt input_prompt">In&nbsp;[11]:</div>
-<div class="inner_cell">
-    <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="k">print</span> <span class="n">depol_gateset3</span>
-</pre></div>
-
-</div>
-</div>
-</div>
-
-<div class="output_wrapper">
-<div class="output">
-
-
-<div class="output_area"><div class="prompt"></div>
-<div class="output_subarea output_stream output_stdout output_text">
-<pre>rhoVec[0] =    0.7071        0        0   0.7071
-
-
-EVec[0] =    0.7071        0        0  -0.7071
-
-
-Gi = 
-   1.0000        0        0        0
-        0   0.9000        0        0
-        0        0   0.9000        0
-        0        0        0   0.9000
-
-
-Gx = 
-   1.0000        0        0        0
-        0   0.9000        0        0
-        0        0        0   0.9000
-        0        0  -0.9000        0
-
-
-Gy = 
-   1.0000        0        0        0
-        0        0        0  -0.9000
-        0        0   0.9000        0
-        0   0.9000        0        0
-
-
-
-</pre>
-</div>
-</div>
-
-</div>
-</div>
-
-</div>
-<div class="cell border-box-sizing code_cell rendered">
-<div class="input">
-<div class="prompt input_prompt">In&nbsp;[&nbsp;]:</div>
+<div class="prompt input_prompt">In&nbsp;[9]:</div>
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython2"><pre> 

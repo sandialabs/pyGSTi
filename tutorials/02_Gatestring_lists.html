@@ -3,7 +3,7 @@
 <head>
 
 <meta charset="utf-8" />
-<title>04 Algorithms</title>
+<title>02 Gatestring lists</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.1.10/require.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
@@ -172,12 +172,28 @@ div#notebook {
   <div tabindex="-1" id="notebook" class="border-box-sizing">
     <div class="container" id="notebook-container">
 
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h1 id="Gate-String-Lists-Tutorial">Gate String Lists Tutorial<a class="anchor-link" href="#Gate-String-Lists-Tutorial">&#182;</a></h1><p>This tutorial will show you how to create and use <code>GateString</code> objects, which represent an ordered sequence (or "string") of quantum gate operations.  In almost all cases, you'll be using a list (or even a list of lists!) of <code>GateString</code>s, so we'll often be talking about "gate string lists".  You may have noticed in Tutorial 00 that we had to generate gate string lists of "fiducials" and "germs" in order to populate the data template file which GST analyzes to produce its estimates.</p>
+<p>A <code>GateString</code> object is nearly identical, and sometimes interchangeable, with a Python tuple of gate labels (i.e. the names beginning with <code>G</code> that label the gate operations in a <code>GateSet</code>).  They can be accessed and operated upon just as a standard Python tuple.  The primary difference between a <code>GateString</code> and a tuple is that a <code>GateString</code> also contains a "string representation" of the gate sequence.  This string representation gets carried along for the ride until it's needed, typically when writing a the gate string to a file.  The string representation must <em>evaluate</em>, using pyGSTi's allowed text format for gate strings (see below), to the tuple-of-gate-labels, or "tuple representation".  The string representation is intended to contain a compact and intuitive human-readable form of the gate sequence that is used for display purposes.  For example, the gate string <code>('Gx','Gx','Gx','Gx','Gx')</code> might have the string representation <code>"Gx^5"</code>.  If needed, the tuple and string representations of any <code>GateString</code> can be accessed via <code>.tup</code> and <code>.str</code> respectively.</p>
+<p>Gate strings are central to Gate Set Tomography, as they describe both real and "simulated" experiments.  A <code>GateString</code>'s ordered sequence tells the experimentalist which gates they must execute on their hardware and likewise what order to compose (i.e. multiply) the gate matrices contained in a <code>GateSet</code>.  The outcomes of an experiment correspond to different <strong>SPAM labels</strong> (c.f. the gate set tutorial), and so by repeating an experiment one obtains counts and thereby frequencies for each SPAM label.  Given a <code>GateSet</code> one can obtain corresponding probabilities by muliplying gate matrices and contracting the product between the state preparation and POVM effect vectors associated with each SPAM label.</p>
+<p>The <strong>ordering direction</strong> is important.  The elements of a <code>GateString</code> are read from <strong>left-to-right</strong>, meaning the first (left-most) gate label is performed first.  This is very natural for experiments since one can read the gate string as a script, executing each gate as one reads from left to right.  However, since we insist on "normal" matrix multiplication conventions, the ordering of the matrix product is <em>reversed</em> from that of the gate string.  For example, the gate string <code>('Ga','Gb','Gc')</code>, in which Ga is performed first, corresponds to the matrix product $G_c G_b G_a$.  The probability of this gate string for a SPAM label associated with the (column) vectors ($\rho_0$,$E_0$) is given by $E_0^T G_c G_b G_a \rho_0$, which can be interpreted as "prepare state 0 first, then apply gate A, then B, then C, and finally measure effect 0".  While this nuance is typically hidden from the user (the <code>GateSet</code> functions which compute products and probabilities from <code>GateString</code>s perform the order reversal internally), it becomes very important if you plan to perform such products by hand.</p>
+<p>We'll now go over some examples of how to create and use a single <code>GateString</code>.</p>
+
+</div>
+</div>
+</div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 <div class="prompt input_prompt">In&nbsp;[1]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="c">## Steps for running basic GST Algorithms</span>
+<div class=" highlight hl-ipython2"><pre><span class="kn">import</span> <span class="nn">pygsti</span> <span class="c"># the main pyGSTi module</span>
+<span class="kn">import</span> <span class="nn">pygsti.construction</span> <span class="kn">as</span> <span class="nn">pc</span>  <span class="c">#shorthand</span>
+<span class="kn">from</span> <span class="nn">pygsti.construction</span> <span class="kn">import</span> <span class="n">std1Q_XY</span> <span class="c">#a standard gateset &amp; peripherals</span>
 </pre></div>
 
 </div>
@@ -190,7 +206,8 @@ div#notebook {
 </div>
 <div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
-<h3 id="Setup">Setup<a class="anchor-link" href="#Setup">&#182;</a></h3>
+<h2 id="A-simple-example:-the-single-GateString">A simple example: the single <code>GateString</code><a class="anchor-link" href="#A-simple-example:-the-single-GateString">&#182;</a></h2><p>The cell below show how to create a <code>GateString</code> object from a tuple, optionally with a corresponding string representation.  It demonstrates how to access the tuple and string representations directly, and the tuple-like operations that can be performed on a <code>GateString</code>.</p>
+
 </div>
 </div>
 </div>
@@ -199,36 +216,39 @@ div#notebook {
 <div class="prompt input_prompt">In&nbsp;[2]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="c">#Step 1: Import the GST module -- you probably want this at the beginning of every notebook</span>
-<span class="kn">import</span> <span class="nn">pygsti</span>
-<span class="kn">import</span> <span class="nn">json</span>
-</pre></div>
+<div class=" highlight hl-ipython2"><pre><span class="c">#Construction of a GateString</span>
+<span class="n">s1</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">GateString</span><span class="p">(</span> <span class="p">(</span><span class="s">&#39;Gx&#39;</span><span class="p">,</span><span class="s">&#39;Gx&#39;</span><span class="p">)</span> <span class="p">)</span> <span class="c"># from a tuple</span>
+<span class="n">s2</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">GateString</span><span class="p">(</span> <span class="p">(</span><span class="s">&#39;Gx&#39;</span><span class="p">,</span><span class="s">&#39;Gx&#39;</span><span class="p">),</span> <span class="s">&quot;Gx^2&quot;</span> <span class="p">)</span> <span class="c"># from tuple and string representations (must match!)</span>
+<span class="n">s3</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">GateString</span><span class="p">(</span> <span class="bp">None</span><span class="p">,</span> <span class="s">&quot;Gx^2&quot;</span> <span class="p">)</span> <span class="c"># from just a string representation</span>
 
-</div>
-</div>
-</div>
+<span class="c">#All of these are equivalent (even though their string representations aren&#39;t -- only tuples are compared)</span>
+<span class="k">assert</span><span class="p">(</span><span class="n">s1</span> <span class="o">==</span> <span class="n">s2</span> <span class="o">==</span> <span class="n">s3</span><span class="p">)</span>
 
-</div>
-<div class="cell border-box-sizing code_cell rendered">
-<div class="input">
-<div class="prompt input_prompt">In&nbsp;[3]:</div>
-<div class="inner_cell">
-    <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="c">#Step 2: Load target gateset, dataset, and list of fiducial gate strings. In this case we load directly from files created in past tutorials</span>
-<span class="n">gs_target</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">load_gateset</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_Gateset.txt&quot;</span><span class="p">)</span>
-<span class="n">ds</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">load_dataset</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_Dataset.txt&quot;</span><span class="p">,</span> <span class="n">cache</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
-<span class="n">dsLowCounts</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">load_dataset</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_Dataset_LowCnts.txt&quot;</span><span class="p">,</span> <span class="n">cache</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
-<span class="n">fiducialList</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">load_gatestring_list</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_FiducialList.txt&quot;</span><span class="p">)</span>
+<span class="c">#Printing displays the string representation</span>
+<span class="k">print</span> <span class="s">&quot;Printing&quot;</span>
+<span class="k">print</span> <span class="s">&quot;s1 =&quot;</span><span class="p">,</span><span class="n">s1</span>
+<span class="k">print</span> <span class="s">&quot;s2 =&quot;</span><span class="p">,</span><span class="n">s2</span>
+<span class="k">print</span> <span class="s">&quot;s3 =&quot;</span><span class="p">,</span><span class="n">s3</span>
+<span class="k">print</span>
 
-<span class="n">depol_gateset</span> <span class="o">=</span> <span class="n">gs_target</span><span class="o">.</span><span class="n">depolarize</span><span class="p">(</span><span class="n">gate_noise</span><span class="o">=</span><span class="mf">0.1</span><span class="p">)</span>
+<span class="c">#Casting to tuple displays the tuple representation</span>
+<span class="k">print</span> <span class="s">&quot;Printing tuple(.)&quot;</span>
+<span class="k">print</span> <span class="s">&quot;s1 =&quot;</span><span class="p">,</span><span class="nb">tuple</span><span class="p">(</span><span class="n">s1</span><span class="p">)</span>
+<span class="k">print</span> <span class="s">&quot;s2 =&quot;</span><span class="p">,</span><span class="nb">tuple</span><span class="p">(</span><span class="n">s2</span><span class="p">)</span>
+<span class="k">print</span> <span class="s">&quot;s3 =&quot;</span><span class="p">,</span><span class="nb">tuple</span><span class="p">(</span><span class="n">s3</span><span class="p">)</span>
+<span class="k">print</span> 
 
-<span class="c">#Could also load a fiducial dictionary file like this:</span>
-<span class="c">#fiducialDict = GST.load_gatestring_dict(&quot;Example_FiducialList.txt&quot;)</span>
-<span class="c">#fiducialList = fiducialDict.values() #all we really need are the fiducial strings themselves</span>
+<span class="c">#Access to tuple or string representation directly:</span>
+<span class="k">print</span> <span class="s">&quot;s1.tup =&quot;</span><span class="p">,</span><span class="n">s1</span><span class="o">.</span><span class="n">tup</span><span class="p">,</span><span class="s">&quot;  s1.str =&quot;</span><span class="p">,</span><span class="n">s1</span><span class="o">.</span><span class="n">str</span>
+<span class="k">print</span> 
 
-<span class="k">print</span> <span class="s">&quot;Loaded target gateset with gate labels: &quot;</span><span class="p">,</span><span class="n">gs_target</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
-<span class="k">print</span> <span class="s">&quot;Loaded fiducial list of length: &quot;</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">fiducialList</span><span class="p">)</span>
-<span class="k">print</span> <span class="s">&quot;Loaded dataset of length: &quot;</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">ds</span><span class="p">)</span>
+<span class="c">#Operations</span>
+<span class="k">assert</span><span class="p">(</span><span class="n">s1</span> <span class="o">==</span> <span class="p">(</span><span class="s">&#39;Gx&#39;</span><span class="p">,</span><span class="s">&#39;Gx&#39;</span><span class="p">))</span> <span class="c">#can compare with tuples</span>
+<span class="n">s4</span> <span class="o">=</span> <span class="n">s1</span><span class="o">+</span><span class="n">s2</span> <span class="c">#addition (note this concatenates string reps)</span>
+<span class="n">s5</span> <span class="o">=</span> <span class="n">s1</span><span class="o">*</span><span class="mi">3</span>  <span class="c">#integer-multplication (note this exponentiates in string rep)</span>
+<span class="k">print</span> <span class="s">&quot;s1 + s2 = &quot;</span><span class="p">,</span><span class="n">s4</span><span class="p">,</span> <span class="s">&quot;, tuple = &quot;</span><span class="p">,</span><span class="nb">tuple</span><span class="p">(</span><span class="n">s4</span><span class="p">)</span>
+<span class="k">print</span> <span class="s">&quot;s1*3 = &quot;</span><span class="p">,</span><span class="n">s5</span><span class="p">,</span> <span class="s">&quot;, tuple = &quot;</span><span class="p">,</span><span class="nb">tuple</span><span class="p">(</span><span class="n">s5</span><span class="p">)</span>
+<span class="k">print</span>
 </pre></div>
 
 </div>
@@ -241,11 +261,21 @@ div#notebook {
 
 <div class="output_area"><div class="prompt"></div>
 <div class="output_subarea output_stream output_stdout output_text">
-<pre>Loading from cache file:  tutorial_files/Example_Dataset.txt.cache
-Loading from cache file:  tutorial_files/Example_Dataset_LowCnts.txt.cache
-Loaded target gateset with gate labels:  [&apos;Gi&apos;, &apos;Gx&apos;, &apos;Gy&apos;]
-Loaded fiducial list of length:  6
-Loaded dataset of length:  2737
+<pre>Printing
+s1 = GxGx
+s2 = Gx^2
+s3 = Gx^2
+
+Printing tuple(.)
+s1 = (&apos;Gx&apos;, &apos;Gx&apos;)
+s2 = (&apos;Gx&apos;, &apos;Gx&apos;)
+s3 = (&apos;Gx&apos;, &apos;Gx&apos;)
+
+s1.tup = (&apos;Gx&apos;, &apos;Gx&apos;)   s1.str = GxGx
+
+s1 + s2 =  GxGxGx^2 , tuple =  (&apos;Gx&apos;, &apos;Gx&apos;, &apos;Gx&apos;, &apos;Gx&apos;)
+s1*3 =  (GxGx)^3 , tuple =  (&apos;Gx&apos;, &apos;Gx&apos;, &apos;Gx&apos;, &apos;Gx&apos;, &apos;Gx&apos;, &apos;Gx&apos;)
+
 </pre>
 </div>
 </div>
@@ -259,7 +289,61 @@ Loaded dataset of length:  2737
 </div>
 <div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
-<h3 id="LGST-to-get-an-initial-estimate">LGST to get an initial estimate<a class="anchor-link" href="#LGST-to-get-an-initial-estimate">&#182;</a></h3>
+<h2 id="List-Construction-Functions:--pygsti.construction-and-create_gatestring_list">List Construction Functions:  <code>pygsti.construction</code> and <code>create_gatestring_list</code><a class="anchor-link" href="#List-Construction-Functions:--pygsti.construction-and-create_gatestring_list">&#182;</a></h2><p>Usually you'll be working with entire lists of <code>GateString</code> objects which define some part of the experiments utilized by Gate Set Tomography.  pyGSTi provides several functions for constructing gate string lists, which we not demonstrate.</p>
+<p>The workhorse function is <code>pygsti.construction.create_gatestring_list</code>, which executes its positional arguments within a nested loop given by iterable keyword arguments.  That's a mouthful, so let's look at a few examples:</p>
+
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[3]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span class="n">As</span> <span class="o">=</span> <span class="p">[(</span><span class="s">&#39;a1&#39;</span><span class="p">,),(</span><span class="s">&#39;a2&#39;</span><span class="p">,)]</span>
+<span class="n">Bs</span> <span class="o">=</span> <span class="p">[(</span><span class="s">&#39;b1&#39;</span><span class="p">,</span><span class="s">&#39;b2&#39;</span><span class="p">),</span> <span class="p">(</span><span class="s">&#39;b3&#39;</span><span class="p">,</span><span class="s">&#39;b4&#39;</span><span class="p">)]</span>
+
+<span class="k">def</span> <span class="nf">rep2</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">x</span><span class="o">+</span><span class="n">x</span>
+
+<span class="n">list1</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">create_gatestring_list</span><span class="p">(</span><span class="s">&quot;a&quot;</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="n">As</span><span class="p">)</span>
+<span class="n">list2</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">create_gatestring_list</span><span class="p">(</span><span class="s">&quot;a+b&quot;</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="n">As</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="n">Bs</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;a&#39;</span><span class="p">,</span><span class="s">&#39;b&#39;</span><span class="p">])</span>
+<span class="n">list3</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">create_gatestring_list</span><span class="p">(</span><span class="s">&quot;R(a)+c&quot;</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="n">As</span><span class="p">,</span> <span class="n">c</span><span class="o">=</span><span class="p">[(</span><span class="s">&#39;c&#39;</span><span class="p">,)],</span> <span class="n">R</span><span class="o">=</span><span class="n">rep2</span><span class="p">)</span>
+
+<span class="k">print</span> <span class="s">&quot;list1 = &quot;</span><span class="p">,</span><span class="nb">map</span><span class="p">(</span><span class="nb">tuple</span><span class="p">,</span><span class="n">list1</span><span class="p">)</span>
+<span class="k">print</span> <span class="s">&quot;list2 = &quot;</span><span class="p">,</span><span class="n">list2</span>
+<span class="k">print</span> <span class="s">&quot;list3 = &quot;</span><span class="p">,</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span><span class="n">list3</span><span class="p">)</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area"><div class="prompt"></div>
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>list1 =  [(&apos;a1&apos;,), (&apos;a2&apos;,)]
+list2 =  [GateString(a1b1b2), GateString(a1b3b4), GateString(a2b1b2), GateString(a2b3b4)]
+list3 =  [&apos;a1a1c&apos;, &apos;a2a2c&apos;]
+</pre>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>Many of the gate sequences used by Gate Set Tomography are composed of three parts.  A "preparation fiducial" sequence is followed by a "repeated germ" sequence, which is followed by a "measurement fiducial" sequence.  We won't get into why this structure is used, but simply use this fact to motivate looking at gate strings of the form $f_1 + R(g) + f_2$, where the $f_1$ and $f_2$ fiducial sequences are simple short sequences are $R(g)$ is a possibly long sequence that is generated by repeating a short sequence $g$ called a "germ".</p>
+<p>It is possible to generate "repeated germ" sequences in several ways using the functions <strong><code>pygsti.construction.repeat_</code><em>xxx</em> </strong>.  In modern GST, germ sequences are always repeated an <em>integer</em> number of times rather than being truncated to a precise length, so <code>repeat_with_max_length</code> is used instead of <code>repeat_and_truncate</code>.  Below we demonstrate the use of these functions.</p>
+
 </div>
 </div>
 </div>
@@ -268,28 +352,11 @@ Loaded dataset of length:  2737
 <div class="prompt input_prompt">In&nbsp;[4]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="c">#Run LGST to get an initial estimate for the gates in gs_target based on the data in ds</span>
-<span class="n">specs</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">construction</span><span class="o">.</span><span class="n">build_spam_specs</span><span class="p">(</span><span class="n">fiducialGateStrings</span><span class="o">=</span><span class="n">fiducialList</span><span class="p">)</span>
-<span class="n">gs_lgst</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">do_lgst</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">specs</span><span class="p">,</span> <span class="n">targetGateset</span><span class="o">=</span><span class="n">gs_target</span><span class="p">,</span> <span class="n">svdTruncateTo</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">verbosity</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<div class=" highlight hl-ipython2"><pre><span class="k">print</span> <span class="n">pc</span><span class="o">.</span><span class="n">repeat_and_truncate</span><span class="p">((</span><span class="s">&#39;A&#39;</span><span class="p">,</span><span class="s">&#39;B&#39;</span><span class="p">,</span><span class="s">&#39;C&#39;</span><span class="p">),</span><span class="mi">5</span><span class="p">)</span> <span class="c">#args (x,N): repeat x until it is exactly length N</span>
 
-<span class="c">#Gauge optimize the result to match the target gateset</span>
-<span class="n">gs_lgst_after_gauge_opt</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">optimize_gauge</span><span class="p">(</span><span class="n">gs_lgst</span><span class="p">,</span> <span class="s">&quot;target&quot;</span><span class="p">,</span> <span class="n">targetGateset</span><span class="o">=</span><span class="n">gs_target</span><span class="p">)</span>
+<span class="k">print</span> <span class="n">pc</span><span class="o">.</span><span class="n">repeat_with_max_length</span><span class="p">((</span><span class="s">&#39;A&#39;</span><span class="p">,</span><span class="s">&#39;B&#39;</span><span class="p">,</span><span class="s">&#39;C&#39;</span><span class="p">),</span><span class="mi">5</span><span class="p">)</span> <span class="c">#args (x,N): repeat x the maximum integer number of times so len(x) &lt; N</span>
 
-<span class="c">#Contract the result to CPTP</span>
-<span class="n">gs_clgst</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">contract</span><span class="p">(</span><span class="n">gs_lgst_after_gauge_opt</span><span class="p">,</span> <span class="s">&quot;CPTP&quot;</span><span class="p">)</span>
-</pre></div>
-
-</div>
-</div>
-</div>
-
-</div>
-<div class="cell border-box-sizing code_cell rendered">
-<div class="input">
-<div class="prompt input_prompt">In&nbsp;[5]:</div>
-<div class="inner_cell">
-    <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="k">print</span> <span class="n">gs_lgst</span>
+<span class="k">print</span> <span class="n">pc</span><span class="o">.</span><span class="n">repeat_count_with_max_length</span><span class="p">((</span><span class="s">&#39;A&#39;</span><span class="p">,</span><span class="s">&#39;B&#39;</span><span class="p">,</span><span class="s">&#39;C&#39;</span><span class="p">),</span><span class="mi">5</span><span class="p">)</span> <span class="c">#args (x,N): the maximum integer number of times so len(x) &lt; N</span>
 </pre></div>
 
 </div>
@@ -302,33 +369,89 @@ Loaded dataset of length:  2737
 
 <div class="output_area"><div class="prompt"></div>
 <div class="output_subarea output_stream output_stdout output_text">
-<pre>rhoVec[0] =    0.7096   0.0234  -0.0264   0.7466
+<pre>(&apos;A&apos;, &apos;B&apos;, &apos;C&apos;, &apos;A&apos;, &apos;B&apos;)
+(&apos;A&apos;, &apos;B&apos;, &apos;C&apos;)
+1
+</pre>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>We can combine a repeated germ sequence between two fiducial sequences using <code>create_gatestring_list</code>.  This demonstrates the power of the <code>create_gatestring_list</code> to perform nested loops.  We also introduce the "bulk-conversion" function <code>gatestring_list</code>, which creates a list of <code>GateString</code> objects from a list of tuples.</p>
+
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[5]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span class="n">fids</span>  <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">gatestring_list</span><span class="p">(</span> <span class="p">[</span> <span class="p">(</span><span class="s">&#39;Gf0&#39;</span><span class="p">,),</span> <span class="p">(</span><span class="s">&#39;Gf1&#39;</span><span class="p">,)</span>    <span class="p">]</span> <span class="p">)</span> <span class="c">#fiducial strings</span>
+<span class="n">germs</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">gatestring_list</span><span class="p">(</span> <span class="p">[</span> <span class="p">(</span><span class="s">&#39;G0&#39;</span><span class="p">,),</span> <span class="p">(</span><span class="s">&#39;G1a&#39;</span><span class="p">,</span><span class="s">&#39;G1b&#39;</span><span class="p">)]</span> <span class="p">)</span> <span class="c">#germ strings</span>
+
+<span class="n">gateStrings1</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">create_gatestring_list</span><span class="p">(</span><span class="s">&quot;f0+germ*e+f1&quot;</span><span class="p">,</span> <span class="n">f0</span><span class="o">=</span><span class="n">fids</span><span class="p">,</span> <span class="n">f1</span><span class="o">=</span><span class="n">fids</span><span class="p">,</span>
+                                       <span class="n">germ</span><span class="o">=</span><span class="n">germs</span><span class="p">,</span> <span class="n">e</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="p">[</span><span class="s">&quot;germ&quot;</span><span class="p">,</span><span class="s">&quot;f0&quot;</span><span class="p">,</span><span class="s">&quot;f1&quot;</span><span class="p">])</span>
+<span class="k">print</span> <span class="s">&quot;gateStrings1 = </span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span><span class="n">gateStrings1</span><span class="p">)),</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
+
+<span class="n">gateStrings2</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">create_gatestring_list</span><span class="p">(</span><span class="s">&quot;f0+T(germ,N)+f1&quot;</span><span class="p">,</span> <span class="n">f0</span><span class="o">=</span><span class="n">fids</span><span class="p">,</span> <span class="n">f1</span><span class="o">=</span><span class="n">fids</span><span class="p">,</span>
+                                        <span class="n">germ</span><span class="o">=</span><span class="n">germs</span><span class="p">,</span> <span class="n">N</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="n">pc</span><span class="o">.</span><span class="n">repeat_and_truncate</span><span class="p">,</span>
+                                        <span class="n">order</span><span class="o">=</span><span class="p">[</span><span class="s">&quot;germ&quot;</span><span class="p">,</span><span class="s">&quot;f0&quot;</span><span class="p">,</span><span class="s">&quot;f1&quot;</span><span class="p">])</span>
+<span class="k">print</span> <span class="s">&quot;gateStrings2 = </span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span><span class="n">gateStrings2</span><span class="p">)),</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
+
+<span class="n">gateStrings3</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">create_gatestring_list</span><span class="p">(</span><span class="s">&quot;f0+T(germ,N)+f1&quot;</span><span class="p">,</span> <span class="n">f0</span><span class="o">=</span><span class="n">fids</span><span class="p">,</span> <span class="n">f1</span><span class="o">=</span><span class="n">fids</span><span class="p">,</span>
+                                        <span class="n">germ</span><span class="o">=</span><span class="n">germs</span><span class="p">,</span> <span class="n">N</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="n">pc</span><span class="o">.</span><span class="n">repeat_with_max_length</span><span class="p">,</span>
+                                        <span class="n">order</span><span class="o">=</span><span class="p">[</span><span class="s">&quot;germ&quot;</span><span class="p">,</span><span class="s">&quot;f0&quot;</span><span class="p">,</span><span class="s">&quot;f1&quot;</span><span class="p">])</span>
+<span class="k">print</span> <span class="s">&quot;gateStrings3 = </span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span><span class="n">gateStrings3</span><span class="p">)),</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
 
 
-EVec[0] =    0.6872  -0.0084   0.0009  -0.6489
+<div class="output_area"><div class="prompt"></div>
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>gateStrings1 = 
+Gf0(G0)^2Gf0
+Gf0(G0)^2Gf1
+Gf1(G0)^2Gf0
+Gf1(G0)^2Gf1
+Gf0(G1aG1b)^2Gf0
+Gf0(G1aG1b)^2Gf1
+Gf1(G1aG1b)^2Gf0
+Gf1(G1aG1b)^2Gf1 
 
+gateStrings2 = 
+Gf0G0G0G0Gf0
+Gf0G0G0G0Gf1
+Gf1G0G0G0Gf0
+Gf1G0G0G0Gf1
+Gf0G1aG1bG1aGf0
+Gf0G1aG1bG1aGf1
+Gf1G1aG1bG1aGf0
+Gf1G1aG1bG1aGf1 
 
-Gi = 
-   0.9955   0.0094  -0.0005  -0.0030
-  -0.0045   0.9273  -0.0507  -0.0053
-   0.0160   0.0100   0.8971   0.0237
-  -0.0009   0.0026   0.0196   0.9062
-
-
-Gx = 
-   1.0021   0.0017  -0.0021  -0.0004
-   0.0097   0.9089  -0.0134  -0.0030
-   0.0141  -0.0198  -0.0171   0.9948
-  -0.0563  -0.0285  -0.8119   0.0049
-
-
-Gy = 
-   0.9932   0.0041  -0.0154  -0.0084
-  -0.0427   0.0114  -0.0031  -0.9818
-   0.0087   0.0059   0.8893  -0.0201
-  -0.0624   0.8159  -0.0134  -0.0042
-
-
+gateStrings3 = 
+Gf0(G0)^3Gf0
+Gf0(G0)^3Gf1
+Gf1(G0)^3Gf0
+Gf1(G0)^3Gf1
+Gf0(G1aG1b)Gf0
+Gf0(G1aG1b)Gf1
+Gf1(G1aG1b)Gf0
+Gf1(G1aG1b)Gf1 
 
 </pre>
 </div>
@@ -343,7 +466,8 @@ Gy =
 </div>
 <div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
-<h3 id="Extended-LGST-(eLGST)">Extended LGST (eLGST)<a class="anchor-link" href="#Extended-LGST-(eLGST)">&#182;</a></h3>
+<p>In addition to <code>create_gatestring_list</code>, the <strong><code>pygsti.construction.list_</code><em>xxx</em> </strong> functions provide ways of constructing common gate string lists.  The example below shows how to construct all possible gate strings within a certain length range, as well as how to construct the set of gate strings needed to run Linear Gate Set Tomography given a set of fiducial strings.</p>
+
 </div>
 </div>
 </div>
@@ -352,14 +476,10 @@ Gy =
 <div class="prompt input_prompt">In&nbsp;[6]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="c">#Get rho and E specifiers, needed by LGST</span>
-<span class="n">specs</span>  <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">construction</span><span class="o">.</span><span class="n">build_spam_specs</span><span class="p">(</span><span class="n">fiducialGateStrings</span><span class="o">=</span><span class="n">fiducialList</span><span class="p">)</span>
-<span class="n">germList</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">load_gatestring_list</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_GermsList.txt&quot;</span><span class="p">)</span>
-<span class="n">maxLengthList</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="nb">open</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_maxLengths.json&quot;</span><span class="p">,</span><span class="s">&quot;r&quot;</span><span class="p">))</span>
-<span class="n">elgstListOfLists</span> <span class="o">=</span> <span class="p">[</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">load_gatestring_list</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_eLGSTlist</span><span class="si">%d</span><span class="s">.txt&quot;</span> <span class="o">%</span> <span class="n">l</span><span class="p">)</span> <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">maxLengthList</span><span class="p">]</span>
-                         
-<span class="n">gs_exlgst</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">do_iterative_exlgst</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">gs_clgst</span><span class="p">,</span> <span class="n">specs</span><span class="p">,</span> <span class="n">elgstListOfLists</span><span class="p">,</span> <span class="n">targetGateset</span><span class="o">=</span><span class="n">gs_target</span><span class="p">,</span>
-                                  <span class="n">svdTruncateTo</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">verbosity</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<div class=" highlight hl-ipython2"><pre><span class="n">myGates</span> <span class="o">=</span> <span class="p">[</span> <span class="s">&#39;Gx&#39;</span><span class="p">,</span> <span class="s">&#39;Gy&#39;</span> <span class="p">]</span>  <span class="c">#gate labels -- often just gateset.gates.keys()</span>
+<span class="n">allStringsInLengthRange</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">list_all_gatestrings</span><span class="p">(</span><span class="n">myGates</span><span class="p">,</span> <span class="n">minlength</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">maxlength</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="k">print</span> <span class="s">&quot;</span><span class="se">\n</span><span class="s">All strings using </span><span class="si">%s</span><span class="s"> up to length 2 = </span><span class="se">\n</span><span class="s">&quot;</span> \
+    <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">myGates</span><span class="p">),</span> <span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span><span class="n">allStringsInLengthRange</span><span class="p">))</span>
 </pre></div>
 
 </div>
@@ -373,55 +493,14 @@ Gy =
 <div class="output_area"><div class="prompt"></div>
 <div class="output_subarea output_stream output_stdout output_text">
 <pre>
---- Iterative eLGST: Beginning iter 1 of 10 : 3 gate strings ---
---- eLGST (least squares) ---
-  Sum of minimum least squares error (w/out reg terms) = 7.40069e-32
-   frobenius distance to target =  0.0573635151888
-
---- Iterative eLGST: Beginning iter 2 of 10 : 4 gate strings ---
---- eLGST (least squares) ---
-  Sum of minimum least squares error (w/out reg terms) = 1.80731e-30
-   frobenius distance to target =  0.0573635151888
-
---- Iterative eLGST: Beginning iter 3 of 10 : 8 gate strings ---
---- eLGST (least squares) ---
-  Sum of minimum least squares error (w/out reg terms) = 0.0146807
-   frobenius distance to target =  0.0577479001878
-
---- Iterative eLGST: Beginning iter 4 of 10 : 18 gate strings ---
---- eLGST (least squares) ---
-  Sum of minimum least squares error (w/out reg terms) = 0.0793128
-   frobenius distance to target =  0.057722007158
-
---- Iterative eLGST: Beginning iter 5 of 10 : 29 gate strings ---
---- eLGST (least squares) ---
-  Sum of minimum least squares error (w/out reg terms) = 0.123323
-   frobenius distance to target =  0.0579279771484
-
---- Iterative eLGST: Beginning iter 6 of 10 : 40 gate strings ---
---- eLGST (least squares) ---
-  Sum of minimum least squares error (w/out reg terms) = 0.193558
-   frobenius distance to target =  0.0575583465307
-
---- Iterative eLGST: Beginning iter 7 of 10 : 51 gate strings ---
---- eLGST (least squares) ---
-  Sum of minimum least squares error (w/out reg terms) = 0.271269
-   frobenius distance to target =  0.0575235722462
-
---- Iterative eLGST: Beginning iter 8 of 10 : 62 gate strings ---
---- eLGST (least squares) ---
-  Sum of minimum least squares error (w/out reg terms) = 0.343526
-   frobenius distance to target =  0.057539360534
-
---- Iterative eLGST: Beginning iter 9 of 10 : 73 gate strings ---
---- eLGST (least squares) ---
-  Sum of minimum least squares error (w/out reg terms) = 0.400736
-   frobenius distance to target =  0.0575433931016
-
---- Iterative eLGST: Beginning iter 10 of 10 : 84 gate strings ---
---- eLGST (least squares) ---
-  Sum of minimum least squares error (w/out reg terms) = 0.474292
-   frobenius distance to target =  0.0575443735376
+All strings using [&apos;Gx&apos;, &apos;Gy&apos;] up to length 2 = 
+{}
+Gx
+Gy
+GxGx
+GxGy
+GyGx
+GyGy
 </pre>
 </div>
 </div>
@@ -429,29 +508,25 @@ Gy =
 </div>
 </div>
 
-</div>
-<div class="cell border-box-sizing text_cell rendered">
-<div class="prompt input_prompt">
-</div>
-<div class="inner_cell">
-<div class="text_cell_render border-box-sizing rendered_html">
-<h3 id="Minimum-$\chi^2$-GST-(MC2GST)">Minimum-$\chi^2$ GST (MC2GST)<a class="anchor-link" href="#Minimum-$\chi^2$-GST-(MC2GST)">&#182;</a></h3>
-</div>
-</div>
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 <div class="prompt input_prompt">In&nbsp;[7]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="c">#Get lists of gate strings for successive iterations of LSGST to use</span>
-<span class="n">specs</span>  <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">construction</span><span class="o">.</span><span class="n">build_spam_specs</span><span class="p">(</span><span class="n">fiducialGateStrings</span><span class="o">=</span><span class="n">fiducialList</span><span class="p">)</span>
-<span class="n">germList</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">load_gatestring_list</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_GermsList.txt&quot;</span><span class="p">)</span>
-<span class="n">maxLengthList</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="nb">open</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_maxLengths.json&quot;</span><span class="p">,</span><span class="s">&quot;r&quot;</span><span class="p">))</span>
-<span class="n">lsgstListOfLists</span> <span class="o">=</span> <span class="p">[</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">load_gatestring_list</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_LSGSTlist</span><span class="si">%d</span><span class="s">.txt&quot;</span> <span class="o">%</span> <span class="n">l</span><span class="p">)</span> <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">maxLengthList</span><span class="p">]</span>
-        
-<span class="n">gs_mc2</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">do_iterative_mc2gst</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">gs_clgst</span><span class="p">,</span> <span class="n">lsgstListOfLists</span><span class="p">,</span> <span class="n">verbosity</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-                                <span class="n">minProbClipForWeighting</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">,</span> <span class="n">probClipInterval</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mf">1e6</span><span class="p">,</span><span class="mf">1e6</span><span class="p">)</span> <span class="p">)</span>
+<div class=" highlight hl-ipython2"><pre><span class="n">myFiducialList</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">gatestring_list</span><span class="p">([</span> <span class="p">(</span><span class="s">&#39;Gf1&#39;</span><span class="p">,),</span> <span class="p">(</span><span class="s">&#39;Gf2&#39;</span><span class="p">,)</span> <span class="p">])</span>  <span class="c">#list of fiducials</span>
+
+<span class="c">#Create spam specs which is just a tuple of two lists SpamSpec objects: one list  </span>
+<span class="c"># for preparation, the other for measurment. Each SpamSpec object associates a </span>
+<span class="c"># fiducial gate string with a state prep (for preparation fiducials)</span>
+<span class="c"># or a POVM effect (for measurement fiducials).  In this example, since we&#39;re </span>
+<span class="c"># just interested in the LGST strings, the state preps and POVM effects do not</span>
+<span class="c"># enter and are irrelevant.</span>
+<span class="n">mySpecs</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">build_spam_specs</span><span class="p">(</span><span class="n">fiducialGateStrings</span><span class="o">=</span><span class="n">myFiducialList</span><span class="p">)</span> 
+
+<span class="n">lgstStrings</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">list_lgst_gatestrings</span><span class="p">(</span><span class="n">mySpecs</span><span class="p">,</span><span class="n">myGates</span><span class="p">)</span>
+
+<span class="k">print</span> <span class="s">&quot;</span><span class="se">\n</span><span class="s">LGST strings = </span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span><span class="n">lgstStrings</span><span class="p">))</span>
 </pre></div>
 
 </div>
@@ -465,45 +540,21 @@ Gy =
 <div class="output_area"><div class="prompt"></div>
 <div class="output_subarea output_stream output_stdout output_text">
 <pre>
---- Iterative LSGST: Beginning iter 1 of 10 : 92 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 48.2156 (92 data params - 40 model params = expected mean of 52; p-value = 0.623488)
-
---- Iterative LSGST: Beginning iter 2 of 10 : 92 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 48.2156 (92 data params - 40 model params = expected mean of 52; p-value = 0.623489)
-
---- Iterative LSGST: Beginning iter 3 of 10 : 168 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 130.576 (168 data params - 40 model params = expected mean of 128; p-value = 0.420134)
-
---- Iterative LSGST: Beginning iter 4 of 10 : 441 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 422.595 (441 data params - 40 model params = expected mean of 401; p-value = 0.219844)
-
---- Iterative LSGST: Beginning iter 5 of 10 : 817 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 768.626 (817 data params - 40 model params = expected mean of 777; p-value = 0.577799)
-
---- Iterative LSGST: Beginning iter 6 of 10 : 1201 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 1153.92 (1201 data params - 40 model params = expected mean of 1161; p-value = 0.553056)
-
---- Iterative LSGST: Beginning iter 7 of 10 : 1585 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 1605.8 (1585 data params - 40 model params = expected mean of 1545; p-value = 0.137498)
-
---- Iterative LSGST: Beginning iter 8 of 10 : 1969 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 2041.44 (1969 data params - 40 model params = expected mean of 1929; p-value = 0.0369745)
-
---- Iterative LSGST: Beginning iter 9 of 10 : 2353 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 2430 (2353 data params - 40 model params = expected mean of 2313; p-value = 0.0444016)
-
---- Iterative LSGST: Beginning iter 10 of 10 : 2737 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 2799.74 (2737 data params - 40 model params = expected mean of 2697; p-value = 0.0821746)
+LGST strings = 
+Gf1
+Gf2
+Gf1Gf1
+Gf1Gf2
+Gf2Gf1
+Gf2Gf2
+Gf1(Gx)Gf1
+Gf1(Gx)Gf2
+Gf2(Gx)Gf1
+Gf2(Gx)Gf2
+Gf1(Gy)Gf1
+Gf1(Gy)Gf2
+Gf2(Gy)Gf1
+Gf2(Gy)Gf2
 </pre>
 </div>
 </div>
@@ -511,28 +562,95 @@ Gy =
 </div>
 </div>
 
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="Generating-gate-string-lists-for-GST-(and-further-tutorials)">Generating gate string lists for GST (and further tutorials)<a class="anchor-link" href="#Generating-gate-string-lists-for-GST-(and-further-tutorials)">&#182;</a></h2><p>As a final full-fledged example we demonstrate functions which generate gate string lists for running extended LGST (eLGST or EXLGST) and long-sequence GST (LSGST) from lists of gates, fiducials, germs, and maximum lengths.  eLGST and LSGST are two different algorithms for performing Gate Set Tomography (more detail will be given on these in the Algorithms tutorial).  The important different between the two for our purposes is that eLGST does <em>not</em> include fiducial-string prefixes or postfixes in its lists whereas LSGST does.  The following example functions are very similar to <code>pygsti.construction.make_lsgst_lists</code>, <code>pygsti.construction.make_elgst_lists</code>, and can be copied verbatim then modified in many circumstances to provide customized gate string generation.</p>
+<p>Both functions product a <em>list</em> of lists of <code>GateString</code> objects.  As we'll see in later tutorials, eLGST and LSGST Gate Set Tomography algorithms utilize an iterative approach whereby longer and longer gate strings are used in each successive iteration.  Each list in the list-of-lists returned by these functions specifies the gate sequences to use during the corresponding iteration.  Thus, each successive list contains longer gate strings.  Each list is generated using a maximum length, and the <em>list</em> of maximum lengths, <code>maxLengthList</code> below, specifies the maximum length of each list in the lists-of-lists.  Thus, <code>maxLengthList</code> should be an <em>increasing</em> list of integers (in practice, increasing by powers of two seems good) and the length of <code>maxLengthList</code> determines the length of the returned list-of-lists, i.e. the number of gate string lists.</p>
+
+</div>
+</div>
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 <div class="prompt input_prompt">In&nbsp;[8]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">write_gateset</span><span class="p">(</span><span class="n">gs_exlgst</span><span class="p">,</span> <span class="s">&quot;tutorial_files/Example_eLGST_Gateset.txt&quot;</span><span class="p">,</span><span class="s">&quot;# Example result from running eLGST&quot;</span><span class="p">)</span>
-<span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">write_gateset</span><span class="p">(</span><span class="n">gs_mc2</span><span class="p">,</span>  <span class="s">&quot;tutorial_files/Example_MC2GST_Gateset.txt&quot;</span><span class="p">,</span><span class="s">&quot;# Example result from running MC2GST&quot;</span><span class="p">)</span>
+<div class=" highlight hl-ipython2"><pre><span class="k">def</span> <span class="nf">make_lsgst_lists</span><span class="p">(</span><span class="n">gateLabels</span><span class="p">,</span> <span class="n">fiducialList</span><span class="p">,</span> <span class="n">germList</span><span class="p">,</span> <span class="n">maxLengthList</span><span class="p">):</span>
+    <span class="n">singleGates</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">gatestring_list</span><span class="p">([(</span><span class="n">g</span><span class="p">,)</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">gateLabels</span><span class="p">])</span>
+    <span class="n">lgstStrings</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">list_lgst_gatestrings</span><span class="p">(</span><span class="n">pc</span><span class="o">.</span><span class="n">build_spam_specs</span><span class="p">(</span><span class="n">fiducialList</span><span class="p">),</span> <span class="n">gateLabels</span><span class="p">)</span>
+    <span class="n">lsgst_list</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">gatestring_list</span><span class="p">([</span> <span class="p">()</span> <span class="p">])</span> <span class="c">#running list of all strings so far</span>
+    
+    <span class="k">if</span> <span class="n">maxLengthList</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">lsgst_listOfLists</span> <span class="o">=</span> <span class="p">[</span> <span class="n">lgstStrings</span> <span class="p">]</span>
+        <span class="n">maxLengthList</span> <span class="o">=</span> <span class="n">maxLengthList</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+    <span class="k">else</span><span class="p">:</span> <span class="n">lsgst_listOfLists</span> <span class="o">=</span> <span class="p">[</span> <span class="p">]</span>
+        
+    <span class="k">for</span> <span class="n">maxLen</span> <span class="ow">in</span> <span class="n">maxLengthList</span><span class="p">:</span>
+        <span class="n">lsgst_list</span> <span class="o">+=</span> <span class="n">pc</span><span class="o">.</span><span class="n">create_gatestring_list</span><span class="p">(</span><span class="s">&quot;f0+R(germ,N)+f1&quot;</span><span class="p">,</span> <span class="n">f0</span><span class="o">=</span><span class="n">fiducialList</span><span class="p">,</span>
+                                           <span class="n">f1</span><span class="o">=</span><span class="n">fiducialList</span><span class="p">,</span> <span class="n">germ</span><span class="o">=</span><span class="n">germList</span><span class="p">,</span> <span class="n">N</span><span class="o">=</span><span class="n">maxLen</span><span class="p">,</span>
+                                           <span class="n">R</span><span class="o">=</span><span class="n">pc</span><span class="o">.</span><span class="n">repeat_with_max_length</span><span class="p">,</span>
+                                           <span class="n">order</span><span class="o">=</span><span class="p">(</span><span class="s">&#39;germ&#39;</span><span class="p">,</span><span class="s">&#39;f0&#39;</span><span class="p">,</span><span class="s">&#39;f1&#39;</span><span class="p">))</span>
+        <span class="n">lsgst_listOfLists</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">remove_duplicates</span><span class="p">(</span><span class="n">lgstStrings</span> <span class="o">+</span> <span class="n">lsgst_list</span><span class="p">)</span> <span class="p">)</span>
+
+    <span class="k">print</span> <span class="s">&quot;</span><span class="si">%d</span><span class="s"> LSGST sets w/lengths&quot;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">lsgst_listOfLists</span><span class="p">),</span><span class="nb">map</span><span class="p">(</span><span class="nb">len</span><span class="p">,</span><span class="n">lsgst_listOfLists</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">lsgst_listOfLists</span>
+
+<span class="k">def</span> <span class="nf">make_elgst_lists</span><span class="p">(</span><span class="n">gateLabels</span><span class="p">,</span> <span class="n">fiducialList</span><span class="p">,</span> <span class="n">germList</span><span class="p">,</span> <span class="n">maxLengthList</span><span class="p">):</span>
+    <span class="n">singleGates</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">gatestring_list</span><span class="p">([(</span><span class="n">g</span><span class="p">,)</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">gateLabels</span><span class="p">])</span>
+    <span class="n">lgstStrings</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">list_lgst_gatestrings</span><span class="p">(</span><span class="n">pc</span><span class="o">.</span><span class="n">build_spam_specs</span><span class="p">(</span><span class="n">fiducialList</span><span class="p">),</span> <span class="n">gateLabels</span><span class="p">)</span>
+    <span class="n">elgst_list</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">gatestring_list</span><span class="p">([</span> <span class="p">()</span> <span class="p">])</span>  <span class="c">#running list of all strings so far</span>
+    
+    <span class="k">if</span> <span class="n">maxLengthList</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">elgst_listOfLists</span> <span class="o">=</span> <span class="p">[</span> <span class="n">singleGates</span> <span class="p">]</span>
+        <span class="n">maxLengthList</span> <span class="o">=</span> <span class="n">maxLengthList</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+    <span class="k">else</span><span class="p">:</span> <span class="n">elgst_listOfLists</span> <span class="o">=</span> <span class="p">[</span> <span class="p">]</span>
+        
+    <span class="k">for</span> <span class="n">maxLen</span> <span class="ow">in</span> <span class="n">maxLengthList</span><span class="p">:</span>
+        <span class="n">elgst_list</span> <span class="o">+=</span> <span class="n">pc</span><span class="o">.</span><span class="n">create_gatestring_list</span><span class="p">(</span><span class="s">&quot;R(germ,N)&quot;</span><span class="p">,</span> <span class="n">germ</span><span class="o">=</span><span class="n">germList</span><span class="p">,</span> <span class="n">N</span><span class="o">=</span><span class="n">maxLen</span><span class="p">,</span>
+                                           <span class="n">R</span><span class="o">=</span><span class="n">pc</span><span class="o">.</span><span class="n">repeat_with_max_length</span><span class="p">)</span>
+        <span class="n">elgst_listOfLists</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">remove_duplicates</span><span class="p">(</span><span class="n">singleGates</span> <span class="o">+</span> <span class="n">elgst_list</span><span class="p">)</span> <span class="p">)</span>
+
+    <span class="k">print</span> <span class="s">&quot;</span><span class="si">%d</span><span class="s"> eLGST sets w/lengths&quot;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">elgst_listOfLists</span><span class="p">),</span><span class="nb">map</span><span class="p">(</span><span class="nb">len</span><span class="p">,</span><span class="n">elgst_listOfLists</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">elgst_listOfLists</span>
 </pre></div>
 
 </div>
 </div>
 </div>
 
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>We'll now use these functions to generate some lists we'll use in other tutorials.  To do this, we'll use <code>pygsti.io.write_gatestring_list</code> to write the lists to text files with one gate string (in it's string representation) per line.</p>
+
+</div>
+</div>
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 <div class="prompt input_prompt">In&nbsp;[9]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="n">gs_mc2_lowcnts</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">do_iterative_mc2gst</span><span class="p">(</span><span class="n">dsLowCounts</span><span class="p">,</span> <span class="n">gs_clgst</span><span class="p">,</span> <span class="n">lsgstListOfLists</span><span class="p">,</span> <span class="n">verbosity</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-                                        <span class="n">minProbClipForWeighting</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">,</span> <span class="n">probClipInterval</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mf">1e6</span><span class="p">,</span><span class="mf">1e6</span><span class="p">)</span> <span class="p">)</span>
+<div class=" highlight hl-ipython2"><pre><span class="n">gates</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;Gi&#39;</span><span class="p">,</span><span class="s">&#39;Gx&#39;</span><span class="p">,</span><span class="s">&#39;Gy&#39;</span><span class="p">]</span>
+<span class="n">fiducials</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">gatestring_list</span><span class="p">([</span> <span class="p">(),</span> <span class="p">(</span><span class="s">&#39;Gx&#39;</span><span class="p">,),</span> <span class="p">(</span><span class="s">&#39;Gy&#39;</span><span class="p">,),</span> <span class="p">(</span><span class="s">&#39;Gx&#39;</span><span class="p">,</span><span class="s">&#39;Gx&#39;</span><span class="p">),</span> <span class="p">(</span><span class="s">&#39;Gx&#39;</span><span class="p">,</span><span class="s">&#39;Gx&#39;</span><span class="p">,</span><span class="s">&#39;Gx&#39;</span><span class="p">),</span> <span class="p">(</span><span class="s">&#39;Gy&#39;</span><span class="p">,</span><span class="s">&#39;Gy&#39;</span><span class="p">,</span><span class="s">&#39;Gy&#39;</span><span class="p">)</span> <span class="p">])</span> <span class="c"># fiducials for 1Q MUB</span>
+<span class="n">germs</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">gatestring_list</span><span class="p">(</span> <span class="p">[(</span><span class="s">&#39;Gx&#39;</span><span class="p">,),</span> <span class="p">(</span><span class="s">&#39;Gy&#39;</span><span class="p">,),</span> <span class="p">(</span><span class="s">&#39;Gi&#39;</span><span class="p">,),</span> <span class="p">(</span><span class="s">&#39;Gx&#39;</span><span class="p">,</span> <span class="s">&#39;Gy&#39;</span><span class="p">,),</span>
+                             <span class="p">(</span><span class="s">&#39;Gx&#39;</span><span class="p">,</span> <span class="s">&#39;Gy&#39;</span><span class="p">,</span> <span class="s">&#39;Gi&#39;</span><span class="p">,),</span> <span class="p">(</span><span class="s">&#39;Gx&#39;</span><span class="p">,</span> <span class="s">&#39;Gi&#39;</span><span class="p">,</span> <span class="s">&#39;Gy&#39;</span><span class="p">,),(</span><span class="s">&#39;Gx&#39;</span><span class="p">,</span> <span class="s">&#39;Gi&#39;</span><span class="p">,</span> <span class="s">&#39;Gi&#39;</span><span class="p">,),</span> <span class="p">(</span><span class="s">&#39;Gy&#39;</span><span class="p">,</span> <span class="s">&#39;Gi&#39;</span><span class="p">,</span> <span class="s">&#39;Gi&#39;</span><span class="p">,),</span>
+                             <span class="p">(</span><span class="s">&#39;Gx&#39;</span><span class="p">,</span> <span class="s">&#39;Gx&#39;</span><span class="p">,</span> <span class="s">&#39;Gi&#39;</span><span class="p">,</span> <span class="s">&#39;Gy&#39;</span><span class="p">,),</span> <span class="p">(</span><span class="s">&#39;Gx&#39;</span><span class="p">,</span> <span class="s">&#39;Gy&#39;</span><span class="p">,</span> <span class="s">&#39;Gy&#39;</span><span class="p">,</span> <span class="s">&#39;Gi&#39;</span><span class="p">,),</span>
+                             <span class="p">(</span><span class="s">&#39;Gx&#39;</span><span class="p">,</span> <span class="s">&#39;Gx&#39;</span><span class="p">,</span> <span class="s">&#39;Gy&#39;</span><span class="p">,</span> <span class="s">&#39;Gx&#39;</span><span class="p">,</span> <span class="s">&#39;Gy&#39;</span><span class="p">,</span> <span class="s">&#39;Gy&#39;</span><span class="p">,)]</span> <span class="p">)</span>
+<span class="n">maxLengths</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">8</span><span class="p">,</span><span class="mi">16</span><span class="p">,</span><span class="mi">32</span><span class="p">,</span><span class="mi">64</span><span class="p">,</span><span class="mi">128</span><span class="p">,</span><span class="mi">256</span><span class="p">]</span>    
+<span class="n">elgst_lists</span> <span class="o">=</span> <span class="n">make_elgst_lists</span><span class="p">(</span><span class="n">gates</span><span class="p">,</span> <span class="n">fiducials</span><span class="p">,</span> <span class="n">germs</span><span class="p">,</span> <span class="n">maxLengths</span><span class="p">)</span>
+<span class="n">lsgst_lists</span> <span class="o">=</span> <span class="n">make_lsgst_lists</span><span class="p">(</span><span class="n">gates</span><span class="p">,</span> <span class="n">fiducials</span><span class="p">,</span> <span class="n">germs</span><span class="p">,</span> <span class="n">maxLengths</span><span class="p">)</span>    
+
+<span class="k">print</span> <span class="s">&quot;</span><span class="se">\n</span><span class="s">First 20 items for dataset generation in label : string format&quot;</span>
+<span class="k">for</span> <span class="n">gateString</span> <span class="ow">in</span> <span class="n">lsgst_lists</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">:</span><span class="mi">30</span><span class="p">]:</span>
+    <span class="k">print</span> <span class="nb">str</span><span class="p">(</span><span class="n">gateString</span><span class="p">),</span> <span class="s">&quot;: &quot;</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">gateString</span><span class="p">)</span>
 </pre></div>
 
 </div>
@@ -545,46 +663,40 @@ Gy =
 
 <div class="output_area"><div class="prompt"></div>
 <div class="output_subarea output_stream output_stdout output_text">
-<pre>
---- Iterative LSGST: Beginning iter 1 of 10 : 92 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 71.5877 (92 data params - 40 model params = expected mean of 52; p-value = 0.0371042)
+<pre>10 eLGST sets w/lengths [3, 4, 8, 18, 29, 40, 51, 62, 73, 84]
+10 LSGST sets w/lengths [92, 92, 168, 441, 817, 1201, 1585, 1969, 2353, 2737]
 
---- Iterative LSGST: Beginning iter 2 of 10 : 92 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 71.5877 (92 data params - 40 model params = expected mean of 52; p-value = 0.0371046)
-
---- Iterative LSGST: Beginning iter 3 of 10 : 168 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 165.482 (168 data params - 40 model params = expected mean of 128; p-value = 0.0143613)
-
---- Iterative LSGST: Beginning iter 4 of 10 : 441 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 428.861 (441 data params - 40 model params = expected mean of 401; p-value = 0.162233)
-
---- Iterative LSGST: Beginning iter 5 of 10 : 817 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 769.85 (817 data params - 40 model params = expected mean of 777; p-value = 0.565529)
-
---- Iterative LSGST: Beginning iter 6 of 10 : 1201 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 1182.06 (1201 data params - 40 model params = expected mean of 1161; p-value = 0.326984)
-
---- Iterative LSGST: Beginning iter 7 of 10 : 1585 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 1549.4 (1585 data params - 40 model params = expected mean of 1545; p-value = 0.463693)
-
---- Iterative LSGST: Beginning iter 8 of 10 : 1969 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 1900.6 (1969 data params - 40 model params = expected mean of 1929; p-value = 0.673166)
-
---- Iterative LSGST: Beginning iter 9 of 10 : 2353 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 2295.93 (2353 data params - 40 model params = expected mean of 2313; p-value = 0.59553)
-
---- Iterative LSGST: Beginning iter 10 of 10 : 2737 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 2670.41 (2737 data params - 40 model params = expected mean of 2697; p-value = 0.638414)
+First 20 items for dataset generation in label : string format
+{} :  ()
+Gx :  (&apos;Gx&apos;,)
+Gy :  (&apos;Gy&apos;,)
+GxGx :  (&apos;Gx&apos;, &apos;Gx&apos;)
+GxGxGx :  (&apos;Gx&apos;, &apos;Gx&apos;, &apos;Gx&apos;)
+GyGyGy :  (&apos;Gy&apos;, &apos;Gy&apos;, &apos;Gy&apos;)
+GxGy :  (&apos;Gx&apos;, &apos;Gy&apos;)
+GxGxGxGx :  (&apos;Gx&apos;, &apos;Gx&apos;, &apos;Gx&apos;, &apos;Gx&apos;)
+GxGyGyGy :  (&apos;Gx&apos;, &apos;Gy&apos;, &apos;Gy&apos;, &apos;Gy&apos;)
+GyGx :  (&apos;Gy&apos;, &apos;Gx&apos;)
+GyGy :  (&apos;Gy&apos;, &apos;Gy&apos;)
+GyGxGx :  (&apos;Gy&apos;, &apos;Gx&apos;, &apos;Gx&apos;)
+GyGxGxGx :  (&apos;Gy&apos;, &apos;Gx&apos;, &apos;Gx&apos;, &apos;Gx&apos;)
+GyGyGyGy :  (&apos;Gy&apos;, &apos;Gy&apos;, &apos;Gy&apos;, &apos;Gy&apos;)
+GxGxGy :  (&apos;Gx&apos;, &apos;Gx&apos;, &apos;Gy&apos;)
+GxGxGxGxGx :  (&apos;Gx&apos;, &apos;Gx&apos;, &apos;Gx&apos;, &apos;Gx&apos;, &apos;Gx&apos;)
+GxGxGyGyGy :  (&apos;Gx&apos;, &apos;Gx&apos;, &apos;Gy&apos;, &apos;Gy&apos;, &apos;Gy&apos;)
+GxGxGxGy :  (&apos;Gx&apos;, &apos;Gx&apos;, &apos;Gx&apos;, &apos;Gy&apos;)
+GxGxGxGxGxGx :  (&apos;Gx&apos;, &apos;Gx&apos;, &apos;Gx&apos;, &apos;Gx&apos;, &apos;Gx&apos;, &apos;Gx&apos;)
+GxGxGxGyGyGy :  (&apos;Gx&apos;, &apos;Gx&apos;, &apos;Gx&apos;, &apos;Gy&apos;, &apos;Gy&apos;, &apos;Gy&apos;)
+GyGyGyGx :  (&apos;Gy&apos;, &apos;Gy&apos;, &apos;Gy&apos;, &apos;Gx&apos;)
+GyGyGyGxGx :  (&apos;Gy&apos;, &apos;Gy&apos;, &apos;Gy&apos;, &apos;Gx&apos;, &apos;Gx&apos;)
+GyGyGyGxGxGx :  (&apos;Gy&apos;, &apos;Gy&apos;, &apos;Gy&apos;, &apos;Gx&apos;, &apos;Gx&apos;, &apos;Gx&apos;)
+GyGyGyGyGyGy :  (&apos;Gy&apos;, &apos;Gy&apos;, &apos;Gy&apos;, &apos;Gy&apos;, &apos;Gy&apos;, &apos;Gy&apos;)
+(Gi) :  (&apos;Gi&apos;,)
+(Gi)Gx :  (&apos;Gi&apos;, &apos;Gx&apos;)
+(Gi)Gy :  (&apos;Gi&apos;, &apos;Gy&apos;)
+(Gi)GxGx :  (&apos;Gi&apos;, &apos;Gx&apos;, &apos;Gx&apos;)
+(Gi)GxGxGx :  (&apos;Gi&apos;, &apos;Gx&apos;, &apos;Gx&apos;, &apos;Gx&apos;)
+(Gi)GyGyGy :  (&apos;Gi&apos;, &apos;Gy&apos;, &apos;Gy&apos;, &apos;Gy&apos;)
 </pre>
 </div>
 </div>
@@ -592,327 +704,30 @@ Gy =
 </div>
 </div>
 
-</div>
-<div class="cell border-box-sizing text_cell rendered">
-<div class="prompt input_prompt">
-</div>
-<div class="inner_cell">
-<div class="text_cell_render border-box-sizing rendered_html">
-<h3 id="Maximum-Likelihood-GST-(MLGST)">Maximum Likelihood GST (MLGST)<a class="anchor-link" href="#Maximum-Likelihood-GST-(MLGST)">&#182;</a></h3>
-</div>
-</div>
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 <div class="prompt input_prompt">In&nbsp;[10]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="n">maxLengthList</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="nb">open</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_maxLengths.json&quot;</span><span class="p">,</span><span class="s">&quot;r&quot;</span><span class="p">))</span>
-<span class="n">lsgstListOfLists</span> <span class="o">=</span> <span class="p">[</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">load_gatestring_list</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_LSGSTlist</span><span class="si">%d</span><span class="s">.txt&quot;</span> <span class="o">%</span> <span class="n">l</span><span class="p">)</span> <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">maxLengthList</span><span class="p">]</span> 
-</pre></div>
+<div class=" highlight hl-ipython2"><pre><span class="c">#Write example gatestring list files for later use</span>
+<span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">write_gatestring_list</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_FiducialList.txt&quot;</span><span class="p">,</span> <span class="n">fiducials</span><span class="p">,</span><span class="s">&quot;#My fiducial strings&quot;</span><span class="p">)</span>
+<span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">write_gatestring_list</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_GermsList.txt&quot;</span><span class="p">,</span> <span class="n">germs</span><span class="p">,</span><span class="s">&quot;#My germ strings&quot;</span><span class="p">)</span>
 
-</div>
-</div>
-</div>
+<span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">write_gatestring_list</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_GatestringList.txt&quot;</span><span class="p">,</span><span class="n">lsgst_lists</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span><span class="s">&quot;#All the gate strings to be in my dataset&quot;</span><span class="p">)</span>
+<span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">write_empty_dataset</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_DatasetTemplate.txt&quot;</span><span class="p">,</span><span class="n">lsgst_lists</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
 
-</div>
-<div class="cell border-box-sizing code_cell rendered">
-<div class="input">
-<div class="prompt input_prompt">In&nbsp;[11]:</div>
-<div class="inner_cell">
-    <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="n">gs_mle</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">do_iterative_mlgst</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">gs_clgst</span><span class="p">,</span> <span class="n">lsgstListOfLists</span><span class="p">,</span> <span class="n">probClipInterval</span><span class="o">=</span><span class="p">[</span><span class="o">-</span><span class="mf">1e2</span><span class="p">,</span><span class="mf">1e2</span><span class="p">],</span> <span class="n">verbosity</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
-</pre></div>
+<span class="k">for</span> <span class="n">l</span><span class="p">,</span><span class="n">lst</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">maxLengths</span><span class="p">,</span><span class="n">elgst_lists</span><span class="p">):</span>
+    <span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">write_gatestring_list</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_eLGSTlist</span><span class="si">%d</span><span class="s">.txt&quot;</span> <span class="o">%</span> <span class="n">l</span><span class="p">,</span><span class="n">lst</span><span class="p">,</span>
+                                <span class="s">&quot;# eLGST gate strings for max length </span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">l</span><span class="p">)</span>
 
-</div>
-</div>
-</div>
-
-<div class="output_wrapper">
-<div class="output">
-
-
-<div class="output_area"><div class="prompt"></div>
-<div class="output_subarea output_stream output_stdout output_text">
-<pre>
---- Iterative MLEGST: Beginning iter 1 of 10 : 92 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 48.2156 (92 data params - 40 model params = expected mean of 52; p-value = 0.623489)
-    2*Delta(log(L)) = 48.4602
-
---- Iterative MLEGST: Beginning iter 2 of 10 : 92 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 48.2156 (92 data params - 40 model params = expected mean of 52; p-value = 0.623489)
-    2*Delta(log(L)) = 48.4603
-
---- Iterative MLEGST: Beginning iter 3 of 10 : 168 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 130.576 (168 data params - 40 model params = expected mean of 128; p-value = 0.420139)
-    2*Delta(log(L)) = 130.935
-
---- Iterative MLEGST: Beginning iter 4 of 10 : 441 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 422.578 (441 data params - 40 model params = expected mean of 401; p-value = 0.220013)
-    2*Delta(log(L)) = 423.427
-
---- Iterative MLEGST: Beginning iter 5 of 10 : 817 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 768.607 (817 data params - 40 model params = expected mean of 777; p-value = 0.577988)
-    2*Delta(log(L)) = 770.358
-
---- Iterative MLEGST: Beginning iter 6 of 10 : 1201 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 1153.91 (1201 data params - 40 model params = expected mean of 1161; p-value = 0.553172)
-    2*Delta(log(L)) = 1156.04
-
---- Iterative MLEGST: Beginning iter 7 of 10 : 1585 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 1605.78 (1585 data params - 40 model params = expected mean of 1545; p-value = 0.137556)
-    2*Delta(log(L)) = 1608.31
-
---- Iterative MLEGST: Beginning iter 8 of 10 : 1969 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 2041.43 (1969 data params - 40 model params = expected mean of 1929; p-value = 0.0369934)
-    2*Delta(log(L)) = 2044.46
-
---- Iterative MLEGST: Beginning iter 9 of 10 : 2353 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 2429.98 (2353 data params - 40 model params = expected mean of 2313; p-value = 0.0444223)
-    2*Delta(log(L)) = 2433.43
-
---- Iterative MLEGST: Beginning iter 10 of 10 : 2737 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 2799.7 (2737 data params - 40 model params = expected mean of 2697; p-value = 0.082264)
-    2*Delta(log(L)) = 2803.55
---- Last Iteration: switching to MLE objective ---
---- MLEGST ---
-  Maximum log(L) = 1401.43 below upper bound of -4.60013e+06
-    2*Delta(log(L)) = 2802.85 (2737 data params - 40 model params = expected mean of 2697; p-value = 0.0760873)
-    2*Delta(log(L)) = 2802.85
-</pre>
-</div>
-</div>
-
-</div>
-</div>
-
-</div>
-<div class="cell border-box-sizing code_cell rendered">
-<div class="input">
-<div class="prompt input_prompt">In&nbsp;[12]:</div>
-<div class="inner_cell">
-    <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="n">gs_mle_lowcnts</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">do_iterative_mlgst</span><span class="p">(</span><span class="n">dsLowCounts</span><span class="p">,</span> <span class="n">gs_clgst</span><span class="p">,</span> <span class="n">lsgstListOfLists</span><span class="p">,</span> 
-                                       <span class="n">probClipInterval</span><span class="o">=</span><span class="p">[</span><span class="o">-</span><span class="mf">1e2</span><span class="p">,</span><span class="mf">1e2</span><span class="p">],</span> <span class="n">verbosity</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
-</pre></div>
-
-</div>
-</div>
-</div>
-
-<div class="output_wrapper">
-<div class="output">
-
-
-<div class="output_area"><div class="prompt"></div>
-<div class="output_subarea output_stream output_stdout output_text">
-<pre>
---- Iterative MLEGST: Beginning iter 1 of 10 : 92 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 71.5875 (92 data params - 40 model params = expected mean of 52; p-value = 0.0371053)
-    2*Delta(log(L)) = 73.4362
-
---- Iterative MLEGST: Beginning iter 2 of 10 : 92 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 71.5875 (92 data params - 40 model params = expected mean of 52; p-value = 0.0371053)
-    2*Delta(log(L)) = 73.4369
-
---- Iterative MLEGST: Beginning iter 3 of 10 : 168 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 165.482 (168 data params - 40 model params = expected mean of 128; p-value = 0.0143616)
-    2*Delta(log(L)) = 169.245
-
---- Iterative MLEGST: Beginning iter 4 of 10 : 441 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 428.861 (441 data params - 40 model params = expected mean of 401; p-value = 0.162234)
-    2*Delta(log(L)) = 440.777
-
---- Iterative MLEGST: Beginning iter 5 of 10 : 817 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 769.847 (817 data params - 40 model params = expected mean of 777; p-value = 0.565559)
-    2*Delta(log(L)) = 789.389
-
---- Iterative MLEGST: Beginning iter 6 of 10 : 1201 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 1182.06 (1201 data params - 40 model params = expected mean of 1161; p-value = 0.327019)
-    2*Delta(log(L)) = 1210.06
-
---- Iterative MLEGST: Beginning iter 7 of 10 : 1585 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 1549.4 (1585 data params - 40 model params = expected mean of 1545; p-value = 0.463726)
-    2*Delta(log(L)) = 1583.82
-
---- Iterative MLEGST: Beginning iter 8 of 10 : 1969 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 1900.6 (1969 data params - 40 model params = expected mean of 1929; p-value = 0.67319)
-    2*Delta(log(L)) = 1941.34
-
---- Iterative MLEGST: Beginning iter 9 of 10 : 2353 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 2295.93 (2353 data params - 40 model params = expected mean of 2313; p-value = 0.595548)
-    2*Delta(log(L)) = 2345.66
-
---- Iterative MLEGST: Beginning iter 10 of 10 : 2737 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 2670.4 (2737 data params - 40 model params = expected mean of 2697; p-value = 0.638444)
-    2*Delta(log(L)) = 2727.55
---- Last Iteration: switching to MLE objective ---
---- MLEGST ---
-  Maximum log(L) = 1356.67 below upper bound of -228670
-    2*Delta(log(L)) = 2713.34 (2737 data params - 40 model params = expected mean of 2697; p-value = 0.408605)
-    2*Delta(log(L)) = 2713.34
-</pre>
-</div>
-</div>
-
-</div>
-</div>
-
-</div>
-<div class="cell border-box-sizing text_cell rendered">
-<div class="prompt input_prompt">
-</div>
-<div class="inner_cell">
-<div class="text_cell_render border-box-sizing rendered_html">
-<h2 id="Compare-MLE-GST-with-LS-GST">Compare MLE-GST with LS-GST<a class="anchor-link" href="#Compare-MLE-GST-with-LS-GST">&#182;</a></h2>
-</div>
-</div>
-</div>
-<div class="cell border-box-sizing code_cell rendered">
-<div class="input">
-<div class="prompt input_prompt">In&nbsp;[13]:</div>
-<div class="inner_cell">
-    <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="n">gs_mle</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">optimize_gauge</span><span class="p">(</span><span class="n">gs_mle</span><span class="p">,</span><span class="s">&quot;target&quot;</span><span class="p">,</span><span class="n">targetGateset</span><span class="o">=</span><span class="n">depol_gateset</span><span class="p">)</span>
-<span class="n">gs_mle_lowcnts</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">optimize_gauge</span><span class="p">(</span><span class="n">gs_mle_lowcnts</span><span class="p">,</span><span class="s">&quot;target&quot;</span><span class="p">,</span><span class="n">targetGateset</span><span class="o">=</span><span class="n">depol_gateset</span><span class="p">)</span>
-<span class="n">gs_mc2</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">optimize_gauge</span><span class="p">(</span><span class="n">gs_mc2</span><span class="p">,</span><span class="s">&quot;target&quot;</span><span class="p">,</span><span class="n">targetGateset</span><span class="o">=</span><span class="n">depol_gateset</span><span class="p">)</span>
-<span class="n">gs_mc2_lowcnts</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">optimize_gauge</span><span class="p">(</span><span class="n">gs_mc2_lowcnts</span><span class="p">,</span><span class="s">&quot;target&quot;</span><span class="p">,</span><span class="n">targetGateset</span><span class="o">=</span><span class="n">depol_gateset</span><span class="p">)</span>
-</pre></div>
-
-</div>
-</div>
-</div>
-
-</div>
-<div class="cell border-box-sizing code_cell rendered">
-<div class="input">
-<div class="prompt input_prompt">In&nbsp;[14]:</div>
-<div class="inner_cell">
-    <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="k">print</span> <span class="s">&quot;Frobenius diff btwn MLE and datagen = &quot;</span><span class="p">,</span><span class="n">gs_mle</span><span class="o">.</span><span class="n">frobeniusdist</span><span class="p">(</span><span class="n">depol_gateset</span><span class="p">)</span>
-<span class="k">print</span> <span class="s">&quot;Frobenius diff btwn LSGST and datagen = &quot;</span><span class="p">,</span><span class="n">gs_mc2</span><span class="o">.</span><span class="n">frobeniusdist</span><span class="p">(</span><span class="n">depol_gateset</span><span class="p">)</span>
-<span class="k">print</span> <span class="s">&quot;Frobenius diff btwn MLE and LGST = &quot;</span><span class="p">,</span><span class="n">gs_mle</span><span class="o">.</span><span class="n">frobeniusdist</span><span class="p">(</span><span class="n">gs_clgst</span><span class="p">)</span>
-<span class="k">print</span> <span class="s">&quot;Frobenius diff btwn MLE and LSGST = &quot;</span><span class="p">,</span><span class="n">gs_mle</span><span class="o">.</span><span class="n">frobeniusdist</span><span class="p">(</span><span class="n">gs_mc2</span><span class="p">)</span>
-<span class="k">print</span> <span class="s">&quot;Chi^2( LSGST ) = &quot;</span><span class="p">,</span><span class="n">pygsti</span><span class="o">.</span><span class="n">chi2</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">gs_mc2</span><span class="p">,</span> <span class="n">lsgstListOfLists</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
-<span class="k">print</span> <span class="s">&quot;Chi^2( MLE ) = &quot;</span><span class="p">,</span><span class="n">pygsti</span><span class="o">.</span><span class="n">chi2</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">gs_mle</span><span class="p">,</span> <span class="n">lsgstListOfLists</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="p">)</span>
-<span class="k">print</span> <span class="s">&quot;LogL( LSGST ) = &quot;</span><span class="p">,</span><span class="n">pygsti</span><span class="o">.</span><span class="n">logl</span><span class="p">(</span><span class="n">gs_mc2</span><span class="p">,</span> <span class="n">ds</span><span class="p">,</span> <span class="n">lsgstListOfLists</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">probClipInterval</span><span class="o">=</span><span class="p">[</span><span class="mf">1e-4</span><span class="p">,</span><span class="mi">1</span><span class="o">-</span><span class="mf">1e-4</span><span class="p">])</span>
-<span class="k">print</span> <span class="s">&quot;LogL( MLE ) = &quot;</span><span class="p">,</span><span class="n">pygsti</span><span class="o">.</span><span class="n">logl</span><span class="p">(</span><span class="n">gs_mle</span><span class="p">,</span> <span class="n">ds</span><span class="p">,</span> <span class="n">lsgstListOfLists</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">probClipInterval</span><span class="o">=</span><span class="p">[</span><span class="mf">1e-4</span><span class="p">,</span><span class="mi">1</span><span class="o">-</span><span class="mf">1e-4</span><span class="p">])</span>
-</pre></div>
-
-</div>
-</div>
-</div>
-
-<div class="output_wrapper">
-<div class="output">
-
-
-<div class="output_area"><div class="prompt"></div>
-<div class="output_subarea output_stream output_stdout output_text">
-<pre>Frobenius diff btwn MLE and datagen =  0.0322203458694
-Frobenius diff btwn LSGST and datagen =  0.0356528339106
-Frobenius diff btwn MLE and LGST =  0.0119897115646
-Frobenius diff btwn MLE and LSGST =  0.00671203679081
-Chi^2( LSGST ) =  2799.73646204
-Chi^2( MLE ) =  2800.58536739
-LogL( LSGST ) =  -4601531.87
-LogL( MLE ) =  -4601531.52007
-</pre>
-</div>
-</div>
-
-</div>
-</div>
-
-</div>
-<div class="cell border-box-sizing code_cell rendered">
-<div class="input">
-<div class="prompt input_prompt">In&nbsp;[15]:</div>
-<div class="inner_cell">
-    <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="k">print</span> <span class="s">&quot;Frobenius diff btwn MLE and datagen = &quot;</span><span class="p">,</span><span class="n">gs_mle_lowcnts</span><span class="o">.</span><span class="n">frobeniusdist</span><span class="p">(</span><span class="n">depol_gateset</span><span class="p">)</span>
-<span class="k">print</span> <span class="s">&quot;Frobenius diff btwn LSGST and datagen = &quot;</span><span class="p">,</span><span class="n">gs_mc2_lowcnts</span><span class="o">.</span><span class="n">frobeniusdist</span><span class="p">(</span><span class="n">depol_gateset</span><span class="p">)</span>
-<span class="k">print</span> <span class="s">&quot;Frobenius diff btwn MLE and LGST = &quot;</span><span class="p">,</span><span class="n">gs_mle_lowcnts</span><span class="o">.</span><span class="n">frobeniusdist</span><span class="p">(</span><span class="n">gs_clgst</span><span class="p">)</span>
-<span class="k">print</span> <span class="s">&quot;Frobenius diff btwn MLE and LSGST = &quot;</span><span class="p">,</span><span class="n">gs_mle_lowcnts</span><span class="o">.</span><span class="n">frobeniusdist</span><span class="p">(</span><span class="n">gs_mc2_lowcnts</span><span class="p">)</span>
-<span class="k">print</span> <span class="s">&quot;Chi^2( LSGST ) = &quot;</span><span class="p">,</span><span class="n">pygsti</span><span class="o">.</span><span class="n">chi2</span><span class="p">(</span><span class="n">dsLowCounts</span><span class="p">,</span> <span class="n">gs_mc2_lowcnts</span><span class="p">)</span>
-<span class="k">print</span> <span class="s">&quot;Chi^2( MLE ) = &quot;</span><span class="p">,</span><span class="n">pygsti</span><span class="o">.</span><span class="n">chi2</span><span class="p">(</span><span class="n">dsLowCounts</span><span class="p">,</span> <span class="n">gs_mle_lowcnts</span><span class="p">)</span>
-<span class="k">print</span> <span class="s">&quot;LogL( LSGST ) = &quot;</span><span class="p">,</span><span class="n">pygsti</span><span class="o">.</span><span class="n">logl</span><span class="p">(</span><span class="n">gs_mc2_lowcnts</span><span class="p">,</span> <span class="n">dsLowCounts</span><span class="p">,</span> <span class="n">probClipInterval</span><span class="o">=</span><span class="p">[</span><span class="mf">1e-12</span><span class="p">,</span><span class="mi">1</span><span class="o">-</span><span class="mf">1e-12</span><span class="p">])</span>
-<span class="k">print</span> <span class="s">&quot;LogL( MLE ) = &quot;</span><span class="p">,</span><span class="n">pygsti</span><span class="o">.</span><span class="n">logl</span><span class="p">(</span><span class="n">gs_mle_lowcnts</span><span class="p">,</span> <span class="n">dsLowCounts</span><span class="p">,</span> <span class="n">probClipInterval</span><span class="o">=</span><span class="p">[</span><span class="mf">1e-12</span><span class="p">,</span><span class="mi">1</span><span class="o">-</span><span class="mf">1e-12</span><span class="p">])</span>
-</pre></div>
-
-</div>
-</div>
-</div>
-
-<div class="output_wrapper">
-<div class="output">
-
-
-<div class="output_area"><div class="prompt"></div>
-<div class="output_subarea output_stream output_stdout output_text">
-<pre>Frobenius diff btwn MLE and datagen =  0.0330990970595
-Frobenius diff btwn LSGST and datagen =  0.035106972596
-Frobenius diff btwn MLE and LGST =  0.0184621381202
-Frobenius diff btwn MLE and LSGST =  0.00819647089028
-Chi^2( LSGST ) =  2670.40472039
-Chi^2( MLE ) =  2684.71978217
-LogL( LSGST ) =  -230034.070762
-LogL( MLE ) =  -230026.900449
-</pre>
-</div>
-</div>
-
-</div>
-</div>
-
-</div>
-<div class="cell border-box-sizing code_cell rendered">
-<div class="input">
-<div class="prompt input_prompt">In&nbsp;[16]:</div>
-<div class="inner_cell">
-    <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="c">#OLD - construct an old-style gateset, which at one point was needed to keep MLEGST running before</span>
-<span class="c">#       it was updated.</span>
-
-<span class="c">#Note: could use gateset with (-1,-1) spam label here to be consistent</span>
-<span class="c">#  with trace preservation of MLE (opt_G0 = opt_SP0 = False).</span>
-<span class="c">#bUseM1M1Gateset = False</span>
-<span class="c">#if bUseM1M1Gateset:</span>
-<span class="c">#    gateset_fixTrace = pygsti.construction.build_gateset( [2], [(&#39;Q0&#39;,)],[&#39;Gi&#39;,&#39;Gx&#39;,&#39;Gy&#39;], </span>
-<span class="c">#                                 [ &quot;I(Q0)&quot;,&quot;X(pi/2,Q0)&quot;, &quot;Y(pi/2,Q0)&quot;],</span>
-<span class="c">#                                 rhoExpressions=[&quot;0&quot;], EExpressions=[&quot;1&quot;], </span>
-<span class="c">#                                 spamLabelDict={&#39;plus&#39;: (0,0), &#39;minus&#39;: (-1,-1) }) #basis=&quot;gm&quot; )</span>
-<span class="c">#</span>
-<span class="c">#    specs = pygsti.construction.build_spam_specs(fiducialGateStrings=fiducialList)</span>
-<span class="c">#    gs_lgst_4mle = pygsti.do_lgst(ds, specs, targetGateset=gateset_fixTrace, svdTruncateTo=4, verbosity=1)</span>
-<span class="c">#</span>
-<span class="c">#    #Gauge optimize the result to match the target gateset</span>
-<span class="c">#    gs_lgst_4mle_after_gauge_opt = pygsti.optimize_gauge(gs_lgst_4mle, &quot;target&quot;, targetGateset=gs_target)</span>
-<span class="c">#</span>
-<span class="c">#    #Contract the result to CPTP</span>
-<span class="c">#    gs_clgst_4mle = pygsti.contract(gs_lgst_4mle_after_gauge_opt, &quot;CPTP&quot;)</span>
-<span class="c">#else:</span>
-<span class="c">#    gs_clgst_4mle = gs_clgst</span>
+<span class="k">for</span> <span class="n">l</span><span class="p">,</span><span class="n">lst</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">maxLengths</span><span class="p">,</span><span class="n">lsgst_lists</span><span class="p">):</span>
+    <span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">write_gatestring_list</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_LSGSTlist</span><span class="si">%d</span><span class="s">.txt&quot;</span> <span class="o">%</span> <span class="n">l</span><span class="p">,</span><span class="n">lst</span><span class="p">,</span>
+                                <span class="s">&quot;# LSGST gate strings for max length </span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">l</span><span class="p">)</span>
+    
+<span class="c">#Also write the max lengths we used to file</span>
+<span class="kn">import</span> <span class="nn">json</span>
+<span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">maxLengths</span><span class="p">,</span> <span class="nb">open</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_maxLengths.json&quot;</span><span class="p">,</span><span class="s">&quot;w&quot;</span><span class="p">))</span>
 </pre></div>
 
 </div>

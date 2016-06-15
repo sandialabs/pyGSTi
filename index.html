@@ -45,6 +45,7 @@
             <section id="downloads">
               <a class="zip_download_link" href="https://github.com/pyGSTio/pyGSTi/zipball/master">Download this project as a .zip file</a>
               <a class="tar_download_link" href="https://github.com/pyGSTio/pyGSTi/tarball/master">Download this project as a tar.gz file</a>
+              <a class="documentation_link" href="http://pygsti.readthedocs.io">View the online documentation</a>
             </section>
         </header>
     </div>
@@ -56,10 +57,10 @@
 <h2>
 <a id="getting-started" class="anchor" href="#getting-started" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Getting Started</h2>
 
-<p><strong>pyGSTi</strong> is a software package to perform gate set tomography (GST).  GST is a kind of quantum tomography, and it provides full characterization of quantum logic gates on quantum devices such as qubits.  For a basic (albeit out of date) introduction to GST, see <a href="http://arxiv.org/abs/1310.4492">http://arxiv.org/abs/1310.4492</a> (by the GST authors) or <a href="http://arxiv.org/abs/1509.02921">http://arxiv.org/abs/1509.02921</a> (by an independent 3rd party).  These papers describe a relatively primitive implementation of GST (compared to what’s available in pyGSTi).  Major upgrades in pyGSTi include higher accuracy (from the analysis of long gate sequences) and automatic generation of detailed reports. </p>
+<p><strong>pyGSTi</strong> is a software package to perform gate set tomography (GST).  GST is a kind of quantum tomography, and it provides full characterization of quantum logic gates on quantum devices such as qubits.  For a basic (albeit out of date) introduction to GST, see <a href="http://arxiv.org/abs/1605.07674">http://arxiv.org/abs/1605.07674</a> (by the pyGSTi authors) or <a href="http://arxiv.org/abs/1509.02921">http://arxiv.org/abs/1509.02921</a> (by an independent 3rd party).  The first of these papers describes a relatively recent use of GST, similar to what's in pyGSTi.  The second describes a more primitive initial version of gate set tomography which looks much different than the current pyGSTi code. </p>
 
 <p>pyGSTi is written entirely in Python, so there's no compiling necessary.
-The first step is to install <strong>Python</strong> and <strong>iPython notebook</strong> (if they aren't
+The first step is to install <strong>Python</strong> and <strong>iPython (Jupyter) notebook</strong> (if they aren't
 installed already).  In order to use pyGSTi you need to
 tell your python distribution where pyGSTi lives, which can be done in one
  of two ways:</p>
@@ -69,7 +70,13 @@ tell your python distribution where pyGSTi lives, which can be done in one
 <p>run: <code>python install_locally.py</code> </p>
 
 <p>This adds the current pyGSTi path to Python's list of search paths, and
-doesn't required administrative access (but only applies to the current user).</p>
+doesn't required administrative access (but only applies to the current user).
+Typically you want to do this if you've cloned the pyGSTi GitHub repository 
+and want any changes you make to your local file to have effect when you 
+<code>import pygsti</code> from Python.  You'd also want to use this option
+if you plan to use the tutorial notebook files for a while, since this means
+you'll be keeping the pyGSTi directory you unpacked or cloned around for a 
+while.</p>
 </li>
 <li>
 <p>run: <code>python setup.py install</code></p>
@@ -78,24 +85,28 @@ doesn't required administrative access (but only applies to the current user).</
 search directories.  This typically requires administrative privileges, and
 is the way most Python packages are installed.  Installing this way has the
 advantage that it makes the package available to all users and then allows 
-you to move or delete the directory you're installing from.</p>
+you to move or delete the directory you're installing from.  If you don't
+use this method <strong>you must not delete the pyGSTi directory</strong>
+that you cloned or unpacked so long as you want to use pyGSTi.</p>
 
-<p>The reason why you may <em>not</em> want to use this installation method is that 
-pyGSTi comes with (iPython notebook) tutorials that you may want to access.
-If you're keeping the tutorial files somewhere in your local user
-directories, you may want to just place the entire pyGSTi directory there
-using option (1) above.</p>
+<p>Reasons you may <em>not</em> want to use this installation method are 
+  (1) that you want to access the pyGSTi tutorials for weeks and years to
+  or (2) you've cloned the pyGSTi repository and want the resulting local 
+  git directory to be the one Python uses when you <code>import pygsti</code>
+  (so that when you do a <code>git pull</code> to update the repository,
+  this actually updates the behavior in your scripts!).</p>
+
 </li>
 </ol>
 
 <p>After you've installed pyGSTi, you should be able to 
-<code>import pygsti</code> in Python or an iPython notebook.  The next step is to take a look at
+<code>import pygsti</code> in Python or an iPython (Jupyter) notebook.  The next step is to take a look at
 the tutorials.  To do this:</p>
 
 <ul>
 <li><p>change to the notebook directory, by running:
 <code>cd ipython_notebooks</code>  </p></li>
-<li><p>start up the iPython notebook server by running:
+<li><p>start up the Jupyter ipython notebook server by running:
 <code>ipython notebook</code></p></li>
 </ul>
 
@@ -118,41 +129,50 @@ as a reference and so you can see pyGSTi in action before you (or without needin
 
 <ol>
 <li>
-<a href="tutorials/00%20Quick%20and%20easy%20GST.html">Quick and easy GST</a>  Get started with pyGSTi
+<a href="tutorials/00_Quick_and_easy_GST.html">Quick and easy GST</a>  Get started with pyGSTi
 using the high-level interface.  This may be the only tutorial many users will need.<br>
 </li>
 <li>
-<a href="tutorials/01%20GateSets.html">Gate sets</a>  Covers the <code>GateSet</code> object and related functions.</li>
+<a href="tutorials/01_GateSets.html">Gate sets</a>  Covers the <code>GateSet</code> object and related functions.</li>
 <li>
-<a href="tutorials/02%20Gatestring%20lists.html">Gate strings</a> Covers the <code>GateString</code> object and related functions, specifically how to make lists of gate strings.</li>
+<a href="tutorials/02_Gatestring_lists.html">Gate strings</a> Covers the <code>GateString</code> object and related functions, specifically how to make lists of gate strings.</li>
 <li>
-<a href="tutorials/03%20DataSets.html">Data sets</a> Covers construction and use of <code>DataSet</code> objects.</li>
+<a href="tutorials/03_DataSets.html">Data sets</a> Covers construction and use of <code>DataSet</code> objects.</li>
 <li>
-<a href="tutorials/04%20Algorithms.html">Algorithms</a> How to invoke pyGSTi's algorithms (at a lower level than in the first tutorial).</li>
+<a href="tutorials/04_Algorithms.html">Algorithms</a> How to invoke pyGSTi's algorithms (at a lower level than in the first tutorial).</li>
 <li>
-<a href="tutorials/05%20Analysis.html">Making Plots</a>  Shows how to construct various types of plots from a GST estimate.</li>
+<a href="tutorials/05_Plotting.html">Making Plots</a>  Shows how to construct various types of plots from a GST estimate.</li>
 <li>
-<a href="tutorials/06%20Advanced%20Algorithms.html">Advanced: Algorithms</a>  An advanced and <em>incomplete</em> tutorial showing how to use some of pyGSTi's model selection routines. </li>
+<a href="tutorials/06_Advanced_Algorithms.html">Advanced: Algorithms</a>  An advanced and <em>incomplete</em> tutorial showing how to use some of pyGSTi's model selection routines. </li>
 <li>
-<a href="tutorials/07%20Report%20Generation.html">Generating Reports</a> Covers how to generate reports from a GST estimate.</li>
+<a href="tutorials/07_Report_Generation.html">Generating Reports</a> Covers how to generate reports from a GST estimate.</li>
 <li>
-<a href="tutorials/08%20Fiducial%20Reduction.html">Advanced: Fiducial Reduction</a>  An advanced tutorial demonstrating fiducial-pair-reduction. </li>
+<a href="tutorials/08_Fiducial_Reduction.html">Advanced: Fiducial Reduction</a>  An advanced tutorial demonstrating fiducial-pair-reduction. </li>
 <li>
-<a href="tutorials/09%20Boostrapped%20Error%20Bars.html">Advanced: Bootstrapped Error Bars</a>  An advanced tutorial which constructs error bars on a GST estimate using parametric and non-parametric bootstrapping.</li>
+<a href="tutorials/09_Boostrapped_Error_Bars.html">Advanced: Bootstrapped Error Bars</a>  An advanced tutorial which constructs error bars on a GST estimate using parametric and non-parametric bootstrapping.</li>
+<li>
+<a href="tutorials/10_Fiducial_Selection__1_qubit_X_Y.html">Fiducial Selection</a>  A tutorial demonstrating how the <q>fiducial</q> gate sequences are chosen (1-qubit example).</li>
+<li>
+<a href="tutorials/11_Fiducial_Selection__2_qubits_IX_IY_XI_XY_Entangling.html">Fiducial Selection II</a>  A tutorial demonstrating how the <q>fiducial</q> gate sequences are chosen (2-qubit example).</li>
+<li>
+<a href="tutorials/12_Germ_Selection.html">Germ Selection</a>  A tutorial demonstrating how germ sequences are chosen.</li>
+<li>
+<a href="tutorials/13_GST_on_2_qubits.html">2-qubit GST</a>  A tutorial demonstrating how to peform GST on a 2-qubit system.</li>
+<li>
+<a href="tutorials/14_GST_on_2_qubits__custom_2Q_gate.html">Custom 2-qubit gate</a>  A tutorial demonstrating a process that can be used to construct a <q>custom</q> 2-qubit gate (i.e. a gate not included in one of pyGSTi's standard gate sets). </li>
 </ol>
 
 <h2>
 <a id="documentation" class="anchor" href="#documentation" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Documentation</h2>
 
 <p>Detailed documentation of the pyGSTi code (automatically generated from 
-the source code's docstrings) can be found <a href="http://www.pygsti.info/doc/index.html">here</a>.
-These pages provide a searchable reference for just about everything pyGSTi can do.  Please
-let us know if you find any errors.</p>
+the source code's docstrings) can be found <a href="http://pygsti.readthedocs.io">here</a>.  These pages provide a searchable reference for just about everything pyGSTi can do.  Please let us know if you find any errors.</p>
 
-<h2>
+<!-- <h2>
 <a id="online-web-based-gst-tool" class="anchor" href="#online-web-based-gst-tool" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Online web-based GST tool</h2>
 
 <p>Don't want to go through all the trouble of installing pyGSTi (even though it's really not that much trouble)?  We've setup a simple online tool where, if you just want to run plain vanilla 1-qubit GST on some data, you can!  First we need to set up an account for you. We hope to automate this in the future, but for now you need to email us at <a href="mailto:pygsti@sandia.gov">pygsti@sandia.gov</a>. We'll send you an email with a link to the online tool and credentials to login; from there you can download a template data file, fill it with data, upload it back to the site, and run GST.  It's like taking candy from a baby...</p>
+-->
 
 <h2>
 <a id="license" class="anchor" href="#license" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>License</h2>

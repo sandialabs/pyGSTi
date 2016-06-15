@@ -3,7 +3,7 @@
 <head>
 
 <meta charset="utf-8" />
-<title>08 Fiducial Reduction</title>
+<title>10 Fiducial Selection - 1 qubit (X, Y)</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.1.10/require.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
@@ -172,75 +172,156 @@ div#notebook {
   <div tabindex="-1" id="notebook" class="border-box-sizing">
     <div class="container" id="notebook-container">
 
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>In this notebook, we'll demonstrate how to select preparation and measurement fiducials for the standard single-qubit $X, Y, I$ (or $X, Y$) gate set.  The results are very straightforward to generalize for a non $X, Y, I$ single-qubit gateset or a multiqubit gate set.</p>
+<p>Fiducial selection is not quite as much of a "dark art" as germ selection is, but there are nonetheless equally valid choices one can make in terms of inputs to the fiducial selection function.  At present, we demonstrate only a subset of the functionality, but we endeavour to explain the remaining functionality as well.</p>
+
+</div>
+</div>
+</div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 <div class="prompt input_prompt">In&nbsp;[1]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="kn">import</span> <span class="nn">pygsti</span>
-<span class="kn">import</span> <span class="nn">json</span>
+<div class=" highlight hl-ipython2"><pre><span class="c">#Import relevant modules.</span>
+
+<span class="kn">import</span> <span class="nn">pygsti</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">_np</span>
+
+<span class="kn">from</span> <span class="nn">pygsti.algorithms</span> <span class="kn">import</span> <span class="n">fiducialselection</span> <span class="k">as</span> <span class="n">FS</span>
+
+<span class="kn">from</span> <span class="nn">pygsti.construction</span> <span class="kn">import</span> <span class="n">std1Q_XYI</span>
+<span class="kn">from</span> <span class="nn">pygsti.construction</span> <span class="kn">import</span> <span class="n">std1Q_XY</span>
+
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="kn">as</span> <span class="nn">plt</span>
+<span class="o">%</span><span class="k">matplotlib</span> inline
+
+<span class="kn">import</span> <span class="nn">time</span>
 </pre></div>
 
 </div>
 </div>
 </div>
 
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>Different target gatesets require different fiducials. Thus, we must first define the
+target gateset.</p>
+<p>It's worth noting that unlike with germ selection, we will use perfect gates. (In fact, imperfect gates for fiducial selection can introduce errors that we don't want.)</p>
+
+</div>
+</div>
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 <div class="prompt input_prompt">In&nbsp;[2]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="c"># Follow Algorithm tutorial to generate LSGST gatesets</span>
-<span class="n">gs_target</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">load_gateset</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_Gateset.txt&quot;</span><span class="p">)</span>
-<span class="n">ds</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">load_dataset</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_Dataset.txt&quot;</span><span class="p">,</span> <span class="n">cache</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
-<span class="n">fiducialList</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">load_gatestring_list</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_FiducialList.txt&quot;</span><span class="p">)</span>
+<div class=" highlight hl-ipython2"><pre><span class="c">#Define the target gate set we will select fiducials for.</span>
+<span class="c">#Here, it is the standard X pi/2, Y pi/2, I gate set.</span>
 
-<span class="c">#Run LGST to get an initial estimate for the gates in gs_target based on the data in ds</span>
-<span class="n">specs</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">construction</span><span class="o">.</span><span class="n">build_spam_specs</span><span class="p">(</span><span class="n">fiducialGateStrings</span><span class="o">=</span><span class="n">fiducialList</span><span class="p">)</span>
-<span class="n">gs_lgst</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">do_lgst</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">specs</span><span class="p">,</span> <span class="n">targetGateset</span><span class="o">=</span><span class="n">gs_target</span><span class="p">,</span> <span class="n">svdTruncateTo</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">verbosity</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-
-<span class="c">#Gauge optimize the result to match the target gateset</span>
-<span class="n">gs_lgst_after_gauge_opt</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">optimize_gauge</span><span class="p">(</span><span class="n">gs_lgst</span><span class="p">,</span> <span class="s">&quot;target&quot;</span><span class="p">,</span> <span class="n">targetGateset</span><span class="o">=</span><span class="n">gs_target</span><span class="p">)</span>
-
-<span class="c">#Contract the result to CPTP</span>
-<span class="n">gs_clgst</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">contract</span><span class="p">(</span><span class="n">gs_lgst_after_gauge_opt</span><span class="p">,</span> <span class="s">&quot;CPTP&quot;</span><span class="p">)</span>
-
-<span class="c">#Get lists of gate strings for successive iterations of LSGST to use</span>
-<span class="n">specs</span>  <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">construction</span><span class="o">.</span><span class="n">build_spam_specs</span><span class="p">(</span><span class="n">fiducialGateStrings</span><span class="o">=</span><span class="n">fiducialList</span><span class="p">)</span>
-<span class="n">germList</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">load_gatestring_list</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_GermsList.txt&quot;</span><span class="p">)</span>
-<span class="n">maxLengthList</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="nb">open</span><span class="p">(</span><span class="s">&quot;tutorial_files/Example_maxLengths.json&quot;</span><span class="p">,</span><span class="s">&quot;r&quot;</span><span class="p">))</span>
+<span class="n">gs_target</span> <span class="o">=</span> <span class="n">std1Q_XYI</span><span class="o">.</span><span class="n">gs_target</span>
 </pre></div>
 
 </div>
 </div>
 </div>
 
-<div class="output_wrapper">
-<div class="output">
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>Let's now try to actually pick out a fiducial set.  The fiducial selection output will strongly depend on several different inputs to the function <code>optimize_integer_fiducials_slack</code>. These inputs include:</p>
+<ul>
+<li><code>prepOrMeas</code>:  Whether we are attempting to compute preparation fiducials or measurement fiducials.</li>
+</ul>
+<ul>
+<li><code>fiducialList</code> : The list of candidate germs from which the fiducials set will be chosen.</li>
+</ul>
+<ul>
+<li><code>initialWeights</code> : The initial subset of candidate fiducials which the optimizer tests. The default here is <code>None</code>,  meaning that all candidate fiducials are included in the first fiducial set test.</li>
+</ul>
+<ul>
+<li><code>fixedSlack</code> : The absolute score a fiducial set is allowed to achieve</li>
+</ul>
+<ul>
+<li><code>slackFrac</code> : The relative score a fiducial set is allowed to achieve</li>
+</ul>
+<p>Note: <strong>Only one</strong> of <code>fixedSlack</code> or <code>slackFrac</code> may be set. Typically we will use <code>fixedSlack</code>, and we find that <code>fixedSlack</code> ~1 is sufficient. These arguments determine the relaxation scheme used to reduce the fiducial list size.</p>
+<ul>
+<li><code>forceEmpty</code>: Whether or not the fiducial set <em>must</em> contain the empty string.</li>
+</ul>
+<ul>
+<li><code>fixedNum</code> : Whether or not we are forcing the fiducial set to be a fixed size</li>
+</ul>
+<ul>
+<li><code>scoreFunc</code> : Whether the objective function only tries to minimize how insensitive we are for our most insensitive direction in Hilbert-Schmidt space, or if it tries to make us as sensitive as possible to all directions in Hilbert-Schmidt space</li>
+</ul>
+<p>Here we demonstrate particular choices for the above inputs.  By parameter counting, one can see that these particular instances yield "optimal" results (as there are four elements of a state or measurement effect, and we choose four fiducials).</p>
+<p><strong> However, we make no claims of optimality for these choices in general (particularly when 2 or more qubits are considered).</strong></p>
+<p>End users are encouraged to experiment themselves with these inputs.  They are also welcome to contact the <code>pygsti</code> development team at pygsti@sandia.gov.</p>
 
-
-<div class="output_area"><div class="prompt"></div>
-<div class="output_subarea output_stream output_stdout output_text">
-<pre>Loading from cache file:  tutorial_files/Example_Dataset.txt.cache
-</pre>
 </div>
 </div>
-
-</div>
-</div>
-
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 <div class="prompt input_prompt">In&nbsp;[3]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="c">#Get sufficient set of fiducial pairs, meaning that with these fidicual pairs and the given set of germs,</span>
-<span class="c"># the number of gateset parameters which are amplified when all pairs are used are also amplified when using</span>
-<span class="c"># the returned subset.</span>
-<span class="n">rhoEPairs</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">alg</span><span class="o">.</span><span class="n">find_sufficient_fiducial_pairs</span><span class="p">(</span><span class="n">gs_target</span><span class="p">,</span> <span class="n">fiducialList</span><span class="p">,</span> <span class="n">fiducialList</span><span class="p">,</span> <span class="n">germList</span><span class="p">,</span> <span class="n">verbosity</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-<span class="k">print</span> <span class="n">rhoEPairs</span>
+<div class=" highlight hl-ipython2"><pre><span class="c">#Let&#39;s try to pick out a fiducial set.  </span>
+
+<span class="c">#First, we generate a candidate set which we&#39;ll attempt to prune.</span>
+<span class="c">#Here, we&#39;re looking at all gate string sequences of maximum length 2.</span>
+
+<span class="n">max_length</span> <span class="o">=</span> <span class="mi">2</span>
+<span class="n">gates</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;Gx&#39;</span><span class="p">,</span><span class="s">&#39;Gy&#39;</span><span class="p">]</span><span class="c">#We omit any identity operations here, as we don&#39;t want them in our fiducials.</span>
+
+<span class="c">#Important for the minlength arg to equal 0, so we include the empty string.</span>
+<span class="n">testFidList</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">construction</span><span class="o">.</span><span class="n">list_all_gatestrings</span><span class="p">(</span><span class="n">gates</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="n">max_length</span><span class="p">)</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>Don't worry if the <code>optimize_integer_fiducials_slack</code> function below throws a divide by zero warning;
+this just means one of the tested cases was <em>really</em> bad.</p>
+
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[4]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span class="c">#Compute the preparation fiducials</span>
+
+<span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+<span class="n">prepFidList1</span> <span class="o">=</span> <span class="n">FS</span><span class="o">.</span><span class="n">optimize_integer_fiducials_slack</span><span class="p">(</span><span class="n">gs_target</span><span class="p">,</span><span class="n">testFidList</span><span class="p">,</span><span class="n">prepOrMeas</span><span class="o">=</span><span class="s">&#39;prep&#39;</span><span class="p">,</span>\
+                                                   <span class="n">initialWeights</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span><span class="n">slackFrac</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">end</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+<span class="k">print</span>
+<span class="k">print</span> <span class="s">&quot;Fiducial selection completed in {0} seconds.&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">end</span><span class="o">-</span><span class="n">start</span><span class="p">,</span> <span class="mi">7</span><span class="p">))</span>
+<span class="k">print</span> <span class="n">prepFidList1</span>
 </pre></div>
 
 </div>
@@ -253,32 +334,25 @@ div#notebook {
 
 <div class="output_area"><div class="prompt"></div>
 <div class="output_subarea output_stream output_stdout output_text">
-<pre>------  Fiducial Pair Reduction --------
-maximum number of amplified parameters =  34
-Beginning search for a good set of 1 pairs (36 pair lists to test)
- --&gt; Higheset number of amplified parameters was 19
-Beginning search for a good set of 2 pairs (630 pair lists to test)
- --&gt; Higheset number of amplified parameters was 30
-Beginning search for a good set of 3 pairs (7140 pair lists to test)
-[(0, 0), (0, 1), (1, 0)]
+<pre>Starting fiducial set optimization. Lower score is better.
+Iteration 0: score=35, nFids=7
+Moving to better neighbor
+Iteration 1: score=36, nFids=6
+Moving to better neighbor
+Iteration 2: score=35, nFids=5
+Moving to better neighbor
+Iteration 3: score=32, nFids=4
+Stationary point found!
+score =  64.0
+weights =  [1 0 0 0 1 1 1]
+L1(weights) =  4
+
+Fiducial selection completed in 0.0121231 seconds.
+[GateString({}), GateString(GxGy), GateString(GyGx), GateString(GyGy)]
 </pre>
 </div>
 </div>
 
-</div>
-</div>
-
-</div>
-<div class="cell border-box-sizing code_cell rendered">
-<div class="input">
-<div class="prompt input_prompt">In&nbsp;[4]:</div>
-<div class="inner_cell">
-    <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="c">#Test a specific set of fiducial pairs: see how many gateset parameter are amplified</span>
-<span class="c">#FPR.find_sufficient_fiducial_pairs(gs_target, fiducialList, germList, testPairList=[(0,0),(0,1),(1,0)], verbosity=4)</span>
-</pre></div>
-
-</div>
 </div>
 </div>
 
@@ -288,12 +362,15 @@ Beginning search for a good set of 3 pairs (7140 pair lists to test)
 <div class="prompt input_prompt">In&nbsp;[5]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="n">lsgstListOfLists</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">construction</span><span class="o">.</span><span class="n">make_lsgst_lists</span><span class="p">(</span><span class="n">gs_target</span><span class="o">.</span><span class="n">keys</span><span class="p">(),</span> <span class="n">fiducialList</span><span class="p">,</span> <span class="n">germList</span><span class="p">,</span>
-                                              <span class="n">maxLengthList</span><span class="p">,</span> <span class="n">rhoEPairs</span><span class="p">)</span>
+<div class=" highlight hl-ipython2"><pre><span class="c"># Compute the measurement fiducials </span>
 
-<span class="n">gs_lsgst_list</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">do_iterative_mc2gst</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">gs_clgst</span><span class="p">,</span> <span class="n">lsgstListOfLists</span><span class="p">,</span> <span class="n">verbosity</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-                                         <span class="n">minProbClipForWeighting</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">,</span> <span class="n">probClipInterval</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mf">1e6</span><span class="p">,</span><span class="mf">1e6</span><span class="p">),</span>
-                                         <span class="n">returnAll</span><span class="o">=</span><span class="bp">True</span> <span class="p">)</span>
+<span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+<span class="n">measFidList1</span> <span class="o">=</span> <span class="n">FS</span><span class="o">.</span><span class="n">optimize_integer_fiducials_slack</span><span class="p">(</span><span class="n">gs_target</span><span class="p">,</span><span class="n">testFidList</span><span class="p">,</span><span class="n">prepOrMeas</span><span class="o">=</span><span class="s">&#39;meas&#39;</span><span class="p">,</span>\
+                                                   <span class="n">initialWeights</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span><span class="n">slackFrac</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">end</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+<span class="k">print</span>
+<span class="k">print</span> <span class="s">&quot;Fiducial selection completed in {0} seconds.&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">end</span><span class="o">-</span><span class="n">start</span><span class="p">,</span> <span class="mi">7</span><span class="p">))</span>
+<span class="k">print</span> <span class="n">measFidList1</span>
 </pre></div>
 
 </div>
@@ -306,46 +383,21 @@ Beginning search for a good set of 3 pairs (7140 pair lists to test)
 
 <div class="output_area"><div class="prompt"></div>
 <div class="output_subarea output_stream output_stdout output_text">
-<pre>
---- Iterative LSGST: Beginning iter 1 of 10 : 92 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 48.2156 (92 data params - 40 model params = expected mean of 52; p-value = 0.623488)
+<pre>Starting fiducial set optimization. Lower score is better.
+Iteration 0: score=35, nFids=7
+Moving to better neighbor
+Iteration 1: score=36, nFids=6
+Moving to better neighbor
+Iteration 2: score=35, nFids=5
+Moving to better neighbor
+Iteration 3: score=32, nFids=4
+Stationary point found!
+score =  64.0
+weights =  [1 0 0 0 1 1 1]
+L1(weights) =  4
 
---- Iterative LSGST: Beginning iter 2 of 10 : 92 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 48.2156 (92 data params - 40 model params = expected mean of 52; p-value = 0.623489)
-
---- Iterative LSGST: Beginning iter 3 of 10 : 95 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 51.0054 (95 data params - 40 model params = expected mean of 55; p-value = 0.627974)
-
---- Iterative LSGST: Beginning iter 4 of 10 : 114 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 76.4723 (114 data params - 40 model params = expected mean of 74; p-value = 0.399098)
-
---- Iterative LSGST: Beginning iter 5 of 10 : 146 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 117.016 (146 data params - 40 model params = expected mean of 106; p-value = 0.218495)
-
---- Iterative LSGST: Beginning iter 6 of 10 : 178 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 145.915 (178 data params - 40 model params = expected mean of 138; p-value = 0.305874)
-
---- Iterative LSGST: Beginning iter 7 of 10 : 210 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 190.552 (210 data params - 40 model params = expected mean of 170; p-value = 0.13384)
-
---- Iterative LSGST: Beginning iter 8 of 10 : 242 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 233.121 (242 data params - 40 model params = expected mean of 202; p-value = 0.0657696)
-
---- Iterative LSGST: Beginning iter 9 of 10 : 274 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 267.547 (274 data params - 40 model params = expected mean of 234; p-value = 0.0651749)
-
---- Iterative LSGST: Beginning iter 10 of 10 : 306 gate strings ---
---- Least Squares GST ---
-  Sum of Chi^2 = 291.434 (306 data params - 40 model params = expected mean of 266; p-value = 0.136086)
+Fiducial selection completed in 0.0105648 seconds.
+[GateString({}), GateString(GxGy), GateString(GyGx), GateString(GyGy)]
 </pre>
 </div>
 </div>
@@ -359,35 +411,9 @@ Beginning search for a good set of 3 pairs (7140 pair lists to test)
 <div class="prompt input_prompt">In&nbsp;[6]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="c"># Compute a few additional quantities needed to generate the report</span>
-<span class="n">Ls</span> <span class="o">=</span> <span class="n">maxLengthList</span>
-<span class="n">gateStrDict</span> <span class="o">=</span> <span class="p">{</span> <span class="p">(</span><span class="n">L</span><span class="p">,</span><span class="n">germ</span><span class="p">):</span><span class="n">pygsti</span><span class="o">.</span><span class="n">construction</span><span class="o">.</span><span class="n">repeat_with_max_length</span><span class="p">(</span><span class="n">germ</span><span class="p">,</span><span class="n">L</span><span class="p">,</span><span class="bp">False</span><span class="p">)</span> <span class="k">for</span> <span class="n">L</span> <span class="ow">in</span> <span class="n">Ls</span> <span class="k">for</span> <span class="n">germ</span> <span class="ow">in</span> <span class="n">germList</span> <span class="p">}</span>
-
-<span class="c">#remove duplicates by replacing duplicate strings with None</span>
-<span class="n">runningList</span> <span class="o">=</span> <span class="p">[]</span>
-<span class="k">for</span> <span class="n">L</span> <span class="ow">in</span> <span class="n">Ls</span><span class="p">:</span>
-    <span class="k">for</span> <span class="n">germ</span> <span class="ow">in</span> <span class="n">germList</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">gateStrDict</span><span class="p">[(</span><span class="n">L</span><span class="p">,</span><span class="n">germ</span><span class="p">)]</span> <span class="ow">in</span> <span class="n">runningList</span><span class="p">:</span>
-            <span class="n">gateStrDict</span><span class="p">[(</span><span class="n">L</span><span class="p">,</span><span class="n">germ</span><span class="p">)]</span> <span class="o">=</span> <span class="bp">None</span>
-        <span class="k">else</span><span class="p">:</span> <span class="n">runningList</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="n">gateStrDict</span><span class="p">[(</span><span class="n">L</span><span class="p">,</span><span class="n">germ</span><span class="p">)]</span> <span class="p">)</span>
-</pre></div>
-
-</div>
-</div>
-</div>
-
-</div>
-<div class="cell border-box-sizing code_cell rendered">
-<div class="input">
-<div class="prompt input_prompt">In&nbsp;[8]:</div>
-<div class="inner_cell">
-    <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span class="n">res</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">report</span><span class="o">.</span><span class="n">Results</span><span class="p">()</span>
-<span class="n">res</span><span class="o">.</span><span class="n">init_Ls_and_germs</span><span class="p">(</span><span class="s">&quot;chi2&quot;</span><span class="p">,</span> <span class="n">gs_target</span><span class="p">,</span> <span class="n">ds</span><span class="p">,</span> <span class="n">gs_clgst</span><span class="p">,</span> <span class="n">maxLengthList</span><span class="p">,</span> <span class="n">germList</span><span class="p">,</span>
-                    <span class="n">gs_lsgst_list</span><span class="p">,</span> <span class="n">lsgstListOfLists</span><span class="p">,</span> <span class="n">fiducialList</span><span class="p">,</span> <span class="n">fiducialList</span><span class="p">,</span> 
-                    <span class="n">pygsti</span><span class="o">.</span><span class="n">construction</span><span class="o">.</span><span class="n">repeat_with_max_length</span><span class="p">,</span> <span class="bp">False</span><span class="p">,</span> <span class="n">rhoEPairs</span><span class="p">)</span>
-
-<span class="n">res</span><span class="o">.</span><span class="n">create_full_report_pdf</span><span class="p">(</span><span class="n">filename</span><span class="o">=</span><span class="s">&quot;tutorial_files/Example_report_FR.pdf&quot;</span><span class="p">,</span> <span class="n">verbosity</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<div class=" highlight hl-ipython2"><pre><span class="k">print</span> <span class="s">&quot;We have selected our preparation fiducials to be:&quot;</span>
+<span class="k">for</span> <span class="n">fid</span> <span class="ow">in</span> <span class="n">prepFidList1</span><span class="p">:</span>
+    <span class="k">print</span> <span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="p">,</span><span class="n">fid</span>
 </pre></div>
 
 </div>
@@ -400,32 +426,11 @@ Beginning search for a good set of 3 pairs (7140 pair lists to test)
 
 <div class="output_area"><div class="prompt"></div>
 <div class="output_subarea output_stream output_stdout output_text">
-<pre>*** Generating tables ***
-Generating targetSpamTable table...
-Generating targetGatesTable table...
-Generating datasetOverviewTable table...
-Generating bestGatesetSpamTable table...
-Generating bestGatesetSpamParametersTable table...
-Generating bestGatesetGatesTable table...
-Generating bestGatesetChoiTable table...
-Generating bestGatesetDecompTable table...
-Generating bestGatesetRotnAxisTable table...
-Generating bestGatesetClosestUnitaryTable table...
-Generating bestGatesetVsTargetTable table...
-Generating bestGatesetErrorGenTable table...
-Generating fiducialListTable table...
-Generating rhoStrListTable table...
-Generating EStrListTable table...
-Generating germListTable table...
-Generating chi2ProgressTable table...
-*** Generating plots ***
- -- Chi2 plots (2):  1  Generating bestEstimateColorBoxPlot figure...
-2  Generating invertedBestEstimateColorBoxPlot figure...
-
-*** Merging into template file ***
-Latex file(s) successfully generated.  Attempting to compile with pdflatex...
-Initial output PDF tutorial_files/Example_report_FR.pdf successfully generated.
-Final output PDF tutorial_files/Example_report_FR.pdf successfully generated. Cleaning up .aux and .log files.
+<pre>We have selected our preparation fiducials to be:
+	{}
+	GxGy
+	GyGx
+	GyGy
 </pre>
 </div>
 </div>
@@ -436,10 +441,139 @@ Final output PDF tutorial_files/Example_report_FR.pdf successfully generated. Cl
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[&nbsp;]:</div>
+<div class="prompt input_prompt">In&nbsp;[7]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre> 
+<div class=" highlight hl-ipython2"><pre><span class="k">print</span> <span class="s">&quot;We have selected our measurement fiducials to be:&quot;</span>
+<span class="k">for</span> <span class="n">fid</span> <span class="ow">in</span> <span class="n">measFidList1</span><span class="p">:</span>
+    <span class="k">print</span> <span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="p">,</span><span class="n">fid</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area"><div class="prompt"></div>
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>We have selected our measurement fiducials to be:
+	{}
+	GxGy
+	GyGx
+	GyGy
+</pre>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>The key property we wish for our fiducials to have is <em>informational completeness</em>. Below, we test whether our selected preparation and measurement fiducuials are in fact so.</p>
+
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[8]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span class="n">FS</span><span class="o">.</span><span class="n">test_fiducial_list</span><span class="p">(</span><span class="n">gs_target</span><span class="p">,</span><span class="n">prepFidList1</span><span class="p">,</span><span class="s">&#39;prep&#39;</span><span class="p">,</span><span class="n">returnAll</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area"><div class="prompt output_prompt">Out[8]:</div>
+
+
+<div class="output_text output_subarea output_execute_result">
+<pre>(True,
+ array([ 0.21922359,  0.5       ,  1.        ,  2.28077641]),
+ 32.000000000000007)</pre>
+</div>
+
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[9]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span class="n">FS</span><span class="o">.</span><span class="n">test_fiducial_list</span><span class="p">(</span><span class="n">gs_target</span><span class="p">,</span><span class="n">measFidList1</span><span class="p">,</span><span class="s">&#39;meas&#39;</span><span class="p">,</span><span class="n">returnAll</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area"><div class="prompt output_prompt">Out[9]:</div>
+
+
+<div class="output_text output_subarea output_execute_result">
+<pre>(True,
+ array([ 0.21922359,  0.5       ,  1.        ,  2.28077641]),
+ 32.000000000000007)</pre>
+</div>
+
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>Note that in practice, we use a set of six fiducials both for prep and measure (which can be created using <code>std1Q_XYI.fiducials</code>).
+This is for greater numerical stability; for single-qubit GST, we recommend 6 preparation and 6 measurement fiducials, as the added cost is not too great, and this provides prep and measure fiducials corresponding to all 6 antipodal points on the Bloch sphere, providing a nice degree of symmetry.</p>
+<p>However, for multiqubit GST, experimental resource constraints become more relevant, and we recommend simply directly using the outputs of the fiducial selection code.</p>
+<p>That said, one can, for one or more quibits, force optimize_integer_fiducials_slack to return a fiducial set of
+fixed size.  Instead of running an integer program over fiducial sets of different sizes, we can instead score
+all fiducial sets of a fixed size (that are subsets of the input set) and select the best one.<br>
+This can become expensive quickly, but it is very feasible for at least single-qubit gate sets, as exhibited below.</p>
+<p>To turn this functionality on, set the fixedNum keyword argument to be equal to the fiducial set size you want.</p>
+<p>Also, a warning:  <strong>If there does not exist an informationally complete fiducial set of the desired size, you may still receive an output from <code>optimize_integer_fiducials_slack</code></strong>, so it is important to check the score of the fiducial set (either via the <code>returnAll</code> keyword arg, or the <code>function test_fiducial_list</code>.)</p>
+
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[10]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span class="c">#Again, we&#39;ll try to pick out a fiducial set, but now we will insist that the set be of size 6.</span>
+<span class="c">#We&#39;ll look at all gate string sequences of maximum length 3.</span>
+
+<span class="n">max_length</span> <span class="o">=</span> <span class="mi">3</span>
+<span class="n">gates</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;Gx&#39;</span><span class="p">,</span><span class="s">&#39;Gy&#39;</span><span class="p">]</span>
+
+<span class="n">testFidList_force6</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">construction</span><span class="o">.</span><span class="n">list_all_gatestrings</span><span class="p">(</span><span class="n">gates</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="n">max_length</span><span class="p">)</span>
 </pre></div>
 
 </div>
@@ -449,16 +583,350 @@ Final output PDF tutorial_files/Example_report_FR.pdf successfully generated. Cl
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[&nbsp;]:</div>
+<div class="prompt input_prompt">In&nbsp;[11]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre> 
+<div class=" highlight hl-ipython2"><pre><span class="c">#Let&#39;s again forceEmpty to be True, and see what we get for preparation fiducials.</span>
+<span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+<span class="n">prepFidList1_force6</span> <span class="o">=</span> <span class="n">FS</span><span class="o">.</span><span class="n">optimize_integer_fiducials_slack</span><span class="p">(</span><span class="n">gs_target</span><span class="p">,</span><span class="n">testFidList_force6</span><span class="p">,</span><span class="n">prepOrMeas</span><span class="o">=</span><span class="s">&#39;prep&#39;</span><span class="p">,</span>\
+                                                          <span class="n">initialWeights</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span><span class="n">slackFrac</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span><span class="n">fixedNum</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>\
+                                                          <span class="n">forceEmpty</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="n">end</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+<span class="k">print</span>
+<span class="k">print</span> <span class="s">&quot;Fiducial selection completed in {0} seconds.&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">end</span><span class="o">-</span><span class="n">start</span><span class="p">,</span> <span class="mi">7</span><span class="p">))</span>
+<span class="k">print</span> <span class="n">prepFidList1_force6</span>
 </pre></div>
 
 </div>
 </div>
 </div>
 
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area"><div class="prompt"></div>
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>Starting fiducial set optimization. Lower score is better.
+Output set is required to be of size 6
+Total number of fiducial sets to be checked is 2002.0
+If this is very large, you may wish to abort.
+
+Fiducial selection completed in 0.8575828 seconds.
+[GateString({}), GateString(Gx), GateString(Gy), GateString(GxGx), GateString(GxGxGx), GateString(GxGxGy)]
+</pre>
+</div>
+</div>
+
+<div class="output_area"><div class="prompt"></div>
+<div class="output_subarea output_stream output_stderr output_text">
+<pre>/home/enielse/research/pyGSTi/packages/pygsti/algorithms/fiducialselection.py:355: RuntimeWarning: divide by zero encountered in divide
+  return sum(1./_np.abs(input_array))
+</pre>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[12]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span class="c">#Let&#39;s set forceEmpty = False</span>
+<span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+<span class="n">prepFidList1_force6</span> <span class="o">=</span> <span class="n">FS</span><span class="o">.</span><span class="n">optimize_integer_fiducials_slack</span><span class="p">(</span><span class="n">gs_target</span><span class="p">,</span><span class="n">testFidList_force6</span><span class="p">,</span><span class="n">prepOrMeas</span><span class="o">=</span><span class="s">&#39;prep&#39;</span><span class="p">,</span>\
+                                                          <span class="n">initialWeights</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span><span class="n">slackFrac</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span><span class="n">fixedNum</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>\
+                                                          <span class="n">forceEmpty</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+<span class="n">end</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+<span class="k">print</span>
+<span class="k">print</span> <span class="s">&quot;Fiducial selection completed in {0} seconds.&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">end</span><span class="o">-</span><span class="n">start</span><span class="p">,</span> <span class="mi">7</span><span class="p">))</span>
+<span class="k">print</span> <span class="n">prepFidList1_force6</span>
+<span class="c">#Conveniently, we get the same results as above!</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area"><div class="prompt"></div>
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>Starting fiducial set optimization. Lower score is better.
+Output set is required to be of size 6
+Total number of fiducial sets to be checked is 5005.0
+If this is very large, you may wish to abort.
+
+Fiducial selection completed in 1.757138 seconds.
+[GateString({}), GateString(Gx), GateString(Gy), GateString(GxGx), GateString(GxGxGx), GateString(GxGxGy)]
+</pre>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[13]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span class="c">#Now let&#39;s make a measurement fiducial set with forceEmpty = True</span>
+<span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+<span class="n">measFidList1_force6</span> <span class="o">=</span> <span class="n">FS</span><span class="o">.</span><span class="n">optimize_integer_fiducials_slack</span><span class="p">(</span><span class="n">gs_target</span><span class="p">,</span><span class="n">testFidList_force6</span><span class="p">,</span><span class="n">prepOrMeas</span><span class="o">=</span><span class="s">&#39;meas&#39;</span><span class="p">,</span>\
+                                                          <span class="n">initialWeights</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span><span class="n">slackFrac</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span><span class="n">fixedNum</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>\
+                                                          <span class="n">forceEmpty</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="n">end</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+<span class="k">print</span>
+<span class="k">print</span> <span class="s">&quot;Fiducial selection completed in {0} seconds.&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">end</span><span class="o">-</span><span class="n">start</span><span class="p">,</span> <span class="mi">7</span><span class="p">))</span>
+<span class="k">print</span> <span class="n">measFidList1_force6</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area"><div class="prompt"></div>
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>Starting fiducial set optimization. Lower score is better.
+Output set is required to be of size 6
+Total number of fiducial sets to be checked is 2002.0
+If this is very large, you may wish to abort.
+
+Fiducial selection completed in 0.8593938 seconds.
+[GateString({}), GateString(Gx), GateString(Gy), GateString(GxGx), GateString(GxGxGx), GateString(GyGxGx)]
+</pre>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[14]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span class="c">#Now let&#39;s make a measurement fiducial set with forceEmpty = False</span>
+<span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+<span class="n">measFidList1_force6</span> <span class="o">=</span> <span class="n">FS</span><span class="o">.</span><span class="n">optimize_integer_fiducials_slack</span><span class="p">(</span><span class="n">gs_target</span><span class="p">,</span><span class="n">testFidList_force6</span><span class="p">,</span><span class="n">prepOrMeas</span><span class="o">=</span><span class="s">&#39;meas&#39;</span><span class="p">,</span>\
+                                                          <span class="n">initialWeights</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span><span class="n">slackFrac</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span><span class="n">fixedNum</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>\
+                                                          <span class="n">forceEmpty</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+<span class="n">end</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+<span class="k">print</span>
+<span class="k">print</span> <span class="s">&quot;Fiducial selection completed in {0} seconds.&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">end</span><span class="o">-</span><span class="n">start</span><span class="p">,</span> <span class="mi">7</span><span class="p">))</span>
+<span class="k">print</span> <span class="n">measFidList1_force6</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area"><div class="prompt"></div>
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>Starting fiducial set optimization. Lower score is better.
+Output set is required to be of size 6
+Total number of fiducial sets to be checked is 5005.0
+If this is very large, you may wish to abort.
+
+Fiducial selection completed in 1.692409 seconds.
+[GateString({}), GateString(Gx), GateString(Gy), GateString(GxGx), GateString(GxGxGx), GateString(GyGxGx)]
+</pre>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[15]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span class="k">print</span> <span class="s">&quot;We have selected our size-6 preparation fiducials to be:&quot;</span>
+<span class="k">for</span> <span class="n">fid</span> <span class="ow">in</span> <span class="n">prepFidList1_force6</span><span class="p">:</span>
+    <span class="k">print</span> <span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="p">,</span><span class="n">fid</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area"><div class="prompt"></div>
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>We have selected our size-6 preparation fiducials to be:
+	{}
+	Gx
+	Gy
+	GxGx
+	GxGxGx
+	GxGxGy
+</pre>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[16]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span class="k">print</span> <span class="s">&quot;We have selected our size-6 measurement fiducials to be:&quot;</span>
+<span class="k">for</span> <span class="n">fid</span> <span class="ow">in</span> <span class="n">measFidList1_force6</span><span class="p">:</span>
+    <span class="k">print</span> <span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="p">,</span><span class="n">fid</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area"><div class="prompt"></div>
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>We have selected our size-6 measurement fiducials to be:
+	{}
+	Gx
+	Gy
+	GxGx
+	GxGxGx
+	GyGxGx
+</pre>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[17]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span class="n">FS</span><span class="o">.</span><span class="n">test_fiducial_list</span><span class="p">(</span><span class="n">gs_target</span><span class="p">,</span><span class="n">prepFidList1_force6</span><span class="p">,</span><span class="s">&#39;prep&#39;</span><span class="p">,</span><span class="n">returnAll</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area"><div class="prompt output_prompt">Out[17]:</div>
+
+
+<div class="output_text output_subarea output_execute_result">
+<pre>(True, array([ 1.,  1.,  1.,  3.]), 20.0)</pre>
+</div>
+
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[18]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span class="n">FS</span><span class="o">.</span><span class="n">test_fiducial_list</span><span class="p">(</span><span class="n">gs_target</span><span class="p">,</span><span class="n">measFidList1_force6</span><span class="p">,</span><span class="s">&#39;meas&#39;</span><span class="p">,</span><span class="n">returnAll</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area"><div class="prompt output_prompt">Out[18]:</div>
+
+
+<div class="output_text output_subarea output_execute_result">
+<pre>(True, array([ 1.,  1.,  1.,  3.]), 20.0)</pre>
+</div>
+
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[19]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span class="c">#Lastly, let&#39;s compare to the &quot;standard&quot; 6-fiducial set we use as our default:</span>
+<span class="k">print</span> <span class="s">&quot;std1Q_XYI.fiducials =&quot;</span><span class="p">,</span> <span class="n">std1Q_XYI</span><span class="o">.</span><span class="n">fiducials</span>
+<span class="k">print</span> <span class="n">FS</span><span class="o">.</span><span class="n">test_fiducial_list</span><span class="p">(</span><span class="n">gs_target</span><span class="p">,</span><span class="n">std1Q_XYI</span><span class="o">.</span><span class="n">fiducials</span><span class="p">,</span><span class="s">&#39;prep&#39;</span><span class="p">,</span><span class="n">returnAll</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="k">print</span> <span class="n">FS</span><span class="o">.</span><span class="n">test_fiducial_list</span><span class="p">(</span><span class="n">gs_target</span><span class="p">,</span><span class="n">std1Q_XYI</span><span class="o">.</span><span class="n">fiducials</span><span class="p">,</span><span class="s">&#39;meas&#39;</span><span class="p">,</span><span class="n">returnAll</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area"><div class="prompt"></div>
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>std1Q_XYI.fiducials = [GateString({}), GateString(Gx), GateString(Gy), GateString(GxGx), GateString(GxGxGx), GateString(GyGyGy)]
+(True, array([ 1.,  1.,  1.,  3.]), 20.0)
+(True, array([ 1.,  1.,  1.,  3.]), 20.0)
+</pre>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>The "standard" fiducials are very similar to the automatically selected ones, and score the same!
+The notable difference is that prep and measurement fiducials are different when automatically selected;
+our default sets are the same for both prep and measure.
+This is because each "standard" fiducial is symmetric; the automated fiducials reverse gate order between
+preparation and measure.</p>
+
+</div>
+</div>
 </div>
     </div>
   </div>

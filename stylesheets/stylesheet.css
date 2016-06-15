@@ -341,6 +341,16 @@ table.headertable img {
   background: url('../images/icon_download.png') no-repeat 0% 90%;
 }
 
+.documentation_link {
+  display: block;
+  float: right;
+  width: 90px;
+  height:70px;
+  text-indent: -5000px;
+  overflow: hidden;
+  background: url(../images/custom_sprite_download.png) no-repeat bottom left;
+}
+
 .zip_download_link {
   display: block;
   float: right;
