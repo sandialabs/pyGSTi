@@ -40,7 +40,7 @@ setup(name='pyGSTi',
       requires=['numpy','scipy','matplotlib'],
       platforms = ["any"],      
       url = 'http://www.pygsti.info',
-      download_url = 'https://github.com/pyGSTio/pyGSTi/archive/v0.9.1-alpha.tar.gz',
+      download_url = 'https://github.com/pyGSTio/pyGSTi/archive/v0.9.1-beta.tar.gz',
       keywords = ['pygsti', 'tomography', 'gate set', 'pigsty', 'pig', 'quantum', 'qubit'],
       classifiers = filter(None, classifiers.split("\n")),
      )
