@@ -4,6 +4,7 @@
 #    in the file "license.txt" in the top-level pyGSTi directory 
 #*****************************************************************
 """ Functions for creating datasets """
+from __future__ import print_function
 
 import numpy as _np
 import numpy.random as _rndm
@@ -100,7 +101,7 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples, sampleError=
           spamLabel1, spamLabel2 = ps.keys(); p1 = ps[spamLabel1]
           if p1 < 0 and abs(p1) < 1e-6: p1 = 0
           if p1 > 1 and abs(p1-1.0) < 1e-6: p1 = 1
-          if p1 < 0 or p1 > 1: print "Warning: probability == %g clipped to generate fake data" % p1
+          if p1 < 0 or p1 > 1: print("Warning: probability == %g clipped to generate fake data" % p1)
           p1 = _np.clip(p1,0,1)
           counts[spamLabel1] = rndm.binomial(nWeightedSamples, p1) #numpy.clip(p1,0,1) )
           counts[spamLabel2] = nWeightedSamples - counts[spamLabel1]

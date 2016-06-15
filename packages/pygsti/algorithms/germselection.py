@@ -5,13 +5,13 @@
 #*****************************************************************
 """ Functions for selecting a complete set of germs for a GST analysis."""
 
-import numpy as _np
-import numpy.linalg as _nla
-import itertools as _itertools
-import math as _math
-import sys as _sys
-import warnings as _warnings
-
+import numpy           as _np
+import numpy.linalg    as _nla
+import itertools       as _itertools
+import math            as _math
+import sys             as _sys
+import warnings        as _warnings
+from .. import objects as _objs
 
 #def _PerfectTwirl(mxToTwirl,wrt,eps):
 #    """ Perform twirl on mxToTwirl with respect to wrt """
@@ -351,6 +351,9 @@ def optimize_integer_germs_slack(gateset, germsList, initialWeights=None,
         specifying a subset of germs, and values == 1.0/smallest-non-gauge-
         eigenvalue "scores".  
     """
+    
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+
     if (fixedSlack and slackFrac) or (not fixedSlack and not slackFrac):
         raise ValueError("Either fixedSlack *or* slackFrac should be specified")
     lessWeightOnly = False  #Initially allow adding to weight. -- maybe make this an argument??
@@ -358,9 +361,8 @@ def optimize_integer_germs_slack(gateset, germsList, initialWeights=None,
     nGaugeParams = gateset.num_gauge_params()
     nGerms = len(germsList)
 
-    if verbosity > 0:
-        print "Starting germ set optimization. Lower score is better."
-        print "Gateset has %d gauge params." % nGaugeParams
+    printer.log("Starting germ set optimization. Lower score is better.")
+    printer.log("Gateset has %d gauge params." % nGaugeParams)
 
     #score dictionary:
     #  keys = tuple-ized weight vector of 1's and 0's only
@@ -400,8 +402,7 @@ def optimize_integer_germs_slack(gateset, germsList, initialWeights=None,
     for iIter in xrange(maxIter):
         scoreD_keys = scoreD.keys() #list of weight tuples already computed
 
-        if verbosity > 0:
-            print "Iteration %d: score=%g, nGerms=%d" % (iIter, score, L1)
+        printer.show_progress(iIter, maxIter-1, suffix="score=%g, nGerms=%d" % (score, L1))
         
         bFoundBetterNeighbor = False
         for neighborNum, neighbor in enumerate(get_neighbors(weights)):
@@ -416,7 +417,7 @@ def optimize_integer_germs_slack(gateset, germsList, initialWeights=None,
             if neighborScore <= score and (neighborL1 < L1 or lessWeightOnly == False):
                 weights, score, L1 = neighbor, neighborScore, neighborL1
                 bFoundBetterNeighbor = True
-                if verbosity > 1: print "Found better neighbor: nGerms = %d score = %g" % (L1,score)
+                printer.log("Found better neighbor: nGerms = %d score = %g" % (L1,score), 2)
 
 
         if not bFoundBetterNeighbor: # Time to relax our search.
@@ -428,27 +429,26 @@ def optimize_integer_germs_slack(gateset, germsList, initialWeights=None,
                 slack = fixedSlack
             assert(slack > 0)
 
-            if verbosity > 1:
-                print "No better neighbor. Relaxing score w/slack: %g => %g" % (score, score+slack)
+            printer.log("No better neighbor. Relaxing score w/slack: %g => %g" % (score, score+slack), 2)
             score += slack #artificially increase score and see if any neighbor is better now...
 
             for neighborNum, neighbor in enumerate(get_neighbors(weights)):
                 if sum(neighbor) < L1 and scoreD[tuple(neighbor)] < score:
                     weights, score, L1 = neighbor, scoreD[tuple(neighbor)], sum(neighbor)
                     bFoundBetterNeighbor = True
-                    if verbosity > 1: print "Found better neighbor: nGerms = %d score = %g" % (L1,score)
+                    printer.log("Found better neighbor: nGerms = %d score = %g" % (L1,score), 2)
 
             if not bFoundBetterNeighbor: #Relaxing didn't help!
-                print "Stationary point found!";
+                printer.log("Stationary point found!");
                 break #end main for loop
         
-        print "Moving to better neighbor"
+        printer.log("Moving to better neighbor")
     else:
-        print "Hit max. iterations"
+        printer.log("Hit max. iterations")
     
-    print "score = ", score
-    print "weights = ",weights
-    print "L1(weights) = ",sum(weights)
+    printer.log("score = %s" % score)
+    printer.log("weights = %s" % weights)
+    printer.log("L1(weights) = %s" % sum(weights))
 
     goodGermsList = []
     for index,val in enumerate(weights):

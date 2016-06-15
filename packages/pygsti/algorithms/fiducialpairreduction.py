@@ -5,13 +5,14 @@
 #*****************************************************************
 """ Functions for reducing the number of required fiducial pairs for analysis."""
 
-import numpy as _np
+import numpy     as _np
 import itertools as _itertools
-import math as _math
-import sys as _sys
+import math      as _math
+import sys       as _sys
 from ..construction import gatestringconstruction as _gsc
-from ..tools import remove_duplicates as _remove_duplicates
+from ..tools        import remove_duplicates      as _remove_duplicates
 
+from ..             import objects as _objs
 
 def _nCr(n,r):
     """Number of combinations of r items out of a set of n.  Equals n!/(r!(n-r)!)"""
@@ -22,6 +23,8 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
                                    testLs=(256,2048), spamLabels="all", tol=0.75,
                                    searchMode="sequential", nRandom=100, seed=None,
                                    verbosity=0, testPairList=None, memLimit=None):
+
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
     """ Still in experimental stages.  TODO docstring. """
     #trim LSGST list of all f1+germ^exp+f2 strings to just those needed to get full rank jacobian. (compressed sensing like)
@@ -50,16 +53,16 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
                 nParams = targetGateset.num_params()
                 memEstimate = 8.0*len(evTree)*dim**2*nParams #*nSPAM
                 if memEstimate > memLimit:
-                    print "Germ %d/%d: Memory estimate = %.1fGB > %.1fGB" % \
-                        (iGerm+1,len(germList),memEstimate/(1024.0**3),memLimit/(1024.0**3))
+                    printer.log("Germ %d/%d: Memory estimate = %.1fGB > %.1fGB" % \
+                        (iGerm+1,len(germList),memEstimate/(1024.0**3),memLimit/(1024.0**3)))
                     if memEstimate/nParams < memLimit:
                         blkSz = int(nParams * memLimit / memEstimate)
-                        print " --> Setting max block size = ",blkSz
+                        printer.log(" --> Setting max block size = ",blkSz)
                     else:
                         #Tree splitting method
                         maxTreeLength = len(evTree) * memLimit / memEstimate
                         evTree.split(maxTreeLength)
-                        print " --> Setting max subtree size = ",maxTreeLength
+                        printer.log(" --> Setting max subtree size = %s" % maxTreeLength)
                         evTree.print_analysis()
 
             dprobs = targetGateset.bulk_dprobs(evTree, wrtBlockSize=blkSz)
@@ -68,29 +71,29 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
         return dP
     
     def get_number_amplified(M0,M1,L0,L1,verb):
+        printer = _objs.VerbosityPrinter.build_printer(verb)
         L_ratio = float(L1)/float(L0)
         try:
             s0 = _np.linalg.svd(M0, compute_uv=False)
             s1 = _np.linalg.svd(M1, compute_uv=False)
         except:
-            print "Warning: SVD error!!"; return 0
+            printer.warning("SVD error!!"); return 0
             #SVD did not converge -> just say no amplified params...
 
         numAmplified = 0
-        if verb > 3: 
-            print "Amplified parameter test: matrices are %s and %s." % (M0.shape, M1.shape)
-            print "Index : SV(L=%d)  SV(L=%d)  AmpTest ( > %g ?)" % (L0,L1,tol)
+        printer.log("Amplified parameter test: matrices are %s and %s." % (M0.shape, M1.shape), 4)
+        printer.log("Index : SV(L=%d)  SV(L=%d)  AmpTest ( > %g ?)" % (L0,L1,tol), 4)
         for i,(v0,v1) in enumerate(zip(sorted(s0,reverse=True),sorted(s1,reverse=True))):
             if abs(v0) > 0.1 and (v1/v0)/L_ratio > tol: 
                 numAmplified += 1
-                if verb > 3: print "%d: %g  %g  %g YES" % (i,v0,v1, (v1/v0)/L_ratio )
-            elif verb > 3: print "%d: %g  %g  %g NO" % (i,v0,v1, (v1/v0)/L_ratio )
+                printer.log("%d: %g  %g  %g YES" % (i,v0,v1, (v1/v0)/L_ratio ), 4)
+            printer.log("%d: %g  %g  %g NO" % (i,v0,v1, (v1/v0)/L_ratio ), 4)
         return numAmplified
             
     #rank = len( [v for v in s if v > 0.001] )
  
-    if verbosity > 0: 
-        print "------  Fiducial Pair Reduction --------"
+   
+    printer.log("------  Fiducial Pair Reduction --------")
             
     L0 = testLs[0]; dP0 = get_derivs(L0)
     L1 = testLs[1]; dP1 = get_derivs(L1)
@@ -100,7 +103,7 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
     #Get number of amplified parameters in the "full" test matrix: the one we get when we use all possible fiducial pairs
     if testPairList is None: 
         maxAmplified = get_number_amplified(fullTestMx0, fullTestMx1, L0, L1, verbosity+1)
-        if verbosity > 0: print "maximum number of amplified parameters = ",maxAmplified
+        printer.log("maximum number of amplified parameters = %s" % maxAmplified)
 
     #Loop through fiducial pairs and add all derivative rows (1 x nGatesetParams) to test matrix
     # then check if testMatrix has full rank ( == nGatesetParams)
@@ -124,15 +127,13 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
         testMx0 = _np.take( fullTestMx0, gateStringIndicesForPairs, axis=0 )
         testMx1 = _np.take( fullTestMx1, gateStringIndicesForPairs, axis=0 )
         nAmplified = get_number_amplified(testMx0, testMx1, L0, L1, verbosity)
-        print "Number of amplified parameters = ",nAmplified
+        printer.log("Number of amplified parameters = %s" % nAmplified)
         return None
 
     bestAmplified = 0
     for nNeededPairs in range(1,nPossiblePairs):
-        if verbosity > 0: 
-            print "Beginning search for a good set of %d pairs (%d pair lists to test)" % \
-                (nNeededPairs,_nCr(nPossiblePairs,nNeededPairs))
-            _sys.stdout.flush()
+        printer.log("Beginning search for a good set of %d pairs (%d pair lists to test)" % \
+                (nNeededPairs,_nCr(nPossiblePairs,nNeededPairs)))
 
         bestAmplified = 0
         if searchMode == "sequential":
@@ -165,13 +166,13 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
             testMx1 = _np.take( fullTestMx1, gateStringIndicesForPairs, axis=0 )
             nAmplified = get_number_amplified(testMx0, testMx1, L0, L1, verbosity)
             bestAmplified = max(bestAmplified, nAmplified)
-            if verbosity > 1:
+            if printer.verbosity > 1:
                 ret = []
                 for i in pairIndicesToTest:
                     iRhoStr = i // nEStrs
                     iEStr   = i - iRhoStr*nEStrs
                     ret.append( (iRhoStr,iEStr) )
-                print "Pair list %s ==> %d amplified parameters" % (" ".join(map(str,ret)), nAmplified)
+                printer.log("Pair list %s ==> %d amplified parameters" % (" ".join(map(str,ret)), nAmplified))
 
             if nAmplified == maxAmplified:
                 ret = []
@@ -181,8 +182,7 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
                     ret.append( (iRhoStr,iEStr) )
                 return ret
 
-    if verbosity > 0: 
-        print " --> Highest number of amplified parameters was %d" % bestAmplified
+    printer.log(" --> Highest number of amplified parameters was %d" % bestAmplified)
     
     #if we tried all the way to nPossiblePairs-1 and no success, just return all the pairs, which by definition will hit the "max-amplified" target
     listOfAllPairs = [ (iRhoStr,iEStr)

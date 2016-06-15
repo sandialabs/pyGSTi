@@ -63,12 +63,11 @@ def write_empty_dataset(filename, gatestring_list,
         else:
             raise ValueError("Must specify numZeroCols since I can't figure it out from the header string")
 
-    f = open(filename, 'w')
-    zeroCols = "  ".join( ['0']*numZeroCols )
-    print >> f, headerString
-    for gateString in gatestring_list: #gateString should be a GateString object here
-        print >> f, gateString.str + "  " + zeroCols + (("  %f" % gateString.weight) if appendWeightsColumn else "")
-    f.close()
+    with open(filename, 'w') as output:
+	zeroCols = "  ".join( ['0']*numZeroCols )
+	output.write(headerString + '\n')
+	for gateString in gatestring_list: #gateString should be a GateString object here
+	    output.write(gateString.str + "  " + zeroCols + (("  %f" % gateString.weight) if appendWeightsColumn else "") + '\n')
 
 
 def write_dataset(filename, dataset, gatestring_list=None, spamLabelOrder=None):
@@ -107,12 +106,11 @@ def write_dataset(filename, dataset, gatestring_list=None, spamLabelOrder=None):
     headerString = '## Columns = ' + ", ".join( [ "%s count" % sl for sl in spamLabels ]) 
     parser = _stdinput.StdInputParser()
 
-    f = open(filename, 'w')
-    print >> f, headerString
-    for gateString in gatestring_list: #gateString should be a GateString object here
-        dataRow = dataset[gateString.tup]
-        print >> f, gateString.str + "  " + "  ".join( [("%g" % dataRow[sl]) for sl in spamLabels] )
-    f.close()
+    with open(filename, 'w') as output:
+	output.write(headerString + '\n')
+	for gateString in gatestring_list: #gateString should be a GateString object here
+	    dataRow = dataset[gateString.tup]
+	    output.write(gateString.str + "  " + "  ".join( [("%g" % dataRow[sl]) for sl in spamLabels] ) + '\n')
 
 def write_multidataset(filename, multidataset, gatestring_list=None, spamLabelOrder=None):
     """
@@ -155,14 +153,12 @@ def write_multidataset(filename, multidataset, gatestring_list=None, spamLabelOr
                                                   for sl in spamLabels ]) 
     parser = _stdinput.StdInputParser()
 
-    f = open(filename, 'w')
-    print >> f, headerString
-    for gateString in gatestring_list: #gateString should be a GateString object here
-        gs = gateString.tup #gatestring tuple
-        print >> f, gateString.str + "  " + "  ".join( [("%g" % multidataset[dsl][gs][sl])
-                                                        for dsl in dsLabels for sl in spamLabels] )
-    f.close()
-
+    with open(filename, 'w') as output:
+        output.write(headerString + '\n')
+	for gateString in gatestring_list: #gateString should be a GateString object here
+	    gs = gateString.tup #gatestring tuple
+	    output.write(gateString.str + "  " + "  ".join( [("%g" % multidataset[dsl][gs][sl])
+							    for dsl in dsLabels for sl in spamLabels] ) + '\n')
 
 def write_gatestring_list(filename, gatestring_list, header=None):
     """
@@ -183,16 +179,13 @@ def write_gatestring_list(filename, gatestring_list, header=None):
     """
     if len(gatestring_list) > 0 and not isinstance(gatestring_list[0], _objs.GateString):
         raise ValueError("Argument gatestring_list must be a list of GateString objects!")
-    
-    f = open(filename, "w")
+   
+    with open(filename, 'w') as output: 
+	if header is not None:
+	    output.write("# %s" % header + '\n')
 
-    if header is not None:
-        print >> f, "# %s" % header
-
-    for gateString in gatestring_list:
-        print >> f, gateString.str
-
-    f.close()
+	for gateString in gatestring_list:
+	    output.write(gateString.str + '\n')
 
 
 def write_gateset(gs,filename,title=None):
@@ -212,36 +205,36 @@ def write_gateset(gs,filename,title=None):
         need to include one.
 
     """
-    f = open(filename, "w")
 
-    if title is not None:
-        print >> f, "# %s" % title
-    print >> f, ""
+    with open(filename, 'w') as output:
 
-    for (prepLabel,rhoVec) in gs.preps.iteritems():
-        print >> f, "%s" % prepLabel
-        print >> f, "PauliVec"
-        print >> f, " ".join( "%.8g" % el for el in rhoVec )
-        print >> f, ""
+	if title is not None:
+	    output.write("# %s" % title + '\n')
+	output.write('\n')
 
-    for (ELabel,EVec) in gs.effects.iteritems():
-        print >> f, "%s" % ELabel
-        print >> f, "PauliVec"
-        print >> f, " ".join( "%.8g" % el for el in EVec )
-        print >> f, ""
+	for (prepLabel,rhoVec) in gs.preps.iteritems():
+	    output.write("%s\n" % prepLabel)
+	    output.write("PauliVec\n")
+	    output.write(" ".join( "%.8g" % el for el in rhoVec ) + '\n')
+	    output.write("\n")
 
-    for (label,gate) in gs.gates.iteritems():
-        print >> f, label
-        print >> f, "PauliMx"
-        print >> f, _tools.mx_to_string(gate, width=16, prec=8)
-        print >> f, ""
+	for (ELabel,EVec) in gs.effects.iteritems():
+	    output.write("%s\n" % ELabel)
+	    output.write("PauliVec\n")
+	    output.write(" ".join( "%.8g" % el for el in EVec ) + '\n')
+	    output.write("\n")
 
-    if gs.povm_identity is not None:
-        print >> f, "IDENTITYVEC " + " ".join( "%.8g" % el for el in gs.povm_identity )
-    else:
-        print >> f, "IDENTITYVEC None"
+	for (label,gate) in gs.gates.iteritems():
+	    output.write(label + '\n') 
+	    output.write("PauliMx\n")
+	    output.write(_tools.mx_to_string(gate, width=16, prec=8) + '\n')
+	    output.write("\n")
 
-    for sl,(prepLabel,ELabel) in gs.spamdefs.iteritems():
-        print >> f, "SPAMLABEL %s = %s %s" % (sl, prepLabel, ELabel)
+	if gs.povm_identity is not None:
+	    output.write("IDENTITYVEC " + " ".join( "%.8g" % el for el in gs.povm_identity ) + '\n')
+	else:
+	    output.write("IDENTITYVEC None\n")
 
-    f.close()
+	for sl,(prepLabel,ELabel) in gs.spamdefs.iteritems():
+	    output.write("SPAMLABEL %s = %s %s\n" % (sl, prepLabel, ELabel))
+

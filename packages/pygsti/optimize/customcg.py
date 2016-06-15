@@ -4,6 +4,8 @@
 #    in the file "license.txt" in the top-level pyGSTi directory 
 #*****************************************************************
 """ A custom conjugate gradient descent algorithm """
+from __future__ import print_function
+
 import numpy as _np
 
 try:
@@ -76,10 +78,10 @@ def fmax_cg(f, x0, maxiters=100, tol=1e-8, dfdx_and_bdflag = None, xopt=None):
         for i in range(len(change)):
             if boundaryFlag[i]*change[i] > 0: 
                 change[i] = 0
-                print "DEBUG: fmax Preventing motion along dim ",i
+                print("DEBUG: fmax Preventing motion along dim %s" % i)
         
         if max(abs(change)) == 0:
-            print "Warning: Completely Boxed in!"
+            print("Warning: Completely Boxed in!")
             fx = last_fx; x = last_x
             assert( abs(last_fx - f(last_x)) < 1e-6)
             break
@@ -103,9 +105,9 @@ def fmax_cg(f, x0, maxiters=100, tol=1e-8, dfdx_and_bdflag = None, xopt=None):
         if xopt is not None: xopt_dot = _np.dot(change, xopt-x) / (_np.linalg.norm(change) * _np.linalg.norm(xopt-x))
         x += stepsize * change; fx = f(x)
         difference = fx - last_fx
-        print "DEBUG: Max iter ", step, ": f=",fx,", dexpct=",predicted_difference-difference, \
+        print("DEBUG: Max iter ", step, ": f=",fx,", dexpct=",predicted_difference-difference, \
             ", step=",stepsize,", xopt_dot=", xopt_dot if xopt is not None else "--", \
-            ", chg_dot=",_np.dot(change,lastchange)/(_np.linalg.norm(change)*_np.linalg.norm(lastchange)+1e-6)
+            ", chg_dot=",_np.dot(change,lastchange)/(_np.linalg.norm(change)*_np.linalg.norm(lastchange)+1e-6))
 
         if abs(difference) < tol: break #Convergence condition
 
@@ -114,9 +116,9 @@ def fmax_cg(f, x0, maxiters=100, tol=1e-8, dfdx_and_bdflag = None, xopt=None):
         last_x = x.copy()
         step += 1
 
-    print "Finished Custom Contrained Newton CG Method"
-    print " iterations = %d" % step
-    print " maximum f = %g" % fx
+    print("Finished Custom Contrained Newton CG Method")
+    print(" iterations = %d" % step)
+    print(" maximum f = %g" % fx)
 
     solution = _optResult()
     solution.x = x; solution.fun = -fx if fx is not None else None  # negate maximum to conform to other minimization routines
@@ -153,7 +155,7 @@ def _maximize1D(g,s1,s2,g1):
         #print "DEBUG: Max1D iter: (",s1,",",g1,") (",s2,",",g2,") (",s3,",",g3,")"
         if g3>g2:
             if g2>=g1: # Expand to the right
-                if s3_on_bd: print "** Returning on bd"; return s3 #can't expand any further to right
+                if s3_on_bd: print("** Returning on bd"); return s3 #can't expand any further to right
                 s2,g2 = s3,g3
                 s3 = s1 + (s3-s1)*PHI; g3 = g(s3)
                 if g3 is None: 
@@ -164,7 +166,7 @@ def _maximize1D(g,s1,s2,g1):
                 s2 = s1 + (s3-s1)/PHI; g2 = g(s2)
         else:
             if g2<=g1: # Expand to the left
-                if s1_on_bd: print "** Returning on bd2"; return s1 #can't expand any further to left
+                if s1_on_bd: print("** Returning on bd2"); return s1 #can't expand any further to left
                 s2,g2 = s1,g1
                 s1 = s3 - (s3-s1)*PHI; g1 = g(s1)
                 if g1 is None: 
@@ -174,7 +176,7 @@ def _maximize1D(g,s1,s2,g1):
             else:  # Got it bracketed: now just narrow down bracket
                 return _max_within_bracket(g,s1,g1,s2,g2,s3,g3)
 
-    print "Warning: maximize_1d could not find bracket"
+    print("Warning: maximize_1d could not find bracket")
 
     ret = s2 if g2 is not None else s1 #return s2 if it evaluates to a valid point
     assert( g(ret) is not None )       #  otherwise return s1, since it should always be valid   

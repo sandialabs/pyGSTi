@@ -5,6 +5,8 @@
 #*****************************************************************
 """ Defines the DataSet class and supporting classes and functions """
 
+from __future__ import print_function
+
 import numpy as _np
 import cPickle as _pickle
 import warnings as _warnings
@@ -13,7 +15,6 @@ from collections import OrderedDict as _OrderedDict
 from ..tools import listtools as _lt
 
 import gatestring as _gs
-
 
 
 class DataSet_KeyValIterator(object):
@@ -402,9 +403,9 @@ class DataSet(object):
       oldP = current_dsRow['plus'] / float( current_dsRow['plus'] + current_dsRow['minus'] )
       newP = nPlus / float(nPlus + nMinus)
       if abs(oldP-newP) > 0.1:
-        print 'Warning! When attempting to combine data for the gate string '+ \
+        print('Warning! When attempting to combine data for the gate string '+ \
             str(gateString) +', I encountered a discrepency of '+ str(abs(oldP-newP)*100.0) + \
-            ' percent! To resolve this issue, I am not going to ignore the latter data.'
+            ' percent! To resolve this issue, I am not going to ignore the latter data.')
         return
 
     self.add_count_dict(gateString, {'plus':nPlus, 'minus':nMinus} )
@@ -446,7 +447,8 @@ class DataSet(object):
         data set, bThrowErrorIfStringIsMissing determines the behavior.
 
     bThrowErrorIfStringIsMissing : bool, optional
-        When true, a ValueError exception is raised when a string
+        When true, a ValueError exception is raised when a strin)g
+        if verbosity > 0:
         in listOfGateStringsToKeep is not in the data set.
         
     Returns

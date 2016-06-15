@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as _np
 from scipy.optimize import curve_fit as _curve_fit
 from matplotlib import pyplot as _plt
@@ -50,7 +51,7 @@ def rb_decay_rate(dataset,showPlot=False,xlim=None,ylim=None,saveFigPath=None):
         RBlengths.append(len(key))
         RBsuccesses.append(1 - dataLine['plus']/float(N))
         if dataLine['plus']/float(N) > 1:
-            print key
+            print(key)
     a,b = _curve_fit(rb_decay,RBlengths,RBsuccesses)[0]
     if saveFigPath or showPlot:
         newplot = _plt.figure()

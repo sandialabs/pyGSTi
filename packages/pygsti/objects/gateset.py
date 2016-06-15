@@ -2463,23 +2463,23 @@ class GateSet(object):
         -------
         None
         """
-        print self
-        print "\n"
-        print "Choi Matrices:"
+        print(self)
+        print("\n")
+        print("Choi Matrices:")
         for (label,gate) in self.gates.iteritems():
-            print "Choi(%s) in pauli basis = \n" % label, 
-            _mt.mx_to_string_complex(_jt.jamiolkowski_iso(gate))
-            print "  --eigenvals = ", sorted( 
+            print("Choi(%s) in pauli basis = \n" % label, 
+            _mt.mx_to_string_complex(_jt.jamiolkowski_iso(gate)))
+            print("  --eigenvals = ", sorted( 
                 [ev.real for ev in _np.linalg.eigvals(
-                        _jt.jamiolkowski_iso(gate))] ),"\n"
-        print "Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_evals(self)
+                        _jt.jamiolkowski_iso(gate))] ),"\n")
+        print("Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_evals(self))
     
         prep_penalty = sum( [ _lf.prep_penalty(rhoVec)
                                 for rhoVec in self.preps.values() ] )
         effect_penalty   = sum( [ _lf.effect_penalty(EVec) 
                                 for EVec in self.effects.values() ] )
-        print "rhoVec Penalty (>0 if invalid rhoVecs) = ", prep_penalty
-        print "EVec Penalty (>0 if invalid EVecs) = ", effect_penalty
+        print("rhoVec Penalty (>0 if invalid rhoVecs) = ", prep_penalty)
+        print("EVec Penalty (>0 if invalid EVecs) = ", effect_penalty)
 
 
 

@@ -4,6 +4,7 @@
 #    in the file "license.txt" in the top-level pyGSTi directory 
 #*****************************************************************
 """ Text-parsering classes and functions to read input files."""
+from __future__ import print_function
 
 import os as _os
 import sys as _sys
@@ -346,7 +347,7 @@ class StdInputParser(object):
                 from IPython.display import clear_output
                 def display_progress(i,N): 
                     time.sleep(0.001); clear_output()
-                    print "Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N))
+                    print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))
                     _sys.stdout.flush()
             except:
                 def display_progress(i,N): pass
@@ -482,7 +483,7 @@ class StdInputParser(object):
                 from IPython.display import clear_output
                 def display_progress(i,N): 
                     time.sleep(0.001); clear_output()
-                    print "Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N))
+                    print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))
                     _sys.stdout.flush()
             except:
                 def display_progress(i,N): pass
