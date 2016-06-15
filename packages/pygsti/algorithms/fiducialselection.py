@@ -27,7 +27,7 @@ def xor(*args):
     
     Parameters
     ----------
-    *args : bool-likes
+    args : bool-likes
         All the boolean (or boolean-like) objects to be checked for xor satisfaction.
     
     Returns

@@ -54,25 +54,24 @@
   pdfinfo={ Author={pyGSTi},
 Title={Brief GST report for MyDefaultReportName},
 Keywords={GST},
-pyGSTi_Version={0.9.1-alpha},
-opt_table_formats={[py, html, latex, ppt]},
+pyGSTi_Version={0.9.1-beta},
 opt_long_tables={False},
-opt_table_class={dataTable},
+opt_table_class={pygstiTbl},
 opt_template_path={None},
 opt_latex_cmd={pdflatex},
-defaultDirectory={temp_test_files},
 L_germ_tuple_base_string_dict={Dict[[0, Gx]: {}, [0, Gy]: {}, [0, Gi]: {}, [0, GxGy]: {}, [0, GxGyGi]: {}, [0, GxGiGy]: {}, [0, GxGiGi]: {}, [0, GyGiGi]: {}, [0, GxGxGiGy]: {}, [0, GxGyGyGi]: {}, [0, GxGxGyGxGyGy]: {}, [1, Gx]: [Gx], [1, Gy]: [Gy], [1, Gi]: [Gi], [1, GxGy]: {}, [1, GxGyGi]: {}, [1, GxGiGy]: {}, [1, GxGiGi]: {}, [1, GyGiGi]: {}, [1, GxGxGiGy]: {}, [1, GxGyGyGi]: {}, [1, GxGxGyGxGyGy]: {}, [2, Gx]: [Gx]2, [2, Gy]: [Gy]2, [2, Gi]: [Gi]2, [2, GxGy]: [GxGy], [2, GxGyGi]: {}, [2, GxGiGy]: {}, [2, GxGiGi]: {}, [2, GyGiGi]: {}, [2, GxGxGiGy]: {}, [2, GxGyGyGi]: {}, [2, GxGxGyGxGyGy]: {}, [4, Gx]: [Gx]4, [4, Gy]: [Gy]4, [4, Gi]: [Gi]4, [4, GxGy]: [GxGy]2, [4, GxGyGi]: [GxGyGi], [4, GxGiGy]: [GxGiGy], [4, GxGiGi]: [GxGiGi], [4, GyGiGi]: [GyGiGi], [4, GxGxGiGy]: [GxGxGiGy], [4, GxGyGyGi]: [GxGyGyGi], [4, GxGxGyGxGyGy]: {}, [8, Gx]: [Gx]8, [8, Gy]: [Gy]8, [8, Gi]: [Gi]8, [8, GxGy]: [GxGy]4, [8, GxGyGi]: [GxGyGi]2, [8, GxGiGy]: [GxGiGy]2, [8, GxGiGi]: [GxGiGi]2, [8, GyGiGi]: [GyGiGi]2, [8, GxGxGiGy]: [GxGxGiGy]2, [8, GxGyGyGi]: [GxGyGyGi]2, [8, GxGxGyGxGyGy]: [GxGxGyGxGyGy]]},
 max_length_list={[0, 1, 2, 4, 8]},
 defaultBasename={MyDefaultReportName},
 radius={0.0001},
 minProbClip={1e-06},
 fiducial_pairs={None},
-mxBasis={gm},
+defaultDirectory={temp_test_files},
 minProbClipForWeighting={0.0001},
 linlogPercentile={5},
 probClipInterval={[-1000000.0, 1000000.0]},
 memLimit={None},
 weights={None},
+gaugeOptParams={Dict[]},
 objective={chi2},
 constrainToTP={False},
 hessianProjection={std}  }
@@ -134,12 +133,12 @@ Below is a collection of GST's primary result tables, ordered in what we think i
 
 \begin{table}[h]
 \begin{center}
-\begin{tabular}[l]{|c|c|c|c|c|}
+\begin{tabular}[l]{|c|c|c|c|}
 \hline
-Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm & \begin{tabular}{c}Frobenius\\Distance\end{tabular} \\ \hline
-Gi & $ \begin{array}{c} 0.039909 \\ \pm 0.001947 \end{array} $ & $ \begin{array}{c} 0.04008 \\ \pm 0.001848 \end{array} $ & $ \begin{array}{c} 0.040088 \\ \pm 0.001848 \end{array} $ & $ \begin{array}{c} 0.092944 \\ \pm 0.004378 \end{array} $ \\ \hline
-Gx & $ \begin{array}{c} 0.037849 \\ \pm 0.001611 \end{array} $ & $ \begin{array}{c} 0.037916 \\ \pm 0.001551 \end{array} $ & $ \begin{array}{c} 0.037917 \\ \pm 0.001551 \end{array} $ & $ \begin{array}{c} 0.087745 \\ \pm 0.00363 \end{array} $ \\ \hline
-Gy & $ \begin{array}{c} 0.037688 \\ \pm 0.001661 \end{array} $ & $ \begin{array}{c} 0.037764 \\ \pm 0.001597 \end{array} $ & $ \begin{array}{c} 0.037765 \\ \pm 0.001597 \end{array} $ & $ \begin{array}{c} 0.0874 \\ \pm 0.003735 \end{array} $ \\ \hline
+Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
+Gi & $ \begin{array}{c} 0.039909 \\ \pm 0.001947 \end{array} $ & $ \begin{array}{c} 0.04008 \\ \pm 0.001848 \end{array} $ & $ \begin{array}{c} 0.040088 \\ \pm 0.001848 \end{array} $ \\ \hline
+Gx & $ \begin{array}{c} 0.037849 \\ \pm 0.001611 \end{array} $ & $ \begin{array}{c} 0.037916 \\ \pm 0.001551 \end{array} $ & $ \begin{array}{c} 0.037917 \\ \pm 0.001551 \end{array} $ \\ \hline
+Gy & $ \begin{array}{c} 0.037688 \\ \pm 0.001661 \end{array} $ & $ \begin{array}{c} 0.037764 \\ \pm 0.001597 \end{array} $ & $ \begin{array}{c} 0.037765 \\ \pm 0.001597 \end{array} $ \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -182,14 +181,14 @@ Gate & Eigenvalues & Fixed pt & Rotn. axis & Diag. decay & Off-diag. decay \\ \h
 Gi & $ \begin{array}{c}
 1 \\ 
 0.9488 \\ 
-0.9458e^{i0.0} \\ 
-0.9458e^{-i0.0}
+0.9458e^{i0.002} \\ 
+0.9458e^{-i0.002}
  \end{array} $
  $\pm$ $ \begin{array}{c}
 0.0007 \\ 
 0.0132 \\ 
-0.0091e^{i0.7} \\ 
-0.0091e^{i0.7}
+0.0091e^{i0.677} \\ 
+0.0091e^{i0.677}
  \end{array} $
  & $ \begin{array}{c}
 0.9989 \\ 
@@ -205,14 +204,14 @@ Gi & $ \begin{array}{c}
  \end{array} $
  & $ \begin{array}{c} 0.051182 \\ \pm 0.013192 \end{array} $ & $ \begin{array}{c} 0.054226 \\ \pm 0.007068 \end{array} $ \\ \hline
 Gx & $ \begin{array}{c}
-0.949e^{i1.6} \\ 
-0.949e^{-i1.6} \\ 
+0.949e^{i1.572} \\ 
+0.949e^{-i1.572} \\ 
 1 \\ 
 0.9506
  \end{array} $
  $\pm$ $ \begin{array}{c}
-0.0033e^{i0.7} \\ 
-0.0033e^{i0.7} \\ 
+0.0033e^{i0.688} \\ 
+0.0033e^{i0.688} \\ 
 0.0005 \\ 
 0.004
  \end{array} $
@@ -232,14 +231,14 @@ Gx & $ \begin{array}{c}
 Gy & $ \begin{array}{c}
 1 \\ 
 0.9513 \\ 
-0.9489e^{i1.6} \\ 
-0.9489e^{-i1.6}
+0.9489e^{i1.571} \\ 
+0.9489e^{-i1.571}
  \end{array} $
  $\pm$ $ \begin{array}{c}
 0.0005 \\ 
 0.0041 \\ 
-0.0033e^{i0.7} \\ 
-0.0033e^{i0.7}
+0.0033e^{i0.740} \\ 
+0.0033e^{i0.740}
  \end{array} $
  & $ \begin{array}{c}
 1 \\ 
@@ -292,8 +291,8 @@ $\rho_{0}$ & $ \begin{array}{c}
 0.0032
  \end{array} $
  & $ \left(\!\!\begin{array}{cc}
-0.9639 & 0.0011e^{-i0.2} \\ 
-0.0011e^{i0.2} & 0.0374
+0.9639 & 0.0011e^{-i0.155} \\ 
+0.0011e^{i0.155} & 0.0374
  \end{array}\!\!\right) $
  \\ \hline
 $E_{0}$ & $ \begin{array}{c}
@@ -309,8 +308,8 @@ $E_{0}$ & $ \begin{array}{c}
 0.0033
  \end{array} $
  & $ \left(\!\!\begin{array}{cc}
-0.0581 & 0.0018e^{i1.8} \\ 
-0.0018e^{-i1.8} & 0.9419
+0.0581 & 0.0018e^{i1.847} \\ 
+0.0018e^{-i1.847} & 0.9419
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}

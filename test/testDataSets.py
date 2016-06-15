@@ -280,7 +280,7 @@ Gx^4 0.2 100
         basis = pygsti.get_max_gram_basis( ('Gx','Gy'), ds)
         self.assertEqual(basis, [ ('Gx',), ('Gy',) ] )
 
-        rank, evals = pygsti.max_gram_rank_and_evals(ds)
+        rank, evals, tgt_evals = pygsti.max_gram_rank_and_evals(ds)
         self.assertEqual(rank, 1)
 
 

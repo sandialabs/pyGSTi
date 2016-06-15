@@ -64,7 +64,7 @@ def max_gram_rank_and_evals(dataset, maxBasisStringLength=10,
                             targetGateset=None, spamDict=None,
                             fixedLists=None):
     """
-    Compute the rank and eigenvalues of a maximal Gram matrix,that is, the
+    Compute the rank and singular values of a maximal Gram matrix,that is, the
     Gram matrix using a basis computed by:
     get_max_gram_basis(dataset.get_gate_labels(), dataset, maxBasisStringLength).
 
@@ -95,7 +95,8 @@ def max_gram_rank_and_evals(dataset, maxBasisStringLength=10,
     Returns
     -------
     rank : integer
-    eigenvalues : numpy array
+    singularvalues : numpy array
+    targetsingularvalues : numpy array
     """
     if fixedLists is not None:
         maxRhoStrs, maxEStrs = fixedLists

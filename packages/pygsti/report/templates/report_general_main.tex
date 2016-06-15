@@ -48,6 +48,9 @@
 %Command used for python automatic substitution
 \newcommand{\putfield}[2]{#2}
 
+\newcommand*{\vcenteredhbox}[1]{\begingroup
+\setbox0=\hbox{#1}\parbox{\wd0}{\box0}\endgroup}
+
 \newtoggle{confidences}
 \newtoggle{LsAndGermsSet}
 %\newtoggle{debuggingaidsappendix}
@@ -72,6 +75,8 @@
 \let\endcenter\endflushleft
 \maketitle
 \endgroup
+
+\tableofcontents
 
 \section{Overview}
 This report presents a gate-set tomography (GST) analysis of a dataset called ``\putfield{datasetLabel}{DATASET LABEL HERE}''.  
@@ -169,11 +174,20 @@ This table also contains one derived quantity, the spectrum of the largest \emph
 
 \section{Output from GST\label{secOutput}}
 
-The primary output of GST is an estimated gate set.  This section presents the raw estimate, and then some useful derived quantities of the estimated gates, including comparisons to the target gates.
+The primary output of GST is an estimated gate set.  This section presents the raw estimate, and then some useful derived quantities of the estimated gates, including comparisons to the target gates.  Some of these quanties are ``gauge-dependent'', meaning they will depend on unphysical gauge degrees of freedom that are a necessary byproduct of estimating an entire gate set at once (akin to a freedom of reference frame).  After finding a best-estimate based on the (physical) data, GST optimizes within the space of all (unphysical) gauge degrees of freedom.  Typically this is done to make the estimated gates and SPAM operations look as close to the ideal target gates as possible.  But tradeoffs can and almost always must be made regarding this optimization.  Table \ref{bestGatesetGaugeParamsTable} lists the relevant parameters used during the gauge optimization step which resulted in the estimates that follow.
+
+
+\begin{table}[h]
+\begin{center}
+\putfield{bestGatesetGaugeOptParamsTable}{Table of gauge optimization parameters}
+\caption{\putfield{tt_bestGatesetGaugeOptParamsTable}{}\textbf{Gauge Optimization Details}.  A list of the parameters used when performing the gauge optimization that produced the final GST results found in subsequent tables and figures.\label{bestGatesetGaugeParamsTable}}
+\end{center}
+\end{table}
+
 
 \subsection{Raw GST estimates}
 
-Table \ref{bestGatesetSpamTable} reports the estimated SPAM operations, and Table \ref{bestGatesetGatesTable} reports the logic gate operations.  The estimated SPAM operations are $d\times d$ matrices that can be expressed as length-$d^2$ vectors in $\mathcal{B}(\mathcal{H})$ by writing each matrix as a linear combinations of $d^2$ basis matrices (e.g.~the four Pauli matrices when $d=2$).  The estimated logic gates are superoperators represented as matrices acting on $\mathcal{B}(\mathcal{H})$, all in the basis specified.   By taking the dot product of state preparation and measurement vectors, estimated SPAM probabilites are computed in Table \ref{bestGatesetSpamParametersTable}.  Because the superoperator matrices can be quite large, we do not display their raw entries because of page-space limitations.  (Plotting them as heat maps similar to Table \ref{targetGatesTable} is unhelpful because the magnitude of the errors is typically so much smaller than the magniude of the elements that errors are invisible on the color scale.) Instead, we display discrepancies between the estimates and the targets using \emph{derived} quantities -- i.e., properties calculated from the gate matrices and SPAM vectors -- in the section \ref{derivedQtySection}.
+Table \ref{bestGatesetSpamTable} reports GST's best estimate of the SPAM operations.  The estimated SPAM operations are $d\times d$ matrices that can be expressed as length-$d^2$ vectors in $\mathcal{B}(\mathcal{H})$ by writing each matrix as a linear combinations of $d^2$ basis matrices (e.g.~the four Pauli matrices when $d=2$).  The estimated logic gates are superoperators represented as matrices acting on $\mathcal{B}(\mathcal{H})$, all in the basis specified.   By taking the dot product of state preparation and measurement vectors, estimated SPAM probabilites are computed in Table \ref{bestGatesetSpamParametersTable}.  Because the superoperator matrices can be quite large, we do not display their raw entries because of page-space limitations.  (Plotting them as heat maps similar to Table \ref{targetGatesTable} is unhelpful because the magnitude of the errors is typically so much smaller than the magniude of the elements that errors are invisible on the color scale.) Instead, we display discrepancies between the estimates and the targets using \emph{derived} quantities -- i.e., properties calculated from the gate matrices and SPAM vectors -- in the section \ref{derivedQtySection}.
 \iftoggle{confidences}{
 Table \ref{bestGatesetSpamTable} reports \putfield{confidenceLevel}{X}\% confidence intervals for each of the gate matrix and SPAM vector elements.  A confidence region is obtained by approximating the log-likelihood (see below) as being quadratic about its minimum, and determining the ellipsoid where this approximation equals a value, $C$, defined below.  For a given parameter (e.g. gate or SPAM vector element) $x$, a confidence interval is obtained by projecting the ellipsiodal region onto that $x$'s axis.  This computes a 1-dimensional \putfield{confidenceLevel}{X}\% confidence interval for the profile log-liklihood for $x$, and for this reason the value of $C$ used above is chosen such that $\mathrm{CDF}[\chi^2_1](C) = \putfield{confidenceLevel}{X}\%$ (that is, at the value $C$ the cumulative density function of a $\chi^2_1$ distribution reaches \putfield{confidenceLevel}{X}\%).  If, instead, the interval corresponding to a projection of the \putfield{confidenceLevel}{X}\% multi-dimensional confidence region (defined by $C$ s.t.~$\mathrm{CDF}[\chi^2_n](C) = \putfield{confidenceLevel}{X}\%$, where $n=\putfield{confidenceIntervalNumNonGaugeParams}{X}$ is the number of non-gauge gate set parameters) is desired, then the all the interval widths reported here should be multiplied by \putfield{confidenceIntervalScaleFctr}{X}.  The resulting confidence interval is always symmetric about the estimated value, and we report the half-width of the intervals in the tables.  In table \ref{bestGatesetSpamParametersTable} and those in the following section, we specify the \putfield{confidenceLevel}{-1}\% confidence intervals of derived quantities in using \emph{value} $\pm$ \emph{half-width} notation.  The derived-quantity confidence intervals in section \ref{derivedQtySection} are computed by finding the minimum and maximum values of the linearization of the derived quantity (e.g.~fidelity).
 }{}
@@ -193,6 +207,8 @@ Table \ref{bestGatesetSpamTable} reports \putfield{confidenceLevel}{X}\% confide
 \end{center}
 \end{table}
 
+%, and Table \ref{bestGatesetGatesTable} reports the logic gate operations
+
 %\begin{table}[h]
 %\begin{center}
 %XXXputfield{bestGatesetGatesTable}{Best gate set's gates table will be placed here}
@@ -210,8 +226,10 @@ Generally, the first thing that you want to know is ``How far from ideal are the
 \item \textbf{Process infidelity}.  Infidelity is simply $1-F$, where $F$ is the \emph{fidelity}.  The process fidelity between quantum processes $G_a$ and $G_b$ is given by $F = \Tr\left( \sqrt{ \sqrt{\chi_a} \chi_b \sqrt{\chi_a} } \right)^2$, where $\chi_a$ and $\chi_b$ are the Jamiolkowski states (normalized Choi process matrices) corresponding to gate matrices $G_a$ and $G_b$ respectively.  If the target is unitary (as is often the case), $F = \Tr\left( \chi_a \chi_b \right)$.  Process infidelity is roughly what is measured in randomized benchmarking protocols; it quantifies the \emph{incoherent} error rate if coherent errors (e.g. over-rotations) are not allowed to accumulate.
 \item \textbf{Trace distance}.  This is the \emph{Jamiolkowski trace distance} between the Jamiolkowski states corresponding to the two processes:  $d_{tr} = \vert\chi_a - \chi_b\vert_1 = \Tr\left(\sqrt{(\chi_a-\chi_b)^2}\right)$.  This distance is useful primarily as a proxy for the \emph{diamond norm distance}, because $d_{tr} \leq d_{\diamond} \leq \mathrm{dim}(\mathcal{H}) d_{tr}$.
 \item \textbf{Diamond Norm}.  The diamond norm between two quantum processes $G_a$ and $G_b$ is given by $\norm{G_a - G_b}_\Diamond = \sup_\rho \norm{(G_a \otimes I_k)(\rho) - (G_b \otimes I_k)(\rho)}_1$, where $I_k$ is the $k$-dimensional identity operation, $\norm{\cdot}_1$ denotes the trace norm, and the supremum is taken over all $k \ge 1$ and density matrices $\rho$ of dimension $nk$, with $n$ the dimension of $G_a$ and $G_b$.  The diamond norm is also called the \emph{completely bounded trace norm}, and plays the analogous role for quantum process distinguishability that the trace norm plays for density matrices.  Specifically, the optimal probability of distinguishing $G_a$ from $G_b$ after a \emph{single evaluation} is given by $\frac{1}{2} + \frac{1}{4}\norm{G_a - G_b}_\Diamond$.  The diamond norm distance is an upper bound on the rate of error under any possible circumstance (including coherent accumulation of errors) and is often used in proofs of fault tolerance.  For gates dominated by coherent/unitary error, it is common to see $d_{\diamond} \approx \sqrt{1-F}$.  For gates dominated by incoherent error, $d_{\diamond} \approx 1-F$.
-\item \textbf{Frobenius-norm distance}.  The Frobenius norm distance between two gates $G_a$ and $G_b$ is simply $d_F = \sqrt{\Tr\left[\left(G_a-G_b\right)^2\right]}$.  It has no known \emph{operational} interpretation, but is very convenient as a rough measure of inaccuracy.  It is also equal to the sum of the RMS errors in the individual matrix elements of the gates.
+%\item \textbf{Frobenius-norm distance}.  The Frobenius norm distance between two gates $G_a$ and $G_b$ is simply $d_F = \sqrt{\Tr\left[\left(G_a-G_b\right)^2\right]}$.  It has no known \emph{operational} interpretation, but is very convenient as a rough measure of inaccuracy.  It is also equal to the sum of the RMS errors in the individual matrix elements of the gates.
 \end{enumerate}
+
+Table \ref{bestGatesetSpamVsTargetTable} shows a similar comparision using the information using the standard state infidelity and trace distance between the estimated and ideal state preparations and POVM effects.
 
 It's also useful to know \emph{how} the real gates (or, more precisely, GST's estimates of the real gates) differ from the targets.  There are several ways we could represent this, but the most useful involves an \emph{error generator}.  These are given in Table \ref{bestGatesetErrGenTable}.  The table displays, in heat map form for compactness, a Lindbladian superoperator $\mathbb{L}$ for each gate.  It is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$, where $\hat{G}$ is the estimate and $G_{\mathrm{target}}$ is the ideal gate.  This Lindbladian would be zero if the gates were perfect, and its overall magnitude is approximately equal to the diamond distance (or Jamiolkowski trace distance) between the target gate and the estimate.
 
@@ -222,6 +240,15 @@ It's also useful to know \emph{how} the real gates (or, more precisely, GST's es
 \end{center}
 \end{table}
 
+
+\begin{table}[h]
+\begin{center}
+\putfield{bestGatesetSpamVsTargetTable}{Best gate set overview table will be placed here}
+\caption{\putfield{tt_bestGatesetSpamVsTargetTable}{}\textbf{Comparison of GST estimated SPAM to target SPAM}.  This table presents, for each state preparation and POVM effect, two different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.\label{bestGatesetSpamVsTargetTable}}
+\end{center}
+\end{table}
+
+
 \begin{table}[h]
 \begin{center}
 \putfield{bestGatesetErrGenBoxTable}{Best gate set error generator table will be placed here}
@@ -230,23 +257,32 @@ It's also useful to know \emph{how} the real gates (or, more precisely, GST's es
 \end{table}
 
 
-It's usually useful to understand \emph{how} gates fail.  The error generators in Table \ref{bestGatesetErrGenTable} provide one view on this, but they are not necessarily intuitive.   For example, you might want to know whether your gate suffers depolarizing, dephasing, or over-rotation errors.  In Table \ref{bestGatesetEigenvalueTable}, the eigenvalues of the estimated gates are shown along with the eigenvalues of $G_{\mathrm{target}}^{-1}\hat{G} = e^{\mathbb{L}}$, which would all be $1.0$ if the gate were ideal.  Table \ref{bestGatesetPolarEigvalTable} plots these eigenvalues on the complex disc, which can be helpful for visualizing the different types of errors (e.g.~over- or under-rotation vs.~depolarization). 
+It's usually useful to understand \emph{how} gates fail.  The error generators in Table \ref{bestGatesetErrGenTable} provide one view on this, but they are not necessarily intuitive.   For example, you might want to know whether your gate suffers depolarizing, dephasing, or over-rotation errors.  In Tables \ref{bestGatesetEigenvalueTable}, the eigenvalues of the estimated gates are shown and plotted on the complex disc (which can be helpful for visualizing the different types of errors, e.g., over- or under-rotation vs.~depolarization).  Table \ref{bestGatesetRelativeEigenvalueTable} shows the same quantities but for the eigenvalues of $G_{\mathrm{target}}^{-1}\hat{G} = e^{\mathbb{L}}$, which would all be $1.0$ if the gate were ideal.  %Table \ref{bestGatesetPolarEigvalTable} plots these eigenvalues on the complex disc, which can be helpful for visualizing the different types of errors (e.g.~over- or under-rotation vs.~depolarization). 
 %TODO: add hamiltonian generator projections figure?
 
 \begin{table}[h]
 \small
 \begin{center}
 \putfield{bestGatesetEvalTable}{Best gate set eigevalue-decomp table will be placed here}
-\caption{\putfield{tt_bestGatesetEvalTable}{}\textbf{Eigenvalues of estimated gates}.  The spectrum (Eigenvalues column) of each estimated gate, along with the eigenvalues of the gate relative to the target gate (Relative Eigenvalues column), defined as $G_{\mathrm{target}}^{-1}\hat{G}$ (see text for details).\label{bestGatesetEigenvalueTable}}
+\caption{\putfield{tt_bestGatesetEvalTable}{}\textbf{Eigenvalues of estimated gates}.  The spectrum (Eigenvalues column) of each estimated gate.  The second column displays these eigenvalues over the complex disc.  \textbf{Black} and \textcolor{cyan}{\textbf{cyan}} circles plot the spectrum of the \textbf{ideal target gate} and \textcolor{cyan}{\textbf{estimated gate}}, respectively.\label{bestGatesetEigenvalueTable}}
 \end{center}
 \end{table}
 
-\begin{figure}
+\begin{table}[h]
+\small
 \begin{center}
-\putfield{bestEstimatePolarEvalPlots}{Polar eigenvalue plots for gates placed here}
-\caption{\putfield{tt_bestEstimatePolarEvalPlots}\textbf{Polar plots of gate eigenvalues}.  The eigenvalues from Table \ref{bestGatesetEigenvalueTable} plotted over the complex disc.  Large \textbf{black} and \textcolor{blue}{\textbf{blue}} circles plot the spectrum of the \textbf{ideal target gate} and \textcolor{blue}{\textbf{estimated gate}}, respectively.  Small \textcolor{red}{\textbf{red}} circles plot the \textcolor{red}{\textbf{``relative'' eigenvalues}} (see Table \ref{bestGatesetEigenvalueTable}), and \textcolor{darkgreen}{\textbf{green}} circles plot the relative eigenvalues of the gate \textcolor{darkgreen}{\textbf{repeated 10 times}} (to increase visibility).\label{bestGatesetPolarEigvalTable}}
+\putfield{bestGatesetRelEvalTable}{Best gate set relative-eigevalue-decomp table will be placed here}
+\caption{\putfield{tt_bestGatesetEvalTable}{}\textbf{Relative Eigenvalues of estimated gates}.  For each gate, the spectrum of $G_{\mathrm{target}}^{-1}\hat{G}$, defined as its \emph{relative eigenvalues} (see text for details).  The second column displays these eigenvalues over the complex disc.  Small \textcolor{red}{\textbf{red}} circles plot the \textcolor{red}{\textbf{relative eigenvalues}}, and \textcolor{darkgreen}{\textbf{green}} circles plot the relative eigenvalues of the gate \textcolor{darkgreen}{\textbf{repeated 10 times}} (to increase visibility).\label{bestGatesetRelativeEigenvalueTable}}
 \end{center}
-\end{figure}
+\end{table}
+
+
+%\begin{figure}
+%\begin{center}
+%\XXputfield{bestEstimatePolarEvalPlots}{Polar eigenvalue plots for gates placed here}
+%\caption{\XXputfield{tt_bestEstimatePolarEvalPlots}\textbf{Polar plots of gate eigenvalues}.  The eigenvalues from Table \ref{bestGatesetEigenvalueTable} plotted over the complex disc.  Large \textbf{black} and \textcolor{cyan}{\textbf{cyan}} circles plot the spectrum of the \textbf{ideal target gate} and \textcolor{cyan}{\textbf{estimated gate}}, respectively.  Small \textcolor{red}{\textbf{red}} circles plot the \textcolor{red}{\textbf{``relative'' eigenvalues}} (see Table \ref{bestGatesetEigenvalueTable}), and \textcolor{darkgreen}{\textbf{green}} circles plot the relative eigenvalues of the gate \textcolor{darkgreen}{\textbf{repeated 10 times}} (to increase visibility).\label{bestGatesetPolarEigvalTable}}
+%\end{center}
+%\end{figure}
 
 
 %REMOVE It might be useful to know the closest \emph{unitary} operation to the estimated gate, and how close it is.  Usually, you were trying to implement a unitary.  If the closest unitary to $G$ was indeed $G_{\mathrm{target}}$, then all errors are incoherent; if not, you might be able to tweak the gate parameters to get closer relatively easily.  Also, implementing a particular unitary may be less important than just achieving \emph{some} set of mutually independent unitaries.  In these and other cases, the distance from an estimated gate to its closest unitary approximation is of interest.
@@ -270,7 +306,7 @@ Additionally, the condition of \emph{complete positivity} or CP (which all real 
 \begin{table}[h]
 \begin{center}
 \putfield{bestGatesetChoiEvalTable}{Best gate set's choi matrix table will be placed here}
-\caption{\putfield{tt_bestGatesetChoiEvalTable}{}\textbf{Choi matrix spectrum of the GST estimated gate set}.  The eigenvalues of the Choi representation of each estimated gate.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestGatesetChoiTable}}
+\caption{\putfield{tt_bestGatesetChoiEvalTable}{}\textbf{Choi matrix spectrum of the GST estimated gate set}.  The eigenvalues of the Choi representation of each estimated gate.  In the third column, magnitudes of \emph{negative} values are plotted using \textcolor{red}{red} bars. Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestGatesetChoiTable}}
 \end{center}
 \end{table}
 
@@ -344,7 +380,10 @@ As a rough rule of thumb, for GST experiments involving relatively long sequence
 
 The aggregated $2\Delta\log(\mathcal{L})$ numbers presented in Table \ref{progressTable} tell you how well the GST estimate fits the \emph{entire} dataset.  If they are in line with theory ($2\Delta\log(\mathcal{L}) \approx k$), then there is little more to be said.  But if the best fit to the data is not good, we can debug it by identifying \emph{which} experiments are inconsistent with the fit.
 
-Figure \ref{bestEstimateColorBoxPlot} displays the $2\Delta\log(\mathcal{L})$ contribution from each individual gate sequence (Eq.~\ref{eqGateStringLogL}).  Each gate sequence corresponds to a single colored ``pixel'' in the plot.  Each block of pixels corresponds to a single base sequence (i.e., a germ power), and the individual pixels within a block correspond to the various fiducial sequence pairs between which that base sequence was sandwiched, as indicated in Figure \ref{colorBoxPlotKeyPlot}.  Base sequences are arranged in a grid; different rows correspond to different germs, while different columns correspond to different maximum lengths $L$.  Pixels are labeled with the $2\Delta\log(\mathcal{L})$ contribution for that sequence, and colored appropriately. 
+%s \ref{bestEstimateSummedColorBoxPlot} and
+%In Fig.~\ref{bestEstimateColorBoxPlot}, each
+%Figure \ref{bestEstimateSummedColorBoxPlot} shows the same $2\Delta\log(\mathcal{L})$ contributions on a coarser level by summing together the values of all the boxes in a each block of Fig.~\ref{bestEstimateColorBoxPlot}.  Thus, in Fig.~\ref{bestEstimateSummedColorBoxPlot}, each box represents a single germ-power gate sequence.
+Figure \ref{bestEstimateColorBoxPlot} displays the $2\Delta\log(\mathcal{L})$ contribution from individual gate sequence (Eq.~\ref{eqGateStringLogL}).  Each gate sequence corresponds to a single colored ``pixel'' in the plot.  Each block of pixels corresponds to a single base sequence (i.e., a germ power), and the individual pixels within a block correspond to the various fiducial sequence pairs between which that base sequence was sandwiched, as indicated in Figure \ref{colorBoxPlotKeyPlot}.  Base sequences are arranged in a grid; different rows correspond to different germs, while different columns correspond to different maximum lengths $L$.  Pixels are labeled with the $2\Delta\log(\mathcal{L})$ contribution for that sequence, and colored appropriately. 
 
 Sequences whose observed frequencies are consistent with a Markovian gate set are shown in gray, with darker shades indicating greater inconsistency with the estimated gate set.  Data shown in red are \emph{not} consistent with a Markovian gate set.  It may appear contradictory to say that (a) gray is ``consistent" with Markovian, but (b) darker shades indicate ``greater inconsistency".  The resolution is that the $\chi^2$ values quantify inconsistency with the model, \emph{but} they themselves are also subject to random fluctuations.  Therefore, even if the data are perfectly consistent with the model, we expect to see (for example) a single $\chi^2_s \geq 10$ once per each 638 experiments.  Observing $\chi^2_s \geq 10$ for any given sequence does suggest that the data from
 $s$ were relatively surprising, but we also expect to see one such fluctuation if there are more than about 600 experiments.  The gray/red threshold is chosen based on the total number of sequences so that \emph{if} the data are perfectly Markovian, then the probability of one or more experiments being colored red is only \putfield{linlg_pcntle}{X}\%.
@@ -352,6 +391,14 @@ $s$ were relatively surprising, but we also expect to see one such fluctuation i
 Identifying patterns and trends within such ``pixel plots'' can aid in identifying specific sources and types of non-Markovian noise which may be to blame if the GST algorithms are unable to produce a ``good'' estimate.  For example, it is often the case that all the short sequences [$L = O(1)$] can be fit reasonably well, but the right-hand side of Figure \ref{bestEstimateColorBoxPlot} becomes a sea of red.  This indicates that non-Markovian behavior (potentially due to slow drift of gate set parameters) is becoming more significant for longer experiments.  In other cases, a single row may be particularly bad, indicating that a particular gate or germ is especially problematic (e.g., was not stabilized using dynamical decoupling techniques).  Be cautious in debugging, however -- sometimes bad $\log(\mathcal{L})$ values for a particular gate or germ can result \emph{not} from faults in that operation, but because another operation failed so badly that it distorted the entire fit (e.g., in trying to fit catastrophically non-Markovian data at Point A, GST ended up failing to fit perfectly good data at Point B).
 
 %REMOVE Similar pixel plots for the intermediate estimates whose total $2\Delta\log(\mathcal{L})$ is listed in Table \ref{progressTable} \iftoggle{pixelplotsappendix}{can be found in Appendix \ref{appendix_logL_pixelplots}.}{are included when the ``pixel plots'' appendix is enabled.}
+
+%\begin{figure}
+%\begin{center}
+%\XXputfield{bestEstimateSummedColorBoxPlot}{Box plot of best gate set logL}
+%\caption{\XXputfield{tt_bestEstimateSummedColorBoxPlot}{}\textbf{$2\Delta\log(\mathcal{L})$ contributions for every gate sequence up to fiducials}.   Each box shows the aggregate (summed) $2\Delta\log(\mathcal{L})$ for the set of experiments whereby a single germ power sequence is sandwiched between every combination of fiducial strin pairs.  Box color indicates whether GST was able to fit the corresponding frequencies well.  Shades of white/gray are typical. Red squares represent statistically significant evidence for model violation (non-Markovianity), and should appear with probability at most \putfield{linlg_pcntle}{32}\% if the data really are Markovian.  See text for further details.\label{bestEstimateSummedColorBoxPlot}}
+%\end{center}
+%\end{figure}
+
 
 \begin{figure}
 \begin{center}

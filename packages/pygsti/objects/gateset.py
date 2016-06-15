@@ -80,6 +80,12 @@ class GateSet(object):
         #Gate dimension of this GateSet (None => unset, to be determined)
         self._dim = None
 
+        #Name and dimension (or list of dims) of the *basis*
+        # that the gates and SPAM vectors are expressed in.  This
+        # is for interpretational purposes only, and is reset often
+        # (for instance, when reading GateSet params from a vector)
+        self._basisNameAndDim = ("unknown",None) 
+
         #SPAM vectors
         self.preps = _ld.OrderedSPAMVecDict(self,default_param,
                                               None, prep_prefix)
@@ -132,6 +138,7 @@ class GateSet(object):
         """
         return self._dim
 
+
     def get_dimension(self):
         """ 
         Get the dimension of the gateset, which equals d when the gate
@@ -144,6 +151,76 @@ class GateSet(object):
             gateset dimension
         """
         return self._dim
+
+
+    def get_basis_name(self):
+        """ 
+        Returns the name abbreviation of the basis, essentially identifying
+        its type.  The gate matrices and SPAM vectors within the GateSet 
+        are to be interpreted within this basis.  Note that the dimension of
+        the (matrix) elements of the basis can be obtained by 
+        get_basis_dimension(...).  The basis abbreviations use by pyGSTi are
+        "gm" (a Gell-Mann basis), "pp" (a Pauli-product basis), and "std"
+        (a matrix unit, or "standard" basis).  If the basis is unknown, the
+        string "unknown" is returned.
+
+        Returns
+        -------
+        str
+            basis abbreviation (or "unknown")
+        """
+        return self._basisNameAndDim[0]
+
+
+    def get_basis_dimension(self):
+        """ 
+        Get the dimension of the basis matrices, or more generally,
+        the structure of the density matrix space as a list of integer
+        dimensions.  In the latter case, the dimension of each basis
+        element (a matrix) is d x d, where d equals the sum of the 
+        returned list of integers. (In the former case, d equals the
+        single returned integers.)  This density-matrix-space 
+        structure can be used, along with the basis name (cf. 
+        get_basis_name), to construct that basis of matrices used
+        to express the gate matrices and SPAM vectors of this
+        GateSet.
+
+        Returns
+        -------
+        int or list
+            density-matrix dimension or a list of integers
+            specifying the dimension of each term in a
+            direct sum decomposition of the density matrix
+            space.
+        """
+        return self._basisNameAndDim[1]
+
+
+    def set_basis(self, basisName, basisDimension):
+        """ 
+        Sets the basis name and dimension.  See
+        get_basis_name and gate_basis_dimension for
+        details on these quantities.
+
+        Parameters
+        ----------
+        basisName : str
+           The name abbreviation for the basis. Typically in {"pp","gm","std"}
+
+        basisDimension : int or list
+           The dimension of the density matrix space this basis spans, or a
+           list specifying the dimensions of terms in a direct-sum 
+           decomposition of the density matrix space.
+        """
+        self._basisNameAndDim = (basisName, basisDimension)
+
+
+    def reset_basis(self):
+        """
+        "Forgets" the basis name and dimension by setting
+        these quantities to "unkown" and None, respectively.
+        """
+        self._basisNameAndDim = ("unknown", None)
 
 
     def get_prep_labels(self):
@@ -491,6 +568,10 @@ class GateSet(object):
         for obj in objs_to_vectorize:
             np = obj.num_params()
             obj.from_vector( v[off:off+np] ); off += np
+
+        self.reset_basis() 
+          # assume the vector we're loading isn't producing gates & vectors in
+          # a known basis.
 
 
     def get_vector_offsets(self):
@@ -1971,6 +2052,27 @@ class GateSet(object):
         return self._calc().diamonddist(otherGateSet._calc(), transformMx)
 
 
+    def tpdist(self):
+        """
+        Compute the "distance" between this gateset and the space of 
+        trace-preserving (TP) maps, defined as the sqrt of the sum-of-squared
+        deviations among the first row of all gate matrices and the 
+        first element of all state preparations.
+        """
+        penalty = 0.0
+        for gateMx in self.gates.values():
+            penalty += abs(gateMx[0,0] - 1.0)**2
+            for k in range(1,gateMx.shape[1]):
+                penalty += abs(gateMx[0,k])**2
+
+        gate_dim = self.get_dimension()
+        firstEl = 1.0 / gate_dim**0.25
+        for rhoVec in self.preps.values():
+            penalty += abs(rhoVec[0,0] - firstEl)**2
+
+        return _np.sqrt(penalty)
+
+
     def copy(self):
         """ 
         Copy this gateset
@@ -1987,6 +2089,7 @@ class GateSet(object):
         newGateset.spamdefs = self.spamdefs.copy()
         newGateset.povm_identity = self.povm_identity.copy()
         newGateset._dim = self._dim
+        newGateset._basisNameAndDim = self._basisNameAndDim
         newGateset._remainderlabel = self._remainderlabel
         newGateset._identitylabel = self._identitylabel
         return newGateset
@@ -2332,6 +2435,7 @@ class GateSet(object):
                               self.gates._prefix, self._remainderlabel,
                               self._identitylabel)
         new_gateset._dim = newDimension
+        new_gateset.reset_basis() #FUTURE: maybe user can specify how increase is being done?
         new_gateset.spamdefs.update( self.spamdefs )
     
         addedDim = newDimension-curDim
@@ -2390,6 +2494,7 @@ class GateSet(object):
                               self.gates._prefix, self._remainderlabel,
                               self._identitylabel)
         new_gateset._dim = newDimension
+        new_gateset.reset_basis() #FUTURE: maybe user can specify how decrease is being done?
         new_gateset.spamdefs.update( self.spamdefs )
     
         #Decrease dimension of rhoVecs and EVecs by truncation
