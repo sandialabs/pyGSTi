@@ -6,7 +6,7 @@ import sys
 import os
 
 # The path for a temporary file to be generated in 
-filePath        = 'temp_test_files/printer_output.txt'
+filePath        = '../temp_test_files/printer_output.txt'
 # Some basic messages to make assertions easier
 warningMessage  = 'This might go badly'
 errorMessage    = 'Something terrible happened'    

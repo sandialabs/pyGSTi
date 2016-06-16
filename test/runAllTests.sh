@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for filename in `ls test*.py`; do
+for filename in `ls */*.py`; do
     echo "============ Running $filename ==========================="
     python "$filename"
     echo ""

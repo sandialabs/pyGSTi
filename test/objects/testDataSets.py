@@ -60,8 +60,8 @@ class TestDataSetMethods(DataSetTestCase):
         self.assertAlmostEqual(ds[('Gx',)].fraction('plus'), 0.1)
         
         #Pickle and unpickle
-        pickle.dump(ds, open("temp_test_files/dataset.pickle","w"))
-        ds_from_pkl = pickle.load(open("temp_test_files/dataset.pickle","r"))
+        pickle.dump(ds, open("../temp_test_files/dataset.pickle","w"))
+        ds_from_pkl = pickle.load(open("../temp_test_files/dataset.pickle","r"))
         self.assertEquals(ds_from_pkl[('Gx',)]['plus'], 10)
         self.assertAlmostEqual(ds_from_pkl[('Gx',)].fraction('plus'), 0.1)
 
@@ -134,21 +134,21 @@ class TestDataSetMethods(DataSetTestCase):
         ds4_copy = ds4.copy() #static
 
         #Loading and saving
-        ds2.save("temp_test_files/nonstatic_dataset.saved")
-        ds2.save("temp_test_files/nonstatic_dataset.saved.gz")
-        ds2.save(open("temp_test_files/nonstatic_dataset.stream","w"))
+        ds2.save("../temp_test_files/nonstatic_dataset.saved")
+        ds2.save("../temp_test_files/nonstatic_dataset.saved.gz")
+        ds2.save(open("../temp_test_files/nonstatic_dataset.stream","w"))
 
-        ds4.save("temp_test_files/static_dataset.saved")
-        ds4.save("temp_test_files/static_dataset.saved.gz")
-        ds4.save(open("temp_test_files/static_dataset.stream","w"))
+        ds4.save("../temp_test_files/static_dataset.saved")
+        ds4.save("../temp_test_files/static_dataset.saved.gz")
+        ds4.save(open("../temp_test_files/static_dataset.stream","w"))
 
-        ds2.load("temp_test_files/nonstatic_dataset.saved")
-        ds2.load("temp_test_files/nonstatic_dataset.saved.gz")
-        ds2.load(open("temp_test_files/nonstatic_dataset.stream","r"))
+        ds2.load("../temp_test_files/nonstatic_dataset.saved")
+        ds2.load("../temp_test_files/nonstatic_dataset.saved.gz")
+        ds2.load(open("../temp_test_files/nonstatic_dataset.stream","r"))
 
-        ds4.load("temp_test_files/static_dataset.saved")
-        ds4.load("temp_test_files/static_dataset.saved.gz")
-        ds4.load(open("temp_test_files/static_dataset.stream","r"))
+        ds4.load("../temp_test_files/static_dataset.saved")
+        ds4.load("../temp_test_files/static_dataset.saved.gz")
+        ds4.load(open("../temp_test_files/static_dataset.stream","r"))
 
         #Test various other methods
         nStrs = len(ds)
@@ -156,7 +156,7 @@ class TestDataSetMethods(DataSetTestCase):
         asStr = str(ds[('Gx',)])
 
         #Test loading a deprecated dataset file
-        dsDeprecated = pygsti.objects.DataSet(fileToLoadFrom="cmp_chk_files/deprecated.dataset")
+        dsDeprecated = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/deprecated.dataset")
 
                 
 
@@ -169,8 +169,8 @@ Gx 10 90
 GxGy 40 60
 Gx^4 20 80
 """
-        open("temp_test_files/TinyDataset.txt","w").write(dataset_txt)
-        ds = pygsti.io.load_dataset("temp_test_files/TinyDataset.txt")
+        open("../temp_test_files/TinyDataset.txt","w").write(dataset_txt)
+        ds = pygsti.io.load_dataset("../temp_test_files/TinyDataset.txt")
         self.assertEquals(ds[()]['plus'], 0)
         self.assertEquals(ds[('Gx','Gy')]['minus'], 60)
 
@@ -181,8 +181,8 @@ Gx 0.1 100
 GxGy 0.4 100
 Gx^4 0.2 100
 """
-        open("temp_test_files/TinyDataset2.txt","w").write(dataset_txt2)
-        ds2 = pygsti.io.load_dataset("temp_test_files/TinyDataset2.txt")
+        open("../temp_test_files/TinyDataset2.txt","w").write(dataset_txt2)
+        ds2 = pygsti.io.load_dataset("../temp_test_files/TinyDataset2.txt")
         self.assertEqualDatasets(ds, ds2)
 
 
@@ -227,21 +227,21 @@ Gx^4 0.2 100
         
 
         # TO SEED SAVED FILE, RUN THIS: 
-        #pygsti.io.write_dataset("cmp_chk_files/Fake_Dataset_none.txt", ds_none,  gateStrings) 
-        #pygsti.io.write_dataset("cmp_chk_files/Fake_Dataset_round.txt", ds_round, gateStrings) 
-        #pygsti.io.write_dataset("cmp_chk_files/Fake_Dataset_binom.txt", ds_binom, gateStrings) 
-        #pygsti.io.write_dataset("cmp_chk_files/Fake_Dataset_multi.txt", ds_multi, gateStrings) 
+        #pygsti.io.write_dataset("../cmp_chk_files/Fake_Dataset_none.txt", ds_none,  gateStrings) 
+        #pygsti.io.write_dataset("../cmp_chk_files/Fake_Dataset_round.txt", ds_round, gateStrings) 
+        #pygsti.io.write_dataset("../cmp_chk_files/Fake_Dataset_binom.txt", ds_binom, gateStrings) 
+        #pygsti.io.write_dataset("../cmp_chk_files/Fake_Dataset_multi.txt", ds_multi, gateStrings) 
 
-        saved_ds = pygsti.io.load_dataset("cmp_chk_files/Fake_Dataset_none.txt", cache=True)
+        saved_ds = pygsti.io.load_dataset("../cmp_chk_files/Fake_Dataset_none.txt", cache=True)
         self.assertEqualDatasets(ds_none, saved_ds)
 
-        saved_ds = pygsti.io.load_dataset("cmp_chk_files/Fake_Dataset_round.txt")
+        saved_ds = pygsti.io.load_dataset("../cmp_chk_files/Fake_Dataset_round.txt")
         self.assertEqualDatasets(ds_round, saved_ds)
 
-        saved_ds = pygsti.io.load_dataset("cmp_chk_files/Fake_Dataset_binom.txt")
+        saved_ds = pygsti.io.load_dataset("../cmp_chk_files/Fake_Dataset_binom.txt")
         self.assertEqualDatasets(ds_binom, saved_ds)
 
-        saved_ds = pygsti.io.load_dataset("cmp_chk_files/Fake_Dataset_multi.txt")
+        saved_ds = pygsti.io.load_dataset("../cmp_chk_files/Fake_Dataset_multi.txt")
         self.assertEqualDatasets(ds_multi, saved_ds)
 
         #Now test RB and RPE datasets
@@ -292,8 +292,8 @@ Gx 10 90 0.1 100
 GxGy 40 60 0.4 100
 Gx^4 20 80 0.2 100
 """
-        open("temp_test_files/TinyMultiDataset.txt","w").write(multi_dataset_txt)
-        multiDS = pygsti.io.load_multidataset("temp_test_files/TinyMultiDataset.txt", cache=True)
+        open("../temp_test_files/TinyMultiDataset.txt","w").write(multi_dataset_txt)
+        multiDS = pygsti.io.load_multidataset("../temp_test_files/TinyMultiDataset.txt", cache=True)
 
         bad_multi_dataset_txt = \
 """## Columns = DS0 plus count, DS0 minus count, DS1 plus frequency, DS1 count total
@@ -302,9 +302,9 @@ FooBar 10 90 0.1 100
 GxGy 40 60 0.4 100
 Gx^4 20 80 0.2 100
 """
-        open("temp_test_files/BadTinyMultiDataset.txt","w").write(bad_multi_dataset_txt)
+        open("../temp_test_files/BadTinyMultiDataset.txt","w").write(bad_multi_dataset_txt)
         with self.assertRaises(ValueError):
-            pygsti.io.load_multidataset("temp_test_files/BadTinyMultiDataset.txt")
+            pygsti.io.load_multidataset("../temp_test_files/BadTinyMultiDataset.txt")
 
         gstrs = [ ('Gx',), ('Gx','Gy'), ('Gy',) ]
         gstrInds = collections.OrderedDict( [ (('Gx',),0),  (('Gx','Gy'),1), (('Gy',),2) ] )
@@ -377,19 +377,19 @@ Gx^4 20 80 0.2 100
 
 
         #Pickle and unpickle
-        pickle.dump(multiDS, open("temp_test_files/multidataset.pickle","w"))
-        mds_from_pkl = pickle.load(open("temp_test_files/multidataset.pickle","r"))
+        pickle.dump(multiDS, open("../temp_test_files/multidataset.pickle","w"))
+        mds_from_pkl = pickle.load(open("../temp_test_files/multidataset.pickle","r"))
         self.assertEquals(mds_from_pkl['DS0'][('Gx',)]['plus'], 10)
 
         #Loading and saving
-        multiDS.save("temp_test_files/multidataset.saved")
-        multiDS.save("temp_test_files/multidataset.saved.gz")
-        multiDS.save(open("temp_test_files/multidataset.stream","w"))
+        multiDS.save("../temp_test_files/multidataset.saved")
+        multiDS.save("../temp_test_files/multidataset.saved.gz")
+        multiDS.save(open("../temp_test_files/multidataset.stream","w"))
 
-        multiDS.load("temp_test_files/multidataset.saved")
-        multiDS.load("temp_test_files/multidataset.saved.gz")
-        multiDS.load(open("temp_test_files/multidataset.stream","r"))
-        multiDS2 = pygsti.obj.MultiDataSet(fileToLoadFrom="temp_test_files/multidataset.saved")
+        multiDS.load("../temp_test_files/multidataset.saved")
+        multiDS.load("../temp_test_files/multidataset.saved.gz")
+        multiDS.load(open("../temp_test_files/multidataset.stream","r"))
+        multiDS2 = pygsti.obj.MultiDataSet(fileToLoadFrom="../temp_test_files/multidataset.saved")
         
 
 

@@ -1,2 +1,2 @@
 #!/bin/bash
-nosetests -v test*.py mpitest*.py 2>&1 | tee out.txt
+nosetests -v */*.py mpi/mpitest*.py 2>&1 | tee out.txt

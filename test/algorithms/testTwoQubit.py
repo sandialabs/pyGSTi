@@ -8,7 +8,7 @@ class TwoQubitTestCase(unittest.TestCase):
 
     def runSilent(self, callable, *args, **kwds):
         orig_stdout = sys.stdout
-        sys.stdout = open("temp_test_files/silent.txt","w")
+        sys.stdout = open("../temp_test_files/silent.txt","w")
         result = callable(*args, **kwds)
         sys.stdout.close()
         sys.stdout = orig_stdout

@@ -438,8 +438,8 @@ IDENTITYVEC sqrt(2) 0 0 0
 SPAMLABEL plus = rho E
 SPAMLABEL minus = rho remainder
 """
-        open("temp_test_files/Test_Gateset.txt","w").write(gateset4_txt)
-        gateset4 = pygsti.io.load_gateset("temp_test_files/Test_Gateset.txt")
+        open("../temp_test_files/Test_Gateset.txt","w").write(gateset4_txt)
+        gateset4 = pygsti.io.load_gateset("../temp_test_files/Test_Gateset.txt")
 
         std_gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'], 
                                                          [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],

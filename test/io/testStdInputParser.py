@@ -97,7 +97,7 @@ G1
 G1G2
 G1(G2G3)^2
 """ 
-        f = open("temp_test_files/sip_test.list","w")
+        f = open("../temp_test_files/sip_test.list","w")
         f.write(stringfile_test)
         f.close()
 
@@ -113,7 +113,7 @@ MyFav2 G2^3
 this1  G3*G3*G3
 thatOne G1 G2 * G3
 """ 
-        f = open("temp_test_files/sip_test.dict","w")
+        f = open("../temp_test_files/sip_test.dict","w")
         f.write(dictfile_test)
         f.close()
 
@@ -144,7 +144,7 @@ G_my_xG_my_y  0.5 24.0
 G_my_x*G_my_y 0.5 24.0
 G_my_x G_my_y 0.5 24.0
 """ 
-        f = open("temp_test_files/sip_test.data","w")
+        f = open("../temp_test_files/sip_test.data","w")
         f.write(datafile_test)
         f.close()
 
@@ -152,7 +152,7 @@ G_my_x G_my_y 0.5 24.0
 """#Data File without Header
 {}            1.0 100
 """
-        f = open("temp_test_files/sip_test2.data","w")
+        f = open("../temp_test_files/sip_test2.data","w")
         f.write(datafile_test)
         f.close()
 
@@ -164,7 +164,7 @@ G1            0.0 100
 FooBar        0.4 100
 G3            0.2 100
 """
-        f = open("temp_test_files/sip_test3.data","w")
+        f = open("../temp_test_files/sip_test3.data","w")
         f.write(datafile_test)
         f.close()
 
@@ -176,7 +176,7 @@ G1            0.0 100
 G2            0   0
 G3            0.2 100
 """
-        f = open("temp_test_files/sip_test4.data","w")
+        f = open("../temp_test_files/sip_test4.data","w")
         f.write(datafile_test)
         f.close()
 
@@ -188,7 +188,7 @@ G1            0.0 1.0
 G2            0   1.0
 G3            0.2 0.8
 """
-        f = open("temp_test_files/sip_test5.data","w")
+        f = open("../temp_test_files/sip_test5.data","w")
         f.write(datafile_test)
         f.close()
 
@@ -200,7 +200,7 @@ G1            0.0 100
 G2            3.4 100
 G3            0.2 100
 """
-        f = open("temp_test_files/sip_test6.data","w")
+        f = open("../temp_test_files/sip_test6.data","w")
         f.write(datafile_test)
         f.close()
 
@@ -212,7 +212,7 @@ G1            10  100
 G2            0.2 100
 G3            0.1 100
 """
-        f = open("temp_test_files/sip_test7.data","w")
+        f = open("../temp_test_files/sip_test7.data","w")
         f.write(datafile_test)
         f.close()
 
@@ -221,7 +221,7 @@ G3            0.1 100
 ## Columns = plus count, count total
 {xx}            10  100
 """
-        f = open("temp_test_files/sip_test8.data","w")
+        f = open("../temp_test_files/sip_test8.data","w")
         f.write(datafile_test)
         f.close()
 
@@ -236,7 +236,7 @@ G1            10  100  10 200
 G2            20  100  5  200
 G3            10  100  80 200
 """
-        f = open("temp_test_files/sip_test.multidata","w")
+        f = open("../temp_test_files/sip_test.multidata","w")
         f.write(multidatafile_test)
         f.close()
 
@@ -247,7 +247,7 @@ G1            10  100
 G2            20  100
 G3            10  100
 """
-        f = open("temp_test_files/sip_test2.multidata","w")
+        f = open("../temp_test_files/sip_test2.multidata","w")
         f.write(multidatafile_test)
         f.close()
 
@@ -257,7 +257,7 @@ G3            10  100
 FooBar        10  100
 G2            20  100
 """
-        f = open("temp_test_files/sip_test3.multidata","w")
+        f = open("../temp_test_files/sip_test3.multidata","w")
         f.write(multidatafile_test)
         f.close()
 
@@ -268,7 +268,7 @@ G2            20  100
 G1            0.1  0.5  10 200
 G2            0.2  0.3  5  200
 """
-        f = open("temp_test_files/sip_test4.multidata","w")
+        f = open("../temp_test_files/sip_test4.multidata","w")
         f.write(multidatafile_test)
         f.close()
 
@@ -279,7 +279,7 @@ G2            0.2  0.3  5  200
 G1            100  10   10 200
 G2            100  0.2  5  200
 """
-        f = open("temp_test_files/sip_test5.multidata","w")
+        f = open("../temp_test_files/sip_test5.multidata","w")
         f.write(multidatafile_test)
         f.close()
 
@@ -290,7 +290,7 @@ G2            100  0.2  5  200
 G1            0.1   100  10 200
 G2            20  100  5  200
 """
-        f = open("temp_test_files/sip_test6.multidata","w")
+        f = open("../temp_test_files/sip_test6.multidata","w")
         f.write(multidatafile_test)
         f.close()
 
@@ -299,7 +299,7 @@ G2            20  100  5  200
 ## Columns = ds1 plus count, ds1 count total, ds2 plus count, ds2 count total
 {xxx}         0.3  100  20 200
 """
-        f = open("temp_test_files/sip_test7.multidata","w")
+        f = open("../temp_test_files/sip_test7.multidata","w")
         f.write(multidatafile_test)
         f.close()
 
@@ -310,72 +310,72 @@ G2            20  100  5  200
         pp = pprint.PrettyPrinter(indent=4)
 
         #print " Stringfile Test:"
-        strlist = std.parse_stringfile("temp_test_files/sip_test.list")
+        strlist = std.parse_stringfile("../temp_test_files/sip_test.list")
         #print " ==> String list:"
         #pp.pprint(strlist)
     
         #print " Dictfile Test:"
-        lkupDict = std.parse_dictfile("temp_test_files/sip_test.dict")
+        lkupDict = std.parse_dictfile("../temp_test_files/sip_test.dict")
         #print " ==> Lookup dictionary:"
         #pp.pprint(lkupDict)
 
         #print " Datafile Test:"
-        ds = std.parse_datafile("temp_test_files/sip_test.data")
+        ds = std.parse_datafile("../temp_test_files/sip_test.data")
         #print " ==> DataSet:\n", ds
 
         #test file with no header
-        ds = std.parse_datafile("temp_test_files/sip_test2.data") 
+        ds = std.parse_datafile("../temp_test_files/sip_test2.data") 
 
         #test file with bad data
         with self.assertRaises(ValueError):
-            std.parse_datafile("temp_test_files/sip_test3.data")
+            std.parse_datafile("../temp_test_files/sip_test3.data")
 
         #test file with line(s) containing all zeros => ignore with warning
-        self.assertWarns( std.parse_datafile, "temp_test_files/sip_test4.data" )
+        self.assertWarns( std.parse_datafile, "../temp_test_files/sip_test4.data" )
 
         #test file with frequency columns but no count total
         with self.assertRaises(ValueError):
-            std.parse_datafile("temp_test_files/sip_test5.data")
+            std.parse_datafile("../temp_test_files/sip_test5.data")
 
         #test file with out-of-range frequency
         with self.assertRaises(ValueError):
-            std.parse_datafile("temp_test_files/sip_test6.data")
+            std.parse_datafile("../temp_test_files/sip_test6.data")
 
         #test file with out-of-range counts
         with self.assertRaises(ValueError):
-            std.parse_datafile("temp_test_files/sip_test7.data")
+            std.parse_datafile("../temp_test_files/sip_test7.data")
 
         #test file with bad syntax
         with self.assertRaises(ValueError):
-            std.parse_datafile("temp_test_files/sip_test8.data")
+            std.parse_datafile("../temp_test_files/sip_test8.data")
 
 
 
         #Multi-dataset tests
-        mds = std.parse_multidatafile("temp_test_files/sip_test.multidata")
+        mds = std.parse_multidatafile("../temp_test_files/sip_test.multidata")
 
         #test file with no header
-        mds = std.parse_multidatafile("temp_test_files/sip_test2.multidata") 
+        mds = std.parse_multidatafile("../temp_test_files/sip_test2.multidata") 
 
         #test file with bad data
         with self.assertRaises(ValueError):
-            std.parse_multidatafile("temp_test_files/sip_test3.multidata")
+            std.parse_multidatafile("../temp_test_files/sip_test3.multidata")
 
         #test file with frequency columns but no count total
         with self.assertRaises(ValueError):
-            std.parse_multidatafile("temp_test_files/sip_test4.multidata")
+            std.parse_multidatafile("../temp_test_files/sip_test4.multidata")
 
         #test file with out-of-range frequency
         with self.assertRaises(ValueError):
-            std.parse_multidatafile("temp_test_files/sip_test5.multidata")
+            std.parse_multidatafile("../temp_test_files/sip_test5.multidata")
 
         #test file with out-of-range counts
         with self.assertRaises(ValueError):
-            std.parse_multidatafile("temp_test_files/sip_test6.multidata")
+            std.parse_multidatafile("../temp_test_files/sip_test6.multidata")
 
         #test file with bad syntax
         with self.assertRaises(ValueError):
-            std.parse_multidatafile("temp_test_files/sip_test7.multidata")
+            std.parse_multidatafile("../temp_test_files/sip_test7.multidata")
 
 
         #TODO: add asserts
@@ -536,46 +536,46 @@ SPAMLABEL plus = rho_up E
 
 
 
-        f = open("temp_test_files/sip_test.gateset1","w")
+        f = open("../temp_test_files/sip_test.gateset1","w")
         f.write(gatesetfile_test); f.close()
         
-        f = open("temp_test_files/sip_test.gateset2","w")
+        f = open("../temp_test_files/sip_test.gateset2","w")
         f.write(gatesetfile_test2); f.close()
 
-        f = open("temp_test_files/sip_test.gateset3","w")
+        f = open("../temp_test_files/sip_test.gateset3","w")
         f.write(gatesetfile_test3); f.close()
 
-        f = open("temp_test_files/sip_test.gateset4","w")
+        f = open("../temp_test_files/sip_test.gateset4","w")
         f.write(gatesetfile_test4); f.close()
 
-        f = open("temp_test_files/sip_test.gateset5","w")
+        f = open("../temp_test_files/sip_test.gateset5","w")
         f.write(gatesetfile_test5); f.close()
 
-        f = open("temp_test_files/sip_test.gateset6","w")
+        f = open("../temp_test_files/sip_test.gateset6","w")
         f.write(gatesetfile_test6); f.close()
 
-        f = open("temp_test_files/sip_test.gateset7","w")
+        f = open("../temp_test_files/sip_test.gateset7","w")
         f.write(gatesetfile_test7); f.close()
 
-        f = open("temp_test_files/sip_test.gateset8","w")
+        f = open("../temp_test_files/sip_test.gateset8","w")
         f.write(gatesetfile_test8); f.close()
 
 
-        gs1 = pygsti.io.read_gateset("temp_test_files/sip_test.gateset1")
-        gs2 = pygsti.io.read_gateset("temp_test_files/sip_test.gateset2")
+        gs1 = pygsti.io.read_gateset("../temp_test_files/sip_test.gateset1")
+        gs2 = pygsti.io.read_gateset("../temp_test_files/sip_test.gateset2")
 
         with self.assertRaises(ValueError):
-            pygsti.io.read_gateset("temp_test_files/sip_test.gateset3")
+            pygsti.io.read_gateset("../temp_test_files/sip_test.gateset3")
         with self.assertRaises(ValueError):
-            pygsti.io.read_gateset("temp_test_files/sip_test.gateset4")
+            pygsti.io.read_gateset("../temp_test_files/sip_test.gateset4")
         with self.assertRaises(ValueError):
-            pygsti.io.read_gateset("temp_test_files/sip_test.gateset5")
+            pygsti.io.read_gateset("../temp_test_files/sip_test.gateset5")
         with self.assertRaises(ValueError):
-            pygsti.io.read_gateset("temp_test_files/sip_test.gateset6")
+            pygsti.io.read_gateset("../temp_test_files/sip_test.gateset6")
         with self.assertRaises(ValueError):
-            pygsti.io.read_gateset("temp_test_files/sip_test.gateset7")
+            pygsti.io.read_gateset("../temp_test_files/sip_test.gateset7")
 
-        gs8 = pygsti.io.read_gateset("temp_test_files/sip_test.gateset8")
+        gs8 = pygsti.io.read_gateset("../temp_test_files/sip_test.gateset8")
 
         #print " ==> gateset1:\n", gs1
         #print " ==> gateset2:\n", gs2

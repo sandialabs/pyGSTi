@@ -31,18 +31,18 @@ class CoreTestCase(unittest.TestCase):
             self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLengthList )
         
         #Created in testAnalysis...
-        self.ds = pygsti.objects.DataSet(fileToLoadFrom="cmp_chk_files/analysis.dataset")
+        self.ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis.dataset")
 
         ##UNCOMMENT to create LGST analysis dataset
         #ds_lgst = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
         #                                                 nSamples=10000,sampleError='binomial', seed=100)
-        #ds_lgst.save("cmp_chk_files/analysis_lgst.dataset")
-        self.ds_lgst = pygsti.objects.DataSet(fileToLoadFrom="cmp_chk_files/analysis_lgst.dataset")
+        #ds_lgst.save("../cmp_chk_files/analysis_lgst.dataset")
+        self.ds_lgst = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis_lgst.dataset")
 
 
     def runSilent(self, callable, *args, **kwds):
         orig_stdout = sys.stdout
-        sys.stdout = open("temp_test_files/silent.txt","w")
+        sys.stdout = open("../temp_test_files/silent.txt","w")
         result = callable(*args, **kwds)
         sys.stdout.close()
         sys.stdout = orig_stdout
@@ -78,13 +78,13 @@ class TestCoreMethods(CoreTestCase):
         gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
         
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
-        #pygsti.io.write_gateset(gs_lgst,"cmp_chk_files/lgst.gateset", "Saved LGST Gateset before gauge optimization")
-        #pygsti.io.write_gateset(gs_lgst_go,"cmp_chk_files/lgst_go.gateset", "Saved LGST Gateset after gauge optimization")
-        #pygsti.io.write_gateset(gs_clgst,"cmp_chk_files/clgst.gateset", "Saved LGST Gateset after G.O. and CPTP contraction")
+        #pygsti.io.write_gateset(gs_lgst,"../cmp_chk_files/lgst.gateset", "Saved LGST Gateset before gauge optimization")
+        #pygsti.io.write_gateset(gs_lgst_go,"../cmp_chk_files/lgst_go.gateset", "Saved LGST Gateset after gauge optimization")
+        #pygsti.io.write_gateset(gs_clgst,"../cmp_chk_files/clgst.gateset", "Saved LGST Gateset after G.O. and CPTP contraction")
 
-        gs_lgst_compare = pygsti.io.load_gateset("cmp_chk_files/lgst.gateset")
-        gs_lgst_go_compare = pygsti.io.load_gateset("cmp_chk_files/lgst_go.gateset")
-        gs_clgst_compare = pygsti.io.load_gateset("cmp_chk_files/clgst.gateset")
+        gs_lgst_compare = pygsti.io.load_gateset("../cmp_chk_files/lgst.gateset")
+        gs_lgst_go_compare = pygsti.io.load_gateset("../cmp_chk_files/lgst_go.gateset")
+        gs_clgst_compare = pygsti.io.load_gateset("../cmp_chk_files/clgst.gateset")
 
         self.assertAlmostEqual( gs_lgst.frobeniusdist(gs_lgst_compare), 0)
         self.assertAlmostEqual( gs_lgst_go.frobeniusdist(gs_lgst_go_compare), 0)
@@ -180,11 +180,11 @@ class TestCoreMethods(CoreTestCase):
                                                    check_jacobian=True)
         
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
-        #pygsti.io.write_gateset(gs_exlgst,"cmp_chk_files/exlgst.gateset", "Saved Extended-LGST (eLGST) Gateset")
-        #pygsti.io.write_gateset(gs_exlgst_reg,"cmp_chk_files/exlgst_reg.gateset", "Saved Extended-LGST (eLGST) Gateset w/regularization")
+        #pygsti.io.write_gateset(gs_exlgst,"../cmp_chk_files/exlgst.gateset", "Saved Extended-LGST (eLGST) Gateset")
+        #pygsti.io.write_gateset(gs_exlgst_reg,"../cmp_chk_files/exlgst_reg.gateset", "Saved Extended-LGST (eLGST) Gateset w/regularization")
 
-        gs_exlgst_compare = pygsti.io.load_gateset("cmp_chk_files/exlgst.gateset")
-        gs_exlgst_reg_compare = pygsti.io.load_gateset("cmp_chk_files/exlgst_reg.gateset")
+        gs_exlgst_compare = pygsti.io.load_gateset("../cmp_chk_files/exlgst.gateset")
+        gs_exlgst_reg_compare = pygsti.io.load_gateset("../cmp_chk_files/exlgst_reg.gateset")
         
         self.assertAlmostEqual( gs_exlgst.frobeniusdist(gs_exlgst_compare), 0)
         self.assertAlmostEqual( gs_exlgst_reg.frobeniusdist(gs_exlgst_reg_compare), 0)
@@ -257,11 +257,11 @@ class TestCoreMethods(CoreTestCase):
 
 
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
-        #pygsti.io.write_gateset(gs_lsgst,"cmp_chk_files/lsgst.gateset", "Saved LSGST Gateset")
-        #pygsti.io.write_gateset(gs_lsgst_reg,"cmp_chk_files/lsgst_reg.gateset", "Saved LSGST Gateset w/Regularization")
+        #pygsti.io.write_gateset(gs_lsgst,"../cmp_chk_files/lsgst.gateset", "Saved LSGST Gateset")
+        #pygsti.io.write_gateset(gs_lsgst_reg,"../cmp_chk_files/lsgst_reg.gateset", "Saved LSGST Gateset w/Regularization")
 
-        gs_lsgst_compare = pygsti.io.load_gateset("cmp_chk_files/lsgst.gateset")
-        gs_lsgst_reg_compare = pygsti.io.load_gateset("cmp_chk_files/lsgst_reg.gateset")
+        gs_lsgst_compare = pygsti.io.load_gateset("../cmp_chk_files/lsgst.gateset")
+        gs_lsgst_reg_compare = pygsti.io.load_gateset("../cmp_chk_files/lsgst_reg.gateset")
         
         self.assertAlmostEqual( gs_lsgst.frobeniusdist(gs_lsgst_compare), 0)
         self.assertAlmostEqual( gs_lsgst_reg.frobeniusdist(gs_lsgst_reg_compare), 0)
@@ -331,9 +331,9 @@ class TestCoreMethods(CoreTestCase):
 
 
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
-        #pygsti.io.write_gateset(gs_mlegst,"cmp_chk_files/mle_gst.gateset", "Saved MLE-GST Gateset")
+        #pygsti.io.write_gateset(gs_mlegst,"../cmp_chk_files/mle_gst.gateset", "Saved MLE-GST Gateset")
     
-        gs_mle_compare = pygsti.io.load_gateset("cmp_chk_files/mle_gst.gateset")
+        gs_mle_compare = pygsti.io.load_gateset("../cmp_chk_files/mle_gst.gateset")
         self.assertAlmostEqual( gs_mlegst.frobeniusdist(gs_mle_compare), 0)
 
     def test_LGST_1overSqrtN_dependence(self):
@@ -395,9 +395,9 @@ class TestCoreMethods(CoreTestCase):
 
 
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
-        #pygsti.io.write_gateset(gs_lsgst,"cmp_chk_files/lsgstMS.gateset", "Saved LSGST Gateset with model selection")
+        #pygsti.io.write_gateset(gs_lsgst,"../cmp_chk_files/lsgstMS.gateset", "Saved LSGST Gateset with model selection")
 
-        gs_lsgst_compare = pygsti.io.load_gateset("cmp_chk_files/lsgstMS.gateset")
+        gs_lsgst_compare = pygsti.io.load_gateset("../cmp_chk_files/lsgstMS.gateset")
         
         self.assertAlmostEqual( gs_lsgst.frobeniusdist(gs_lsgst_compare), 0)
 

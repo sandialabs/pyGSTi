@@ -23,8 +23,8 @@ GxGy 40 60
 Gx^4 20 90
 """
 
-        open("temp_test_files/MetricsDataset.txt","w").write(dataset_txt)
-        self.ds = pygsti.io.load_dataset("temp_test_files/MetricsDataset.txt")
+        open("../temp_test_files/MetricsDataset.txt","w").write(dataset_txt)
+        self.ds = pygsti.io.load_dataset("../temp_test_files/MetricsDataset.txt")
 
 
 class TestMetrics(MetricsTestCase):

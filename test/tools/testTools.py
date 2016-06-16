@@ -246,7 +246,7 @@ class ToolsMethods(ToolsTestCase):
     ###########################################################
             
     def test_chi2_fn(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom="cmp_chk_files/analysis.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis.dataset")
         chi2, grad = pygsti.chi2(ds, std.gs_target, returnGradient=True)
 
         pygsti.gate_string_chi2( ('Gx',), ds, std.gs_target)
@@ -259,7 +259,7 @@ class ToolsMethods(ToolsTestCase):
             pygsti.chi2(ds, std.gs_target, useFreqWeightedChiSq=True) #no impl yet
 
     def test_logl_fn(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom="cmp_chk_files/analysis.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis.dataset")
         gatestrings = pygsti.construction.gatestring_list( [ ('Gx',), ('Gy',), ('Gx','Gx') ] )
         spam_labels = std.gs_target.get_spam_labels()
         pygsti.create_count_vec_dict( spam_labels, ds, gatestrings )
@@ -451,11 +451,11 @@ class ToolsMethods(ToolsTestCase):
         #TODO: go through matrixtools.py and add tests for every function
 
     def test_rb_tools(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom="cmp_chk_files/analysis.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis.dataset")
         val = pygsti.rb_decay(0.1,0.1,0.1)
         self.assertAlmostEqual(val, 0.1039800665)
         decay = pygsti.rb_decay_rate(ds,showPlot=False,xlim=(0,10),ylim=(0,10),
-                                     saveFigPath="temp_test_files/RBdecay.png")
+                                     saveFigPath="../temp_test_files/RBdecay.png")
 
     def test_rpe_tools(self):
         from pygsti.tools import rpe

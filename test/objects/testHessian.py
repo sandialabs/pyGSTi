@@ -14,8 +14,8 @@ class HessianTestCase(unittest.TestCase):
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = True
 
-        self.gateset = pygsti.io.load_gateset("cmp_chk_files/analysis.gateset")
-        self.ds = pygsti.objects.DataSet(fileToLoadFrom="cmp_chk_files/analysis.dataset")
+        self.gateset = pygsti.io.load_gateset("../cmp_chk_files/analysis.gateset")
+        self.ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis.dataset")
 
     def assertWarns(self, callable, *args, **kwds):
         with warnings.catch_warnings(record=True) as warning_list:
@@ -26,7 +26,7 @@ class HessianTestCase(unittest.TestCase):
 
     def runSilent(self, callable, *args, **kwds):
         orig_stdout = sys.stdout
-        sys.stdout = open("temp_test_files/silent.txt","w")
+        sys.stdout = open("../temp_test_files/silent.txt","w")
         result = callable(*args, **kwds)
         sys.stdout.close()
         sys.stdout = orig_stdout
