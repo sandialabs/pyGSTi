@@ -4,6 +4,7 @@ from pygsti.construction import std1Q_XYI as std
 
 import numpy as np
 import sys
+import sys, os
 
 class DriversTestCase(unittest.TestCase):
 
@@ -49,6 +50,13 @@ class DriversTestCase(unittest.TestCase):
         #ds.save("../cmp_chk_files/drivers.dataset")
         #ds_tgp.save("../cmp_chk_files/drivers_tgp.dataset")
         #ds_lae.save("../cmp_chk_files/drivers_lae.dataset")
+
+        #Set CWD to directory of this file
+        self.owd = os.getcwd()
+        os.chdir( os.path.dirname(__file__))
+
+    def tearDown(self):
+        os.chdir(self.owd)
 
     def runSilent(self, callable, *args, **kwds):
         orig_stdout = sys.stdout

@@ -115,6 +115,15 @@ def _test_output_with(testcase, method, printer):
     testcase.assertEqual(generated[0], 'ERROR: %s' % errorMessage)
 
 class TestVerbosePrinter(unittest.TestCase):
+ 
+    def setUp(self):
+        #Set CWD to directory of this file
+        self.owd = os.getcwd()
+        os.chdir( os.path.dirname(__file__))
+
+    def tearDown(self):
+        os.chdir(self.owd)
+
 
     def test_file_output(self):
         _test_output_with(self, _to_temp_file, VerbosityPrinter(2, filename=filePath)) 

@@ -1,10 +1,18 @@
 import unittest
+import os, sys
 
 class TwoQubitTestCase(unittest.TestCase):
 
     def setUp(self):
         #Set GateSet objects to "non-strict" mode for this testing
         pygsti.objects.GateSet._strict = False
+
+        #Set CWD to directory of this file
+        self.owd = os.getcwd()
+        os.chdir( os.path.dirname(__file__))
+
+    def tearDown(self):
+        os.chdir(self.owd)
 
     def runSilent(self, callable, *args, **kwds):
         orig_stdout = sys.stdout

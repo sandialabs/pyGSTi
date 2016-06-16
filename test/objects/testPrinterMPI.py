@@ -1,9 +1,21 @@
 from pygsti.objects.verbosityprinter import *
 from mpi4py                          import MPI
 
+
 import unittest
+import os, sys
+
 
 class TestPrinterMPI(unittest.TestCase):
+
+    def setUp(self):
+        #Set CWD to directory of this file
+        self.owd = os.getcwd()
+        os.chdir( os.path.dirname(__file__))
+
+    def tearDown(self):
+        os.chdir(self.owd)
+
     def test_mpi(self):
         comm    = MPI.COMM_WORLD
         print('Running test on process %s' % comm.Get_rank())

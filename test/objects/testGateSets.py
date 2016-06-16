@@ -3,7 +3,7 @@ import pygsti
 import numpy as np
 import warnings
 import pickle
-
+import os, sys
 
 class GateSetTestCase(unittest.TestCase):
 
@@ -38,6 +38,12 @@ class GateSetTestCase(unittest.TestCase):
                            'minus': ('rho0','remainder') },
             parameterization="static")
 
+        #Set CWD to directory of this file
+        self.owd = os.getcwd()
+        os.chdir( os.path.dirname(__file__))
+
+    def tearDown(self):
+        os.chdir(self.owd)
 
 
     def assertArraysAlmostEqual(self,a,b):

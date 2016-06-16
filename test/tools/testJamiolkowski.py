@@ -1,6 +1,7 @@
 import unittest
 import pygsti
 import numpy as np
+import os, sys
 
 class JamiolkowskiTestCase(unittest.TestCase):
 
@@ -20,6 +21,14 @@ class JamiolkowskiTestCase(unittest.TestCase):
         self.testGateGM_mx = pygsti.std_to_gm(self.testGate, self.stateSpaceDims)
         self.expTestGate_mx = pygsti.expand_from_std_direct_sum_mx(self.testGate, self.stateSpaceDims)
         self.expTestGateGM_mx = pygsti.std_to_gm(self.expTestGate_mx)
+        #Set CWD to directory of this file
+
+        self.owd = os.getcwd()
+        os.chdir( os.path.dirname(__file__))
+
+    def tearDown(self):
+        os.chdir(self.owd)
+
 
     def checkBasis(self, cmb):
         #Op with Jamio map on gate in std and gm bases

@@ -5,6 +5,7 @@ from pygsti.construction import std1Q_XYI as std
 import numpy as np
 from scipy import polyfit
 import sys
+import os, sys
 
 class AlgorithmTestCase(unittest.TestCase):
 
@@ -13,6 +14,13 @@ class AlgorithmTestCase(unittest.TestCase):
         pygsti.objects.GateSet._strict = True
 
         self.gs_target_noisy = std.gs_target.randomize_with_unitary(0.001, seed=1234)
+
+        #Set CWD to directory of this file
+        self.owd = os.getcwd()
+        os.chdir( os.path.dirname(__file__))
+
+    def tearDown(self):
+        os.chdir(self.owd)
 
     def runSilent(self, callable, *args, **kwds):
         orig_stdout = sys.stdout

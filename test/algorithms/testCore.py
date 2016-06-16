@@ -4,13 +4,17 @@ from pygsti.construction import std1Q_XYI as std
 
 import numpy as np
 from scipy import polyfit
-import sys
+import sys, os
 
 class CoreTestCase(unittest.TestCase):
 
     def setUp(self):
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = True
+
+        #Set CWD to directory of this file
+        self.owd = os.getcwd()
+        os.chdir( os.path.dirname(__file__))
 
         self.gateset = std.gs_target
         self.datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0.1)
@@ -39,6 +43,9 @@ class CoreTestCase(unittest.TestCase):
         #ds_lgst.save("../cmp_chk_files/analysis_lgst.dataset")
         self.ds_lgst = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis_lgst.dataset")
 
+	
+    def tearDown(self):
+        os.chdir(self.owd)
 
     def runSilent(self, callable, *args, **kwds):
         orig_stdout = sys.stdout

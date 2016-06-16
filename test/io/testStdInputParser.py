@@ -11,6 +11,13 @@ class StdInputParserTestCase(unittest.TestCase):
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = True
 
+        #Set CWD to directory of this file
+        self.owd = os.getcwd()
+        os.chdir( os.path.dirname(__file__))
+
+    def tearDown(self):
+        os.chdir(self.owd)
+
     def assertArraysAlmostEqual(self,a,b):
         self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
 

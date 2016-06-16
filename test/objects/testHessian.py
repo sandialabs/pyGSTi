@@ -6,7 +6,7 @@ from pygsti.construction import std1Q_XY as stdxy
 
 import numpy as np
 import sys
-
+import os, sys
 
 class HessianTestCase(unittest.TestCase):
 
@@ -16,6 +16,14 @@ class HessianTestCase(unittest.TestCase):
 
         self.gateset = pygsti.io.load_gateset("../cmp_chk_files/analysis.gateset")
         self.ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis.dataset")
+
+        #Set CWD to directory of this file
+        self.owd = os.getcwd()
+        os.chdir( os.path.dirname(__file__))
+
+    def tearDown(self):
+        os.chdir(self.owd)
+
 
     def assertWarns(self, callable, *args, **kwds):
         with warnings.catch_warnings(record=True) as warning_list:

@@ -81,6 +81,13 @@ class ReportTestCase(unittest.TestCase):
                                      pygsti.construction.repeat_with_max_length, True)
 
 
+        #Set CWD to directory of this file
+        self.owd = os.getcwd()
+        os.chdir( os.path.dirname(__file__))
+
+    def tearDown(self):
+        os.chdir(self.owd)
+
             
         
 

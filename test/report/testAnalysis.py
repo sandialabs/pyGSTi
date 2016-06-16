@@ -4,6 +4,7 @@ from pygsti.construction import std1Q_XYI as std
 
 import numpy as np
 import os
+import sys
 import warnings
 
 try:
@@ -64,6 +65,13 @@ class AnalysisTestCase(unittest.TestCase):
                 if self.gateStrDict[(x,y)] in runningList:
                     self.gateStrDict[(x,y)] = None
                 else: runningList.append( self.gateStrDict[(x,y)] )
+        #Set CWD to directory of this file
+        self.owd = os.getcwd()
+        os.chdir( os.path.dirname(__file__))
+
+    def tearDown(self):
+        os.chdir(self.owd)
+
 
     def assertEqualImages(self, fn1, fn2):
         if haveImageLibs:
