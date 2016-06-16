@@ -1,6 +1,7 @@
 from    __future__ import print_function
 from   copy        import deepcopy as _dc
 import sys         as _sys
+import math        as _math # used for digit formatting
 
 '''
 verbosityprinter module:
@@ -29,9 +30,12 @@ show_progress: function that prints a progress bar to the screen.
   
 '''
 
+def _num_digits(n):
+    return int(_math.log10(n)) + 1
+
 # This function isn't a part of the public interface, instead it has a wrapper in the VerbosityPrinter class
 def _build_progress_bar (iteration, total, barLength = 100, numDecimals=2, fillChar='#', 
-                    emptyChar='-', prefix='Progress:', suffix='Complete'):
+                    emptyChar='-', prefix='Progress:', suffix='Complete', end='\n'):
     """
     Used for building a progress bar as a string
     @params:
@@ -48,13 +52,14 @@ def _build_progress_bar (iteration, total, barLength = 100, numDecimals=2, fillC
     percents        = round(100.00 * (iteration / float(total)), numDecimals)
     bar             = fillChar * filledLength + emptyChar * (barLength - filledLength)
     # Here, the \r (carriage return) is what replaces the last line that was printed
-    carriageReturn  = '\n' if iteration == total else '\r'
+    carriageReturn  = end if iteration == total else '\r'
     formattedString = '%s [%s] %s%s %s%s' % (prefix, bar, percents, '%', suffix, carriageReturn)
     return formattedString
 
 # Another hidden function for providing verbose progress output
-def _build_verbose_iteration(iteration, total, prefix, suffix):
-    return '%s Iter %s of %s %s: \n' % (prefix, iteration, total, suffix)
+def _build_verbose_iteration(iteration, total, prefix, suffix, end):
+    digits = _num_digits(total)
+    return '%s Iter %s of %s %s: %s' % (prefix, str(iteration).zfill(digits), total, suffix, end)
 
 #############################################################################################################
 #                                    The VerbosityPrinter Class itself                                      #
@@ -102,7 +107,7 @@ class VerbosityPrinter():
         if type(verbosity) == int:  #isinstance(verbosity,int)
             return VerbosityPrinter(verbosity, comm=comm)
         else:
-            return verbosity
+            return verbosity.clone() # deepcopy the printer object if it has been passed as a verbosity
 
     # Basic rules for increasing or decreasing verbosity with arithmetic operators
     def __add__(self, other):
@@ -121,11 +126,12 @@ class VerbosityPrinter():
             output.write(message + '\n')
 
     # Hidden function for deciding what to do with our output
-    def _put(self, message):
+    def _put(self, message, flush=True):
 	if self.filename == None: # handles the case where comm exists, as comm will create a filename
             if self._comm == None or self._comm.Get_rank() == 0:
 	        print(message, end='')
-	        _sys.stdout.flush() 
+                if flush:
+	            _sys.stdout.flush() 
         else:
             self._append_to(self.filename, message)
 
@@ -141,16 +147,16 @@ class VerbosityPrinter():
     # Function for sending messages to the desired output
     # Determines whether the message should be printed based on current verbosity setting,
     # then sends the message to the appropriate output 
-    def log(self, message, messageLevel=1, indentChar='  ', showStatustype=False, doIndent=True, indentOffset=0):
+    def log(self, message, messageLevel=1, indentChar='  ', showStatustype=False, doIndent=True, indentOffset=0, end='\n', flush=True):
         if messageLevel <= self.verbosity:
             indent = (indentChar * (messageLevel+indentOffset)) if doIndent else ''
             statusType = 'Status Level %s:' % messageLevel if showStatustype else ''
-            formattedMessage = '%s%s%s\n' % (indent, statusType, message)
+            formattedMessage = '%s%s%s%s' % (indent, statusType, message, end)
 	    
             if self.progressLevel > 0 and self.filename == None:
 		self._delayQueue.append(indentChar + 'INVALID LEVEL: ' + formattedMessage)
 	    else:
-		self._put(formattedMessage)
+		self._put(formattedMessage, flush=flush)
 
     def _progress_bar(self, iteration, total, barLength, numDecimals, fillChar, emptyChar, prefix, suffix, starting, indent):
         progressBar = ''
@@ -164,8 +170,8 @@ class VerbosityPrinter():
             progressBar = indent + progressBar
         return progressBar
 
-    def _verbose_iteration(self, iteration, total, prefix, suffix, verboseMessages, indent):
-        iteration =  _build_verbose_iteration(iteration, total, prefix, suffix)
+    def _verbose_iteration(self, iteration, total, prefix, suffix, verboseMessages, indent, end):
+        iteration =  _build_verbose_iteration(iteration, total, prefix, suffix, end)
         iteration = indent + iteration
        
 	for verboseMessage in verboseMessages:
@@ -173,9 +179,12 @@ class VerbosityPrinter():
 
         return iteration
 
+    def __str__(self):
+        return 'Printer Object: Progress Level: %s Verbosity %s' % (self.progressLevel, self.verbosity)
+
     # A wrapper for show_progress that only works if verbosity is above a certain value (Status by default)
     def show_progress(self, iteration, total, messageLevel=1, barLength = 50, numDecimals=2, fillChar='#', 
-                    emptyChar='-', prefix='Progress:', suffix='', verboseMessages=[], indentChar='  '): 
+                    emptyChar='-', prefix='Progress:', suffix='', verboseMessages=[], indentChar='  ', end='\n'): 
 	"""
 	Used for building a progress bar as a string
 	@params:
@@ -203,7 +212,7 @@ class VerbosityPrinter():
         if self.verbosity == self._progressStack[-1] and self.filename == None:
             progress = self._progress_bar(iteration, total, barLength, numDecimals, fillChar, emptyChar, prefix, suffix, starting, indent)
         elif self.verbosity >  self._progressStack[-1]:
-            progress = self._verbose_iteration(iteration, total, prefix, suffix, verboseMessages, indent)
+            progress = self._verbose_iteration(iteration, total, prefix, suffix, verboseMessages, indent, end)
       
         self._put(progress) # send the progress logging to either file or stdout
 

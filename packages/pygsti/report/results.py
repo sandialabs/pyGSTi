@@ -6,22 +6,24 @@
 """ Defines the Results class and supporting functionality."""
 
 import sys as _sys
-import os as _os
-import re as _re
+import os  as _os
+import re  as _re
 import collections as _collections
-import matplotlib as _matplotlib
-import itertools as _itertools
+import matplotlib  as _matplotlib
+import itertools   as _itertools
 
-from ..objects import gatestring as _gs
+from ..objects      import gatestring           as _gs
+from ..objects      import VerbosityPrinter
 from ..construction import spamspecconstruction as _ssc
-from ..algorithms import optimize_gauge as _optimizeGauge
-from ..tools import listtools as _lt
-from ..tools import basistools as _bt
-from .. import _version
+from ..algorithms   import optimize_gauge       as _optimizeGauge
+from ..tools        import listtools            as _lt
+from ..tools        import basistools           as _bt
+from ..             import _version
 
-import latex as _latex
+import latex      as _latex
 import generation as _generation
-import plotting as _plotting
+import plotting   as _plotting
+
 from resultcache import ResultCache as _ResultCache
 
 class Results(object):
@@ -59,7 +61,7 @@ class Results(object):
         self._confidence_regions = {} # plain dict. Key == confidence level
         self._specials = _ResultCache(self._get_special_fns(), self, "special")
 
-        self.tables = _ResultCache(self._get_table_fns(), self, "table")
+        self.tables  = _ResultCache(self._get_table_fns(), self, "table")
         self.figures = _ResultCache(self._get_figure_fns(), self, "figure")
         #self.qtys = _ResultCache(self._get_qty_fns(), self, "computable qty")
 
@@ -935,15 +937,14 @@ class Results(object):
 
 
         def fn(key, confidenceLevel, vb):
+            printer = VerbosityPrinter.build_printer(vb)
             noConfidenceLevelDependence(confidenceLevel)
 
             gsTarget = self.gatesets['target']
             gsBestEstimate = self.gatesets['final estimate']
             constrainToTP = self.parameters['constrainToTP']
 
-            if vb > 0: 
-                print "Performing gauge transforms for appendix..."
-                _sys.stdout.flush()
+            printer.log("Performing gauge transforms for appendix...")
 
             best_gs_gauges = _collections.OrderedDict()
 
@@ -1428,6 +1429,8 @@ class Results(object):
         -------
         None
         """
+        printer = VerbosityPrinter.build_printer(verbosity)
+
         assert(self._bEssentialResultsSet)
         self.confidence_level = confidenceLevel 
         self._comm = comm
@@ -1539,9 +1542,7 @@ class Results(object):
 
             
         # 1) get latex tables
-        if verbosity > 0: 
-            print "*** Generating tables ***"; _sys.stdout.flush()
-
+	printer.log("*** Generating tables ***")
         
         std_tables = \
             ('targetSpamTable','targetGatesTable','datasetOverviewTable',
@@ -1563,10 +1564,12 @@ class Results(object):
         else:
             tables_to_blank += ls_and_germs_tables
 
-        for key in tables_to_compute:
-            qtys[key] = self.tables.get(key, verbosity=v).render(
+        for i, key in enumerate(tables_to_compute):
+            printer.show_progress(i, len(tables_to_compute) - 1, prefix='', end='')
+            qtys[key] = self.tables.get(key, verbosity=printer - 1).render(
                 'latex',longtables=self.options.long_tables, scratchDir=D)
             qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
+        printer.end_progress()
 
         for key in tables_to_blank:
             qtys[key] = _generation.get_blank_table().render(
@@ -1575,7 +1578,7 @@ class Results(object):
 
         #get appendix tables if needed
         if gaugeOptAppendix: 
-            goaTables = self._specials.get('gaugeOptAppendixTables',verbosity=v)
+            goaTables = self._specials.get('gaugeOptAppendixTables',verbosity=printer - 1)
             qtys.update( { key : goaTables[key].render(
                         'latex', longtables=self.options.long_tables, scratchDir=D)
                            for key in goaTables }  )
@@ -1583,7 +1586,7 @@ class Results(object):
 
         elif any((debugAidsAppendix, pixelPlotAppendix, whackamoleAppendix)):
             goaTables = self._specials.get('blankGaugeOptAppendixTables',
-                              verbosity=v)   # fill keys with blank tables
+                              verbosity=printer - 1)   # fill keys with blank tables
             qtys.update( { key : goaTables[key].render(
                         'latex',longtables=self.options.long_tables)
                            for key in goaTables }  )  # for format substitution
@@ -1591,8 +1594,7 @@ class Results(object):
 
     
         # 2) generate plots
-        if verbosity > 0: 
-            print "*** Generating plots ***"; _sys.stdout.flush()
+	printer.log("*** Generating plots ***")
 
         if _matplotlib.is_interactive():
             _matplotlib.pyplot.ioff()
@@ -1607,7 +1609,7 @@ class Results(object):
             return "\\includegraphics[width=%.2fin,height=%.2fin" % (W,H) + \
                 ",keepaspectratio]{%s/%s}" % (D,figFilenm)
 
-        def set_fig_qtys(figkey, figFilenm, W=None,H=None):
+        def set_fig_qtys(figkey, figFilenm, v, W=None,H=None):
             fig = self.figures.get(figkey, verbosity=v)
             fig.save_to(_os.path.join(report_dir, D, figFilenm))
             qtys[figkey] = incgr(figFilenm,W,H)
@@ -1628,14 +1630,11 @@ class Results(object):
                 raise ValueError("Invalid objective value: %s" 
                                  % self.parameters['objective'])
             
-            if verbosity > 0: 
-                print " -- %s plots (%d): " % (plotFnName, nPlots),
-                _sys.stdout.flush()
-
-            if verbosity > 0:
-                print "1 ",; _sys.stdout.flush()
+            printer.log("%s plots (%d): " % (plotFnName, nPlots))
+            
+            printer.show_progress(0, 1, prefix='', end='')
             fig = set_fig_qtys("bestEstimateColorBoxPlot",
-                               "best%sBoxes.pdf" % plotFnName)
+                               "best%sBoxes.pdf" % plotFnName, printer - 1)
             maxX = fig.get_extra_info()['nUsedXs']
             maxY = fig.get_extra_info()['nUsedYs']
 
@@ -1644,10 +1643,10 @@ class Results(object):
             #    #no tooltip for histogram... - probably should make it 
             #    # it's own element of .figures dict
 
-            if verbosity > 0: 
-                print "2 ",; _sys.stdout.flush()
+            printer.show_progress(1, 1, prefix='', end='')
             fig = set_fig_qtys("invertedBestEstimateColorBoxPlot",
-                               "best%sBoxes_inverted.pdf" % plotFnName)
+                               "best%sBoxes_inverted.pdf" % plotFnName, printer - 1)
+            printer.end_progress()
         else:
             for figkey in ["bestEstimateColorBoxPlot",
                            "invertedBestEstimateColorBoxPlot"]:
@@ -1658,11 +1657,11 @@ class Results(object):
         if pixelPlotAppendix:
             Ls = self.parameters['max length list']
             for i in range(st,len(Ls)-1):
+                
+                printer.show_progress(i, len(Ls)-2, prefix='', end='') # -2 is intentional
 
-                if verbosity > 0: 
-                    print "%d " % (i-st+3),; _sys.stdout.flush()
                 fig = self.figures.get("estimateForLIndex%dColorBoxPlot" % i,
-                                       verbosity=v)
+                                       verbosity=printer)
                 fig.save_to( _os.path.join(report_dir, D,
                                            "L%d_%sBoxes.pdf" % (i,plotFnName)))
                 lx = fig.get_extra_info()['nUsedXs']
@@ -1686,48 +1685,43 @@ class Results(object):
                 #TODO: add conditional tooltip string to start of caption
                 pixplots += "\\end{center}\n"
                 pixplots += "\\end{figure}\n"
+            printer.end_progress()
 
         #Set template quantity (empty string if appendix disabled)
         qtys['intermediate_pixel_plot_figures'] = pixplots
 
-        if verbosity > 0: 
-            print ""; _sys.stdout.flush()
+        printer.log("")
         
         if debugAidsAppendix:
             #DirectLGST and deviation
-            if verbosity > 0: 
-                print " -- Direct-X plots ",; _sys.stdout.flush()
-                print "(2):"; _sys.stdout.flush()    
+            printer.log(" -- Direct-X plots ", end='')
+            printer.log("(2):") 
 
             #if verbosity > 0: 
             #    print " ?",; _sys.stdout.flush()
             #fig = set_fig_qtys("directLGSTColorBoxPlot",
             #                   "directLGST%sBoxes.pdf" % plotFnName)
 
-            if verbosity > 0: 
-                print " 1",; _sys.stdout.flush()        
+            printer.show_progress(0, 1, prefix='', end='')
             fig = set_fig_qtys("directLongSeqGSTColorBoxPlot",
-                           "directLongSeqGST%sBoxes.pdf" % plotFnName)
+                           "directLongSeqGST%sBoxes.pdf" % plotFnName, printer - 1)
 
             #if verbosity > 0: 
             #    print " ?",; _sys.stdout.flush()        
             #fig = set_fig_qtys("directLGSTDeviationColorBoxPlot",
             #                   "directLGSTDeviationBoxes.pdf",W=4,H=5)
 
-            if verbosity > 0: 
-                print " 2",; _sys.stdout.flush()
+            printer.show_progress(1, 1, prefix='', end='')
             fig = set_fig_qtys("directLongSeqGSTDeviationColorBoxPlot",
-                               "directLongSeqGSTDeviationBoxes.pdf",W=4,H=5)
+                               "directLongSeqGSTDeviationBoxes.pdf", printer - 1, W=4,H=5)
 
-            if verbosity > 0: 
-                print ""; _sys.stdout.flush()
+            printer.log('')
 
-
+            printer.end_progress()
             #Small eigenvalue error rate
-            if verbosity > 0: 
-                print " -- Error rate plots..."; _sys.stdout.flush()
+            printer.log(" -- Error rate plots...")
             fig = set_fig_qtys("smallEigvalErrRateColorBoxPlot",
-                               "smallEigvalErrRateBoxes.pdf",W=4,H=5)
+                               "smallEigvalErrRateBoxes.pdf", printer - 1, W=4,H=5)
         else:
             #UNUSED: "directLGSTColorBoxPlot", "directLGSTDeviationColorBoxPlot"
             for figkey in ["directLongSeqGSTColorBoxPlot",
@@ -1745,15 +1739,13 @@ class Results(object):
             len1Germs = [ g for g in self.gatestring_lists['germs'] 
                           if len(g) == 1 ]
 
-            if verbosity > 0: 
-                print " -- Whack-a-mole plots (%d): " % (2*len(len1Germs)),
-                _sys.stdout.flush()
+            printer.log(" -- Whack-a-mole plots (%d): " % (2*len(len1Germs)), end='')
 
-            for i,germ in enumerate(len1Germs):
-                if verbosity > 0: 
-                    print "%d " % (i+1),; _sys.stdout.flush()
+            for i, germ in enumerate(len1Germs):
+               
+                printer.show_progress(i,  len(len1Germs) - 1, prefix='', end='') 
 
-                fig = self.figures.get("whack%sMoleBoxes" % germ[0],verbosity=v)
+                fig = self.figures.get("whack%sMoleBoxes" % germ[0],verbosity=printer - 1)
                 fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.pdf"
                                           % germ[0]))
         
@@ -1766,13 +1758,13 @@ class Results(object):
                 whackamoleplots += "  Hitting with hammer of weight %.1f.\label{Whack%sMoleBoxPlot}}\n" % (hammerWeight,germ[0])
                 whackamoleplots += "\\end{center}\n"
                 whackamoleplots += "\\end{figure}\n"
+            printer.end_progress()
         
             for i,germ in enumerate(len1Germs):
-                if verbosity > 0: 
-                    print "%d " % (len(len1Germs)+i+1),; _sys.stdout.flush()
+                printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
 
                 fig = self.figures.get("whack%sMoleBoxesSummed" % germ[0],
-                                       verbosity=v)
+                                       verbosity=printer - 1)
                 fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxesSummed.pdf" % germ[0]))
     
                 whackamoleplots += "\n"
@@ -1784,10 +1776,9 @@ class Results(object):
                 whackamoleplots += "  Hitting with hammer of weight %.1f.\label{Whack%sMoleBoxPlotSummed}}\n" % (hammerWeight,germ[0])
                 whackamoleplots += "\\end{center}\n"
                 whackamoleplots += "\\end{figure}\n"
+            printer.end_progress()
     
-            if verbosity > 0: 
-                print ""; _sys.stdout.flush()
-
+            printer.log('')
         #Set template quantity (empty string if appendix disabled)
         qtys['whackamole_plot_figures'] = whackamoleplots
             
@@ -1796,8 +1787,7 @@ class Results(object):
     
 
         # 3) populate template latex file => report latex file
-        if verbosity > 0: 
-            print "*** Merging into template file ***"; _sys.stdout.flush()
+        printer.log("*** Merging into template file ***")
         
         mainTexFilename = _os.path.join(report_dir, report_base + ".tex")
         appendicesTexFilename = _os.path.join(report_dir, report_base + "_appendices.tex")
@@ -1824,8 +1814,7 @@ class Results(object):
     
     
         # 4) compile report latex file into PDF
-        if verbosity > 0: 
-            print "Latex file(s) successfully generated.  Attempting to compile with pdflatex..."; _sys.stdout.flush()
+        printer.log("Latex file(s) successfully generated.  Attempting to compile with pdflatex...")
         cwd = _os.getcwd()
         if len(report_dir) > 0:  
             _os.chdir(report_dir)
@@ -1838,25 +1827,23 @@ class Results(object):
             if ret == 0:
                 #We could check if the log file contains "Rerun" in it, 
                 # but we'll just re-run all the time now
-                if verbosity > 0: 
-                    print "Initial output PDF %s successfully generated." \
-                        % pdfFilename
+                printer.log("Initial output PDF %s successfully generated." \
+                        % pdfFilename)
 
                 ret = _os.system( "%s %s %s" % 
                                   (self.options.latex_cmd,
                                    _os.path.basename(mainTexFilename),
                                    self.options.latex_postcmd) )
                 if ret == 0:
-                    if verbosity > 0: 
-                        print "Final output PDF %s successfully generated. Cleaning up .aux and .log files." % pdfFilename #mainTexFilename
+                    printer.log("Final output PDF %s successfully generated. Cleaning up .aux and .log files." % pdfFilename) #mainTexFilename
                     _os.remove( report_base + ".log" )
                     _os.remove( report_base + ".aux" )
                 else:
-                    print "Error: pdflatex returned code %d. Check %s.log to see details" % (ret, report_base)
+                    printer.error("pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
             else:
-                print "Error: pdflatex returned code %d. Check %s.log to see details" % (ret, report_base)
+                printer.error("pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
         except:
-            print "Error trying to run pdflatex to generate output PDF %s. Is '%s' on your path?" % (pdfFilename,self.options.latex_cmd)
+            printer.error("Error trying to run pdflatex to generate output PDF %s. Is '%s' on your path?" % (pdfFilename,self.options.latex_cmd))
         finally: 
             _os.chdir(cwd)
     
@@ -1922,6 +1909,9 @@ class Results(object):
         -------
         None
         """
+
+        rinter = VerbosityPrinter.build_printer(verbosity)   
+
         assert(self._bEssentialResultsSet)
         self.confidence_level = confidenceLevel 
         self._comm = comm
@@ -2019,8 +2009,7 @@ class Results(object):
             _os.mkdir( _os.path.join(report_dir,D))
             
         # 1) get latex tables
-        if verbosity > 0: 
-            print "*** Generating tables ***"; _sys.stdout.flush()
+        printer.log("*** Generating tables ***")
 
         std_tables = ('bestGatesetSpamTable',
                       'bestGatesetSpamParametersTable',
@@ -2039,7 +2028,7 @@ class Results(object):
             tables_to_blank += gof_tables
 
         for key in tables_to_compute:
-            qtys[key] = self.tables.get(key, verbosity=v).render(
+            qtys[key] = self.tables.get(key, verbosity=printer - 1).render(
                 'latex',longtables=self.options.long_tables, scratchDir=D)
             qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
 
@@ -2050,8 +2039,7 @@ class Results(object):
 
     
         # 2) generate plots
-        if verbosity > 0: 
-            print "*** Generating plots ***"; _sys.stdout.flush()
+        printer.log("*** Generating plots ***")
 
         if _matplotlib.is_interactive():
             _matplotlib.pyplot.ioff()
@@ -2097,8 +2085,7 @@ class Results(object):
             _matplotlib.pyplot.ion()
     
         # 3) populate template latex file => report latex file
-        if verbosity > 0: 
-            print "*** Merging into template file ***"; _sys.stdout.flush()
+        printer.log("*** Merging into template file ***")
         
         mainTexFilename = _os.path.join(report_dir, report_base + ".tex")
         appendicesTexFilename = _os.path.join(report_dir, report_base + "_appendices.tex")
@@ -2108,8 +2095,7 @@ class Results(object):
         self._merge_template(qtys, mainTemplate, mainTexFilename)
     
         # 4) compile report latex file into PDF
-        if verbosity > 0: 
-            print "Latex file(s) successfully generated.  Attempting to compile with pdflatex..."; _sys.stdout.flush()
+        printer.log("Latex file(s) successfully generated.  Attempting to compile with pdflatex...")
         cwd = _os.getcwd()
         if len(report_dir) > 0:  
             _os.chdir(report_dir)
@@ -2122,24 +2108,22 @@ class Results(object):
             if ret == 0:
                 #We could check if the log file contains "Rerun" in it, 
                 # but we'll just re-run all the time now
-                if verbosity > 0: 
-                    print "Initial output PDF %s successfully generated." % \
-                        pdfFilename
+                printer.log("Initial output PDF %s successfully generated." % \
+                        pdfFilename)
                 ret = _os.system( "%s %s %s" % 
                                   (self.options.latex_cmd,
                                    _os.path.basename(mainTexFilename),
                                    self.options.latex_postcmd) )
                 if ret == 0:
-                    if verbosity > 0: 
-                        print "Final output PDF %s successfully generated. Cleaning up .aux and .log files." % pdfFilename #mainTexFilename
+                    printer.log("Final output PDF %s successfully generated. Cleaning up .aux and .log files." % pdfFilename) #mainTexFilename
                     _os.remove( report_base + ".log" )
                     _os.remove( report_base + ".aux" )
                 else:
-                    print "Error: pdflatex returned code %d. Check %s.log to see details" % (ret, report_base)
+                    printer.error("Error: pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
             else:
-                print "Error: pdflatex returned code %d. Check %s.log to see details" % (ret, report_base)
+                printer.error("Error: pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
         except:
-            print "Error trying to run pdflatex to generate output PDF %s. Is '%s' on your path?" % (pdfFilename,self.options.latex_cmd)
+            printer.error("Error trying to run pdflatex to generate output PDF %s. Is '%s' on your path?" % (pdfFilename,self.options.latex_cmd))
         finally: 
             _os.chdir(cwd)
 
@@ -2219,6 +2203,9 @@ class Results(object):
         -------
         None
         """
+
+        printer = VerbosityPrinter.build_printer(verbosity)
+
         assert(self._bEssentialResultsSet)
         self.confidence_level = confidenceLevel 
         self._comm = comm
@@ -2313,8 +2300,7 @@ class Results(object):
 
             
         # 1) get latex tables
-        if verbosity > 0: 
-            print "*** Generating tables ***"; _sys.stdout.flush()
+        printer.log("*** Generating tables ***")
 
         std_tables =('targetSpamTable','targetGatesTable',
                      'datasetOverviewTable','bestGatesetSpamTable',
@@ -2335,7 +2321,7 @@ class Results(object):
             tables_to_blank += ls_and_germs_tables
 
         for key in tables_to_compute:
-            qtys[key] = self.tables.get(key, verbosity=v).render(
+            qtys[key] = self.tables.get(key, verbosity=printer - 1).render(
                 'latex',longtables=self.options.long_tables, scratchDir=D)
             qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
 
@@ -2346,8 +2332,7 @@ class Results(object):
 
     
         # 2) generate plots
-        if verbosity > 0: 
-            print "*** Generating plots ***"; _sys.stdout.flush()
+        printer.log("*** Generating plots ***")
 
         if _matplotlib.is_interactive():
             _matplotlib.pyplot.ioff()
@@ -2363,7 +2348,7 @@ class Results(object):
             return "\\includegraphics[width=%.2fin,height=%.2fin" % (W,H) + \
                 ",keepaspectratio]{%s/%s}" % (D,figFilenm)
 
-        def set_fig_qtys(figkey, figFilenm, W=None,H=None):
+        def set_fig_qtys(figkey, figFilenm, v, W=None,H=None):
             fig = self.figures.get(figkey, verbosity=v)
             fig.save_to(_os.path.join(report_dir, D, figFilenm))
             qtys[figkey] = incgr(figFilenm,W,H)
@@ -2386,15 +2371,14 @@ class Results(object):
                 raise ValueError("Invalid objective value: %s" 
                                  % self.parameters['objective'])
             
-            if verbosity > 0: 
-                print " -- %s plots (%d): " % (plotFnName, nPlots),; _sys.stdout.flush()
-
-            if verbosity > 0: 
-                print "1 ",; _sys.stdout.flush()
+            printer.log(" -- %s plots (%d): " % (plotFnName, nPlots), end='')
+           
+            printer.show_progress(0, 0, prefix='', end='')
             fig = set_fig_qtys("bestEstimateColorBoxPlot",
-                               "best%sBoxes.pdf" % plotFnName)
+                               "best%sBoxes.pdf" % plotFnName, printer - 1)
             maxX = fig.get_extra_info()['nUsedXs']
             maxY = fig.get_extra_info()['nUsedYs']
+            printer.end_progress()
 
         else:
             for figkey in ["bestEstimateColorBoxPlot"]:
@@ -2403,13 +2387,13 @@ class Results(object):
         
         pixplots = ""
         if pixelPlotAppendix:
-            for i in range(st,len(self.parameters['max length list'])-1):
-
-                if verbosity > 0: 
-                    print "%d " % (i-st+2),; _sys.stdout.flush()
+            paramListLength = len(self.parameters['max length list'])-1
+            for i in range(st, paramListLength):
+                printer.show_progress(i, paramListLength-1, prefix='', end='')
+                #printer.log("%d " % (i-st+2), end='')
 
                 fig = self.figures.get("estimateForLIndex%dColorBoxPlot" % i,
-                                       verbosity=v)
+                                       verbosity=printer - 1)
                 fig.save_to( _os.path.join(report_dir, D,
                                            "L%d_%sBoxes.pdf" % (i,plotFnName)) )
                 lx = fig.get_extra_info()['nUsedXs']
@@ -2432,38 +2416,30 @@ class Results(object):
                 pixplots += "\\end{center}\n"
                 pixplots += "\\end{figure}\n"
                 pixplots += "\\end{frame}\n"
+            printer.end_progress()
 
         #Set template quantity (empty string if appendix disabled)
         qtys['intermediate_pixel_plot_slides'] = pixplots
 
-    
-        if verbosity > 0: 
-            print ""; _sys.stdout.flush()
+        printer.log("")
         
         if debugAidsAppendix:
             #Direct-GST and deviation
-            if verbosity > 0: 
-                print " -- Direct-X plots (2)",; _sys.stdout.flush()
-
-            if verbosity > 0: 
-                print " 1",; _sys.stdout.flush()        
+            printer.log(" -- Direct-X plots (2)", end='')
+            
+            printer.show_progress(0, 1, prefix='', end='')
             fig = set_fig_qtys("directLongSeqGSTColorBoxPlot",
-                           "directLongSeqGST%sBoxes.pdf" % plotFnName,H=maxHc)
-
-            if verbosity > 0: 
-                print " 2",; _sys.stdout.flush()
+                           "directLongSeqGST%sBoxes.pdf" % plotFnName, printer - 1, H=maxHc)
+            printer.show_progress(1, 1, prefix='', end='')
             fig = set_fig_qtys("directLongSeqGSTDeviationColorBoxPlot",
-                               "directLongSeqGSTDeviationBoxes.pdf",H=maxHc)
-
-            if verbosity > 0: 
-                print ""; _sys.stdout.flush()
-
+                               "directLongSeqGSTDeviationBoxes.pdf", printer - 1, H=maxHc)
+            printer.end_progress()
+            printer.log('')
     
             #Small eigenvalue error rate
-            if verbosity > 0: 
-                print " -- Error rate plots..."; _sys.stdout.flush()
+            printer.log(" -- Error rate plots...")
             fig = set_fig_qtys("smallEigvalErrRateColorBoxPlot",
-                               "smallEigvalErrRateBoxes.pdf",H=maxHc)
+                               "smallEigvalErrRateBoxes.pdf", printer - 1, H=maxHc)
 
         else:
             for figkey in ["directLongSeqGSTColorBoxPlot",
@@ -2482,14 +2458,12 @@ class Results(object):
             len1Germs = [ g for g in self.gatestring_lists['germs']
                           if len(g) == 1 ]
 
-            if verbosity > 0: 
-                print " -- Whack-a-mole plots (%d): " % (2*len(len1Germs)),; _sys.stdout.flush()
+            printer.log(" -- Whack-a-mole plots (%d): " % (2*len(len1Germs)), end='')
 
             for i,germ in enumerate(len1Germs):
-                if verbosity > 0: 
-                    print "%d " % (i+1),; _sys.stdout.flush()
+                printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
 
-                fig = self.figures.get("whack%sMoleBoxes" % germ[0],verbosity=v)
+                fig = self.figures.get("whack%sMoleBoxes" % germ[0],verbosity=printer - 1)
                 fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.pdf"
                                           % germ[0]))
         
@@ -2505,12 +2479,13 @@ class Results(object):
                 whackamoleplots += "\\end{figure}\n"
                 whackamoleplots += "\\end{frame}\n"
         
+            printer.end_progress()
             for i,germ in enumerate(len1Germs):
-                if verbosity > 0: 
-                    print "%d " % (len(len1Germs)+i+1),; _sys.stdout.flush()
+                # printer.log("%d " % (len(len1Germs)+i+1), end='')
+                printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
     
                 fig = self.figures.get("whack%sMoleBoxesSummed" % germ[0],
-                                       verbosity=v)
+                                       verbosity=printer - 1)
                 fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxesSummed.pdf" % germ[0]))
 
                 whackamoleplots += "\n"
@@ -2525,9 +2500,9 @@ class Results(object):
                 whackamoleplots += "\\end{figure}\n"
                 whackamoleplots += "\\end{frame}\n"
     
-            if verbosity > 0: 
-                print ""; _sys.stdout.flush()
-        
+            printer.end_progress()
+            printer.log('')
+ 
         #Set template quantity (empty string if appendix disabled)
         qtys['whackamole_plot_slides'] = whackamoleplots
     
@@ -2536,8 +2511,7 @@ class Results(object):
 
     
         # 3) populate template latex file => report latex file
-        if verbosity > 0: 
-            print "*** Merging into template file ***"; _sys.stdout.flush()
+        printer.log("*** Merging into template file ***")
         
         mainTexFilename = _os.path.join(report_dir, report_base + ".tex")
         pdfFilename = _os.path.join(report_dir, report_base + ".pdf")
@@ -2547,8 +2521,7 @@ class Results(object):
     
     
         # 4) compile report latex file into PDF
-        if verbosity > 0: 
-            print "Latex file(s) successfully generated.  Attempting to compile with pdflatex..."; _sys.stdout.flush()
+        printer.log("Latex file(s) successfully generated.  Attempting to compile with pdflatex...")
         cwd = _os.getcwd()
         if len(report_dir) > 0:  
             _os.chdir(report_dir)
@@ -2560,23 +2533,21 @@ class Results(object):
                                self.options.latex_postcmd) )
             if ret == 0:
                 #We could check if the log file contains "Rerun" in it, but we'll just re-run all the time now
-                if verbosity > 0: 
-                    print "Initial output PDF %s successfully generated." % pdfFilename #mainTexFilename
+                printer.log("Initial output PDF %s successfully generated." % pdfFilename) #mainTexFilename
                 ret = _os.system( "%s %s %s" % 
                                   (self.options.latex_cmd,
                                    _os.path.basename(mainTexFilename),
                                    self.options.latex_postcmd) )
                 if ret == 0:
-                    if verbosity > 0: 
-                        print "Final output PDF %s successfully generated. Cleaning up .aux and .log files." % pdfFilename #mainTexFilename
+                    printer.log("Final output PDF %s successfully generated. Cleaning up .aux and .log files." % pdfFilename) #mainTexFilename
                     _os.remove( report_base + ".log" )
                     _os.remove( report_base + ".aux" )
                 else:
-                    print "Error: pdflatex returned code %d. Check %s.log to see details" % (ret, report_base)
+                    printer.error("pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
             else:
-                print "Error: pdflatex returned code %d. Check %s.log to see details" % (ret, report_base)
+                printer.error("Error: pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
         except:
-            print "Error trying to run pdflatex to generate output PDF %s. Is '%s' on your path?" % (pdfFilename,self.options.latex_cmd)
+            printer.error("Error trying to run pdflatex to generate output PDF %s. Is '%s' on your path?" % (pdfFilename,self.options.latex_cmd))
         finally: 
             _os.chdir(cwd)
     
@@ -2669,6 +2640,8 @@ class Results(object):
         None
         """
 
+        printer = VerbosityPrinter.build_printer(verbosity)
+
         assert(self._bEssentialResultsSet)
         self.confidence_level = confidenceLevel 
         self._comm = comm
@@ -2748,8 +2721,7 @@ class Results(object):
             _os.mkdir( _os.path.join(report_dir,D))
             
         # 1) get ppt tables
-        if verbosity > 0: 
-            print "*** Generating tables ***"; _sys.stdout.flush()
+        printer.log("*** Generating tables ***")
 
         std_tables = ('targetSpamTable','targetGatesTable',
                       'datasetOverviewTable', 'bestGatesetSpamTable',
@@ -2770,9 +2742,11 @@ class Results(object):
         else:
             tables_to_blank += ls_and_germs_tables
 
-        for key in tables_to_compute:
-            qtys[key] = self.tables.get(key, verbosity=v)
+        for i, key in enumerate(tables_to_compute):
+            printer.show_progress(i, len(tables_to_compute) - 1, prefix='', end='')
+            qtys[key] = self.tables.get(key, verbosity=printer)
             qtys["tt_"+key] = tooltiptext(".tables['%s']" % key)
+        printer.end_progress()
 
         for key in tables_to_blank:
             qtys[key] = _generation.get_blank_table()
@@ -2780,8 +2754,7 @@ class Results(object):
     
 
         # 2) generate plots
-        if verbosity > 0: 
-            print "*** Generating plots ***"; _sys.stdout.flush()
+        printer.log("*** Generating plots ***")
 
         if _matplotlib.is_interactive():
             _matplotlib.pyplot.ioff()
@@ -2794,7 +2767,7 @@ class Results(object):
         def incgr(figFilenm,W=None,H=None): #includegraphics "macro"
             return "%s/%s" % (fileDir,figFilenm)
 
-        def set_fig_qtys(figkey, figFilenm, W=None,H=None):
+        def set_fig_qtys(figkey, figFilenm, v, W=None,H=None):
             fig = self.figures.get(figkey, verbosity=v)
             fig.save_to(_os.path.join(report_dir, D, figFilenm))
             qtys[figkey] = incgr(figFilenm,W,H)
@@ -2818,13 +2791,11 @@ class Results(object):
                 raise ValueError("Invalid objective value: %s" \
                                      % self.parameters['objective'])
             
-            if verbosity > 0: 
-                print " -- %s plots (%d): " % (plotFnName, nPlots),; _sys.stdout.flush()
-
-            if verbosity > 0: 
-                print "1 ",; _sys.stdout.flush()
+            printer.log(" -- %s plots (%d): " % (plotFnName, nPlots), end='')
+            printer.show_progress(0, 0, prefix='', end='')
+            printer.end_progress()
             fig = set_fig_qtys("bestEstimateColorBoxPlot",
-                               "best%sBoxes.png" % plotFnName)
+                               "best%sBoxes.png" % plotFnName, printer - 1)
             maxX = fig.get_extra_info()['nUsedXs']
             maxY = fig.get_extra_info()['nUsedYs']
 
@@ -2838,11 +2809,11 @@ class Results(object):
             Ls = self.parameters['max length list']
             for i in range(st,len(Ls)-1):
 
-                if verbosity > 0: 
-                    print "%d " % (i-st+2),; _sys.stdout.flush()
+                printer.show_progress(i, len(Ls)-2, prefix='', end='')
+                # printer.log("%d " % (i-st+2), end='')
 
                 fig = self.figures.get("estimateForLIndex%dColorBoxPlot" % i,
-                                       verbosity=v)
+                                       verbosity=printer - 1)
                 fig.save_to( _os.path.join(report_dir, D,"L%d_%sBoxes.png" %
                                            (i,plotFnName)) )
                 lx = fig.get_extra_info()['nUsedXs']
@@ -2856,36 +2827,32 @@ class Results(object):
                 pixplots.append( _os.path.join(
                         report_dir, D, "L%d_%sBoxes.png" % (i,plotFnName)) )
                 #FUTURE: Add tooltip caption info further down?
+            printer.end_progress()
 
         #Set template quantity (empty array if appendix disabled)
         qtys['intermediate_pixel_plot_slides'] = pixplots
     
-        if verbosity > 0: 
-            print ""; _sys.stdout.flush()
+        printer.log("")
         
         if debugAidsAppendix:
             #Direct-GST and deviation
-            if verbosity > 0: 
-                print " -- Direct-X plots (2)",; _sys.stdout.flush()
+            printer.log(" -- Direct-X plots (2)", end="")
 
-            if verbosity > 0: 
-                print " 1",; _sys.stdout.flush()        
+            printer.show_progress(0, 1, prefix='', end='')
             fig = set_fig_qtys("directLongSeqGSTColorBoxPlot",
-                           "directLongSeqGST%sBoxes.png" % plotFnName)
+                           "directLongSeqGST%sBoxes.png" % plotFnName, printer - 1)
 
-            if verbosity > 0: 
-                print " 2",; _sys.stdout.flush()
+            printer.show_progress(1, 1, prefix='', end='')
             fig = set_fig_qtys("directLongSeqGSTDeviationColorBoxPlot",
-                               "directLongSeqGSTDeviationBoxes.png")
+                               "directLongSeqGSTDeviationBoxes.png", printer - 1)
 
-            if verbosity > 0: 
-                print ""; _sys.stdout.flush()
+            printer.log('')
     
             #Small eigenvalue error rate
-            if verbosity > 0: 
-                print " -- Error rate plots..."; _sys.stdout.flush()
+            printer.log(" -- Error rate plots...")
             fig = set_fig_qtys("smallEigvalErrRateColorBoxPlot",
-                               "smallEigvalErrRateBoxes.png")
+                               "smallEigvalErrRateBoxes.png", printer - 1)
+            printer.end_progresss()
 
         else:
             for figkey in ["directLongSeqGSTColorBoxPlot",
@@ -2903,35 +2870,33 @@ class Results(object):
             len1Germs = [ g for g in self.gatestring_lists['germs'] 
                           if len(g) == 1 ]
 
-            if verbosity > 0: 
-                print " -- Whack-a-mole plots (%d): " % (2*len(len1Germs)),
-                _sys.stdout.flush()
+            printer.log(" -- Whack-a-mole plots (%d): " % (2*len(len1Germs)), end='')
 
             for i,germ in enumerate(len1Germs):
-                if verbosity > 0: 
-                    print "%d " % (i+1),; _sys.stdout.flush()
+                printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
 
-                fig = self.figures.get("whack%sMoleBoxes" % germ[0],verbosity=v)
+                fig = self.figures.get("whack%sMoleBoxes" % germ[0],verbosity=printer -1)
                 fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.png"
                                           % germ[0]))
                 whackamoleplots.append( _os.path.join(
                         report_dir, D, "whack%sMoleBoxes.png" % germ[0]) )
                 #FUTURE: Add tooltip caption info further down?
-        
+            printer.end_progress()
+            
             for i,germ in enumerate(len1Germs):
-                if verbosity > 0: 
-                    print "%d " % (len(len1Germs)+i+1),; _sys.stdout.flush()
+                printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
+                # printer.log("%d " % (len(len1Germs)+i+1), end='')
 
                 fig = self.figures.get("whack%sMoleBoxesSummed" % germ[0],
-                                       verbosity=v)
+                                       verbosity=printer - 1)
                 fig.save_to(_os.path.join(
                         report_dir, D, "whack%sMoleBoxesSummed.png" % germ[0]))
                 whackamoleplots.append( _os.path.join(
                         report_dir, D,"whack%sMoleBoxesSummed.png" % germ[0]) )
                 #FUTURE: Add tooltip caption info further down?
     
-            if verbosity > 0: 
-                print ""; _sys.stdout.flush()
+            printer.end_progress()
+            printer.log('')
 
         #Set template quantity (empty array if appendix disabled)
         qtys['whackamole_plot_slides'] = whackamoleplots
@@ -2941,8 +2906,7 @@ class Results(object):
 
     
         # 3) create PPT file via python-pptx
-        if verbosity > 0: 
-            print "*** Assembling PPT file ***"; _sys.stdout.flush()
+        printer.log("*** Assembling PPT file ***")
 
         mainPPTFilename = _os.path.join(report_dir, report_base + ".pptx")        
         templatePath = self.options.template_path \
@@ -3051,7 +3015,7 @@ class Results(object):
                                            longtables=self.options.long_tables,
                                            scratchDir=D)
             d = {'toLatex': latexTabStr }
-            print "Latexing %s table..." % key; _sys.stdout.flush()
+            printer.log("Latexing %s table..." % key)
             outputFilename = _os.path.join(fileDir, "%s.tex" % key)
             self._merge_template(d, "standalone.tex", outputFilename)
 
@@ -3202,7 +3166,7 @@ class Results(object):
 
         # 4) save presenation as PPTX file
         prs.save(mainPPTFilename)
-        print "Final output PPT %s successfully generated." % mainPPTFilename
+        printer.log("Final output PPT %s successfully generated." % mainPPTFilename)
         return
 
 
@@ -3260,6 +3224,9 @@ class Results(object):
         -------
         None
         """
+ 
+        printer = VerbosityPrinter.build_printer(verbosity) 
+
         assert(self._bEssentialResultsSet)
         self.confidence_level = confidenceLevel 
         self._comm = comm
@@ -3373,8 +3340,7 @@ class Results(object):
             _os.mkdir( _os.path.join(report_dir,D))
  
         # 1) get latex tables
-        if verbosity > 0: 
-            print "*** Generating tables ***"; _sys.stdout.flush()
+        printer.log("*** Generating tables ***")
 
         
         std_tables = \
@@ -3406,7 +3372,7 @@ class Results(object):
         if len(report_dir) > 0: _os.chdir(report_dir)
 
         for key in tables_to_compute:
-            qtys[key] = self.tables.get(key, verbosity=v).render(
+            qtys[key] = self.tables.get(key, verbosity=printer - 1).render(
                 'latex',longtables=self.options.long_tables, scratchDir=D)
             qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
 
@@ -3433,8 +3399,7 @@ class Results(object):
 
     
         # 2) generate plots
-        if verbosity > 0: 
-            print "*** Generating plots ***"; _sys.stdout.flush()
+        printer.log("*** Generating plots ***")
 
         if _matplotlib.is_interactive():
             _matplotlib.pyplot.ioff()
@@ -3449,7 +3414,7 @@ class Results(object):
             return "\\includegraphics[width=%.2fin,height=%.2fin" % (W,H) + \
                 ",keepaspectratio]{%s/%s}" % (D,figFilenm)
 
-        def set_fig_qtys(figkey, figFilenm, W=None,H=None):
+        def set_fig_qtys(figkey, figFilenm, v, W=None,H=None):
             fig = self.figures.get(figkey, verbosity=v)
             fig.save_to(_os.path.join(report_dir, D, figFilenm))
             qtys[figkey] = incgr(figFilenm,W,H)
@@ -3508,31 +3473,27 @@ class Results(object):
                 raise ValueError("Invalid objective value: %s" 
                                  % self.parameters['objective'])
             
-            if verbosity > 0: 
-                print " -- %s plots (%d): " % (plotFnName, nPlots),
-                _sys.stdout.flush()
-
-            if verbosity > 0:
-                print "1 ",; _sys.stdout.flush()
+            printer.log(" -- %s plots (%d): " % (plotFnName, nPlots), end='')
+            
+            printer.show_progress(0, 2, prefix='', end='')
 
             w = min(len(self.gatestring_lists['prep fiducials']) * 0.3,maxW)
             h = min(len(self.gatestring_lists['effect fiducials']) * 0.3,maxH)
             fig = set_fig_qtys("colorBoxPlotKeyPlot",
-                               "colorBoxPlotKey.png", w,h)
+                               "colorBoxPlotKey.png", printer - 1, w,h)
 
-            if verbosity > 0:
-                print "2 ",; _sys.stdout.flush()
+            printer.show_progress(1, 2, prefix='', end='')
 
             fig = set_fig_qtys("bestEstimateSummedColorBoxPlot",
                                "best%sBoxesSummed.png" % plotFnName,
+                               printer - 1,
                                maxW, maxH-1.0) # -1 for room for caption
 
-            if verbosity > 0:
-                print "3 ",; _sys.stdout.flush()
-
+            printer.show_progress(2, 2, prefix='', end='')
+            printer.end_progress()
 
             figkey = "bestEstimateColorBoxPlotPages"
-            figs = self._specials.get(figkey, verbosity=v)
+            figs = self._specials.get(figkey, verbosity=printer - 1)
             incgr_list = []
             for iFig,fig in enumerate(figs):
                 figFilenm = "best%sBoxes_pg%d.png" % (plotFnName,iFig)
@@ -3627,9 +3588,7 @@ class Results(object):
         #Set template quantity (empty string if appendix disabled)
         qtys['intermediate_pixel_plot_figures'] = pixplots
 
-        if verbosity > 0: 
-            print ""; _sys.stdout.flush()
-        
+        printer.log('') 
         #if debugAidsAppendix:
         #    #DirectLGST and deviation
         #    if verbosity > 0: 
@@ -3733,8 +3692,7 @@ class Results(object):
     
 
         # 3) populate template latex file => report latex file
-        if verbosity > 0: 
-            print "*** Merging into template file ***"; _sys.stdout.flush()
+        printer.log("*** Merging into template file ***")
         
         mainTexFilename = _os.path.join(report_dir, report_base + ".tex")
         appendicesTexFilename = _os.path.join(report_dir, report_base + "_appendices.tex")
@@ -3762,8 +3720,7 @@ class Results(object):
     
     
         # 4) compile report latex file into PDF
-        if verbosity > 0: 
-            print "Latex file(s) successfully generated.  Attempting to compile with pdflatex..."; _sys.stdout.flush()
+        printer.log("Latex file(s) successfully generated.  Attempting to compile with pdflatex...")
         cwd = _os.getcwd()
         if len(report_dir) > 0:  
             _os.chdir(report_dir)
@@ -3776,25 +3733,23 @@ class Results(object):
             if ret == 0:
                 #We could check if the log file contains "Rerun" in it, 
                 # but we'll just re-run all the time now
-                if verbosity > 0: 
-                    print "Initial output PDF %s successfully generated." \
-                        % pdfFilename
+                printer.log("Initial output PDF %s successfully generated." \
+                        % pdfFilename)
 
                 ret = _os.system( "%s %s %s" % 
                                   (self.options.latex_cmd,
                                    _os.path.basename(mainTexFilename),
                                    self.options.latex_postcmd) )
                 if ret == 0:
-                    if verbosity > 0: 
-                        print "Final output PDF %s successfully generated. Cleaning up .aux and .log files." % pdfFilename #mainTexFilename
+                    printer.log("Final output PDF %s successfully generated. Cleaning up .aux and .log files." % pdfFilename) #mainTexFilename
                     _os.remove( report_base + ".log" )
                     _os.remove( report_base + ".aux" )
                 else:
-                    print "Error: pdflatex returned code %d. Check %s.log to see details" % (ret, report_base)
+                    printer.error("pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
             else:
-                print "Error: pdflatex returned code %d. Check %s.log to see details" % (ret, report_base)
+                printer.error("pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
         except:
-            print "Error trying to run pdflatex to generate output PDF %s. Is '%s' on your path?" % (pdfFilename,self.options.latex_cmd)
+            printer.error("Error trying to run pdflatex to generate output PDF %s. Is '%s' on your path?" % (pdfFilename,self.options.latex_cmd))
         finally: 
             _os.chdir(cwd)
     

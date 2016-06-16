@@ -7,7 +7,7 @@
 Routines for converting python objects to Powerpoint compatible values.  Parallel rountines as
 LatexUtil has for latex conversion.
 """
-
+from __future__ import print_function
 import numpy as _np
 import cmath
 from .. import objects as _objs
@@ -47,7 +47,7 @@ def ppt(x, brackets=False):
     elif type(x) == str:
         return ppt_escaped(x)
     else:
-        print "Warning: %s not specifically converted to ppt" % str(type(x))
+        print("Warning: %s not specifically converted to ppt" % str(type(x)))
         return str(x)
 
 

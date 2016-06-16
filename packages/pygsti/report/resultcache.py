@@ -4,10 +4,12 @@
 #    in the file "license.txt" in the top-level pyGSTi directory 
 #*****************************************************************
 import collections as _collections
-import numpy as _np
-import re as _re
-import sys as _sys
-import itertools as _itertools
+import numpy       as _np
+import re          as _re
+import sys         as _sys
+import itertools   as _itertools
+
+from ..objects import VerbosityPrinter
 #import warnings as _warnings
 
 class ResultCache(object):
@@ -30,6 +32,7 @@ class ResultCache(object):
         self._parent = parent
 
     def get(self, key, confidence_level="current",verbosity=0):
+ 
         """
         Retrieve the data associated with a given key, optionally
         specifying the confidence level and verbosity.
@@ -55,6 +58,9 @@ class ResultCache(object):
         -------
         stored_data_item
         """
+
+        printer = VerbosityPrinter.build_printer(verbosity)
+
         if confidence_level=="current":
             level = self._parent.confidence_level if self._parent else None
         else: level = confidence_level
@@ -69,26 +75,19 @@ class ResultCache(object):
             computeFn = self._get_compute_fn(key)
             if computeFn:
                 try:
-                    if verbosity > 0:
-                        print "Generating %s: %s%s" % \
-                            (self._typename,key," (w/%d%% CIs)" % round(level) 
-                             if (level is not None) else "")
-                        _sys.stdout.flush()
+                    printer.log("Generating %s: %s%s" % (self._typename, key, (" (w/%d%% CIs)" % round(level) if (level is not None) else "")))
 
-                    self._data[level][key] = computeFn(key, level, verbosity)
+                    self._data[level][key] = computeFn(key, level, printer)
                 except ResultCache.NoCRDependenceError:
                     assert(level is not None)
-                    self._data[level][key] = self.get(key,None,verbosity)
+                    self._data[level][key] = self.get(key, None, printer)
             else:
                 raise KeyError("Invalid key: %s" % key)
             return self._data[level][key]
     
         else:
-            if verbosity > 0:
-                print "Retrieving cached %s: %s%s" % \
-                    (self._typename,key," (w/%d%% CIs)" % round(level) 
-                     if (level is not None) else "")
-                _sys.stdout.flush()
+            printer.log("Retrieving cached %s: %s%s" % (self._typename, key, (" (w/%d%% CIs)" % round(level) if (level is not None) else "")))
+
             return self._data[level][key]
 
     def _get_compute_fn(self, key):
