@@ -10,12 +10,13 @@ import os
 class ReportTestCase(unittest.TestCase):
 
     def setUp(self):
+
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = True
 
         self.targetGateset = std.gs_target
         datagen_gateset = self.targetGateset.depolarize(gate_noise=0.05, spam_noise=0.1)
-        
+
         self.fiducials = std.fiducials
         self.germs = std.germs
         self.specs = pygsti.construction.build_spam_specs(self.fiducials, effect_labels=['E0']) #only use the first EVec
@@ -24,7 +25,7 @@ class ReportTestCase(unittest.TestCase):
         self.lgstStrings = pygsti.construction.list_lgst_gatestrings(self.specs, self.gateLabels)
 
         self.maxLengthList = [0,1,2,4,8]
-        
+
         self.lsgstStrings = pygsti.construction.make_lsgst_lists(
             self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLengthList)
 
@@ -60,7 +61,7 @@ class ReportTestCase(unittest.TestCase):
         self.results = pygsti.report.Results()
         self.results.init_Ls_and_germs("chi2", self.targetGateset, self.ds, self.gs_clgst,
                                        self.maxLengthList, self.germs,
-                                       lsgst_gatesets, self.lsgstStrings, self.fiducials, self.fiducials, 
+                                       lsgst_gatesets, self.lsgstStrings, self.fiducials, self.fiducials,
                                        pygsti.construction.repeat_with_max_length, False, None, lsgst_gatesets_prego)
         self.results.parameters.update({'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
                                         'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
@@ -77,19 +78,16 @@ class ReportTestCase(unittest.TestCase):
 
         self.results_logL = pygsti.report.Results()
         self.results_logL.init_Ls_and_germs("logl", self.targetGateset, self.ds, self.gs_clgst_tp, self.maxLengthList, self.germs,
-                                     lsgst_gatesets_TP, self.lsgstStrings, self.fiducials, self.fiducials, 
+                                     lsgst_gatesets_TP, self.lsgstStrings, self.fiducials, self.fiducials,
                                      pygsti.construction.repeat_with_max_length, True)
-
 
         #Set CWD to directory of this file
         self.owd = os.getcwd()
-        os.chdir( os.path.dirname(__file__))
+        os.chdir(os.path.dirname(__file__))
+
 
     def tearDown(self):
         os.chdir(self.owd)
-
-            
-        
 
     def checkFile(self, fn):
         linesToTest = open("../temp_test_files/%s" % fn).readlines()
@@ -97,9 +95,8 @@ class ReportTestCase(unittest.TestCase):
         self.assertEqual(linesToTest,linesOK)
 
 
-
 class TestReport(ReportTestCase):
-    
+
     def test_reports_chi2_noCIs(self):
 
         self.results.create_full_report_pdf(filename="../temp_test_files/full_reportA.pdf", confidenceLevel=None,
@@ -267,13 +264,13 @@ class TestReport(ReportTestCase):
         ci_TP_tgt = pygsti.obj.ConfidenceRegion(target_tp, chi2Hessian_tgt_TP, 95.0,
                                             hessianProjection="std")
 
-        gateset_2q = pygsti.construction.build_gateset( 
-            [4], [('Q0','Q1')],['GIX','GIY','GXI','GYI','GCNOT'], 
+        gateset_2q = pygsti.construction.build_gateset(
+            [4], [('Q0','Q1')],['GIX','GIY','GXI','GYI','GCNOT'],
             [ "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)" ],
-            prepLabels=['rho0'], prepExpressions=["0"], effectLabels=['E0','E1','E2'], effectExpressions=["0","1","2"], 
+            prepLabels=['rho0'], prepExpressions=["0"], effectLabels=['E0','E1','E2'], effectExpressions=["0","1","2"],
             spamdefs={'upup': ('rho0','E0'), 'updn': ('rho0','E1'), 'dnup': ('rho0','E2'),
                            'dndn': ('rho0','remainder') }, basis="pp" )
-        
+
 
         #tests which fill in the cracks of the full-report tests
         tab = gen.get_gateset_spam_table(gateset, None)
@@ -342,7 +339,7 @@ class TestReport(ReportTestCase):
             tab.col(key='foobar',index=1) #cannot specify key and index
 
         with self.assertRaises(ValueError):
-            tab.render(fmt="foobar") #invalid format            
+            tab.render(fmt="foobar") #invalid format
 
 
 
@@ -357,14 +354,14 @@ class TestReport(ReportTestCase):
                                        gatestring_list=None, probClipInterval=(-1e6,1e6),
                                        minProbClip=1e-4, radius=1e-4, hessianProjection="std")
 
-        
+
     def test_table_formatting(self):
         vec = np.array( [1.0,2.0,3.0] )
         mx = np.identity( 2, 'd' )
         rank3Tensor = np.zeros( (2,2,2), 'd')
         f = 10.0
         l = [10.0, 20.0]
-        
+
         class weirdType:
             def __init__(self):
                 pass
@@ -408,7 +405,7 @@ class TestReport(ReportTestCase):
             for x in (0.001,0.01,1.0,10.0,100.0,1000.0,10000.0,1.0+1.0j,10j,1.0+1e-10j,1e-10j,"N/A"):
                 pygsti.report.html.html_value(x, ROUND, complxAsPolar)
                 pygsti.report.latex.latex_value(x, ROUND, complxAsPolar)
-                pygsti.report.ppt.ppt_value(x, ROUND, complxAsPolar)        
+                pygsti.report.ppt.ppt_value(x, ROUND, complxAsPolar)
 
         with self.assertRaises(ValueError):
             pygsti.report.html.html(rank3Tensor)
@@ -437,7 +434,7 @@ class TestReport(ReportTestCase):
                                                                        self.targetGateset,includeTargetGates=False,
                                                                        gateStringLabels=None, svdTruncateTo=4, verbosity=0)
 
-        gsWithGxgx = pygsti.report.plotting.focused_mc2gst_gatesets( 
+        gsWithGxgx = pygsti.report.plotting.focused_mc2gst_gatesets(
             pygsti.construction.gatestring_list([('Gx','Gx')]), self.ds, self.specs, self.gs_clgst)
 
     def test_reportables(self):
@@ -451,7 +448,7 @@ class TestReport(ReportTestCase):
         qty = pygsti.report.reportables.compute_gateset_gateset_qty("FooBar",self.gs_clgst, self.gs_clgst)
         self.assertIsNone(qty)
 
-        #test ignoring gate strings not in dataset        
+        #test ignoring gate strings not in dataset
         qty = pygsti.report.reportables.compute_dataset_qty("gate string length", self.ds,
                                                             pygsti.construction.gatestring_list([('Gx','Gx'),('Gfoobar',)]) )
         qty = pygsti.report.reportables.compute_gateset_dataset_qty("prob(plus) diff", self.gs_clgst, self.ds,
@@ -459,7 +456,7 @@ class TestReport(ReportTestCase):
         qty_str = str(qty) #test __str__
 
         #Test gateset gates mismatch
-        from pygsti.construction import std1Q_XY as stdXY          
+        from pygsti.construction import std1Q_XY as stdXY
         with self.assertRaises(ValueError):
             qty = pygsti.report.reportables.compute_gateset_gateset_qty(
                 "Gx fidelity",std.gs_target, stdXY.gs_target) #Gi missing from 2nd gateset
@@ -479,7 +476,7 @@ class TestReport(ReportTestCase):
              'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
              'weights': None, 'defaultDirectory': "../temp_test_files",
              'defaultBasename': "MyDefaultReportName" } )
-        
+
         results.create_full_report_pdf(
             filename="../temp_test_files/singleReport.pdf")
         results.create_brief_report_pdf(
@@ -562,11 +559,11 @@ class TestReport(ReportTestCase):
         #results_badObjective.init_single("foobar", self.targetGateset, self.ds, self.gs_clgst,
         #                                 self.lgstStrings, False)
         results_badObjective.init_Ls_and_germs("foobar", self.targetGateset, self.ds, self.gs_clgst, [0], self.germs,
-                                               [self.gs_clgst], [self.lgstStrings], self.fiducials, self.fiducials, 
+                                               [self.gs_clgst], [self.lgstStrings], self.fiducials, self.fiducials,
                                                pygsti.construction.repeat_with_max_length, True)
-        
+
         with self.assertRaises(ValueError):
-            results_badObjective._get_confidence_region(95) 
+            results_badObjective._get_confidence_region(95)
         with self.assertRaises(ValueError):
             results_badObjective._specials['DirectLongSeqGatesets']
         with self.assertRaises(ValueError):
@@ -576,19 +573,19 @@ class TestReport(ReportTestCase):
         if self.have_python_pptx:
             with self.assertRaises(ValueError):
                 results_badObjective.create_presentation_ppt(filename="../temp_test_files/badSlides.pptx")
-        
+
 
     def test_report_figure_object(self):
         axes = {'dummy': "matplotlib axes"}
         fig = pygsti.report.figure.ReportFigure(axes, {})
         fig.set_extra_info("extra!")
         self.assertEqual(fig.get_extra_info(), "extra!")
-        
+
         with self.assertRaises(ValueError):
             fig.pickledAxes = "not-a-pickle-string" #corrupt pickled string so get unpickling error
             fig.save_to("../temp_test_files/test.figure")
-    
 
-        
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

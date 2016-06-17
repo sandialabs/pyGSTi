@@ -1,6 +1,6 @@
 from __future__ import print_function
+from tool       import tool
 import os
-import ast
 import sys
 
 def increase_count(dictionary, item):
@@ -27,7 +27,7 @@ def build_qualified_imports(line, qualifiedImports):
                     token = token.replace(',', '')
                     qualifiedImports.append((token, package + '.' + token))
 
-
+@tool
 def find_dependencies(filename, packageName='pygsti'):
     dependencies = dict()
     qualifiedImports = []
@@ -72,12 +72,12 @@ if __name__ == "__main__":
 	    filepath = subdir + os.sep + filename
 	    if filepath.endswith('.py'):
                 dependencyList.append((filepath, find_dependencies(filepath)))
-    
+
     for item in dependencyList:
         print('Dependencies for %s:' % item[0])
         print(item[1])
         if len(item[1]) > 0:
             print('Most Imported: ', max(item[1], key=item[1].get))
-        print('') 
+        print('')
 
-   ''' 
+   '''

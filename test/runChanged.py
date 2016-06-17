@@ -1,5 +1,5 @@
-from __future__ import print_function
-from runModule  import run_module
+from __future__            import print_function
+from test_tools.runModule  import run_module
 import os
 import sys
 
@@ -53,7 +53,7 @@ def run_changed_packages():
 
     for packageName in changedPackages:
          run_module(packageName)
-        
+
 
 if __name__ == "__main__":
     run_changed_packages()
