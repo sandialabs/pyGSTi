@@ -1,4 +1,5 @@
 from __future__ import print_function
+from runModule  import run_module
 import os
 import sys
 
@@ -51,12 +52,8 @@ def run_changed_packages():
         print('No packages have changed since the last commit')
 
     for packageName in changedPackages:
-	for subdir, dirs, files in os.walk(os.getcwd() + '/' + packageName):
-	    for filename in files:
-                print('Running %s' % filename)
-		filepath = subdir + os.sep + filename
-		if filepath.endswith('.py'):
-		    os.system('python %s' % filepath)
+         run_module(packageName)
+        
 
 if __name__ == "__main__":
     run_changed_packages()
