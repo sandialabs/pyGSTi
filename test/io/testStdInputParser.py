@@ -3,6 +3,7 @@ import warnings
 import pyparsing
 import pygsti
 import numpy as np
+import os, sys
 
 
 class StdInputParserTestCase(unittest.TestCase):

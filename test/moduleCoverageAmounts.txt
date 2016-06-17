@@ -1,0 +1,17 @@
+A quick breakdown of how the current test-module distribution covers each independent module:
+(06-17-2016-09:39AM)
+objects      - 74%
+io           - 95%
+optimize     - 89%
+tools        - 83%
+construction - 74%
+algorithms   - 89%
+drivers      - 63%
+report       - 63%
+
+each of these was generated with the following command:
+
+nosetests -v --with-coverage --cover-package=pygsti.module --cover-erase test*.py
+
+while in the module directory
+

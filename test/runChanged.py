@@ -9,6 +9,7 @@ preCommand   = 'cd ~/pyGSTi/'
 
 # The directories to be removed from the path of changed files
 cutoffDirs   = ['packages/pygsti/', 'ipython_notebooks/']
+exclude      = ['test']
 
 def get_changed_files():
     # Run git diff against the repository, and save all the changed names to a text file
@@ -37,18 +38,25 @@ def get_changed_packages():
 
     for name in get_changed_files():
 	packageName, name = name.split('/')
-	changedPackages.add(packageName)
+        if packageName not in exclude:
+	    changedPackages.add(packageName)
 
     return changedPackages
 
 def run_changed_packages():
-    for packageName in get_changed_packages():
+    print('Trying to run changed packages...')
+    changedPackages = get_changed_packages()
+
+    if len(changedPackages) == 0:
+        print('No packages have changed since the last commit')
+
+    for packageName in changedPackages:
 	for subdir, dirs, files in os.walk(os.getcwd() + '/' + packageName):
 	    for filename in files:
+                print('Running %s' % filename)
 		filepath = subdir + os.sep + filename
 		if filepath.endswith('.py'):
 		    os.system('python %s' % filepath)
-
 
 if __name__ == "__main__":
     run_changed_packages()

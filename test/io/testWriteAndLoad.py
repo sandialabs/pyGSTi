@@ -2,6 +2,7 @@ import unittest
 import pygsti
 from pygsti.construction import std1Q_XYI as std
 import numpy as np
+import os, sys
 
 
 class WriteAndLoadTestCase(unittest.TestCase):
