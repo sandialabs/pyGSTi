@@ -1,7 +1,7 @@
 from __future__ import print_function
 from runModule  import run_module
 from benchmarks import benchmark
-from helpers    import tool, get_args
+from helpers    import *
 import os, sys
 
 def benchmark_template(fullpath, command):
@@ -22,12 +22,8 @@ def benchmark_file(filename):
 @tool
 def run_benchmarks(names, output=None):
     # build modulenames and filenames
-    _, moduleNames, _ = os.walk(os.getcwd()).next()
-    fileNames = {}
-    for subdir, dirs, files in os.walk(os.getcwd()):
-        for filename in files:
-            if filename.endswith('.py') and filename.startswith('test'):
-                fileNames[filename] = subdir + os.sep + filename
+    fileNames   = get_file_names()
+    moduleNames = get_module_names()
 
     benchDict = {}
 
@@ -41,10 +37,7 @@ def run_benchmarks(names, output=None):
             print('%s is neither a valid modulename, nor a valid filename' % name)
 
     if output != None:
-        with open(output, 'w') as benchfile:
-            for key in benchDict:
-                info = '%s | %s\n' % (key.ljust(20), benchDict[key])
-                benchfile.write(info)
+        write_formatted_table(output, benchDict.items())
     return benchDict
 
 if __name__ == "__main__":
