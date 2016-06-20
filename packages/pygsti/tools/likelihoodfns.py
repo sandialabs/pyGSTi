@@ -4,6 +4,7 @@
 #    in the file "license.txt" in the top-level pyGSTi directory 
 #*****************************************************************
 """Functions related to computation of the log-likelihood."""
+from __future__ import print_function
 
 import numpy as _np
 import warnings as _warnings
@@ -547,17 +548,17 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
 
     #DEBUG - no verbosity passed in to just leave commented out
     if memLimit is not None:
-        print "HLogL Memory estimates: (%d spam labels," % ns + \
-            "%d gate strings, %d gateset params, %d gate dim)" % (ng,ne,gd)
-        print "Mode = ",mode
-        print "Peristent: %g GB " % (persistentMem*C)
-        print "Intermediate: %g GB " % (intermedMem*C)
-        print "Limit: %g GB" % (memLimit*C)
+        print("HLogL Memory estimates: (%d spam labels," % ns + \
+            "%d gate strings, %d gateset params, %d gate dim)" % (ng,ne,gd))
+        print("Mode = %s" % mode)
+        print("Peristent: %g GB " % (persistentMem*C))
+        print("Intermediate: %g GB " % (intermedMem*C))
+        print("Limit: %g GB" % (memLimit*C))
         if maxEvalSubTreeSize < ng:
-            print "Maximum sub-tree size = %d" % maxEvalSubTreeSize
-            print "HLogL mem limit has imposed a division of evaluation tree."
-            print "Original tree length %d split into %d sub-trees of total length %d" % \
-                (len(evalTree), len(evalTree.get_sub_trees()), sum(map(len,evalTree.get_sub_trees())))
+            print("Maximum sub-tree size = %d" % maxEvalSubTreeSize)
+            print("HLogL mem limit has imposed a division of evaluation tree.")
+            print("Original tree length %d split into %d sub-trees of total length %d" % \
+                (len(evalTree), len(evalTree.get_sub_trees()), sum(map(len,evalTree.get_sub_trees()))))
 
     a = radius # parameterizes "roundness" of f == 0 terms 
     min_p = minProbClip
@@ -994,8 +995,8 @@ def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
     #TODO: change this function to handle nan's in the inputs without warnings, since
     # fiducial pair reduction may pass inputs with nan's legitimately and the desired
     # behavior is to just let the nan's pass through to nan's in the output.
-    cp = _np.clip(p,minProbClip,1e10) #effectively no upper bound
-    zf = _np.where(f < 1e-10, 0.0, f) #set zero-freqs to zero
+    cp  = _np.clip(p,minProbClip,1e10) #effectively no upper bound
+    zf  = _np.where(f < 1e-10, 0.0, f) #set zero-freqs to zero
     nzf = _np.where(f < 1e-10, 1.0, f) #set zero-freqs to one -- together w/above line makes 0 * log(0) == 0
     if poissonPicture:
         return 2 * (N * zf * _np.log(nzf/cp) - N * (f-cp))

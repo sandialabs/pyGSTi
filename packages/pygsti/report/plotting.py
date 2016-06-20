@@ -5,19 +5,20 @@
 #*****************************************************************
 """ Functions for generating plots """
 
-from __future__ import division
-import numpy as _np
+from __future__ import division, print_function
+import numpy             as _np
 import matplotlib.pyplot as _plt
-import matplotlib as _matplotlib
-import os as _os
-from matplotlib.ticker import AutoMinorLocator as _AutoMinorLocator
-from matplotlib.ticker import FixedLocator as _FixedLocator
-from scipy.stats import chi2 as _chi2
+import matplotlib        as _matplotlib
+import os                as _os
 
-from .. import algorithms as _alg
-from .. import tools as _tools
+from matplotlib.ticker import AutoMinorLocator as _AutoMinorLocator
+from matplotlib.ticker import FixedLocator     as _FixedLocator
+from scipy.stats       import chi2             as _chi2
+
+from .. import algorithms   as _alg
+from .. import tools        as _tools
 from .. import construction as _construction
-from .. import objects as _objs
+from .. import objects      as _objs
 
 from figure import ReportFigure as _ReportFigure
 
@@ -1106,7 +1107,7 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxs, cmapFactory, xlabe
     if sumUp:
         subMxSums = _np.array( [ [ sum_up_mx(subMxs[iy][ix]) for ix in range(nXs) ] for iy in range(nYs) ], 'd' )
         subMxSums = _np.flipud(subMxSums) #so [0,0] el of original subMxSums is at *top*-left (FLIP)
-        if invert: print "Warning: cannot invert a summed-up plot.  Ignoring invert=True."
+        if invert: print("Warning: cannot invert a summed-up plot.  Ignoring invert=True.")
 
         fig,ax = _plt.subplots( 1, 1, figsize=(nXs*scale, nYs*scale))
         rptFig = color_boxplot( subMxSums, cmapFactory, fig=fig, axes=ax, title=title,
@@ -1812,12 +1813,15 @@ def direct_lgst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncate
         the gate label "GsigmaLbl", along with LGST estimates of the gates in
         targetGateset.
     """    
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+
     directLGSTgatesets = {}
-    if verbosity > 0: print "--- Direct LGST precomputation ---"
+    printer.log("--- Direct LGST precomputation ---")
     for i,sigma in enumerate(gateStrings):
-        if verbosity > 0: print "--- Computing gateset for string %d of %d ---" % (i,len(gateStrings))
+        printer.show_progress(i, len(gateStrings)-1, prefix="--- Computing gateset for string -", suffix='---' )
         directLGSTgatesets[sigma] = direct_lgst_gateset( sigma, "GsigmaLbl", dataset, specs, targetGateset,
                                                         svdTruncateTo, verbosity)
+    printer.end_progress()
     return directLGSTgatesets
 
 
@@ -1943,13 +1947,15 @@ def direct_mc2gst_gatesets(gateStrings, dataset, specs, targetGateset, svdTrunca
         the gate label "GsigmaLbl", along with LSGST estimates of the gates in
         targetGateset.
     """    
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
     directLSGSTgatesets = {}
-    if verbosity > 0: print "--- Direct LSGST precomputation ---"
+    printer.log("--- Direct LSGST precomputation ---")
     for i,sigma in enumerate(gateStrings):
-        if verbosity > 0: print "--- Computing gateset for string %d of %d ---" % (i,len(gateStrings))
+        printer.show_progress(i, len(gateString) - 1, prefix="--- Computing gateset for string-", suffix='---')
         directLSGSTgatesets[sigma] = direct_mc2gst_gateset( sigma, "GsigmaLbl", dataset, specs, targetGateset,
                                                         svdTruncateTo, minProbClipForWeighting,
                                                         probClipInterval, verbosity)
+    printer.end_progress()
     return directLSGSTgatesets
 
 
@@ -2072,12 +2078,14 @@ def direct_mlgst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncat
         the gate label "GsigmaLbl", along with MLEGST estimates of the gates in
         targetGateset.
     """    
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
     directMLEGSTgatesets = {}
-    if verbosity > 0: print "--- Direct MLEGST precomputation ---"
+    printer.log("--- Direct MLEGST precomputation ---")
     for i,sigma in enumerate(gateStrings):
-        if verbosity > 0: print "--- Computing gateset for string %d of %d ---" % (i,len(gateStrings))
+        printer.show_progress(i, len(gateStrings) - 1, prefix="--- Computing gateset for string ", suffix="---")
         directMLEGSTgatesets[sigma] = direct_mlgst_gateset( sigma, "GsigmaLbl", dataset, specs, targetGateset,
                                                         svdTruncateTo, minProbClip, probClipInterval, verbosity)
+    printer.end_progress()
     return directMLEGSTgatesets
 
 
@@ -2178,11 +2186,12 @@ def focused_mc2gst_gatesets(gateStrings, dataset, specs, startGateset,
         the gate label "GsigmaLbl".
     """    
     focusedLSGSTgatesets = {}
-    if verbosity > 0: print "--- Focused LSGST precomputation ---"
+    printer.log("--- Focused LSGST precomputation ---")
     for i,sigma in enumerate(gateStrings):
-        if verbosity > 0: print "--- Computing gateset for string %d of %d ---" % (i,len(gateStrings))
+        printer.show_progress(i, len(gateStrings) - 1, prefix="--- Computing gateset for string", suffix='---')
         focusedLSGSTgatesets[sigma] = focused_mc2gst_gateset( sigma, "GsigmaLbl", dataset, specs, startGateset,
                                                            minProbClipForWeighting, probClipInterval, verbosity)
+    printer.end_progress()
     return focusedLSGSTgatesets
 
 

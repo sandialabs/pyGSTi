@@ -4,6 +4,7 @@
 #    in the file "license.txt" in the top-level pyGSTi directory 
 #*****************************************************************
 """ Functions for generating bootstrapped error bars """
+from __future__ import print_function
 import numpy as _np
 import matplotlib as _mpl
 from longsequence import do_long_sequence_gst as _do_long_sequence_gst
@@ -54,12 +55,12 @@ def make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=None,
     rndm = _np.random.RandomState(seed)
     if inputGateSet is None:
         if generationMethod == 'nonparametric':
-            print "Generating non-parametric dataset."
+            print("Generating non-parametric dataset.")
         elif generationMethod == 'parametric':
             raise ValueError("For 'parmametric', must specify inputGateSet")
     else:
         if generationMethod == 'parametric':
-            print "Generating parametric dataset."
+            print("Generating parametric dataset.")
         elif generationMethod == 'nonparametric':
             raise ValueError("For 'nonparametric', inputGateSet must be None")
         possibleSpamLabels = inputGateSet.get_spam_labels()
@@ -174,7 +175,7 @@ def make_bootstrap_gatesets(numGateSets, inputDataSet, generationMethod,
     """
 
     if maxLengths == None:
-        print "No maxLengths value specified; using [0,1,24,...,1024]"
+        print("No maxLengths value specified; using [0,1,24,...,1024]")
         maxLengths = [0]+[2**k for k in range(10)]
 
     if (inputGateSet is None and targetGateSet is None):
@@ -186,9 +187,9 @@ def make_bootstrap_gatesets(numGateSets, inputDataSet, generationMethod,
         targetGateSet = inputGateSet
 
     datasetList = []
-    print "Creating DataSets: "
+    print("Creating DataSets: ")
     for run in xrange(numGateSets):
-        print "%d " % run,
+        print("%d " % run, end='')
         datasetList.append(
             make_bootstrap_dataset(inputDataSet,generationMethod,
                                    inputGateSet, startSeed+run,
@@ -196,9 +197,9 @@ def make_bootstrap_gatesets(numGateSets, inputDataSet, generationMethod,
             )
 
     gatesetList = []
-    print "Creating GateSets: "
+    print("Creating GateSets: ")
     for run in xrange(numGateSets):
-        print "Running MLGST Iteration %d " % run
+        print("Running MLGST Iteration %d " % run)
         results = _do_long_sequence_gst(
             datasetList[run], targetGateSet, fiducialPrep, fiducialMeasure,
             germs, maxLengths, constrainToTP=constrainToTP,
@@ -262,7 +263,7 @@ def gauge_optimize_gs_list(gsList, targetGateset, constrainToTP=True,
     gateMax = []
     gateMean = []
     for spWind, spW in enumerate(_np.logspace(-4,0,13)): #try spam weights
-        print "Spam weight ", spWind
+        print("Spam weight %s" % spWind)
         listOfBootStrapEstsNoOptG0toTargetVarSpam = []
         for gs in listOfBootStrapEstsNoOpt:
             listOfBootStrapEstsNoOptG0toTargetVarSpam.append(
@@ -311,7 +312,7 @@ def gauge_optimize_gs_list(gsList, targetGateset, constrainToTP=True,
 
     bestSPAMWeight = _np.logspace(-4,0,13)[ _np.argmin(
             _np.array(SPAMMean)*_np.array(gateMean)) ]
-    print "Best SPAM weight is", bestSPAMWeight
+    print("Best SPAM weight is %s" % bestSPAMWeight)
 
     listOfBootStrapEstsG0toTargetSmallSpam = []
     for gs in listOfBootStrapEstsNoOpt:

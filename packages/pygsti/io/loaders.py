@@ -4,6 +4,7 @@
 #    in the file "license.txt" in the top-level pyGSTi directory 
 #*****************************************************************
 """ Functions for loading GST objects from text files."""
+from __future__ import print_function
 
 import os as _os
 import json as _json
@@ -60,18 +61,18 @@ def load_dataset(filename, cache=False):
             if _os.path.exists( cache_filename ) and \
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
                 try:
-                    print "Loading from cache file: ",cache_filename
+                    print("Loading from cache file: ", cache_filename)
                     ds = _objs.DataSet(fileToLoadFrom=cache_filename)
                     return ds
-                except: print "Failed to load from cache file"
+                except: print("Failed to load from cache file")
             else:
-                print "Cache file not found or is tool old -- one will be created after loading is completed"
+                print("Cache file not found or is tool old -- one will be created after loading is completed")
 
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
             ds = parser.parse_datafile(filename)
 
-            print "Writing cache file (to speed future loads): ",cache_filename
+            print("Writing cache file (to speed future loads): %s" % cache_filename)
             ds.save(cache_filename)
         else:
             # otherwise must use standard dataset file format
@@ -112,18 +113,18 @@ def load_multidataset(filename, cache=False):
             if _os.path.exists( cache_filename ) and \
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
                 try: 
-                    print "Loading from cache file: ",cache_filename
+                    print("Loading from cache file: %s" % cache_filename)
                     mds = _objs.MultiDataSet(fileToLoadFrom=cache_filename)
                     return mds
-                except: print "Failed to load from cache file"
+                except: print("Failed to load from cache file")
             else:
-                print "Cache file not found or is tool old -- one will be created after loading is completed"
+                print("Cache file not found or is too old -- one will be created after loading is completed")
 
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
             mds = parser.parse_multidatafile(filename)
 
-            print "Writing cache file (to speed future loads): ",cache_filename
+            print("Writing cache file (to speed future loads): %s" % cache_filename)
             mds.save(cache_filename)
 
         else:

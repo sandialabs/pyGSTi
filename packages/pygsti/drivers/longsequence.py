@@ -4,6 +4,7 @@
 #    in the file "license.txt" in the top-level pyGSTi directory 
 #*****************************************************************
 """ End-to-end functions for performing long-sequence GST """
+from __future__ import print_function
 
 import os as _os
 import warnings as _warnings
@@ -264,7 +265,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     #Run the gatesets through gauge optimization, first to CPTP then to target
     #   so fidelity and frobenius distance w/targets is more meaningful
     if gaugeOptToCPTP:
-        print "\nGauge Optimizing to CPTP..."; _sys.stdout.flush()
+        print("\nGauge Optimizing to CPTP..."); _sys.stdout.flush()
         go_gs_lsgst_list = [_alg.optimize_gauge(
                 gs,'CPTP',constrainToTP=constrainToTP) for gs in gs_lsgst_list]
 

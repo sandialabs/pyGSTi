@@ -8,6 +8,7 @@ Routines for converting python objects to HTML.  Parallel rountines as
 LatexUtil has for latex conversion.
 """
 
+from __future__ import print_function
 import numpy as _np
 import cmath
 from .. import objects as _objs
@@ -48,7 +49,7 @@ def html(x, brackets=False):
     elif type(x) == str:
         return html_escaped(x)
     else:
-        print "Warning: %s not specifically converted to html" % str(type(x))
+        print("Warning: %s not specifically converted to html" % str(type(x)))
         return str(x)
 
 

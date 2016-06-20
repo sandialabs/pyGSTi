@@ -4,6 +4,7 @@
 #    in the file "license.txt" in the top-level pyGSTi directory 
 #*****************************************************************
 """ Optimization (minimization) functions """
+from __future__ import print_function
 
 import numpy as _np
 import time as _time
@@ -201,19 +202,19 @@ def fmin_supersimplex(fn, x0, outer_tol, inner_tol, max_outer_iter, min_inner_ma
             inner_maxiter /= 10; cnt_at_same_maxiter = 1
         f_init = f_final
         
-        print ">>> fmin_supersimplex: outer iteration %d (inner_maxiter = %d)" % (i,inner_maxiter)
+        print(">>> fmin_supersimplex: outer iteration %d (inner_maxiter = %d)" % (i,inner_maxiter))
         i += 1; cnt_at_same_maxiter += 1
 
         opts = {'maxiter': inner_maxiter, 'maxfev': inner_maxiter, 'disp': False }
         inner_solution = _spo.minimize(fn,x_start,options=opts, method='Nelder-Mead',callback=None, tol=inner_tol)
 
         if not inner_solution.success:
-            print "WARNING: fmin_supersimplex inner loop failed (tol=%g, maxiter=%d): %s" \
-                % (inner_tol,inner_maxiter,inner_solution.message)
+            print("WARNING: fmin_supersimplex inner loop failed (tol=%g, maxiter=%d): %s" \
+                % (inner_tol,inner_maxiter,inner_solution.message))
 
         f_final = inner_solution.fun
         x_start = inner_solution.x
-        print ">>> fmin_supersimplex: outer iteration %d gives min = %f" % (i,f_final)
+        print(">>> fmin_supersimplex: outer iteration %d gives min = %f" % (i,f_final))
 
     solution = _optResult()
     solution.x = inner_solution.x
@@ -490,7 +491,7 @@ def fmin_particle_swarm(f, x0, err_crit, iter_max, popsize=100, c1=2, c2=2):
         #    gbest.fitness = local_soln.fun
         #    print "  final fun = ",gbest.fitness
             
-        print "Iter %d: global best = %g (index %d)" % (iter_num, gbest.fitness, ibest)
+        print("Iter %d: global best = %g (index %d)" % (iter_num, gbest.fitness, ibest))
           
         #if err < err_crit:  break  #TODO: stopping condition
 
@@ -590,7 +591,7 @@ def fmin_evolutionary(f, x0, num_generations, num_individuals):
     for g in range(num_generations):
         record = stats.compile(pop)
         logbook.record(gen=g, **record)
-        print "Gen %d: %s" % (g,record)
+        print("Gen %d: %s" % (g,record))
 
         # Select the next generation individuals
         offspring = toolbox.select(pop, len(pop))
@@ -732,9 +733,9 @@ def create_obj_func_printer(objFunc):
     """
     def print_obj_func(x,f=None,accepted=None): # Just print the objective function value (used to monitor convergence in a callback)
         if f is not None and accepted is not None:
-            print "%5ds %22.10f %s" % (_time.time()-startTime, f, 'accepted' if accepted else 'not accepted')
+            print("%5ds %22.10f %s" % (_time.time()-startTime, f, 'accepted' if accepted else 'not accepted'))
         else:
-            print "%5ds %22.10f" % (_time.time()-startTime, objFunc(x))
+            print("%5ds %22.10f" % (_time.time()-startTime, objFunc(x)))
     return print_obj_func
 
 
@@ -817,7 +818,7 @@ def check_jac(f, x0, jacToCheck, eps=1e-10, tol=1e-6, errType='rel'):
     if len(errs) > 0:
         maxabs = _np.max(_np.abs(jacToCheck))
         max_err_ratio = _np.max([ x[2]/maxabs for x in errs ])
-        if max_err_ratio > 0.01: print "Warning: jacobian_check has max err/jac_max = %g (jac_max = %g)" % (max_err_ratio,maxabs)
+        if max_err_ratio > 0.01: print("Warning: jacobian_check has max err/jac_max = %g (jac_max = %g)" % (max_err_ratio,maxabs))
 
     return errSum, errs, fd_jac
 

@@ -34,3 +34,4 @@ from spamspec import SpamSpec
 
 #Functions
 from gate import compose, optimize_gate
+from verbosityprinter import VerbosityPrinter
