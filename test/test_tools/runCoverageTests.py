@@ -6,14 +6,14 @@ import os
 
 @tool
 def serial_tests():
-    os.system('time nosetests -v --with-coverage --cover-package=pygsti --cover-erase */test*.py > coverage_tests_serial.out 2>&1')
-    #os.system('mv .coverage coverage.serial')
+    os.system('time nosetests -v --with-coverage --cover-package=pygsti --cover-erase */*.py > coverage_tests_serial.out 2>&1')
+    os.system('mv .coverage coverage.serial')
 
 @tool
 def parallel_tests():
     os.system('cp mpi/setup.cfg.mpi setup.cfg')
     os.system('time mpiexec -np 4 python mpi/runtests.py -v --with-coverage --cover-package=pygsti --cover-erase mpi/mpitest*.py  > coverage_tests_mpi.out 2>&1')
-    #os.system('mv .coverage coverage.mpi')
+    os.system('mv .coverage coverage.mpi')
     os.system('rm setup.cfg')
 
 if __name__ == "__main__":

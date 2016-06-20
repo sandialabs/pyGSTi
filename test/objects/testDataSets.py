@@ -4,20 +4,20 @@ import pickle
 import pygsti
 import numpy as np
 import warnings
-
-import os, sys
+import os
 
 class DataSetTestCase(unittest.TestCase):
 
     def setUp(self):
+        # move working directories
+        self.old = os.getcwd()
+        os.chdir(os.path.abspath(os.path.dirname(__file__)))
+
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = True
-        #Set CWD to directory of this file
-        self.owd = os.getcwd()
-        os.chdir( os.path.dirname(__file__))
 
     def tearDown(self):
-        os.chdir(self.owd)
+        os.chdir(self.old)
 
     def assertEqualDatasets(self, ds1, ds2):
         self.assertEqual(len(ds1),len(ds2))
@@ -53,9 +53,9 @@ class TestDataSetMethods(DataSetTestCase):
         dsWritable = ds.copy_nonstatic()
         dsWritable[('Gy',)] = {'plus': 20, 'minus': 80}
 
-        dsWritable2 = dsWritable.copy_nonstatic() 
+        dsWritable2 = dsWritable.copy_nonstatic()
          #test copy_nonstatic on already non-static dataset
-        
+
         ds_str = str(ds)
 
         with self.assertRaises(ValueError):
@@ -65,7 +65,7 @@ class TestDataSetMethods(DataSetTestCase):
 
         self.assertEquals(ds[('Gx',)]['plus'], 10)
         self.assertAlmostEqual(ds[('Gx',)].fraction('plus'), 0.1)
-        
+
         #Pickle and unpickle
         pickle.dump(ds, open("../temp_test_files/dataset.pickle","w"))
         ds_from_pkl = pickle.load(open("../temp_test_files/dataset.pickle","r"))
@@ -121,7 +121,7 @@ class TestDataSetMethods(DataSetTestCase):
                     cnt = dsRow[spamLabel]
                 if dsRow.has_key(spamLabel):
                     cnt = dsRow[spamLabel]
-            
+
         for dsRow in ds.itervalues():
             for spamLabel,count in dsRow.iteritems():
                 cnt += count
@@ -135,7 +135,7 @@ class TestDataSetMethods(DataSetTestCase):
             ds2.truncate( [('Gx',),('Gx','Gy'),('Gz',)], bThrowErrorIfStringIsMissing=True ) #Gz is missing
         with self.assertRaises(ValueError):
             ds4.truncate( [('Gx',),('Gx','Gy'),('Gz',)], bThrowErrorIfStringIsMissing=True ) #Gz is missing
-                
+
         #test copy
         ds2_copy = ds2.copy() #non-static
         ds4_copy = ds4.copy() #static
@@ -165,7 +165,7 @@ class TestDataSetMethods(DataSetTestCase):
         #Test loading a deprecated dataset file
         dsDeprecated = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/deprecated.dataset")
 
-                
+
 
     def test_from_file(self):
         # creating and loading a text-format dataset file
@@ -195,17 +195,17 @@ Gx^4 0.2 100
 
     def test_generate_fake_data(self):
 
-        gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy','Gz'], 
+        gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy','Gz'],
                                                      [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)", "Z(pi/2,Q0)"],
                                                      prepLabels=['rho0'], prepExpressions=["0"],
-                                                     effectLabels=['E0'], effectExpressions=["1"], 
+                                                     effectLabels=['E0'], effectExpressions=["1"],
                                                      spamdefs={'plus': ('rho0','E0'),
                                                                     'minus': ('rho0','remainder') })
 
         depol_gateset = gateset.depolarize(gate_noise=0.1,spam_noise=0)
 
         fids  = pygsti.construction.gatestring_list( [ (), ('Gx',), ('Gy'), ('Gx','Gx') ] )
-        germs = pygsti.construction.gatestring_list( [ ('Gi',), ('Gx',), ('Gy'), ('Gi','Gi','Gi')] )        
+        germs = pygsti.construction.gatestring_list( [ ('Gi',), ('Gx',), ('Gy'), ('Gi','Gi','Gi')] )
         gateStrings = pygsti.construction.create_gatestring_list(
             "f0+T(germ,N)+f1", f0=fids, f1=fids, germ=germs, N=3,
             T=pygsti.construction.repeat_with_max_length,
@@ -231,13 +231,13 @@ Gx^4 0.2 100
             pygsti.construction.generate_fake_data(depol_gateset, weightedStrings,
                                                    nSamples=1000, sampleError='FooBar') #invalid sampleError
 
-        
 
-        # TO SEED SAVED FILE, RUN THIS: 
-        #pygsti.io.write_dataset("../cmp_chk_files/Fake_Dataset_none.txt", ds_none,  gateStrings) 
-        #pygsti.io.write_dataset("../cmp_chk_files/Fake_Dataset_round.txt", ds_round, gateStrings) 
-        #pygsti.io.write_dataset("../cmp_chk_files/Fake_Dataset_binom.txt", ds_binom, gateStrings) 
-        #pygsti.io.write_dataset("../cmp_chk_files/Fake_Dataset_multi.txt", ds_multi, gateStrings) 
+
+        # TO SEED SAVED FILE, RUN THIS:
+        #pygsti.io.write_dataset("../cmp_chk_files/Fake_Dataset_none.txt", ds_none,  gateStrings)
+        #pygsti.io.write_dataset("../cmp_chk_files/Fake_Dataset_round.txt", ds_round, gateStrings)
+        #pygsti.io.write_dataset("../cmp_chk_files/Fake_Dataset_binom.txt", ds_binom, gateStrings)
+        #pygsti.io.write_dataset("../cmp_chk_files/Fake_Dataset_multi.txt", ds_multi, gateStrings)
 
         saved_ds = pygsti.io.load_dataset("../cmp_chk_files/Fake_Dataset_none.txt", cache=True)
         self.assertEqualDatasets(ds_none, saved_ds)
@@ -254,11 +254,11 @@ Gx^4 0.2 100
         #Now test RB and RPE datasets
         rbDS = pygsti.construction.generate_sim_rb_data(depol_gateset, ds_binom, seed=1234)
         rbDS_perfect = pygsti.construction.generate_sim_rb_data_perfect(depol_gateset, ds_binom)
-        
+
         rpeGS = pygsti.construction.make_parameterized_rpe_gate_set(np.pi/2, np.pi/4, 0, 0.1, 0.1, True)
-        rpeGS2 = pygsti.construction.make_parameterized_rpe_gate_set(np.pi/2, np.pi/4, 0, 0.1, 0.1, False)        
+        rpeGS2 = pygsti.construction.make_parameterized_rpe_gate_set(np.pi/2, np.pi/4, 0, 0.1, 0.1, False)
         rpeGS3 = pygsti.construction.make_parameterized_rpe_gate_set(np.pi/2, np.pi/4, np.pi/4, 0.1, 0.1, False)
-        
+
         kList = [0,1,2]
         lst1 = pygsti.construction.make_rpe_alpha_str_lists_gx_gz(kList)
         lst2 = pygsti.construction.make_rpe_epsilon_str_lists_gx_gz(kList)
@@ -267,14 +267,14 @@ Gx^4 0.2 100
 
         rpeDS = pygsti.construction.make_rpe_data_set(depol_gateset,lstDict,1000,
                                                           sampleError='binomial',seed=1234)
-        
+
         #Just make sure this runs:
         pygsti.construction.rpe_ensemble_test(np.pi/2, np.pi/4, 0, 0.1, 2, 1000, 2)
 
 
-        
-        
-        
+
+
+
 
     def test_gram(self):
         ds = pygsti.objects.DataSet(spamLabels=['plus','minus'])
@@ -397,13 +397,13 @@ Gx^4 20 80 0.2 100
         multiDS.load("../temp_test_files/multidataset.saved.gz")
         multiDS.load(open("../temp_test_files/multidataset.stream","r"))
         multiDS2 = pygsti.obj.MultiDataSet(fileToLoadFrom="../temp_test_files/multidataset.saved")
-        
 
 
-        
 
-        
-        
-      
+
+
+
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

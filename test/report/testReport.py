@@ -2,14 +2,18 @@ import unittest
 import warnings
 import pickle
 import pygsti
+import os
 from pygsti.construction import std1Q_XYI as std
 
 import numpy as np
-import os
 
 class ReportTestCase(unittest.TestCase):
 
     def setUp(self):
+
+        # move working directories
+        self.old = os.getcwd()
+        os.chdir(os.path.abspath(os.path.dirname(__file__)))
 
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = True
@@ -81,13 +85,8 @@ class ReportTestCase(unittest.TestCase):
                                      lsgst_gatesets_TP, self.lsgstStrings, self.fiducials, self.fiducials,
                                      pygsti.construction.repeat_with_max_length, True)
 
-        #Set CWD to directory of this file
-        self.owd = os.getcwd()
-        os.chdir(os.path.dirname(__file__))
-
-
     def tearDown(self):
-        os.chdir(self.owd)
+        os.chdir(self.old)
 
     def checkFile(self, fn):
         linesToTest = open("../temp_test_files/%s" % fn).readlines()

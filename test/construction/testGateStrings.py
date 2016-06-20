@@ -2,14 +2,19 @@ import unittest
 import copy
 import pygsti
 import numpy as np
-
+import os
 
 class GateStringTestCase(unittest.TestCase):
 
     def setUp(self):
+        # move working directories
+        self.old = os.getcwd()
+        os.chdir(os.path.abspath(os.path.dirname(__file__)))
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = True
 
+    def tearDown(self):
+        os.chdir(self.old)
 
 class TestGateStringMethods(GateStringTestCase):
     def test_simple(self):
@@ -48,10 +53,10 @@ class TestGateStringMethods(GateStringTestCase):
         self.assertEqual(list5, []) # failed assertions cause item to be skipped
         self.assertEqual(list6, pygsti.construction.gatestring_list([('Gx',), ('Gx',)])) #strs => parser => GateStrings
         self.assertEqual(list7, list1)
-        
+
         with self.assertRaises(ValueError):
             pygsti.construction.gatestring_list( [ {'foo': "Bar"} ] ) #cannot convert dicts to GateStrings...
-            
+
 
     def test_truncate_methods(self):
         self.assertEqual( pygsti.construction.repeat_and_truncate(('A','B','C'),5), ('A','B','C','A','B'))
@@ -74,7 +79,7 @@ class TestGateStringMethods(GateStringTestCase):
                      "Gf1(G1aG1b)^2Gf1" ]
         self.assertEqual( map(str,gateStrings1), expected1 )
 
-        
+
         gateStrings2 = pygsti.construction.create_gatestring_list("f0+T(germ,N)+f1", f0=fids, f1=fids,
                                                                   germ=germs, N=3, T=pygsti.construction.repeat_and_truncate,
                                                                   order=["germ","f0","f1"])
@@ -87,10 +92,10 @@ class TestGateStringMethods(GateStringTestCase):
                      "Gf1G1aG1bG1aGf0",
                      "Gf1G1aG1bG1aGf1" ]
         self.assertEqual( map(str,gateStrings2), expected2 )
-        
+
 
         gateStrings3 = pygsti.construction.create_gatestring_list("f0+T(germ,N)+f1", f0=fids, f1=fids,
-                                                                  germ=germs, N=3, 
+                                                                  germ=germs, N=3,
                                                                   T=pygsti.construction.repeat_with_max_length,
                                                                   order=["germ","f0","f1"])
         expected3 = [ "Gf0(G0)^3Gf0",
@@ -100,7 +105,7 @@ class TestGateStringMethods(GateStringTestCase):
                       "Gf0(G1aG1b)Gf0",
                       "Gf0(G1aG1b)Gf1",
                       "Gf1(G1aG1b)Gf0",
-                      "Gf1(G1aG1b)Gf1" ] 
+                      "Gf1(G1aG1b)Gf1" ]
         self.assertEqual( map(str,gateStrings3), expected3 )
 
     def test_string_compression(self):
@@ -111,7 +116,7 @@ class TestGateStringMethods(GateStringTestCase):
 
     def test_repeat(self):
         gs = pygsti.objects.GateString( ('Gx','Gx','Gy') )
-        
+
         gs2 = pygsti.construction.repeat(gs, 2)
         self.assertEqual( gs2, pygsti.obj.GateString( ('Gx','Gx','Gy','Gx','Gx','Gy') ))
 
@@ -136,7 +141,7 @@ class TestGateStringMethods(GateStringTestCase):
 
 
     def test_lists(self):
-        expected_allStrs = set( pygsti.construction.gatestring_list( 
+        expected_allStrs = set( pygsti.construction.gatestring_list(
                 [(),('Gx',),('Gy',),('Gx','Gx'),('Gx','Gy'),('Gy','Gx'),('Gy','Gy')] ))
         allStrs = pygsti.construction.list_all_gatestrings( ('Gx','Gy'), 0,2 )
         self.assertEqual( set(allStrs), expected_allStrs)
@@ -158,7 +163,7 @@ class TestGateStringMethods(GateStringTestCase):
 
         pystr = gs.to_pythonstr( ('Gx','Gy','Gz') )
         self.assertEqual( pystr, "AAABBAC" )
-        
+
         gs2_tup = pygsti.obj.GateString.from_pythonstr( pystr, ('Gx','Gy','Gz') )
         self.assertEqual( gs2_tup, tuple(gs) )
 
@@ -196,7 +201,7 @@ class TestGateStringMethods(GateStringTestCase):
                 truncScheme="foobar")
 
 
-        
+
 
         # ELGST
         maxLens = [0,1,2]
@@ -206,7 +211,7 @@ class TestGateStringMethods(GateStringTestCase):
         maxLens = [1,2]
         elgstLists2 = pygsti.construction.make_elgst_lists(
             gateLabels, germs, maxLens, truncScheme="whole germ powers",
-            nest=False)        
+            nest=False)
 
         elgstExpLists = pygsti.construction.make_elgst_experiment_list(
             gateLabels, germs, maxLens, truncScheme="whole germ powers")
@@ -235,7 +240,7 @@ class TestGateStringMethods(GateStringTestCase):
         self.assertEqual( s5, s4 )
         self.assertEqual( s1, s6 )
         self.assertEqual( s1, s7 )
-        
+
         b1 = s1 < s2
         b2 = s1 > s2
 
@@ -244,7 +249,7 @@ class TestGateStringMethods(GateStringTestCase):
         with self.assertRaises(ValueError):
             bad = s1 + ("Gx",) #can't add non-GateString to gatestring
         with self.assertRaises(ValueError):
-            pygsti.obj.GateString( ('Gx','Gx'), "GxGy" ) #mismatch 
+            pygsti.obj.GateString( ('Gx','Gx'), "GxGy" ) #mismatch
         with self.assertRaises(ValueError):
             pygsti.obj.GateString( None )
 
@@ -265,7 +270,7 @@ class TestGateStringMethods(GateStringTestCase):
         w1_repr = repr(w1)
         x = w1[0]
         x2 = w1[0:2]
-        
+
         self.assertEqual( w1, ('Gx','Gy') ); self.assertEqual(w1.weight, 0.5)
         self.assertEqual( w2, ('Gy',) ); self.assertEqual(w2.weight, 0.5)
         self.assertEqual( w3, ('Gx','Gy','Gy') ); self.assertEqual(w3.weight, 1.0)
@@ -282,10 +287,10 @@ class TestGateStringMethods(GateStringTestCase):
 
         with self.assertRaises(ValueError):
             pygsti.objects.gatestring.CompressedGateString( ('Gx',) ) #can only create from GateStrings
-        
-        
 
-        
-        
+
+
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

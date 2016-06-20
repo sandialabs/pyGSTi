@@ -1,18 +1,15 @@
 from __future__ import print_function
-from tool       import tool
 import os, sys
 
-@tool
-def run_module(moduleName, command='python', extension=''):
-    owd = os.getcwd() # Handle moving between directories
-    os.chdir(os.getcwd() +  '/' + moduleName)
+def run_module(moduleName, precommand='python', postcommand=''):
+    os.chdir(moduleName)
     for subdir, dirs, files in os.walk(os.getcwd()):
         for filename in files:
-            if filename.endswith('.py'):
+            if filename.endswith('.py') and filename.startswith('test'):
                 print('Running %s' % filename)
                 filepath = subdir + os.sep + filename
-                os.system('%s %s %s' % (command, filepath, extension))
-    os.chdir(owd)
+                os.system('%s %s %s' % (precommand, filepath, postcommand))
+    os.chdir('..')
 
 if __name__ == "__main__":
    for name in sys.argv[1:]:

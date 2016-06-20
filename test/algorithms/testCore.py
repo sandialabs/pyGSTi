@@ -9,16 +9,16 @@ import sys, os
 class CoreTestCase(unittest.TestCase):
 
     def setUp(self):
+        # move working directories
+        self.old = os.getcwd()
+        os.chdir(os.path.abspath(os.path.dirname(__file__)))
+
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = True
 
-        #Set CWD to directory of this file
-        self.owd = os.getcwd()
-        os.chdir( os.path.dirname(__file__))
-
         self.gateset = std.gs_target
         self.datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0.1)
-        
+
         self.fiducials = std.fiducials
         self.germs = std.germs
         self.specs = pygsti.construction.build_spam_specs(self.fiducials, effect_labels=['E0']) #only use the first EVec
@@ -27,13 +27,13 @@ class CoreTestCase(unittest.TestCase):
         self.lgstStrings = pygsti.construction.list_lgst_gatestrings(self.specs, self.gateLabels)
 
         self.maxLengthList = [0,1,2,4,8]
-        
+
         self.elgstStrings = pygsti.construction.make_elgst_lists(
             self.gateLabels, self.germs, self.maxLengthList )
-        
+
         self.lsgstStrings = pygsti.construction.make_lsgst_lists(
             self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLengthList )
-        
+
         #Created in testAnalysis...
         self.ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis.dataset")
 
@@ -43,9 +43,8 @@ class CoreTestCase(unittest.TestCase):
         #ds_lgst.save("../cmp_chk_files/analysis_lgst.dataset")
         self.ds_lgst = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis_lgst.dataset")
 
-	
     def tearDown(self):
-        os.chdir(self.owd)
+        os.chdir(self.old)
 
     def runSilent(self, callable, *args, **kwds):
         orig_stdout = sys.stdout
@@ -76,14 +75,14 @@ class TestCoreMethods(CoreTestCase):
         ds = self.ds
         #pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings, nSamples=1000,
         #                                            sampleError='binomial', seed=None)
-        
+
         gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
         gs_lgst_verb = self.runSilent(pygsti.do_lgst, ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=10)
         self.assertAlmostEqual(gs_lgst.frobeniusdist(gs_lgst_verb),0)
 
         gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",targetGateset=self.gateset, spamWeight=1.0, gateWeight=1.0)
         gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
-        
+
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
         #pygsti.io.write_gateset(gs_lgst,"../cmp_chk_files/lgst.gateset", "Saved LGST Gateset before gauge optimization")
         #pygsti.io.write_gateset(gs_lgst_go,"../cmp_chk_files/lgst_go.gateset", "Saved LGST Gateset after gauge optimization")
@@ -131,7 +130,7 @@ class TestCoreMethods(CoreTestCase):
                 self.datagen_gateset, incomplete_strings,
                 nSamples=10, sampleError='none')
             gs_lgst = pygsti.do_lgst(bad_ds, self.specs, self.gateset,
-                                     svdTruncateTo=4, verbosity=0) 
+                                     svdTruncateTo=4, verbosity=0)
                       # incomplete dataset
 
 
@@ -144,22 +143,22 @@ class TestCoreMethods(CoreTestCase):
         gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
         gs_lgst = pygsti.optimize_gauge(gs_lgst, "target", targetGateset=self.datagen_gateset, gateWeight=1.0, spamWeight=1.0)
         self.assertAlmostEqual( gs_lgst.frobeniusdist(self.datagen_gateset), 0)
-        
+
 
     def test_eLGST(self):
 
         ds = self.ds
         #pygsti.construction.generate_fake_data(self.datagen_gateset, self.lsgstStrings[-1],
         #                                            nSamples=1000,sampleError='binomial', seed=100)
-        
+
         gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
         gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",targetGateset=self.gateset, spamWeight=1.0, gateWeight=1.0)
         gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
 
-        gs_single_exlgst = pygsti.do_exlgst(ds, gs_clgst, self.elgstStrings[0], self.specs, 
+        gs_single_exlgst = pygsti.do_exlgst(ds, gs_clgst, self.elgstStrings[0], self.specs,
                                             self.gateset, regularizeFactor=1e-3, svdTruncateTo=4,
                                             verbosity=0)
-        gs_single_exlgst_verb = self.runSilent(pygsti.do_exlgst, ds, gs_clgst, self.elgstStrings[0], self.specs, 
+        gs_single_exlgst_verb = self.runSilent(pygsti.do_exlgst, ds, gs_clgst, self.elgstStrings[0], self.specs,
                                                self.gateset, regularizeFactor=1e-3, svdTruncateTo=4,
                                                verbosity=10)
 
@@ -185,14 +184,14 @@ class TestCoreMethods(CoreTestCase):
         gs_exlgst_chk_verb = self.runSilent(pygsti.do_iterative_exlgst,ds, gs_clgst, self.specs, self.elgstStrings[0:2],
                                                    targetGateset=self.gateset, svdTruncateTo=4, verbosity=10,
                                                    check_jacobian=True)
-        
+
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
         #pygsti.io.write_gateset(gs_exlgst,"../cmp_chk_files/exlgst.gateset", "Saved Extended-LGST (eLGST) Gateset")
         #pygsti.io.write_gateset(gs_exlgst_reg,"../cmp_chk_files/exlgst_reg.gateset", "Saved Extended-LGST (eLGST) Gateset w/regularization")
 
         gs_exlgst_compare = pygsti.io.load_gateset("../cmp_chk_files/exlgst.gateset")
         gs_exlgst_reg_compare = pygsti.io.load_gateset("../cmp_chk_files/exlgst_reg.gateset")
-        
+
         self.assertAlmostEqual( gs_exlgst.frobeniusdist(gs_exlgst_compare), 0)
         self.assertAlmostEqual( gs_exlgst_reg.frobeniusdist(gs_exlgst_reg_compare), 0)
 
@@ -202,13 +201,13 @@ class TestCoreMethods(CoreTestCase):
         ds = self.ds
         #pygsti.construction.generate_fake_data(self.datagen_gateset, self.lsgstStrings[-1],
         #                                            nSamples=1000, sampleError='binomial', seed=100)
-        
+
         gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
         gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",targetGateset=self.gateset, spamWeight=1.0, gateWeight=1.0)
         gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
 
         gs_single_lsgst = pygsti.do_mc2gst(ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
-                                           probClipInterval=(-1e6,1e6), regularizeFactor=1e-3, 
+                                           probClipInterval=(-1e6,1e6), regularizeFactor=1e-3,
                                            verbosity=0)
 
         gs_lsgst = pygsti.do_iterative_mc2gst(ds, gs_clgst, self.lsgstStrings, verbosity=0,
@@ -245,22 +244,22 @@ class TestCoreMethods(CoreTestCase):
 
         #Check with small but ok memlimit
         self.runSilent(pygsti.do_mc2gst,ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
-                         probClipInterval=(-1e6,1e6), regularizeFactor=1e-3, 
+                         probClipInterval=(-1e6,1e6), regularizeFactor=1e-3,
                          verbosity=10, memLimit=300000)
 
 
         #Check errors:
         with self.assertRaises(MemoryError):
             pygsti.do_mc2gst(ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
-                             probClipInterval=(-1e6,1e6), regularizeFactor=1e-3, 
+                             probClipInterval=(-1e6,1e6), regularizeFactor=1e-3,
                              verbosity=0, memLimit=1)
 
         with self.assertRaises(NotImplementedError):
             pygsti.do_mc2gst(ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
-                             probClipInterval=(-1e6,1e6), regularizeFactor=1e-3, 
+                             probClipInterval=(-1e6,1e6), regularizeFactor=1e-3,
                              verbosity=0, cptp_penalty_factor=1.0) #cptp pentalty not implemented yet
 
-        
+
 
 
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
@@ -269,7 +268,7 @@ class TestCoreMethods(CoreTestCase):
 
         gs_lsgst_compare = pygsti.io.load_gateset("../cmp_chk_files/lsgst.gateset")
         gs_lsgst_reg_compare = pygsti.io.load_gateset("../cmp_chk_files/lsgst_reg.gateset")
-        
+
         self.assertAlmostEqual( gs_lsgst.frobeniusdist(gs_lsgst_compare), 0)
         self.assertAlmostEqual( gs_lsgst_reg.frobeniusdist(gs_lsgst_reg_compare), 0)
 
@@ -279,7 +278,7 @@ class TestCoreMethods(CoreTestCase):
         ds = self.ds
         #pygsti.construction.generate_fake_data(self.datagen_gateset, self.lsgstStrings[-1],
         #                                            nSamples=1000, sampleError='binomial', seed=100)
-        
+
         gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
         gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",targetGateset=self.gateset, spamWeight=1.0, gateWeight=1.0)
         gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
@@ -339,7 +338,7 @@ class TestCoreMethods(CoreTestCase):
 
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
         #pygsti.io.write_gateset(gs_mlegst,"../cmp_chk_files/mle_gst.gateset", "Saved MLE-GST Gateset")
-    
+
         gs_mle_compare = pygsti.io.load_gateset("../cmp_chk_files/mle_gst.gateset")
         self.assertAlmostEqual( gs_mlegst.frobeniusdist(gs_mle_compare), 0)
 
@@ -368,14 +367,14 @@ class TestCoreMethods(CoreTestCase):
         ds = self.ds
         #pygsti.construction.generate_fake_data(self.datagen_gateset, self.lsgstStrings[-1],
         #                                            nSamples=1000,sampleError='binomial', seed=100)
-        
+
 
         gs_lgst4 = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
         gs_lgst6 = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=6, verbosity=0)
         sys.stdout.flush()
-        
+
         self.runSilent(pygsti.do_lgst, ds, self.specs, self.gateset, svdTruncateTo=6, verbosity=4) # test verbose prints
-        
+
         chiSq4 = pygsti.chi2(ds, gs_lgst4, self.lgstStrings, minProbClipForWeighting=1e-4)
         chiSq6 = pygsti.chi2(ds, gs_lgst6, self.lgstStrings, minProbClipForWeighting=1e-4)
 
@@ -405,7 +404,7 @@ class TestCoreMethods(CoreTestCase):
         #pygsti.io.write_gateset(gs_lsgst,"../cmp_chk_files/lsgstMS.gateset", "Saved LSGST Gateset with model selection")
 
         gs_lsgst_compare = pygsti.io.load_gateset("../cmp_chk_files/lsgstMS.gateset")
-        
+
         self.assertAlmostEqual( gs_lsgst.frobeniusdist(gs_lsgst_compare), 0)
 
     def test_miscellaneous(self):
@@ -422,7 +421,7 @@ class TestCoreMethods(CoreTestCase):
         ds = self.ds_lgst
         #pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
         #                                            nSamples=10000,sampleError='binomial', seed=100)
-        
+
         gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
 
         #Gauge Opt to Target
@@ -451,7 +450,7 @@ class TestCoreMethods(CoreTestCase):
                            targetSpamMetric='target', verbosity=10) #bad toGetTo
 
 
-        
+
         #Contractions
         gs_clgst_tp    = self.runSilent(pygsti.contract, gs_lgst_target, "TP",verbosity=10, tol=10.0)
         gs_clgst_cp    = self.runSilent(pygsti.contract, gs_lgst_target, "CP",verbosity=10, tol=10.0)
@@ -516,8 +515,8 @@ class TestCoreMethods(CoreTestCase):
         #with self.assertRaises(ValueError):
         #    self.runSilent(pygsti.contract,gs_bigkick, "CP", verbosity=10,
         #                   maxiter=1) # fail to contract to CP
-        
-    
-      
+
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

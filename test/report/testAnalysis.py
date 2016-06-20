@@ -17,12 +17,17 @@ except ImportError:
 class AnalysisTestCase(unittest.TestCase):
 
     def setUp(self):
+
+        # move working directories
+        self.old = os.getcwd()
+        os.chdir(os.path.abspath(os.path.dirname(__file__)))
+
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = True
 
         self.gateset = std.gs_target
         self.datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0.1)
-        
+
         self.fiducials = std.fiducials
         self.germs = std.germs
         self.specs = pygsti.construction.build_spam_specs(self.fiducials, prep_labels=['rho0'], effect_labels=['E0'])
@@ -32,7 +37,7 @@ class AnalysisTestCase(unittest.TestCase):
         self.lgstStrings = pygsti.construction.list_lgst_gatestrings(self.specs, self.gateLabels)
 
         self.maxLengthList = [0,1,2,4,8]
-        
+
         self.lsgstStrings = pygsti.construction.make_lsgst_lists(
             self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLengthList )
 
@@ -65,13 +70,9 @@ class AnalysisTestCase(unittest.TestCase):
                 if self.gateStrDict[(x,y)] in runningList:
                     self.gateStrDict[(x,y)] = None
                 else: runningList.append( self.gateStrDict[(x,y)] )
-        #Set CWD to directory of this file
-        self.owd = os.getcwd()
-        os.chdir( os.path.dirname(__file__))
 
     def tearDown(self):
-        os.chdir(self.owd)
-
+        os.chdir(self.old)
 
     def assertEqualImages(self, fn1, fn2):
         if haveImageLibs:
@@ -82,29 +83,29 @@ class AnalysisTestCase(unittest.TestCase):
                           ", so Image comparisons in testAnalysis have been" +
                           " disabled.")
             return True
-        
+
 
 class TestAnalysis(AnalysisTestCase):
-    
+
     def test_blank_boxes(self):
         pygsti.report.blank_boxplot( self.Xs, self.Ys, self.gateStrDict, self.strs, self.xlbl, self.ylbl,
                              sumUp=True, ticSize=20, save_to="../temp_test_files/blankBoxes.jpg")
         self.assertEqualImages("../temp_test_files/blankBoxes.jpg", "../cmp_chk_files/blankBoxes_ok.jpg")
 
     def test_chi2_boxes(self):
-        pygsti.report.chi2_boxplot( self.Xs, self.Ys, self.gateStrDict, self.ds, self.lsgst_gateset, self.strs, 
-                         self.xlbl, self.ylbl, linlg_pcntle=.05, scale=1.0, sumUp=False, histogram=True, 
+        pygsti.report.chi2_boxplot( self.Xs, self.Ys, self.gateStrDict, self.ds, self.lsgst_gateset, self.strs,
+                         self.xlbl, self.ylbl, linlg_pcntle=.05, scale=1.0, sumUp=False, histogram=True,
                          save_to="../temp_test_files/chi2boxes.jpg")
         self.assertEqualImages("../temp_test_files/chi2boxes.jpg", "../cmp_chk_files/chi2boxes_ok.jpg")
         self.assertEqualImages("../temp_test_files/chi2boxes_hist.jpg", "../cmp_chk_files/chi2boxes_hist_ok.jpg")
 
-        pygsti.report.chi2_boxplot( self.Xs, self.Ys, self.gateStrDict, self.ds, self.lsgst_gateset, self.strs, 
+        pygsti.report.chi2_boxplot( self.Xs, self.Ys, self.gateStrDict, self.ds, self.lsgst_gateset, self.strs,
                          self.xlbl, self.ylbl, linlg_pcntle=.05, scale=1.0, sumUp=False, histogram=True, invert=True,
                          save_to="../temp_test_files/chi2boxes_inv.jpg")
         self.assertEqualImages("../temp_test_files/chi2boxes_inv.jpg", "../cmp_chk_files/chi2boxes_inv_ok.jpg")
         self.assertEqualImages("../temp_test_files/chi2boxes_inv_hist.jpg", "../cmp_chk_files/chi2boxes_inv_hist_ok.jpg")
 
-        pygsti.report.chi2_boxplot( self.Xs, self.Ys, self.gateStrDict, self.ds, self.lsgst_gateset, self.strs, 
+        pygsti.report.chi2_boxplot( self.Xs, self.Ys, self.gateStrDict, self.ds, self.lsgst_gateset, self.strs,
                          self.xlbl, self.ylbl, linlg_pcntle=.05, scale=1.0, sumUp=True,
                          save_to="../temp_test_files/chi2boxes_summed.jpg")
         self.assertEqualImages("../temp_test_files/chi2boxes_summed.jpg", "../cmp_chk_files/chi2boxes_summed_ok.jpg")
@@ -114,22 +115,22 @@ class TestAnalysis(AnalysisTestCase):
                                                 self.ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
         directLSGST = pygsti.report.direct_mc2gst_gatesets( [gs for gs in self.gateStrDict.values() if gs is not None],
                                                   self.ds, self.specs, self.gateset, svdTruncateTo=4,
-                                                  minProbClipForWeighting=1e-2, 
+                                                  minProbClipForWeighting=1e-2,
                                                   probClipInterval=(-1e6,1e6), verbosity=0)
 
-        pygsti.report.direct_chi2_boxplot( self.Xs, self.Ys, self.gateStrDict, self.ds, directLSGST, 
+        pygsti.report.direct_chi2_boxplot( self.Xs, self.Ys, self.gateStrDict, self.ds, directLSGST,
                                    self.strs, self.xlbl, self.ylbl,
                                    linlg_pcntle=.05, scale=1.0, boxLabels=True,
                                    save_to="../temp_test_files/direct_chi2_boxes.jpg")
         self.assertEqualImages("../temp_test_files/direct_chi2_boxes.jpg", "../cmp_chk_files/direct_chi2_boxes_ok.jpg")
 
-        pygsti.report.direct_deviation_boxplot(self.Xs, self.Ys, self.gateStrDict, self.ds, self.lsgst_gateset, 
+        pygsti.report.direct_deviation_boxplot(self.Xs, self.Ys, self.gateStrDict, self.ds, self.lsgst_gateset,
                                       directLSGST, self.xlbl, self.ylbl, prec=4,
                                       scale=1.0, boxLabels=True,
                                       save_to="../temp_test_files/direct_deviation.jpg")
         self.assertEqualImages("../temp_test_files/direct_deviation.jpg", "../cmp_chk_files/direct_deviation_ok.jpg")
 
-        pygsti.report.direct2x_comp_boxplot( self.Xs, self.Ys, self.gateStrDict, self.ds, directLSGST, 
+        pygsti.report.direct2x_comp_boxplot( self.Xs, self.Ys, self.gateStrDict, self.ds, directLSGST,
                                     self.strs, self.xlbl, self.ylbl,
                                     M=10, scale=1.0, boxLabels=True,
                                     save_to="../temp_test_files/direct_2x_compare.jpg")
@@ -144,7 +145,7 @@ class TestAnalysis(AnalysisTestCase):
     def test_whack_a_mole(self):
         whack = pygsti.obj.GateString( ('Gi',)*4 )
         fullGatestringList = self.lsgstStrings[-1]
-        pygsti.report.whack_a_chi2_mole_boxplot( whack, fullGatestringList, self.Xs, self.Ys, self.gateStrDict, 
+        pygsti.report.whack_a_chi2_mole_boxplot( whack, fullGatestringList, self.Xs, self.Ys, self.gateStrDict,
                                        self.ds, self.lsgst_gateset, self.strs, self.xlbl, self.ylbl,
                                        scale=1.0, sumUp=False, histogram=True,
                                        save_to="../temp_test_files/whackamole.jpg")

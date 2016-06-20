@@ -2,11 +2,16 @@ import unittest
 import pygsti
 from pygsti.construction import std1Q_XYI as std
 import numpy as np
-import os, sys
+import os
 
 class MetricsTestCase(unittest.TestCase):
 
     def setUp(self):
+
+        # move working directories
+        self.old = os.getcwd()
+        os.chdir(os.path.abspath(os.path.dirname(__file__)))
+
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = True
 
@@ -25,17 +30,12 @@ Gx^4 20 90
 
         open("../temp_test_files/MetricsDataset.txt","w").write(dataset_txt)
         self.ds = pygsti.io.load_dataset("../temp_test_files/MetricsDataset.txt")
-        #Set CWD to directory of this file
-        self.owd = os.getcwd()
-        os.chdir( os.path.dirname(__file__))
 
     def tearDown(self):
-        os.chdir(self.owd)
-
-
+        os.chdir(self.old)
 
 class TestMetrics(MetricsTestCase):
-    
+
     def test_dataset_qtys(self):
         names = ('gate string', 'gate string index', 'gate string length', 'count total',
                  'Exp prob(plus)', 'Exp count(plus)', 'max logl', 'number of gate strings')

@@ -1,6 +1,7 @@
 from __future__ import print_function
 import time, sys, os
 
+# allows creation of decorators that take arguments
 def parametrized(dec):
     def layer(*args, **kwargs):
         def repl(f):

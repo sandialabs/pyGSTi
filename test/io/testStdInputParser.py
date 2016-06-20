@@ -3,21 +3,19 @@ import warnings
 import pyparsing
 import pygsti
 import numpy as np
-import os, sys
-
+import os
 
 class StdInputParserTestCase(unittest.TestCase):
 
     def setUp(self):
+        # move working directories
+        self.old = os.getcwd()
+        os.chdir(os.path.abspath(os.path.dirname(__file__)))
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = True
 
-        #Set CWD to directory of this file
-        self.owd = os.getcwd()
-        os.chdir( os.path.dirname(__file__))
-
     def tearDown(self):
-        os.chdir(self.owd)
+        os.chdir(self.old)
 
     def assertArraysAlmostEqual(self,a,b):
         self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
@@ -52,7 +50,7 @@ class TestStdInputParser(StdInputParserTestCase):
                          ("G_my_xG_my_y", ('G_my_x', 'G_my_y')),
                          ("G_my_x*G_my_y", ('G_my_x', 'G_my_y')),
                          ("G_my_x G_my_y", ('G_my_x', 'G_my_y')) ]
-        
+
         std = pygsti.io.StdInputParser()
 
         #print "String Tests:"
@@ -66,7 +64,7 @@ class TestStdInputParser(StdInputParserTestCase):
 
 
     def test_lines(self):
-        dataline_tests = [ "G1G2G3           0.1 100", 
+        dataline_tests = [ "G1G2G3           0.1 100",
                            "G1 G2 G3         0.798 100",
                            "G1 (G2 G3)^2 G4  1.0 100" ]
 
@@ -104,7 +102,7 @@ class TestStdInputParser(StdInputParserTestCase):
 G1
 G1G2
 G1(G2G3)^2
-""" 
+"""
         f = open("../temp_test_files/sip_test.list","w")
         f.write(stringfile_test)
         f.close()
@@ -120,7 +118,7 @@ MyFav1 G1G1G1
 MyFav2 G2^3
 this1  G3*G3*G3
 thatOne G1 G2 * G3
-""" 
+"""
         f = open("../temp_test_files/sip_test.dict","w")
         f.write(dictfile_test)
         f.close()
@@ -151,7 +149,7 @@ G1G2G3G4      0.2      5
 G_my_xG_my_y  0.5 24.0
 G_my_x*G_my_y 0.5 24.0
 G_my_x G_my_y 0.5 24.0
-""" 
+"""
         f = open("../temp_test_files/sip_test.data","w")
         f.write(datafile_test)
         f.close()
@@ -321,7 +319,7 @@ G2            20  100  5  200
         strlist = std.parse_stringfile("../temp_test_files/sip_test.list")
         #print " ==> String list:"
         #pp.pprint(strlist)
-    
+
         #print " Dictfile Test:"
         lkupDict = std.parse_dictfile("../temp_test_files/sip_test.dict")
         #print " ==> Lookup dictionary:"
@@ -332,7 +330,7 @@ G2            20  100  5  200
         #print " ==> DataSet:\n", ds
 
         #test file with no header
-        ds = std.parse_datafile("../temp_test_files/sip_test2.data") 
+        ds = std.parse_datafile("../temp_test_files/sip_test2.data")
 
         #test file with bad data
         with self.assertRaises(ValueError):
@@ -363,7 +361,7 @@ G2            20  100  5  200
         mds = std.parse_multidatafile("../temp_test_files/sip_test.multidata")
 
         #test file with no header
-        mds = std.parse_multidatafile("../temp_test_files/sip_test2.multidata") 
+        mds = std.parse_multidatafile("../temp_test_files/sip_test2.multidata")
 
         #test file with bad data
         with self.assertRaises(ValueError):
@@ -394,11 +392,11 @@ G2            20  100  5  200
         gatesetfile_test = \
 """#My Gateset file
 
-rho 
+rho
 PauliVec
 1.0/sqrt(2) 0 0 1.0/sqrt(2)
 
-E 
+E
 PauliVec
 1.0/sqrt(2) 0 0 -1.0/sqrt(2)
 
@@ -429,7 +427,7 @@ DensityMx
 0 0
 0 1
 
-E 
+E
 StateVec
 0 1
 
@@ -546,7 +544,7 @@ SPAMLABEL plus = rho_up E
 
         f = open("../temp_test_files/sip_test.gateset1","w")
         f.write(gatesetfile_test); f.close()
-        
+
         f = open("../temp_test_files/sip_test.gateset2","w")
         f.write(gatesetfile_test2); f.close()
 
@@ -605,7 +603,7 @@ SPAMLABEL plus = rho_up E
 
 
 
-            
+
 
 
 

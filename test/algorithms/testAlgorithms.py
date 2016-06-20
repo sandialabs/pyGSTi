@@ -4,23 +4,22 @@ from pygsti.construction import std1Q_XYI as std
 
 import numpy as np
 from scipy import polyfit
-import sys
-import os, sys
+import sys, os
 
 class AlgorithmTestCase(unittest.TestCase):
 
     def setUp(self):
+        # move working directories
+        self.old = os.getcwd()
+        os.chdir(os.path.abspath(os.path.dirname(__file__)))
+
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = True
 
         self.gs_target_noisy = std.gs_target.randomize_with_unitary(0.001, seed=1234)
 
-        #Set CWD to directory of this file
-        self.owd = os.getcwd()
-        os.chdir( os.path.dirname(__file__))
-
     def tearDown(self):
-        os.chdir(self.owd)
+        os.chdir(self.old)
 
     def runSilent(self, callable, *args, **kwds):
         orig_stdout = sys.stdout
@@ -59,35 +58,35 @@ class TestAlgorithmMethods(AlgorithmTestCase):
 
         prepFidList = pygsti.alg.optimize_integer_fiducials_slack(
             std.gs_target, std.fiducials, prepOrMeas = "prep",
-            initialWeights=None, maxIter=100, 
-            fixedSlack=False, slackFrac=0.1, 
+            initialWeights=None, maxIter=100,
+            fixedSlack=False, slackFrac=0.1,
             returnAll=False, verbosity=4)
 
         measFidList, wts, scoredict = pygsti.alg.optimize_integer_fiducials_slack(
             std.gs_target, std.fiducials, prepOrMeas = "meas",
-            initialWeights=np.ones( len(std.fiducials), 'i' ), maxIter=100, 
-            fixedSlack=0.1, slackFrac=False, 
+            initialWeights=np.ones( len(std.fiducials), 'i' ), maxIter=100,
+            fixedSlack=0.1, slackFrac=False,
             returnAll=True, verbosity=4)
 
 
         fiducials_to_try = pygsti.construction.list_all_gatestrings(std.gs_target.gates.keys(), 0, 2)
         prepFidList2 = pygsti.alg.optimize_integer_fiducials_slack(
             std.gs_target, fiducials_to_try, prepOrMeas = "prep",
-            initialWeights=None, scoreFunc='worst', maxIter=100, 
-            fixedSlack=False, slackFrac=0.1, 
+            initialWeights=None, scoreFunc='worst', maxIter=100,
+            fixedSlack=False, slackFrac=0.1,
             returnAll=False, verbosity=4)
 
         prepFidList3 = pygsti.alg.optimize_integer_fiducials_slack(
             std.gs_target, fiducials_to_try, prepOrMeas = "prep",
-            initialWeights=None, scoreFunc='all', maxIter=100, 
+            initialWeights=None, scoreFunc='all', maxIter=100,
             fixedSlack=False, slackFrac=0.1, fixedNum=4,
             returnAll=False, verbosity=4)
         pygsti.alg.write_fixed_hamming_weight_code(3,1)
 
         self.runSilent(pygsti.alg.optimize_integer_fiducials_slack,
             std.gs_target, fiducials_to_try, prepOrMeas = "prep",
-            initialWeights=None, maxIter=1, 
-            fixedSlack=False, slackFrac=0.1, 
+            initialWeights=None, maxIter=1,
+            fixedSlack=False, slackFrac=0.1,
             returnAll=False, verbosity=4) #check max iterations
 
         with self.assertRaises(ValueError):
@@ -121,7 +120,7 @@ class TestAlgorithmMethods(AlgorithmTestCase):
         self.runSilent(pygsti.alg.find_sufficient_fiducial_pairs,
                        std.gs_target, std.fiducials, std.fiducials,
                        std.germs, testPairList=[(0,0),(0,1),(1,0)], verbosity=4)
-        
+
         suffPairs = self.runSilent(pygsti.alg.find_sufficient_fiducial_pairs,
             std.gs_target, std.fiducials, std.fiducials, std.germs, verbosity=4)
 
@@ -139,7 +138,7 @@ class TestAlgorithmMethods(AlgorithmTestCase):
                        std.gs_target, std.fiducials, std.fiducials,
                        std.germs, searchMode="random", nRandom=300,
                        seed=1234, verbosity=2)
-        
+
         self.assertEqual(suffPairs, [(0, 0), (0, 1), (1, 0)])
 
 
@@ -147,7 +146,7 @@ class TestAlgorithmMethods(AlgorithmTestCase):
         germsToTest = pygsti.construction.list_all_gatestrings_without_powers_and_cycles(
             std.gs_target.gates.keys(), 2)
 
-        
+
         bSuccess, eigvals_finiteL = pygsti.alg.test_germ_list_finitel(
             self.gs_target_noisy, germsToTest, L=16, returnSpectrum=True, tol=1e-3)
         self.assertFalse(bSuccess)
@@ -163,29 +162,29 @@ class TestAlgorithmMethods(AlgorithmTestCase):
             std.gs_target.gates.keys(), 4)
 
         finalGerms = pygsti.alg.optimize_integer_germs_slack(
-            self.gs_target_noisy, germsToTest, initialWeights=None, 
+            self.gs_target_noisy, germsToTest, initialWeights=None,
             fixedSlack=0.1, slackFrac=False, returnAll=False, tol=1e-6, verbosity=4)
 
         finalGerms, wts, scoreDict = pygsti.alg.optimize_integer_germs_slack(
-            self.gs_target_noisy, germsToTest2, initialWeights=np.ones( len(germsToTest2), 'd' ), 
+            self.gs_target_noisy, germsToTest2, initialWeights=np.ones( len(germsToTest2), 'd' ),
             fixedSlack=False, slackFrac=0.1, returnAll=True, tol=1e-6, verbosity=4)
 
         self.runSilent(pygsti.alg.optimize_integer_germs_slack,
-                       self.gs_target_noisy, germsToTest, 
-                       initialWeights=np.ones( len(germsToTest), 'd' ), 
-                       fixedSlack=False, slackFrac=0.1, 
+                       self.gs_target_noisy, germsToTest,
+                       initialWeights=np.ones( len(germsToTest), 'd' ),
+                       fixedSlack=False, slackFrac=0.1,
                        returnAll=True, tol=1e-6, verbosity=4, maxIter=1)
                        # test hitting max iterations
-        
+
         with self.assertRaises(ValueError):
             pygsti.alg.optimize_integer_germs_slack(
-                self.gs_target_noisy, germsToTest, 
-                initialWeights=np.ones( len(germsToTest), 'd' ), 
+                self.gs_target_noisy, germsToTest,
+                initialWeights=np.ones( len(germsToTest), 'd' ),
                 returnAll=True, tol=1e-6, verbosity=4)
                 # must specify either fixedSlack or slackFrac
 
-        
-    
-      
+
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

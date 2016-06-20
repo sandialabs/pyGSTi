@@ -1,23 +1,23 @@
 import unittest
 import numpy as np
 import scipy.linalg
-import sys, os
 import pygsti
+import os
 from pygsti.construction import std1Q_XYI as std
 
 
 class ToolsTestCase(unittest.TestCase):
 
     def setUp(self):
+        # move working directories
+        self.old = os.getcwd()
+        os.chdir(os.path.abspath(os.path.dirname(__file__)))
+
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = True
-        #Set CWD to directory of this file
-        self.owd = os.getcwd()
-        os.chdir( os.path.dirname(__file__))
 
     def tearDown(self):
-        os.chdir(self.owd)
-
+        os.chdir(self.old)
 
     def assertArraysAlmostEqual(self,a,b):
         self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
@@ -44,7 +44,7 @@ class ToolsMethods(ToolsTestCase):
                                   [ 3.0,  4.0]])
         self.assertArraysAlmostEqual( mxInReducedBasis, correctAnswer )
         self.assertArraysAlmostEqual( notReallyContracted, mxInStdBasis )
-        
+
         expandedMx = pygsti.expand_from_std_direct_sum_mx(mxInReducedBasis,[1,1])
         expandedMxAgain = pygsti.expand_from_std_direct_sum_mx(expandedMx,4)
         self.assertArraysAlmostEqual( expandedMx, mxInStdBasis )
@@ -68,7 +68,7 @@ class ToolsMethods(ToolsTestCase):
             pygsti.gm_matrices_unnormalized("FooBar") #arg must be tuple,list,or int
 
         # GM [1,1] matrices are the basis matrices for each block, concatenated together
-        GM11_mxs = pygsti.gm_matrices_unnormalized([1,1]) 
+        GM11_mxs = pygsti.gm_matrices_unnormalized([1,1])
         self.assertTrue(len(GM11_mxs) == 2)
         self.assertArraysAlmostEqual( GM11_mxs[0], np.array([[1,0],[0,0]],'d') )
         self.assertArraysAlmostEqual( GM11_mxs[1], np.array([[0,0],[0,1]],'d') )
@@ -80,7 +80,7 @@ class ToolsMethods(ToolsTestCase):
         self.assertArraysAlmostEqual( NGM2_mxs[1], sigmax/np.sqrt(2) )
         self.assertArraysAlmostEqual( NGM2_mxs[2], sigmay/np.sqrt(2) )
         self.assertArraysAlmostEqual( NGM2_mxs[3], sigmaz/np.sqrt(2) )
-        
+
         #TODO: test 4x4 matrices?
 
     def test_orthogonality(self):
@@ -127,7 +127,7 @@ class ToolsMethods(ToolsTestCase):
                 pp_trMx[i,j] = np.trace(np.dot(np.conjugate(np.transpose(mxs[i])),mxs[j]))
                 #Note: conjugate transpose not needed since mxs are Hermitian
         self.assertArraysAlmostEqual( pp_trMx, np.identity(N,'complex') )
-        
+
 
     def test_transforms(self):
         mxStd = np.array([[1,0,0,0],
@@ -143,7 +143,7 @@ class ToolsMethods(ToolsTestCase):
         vecGM = pygsti.std_to_gm(vecStd)
         vecStd2 = pygsti.gm_to_std(vecGM)
         self.assertArraysAlmostEqual( vecStd, vecStd2 )
-        
+
         mxPP = pygsti.std_to_pp(mxStd)
         mxStd2 = pygsti.pp_to_std(mxPP)
         self.assertArraysAlmostEqual( mxStd, mxStd2 )
@@ -157,14 +157,14 @@ class ToolsMethods(ToolsTestCase):
 
         vecPP2 = pygsti.gm_to_pp(vecGM)
         self.assertArraysAlmostEqual( vecPP, vecPP2 )
-        
+
         mxGM2 = pygsti.pp_to_gm(mxPP)
         self.assertArraysAlmostEqual( mxGM, mxGM2 )
 
         vecGM2 = pygsti.pp_to_gm(vecPP)
         self.assertArraysAlmostEqual( vecGM, vecGM2 )
 
-        
+
         non_herm_mxStd = np.array([[1,0,2,3j],
                                    [0,1,0,2],
                                    [0,0,1,0],
@@ -210,7 +210,7 @@ class ToolsMethods(ToolsTestCase):
         self.assertArraysAlmostEqual( mxFromStd, densityMx)
 
 
-        
+
 
     def test_few_qubit_fns(self):
         state_vec = np.array([1,0],'complex')
@@ -219,7 +219,7 @@ class ToolsMethods(ToolsTestCase):
 
         theta = np.pi
         ex = 1j * theta*pygsti.sigmax/2
-        U = scipy.linalg.expm(ex) 
+        U = scipy.linalg.expm(ex)
         # U is 2x2 unitary matrix operating on single qubit in [0,1] basis (X(pi) rotation)
 
         op = pygsti.unitary_to_pauligate_1q(U)
@@ -231,7 +231,7 @@ class ToolsMethods(ToolsTestCase):
 
         U_2Q = np.identity(4, 'complex'); U_2Q[2:,2:] = U
         # U_2Q is 4x4 unitary matrix operating on isolated two-qubit space (CX(pi) rotation)
-        
+
         op_2Q = pygsti.unitary_to_pauligate_2q(U_2Q)
 
         stdMx = np.array( [[1,0],[0,0]], 'complex' ) #density matrix
@@ -244,13 +244,13 @@ class ToolsMethods(ToolsTestCase):
     def test_basistools_misc(self):
         with self.assertRaises(ValueError):
             pygsti.tools.basistools._processBlockDims("FooBar") #arg should be a list,tuple,or int
-        
-            
+
+
 
     ###########################################################
     ## Chi2 and logL TESTS   ##################################
     ###########################################################
-            
+
     def test_chi2_fn(self):
         ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis.dataset")
         chi2, grad = pygsti.chi2(ds, std.gs_target, returnGradient=True)
@@ -269,34 +269,34 @@ class ToolsMethods(ToolsTestCase):
         gatestrings = pygsti.construction.gatestring_list( [ ('Gx',), ('Gy',), ('Gx','Gx') ] )
         spam_labels = std.gs_target.get_spam_labels()
         pygsti.create_count_vec_dict( spam_labels, ds, gatestrings )
-        
-        L1 = pygsti.logl(std.gs_target, ds, gatestrings, 
+
+        L1 = pygsti.logl(std.gs_target, ds, gatestrings,
                          probClipInterval=(-1e6,1e6), countVecMx=None,
                          poissonPicture=True, check=False)
-        L2 = pygsti.logl(std.gs_target, ds, gatestrings, 
+        L2 = pygsti.logl(std.gs_target, ds, gatestrings,
                          probClipInterval=(-1e6,1e6), countVecMx=None,
                          poissonPicture=False, check=False) #Non-poisson-picture
 
         dL1 = pygsti.logl_jacobian(std.gs_target, ds, gatestrings,
-                                   probClipInterval=(-1e6,1e6), radius=1e-4, 
+                                   probClipInterval=(-1e6,1e6), radius=1e-4,
                                    poissonPicture=True, check=False)
         dL2 = pygsti.logl_jacobian(std.gs_target, ds, gatestrings,
-                                   probClipInterval=(-1e6,1e6), radius=1e-4, 
+                                   probClipInterval=(-1e6,1e6), radius=1e-4,
                                    poissonPicture=False, check=False)
         dL2b = pygsti.logl_jacobian(std.gs_target, ds, None,
-                                   probClipInterval=(-1e6,1e6), radius=1e-4, 
+                                   probClipInterval=(-1e6,1e6), radius=1e-4,
                                    poissonPicture=False, check=False) #test None as gs list
 
 
         hL1 = pygsti.logl_hessian(std.gs_target, ds, gatestrings,
-                                  probClipInterval=(-1e6,1e6), radius=1e-4, 
+                                  probClipInterval=(-1e6,1e6), radius=1e-4,
                                   poissonPicture=True, check=False)
 
         hL2 = pygsti.logl_hessian(std.gs_target, ds, gatestrings,
-                                  probClipInterval=(-1e6,1e6), radius=1e-4, 
+                                  probClipInterval=(-1e6,1e6), radius=1e-4,
                                   poissonPicture=False, check=False)
         hL2b = pygsti.logl_hessian(std.gs_target, ds, None,
-                                   probClipInterval=(-1e6,1e6), radius=1e-4, 
+                                   probClipInterval=(-1e6,1e6), radius=1e-4,
                                    poissonPicture=False, check=False) #test None as gs list
 
 
@@ -306,21 +306,21 @@ class ToolsMethods(ToolsTestCase):
         pygsti.cptp_penalty(std.gs_target, include_spam_penalty=True)
         twoDelta1 = pygsti.two_delta_loglfn(N=100, p=0.5, f=0.6, minProbClip=1e-6, poissonPicture=True)
         twoDelta2 = pygsti.two_delta_loglfn(N=100, p=0.5, f=0.6, minProbClip=1e-6, poissonPicture=False)
-        
+
 
     def test_gate_tools(self):
         oneRealPair = np.array( [[1+1j, 0, 0, 0],
                              [ 0, 1-1j,0, 0],
                              [ 0,   0, 2, 0],
                              [ 0,   0,  0, 2]], 'complex')
-        decomp = pygsti.decompose_gate_matrix(oneRealPair) 
+        decomp = pygsti.decompose_gate_matrix(oneRealPair)
             #decompose gate mx whose eigenvalues have a real but non-unit pair
 
         dblRealPair = np.array( [[3, 0, 0, 0],
                              [ 0, 3,0, 0],
                              [ 0,   0, 2, 0],
                              [ 0,   0,  0, 2]], 'complex')
-        decomp = pygsti.decompose_gate_matrix(dblRealPair) 
+        decomp = pygsti.decompose_gate_matrix(dblRealPair)
             #decompose gate mx whose eigenvalues have two real but non-unit pairs
 
 
@@ -328,7 +328,7 @@ class ToolsMethods(ToolsTestCase):
                                 [ 0, 2-1j,0, 0],
                                 [ 0,   0, 2+2j, 0],
                                 [ 0,   0,  0,  1.0+3j]], 'complex')
-        decomp = pygsti.decompose_gate_matrix(unpairedMx) 
+        decomp = pygsti.decompose_gate_matrix(unpairedMx)
             #decompose gate mx which has all complex eigenvalue -> bail out
         self.assertFalse(decomp['isValid'])
 
@@ -355,7 +355,7 @@ class ToolsMethods(ToolsTestCase):
 
         self.assertAlmostEqual( pygsti.frobeniusdist(A,B), pygsti.frobeniusnorm(A-B) )
         self.assertAlmostEqual( pygsti.frobeniusdist(A,B), np.sqrt( pygsti.frobeniusnorm2(A-B) ) )
-        
+
 
     def test_jamiolkowski_ops(self):
         mxGM  = np.array([[1, 0, 0, 0],
@@ -418,7 +418,7 @@ class ToolsMethods(ToolsTestCase):
             pygsti.jamiolkowski_iso_inv(choiStd, "foobar","gm") #invalid choi basis
         with self.assertRaises(ValueError):
             pygsti.jamiolkowski_iso_inv(choiStd, "std","foobar") #invalid gate basis
-        
+
 
         sumOfNeg  = pygsti.sum_of_negative_choi_evals(std.gs_target)
         sumsOfNeg = pygsti.sums_of_negative_choi_evals(std.gs_target)
@@ -453,7 +453,7 @@ class ToolsMethods(ToolsTestCase):
         s2 = pygsti.mx_to_string(non_herm_mx)
         #print "\n>%s<" % s1
         #print "\n>%s<" % s2
-        
+
         #TODO: go through matrixtools.py and add tests for every function
 
     def test_rb_tools(self):
@@ -493,7 +493,7 @@ class ToolsMethods(ToolsTestCase):
 
         with self.assertRaises(Exception):
             rpe.extract_rotation_hat(xhat,yhat,1,Nx,Ny,"foobar") #bad angle name
-        
+
 
         from pygsti.construction import std1Q_XZ as stdXZ
         target = stdXZ.gs_target.copy()
@@ -518,6 +518,6 @@ class ToolsMethods(ToolsTestCase):
 
 
 
-      
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

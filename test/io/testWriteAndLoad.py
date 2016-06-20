@@ -2,20 +2,21 @@ import unittest
 import pygsti
 from pygsti.construction import std1Q_XYI as std
 import numpy as np
-import os, sys
+import os
 
 
 class WriteAndLoadTestCase(unittest.TestCase):
 
     def setUp(self):
+        # move working directories
+        self.old = os.getcwd()
+        os.chdir(os.path.abspath(os.path.dirname(__file__)))
+
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = True
-        #Set CWD to directory of this file
-        self.owd = os.getcwd()
-        os.chdir( os.path.dirname(__file__))
 
     def tearDown(self):
-        os.chdir(self.owd)
+        os.chdir(old)
 
     def assertArraysAlmostEqual(self,a,b):
         self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
@@ -32,11 +33,11 @@ class TestWriteAndLoad(WriteAndLoadTestCase):
     def test_dataset_file(self):
 
         strList = pygsti.construction.gatestring_list( [(), ('Gx',), ('Gx','Gy') ] )
-        weighted_strList = [ pygsti.obj.WeightedGateString((), weight=0.1), 
+        weighted_strList = [ pygsti.obj.WeightedGateString((), weight=0.1),
                              pygsti.obj.WeightedGateString(('Gx',), weight=2.0),
                              pygsti.obj.WeightedGateString(('Gx','Gy'), weight=1.5) ]
         pygsti.io.write_empty_dataset("../temp_test_files/emptyDataset.txt", strList, numZeroCols=2, appendWeightsColumn=False)
-        pygsti.io.write_empty_dataset("../temp_test_files/emptyDataset2.txt", weighted_strList, 
+        pygsti.io.write_empty_dataset("../temp_test_files/emptyDataset2.txt", weighted_strList,
                                   headerString='## Columns = myplus count, myminus count', appendWeightsColumn=True)
 
         with self.assertRaises(ValueError):
@@ -45,7 +46,7 @@ class TestWriteAndLoad(WriteAndLoadTestCase):
             pygsti.io.write_empty_dataset("../temp_test_files/emptyDataset.txt", strList, headerString="# Nothing ")
               #must give numZeroCols or meaningful header string (default => 2 cols)
 
-        
+
         ds = pygsti.obj.DataSet(spamLabels=['plus','minus'])
         ds.add_count_dict( ('Gx',), {'plus': 10, 'minus': 90} )
         ds.add_count_dict( ('Gx','Gy'), {'plus': 40, 'minus': 60} )
@@ -96,7 +97,7 @@ Gx^4 20 80 0.2 100
         #write all strings in ds to file with given spam label ordering
         pygsti.io.write_multidataset("../temp_test_files/TestMultiDataset3.txt",
                                      ds, spamLabelOrder=('plus','minus'))
-        
+
         with self.assertRaises(ValueError):
             pygsti.io.write_multidataset(
                 "../temp_test_files/TestMultiDatasetErr.txt",ds, [('Gx',)])
@@ -117,10 +118,10 @@ Gx^4 20 80 0.2 100
 
         with self.assertRaises(ValueError):
             pygsti.io.write_gatestring_list(
-                "../temp_test_files/gatestringlist_bad.txt", 
+                "../temp_test_files/gatestringlist_bad.txt",
                 [ ('Gx',)], "My Header") #Must be GateStrings
 
-        
+
     def test_gateset_file(self):
         pygsti.io.write_gateset(std.gs_target, "../temp_test_files/gateset_loadwrite.txt", "My title")
 
@@ -132,10 +133,10 @@ Gx^4 20 80 0.2 100
         gs = pygsti.io.load_gateset("../temp_test_files/gateset_loadwrite.txt")
         self.assertAlmostEqual(gs.frobeniusdist(std.gs_target), 0)
 
-        gateset_m1m1 = pygsti.construction.build_gateset([2], [('Q0',)],['Gi','Gx','Gy'], 
+        gateset_m1m1 = pygsti.construction.build_gateset([2], [('Q0',)],['Gi','Gx','Gy'],
                                                          [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
                                                          prepLabels=['rho0'], prepExpressions=["0"],
-                                                         effectLabels=['E0'], effectExpressions=["1"], 
+                                                         effectLabels=['E0'], effectExpressions=["1"],
                                                          spamdefs={'plus': ('rho0','E0'),
                                                                         'minus': ('remainder','remainder') })
         pygsti.io.write_gateset(gateset_m1m1, "../temp_test_files/gateset_m1m1_loadwrite.txt", "My title m1m1")
@@ -213,7 +214,7 @@ SPAMLABEL minus = remainder
 
 
 
-        
+
     def test_gatestring_dict_file(self):
         file_txt = "# Gate string dictionary\nF1 GxGx\nF2 GxGy"  #TODO: make a Writers function for gate string dicts
         open("../temp_test_files/gatestringdict_loadwrite.txt","w").write(file_txt)
@@ -221,10 +222,8 @@ SPAMLABEL minus = remainder
         d = pygsti.io.load_gatestring_dict("../temp_test_files/gatestringdict_loadwrite.txt")
         self.assertEqual( tuple(d['F1']), ('Gx','Gx'))
 
-        
+
 
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
-
-    

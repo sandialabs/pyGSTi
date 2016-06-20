@@ -3,7 +3,7 @@ import pygsti
 import numpy as np
 import sys
 import warnings
-import os, sys
+import os
 
 def f(x):
     return np.dot(x,x)
@@ -17,29 +17,29 @@ def jac(x):
 class OptimizeTestCase(unittest.TestCase):
 
     def setUp(self):
+        # move working directories
+        self.old = os.getcwd()
+        os.chdir(os.path.abspath(os.path.dirname(__file__)))
+
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = True
 
         self.x0 = np.array( [10,5], 'd')
         self.answer = np.array( [0,0], 'd')
-        #Set CWD to directory of this file
-        self.owd = os.getcwd()
-        os.chdir( os.path.dirname(__file__))
 
     def tearDown(self):
-        os.chdir(self.owd)
-
+        os.chdir(self.old)
 
     def assertArraysAlmostEqual(self,a,b):
         self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
 
 
 class TestOptimizeMethods(OptimizeTestCase):
-    
+
     def test_optimize(self):
         old_stdout = sys.stdout
         sys.stdout = open("../temp_test_files/optimize.out","w")
-        
+
         for method in ("simplex","supersimplex","customcg","basinhopping","CG","BFGS","L-BFGS-B"): #"homebrew"
             result = pygsti.optimize.minimize(f, self.x0, method, maxiter=1000)
             self.assertArraysAlmostEqual(result.x, self.answer)
@@ -63,9 +63,9 @@ class TestOptimizeMethods(OptimizeTestCase):
 
         if doTest:
             result = pygsti.optimize.minimize(f, self.x0, "evolve", maxiter=20)
-            self.assertLess(np.linalg.norm(result.x-self.answer), 0.1) 
+            self.assertLess(np.linalg.norm(result.x-self.answer), 0.1)
               #takes too long to converge...
-        
+
         sys.stdout.close()
         sys.stdout = old_stdout
 
@@ -75,6 +75,6 @@ class TestOptimizeMethods(OptimizeTestCase):
         pygsti.optimize.check_jac(f_vec, x0, jac(x0), eps=1e-10, tol=1e-6, errType='rel')
         pygsti.optimize.check_jac(f_vec, x0, jac(x0), eps=1e-10, tol=1e-6, errType='abs')
 
-      
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

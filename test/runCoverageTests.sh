@@ -1,4 +1,5 @@
 #!/bin/bash
+
 echo "Serial tests started..."
 time nosetests -v --with-coverage --cover-package=pygsti --cover-erase */test*.py > coverage_tests_serial.out 2>&1
 mv .coverage coverage.serial

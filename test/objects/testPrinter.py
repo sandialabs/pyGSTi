@@ -1,15 +1,13 @@
 from pygsti.objects.verbosityprinter import *
 from contextlib                      import contextmanager
 
-import unittest
-import sys
-import os
+import unittest, sys, os
 
-# The path for a temporary file to be generated in 
+# The path for a temporary file to be generated in
 filePath        = '../temp_test_files/printer_output.txt'
 # Some basic messages to make assertions easier
 warningMessage  = 'This might go badly'
-errorMessage    = 'Something terrible happened'    
+errorMessage    = 'Something terrible happened'
 logMessage      = 'Data recieved'
 
 def _generate_with(printer):
@@ -24,11 +22,11 @@ def _generate_with(printer):
 	for i, item in enumerate(data):
 	    printer.show_progress(i, len(data)-1, messageLevel=2)
 	printer.end_progress()
-    printer.end_progress()     
+    printer.end_progress()
 
 def _to_temp_file(printer):
     data     = range(2)
-    
+
     _generate_with(printer)
 
     generated = []
@@ -52,12 +50,12 @@ class ListStream:
         sys.stdout = self
         return self
     def __exit__(self, ext_type, exc_value, traceback):
-        sys.stdout = sys.__stdout__  
+        sys.stdout = sys.__stdout__
 
 
 def _to_redirected_stream(printer):
     generated = []
-    with ListStream() as output:    
+    with ListStream() as output:
         _generate_with(printer)
     for line in ''.join(output.data).splitlines():
         if line != '':
@@ -78,20 +76,20 @@ def _test_output_with(testcase, method, printer):
 
     # Verbose output testing (Warnings, Errors, Verbose Log Messages, Outer Iterations, Innner Iterations)
 
-    verbose   = VerbosityPrinter.build_printer(normal + 1)   
-    generated = method(verbose)       
+    verbose   = VerbosityPrinter.build_printer(normal + 1)
+    generated = method(verbose)
 
     if printer.filename != None:
 
-	testcase.assertEqual(generated, ['      Data recieved', 'WARNING: This might go badly', '  Progress: Iter 0 of 1 : ', 
-					 '  (1 data members remaining)', '  Data recieved', '    Progress: Iter 0 of 1 : ', 
-					 '    Progress: Iter 1 of 1 : ', '    Progress: Iter 1 of 1 : ', '    (0 data members remaining)', 
+	testcase.assertEqual(generated, ['      Data recieved', 'WARNING: This might go badly', '  Progress: Iter 0 of 1 : ',
+					 '  (1 data members remaining)', '  Data recieved', '    Progress: Iter 0 of 1 : ',
+					 '    Progress: Iter 1 of 1 : ', '    Progress: Iter 1 of 1 : ', '    (0 data members remaining)',
 					 '  Data recieved', 'ERROR: Something terrible happened', '    Progress: Iter 0 of 1 : ', '    Progress: Iter 1 of 1 : '])
 
     else:
-        testcase.assertEqual(generated, ['      Data recieved', 'WARNING: This might go badly', '  Progress: Iter 0 of 1 : ', '  (1 data members remaining)', 
-                                         '  Data recieved', '    Progress: Iter 0 of 1 : ', '    Progress: Iter 1 of 1 : ', '    Progress: Iter 1 of 1 : ', 
-                                         '    (0 data members remaining)', '  Data recieved', 'ERROR: Something terrible happened', '    Progress: Iter 0 of 1 : ', 
+        testcase.assertEqual(generated, ['      Data recieved', 'WARNING: This might go badly', '  Progress: Iter 0 of 1 : ', '  (1 data members remaining)',
+                                         '  Data recieved', '    Progress: Iter 0 of 1 : ', '    Progress: Iter 1 of 1 : ', '    Progress: Iter 1 of 1 : ',
+                                         '    (0 data members remaining)', '  Data recieved', 'ERROR: Something terrible happened', '    Progress: Iter 0 of 1 : ',
                                          '    Progress: Iter 1 of 1 : '])
 
     # Terse output testing (Warnings, Errors, and an unnested ProgressBar)
@@ -103,8 +101,8 @@ def _test_output_with(testcase, method, printer):
         testcase.assertEqual(generated, ['WARNING: This might go badly', '  Data recieved', '  Data recieved', 'ERROR: Something terrible happened'])
 
     else:
-        testcase.assertEqual(generated, ['WARNING: This might go badly', '  Progress: [--------------------------------------------------] 0.0% ', 
-                                         '  Progress: [##################################################] 100.0% ', 'ERROR: Something terrible happened', 
+        testcase.assertEqual(generated, ['WARNING: This might go badly', '  Progress: [--------------------------------------------------] 0.0% ',
+                                         '  Progress: [##################################################] 100.0% ', 'ERROR: Something terrible happened',
                                          '  INVALID LEVEL:   Data recieved', '  INVALID LEVEL:   Data recieved'])
 
     # Tersest output testing (Errors only)
@@ -115,25 +113,22 @@ def _test_output_with(testcase, method, printer):
     testcase.assertEqual(generated[0], 'ERROR: %s' % errorMessage)
 
 class TestVerbosePrinter(unittest.TestCase):
- 
     def setUp(self):
-        #Set CWD to directory of this file
-        self.owd = os.getcwd()
-        os.chdir( os.path.dirname(__file__))
+        self.old = os.getcwd()
+        os.chdir(os.path.abspath(os.path.dirname(__file__)))
 
     def tearDown(self):
-        os.chdir(self.owd)
-
+        os.chdir(self.old)
 
     def test_file_output(self):
-        _test_output_with(self, _to_temp_file, VerbosityPrinter(2, filename=filePath)) 
+        _test_output_with(self, _to_temp_file, VerbosityPrinter(2, filename=filePath))
 
-    def test_stream_output(self): 
-        _test_output_with(self, _to_redirected_stream, VerbosityPrinter.build_printer(2))           
-        
+    def test_stream_output(self):
+        _test_output_with(self, _to_redirected_stream, VerbosityPrinter.build_printer(2))
+
 if __name__ == '__main__':
     unittest.main()
-     
+
 
 '''
 
@@ -146,4 +141,4 @@ Sample output
 .
 ----------------------------------------------------------------------
 
-''' 
+'''

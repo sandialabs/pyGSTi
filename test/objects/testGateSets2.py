@@ -7,43 +7,44 @@ import os, sys
 class GateSetTestCase(unittest.TestCase):
 
     def setUp(self):
+
+        # move working directories
+        self.old = os.getcwd()
+        os.chdir(os.path.abspath(os.path.dirname(__file__)))
+
         #OK for these tests, since we test user interface?
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = False
 
 
-        self.gateset = pygsti.construction.build_gateset( 
-            [2], [('Q0',)],['Gi','Gx','Gy'], 
+        self.gateset = pygsti.construction.build_gateset(
+            [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0"], effectExpressions=["1"], 
-            spamdefs={'plus': ('rho0','E0'), 
+            effectLabels=["E0"], effectExpressions=["1"],
+            spamdefs={'plus': ('rho0','E0'),
                            'minus': ('remainder','remainder') } )
 
         self.tp_gateset = pygsti.construction.build_gateset(
-            [2], [('Q0',)],['Gi','Gx','Gy'], 
+            [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0"], effectExpressions=["1"], 
-            spamdefs={'plus': ('rho0','E0'), 
+            effectLabels=["E0"], effectExpressions=["1"],
+            spamdefs={'plus': ('rho0','E0'),
                            'minus': ('rho0','remainder') },
             parameterization="TP")
 
         self.static_gateset = pygsti.construction.build_gateset(
-            [2], [('Q0',)],['Gi','Gx','Gy'], 
+            [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0"], effectExpressions=["1"], 
-            spamdefs={'plus': ('rho0','E0'), 
+            effectLabels=["E0"], effectExpressions=["1"],
+            spamdefs={'plus': ('rho0','E0'),
                            'minus': ('rho0','remainder') },
             parameterization="static")
-        #Set CWD to directory of this file
-        self.owd = os.getcwd()
-        os.chdir( os.path.dirname(__file__))
 
     def tearDown(self):
-        os.chdir(self.owd)
-
+        os.chdir(self.old)
 
     def assertArraysAlmostEqual(self,a,b):
         self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
@@ -63,8 +64,8 @@ class TestGateSetMethods(GateSetTestCase):
 
   def test_counting(self):
 
-      self.assertEqual(self.gateset.num_preps(), 1) 
-      self.assertEqual(self.gateset.num_effects(), 1) 
+      self.assertEqual(self.gateset.num_preps(), 1)
+      self.assertEqual(self.gateset.num_effects(), 1)
 
       for default_param in ("full","TP","static"):
           nGates = 3 if default_param in ("full","TP") else 0
@@ -74,10 +75,10 @@ class TestGateSetMethods(GateSetTestCase):
           nParamsPerSP = 4 if default_param == "full" else 3
           nParams =  nGates * nParamsPerGate + nSPVecs * nParamsPerSP + nEVecs * 4
           self.gateset.set_all_parameterizations(default_param)
-          self.assertEqual(self.gateset.num_params(), nParams)  
+          self.assertEqual(self.gateset.num_params(), nParams)
 
-      self.assertEqual(self.gateset.get_prep_labels(), ["rho0"]) 
-      self.assertEqual(self.gateset.get_effect_labels(), ["E0"]) 
+      self.assertEqual(self.gateset.get_prep_labels(), ["rho0"])
+      self.assertEqual(self.gateset.get_effect_labels(), ["E0"])
 
 
   def test_getset_full(self):
@@ -88,11 +89,11 @@ class TestGateSetMethods(GateSetTestCase):
 
   def test_getset_static(self):
       self.getset_helper(self.static_gateset)
-      
+
   def getset_helper(self, gs):
 
       v = np.array( [[1.0/np.sqrt(2)],[0],[0],[1.0/np.sqrt(2)]], 'd')
-      
+
       gs['identity'] = v
       w = gs['identity']
       self.assertArraysAlmostEqual(w,v)
@@ -162,7 +163,7 @@ class TestGateSetMethods(GateSetTestCase):
           self.assertArraysAlmostEqual(cp[prepLabel], np.dot(Tinv, self.gateset[prepLabel]))
       for effectLabel in cp.effects:
           self.assertArraysAlmostEqual(cp[effectLabel],  np.dot(np.transpose(T), self.gateset[effectLabel]))
-      
+
 
   def test_simple_multiplicationA(self):
       gatestring = ('Gx','Gy')
@@ -187,7 +188,7 @@ class TestGateSetMethods(GateSetTestCase):
   def test_bulk_multiplication(self):
       gatestring1 = ('Gx','Gy')
       gatestring2 = ('Gx','Gy','Gy')
-      evt = self.gateset.bulk_evaltree( [gatestring1,gatestring2] )      
+      evt = self.gateset.bulk_evaltree( [gatestring1,gatestring2] )
 
       p1 = np.dot( self.gateset['Gy'], self.gateset['Gx'] )
       p2 = np.dot( self.gateset['Gy'], np.dot( self.gateset['Gy'], self.gateset['Gx'] ))
@@ -223,10 +224,10 @@ class TestGateSetMethods(GateSetTestCase):
 
   def test_simple_probabilityB(self):
       gatestring = ('Gx','Gy','Gy')
-      p1 = np.dot( np.transpose(self.gateset.effects['E0']), 
-                   np.dot( self.gateset['Gy'], 
-                           np.dot( self.gateset['Gy'], 
-                                   np.dot(self.gateset['Gx'], 
+      p1 = np.dot( np.transpose(self.gateset.effects['E0']),
+                   np.dot( self.gateset['Gy'],
+                           np.dot( self.gateset['Gy'],
+                                   np.dot(self.gateset['Gx'],
                                           self.gateset.preps['rho0']))))
       p2 = self.gateset.pr('plus',gatestring)
       self.assertAlmostEqual(p1,p2)
@@ -234,17 +235,17 @@ class TestGateSetMethods(GateSetTestCase):
   def test_bulk_probabilities(self):
       gatestring1 = ('Gx','Gy')
       gatestring2 = ('Gx','Gy','Gy')
-      evt = self.gateset.bulk_evaltree( [gatestring1,gatestring2] )    
+      evt = self.gateset.bulk_evaltree( [gatestring1,gatestring2] )
 
       p1 = np.dot( np.transpose(self.gateset.effects['E0']),
                    np.dot( self.gateset['Gy'],
                            np.dot(self.gateset['Gx'],
                                   self.gateset.preps['rho0'])))
 
-      p2 = np.dot( np.transpose(self.gateset.effects['E0']), 
-                   np.dot( self.gateset['Gy'], 
-                           np.dot( self.gateset['Gy'], 
-                                   np.dot(self.gateset['Gx'], 
+      p2 = np.dot( np.transpose(self.gateset.effects['E0']),
+                   np.dot( self.gateset['Gy'],
+                           np.dot( self.gateset['Gy'],
+                                   np.dot(self.gateset['Gx'],
                                           self.gateset.preps['rho0']))))
 
       #check == true could raise a warning if a mismatch is detected
@@ -441,22 +442,22 @@ class TestGateSetMethods(GateSetTestCase):
 
       #without derivative
       self.assertNoWarnings(self.gateset.bulk_fill_hprobs, hprobs_to_fillB, spam_label_rows, evt,
-                            prMxToFill=probs_to_fillB, check=True) 
+                            prMxToFill=probs_to_fillB, check=True)
       self.assertArraysAlmostEqual(hprobs_to_fill,hprobs_to_fillB)
       self.assertArraysAlmostEqual(probs_to_fill,probs_to_fillB)
 
       #without probs
       self.assertNoWarnings(self.gateset.bulk_fill_hprobs, hprobs_to_fillB, spam_label_rows, evt,
-                            derivMxToFill=dprobs_to_fillB, check=True) 
+                            derivMxToFill=dprobs_to_fillB, check=True)
       self.assertArraysAlmostEqual(hprobs_to_fill,hprobs_to_fillB)
       self.assertArraysAlmostEqual(dprobs_to_fill,dprobs_to_fillB)
 
       #without either
-      self.assertNoWarnings(self.gateset.bulk_fill_hprobs, hprobs_to_fillB, spam_label_rows, evt, check=True) 
+      self.assertNoWarnings(self.gateset.bulk_fill_hprobs, hprobs_to_fillB, spam_label_rows, evt, check=True)
       self.assertArraysAlmostEqual(hprobs_to_fill,hprobs_to_fillB)
 
       N = self.gateset.get_dimension()**2 #number of elements in a gate matrix
-      
+
       hProds = self.gateset.bulk_hproduct(evt)
       hProdsB,scales = self.gateset.bulk_hproduct(evt, bScale=True)
       self.assertArraysAlmostEqual(hProds, scales[:,None,None,None,None]*hProdsB)
@@ -524,10 +525,10 @@ class TestGateSetMethods(GateSetTestCase):
       #Iterate over all gates and SPAM matrices
       #for mx in self.gateset.iterall():
       pass
-      
 
 
 
-      
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -5,25 +5,23 @@ from pygsti.construction import std1Q_XYI as stdxyi
 from pygsti.construction import std1Q_XY as stdxy
 
 import numpy as np
-import sys
-import os, sys
+import sys, os
 
 class HessianTestCase(unittest.TestCase):
 
     def setUp(self):
+        # move working directories
+        self.old = os.getcwd()
+        os.chdir(os.path.abspath(os.path.dirname(__file__)))
+
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = True
 
         self.gateset = pygsti.io.load_gateset("../cmp_chk_files/analysis.gateset")
         self.ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis.dataset")
 
-        #Set CWD to directory of this file
-        self.owd = os.getcwd()
-        os.chdir( os.path.dirname(__file__))
-
     def tearDown(self):
-        os.chdir(self.owd)
-
+        os.chdir(self.old)
 
     def assertWarns(self, callable, *args, **kwds):
         with warnings.catch_warnings(record=True) as warning_list:
@@ -47,17 +45,17 @@ class TestHessianMethods(HessianTestCase):
         #XY Gateset: SPAM=True
         n = stdxy.gs_target.num_params()
         self.assertEqual(n,40) # 2*16 + 2*4 = 40
-        
+
         n = stdxy.gs_target.num_nongauge_params()
         self.assertEqual(n,24) # full 16 gauge params: SPAM gate + 2 others
-        
+
         #XY Gateset: SPAM=False
         tst = stdxy.gs_target.copy()
         del tst.preps['rho0']
         del tst.effects['E0']
         n = tst.num_params()
         self.assertEqual(n,32) # 2*16 = 32
-        
+
         n = tst.num_nongauge_params()
         self.assertEqual(n,18) # gates are all unital & TP => only 14 gauge params (2 casimirs)
 
@@ -65,17 +63,17 @@ class TestHessianMethods(HessianTestCase):
         #XYI Gateset: SPAM=True
         n = stdxyi.gs_target.num_params()
         self.assertEqual(n,56) # 3*16 + 2*4 = 56
-        
+
         n = stdxyi.gs_target.num_nongauge_params()
         self.assertEqual(n,40) # full 16 gauge params: SPAM gate + 3 others
-        
+
         #XYI Gateset: SPAM=False
         tst = stdxyi.gs_target.copy()
         del tst.preps['rho0']
         del tst.effects['E0']
         n = tst.num_params()
         self.assertEqual(n,48) # 3*16 = 48
-        
+
         n = tst.num_nongauge_params()
         self.assertEqual(n,34) # gates are all unital & TP => only 14 gauge params (2 casimirs)
 
@@ -84,7 +82,7 @@ class TestHessianMethods(HessianTestCase):
         tst.preps['rho0'] = pygsti.obj.TPParameterizedSPAMVec(tst.preps['rho0'])
         n = tst.num_params()
         self.assertEqual(n,55) # 3*16 + 4 + 3 = 55
-        
+
         n = tst.num_nongauge_params()
         self.assertEqual(n,40) # 15 gauge params (minus one b/c can't change rho?)
 
@@ -94,11 +92,11 @@ class TestHessianMethods(HessianTestCase):
         tst.gates['Gy'] = pygsti.obj.TPParameterizedGate(tst.gates['Gy'])
         n = tst.num_params()
         self.assertEqual(n,43) # 3*12 + 4 + 3 = 43
-        
+
         n = tst.num_nongauge_params()
         self.assertEqual(n,31) # full 12 gauge params of single 4x3 gate
-        
-        
+
+
     def test_hessian_projection(self):
 
         chi2, chi2Grad, chi2Hessian = pygsti.chi2(self.ds, self.gateset,
@@ -106,16 +104,16 @@ class TestHessianMethods(HessianTestCase):
                                                   returnHessian=True)
 
         proj_non_gauge = self.gateset.get_nongauge_projector()
-        projectedHessian = np.dot(proj_non_gauge, 
+        projectedHessian = np.dot(proj_non_gauge,
                                   np.dot(chi2Hessian, proj_non_gauge))
 
         self.assertEqual( projectedHessian.shape, (56,56) )
-        self.assertEqual( np.linalg.matrix_rank(proj_non_gauge), 40)        
+        self.assertEqual( np.linalg.matrix_rank(proj_non_gauge), 40)
         self.assertEqual( np.linalg.matrix_rank(projectedHessian), 40)
 
         eigvals = np.sort(abs(np.linalg.eigvals(projectedHessian)))
-        
-        eigvals_chk = np.array( 
+
+        eigvals_chk = np.array(
             [  2.36932621e-11,   4.57739349e-11,   8.49888013e-11,   8.49888013e-11,
                1.22859895e-10,   1.22859895e-10,   1.38705957e-10,   1.38705957e-10,
                3.75441328e-10,   6.46644807e-10,   6.46644807e-10,   7.06181642e-10,
@@ -145,11 +143,11 @@ class TestHessianMethods(HessianTestCase):
         ci_opt = pygsti.obj.ConfidenceRegion(self.gateset, chi2Hessian, 95.0,
                                              hessianProjection="optimal gate CIs",
                                              tol=0.1) #very low tol so doesn't take long
-        
+
         with self.assertRaises(ValueError):
             pygsti.obj.ConfidenceRegion(self.gateset, chi2Hessian, 95.0,
                                              hessianProjection="FooBar") #bad hessianProjection
-            
+
         self.assertWarns(pygsti.obj.ConfidenceRegion, self.gateset,
                          chi2Hessian, 0.95, hessianProjection="none") # percentage < 1.0
 
@@ -201,9 +199,9 @@ class TestHessianMethods(HessianTestCase):
 
         with self.assertRaises(ValueError):
             ci_std.get_spam_fn_confidence_interval(fnOfSpam_3D, verbosity=0)
-            
+
         #TODO: assert values of df & f0 ??
 
-      
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
