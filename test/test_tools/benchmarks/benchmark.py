@@ -1,16 +1,17 @@
 from __future__ import print_function
 import time, sys, os
 
-# allows creation of decorators that take arguments
-def parametrized(dec):
-    def layer(*args, **kwargs):
-        def repl(f):
-            return dec(f, *args, **kwargs)
-        return repl
-    return layer
+# # allows creation of decorators that take arguments
+# def parametrized(dec):
+#     def layer(*args, **kwargs):
+#         def repl(f):
+#             return dec(f, *args, **kwargs)
+#         return repl
+#     return layer
+#
+# @parametrized
 
-@parametrized
-def benchmark(function, filename):
+def benchmark(function):
     def wrapper(*args, **kwargs):
         startTime = time.time()
         result    = function(*args, **kwargs)
@@ -18,11 +19,10 @@ def benchmark(function, filename):
         totalTime = endTime - startTime
 
         # Log the amount of time the function took to finish
-        info = 'The function %s in the module %s took %s seconds to run' % \
-            (function.__name__, function.__module__, totalTime)
-        # filename exists here no matter what
-        with open(filename, 'a') as output:
-            output.write(info + '\n')
+        #info = 'The Benchmark took %s seconds\n' % (totalTime)
 
-        return result
+        #with open(filename, 'a') as output:
+        #    output.write(info)
+
+        return result, totalTime
     return wrapper

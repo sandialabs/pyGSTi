@@ -1,28 +1,26 @@
 from __future__ import print_function
 from runModule  import run_module
 from benchmarks import benchmark
-from tool       import tool
+from helpers    import tool, get_args
 import os, sys
 
-get_bench_file = lambda benchDir, name : '%s%s.bench' % ((benchDir if benchDir != None else ''), name.replace('.py', ''))
-
-def benchmark_template(fullpath, command, benchDir=None):
+def benchmark_template(fullpath, command):
     directory, name = fullpath.rsplit('/', 1)
-    benchFile = get_bench_file(benchDir, name)
-    @benchmark(benchFile)
+    @benchmark
     def template():
         command(fullpath)
-    template()
+    _, time = template()
+    return time
 
-def benchmark_module(moduleName, benchDir=None):
-    benchmark_template(moduleName, run_module, benchDir)
+def benchmark_module(moduleName):
+    return benchmark_template(moduleName, run_module)
 
-def benchmark_file(filename, benchDir=None):
+def benchmark_file(filename):
     run_file = lambda filename : os.system('python %s' % filename)
-    benchmark_template(filename, run_file, benchDir)
+    return benchmark_template(filename, run_file)
 
 @tool
-def run_benchmarks(names, benchDir=None, allModules=False):
+def run_benchmarks(names, output=None):
     # build modulenames and filenames
     _, moduleNames, _ = os.walk(os.getcwd()).next()
     fileNames = {}
@@ -31,24 +29,24 @@ def run_benchmarks(names, benchDir=None, allModules=False):
             if filename.endswith('.py') and filename.startswith('test'):
                 fileNames[filename] = subdir + os.sep + filename
 
+    benchDict = {}
 
     for name in names:
         if name in moduleNames:
-            benchmark_module(os.getcwd() + '/' + name, benchDir)
+            benchDict[name] = benchmark_module(os.getcwd() + '/' + name)
         elif name in fileNames:
             # send the full filepath to benchmark_file()
-            benchmark_file(fileNames[name], benchDir)
+            benchDict[name] = benchmark_file(fileNames[name])
         else:
             print('%s is neither a valid modulename, nor a valid filename' % name)
 
+    if output != None:
+        with open(output, 'w') as benchfile:
+            for key in benchDict:
+                info = '%s | %s\n' % (key.ljust(20), benchDict[key])
+                benchfile.write(info)
+    return benchDict
 
 if __name__ == "__main__":
-    args      = [[arg for arg in sys.argv[1:] if not arg.startswith('--')]] # create args
-    optionals = [arg for arg in sys.argv[1:] if arg.startswith('--')]
-    kwargs    = {}
-    # create kwargs
-    for optional in optionals:
-        kv = optional[2:].split('=') # remove prepending '--' and seperate into key : value
-        kwargs[kv[0]] = kv[1]
-
+    args, kwargs = get_args(sys.argv)
     run_benchmarks(*args, **kwargs)
