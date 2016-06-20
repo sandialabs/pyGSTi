@@ -1,23 +1,25 @@
-from __future__ import print_function
-from runModule  import run_module
-from benchmarks import benchmark
-from helpers    import *
+from __future__  import print_function
+from runModule   import run_module
+from benchmarks  import benchmark
+from helpers     import *
+from getCoverage import get_single_coverage
 import os, sys
 
-def benchmark_template(fullpath, command):
-    directory, name = fullpath.rsplit('/', 1)
+def benchmark_template(command, *args, **kwargs):
     @benchmark
     def template():
-        command(fullpath)
-    _, time = template()
-    return time
+        return command(*args, **kwargs)
+    return template()
 
 def benchmark_module(moduleName):
-    return benchmark_template(moduleName, run_module)
+    return benchmark_template(run_module, moduleName)
 
 def benchmark_file(filename):
     run_file = lambda filename : os.system('python %s' % filename)
-    return benchmark_template(filename, run_file)
+    return benchmark_template(run_file, filename)
+
+def benchmark_coverage(fullpath, package=''):
+    return benchmark_template(get_single_coverage, fullpath, package)
 
 @tool
 def run_benchmarks(names, output=None):
@@ -29,10 +31,10 @@ def run_benchmarks(names, output=None):
 
     for name in names:
         if name in moduleNames:
-            benchDict[name] = benchmark_module(os.getcwd() + '/' + name)
+            benchDict[name] = benchmark_module(os.getcwd() + '/' + name)[1]
         elif name in fileNames:
             # send the full filepath to benchmark_file()
-            benchDict[name] = benchmark_file(fileNames[name])
+            benchDict[name] = benchmark_file(fileNames[name])[1]
         else:
             print('%s is neither a valid modulename, nor a valid filename' % name)
 
