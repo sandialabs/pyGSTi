@@ -9,8 +9,7 @@ exclude = ['benchmarks', 'output', 'cmp_chk_files', 'temp_test_files', 'Tutorial
 def genModuleInfo(extra_exclude):
     excludes = exclude + extra_exclude
     moduleDict = {}
-    # moduleNames = [name for name in get_module_names() if name not in excludes]
-    moduleNames = ['objects', 'tools']
+    moduleNames = [name for name in get_module_names() if name not in excludes]
     for name in moduleNames:
         moduleDict[name] = benchmark_coverage(name, package=name)
     moduleDict = { key : ('%s%% coverage | %s seconds' % moduleDict[key]) for key in moduleDict }
