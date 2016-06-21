@@ -35,8 +35,9 @@ def _read_coverage(command, filename):
 def get_single_coverage(name, package=''):
     #nosetests -v --with-coverage --cover-package=pygsti --cover-erase */test*.py > coverage_tests_serial.out 2>&1
     # build the above command with some string formatting
-    package  = 'pygsti' + ('.%s' % package if package != '' else '')
-    commands = 'nosetests -v --with-coverage --cover-package=%s --cover-erase ' % package
+    package   = 'pygsti' + ('.%s' % package if package != '' else '')
+    commands  = 'nosetests -v --with-coverage --cover-package=%s --cover-erase ' % package
+    shortname = name
     if name.count('/') > 0:
         shortname = name.rsplit('/', 1)[1] # get the filename without full path
     if shortname.count('.') > 0:
