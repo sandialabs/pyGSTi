@@ -16,17 +16,22 @@ import pygsti
 #    #sys.path.pop()
 #    exit()
 
+tutorialDir = os.path.join("../..","ipython_notebooks","Tutorials")
+
 class TutorialsTestCase(unittest.TestCase):
 
     def setUp(self):
+        self.old = os.getcwd()
+        os.chdir(os.path.abspath(os.path.dirname(__file__)))
+
         #Set GateSet objects to non-"strict" mode, as this would be the 
         # tutorial environment
         pygsti.objects.GateSet._strict = False
 
-        pass
+    def tearDown(self):
+        os.chdir(self.old)
 
     def runTutorial_as_script(self, tutorialFile):
-        tutorialDir = os.path.join("..","ipython_notebooks","Tutorials")
         tutorialModuleName = os.path.splitext(tutorialFile)[0]
         cwd = os.getcwd()
         os.chdir(tutorialDir)
@@ -60,7 +65,6 @@ class TutorialsTestCase(unittest.TestCase):
                     return True
             return False
 
-        tutorialDir = os.path.join("..","ipython_notebooks","Tutorials")
         tutorialName,Ext = os.path.splitext(tutorialFile)
 
         cwd = os.getcwd()
