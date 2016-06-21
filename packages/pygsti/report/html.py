@@ -1,7 +1,7 @@
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """
 Routines for converting python objects to HTML.  Parallel rountines as
@@ -22,7 +22,7 @@ def html(x, brackets=False):
     ----------
     x : anything
         Value to convert into HTML.
-        
+
     brackets : bool, optional
         Whether to include brackets in the output for array-type variables.
 
@@ -61,7 +61,7 @@ def html_list(l, brackets=False):
     ----------
     l : list
         list to convert into HTML.
-        
+
     brackets : bool, optional
         Whether to include brackets in the output html.
 
@@ -87,7 +87,7 @@ def html_vector(v, brackets=False):
     ----------
     v : numpy array
         1D array to convert into HTML.
-        
+
     brackets : bool, optional
         Whether to include brackets in the output html.
 
@@ -122,7 +122,7 @@ def html_matrix(m, fontsize=None, brackets=False):
 
     fontsize : int, optional
         If not None, the fontsize.
-        
+
     brackets : bool, optional
         Whether to include brackets in the output html.
 
@@ -155,7 +155,7 @@ def html_value(el,ROUND=6,complexAsPolar=True):
 
     Parameters
     ----------
-    el : float or complex 
+    el : float or complex
         Value to convert into HTML.
 
     ROUND : int, optional
@@ -187,7 +187,7 @@ def html_value(el,ROUND=6,complexAsPolar=True):
 
         #Fix scientific notition
         p = s.split('e')
-        if len(p) == 2: 
+        if len(p) == 2:
             ex = str(int(p[1])) #exponent without extras (e.g. +04 => 4)
             s = p[0] + "&times;10<sup>" + ex + "</sup>"
 
@@ -204,7 +204,7 @@ def html_value(el,ROUND=6,complexAsPolar=True):
     if el is None or _np.isnan(el): return "--"
 
     try:
-        if abs(el.real) > TOL: 
+        if abs(el.real) > TOL:
             if abs(el.imag) > TOL:
                 if complexAsPolar:
                     r,phi = cmath.polar(el)
@@ -229,7 +229,7 @@ def html_value(el,ROUND=6,complexAsPolar=True):
         s = str(el)
 
     return s
-            
+
 
 def html_escaped(txt):
     """
@@ -242,6 +242,6 @@ def html_escaped(txt):
 
     Returns
     -------
-    string 
+    string
     """
     return txt

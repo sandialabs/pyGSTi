@@ -1,7 +1,7 @@
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ Functions for loading GST objects from text files."""
 from __future__ import print_function
@@ -9,11 +9,11 @@ from __future__ import print_function
 import os as _os
 import json as _json
 
-import stdinput as _stdinput
+from . import stdinput as _stdinput
 from .. import objects as _objs
 
 def load_parameter_file(filename):
-    """ 
+    """
     Load a json-formatted parameter file.
 
     Parameters
@@ -30,27 +30,27 @@ def load_parameter_file(filename):
 
 def load_dataset(filename, cache=False):
     """
-    Load a DataSet from a file.  First tries to load file as a 
+    Load a DataSet from a file.  First tries to load file as a
     saved DataSet object, then as a standard text-formatted DataSet.
-  
+
     Parameters
     ----------
     filename : string
         The name of the file
-  
+
     cache : bool, optional
         When set to True, a pickle file with the name filename + ".cache"
         is searched for and loaded instead of filename if it exists
         and is newer than filename.  If no cache file exists or one
         exists but it is older than filename, a cache file will be
         written after loading from filename.
-  
+
     Returns
     -------
     DataSet
     """
 
-    try: 
+    try:
         # a saved Dataset object is ok
         ds = _objs.DataSet(fileToLoadFrom=filename)
     except:
@@ -83,27 +83,27 @@ def load_dataset(filename, cache=False):
 
 def load_multidataset(filename, cache=False):
     """
-    Load a MultiDataSet from a file.  First tries to load file as a 
+    Load a MultiDataSet from a file.  First tries to load file as a
     saved MultiDataSet object, then as a standard text-formatted MultiDataSet.
-  
+
     Parameters
     ----------
     filename : string
         The name of the file
-  
+
     cache : bool, optional
         When set to True, a pickle file with the name filename + ".cache"
         is searched for and loaded instead of filename if it exists
         and is newer than filename.  If no cache file exists or one
         exists but it is older than filename, a cache file will be
         written after loading from filename.
-  
+
     Returns
     -------
     MultiDataSet
     """
 
-    try: 
+    try:
         # a saved MultiDataset object is ok
         mds = _objs.MultiDataSet(fileToLoadFrom=filename)
     except:
@@ -112,7 +112,7 @@ def load_multidataset(filename, cache=False):
             cache_filename = filename + ".cache"
             if _os.path.exists( cache_filename ) and \
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
-                try: 
+                try:
                     print("Loading from cache file: %s" % cache_filename)
                     mds = _objs.MultiDataSet(fileToLoadFrom=cache_filename)
                     return mds
@@ -137,7 +137,7 @@ def load_multidataset(filename, cache=False):
 
 def load_gateset(filename):
     """
-    Load a GateSet from a file, formatted using the 
+    Load a GateSet from a file, formatted using the
     standard text-format for gate sets.
 
     Parameters
@@ -153,7 +153,7 @@ def load_gateset(filename):
 
 def load_gatestring_dict(filename):
     """
-    Load a gate string dictionary from a file, formatted 
+    Load a gate string dictionary from a file, formatted
     using the standard text-format.
 
     Parameters
@@ -171,7 +171,7 @@ def load_gatestring_dict(filename):
 
 def load_gatestring_list(filename, readRawStrings=False):
     """
-    Load a gate string list from a file, formatted 
+    Load a gate string list from a file, formatted
     using the standard text-format.
 
     Parameters
@@ -197,4 +197,3 @@ def load_gatestring_list(filename, readRawStrings=False):
     else:
         std = _stdinput.StdInputParser()
         return std.parse_stringfile(filename)
-

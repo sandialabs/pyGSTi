@@ -853,7 +853,7 @@ SPAMLABEL minus = rho remainder
         with self.assertRaises(TypeError):
             result = int(gate_full) #can't convert
         with self.assertRaises(TypeError):
-            result = long(gate_full) #can't convert
+            result = int(gate_full) #can't convert
         with self.assertRaises(TypeError):
             result = float(gate_full) #can't convert
         with self.assertRaises(TypeError):

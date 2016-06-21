@@ -1,6 +1,6 @@
 from __future__ import print_function
-from runPackage import run_package
-from helpers    import *
+from .runPackage import run_package
+from .helpers    import *
 import subprocess
 import os
 import sys

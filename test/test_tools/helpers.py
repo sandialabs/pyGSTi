@@ -35,7 +35,7 @@ def get_args(rawArgs):
 
 # return a list of the immediate subdirectories
 def get_package_names():
-    _, packageNames, _ = os.walk(os.getcwd()).next()
+    _, packageNames, _ = next(os.walk(os.getcwd()))
     return packageNames
 
 # return a dict of filenames that correspond to full paths

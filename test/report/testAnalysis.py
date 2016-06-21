@@ -33,7 +33,7 @@ class AnalysisTestCase(unittest.TestCase):
         self.specs = pygsti.construction.build_spam_specs(self.fiducials, prep_labels=['rho0'], effect_labels=['E0'])
         self.strs = pygsti.construction.get_spam_strs(self.specs)
 
-        self.gateLabels = self.gateset.gates.keys() # also == std.gates
+        self.gateLabels = list(self.gateset.gates.keys()) # also == std.gates
         self.lgstStrings = pygsti.construction.list_lgst_gatestrings(self.specs, self.gateLabels)
 
         self.maxLengthList = [0,1,2,4,8]
@@ -111,9 +111,9 @@ class TestAnalysis(AnalysisTestCase):
         self.assertEqualImages("../temp_test_files/chi2boxes_summed.jpg", "../cmp_chk_files/chi2boxes_summed_ok.jpg")
 
     def test_direct_boxes(self):
-        directLGST = pygsti.report.direct_lgst_gatesets( [gs for gs in self.gateStrDict.values() if gs is not None],
+        directLGST = pygsti.report.direct_lgst_gatesets( [gs for gs in list(self.gateStrDict.values()) if gs is not None],
                                                 self.ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
-        directLSGST = pygsti.report.direct_mc2gst_gatesets( [gs for gs in self.gateStrDict.values() if gs is not None],
+        directLSGST = pygsti.report.direct_mc2gst_gatesets( [gs for gs in list(self.gateStrDict.values()) if gs is not None],
                                                   self.ds, self.specs, self.gateset, svdTruncateTo=4,
                                                   minProbClipForWeighting=1e-2,
                                                   probClipInterval=(-1e6,1e6), verbosity=0)

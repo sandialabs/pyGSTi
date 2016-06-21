@@ -1,4 +1,4 @@
-import tableformat as _tf
+from . import tableformat as _tf
 
 class ReportTable(object):
     def __init__(self, colHeadings, formatters, customHeader=None):
@@ -25,7 +25,7 @@ class ReportTable(object):
 
         if fmt == "latex":
 
-            _tf.SCRATCHDIR = scratchDir #Dangerous global     
+            _tf.SCRATCHDIR = scratchDir #Dangerous global
             table = "longtable" if longtables else "tabular"
             if self._customHeadings is not None \
                     and "latex" in self._customHeadings:
@@ -37,7 +37,7 @@ class ReportTable(object):
                                        self._headingFormatters, "latex")
                 else: #headingFormatters is None => headings is dict w/formats
                     colHeadings_formatted = self._headings['latex']
-                
+
                 latex  = "\\begin{%s}[l]{%s}\n\hline\n" % \
                     (table, "|c" * len(colHeadings_formatted) + "|")
                 latex += "%s \\\\ \hline\n" % \
@@ -49,13 +49,13 @@ class ReportTable(object):
                     latex += " & ".join(formatted_rowData) + " \\\\ \hline\n"
 
             latex += "\end{%s}\n" % table
-            _tf.SCRATCHDIR = None #Dangerous global     
+            _tf.SCRATCHDIR = None #Dangerous global
             return latex
 
-    
+
         elif fmt == "html":
 
-            _tf.SCRATCHDIR = scratchDir #Dangerous global     
+            _tf.SCRATCHDIR = scratchDir #Dangerous global
             if self._customHeadings is not None \
                     and "html" in self._customHeadings:
                 html = self._customHeadings['html']
@@ -79,12 +79,12 @@ class ReportTable(object):
                         "</td><td>".join(formatted_rowData) + "</td></tr>\n"
 
             html += "</tbody></table>"
-            _tf.SCRATCHDIR = None #Dangerous global     
+            _tf.SCRATCHDIR = None #Dangerous global
             return html
-            
+
 
         elif fmt == "py":
-    
+
             if self._customHeadings is not None \
                     and "py" in self._customHeadings:
                 raise ValueError("custom headers unsupported for python format")
@@ -95,7 +95,7 @@ class ReportTable(object):
                                    self._headingFormatters, "py")
             else: #headingFormatters is None => headings is dict w/formats
                 colHeadings_formatted = self._headings['py']
-    
+
             py = { 'column names': colHeadings_formatted,
                    'row data': [] }
 
@@ -106,7 +106,7 @@ class ReportTable(object):
 
             return py
 
-    
+
         elif fmt == "ppt":
 
             if self._customHeadings is not None \
@@ -120,7 +120,7 @@ class ReportTable(object):
                                    self._headingFormatters, "ppt")
             else: #headingFormatters is None => headings is dict w/formats
                 colHeadings_formatted = self._headings['ppt']
-    
+
             ppt = { 'column names': colHeadings_formatted,
                     'row data' : [] }
 
@@ -133,7 +133,7 @@ class ReportTable(object):
 
         else:
             raise ValueError("Unknown format: %s" % fmt)
-    
+
 
     def __str__(self):
 
@@ -144,7 +144,7 @@ class ReportTable(object):
         def getline(x,i):
             lines = str(x).split('\n')
             return lines[i] if i < len(lines) else ""
-        
+
         data = self.render('py')
         col_widths = [0]*len(self._columnNames)
         row_lines = [0]*len(self._rows)
@@ -176,7 +176,7 @@ class ReportTable(object):
                     s += "|  %*s  " % (col_widths[i],getline(el,k))
                 s += "|\n"
             s += row_separator
-            
+
         s += "\n"
         s += "Access row and column data by indexing into this object\n"
         s += " as a dictionary using the column header followed by the\n"
@@ -198,17 +198,17 @@ class ReportTable(object):
         return len(self._rows)
 
     def __contains__(self, key):
-        return key in self.keys()
+        return key in list(self.keys())
 
     def keys(self):
-        """ 
+        """
         Return a list of the first element of each row, which can be
         used for indexing.
         """
         return [ d[0] for (d,f) in self._rows if len(d) > 0 ]
 
     def has_key(self, key):
-        return key in self.keys()
+        return key in list(self.keys())
 
     def row(self, key=None, index=None):
         if key is not None:
@@ -218,7 +218,7 @@ class ReportTable(object):
                 if len(row_data) > 0 and row_data[0] == key:
                     return row_data
             raise KeyError("%s not found as a first-column value" % key)
-        
+
         elif index is not None:
             if 0 <= index < len(self):
                 return self._rows[index][0]
@@ -237,7 +237,7 @@ class ReportTable(object):
                 iCol = self._columnNames.index(key)
                 return [ d[iCol] for (d,f) in self._rows ] #if len(d)>iCol
             raise KeyError("%s is not a column name." % key)
-        
+
         elif index is not None:
             if 0 <= index < len(self._columnNames):
                 return [ d[index] for (d,f) in self._rows ] #if len(d)>iCol
@@ -251,17 +251,15 @@ class ReportTable(object):
     @property
     def num_rows(self):
         return len(self._rows)
-    
+
     @property
     def num_cols(self):
         return len(self._columnNames)
 
     @property
     def row_names(self):
-        return self.keys()
+        return list(self.keys())
 
     @property
     def col_names(self):
         return self._columnNames
-        
-    

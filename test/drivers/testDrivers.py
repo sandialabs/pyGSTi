@@ -21,7 +21,7 @@ class DriversTestCase(unittest.TestCase):
         self.germs = std.germs
         self.fiducials = std.fiducials
         self.maxLens = [0,1,2,4]
-        self.gateLabels = self.gateset.gates.keys()
+        self.gateLabels = list(self.gateset.gates.keys())
 
         self.elgstStrings = pygsti.construction.make_elgst_lists(
             self.gateLabels, self.germs, self.maxLens )

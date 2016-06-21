@@ -63,13 +63,13 @@ class TestDataSetMethods(DataSetTestCase):
         with self.assertRaises(ValueError):
             ds.add_counts_1q( ('Gx',), 40,60) # done adding data
 
-        self.assertEquals(ds[('Gx',)]['plus'], 10)
+        self.assertEqual(ds[('Gx',)]['plus'], 10)
         self.assertAlmostEqual(ds[('Gx',)].fraction('plus'), 0.1)
 
         #Pickle and unpickle
         pickle.dump(ds, open("../temp_test_files/dataset.pickle","w"))
         ds_from_pkl = pickle.load(open("../temp_test_files/dataset.pickle","r"))
-        self.assertEquals(ds_from_pkl[('Gx',)]['plus'], 10)
+        self.assertEqual(ds_from_pkl[('Gx',)]['plus'], 10)
         self.assertAlmostEqual(ds_from_pkl[('Gx',)].fraction('plus'), 0.1)
 
 
@@ -109,21 +109,21 @@ class TestDataSetMethods(DataSetTestCase):
         for gstr in ds:
 
             if gstr in ds:
-                if ds.has_key(gstr):
+                if gstr in ds:
                     pass
-                if ds.has_key(pygsti.obj.GateString(gstr)):
+                if pygsti.obj.GateString(gstr) in ds:
                     pass
 
             dsRow = ds[gstr]
-            allLabels = dsRow.keys()
+            allLabels = list(dsRow.keys())
             for spamLabel in dsRow:
                 if spamLabel in dsRow: #we know to be true
                     cnt = dsRow[spamLabel]
-                if dsRow.has_key(spamLabel):
+                if spamLabel in dsRow:
                     cnt = dsRow[spamLabel]
 
-        for dsRow in ds.itervalues():
-            for spamLabel,count in dsRow.iteritems():
+        for dsRow in ds.values():
+            for spamLabel,count in dsRow.items():
                 cnt += count
 
         #Test truncation
@@ -178,8 +178,8 @@ Gx^4 20 80
 """
         open("../temp_test_files/TinyDataset.txt","w").write(dataset_txt)
         ds = pygsti.io.load_dataset("../temp_test_files/TinyDataset.txt")
-        self.assertEquals(ds[()]['plus'], 0)
-        self.assertEquals(ds[('Gx','Gy')]['minus'], 60)
+        self.assertEqual(ds[()]['plus'], 0)
+        self.assertEqual(ds[('Gx','Gy')]['minus'], 60)
 
         dataset_txt2 = \
 """## Columns = plus frequency, count total
@@ -359,20 +359,20 @@ Gx^4 20 80 0.2 100
             multiDS['badDS'] = ds4 # not static
 
         nStrs = len(multiDS)
-        labels = multiDS.keys()
+        labels = list(multiDS.keys())
         self.assertEqual(labels, ['DS0', 'DS1', 'myDS'])
 
         for label in multiDS:
             DS = multiDS[label]
             if label in multiDS:
                 pass
-            if multiDS.has_key(label):
+            if label in multiDS:
                 pass
 
-        for DS in multiDS.itervalues():
+        for DS in multiDS.values():
             pass
 
-        for label,DS in multiDS.iteritems():
+        for label,DS in multiDS.items():
             pass
 
         sumDS = multiDS.get_datasets_sum('DS0','DS1')
@@ -386,7 +386,7 @@ Gx^4 20 80 0.2 100
         #Pickle and unpickle
         pickle.dump(multiDS, open("../temp_test_files/multidataset.pickle","w"))
         mds_from_pkl = pickle.load(open("../temp_test_files/multidataset.pickle","r"))
-        self.assertEquals(mds_from_pkl['DS0'][('Gx',)]['plus'], 10)
+        self.assertEqual(mds_from_pkl['DS0'][('Gx',)]['plus'], 10)
 
         #Loading and saving
         multiDS.save("../temp_test_files/multidataset.saved")

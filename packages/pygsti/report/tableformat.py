@@ -1,19 +1,19 @@
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ Functions for generating report tables in different formats """
 
-import latex as _lu
-import html as _hu
-import ppt as _pu
+from . import latex as _lu
+from . import html as _hu
+from . import ppt as _pu
 import cgi as _cgi
 import numpy as _np
 import re as _re
 import os as _os
 
-#Dangerous (!) Global variable -- to be removed when formatters 
+#Dangerous (!) Global variable -- to be removed when formatters
 # get rolled into a class that can be instantiated with a
 # scratch directory
 SCRATCHDIR = None
@@ -112,7 +112,7 @@ def _fmtPi_latex(x):
     else: return _lu.latex(x) + "$\\pi$"
 def _fmtPi_py(x):
     if x == "" or x == "--": return ""
-    else: 
+    else:
         try: return x * _np.pi #but sometimes can't take product b/c x isn't a number
         except: return None
 def _fmtPi_ppt(x):
@@ -134,7 +134,7 @@ def _fmtCnv_html(x):
     x = _cgi.escape(x).encode("ascii","xmlcharrefreplace")
     x = x.replace("REPLACEWITHSTARCODE","&#9733;") #replace new marker with HTML code
     return x
-def _fmtCnv_latex(x): 
+def _fmtCnv_latex(x):
     x = x.replace('%','\\%')
     x = x.replace('#','\\#')
     x = x.replace("half-width", "$\\nicefrac{1}{2}$-width")
@@ -158,69 +158,69 @@ def _fmtCnv_ppt(x):
 TxtCnv = { 'html': _fmtCnv_html, 'latex': _fmtCnv_latex, 'py': _fmtCnv_py, 'ppt': _fmtCnv_ppt }
 
 # 'errorbars' formatting: display a scalar value +/- error bar
-def _fmtEB_html(t): 
-    if t[1] is not None: 
+def _fmtEB_html(t):
+    if t[1] is not None:
         return "%s +/- %s" % (_hu.html(t[0]), _hu.html(t[1]))
     else: return _hu.html(t[0])
-def _fmtEB_latex(t): 
-    if t[1] is not None: 
+def _fmtEB_latex(t):
+    if t[1] is not None:
         return "$ \\begin{array}{c} %s \\\\ \pm %s \\end{array} $" % (_lu.latex_value(t[0]), _lu.latex_value(t[1]))
     else: return _lu.latex_value(t[0])
-def _fmtEB_py(t): 
+def _fmtEB_py(t):
     return { 'value': t[0], 'errbar': t[1] }
-def _fmtEB_ppt(t): 
-    if t[1] is not None: 
+def _fmtEB_ppt(t):
+    if t[1] is not None:
         return "%s +/- %s" % (_pu.ppt(t[0]), _pu.ppt(t[1]))
     else: return _pu.ppt(t[0])
 EB = { 'html': _fmtEB_html, 'latex': _fmtEB_latex, 'py': _fmtEB_py, 'ppt': _fmtEB_ppt }
 
 
 # 'vector errorbars' formatting: display a vector value +/- error bar
-def _fmtEBvec_html(t): 
-    if t[1] is not None: 
+def _fmtEBvec_html(t):
+    if t[1] is not None:
         return "%s +/- %s" % (_hu.html(t[0]), _hu.html(t[1]))
     else: return _hu.html(t[0])
-def _fmtEBvec_latex(t): 
-    if t[1] is not None: 
+def _fmtEBvec_latex(t):
+    if t[1] is not None:
         return "%s $\pm$ %s" % (_lu.latex(t[0]), _lu.latex(t[1]))
     else: return _lu.latex(t[0])
 def _fmtEBvec_py(t): return { 'value': t[0], 'errbar': t[1] }
-def _fmtEBvec_ppt(t): 
-    if t[1] is not None: 
+def _fmtEBvec_ppt(t):
+    if t[1] is not None:
         return "%s +/- %s" % (_pu.ppt(t[0]), _pu.ppt(t[1]))
     else: return _pu.ppt(t[0])
 EBvec = { 'html': _fmtEBvec_html, 'latex': _fmtEBvec_latex, 'py': _fmtEBvec_py, 'ppt': _fmtEBvec_ppt }
 
 
 # 'errorbars with pi' formatting: display (scalar_value +/- error bar) * pi
-def _fmtEBPi_html(t): 
-    if t[1] is not None: 
+def _fmtEBPi_html(t):
+    if t[1] is not None:
         return "(%s +/- %s)&pi;" % (_hu.html(t[0]), _hu.html(t[1]))
     else: return _fmtPi_html(t[0])
-def _fmtEBPi_latex(t): 
-    if t[1] is not None: 
+def _fmtEBPi_latex(t):
+    if t[1] is not None:
         return "$ \\begin{array}{c}(%s \\\\ \pm %s)\\pi \\end{array} $" % (_lu.latex(t[0]), _lu.latex(t[1]))
     else: return _fmtPi_latex(t[0])
 def _fmtEBPi_py(t): return { 'value': t[0], 'errbar': t[1] }
-def _fmtEBPi_ppt(t): 
-    if t[1] is not None: 
+def _fmtEBPi_ppt(t):
+    if t[1] is not None:
         return "(%s +/- %s)pi" % (_pu.ppt(t[0]), _pu.ppt(t[1]))
     else: return _pu.ppt(t[0])
 EBPi = { 'html': _fmtEBPi_html, 'latex': _fmtEBPi_latex, 'py': _fmtEBPi_py, 'ppt': _fmtEBPi_ppt }
 
 
 # 'gatestring' formatting: display a gate string
-def _fmtGStr_html(s): 
+def _fmtGStr_html(s):
     return '.'.join(s) if s is not None else ""
 def _fmtGStr_latex(s):
-    if s is None: 
+    if s is None:
         return ""
     else:
         boxed = [ ("\\mbox{%s}" % gl) for gl in s ]
         return "$" + '\\cdot'.join(boxed) + "$"
-def _fmtGStr_py(s): 
+def _fmtGStr_py(s):
     return tuple(s) if s is not None else None
-def _fmtGStr_ppt(s): 
+def _fmtGStr_ppt(s):
     return '.'.join(s) if s is not None else ""
 GStr = { 'html': _fmtGStr_html, 'latex': _fmtGStr_latex, 'py': _fmtGStr_py, 'ppt': _fmtGStr_ppt }
 
@@ -233,7 +233,7 @@ Pre = { 'html': _fmtPre_html, 'latex': _fmtPre_latex, 'py': _fmtPre_py, 'ppt': _
 
 
 # Figure formatting, where a GST figure is displayed in a table cell
-def _fmtFig_html(figInfo): 
+def _fmtFig_html(figInfo):
     fig, name, W, H = figInfo
     fig.save_to(_os.path.join(SCRATCHDIR, name + ".png"))
     return "<img width='%.2f' height='%.2f' src='%s/%s'>" \
@@ -243,10 +243,10 @@ def _fmtFig_latex(figInfo):
     fig.save_to(_os.path.join(SCRATCHDIR, name + ".pdf"))
     return "\\vcenteredhbox{\\includegraphics[width=%.2fin,height=%.2fin" \
         % (W,H) + ",keepaspectratio]{%s/%s}}" % (SCRATCHDIR,name + ".pdf")
-def _fmtFig_py(figInfo): 
+def _fmtFig_py(figInfo):
     fig, name, W, H = figInfo
     return fig
-def _fmtFig_ppt(figInfo): 
+def _fmtFig_ppt(figInfo):
     return "Not Impl."
 Fig = { 'html': _fmtFig_html, 'latex': _fmtFig_latex, 'py': _fmtFig_py, 'ppt': _fmtFig_ppt }
 

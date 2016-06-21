@@ -1,7 +1,7 @@
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ Functions for selecting a complete set of fiducials for a GST analysis."""
 
@@ -24,12 +24,12 @@ from .. import objects as _objs
 def xor(*args):
     """
     Implements logical xor function for arbitrary number of inputs.
-    
+
     Parameters
     ----------
     args : bool-likes
         All the boolean (or boolean-like) objects to be checked for xor satisfaction.
-    
+
     Returns
     ---------
     output : bool
@@ -45,7 +45,7 @@ def make_prep_mxs(gs,prepFidList):
     Makes a list of matrices, where each matrix corresponds to a single preparation
     operation in the gate set, and the column of each matrix is a fiducial acting on
     that state preparation.
-    
+
     Parameters
     ----------
     gs : GateSet
@@ -59,14 +59,14 @@ def make_prep_mxs(gs,prepFidList):
     outputMatList : list of arrays
         List of arrays, where each array corresponds to one preparation in the gate set,
         and each column therein corresponds to a single fiducial.
- 
+
     """
-    
+
     dimRho = gs.get_dimension()
     numRho = len(gs.preps)
     numFid = len(prepFidList)
     outputMatList = []
-    for rho in gs.preps.values():
+    for rho in list(gs.preps.values()):
         outputMat = _np.zeros([dimRho,numFid],float)
         counter = 0
         for prepFid in prepFidList:
@@ -80,7 +80,7 @@ def make_meas_mxs(gs,prepMeasList):
     Makes a list of matrices, where each matrix corresponds to a single measurement
     effect in the gate set, and the column of each matrix is the transpose of the
     measurement effect acting on a fiducial.
-    
+
     Parameters
     ----------
     gs : GateSet
@@ -95,12 +95,12 @@ def make_meas_mxs(gs,prepMeasList):
         List of arrays, where each array corresponds to one measurement in the gate set,
         and each column therein corresponds to a single fiducial.
     """
-    
+
     dimE = gs.get_dimension()
     numE = len(gs.effects)
     numFid = len(prepMeasList)
     outputMatList = []
-    for E in gs.effects.values():
+    for E in list(gs.effects.values()):
         outputMat = _np.zeros([dimE,numFid],float)
         counter = 0
         for measFid in prepMeasList:
@@ -111,8 +111,8 @@ def make_meas_mxs(gs,prepMeasList):
 
 def test_fiducial_list(gateset,fidList,prepOrMeas,scoreFunc='all',returnAll=False,threshold=1e6):
     """
-    Tests a prep or measure fiducial list for informational completeness. 
-    
+    Tests a prep or measure fiducial list for informational completeness.
+
     Parameters
     ----------
     gateset : GateSet
@@ -136,10 +136,10 @@ def test_fiducial_list(gateset,fidList,prepOrMeas,scoreFunc='all',returnAll=Fals
         (Also note- because we are using a simple integer program to choose fiducials,
         it is possible to get stuck in a local minimum, and choosing one or the other
         objective function can help avoid such minima in different circumstances.)
-                
+
     returnAll : bool, optional (default is False)
         If true, function returns reciprocals of eigenvalues of fiducial score matrix,
-        and the score of the fiducial set as specified by scoreFunc, in addition to a 
+        and the score of the fiducial set as specified by scoreFunc, in addition to a
         boolean specifying whether or not the fiducial set is informationally complete
 
     threshold : float, optional (default is 1e6)
@@ -155,7 +155,7 @@ def test_fiducial_list(gateset,fidList,prepOrMeas,scoreFunc='all',returnAll=Fals
     spectrum : array, optional
         The number of fiducials times the reciprocal of the spectrum of the score matrix.
         Only returned if returnAll == True.
-    
+
     score : float, optional
         The score for the fiducial set; only returned if returnAll == True.
     """
@@ -171,7 +171,7 @@ def test_fiducial_list(gateset,fidList,prepOrMeas,scoreFunc='all',returnAll=Fals
 
     dimRho = gateset.get_dimension()
 
-    fidLengths = _np.array( map(len,fidList), 'i')
+    fidLengths = _np.array( list(map(len,fidList)), 'i')
     if prepOrMeas == 'prep':
         fidArrayList = make_prep_mxs(gateset,fidList)
     elif prepOrMeas == 'meas':
@@ -192,7 +192,7 @@ def test_fiducial_list(gateset,fidList,prepOrMeas,scoreFunc='all',returnAll=Fals
     scoreSqMx = _np.dot(scoreMx,scoreMx.T)
     spectrum = _np.linalg.eigvalsh(scoreSqMx)
     score = numFids * list_score(_np.abs(spectrum))
-    
+
     if (score <= 0 or _np.isinf(score)) or score > threshold:
         testResult = False
         if returnAll:
@@ -211,20 +211,20 @@ def write_fixed_hamming_weight_code(n,k):
     This is an auxiliary function (probably to be deprecated soon) for the fixedNum
     mode of optimize_integer_fiducials_slack.  It generates a string that, when executed,
     creates an exhaustive array of binary vectors of fixed length and Hamming weight.
-    
+
     Parameters
     ----------
     n : int
         The length of each bit string.
     k : int
         The hamming weight of each bit string.
-    
+
     Returns
     ----------
     code : str
-        A string that is to be written to disk, run, then deleted.  When executed, the 
+        A string that is to be written to disk, run, then deleted.  When executed, the
         resulting file will write to disk (as a pickle object) the array bitVecMat;
-        this is the array of binary vectors of a fixed length n and fixed Hamming weight k. 
+        this is the array of binary vectors of a fixed length n and fixed Hamming weight k.
     """
     assert type(n) is int
     assert type(k) is int
@@ -234,10 +234,10 @@ def write_fixed_hamming_weight_code(n,k):
     code += 'bitVecMat = _np.zeros([scipy.special.binom('+str(n)+','+str(k)+'),'+str(n)+'])\n'
     code += 'counter = 0\n'
     code += 'for bit_loc_0 in range('+str(n)+'-'+str(k)+'+1):\n'
-    for sub_k in xrange(1,k):
+    for sub_k in range(1,k):
         code += sub_k*'\t'+'for bit_loc_'+str(sub_k)+' in range(1+bit_loc_'+str(sub_k-1)+','+str(n)+'-'+str(k)+'+'+str(sub_k)+'+1):\n'
     index_string = '[['
-    for sub_k in xrange(k):
+    for sub_k in range(k):
         index_string += 'bit_loc_'+str(sub_k)+','
     index_string += ']]'
     code += (k)*'\t'+'bitVecMat[counter]'+index_string+'=1\n'
@@ -247,13 +247,13 @@ def write_fixed_hamming_weight_code(n,k):
     code += 'fiducialselection_temp_pkl.close()\n'
     return code
 
-def optimize_integer_fiducials_slack(gateset, fidList, 
+def optimize_integer_fiducials_slack(gateset, fidList,
                               prepOrMeas = None,
                               initialWeights=None,
                               scoreFunc = 'all',
-                              maxIter=100, 
+                              maxIter=100,
                               fixedSlack=False, slackFrac=False,
-                              returnAll=False, 
+                              returnAll=False,
                               forceEmpty = True, forceEmptyScore = 1e100,
                               fixedNum = None,
 #                              forceMinScore = 1e100,
@@ -299,12 +299,12 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         The maximum number of iterations before stopping.
 
     fixedSlack : float, optional
-        If not None, a floating point number which specifies that excluding a 
+        If not None, a floating point number which specifies that excluding a
         fiducial is allowed to increase the fiducial set score additively by fixedSlack.
         You must specify *either* fixedSlack or slackFrac.
 
     slackFrac : float, optional
-        If not None, a floating point number which specifies that excluding a 
+        If not None, a floating point number which specifies that excluding a
         fiducial is allowed to increase the fiducial set score multiplicatively by (1+slackFrac).
         You must specify *either* fixedSlack or slackFrac.
 
@@ -315,7 +315,7 @@ def optimize_integer_fiducials_slack(gateset, fidList,
     forceEmpty : bool, optional (default is True)
         Whether or not to force all fiducial sets to contain the empty gate string as a fiducial.
         IMPORTANT:  This only works if the first element of fidList is the empty gate string.
-    
+
     forceEmptyScore : float, optional (default is 1e100)
         When forceEmpty is True, what score to assign any fiducial set
         that does not contain the empty gate string as a fiducial.
@@ -323,10 +323,10 @@ def optimize_integer_fiducials_slack(gateset, fidList,
     forceMin : bool, optional (default is False)
         If True, forces fiducial selection to choose a fiducial set that is *at least* as
         large as forceMinNum.
-        
+
     forceMinNum : int, optional (default is None)
         If not None, and forceMin == True, the minimum size of the returned fiducial set.
-    
+
     forceMinScore : float, optional (default is 1e100)
         When forceMin is True, what score to assign any fiducial set
         that does not contain at least forceMinNum fiducials.
@@ -347,7 +347,7 @@ def optimize_integer_fiducials_slack(gateset, fidList,
     scoreDictionary : dict
         Dictionary with keys == tuples of 0s and 1s of length len(fidList),
         specifying a subset of fiducials, and values == 1.0/smallest-non-gauge-
-        eigenvalue "scores".  
+        eigenvalue "scores".
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
@@ -368,9 +368,9 @@ def optimize_integer_fiducials_slack(gateset, fidList,
 
     printer.log("Starting fiducial set optimization. Lower score is better.")
 
-    scoreD = {} 
+    scoreD = {}
 
-    fidLengths = _np.array( map(len,fidList), 'i')
+    fidLengths = _np.array( list(map(len,fidList)), 'i')
     if prepOrMeas == 'prep':
         fidArrayList = make_prep_mxs(gateset,fidList)
     elif prepOrMeas == 'meas':
@@ -378,7 +378,7 @@ def optimize_integer_fiducials_slack(gateset, fidList,
     else:
         raise Exception('prepOrMeas must be specified!')
     numMxs = len(fidArrayList)
-        
+
     def compute_score(wts,cache_score = True):
         score = None
         if forceEmpty and _np.count_nonzero(wts[:1]) != 1:
@@ -421,9 +421,9 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         code_file.writelines(code)
         code_file.close()
         os.system('python fiducialselection_temp_script.py')
-        bitVecMat = pickle.load(open('fiducialselection_temp_pkl.pkl','r'))   
-        os.system('rm fiducialselection_temp_script.py')  
-        os.system('rm fiducialselection_temp_pkl.pkl')  
+        bitVecMat = pickle.load(open('fiducialselection_temp_pkl.pkl','r'))
+        os.system('rm fiducialselection_temp_script.py')
+        os.system('rm fiducialselection_temp_pkl.pkl')
         if forceEmpty:
             bitVecMat = _np.concatenate((_np.array([[1]*numFidLists]).T,bitVecMat),axis=1)
         best_score = _np.inf
@@ -450,7 +450,7 @@ def optimize_integer_fiducials_slack(gateset, fidList,
             elif temp_score < best_score:
                 best_score = temp_score
                 best_weights = weights
-                            
+
         goodFidList = []
         weights = best_weights
         for index, val in enumerate(weights):
@@ -466,7 +466,7 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         return best_score, best_weights, finalFidList
 
     def get_neighbors(boolVec):
-        for i in xrange(nFids):
+        for i in range(nFids):
             v = boolVec.copy()
             v[i] = (v[i] + 1) % 2 #toggle v[i] btwn 0 and 1
             yield v
@@ -480,11 +480,11 @@ def optimize_integer_fiducials_slack(gateset, fidList,
     score = compute_score(weights)
     L1 = sum(weights) # ~ L1 norm of weights
 
-    for iIter in xrange(maxIter):
-        scoreD_keys = scoreD.keys() #list of weight tuples already computed
+    for iIter in range(maxIter):
+        scoreD_keys = list(scoreD.keys()) #list of weight tuples already computed
 
         printer.show_progress(iIter, maxIter-1, suffix="score=%g, nFids=%d" % (score, L1))
-        
+
         bFoundBetterNeighbor = False
         for neighborNum, neighbor in enumerate(get_neighbors(weights)):
             if tuple(neighbor) not in scoreD_keys:
@@ -522,11 +522,11 @@ def optimize_integer_fiducials_slack(gateset, fidList,
             if not bFoundBetterNeighbor: #Relaxing didn't help!
                 printer.log("Stationary point found!");
                 break #end main for loop
-        
+
         printer.log("Moving to better neighbor")
     else:
         printer.log("Hit max. iterations")
-    
+
     printer.log("score = %s"       % score)
     printer.log("weights = %s"     % weights)
     printer.log("L1(weights) = %s" % sum(weights))

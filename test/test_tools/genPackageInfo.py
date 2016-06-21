@@ -1,7 +1,7 @@
 from __future__   import print_function
-from helpers      import *
-from runBenchmark import *
-from runChanged   import get_changed_test_packages
+from .helpers      import *
+from .runBenchmark import *
+from .runChanged   import get_changed_test_packages
 import os, sys
 
 exclude = ['benchmarks', 'output', 'cmp_chk_files', 'temp_test_files', 'Tutorials', 'test_tools']
@@ -48,7 +48,7 @@ def gen_package_info(extra_exclude, infoType='', changedOnly=''):
     # ALWAYS write a table to file
     write_formatted_table('output/package%sinfo.out' % \
                            (('_%s_' % infoType) if infoType != '' else ''),
-                          packageDict.items())
+                          list(packageDict.items()))
 
 if __name__ == "__main__":
     args, kwargs = get_args(sys.argv)

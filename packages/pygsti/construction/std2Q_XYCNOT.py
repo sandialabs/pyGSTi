@@ -1,25 +1,25 @@
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" 
-Variables for working with the 2-qubit gate set containing the gates 
+"""
+Variables for working with the 2-qubit gate set containing the gates
 I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CNOT.
 """
 
-import gatestringconstruction as _strc
-import gatesetconstruction as _setc
-import spamspecconstruction as _spamc
+from . import gatestringconstruction as _strc
+from . import gatesetconstruction as _setc
+from . import spamspecconstruction as _spamc
 
 description = "I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CNOT gates"
 
 gates = ['Gix','Giy','Gxi','Gyi','Gcnot']
 
-fiducials16 = _strc.gatestring_list( 
-    [ (), ('Gix',), ('Giy',), ('Gix','Gix'), 
-      ('Gxi',), ('Gxi','Gix'), ('Gxi','Giy'), ('Gxi','Gix','Gix'), 
-      ('Gyi',), ('Gyi','Gix'), ('Gyi','Giy'), ('Gyi','Gix','Gix'), 
+fiducials16 = _strc.gatestring_list(
+    [ (), ('Gix',), ('Giy',), ('Gix','Gix'),
+      ('Gxi',), ('Gxi','Gix'), ('Gxi','Giy'), ('Gxi','Gix','Gix'),
+      ('Gyi',), ('Gyi','Gix'), ('Gyi','Giy'), ('Gyi','Gix','Gix'),
       ('Gxi','Gxi'), ('Gxi','Gxi','Gix'), ('Gxi','Gxi','Giy'), ('Gxi','Gxi','Gix','Gix') ] )
 
 fiducials36 = _strc.gatestring_list(
@@ -113,11 +113,11 @@ germs = _strc.gatestring_list(
      ('Giy', 'Gcnot', 'Gxi', 'Gyi', 'Gyi', 'Gcnot', 'Gix', 'Gcnot')] )
 
 #Construct the target gateset
-gs_target = _setc.build_gateset( 
-    [4], [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcnot'], 
+gs_target = _setc.build_gateset(
+    [4], [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcnot'],
     [ "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)" ],
     prepLabels=['rho0'], prepExpressions=["0"],
-    effectLabels=['E0','E1','E2'], effectExpressions=["0","1","2"], 
+    effectLabels=['E0','E1','E2'], effectExpressions=["0","1","2"],
     spamdefs={'upup': ('rho0','E0'), 'updn': ('rho0','E1'),
               'dnup': ('rho0','E2'), 'dndn': ('rho0','remainder') }, basis="pp")
 

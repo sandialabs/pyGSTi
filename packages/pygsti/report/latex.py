@@ -1,7 +1,7 @@
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """
 Routines for converting python objects to latex.  Parallel rountines as
@@ -21,7 +21,7 @@ def latex(x, brackets=False):
     ----------
     x : anything
         Value to convert into latex.
-        
+
     brackets : bool, optional
         Whether to include brackets in the output for array-type variables.
 
@@ -63,7 +63,7 @@ def latex_list(l, brackets=False):
 
     brackets : bool, optional
         Whether to include brackets in the output for array-type variables.
-        
+
     Returns
     -------
     string
@@ -73,7 +73,7 @@ def latex_list(l, brackets=False):
     for el in l:
         lines.append( latex(el,brackets) )
     return "\\begin{tabular}{c}\n" + \
-	        " \\\\ \n".join(lines) + "\n \end{tabular}\n"
+                " \\\\ \n".join(lines) + "\n \end{tabular}\n"
 
 def latex_vector(v, brackets=False):
     """
@@ -83,7 +83,7 @@ def latex_vector(v, brackets=False):
     ----------
     v : numpy array
         1D array to convert into latex.
-        
+
     brackets : bool, optional
         Whether to include brackets in the output latex.
 
@@ -97,11 +97,11 @@ def latex_vector(v, brackets=False):
     for el in v:
         lines.append( latex_value(el, ROUND) )
     if brackets:
-    	return "$ \\left(\\!\\!\\begin{array}{c}\n" + \
-	        " \\\\ \n".join(lines) + "\n \end{array}\\!\\!\\right) $\n"
+        return "$ \\left(\\!\\!\\begin{array}{c}\n" + \
+                " \\\\ \n".join(lines) + "\n \end{array}\\!\\!\\right) $\n"
     else:
-    	return "$ \\begin{array}{c}\n" + \
-	        " \\\\ \n".join(lines) + "\n \end{array} $\n"
+        return "$ \\begin{array}{c}\n" + \
+                " \\\\ \n".join(lines) + "\n \end{array} $\n"
 
 def latex_matrix(m, fontsize=None, brackets=False):
     """
@@ -114,7 +114,7 @@ def latex_matrix(m, fontsize=None, brackets=False):
 
     fontsize : int, optional
         If not None, the fontsize.
-        
+
     brackets : bool, optional
         Whether to include brackets in the output latex.
 
@@ -130,14 +130,14 @@ def latex_matrix(m, fontsize=None, brackets=False):
 
     for r in range(m.shape[0]):
         lines.append( " & ".join( [latex_value(el,ROUND) for el in m[r,:] ] ) )
-        
+
     if brackets:
-	    return prefix + "$ \\left(\\!\\!\\begin{array}{%s}\n" % ("c" * m.shape[1]) + \
-    	    " \\\\ \n".join(lines) + "\n \end{array}\\!\\!\\right) $\n"
+        return prefix + "$ \\left(\\!\\!\\begin{array}{%s}\n" % ("c" * m.shape[1]) + \
+        " \\\\ \n".join(lines) + "\n \end{array}\\!\\!\\right) $\n"
     else:
-	    return prefix + "$ \\begin{array}{%s}\n" % ("c" * m.shape[1]) + \
-    	    " \\\\ \n".join(lines) + "\n \end{array} $\n"
-    
+        return prefix + "$ \\begin{array}{%s}\n" % ("c" * m.shape[1]) + \
+        " \\\\ \n".join(lines) + "\n \end{array} $\n"
+
 
 
 def latex_value(el,ROUND=6,complexAsPolar=True):
@@ -146,7 +146,7 @@ def latex_value(el,ROUND=6,complexAsPolar=True):
 
     Parameters
     ----------
-    el : float or complex 
+    el : float or complex
         Value to convert into latex.
 
     ROUND : int, optional
@@ -178,7 +178,7 @@ def latex_value(el,ROUND=6,complexAsPolar=True):
 
         #Fix scientific notition
         p = s.split('e')
-        if len(p) == 2: 
+        if len(p) == 2:
             ex = str(int(p[1])) #exponent without extras (e.g. +04 => 4)
             s = p[0] + "\\e{" + ex + "}"
 
@@ -194,7 +194,7 @@ def latex_value(el,ROUND=6,complexAsPolar=True):
     if el is None or _np.isnan(el): return "--"
 
     try:
-        if abs(el.real) > TOL: 
+        if abs(el.real) > TOL:
             if abs(el.imag) > TOL:
                 if complexAsPolar:
                     r,phi = cmath.polar(el)
@@ -220,7 +220,7 @@ def latex_value(el,ROUND=6,complexAsPolar=True):
         s = str(el)
 
     return s
-            
+
 
 def latex_escaped(txt):
     """
@@ -233,7 +233,7 @@ def latex_escaped(txt):
 
     Returns
     -------
-    string 
+    string
     """
     ret = txt.replace("_","\_")
     return ret

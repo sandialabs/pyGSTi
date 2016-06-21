@@ -77,7 +77,7 @@ class TestGateStringMethods(GateStringTestCase):
                      "Gf0(G1aG1b)^2Gf1",
                      "Gf1(G1aG1b)^2Gf0",
                      "Gf1(G1aG1b)^2Gf1" ]
-        self.assertEqual( map(str,gateStrings1), expected1 )
+        self.assertEqual( list(map(str,gateStrings1)), expected1 )
 
 
         gateStrings2 = pygsti.construction.create_gatestring_list("f0+T(germ,N)+f1", f0=fids, f1=fids,
@@ -91,7 +91,7 @@ class TestGateStringMethods(GateStringTestCase):
                      "Gf0G1aG1bG1aGf1",
                      "Gf1G1aG1bG1aGf0",
                      "Gf1G1aG1bG1aGf1" ]
-        self.assertEqual( map(str,gateStrings2), expected2 )
+        self.assertEqual( list(map(str,gateStrings2)), expected2 )
 
 
         gateStrings3 = pygsti.construction.create_gatestring_list("f0+T(germ,N)+f1", f0=fids, f1=fids,
@@ -106,7 +106,7 @@ class TestGateStringMethods(GateStringTestCase):
                       "Gf0(G1aG1b)Gf1",
                       "Gf1(G1aG1b)Gf0",
                       "Gf1(G1aG1b)Gf1" ]
-        self.assertEqual( map(str,gateStrings3), expected3 )
+        self.assertEqual( list(map(str,gateStrings3)), expected3 )
 
     def test_string_compression(self):
         gs = pygsti.objects.GateString(None, stringRepresentation="Gx^100")

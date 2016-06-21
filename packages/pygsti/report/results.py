@@ -1,7 +1,7 @@
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ Defines the Results class and supporting functionality."""
 
@@ -20,11 +20,11 @@ from ..tools        import listtools            as _lt
 from ..tools        import basistools           as _bt
 from ..             import _version
 
-import latex      as _latex
-import generation as _generation
-import plotting   as _plotting
+from . import latex      as _latex
+from . import generation as _generation
+from . import plotting   as _plotting
 
-from resultcache import ResultCache as _ResultCache
+from .resultcache import ResultCache as _ResultCache
 
 class Results(object):
     """
@@ -34,12 +34,12 @@ class Results(object):
     gatesets from a GST calculation, typically performed by one of the
     "do<something>" methods of GST.Core, and acts as a end-output factory
     (creating reports, presentations, etc), and a derived-results cache
-    (so derived quantities don't need to be recomputed many times for 
+    (so derived quantities don't need to be recomputed many times for
     different output formats).
     """
 
     def __init__(self, templatePath=None, latexCmd="pdflatex"):
-        """ 
+        """
         Initialize a Results object.
 
         Parameters
@@ -48,7 +48,7 @@ class Results(object):
             A local path to the stored GST report template files.  The
             default value of None means to use the default path, which
             is almost always what you want.
-            
+
         latexCmd : string or None, optional
             The system command used to compile latex documents.
         """
@@ -72,7 +72,7 @@ class Results(object):
         self.parameters = {}
         self.options = ResultOptions()
         self.confidence_level = None #holds "current" (i.e. "last")
-        
+
         # Set default display options (affect how results are displayed)
         self.options.long_tables = False
         self.options.table_class = "pygstiTbl"
@@ -82,7 +82,7 @@ class Results(object):
         # Set default parameter values
         self.parameters = { 'objective': None,
                             'constrainToTP': None,
-                            'weights':None, 
+                            'weights':None,
                             'minProbClip': 1e-6,
                             'minProbClipForWeighting': 1e-4,
                             'probClipInterval': (-1e6,1e6),
@@ -97,17 +97,17 @@ class Results(object):
 
     def init_single(self, objective, targetGateset, dataset, gatesetEstimate,
                     gatestring_list, constrainToTP, gatesetEstimate_noGaugeOpt=None):
-        """ 
+        """
         Initialize this Results object from the inputs and outputs of a
         single (non-iterative) GST method.
-        
+
 
         Parameters
         ----------
         objective : {'chi2', 'logl'}
             Whether gateset was obtained by minimizing chi^2 or
             maximizing the log-likelihood.
-            
+
         targetGateset : GateSet
             The target gateset used when optimizing the objective.
 
@@ -127,12 +127,12 @@ class Results(object):
         gatesetEstimate_noGaugeOpt : GateSet, optional
             The value of the estimated gate set *before* any gauge
             optimization was performed on it.
-        
+
         Returns
         -------
         None
         """
-        
+
         # Set essential info: gateset estimates(s) but no particular
         # structure known about gateStringLists.
         self.gatesets['target'] = targetGateset
@@ -152,14 +152,14 @@ class Results(object):
 
 
     def init_Ls_and_germs(self, objective, targetGateset, dataset,
-                              seedGateset, Ls, germs, gatesetsByL, gateStringListByL, 
+                              seedGateset, Ls, germs, gatesetsByL, gateStringListByL,
                               prepStrs, effectStrs, truncFn, constrainToTP, fidPairs=None,
                               gatesetsByL_noGaugeOpt=None):
 
-        """ 
+        """
         Initialize this Results object from the inputs and outputs of
         an iterative GST method based on gate string lists containing
-        germs repeated up to a maximum-L value that increases with 
+        germs repeated up to a maximum-L value that increases with
         iteration.
 
         Parameters
@@ -167,7 +167,7 @@ class Results(object):
         objective : {'chi2', 'logl'}
             Whether gateset was obtained by minimizing chi^2 or
             maximizing the log-likelihood.
-            
+
         targetGateset : GateSet
             The target gateset used when optimizing the objective.
 
@@ -184,7 +184,7 @@ class Results(object):
 
         germs : list of GateStrings
             List of germ gate strings used in the objective optimization.
-            
+
         gatesetsByL : list of GateSets
             The estimated gateset at each L value.
 
@@ -209,7 +209,7 @@ class Results(object):
         constrainToTP : boolean
             Whether or not the gatesetEstimate was constrained to lie
             within TP during the objective optimization.
-            
+
         fidPairs : list of 2-tuples, optional
             Specifies a subset of all prepStr,effectStr string pairs to be used in this
             analysis.  Each element of fidPairs is a (iRhoStr, iEStr) 2-tuple of integers,
@@ -219,7 +219,7 @@ class Results(object):
         gatesetsByL_noGaugeOpt : list of GateSets, optional
             The value of the estimated gate sets *before* any gauge
             optimization was performed on it.
-        
+
         Returns
         -------
         None
@@ -235,7 +235,7 @@ class Results(object):
         self.gatesets['final estimate'] = gatesetsByL[-1]
         self.gatestring_lists['iteration'] = gateStringListByL
         self.gatestring_lists['final'] = gateStringListByL[-1]
-        self.gatestring_lists['all'] = _lt.remove_duplicates( 
+        self.gatestring_lists['all'] = _lt.remove_duplicates(
             list(_itertools.chain(*gateStringListByL)) )
         self.dataset = dataset
         self.parameters['objective'] = objective
@@ -254,7 +254,7 @@ class Results(object):
         self.parameters['max length list'] = Ls
         self.parameters['fiducial pairs'] = fidPairs
         self.parameters['L,germ tuple base string dict'] = \
-            _collections.OrderedDict( [ ( (L,germ), truncFn(germ,L) ) 
+            _collections.OrderedDict( [ ( (L,germ), truncFn(germ,L) )
                                         for L in Ls for germ in germs] )
         self._LsAndGermInfoSet = True
 
@@ -277,23 +277,23 @@ class Results(object):
         s += " .dataset    -- the DataSet used to generate these results\n\n"
         s += " .gatesets   -- a dictionary of GateSet objects w/keys:\n"
         s += " ---------------------------------------------------------\n"
-        s += "  " + "\n  ".join(self.gatesets.keys()) + "\n"
+        s += "  " + "\n  ".join(list(self.gatesets.keys())) + "\n"
         s += "\n"
         s += " .gatestring_lists   -- a dict of GateString lists w/keys:\n"
         s += " ---------------------------------------------------------\n"
-        s += "  " + "\n  ".join(self.gatestring_lists.keys()) + "\n"
+        s += "  " + "\n  ".join(list(self.gatestring_lists.keys())) + "\n"
         s += "\n"
         s += " .tables   -- a dict of ReportTable objects w/keys:\n"
         s += " ---------------------------------------------------------\n"
-        s += "  " + "\n  ".join(self.tables.keys()) + "\n"
+        s += "  " + "\n  ".join(list(self.tables.keys())) + "\n"
         s += "\n"
         s += " .figures   -- a dict of ReportFigure objects w/keys:\n"
         s += " ---------------------------------------------------------\n"
-        s += "  " + "\n  ".join(self.figures.keys()) + "\n"
+        s += "  " + "\n  ".join(list(self.figures.keys())) + "\n"
         s += "\n"
         s += " .parameters   -- a dict of simulation parameters:\n"
         s += " ---------------------------------------------------------\n"
-        s += "  " + "\n  ".join(self.parameters.keys()) + "\n"
+        s += "  " + "\n  ".join(list(self.parameters.keys())) + "\n"
         s += "\n"
         s += " .options   -- a container of display options:\n"
         s += " ---------------------------------------------------------\n"
@@ -307,7 +307,7 @@ class Results(object):
 
 
     def _get_table_fns(self):
-        """ 
+        """
         Return a dictionary of functions which create a table identified by
         the dictionary key.  These functions are used for the lazy creation
         of tables within the "tables" member of a Results instance.
@@ -317,11 +317,11 @@ class Results(object):
         # which match their single "key" argument.  It can be assumed
         # that "key" is either equal to or matches the corresponding
         # compute-function key.  Since the latter may be a regular expression,
-        # "key" may also be this same regular-expression, in which case 
+        # "key" may also be this same regular-expression, in which case
         # a list of currently computable keys (based on current Results
         # parameters, etc.) should be returned.  In the more mundane
         # case where key is just a string, the function simply returns
-        # that same string when that key can be computed, and None 
+        # that same string when that key can be computed, and None
         # otherwise.
         def validate_none(key):
             return [key]
@@ -351,7 +351,7 @@ class Results(object):
             gsTgt, gsBest = setup()
             return _generation.get_gateset_spam_table(gsTgt, None, False)
         fns['targetSpamBriefTable'] = (fn, validate_essential)
-             
+
 
         def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
@@ -366,7 +366,7 @@ class Results(object):
             #             10 ) #heuristic (unused)
             gsTgt, gsBest = setup()
             if self._LsAndGermInfoSet:
-                strs = ( self.gatestring_lists['prep fiducials'], 
+                strs = ( self.gatestring_lists['prep fiducials'],
                          self.gatestring_lists['effect fiducials'] )
             else: strs = None
             return _generation.get_dataset_overview_table(
@@ -375,7 +375,7 @@ class Results(object):
 
         def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
-            strs = ( self.gatestring_lists['prep fiducials'], 
+            strs = ( self.gatestring_lists['prep fiducials'],
                      self.gatestring_lists['effect fiducials'] )
 
             return _generation.get_gatestring_multi_table(
@@ -529,7 +529,7 @@ class Results(object):
                     self.parameters['max length list'],
                     self.gatesets['iteration estimates'],
                     self.gatestring_lists['iteration'], self.dataset)
-            else: raise ValueError("Invalid Objective: %s" % 
+            else: raise ValueError("Invalid Objective: %s" %
                                    self.parameters['objective'])
         fns['progressTable'] = (fn, validate_LsAndGerms)
 
@@ -572,7 +572,7 @@ class Results(object):
 
 
     def _get_figure_fns(self):
-        """ 
+        """
         Return a dictionary of functions which create a figure identified by
         the dictionary key.  These functions are used for the lazy creation
         of figures within the "figures" member of a Results instance.
@@ -601,14 +601,14 @@ class Results(object):
             assert(obj in ("chi2","logl"))
             if obj == "chi2":
                 return self.parameters['minProbClipForWeighting']
-            elif obj == "logl": 
+            elif obj == "logl":
                 return self.parameters['minProbClip']
 
         def plot_setup():
             m = 0
             M = 10
             baseStr_dict = self._getBaseStrDict()
-            strs  = (self.gatestring_lists['prep fiducials'], 
+            strs  = (self.gatestring_lists['prep fiducials'],
                      self.gatestring_lists['effect fiducials'])
             germs = self.gatestring_lists['germs']
             gsBest = self.gatesets['final estimate']
@@ -632,7 +632,7 @@ class Results(object):
 
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
-            strs  = (self.gatestring_lists['prep fiducials'], 
+            strs  = (self.gatestring_lists['prep fiducials'],
                      self.gatestring_lists['effect fiducials'])
             return _plotting.gof_boxplot_keyplot(strs)
         fns["colorBoxPlotKeyPlot"] = (fn,validate_LsAndGerms)
@@ -674,7 +674,7 @@ class Results(object):
                            fidPairs=fidPairs, minProbClipForWeighting=mpc,
                            save_to="", ticSize=14, linlg_pcntle=float(self.parameters['linlogPercentile']) / 100)
         fns["bestEstimateSummedColorBoxPlot"] = (fn,validate_LsAndGerms)
-            
+
 
         expr1 = "estimateForLIndex(\d+?)ColorBoxPlot"
         def fn(key, confidenceLevel, vb):
@@ -689,8 +689,8 @@ class Results(object):
                         save_to="", minProbClipForWeighting=mpc, ticSize=20)
         def fn_validate(key):
             if not self._LsAndGermInfoSet: return []
-            
-            keys = ["estimateForLIndex%dColorBoxPlot" % i 
+
+            keys = ["estimateForLIndex%dColorBoxPlot" % i
                     for i in range(len(self.parameters['max length list']))]
             if key == expr1: return keys # all computable keys
             elif key in keys: return [key]
@@ -700,7 +700,7 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
             Ls,germs,gsBest,fidPairs,m,M,baseStr_dict,strs,st = plot_setup()
-            return _plotting.blank_boxplot( 
+            return _plotting.blank_boxplot(
                 Ls[st:], germs, baseStr_dict, strs, r"$L$", "germ",
                 scale=1.0, title="", sumUp=False, save_to="", ticSize=20)
         fns["blankBoxPlot"] = (fn,validate_LsAndGerms)
@@ -708,7 +708,7 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
             Ls,germs,gsBest,fidPairs,m,M,baseStr_dict,strs,st = plot_setup()
-            return _plotting.blank_boxplot( 
+            return _plotting.blank_boxplot(
                 Ls[st:], germs, baseStr_dict, strs, r"$L$", "germ",
                 scale=1.0, title="", sumUp=True, save_to="", ticSize=20)
         fns["blankSummedBoxPlot"] = (fn,validate_LsAndGerms)
@@ -743,7 +743,7 @@ class Results(object):
             noConfidenceLevelDependence(confidenceLevel)
             Ls,germs,gsBest,fidPairs,m,M,baseStr_dict,strs,st = plot_setup()
             directLGST = self._specials.get('direct_lgst_gatesets',verbosity=vb)
-            return _plotting.direct_deviation_boxplot( 
+            return _plotting.direct_deviation_boxplot(
                 Ls[st:], germs, baseStr_dict, self.dataset,
                 gsBest, directLGST, r"$L$", "germ", scale=1.0,
                 prec=-1, title="", save_to="", ticSize=20)
@@ -790,9 +790,9 @@ class Results(object):
             if not self._LsAndGermInfoSet: return []
 
             #only whack-a-mole plots for the length-1 germs are available
-            len1GermFirstEls = [ g[0] for g in self.gatestring_lists['germs'] 
+            len1GermFirstEls = [ g[0] for g in self.gatestring_lists['germs']
                                  if len(g) == 1 ]
-            
+
             keys = ["whack%sMoleBoxes" % gl for gl in len1GermFirstEls]
             if key == expr2: return keys # all computable keys
             elif key in keys: return [key]
@@ -818,9 +818,9 @@ class Results(object):
             if not self._LsAndGermInfoSet: return []
 
             #only whack-a-mole plots for the length-1 germs are available
-            len1GermFirstEls = [ g[0] for g in self.gatestring_lists['germs'] 
+            len1GermFirstEls = [ g[0] for g in self.gatestring_lists['germs']
                                  if len(g) == 1 ]
-            
+
             keys = ["whack%sMoleBoxesSummed" % gl for gl in len1GermFirstEls]
             if key == expr3: return keys # all computable keys
             elif key in keys: return [key]
@@ -843,8 +843,8 @@ class Results(object):
                 mxBasisDims=basisDims)
 
         def fn_validate(key):
-            if not self._bEssentialResultsSet: return []            
-            keys = ["bestGateErrGenBoxes%s" % gl 
+            if not self._bEssentialResultsSet: return []
+            keys = ["bestGateErrGenBoxes%s" % gl
                     for gl in self.gatesets['final estimate'].gates ]
             if key == expr4: return keys # all computable keys
             elif key in keys: return [key]
@@ -857,14 +857,14 @@ class Results(object):
             #cri = self._get_confidence_region(confidenceLevel)
             noConfidenceLevelDependence(confidenceLevel)
             gateLabel = _re.match(expr5,key).group(1)
-            gate = self.gatesets['target'].gates[gateLabel]            
-            return _plotting.gate_matrix_boxplot(gate, save_to="", 
+            gate = self.gatesets['target'].gates[gateLabel]
+            return _plotting.gate_matrix_boxplot(gate, save_to="",
                 mxBasis=self.gatesets['target'].get_basis_name(),
                 mxBasisDims=self.gatesets['target'].get_basis_dimension())
 
         def fn_validate(key):
-            if not self._bEssentialResultsSet: return []            
-            keys = ["targetGateBoxes%s" % gl 
+            if not self._bEssentialResultsSet: return []
+            keys = ["targetGateBoxes%s" % gl
                     for gl in self.gatesets['final estimate'].gates ]
             if key == expr5: return keys # all computable keys
             elif key in keys: return [key]
@@ -878,12 +878,12 @@ class Results(object):
             gateLabel = _re.match(expr6,key).group(1)
             gate = self.gatesets['final estimate'].gates[gateLabel]
             target_gate = self.gatesets['target'].gates[gateLabel]
-            return _plotting.polar_eigenval_plot(gate, target_gate, 
+            return _plotting.polar_eigenval_plot(gate, target_gate,
                                                  title=gateLabel, save_to="")
 
         def fn_validate(key):
-            if not self._bEssentialResultsSet: return []            
-            keys = ["bestEstimatePolar%sEvalPlot" % gl 
+            if not self._bEssentialResultsSet: return []
+            keys = ["bestEstimatePolar%sEvalPlot" % gl
                     for gl in self.gatesets['final estimate'].gates ]
             if key == expr6: return keys # all computable keys
             elif key in keys: return [key]
@@ -904,8 +904,8 @@ class Results(object):
                 gate, target_gate, save_to="", mxBasis=basisNm, boxLabels=True)
 
         def fn_validate(key):
-            if not self._bEssentialResultsSet: return []            
-            keys = ["pauliProdHamiltonianDecompBoxes%s" % gl 
+            if not self._bEssentialResultsSet: return []
+            keys = ["pauliProdHamiltonianDecompBoxes%s" % gl
                     for gl in self.gatesets['final estimate'].gates ]
             if key == expr7: return keys # all computable keys
             elif key in keys: return [key]
@@ -916,7 +916,7 @@ class Results(object):
 
 
     def _get_special_fns(self):
-        """ 
+        """
         Return a dictionary of functions which create "special objects"
         identified by the dictionary key.  These functions are used for
         the lazy creation of these objects within the "_specials" member
@@ -964,7 +964,7 @@ class Results(object):
                 constrainToTP=constrainToTP)
 
             best_gs_gauges['CPTP'] = _optimizeGauge(
-                gsBestEstimate, "CPTP and target", 
+                gsBestEstimate, "CPTP and target",
                 targetGateset=gsTarget, verbosity=vb,
                 targetFactor=1.0e-7, constrainToTP=constrainToTP)
 
@@ -980,7 +980,7 @@ class Results(object):
         fns['gaugeOptAppendixGatesets'] = (fn, validate_essential)
 
 
-        def fn(key, confidenceLevel, vb):            
+        def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
 
             best_gs_gauges = self._specials.get('gaugeOptAppendixGatesets',
@@ -989,8 +989,8 @@ class Results(object):
 
             ret = {}
 
-            for gaugeKey,gopt_gs in best_gs_gauges.iteritems():
-                #FUTURE: add confidence region support to these appendices? 
+            for gaugeKey,gopt_gs in best_gs_gauges.items():
+                #FUTURE: add confidence region support to these appendices?
                 # -- would need to compute confidenceRegionInfo (cri)
                 #    for each gauge-optimized gateset, gopt_gs and pass
                 #    to appropriate functions below
@@ -1063,13 +1063,13 @@ class Results(object):
                     if fullDict[(L,germ)] not in baseStrs:
                         baseStrs.append( fullDict[(L,germ)] )
 
-            return _plotting.direct_lgst_gatesets( 
+            return _plotting.direct_lgst_gatesets(
                 baseStrs, self.dataset, direct_specs, self.gatesets['target'],
-                svdTruncateTo=4, verbosity=0) 
+                svdTruncateTo=4, verbosity=0)
                 #TODO: svdTruncateTo set elegantly?
         fns["direct_lgst_gatesets"] = (fn, validate_LsAndGerms)
 
-        
+
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
 
@@ -1091,7 +1091,7 @@ class Results(object):
                 mpc = self.parameters['minProbClipForWeighting']
                 return _plotting.direct_mc2gst_gatesets(
                     baseStrs, self.dataset, direct_specs, gsTarget,
-                    svdTruncateTo=gsTarget.get_dimension(), 
+                    svdTruncateTo=gsTarget.get_dimension(),
                     minProbClipForWeighting=mpc,
                     probClipInterval=self.parameters['probClipInterval'],
                     verbosity=0)
@@ -1105,7 +1105,7 @@ class Results(object):
                     probClipInterval=self.parameters['probClipInterval'],
                     verbosity=0)
             else:
-                raise ValueError("Invalid Objective: %s" % 
+                raise ValueError("Invalid Objective: %s" %
                                  self.parameters['objective'])
         fns["DirectLongSeqGatesets"] = (fn, validate_LsAndGerms)
 
@@ -1114,7 +1114,7 @@ class Results(object):
             noConfidenceLevelDependence(confidenceLevel)
 
             baseStr_dict = self._getBaseStrDict()
-            strs  = (self.gatestring_lists['prep fiducials'], 
+            strs  = (self.gatestring_lists['prep fiducials'],
                      self.gatestring_lists['effect fiducials'])
             germs = self.gatestring_lists['germs']
             gsBest = self.gatesets['final estimate']
@@ -1127,7 +1127,7 @@ class Results(object):
             if obj == "chi2":
                 plotFn = _plotting.chi2_boxplot
                 mpc = self.parameters['minProbClipForWeighting']
-                
+
             elif obj == "logl":
                 plotFn = _plotting.logl_boxplot
                 mpc = self.parameters['minProbClip']
@@ -1171,12 +1171,12 @@ class Results(object):
 #            A penalty function replaces the true log-likelihood for probabilities that lie
 #            below this threshold so that the log-likelihood never becomes undefined (which improves
 #            optimizer performance).
-#    
+#
 #        minProbClipForWeighting : float, optional
 #            Sets the minimum and maximum probability p allowed in the chi^2 weights: N/(p*(1-p))
 #            by clipping probability p values to lie within the interval
 #            [ minProbClipForWeighting, 1-minProbClipForWeighting ].
-#    
+#
 #        probClipInterval : 2-tuple or None, optional
 #           (min,max) values used to clip the probabilities predicted by gatesets during the
 #           least squares search for an optimal gateset (if not None).
@@ -1186,9 +1186,9 @@ class Results(object):
 #           terms of the log-likelihood.
 #
 #        weightsDict : dict, optional
-#           A dictionary with keys == gate strings and values == multiplicative scaling 
+#           A dictionary with keys == gate strings and values == multiplicative scaling
 #           factor for the corresponding gate string. The default is no weight scaling at all.
-#           
+#
 #        defaultDirectory : string, optional
 #           Path to the default directory for generated reports and presentations.
 #
@@ -1205,8 +1205,8 @@ class Results(object):
 #        """
 #
 #
-#        self.additionalInfo = { 'weights': weightsDict, 
-#                                'minProbClip': minProbClip, 
+#        self.additionalInfo = { 'weights': weightsDict,
+#                                'minProbClip': minProbClip,
 #                                'minProbClipForWeighting': minProbClipForWeighting,
 #                                'probClipInterval': probClipInterval,
 #                                'radius': radius,
@@ -1222,7 +1222,7 @@ class Results(object):
 #        Parameters
 #        ----------
 #        pathToTemplates : string
-#           The path to a folder containing GST's template files.  
+#           The path to a folder containing GST's template files.
 #           Usually this can be determined automatically (the default).
 #        """
 #        self.options.template_path = pathToTemplates
@@ -1238,7 +1238,7 @@ class Results(object):
 #        latexCmd : string
 #           The command to run to invoke the latex compiler,
 #           typically just 'pdflatex' when it is on the system
-#           path. 
+#           path.
 #        """
 #        self.latexCmd = latexCmd
 
@@ -1258,7 +1258,7 @@ class Results(object):
         -------
         ConfidenceRegion
         """
-        
+
         assert(self._bEssentialResultsSet)
 
         if confidenceLevel is None:
@@ -1304,12 +1304,12 @@ class Results(object):
 
     def _merge_template(self, qtys, templateFilename, outputFilename):
         if self.options.template_path is None:
-            templateFilename = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)), 
+            templateFilename = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)),
                                               "templates", templateFilename )
         else:
             templateFilename = _os.path.join( self.options.template_path,
                                               templateFilename )
-            
+
         template = open(templateFilename,"r").read()
         template = template.replace("{", "{{").replace("}", "}}") #double curly braces (for format processing)
 
@@ -1319,10 +1319,10 @@ class Results(object):
         # Replace str.format fields with values and write to output file
         template = template.format(**qtys)
         open(outputFilename,'w').write(template)
-    
+
 
     def _getBaseStrDict(self, remove_dups = True):
-        #if remove_dups == True, remove duplicates in 
+        #if remove_dups == True, remove duplicates in
         #  L_germ_tuple_to_baseStr_dict by replacing with None
 
         assert(self._bEssentialResultsSet)
@@ -1338,15 +1338,15 @@ class Results(object):
             for germ in self.gatestring_lists['germs']:
                 if remove_dups and fullDict[(L,germ)] in tmpRunningList:
                     baseStr_dict[(L,germ)] = None
-                else: 
+                else:
                     tmpRunningList.append( fullDict[(L,germ)] )
                     baseStr_dict[(L,germ)] = fullDict[(L,germ)]
         return baseStr_dict
 
 
-    
 
-    def create_full_report_pdf(self, confidenceLevel=None, filename="auto", 
+
+    def create_full_report_pdf(self, confidenceLevel=None, filename="auto",
                             title="auto", datasetLabel="auto", suffix="",
                             debugAidsAppendix=False, gaugeOptAppendix=False,
                             pixelPlotAppendix=False, whackamoleAppendix=False,
@@ -1360,12 +1360,12 @@ class Results(object):
         ----------
         confidenceLevel : float, optional
            If not None, then the confidence level (between 0 and 100) used in
-           the computation of confidence regions/intervals. If None, no 
+           the computation of confidence regions/intervals. If None, no
            confidence regions or intervals are computed.
 
         filename : string, optional
            The output filename where the report file(s) will be saved.  Specifying
-           "auto" will use the default directory and base name (specified in 
+           "auto" will use the default directory and base name (specified in
            set_additional_info) if given, otherwise the file "GSTReport.pdf" will
            be output to the current directoy.
 
@@ -1384,7 +1384,7 @@ class Results(object):
            the same dataset.
 
         debugAidsAppendix : bool, optional
-           Whether to include the "debugging aids" appendix.  This 
+           Whether to include the "debugging aids" appendix.  This
            appendix contains comparisons of GST and Direct-GST and small-
            eigenvalue error rates among other quantities potentially
            useful for figuring out why the GST estimate did not fit
@@ -1403,8 +1403,8 @@ class Results(object):
            intermediate iterations of the GST algortihm.
 
         whackamoleAppendix : bool, optional
-           Whether to include the "whack-a-mole" appendix, which contains 
-           colr box plots showing the effect of reducing ("whacking") one 
+           Whether to include the "whack-a-mole" appendix, which contains
+           colr box plots showing the effect of reducing ("whacking") one
            particular part of the overall goodness of fit box plot.
 
         m, M : float, optional
@@ -1432,7 +1432,7 @@ class Results(object):
         printer = VerbosityPrinter.build_printer(verbosity)
 
         assert(self._bEssentialResultsSet)
-        self.confidence_level = confidenceLevel 
+        self.confidence_level = confidenceLevel
         self._comm = comm
           #set "current" level, used by ResultCache member dictionaries
 
@@ -1480,20 +1480,20 @@ class Results(object):
         # 5) remove auxiliary files generated during compilation
         #  FUTURE?? determine what we need to compute & plot by reading
         #           through the template file?
-        
+
         #Note: for now, we assume the best gateset corresponds to the last
         #      L-value
         best_gs = self.gatesets['final estimate']
         v = verbosity # shorthand
 
-        if not self._LsAndGermInfoSet: #cannot create appendices 
+        if not self._LsAndGermInfoSet: #cannot create appendices
             debugAidsAppendix = False  # which depend on this structure
             pixelPlotAppendix = False
             whackamoleAppendix = False
-        
+
         qtys = {} # dictionary to store all latex strings
                   # to be inserted into report template
-        qtys['title'] = title   
+        qtys['title'] = title
         qtys['datasetLabel'] = datasetLabel
         qtys['settoggles'] =  "\\toggle%s{confidences}\n" % \
             ("false" if confidenceLevel is None else "true")
@@ -1529,21 +1529,21 @@ class Results(object):
                    ('opt_template_path', self.options.template_path),
                    ('opt_latex_cmd', self.options.latex_cmd) ]
                    #('opt_latex_postcmd', self.options.latex_postcmd) #TODO: add this
-        for key,val in self.parameters.iteritems():
+        for key,val in self.parameters.items():
             pdfInfo.append( (key, val) )
         qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
 
 
-        #Get figure directory for figure generation *and* as a 
+        #Get figure directory for figure generation *and* as a
         # scratch space for tables.
         D = report_base + "_files" #figure directory relative to reportDir
         if not _os.path.isdir( _os.path.join(report_dir,D)):
             _os.mkdir( _os.path.join(report_dir,D))
 
-            
+
         # 1) get latex tables
-	printer.log("*** Generating tables ***")
-        
+        printer.log("*** Generating tables ***")
+
         std_tables = \
             ('targetSpamTable','targetGatesTable','datasetOverviewTable',
              'bestGatesetSpamTable','bestGatesetSpamParametersTable',
@@ -1551,7 +1551,7 @@ class Results(object):
              'bestGatesetDecompTable','bestGatesetRotnAxisTable',
              'bestGatesetClosestUnitaryTable',
              'bestGatesetVsTargetTable','bestGatesetErrorGenTable')
-        
+
         ls_and_germs_tables = ('fiducialListTable','prepStrListTable',
                                'effectStrListTable','germListTable',
                                'progressTable')
@@ -1577,7 +1577,7 @@ class Results(object):
             qtys["tt_"+key] = ""
 
         #get appendix tables if needed
-        if gaugeOptAppendix: 
+        if gaugeOptAppendix:
             goaTables = self._specials.get('gaugeOptAppendixTables',verbosity=printer - 1)
             qtys.update( { key : goaTables[key].render(
                         'latex', longtables=self.options.long_tables, scratchDir=D)
@@ -1592,15 +1592,15 @@ class Results(object):
                            for key in goaTables }  )  # for format substitution
             #TODO: tables[ref] and then tooltips?
 
-    
+
         # 2) generate plots
-	printer.log("*** Generating plots ***")
+        printer.log("*** Generating plots ***")
 
         if _matplotlib.is_interactive():
             _matplotlib.pyplot.ioff()
             bWasInteractive = True
         else: bWasInteractive = False
-    
+
         maxW,maxH = 6.5,9.0 #max width and height of graphic in latex document (in inches)
 
         def incgr(figFilenm,W=None,H=None): #includegraphics "macro"
@@ -1626,12 +1626,12 @@ class Results(object):
                 plotFnName,plotFnLatex = "Chi2", "$\chi^2$"
             elif self.parameters['objective'] == "logl":
                 plotFnName,plotFnLatex = "LogL", "$\\log(\\mathcal{L})$"
-            else: 
-                raise ValueError("Invalid objective value: %s" 
+            else:
+                raise ValueError("Invalid objective value: %s"
                                  % self.parameters['objective'])
-            
+
             printer.log("%s plots (%d): " % (plotFnName, nPlots))
-            
+
             printer.show_progress(0, 1, prefix='', end='')
             fig = set_fig_qtys("bestEstimateColorBoxPlot",
                                "best%sBoxes.pdf" % plotFnName, printer - 1)
@@ -1640,7 +1640,7 @@ class Results(object):
 
             #qtys["bestEstimateColorBoxPlot_hist"] = \
             #    incgr("best%sBoxes_hist.pdf" % plotFnName figFilenm)
-            #    #no tooltip for histogram... - probably should make it 
+            #    #no tooltip for histogram... - probably should make it
             #    # it's own element of .figures dict
 
             printer.show_progress(1, 1, prefix='', end='')
@@ -1652,12 +1652,12 @@ class Results(object):
                            "invertedBestEstimateColorBoxPlot"]:
                 qtys[figkey] = qtys["tt_"+figkey] = ""
 
-    
+
         pixplots = ""
         if pixelPlotAppendix:
             Ls = self.parameters['max length list']
             for i in range(st,len(Ls)-1):
-                
+
                 printer.show_progress(i, len(Ls)-2, prefix='', end='') # -2 is intentional
 
                 fig = self.figures.get("estimateForLIndex%dColorBoxPlot" % i,
@@ -1669,9 +1669,9 @@ class Results(object):
 
                 #scale figure size according to number of rows and columns+1
                 # (+1 for labels ~ another col) relative to initial plot
-                W = float(lx+1)/float(maxX+1) * maxW 
-                H = float(ly)  /float(maxY)   * maxH 
-            
+                W = float(lx+1)/float(maxX+1) * maxW
+                H = float(ly)  /float(maxY)   * maxH
+
                 pixplots += "\n"
                 pixplots += "\\begin{figure}\n"
                 pixplots += "\\begin{center}\n"
@@ -1691,13 +1691,13 @@ class Results(object):
         qtys['intermediate_pixel_plot_figures'] = pixplots
 
         printer.log("")
-        
+
         if debugAidsAppendix:
             #DirectLGST and deviation
             printer.log(" -- Direct-X plots ", end='')
-            printer.log("(2):") 
+            printer.log("(2):")
 
-            #if verbosity > 0: 
+            #if verbosity > 0:
             #    print " ?",; _sys.stdout.flush()
             #fig = set_fig_qtys("directLGSTColorBoxPlot",
             #                   "directLGST%sBoxes.pdf" % plotFnName)
@@ -1706,8 +1706,8 @@ class Results(object):
             fig = set_fig_qtys("directLongSeqGSTColorBoxPlot",
                            "directLongSeqGST%sBoxes.pdf" % plotFnName, printer - 1)
 
-            #if verbosity > 0: 
-            #    print " ?",; _sys.stdout.flush()        
+            #if verbosity > 0:
+            #    print " ?",; _sys.stdout.flush()
             #fig = set_fig_qtys("directLGSTDeviationColorBoxPlot",
             #                   "directLGSTDeviationBoxes.pdf",W=4,H=5)
 
@@ -1731,24 +1731,24 @@ class Results(object):
 
 
         whackamoleplots = ""
-        if whackamoleAppendix:    
+        if whackamoleAppendix:
             #Whack-a-mole plots for highest L of each length-1 germ
             Ls = self.parameters['max length list']
             highestL = Ls[-1]; allGateStrings = self.gatestring_lists['all']
             hammerWeight = 10.0
-            len1Germs = [ g for g in self.gatestring_lists['germs'] 
+            len1Germs = [ g for g in self.gatestring_lists['germs']
                           if len(g) == 1 ]
 
             printer.log(" -- Whack-a-mole plots (%d): " % (2*len(len1Germs)), end='')
 
             for i, germ in enumerate(len1Germs):
-               
-                printer.show_progress(i,  len(len1Germs) - 1, prefix='', end='') 
+
+                printer.show_progress(i,  len(len1Germs) - 1, prefix='', end='')
 
                 fig = self.figures.get("whack%sMoleBoxes" % germ[0],verbosity=printer - 1)
                 fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.pdf"
                                           % germ[0]))
-        
+
                 whackamoleplots += "\n"
                 whackamoleplots += "\\begin{figure}\n"
                 whackamoleplots += "\\begin{center}\n"
@@ -1759,14 +1759,14 @@ class Results(object):
                 whackamoleplots += "\\end{center}\n"
                 whackamoleplots += "\\end{figure}\n"
             printer.end_progress()
-        
+
             for i,germ in enumerate(len1Germs):
                 printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
 
                 fig = self.figures.get("whack%sMoleBoxesSummed" % germ[0],
                                        verbosity=printer - 1)
                 fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxesSummed.pdf" % germ[0]))
-    
+
                 whackamoleplots += "\n"
                 whackamoleplots += "\\begin{figure}\n"
                 whackamoleplots += "\\begin{center}\n"
@@ -1777,32 +1777,32 @@ class Results(object):
                 whackamoleplots += "\\end{center}\n"
                 whackamoleplots += "\\end{figure}\n"
             printer.end_progress()
-    
+
             printer.log('')
         #Set template quantity (empty string if appendix disabled)
         qtys['whackamole_plot_figures'] = whackamoleplots
-            
+
         if bWasInteractive:
             _matplotlib.pyplot.ion()
-    
+
 
         # 3) populate template latex file => report latex file
         printer.log("*** Merging into template file ***")
-        
+
         mainTexFilename = _os.path.join(report_dir, report_base + ".tex")
         appendicesTexFilename = _os.path.join(report_dir, report_base + "_appendices.tex")
         pdfFilename = _os.path.join(report_dir, report_base + ".pdf")
-    
-        if self.parameters['objective'] == "chi2":    
+
+        if self.parameters['objective'] == "chi2":
             mainTemplate = "report_chi2_main.tex"
             appendicesTemplate = "report_chi2_appendices.tex"
         elif self.parameters['objective'] == "logl":
             mainTemplate = "report_logL_main.tex"
             appendicesTemplate = "report_logL_appendices.tex"
-        else: 
-            raise ValueError("Invalid objective value: %s" 
+        else:
+            raise ValueError("Invalid objective value: %s"
                              % self.parameters['objective'])
-    
+
         if any( (debugAidsAppendix, gaugeOptAppendix,
                  pixelPlotAppendix, whackamoleAppendix) ):
             qtys['appendices'] = "\\input{%s}" % \
@@ -1811,26 +1811,26 @@ class Results(object):
                                  appendicesTexFilename)
         else: qtys['appendices'] = ""
         self._merge_template(qtys, mainTemplate, mainTexFilename)
-    
-    
+
+
         # 4) compile report latex file into PDF
         printer.log("Latex file(s) successfully generated.  Attempting to compile with pdflatex...")
         cwd = _os.getcwd()
-        if len(report_dir) > 0:  
+        if len(report_dir) > 0:
             _os.chdir(report_dir)
-    
+
         try:
-            ret = _os.system( "%s %s %s" % 
+            ret = _os.system( "%s %s %s" %
                               (self.options.latex_cmd,
                                _os.path.basename(mainTexFilename),
                                self.options.latex_postcmd) )
             if ret == 0:
-                #We could check if the log file contains "Rerun" in it, 
+                #We could check if the log file contains "Rerun" in it,
                 # but we'll just re-run all the time now
                 printer.log("Initial output PDF %s successfully generated." \
                         % pdfFilename)
 
-                ret = _os.system( "%s %s %s" % 
+                ret = _os.system( "%s %s %s" %
                                   (self.options.latex_cmd,
                                    _os.path.basename(mainTexFilename),
                                    self.options.latex_postcmd) )
@@ -1844,13 +1844,13 @@ class Results(object):
                 printer.error("pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
         except:
             printer.error("Error trying to run pdflatex to generate output PDF %s. Is '%s' on your path?" % (pdfFilename,self.options.latex_cmd))
-        finally: 
+        finally:
             _os.chdir(cwd)
-    
+
         return
 
 
-    def create_brief_report_pdf(self, confidenceLevel=None, 
+    def create_brief_report_pdf(self, confidenceLevel=None,
                            filename="auto", title="auto", datasetLabel="auto",
                            suffix="", m=0, M=10, tips=False, verbosity=0,
                            comm=None):
@@ -1864,12 +1864,12 @@ class Results(object):
         ----------
         confidenceLevel : float, optional
            If not None, then the confidence level (between 0 and 100) used in
-           the computation of confidence regions/intervals. If None, no 
+           the computation of confidence regions/intervals. If None, no
            confidence regions or intervals are computed.
 
         filename : string, optional
            The output filename where the report file(s) will be saved.  Specifying
-           "auto" will use the default directory and base name (specified in 
+           "auto" will use the default directory and base name (specified in
            set_additional_info) if given, otherwise the file "GSTBrief.pdf" will
            be output to the current directoy.
 
@@ -1910,10 +1910,10 @@ class Results(object):
         None
         """
 
-        printer = VerbosityPrinter.build_printer(verbosity)   
+        printer = VerbosityPrinter.build_printer(verbosity)
 
         assert(self._bEssentialResultsSet)
-        self.confidence_level = confidenceLevel 
+        self.confidence_level = confidenceLevel
         self._comm = comm
         v = verbosity # shorthand
 
@@ -1955,8 +1955,8 @@ class Results(object):
         # 3) populate template latex file => report latex file
         # 4) compile report latex file into PDF
         # 5) remove auxiliary files generated during compilation
-        
-                    
+
+
         if self._LsAndGermInfoSet:
             baseStr_dict = self._getBaseStrDict()
             Ls = self.parameters['max length list']
@@ -1964,11 +1964,11 @@ class Results(object):
             goodnessOfFitSection = True
         else:
             goodnessOfFitSection = False
-    
+
         #Note: for now, we assume the best gateset corresponds to the last L-value
         best_gs = self.gatesets['final estimate']
         obj = self.parameters['objective']
-        
+
         qtys = {} # dictionary to store all latex strings to be inserted into report template
         qtys['title'] = title
         qtys['datasetLabel'] = datasetLabel
@@ -1998,16 +1998,16 @@ class Results(object):
                    ('opt_table_class', self.options.table_class),
                    ('opt_template_path', self.options.template_path),
                    ('opt_latex_cmd', self.options.latex_cmd) ]
-        for key,val in self.parameters.iteritems():
+        for key,val in self.parameters.items():
             pdfInfo.append( (key, val) )
         qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
 
-        #Get figure directory for figure generation *and* as a 
+        #Get figure directory for figure generation *and* as a
         # scratch space for tables.
         D = report_base + "_files" #figure directory relative to reportDir
         if not _os.path.isdir( _os.path.join(report_dir,D)):
             _os.mkdir( _os.path.join(report_dir,D))
-            
+
         # 1) get latex tables
         printer.log("*** Generating tables ***")
 
@@ -2037,7 +2037,7 @@ class Results(object):
                 'latex',longtables=self.options.long_tables)
             qtys["tt_"+key] = ""
 
-    
+
         # 2) generate plots
         printer.log("*** Generating plots ***")
 
@@ -2046,8 +2046,8 @@ class Results(object):
             bWasInteractive = True
         else: bWasInteractive = False
 
-        #if goodnessOfFitSection:    
-        #    strs = ( self.gatestring_lists['prep fiducials'], 
+        #if goodnessOfFitSection:
+        #    strs = ( self.gatestring_lists['prep fiducials'],
         #             self.gatestring_lists['effect fiducials'] )
         #    D = report_base + "_files" #figure directory relative to reportDir
         #    if not _os.path.isdir( _os.path.join(report_dir,D)):
@@ -2059,14 +2059,14 @@ class Results(object):
         #        plotFnName,plotFnLatex = "Chi2", "$\chi^2$"
         #    elif self.parameters['objective'] == "logl":
         #        plotFnName,plotFnLatex = "LogL", "$\\log(\\mathcal{L})$"
-        #    else: 
-        #        raise ValueError("Invalid objective value: %s" 
+        #    else:
+        #        raise ValueError("Invalid objective value: %s"
         #                         % self.parameters['objective'])
         #
-        #    if verbosity > 0: 
+        #    if verbosity > 0:
         #        print " -- %s plots (%d): " % (plotFnName, nPlots),; _sys.stdout.flush()
         #
-        #    if verbosity > 0: 
+        #    if verbosity > 0:
         #        print "1 ",; _sys.stdout.flush()
         #    figkey = 'bestEstimateColorBoxPlot'
         #    figFilenm = "best%sBoxes.pdf" % plotFnName
@@ -2075,42 +2075,42 @@ class Results(object):
         #    maxX = fig.get_extra_info()['nUsedXs']; maxY = fig.get_extra_info()['nUsedYs']
         #    maxW,maxH = 6.5,9.0 #max width and height of graphic in latex document (in inches)
         #
-        #    if verbosity > 0: 
-        #        print ""; _sys.stdout.flush()    
+        #    if verbosity > 0:
+        #        print ""; _sys.stdout.flush()
         #
         #    qtys[figkey]  = "\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/%s}" % (maxW,maxH,D,figFilenm)
         #    qtys['tt_'+ figkey]  = tooltiptex(".figures['%s']" % figkey)
-        
+
         if bWasInteractive:
             _matplotlib.pyplot.ion()
-    
+
         # 3) populate template latex file => report latex file
         printer.log("*** Merging into template file ***")
-        
+
         mainTexFilename = _os.path.join(report_dir, report_base + ".tex")
         appendicesTexFilename = _os.path.join(report_dir, report_base + "_appendices.tex")
         pdfFilename = _os.path.join(report_dir, report_base + ".pdf")
-    
+
         mainTemplate = "brief_report_main.tex"
         self._merge_template(qtys, mainTemplate, mainTexFilename)
-    
+
         # 4) compile report latex file into PDF
         printer.log("Latex file(s) successfully generated.  Attempting to compile with pdflatex...")
         cwd = _os.getcwd()
-        if len(report_dir) > 0:  
+        if len(report_dir) > 0:
             _os.chdir(report_dir)
-    
+
         try:
             ret = _os.system( "%s %s %s" %
                               (self.options.latex_cmd,
                                _os.path.basename(mainTexFilename),
                                self.options.latex_postcmd) )
             if ret == 0:
-                #We could check if the log file contains "Rerun" in it, 
+                #We could check if the log file contains "Rerun" in it,
                 # but we'll just re-run all the time now
                 printer.log("Initial output PDF %s successfully generated." % \
                         pdfFilename)
-                ret = _os.system( "%s %s %s" % 
+                ret = _os.system( "%s %s %s" %
                                   (self.options.latex_cmd,
                                    _os.path.basename(mainTexFilename),
                                    self.options.latex_postcmd) )
@@ -2124,15 +2124,15 @@ class Results(object):
                 printer.error("Error: pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
         except:
             printer.error("Error trying to run pdflatex to generate output PDF %s. Is '%s' on your path?" % (pdfFilename,self.options.latex_cmd))
-        finally: 
+        finally:
             _os.chdir(cwd)
 
         return
 
 
-    def create_presentation_pdf(self, confidenceLevel=None, filename="auto", 
+    def create_presentation_pdf(self, confidenceLevel=None, filename="auto",
                               title="auto", datasetLabel="auto", suffix="",
-                              debugAidsAppendix=False, 
+                              debugAidsAppendix=False,
                               pixelPlotAppendix=False, whackamoleAppendix=False,
                               m=0, M=10, verbosity=0, comm=None):
         """
@@ -2147,12 +2147,12 @@ class Results(object):
         ----------
         confidenceLevel : float, optional
            If not None, then the confidence level (between 0 and 100) used in
-           the computation of confidence regions/intervals. If None, no 
+           the computation of confidence regions/intervals. If None, no
            confidence regions or intervals are computed.
 
         filename : string, optional
-           The output filename where the presentation file(s) will be saved.  
-           Specifying "auto" will use the default directory and base name 
+           The output filename where the presentation file(s) will be saved.
+           Specifying "auto" will use the default directory and base name
            (specified in set_additional_info) if given, otherwise the file
            "GSTSlides.pdf" will be output to the current directoy.
 
@@ -2171,7 +2171,7 @@ class Results(object):
            the same dataset.
 
         debugAidsAppendix : bool, optional
-           Whether to include the "debugging aids" appendix.  This 
+           Whether to include the "debugging aids" appendix.  This
            appendix contains comparisons of GST and Direct-GST and small-
            eigenvalue error rates among other quantities potentially
            useful for figuring out why the GST estimate did not fit
@@ -2183,8 +2183,8 @@ class Results(object):
            intermediate iterations of the GST algortihm.
 
         whackamoleAppendix : bool, optional
-           Whether to include the "whack-a-mole" appendix, which contains 
-           colr box plots showing the effect of reducing ("whacking") one 
+           Whether to include the "whack-a-mole" appendix, which contains
+           colr box plots showing the effect of reducing ("whacking") one
            particular part of the overall goodness of fit box plot.
 
         m, M : float, optional
@@ -2207,7 +2207,7 @@ class Results(object):
         printer = VerbosityPrinter.build_printer(verbosity)
 
         assert(self._bEssentialResultsSet)
-        self.confidence_level = confidenceLevel 
+        self.confidence_level = confidenceLevel
         self._comm = comm
         v = verbosity # shorthand
 
@@ -2243,7 +2243,7 @@ class Results(object):
         # 3) populate template latex file => report latex file
         # 4) compile report latex file into PDF
         # 5) remove auxiliary files generated during compilation
-                            
+
         #Note: for now, we assume the best gateset corresponds to the last L-value
         best_gs = self.gatesets['final estimate']
 
@@ -2251,7 +2251,7 @@ class Results(object):
             debugAidsAppendix = False
             pixelPlotAppendix = False
             whackamoleAppendix = False
-        
+
         qtys = {} # dictionary to store all latex strings to be inserted into report template
         qtys['title'] = title
         qtys['datasetLabel'] = datasetLabel
@@ -2271,7 +2271,7 @@ class Results(object):
             if self.parameters['objective'] == "logl" else "$\\chi^2$"
         qtys['gofObjective'] = "$2\\Delta\\log{\\mathcal{L}}$" \
             if self.parameters['objective'] == "logl" else "$\\chi^2$"
-    
+
         if confidenceLevel is not None:
             cri = self._get_confidence_region(confidenceLevel)
             qtys['confidenceIntervalScaleFctr'] = "%.3g" % cri.intervalScaling
@@ -2287,18 +2287,18 @@ class Results(object):
                    ('opt_table_class', self.options.table_class),
                    ('opt_template_path', self.options.template_path),
                    ('opt_latex_cmd', self.options.latex_cmd) ]
-        for key,val in self.parameters.iteritems():
+        for key,val in self.parameters.items():
             pdfInfo.append( (key, val) )
         qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
 
 
-        #Get figure directory for figure generation *and* as a 
+        #Get figure directory for figure generation *and* as a
         # scratch space for tables.
         D = report_base + "_files" #figure directory relative to reportDir
         if not _os.path.isdir( _os.path.join(report_dir,D)):
             _os.mkdir( _os.path.join(report_dir,D))
 
-            
+
         # 1) get latex tables
         printer.log("*** Generating tables ***")
 
@@ -2330,7 +2330,7 @@ class Results(object):
                 'latex',longtables=self.options.long_tables)
             qtys["tt_"+key] = ""
 
-    
+
         # 2) generate plots
         printer.log("*** Generating plots ***")
 
@@ -2338,7 +2338,7 @@ class Results(object):
             _matplotlib.pyplot.ioff()
             bWasInteractive = True
         else: bWasInteractive = False
-    
+
         maxW,maxH = 4.0,3.0 #max width and height of graphic in latex presentation (in inches)
         maxHc = 2.5 #max height allowed for a figure with a caption (in inches)
 
@@ -2367,12 +2367,12 @@ class Results(object):
                 plotFnName,plotFnLatex = "Chi2", "$\chi^2$"
             elif self.parameters['objective'] == "logl":
                 plotFnName,plotFnLatex = "LogL", "$\\log(\\mathcal{L})$"
-            else: 
-                raise ValueError("Invalid objective value: %s" 
+            else:
+                raise ValueError("Invalid objective value: %s"
                                  % self.parameters['objective'])
-            
+
             printer.log(" -- %s plots (%d): " % (plotFnName, nPlots), end='')
-           
+
             printer.show_progress(0, 0, prefix='', end='')
             fig = set_fig_qtys("bestEstimateColorBoxPlot",
                                "best%sBoxes.pdf" % plotFnName, printer - 1)
@@ -2384,7 +2384,7 @@ class Results(object):
             for figkey in ["bestEstimateColorBoxPlot"]:
                 qtys[figkey] = qtys["tt_"+figkey] = ""
 
-        
+
         pixplots = ""
         if pixelPlotAppendix:
             paramListLength = len(self.parameters['max length list'])-1
@@ -2403,7 +2403,7 @@ class Results(object):
                 # (+1 for labels ~ another col) relative to initial plot
                 W = float(lx+1)/float(maxX+1) * maxW
                 H = float(ly)  /float(maxY)   * maxH
-            
+
                 pixplots += "\n"
                 pixplots += "\\begin{frame}\n"
                 pixplots += "\\frametitle{Iteration %d ($L=%d$): %s values}\n" \
@@ -2422,11 +2422,11 @@ class Results(object):
         qtys['intermediate_pixel_plot_slides'] = pixplots
 
         printer.log("")
-        
+
         if debugAidsAppendix:
             #Direct-GST and deviation
             printer.log(" -- Direct-X plots (2)", end='')
-            
+
             printer.show_progress(0, 1, prefix='', end='')
             fig = set_fig_qtys("directLongSeqGSTColorBoxPlot",
                            "directLongSeqGST%sBoxes.pdf" % plotFnName, printer - 1, H=maxHc)
@@ -2435,7 +2435,7 @@ class Results(object):
                                "directLongSeqGSTDeviationBoxes.pdf", printer - 1, H=maxHc)
             printer.end_progress()
             printer.log('')
-    
+
             #Small eigenvalue error rate
             printer.log(" -- Error rate plots...")
             fig = set_fig_qtys("smallEigvalErrRateColorBoxPlot",
@@ -2450,7 +2450,7 @@ class Results(object):
 
 
         whackamoleplots = ""
-        if whackamoleAppendix:    
+        if whackamoleAppendix:
             #Whack-a-mole plots for highest L of each length-1 germ
             highestL = self.parameters['max length list'][-1]
             allGateStrings = self.gatestring_lists['all']
@@ -2466,7 +2466,7 @@ class Results(object):
                 fig = self.figures.get("whack%sMoleBoxes" % germ[0],verbosity=printer - 1)
                 fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.pdf"
                                           % germ[0]))
-        
+
                 whackamoleplots += "\n"
                 whackamoleplots += "\\begin{frame}\n"
                 whackamoleplots += "\\frametitle{Whack-a-%s-mole plot for $\mathrm{%s}^{%d}$}" % (plotFnLatex,germ[0],highestL)
@@ -2478,12 +2478,12 @@ class Results(object):
                 whackamoleplots += "\\end{center}\n"
                 whackamoleplots += "\\end{figure}\n"
                 whackamoleplots += "\\end{frame}\n"
-        
+
             printer.end_progress()
             for i,germ in enumerate(len1Germs):
                 # printer.log("%d " % (len(len1Germs)+i+1), end='')
                 printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
-    
+
                 fig = self.figures.get("whack%sMoleBoxesSummed" % germ[0],
                                        verbosity=printer - 1)
                 fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxesSummed.pdf" % germ[0]))
@@ -2499,42 +2499,42 @@ class Results(object):
                 whackamoleplots += "\\end{center}\n"
                 whackamoleplots += "\\end{figure}\n"
                 whackamoleplots += "\\end{frame}\n"
-    
+
             printer.end_progress()
             printer.log('')
- 
+
         #Set template quantity (empty string if appendix disabled)
         qtys['whackamole_plot_slides'] = whackamoleplots
-    
+
         if bWasInteractive:
             _matplotlib.pyplot.ion()
 
-    
+
         # 3) populate template latex file => report latex file
         printer.log("*** Merging into template file ***")
-        
+
         mainTexFilename = _os.path.join(report_dir, report_base + ".tex")
         pdfFilename = _os.path.join(report_dir, report_base + ".pdf")
-    
-        mainTemplate = "slides_main.tex"    
+
+        mainTemplate = "slides_main.tex"
         self._merge_template(qtys, mainTemplate, mainTexFilename)
-    
-    
+
+
         # 4) compile report latex file into PDF
         printer.log("Latex file(s) successfully generated.  Attempting to compile with pdflatex...")
         cwd = _os.getcwd()
-        if len(report_dir) > 0:  
+        if len(report_dir) > 0:
             _os.chdir(report_dir)
-    
+
         try:
-            ret = _os.system( "%s %s %s" % 
-                              (self.options.latex_cmd, 
+            ret = _os.system( "%s %s %s" %
+                              (self.options.latex_cmd,
                                _os.path.basename(mainTexFilename),
                                self.options.latex_postcmd) )
             if ret == 0:
                 #We could check if the log file contains "Rerun" in it, but we'll just re-run all the time now
                 printer.log("Initial output PDF %s successfully generated." % pdfFilename) #mainTexFilename
-                ret = _os.system( "%s %s %s" % 
+                ret = _os.system( "%s %s %s" %
                                   (self.options.latex_cmd,
                                    _os.path.basename(mainTexFilename),
                                    self.options.latex_postcmd) )
@@ -2548,15 +2548,15 @@ class Results(object):
                 printer.error("Error: pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
         except:
             printer.error("Error trying to run pdflatex to generate output PDF %s. Is '%s' on your path?" % (pdfFilename,self.options.latex_cmd))
-        finally: 
+        finally:
             _os.chdir(cwd)
-    
+
         return
-        
 
 
 
-    def create_presentation_ppt(self, confidenceLevel=None, filename="auto", 
+
+    def create_presentation_ppt(self, confidenceLevel=None, filename="auto",
                             title="auto", datasetLabel="auto", suffix="",
                             debugAidsAppendix=False,
                             pixelPlotAppendix=False, whackamoleAppendix=False,
@@ -2565,24 +2565,24 @@ class Results(object):
         Create a GST Microsoft Powerpoint presentation.
 
         These slides can contain most (but not all) of the tables and figures from
-        the "full" report but contain only minimal descriptive text.  This method 
-        uses the python-pptx package to write Powerpoint files.  The resulting 
+        the "full" report but contain only minimal descriptive text.  This method
+        uses the python-pptx package to write Powerpoint files.  The resulting
         powerpoint slides are meant to parallel those of the PDF presentation
         but are not as nice and clean.  This method exists because the Powerpoint
-        format is an industry standard and makes it very easy to shamelessly 
-        co-opt GST figures or entire slides for incorporation into other 
+        format is an industry standard and makes it very easy to shamelessly
+        co-opt GST figures or entire slides for incorporation into other
         presentations.
 
         Parameters
         ----------
         confidenceLevel : float, optional
            If not None, then the confidence level (between 0 and 100) used in
-           the computation of confidence regions/intervals. If None, no 
+           the computation of confidence regions/intervals. If None, no
            confidence regions or intervals are computed.
 
         filename : string, optional
-           The output filename where the presentation file(s) will be saved.  
-           Specifying "auto" will use the default directory and base name 
+           The output filename where the presentation file(s) will be saved.
+           Specifying "auto" will use the default directory and base name
            (specified in set_additional_info) if given, otherwise the file
            "GSTSlides.pptx" will be output to the current directoy.
 
@@ -2601,7 +2601,7 @@ class Results(object):
            the same dataset.
 
         debugAidsAppendix : bool, optional
-           Whether to include the "debugging aids" appendix.  This 
+           Whether to include the "debugging aids" appendix.  This
            appendix contains comparisons of GST and Direct-GST and small-
            eigenvalue error rates among other quantities potentially
            useful for figuring out why the GST estimate did not fit
@@ -2613,8 +2613,8 @@ class Results(object):
            intermediate iterations of the GST algortihm.
 
         whackamoleAppendix : bool, optional
-           Whether to include the "whack-a-mole" appendix, which contains 
-           colr box plots showing the effect of reducing ("whacking") one 
+           Whether to include the "whack-a-mole" appendix, which contains
+           colr box plots showing the effect of reducing ("whacking") one
            particular part of the overall goodness of fit box plot.
 
         m, M : float, optional
@@ -2643,7 +2643,7 @@ class Results(object):
         printer = VerbosityPrinter.build_printer(verbosity)
 
         assert(self._bEssentialResultsSet)
-        self.confidence_level = confidenceLevel 
+        self.confidence_level = confidenceLevel
         self._comm = comm
         v = verbosity # shorthand
 
@@ -2658,7 +2658,7 @@ class Results(object):
             from pptx.enum.text import MSO_ANCHOR, MSO_AUTO_SIZE, PP_ALIGN
         except:
             raise ValueError("Cannot import pptx: it seems like python-pptx is not installed on your system!")
-        
+
         try:
             from PIL import Image
         except:
@@ -2686,7 +2686,7 @@ class Results(object):
         if title == "auto": title = "GST on %s" % datasetLabel
 
         ######  Generate PPT Presentation ######
-                            
+
         #Note: for now, we assume the best gateset corresponds to the last L-value
         best_gs = self.gatesets['final estimate']
 
@@ -2694,7 +2694,7 @@ class Results(object):
             debugAidsAppendix = False
             pixelPlotAppendix = False
             whackamoleAppendix = False
-        
+
         qtys = {}
         qtys['title'] = title
         qtys['datasetLabel'] = datasetLabel
@@ -2704,7 +2704,7 @@ class Results(object):
             if self.parameters['objective'] == "logl" else "$\\chi^2$"
         qtys['gofObjective'] = "$2\\Delta\\log{\\mathcal{L}}$" \
             if self.parameters['objective'] == "logl" else "$\\chi^2$"
-    
+
         if confidenceLevel is not None:
             cri = self._get_confidence_region(confidenceLevel)
             qtys['confidenceIntervalScaleFctr'] = "%.3g" % cri.intervalScaling
@@ -2714,12 +2714,12 @@ class Results(object):
             qtys['confidenceIntervalScaleFctr'] = "NOT-SET"
             qtys['confidenceIntervalNumNonGaugeParams'] = "NOT-SET"
 
-        #Get figure directory for figure generation *and* as a 
+        #Get figure directory for figure generation *and* as a
         # scratch space for tables.
         D = report_base + "_files" #figure directory relative to reportDir
         if not _os.path.isdir( _os.path.join(report_dir,D)):
             _os.mkdir( _os.path.join(report_dir,D))
-            
+
         # 1) get ppt tables
         printer.log("*** Generating tables ***")
 
@@ -2751,7 +2751,7 @@ class Results(object):
         for key in tables_to_blank:
             qtys[key] = _generation.get_blank_table()
             qtys["tt_"+key] = ""
-    
+
 
         # 2) generate plots
         printer.log("*** Generating plots ***")
@@ -2760,7 +2760,7 @@ class Results(object):
             _matplotlib.pyplot.ioff()
             bWasInteractive = True
         else: bWasInteractive = False
-    
+
         fileDir = _os.path.join(report_dir, D)
         maxW,maxH = 4.0,3.0 #max width and height of graphic in latex presentation (in inches)
 
@@ -2787,10 +2787,10 @@ class Results(object):
                 plotFnName,plotFnLatex = "Chi2", "$\chi^2$"
             elif self.parameters['objective'] == "logl":
                 plotFnName,plotFnLatex = "LogL", "$\\log(\\mathcal{L})$"
-            else: 
+            else:
                 raise ValueError("Invalid objective value: %s" \
                                      % self.parameters['objective'])
-            
+
             printer.log(" -- %s plots (%d): " % (plotFnName, nPlots), end='')
             printer.show_progress(0, 0, prefix='', end='')
             printer.end_progress()
@@ -2823,7 +2823,7 @@ class Results(object):
                 # (+1 for labels ~ another col) relative to initial plot
                 W = float(lx+1)/float(maxX+1) * maxW
                 H = float(ly)  /float(maxY)   * maxH
-            
+
                 pixplots.append( _os.path.join(
                         report_dir, D, "L%d_%sBoxes.png" % (i,plotFnName)) )
                 #FUTURE: Add tooltip caption info further down?
@@ -2831,9 +2831,9 @@ class Results(object):
 
         #Set template quantity (empty array if appendix disabled)
         qtys['intermediate_pixel_plot_slides'] = pixplots
-    
+
         printer.log("")
-        
+
         if debugAidsAppendix:
             #Direct-GST and deviation
             printer.log(" -- Direct-X plots (2)", end="")
@@ -2847,7 +2847,7 @@ class Results(object):
                                "directLongSeqGSTDeviationBoxes.png", printer - 1)
 
             printer.log('')
-    
+
             #Small eigenvalue error rate
             printer.log(" -- Error rate plots...")
             fig = set_fig_qtys("smallEigvalErrRateColorBoxPlot",
@@ -2859,15 +2859,15 @@ class Results(object):
                            "directLongSeqGSTDeviationColorBoxPlot",
                            "smallEigvalErrRateColorBoxPlot"]:
                 qtys[figkey] = qtys["tt_"+figkey] = ""
-                
-    
+
+
         whackamoleplots = []
-        if whackamoleAppendix:    
+        if whackamoleAppendix:
             #Whack-a-mole plots for highest L of each length-1 germ
             Ls = self.parameters['max length list']
             highestL = Ls[-1]; allGateStrings = self.gatestring_lists['all']
             hammerWeight = 10.0
-            len1Germs = [ g for g in self.gatestring_lists['germs'] 
+            len1Germs = [ g for g in self.gatestring_lists['germs']
                           if len(g) == 1 ]
 
             printer.log(" -- Whack-a-mole plots (%d): " % (2*len(len1Germs)), end='')
@@ -2882,7 +2882,7 @@ class Results(object):
                         report_dir, D, "whack%sMoleBoxes.png" % germ[0]) )
                 #FUTURE: Add tooltip caption info further down?
             printer.end_progress()
-            
+
             for i,germ in enumerate(len1Germs):
                 printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
                 # printer.log("%d " % (len(len1Germs)+i+1), end='')
@@ -2894,21 +2894,21 @@ class Results(object):
                 whackamoleplots.append( _os.path.join(
                         report_dir, D,"whack%sMoleBoxesSummed.png" % germ[0]) )
                 #FUTURE: Add tooltip caption info further down?
-    
+
             printer.end_progress()
             printer.log('')
 
         #Set template quantity (empty array if appendix disabled)
         qtys['whackamole_plot_slides'] = whackamoleplots
-    
+
         if bWasInteractive:
             _matplotlib.pyplot.ion()
 
-    
+
         # 3) create PPT file via python-pptx
         printer.log("*** Assembling PPT file ***")
 
-        mainPPTFilename = _os.path.join(report_dir, report_base + ".pptx")        
+        mainPPTFilename = _os.path.join(report_dir, report_base + ".pptx")
         templatePath = self.options.template_path \
             if (self.options.template_path is not None) else \
             _os.path.join( _os.path.dirname(_os.path.abspath(__file__)),
@@ -2940,7 +2940,7 @@ class Results(object):
                 max_col_width = max( [ maxllen(rd[i]) for rd in tabDict['row data'] ] )
                 max_col_width = max(max_col_width, maxllen(tabDict['column names'][i]) )
                 max_col_widths.append(max_col_width)
-            
+
             max_row_heights = []
             max_row_heights.append( max([ len(nm.split('\n')) for nm in tabDict['column names'] ] ) )
             for row_data in tabDict['row data']:
@@ -2970,8 +2970,8 @@ class Results(object):
             if h > maxH:
                 fontSize = maxH / HperPt
                 h = maxH
-                w = int(WperPt * fontSize)            
-            
+                w = int(WperPt * fontSize)
+
             table = shapes.add_table(nRows, nCols, l, t, w, h).table
             table.first_row = True
             table.horz_banding = True
@@ -3034,7 +3034,7 @@ class Results(object):
                 raise ValueError("pdflatex failed to render standalone %s" % key)
             finally:
                 _os.chdir(cwd)
-            
+
             pathToImg = _os.path.join(fileDir, "%s.png" % key)
             return draw_pic(shapes, pathToImg, left, top, width, height)
 
@@ -3043,7 +3043,7 @@ class Results(object):
             pxWidth, pxHeight = Image.open(open(path)).size
             pxAspect = pxWidth / float(pxHeight) #aspect ratio of image
             maxAspect = width / float(height) #aspect ratio of "max" box
-            if pxAspect > maxAspect: 
+            if pxAspect > maxAspect:
                 w = Inches(width); h = None # image is wider & flatter than max box => constrain width
                 #print "%s -> constrain width to %f so height is %f" % (path,width,width / pxAspect)
             else:
@@ -3077,7 +3077,7 @@ class Results(object):
             return txtBox
 
         drawTable = draw_table_ppt if pptTables else draw_table_latex
-        
+
         # begin presentation creation
         #prs = Presentation() #templateFilename)
         templateDir =_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
@@ -3097,7 +3097,7 @@ class Results(object):
             #body_shape = slide.shapes.placeholders[1]; tf = body_shape.text_frame
             add_text_list(slide.shapes, 1, 2, 8, 2, ['Ns is the number of gate strings', 'Np is the number of parameters'], 15)
             drawTable(slide.shapes, 'progressTable', 1, 3, 8.5, 4, ptSize=10)
-        
+
             slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Detailed %s Analysis" % plotFnName)
             draw_pic(slide.shapes, qtys['bestEstimateColorBoxPlot'], 1, 1.5, 8, 5.5)
 
@@ -3108,7 +3108,7 @@ class Results(object):
 
         slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "GST Estimate decomposition")
         drawTable(slide.shapes, 'bestGatesetDecompTable', 1, 1.5, 7.5, 3.5 , ptSize=10)
-        drawTable(slide.shapes, 'bestGatesetRotnAxisTable', 1, 5.1, 5, 1.5, ptSize=10)        
+        drawTable(slide.shapes, 'bestGatesetRotnAxisTable', 1, 5.1, 5, 1.5, ptSize=10)
 
         slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Raw GST Estimate: Gates")
         drawTable(slide.shapes, 'bestGatesetGatesTable', 1, 2, 8, 5, ptSize=10)
@@ -3148,7 +3148,7 @@ class Results(object):
 
         if pixelPlotAppendix:
             Ls = self.parameters['max length list']
-            for i,pixPlotPath in zip( range(st,len(Ls)-1), pixplots ):
+            for i,pixPlotPath in zip( list(range(st,len(Ls)-1)), pixplots ):
                 slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Iteration %d (L=%d): %s values" % (i,Ls[i],plotFnName))
                 draw_pic(slide.shapes, pixPlotPath, 1, 1.5, 8, 5.5)
 
@@ -3170,7 +3170,7 @@ class Results(object):
         return
 
 
-    def create_general_report_pdf(self, confidenceLevel=None, filename="auto", 
+    def create_general_report_pdf(self, confidenceLevel=None, filename="auto",
                                   title="auto", datasetLabel="auto", suffix="",
                                   tips=False, verbosity=0, comm=None):
         """
@@ -3183,12 +3183,12 @@ class Results(object):
         ----------
         confidenceLevel : float, optional
            If not None, then the confidence level (between 0 and 100) used in
-           the computation of confidence regions/intervals. If None, no 
+           the computation of confidence regions/intervals. If None, no
            confidence regions or intervals are computed.
 
         filename : string, optional
            The output filename where the report file(s) will be saved.  Specifying
-           "auto" will use the default directory and base name (specified in 
+           "auto" will use the default directory and base name (specified in
            set_additional_info) if given, otherwise the file "GSTReport.pdf" will
            be output to the current directoy.
 
@@ -3224,11 +3224,11 @@ class Results(object):
         -------
         None
         """
- 
-        printer = VerbosityPrinter.build_printer(verbosity) 
+
+        printer = VerbosityPrinter.build_printer(verbosity)
 
         assert(self._bEssentialResultsSet)
-        self.confidence_level = confidenceLevel 
+        self.confidence_level = confidenceLevel
         self._comm = comm
           #set "current" level, used by ResultCache member dictionaries
 
@@ -3281,20 +3281,20 @@ class Results(object):
         # 5) remove auxiliary files generated during compilation
         #  FUTURE?? determine what we need to compute & plot by reading
         #           through the template file?
-        
+
         #Note: for now, we assume the best gateset corresponds to the last
         #      L-value
         best_gs = self.gatesets['final estimate']
         v = verbosity # shorthand
 
-        if not self._LsAndGermInfoSet: #cannot create appendices 
+        if not self._LsAndGermInfoSet: #cannot create appendices
             debugAidsAppendix = False  # which depend on this structure
             pixelPlotAppendix = False
             whackamoleAppendix = False
-        
+
         qtys = {} # dictionary to store all latex strings
                   # to be inserted into report template
-        qtys['title'] = title   
+        qtys['title'] = title
         qtys['datasetLabel'] = datasetLabel
         qtys['settoggles'] =  "\\toggle%s{confidences}\n" % \
             ("false" if confidenceLevel is None else "true")
@@ -3329,20 +3329,20 @@ class Results(object):
                    ('opt_table_class', self.options.table_class),
                    ('opt_template_path', self.options.template_path),
                    ('opt_latex_cmd', self.options.latex_cmd) ]
-        for key,val in self.parameters.iteritems():
+        for key,val in self.parameters.items():
             pdfInfo.append( (key, val) )
         qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
 
-        #Get figure directory for figure generation *and* as a 
+        #Get figure directory for figure generation *and* as a
         # scratch space for tables.
         D = report_base + "_files" #figure directory relative to reportDir
         if not _os.path.isdir( _os.path.join(report_dir,D)):
             _os.mkdir( _os.path.join(report_dir,D))
- 
+
         # 1) get latex tables
         printer.log("*** Generating tables ***")
 
-        
+
         std_tables = \
             ('targetSpamBriefTable', 'bestGatesetSpamBriefTable',
              'bestGatesetSpamParametersTable', 'bestGatesetVsTargetTable',
@@ -3350,10 +3350,10 @@ class Results(object):
              'bestGatesetChoiEvalTable', 'datasetOverviewTable',
              'bestGatesetEvalTable', 'bestGatesetRelEvalTable',
              'targetGatesBoxTable', 'bestGatesetErrGenBoxTable')
-             
+
 #'bestGatesetDecompTable','bestGatesetRotnAxisTable',
 #'bestGatesetClosestUnitaryTable',
-        
+
         ls_and_germs_tables = ('fiducialListTable','prepStrListTable',
                                'effectStrListTable','germList2ColTable',
                                'progressTable')
@@ -3384,20 +3384,20 @@ class Results(object):
             qtys["tt_"+key] = ""
 
         #get appendix tables if needed
-        #if gaugeOptAppendix: 
+        #if gaugeOptAppendix:
         #    goaTables = self._specials.get('gaugeOptAppendixTables',verbosity=v)
-        #    qtys.update( { key : goaTables[key].render('latex') 
+        #    qtys.update( { key : goaTables[key].render('latex')
         #                   for key in goaTables }  )
         #    #TODO: tables[ref] and then tooltips?
         #
         #elif any((debugAidsAppendix, pixelPlotAppendix, whackamoleAppendix)):
         #    goaTables = self._specials.get('blankGaugeOptAppendixTables',
         #                      verbosity=v)   # fill keys with blank tables
-        #    qtys.update( { key : goaTables[key].render('latex') 
+        #    qtys.update( { key : goaTables[key].render('latex')
         #                   for key in goaTables }  )  # for format substitution
         #    #TODO: tables[ref] and then tooltips?
 
-    
+
         # 2) generate plots
         printer.log("*** Generating plots ***")
 
@@ -3405,7 +3405,7 @@ class Results(object):
             _matplotlib.pyplot.ioff()
             bWasInteractive = True
         else: bWasInteractive = False
-    
+
         maxW,maxH = 6.5,9.0 #max width and height of graphic in latex document (in inches)
 
         def incgr(figFilenm,W=None,H=None): #includegraphics "macro"
@@ -3422,7 +3422,7 @@ class Results(object):
             return fig
 
         ## Gate/SPAM box tables for visualizing large matrices.
-        ##  - these tables are "special" in that they contain figures, so 
+        ##  - these tables are "special" in that they contain figures, so
         ##    there's no way to simply incorporate them into the figures or
         ##    tables member dictionaries.
         #def make_gateset_box_table(gsKey, tablekey, figPrefixes, figColWidths, figHeadings):
@@ -3442,9 +3442,9 @@ class Results(object):
         #            sz = min(gs.gates[gateLabel].shape[0] * 0.15, maxFigH)
         #            latex += " & " + incgr(figFilenm,sz,sz)
         #        latex += "\\\\ \hline\n"
-        #        
+        #
         #    latex += "\end{tabular}\n"
-        #        
+        #
         #    qtys['tt_' + tablekey] = "" #tooltiptex(".tables['%s']" % tablekey)
         #    qtys[tablekey] = latex
         #
@@ -3469,12 +3469,12 @@ class Results(object):
                 plotFnName,plotFnLatex = "Chi2", "$\chi^2$"
             elif self.parameters['objective'] == "logl":
                 plotFnName,plotFnLatex = "LogL", "$\\log(\\mathcal{L})$"
-            else: 
-                raise ValueError("Invalid objective value: %s" 
+            else:
+                raise ValueError("Invalid objective value: %s"
                                  % self.parameters['objective'])
-            
+
             printer.log(" -- %s plots (%d): " % (plotFnName, nPlots), end='')
-            
+
             printer.show_progress(0, 2, prefix='', end='')
 
             w = min(len(self.gatestring_lists['prep fiducials']) * 0.3,maxW)
@@ -3505,10 +3505,10 @@ class Results(object):
                 else:
                     lx = fig.get_extra_info()['nUsedXs']
                     ly = fig.get_extra_info()['nUsedYs']
-        
+
                     #scale figure size according to number of rows and columns+1
                     # (+1 for labels ~ another col) relative to initial plot
-                    W = float(lx+1)/float(maxX+1) * maxW 
+                    W = float(lx+1)/float(maxX+1) * maxW
                     H = float(ly)  /float(maxY)   * (maxH - 1.25) # -1 for caption
                     incgr_list.append(incgr(figFilenm,W,H))
             qtys[figkey] = "\\end{center}\\end{figure}\\begin{figure}\\begin{center}".join(
@@ -3522,10 +3522,10 @@ class Results(object):
 
             #qtys["bestEstimateColorBoxPlot_hist"] = \
             #    incgr("best%sBoxes_hist.pdf" % plotFnName figFilenm)
-            #    #no tooltip for histogram... - probably should make it 
+            #    #no tooltip for histogram... - probably should make it
             #    # it's own element of .figures dict
 
-            #if verbosity > 0: 
+            #if verbosity > 0:
             #    print "2 ",; _sys.stdout.flush()
             #fig = set_fig_qtys("invertedBestEstimateColorBoxPlot",
             #                   "best%sBoxes_inverted.pdf" % plotFnName)
@@ -3546,18 +3546,18 @@ class Results(object):
             #    qtys['tt_bestEstimatePolarEvalPlots'] += tooltiptex(".figures['%s']" % figkey)
 
         else:
-            for figkey in ["colorBoxPlotKeyPlot", 
+            for figkey in ["colorBoxPlotKeyPlot",
                            "bestEstimateColorBoxPlot"]:
                 qtys[figkey] = qtys["tt_"+figkey] = ""
                 # "invertedBestEstimateColorBoxPlot"
 
-    
+
         pixplots = ""
         #if pixelPlotAppendix:
         #    Ls = self.parameters['max length list']
         #    for i in range(st,len(Ls)-1):
         #
-        #        if verbosity > 0: 
+        #        if verbosity > 0:
         #            print "%d " % (i-st+3),; _sys.stdout.flush()
         #        fig = self.figures.get("estimateForLIndex%dColorBoxPlot" % i,
         #                               verbosity=v)
@@ -3568,9 +3568,9 @@ class Results(object):
         #
         #        #scale figure size according to number of rows and columns+1
         #        # (+1 for labels ~ another col) relative to initial plot
-        #        W = float(lx+1)/float(maxX+1) * maxW 
-        #        H = float(ly)  /float(maxY)   * maxH 
-        #    
+        #        W = float(lx+1)/float(maxX+1) * maxW
+        #        H = float(ly)  /float(maxY)   * maxH
+        #
         #        pixplots += "\n"
         #        pixplots += "\\begin{figure}\n"
         #        pixplots += "\\begin{center}\n"
@@ -3588,39 +3588,39 @@ class Results(object):
         #Set template quantity (empty string if appendix disabled)
         qtys['intermediate_pixel_plot_figures'] = pixplots
 
-        printer.log('') 
+        printer.log('')
         #if debugAidsAppendix:
         #    #DirectLGST and deviation
-        #    if verbosity > 0: 
+        #    if verbosity > 0:
         #        print " -- Direct-X plots ",; _sys.stdout.flush()
-        #        print "(2):"; _sys.stdout.flush()    
+        #        print "(2):"; _sys.stdout.flush()
         #
-        #    #if verbosity > 0: 
+        #    #if verbosity > 0:
         #    #    print " ?",; _sys.stdout.flush()
         #    #fig = set_fig_qtys("directLGSTColorBoxPlot",
         #    #                   "directLGST%sBoxes.pdf" % plotFnName)
         #
-        #    if verbosity > 0: 
-        #        print " 1",; _sys.stdout.flush()        
+        #    if verbosity > 0:
+        #        print " 1",; _sys.stdout.flush()
         #    fig = set_fig_qtys("directLongSeqGSTColorBoxPlot",
         #                   "directLongSeqGST%sBoxes.pdf" % plotFnName)
         #
-        #    #if verbosity > 0: 
-        #    #    print " ?",; _sys.stdout.flush()        
+        #    #if verbosity > 0:
+        #    #    print " ?",; _sys.stdout.flush()
         #    #fig = set_fig_qtys("directLGSTDeviationColorBoxPlot",
         #    #                   "directLGSTDeviationBoxes.pdf",W=4,H=5)
         #
-        #    if verbosity > 0: 
+        #    if verbosity > 0:
         #        print " 2",; _sys.stdout.flush()
         #    fig = set_fig_qtys("directLongSeqGSTDeviationColorBoxPlot",
         #                       "directLongSeqGSTDeviationBoxes.pdf",W=4,H=5)
         #
-        #    if verbosity > 0: 
+        #    if verbosity > 0:
         #        print ""; _sys.stdout.flush()
         #
         #
         #    #Small eigenvalue error rate
-        #    if verbosity > 0: 
+        #    if verbosity > 0:
         #        print " -- Error rate plots..."; _sys.stdout.flush()
         #    fig = set_fig_qtys("smallEigvalErrRateColorBoxPlot",
         #                       "smallEigvalErrRateBoxes.pdf",W=4,H=5)
@@ -3633,26 +3633,26 @@ class Results(object):
 
 
         whackamoleplots = ""
-#        if whackamoleAppendix:    
+#        if whackamoleAppendix:
 #            #Whack-a-mole plots for highest L of each length-1 germ
 #            Ls = self.parameters['max length list']
 #            highestL = Ls[-1]; allGateStrings = self.gatestring_lists['all']
 #            hammerWeight = 10.0
-#            len1Germs = [ g for g in self.gatestring_lists['germs'] 
+#            len1Germs = [ g for g in self.gatestring_lists['germs']
 #                          if len(g) == 1 ]
 #
-#            if verbosity > 0: 
+#            if verbosity > 0:
 #                print " -- Whack-a-mole plots (%d): " % (2*len(len1Germs)),
 #                _sys.stdout.flush()
 #
 #            for i,germ in enumerate(len1Germs):
-#                if verbosity > 0: 
+#                if verbosity > 0:
 #                    print "%d " % (i+1),; _sys.stdout.flush()
 #
 #                fig = self.figures.get("whack%sMoleBoxes" % germ[0],verbosity=v)
 #                fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.pdf"
 #                                          % germ[0]))
-#        
+#
 #                whackamoleplots += "\n"
 #                whackamoleplots += "\\begin{figure}\n"
 #                whackamoleplots += "\\begin{center}\n"
@@ -3662,15 +3662,15 @@ class Results(object):
 #                whackamoleplots += "  Hitting with hammer of weight %.1f.\label{Whack%sMoleBoxPlot}}\n" % (hammerWeight,germ[0])
 #                whackamoleplots += "\\end{center}\n"
 #                whackamoleplots += "\\end{figure}\n"
-#        
+#
 #            for i,germ in enumerate(len1Germs):
-#                if verbosity > 0: 
+#                if verbosity > 0:
 #                    print "%d " % (len(len1Germs)+i+1),; _sys.stdout.flush()
 #
 #                fig = self.figures.get("whack%sMoleBoxesSummed" % germ[0],
 #                                       verbosity=v)
 #                fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxesSummed.pdf" % germ[0]))
-#    
+#
 #                whackamoleplots += "\n"
 #                whackamoleplots += "\\begin{figure}\n"
 #                whackamoleplots += "\\begin{center}\n"
@@ -3680,35 +3680,35 @@ class Results(object):
 #                whackamoleplots += "  Hitting with hammer of weight %.1f.\label{Whack%sMoleBoxPlotSummed}}\n" % (hammerWeight,germ[0])
 #                whackamoleplots += "\\end{center}\n"
 #                whackamoleplots += "\\end{figure}\n"
-#    
-#            if verbosity > 0: 
+#
+#            if verbosity > 0:
 #                print ""; _sys.stdout.flush()
 
         #Set template quantity (empty string if appendix disabled)
         qtys['whackamole_plot_figures'] = whackamoleplots
-            
+
         if bWasInteractive:
             _matplotlib.pyplot.ion()
-    
+
 
         # 3) populate template latex file => report latex file
         printer.log("*** Merging into template file ***")
-        
+
         mainTexFilename = _os.path.join(report_dir, report_base + ".tex")
         appendicesTexFilename = _os.path.join(report_dir, report_base + "_appendices.tex")
         pdfFilename = _os.path.join(report_dir, report_base + ".pdf")
-    
+
         mainTemplate = "report_general_main.tex"
-        #if self.parameters['objective'] == "chi2":    
+        #if self.parameters['objective'] == "chi2":
         #    mainTemplate = "report_chi2_main.tex"
         #    appendicesTemplate = "report_chi2_appendices.tex"
         #elif self.parameters['objective'] == "logl":
         #    mainTemplate = "report_logL_main.tex"
         #    appendicesTemplate = "report_logL_appendices.tex"
-        #else: 
-        #    raise ValueError("Invalid objective value: %s" 
+        #else:
+        #    raise ValueError("Invalid objective value: %s"
         #                     % self.parameters['objective'])
-    
+
         #if any( (debugAidsAppendix, gaugeOptAppendix,
         #         pixelPlotAppendix, whackamoleAppendix) ):
         #    qtys['appendices'] = "\\input{%s}" % \
@@ -3717,26 +3717,26 @@ class Results(object):
         #                         appendicesTexFilename)
         #else: qtys['appendices'] = ""
         self._merge_template(qtys, mainTemplate, mainTexFilename)
-    
-    
+
+
         # 4) compile report latex file into PDF
         printer.log("Latex file(s) successfully generated.  Attempting to compile with pdflatex...")
         cwd = _os.getcwd()
-        if len(report_dir) > 0:  
+        if len(report_dir) > 0:
             _os.chdir(report_dir)
-    
+
         try:
-            ret = _os.system( "%s %s %s" % 
+            ret = _os.system( "%s %s %s" %
                               (self.options.latex_cmd,
                                _os.path.basename(mainTexFilename),
                                self.options.latex_postcmd) )
             if ret == 0:
-                #We could check if the log file contains "Rerun" in it, 
+                #We could check if the log file contains "Rerun" in it,
                 # but we'll just re-run all the time now
                 printer.log("Initial output PDF %s successfully generated." \
                         % pdfFilename)
 
-                ret = _os.system( "%s %s %s" % 
+                ret = _os.system( "%s %s %s" %
                                   (self.options.latex_cmd,
                                    _os.path.basename(mainTexFilename),
                                    self.options.latex_postcmd) )
@@ -3750,9 +3750,9 @@ class Results(object):
                 printer.error("pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
         except:
             printer.error("Error trying to run pdflatex to generate output PDF %s. Is '%s' on your path?" % (pdfFilename,self.options.latex_cmd))
-        finally: 
+        finally:
             _os.chdir(cwd)
-    
+
         return
 
 
@@ -3803,12 +3803,12 @@ def _to_pdfinfo(list_of_keyval_tuples):
 
     def sanitize(val):
         if type(val) in (list,tuple):
-            sanitized_val = "[" + ", ".join([sanitize(el) 
+            sanitized_val = "[" + ", ".join([sanitize(el)
                                              for el in val]) + "]"
         elif type(val) in (dict,_collections.OrderedDict):
             sanitized_val = "Dict[" + \
                 ", ".join([ "%s: %s" % (sanitize(k),sanitize(v)) for k,v
-                            in val.iteritems()]) + "]"
+                            in val.items()]) + "]"
         else:
             sanitized_val = sanitize_str( str(val) )
         return sanitized_val

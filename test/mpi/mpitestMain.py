@@ -19,7 +19,7 @@ def runOneQubit_Tutorial():
     
     gs_datagen = gs_target.depolarize(gate_noise=0.1, spam_noise=0.001)
     listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
-        gs_target.gates.keys(), fiducials, fiducials, germs, maxLengths)
+        list(gs_target.gates.keys()), fiducials, fiducials, germs, maxLengths)
     ds = pygsti.construction.generate_fake_data(gs_datagen, listOfExperiments,
                                                 nSamples=1000,
                                                 sampleError="binomial",
@@ -39,15 +39,15 @@ def runAnalysis(obj, myspecs, mygerms, gsTarget, seed,
                 comm=None, distributeMethod="gatestrings"):
     rhoStrs, EStrs = pygsti.construction.get_spam_strs(myspecs)
     lgstStrings = pygsti.construction.list_lgst_gatestrings(
-        myspecs, gsTarget.gates.keys())
+        myspecs, list(gsTarget.gates.keys()))
     lsgstStrings = pygsti.construction.make_lsgst_lists(
-            gsTarget.gates.keys(), rhoStrs, EStrs, mygerms, maxLs, fidPairList )
+            list(gsTarget.gates.keys()), rhoStrs, EStrs, mygerms, maxLs, fidPairList )
 
-    print len(myspecs[0]), " rho specifiers"
-    print len(myspecs[1]), " effect specifiers"
-    print len(mygerms), " germs"
-    print len(lgstStrings), " total LGST gate strings"
-    print len(lsgstStrings[-1]), " LSGST strings before thinning"
+    print(len(myspecs[0]), " rho specifiers")
+    print(len(myspecs[1]), " effect specifiers")
+    print(len(mygerms), " germs")
+    print(len(lgstStrings), " total LGST gate strings")
+    print(len(lsgstStrings[-1]), " LSGST strings before thinning")
     
     lsgstStringsToUse = lsgstStrings
     allRequiredStrs = pygsti.remove_duplicates(lgstStrings + lsgstStrings[-1])
@@ -84,7 +84,7 @@ def runAnalysis(obj, myspecs, mygerms, gsTarget, seed,
             distributeMethod=distributeMethod)
 
     tEnd = time.time()
-    print "Time = ",(tEnd-tStart)/3600.0,"hours"
+    print("Time = ",(tEnd-tStart)/3600.0,"hours")
     
     return all_gs_lsgst, gs_dataGen
     
@@ -111,7 +111,7 @@ def test_MPI_products(comm):
     #Get some gate strings
     maxLengths = [0,1,2,4,8]
     gstrs = pygsti.construction.make_lsgst_experiment_list(
-        std.gs_target.gates.keys(), std.fiducials, std.fiducials, std.germs, maxLengths)
+        list(std.gs_target.gates.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
     tree = gs.bulk_evaltree(gstrs)
     split_tree = tree.copy()
     split_tree.split(numSubTrees=g_numSubTrees)
@@ -199,7 +199,7 @@ def test_MPI_pr(comm):
     maxLengths = [0,1,2]
     maxLengths = g_maxLengths
     gstrs = pygsti.construction.make_lsgst_experiment_list(
-        std.gs_target.gates.keys(), std.fiducials, std.fiducials, std.germs, maxLengths)
+        list(std.gs_target.gates.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
     tree = gs.bulk_evaltree(gstrs)
     split_tree = tree.copy()
     split_tree.split(numSubTrees=g_numSubTrees)
@@ -266,7 +266,7 @@ def test_MPI_probs(comm):
     maxLengths = [0,1,2]
     maxLengths = g_maxLengths
     gstrs = pygsti.construction.make_lsgst_experiment_list(
-        std.gs_target.gates.keys(), std.fiducials, std.fiducials, std.germs, maxLengths)
+        list(std.gs_target.gates.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
     tree = gs.bulk_evaltree(gstrs)
     split_tree = tree.copy()
     split_tree.split(numSubTrees=g_numSubTrees)
@@ -340,7 +340,7 @@ def test_MPI_fills(comm):
     maxLengths = [0,1,2]
     maxLengths = g_maxLengths
     gstrs = pygsti.construction.make_lsgst_experiment_list(
-        std.gs_target.gates.keys(), std.fiducials, std.fiducials, std.germs, maxLengths)
+        list(std.gs_target.gates.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
     tree = gs.bulk_evaltree(gstrs)
     split_tree = tree.copy()
     split_tree.split(numSubTrees=g_numSubTrees)
@@ -457,7 +457,7 @@ def test_MPI_by_columns(comm):
     #Get some gate strings
     maxLengths = g_maxLengths
     gstrs = pygsti.construction.make_lsgst_experiment_list(
-        std.gs_target.gates.keys(), std.fiducials, std.fiducials, std.germs, maxLengths)
+        list(std.gs_target.gates.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
     tree = gs.bulk_evaltree(gstrs)
     split_tree = tree.copy()
     split_tree.split(numSubTrees=g_numSubTrees)
@@ -577,7 +577,7 @@ def test_MPI_gatestrings_chi2(comm):
         for gs1,gs2 in zip(my1ProcResults,myManyProcResults):
             gs2_go = pygsti.optimize_gauge(gs2, "target", targetGateset=gs1,
                                            gateWeight=1.0, spamWeight=1.0)
-            print "Frobenius distance = ", gs1.frobeniusdist(gs2_go)
+            print("Frobenius distance = ", gs1.frobeniusdist(gs2_go))
             assert(gs1.frobeniusdist(gs2_go) < 1e-5)
     return
 
@@ -595,7 +595,7 @@ def test_MPI_gatestrings_logl(comm):
         for gs1,gs2 in zip(my1ProcResults,myManyProcResults):
             gs2_go = pygsti.optimize_gauge(gs2, "target", targetGateset=gs1,
                                            gateWeight=1.0, spamWeight=1.0)
-            print "Frobenius distance = ", gs1.frobeniusdist(gs2_go)
+            print("Frobenius distance = ", gs1.frobeniusdist(gs2_go))
             assert(gs1.frobeniusdist(gs2_go) < 1e-5)
     return
 
@@ -612,7 +612,7 @@ def test_MPI_derivcols(comm):
         for gs1,gs2 in zip(my1ProcResults,myManyProcResults):
             gs2_go = pygsti.optimize_gauge(gs2, "target", targetGateset=gs1,
                                            gateWeight=1.0, spamWeight=1.0)
-            print "Frobenius distance = ", gs1.frobeniusdist(gs2_go)
+            print("Frobenius distance = ", gs1.frobeniusdist(gs2_go))
             assert(gs1.frobeniusdist(gs2_go) < 1e-5)
     return
 

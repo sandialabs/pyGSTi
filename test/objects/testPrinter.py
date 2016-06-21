@@ -10,7 +10,7 @@ errorMessage    = 'Something terrible happened'
 logMessage      = 'Data recieved'
 
 def _generate_with(printer):
-    data     = range(2)
+    data     = list(range(2))
     printer.log(logMessage, 3)
     printer.warning(warningMessage)
     for i, item in enumerate(data):
@@ -24,7 +24,7 @@ def _generate_with(printer):
     printer.end_progress()
 
 def _to_temp_file(printer):
-    data     = range(2)
+    data     = list(range(2))
 
     _generate_with(printer)
 

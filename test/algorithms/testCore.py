@@ -23,7 +23,7 @@ class CoreTestCase(unittest.TestCase):
         self.germs = std.germs
         self.specs = pygsti.construction.build_spam_specs(self.fiducials, effect_labels=['E0']) #only use the first EVec
 
-        self.gateLabels = self.gateset.gates.keys() # also == std.gates
+        self.gateLabels = list(self.gateset.gates.keys()) # also == std.gates
         self.lgstStrings = pygsti.construction.list_lgst_gatestrings(self.specs, self.gateLabels)
 
         self.maxLengthList = [0,1,2,4,8]
@@ -63,9 +63,9 @@ class TestCoreMethods(CoreTestCase):
         #                                            nSamples=1000, sampleError='none')
 
         rank,evals,target_evals = pygsti.gram_rank_and_evals(ds, self.specs, self.gateset)
-        print "gram rank = ",rank
-        print "gram evals = ",evals
-        print "target gram evals = ",target_evals
+        print("gram rank = ",rank)
+        print("gram evals = ",evals)
+        print("target gram evals = ",target_evals)
 
         with self.assertRaises(ValueError):
             pygsti.gram_rank_and_evals(ds, self.specs, None) #no spam labels
@@ -101,11 +101,11 @@ class TestCoreMethods(CoreTestCase):
             gs_lgst = pygsti.do_lgst(ds, self.specs, None, svdTruncateTo=4, verbosity=0) #no gate labels
 
         with self.assertRaises(ValueError):
-            gs_lgst = pygsti.do_lgst(ds, self.specs, None, gateLabels=self.gateset.gates.keys(),
+            gs_lgst = pygsti.do_lgst(ds, self.specs, None, gateLabels=list(self.gateset.gates.keys()),
                                      svdTruncateTo=4, verbosity=0) #no spam dict
 
         with self.assertRaises(ValueError):
-            gs_lgst = pygsti.do_lgst(ds, self.specs, None, gateLabels=self.gateset.gates.keys(),
+            gs_lgst = pygsti.do_lgst(ds, self.specs, None, gateLabels=list(self.gateset.gates.keys()),
                                      spamDict=self.gateset.get_reverse_spam_defs(),
                                      svdTruncateTo=4, verbosity=0) #no identity vector
 
@@ -378,8 +378,8 @@ class TestCoreMethods(CoreTestCase):
         chiSq4 = pygsti.chi2(ds, gs_lgst4, self.lgstStrings, minProbClipForWeighting=1e-4)
         chiSq6 = pygsti.chi2(ds, gs_lgst6, self.lgstStrings, minProbClipForWeighting=1e-4)
 
-        print "LGST dim=4 chiSq = ",chiSq4
-        print "LGST dim=6 chiSq = ",chiSq6
+        print("LGST dim=4 chiSq = ",chiSq4)
+        print("LGST dim=6 chiSq = ",chiSq6)
         #self.assertAlmostEqual(chiSq4, 174.061524953) #429.271983052)
         #self.assertAlmostEqual(chiSq6, 267012993.861, places=1) #1337.74222467) #Why is this so large??? -- DEBUG later
 
@@ -388,7 +388,7 @@ class TestCoreMethods(CoreTestCase):
                                   verbosity=10, minProbClipForWeighting=1e-3, probClipInterval=(-1e5,1e5))
 
         # Run again with other parameters
-        tuple_strings = [ map(tuple, gsList) for gsList in self.lsgstStrings[0:3] ] #to test tuple argument
+        tuple_strings = [ list(map(tuple, gsList)) for gsList in self.lsgstStrings[0:3] ] #to test tuple argument
         errorVecs, gs_lsgst_wts = self.runSilent(pygsti.do_iterative_mc2gst_with_model_selection, ds, gs_lgst4,
                                                  1, tuple_strings, verbosity=10, minProbClipForWeighting=1e-3,
                                                  probClipInterval=(-1e5,1e5), gatestringWeightsDict={ ('Gx',): 2.0 },

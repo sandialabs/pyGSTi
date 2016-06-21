@@ -53,7 +53,7 @@ class TestWriteAndLoad(WriteAndLoadTestCase):
         ds.done_adding_data()
 
         pygsti.io.write_dataset("../temp_test_files/dataset_loadwrite.txt",
-                                ds, pygsti.construction.gatestring_list(ds.keys())[0:10]) #write only first 10 strings
+                                ds, pygsti.construction.gatestring_list(list(ds.keys()))[0:10]) #write only first 10 strings
         ds2 = pygsti.io.load_dataset("../temp_test_files/dataset_loadwrite.txt")
         ds3 = pygsti.io.load_dataset("../temp_test_files/dataset_loadwrite.txt", cache=True) #creates cache file
         ds4 = pygsti.io.load_dataset("../temp_test_files/dataset_loadwrite.txt", cache=True) #loads from cache file

@@ -72,15 +72,15 @@ class TestGateSetMethods(GateSetTestCase):
   def test_pickling(self):
       p = pickle.dumps(self.gateset.preps)
       preps = pickle.loads(p)
-      self.assertEqual(preps.keys(), self.gateset.preps.keys())
+      self.assertEqual(list(preps.keys()), list(self.gateset.preps.keys()))
 
       p = pickle.dumps(self.gateset.effects)
       effects = pickle.loads(p)
-      self.assertEqual(effects.keys(), self.gateset.effects.keys())
+      self.assertEqual(list(effects.keys()), list(self.gateset.effects.keys()))
 
       p = pickle.dumps(self.gateset.gates)
       gates = pickle.loads(p)
-      self.assertEqual(gates.keys(), self.gateset.gates.keys())
+      self.assertEqual(list(gates.keys()), list(self.gateset.gates.keys()))
 
       p = pickle.dumps(self.gateset)
       g = pickle.loads(p)

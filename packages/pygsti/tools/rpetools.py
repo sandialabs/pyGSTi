@@ -1,21 +1,21 @@
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ Utility functions for RPE """
 import numpy as _np
 from scipy import optimize as _opt
-import gatetools as _gt
+from . import gatetools as _gt
 
 
 def extract_rotation_hat(xhat,yhat,k,Nx,Ny,angleName="epsilon",
                          previousAngle=None):
     """
     For a single germ generation (k value), estimate the angle of rotation
-    for either alpha, epsilon, or Phi.  (Warning:  Do not use for theta 
+    for either alpha, epsilon, or Phi.  (Warning:  Do not use for theta
     estimate without further processing!)
-    
+
     Parameters
     ----------
     xhat : float
@@ -37,8 +37,8 @@ def extract_rotation_hat(xhat,yhat,k,Nx,Ny,angleName="epsilon",
       The angle to be extracted
 
     previousAngle : float, optional
-       Angle estimate from previous generation; used to refine this 
-       generation's estimate.  Default is None (for estimation with no 
+       Angle estimate from previous generation; used to refine this
+       generation's estimate.  Default is None (for estimation with no
        previous genereation's data)
 
     Returns
@@ -78,11 +78,11 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon"):
     """
     For a dataset containing sin and cos strings to estimate either alpha,
     epsilon, or Phi return a list of alpha, epsilon, or Phi estimates (one for
-    each generation).  Note: this assumes the dataset contains 'plus' and 
+    each generation).  Note: this assumes the dataset contains 'plus' and
     'minus' SPAM labels.
 
     WARNING:  At present, kList must be of form [1,2,4,...,2**log2kMax].
-    
+
     Parameters
     ----------
     DS : DataSet
@@ -96,7 +96,7 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon"):
 
     angleName : { "alpha", "epsilon", "Phi" }, optional
       The angle to be extracted
-    
+
     Returns
     -------
     angleHatList : list of floats
@@ -105,7 +105,7 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon"):
     angleTemp1 = None
     angleHatList = []
     genNum = len(angleSinStrs)
-    for i in xrange(genNum):
+    for i in range(genNum):
         xhatTemp = DS[angleSinStrs[i]]['plus']
         yhatTemp = DS[angleCosStrs[i]]['plus']
         Nx = xhatTemp + DS[angleSinStrs[i]]['minus']
@@ -114,16 +114,16 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon"):
                                           Nx,Ny,angleName,angleTemp1)
         angleHatList.append(angleTemp1)
     return angleHatList
-    
+
 def sin_phi2_func(theta,Phi,epsilon):
     """
     Returns the function whose zero, for fixed Phi and epsilon, occurs at the
     desired value of theta. (This function exists to be passed to a minimizer
     to obtain theta.)
-    
+
     WARNING:  epsilon gets rescaled to newEpsilon, by dividing by pi/4; will
     have to change for epsilons far from pi/4.
-    
+
     Parameters
     ----------
     theta : float
@@ -134,7 +134,7 @@ def sin_phi2_func(theta,Phi,epsilon):
 
     epsilon : float
        Angle of X rotation.
-    
+
     Returns
     -------
     sinPhi2FuncVal
@@ -150,7 +150,7 @@ def sin_phi2_func(theta,Phi,epsilon):
 def est_theta_list(DS,angleSinStrs,angleCosStrs,epsilonList,returnPhiFunList = False):
     """
     For a dataset containing sin and cos strings to estimate theta,
-    along with already-made estimates of epsilon, return a list of theta 
+    along with already-made estimates of epsilon, return a list of theta
     (one for each generation).
 
     Parameters
@@ -200,17 +200,17 @@ def est_theta_list(DS,angleSinStrs,angleCosStrs,epsilonList,returnPhiFunList = F
 
 def extract_alpha(gateset):
     """
-    For a given gateset, obtain the angle of rotation about Z axis 
+    For a given gateset, obtain the angle of rotation about Z axis
     (for gate "Gz").
-    
+
     WARNING:  This is a gauge-covariant parameter!  Gauge must be fixed prior
     to estimating.
-    
+
     Parameters
     ----------
     gateset : GateSet
        The gateset whose "Gz" angle of rotation is to be calculated.
-    
+
     Returns
     -------
     alphaVal : float
@@ -222,17 +222,17 @@ def extract_alpha(gateset):
 
 def extract_epsilon(gateset):
     """
-    For a given gateset, obtain the angle of rotation about X axis 
+    For a given gateset, obtain the angle of rotation about X axis
     (for gate "Gx").
-    
+
     WARNING:  This is a gauge-covariant parameter!  Gauge must be fixed prior
     to estimating.
-    
+
     Parameters
     ----------
     gateset : GateSet
        The gateset whose "Gx" angle of rotation is to be calculated.
-    
+
     Returns
     -------
     epsilonVal : float
@@ -247,15 +247,15 @@ def extract_theta(gateset):
     For a given gateset, obtain the angle between the "X axis of rotation" and
     the "true" X axis (perpendicular to Z). (Angle of misalignment between "Gx"
     axis of rotation and X axis as defined by "Gz".)
-    
+
     WARNING:  This is a gauge-covariant parameter!  (I think!)  Gauge must be
     fixed prior to estimating.
-    
+
     Parameters
     ----------
     gateset : GateSet
        The gateset whose X axis misaligment is to be calculated.
-    
+
     Returns
     -------
     thetaVal : float
@@ -275,7 +275,7 @@ def analyze_simulated_rpe_experiment(inputDataset,trueGateset,stringListD):
     """
     Compute angle estimates and compare to true estimates for alpha, epsilon,
     and theta.
-    
+
     Parameters
     ----------
     inputDataset : DataSet
@@ -287,13 +287,13 @@ def analyze_simulated_rpe_experiment(inputDataset,trueGateset,stringListD):
     stringListD : dict
        The dictionary of gate string lists used for the RPE experiments.
        This should be generated via make_rpe_string_list_d.
-    
+
     Returns
     -------
     resultsD : dict
         A dictionary of the results
         The keys of the dictionary are:
-        
+
         -'alphaHatList' : List (ordered by k) of alpha estimates.
         -'epsilonHatList' : List (ordered by k) of epsilon estimates.
         -'thetaHatList' : List (ordered by k) of theta estimates.
@@ -309,7 +309,7 @@ def analyze_simulated_rpe_experiment(inputDataset,trueGateset,stringListD):
     alphaCosStrList = stringListD['alpha','cos']
     alphaSinStrList = stringListD['alpha','sin']
     epsilonCosStrList = stringListD['epsilon','cos']
-    epsilonSinStrList = stringListD['epsilon','sin'] 
+    epsilonSinStrList = stringListD['epsilon','sin']
     thetaCosStrList = stringListD['theta','cos']
     thetaSinStrList = stringListD['theta','sin']
     try:
@@ -357,4 +357,3 @@ def analyze_simulated_rpe_experiment(inputDataset,trueGateset,stringListD):
     resultsD['thetaErrorList'] = thetaErrorList
     resultsD['PhiFunErrorList'] = PhiFunErrorList
     return resultsD
-

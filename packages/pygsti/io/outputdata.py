@@ -1,11 +1,11 @@
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ Defines the OutputData class and supporting functions """
 
-import cPickle as _pickle
+import pickle as _pickle
 from dataset import upgrade_old_dataset as _UpgradeOldDataSet
 
 class OutputData:
@@ -18,22 +18,22 @@ class OutputData:
         self.gatesets = { }
         self.parameters = { }
         self.filename = init_from_filename
-        
+
         if self.filename is not None:
             self.load_from(self.filename)
 
     def has_gateset(self, gsKey):
         """ Test whether this OutputData contains a gateset named gsKey"""
-        return self.gatesets.has_key(gsKey)
+        return gsKey in self.gatesets
 
     def has_dataset(self, dsKey):
         """ Test whether this OutputData contains a dataset named dsKey"""
-        return self.datasets.has_key(dsKey)
+        return dsKey in self.datasets
 
     def get_gateset(self, gsKey):
         """ Returns the gateset named gsKey.  Returns None if no gateset of that name exists"""
         return self.gatesets.get(gsKey,None)
-    
+
     def get_dataset(self, dsKey):
         """ Returns the dataset named dsKey.  Returns None if no dataset of that name exists"""
         return self.datasets[dsKey]
@@ -44,10 +44,10 @@ class OutputData:
           If no parameter of that name is found, returns None.
         """
         if paramCategory is None:
-            for (cat,cat_dict) in self.parameters.iteritems():
+            for (cat,cat_dict) in self.parameters.items():
                 if paramName in cat_dict:
                     return cat_dict[paramName]
-        elif self.parameters.has_key(paramCategory):
+        elif paramCategory in self.parameters:
             if paramName in self.parameters[paramCategory]:
                 return self.parameters[paramCategory][paramName]
         return None
@@ -77,7 +77,7 @@ class OutputData:
           and the datasets themselves given by the dictionary values.
         """
         self.datasets.update(dsDict)
-            
+
     def set_parameter(self, paramName, paramValue, paramCategory):
         """ Stores the value paramValue for the parameter named paramName within category paramCategory """
         if paramCategory not in self.parameters:
@@ -104,25 +104,25 @@ class OutputData:
         #except:
         #    raise ValueError("Error loading pickle data from %s" % filename)
         version = file_data.get("gst_output_data_version",0)
-        
+
         if version == 0:
-            for (k,val) in file_data.iteritems():
+            for (k,val) in file_data.items():
                 if   k == 'gst params': self.set_parameters('algorithm', val)
                 elif k == 'data set params': self.set_parameters('dataset', val)
                 elif k == 'data set': self.set_dataset('training', val)
                 else: self.set_gateset(k, val)
-                
+
         elif version == 1:
-            for (k,val) in file_data.iteritems():
+            for (k,val) in file_data.items():
                 if   k == 'gatesets': self.gatesets = val
                 elif k == 'datasets': self.datasets = val
                 elif k == 'parameters': self.parameters = val
                 elif k == 'gst_output_data_version': continue
                 else: raise ValueError("Invalid version 1 gst output data file: unknown key: %s" % k)
-            
+
         else:
             raise ValueError("Unknown version (%s) of gst output data file" % version)
-            
+
 
     def save(self):
         """ Save data to the same file this OutputData was loaded from """
@@ -166,5 +166,3 @@ class OutputData:
 #        print "Upgraded dataset %s, %s" % (key, type(ds))
 #
 #    print "Successfully updated ==> %s" % (filename + ".upd")
-    
-

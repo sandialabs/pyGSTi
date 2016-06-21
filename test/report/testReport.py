@@ -25,7 +25,7 @@ class ReportTestCase(unittest.TestCase):
         self.germs = std.germs
         self.specs = pygsti.construction.build_spam_specs(self.fiducials, effect_labels=['E0']) #only use the first EVec
 
-        self.gateLabels = self.targetGateset.gates.keys() # also == std.gates
+        self.gateLabels = list(self.targetGateset.gates.keys()) # also == std.gates
         self.lgstStrings = pygsti.construction.list_lgst_gatestrings(self.specs, self.gateLabels)
 
         self.maxLengthList = [0,1,2,4,8]
@@ -293,9 +293,9 @@ class TestReport(ReportTestCase):
             gen.get_gateset_spam_parameters_table(std.gs_target, ci) #gateset-CI mismatch
 
         #Test ReportTable object
-        rowLabels = tab.keys()
+        rowLabels = list(tab.keys())
         row1Data = tab[rowLabels[0]]
-        colLabels = row1Data.keys()
+        colLabels = list(row1Data.keys())
 
         self.assertTrue(rowLabels, tab.row_names)
         self.assertTrue(colLabels, tab.col_names)
@@ -304,7 +304,7 @@ class TestReport(ReportTestCase):
 
         el00 = tab[rowLabels[0]][colLabels[0]]
         self.assertTrue( rowLabels[0] in tab )
-        self.assertTrue( tab.has_key(rowLabels[0]) )
+        self.assertTrue( rowLabels[0] in tab )
 
         table_len = len(tab)
         self.assertEqual(table_len, tab.num_rows)
@@ -368,37 +368,37 @@ class TestReport(ReportTestCase):
                 return "weird"
         w = weirdType()
 
-        print "Float formatting"
+        print("Float formatting")
         pygsti.report.html.html(f)
         pygsti.report.latex.latex(f)
         pygsti.report.ppt.ppt(f)
 
-        print "List formatting"
+        print("List formatting")
         pygsti.report.html.html(l)
         pygsti.report.latex.latex(l)
         pygsti.report.ppt.ppt(l)
 
-        print "Arbitrary class formatting"
+        print("Arbitrary class formatting")
         pygsti.report.html.html(w)
         pygsti.report.latex.latex(w)
         pygsti.report.ppt.ppt(w)
 
-        print "Vector formatting"
+        print("Vector formatting")
         pygsti.report.html.html(vec)
         pygsti.report.latex.latex(vec)
         pygsti.report.ppt.ppt(vec)
 
-        print "Vector formatting (w/brackets)"
+        print("Vector formatting (w/brackets)")
         pygsti.report.html.html(vec, brackets=True)
         pygsti.report.latex.latex(vec, brackets=True)
         pygsti.report.ppt.ppt(vec, brackets=True)
 
-        print "Matrix formatting"
+        print("Matrix formatting")
         pygsti.report.html.html_matrix(mx, fontsize=8, brackets=False)
         pygsti.report.latex.latex_matrix(mx, fontsize=8, brackets=False)
         pygsti.report.ppt.ppt_matrix(mx, fontsize=8, brackets=False)
 
-        print "Value formatting"
+        print("Value formatting")
         ROUND = 2; complxAsPolar=True
         for complxAsPolar in (True,False):
             for x in (0.001,0.01,1.0,10.0,100.0,1000.0,10000.0,1.0+1.0j,10j,1.0+1e-10j,1e-10j,"N/A"):
@@ -517,8 +517,8 @@ class TestReport(ReportTestCase):
 
 
         results_str = str(results)
-        tableNames = results.tables.keys()
-        figNames = results.figures.keys()
+        tableNames = list(results.tables.keys())
+        figNames = list(results.figures.keys())
         for g in results.gatesets:
             s = str(g)
         for g in results.gatestring_lists:
@@ -526,7 +526,7 @@ class TestReport(ReportTestCase):
         s = str(results.dataset)
         s = str(results.options)
 
-        self.assertTrue(results.tables.has_key(tableNames[0]))
+        self.assertTrue(tableNames[0] in results.tables)
 
         with self.assertRaises(KeyError):
             x = results.tables.get('foobar')
@@ -534,18 +534,18 @@ class TestReport(ReportTestCase):
             results.tables['newKey'] = "notAllowed"
         with self.assertRaises(NotImplementedError):
             for x in results.tables: # cannot __iter__
-                print x
+                print(x)
         with self.assertRaises(NotImplementedError):
-            for x in results.tables.iteritems(): # cannot iter
-                print x
+            for x in results.tables.items(): # cannot iter
+                print(x)
         with self.assertRaises(NotImplementedError):
-            for x in results.tables.values(): # cannot iter
-                print x
+            for x in list(results.tables.values()): # cannot iter
+                print(x)
 
         pkl = pickle.dumps(results)
         results_copy = pickle.loads(pkl)
-        self.assertEqual(tableNames, results_copy.tables.keys())
-        self.assertEqual(figNames, results_copy.figures.keys())
+        self.assertEqual(tableNames, list(results_copy.tables.keys()))
+        self.assertEqual(figNames, list(results_copy.figures.keys()))
         #self.assertEqual(results.options, results_copy.options) #need to add equal test to ResultsOptions
         self.assertEqual(results.parameters, results_copy.parameters)
 

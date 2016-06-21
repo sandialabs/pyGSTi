@@ -1,7 +1,7 @@
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ Routines for building qutrit gates and gate sets """
 
@@ -33,13 +33,13 @@ def Y2qubit(theta):
 
 #Returns Molmer-Sorensen gate for two qubits
 def ms2qubit(theta,phi):
-    return _np.matrix(_linalg.expm(-1j/2 * theta * 
+    return _np.matrix(_linalg.expm(-1j/2 * theta *
                                  _np.kron(
                                     _np.cos(phi) * X + _np.sin(phi) * Y,
                                     _np.cos(phi) * X + _np.sin(phi) * Y)
                                  ))
 
-#Projecting above gates into symmetric subspace (qutrit space) 
+#Projecting above gates into symmetric subspace (qutrit space)
 #(state space ordering is |0> = |00>, |1> ~ |01>+|10>,|2>=|11>, so state |i> corresponds to i detector counts
 
 
@@ -48,7 +48,7 @@ def _remove_from_matrix(inputArr, columns, rows, outputType = _np.matrix):
     inputArr = _np.array(inputArr)
     return outputType([
            [inputArr[row_num][col_num]
-           for col_num in range(len(inputArr[row_num])) 
+           for col_num in range(len(inputArr[row_num]))
            if not col_num in columns]
 
            for row_num in range(len(inputArr))
@@ -75,7 +75,7 @@ def _random_rot(scale,arrType = _np.array, seed=None):
     randH = _np.dot(_np.conj(randH.T), randH)
     randU = _linalg.expm(-1j * randH)
     return arrType(randU)
-    
+
 def make_qutrit_gateset(errorScale,Xangle = _np.pi/2, Yangle = _np.pi/2, MSglobal = _np.pi/2, MSlocal = 0, arrType = _np.array,similarity=False,seed=None):
 
     arrType = _np.array#Are we casting gates as matrices or arrays?
@@ -139,7 +139,7 @@ def make_qutrit_gateset(errorScale,Xangle = _np.pi/2, Yangle = _np.pi/2, MSgloba
     qutritGS['E0'] = E0gm
     qutritGS['E1'] = E1gm
     qutritGS['E2'] = E2gm
-    qutritGS['identity'] identity3gm
+    qutritGS['identity'] = identity3gm
     qutritGS.spamdefs['0bright'] = ('rho0','E0')
     qutritGS.spamdefs['1bright'] = ('rho0','E1')
     qutritGS.spamdefs['2bright'] = ('rho0','E2')

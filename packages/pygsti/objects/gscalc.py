@@ -1,7 +1,7 @@
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ Defines the GateSetCalculator class"""
 
@@ -11,7 +11,7 @@ import numpy.linalg as _nla
 import time as _time
 
 from ..tools import gatetools as _gt
-from verbosityprinter import VerbosityPrinter
+from .verbosityprinter import VerbosityPrinter
 #import evaltree as _evaltree
 #import sys #DEBUG - for printing
 
@@ -54,16 +54,16 @@ class GateSetCalculator(object):
         povm_identity : SPAMVec
             Identity vector (shape must be dim x 1) used when spamdefs
             contains the value (<rho_label>,"remainder"), which specifies
-            a POVM effect that is the identity minus the sum of all the 
+            a POVM effect that is the identity minus the sum of all the
             effect vectors in effects.
 
         spamdefs : OrderedDict
             A dictionary whose keys are the allowed SPAM labels, and whose
-            values are 2-tuples comprised of a state preparation label 
+            values are 2-tuples comprised of a state preparation label
             followed by a POVM effect label (both of which are strings,
             and keys of preps and effects, respectively, except for the
             special case when eith both or just the effect label is set
-            to "remainder").            
+            to "remainder").
 
         remainderLabel : string
             A string that may appear in the values of spamdefs to designate
@@ -76,28 +76,28 @@ class GateSetCalculator(object):
         self.effects = effects
         self.povm_identity = povm_identity
         self.spamdefs = spamdefs
-        self.assumeSumToOne = bool( (self._remainderLabel,self._remainderLabel) in spamdefs.values())
+        self.assumeSumToOne = bool( (self._remainderLabel,self._remainderLabel) in list(spamdefs.values()))
           #Whether spamdefs contains the value ("remainder", "remainder"),
           #  which specifies a spam label that generates probabilities such that
           #  all SPAM label probabilities sum exactly to 1.0.
 
-        self.num_rho_params = [v.num_params() for v in self.preps.values()]
-        self.num_e_params = [v.num_params() for v in self.effects.values()]
-        self.num_gate_params = [g.num_params() for g in self.gates.values()]
+        self.num_rho_params = [v.num_params() for v in list(self.preps.values())]
+        self.num_e_params = [v.num_params() for v in list(self.effects.values())]
+        self.num_gate_params = [g.num_params() for g in list(self.gates.values())]
         self.rho_offset = [ sum(self.num_rho_params[0:i]) for i in range(len(self.preps)+1) ]
         self.e_offset = [ sum(self.num_e_params[0:i]) for i in range(len(self.effects)+1) ]
         self.tot_rho_params = sum(self.num_rho_params)
         self.tot_e_params = sum(self.num_e_params)
         self.tot_gate_params = sum(self.num_gate_params)
         self.tot_params = self.tot_rho_params + self.tot_e_params + self.tot_gate_params
-        
+
 
 
 
     def _is_remainder_spamlabel(self, label):
         """
         Returns whether or not the given SPAM label is the
-        special "remainder" SPAM label which generates 
+        special "remainder" SPAM label which generates
         probabilities such that all SPAM label probabilities
         sum exactly to 1.0.
         """
@@ -124,7 +124,7 @@ class GateSetCalculator(object):
 
     def _make_spamgate(self, spamlabel):
         prepLabel,effectLabel = self.spamdefs[spamlabel]
-        if prepLabel == self._remainderLabel: 
+        if prepLabel == self._remainderLabel:
             return None
 
         rho,E = self.preps[prepLabel], self._get_evec(effectLabel)
@@ -132,11 +132,11 @@ class GateSetCalculator(object):
 
 
     def product(self, gatestring, bScale=False):
-        """ 
+        """
         Compute the product of a specified sequence of gate labels.
 
         Note: Gate matrices are multiplied in the reversed order of the tuple. That is,
-        the first element of gatestring can be thought of as the first gate operation 
+        the first element of gatestring can be thought of as the first gate operation
         performed, which is on the far right of the product of matrices.
 
         Parameters
@@ -153,14 +153,14 @@ class GateSetCalculator(object):
             The product or scaled product of the gate matrices.
 
         scale : float
-            Only returned when bScale == True, in which case the 
+            Only returned when bScale == True, in which case the
             actual product == product * scale.  The purpose of this
             is to allow a trace or other linear operation to be done
             prior to the scaling.
         """
         if bScale:
-            scaledGatesAndExps = {}; 
-            for (gateLabel,gatemx) in self.gates.iteritems():
+            scaledGatesAndExps = {};
+            for (gateLabel,gatemx) in self.gates.items():
                 ng = max(_nla.norm(gatemx),1.0)
                 scaledGatesAndExps[gateLabel] = (gatemx / ng, _np.log(ng))
 
@@ -172,7 +172,7 @@ class GateSetCalculator(object):
                 scale_exp += ex   # scale and keep track of exponent
                 if H.max() < PSMALL and H.min() > -PSMALL:
                     nG = max(_nla.norm(G), _np.exp(-scale_exp))
-                    G = _np.dot(gate,G/nG); scale_exp += _np.log(nG) 
+                    G = _np.dot(gate,G/nG); scale_exp += _np.log(nG)
                     #OLD: _np.dot(G/nG,gate); scale_exp += _np.log(nG) LEXICOGRAPHICAL VS MATRIX ORDER
                 else: G = H
 
@@ -181,7 +181,7 @@ class GateSetCalculator(object):
             _np.seterr(**old_err)
 
             return G, scale
-        
+
         else:
             G = _np.identity( self.dim )
             for lGate in gatestring:
@@ -193,18 +193,18 @@ class GateSetCalculator(object):
     #Vectorizing Identities. (Vectorization)
     # Note when vectorizing op uses numpy.flatten rows are kept contiguous, so the first identity below is valid.
     # Below we use E(i,j) to denote the elementary matrix where all entries are zero except the (i,j) entry == 1
-    
+
     # if vec(.) concatenates rows (which numpy.flatten does)
     # vec( A * E(0,1) * B ) = vec( mx w/ row_i = A[i,0] * B[row1] ) = A tensor B^T * vec( E(0,1) )
     # In general: vec( A * X * B ) = A tensor B^T * vec( X )
-    
+
     # if vec(.) stacks columns
     # vec( A * E(0,1) * B ) = vec( mx w/ col_i = A[col0] * B[0,1] ) = B^T tensor A * vec( E(0,1) )
     # In general: vec( A * X * B ) = B^T tensor A * vec( X )
 
     def dproduct(self, gatestring, flat=False, wrtFilter=None):
         """
-        Compute the derivative of a specified sequence of gate labels.  
+        Compute the derivative of a specified sequence of gate labels.
 
         Parameters
         ----------
@@ -231,7 +231,7 @@ class GateSetCalculator(object):
               - M == length of the vectorized gateset (number of gateset parameters)
 
               and deriv[i,j] holds the derivative of the i-th entry of the flattened
-              product with respect to the j-th gateset parameter.                
+              product with respect to the j-th gateset parameter.
         """
 
         # LEXICOGRAPHICAL VS MATRIX ORDER
@@ -241,9 +241,9 @@ class GateSetCalculator(object):
         #  dprod/d(gateLabel)_ij   = sum_{L s.t. G(L) == gatelabel} [ G1 ... G(L-1) dG(L)/dij G(L+1) ... GN ] , a matrix for each given (i,j)
         #  vec( dprod/d(gateLabel)_ij ) = sum_{L s.t. G(L) == gatelabel} [ (G1 ... G(L-1)) tensor (G(L+1) ... GN)^T vec( dG(L)/dij ) ]
         #                               = [ sum_{L s.t. G(L) == gatelabel} [ (G1 ... G(L-1)) tensor (G(L+1) ... GN)^T ]] * vec( dG(L)/dij) )
-        #  if dG(L)/dij = E(i,j) 
+        #  if dG(L)/dij = E(i,j)
         #                               = vec(i,j)-col of [ sum_{L s.t. G(L) == gatelabel} [ (G1 ... G(L-1)) tensor (G(L+1) ... GN)^T ]]
-        # So for each gateLabel the matrix [ sum_{L s.t. GL == gatelabel} [ (G1 ... G(L-1)) tensor (G(L+1) ... GN)^T ]] has columns which 
+        # So for each gateLabel the matrix [ sum_{L s.t. GL == gatelabel} [ (G1 ... G(L-1)) tensor (G(L+1) ... GN)^T ]] has columns which
         #  correspond to the vectorized derivatives of each of the product components (i.e. prod_kl) with respect to a given gateLabel_ij
         # This function returns a concatenated form of the above matrices, so that each column corresponds to a (gateLabel,i,j) tuple and
         #  each row corresponds to an element of the product (els of prod.flatten()).
@@ -252,18 +252,18 @@ class GateSetCalculator(object):
 
         dim = self.dim
 
-        
-        #Create per-gate with-respect-to paramter filters, used to 
+
+        #Create per-gate with-respect-to paramter filters, used to
         # select a subset of all the derivative columns, essentially taking
         # a derivative of only a *subset* of all the gate's parameters
         fltr = {} #keys = gate labels, values = per-gate param indices
-        if wrtFilter is not None: 
+        if wrtFilter is not None:
             wrtIndexToGatelableIndexPair = []
-            for lbl,g in self.gates.iteritems():
+            for lbl,g in self.gates.items():
                 for k in range(g.num_params()):
                     wrtIndexToGatelableIndexPair.append((lbl,k))
 
-            for gateLabel in self.gates.keys():
+            for gateLabel in list(self.gates.keys()):
                 fltr[gateLabel] = []
 
             for i in wrtFilter:
@@ -285,7 +285,7 @@ class GateSetCalculator(object):
 
         # Initialize storage
         dprod_dgateLabel = { }; dgate_dgateLabel = {}
-        for gateLabel,gate in self.gates.iteritems():
+        for gateLabel,gate in self.gates.items():
             iCols = fltr.get(gateLabel,None)
             nDerivCols = gate.num_params() if (iCols is None) else len(iCols)
             dprod_dgateLabel[gateLabel] = _np.zeros((dim**2, nDerivCols))
@@ -300,9 +300,9 @@ class GateSetCalculator(object):
         #Add contributions for each gate in list
         N = len(revGateLabelList)
         for (i,gateLabel) in enumerate(revGateLabelList):
-                dprod_dgate = _np.kron( leftProds[i], rightProdsT[N-1-i] )  # (dim**2, dim**2)
-                dprod_dgateLabel[gateLabel] += _np.dot( dprod_dgate, dgate_dgateLabel[gateLabel] ) # (dim**2, nParams[gateLabel])
-            
+            dprod_dgate = _np.kron( leftProds[i], rightProdsT[N-1-i] )  # (dim**2, dim**2)
+            dprod_dgateLabel[gateLabel] += _np.dot( dprod_dgate, dgate_dgateLabel[gateLabel] ) # (dim**2, nParams[gateLabel])
+
         #Concatenate per-gateLabel results to get final result
         to_concat = [ dprod_dgateLabel[gateLabel] for gateLabel in self.gates ]
         flattened_dprod = _np.concatenate( to_concat, axis=1 ) # axes = (vectorized_gate_el_index,gateset_parameter)
@@ -317,7 +317,7 @@ class GateSetCalculator(object):
 
     def hproduct(self, gatestring, flat=False, wrtFilter=None):
         """
-        Compute the hessian of a specified sequence of gate labels.  
+        Compute the hessian of a specified sequence of gate labels.
 
         Parameters
         ----------
@@ -347,9 +347,9 @@ class GateSetCalculator(object):
               product with respect to the k-th then k-th gateset parameters.
         """
 
-        gatesToVectorize1 = self.gates.keys() #which differentiation w.r.t. gates should be done
+        gatesToVectorize1 = list(self.gates.keys()) #which differentiation w.r.t. gates should be done
                                               # (which is all the differentiation done here)
-        gatesToVectorize2 = self.gates.keys() # (possibility to later specify different sets of gates
+        gatesToVectorize2 = list(self.gates.keys()) # (possibility to later specify different sets of gates
                                               #to differentiate firstly and secondly with)
 
         # LEXICOGRAPHICAL VS MATRIX ORDER
@@ -357,7 +357,7 @@ class GateSetCalculator(object):
 
         #  prod = G1 * G2 * .... * GN , a matrix
         #  dprod/d(gateLabel)_ij   = sum_{L s.t. GL == gatelabel} [ G1 ... G(L-1) dG(L)/dij G(L+1) ... GN ] , a matrix for each given (i,j)
-        #  d2prod/d(gateLabel1)_kl*d(gateLabel2)_ij = sum_{M s.t. GM == gatelabel1} sum_{L s.t. GL == gatelabel2, M < L} 
+        #  d2prod/d(gateLabel1)_kl*d(gateLabel2)_ij = sum_{M s.t. GM == gatelabel1} sum_{L s.t. GL == gatelabel2, M < L}
         #                                                 [ G1 ... G(M-1) dG(M)/dkl G(M+1) ... G(L-1) dG(L)/dij G(L+1) ... GN ] + {similar with L < M} (if L == M ignore)
         #                                                 a matrix for each given (i,j,k,l)
         #  vec( d2prod/d(gateLabel1)_kl*d(gateLabel2)_ij ) = sum{...} [ G1 ...  G(M-1) dG(M)/dkl G(M+1) ... G(L-1) tensor (G(L+1) ... GN)^T vec( dG(L)/dij ) ]
@@ -366,7 +366,7 @@ class GateSetCalculator(object):
         #                                                  + sum{ L < M} [ G1 ...  G(L-1) tensor
         #                                                       ( unvec( G(L+1) ... G(M-1) tensor (G(M+1) ... GN)^T vec( dG(M)/dkl ) ) )^T vec( dG(L)/dij ) ]
         #
-        #  Note: ignoring L == M terms assumes that d^2 G/(dij)^2 == 0, which is true IF each gate matrix element is at most 
+        #  Note: ignoring L == M terms assumes that d^2 G/(dij)^2 == 0, which is true IF each gate matrix element is at most
         #        *linear* in each of the gate parameters.  If this is not the case, need Gate objects to have a 2nd-deriv method in addition of deriv_wrt_params
         #
         #  Note: unvec( X ) can be done efficiently by actually computing X^T ( note (A tensor B)^T = A^T tensor B^T ) and using numpy's reshape
@@ -390,7 +390,7 @@ class GateSetCalculator(object):
             dgate_dgateLabel[gateLabel] = self.gates[gateLabel].deriv_wrt_params() # (dim**2, nParams[gateLabel])
             nParams[gateLabel] = dgate_dgateLabel[gateLabel].shape[1]
 
-        d2prod_dgateLabels = { }; 
+        d2prod_dgateLabels = { };
         for gateLabel1 in gatesToVectorize1:
             for gateLabel2 in gatesToVectorize2:
                 d2prod_dgateLabels[(gateLabel1,gateLabel2)] = _np.zeros( (dim**2, nParams[gateLabel1], nParams[gateLabel2]), 'd')
@@ -401,14 +401,14 @@ class GateSetCalculator(object):
             #OLD shortcut: if gateLabel1 in gatesToVectorize1: (and indent below)
             for l,gateLabel2 in enumerate(revGateLabelList):
                 #OLD shortcut: if gateLabel2 in gatesToVectorize2: (and indent below)
-                # FUTURE: we could add logic that accounts for the symmetry of the Hessian, so that 
+                # FUTURE: we could add logic that accounts for the symmetry of the Hessian, so that
                 # if gl1 and gl2 are both in gatesToVectorize1 and gatesToVectorize2 we only compute d2(prod)/d(gl1)d(gl2)
                 # and not d2(prod)/d(gl2)d(gl1) ...
                 if m < l:
                     x0 = _np.kron(_np.transpose(prods[(0,m-1)]),prods[(m+1,l-1)])  # (dim**2, dim**2)
                     x  = _np.dot( _np.transpose(dgate_dgateLabel[gateLabel1]), x0); xv = x.view() # (nParams[gateLabel1],dim**2)
                     xv.shape = (nParams[gateLabel1], dim, dim) # (reshape without copying - throws error if copy is needed)
-                    y = _np.dot( _np.kron(xv, _np.transpose(prods[(l+1,N-1)])), dgate_dgateLabel[gateLabel2] ) 
+                    y = _np.dot( _np.kron(xv, _np.transpose(prods[(l+1,N-1)])), dgate_dgateLabel[gateLabel2] )
                     # above: (nParams1,dim**2,dim**2) * (dim**2,nParams[gateLabel2]) = (nParams1,dim**2,nParams2)
                     d2prod_dgateLabels[(gateLabel1,gateLabel2)] += _np.swapaxes(y,0,1)
                             # above: dim = (dim2, nParams1, nParams2); swapaxes takes (kl,vec_prod_indx,ij) => (vec_prod_indx,kl,ij)
@@ -430,7 +430,7 @@ class GateSetCalculator(object):
         flattened_d2prod = _np.concatenate( to_concat, axis=1 ) # concat along kl (nParams1)
 
         if wrtFilter is not None:
-            flattened_d2prod = flattened_d2prod.take(wrtFilter, axis=2) 
+            flattened_d2prod = flattened_d2prod.take(wrtFilter, axis=2)
               #take subset of 2nd derivatives w.r.t. gateset parameter
 
 
@@ -443,7 +443,7 @@ class GateSetCalculator(object):
 
 
     def pr(self, spamLabel, gatestring, clipTo=None, bUseScaling=True):
-        """ 
+        """
         Compute the probability of the given gate sequence, where initialization
         & measurement operations are together specified by spamLabel.
 
@@ -451,7 +451,7 @@ class GateSetCalculator(object):
         ----------
         spamLabel : string
            the label specifying the state prep and measure operations
-           
+
         gatestring : GateString or tuple of gate labels
           The sequence of gate labels specifying the gate string.
 
@@ -460,10 +460,10 @@ class GateSetCalculator(object):
 
         bUseScaling : bool, optional
           Whether to use a post-scaled product internally.  If False, this
-          routine will run slightly faster, but with a chance that the 
+          routine will run slightly faster, but with a chance that the
           product will overflow and the subsequent trace operation will
           yield nan as the returned probability.
-           
+
         Returns
         -------
         float
@@ -471,14 +471,14 @@ class GateSetCalculator(object):
 
         if self._is_remainder_spamlabel(spamLabel):
             #then compute 1.0 - (all other spam label probabilities)
-            otherSpamdefs = self.spamdefs.keys()[:]; del otherSpamdefs[ otherSpamdefs.index(spamLabel) ]
+            otherSpamdefs = list(self.spamdefs.keys())[:]; del otherSpamdefs[ otherSpamdefs.index(spamLabel) ]
             assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamdefs]) )
             return 1.0 - sum( [self.pr(sl, gatestring, clipTo, bUseScaling) for sl in otherSpamdefs] )
 
         (rholabel,elabel) = self.spamdefs[spamLabel]
         rho = self.preps[rholabel]
         E   = _np.conjugate(_np.transpose(self._get_evec(elabel)))
-        
+
         if bUseScaling:
             old_err = _np.seterr(over='ignore')
             G,scale = self.product(gatestring, True)
@@ -498,10 +498,10 @@ class GateSetCalculator(object):
             G = self.product(gatestring, False)
             p = float(_np.dot(E, _np.dot(G, rho) ))
 
-        if _np.isnan(p): 
+        if _np.isnan(p):
             if len(gatestring) < 10:
                 strToPrint = str(gatestring)
-            else: 
+            else:
                 strToPrint = str(gatestring[0:10]) + " ... (len %d)" % len(gatestring)
             _warnings.warn("pr(%s) == nan" % strToPrint)
             #DEBUG: print "backtrace" of product leading up to nan
@@ -515,7 +515,7 @@ class GateSetCalculator(object):
             #    print "%d: p = %g, norm %g, exp %g\n%s" % (i,p,norm(G),total_exp,str(G))
             #    if _np.isnan(p): raise ValueError("STOP")
 
-        if clipTo is not None: 
+        if clipTo is not None:
             return _np.clip(p,clipTo[0],clipTo[1])
         else: return p
 
@@ -530,7 +530,7 @@ class GateSetCalculator(object):
         ----------
         spamLabel : string
            the label specifying the state prep and measure operations
-           
+
         gatestring : GateString or tuple of gate labels
           The sequence of gate labels specifying the gate string.
 
@@ -553,10 +553,10 @@ class GateSetCalculator(object):
 
         if self._is_remainder_spamlabel(spamLabel):
             #then compute Deriv[ 1.0 - (all other spam label probabilities) ]
-            otherSpamdefs = self.spamdefs.keys()[:]; del otherSpamdefs[ otherSpamdefs.index(spamLabel) ]
+            otherSpamdefs = list(self.spamdefs.keys())[:]; del otherSpamdefs[ otherSpamdefs.index(spamLabel) ]
             assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamdefs]) )
             otherResults = [self.dpr(sl, gatestring, returnPr, clipTo) for sl in otherSpamdefs]
-            if returnPr: 
+            if returnPr:
                 return -1.0 * sum([dpr for dpr,p in otherResults]), 1.0 - sum([p for dpr,p in otherResults])
             else:
                 return -1.0 * sum(otherResults)
@@ -575,25 +575,25 @@ class GateSetCalculator(object):
         prod,scale = self.product(gatestring, True)
         dprod_dGates = self.dproduct(gatestring); vec_gs_size = dprod_dGates.shape[0]
         dpr_dGates = _np.empty( (1, vec_gs_size) )
-        for i in xrange(vec_gs_size):
+        for i in range(vec_gs_size):
             dpr_dGates[0,i] = float(_np.dot(E, _np.dot( dprod_dGates[i], rho)))
-        
+
         if returnPr:
             p = _np.dot(E, _np.dot(prod, rho)) * scale  #may generate overflow, but OK
             if clipTo is not None:  p = _np.clip( p, clipTo[0], clipTo[1] )
-            
+
         #Derivs wrt SPAM
-        num_rho_params = [v.num_params() for v in self.preps.values()]
+        num_rho_params = [v.num_params() for v in list(self.preps.values())]
         rho_offset = [ sum(num_rho_params[0:i]) for i in range(len(self.preps)+1) ]
-        rhoIndex = self.preps.keys().index(rholabel)
+        rhoIndex = list(self.preps.keys()).index(rholabel)
         dpr_drhos = _np.zeros( (1, sum(num_rho_params)) )
         derivWrtAnyRhovec = scale * _np.dot(E,prod)
         dpr_drhos[0, rho_offset[rhoIndex]:rho_offset[rhoIndex+1]] = \
             _np.dot( derivWrtAnyRhovec, rho.deriv_wrt_params())  #may overflow, but OK
 
-        num_e_params = [v.num_params() for v in self.effects.values()]
+        num_e_params = [v.num_params() for v in list(self.effects.values())]
         e_offset = [ sum(num_e_params[0:i]) for i in range(len(self.effects)+1) ]
-        dpr_dEs = _np.zeros( (1, sum(num_e_params)) ); 
+        dpr_dEs = _np.zeros( (1, sum(num_e_params)) );
         derivWrtAnyEvec = scale * _np.transpose(_np.dot(prod,rho)) # may overflow, but OK
            # (** doesn't depend on eIndex **) -- TODO: should also conjugate() here if complex?
         if elabel == self._remainderLabel:
@@ -602,14 +602,14 @@ class GateSetCalculator(object):
                 dpr_dEs[0, e_offset[ei]:e_offset[ei+1]] = \
                     -1.0 * _np.dot( derivWrtAnyEvec, evec.deriv_wrt_params() )
         else:
-            eIndex = self.effects.keys().index(elabel)
+            eIndex = list(self.effects.keys()).index(elabel)
             dpr_dEs[0, e_offset[eIndex]:e_offset[eIndex+1]] = \
                 _np.dot( derivWrtAnyEvec, self.effects[elabel].deriv_wrt_params() )
 
         _np.seterr(**old_err)
 
         if returnPr:
-              return _np.concatenate( (dpr_drhos,dpr_dEs,dpr_dGates), axis=1 ), p
+            return _np.concatenate( (dpr_drhos,dpr_dEs,dpr_dGates), axis=1 ), p
         else: return _np.concatenate( (dpr_drhos,dpr_dEs,dpr_dGates), axis=1 )
 
 
@@ -623,7 +623,7 @@ class GateSetCalculator(object):
         ----------
         spamLabel : string
            the label specifying the state prep and measure operations
-           
+
         gatestring : GateString or tuple of gate labels
           The sequence of gate labels specifying the gate string.
 
@@ -631,7 +631,7 @@ class GateSetCalculator(object):
           when set to True, additionally return the probability itself.
 
         returnDeriv : bool, optional
-          when set to True, additionally return the derivative of the 
+          when set to True, additionally return the derivative of the
           probability.
 
         clipTo : 2-tuple, optional
@@ -646,7 +646,7 @@ class GateSetCalculator(object):
             k-th then the j-th gateset parameter.
 
         derivative : numpy array
-            only returned if returnDeriv == True. A 1 x M numpy array of 
+            only returned if returnDeriv == True. A 1 x M numpy array of
             derivatives of the probability w.r.t. each gateset parameter.
 
         probability : float
@@ -655,12 +655,12 @@ class GateSetCalculator(object):
 
         if self._is_remainder_spamlabel(spamLabel):
             #then compute Hessian[ 1.0 - (all other spam label probabilities) ]
-            otherSpamdefs = self.spamdefs.keys()[:]; del otherSpamdefs[ otherSpamdefs.index(spamLabel) ]
+            otherSpamdefs = list(self.spamdefs.keys())[:]; del otherSpamdefs[ otherSpamdefs.index(spamLabel) ]
             assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamdefs]) )
             otherResults = [self.hpr(sl, gatestring, returnPr, returnDeriv, clipTo) for sl in otherSpamdefs]
-            if returnDeriv: 
+            if returnDeriv:
                 if returnPr: return ( -1.0 * sum([hpr for hpr,dpr,p in otherResults]),
-                                      -1.0 * sum([dpr for hpr,dpr,p in otherResults]), 
+                                      -1.0 * sum([dpr for hpr,dpr,p in otherResults]),
                                        1.0 - sum([p   for hpr,dpr,p in otherResults])   )
                 else:        return ( -1.0 * sum([hpr for hpr,dpr in otherResults]),
                                       -1.0 * sum([dpr for hpr,dpr in otherResults])     )
@@ -687,8 +687,8 @@ class GateSetCalculator(object):
         assert( d2prod_dGates.shape[0] == d2prod_dGates.shape[1] )
 
         d2pr_dGates2 = _np.empty( (1, vec_gs_size, vec_gs_size) )
-        for i in xrange(vec_gs_size):
-            for j in xrange(vec_gs_size):
+        for i in range(vec_gs_size):
+            for j in range(vec_gs_size):
                 d2pr_dGates2[0,i,j] = float(_np.dot(E, _np.dot( d2prod_dGates[i,j], rho)))
 
         old_err = _np.seterr(over='ignore')
@@ -702,16 +702,16 @@ class GateSetCalculator(object):
         assert( dprod_dGates.shape[0] == vec_gs_size )
         if returnDeriv: # same as in dpr(...)
             dpr_dGates = _np.empty( (1, vec_gs_size) )
-            for i in xrange(vec_gs_size):
+            for i in range(vec_gs_size):
                 dpr_dGates[0,i] = float(_np.dot(E, _np.dot( dprod_dGates[i], rho)))
 
 
         #Derivs wrt SPAM
-        num_rho_params = [v.num_params() for v in self.preps.values()]
-        num_e_params = [v.num_params() for v in self.effects.values()]
+        num_rho_params = [v.num_params() for v in list(self.preps.values())]
+        num_e_params = [v.num_params() for v in list(self.effects.values())]
         rho_offset = [ sum(num_rho_params[0:i]) for i in range(len(self.preps)+1) ]
         e_offset = [ sum(num_e_params[0:i]) for i in range(len(self.effects)+1) ]
-        rhoIndex = self.preps.keys().index(rholabel)
+        rhoIndex = list(self.preps.keys()).index(rholabel)
 
         if returnDeriv:  #same as in dpr(...)
             dpr_drhos = _np.zeros( (1, sum(num_rho_params)) )
@@ -719,7 +719,7 @@ class GateSetCalculator(object):
             dpr_drhos[0, rho_offset[rhoIndex]:rho_offset[rhoIndex+1]] = \
                 _np.dot( derivWrtAnyRhovec, rho.deriv_wrt_params())  #may overflow, but OK
 
-            dpr_dEs = _np.zeros( (1, sum(num_e_params)) ); 
+            dpr_dEs = _np.zeros( (1, sum(num_e_params)) );
             derivWrtAnyEvec = scale * _np.transpose(_np.dot(prod,rho)) # may overflow, but OK
             if elabel == self._remainderLabel:
                 assert(self._remainderLabel not in self.effects)
@@ -727,10 +727,10 @@ class GateSetCalculator(object):
                     dpr_dEs[0, e_offset[ei]:e_offset[ei+1]] = \
                         -1.0 * _np.dot( derivWrtAnyEvec, evec.deriv_wrt_params() )
             else:
-                eIndex = self.effects.keys().index(elabel)
+                eIndex = list(self.effects.keys()).index(elabel)
                 dpr_dEs[0, e_offset[eIndex]:e_offset[eIndex+1]] = \
                     _np.dot( derivWrtAnyEvec, self.effects[elabel].deriv_wrt_params() )
-        
+
             dpr = _np.concatenate( (dpr_drhos,dpr_dEs,dpr_dGates), axis=1 )
 
         d2pr_drhos = _np.zeros( (1, vec_gs_size, sum(num_rho_params)) )
@@ -745,10 +745,10 @@ class GateSetCalculator(object):
                 d2pr_dEs[0, :, e_offset[ei]:e_offset[ei+1]] = \
                     -1.0 * _np.dot( derivWrtAnyEvec, evec.deriv_wrt_params() )
         else:
-            eIndex = self.effects.keys().index(elabel)
+            eIndex = list(self.effects.keys()).index(elabel)
             d2pr_dEs[0, :, e_offset[eIndex]:e_offset[eIndex+1]] = \
                 _np.dot(derivWrtAnyEvec, self.effects[elabel].deriv_wrt_params())
-        
+
         d2pr_dErhos = _np.zeros( (1, sum(num_e_params), sum(num_rho_params)) )
         derivWrtAnyEvec = scale * _np.dot(prod, rho.deriv_wrt_params()) #may generate overflow, but OK
 
@@ -756,11 +756,11 @@ class GateSetCalculator(object):
             for ei,evec in enumerate(self.effects.values()): #similar to above, but now after also a deriv w.r.t rhos
                 d2pr_dErhos[0, e_offset[ei]:e_offset[ei+1], rho_offset[rhoIndex]:rho_offset[rhoIndex+1]] = \
                     -1.0 * _np.dot( _np.transpose(evec.deriv_wrt_params()),derivWrtAnyEvec)
-                # ET*P*rho -> drhoP -> ET*P*drho/drhoP = ((P*drho/drhoP)^T*E)^T -> dEp -> 
+                # ET*P*rho -> drhoP -> ET*P*drho/drhoP = ((P*drho/drhoP)^T*E)^T -> dEp ->
                 # ((P*drho/drhoP)^T*dE/dEp)^T = dE/dEp^T*(P*drho/drhoP) = (d,eP)^T*(d,rhoP) = (eP,rhoP) OK!
         else:
-            eIndex = self.effects.keys().index(elabel)
-            d2pr_dErhos[0, e_offset[eIndex]:e_offset[eIndex+1], 
+            eIndex = list(self.effects.keys()).index(elabel)
+            d2pr_dErhos[0, e_offset[eIndex]:e_offset[eIndex+1],
                         rho_offset[rhoIndex]:rho_offset[rhoIndex+1]] = \
                         _np.dot( _np.transpose(self.effects[elabel].deriv_wrt_params()),derivWrtAnyEvec)
 
@@ -774,7 +774,7 @@ class GateSetCalculator(object):
 
         _np.seterr(**old_err)
 
-        if returnDeriv: 
+        if returnDeriv:
             if returnPr: return ret, dpr, p
             else:        return ret, dpr
         else:
@@ -794,11 +794,11 @@ class GateSetCalculator(object):
 
         clipTo : 2-tuple, optional
            (min,max) to clip probabilities to if not None.
-           
+
         Returns
         -------
         probs : dictionary
-            A dictionary such that 
+            A dictionary such that
             probs[SL] = pr(SL,gatestring,clipTo)
             for each spam label (string) SL.
         """
@@ -814,7 +814,7 @@ class GateSetCalculator(object):
                     lastLabel = spamLabel; continue
                 probs[spamLabel] = self.pr(spamLabel, gatestring, clipTo)
                 s += probs[spamLabel]
-            if lastLabel is not None: 
+            if lastLabel is not None:
                 probs[lastLabel] = 1.0 - s  #last spam label is computed so sum == 1
         return probs
 
@@ -839,7 +839,7 @@ class GateSetCalculator(object):
         Returns
         -------
         dprobs : dictionary
-            A dictionary such that 
+            A dictionary such that
             dprobs[SL] = dpr(SL,gatestring,gates,G0,SPAM,SP0,returnPr,clipTo)
             for each spam label (string) SL.
         """
@@ -859,7 +859,7 @@ class GateSetCalculator(object):
                     s += dprobs[spamLabel][1]
                 else:
                     ds = dprobs[spamLabel] if ds is None else ds + dprobs[spamLabel]
-            if lastLabel is not None: 
+            if lastLabel is not None:
                 dprobs[lastLabel] = (-ds,1.0-s) if returnPr else -ds
         return dprobs
 
@@ -879,7 +879,7 @@ class GateSetCalculator(object):
           when set to True, additionally return the probabilities.
 
         returnDeriv : bool, optional
-          when set to True, additionally return the derivatives of the 
+          when set to True, additionally return the derivatives of the
           probabilities.
 
         clipTo : 2-tuple, optional
@@ -889,7 +889,7 @@ class GateSetCalculator(object):
         Returns
         -------
         hprobs : dictionary
-            A dictionary such that 
+            A dictionary such that
             hprobs[SL] = hpr(SL,gatestring,gates,G0,SPAM,SP0,returnPr,returnDeriv,clipTo)
             for each spam label (string) SL.
         """
@@ -921,20 +921,20 @@ class GateSetCalculator(object):
                     else:
                         hs = hprobs[spamLabel] if hs is None else hs + hprobs[spamLabel]
 
-            if lastLabel is not None: 
+            if lastLabel is not None:
                 if returnPr:
                     hprobs[lastLabel] = (-hs,-ds,1.0-s) if returnDeriv else (-hs,1.0-s)
                 else:
                     hprobs[lastLabel] = (-hs,-ds) if returnDeriv else -hs
-                    
+
         return hprobs
 
 
 #    def bulk_evaltree_beta(self, gatestring_list):
 #        """
-#          Returns an evaluation tree for all the gate 
+#          Returns an evaluation tree for all the gate
 #          strings in gatestring_list. Used by bulk_pr and
-#          bulk_dpr, this is it's own function so that 
+#          bulk_dpr, this is it's own function so that
 #          if many calls to bulk_pr and/or bulk_dpr are
 #          made with the same gatestring_list, only a single
 #          call to bulk_evaltree is needed.
@@ -949,10 +949,10 @@ class GateSetCalculator(object):
 #        """
 #        Create an evaluation tree for all the gate strings in gatestring_list.
 #
-#        This tree can be used by other Bulk_* functions, and is it's own 
-#        function so that for many calls to Bulk_* made with the same 
+#        This tree can be used by other Bulk_* functions, and is it's own
+#        function so that for many calls to Bulk_* made with the same
 #        gatestring_list, only a single call to bulk_evaltree is needed.
-#        
+#
 #        Parameters
 #        ----------
 #        gatestring_list : list of (tuples or GateStrings)
@@ -969,8 +969,8 @@ class GateSetCalculator(object):
 
 
     def _distribute_indices(self, indices, comm, verbosity=0):
-        #Doesn't need to be a member function: TODO - move to 
-        # an MPI helper class?            
+        #Doesn't need to be a member function: TODO - move to
+        # an MPI helper class?
 
         printer = VerbosityPrinter.build_printer(verbosity)
 
@@ -1009,7 +1009,7 @@ class GateSetCalculator(object):
             loc_indices = [ indices[i] for i in range(nstart,nstart+nloc)]
 
             owners = { } #which rank "owns" each index
-            for r in range(nprocs-1): 
+            for r in range(nprocs-1):
                 nstart = r * nloc_std
                 for i in range(nstart,nstart+nloc_std):
                     owners[indices[i]] = r
@@ -1018,11 +1018,11 @@ class GateSetCalculator(object):
                 owners[indices[i]] = (nprocs-1)
             loc_comm = None
 
-	if rank == 0:
-	    printer.log("*** Distributing %d indices amongst %s processors ***"% \
-	    (nIndices, nprocs), 3)
-	printer.log("    Rank %d (%d): %s" % (rank, len(loc_indices),
-					str(loc_indices)), 3)
+        if rank == 0:
+            printer.log("*** Distributing %d indices amongst %s processors ***"% \
+            (nIndices, nprocs), 3)
+        printer.log("    Rank %d (%d): %s" % (rank, len(loc_indices),
+                                        str(loc_indices)), 3)
 
         return loc_indices, owners, loc_comm
 
@@ -1030,11 +1030,11 @@ class GateSetCalculator(object):
     def _gather_subtree_results(self, evt, spam_label_rows,
                                 gIndex_owners, my_gIndices,
                                 result_tup, my_results, comm):
-        #Doesn't need to be a member function: TODO - move to 
-        # an MPI helper class?            
+        #Doesn't need to be a member function: TODO - move to
+        # an MPI helper class?
         S = evt.num_final_strings() # number of strings
-        result_range = range(len(result_tup))
-        
+        result_range = list(range(len(result_tup)))
+
         assert(result_tup[-1].shape[1] == S) #when this isn't true, (e.g. flat==True
         #  # for bulk_dproduct), we need to copy blocks instead of single indices
         #  # in the myFinalToParentFinalMap line below...
@@ -1042,9 +1042,9 @@ class GateSetCalculator(object):
         for i,subtree in enumerate(evt.get_sub_trees()):
             li = my_gIndices.index(i) if (i in my_gIndices) else None
 
-            for spamLabel,rowIndex in spam_label_rows.iteritems():
+            for spamLabel,rowIndex in spam_label_rows.items():
                 for r in result_range:
-                    if result_tup[r] is None: 
+                    if result_tup[r] is None:
                         continue #skip None result_tup elements
 
                     sub_result = my_results[li][spamLabel][r] \
@@ -1065,7 +1065,7 @@ class GateSetCalculator(object):
                             my_blk_results, comm):
 
         if comm is None:
-            assert(all([x == 0 for x in blk_owners.values()]))
+            assert(all([x == 0 for x in list(blk_owners.values())]))
             assert(nBlocks == len(my_blk_results))
             all_blk_results = [ my_blk_results ]
             all_blk_indices = [ my_blkIndices ]
@@ -1073,7 +1073,7 @@ class GateSetCalculator(object):
             # gather a list of each processor's list of computed "blocks"
             all_blk_results = comm.allgather(my_blk_results)
             all_blk_indices = comm.allgather(my_blkIndices)
-        
+
         # edit this list to put blocks in the correct order
         blk_list = []
         for iBlk in range(nBlocks):
@@ -1086,7 +1086,7 @@ class GateSetCalculator(object):
 
 
     def _compute_product_cache(self, evalTree, comm=None):
-        """ 
+        """
         Computes a tree of products in a linear cache space. Will use a split
         tree to parallelize computation, since there are no memory savings
         from using a split tree.
@@ -1095,15 +1095,15 @@ class GateSetCalculator(object):
         #LATER: tailor this function for use only within this function and other cache functions
         def gather_subtree_results(evt, gIndex_owners, my_gIndices,
                                    my_results, result_index, per_string_dim, comm):
-            #Doesn't need to be a member function: TODO - move to 
-            # an MPI helper class?            
+            #Doesn't need to be a member function: TODO - move to
+            # an MPI helper class?
             S = len(evt) # Note: *not* evt.num_final_strings() since want *entire* cache
             assert(per_string_dim[0] == 1) #when this isn't true, (e.g. flat==True
-              # for bulk_dproduct), we need to copy blocks instead of single indices
-              # in the myFinalToParentFinalMap line below...
+            # for bulk_dproduct), we need to copy blocks instead of single indices
+            # in the myFinalToParentFinalMap line below...
             dims = (S*per_string_dim[0],) + tuple(per_string_dim[1:])
             result = _np.empty( dims, 'd' )
-    
+
             for i,subtree in enumerate(evt.get_sub_trees()):
                 if i in my_gIndices:
                     li = my_gIndices.index(i)
@@ -1113,19 +1113,19 @@ class GateSetCalculator(object):
                         sub_result = my_results[li][result_index]
                 else:
                     sub_result = None
-    
+
                 if comm is None:
                     #No comm; rank 0 owns everything
                     assert(gIndex_owners[i] == 0)
                 else:
                     sub_result = comm.bcast(sub_result, root=gIndex_owners[i])
-    
+
                 if evt.is_split():
                     result[ subtree.parentIndexMap ] = sub_result
                 else: #subtree is actually the entire tree (evt), so just copy all
                     result = sub_result
             return result
-    
+
 
         dim = self.dim
 
@@ -1135,10 +1135,10 @@ class GateSetCalculator(object):
         if comm is not None and evalTree.is_split():
             #Parallelize using sub-trees
             subtrees = evalTree.get_sub_trees()
-            allSubTreeIndices = range(len(subtrees))
+            allSubTreeIndices = list(range(len(subtrees)))
             mySubTreeIndices, subTreeOwners, mySubComm = \
                 self._distribute_indices(allSubTreeIndices, comm)
-            
+
             #print "MPI: _compute_product_cache over %d subtrees (rank %d computing %s)" \
             #    % (len(subtrees), comm.Get_rank(), str(mySubTreeIndices))
             my_results = [ self._compute_product_cache(subtrees[iSubTree],comm=mySubComm)
@@ -1154,7 +1154,7 @@ class GateSetCalculator(object):
 
         if comm is not None: #ignorning comm since can't do anything with it!
             _warnings.warn("More processors than can be used for product computation")
-            
+
         # ------------------------------------------------------------------
 
         if evalTree.is_split():
@@ -1193,8 +1193,8 @@ class GateSetCalculator(object):
                 nL,nR = max(_nla.norm(L), _np.exp(-scaleCache[iLeft]),1e-300), max(_nla.norm(R), _np.exp(-scaleCache[iRight]),1e-300)
                 sL, sR = L/nL, R/nR
                 prodCache[i] = _np.dot(sL,sR); scaleCache[i] += _np.log(nL) + _np.log(nR)
-               
-        #print "bulk_product DEBUG: %d rescalings out of %d products" % (cnt, len(evalTree)) 
+
+        #print "bulk_product DEBUG: %d rescalings out of %d products" % (cnt, len(evalTree))
 
         nanOrInfCacheIndices = (~_np.isfinite(prodCache)).nonzero()[0]  #may be duplicates (a list, not a set)
         assert( len(nanOrInfCacheIndices) == 0 ) # since all scaled gates start with norm <= 1, products should all have norm <= 1
@@ -1206,7 +1206,7 @@ class GateSetCalculator(object):
                                 comm=None, wrtFilter=None):
         """
         Computes a tree of product derivatives in a linear cache space. Will
-        use derivative columns and then (and only when needed) a split tree 
+        use derivative columns and then (and only when needed) a split tree
         to parallelize computation, since there are no memory savings
         from using a split tree.
         """
@@ -1220,11 +1220,11 @@ class GateSetCalculator(object):
 
         # ------------------------------------------------------------------
 
-        if comm is not None and comm.Get_size() > 1: 
+        if comm is not None and comm.Get_size() > 1:
             # parallelize of deriv cols, then sub-trees (if available and necessary)
 
             if comm.Get_size() > nGateDerivCols:
-                #If there are more processors than deriv cols, see if 
+                #If there are more processors than deriv cols, see if
                 # we can make use of a tree splitting (this is the *only*
                 # reason for using the splitting, as it does not reduce
                 # the memory requirement).
@@ -1235,9 +1235,9 @@ class GateSetCalculator(object):
                     raise NotImplementedError("Need to finish implementing this case!")
 
                     subtrees = evalTree.get_sub_trees()
-                    allSubTreeIndices = range(len(subtrees))
+                    allSubTreeIndices = list(range(len(subtrees)))
                     mySubTreeIndices, subTreeOwners, mySubComm = \
-                        self._distribute_indices(allSubTreeIndices, comm) 
+                        self._distribute_indices(allSubTreeIndices, comm)
                         #split *many* procs among a smaller number of indices, assigning the
                         # same index list to multiple procs and making a "myComm" group for them.
 
@@ -1259,7 +1259,7 @@ class GateSetCalculator(object):
                                    " than derivative columns.")
 
             # Use comm to distribute columns
-            allDerivColIndices = range(nGateDerivCols) if (wrtFilter is None) else wrtFilter
+            allDerivColIndices = list(range(nGateDerivCols)) if (wrtFilter is None) else wrtFilter
             myDerivColIndices, derivColOwners, mySubComm = \
                 self._distribute_indices(allDerivColIndices, comm)
             #print "MPI: _compute_dproduct_cache over %d cols (%s) (rank %d computing %s)" \
@@ -1268,7 +1268,7 @@ class GateSetCalculator(object):
             if mySubComm is not None and mySubComm.Get_size() > 1:
                 _warnings.warn("Too many processors to make use of in " +
                                " _compute_dproduct_cache.")
-                if mySubComm.Get_rank() > 0: myDerivColIndices = [] 
+                if mySubComm.Get_rank() > 0: myDerivColIndices = []
                   #don't compute anything on "extra", i.e. rank != 0, cpus
 
             my_results = self._compute_dproduct_cache(
@@ -1297,9 +1297,9 @@ class GateSetCalculator(object):
                 #nnzCache[i] = 0
             else:
                 dgate = self.dproduct( (gateLabel,) , wrtFilter=wrtFilter)
-                dProdCache[i] = dgate / _np.exp(scaleCache[i]) 
-                #nnzCache[i] = _np.count_nonzero(dProdCache[i])                
-                
+                dProdCache[i] = dgate / _np.exp(scaleCache[i])
+                #nnzCache[i] = _np.count_nonzero(dProdCache[i])
+
         nZeroAndSingleStrs = len(evalTree.get_init_labels())
 
         #nScaleCnt = nNonScaleCnt = dScaleCnt = 0 #TIMER!!!
@@ -1326,7 +1326,7 @@ class GateSetCalculator(object):
                 if dProdCache[i].max() < DSMALL and dProdCache[i].min() > -DSMALL:
                     _warnings.warn("Scaled dProd small in order to keep prod managable.")
             elif _np.count_nonzero(dProdCache[i]) and dProdCache[i].max() < DSMALL and dProdCache[i].min() > -DSMALL:
-                    _warnings.warn("Would have scaled dProd but now will not alter scaleCache.")
+                _warnings.warn("Would have scaled dProd but now will not alter scaleCache.")
 
         #DEBUG print "AVG dprod cache avg time = ",_np.average(times), "times=",len(evalTree[nZeroAndSingleStrs:]), "total = ",(_time.time()-tStart)
         return dProdCache
@@ -1336,7 +1336,7 @@ class GateSetCalculator(object):
                                 comm=None, wrtFilter=None):
         """
         Computes a tree of product 2nd derivatives in a linear cache space. Will
-        use derivative columns and then (and only when needed) a split tree 
+        use derivative columns and then (and only when needed) a split tree
         to parallelize computation, since there are no memory savings
         from using a split tree.
         """
@@ -1354,24 +1354,24 @@ class GateSetCalculator(object):
 
         # ------------------------------------------------------------------
 
-        if comm is not None and comm.Get_size() > 1: 
+        if comm is not None and comm.Get_size() > 1:
             # parallelize of deriv cols, then sub-trees (if available and necessary)
 
             if comm.Get_size() > nGateDerivCols2:
-                #If there are more processors than deriv cols, see if 
+                #If there are more processors than deriv cols, see if
                 # we can make use of a tree splitting (this is the *only*
                 # reason for using the splitting, as it does not reduce
                 # the memory requirement).
                 if evalTree.is_split():
-                    #Parallelize using *all* subtrees (either we use
-                    #  all of them or none of them)
+                #Parallelize using *all* subtrees (either we use
+                #  all of them or none of them)
                     trees_to_use = evalTree.get_sub_trees()
                     raise NotImplementedError("Need to finish implementing this case!")
 
                     subtrees = evalTree.get_sub_trees()
-                    allSubTreeIndices = range(len(subtrees))
+                    allSubTreeIndices = list(range(len(subtrees)))
                     mySubTreeIndices, subTreeOwners, mySubComm = \
-                        self._distribute_indices_multiple(allSubTreeIndices, comm) 
+                        self._distribute_indices_multiple(allSubTreeIndices, comm)
                         #split *many* procs among a smaller number of indices, assigning the
                         # same index list to multiple procs and making a "myComm" group for them.
 
@@ -1393,7 +1393,7 @@ class GateSetCalculator(object):
                                    " than derivative columns.")
 
             # Use comm to distribute columns
-            allDeriv2ColIndices = range(nGateDerivCols2) if (wrtFilter is None) else wrtFilter
+            allDeriv2ColIndices = list(range(nGateDerivCols2)) if (wrtFilter is None) else wrtFilter
             myDerivColIndices, derivColOwners, mySubComm = \
                 self._distribute_indices(allDeriv2ColIndices, comm)
             #print "MPI: _compute_hproduct_cache over %d cols (rank %d computing %s)" \
@@ -1402,7 +1402,7 @@ class GateSetCalculator(object):
             if mySubComm is not None and mySubComm.Get_size() > 1:
                 _warnings.warn("Too many processors to make use of in " +
                                " _compute_hproduct_cache.")
-                if mySubComm.Get_rank() > 0: myDerivColIndices = [] 
+                if mySubComm.Get_rank() > 0: myDerivColIndices = []
                   #don't compute anything on "extra", i.e. rank != 0, cpus
 
             my_results = self._compute_hproduct_cache(
@@ -1421,31 +1421,31 @@ class GateSetCalculator(object):
 
         #First element of cache are given by evalTree's initial single- or zero-gate labels
         for i,gateLabel in enumerate(evalTree.get_init_labels()):
-            hProdCache[i] = _np.zeros( hessn_shape ) 
-              #assume all gate elements are at most linear in params,
-              # all hessiansl for single- or zero-gate strings are zero.
-            
+            hProdCache[i] = _np.zeros( hessn_shape )
+            #assume all gate elements are at most linear in params,
+            # all hessiansl for single- or zero-gate strings are zero.
+
             #OLD (slow and unnecessary unless we relax linear assumption):
             #if gateLabel == "": #special case of empty label == no gate
             #    hProdCache[i] = _np.zeros( hessn_shape )
             #else:
             #    hgate = self.hproduct( (gateLabel,), wrtFilter=wrtFilter)
             #    hProdCache[i] = hgate / _np.exp(scaleCache[i])
-            
+
         nZeroAndSingleStrs = len(evalTree.get_init_labels())
 
         #Function for "symmetric dLdR" ("dLdR + swapaxes(dLdR)") term for Hessian
         if wrtFilter is None:
-            def compute_sym_dLdR(dL,dR): 
-                dLdR = _np.swapaxes(_np.dot(dL,dR),1,2) 
+            def compute_sym_dLdR(dL,dR):
+                dLdR = _np.swapaxes(_np.dot(dL,dR),1,2)
                 return dLdR + _np.swapaxes(dLdR,0,1)
                   #same as (but faster than) _np.einsum('ikm,jml->ijkl',dL,dR)
         else:
             def compute_sym_dLdR(dL,dR):
                 dL_filtered = dL.take(wrtFilter, axis=0)
                 dR_filtered = dR.take(wrtFilter, axis=0)
-                dLdR1 = _np.swapaxes(_np.dot(dL,dR_filtered),1,2) 
-                dLdR2 = _np.swapaxes(_np.dot(dL_filtered,dR),1,2) 
+                dLdR1 = _np.swapaxes(_np.dot(dL,dR_filtered),1,2)
+                dLdR2 = _np.swapaxes(_np.dot(dL_filtered,dR),1,2)
                 return dLdR1 + _np.swapaxes(dLdR2,0,1)
 
         #DEBUG print "hprod time to main loop = ",(_time.time()-tStart)
@@ -1460,19 +1460,19 @@ class GateSetCalculator(object):
             (iRight,iLeft,iFinal) = tup   # since then matrixOf(gatestring[i]) = matrixOf(gatestring[iLeft]) * matrixOf(gatestring[iRight])
             L,R = prodCache[iLeft], prodCache[iRight]
             dL,dR = dProdCache[iLeft], dProdCache[iRight]
-            hL,hR = hProdCache[iLeft], hProdCache[iRight]   
+            hL,hR = hProdCache[iLeft], hProdCache[iRight]
             #t1 = _time.time() #TIMER
             dLdR_sym = compute_sym_dLdR(dL,dR) # Note: L, R = GxG ; dL,dR = vgs x GxG ; hL,hR = vgs x vgs x GxG
             hProdCache[i] = _np.dot(hL, R) + dLdR_sym + _np.transpose(_np.dot(L,hR),(1,2,0,3))
             #times.append(_time.time()-t1) #TIMER
-            
+
             scale = scaleCache[i] - (scaleCache[iLeft] + scaleCache[iRight])
             if not _np.isclose(scale,0):
                 hProdCache[i] /= _np.exp(scale)
                 if hProdCache[i].max() < HSMALL and hProdCache[i].min() > -HSMALL:
                     _warnings.warn("Scaled hProd small in order to keep prod managable.")
             elif _np.count_nonzero(hProdCache[i]) and hProdCache[i].max() < HSMALL and hProdCache[i].min() > -HSMALL:
-                    _warnings.warn("hProd is small (oh well!).")
+                _warnings.warn("hProd is small (oh well!).")
 
         #DEBUG TIMER print "AVG hprod cache avg time = ",_np.average(times), "times=",len(evalTree[nZeroAndSingleStrs:]), "total = ",(_time.time()-tStart)
         return hProdCache
@@ -1497,7 +1497,7 @@ class GateSetCalculator(object):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  This is done over gate strings when a
            *split* evalTree is given, otherwise no parallelization is performed.
-              
+
         Returns
         -------
         prods : numpy array
@@ -1507,12 +1507,12 @@ class GateSetCalculator(object):
             - G == the linear dimension of a gate matrix (G x G gate matrices).
 
         scaleValues : numpy array
-            Only returned when bScale == True. A length-S array specifying 
+            Only returned when bScale == True. A length-S array specifying
             the scaling that needs to be applied to the resulting products
             (final_product[i] = scaleValues[i] * prods[i]).
         """
         prodCache, scaleCache = self._compute_product_cache(evalTree,comm)
-        
+
         #use cached data to construct return values
         finalIndxList = evalTree.get_list_of_final_value_tree_indices()
         Gs = prodCache.take(  finalIndxList, axis=0 ) #shape == ( len(gatestring_list), dim, dim ), Gs[i] is product for i-th gate string
@@ -1563,22 +1563,22 @@ class GateSetCalculator(object):
         wrtFilter : list of ints, optional
           If not None, a list of integers specifying which gate parameters
           to include in the derivative.  Each element is an index into an
-          array of gate parameters ordered by concatenating each gate's 
+          array of gate parameters ordered by concatenating each gate's
           parameters (in the order specified by the gate set).  This argument
           is used internally for distributing derivative calculations across
           multiple processors.
 
-           
+
         Returns
         -------
         derivs : numpy array
-          
+
           * if flat == False, an array of shape S x M x G x G, where:
 
             - S == len(gatestring_list)
             - M == the length of the vectorized gateset
             - G == the linear dimension of a gate matrix (G x G gate matrices)
-            
+
             and derivs[i,j,k,l] holds the derivative of the (k,l)-th entry
             of the i-th gate string product with respect to the j-th gateset
             parameter.
@@ -1587,13 +1587,13 @@ class GateSetCalculator(object):
 
             - N == the number of entries in a single flattened gate (ordering same as numpy.flatten),
             - S,M == as above,
-              
+
             and deriv[i,j] holds the derivative of the (i % G^2)-th entry of
-            the (i / G^2)-th flattened gate string product  with respect to 
+            the (i / G^2)-th flattened gate string product  with respect to
             the j-th gateset parameter.
 
         products : numpy array
-          Only returned when bReturnProds == True.  An array of shape  
+          Only returned when bReturnProds == True.  An array of shape
           S x G x G; products[i] is the i-th gate string product.
 
         scaleVals : numpy array
@@ -1608,7 +1608,7 @@ class GateSetCalculator(object):
         prodCache, scaleCache = self._compute_product_cache(evalTree, comm)
         dProdCache = self._compute_dproduct_cache(evalTree, prodCache, scaleCache,
                                                   comm, wrtFilter)
-        
+
         #use cached data to construct return values
         finalIndxList = evalTree.get_list_of_final_value_tree_indices()
 
@@ -1628,7 +1628,7 @@ class GateSetCalculator(object):
                 dGs[_np.isnan(dGs)] = 0  #convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero deriv value (see below)
                 _np.seterr(**old_err)
 
-            if flat: 
+            if flat:
                 dGs =  _np.swapaxes( _np.swapaxes(dGs,0,1).reshape(
                     (nGateDerivCols, nGateStrings*dim**2) ), 0,1 ) # cols = deriv cols, rows = flattened everything else
 
@@ -1646,14 +1646,14 @@ class GateSetCalculator(object):
             if not bScale:
                 old_err = _np.seterr(over='ignore', invalid='ignore')
                 dGs = _np.swapaxes( _np.swapaxes(dGs,0,3) * scaleVals, 0,3) #may overflow or get nans (invalid), but ok
-                dGs[_np.isnan(dGs)] =  0 #convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero deriv value, and we 
+                dGs[_np.isnan(dGs)] =  0 #convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero deriv value, and we
                                         # assume the zero deriv value trumps since we've renormed to keep all the products within decent bounds
-                #assert( len( (_np.isnan(dGs)).nonzero()[0] ) == 0 ) 
-                #assert( len( (_np.isinf(dGs)).nonzero()[0] ) == 0 ) 
+                #assert( len( (_np.isnan(dGs)).nonzero()[0] ) == 0 )
+                #assert( len( (_np.isinf(dGs)).nonzero()[0] ) == 0 )
                 #dGs = clip(dGs,-1e300,1e300)
                 _np.seterr(**old_err)
 
-            if flat: 
+            if flat:
                 dGs =  _np.swapaxes( _np.swapaxes(dGs,0,1).reshape(
                     (nGateDerivCols, nGateStrings*dim**2) ), 0,1 ) # cols = deriv cols, rows = flattened everything else
             return (dGs, scaleVals) if bScale else dGs
@@ -1662,7 +1662,7 @@ class GateSetCalculator(object):
 
     def bulk_hproduct(self, evalTree, flat=False, bReturnDProdsAndProds=False,
                       bScale=False, comm=None, wrtFilter=None):
-        
+
         """
         Return the Hessian of many gate string products at once.
 
@@ -1693,16 +1693,16 @@ class GateSetCalculator(object):
         wrtFilter : list of ints, optional
           If not None, a list of integers specifying which gate parameters
           to include in the derivative.  Each element is an index into an
-          array of gate parameters ordered by concatenating each gate's 
+          array of gate parameters ordered by concatenating each gate's
           parameters (in the order specified by the gate set).  This argument
           is used internally for distributing derivative calculations across
           multiple processors.
 
-           
+
         Returns
         -------
         hessians : numpy array
-            * if flat == False, an  array of shape S x M x M x G x G, where 
+            * if flat == False, an  array of shape S x M x M x G x G, where
 
               - S == len(gatestring_list)
               - M == the length of the vectorized gateset
@@ -1718,18 +1718,18 @@ class GateSetCalculator(object):
               - S,M == as above,
 
               and hessians[i,j,k] holds the derivative of the (i % G^2)-th entry
-              of the (i / G^2)-th flattened gate string product with respect to 
+              of the (i / G^2)-th flattened gate string product with respect to
               the k-th then j-th gateset parameters.
 
         derivs : numpy array
           Only returned if bReturnDProdsAndProds == True.
 
-          * if flat == False, an array of shape S x M x G x G, where 
+          * if flat == False, an array of shape S x M x G x G, where
 
             - S == len(gatestring_list)
             - M == the length of the vectorized gateset
             - G == the linear dimension of a gate matrix (G x G gate matrices)
-  
+
             and derivs[i,j,k,l] holds the derivative of the (k,l)-th entry
             of the i-th gate string product with respect to the j-th gateset
             parameter.
@@ -1739,9 +1739,9 @@ class GateSetCalculator(object):
             - N == the number of entries in a single flattened gate (ordering is
                    the same as that used by numpy.flatten),
             - S,M == as above,
-  
+
             and deriv[i,j] holds the derivative of the (i % G^2)-th entry of
-            the (i / G^2)-th flattened gate string product  with respect to 
+            the (i / G^2)-th flattened gate string product  with respect to
             the j-th gateset parameter.
 
         products : numpy array
@@ -1762,7 +1762,7 @@ class GateSetCalculator(object):
         dProdCache = self._compute_dproduct_cache(evalTree, prodCache, scaleCache,
                                                   comm, None) #wrtFilter *not* for 1st derivs
         hProdCache = self._compute_hproduct_cache(evalTree, prodCache, dProdCache,
-                                                  scaleCache, comm, wrtFilter)        
+                                                  scaleCache, comm, wrtFilter)
 
         #use cached data to construct return values
         finalIndxList = evalTree.get_list_of_final_value_tree_indices()
@@ -1774,7 +1774,7 @@ class GateSetCalculator(object):
         if bReturnDProdsAndProds:
             Gs  = prodCache.take(  finalIndxList, axis=0 ) #shape == ( len(gatestring_list), dim, dim ), Gs[i] is product for i-th gate string
             dGs = dProdCache.take( finalIndxList, axis=0 ) #shape == ( len(gatestring_list), nGateDerivCols, dim, dim ), dGs[i] is dprod_dGates for ith string
-            hGs = hProdCache.take( finalIndxList, axis=0 ) #shape == ( len(gatestring_list), nGateDerivCols, nGateDerivCols, dim, dim ), hGs[i] 
+            hGs = hProdCache.take( finalIndxList, axis=0 ) #shape == ( len(gatestring_list), nGateDerivCols, nGateDerivCols, dim, dim ), hGs[i]
                                                            # is hprod_dGates for ith string
 
             if not bScale:
@@ -1786,10 +1786,10 @@ class GateSetCalculator(object):
                 hGs[_np.isnan(hGs)] = 0  #convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero hessian value (see below)
                 _np.seterr(**old_err)
 
-            if flat: 
+            if flat:
                 dGs = _np.swapaxes( _np.swapaxes(dGs,0,1).reshape( (nGateDerivCols, nGateStrings*dim**2) ), 0,1 ) # cols = deriv cols, rows = flattened all else
                 hGs = _np.rollaxis( _np.rollaxis(hGs,0,3).reshape( (nGateDerivCols, nGateDerivCols, nGateStrings*dim**2) ), 2) # cols = deriv cols, rows = all else
-                
+
             return (hGs, dGs, Gs, scaleVals) if bScale else (hGs, dGs, Gs)
 
         else:
@@ -1798,10 +1798,10 @@ class GateSetCalculator(object):
             if not bScale:
                 old_err = _np.seterr(over='ignore', invalid='ignore')
                 hGs = _np.swapaxes( _np.swapaxes(hGs,0,4) * scaleVals, 0,4) #may overflow or get nans (invalid), but ok
-                hGs[_np.isnan(hGs)] =  0 #convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero hessian value, and we 
+                hGs[_np.isnan(hGs)] =  0 #convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero hessian value, and we
                                          # assume the zero hessian value trumps since we've renormed to keep all the products within decent bounds
-                #assert( len( (_np.isnan(hGs)).nonzero()[0] ) == 0 ) 
-                #assert( len( (_np.isinf(hGs)).nonzero()[0] ) == 0 ) 
+                #assert( len( (_np.isnan(hGs)).nonzero()[0] ) == 0 )
+                #assert( len( (_np.isinf(hGs)).nonzero()[0] ) == 0 )
                 #hGs = clip(hGs,-1e300,1e300)
                 _np.seterr(**old_err)
 
@@ -1830,7 +1830,7 @@ class GateSetCalculator(object):
         #  vp[i] = sum_k E[0,k] dot(Gs, rho)[i,k,0]  * scaleVals[i]
         #  vp[i] = dot( E, dot(Gs, rho))[0,i,0]      * scaleVals[i]
         #  vp    = squeeze( dot( E, dot(Gs, rho)), axis=(0,2) ) * scaleVals
-        return _np.squeeze( _np.dot(E, _np.dot(Gs, rho)), axis=(0,2) ) * scaleVals  
+        return _np.squeeze( _np.dot(E, _np.dot(Gs, rho)), axis=(0,2) ) * scaleVals
           # shape == (len(gatestring_list),) ; may overflow but OK
 
     def _dprobs_from_rhoE(self, spamLabel, rho, E, Gs, dGs, scaleVals, wrtFilters=None):
@@ -1840,12 +1840,12 @@ class GateSetCalculator(object):
 
         #Compute d(probability)/dGates and save in return list (now have G,dG => product, dprod_dGates)
         #  prod, dprod_dGates = G,dG
-        # dp_dGates[i,j] = sum_k,l E[0,k] dGs[i,j,k,l] rho[l,0] 
+        # dp_dGates[i,j] = sum_k,l E[0,k] dGs[i,j,k,l] rho[l,0]
         # dp_dGates[i,j] = sum_k E[0,k] dot( dGs, rho )[i,j,k,0]
         # dp_dGates[i,j] = dot( E, dot( dGs, rho ) )[0,i,j,0]
         # dp_dGates      = squeeze( dot( E, dot( dGs, rho ) ), axis=(0,3))
         old_err2 = _np.seterr(invalid='ignore', over='ignore')
-        dp_dGates = _np.squeeze( _np.dot( E, _np.dot( dGs, rho ) ), axis=(0,3) ) * scaleVals[:,None] 
+        dp_dGates = _np.squeeze( _np.dot( E, _np.dot( dGs, rho ) ), axis=(0,3) ) * scaleVals[:,None]
         _np.seterr(**old_err2)
            # may overflow, but OK ; shape == (len(gatestring_list), nGateDerivCols)
            # may also give invalid value due to scaleVals being inf and dot-prod being 0. In
@@ -1853,7 +1853,7 @@ class GateSetCalculator(object):
         dp_dGates[ _np.isnan(dp_dGates) ] = 0
 
         #DEBUG
-        #assert( len( (_np.isnan(scaleVals)).nonzero()[0] ) == 0 ) 
+        #assert( len( (_np.isnan(scaleVals)).nonzero()[0] ) == 0 )
         #xxx = _np.dot( E, _np.dot( dGs, rho ) )
         #assert( len( (_np.isnan(xxx)).nonzero()[0] ) == 0 )
         #if len( (_np.isnan(dp_dGates)).nonzero()[0] ) != 0:
@@ -1869,14 +1869,14 @@ class GateSetCalculator(object):
         # dp_drhos[i,J0+J] = sum_kl E[0,k] Gs[i,k,l] drhoP[l,J]
         # dp_drhos[i,J0+J] = dot(E, Gs, drhoP)[0,i,J]
         # dp_drhos[:,J0+J] = squeeze(dot(E, Gs, drhoP),axis=(0,))[:,J]
-        rhoIndex = self.preps.keys().index(rholabel)
+        rhoIndex = list(self.preps.keys()).index(rholabel)
         dp_drhos = _np.zeros( (nGateStrings, self.tot_rho_params ) )
         dp_drhos[: , self.rho_offset[rhoIndex]:self.rho_offset[rhoIndex+1] ] = \
             _np.squeeze(_np.dot(_np.dot(E, Gs), rho.deriv_wrt_params()),axis=(0,)) \
             * scaleVals[:,None] # may overflow, but OK
-        
+
         # Get: dp_dEs[i, e_offset[eIndex]:e_offset[eIndex+1]] = dot(transpose(dE/dEP),Gs[i],rho))
-        # dp_dEs[i,J0+J] = sum_lj dEPT[J,j] Gs[i,j,l] rho[l,0] 
+        # dp_dEs[i,J0+J] = sum_lj dEPT[J,j] Gs[i,j,l] rho[l,0]
         # dp_dEs[i,J0+J] = sum_j dEP[j,J] dot(Gs, rho)[i,j]
         # dp_dEs[i,J0+J] = sum_j dot(Gs, rho)[i,j,0] dEP[j,J]
         # dp_dEs[i,J0+J] = dot(squeeze(dot(Gs, rho),2), dEP)[i,J]
@@ -1887,7 +1887,7 @@ class GateSetCalculator(object):
             for ei,evec in enumerate(self.effects.values()): #compute Deriv w.r.t. [ 1 - sum_of_other_Effects ]
                 dp_dEs[:,self.e_offset[ei]:self.e_offset[ei+1]] = -1.0 * _np.dot(dp_dAnyE, evec.deriv_wrt_params())
         else:
-            eIndex = self.effects.keys().index(elabel)
+            eIndex = list(self.effects.keys()).index(elabel)
             dp_dEs[:,self.e_offset[eIndex]:self.e_offset[eIndex+1]] = \
                 _np.dot(dp_dAnyE, self.effects[elabel].deriv_wrt_params())
 
@@ -1908,14 +1908,14 @@ class GateSetCalculator(object):
 
         if not spamColsOnly:
             #Compute d2(probability)/dGates2 and save in return list
-            # d2pr_dGates2[i,j,k] = sum_l,m E[0,l] hGs[i,j,k,l,m] rho[m,0] 
+            # d2pr_dGates2[i,j,k] = sum_l,m E[0,l] hGs[i,j,k,l,m] rho[m,0]
             # d2pr_dGates2[i,j,k] = sum_l E[0,l] dot( dGs, rho )[i,j,k,l,0]
             # d2pr_dGates2[i,j,k] = dot( E, dot( dGs, rho ) )[0,i,j,k,0]
             # d2pr_dGates2        = squeeze( dot( E, dot( dGs, rho ) ), axis=(0,4))
             old_err2 = _np.seterr(invalid='ignore', over='ignore')
-            d2pr_dGates2 = _np.squeeze( _np.dot( E, _np.dot( hGs, rho ) ), axis=(0,4) ) * scaleVals[:,None,None] 
+            d2pr_dGates2 = _np.squeeze( _np.dot( E, _np.dot( hGs, rho ) ), axis=(0,4) ) * scaleVals[:,None,None]
             _np.seterr(**old_err2)
-    
+
             # may overflow, but OK ; shape == (len(gatestring_list), nGateDerivCols, nGateDerivCols)
             # may also give invalid value due to scaleVals being inf and dot-prod being 0. In
             #  this case set to zero since we can't tell whether it's + or - inf anyway...
@@ -1929,8 +1929,8 @@ class GateSetCalculator(object):
         # Get: d2pr_drhos[i, j, rho_offset[rhoIndex]:rho_offset[rhoIndex+1]] = dot(E,dGs[i,j],drho/drhoP))
         # d2pr_drhos[i,j,J0+J] = sum_kl E[0,k] dGs[i,j,k,l] drhoP[l,J]
         # d2pr_drhos[i,j,J0+J] = dot(E, dGs, drhoP)[0,i,j,J]
-        # d2pr_drhos[:,:,J0+J] = squeeze(dot(E, dGs, drhoP),axis=(0,))[:,:,J]            
-        rhoIndex = self.preps.keys().index(rholabel)
+        # d2pr_drhos[:,:,J0+J] = squeeze(dot(E, dGs, drhoP),axis=(0,))[:,:,J]
+        rhoIndex = list(self.preps.keys()).index(rholabel)
         d2pr_drhos = _np.zeros( (nGateStrings, vec_gs_size, self.tot_rho_params) )
         d2pr_drhos[:, :, self.rho_offset[rhoIndex]:self.rho_offset[rhoIndex+1]] = \
             _np.squeeze( _np.dot(_np.dot(E,dGs),rho.deriv_wrt_params()), axis=(0,)) \
@@ -1947,7 +1947,7 @@ class GateSetCalculator(object):
             for ei,evec in enumerate(self.effects.values()):
                 d2pr_dEs[:, :, self.e_offset[ei]:self.e_offset[ei+1]] = -1.0 * _np.dot(dp_dAnyE, evec.deriv_wrt_params())
         else:
-            eIndex = self.effects.keys().index(elabel)
+            eIndex = list(self.effects.keys()).index(elabel)
             d2pr_dEs[:, :, self.e_offset[eIndex]:self.e_offset[eIndex+1]] = \
                 _np.dot(dp_dAnyE, self.effects[elabel].deriv_wrt_params())
 
@@ -1966,7 +1966,7 @@ class GateSetCalculator(object):
                 d2pr_dErhos[:, self.e_offset[ei]:self.e_offset[ei+1], self.rho_offset[rhoIndex]:self.rho_offset[rhoIndex+1]] = \
                     -1.0 * _np.swapaxes( _np.dot(_np.transpose(evec.deriv_wrt_params()), dp_dAnyE ), 0,1)
         else:
-            eIndex = self.effects.keys().index(elabel)
+            eIndex = list(self.effects.keys()).index(elabel)
             d2pr_dErhos[:, self.e_offset[eIndex]:self.e_offset[eIndex+1], self.rho_offset[rhoIndex]:self.rho_offset[rhoIndex+1]] = \
                 _np.swapaxes( _np.dot(_np.transpose(self.effects[elabel].deriv_wrt_params()), dp_dAnyE ), 0,1)
 
@@ -1987,7 +1987,7 @@ class GateSetCalculator(object):
         else:
             assert(not spamColsOnly) #easy to do, but not supported yet
             ret_row1 = _np.concatenate(
-                ( d2pr_d2rhos.take(wrtFilters['preps'],axis=2), 
+                ( d2pr_d2rhos.take(wrtFilters['preps'],axis=2),
                   _np.transpose(d2pr_dErhos,(0,2,1)).take(wrtFilters['effects'],axis=2),
                   _np.transpose(d2pr_drhos, (0,2,1)).take(wrtFilters['gates'],axis=2) ), axis=2) #wrt rho
             ret_row2 = _np.concatenate(
@@ -1998,7 +1998,7 @@ class GateSetCalculator(object):
                 ( d2pr_drhos.take(wrtFilters['preps'],axis=2),
                   d2pr_dEs.take(wrtFilters['effects'],axis=2),
                   d2pr_dGates2), axis=2) #wrt gates
-            
+
         sub_vhp = _np.concatenate( (ret_row1, ret_row2, ret_row3), axis=1 )
 
         if spamColsOnly:
@@ -2049,36 +2049,36 @@ class GateSetCalculator(object):
 
     def _check(self, evalTree, spam_label_rows, prMxToFill=None, dprMxToFill=None, hprMxToFill=None, clipTo=None):
         # compare with older slower version that should do the same thing (for debugging)
-        for spamLabel,rowIndex in spam_label_rows.iteritems():
+        for spamLabel,rowIndex in spam_label_rows.items():
             gatestring_list = evalTree.generate_gatestring_list()
-            
+
             if prMxToFill is not None:
                 check_vp = _np.array( [ self.pr(spamLabel, gateString, clipTo) for gateString in gatestring_list ] )
                 if _nla.norm(prMxToFill[rowIndex] - check_vp) > 1e-6:
                     _warnings.warn("norm(vp-check_vp) = %g - %g = %g" % \
                                (_nla.norm(prMxToFill[rowIndex]),
                                 _nla.norm(check_vp),
-                                _nla.norm(prMxToFill[rowIndex] - check_vp)))                    
+                                _nla.norm(prMxToFill[rowIndex] - check_vp)))
                     #for i,gs in enumerate(gatestring_list):
-                    #    if abs(vp[i] - check_vp[i]) > 1e-7: 
+                    #    if abs(vp[i] - check_vp[i]) > 1e-7:
                     #        print "   %s => p=%g, check_p=%g, diff=%g" % (str(gs),vp[i],check_vp[i],abs(vp[i]-check_vp[i]))
 
             if dprMxToFill is not None:
-                check_vdp = _np.concatenate( 
-                    [ self.dpr(spamLabel, gateString, False,clipTo) 
+                check_vdp = _np.concatenate(
+                    [ self.dpr(spamLabel, gateString, False,clipTo)
                       for gateString in gatestring_list ], axis=0 )
                 if _nla.norm(dprMxToFill[rowIndex] - check_vdp) > 1e-6:
-                    _warnings.warn("norm(vdp-check_vdp) = %g - %g = %g" % 
+                    _warnings.warn("norm(vdp-check_vdp) = %g - %g = %g" %
                           (_nla.norm(dprMxToFill[rowIndex]),
-                           _nla.norm(check_vdp), 
+                           _nla.norm(check_vdp),
                            _nla.norm(dprMxToFill[rowIndex] - check_vdp)))
 
             if hprMxToFill is not None:
-                check_vhp = _np.concatenate( 
+                check_vhp = _np.concatenate(
                     [ self.hpr(spamLabel, gateString, False,False,clipTo)
                       for gateString in gatestring_list ], axis=0 )
                 if _nla.norm(hprMxToFill[rowIndex] - check_vhp) > 1e-6:
-                    _warnings.warn("norm(vhp-check_vhp) = %g - %g = %g" % 
+                    _warnings.warn("norm(vhp-check_vhp) = %g - %g = %g" %
                              (_nla.norm(hprMxToFill[rowIndex]),
                               _nla.norm(check_vhp),
                               _nla.norm(hprMxToFill[rowIndex] - check_vhp)))
@@ -2087,14 +2087,14 @@ class GateSetCalculator(object):
 
         remainder_label = None
         sub_results = {}
-        for spamLabel,rowIndex in spam_label_rows.iteritems():
+        for spamLabel,rowIndex in spam_label_rows.items():
             if self._is_remainder_spamlabel(spamLabel):
                 remainder_label = spamLabel
                 continue
             sub_results[spamLabel] = calc_from_spamlabel_fn(spamLabel)
-    
+
         #compute remainder label
-        if remainder_label is not None: 
+        if remainder_label is not None:
             sums = None
             for spamLabel in self.spamdefs: #loop over ALL spam labels
                 if spamLabel == remainder_label: continue # except "remainder"
@@ -2114,7 +2114,7 @@ class GateSetCalculator(object):
     def _fill_sub_result(self, result_tup, spam_label_rows, calc_from_spamlabel_fn):
 
         remainder_index = None
-        for spamLabel,rowIndex in spam_label_rows.iteritems():
+        for spamLabel,rowIndex in spam_label_rows.items():
             if self._is_remainder_spamlabel(spamLabel):
                 remainder_index = rowIndex
                 continue
@@ -2123,9 +2123,9 @@ class GateSetCalculator(object):
                 if result_tup[i] is not None:
                     result_tup[i][rowIndex] = val
                 else: assert(val is None)
-    
+
         #compute remainder label
-        if remainder_index is not None: 
+        if remainder_index is not None:
             sums = None
             for spamLabel in self.spamdefs: #loop over ALL spam labels
                 if self._is_remainder_spamlabel(spamLabel): continue
@@ -2155,16 +2155,16 @@ class GateSetCalculator(object):
 
 
 
-    def bulk_fill_probs(self, mxToFill, spam_label_rows, 
+    def bulk_fill_probs(self, mxToFill, spam_label_rows,
                         evalTree, clipTo=None, check=False, comm=None):
 
-        """ 
-        Identical to bulk_probs(...) except results are 
+        """
+        Identical to bulk_probs(...) except results are
         placed into rows of a pre-allocated array instead
         of being returned in a dictionary.
 
         Specifically, the probabilities for all gate strings
-        and a given SPAM label are placed into the row of 
+        and a given SPAM label are placed into the row of
         mxToFill specified by spam_label_rows[spamLabel].
 
         Parameters
@@ -2175,7 +2175,7 @@ class GateSetCalculator(object):
           to the number of gate strings (i.e. evalTree.num_final_strings())
 
         spam_label_rows : dictionary
-          a dictionary with keys == spam labels and values which 
+          a dictionary with keys == spam labels and values which
           are integer row indices into mxToFill, specifying the
           correspondence between rows of mxToFill and spam labels.
 
@@ -2202,16 +2202,16 @@ class GateSetCalculator(object):
         """
 
         remainder_row_index = None
-        for spamLabel,rowIndex in spam_label_rows.iteritems():
+        for spamLabel,rowIndex in spam_label_rows.items():
             if self._is_remainder_spamlabel(spamLabel):
                 assert(self.assumeSumToOne) # ensure the remainder label is allowed
                 assert(remainder_row_index is None) # ensure there is at most one dummy spam label
-                remainder_row_index = rowIndex      
+                remainder_row_index = rowIndex
 
         #distribute procs across subtrees (groups if needed)
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = \
-            self._distribute_indices(range(len(subtrees)), comm)
+            self._distribute_indices(list(range(len(subtrees))), comm)
 
         #eval on each local subtree
         my_results = []
@@ -2237,14 +2237,14 @@ class GateSetCalculator(object):
             my_results.append(sub_results) #sub_results is a dict (keys = spam labels)
 
         #collect/gather results
-        self._gather_subtree_results(evalTree, spam_label_rows, subTreeOwners, 
-                                     mySubTreeIndices, (mxToFill,), 
+        self._gather_subtree_results(evalTree, spam_label_rows, subTreeOwners,
+                                     mySubTreeIndices, (mxToFill,),
                                      my_results, comm)
 
         if clipTo is not None:
             _np.clip( mxToFill, clipTo[0], clipTo[1], out=mxToFill ) # in-place clip
 
-        if check: 
+        if check:
             self._check(evalTree, spam_label_rows, mxToFill, clipTo=clipTo)
 
 
@@ -2253,14 +2253,14 @@ class GateSetCalculator(object):
                          comm=None, wrtFilter=None, wrtBlockSize=None):
 
         """
-        Identical to bulk_dprobs(...) except results are 
+        Identical to bulk_dprobs(...) except results are
         placed into rows of a pre-allocated array instead
         of being returned in a dictionary.
 
         Specifically, the probability derivatives for all gate
-        strings and a given SPAM label are placed into 
-        mxToFill[ spam_label_rows[spamLabel] ].  
-        Optionally, probabilities can be placed into 
+        strings and a given SPAM label are placed into
+        mxToFill[ spam_label_rows[spamLabel] ].
+        Optionally, probabilities can be placed into
         prMxToFill[ spam_label_rows[spamLabel] ]
 
         Parameters
@@ -2272,7 +2272,7 @@ class GateSetCalculator(object):
           and M is the length of the vectorized gateset.
 
         spam_label_rows : dictionary
-          a dictionary with keys == spam labels and values which 
+          a dictionary with keys == spam labels and values which
           are integer row indices into mxToFill, specifying the
           correspondence between rows of mxToFill and spam labels.
 
@@ -2288,7 +2288,7 @@ class GateSetCalculator(object):
         clipTo : 2-tuple, optional
           (min,max) to clip returned probability to if not None.
           Only relevant when prMxToFill is not None.
-           
+
         check : boolean, optional
           If True, perform extra checks within code to verify correctness,
           generating warnings when checks fail.  Used for testing, and runs
@@ -2298,13 +2298,13 @@ class GateSetCalculator(object):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is first performed over
            subtrees of evalTree (if it is split), and then over blocks (subsets)
-           of the parameters being differentiated with respect to (see 
+           of the parameters being differentiated with respect to (see
            wrtBlockSize).
 
         wrtFilter : list of ints, optional
           If not None, a list of integers specifying which parameters
           to include in the derivative dimension. This argument is used
-          internally for distributing calculations across multiple 
+          internally for distributing calculations across multiple
           processors and to control memory usage.  Cannot be specified
           in conjuction with wrtBlockSize.
 
@@ -2322,11 +2322,11 @@ class GateSetCalculator(object):
         """
 
         remainder_row_index = None
-        for spamLabel,rowIndex in spam_label_rows.iteritems():
+        for spamLabel,rowIndex in spam_label_rows.items():
             if self._is_remainder_spamlabel(spamLabel):
                 assert(self.assumeSumToOne) # ensure the remainder label is allowed
                 assert(remainder_row_index is None) # ensure there is at most one dummy spam label
-                remainder_row_index = rowIndex      
+                remainder_row_index = rowIndex
 
         if wrtFilter is not None:
             assert(wrtBlockSize is None) #Cannot specify both wrtFilter and wrtBlockSize
@@ -2343,7 +2343,7 @@ class GateSetCalculator(object):
         #distribute procs across subtrees (groups if needed)
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = \
-            self._distribute_indices(range(len(subtrees)), comm)
+            self._distribute_indices(list(range(len(subtrees))), comm)
 
         #eval on each local subtree
         my_results = []
@@ -2363,7 +2363,7 @@ class GateSetCalculator(object):
                 rho,E = self._rhoE_from_spamLabel(spamLabel)
 
                 vp = self._probs_from_rhoE(spamLabel, rho, E, Gs, scaleVals) \
-                    if (prMxToFill is not None) else None                
+                    if (prMxToFill is not None) else None
                 vdp = self._dprobs_from_rhoE(spamLabel, rho, E, Gs, dGs,
                                              scaleVals, wrtFilters)
                 _np.seterr(**old_err)
@@ -2389,33 +2389,33 @@ class GateSetCalculator(object):
 
                 #Compute all requested derivative columns at once
                 sub_results = self._compute_sub_result(spam_label_rows, calc_from_spamlabel)
-                
+
             else: # Divide columns into blocks of at most blkSize
                 assert(wrtFilter is None) #cannot specify both wrtFilter and blkSize
                 nBlks = self.tot_gate_params // blkSize
-                blocks = [ range(blkSize*i,blkSize*(i+1)) \
+                blocks = [ list(range(blkSize*i,blkSize*(i+1))) \
                                for i in range(nBlks) ]
                 if blkSize*nBlks < self.tot_gate_params:
-                    blocks.append(range(blkSize*nBlks,self.tot_gate_params))
+                    blocks.append(list(range(blkSize*nBlks,self.tot_gate_params)))
                     nBlks += 1
 
-                # Create placeholder dGs for *no* gate params to compute 
+                # Create placeholder dGs for *no* gate params to compute
                 #  derivatives wrt all spam parameters
-                dGs = _np.empty( (Gs.shape[0],0,self.dim,self.dim), 'd') 
+                dGs = _np.empty( (Gs.shape[0],0,self.dim,self.dim), 'd')
 
                 #Compute spam derivative columns and possibly probs
                 # (computation that is *not* divided into blocks)
                 sub_results = self._compute_sub_result(spam_label_rows, calc_from_spamlabel)
-                
+
                 #distribute derivative computation across blocks
                 myBlkIndices, blkOwners, blkComm = \
-                    self._distribute_indices(range(nBlks), mySubComm)
+                    self._distribute_indices(list(range(nBlks)), mySubComm)
                 if blkComm is not None:
                     _warnings.warn("Note: more CPUs than derivative columns!")
 
                 def calc_vdp_from_spamlabel(spamLabel,wrt):
                     old_err = _np.seterr(over='ignore')
-                    rho,E = self._rhoE_from_spamLabel(spamLabel)    
+                    rho,E = self._rhoE_from_spamLabel(spamLabel)
                     vdp = self._dprobs_from_rhoE(spamLabel, rho, E, Gs, dGs,
                                                  scaleVals, {'preps':[],'effects':[],
                                                              'gates':wrt })
@@ -2446,31 +2446,31 @@ class GateSetCalculator(object):
 
         #collect/gather results
         self._gather_subtree_results(evalTree, spam_label_rows, subTreeOwners,
-                                     mySubTreeIndices, (prMxToFill, mxToFill), 
+                                     mySubTreeIndices, (prMxToFill, mxToFill),
                                      my_results, comm)
 
         if clipTo is not None:
             _np.clip( prMxToFill, clipTo[0], clipTo[1], out=prMxToFill ) # in-place clip
 
-        if check: 
+        if check:
             self._check(evalTree, spam_label_rows, prMxToFill, mxToFill,
                         clipTo=clipTo)
 
 
 
-    def bulk_fill_hprobs(self, mxToFill, spam_label_rows, evalTree, 
+    def bulk_fill_hprobs(self, mxToFill, spam_label_rows, evalTree,
                          prMxToFill=None, derivMxToFill=None, clipTo=None,
                          check=False,comm=None, wrtFilter=None, wrtBlockSize=None):
 
         """
-        Identical to bulk_hprobs(...) except results are 
+        Identical to bulk_hprobs(...) except results are
         placed into rows of a pre-allocated array instead
         of being returned in a dictionary.
 
         Specifically, the probability hessians for all gate
-        strings and a given SPAM label are placed into 
-        mxToFill[ spam_label_rows[spamLabel] ].  
-        Optionally, probabilities and/or derivatives can be placed into 
+        strings and a given SPAM label are placed into
+        mxToFill[ spam_label_rows[spamLabel] ].
+        Optionally, probabilities and/or derivatives can be placed into
         prMxToFill[ spam_label_rows[spamLabel] ] and
         derivMxToFill[ spam_label_rows[spamLabel] ] respectively.
 
@@ -2483,7 +2483,7 @@ class GateSetCalculator(object):
           and M is the length of the vectorized gateset.
 
         spam_label_rows : dictionary
-          a dictionary with keys == spam labels and values which 
+          a dictionary with keys == spam labels and values which
           are integer row indices into mxToFill, specifying the
           correspondence between rows of mxToFill and spam labels.
 
@@ -2504,7 +2504,7 @@ class GateSetCalculator(object):
         clipTo : 2-tuple
           (min,max) to clip returned probability to if not None.
           Only relevant when prMxToFill is not None.
-           
+
         check : boolean, optional
           If True, perform extra checks within code to verify correctness,
           generating warnings when checks fail.  Used for testing, and runs
@@ -2514,7 +2514,7 @@ class GateSetCalculator(object):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is first performed over
            subtrees of evalTree (if it is split), and then over blocks (subsets)
-           of the parameters being differentiated with respect to (see 
+           of the parameters being differentiated with respect to (see
            wrtBlockSize).
 
         wrtBlockSize : int, optional
@@ -2531,11 +2531,11 @@ class GateSetCalculator(object):
         None
         """
         remainder_row_index = None
-        for spamLabel,rowIndex in spam_label_rows.iteritems():
+        for spamLabel,rowIndex in spam_label_rows.items():
             if self._is_remainder_spamlabel(spamLabel):
                 assert(self.assumeSumToOne) # ensure the remainder label is allowed
                 assert(remainder_row_index is None) # ensure there is at most one dummy spam label
-                remainder_row_index = rowIndex      
+                remainder_row_index = rowIndex
 
         if wrtFilter is not None:
             assert(wrtBlockSize is None) #Cannot specify both wrtFilter and wrtBlockSize
@@ -2552,7 +2552,7 @@ class GateSetCalculator(object):
         #distribute procs across subtrees (groups if needed)
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = \
-            self._distribute_indices(range(len(subtrees)), comm)
+            self._distribute_indices(list(range(len(subtrees))), comm)
 
         #eval on each local subtree
         my_results = []
@@ -2569,13 +2569,13 @@ class GateSetCalculator(object):
             scaleVals = self._scaleExp( scaleCache.take( finalIndxList ) )
             Gs  = prodCache.take(  finalIndxList, axis=0 ) #( nGateStrings, dim, dim )
             dGs = dProdCache.take( finalIndxList, axis=0 ) #( nGateStrings, nGateDerivCols, dim, dim )
-            
+
             def calc_from_spamlabel(spamLabel):
                 old_err = _np.seterr(over='ignore')
                 rho,E = self._rhoE_from_spamLabel(spamLabel)
 
                 vp = self._probs_from_rhoE(spamLabel, rho, E, Gs, scaleVals) \
-                    if (prMxToFill is not None) else None                
+                    if (prMxToFill is not None) else None
                 vdp = self._dprobs_from_rhoE(spamLabel, rho, E, Gs, dGs, scaleVals) \
                     if (derivMxToFill is not None) else None
                 vhp = self._hprobs_from_rhoE(spamLabel, rho, E, Gs, dGs, hGs,
@@ -2598,7 +2598,7 @@ class GateSetCalculator(object):
                 gatesFilter = wrtFilters['gates'] if (wrtFilters is not None) else None
                 hProdCache = self._compute_hproduct_cache(evalSubTree, prodCache, dProdCache,
                                                           scaleCache, mySubComm, gatesFilter)
-                hGs = hProdCache.take( finalIndxList, axis=0 ) 
+                hGs = hProdCache.take( finalIndxList, axis=0 )
                    #( nGateStrings, nGateDerivCols, len(wrtFilter), dim, dim )
 
                 #Compute all requested derivative columns at once
@@ -2607,26 +2607,26 @@ class GateSetCalculator(object):
             else: # Divide columns into blocks of at most blkSize
                 assert(wrtFilter is None) #cannot specify both wrtFilter and blkSize
                 nBlks = self.tot_gate_params // blkSize
-                blocks = [ range(blkSize*i,blkSize*(i+1)) \
+                blocks = [ list(range(blkSize*i,blkSize*(i+1))) \
                                for i in range(nBlks) ]
                 if blkSize*nBlks < self.tot_gate_params:
-                    blocks.append(range(blkSize*nBlks,self.tot_gate_params))
+                    blocks.append(list(range(blkSize*nBlks,self.tot_gate_params)))
                     nBlks += 1
 
-                # Create placeholder dGs for *no* gate params to compute 
+                # Create placeholder dGs for *no* gate params to compute
                 #  2nd derivatives wrt all spam parameters
-                hGs = _np.empty( (Gs.shape[0],self.tot_gate_params,0,self.dim,self.dim), 'd') 
-                wrtFilters = { 'preps':    range(self.tot_rho_params),
-                               'effects' : range(self.tot_e_params), 'gates' :   [ ] } 
+                hGs = _np.empty( (Gs.shape[0],self.tot_gate_params,0,self.dim,self.dim), 'd')
+                wrtFilters = { 'preps':    list(range(self.tot_rho_params)),
+                               'effects' : list(range(self.tot_e_params)), 'gates' :   [ ] }
                    #needed b/c _hprobs_from_rhoE(...) uses wrtFilters['gates']
 
                 #Compute spam derivative columns and possibly probs
                 # (computation that is *not* divided into blocks)
                 sub_results = self._compute_sub_result(spam_label_rows, calc_from_spamlabel)
-                
+
                 #distribute derivative computation across blocks
                 myBlkIndices, blkOwners, blkComm = \
-                    self._distribute_indices(range(nBlks), mySubComm)
+                    self._distribute_indices(list(range(nBlks)), mySubComm)
                 if blkComm is not None:
                     _warnings.warn("Note: more CPUs than derivative columns!")
 
@@ -2642,7 +2642,7 @@ class GateSetCalculator(object):
                 for iBlk in myBlkIndices:
                     hProdCache = self._compute_hproduct_cache(evalSubTree, prodCache, dProdCache,
                                                               scaleCache, blkComm, blocks[iBlk])
-                    hGs = hProdCache.take( finalIndxList, axis=0 ) 
+                    hGs = hProdCache.take( finalIndxList, axis=0 )
                     hG_results = self._compute_sub_result(
                         spam_label_rows, lambda sl: calc_vhp_from_spamlabel(sl,blocks[iBlk]))
                     blk_results.append( hG_results )
@@ -2661,23 +2661,23 @@ class GateSetCalculator(object):
             my_results.append(sub_results) #sub_results is a dict (keys = spam labels)
 
         #collect/gather results
-        self._gather_subtree_results(evalTree, spam_label_rows, 
+        self._gather_subtree_results(evalTree, spam_label_rows,
                                      subTreeOwners, mySubTreeIndices,
-                                     (prMxToFill, derivMxToFill, mxToFill), 
+                                     (prMxToFill, derivMxToFill, mxToFill),
                                      my_results, comm)
 
         if clipTo is not None:
             _np.clip( prMxToFill, clipTo[0], clipTo[1], out=prMxToFill ) # in-place clip
 
-        if check: 
-            self._check(evalTree, spam_label_rows, 
+        if check:
+            self._check(evalTree, spam_label_rows,
                         prMxToFill, derivMxToFill, mxToFill, clipTo)
 
 
 
     def bulk_pr(self, spamLabel, evalTree, clipTo=None,
                 check=False, comm=None):
-        """ 
+        """
         Compute the probabilities of the gate sequences given by evalTree,
         where initialization & measurement operations are always the same
         and are together specified by spamLabel.
@@ -2686,7 +2686,7 @@ class GateSetCalculator(object):
         ----------
         spamLabel : string
            the label specifying the state prep and measure operations
-        
+
         evalTree : EvalTree
            given by a prior call to bulk_evaltree.  Specifies the gate strings
            to compute the bulk operation on.
@@ -2704,7 +2704,7 @@ class GateSetCalculator(object):
            across multiple processors.  Distribution is performed over
            subtrees of evalTree (if it is split).
 
-           
+
         Returns
         -------
         numpy array
@@ -2718,10 +2718,10 @@ class GateSetCalculator(object):
 
 
     def bulk_probs(self, evalTree, clipTo=None, check=False, comm=None):
-        """ 
+        """
         Construct a dictionary containing the bulk-probabilities
         for every spam label (each possible initialization &
-        measurement pair) for each gate sequence given by 
+        measurement pair) for each gate sequence given by
         evalTree.
 
         Parameters
@@ -2742,11 +2742,11 @@ class GateSetCalculator(object):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.
 
-           
+
         Returns
         -------
         probs : dictionary
-            A dictionary such that 
+            A dictionary such that
             probs[SL] = bulk_pr(SL,evalTree,clipTo,check)
             for each spam label (string) SL.
         """
@@ -2759,11 +2759,11 @@ class GateSetCalculator(object):
                      for (i,spamLabel) in enumerate(self.spamdefs) }
 
 
-    def bulk_dpr(self, spamLabel, evalTree, 
+    def bulk_dpr(self, spamLabel, evalTree,
                  returnPr=False,clipTo=None,check=False,
                  comm=None, wrtFilter=None, wrtBlockSize=None):
         """
-        Compute the derivatives of the probabilities generated by a each gate 
+        Compute the derivatives of the probabilities generated by a each gate
         sequence given by evalTree, where initialization
         & measurement operations are always the same and are
         together specified by spamLabel.
@@ -2776,14 +2776,14 @@ class GateSetCalculator(object):
         evalTree : EvalTree
            given by a prior call to bulk_evaltree.  Specifies the gate strings
            to compute the bulk operation on.
-           
+
         returnPr : bool, optional
           when set to True, additionally return the probabilities.
 
         clipTo : 2-tuple, optional
            (min,max) to clip returned probability to if not None.
            Only relevant when returnPr == True.
-           
+
         check : boolean, optional
           If True, perform extra checks within code to verify correctness,
           generating warnings when checks fail.  Used for testing, and runs
@@ -2793,13 +2793,13 @@ class GateSetCalculator(object):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is first performed over
            subtrees of evalTree (if it is split), and then over blocks (subsets)
-           of the parameters being differentiated with respect to (see 
+           of the parameters being differentiated with respect to (see
            wrtBlockSize).
 
         wrtFilter : list of ints, optional
           If not None, a list of integers specifying which parameters
           to include in the derivative dimension. This argument is used
-          internally for distributing calculations across multiple 
+          internally for distributing calculations across multiple
           processors and to control memory usage.  Cannot be specified
           in conjuction with wrtBlockSize.
 
@@ -2833,19 +2833,19 @@ class GateSetCalculator(object):
         vp = _np.empty( (1,nGateStrings), 'd' ) if returnPr else None
 
         self.bulk_fill_dprobs(vdp, {spamLabel: 0}, evalTree,
-                              vp, clipTo, check, comm, 
+                              vp, clipTo, check, comm,
                               wrtFilter, wrtBlockSize)
         return (vdp[0], vp[0]) if returnPr else vdp[0]
 
 
-    def bulk_dprobs(self, evalTree, 
+    def bulk_dprobs(self, evalTree,
                     returnPr=False,clipTo=None,
                     check=False,comm=None,
                     wrtFilter=None, wrtBlockSize=None):
 
         """
         Construct a dictionary containing the bulk-probability-
-        derivatives for every spam label (each possible 
+        derivatives for every spam label (each possible
         initialization & measurement pair) for each gate
         sequence given by evalTree.
 
@@ -2854,14 +2854,14 @@ class GateSetCalculator(object):
         evalTree : EvalTree
            given by a prior call to bulk_evaltree.  Specifies the gate strings
            to compute the bulk operation on.
-           
+
         returnPr : bool, optional
           when set to True, additionally return the probabilities.
 
         clipTo : 2-tuple, optional
            (min,max) to clip returned probability to if not None.
            Only relevant when returnPr == True.
-           
+
         check : boolean, optional
           If True, perform extra checks within code to verify correctness,
           generating warnings when checks fail.  Used for testing, and runs
@@ -2871,13 +2871,13 @@ class GateSetCalculator(object):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is first performed over
            subtrees of evalTree (if it is split), and then over blocks (subsets)
-           of the parameters being differentiated with respect to (see 
+           of the parameters being differentiated with respect to (see
            wrtBlockSize).
 
         wrtFilter : list of ints, optional
           If not None, a list of integers specifying which parameters
           to include in the derivative dimension. This argument is used
-          internally for distributing calculations across multiple 
+          internally for distributing calculations across multiple
           processors and to control memory usage.  Cannot be specified
           in conjuction with wrtBlockSize.
 
@@ -2893,7 +2893,7 @@ class GateSetCalculator(object):
         Returns
         -------
         dprobs : dictionary
-            A dictionary such that 
+            A dictionary such that
             ``dprobs[SL] = bulk_dpr(SL,evalTree,gates,G0,SPAM,SP0,returnPr,clipTo,check)``
             for each spam label (string) SL.
         """
@@ -2921,21 +2921,21 @@ class GateSetCalculator(object):
 
 
 
-    def bulk_hpr(self, spamLabel, evalTree, 
+    def bulk_hpr(self, spamLabel, evalTree,
                  returnPr=False,returnDeriv=False,
                  clipTo=None,check=False,comm=None,
                  wrtFilter=None, wrtBlockSize=None):
 
         """
-        Compute the 2nd derivatives of the probabilities generated by a each gate 
-        sequence given by evalTree, where initialization & measurement 
+        Compute the 2nd derivatives of the probabilities generated by a each gate
+        sequence given by evalTree, where initialization & measurement
         operations are always the same and are together specified by spamLabel.
 
         Parameters
         ----------
         spamLabel : string
           the label specifying the state prep and measure operations
-                   
+
         evalTree : EvalTree
           given by a prior call to bulk_evaltree.  Specifies the gate strings
           to compute the bulk operation on.
@@ -2949,7 +2949,7 @@ class GateSetCalculator(object):
         clipTo : 2-tuple, optional
           (min,max) to clip returned probability to if not None.
           Only relevant when returnPr == True.
-           
+
         check : boolean, optional
           If True, perform extra checks within code to verify correctness,
           generating warnings when checks fail.  Used for testing, and runs
@@ -2959,7 +2959,7 @@ class GateSetCalculator(object):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is first performed over
            subtrees of evalTree (if it is split), and then over blocks (subsets)
-           of the parameters being differentiated with respect to (see 
+           of the parameters being differentiated with respect to (see
            wrtBlockSize).
 
         wrtFilter : list of ints, optional
@@ -2981,7 +2981,7 @@ class GateSetCalculator(object):
         Returns
         -------
         hessians : numpy array
-            a S x M x M array, where 
+            a S x M x M array, where
 
             - S == the number of gate strings
             - M == the length of the vectorized gateset
@@ -2995,7 +2995,7 @@ class GateSetCalculator(object):
             w.r.t. the j-th gateset parameter.
 
         probabilities : numpy array
-            only returned if returnPr == True.  A length-S array 
+            only returned if returnPr == True.  A length-S array
             containing the probabilities for each gate string.
         """
         nGateStrings = evalTree.num_final_strings()
@@ -3016,14 +3016,14 @@ class GateSetCalculator(object):
 
 
 
-    def bulk_hprobs(self, evalTree, 
+    def bulk_hprobs(self, evalTree,
                     returnPr=False,returnDeriv=False,clipTo=None,
                     check=False,comm=None,
                     wrtFilter=None, wrtBlockSize=None):
 
         """
         Construct a dictionary containing the bulk-probability-
-        Hessians for every spam label (each possible 
+        Hessians for every spam label (each possible
         initialization & measurement pair) for each gate
         sequence given by evalTree.
 
@@ -3032,7 +3032,7 @@ class GateSetCalculator(object):
         evalTree : EvalTree
            given by a prior call to bulk_evaltree.  Specifies the gate strings
            to compute the bulk operation on.
-           
+
         returnPr : bool, optional
           when set to True, additionally return the probabilities.
 
@@ -3042,7 +3042,7 @@ class GateSetCalculator(object):
         clipTo : 2-tuple, optional
            (min,max) to clip returned probability to if not None.
            Only relevant when returnPr == True.
-           
+
         check : boolean, optional
           If True, perform extra checks within code to verify correctness,
           generating warnings when checks fail.  Used for testing, and runs
@@ -3052,7 +3052,7 @@ class GateSetCalculator(object):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is first performed over
            subtrees of evalTree (if it is split), and then over blocks (subsets)
-           of the parameters being differentiated with respect to (see 
+           of the parameters being differentiated with respect to (see
            wrtBlockSize).
 
         wrtFilter : list of ints, optional
@@ -3074,7 +3074,7 @@ class GateSetCalculator(object):
         Returns
         -------
         hprobs : dictionary
-            A dictionary such that 
+            A dictionary such that
             ``hprobs[SL] = bulk_hpr(SL,evalTree,gates,G0,SPAM,SP0,returnPr,returnDeriv,clipTo,check)``
             for each spam label (string) SL.
         """
@@ -3116,9 +3116,9 @@ class GateSetCalculator(object):
         column-by-column.
 
         This routine can be useful when memory constraints make constructing
-        the entire Hessian at once impractical, and one is able to compute 
+        the entire Hessian at once impractical, and one is able to compute
         reduce results from a single column of the Hessian at a time.  For
-        example, the Hessian of a function of many gate sequence probabilities 
+        example, the Hessian of a function of many gate sequence probabilities
         can often be computed column-by-column from the using the columns of
         the gate sequences.
 
@@ -3126,7 +3126,7 @@ class GateSetCalculator(object):
         Parameters
         ----------
         spam_label_rows : dictionary
-          a dictionary with keys == spam labels and values which 
+          a dictionary with keys == spam labels and values which
           are integer row indices into mxToFill, specifying the
           correspondence between rows of mxToFill and spam labels.
 
@@ -3140,25 +3140,25 @@ class GateSetCalculator(object):
            d12[iSpamLabel,iGateStr,p1,p2] = dP/d(p1)*dP/d(p2) where P is is
            the probability generated by the sequence and spam label indexed
            by iGateStr and iSpamLabel.  d12 has the same dimensions as the
-           Hessian, and turns out to be useful when computing the Hessian 
+           Hessian, and turns out to be useful when computing the Hessian
            of functions of the probabilities.
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is performed as in 
+           across multiple processors.  Distribution is performed as in
            bulk_product, bulk_dproduct, and bulk_hproduct.
 
         wrtFilter : list of ints, optional
           If not None, a list of integers specifying the indices of the
           parameters to include in the *2nd* derivative dimension, i.e.,
           which Hessian columns to compute.
-          
+
 
         Returns
         -------
         column_generator
-          A generator which, when iterated, yields an array of 
-          shape K x S x M x 1 numpy array (a Hessian column), where K is the 
+          A generator which, when iterated, yields an array of
+          shape K x S x M x 1 numpy array (a Hessian column), where K is the
           length of spam_label_rows, S is equal to the number of gate strings
           (i.e. evalTree.num_final_strings()), and M is the number of gateset
           parameters.  If bReturnDProbs12 == True, then two such arrays
@@ -3175,11 +3175,11 @@ class GateSetCalculator(object):
             wrtFilters = None
 
         remainder_row_index = None
-        for spamLabel,rowIndex in spam_label_rows.iteritems():
+        for spamLabel,rowIndex in spam_label_rows.items():
             if self._is_remainder_spamlabel(spamLabel):
                 assert(self.assumeSumToOne) # ensure the remainder label is allowed
                 assert(remainder_row_index is None) # ensure there is at most one dummy spam label
-                remainder_row_index = rowIndex      
+                remainder_row_index = rowIndex
 
         nGateStrings = evalTree.num_final_strings()
         nGateDerivCols = self.tot_gate_params
@@ -3221,7 +3221,7 @@ class GateSetCalculator(object):
                 self._hprobs_from_rhoE(spamLabel, rho, E, Gs, dGs, None,
                                        scaleVals, None, spamColsOnly=True)
             _np.seterr(**old_err)
-            return None, vdp, vhp, dGates_row1, dGates_row2 
+            return None, vdp, vhp, dGates_row1, dGates_row2
                    # None so fill_sub_result works correctly
 
         def calc_from_spamlabel_inner(spamLabel):
@@ -3229,10 +3229,10 @@ class GateSetCalculator(object):
 
             #Compute d2(probability)/dGates2 (see below) for single param
             old_err2 = _np.seterr(invalid='ignore', over='ignore')
-            d2pr_dgates2 = _np.squeeze( 
-                _np.dot( E, _np.dot( hGs, rho ) ), axis=(0,4) ) * scaleVals[:,None,None] 
+            d2pr_dgates2 = _np.squeeze(
+                _np.dot( E, _np.dot( hGs, rho ) ), axis=(0,4) ) * scaleVals[:,None,None]
                 # shape = (nGateStrings, nGateDerivCols, 1)
-            _np.seterr(**old_err2)  
+            _np.seterr(**old_err2)
             d2pr_dgates2[ _np.isnan(d2pr_dgates2) ] = 0
 
             return d2pr_dgates2
@@ -3246,10 +3246,10 @@ class GateSetCalculator(object):
         #for spamLabel,rowIndex in spam_label_rows.iteritems():
         #    if rowIndex == remainder_row_index: continue #skip remainder label
         #    (dprobs[rowIndex], hessianSpamCols[rowIndex],
-        #    dGates_row1[rowIndex], dGates_row2[rowIndex]) = calc_from_spamlabel(spamLabel)    
+        #    dGates_row1[rowIndex], dGates_row2[rowIndex]) = calc_from_spamlabel(spamLabel)
 
         ##compute remainder label
-        #if remainder_row_index is not None: 
+        #if remainder_row_index is not None:
         #    hsum = dsum = r1sum = r2sum = None
         #    for spamLabel in self.spamdefs: #loop over ALL spam labels
         #        if self._is_remainder_spamlabel(spamLabel): continue # except "remainder"
@@ -3271,7 +3271,7 @@ class GateSetCalculator(object):
         #At this point, all spam columns have been computed, so yield them
         # (then we can de-allocate hessianSpamCols)
         spam_cols_to_yield = wrtFilters['spam'] \
-            if (wrtFilters is not None) else range(nSpamDerivCols)
+            if (wrtFilters is not None) else list(range(nSpamDerivCols))
 
         if bReturnDProbs12:
             for i in spam_cols_to_yield:
@@ -3284,9 +3284,9 @@ class GateSetCalculator(object):
 
         #print "TIME4 = ",(_time.time()-tS); sys.stdout.flush()
 
-        #Now compute one by one the remaining (gate-deriv) hessian columns 
+        #Now compute one by one the remaining (gate-deriv) hessian columns
         gate_cols_to_yield = wrtFilters['gates'] \
-            if (wrtFilters is not None) else range(nGateDerivCols)
+            if (wrtFilters is not None) else list(range(nGateDerivCols))
 
         for i in gate_cols_to_yield:
             #print "TIME0.75(%d/%d) = " % (i,len(gates_wrtFilter)),(_time.time()-tS); sys.stdout.flush()
@@ -3296,14 +3296,14 @@ class GateSetCalculator(object):
             hGs = hProdCache.take( finalIndxList, axis=0 ) #( nGateStrings, nGateDerivCols, 1, dim, dim )
             #print "TIME0.75(%d)B = " % i,(_time.time()-tS), " shape ",hProdCache.shape; sys.stdout.flush()
 
-            for spamLabel,rowIndex in spam_label_rows.iteritems():
+            for spamLabel,rowIndex in spam_label_rows.items():
                 if rowIndex == remainder_row_index: continue #skip remainder label
                 d2pr_dGates2 = calc_from_spamlabel_inner(spamLabel)
                 hessianSingleCol[rowIndex] = _np.concatenate( (dGates_row1[rowIndex,:,:,i:i+1],
                                                                dGates_row2[rowIndex,:,:,i:i+1],
                                                                d2pr_dGates2), axis=1 )
             #compute remainder label
-            if remainder_row_index is not None: 
+            if remainder_row_index is not None:
                 d2pr_sum =  None
                 for spamLabel in self.spamdefs: #loop over ALL spam labels
                     if self._is_remainder_spamlabel(spamLabel): continue # except "remainder"
@@ -3343,8 +3343,8 @@ class GateSetCalculator(object):
             the other gate set calculator to difference against.
 
         transformMx : numpy array, optional
-            if not None, transform this gateset by  
-            G => inv(transformMx) * G * transformMx, for each gate matrix G 
+            if not None, transform this gateset by
+            G => inv(transformMx) * G * transformMx, for each gate matrix G
             (and similar for rho and E vectors) before taking the difference.
             This transformation is applied only for the difference and does
             not alter the values stored in this gateset.
@@ -3357,7 +3357,7 @@ class GateSetCalculator(object):
 
         normalize : bool, optional
            if True (the default), the frobenius difference is defined by the
-           sum of weighted squared-differences divided by the number of 
+           sum of weighted squared-differences divided by the number of
            differences.  If False, this final division is not performed.
 
         Returns
@@ -3374,12 +3374,12 @@ class GateSetCalculator(object):
                     otherCalc.gates[gateLabel] )
                 nSummands += gateWeight * _np.size(self.gates[gateLabel])
 
-            for (lbl,rhoV) in self.preps.iteritems(): 
+            for (lbl,rhoV) in self.preps.items():
                 d += spamWeight * _gt.frobeniusdist2(_np.dot(Ti,rhoV),
                                                      otherCalc.preps[lbl])
                 nSummands += spamWeight * _np.size(rhoV)
 
-            for (lbl,Evec) in self.effects.iteritems():
+            for (lbl,Evec) in self.effects.items():
                 d += spamWeight * _gt.frobeniusdist2(_np.dot(
                     _np.transpose(T),Evec),otherCalc.effects[lbl])
                 nSummands += spamWeight * _np.size(Evec)
@@ -3395,12 +3395,12 @@ class GateSetCalculator(object):
                                                      otherCalc.gates[gateLabel])
                 nSummands += gateWeight * _np.size(self.gates[gateLabel])
 
-            for (lbl,rhoV) in self.preps.iteritems(): 
+            for (lbl,rhoV) in self.preps.items():
                 d += spamWeight * _gt.frobeniusdist2(rhoV,
                                       otherCalc.preps[lbl])
                 nSummands += spamWeight *  _np.size(rhoV)
 
-            for (lbl,Evec) in self.effects.iteritems():
+            for (lbl,Evec) in self.effects.items():
                 d += spamWeight * _gt.frobeniusdist2(Evec,otherCalc.effects[lbl])
                 nSummands += spamWeight * _np.size(Evec)
 
@@ -3410,7 +3410,7 @@ class GateSetCalculator(object):
                                                      otherCalc.povm_identity)
                 nSummands += spamWeight * _np.size(self.povm_identity)
 
-        if normalize and nSummands > 0: 
+        if normalize and nSummands > 0:
             return _np.sqrt( d / float(nSummands) )
         else:
             return _np.sqrt(d)
@@ -3428,8 +3428,8 @@ class GateSetCalculator(object):
             the other gate set to difference against.
 
         transformMx : numpy array, optional
-            if not None, transform this gateset by  
-            G => inv(transformMx) * G * transformMx, for each gate matrix G 
+            if not None, transform this gateset by
+            G => inv(transformMx) * G * transformMx, for each gate matrix G
             (and similar for rho and E vectors) before taking the difference.
             This transformation is applied only for the difference and does
             not alter the values stored in this gateset.
@@ -3442,7 +3442,7 @@ class GateSetCalculator(object):
         if T is not None:
             Ti = _nla.inv(T)
             dists = [ _gt.jtracedist( _np.dot(Ti,_np.dot(self.gates[gateLabel],
-                                      T)), otherCalc.gates[gateLabel] ) 
+                                      T)), otherCalc.gates[gateLabel] )
                        for gateLabel in self.gates ]
 
             for spamLabel in self.spamdefs:
@@ -3477,8 +3477,8 @@ class GateSetCalculator(object):
             the other gate set calculator to difference against.
 
         transformMx : numpy array, optional
-            if not None, transform this gateset by  
-            G => inv(transformMx) * G * transformMx, for each gate matrix G 
+            if not None, transform this gateset by
+            G => inv(transformMx) * G * transformMx, for each gate matrix G
             (and similar for rho and E vectors) before taking the difference.
             This transformation is applied only for the difference and does
             not alter the values stored in this gateset.
@@ -3490,7 +3490,7 @@ class GateSetCalculator(object):
         T = transformMx
         if T is not None:
             Ti = _nla.inv(T)
-            dists = [ _gt.diamonddist( 
+            dists = [ _gt.diamonddist(
                     _np.dot(Ti,_np.dot(self.gates[gateLabel],T)),
                     otherCalc.gates[gateLabel] )
                       for gateLabel in self.gates ]
@@ -3499,7 +3499,7 @@ class GateSetCalculator(object):
                 spamGate = self._make_spamgate(spamLabel)
                 spamGate2 = otherCalc._make_spamgate(spamLabel)
                 if spamGate is not None and spamGate2 is not None:
-                    dists.append( _gt.diamonddist( 
+                    dists.append( _gt.diamonddist(
                             _np.dot(Ti,_np.dot(spamGate,T)),spamGate2 ) )
         else:
             dists = [ _gt.diamonddist(self.gates[gateLabel],
@@ -3513,6 +3513,3 @@ class GateSetCalculator(object):
                     dists.append( _gt.diamonddist(spamGate, spamGate2) )
 
         return max(dists)
-
-
-

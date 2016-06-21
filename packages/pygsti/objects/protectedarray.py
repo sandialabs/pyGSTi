@@ -1,28 +1,28 @@
 import numpy as _np
 
 class ProtectedArray(object):
-    """ 
-    A numpy ndarray-like class that allows certain elements to 
+    """
+    A numpy ndarray-like class that allows certain elements to
     be treated as read-only.
     """
-    
+
     def __init__(self, input_array, indicesToProtect=None):
         self.base = input_array
 
         #Get protected indices, a specified as:
         self.indicesToProtect = []
         if indicesToProtect is not None:
-            if not (isinstance(indicesToProtect, tuple) 
+            if not (isinstance(indicesToProtect, tuple)
                     or isinstance(indicesToProtect, list)):
                 indicesToProtect = (indicesToProtect,)
-            
+
             assert(len(indicesToProtect) <= len(self.base.shape))
             for ky,L in zip(indicesToProtect,self.base.shape):
                 if isinstance( ky, slice ):
-                    pindices = xrange(*ky.indices(L))
+                    pindices = range(*ky.indices(L))
                 elif isinstance( ky, int ):
                     i = ky+L if ky<0 else ky
-                    if i < 0 or i > L: 
+                    if i < 0 or i > L:
                         raise IndexError("index (%d) is out of range." % ky)
                     pindices = (i,)
                 elif isinstance( ky, list ):
@@ -52,7 +52,7 @@ class ProtectedArray(object):
     def __eq__(self,x):       return self.base == x
     def __len__(self):        return len(self.base)
     def __int__(self):        return int(self.base)
-    def __long__(self):       return long(self.base)
+    def __long__(self):       return int(self.base)
     def __float__(self):      return float(self.base)
     def __complex__(self):    return complex(self.base)
 
@@ -71,12 +71,12 @@ class ProtectedArray(object):
         # set references to our memory as (entirely) read-only
         ret = getattr(self.__dict__['base'],attr)
         if isinstance(ret, _np.ndarray) and ret.base is self.base:
-            ret.flags.writeable = False 
+            ret.flags.writeable = False
         return ret
 
-    def __getslice__(self, i, j): 
+    def __getslice__(self, i, j):
         #For special cases when getslice is still called, e.g. A[:]
-        return self.__getitem__(slice(i, j)) 
+        return self.__getitem__(slice(i, j))
 
     def __getitem__( self, key ) :
 
@@ -94,7 +94,7 @@ class ProtectedArray(object):
 
                 #Get requested indices
                 if isinstance( ky, slice ):
-                    indices = xrange(*ky.indices(L))
+                    indices = range(*ky.indices(L))
 
                     new_pindices = []
                     for ii,i in enumerate(indices):
@@ -109,13 +109,13 @@ class ProtectedArray(object):
 
                 elif isinstance( ky, int ):
                     i = ky+L if ky<0 else ky
-                    if i > L: 
+                    if i > L:
                         raise IndexError("The index (%d) is out of range." % ky)
 
                     nTotalInDim = 1
                     if i not in pindices: #single index that is unprotected => all unprotected
                         nUnprotectedInCurDim = 1 # a single unprotected index
-                    else: 
+                    else:
                         nUnprotectedInCurDim = 0
 
                 else: raise TypeError("Invalid index type: %s" % type(ky))
@@ -125,10 +125,10 @@ class ProtectedArray(object):
                 #if there exists a single dimension with no protected indices, then
                 # the whole array is writeable.
                 if nTotalInDim == nUnprotectedInCurDim:
-                    writeable = True 
+                    writeable = True
                     new_indicesToProtect = None
                     break
-                    
+
             else: #if we didn't break b/c of above block, which means each dim has
                   # at least one protected index
 
@@ -145,7 +145,7 @@ class ProtectedArray(object):
                     new_indicesToProtect = tuple(new_indicesToProtect)
 
         else: # (if nothing is protected)
-            writeable = True 
+            writeable = True
             new_indicesToProtect = None
 
         ret = _np.ndarray.__getitem__(self.base,key)
@@ -170,21 +170,21 @@ class ProtectedArray(object):
 
                 #Get requested indices
                 if isinstance( ky, slice ):
-                    indices = xrange(*ky.indices(L))
+                    indices = range(*ky.indices(L))
                     if any(i in pindices for i in indices):
                         protectionViolation.append(True)
                     else: protectionViolation.append(False)
 
                 elif isinstance( ky, int ):
                     i = ky+L if ky<0 else ky
-                    if i > L: 
+                    if i > L:
                         raise IndexError("The index (%d) is out of range." % ky)
                     protectionViolation.append( i in pindices )
 
                 else: raise TypeError("Invalid index type: %s" % type(ky))
-            
+
             if all(protectionViolation): #assigns to a protected index in each dim
-                raise ValueError("**assignment destination is read-only")                        
+                raise ValueError("**assignment destination is read-only")
         return self.base.__setitem__(key,val)
 
 
@@ -204,7 +204,7 @@ class ProtectedArray(object):
 #        createFn, args, state = _np.ndarray.__reduce__(self)
 #        new_state = state + (self.__dict__,)
 #        return (createFn, args, new_state)
-#    
+#
 #    def __setstate__(self, state):
 #        """ Pickle plumbing. """
 #        _np.ndarray.__setstate__(self,state[0:-1])
@@ -213,22 +213,22 @@ class ProtectedArray(object):
     #def __array_prepare__(self, out_arr, context=None):
     #    print "PREPARE: ", type(out_arr)
     #    return _np.asarray(out_arr)
-        
+
     #def __array_finalize__(self, obj):
     #    if obj is None: return # let __new__ handle flags
     #    #Note: can't condition off .base since it's not set yet...
     #    #bNone = obj.base is None
     #    print "FINALIZE"
-    #    
+    #
     #    print "FINALIZE obj = ",type(obj)
     #    print "FINALIZE self = ",type(self)
-    #    
+    #
     #    #self.flags.writeable = False #protect by default (in case getitem misses anything)
     #    self.flags.writeable = True  #un-protect by default.  We'd like to be able to control
-    #      #this better, but if we set to False, then operations like flatten() can't work at 
+    #      #this better, but if we set to False, then operations like flatten() can't work at
     #      # all.  Seems to be some numpy inconsistencies in this implementation...
     #    self.indicesToProtect = None #default, in case getitem misses anything
-        
+
     #def flatten(self, order='C'):
     #    ret = _np.ndarray.flatten(self, order)
     #    self.writeable = True
@@ -242,6 +242,3 @@ class ProtectedArray(object):
     #def copy(self):
     #    print "COPY!!"
     #    return ProtectedArray(_np.asarray(self),self.indicesToProtect)
-
-
-

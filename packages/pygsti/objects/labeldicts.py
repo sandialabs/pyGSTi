@@ -1,14 +1,14 @@
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 import collections as _collections
 import numpy as _np
 import warnings as _warnings
 
-import spamvec as _sv
-import gate as _gate
+from . import spamvec as _sv
+from . import gate as _gate
 
 class PrefixOrderedDict(_collections.OrderedDict):
     def __init__(self, prefix, items=[]):
@@ -25,7 +25,7 @@ class PrefixOrderedDict(_collections.OrderedDict):
     #Handled by derived classes
     #def __reduce__(self):
     #    items = [(k,v) for k,v in self.iteritems()]
-    #    return (PrefixOrderedDict, (self._prefix, items), None) 
+    #    return (PrefixOrderedDict, (self._prefix, items), None)
 
 
 
@@ -60,14 +60,14 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
 
         if isinstance(vec, _sv.SPAMVec):  #if we're given a SPAMVec object...
             #just replace or create vector
-            super(OrderedSPAMVecDict,self).__setitem__(key, vec) 
+            super(OrderedSPAMVecDict,self).__setitem__(key, vec)
 
         elif key in self: #if a SPAMVec object already exists...
             #try to set its value
             super(OrderedSPAMVecDict,self).__getitem__(key).set_vector(vec)
 
         else:
-            #otherwise, we've been given a non-SPAMVec-object that doesn't 
+            #otherwise, we've been given a non-SPAMVec-object that doesn't
             # exist yet, so use default creation flags to make one:
             if self.default_param == "TP":
                 vecObj = _sv.TPParameterizedSPAMVec(vec)
@@ -75,7 +75,7 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
                 vecObj = _sv.FullyParameterizedSPAMVec(vec)
             elif self.default_param == "static":
                 vecObj = _sv.StaticSPAMVec(vec)
-            else: 
+            else:
                 raise ValueError("Invalid default_param: %s" % self.default_param)
 
             super(OrderedSPAMVecDict,self).__setitem__(key, vecObj)
@@ -89,24 +89,24 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
         parent : GateSet
             The new parent GateSet, if one exists.  Typically, when copying
             an OrderedSPAMVecDict you want to reset the parent.
-        
+
         Returns
         -------
         OrderedSPAMVecDict
         """
         return OrderedSPAMVecDict(parent, self.default_param,
                            self.remainderLabel, self._prefix,
-                           [(lbl,val.copy()) for lbl,val in self.iteritems()])
+                           [(lbl,val.copy()) for lbl,val in self.items()])
 
     def __reduce__(self):
         #Call constructor to create object, but with parent == None to avoid
         # circular pickling of GateSets.  Must set parent separately.
-        items = [(k,v) for k,v in self.iteritems()]
-        return (OrderedSPAMVecDict, 
+        items = [(k,v) for k,v in self.items()]
+        return (OrderedSPAMVecDict,
                 (None, self.default_param,
                  self.remainderLabel, self._prefix, items), None)
 
-        
+
 
 
 
@@ -119,7 +119,7 @@ class OrderedGateDict(PrefixOrderedDict):
 
 
     def _check_dim(self, M):
-        if isinstance(M, _gate.Gate): 
+        if isinstance(M, _gate.Gate):
             gate_dim = M.dim
         else:
             try:
@@ -146,14 +146,14 @@ class OrderedGateDict(PrefixOrderedDict):
 
         if isinstance(M, _gate.Gate):  #if we're given a Gate object...
             #just replace or create vector
-            super(OrderedGateDict,self).__setitem__(key, M) 
+            super(OrderedGateDict,self).__setitem__(key, M)
 
         elif key in self: #if a Gate object already exists...
             #try to set its value
             super(OrderedGateDict,self).__getitem__(key).set_matrix(_np.asarray(M))
 
         else:
-            #otherwise, we've been given a non-Gate-object that doesn't 
+            #otherwise, we've been given a non-Gate-object that doesn't
             # exist yet, so use default creation flags to make one:
             if self.default_param == "TP":
                 gateObj = _gate.TPParameterizedGate(M)
@@ -161,8 +161,8 @@ class OrderedGateDict(PrefixOrderedDict):
                 gateObj = _gate.FullyParameterizedGate(M)
             elif self.default_param == "static":
                 gateObj = _gate.StaticGate(M)
-            else: 
-                raise ValueError("Invalid default_param: %s" % 
+            else:
+                raise ValueError("Invalid default_param: %s" %
                                  self.default_param)
 
             super(OrderedGateDict,self).__setitem__(key, gateObj)
@@ -176,20 +176,20 @@ class OrderedGateDict(PrefixOrderedDict):
         parent : GateSet, optional
             The new parent GateSet, if one exists.  Typically, when copying
             an OrderedGateDict you want to reset the parent.
-        
+
         Returns
         -------
         OrderedGateDict
         """
 
         return OrderedGateDict(parent, self.default_param, self._prefix,
-                           [(lbl,val.copy()) for lbl,val in self.iteritems()])
+                           [(lbl,val.copy()) for lbl,val in self.items()])
 
     def __reduce__(self):
         #Call constructor to create object, but with parent == None to avoid
         # circular pickling of GateSets.  Must set parent separately.
-        items = [(k,v) for k,v in self.iteritems()]
-        return (OrderedGateDict, 
+        items = [(k,v) for k,v in self.items()]
+        return (OrderedGateDict,
                 (None, self.default_param, self._prefix, items), None)
 
 
@@ -207,9 +207,9 @@ class OrderedSPAMLabelDict(_collections.OrderedDict):
         if type(val) != tuple or len(val) != 2:
             raise KeyError("SPAM label values must be 2-tuples!")
 
-        prepLabel, effectLabel = val        
+        prepLabel, effectLabel = val
         if prepLabel == self.remainderLabel:
-            if effectLabel != self.remainderLabel: 
+            if effectLabel != self.remainderLabel:
                 raise ValueError("POVM label must always ==" +
                                  "%s when preparation " % self.remainderLabel +
                                  "label does")
@@ -221,9 +221,9 @@ class OrderedSPAMLabelDict(_collections.OrderedDict):
                             + "will generate probabilities equal to 1.0 minus "
                             + "the sum of all the probabilities of the other "
                             + "spam labels.")
-        
+
         # if inserted *value* already exists, clobber so values are unique
-        for k,v in self.iteritems():
+        for k,v in self.items():
             if val == v: del self[k]
 
         #TODO: perhaps add checks that value == (prepLabel,effectLabel) labels exist
@@ -233,8 +233,8 @@ class OrderedSPAMLabelDict(_collections.OrderedDict):
 
     def copy(self):
         return OrderedSPAMLabelDict(self.remainderLabel,
-                                    [(lbl,val) for lbl,val in self.iteritems()])
+                                    [(lbl,val) for lbl,val in self.items()])
 
     def __reduce__(self):
-        items = [(k,v) for k,v in self.iteritems()]
+        items = [(k,v) for k,v in self.items()]
         return (OrderedSPAMLabelDict, (self.remainderLabel, items), None)

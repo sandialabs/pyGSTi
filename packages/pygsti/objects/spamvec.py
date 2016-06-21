@@ -1,16 +1,16 @@
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" 
+"""
 Defines classes with represent SPAM operations, along with supporting
 functionality.
 """
 
 import numpy as _np
 from ..tools import matrixtools as _mt
-from protectedarray import ProtectedArray as _ProtectedArray
+from .protectedarray import ProtectedArray as _ProtectedArray
 
 def convert(spamvec, toType):
     """
@@ -43,13 +43,13 @@ def convert(spamvec, toType):
         else:
             return TPParameterizedSPAMVec( spamvec )
               # above will raise ValueError if conversion cannot be done
-    
+
     elif toType == "static":
         if isinstance(spamvec, StaticSPAMVec):
             return spamvec #no conversion necessary
         else:
             return StaticSPAMVec( spamvec )
-        
+
     else:
         raise ValueError("Invalid toType argument: %s" % toType)
 
@@ -66,7 +66,7 @@ class SPAMVec(object):
         """ Initialize a new SPAM Vector """
         self.base = vec
         self.dim = len(vec)
-    
+
     def get_dimension(self):
         """ Return the dimension of the gate matrix. """
         return self.dim
@@ -75,7 +75,7 @@ class SPAMVec(object):
     #def __str__(self):
     #    s = "Spam vector with length %d\n" % len(self.base)
     #    s += _mt.mx_to_string(self.base, width=4, prec=2)
-    #    return s 
+    #    return s
 
 
     #Pickle plumbing
@@ -91,12 +91,12 @@ class SPAMVec(object):
 
     def __setitem__(self, key, val):
         return self.base.__setitem__(key,val)
-        
+
     def __getattr__(self, attr):
         #use __dict__ so no chance for recursive __getattr__
         ret = getattr(self.__dict__['base'],attr)
         if(self.base.shape != (self.dim,1)):
-           raise ValueError("Cannot change dimension of Vector")
+            raise ValueError("Cannot change dimension of Vector")
         return ret
 
 
@@ -117,26 +117,26 @@ class SPAMVec(object):
     def __eq__(self,x):       return self.base == x
     def __len__(self):        return len(self.base)
     def __int__(self):        return int(self.base)
-    def __long__(self):       return long(self.base)
+    def __long__(self):       return int(self.base)
     def __float__(self):      return float(self.base)
     def __complex__(self):    return complex(self.base)
 
 
     @staticmethod
     def convert_to_vector(V):
-        """ 
+        """
         Static method that converts a vector-like object to a 2D numpy
         dim x 1 column array.
 
         Parameters
         ----------
         V : array_like
-        
+
         Returns
         -------
         numpy array
         """
-        if isinstance(V, SPAMVec): 
+        if isinstance(V, SPAMVec):
             vector = _np.asarray(V).copy()
         else:
             try:
@@ -151,7 +151,7 @@ class SPAMVec(object):
             if d2s is not None:
                 if any([len(row) != 1 for row in V]):
                     raise ValueError("%s is 2-dimensional but 2nd dim != 1" % V)
-                
+
                 typ = 'd' if _np.all(_np.isreal(V)) else 'complex'
                 vector = _np.array(V, typ) #vec is already a 2-D column vector
             else:
@@ -164,13 +164,13 @@ class SPAMVec(object):
 
 
 class StaticSPAMVec(SPAMVec):
-    """ 
+    """
     Encapsulates a SPAM vector that is completely fixed, or "static", meaning
       that is contains no parameters.
     """
 
     def __init__(self, vec):
-        """ 
+        """
         Initialize a StaticSPAMVec object.
 
         Parameters
@@ -199,7 +199,7 @@ class StaticSPAMVec(SPAMVec):
         """
         vec  = SPAMVec.convert_to_vector(vec)
         if(vec.size != self.dim):
-            raise ValueError("Argument must be length %d" % self.dim) 
+            raise ValueError("Argument must be length %d" % self.dim)
         self.base[:,:] = vec
 
 
@@ -237,7 +237,7 @@ class StaticSPAMVec(SPAMVec):
         Parameters
         ----------
         v : numpy array
-            The 1D vector of gate parameters.  Length 
+            The 1D vector of gate parameters.  Length
             must == num_params()
 
         Returns
@@ -248,7 +248,7 @@ class StaticSPAMVec(SPAMVec):
 
 
     def deriv_wrt_params(self):
-        """ 
+        """
         Construct a matrix whose columns are the derivatives of the SPAM vector
         with respect to a single param.  Thus, each column is of length
         get_dimension and there is one column per SPAM vector parameter.
@@ -256,7 +256,7 @@ class StaticSPAMVec(SPAMVec):
 
         Returns
         -------
-        numpy array 
+        numpy array
             Array of derivatives, shape == (dimension, num_params)
         """
         return _np.zeros((self.dim,0),'d')
@@ -265,7 +265,7 @@ class StaticSPAMVec(SPAMVec):
     def copy(self):
         """
         Copy this SPAM vector.
-        
+
         Returns
         -------
         StaticSPAMVec
@@ -278,7 +278,7 @@ class StaticSPAMVec(SPAMVec):
         s = "Static spam vector with length %d\n" % \
             len(self.base)
         s += _mt.mx_to_string(self.base, width=4, prec=2)
-        return s 
+        return s
 
     def __reduce__(self):
         return (StaticSPAMVec, (_np.empty((self.dim,1),'d'),), self.__dict__)
@@ -294,7 +294,7 @@ class FullyParameterizedSPAMVec(SPAMVec):
     """
 
     def __init__(self, vec):
-        """ 
+        """
         Initialize a FullyParameterizedSPAMOp object.
 
         Parameters
@@ -323,7 +323,7 @@ class FullyParameterizedSPAMVec(SPAMVec):
         """
         vec = SPAMVec.convert_to_vector(vec)
         if(vec.size != self.dim):
-            raise ValueError("Argument must be length %d" % self.dim) 
+            raise ValueError("Argument must be length %d" % self.dim)
         self.base[:,:] = vec
 
 
@@ -358,7 +358,7 @@ class FullyParameterizedSPAMVec(SPAMVec):
         Parameters
         ----------
         v : numpy array
-            The 1D vector of gate parameters.  Length 
+            The 1D vector of gate parameters.  Length
             must == num_params()
 
         Returns
@@ -369,14 +369,14 @@ class FullyParameterizedSPAMVec(SPAMVec):
 
 
     def deriv_wrt_params(self):
-        """ 
+        """
         Construct a matrix whose columns are the derivatives of the SPAM vector
         with respect to a single param.  Thus, each column is of length
         get_dimension and there is one column per SPAM vector parameter.
 
         Returns
         -------
-        numpy array 
+        numpy array
             Array of derivatives, shape == (dimension, num_params)
         """
         return _np.identity( self.dim, 'd' )
@@ -385,7 +385,7 @@ class FullyParameterizedSPAMVec(SPAMVec):
     def copy(self):
         """
         Copy this SPAM vector.
-        
+
         Returns
         -------
         FullyParameterizedSPAMVec
@@ -396,7 +396,7 @@ class FullyParameterizedSPAMVec(SPAMVec):
     def __str__(self):
         s = "Fully Parameterized spam vector with length %d\n" % len(self.base)
         s += _mt.mx_to_string(self.base, width=4, prec=2)
-        return s 
+        return s
 
     def __reduce__(self):
         return (FullyParameterizedSPAMVec, (_np.empty((self.dim,1),'d'),), self.__dict__)
@@ -417,21 +417,21 @@ class TPParameterizedSPAMVec(SPAMVec):
     """
     Encapsulates a SPAM vector that is fully parameterized except for the first
     element, which is frozen to be 1/(d**0.25).  This is so that, when the SPAM
-    vector is interpreted in the Pauli or Gell-Mann basis, the represented 
-    density matrix has trace == 1.  This restriction is frequently used in 
+    vector is interpreted in the Pauli or Gell-Mann basis, the represented
+    density matrix has trace == 1.  This restriction is frequently used in
     conjuction with trace-preserving (TP) gates.
     """
 
-    #Note: here we assume that the first basis element is (1/sqrt(x) * I), 
+    #Note: here we assume that the first basis element is (1/sqrt(x) * I),
     # where I the d-dimensional identity (where len(vector) == d**2). So
     # if Tr(basisEl*basisEl) == Tr(1/x*I) == d/x must == 1, then we must
-    # have x == d.  Thus, we multiply this first basis element by 
+    # have x == d.  Thus, we multiply this first basis element by
     # alpha = 1/sqrt(d) to obtain a trace-1 matrix, i.e., finding alpha
-    # s.t. Tr(alpha*[1/sqrt(d)*I]) == 1 => alpha*d/sqrt(d) == 1 => 
+    # s.t. Tr(alpha*[1/sqrt(d)*I]) == 1 => alpha*d/sqrt(d) == 1 =>
     # alpha = 1/sqrt(d) = 1/(len(vec)**0.25).
- 
+
     def __init__(self, vec):
-        """ 
+        """
         Initialize a TPParameterizedSPAMOp object.
 
         Parameters
@@ -443,7 +443,7 @@ class TPParameterizedSPAMVec(SPAMVec):
         vector = SPAMVec.convert_to_vector(vec)
         firstEl =  len(vector)**-0.25
         if not _np.isclose(vector[0,0], firstEl):
-            raise ValueError("Cannot create TPParameterizedSPAMVec: " + 
+            raise ValueError("Cannot create TPParameterizedSPAMVec: " +
                              "first element must equal %g!" % firstEl)
         SPAMVec.__init__(self, _ProtectedArray(vector,
                                 indicesToProtect=(0,0)))
@@ -467,9 +467,9 @@ class TPParameterizedSPAMVec(SPAMVec):
         vec = SPAMVec.convert_to_vector(vec)
         firstEl =  (self.dim)**-0.25
         if(vec.size != self.dim):
-            raise ValueError("Argument must be length %d" % self.dim) 
+            raise ValueError("Argument must be length %d" % self.dim)
         if not _np.isclose(vec[0,0], firstEl):
-            raise ValueError("Cannot create TPParameterizedSPAMVec: " + 
+            raise ValueError("Cannot create TPParameterizedSPAMVec: " +
                              "first element must equal %g!" % firstEl)
         self.base[1:,:] = vec[1:,:]
 
@@ -505,7 +505,7 @@ class TPParameterizedSPAMVec(SPAMVec):
         Parameters
         ----------
         v : numpy array
-            The 1D vector of gate parameters.  Length 
+            The 1D vector of gate parameters.  Length
             must == num_params()
 
         Returns
@@ -517,14 +517,14 @@ class TPParameterizedSPAMVec(SPAMVec):
 
 
     def deriv_wrt_params(self):
-        """ 
+        """
         Construct a matrix whose columns are the derivatives of the SPAM vector
         with respect to a single param.  Thus, each column is of length
         get_dimension and there is one column per SPAM vector parameter.
 
         Returns
         -------
-        numpy array 
+        numpy array
             Array of derivatives, shape == (dimension, num_params)
         """
         derivMx = _np.identity( self.dim, 'd' )
@@ -534,7 +534,7 @@ class TPParameterizedSPAMVec(SPAMVec):
     def copy(self):
         """
         Copy this SPAM vector.
-        
+
         Returns
         -------
         TPParameterizedSPAMVec
@@ -545,7 +545,7 @@ class TPParameterizedSPAMVec(SPAMVec):
     def __str__(self):
         s = "TP-Parameterized spam vector with length %d\n" % self.dim
         s += _mt.mx_to_string(self.base, width=4, prec=2)
-        return s 
+        return s
 
     def __reduce__(self):
         return (TPParameterizedSPAMVec, (self.base.copy(),), self.__dict__)
@@ -602,6 +602,3 @@ class TPParameterizedSPAMVec(SPAMVec):
 #            return self.base == x.base
 #        else:
 #            return self.base == x
-
-
-    
