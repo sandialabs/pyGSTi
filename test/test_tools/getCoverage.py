@@ -41,7 +41,7 @@ def get_single_coverage(name, package=''):
     if name.count('.') > 0:
         name = name.split('.', 1)[0] # remove file extensions
     filename = 'output/' + name + temp_coverage_file_name
-    tempfile = ' > %s 2>&1' % filename
+    tempfile = ' 2>&1 | tee %s' % filename
 
     return _read_coverage(commands + name + tempfile, filename)
 
