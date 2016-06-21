@@ -3,7 +3,7 @@
 
 cd ..
 
-for filename in `ls */*test*.py`; do
+for filename in `ls */test*.py`; do
     echo "============ Running $filename ==========================="
     time nosetests -v $filename
     echo ""
