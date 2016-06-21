@@ -16,7 +16,7 @@ class WriteAndLoadTestCase(unittest.TestCase):
         pygsti.objects.GateSet._strict = True
 
     def tearDown(self):
-        os.chdir(old)
+        os.chdir(self.old)
 
     def assertArraysAlmostEqual(self,a,b):
         self.assertAlmostEqual( np.linalg.norm(a-b), 0 )

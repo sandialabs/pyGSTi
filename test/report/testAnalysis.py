@@ -8,7 +8,7 @@ import sys
 import warnings
 
 try:
-    import Image, ImageChops
+    from PIL import Image, ImageChops # stackoverflow.com/questions/19230991/image-open-cannot-identify-image-file-python
     haveImageLibs = True
 except ImportError:
     haveImageLibs = False
