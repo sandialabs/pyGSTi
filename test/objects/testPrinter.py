@@ -127,7 +127,7 @@ class TestVerbosePrinter(unittest.TestCase):
         _test_output_with(self, _to_redirected_stream, VerbosityPrinter.build_printer(2))
 
 if __name__ == '__main__':
-    unittest.main()
+    unittest.main(verbosity=2, argv=[sys.argv[0]])
 
 
 '''

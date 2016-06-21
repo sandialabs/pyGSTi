@@ -1,6 +1,9 @@
 from __future__ import print_function
+from helpers    import tool
 import os, sys
+import subprocess
 
+#@tool
 def run_module(moduleName, precommand='python', postcommand=''):
     os.chdir(moduleName)
     for subdir, dirs, files in os.walk(os.getcwd()):
@@ -8,7 +11,7 @@ def run_module(moduleName, precommand='python', postcommand=''):
             if filename.endswith('.py') and filename.startswith('test'):
                 print('Running %s' % filename)
                 filepath = subdir + os.sep + filename
-                os.system('%s %s %s' % (precommand, filepath, postcommand))
+                subprocess.call([precommand, filepath, postcommand])
     os.chdir('..')
 
 if __name__ == "__main__":

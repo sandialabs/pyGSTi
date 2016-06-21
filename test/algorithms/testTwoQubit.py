@@ -12,7 +12,7 @@ class TwoQubitTestCase(unittest.TestCase):
         pygsti.objects.GateSet._strict = False
 
     def tearDown(self):
-        os.chdir(self.old)        
+        os.chdir(self.old)
 
     def runSilent(self, callable, *args, **kwds):
         orig_stdout = sys.stdout
@@ -56,4 +56,4 @@ class TestTwoQubitMethods(TwoQubitTestCase):
 
 
 if __name__ == "__main__":
-    unittest.main(verbosity=2)
+    unittest.main(verbosity=2, argv=[sys.argv[0]])

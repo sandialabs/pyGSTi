@@ -1,5 +1,5 @@
 from __future__ import print_function
-from tool       import tool
+from helpers    import tool
 import os
 import sys
 
@@ -62,22 +62,3 @@ if __name__ == "__main__":
         print(deps)
         if len(deps) > 0:
             print('Most Imported: %s' % max(deps, key=deps.get))
-
-
-'''
-if __name__ == "__main__":
-    dependencyList = []
-    for subdir, dirs, files in os.walk(os.getcwd()):
-	for filename in files:
-	    filepath = subdir + os.sep + filename
-	    if filepath.endswith('.py'):
-                dependencyList.append((filepath, find_dependencies(filepath)))
-
-    for item in dependencyList:
-        print('Dependencies for %s:' % item[0])
-        print(item[1])
-        if len(item[1]) > 0:
-            print('Most Imported: ', max(item[1], key=item[1].get))
-        print('')
-
-   '''
