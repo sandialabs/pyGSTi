@@ -41,9 +41,9 @@ def gen_package_info(extra_exclude, infoType='', changedOnly=''):
     if infoType == 'coverage':
         packageDict = { key : ('%s%% coverage' % packageDict[key]) for key in packageDict }
     elif infoType == 'benchmark':
-        packageDict = { key : ('%s seconds'    % packageDict[key]) for key in packageDict }
+        packageDict = { key : ('%s'            % packageDict[key]) for key in packageDict }
     else:
-        packageDict = { key : ('%s%% coverage | %s seconds' % packageDict[key]) for key in packageDict }
+        packageDict = { key : ('%s%% coverage | %s' % packageDict[key]) for key in packageDict }
 
     # ALWAYS write a table to file
     write_formatted_table('output/package%sinfo.out' % \

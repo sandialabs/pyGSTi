@@ -18,7 +18,9 @@ def benchmark_template(command, *args, **kwargs):
     @benchmark
     def template():
         return command(*args, **kwargs)
-    return template()
+    result, time = template()
+    time = '%s seconds | %s hours' % (time, (time/3600))
+    return result, time
 
 # A default function for benchmarking a set of tests
 def benchmark_package(packageName):

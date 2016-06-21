@@ -31,7 +31,7 @@ def gen_info(names, output=None, package=''):
             print('%s is neither a valid package, nor a valid filename' % name)
 
     # some nicer formatting before the table is written
-    infoDict = { key : ('%s%% coverage | %s seconds' % infoDict[key]) for key in infoDict }
+    infoDict = { key : ('%s%% coverage | %s' % infoDict[key]) for key in infoDict }
 
     if output != None:
         write_formatted_table(output, infoDict.items())
