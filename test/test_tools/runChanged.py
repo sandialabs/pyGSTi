@@ -1,5 +1,5 @@
 from __future__ import print_function
-from runModule  import run_module
+from runPackage import run_package
 from helpers    import *
 import subprocess
 import os
@@ -12,6 +12,7 @@ directory    = 'test/'
 cutoffDirs   = ['packages/pygsti/', 'ipython_notebooks/']
 exclude      = ['test']
 
+# the tool decorator makes a function act as if run from the test directory
 @tool
 def get_changed_files():
     oldwd = os.getcwd()
@@ -52,7 +53,7 @@ def run_changed_packages():
         print('No packages have changed since the last commit')
 
     for packageName in changedPackages:
-         run_module(packageName)
+         run_package(packageName)
 
 
 if __name__ == "__main__":

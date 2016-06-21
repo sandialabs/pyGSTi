@@ -34,9 +34,9 @@ def get_args(rawArgs):
     return args, kwargs
 
 # return a list of the immediate subdirectories
-def get_module_names():
-    _, moduleNames, _ = os.walk(os.getcwd()).next()
-    return moduleNames
+def get_package_names():
+    _, packageNames, _ = os.walk(os.getcwd()).next()
+    return packageNames
 
 # return a dict of filenames that correspond to full paths
 def get_file_names():
@@ -47,6 +47,7 @@ def get_file_names():
                 fileNames[filename] = subdir + os.sep + filename
     return fileNames
 
+# for the tools like runBenchmarks or genModuleInfoa
 def write_formatted_table(filename, items):
     with open(filename, 'w') as output:
         for a, b in items:

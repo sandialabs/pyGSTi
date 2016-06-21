@@ -3,6 +3,15 @@ from helpers    import *
 import os, sys
 import subprocess
 
+'''
+A tool for generating a coverage file and then reading the result - optionally returning the result or outputting to a file
+
+usage: $ python getCoverage.py testAlgorithms.py construction --output=coverage.out --package=pygsti
+  (generate coverage info for testAlgorithms.py and the construction package, sending the result to coverage.out)
+
+(This is mostly collection of helper functions for the genInfo/genPackageInfo scripts)
+'''
+
 temp_coverage_file_name = '_coverage.out'
 
 def _read_coverage(command, filename):
@@ -19,7 +28,8 @@ def _read_coverage(command, filename):
                 percent = 0 # if the percent is invalid/cannot be parsed
     return percent
 
-# assumes name is either a module or an absolute path to a file
+# assumes name is either a package or an absolute path to a file
+# the tool decorator makes the function act as if it were in the test directory
 @tool
 def get_single_coverage(name, package=''):
     #nosetests -v --with-coverage --cover-package=pygsti --cover-erase */test*.py > coverage_tests_serial.out 2>&1
@@ -35,21 +45,22 @@ def get_single_coverage(name, package=''):
 
     return _read_coverage(commands + name + tempfile, filename)
 
+# the tool decorator makes the function act as if it were in the test directory
 @tool
 def get_coverage(names, output=None, package=''):
-    fileNames   = get_file_names()
-    moduleNames = get_module_names()
+    fileNames    = get_file_names()
+    packageNames = get_package_names()
 
     coverageDict = {}
 
     for name in names:
-        if name in moduleNames:
+        if name in packageNames:
             coverageDict[name] = get_single_coverage(name, package)
         elif name in fileNames:
             # give the full pathname to read_coverage if name is a filename
             coverageDict[name] = get_single_coverage(fileNames[name])
         else:
-            print('%s is neither a valid modulename, nor a valid filename' % name)
+            print('%s is neither a valid package, nor a valid filename' % name)
 
     if output != None:
         write_formatted_table(output, coverageDict.items())
