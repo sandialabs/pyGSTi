@@ -1,5 +1,5 @@
 from __future__  import print_function
-from run_package import run_package
+from runPackage import run_package
 from benchmarks  import benchmark
 from helpers     import *
 from getCoverage import get_single_coverage

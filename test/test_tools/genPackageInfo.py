@@ -1,6 +1,7 @@
 from __future__   import print_function
 from helpers      import *
 from runBenchmark import *
+from runChanged   import get_changed_test_packages
 import os, sys
 
 exclude = ['benchmarks', 'output', 'cmp_chk_files', 'temp_test_files', 'Tutorials', 'test_tools']
@@ -20,11 +21,14 @@ optionally, the argument --infoType='' can be sent as either:
 
 #the tool decorator makes the function act as if it were run from the test directory
 @tool
-def gen_package_info(extra_exclude, infoType=''):
+def gen_package_info(extra_exclude, infoType='', changedOnly=''):
     # build the full list of excluded packages
     excludes = exclude + extra_exclude
     packageDict = {}
-    packageNames = [name for name in get_package_names() if name not in excludes]
+    if changedOnly == 'True':
+        packageNames = [name for name in get_changed_test_packages() if name not in excludes]
+    else:
+        packageNames = [name for name in get_package_names() if name not in excludes]
 
     for name in packageNames:
         if infoType   == 'coverage':

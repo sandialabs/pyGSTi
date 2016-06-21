@@ -26,6 +26,7 @@ def _read_coverage(command, filename):
                 percent = int(percent)
             except:
                 percent = 0 # if the percent is invalid/cannot be parsed
+    subprocess.call(['mv', '.coverage', (filename.split('.', 1)[0] + '.coverage')])
     return percent
 
 # assumes name is either a package or an absolute path to a file
@@ -37,10 +38,10 @@ def get_single_coverage(name, package=''):
     package  = 'pygsti' + ('.%s' % package if package != '' else '')
     commands = 'nosetests -v --with-coverage --cover-package=%s --cover-erase ' % package
     if name.count('/') > 0:
-        name = name.rsplit('/', 1)[1] # get the filename without full path
-    if name.count('.') > 0:
-        name = name.split('.', 1)[0] # remove file extensions
-    filename = 'output/' + name + temp_coverage_file_name
+        shortname = name.rsplit('/', 1)[1] # get the filename without full path
+    if shortname.count('.') > 0:
+        shortname = shortname.split('.', 1)[0] # remove file extensions
+    filename = 'output/' + shortname + temp_coverage_file_name
     tempfile = ' 2>&1 | tee %s' % filename
 
     return _read_coverage(commands + name + tempfile, filename)
@@ -58,7 +59,7 @@ def get_coverage(names, output=None, package=''):
             coverageDict[name] = get_single_coverage(name, package)
         elif name in fileNames:
             # give the full pathname to read_coverage if name is a filename
-            coverageDict[name] = get_single_coverage(fileNames[name])
+            coverageDict[name] = get_single_coverage(fileNames[name], package)
         else:
             print('%s is neither a valid package, nor a valid filename' % name)
 
