@@ -1,11 +1,11 @@
-from __future__ import print_function
-from .helpers    import tool
+from __future__ import print_function 
+from helpers    import tool 
 import os, sys
 import subprocess
 
 #tool makes the function act as if run from the test directory
 @tool
-def run_package(packageName, precommand='python', postcommand=''):
+def run_package(packageName, precommand='python3', postcommand=''):
     os.chdir(packageName)
     for subdir, dirs, files in os.walk(os.getcwd()):
         for filename in files:

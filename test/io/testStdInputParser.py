@@ -4,6 +4,7 @@ import pyparsing
 import pygsti
 import numpy as np
 import os
+import sys
 
 class StdInputParserTestCase(unittest.TestCase):
 
