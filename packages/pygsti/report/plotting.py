@@ -2185,7 +2185,7 @@ def focused_mc2gst_gatesets(gateStrings, dataset, specs, startGateset,
         GateSet containing the LSGST estimate of that gate string stored under
         the gate label "GsigmaLbl".
     """
-    printer = VerbosityPrinter.build_printer(verbosity)
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
     focusedLSGSTgatesets = {}
     printer.log("--- Focused LSGST precomputation ---")
     for i,sigma in enumerate(gateStrings):

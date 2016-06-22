@@ -536,7 +536,7 @@ class TestReport(ReportTestCase):
             for x in results.tables: # cannot __iter__
                 print(x)
         with self.assertRaises(NotImplementedError):
-            for x in results.tables.items(): # cannot iter
+            for x in results.tables.iteritems(): # cannot iter
                 print(x)
         with self.assertRaises(NotImplementedError):
             for x in list(results.tables.values()): # cannot iter
