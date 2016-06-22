@@ -2166,12 +2166,12 @@ class GateSet(object):
           by ``(1.0-spam_noise)``).
 
         max_gate_noise : float, optional
-          specified instead of ``gate_noise``; apply a random depolarization
+          specified instead of `gate_noise`; apply a random depolarization
           with maximum strength ``1-max_gate_noise`` to each gate in the
           gateset.
     
         max_spam_noise : float, optional
-          specified instead of ``spam_noise``; apply a random depolarization
+          specified instead of `spam_noise`; apply a random depolarization
           with maximum strength ``1-max_spam_noise`` to SPAM vector in the
           gateset.
     
