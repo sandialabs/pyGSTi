@@ -255,6 +255,7 @@ def optimize_integer_fiducials_slack(gateset, fidList,
                               returnAll=False, 
                               forceEmpty = True, forceEmptyScore = 1e100,
                               fixedNum = None,
+                              threshold=1e6,
 #                              forceMinScore = 1e100,
                               verbosity=1):
     """
@@ -330,6 +331,12 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         When forceMin is True, what score to assign any fiducial set
         that does not contain at least forceMinNum fiducials.
 
+    threshold : float, optional (default is 1e6)
+        Entire fiducial list is first scored before attempting to select fiducials; if score
+        is above threshold, then fiducial selection will auto-fail.  If final fiducial set
+        selected is above threshold, then fiducial selection will print a warning, but 
+        return selected set.
+
     verbosity : int, optional
         Integer >= 0 indicating the amount of detail to print.
 
@@ -356,6 +363,15 @@ def optimize_integer_fiducials_slack(gateset, fidList,
     elif scoreFunc == 'worst':
         def list_score(input_array):
             return 1./min(_np.abs(input_array))
+
+    initial_test = test_fiducial_list(gateset,fidList,prepOrMeas,scoreFunc=scoreFunc,returnAll=True,threshold=threshold)
+    if initial_test[0]:
+        print "Complete initial fiducial set succeeds."
+        print "Now searching for best fiducial set."
+    else:
+        print  "Complete initial fiducial set FAILS."
+        print  "Aborting search."
+        return None
 
     lessWeightOnly = False  #Initially allow adding to weight. -- maybe make this an argument??
 
@@ -535,6 +551,12 @@ def optimize_integer_fiducials_slack(gateset, fidList,
     for index,val in enumerate(weights):
         if val==1:
             goodFidList.append(fidList[index])
+
+    final_test = test_fiducial_list(gateset,goodFidList,prepOrMeas,scoreFunc=scoreFunc,returnAll=True,threshold=threshold)
+    if initial_test[0]:
+        print "Final fiducial set succeeds."
+    else:
+        print  "WARNING: Final fiducial set FAILS."
 
     if returnAll:
         return goodFidList, weights, scoreD
