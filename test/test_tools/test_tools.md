@@ -5,19 +5,23 @@ Most package info can be generated with the command:
 `$ python genPackageInfo.py `,  
 which takes excluded packages as arguments, and optionally the flags `--infoType` and `--changedOnly`  
 By default, information about both package coverage and time taken is generated for every package:
-Package | Coverage | Time
---- | --- | ---
-objects| 77% | 83.24 s
-drivers | 99% | 1936 s
+
+| Package       | Coverage      | Time  |
+| ------------- |:-------------:| -----:|
+| objects       | 77%           | 83.24s |
+| drivers       | 99%           | 1936s |
+
 However,
 `python genPackageInfo.py report drivers` would generate info for every package except report and drivers  
 
 The flag `infoType` can be set to either `coverage` or `benchmark`, so the command:  
 `python genPackageInfo.py --infoType=coverage` would only generate coverage information, ex:
-Package | Coverage
---- | ---
-objects| 77%
-drivers | 99%
+
+| Package       | Coverage      |
+| ------------- |:-------------:|
+| objects       | 77%           |
+| drivers       | 99%           |
+
 (By default, this is sent to `objects/moduleinfo.out`)
 a single    
 
