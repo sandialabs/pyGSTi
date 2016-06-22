@@ -1310,7 +1310,9 @@ class Results(object):
             templateFilename = _os.path.join( self.options.template_path,
                                               templateFilename )
 
-        template = open(templateFilename,"r").read()
+        template = ''
+        with open(templateFilename, 'r') as templatefile:
+            template = templatefile.read()
         template = template.replace("{", "{{").replace("}", "}}") #double curly braces (for format processing)
 
         # Replace template field markers with `str.format` fields.
@@ -1318,7 +1320,8 @@ class Results(object):
 
         # Replace str.format fields with values and write to output file
         template = template.format(**qtys)
-        open(outputFilename,'w').write(template)
+        with open(outputFilename, 'w') as outputfile:
+            outputfile.write(template)
 
 
     def _getBaseStrDict(self, remove_dups = True):
