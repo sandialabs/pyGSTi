@@ -858,7 +858,7 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
         
     gateExpressions : list of strings
         A list of gate expressions, each corresponding to a gate label in gateLabels,
-        which determine what operation each gate performs (see documentation for build_gate).
+        which determine what operation each gate performs (see documentation for :py:meth:`build_gate`).
 
     prepLabels : list of string
         A list of labels for each created state preparation in the final gateset.  To
@@ -866,7 +866,7 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
 
     prepExpressions : list of strings
         A list of vector expressions for each state preparation vector (see documentation
-        for build_vector).
+        for :py:meth:`build_vector`).
 
     effectLabels : list of string
         A list of labels for each created and *parameterized* POVM effect in the final
@@ -874,7 +874,7 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
 
     effectExpressions : list of strings
         A list of vector expressions for each POVM effect vector (see documentation for
-        build_vector).
+        :py:meth:`build_vector`).
 
     spamdefs : dict
         A dictionary mapping spam labels to (prepLabel,ELabel) 2-tuples associating a 
@@ -894,7 +894,7 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
         - "pp"  = gate matrix operates on density mx expresses as sum of tensor-product of Pauli matrices
 
     parameterization : {"full","linear"}, optional
-        How to parameterize the gates of the resulting GateSet (see documentation for build_gate).
+        How to parameterize the gates of the resulting GateSet (see documentation for :py:meth:`build_gate`).
 
     Returns
     -------
