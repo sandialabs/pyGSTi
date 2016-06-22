@@ -417,11 +417,11 @@ def optimize_integer_fiducials_slack(gateset, fidList,
 #        print "Num bits:", numBits
 #        print "Num Fid Options:", hammingWeight
         code = write_fixed_hamming_weight_code(numBits,hammingWeight)
-        code_file = open('fiducialselection_temp_script.py','w')
-        code_file.writelines(code)
-        code_file.close()
+        with open('fiducialselection_temp_script.py','w') as code_file:
+            code_file.writelines(code)
         os.system('python fiducialselection_temp_script.py')
-        bitVecMat = pickle.load(open('fiducialselection_temp_pkl.pkl','r'))
+        with open('fiducialselection_temp_pkl.pkl','rb') as inputfile:
+            bitVecMat = pickle.load(inputfile, encoding='latin1')
         os.system('rm fiducialselection_temp_script.py')
         os.system('rm fiducialselection_temp_pkl.pkl')
         if forceEmpty:

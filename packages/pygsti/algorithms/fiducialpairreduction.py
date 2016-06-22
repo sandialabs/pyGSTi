@@ -145,7 +145,7 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
             if nRandom < nTotalPairCombos:
                 randIndices = _remove_duplicates(sorted(rand.randint(0,nTotalPairCombos,size=nRandom)))
             else:
-                randIndices = list(range(nTotalPairCombos))
+                randIndices = list(range(int(nTotalPairCombos)))
 
             def filterAll(it): #generator which filters iterator "it" using randIndices
                 nxt = 0

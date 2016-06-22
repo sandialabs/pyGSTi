@@ -870,7 +870,7 @@ def forbidden_prob(gateset, dataset):
     """
     forbidden_prob = 0
 
-    for gs,dsRow in dataset.items():
+    for gs,dsRow in dataset.iteritems():
         probs = gateset.probs(gs)
         for (spamLabel,p) in probs.items():
             if p < TOL:

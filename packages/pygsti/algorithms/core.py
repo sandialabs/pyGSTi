@@ -152,7 +152,7 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
         identityVec = guessGatesetForGauge.povm_identity
     if identityVec is None: #check again in case targetGateset.povm_identity == None
         for (lr,el) in list(spamDict.keys()):
-            if el == remainderLabel and rl != remainderLabel: #then identityVec is required b/c this spamlabel represents Evec = identityVec - sum(other_Evecs)
+            if el == remainderLabel and lr != remainderLabel: #then identityVec is required b/c this spamlabel represents Evec = identityVec - sum(other_Evecs)
                 raise ValueError("do_lgst cannot determine the identity vector from supplied parameters")
         #otherwise identityVec is not required, so OK if it's None
 
