@@ -862,7 +862,7 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
 
     prepLabels : list of string
         A list of labels for each created state preparation in the final gateset.  To
-        conform with conventions these shames should begin with "rho".
+        conform with conventions these labels should begin with "rho".
 
     prepExpressions : list of strings
         A list of vector expressions for each state preparation vector (see documentation
@@ -870,7 +870,7 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
 
     effectLabels : list of string
         A list of labels for each created and *parameterized* POVM effect in the final
-        gateset.  To conform with conventions these shames should begin with "E".
+        gateset.  To conform with conventions these labels should begin with "E".
 
     effectExpressions : list of strings
         A list of vector expressions for each POVM effect vector (see documentation for
