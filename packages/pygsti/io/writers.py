@@ -22,8 +22,9 @@ def write_parameter_file(filename, params):
     params: dict
         The parameters to save.
     """
-
-    return _json.dump( params, open(filename, "wb"), indent=4) # object_pairs_hook=_collections.OrderedDict
+    with open(filename, 'w') as output:
+        return _json.dump(params, output, indent=4)
+    #return _json.dump( params, open(filename, "wb"), indent=4) # object_pairs_hook=_collections.OrderedDict
 
 
 def write_empty_dataset(filename, gatestring_list,

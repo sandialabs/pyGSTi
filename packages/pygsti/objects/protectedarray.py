@@ -45,9 +45,10 @@ class ProtectedArray(object):
     def __rsub__(self,x):     return x - self.base
     def __mul__(self,x):      return self.base * x
     def __rmul__(self,x):     return x * self.base
-    def __div__(self,x):      return self.base / x
-    def __rdiv__(self,x):     return x / self.base
-    def __floordiv__(self,x): return self.base // x
+    def __truediv__(self, x):  return self.base / x
+    def __rtruediv__(self, x): return x / self.base
+    def __floordiv__(self,x):  return self.base // x
+    def __rfloordiv__(self,x): return x // self.base
     def __pow__(self,x):      return self.base ** x
     def __eq__(self,x):       return self.base == x
     def __len__(self):        return len(self.base)

@@ -3,7 +3,7 @@ import pickle
 import pygsti
 import numpy as np
 import warnings
-import os
+import os, sys
 
 class GateSetConstructionTestCase(unittest.TestCase):
 
@@ -444,7 +444,8 @@ IDENTITYVEC sqrt(2) 0 0 0
 SPAMLABEL plus = rho E
 SPAMLABEL minus = rho remainder
 """
-        open("../temp_test_files/Test_Gateset.txt","w").write(gateset4_txt)
+        with open("../temp_test_files/Test_Gateset.txt","w") as output:
+            output.write(gateset4_txt)
         gateset4 = pygsti.io.load_gateset("../temp_test_files/Test_Gateset.txt")
 
         std_gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
@@ -573,7 +574,7 @@ SPAMLABEL minus = rho remainder
         gateset_spam = gateset.depolarize(spam_noise=0.1)
         #print gateset_spam
         self.assertAlmostEqual(np.dot(gateset['E0'].T,gateset['rho0']), 0)
-        self.assertAlmostEqual(np.dot(gateset_spam['E0'].T,gateset_spam['rho0']),0.095)
+        self.assertAlmostEqual(np.dot(gateset_spam['E0'].T,gateset_spam['rho0']), 0.095)
         self.assertArraysAlmostEqual(gateset_spam['rho0'], 1/np.sqrt(2)*np.array([1,0,0,0.9]).reshape(-1,1) )
         self.assertArraysAlmostEqual(gateset_spam['E0'], 1/np.sqrt(2)*np.array([1,0,0,-0.9]).reshape(-1,1) )
 

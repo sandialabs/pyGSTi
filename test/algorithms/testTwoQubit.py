@@ -1,5 +1,5 @@
 import unittest
-import os
+import os, sys
 
 class TwoQubitTestCase(unittest.TestCase):
 

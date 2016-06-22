@@ -4,7 +4,7 @@
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ Defines classes which represent gates, as well as supporting functions """
-from __future__ import print_function
+from __future__ import print_function, division
 
 
 
@@ -223,25 +223,26 @@ class Gate(object):
 
 
     #Mimic array behavior
-    def __pos__(self):        return self.base
-    def __neg__(self):        return -self.base
-    def __abs__(self):        return abs(self.base)
-    def __add__(self,x):      return self.base + x
-    def __radd__(self,x):     return x + self.base
-    def __sub__(self,x):      return self.base - x
-    def __rsub__(self,x):     return x - self.base
-    def __mul__(self,x):      return self.base * x
-    def __rmul__(self,x):     return x * self.base
-    def __div__(self,x):      return self.base / x
-    def __rdiv__(self,x):     return x / self.base
-    def __floordiv__(self,x): return self.base // x
-    def __pow__(self,x):      return self.base ** x
-    def __eq__(self,x):       return self.base == x
-    def __len__(self):        return len(self.base)
-    def __int__(self):        return int(self.base)
-    def __long__(self):       return int(self.base)
-    def __float__(self):      return float(self.base)
-    def __complex__(self):    return complex(self.base)
+    def __pos__(self):         return self.base
+    def __neg__(self):         return -self.base
+    def __abs__(self):         return abs(self.base)
+    def __add__(self,x):       return self.base + x
+    def __radd__(self,x):      return x + self.base
+    def __sub__(self,x):       return self.base - x
+    def __rsub__(self,x):      return x - self.base
+    def __mul__(self,x):       return self.base * x
+    def __rmul__(self,x):      return x * self.base
+    def __truediv__(self, x):  return self.base / x
+    def __rtruediv__(self, x): return x / self.base
+    def __floordiv__(self,x):  return self.base // x
+    def __rfloordiv__(self,x): return x // self.base
+    def __pow__(self,x):       return self.base ** x
+    def __eq__(self,x):        return self.base == x
+    def __len__(self):         return len(self.base)
+    def __int__(self):         return int(self.base)
+    def __long__(self):        return int(self.base)
+    def __float__(self):       return float(self.base)
+    def __complex__(self):     return complex(self.base)
 
 
 
@@ -469,7 +470,6 @@ class FullyParameterizedGate(Gate):
         """
         M2 = Gate.convert_to_matrix(M)
         Gate.__init__(self,M2)
-
 
     def set_matrix(self, M):
         """

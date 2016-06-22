@@ -26,7 +26,9 @@ def load_parameter_file(filename):
     dict
         The json file converted to a python dictionary.
     """
-    return _json.load( open(filename, "rb") )
+    with open(filename, 'r') as inputfile:
+        return _json.load(inputfile)
+    # return _json.load( open(filename, "rb") )
 
 def load_dataset(filename, cache=False):
     """

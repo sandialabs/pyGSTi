@@ -2,7 +2,7 @@ import unittest
 import copy
 import pygsti
 import numpy as np
-import os
+import os, sys
 
 class GateStringTestCase(unittest.TestCase):
 
@@ -241,8 +241,11 @@ class TestGateStringMethods(GateStringTestCase):
         self.assertEqual( s1, s6 )
         self.assertEqual( s1, s7 )
 
-        b1 = s1 < s2
-        b2 = s1 > s2
+
+        b1 = s1.__lt__(s2)
+        b2 = s1.__gt__(s2)
+        #b1 = s1 < s2
+        #b2 = s1 > s2
 
         with self.assertRaises(ValueError):
             s1[0] = 'Gx' #cannot set items - like a tuple they're read-only

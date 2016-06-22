@@ -2,7 +2,7 @@ import unittest
 import warnings
 import pickle
 import pygsti
-import os
+import os, sys
 from pygsti.construction import std1Q_XYI as std
 
 import numpy as np
