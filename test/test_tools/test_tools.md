@@ -28,3 +28,16 @@ The scripts `runBenchmark.py` and `getCoverage.py` can also be run to generate o
 `$ python getCoverage.py testAlgorithms.py construction --output=output/coverage.out --package=pygsti` would create a coverage file for both `testAlgorithms.py` and construction
 
 `$ python runBenchmark.py testPrinter.py io --output=output/bench.out` would create a benchmark file for `testPrinter.py` and the io package
+
+
+##### Automated testing speedups/improvements
+
+Two scripts, `runChanged.py` and `runPackage.py` offer tools to speed up testing:  
+Both scripts accept the flag `--lastFailed=True`, which, if a test has recently run, will only run the tests that previously failed.  
+ex `python runPackage.py io --lastFailed=True` would only run the tests that previously failed in the io test package
+
+Also, `runChanged.py` will only run tests covering packages that have changed since the latest commit (so, `python runChanged.py --lastFailed=True` would only run the tests that have failed in the packages that have been changed since the last commit)
+
+The lastFailed functionality stores a pickle file in each test package (``'last_failed.pkl'``), which outlines which tests have failed in the latest run
+
+lastFailed wont track any errors that belong to the unittest itself. For example, if a unittest relied on the `sys` module, but forgot to import it, the error would be unconnected to any of the test cases, and impossible to track.

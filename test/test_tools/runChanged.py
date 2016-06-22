@@ -46,7 +46,7 @@ def get_changed_packages(cutoffDirs=[], exclude=[], preCommand='../', endings=[]
     return changedPackages
 
 @tool
-def run_changed_packages(cutoffDirs=[], exclude=[], preCommand='../', endings=[]):
+def run_changed_packages(cutoffDirs=[], exclude=[], preCommand='../', endings=[], lastFailed=''):
     print('Trying to run changed packages...')
     changedPackages = get_changed_packages(cutoffDirs, exclude, preCommand, endings)
 
@@ -54,8 +54,9 @@ def run_changed_packages(cutoffDirs=[], exclude=[], preCommand='../', endings=[]
         print('No packages have changed since the last commit')
 
     for packageName in changedPackages:
-         run_package(packageName)
+         run_package(packageName, lastFailed=lastFailed)
 
 
 if __name__ == "__main__":
-    run_changed_packages()
+    args, kwargs = get_args(sys.argv)
+    run_changed_packages(*args, *kwargs)
