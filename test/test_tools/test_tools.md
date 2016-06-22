@@ -23,7 +23,6 @@ The flag `infoType` can be set to either `coverage` or `benchmark`, so the comma
 | drivers       | 99%           |
 
 (By default, this is sent to `objects/moduleinfo.out`)
-a single    
 
 When `changedOnly` is set to `True` (ex: `python genPackageInfo.py --changedOnly=True`), info for only the changed files will be generated
 
