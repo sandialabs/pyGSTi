@@ -425,7 +425,7 @@ class DataSet(object):
         """
         if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
         assert(self.get_spam_labels() == otherDataSet.get_spam_labels())
-        for (gateLabelString,dsRow) in otherDataSet.items():
+        for (gateLabelString,dsRow) in otherDataSet.iteritems():
             self.add_count_list(gateLabelString, list(dsRow.values()) )
 
     def __str__(self):

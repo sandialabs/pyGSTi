@@ -189,10 +189,11 @@ def load_gatestring_list(filename, readRawStrings=False):
     """
     if readRawStrings:
         rawList = []
-        for line in open(filename,'r'):
-            if len(line.strip()) == 0: continue
-            if len(line) == 0 or line[0] == '#': continue
-            rawList.append( line.strip() )
+        with open(filename, 'r') as gatestringlist:
+            for line in gatestringlist:
+                if len(line.strip()) == 0: continue
+                if len(line) == 0 or line[0] == '#': continue
+                rawList.append( line.strip() )
         return rawList
     else:
         std = _stdinput.StdInputParser()

@@ -5,6 +5,7 @@ import pygsti
 import numpy as np
 import warnings
 import os
+import sys
 
 class DataSetTestCase(unittest.TestCase):
 
@@ -369,10 +370,10 @@ Gx^4 20 80 0.2 100
             if label in multiDS:
                 pass
 
-        for DS in multiDS.values():
+        for DS in multiDS.itervalues():
             pass
 
-        for label,DS in multiDS.items():
+        for label,DS in multiDS.iteritems():
             pass
 
         sumDS = multiDS.get_datasets_sum('DS0','DS1')
