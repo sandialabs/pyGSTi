@@ -1,6 +1,0 @@
-pygsti.tools.expand_from_std_direct_sum_mx
-==========================================
-
-.. currentmodule:: pygsti.tools
-
-.. autofunction:: expand_from_std_direct_sum_mx

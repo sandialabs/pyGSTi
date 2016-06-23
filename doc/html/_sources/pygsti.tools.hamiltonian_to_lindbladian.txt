@@ -1,6 +1,0 @@
-pygsti.tools.hamiltonian_to_lindbladian
-=======================================
-
-.. currentmodule:: pygsti.tools
-
-.. autofunction:: hamiltonian_to_lindbladian

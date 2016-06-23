@@ -1,6 +1,0 @@
-pygsti.do_mc2gst_with_model_selection
-=====================================
-
-.. currentmodule:: pygsti
-
-.. autofunction:: do_mc2gst_with_model_selection

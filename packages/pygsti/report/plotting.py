@@ -449,13 +449,13 @@ def splice_cmaps(cmaps, name=None, splice_points=None):
 
     Parameters
     ----------
-    cmaps : list of matplotlib cmaps
+    cmaps : list of matplotlib.colors.Colormap
         The colormaps ordered according to how they should appear in the final
         colormap
 
-    name : string
+    name : string, optional
         The name for the colormap. If no name is given, the name
-        "spliced_cmap1name_cmap2name_..." is assigned to the colormap.
+        ``"spliced_cmap1name_cmap2name_..."`` is assigned to the colormap.
 
     splice_points : ordered list of floats in (0, 1), optional
         The transition points when one colormap should end and the next should
@@ -465,7 +465,8 @@ def splice_cmaps(cmaps, name=None, splice_points=None):
 
     Returns
     -------
-    A cmap combining the provided cmaps
+    matplotlib.colors.LinearSegmentedColormap
+        A cmap combining the provided cmaps
     """
     if name is None:
         name = '_'.join(['spliced'] + [cmap.name for cmap in cmaps])

@@ -1,6 +1,0 @@
-pygsti.tools.pp_matrices
-========================
-
-.. currentmodule:: pygsti.tools
-
-.. autofunction:: pp_matrices

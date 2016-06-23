@@ -46,3 +46,7 @@ Icon?
 Thumbs.db
 .idea/
 HighImpactPaper1/texFiles/.DS_Store
+
+# Generated documentation #
+###########################
+doc/html/*

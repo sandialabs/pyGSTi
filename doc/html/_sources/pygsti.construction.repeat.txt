@@ -1,6 +1,0 @@
-pygsti.construction.repeat
-==========================
-
-.. currentmodule:: pygsti.construction
-
-.. autofunction:: repeat

@@ -1,6 +1,0 @@
-pygsti.io.load_gateset
-======================
-
-.. currentmodule:: pygsti.io
-
-.. autofunction:: load_gateset

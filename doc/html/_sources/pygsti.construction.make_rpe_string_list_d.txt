@@ -1,6 +1,0 @@
-pygsti.construction.make_rpe_string_list_d
-==========================================
-
-.. currentmodule:: pygsti.construction
-
-.. autofunction:: make_rpe_string_list_d

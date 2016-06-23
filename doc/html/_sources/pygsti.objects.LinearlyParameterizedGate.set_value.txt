@@ -1,6 +1,0 @@
-pygsti.objects.LinearlyParameterizedGate.set_value
-==================================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: LinearlyParameterizedGate.set_value

@@ -1,6 +1,0 @@
-pygsti.chi2fn_2outcome
-======================
-
-.. currentmodule:: pygsti
-
-.. autofunction:: chi2fn_2outcome

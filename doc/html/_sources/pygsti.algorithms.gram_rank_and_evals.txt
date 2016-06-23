@@ -1,6 +1,0 @@
-pygsti.algorithms.gram_rank_and_evals
-=====================================
-
-.. currentmodule:: pygsti.algorithms
-
-.. autofunction:: gram_rank_and_evals

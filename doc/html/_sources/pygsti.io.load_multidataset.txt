@@ -1,6 +1,0 @@
-pygsti.io.load_multidataset
-===========================
-
-.. currentmodule:: pygsti.io
-
-.. autofunction:: load_multidataset

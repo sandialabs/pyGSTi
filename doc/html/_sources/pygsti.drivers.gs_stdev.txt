@@ -1,6 +1,0 @@
-pygsti.drivers.gs_stdev
-=======================
-
-.. currentmodule:: pygsti.drivers
-
-.. autofunction:: gs_stdev
