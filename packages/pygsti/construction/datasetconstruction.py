@@ -26,35 +26,34 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples, sampleError=
         Each tuple or GateString contains gate labels and 
         specifies a gate sequence whose counts are included 
         in the returned DataSet.
-        e.g. [ (), ('Gx',), ('Gx','Gy') ] 
+        e.g. ``[ (), ('Gx',), ('Gx','Gy') ]``
 
     nSamples : int or list of ints or None
-        The simulated number of samples for each gate string.  This only
-        has effect when  sampleError == "binomial" or "multinomial".  If
-        an integer, all gate strings have this number of total samples. If
-        a list, integer elements specify the number of samples for the 
-        corresponding gate string.  If None, then gatesetOrDataset must be
-        a DataSet, and total counts are taken from it (on a per-gatestring
-        basis).
+        The simulated number of samples for each gate string.  This only has
+        effect when  ``sampleError == "binomial"`` or ``"multinomial"``.  If an
+        integer, all gate strings have this number of total samples. If a list,
+        integer elements specify the number of samples for the corresponding
+        gate string.  If ``None``, then `gatesetOrDataset` must be a
+        :class:`~pygsti.objects.DataSet`, and total counts are taken from it
+        (on a per-gatestring basis).
 
     sampleError : string, optional
         What type of sample error is included in the counts.  Can be:
 
-        - "none"  - no sampl error: 
-                  counts are floating point numbers such that the exact probabilty
-                  can be found by the ratio of count / total.
-        - "round" - same as "none", except counts are rounded to the nearest integer.
-        - "binomial" - the number of counts is taken from a binomial distribution.
-                     Distribution has parameters p = probability of the gate string
-                     and n = number of samples.  This can only be used when there
-                     are exactly two SPAM labels in gatesetOrDataset.
+        - "none"  - no sample error: counts are floating point numbers such that
+          the exact probabilty can be found by the ratio of count / total.
+        - "round" - same as "none", except counts are rounded to the nearest
+          integer.
+        - "binomial" - the number of counts is taken from a binomial
+          distribution.  Distribution has parameters p = probability of the
+          gate string and n = number of samples.  This can only be used when
+          there are exactly two SPAM labels in gatesetOrDataset.
         - "multinomial" - counts are taken from a multinomial distribution.
-                        Distribution has parameters p_k = probability of the 
-                        gate string using the k-th SPAM label and n = number
-                        of samples.
+          Distribution has parameters p_k = probability of the gate string
+          using the k-th SPAM label and n = number of samples.
 
     seed : int, optional
-        If not None, a seed for numpy's random number generator, which
+        If not ``None``, a seed for numpy's random number generator, which
         is used to sample from the binomial or multinomial distribution.
 
     Returns
