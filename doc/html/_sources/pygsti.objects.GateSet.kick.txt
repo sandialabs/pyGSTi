@@ -1,6 +1,0 @@
-pygsti.objects.GateSet.kick
-===========================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: GateSet.kick

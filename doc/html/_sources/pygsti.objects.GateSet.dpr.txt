@@ -1,6 +1,0 @@
-pygsti.objects.GateSet.dpr
-==========================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: GateSet.dpr

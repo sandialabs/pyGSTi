@@ -1,6 +1,0 @@
-pygsti.tools.is_hermitian
-=========================
-
-.. currentmodule:: pygsti.tools
-
-.. autofunction:: is_hermitian

@@ -1,6 +1,0 @@
-pygsti.contract
-===============
-
-.. currentmodule:: pygsti
-
-.. autofunction:: contract
