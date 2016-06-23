@@ -49,6 +49,12 @@ class GateSetTestCase(unittest.TestCase):
     def assertArraysAlmostEqual(self,a,b):
         self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
 
+    def assertSingleElemArrayAlmostEqual(self, a, b):
+        # Ex given an array [[ 0.095 ]] and 0.095, call assertAlmostEqual(0.095, 0.095)
+        if a.size > 1:
+            raise ValueError('assertSingleElemArrayAlmostEqual should only be used on single element arrays')
+        self.assertAlmostEqual(float(a), b)
+
     def assertNoWarnings(self, callable, *args, **kwds):
         with warnings.catch_warnings(record=True) as warning_list:
             warnings.simplefilter('always')
@@ -230,7 +236,8 @@ class TestGateSetMethods(GateSetTestCase):
                                    np.dot(self.gateset['Gx'],
                                           self.gateset.preps['rho0']))))
       p2 = self.gateset.pr('plus',gatestring)
-      self.assertAlmostEqual(p1,p2)
+      #print(p1, p2)
+      self.assertSingleElemArrayAlmostEqual(p1,p2)
 
   def test_bulk_probabilities(self):
       gatestring1 = ('Gx','Gy')
@@ -252,23 +259,23 @@ class TestGateSetMethods(GateSetTestCase):
       bulk_pr = self.assertNoWarnings(self.gateset.bulk_pr,'plus',evt,check=True)
       # **Cannot directly compute 'minus' since this is the remainder spam label
       #bulk_pr_m = self.assertNoWarnings(self.gateset.bulk_pr,'minus',evt,check=True)
-      self.assertAlmostEqual(bulk_pr[0],p1)
-      self.assertAlmostEqual(bulk_pr[1],p2)
+      self.assertSingleElemArrayAlmostEqual(p1, bulk_pr[0])
+      self.assertSingleElemArrayAlmostEqual(p2, bulk_pr[1])
       #self.assertAlmostEqual(bulk_pr_m[0],1.0-p1)
       #self.assertAlmostEqual(bulk_pr_m[1],1.0-p2)
 
       probs1 = self.gateset.probs(gatestring1)
       probs2 = self.gateset.probs(gatestring2)
-      self.assertAlmostEqual(probs1['plus'],p1)
-      self.assertAlmostEqual(probs2['plus'],p2)
-      self.assertAlmostEqual(probs1['minus'],1.0-p1)
-      self.assertAlmostEqual(probs2['minus'],1.0-p2)
+      self.assertSingleElemArrayAlmostEqual(p1, probs1['plus'])
+      self.assertSingleElemArrayAlmostEqual(p2, probs2['plus'])
+      self.assertSingleElemArrayAlmostEqual(1.0 - p1, probs1['minus'])
+      self.assertSingleElemArrayAlmostEqual(1.0 - p2, probs2['minus'])
 
       bulk_probs = self.assertNoWarnings(self.gateset.bulk_probs,evt,check=True)
-      self.assertAlmostEqual(bulk_probs['plus'][0],p1)
-      self.assertAlmostEqual(bulk_probs['plus'][1],p2)
-      self.assertAlmostEqual(bulk_probs['minus'][0],1.0-p1)
-      self.assertAlmostEqual(bulk_probs['minus'][1],1.0-p2)
+      self.assertSingleElemArrayAlmostEqual(p1, bulk_probs['plus'][0])
+      self.assertSingleElemArrayAlmostEqual(p2, bulk_probs['plus'][1])
+      self.assertSingleElemArrayAlmostEqual(1.0 - p1, bulk_probs['minus'][0])
+      self.assertSingleElemArrayAlmostEqual(1.0 - p2, bulk_probs['minus'][1])
 
       #test with split eval tree
       evt_split = evt.copy(); evt_split.split(numSubTrees=2)
@@ -282,10 +289,10 @@ class TestGateSetMethods(GateSetTestCase):
       probs_to_fill = np.empty( (nSpamLabels,nGateStrings), 'd')
       spam_label_rows = { 'plus': 0, 'minus': 1 }
       self.assertNoWarnings(self.gateset.bulk_fill_probs, probs_to_fill, spam_label_rows, evt, check=True)
-      self.assertAlmostEqual(probs_to_fill[0,0],p1)
-      self.assertAlmostEqual(probs_to_fill[0,1],p2)
-      self.assertAlmostEqual(probs_to_fill[1,0],1-p1)
-      self.assertAlmostEqual(probs_to_fill[1,1],1-p2)
+      self.assertSingleElemArrayAlmostEqual(p1, probs_to_fill[0,0])
+      self.assertSingleElemArrayAlmostEqual(p2, probs_to_fill[0,1])
+      self.assertSingleElemArrayAlmostEqual(1 - p1, probs_to_fill[1,0])
+      self.assertSingleElemArrayAlmostEqual(1 - p2, probs_to_fill[1,1])
 
       prods = self.gateset.bulk_product(evt) #TODO: test output?
 
