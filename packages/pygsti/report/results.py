@@ -1910,7 +1910,7 @@ class Results(object):
         None
         """
 
-        rinter = VerbosityPrinter.build_printer(verbosity)   
+        printer = VerbosityPrinter.build_printer(verbosity)   
 
         assert(self._bEssentialResultsSet)
         self.confidence_level = confidenceLevel 
