@@ -1,1 +1,2 @@
-cp pre-commit ../.git/hooks
+# copy ourselves, even? Who knows :)
+cp * ../.git/hooks
