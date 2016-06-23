@@ -52,9 +52,9 @@ def package_dir(packageName):
 
 #tool makes the function act as if run from the test directory
 @tool
-def run_package(packageName, precommand='', postcommand='', lastFailed=''):
+def run_package(packageName, precommand=None, postcommand=None, lastFailed=''):
     # determine what command will be used to run the tests (python/python3 by default)
-    precommand = pythonCommand if precommand == '' else precommand
+    precommand = pythonCommand if precommand is None else precommand
 
     # enter the package directory to begin running tests and leave when done
     with package_dir(packageName):
@@ -74,8 +74,10 @@ def run_package(packageName, precommand='', postcommand='', lastFailed=''):
                 
                     if filename.endswith('.py') and filename.startswith('test'):
                         # run ALL test files, even those that passed previously
-                        print('Running %s' % filename)        
-                        run_test([precommand, filepath, postcommand], filepath, failedtests)
+                        print('Running %s' % filename)
+                        commands = [precommand, filepath]
+                        if postcommand is not None: commands.append(postcommand)
+                        run_test(commands, filepath, failedtests)
       
         testnames = get_test_names(failedtests)
         create_last_failed(testnames, packageName)

@@ -293,4 +293,4 @@ class TestGateStringMethods(GateStringTestCase):
 
 
 if __name__ == "__main__":
-    unittest.main(verbosity=2, argv=[sys.argv[0]])
+    unittest.main(verbosity=2)
