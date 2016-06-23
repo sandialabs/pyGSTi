@@ -231,7 +231,7 @@ def write_fixed_hamming_weight_code(n,k):
     code = 'import numpy as _np\n'
     code += 'import scipy.special\n'
     code += 'import pickle\n'
-    code += 'bitVecMat = _np.zeros([scipy.special.binom('+str(n)+','+str(k)+'),'+str(n)+'])\n'
+    code += 'bitVecMat = _np.zeros([int(scipy.special.binom('+str(n)+','+str(k)+')),'+str(n)+'])\n'
     code += 'counter = 0\n'
     code += 'for bit_loc_0 in range('+str(n)+'-'+str(k)+'+1):\n'
     for sub_k in range(1,k):
@@ -387,12 +387,12 @@ def optimize_integer_fiducials_slack(gateset, fidList,
 #            score = forceMinScore
         if score is None:
             numFids = _np.sum(wts)
-            scoreMx = _np.zeros([dimRho,numFids *  numMxs],float)
+            scoreMx = _np.zeros([dimRho,int(numFids) *  int(numMxs)], float)
             colInd = 0
             wts = _np.array(wts)
             wtsLoc = _np.where(wts)[0]
             for fidArray in fidArrayList:
-                scoreMx[:,colInd:colInd+numFids] = fidArray[:,wtsLoc]
+                scoreMx[:,colInd:colInd+int(numFids)] = fidArray[:,wtsLoc]
                 colInd += numFids
             scoreSqMx = _np.dot(scoreMx,scoreMx.T)
 #            score = numFids * _np.sum(1./_np.linalg.eigvalsh(scoreSqMx))
@@ -416,7 +416,7 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         printer.warning("If this is very large, you may wish to abort.")
 #        print "Num bits:", numBits
 #        print "Num Fid Options:", hammingWeight
-        code = write_fixed_hamming_weight_code(numBits,hammingWeight)
+        code = write_fixed_hamming_weight_code(numBits, hammingWeight)
         with open('fiducialselection_temp_script.py','w') as code_file:
             code_file.writelines(code)
         os.system('python fiducialselection_temp_script.py')
@@ -425,7 +425,7 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         os.system('rm fiducialselection_temp_script.py')
         os.system('rm fiducialselection_temp_pkl.pkl')
         if forceEmpty:
-            bitVecMat = _np.concatenate((_np.array([[1]*numFidLists]).T,bitVecMat),axis=1)
+            bitVecMat = _np.concatenate((_np.array([[1]*int(numFidLists)]).T,bitVecMat),axis=1)
         best_score = _np.inf
         for weights in bitVecMat:
             temp_score = compute_score(weights,cache_score = True)
