@@ -11,7 +11,7 @@ import numpy.linalg as _nla
 import time as _time
 
 from ..tools import gatetools as _gt
-
+from verbosityprinter import VerbosityPrinter
 #import evaltree as _evaltree
 #import sys #DEBUG - for printing
 
@@ -971,6 +971,9 @@ class GateSetCalculator(object):
     def _distribute_indices(self, indices, comm, verbosity=0):
         #Doesn't need to be a member function: TODO - move to 
         # an MPI helper class?            
+
+        printer = VerbosityPrinter.build_printer(verbosity)
+
         if comm is None:
             nprocs, rank = 1, 0
         else:
@@ -1015,12 +1018,11 @@ class GateSetCalculator(object):
                 owners[indices[i]] = (nprocs-1)
             loc_comm = None
 
-        if verbosity > 2:
-            if rank == 0:
-                print "*** Distributing %d indices amongst %s processors ***"% \
-                (nIndices, nprocs)
-            print "    Rank %d (%d): %s" % (rank, len(loc_indices),
-                                            str(loc_indices))
+	if rank == 0:
+	    printer.log("*** Distributing %d indices amongst %s processors ***"% \
+	    (nIndices, nprocs), 3)
+	printer.log("    Rank %d (%d): %s" % (rank, len(loc_indices),
+					str(loc_indices)), 3)
 
         return loc_indices, owners, loc_comm
 

@@ -2154,27 +2154,29 @@ class GateSet(object):
         Parameters
         ----------
         gate_noise : float, optional
-          apply depolarizing noise of strength 1-noise to all
-          gates in the gateset. (Multiplies each assumed-Pauli-basis gate 
-          matrix by the diagonal matrix with (1.0-noise) along all
-          the diagonal elements except the first (the identity).
+          apply depolarizing noise of strength ``1-gate_noise`` to all gates in
+          the gateset. (Multiplies each assumed-Pauli-basis gate matrix by the
+          diagonal matrix with ``(1.0-gate_noise)`` along all the diagonal
+          elements except the first (the identity).
     
         spam_noise : float, optional
-          apply depolarizing noise of strength 1-noise to all
-          SPAM vectors in the gateset. (Multiplies the non-identity
-          part of each assumed-Pauli-basis state preparation vector
-          and measurement vector by (1.0-noise).
+          apply depolarizing noise of strength ``1-spam_noise`` to all SPAM
+          vectors in the gateset. (Multiplies the non-identity part of each
+          assumed-Pauli-basis state preparation vector and measurement vector
+          by ``(1.0-spam_noise)``).
 
         max_gate_noise : float, optional
-          specified instead of 'gate_noise'; apply a random depolarization
-          with maximum strength 1-max_noise to each gate in the gateset.
+          specified instead of `gate_noise`; apply a random depolarization
+          with maximum strength ``1-max_gate_noise`` to each gate in the
+          gateset.
     
         max_spam_noise : float, optional
-          specified instead of 'spam_noise'; apply a random depolarization
-          with maximum strength 1-max_noise to SPAM vector in the gateset.
+          specified instead of `spam_noise`; apply a random depolarization
+          with maximum strength ``1-max_spam_noise`` to SPAM vector in the
+          gateset.
     
         seed : int, optional
-          if not None, seed numpy's random number generator with this value
+          if not ``None``, seed numpy's random number generator with this value
           before generating random depolarizations.
         
         Returns
@@ -2568,23 +2570,23 @@ class GateSet(object):
         -------
         None
         """
-        print self
-        print "\n"
-        print "Choi Matrices:"
+        print(self)
+        print("\n")
+        print("Choi Matrices:")
         for (label,gate) in self.gates.iteritems():
-            print "Choi(%s) in pauli basis = \n" % label, 
-            _mt.mx_to_string_complex(_jt.jamiolkowski_iso(gate))
-            print "  --eigenvals = ", sorted( 
+            print("Choi(%s) in pauli basis = \n" % label, 
+            _mt.mx_to_string_complex(_jt.jamiolkowski_iso(gate)))
+            print("  --eigenvals = ", sorted( 
                 [ev.real for ev in _np.linalg.eigvals(
-                        _jt.jamiolkowski_iso(gate))] ),"\n"
-        print "Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_evals(self)
+                        _jt.jamiolkowski_iso(gate))] ),"\n")
+        print("Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_evals(self))
     
         prep_penalty = sum( [ _lf.prep_penalty(rhoVec)
                                 for rhoVec in self.preps.values() ] )
         effect_penalty   = sum( [ _lf.effect_penalty(EVec) 
                                 for EVec in self.effects.values() ] )
-        print "rhoVec Penalty (>0 if invalid rhoVecs) = ", prep_penalty
-        print "EVec Penalty (>0 if invalid EVecs) = ", effect_penalty
+        print("rhoVec Penalty (>0 if invalid rhoVecs) = ", prep_penalty)
+        print("EVec Penalty (>0 if invalid EVecs) = ", effect_penalty)
 
 
 

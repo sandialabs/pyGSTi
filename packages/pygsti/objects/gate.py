@@ -5,8 +5,10 @@
 #*****************************************************************
 """ Defines classes which represent gates, as well as supporting functions """
 
+from __future__ import print_function
+
 import numpy as _np
-from .. import optimize as _opt
+from ..      import optimize as _opt
 from ..tools import matrixtools as _mt
 
 from protectedarray import ProtectedArray as _ProtectedArray
@@ -55,7 +57,7 @@ def optimize_gate(gateToOptimize, targetGate):
                            tol=1e-6, callback=None)
 
     gateToOptimize.from_vector(minSol.x)
-    print "DEBUG: optimized gate to min frobenius distance %g" % _mt.frobeniusnorm(gateToOptimize-targetMatrix)
+    print("DEBUG: optimized gate to min frobenius distance %g" % _mt.frobeniusnorm(gateToOptimize-targetMatrix))
 
 
 def compose(gate1, gate2, parameterization="auto"):

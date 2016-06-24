@@ -4,6 +4,7 @@
 #    in the file "license.txt" in the top-level pyGSTi directory 
 #*****************************************************************
 """ Functions for creating datasets """
+from __future__ import print_function
 
 import numpy as _np
 import numpy.random as _rndm
@@ -25,35 +26,34 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples, sampleError=
         Each tuple or GateString contains gate labels and 
         specifies a gate sequence whose counts are included 
         in the returned DataSet.
-        e.g. [ (), ('Gx',), ('Gx','Gy') ] 
+        e.g. ``[ (), ('Gx',), ('Gx','Gy') ]``
 
     nSamples : int or list of ints or None
-        The simulated number of samples for each gate string.  This only
-        has effect when  sampleError == "binomial" or "multinomial".  If
-        an integer, all gate strings have this number of total samples. If
-        a list, integer elements specify the number of samples for the 
-        corresponding gate string.  If None, then gatesetOrDataset must be
-        a DataSet, and total counts are taken from it (on a per-gatestring
-        basis).
+        The simulated number of samples for each gate string.  This only has
+        effect when  ``sampleError == "binomial"`` or ``"multinomial"``.  If an
+        integer, all gate strings have this number of total samples. If a list,
+        integer elements specify the number of samples for the corresponding
+        gate string.  If ``None``, then `gatesetOrDataset` must be a
+        :class:`~pygsti.objects.DataSet`, and total counts are taken from it
+        (on a per-gatestring basis).
 
     sampleError : string, optional
         What type of sample error is included in the counts.  Can be:
 
-        - "none"  - no sampl error: 
-                  counts are floating point numbers such that the exact probabilty
-                  can be found by the ratio of count / total.
-        - "round" - same as "none", except counts are rounded to the nearest integer.
-        - "binomial" - the number of counts is taken from a binomial distribution.
-                     Distribution has parameters p = probability of the gate string
-                     and n = number of samples.  This can only be used when there
-                     are exactly two SPAM labels in gatesetOrDataset.
+        - "none"  - no sample error: counts are floating point numbers such that
+          the exact probabilty can be found by the ratio of count / total.
+        - "round" - same as "none", except counts are rounded to the nearest
+          integer.
+        - "binomial" - the number of counts is taken from a binomial
+          distribution.  Distribution has parameters p = probability of the
+          gate string and n = number of samples.  This can only be used when
+          there are exactly two SPAM labels in gatesetOrDataset.
         - "multinomial" - counts are taken from a multinomial distribution.
-                        Distribution has parameters p_k = probability of the 
-                        gate string using the k-th SPAM label and n = number
-                        of samples.
+          Distribution has parameters p_k = probability of the gate string
+          using the k-th SPAM label and n = number of samples.
 
     seed : int, optional
-        If not None, a seed for numpy's random number generator, which
+        If not ``None``, a seed for numpy's random number generator, which
         is used to sample from the binomial or multinomial distribution.
 
     Returns
@@ -100,7 +100,7 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples, sampleError=
           spamLabel1, spamLabel2 = ps.keys(); p1 = ps[spamLabel1]
           if p1 < 0 and abs(p1) < 1e-6: p1 = 0
           if p1 > 1 and abs(p1-1.0) < 1e-6: p1 = 1
-          if p1 < 0 or p1 > 1: print "Warning: probability == %g clipped to generate fake data" % p1
+          if p1 < 0 or p1 > 1: print("Warning: probability == %g clipped to generate fake data" % p1)
           p1 = _np.clip(p1,0,1)
           counts[spamLabel1] = rndm.binomial(nWeightedSamples, p1) #numpy.clip(p1,0,1) )
           counts[spamLabel2] = nWeightedSamples - counts[spamLabel1]

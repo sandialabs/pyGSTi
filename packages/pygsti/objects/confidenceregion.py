@@ -5,12 +5,13 @@
 #*****************************************************************
 """ Classes for constructing confidence regions """
 
-import numpy as _np
+import numpy       as _np
 import scipy.stats as _stats
-import warnings as _warnings
+import warnings    as _warnings
 from .. import optimize as _opt
 
 from gateset import P_RANK_TOL
+from verbosityprinter import VerbosityPrinter
 
 # NON-MARKOVIAN ERROR BARS
 #Connection with Robin's notes:
@@ -587,8 +588,9 @@ class ConfidenceRegion(object):
         #  so df = sqrt( gradF.dag * U * 1/D * U.dag * gradF )
         #        = sqrt( gradF.dag * invRegionQuadcForm * gradF )
 
-        if verbosity > 0:
-            print "gradF = ",gradF
+        printer = VerbosityPrinter.build_printer(verbosity)
+
+        printer.log("gradF = %s" % gradF)
 
         if type(f0) == float:
             gradFdag = _np.conjugate(_np.transpose(gradF))
@@ -643,8 +645,7 @@ class ConfidenceRegion(object):
                 else:
                     raise ValueError("Unsupported number of dimensions returned by fnOfGate or fnOfGateset: %d" % fDims)
         
-        if verbosity > 0:
-            print "df = ",df
+        printer.log("df = %s" % df)
         
         return (df, f0 ) if returnFnVal else df
 
@@ -655,8 +656,8 @@ def _optProjectionForGateCIs(gateset, base_hessian, nNonGaugeParams, nGaugeParam
                              level, method = "L-BFGS-B", maxiter = 10000,
                              maxfev = 10000, tol = 1e-6, verbosity = 0):
 
-    if verbosity > 2: print ""
-    if verbosity > 1: print "--- Hessian Projector Optimization for gate CIs (%s) ---" % method
+    printer.log('', 3)
+    printer.log("--- Hessian Projector Optimization for gate CIs (%s) ---" % method, 2, indentOffset=-1)
 
     def objective_func(vectorM):
         matM = vectorM.reshape( (nNonGaugeParams,nGaugeParams) )
@@ -681,8 +682,7 @@ def _optProjectionForGateCIs(gateset, base_hessian, nNonGaugeParams, nGaugeParam
     proj_extra = gateset.get_nongauge_projector(mixMx)
     projected_hessian_ex = _np.dot(proj_extra, _np.dot(base_hessian, proj_extra))
          
-    if verbosity > 1:
-        print 'The resulting min sqrt(sum(gateCIs**2)): %g' % minSol.fun
+    printer.log('The resulting min sqrt(sum(gateCIs**2)): %g' % minSol.fun, 2)
         
     return projected_hessian_ex
 

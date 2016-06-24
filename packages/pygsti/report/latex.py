@@ -8,6 +8,7 @@ Routines for converting python objects to latex.  Parallel rountines as
 HtmlUtil has for HTML conversion.
 """
 
+from __future__ import print_function
 import numpy as _np
 import cmath
 from .. import objects as _objs
@@ -47,7 +48,7 @@ def latex(x, brackets=False):
     elif type(x) == str:
         return latex_escaped(x)
     else:
-        print "Warning: %s not specifically converted to latex" % str(type(x))
+        print("Warning: %s not specifically converted to latex" % str(type(x)))
         return str(x)
 
 

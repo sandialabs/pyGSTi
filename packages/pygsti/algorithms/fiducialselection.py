@@ -5,13 +5,14 @@
 #*****************************************************************
 """ Functions for selecting a complete set of fiducials for a GST analysis."""
 
-import numpy as _np
+import numpy     as _np
 import itertools as _itertools
-import math as _math
-import sys as _sys
+import math      as _math
+import sys       as _sys
 import scipy
 import os
 import pickle
+from .. import objects as _objs
 
 #def bool_list_to_ind_list(boolList):
 #    output = _np.array([])
@@ -355,6 +356,8 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         specifying a subset of fiducials, and values == 1.0/smallest-non-gauge-
         eigenvalue "scores".  
     """
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+
     if not xor(fixedSlack,slackFrac):
         raise ValueError("One and only one of fixedSlack or slackFrac should be specified")
     if scoreFunc == 'all':
@@ -379,8 +382,7 @@ def optimize_integer_fiducials_slack(gateset, fidList,
 
     dimRho = gateset.get_dimension()
 
-    if verbosity > 0:
-        print "Starting fiducial set optimization. Lower score is better."
+    printer.log("Starting fiducial set optimization. Lower score is better.")
 
     scoreD = {} 
 
@@ -425,9 +427,9 @@ def optimize_integer_fiducials_slack(gateset, fidList,
             hammingWeight = fixedNum
             numBits = len(fidList)
         numFidLists = scipy.special.binom(numBits,hammingWeight)
-        print "Output set is required to be of size", fixedNum
-        print "Total number of fiducial sets to be checked is", numFidLists
-        print "If this is very large, you may wish to abort."
+        printer.log("Output set is required to be of size%s" % fixedNum)
+        printer.log("Total number of fiducial sets to be checked is%s" % numFidLists)
+        printer.warning("If this is very large, you may wish to abort.")
 #        print "Num bits:", numBits
 #        print "Num Fid Options:", hammingWeight
         code = write_fixed_hamming_weight_code(numBits,hammingWeight)
@@ -460,7 +462,7 @@ def optimize_integer_fiducials_slack(gateset, fidList,
                 if  tempLen < bestLen:
                     best_score = temp_score
                     best_weights = weights
-                    print "Switching!"
+                    printer.log("Switching!")
             elif temp_score < best_score:
                 best_score = temp_score
                 best_weights = weights
@@ -494,58 +496,58 @@ def optimize_integer_fiducials_slack(gateset, fidList,
     score = compute_score(weights)
     L1 = sum(weights) # ~ L1 norm of weights
 
-    for iIter in xrange(maxIter):
-        scoreD_keys = scoreD.keys() #list of weight tuples already computed
+    with printer.progress_logging(1):
 
-        if verbosity > 0:
-            print "Iteration %d: score=%g, nFids=%d" % (iIter, score, L1)
+      for iIter in xrange(maxIter):
+          scoreD_keys = scoreD.keys() #list of weight tuples already computed
+
+          printer.show_progress(iIter, maxIter-1, suffix="score=%g, nFids=%d" % (score, L1))
         
-        bFoundBetterNeighbor = False
-        for neighborNum, neighbor in enumerate(get_neighbors(weights)):
-            if tuple(neighbor) not in scoreD_keys:
-                neighborL1 = sum(neighbor)
-                neighborScore = compute_score(neighbor)
-            else:
-                neighborL1 = sum(neighbor)
-                neighborScore = scoreD[tuple(neighbor)]
+          bFoundBetterNeighbor = False
+          for neighborNum, neighbor in enumerate(get_neighbors(weights)):
+              if tuple(neighbor) not in scoreD_keys:
+                  neighborL1 = sum(neighbor)
+                  neighborScore = compute_score(neighbor)
+              else:
+                  neighborL1 = sum(neighbor)
+                  neighborScore = scoreD[tuple(neighbor)]
 
-            #Move if we've found better position; if we've relaxed, we only move when L1 is improved.
-            if neighborScore <= score and (neighborL1 < L1 or lessWeightOnly == False):
-                weights, score, L1 = neighbor, neighborScore, neighborL1
-                bFoundBetterNeighbor = True
-                if verbosity > 1: print "Found better neighbor: nFids = %d score = %g" % (L1,score)
+              #Move if we've found better position; if we've relaxed, we only move when L1 is improved.
+              if neighborScore <= score and (neighborL1 < L1 or lessWeightOnly == False):
+                  weights, score, L1 = neighbor, neighborScore, neighborL1
+                  bFoundBetterNeighbor = True
+                  printer.log("Found better neighbor: nFids = %d score = %g" % (L1,score), 2)
 
 
-        if not bFoundBetterNeighbor: # Time to relax our search.
-            lessWeightOnly=True #from now on, don't allow increasing weight L1
+          if not bFoundBetterNeighbor: # Time to relax our search.
+              lessWeightOnly=True #from now on, don't allow increasing weight L1
 
-            if fixedSlack:
-                slack = score + fixedSlack #Note score is positive (for sum of 1/lambda)
-            elif slackFrac:
-                slack = score * slackFrac
-            assert(slack > 0)
+              if fixedSlack:
+                  slack = score + fixedSlack #Note score is positive (for sum of 1/lambda)
+              elif slackFrac:
+                  slack = score * slackFrac
+              assert(slack > 0)
 
-            if verbosity > 1:
-                print "No better neighbor. Relaxing score w/slack: %g => %g" % (score, score+slack)
-            score += slack #artificially increase score and see if any neighbor is better now...
+              printer.log("No better neighbor. Relaxing score w/slack: %g => %g" % (score, score+slack), 2)
+              score += slack #artificially increase score and see if any neighbor is better now...
 
-            for neighborNum, neighbor in enumerate(get_neighbors(weights)):
-                if sum(neighbor) < L1 and scoreD[tuple(neighbor)] < score:
-                    weights, score, L1 = neighbor, scoreD[tuple(neighbor)], sum(neighbor)
-                    bFoundBetterNeighbor = True
-                    if verbosity > 1: print "Found better neighbor: nFids = %d score = %g" % (L1,score)
+              for neighborNum, neighbor in enumerate(get_neighbors(weights)):
+                  if sum(neighbor) < L1 and scoreD[tuple(neighbor)] < score:
+                      weights, score, L1 = neighbor, scoreD[tuple(neighbor)], sum(neighbor)
+                      bFoundBetterNeighbor = True
+                      printer.log("Found better neighbor: nFids = %d score = %g" % (L1,score), 2)
 
-            if not bFoundBetterNeighbor: #Relaxing didn't help!
-                print "Stationary point found!";
-                break #end main for loop
+              if not bFoundBetterNeighbor: #Relaxing didn't help!
+                  printer.log("Stationary point found!");
+                  break #end main for loop
         
-        print "Moving to better neighbor"
-    else:
-        print "Hit max. iterations"
+          printer.log("Moving to better neighbor")
+      else:
+          printer.log("Hit max. iterations")
     
-    print "score = ", score
-    print "weights = ",weights
-    print "L1(weights) = ",sum(weights)
+    printer.log("score = %s"       % score)
+    printer.log("weights = %s"     % weights)
+    printer.log("L1(weights) = %s" % sum(weights))
 
     goodFidList = []
     for index,val in enumerate(weights):

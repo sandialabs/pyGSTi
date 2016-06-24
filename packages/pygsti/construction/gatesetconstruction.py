@@ -25,30 +25,33 @@ def build_vector(stateSpaceDims, stateSpaceLabels, vecExpr, basis="gm"):
     Parameters
     ----------
     stateSpaceDims : list of ints
-        Dimenstions specifying the structure of the density-matrix space.  Elements
-        correspond to block dimensions of an allowed density matrix in the standard
-        basis, and the density-matrix space is the direct sum of linear spaces of 
-        dimension block-dimension^2.
+        Dimenstions specifying the structure of the density-matrix space.
+        Elements correspond to block dimensions of an allowed density matrix in
+        the standard basis, and the density-matrix space is the direct sum of
+        linear spaces of dimension block-dimension^2.
 
     stateSpaceLabels : a list of tuples
-        Each tuple corresponds to a block of a density matrix in the standard basis
-        (and therefore a component of the direct-sum density matrix space). Elements
-        of a tuple are user-defined labels beginning with "L" (single level) or "Q"
-        (two-level; qubit) which interpret the d-dimensional state space corresponding
-        to a d x d block as a tensor product between qubit and single level systems.
+        Each tuple corresponds to a block of a density matrix in the standard
+        basis (and therefore a component of the direct-sum density matrix
+        space). Elements of a tuple are user-defined labels beginning with "L"
+        (single level) or "Q" (two-level; qubit) which interpret the
+        d-dimensional state space corresponding to a d x d block as a tensor
+        product between qubit and single level systems.
 
     vecExpr : string
         the expression which determines which vector to build.  Currenlty, only
         integers are allowed, which specify a the vector for the pure state of
-        that index.  For example, "1" means return vectorize(``|1><1|``).  The index
-        labels the absolute index of the state within the entire state space, and
-        is independent of the direct-sum decomposition of density matrix space.
+        that index.  For example, "1" means return vectorize(``|1><1|``).  The
+        index labels the absolute index of the state within the entire state
+        space, and is independent of the direct-sum decomposition of density
+        matrix space.
 
     basis : {'gm','pp','std'}, optional
         the basis of the returned vector. 
-        'std' == Standard (matrix units)
-        'gm' == Gell-Mann 
-        'pp' == Pauli-product
+
+        - 'std' == Standard (matrix units)
+        - 'gm' == Gell-Mann 
+        - 'pp' == Pauli-product
 
     Returns
     -------
@@ -87,16 +90,17 @@ def build_identity_vec(stateSpaceDims, basis="gm"):
     Parameters
     ----------
     stateSpaceDims : list of ints
-        Dimenstions specifying the structure of the density-matrix space.  Elements
-        correspond to block dimensions of an allowed density matrix in the standard
-        basis, and the density-matrix space is the direct sum of linear spaces of 
-        dimension block-dimension^2.
+        Dimenstions specifying the structure of the density-matrix space.
+        Elements correspond to block dimensions of an allowed density matrix in
+        the standard basis, and the density-matrix space is the direct sum of
+        linear spaces of dimension block-dimension^2.
 
     basis : {'gm','pp','std'}, optional
         the basis of the returned vector. 
-        'std' == Standard (matrix units)
-        'gm' == Gell-Mann 
-        'pp' == Pauli-product
+
+        - 'std' == Standard (matrix units)
+        - 'gm' == Gell-Mann 
+        - 'pp' == Pauli-product
 
     Returns
     -------
@@ -129,17 +133,23 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
 
     Parameters
     ----------
-    stateSpaceDims : a list of integers specifying the dimension of each block of a block-diagonal the density matrix
-    stateSpaceLabels : a list of tuples, each one corresponding to a block of the density matrix.  Elements of the tuple are
-                     user-defined labels beginning with "L" (single level) or "Q" (two-level; qubit) which interpret the
-                     states within the block as a tensor product structure between the labelled constituent systems.
+    stateSpaceDims : a list of integers specifying the dimension of each block
+    of a block-diagonal the density matrix
+    stateSpaceLabels : a list of tuples, each one corresponding to a block of
+    the density matrix.  Elements of the tuple are user-defined labels
+    beginning with "L" (single level) or "Q" (two-level; qubit) which interpret
+    the states within the block as a tensor product structure between the
+    labelled constituent systems.
 
     gateExpr : string containing an expression for the gate to build
 
     basis : string
-      - "std" = gate matrix operates on density mx expressed as sum of matrix units
-      - "gm"  = gate matrix operates on dentity mx expressed as sum of normalized Gell-Mann matrices
-      - "pp"  = gate matrix operates on density mx expresses as sum of tensor-prod of pauli matrices
+      - "std" = gate matrix operates on density mx expressed as sum of matrix
+        units
+      - "gm"  = gate matrix operates on dentity mx expressed as sum of
+        normalized Gell-Mann matrices
+      - "pp"  = gate matrix operates on density mx expresses as sum of
+        tensor-prod of pauli matrices
     """
     # gateExpr can contain single qubit ops: X(theta) ,Y(theta) ,Z(theta)
     #                      two qubit ops: CNOT
@@ -363,43 +373,48 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
     Parameters
     ----------
     stateSpaceDims : list of ints
-        Dimenstions specifying the structure of the density-matrix space.  Elements
-        correspond to block dimensions of an allowed density matrix in the standard
-        basis, and the density-matrix space is the direct sum of linear spaces of 
-        dimension block-dimension^2.
+        Dimenstions specifying the structure of the density-matrix space.
+        Elements correspond to block dimensions of an allowed density matrix in
+        the standard basis, and the density-matrix space is the direct sum of
+        linear spaces of dimension block-dimension^2.
 
     stateSpaceLabels : a list of tuples
-        Each tuple corresponds to a block of a density matrix in the standard basis
-        (and therefore a component of the direct-sum density matrix space). Elements
-        of a tuple are user-defined labels beginning with "L" (single level) or "Q"
-        (two-level; qubit) which interpret the d-dimensional state space corresponding
-        to a d x d block as a tensor product between qubit and single level systems.
+        Each tuple corresponds to a block of a density matrix in the standard
+        basis (and therefore a component of the direct-sum density matrix
+        space). Elements of a tuple are user-defined labels beginning with "L"
+        (single level) or "Q" (two-level; qubit) which interpret the
+        d-dimensional state space corresponding to a d x d block as a tensor
+        product between qubit and single level systems.
         
     gateExpr : string 
-        expression for the gate to build.  String is first split into parts delimited
-        by the colon (:) character, which are composed together to create the final gate.
-        Each part takes on of the allowed forms:
+        expression for the gate to build.  String is first split into parts
+        delimited by the colon (:) character, which are composed together to
+        create the final gate.  Each part takes on of the allowed forms:
 
-        - I(ssl_0, ...) = identity operation on one or more state space labels (ssl_i)
+        - I(ssl_0, ...) = identity operation on one or more state space labels
+          (ssl_i)
         - X(theta, ssl) = x-rotation by theta radians of qubit labeled by ssl
         - Y(theta, ssl) = y-rotation by theta radians of qubit labeled by ssl
         - Z(theta, ssl) = z-rotation by theta radians of qubit labeled by ssl
-        - CX(theta, ssl0, ssl1) = controlled x-rotation by theta radians.
-               Acts on qubit labeled by ssl1 with ssl0 being the control.
-        - CY(theta, ssl0, ssl1) = controlled y-rotation by theta radians.
-               Acts on qubit labeled by ssl1 with ssl0 being the control.
-        - CZ(theta, ssl0, ssl1) = controlled z-rotation by theta radians.
-               Acts on qubit labeled by ssl1 with ssl0 being the control.
-        - LX(theta, i0, i1) = leakage between states i0 and i1.
-               Implemented as an x-rotation between states with integer indices
-               i0 and i1 followed by complete decoherence between the states.
+        - CX(theta, ssl0, ssl1) = controlled x-rotation by theta radians.  Acts
+          on qubit labeled by ssl1 with ssl0 being the control.
+        - CY(theta, ssl0, ssl1) = controlled y-rotation by theta radians.  Acts
+          on qubit labeled by ssl1 with ssl0 being the control.
+        - CZ(theta, ssl0, ssl1) = controlled z-rotation by theta radians.  Acts
+          on qubit labeled by ssl1 with ssl0 being the control.
+        - LX(theta, i0, i1) = leakage between states i0 and i1.  Implemented as
+          an x-rotation between states with integer indices i0 and i1 followed
+          by complete decoherence between the states.
 
     basis : {'gm','pp','std'}, optional
         the basis of the returned gate. 
 
-        - "std" = gate matrix operates on density mx expressed as sum of matrix units
-        - "gm"  = gate matrix operates on dentity mx expressed as sum of normalized Gell-Mann matrices
-        - "pp"  = gate matrix operates on density mx expresses as sum of tensor-product of Pauli matrices
+        - "std" = gate matrix operates on density mx expressed as sum of matrix
+          units
+        - "gm"  = gate matrix operates on dentity mx expressed as sum of
+          normalized Gell-Mann matrices
+        - "pp"  = gate matrix operates on density mx expresses as sum of
+          tensor-product of Pauli matrices
 
     parameterization : {"full","TP","static","linear"}, optional
         How to parameterize the resulting gate.
@@ -407,8 +422,8 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
         - "full" = return a FullyParameterizedGate.
         - "TP" = return a TPParameterizedGate.
         - "static" = return a StaticGate.
-        - "linear" = if possible, return a LinearlyParameterizedGate that parameterizes
-          ,          only the pieces explicitly present in gateExpr.
+        - "linear" = if possible, return a LinearlyParameterizedGate that
+          parameterizes only the pieces explicitly present in gateExpr.
 
     unitaryEmbedding : bool, optional
         An interal switch determining how the gate is constructed.  Should have
@@ -420,7 +435,8 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
     Returns
     -------
     Gate
-        A gate object representing the gate given by gateExpr in the desired basis.
+        A gate object representing the gate given by gateExpr in the desired
+        basis.
     """
     # gateExpr can contain single qubit ops: X(theta) ,Y(theta) ,Z(theta)
     #                      two qubit ops: CNOT
@@ -556,7 +572,8 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
         parameterToBaseIndicesMap = {}
 
         def decomp_gate_index(indx): 
-            """ Decompose index of a Pauli-product matrix into indices of each Pauli in the product """
+            """ Decompose index of a Pauli-product matrix into indices of each
+            Pauli in the product """
             ret = []; divisor = 1; divisors = []
             #print "Decomp %d" % indx,
             for l in labels: 
@@ -571,13 +588,14 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
 
         def merge_gate_and_noop_bases(gate_b, noop_b): 
             """ 
-            Merge the Pauli basis indices for the "gate"-parts of the total basis
-            contained in gate_b (i.e. of the components of the tensor product space
-            that are operated on) and the "noop"-parts contained in noop_b.  Thus,
-            len(gate_b) + len(noop_b) == len(basisInds), and this function merges
-            together basis indices for the operated-on and not-operated-on tensor
-            product components.  
-            Note: return value always have length == len(basisInds) == number of components
+            Merge the Pauli basis indices for the "gate"-parts of the total
+            basis contained in gate_b (i.e. of the components of the tensor
+            product space that are operated on) and the "noop"-parts contained
+            in noop_b.  Thus, len(gate_b) + len(noop_b) == len(basisInds), and
+            this function merges together basis indices for the operated-on and
+            not-operated-on tensor product components.  
+            Note: return value always have length == len(basisInds) == number
+            of components
             """
             ret = list(noop_b[:])    #start with noop part...
             for li,b_el in sorted( zip(labelIndices,gate_b), key=lambda x: x[0]):
@@ -838,63 +856,73 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
     Parameters
     ----------
     stateSpaceDims : list of ints
-        Dimenstions specifying the structure of the density-matrix space.  Elements
-        correspond to block dimensions of an allowed density matrix in the standard
-        basis, and the density-matrix space is the direct sum of linear spaces of 
-        dimension block-dimension^2.
+        Dimenstions specifying the structure of the density-matrix space.
+        Elements correspond to block dimensions of an allowed density matrix in
+        the standard basis, and the density-matrix space is the direct sum of
+        linear spaces of dimension block-dimension^2.
 
     stateSpaceLabels : a list of tuples
-        Each tuple corresponds to a block of a density matrix in the standard basis
-        (and therefore a component of the direct-sum density matrix space). Elements
-        of a tuple are user-defined labels beginning with "L" (single level) or "Q"
-        (two-level; qubit) which interpret the d-dimensional state space corresponding
-        to a d x d block as a tensor product between qubit and single level systems.
+        Each tuple corresponds to a block of a density matrix in the standard
+        basis (and therefore a component of the direct-sum density matrix
+        space). Elements of a tuple are user-defined labels beginning with "L"
+        (single level) or "Q" (two-level; qubit) which interpret the
+        d-dimensional state space corresponding to a d x d block as a tensor
+        product between qubit and single level systems.
 
     gateLabels : list of strings
-        A list of labels for each created gate in the final gateset.  To conform with
-        text file parsing conventions these names should begin with a capital G and
-        can be followed by any number of lowercase characters, numbers, or the
-        underscore character.
+        A list of labels for each created gate in the final gateset.  To
+        conform with text file parsing conventions these names should begin
+        with a capital G and can be followed by any number of lowercase
+        characters, numbers, or the underscore character.
         
     gateExpressions : list of strings
-        A list of gate expressions, each corresponding to a gate label in gateLabels,
-        which determine what operation each gate performs (see documentation for build_gate).
+        A list of gate expressions, each corresponding to a gate label in
+        gateLabels, which determine what operation each gate performs (see
+        documentation for :meth:`build_gate`).
 
     prepLabels : list of string
-        A list of labels for each created state preparation in the final gateset.  To
-        conform with conventions these shames should begin with "rho".
+        A list of labels for each created state preparation in the final
+        gateset.  To conform with conventions these labels should begin with
+        "rho".
 
     prepExpressions : list of strings
-        A list of vector expressions for each state preparation vector (see documentation
-        for build_vector).
+        A list of vector expressions for each state preparation vector (see
+        documentation for :meth:`build_vector`).
 
     effectLabels : list of string
-        A list of labels for each created and *parameterized* POVM effect in the final
-        gateset.  To conform with conventions these shames should begin with "E".
+        A list of labels for each created and *parameterized* POVM effect in
+        the final gateset.  To conform with conventions these labels should
+        begin with "E".
 
     effectExpressions : list of strings
-        A list of vector expressions for each POVM effect vector (see documentation for
-        build_vector).
+        A list of vector expressions for each POVM effect vector (see
+        documentation for :meth:`build_vector`).
 
     spamdefs : dict
-        A dictionary mapping spam labels to (prepLabel,ELabel) 2-tuples associating a 
-        particular state preparation and effect vector with a label.  prepLabel and ELabel
-        must be contained in prepLabels and effectLabels respectively except for two
-        special cases:
+        A dictionary mapping spam labels to (prepLabel,ELabel) 2-tuples
+        associating a particular state preparation and effect vector with a
+        label.  prepLabel and ELabel must be contained in prepLabels and
+        effectLabels respectively except for two special cases:
 
-        1.  ELabel can be set to "remainder" to mean an effect vector that is the
-            identity - (other effect vectors)
-        2.  ELabel and prepLabel can both be "remainder" to mean a spam label that generates
-            probabilities that are 1.0 - (sum of probabilities from all other spam labels).
+        1.  ELabel can be set to "remainder" to mean an effect vector that is
+            the identity - (other effect vectors)
+        2.  ELabel and prepLabel can both be "remainder" to mean a spam label
+            that generates probabilities that are 1.0 - (sum of probabilities
+            from all other spam labels).
 
     basis : {'gm','pp','std'}, optional
         the basis of the matrices in the returned GateSet
-        - "std" = gate matrix operates on density mx expressed as sum of matrix units
-        - "gm"  = gate matrix operates on dentity mx expressed as sum of normalized Gell-Mann matrices
-        - "pp"  = gate matrix operates on density mx expresses as sum of tensor-product of Pauli matrices
+
+        - "std" = gate matrix operates on density mx expressed as sum of matrix
+          units
+        - "gm"  = gate matrix operates on dentity mx expressed as sum of
+          normalized Gell-Mann matrices
+        - "pp"  = gate matrix operates on density mx expresses as sum of
+          tensor-product of Pauli matrices
 
     parameterization : {"full","linear"}, optional
-        How to parameterize the gates of the resulting GateSet (see documentation for build_gate).
+        How to parameterize the gates of the resulting GateSet (see
+        documentation for :meth:`build_gate`).
 
     Returns
     -------

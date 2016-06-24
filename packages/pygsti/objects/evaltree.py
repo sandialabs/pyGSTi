@@ -5,6 +5,7 @@
 #*****************************************************************
 """ Defines the EvalTree class which implements an evaluation tree. """
 
+from __future__ import print_function
 import re as _re
 import gatestring as _gs
 import numpy as _np
@@ -561,8 +562,8 @@ class EvalTree(list):
 
         #Analyze tree
         if not self.is_split():
-            print "Size of evalTree = %d" % len(self)
-            print "Size of gatestring_list = %d" % len(self.finalList)
+            print("Size of evalTree = %d" % len(self))
+            print("Size of gatestring_list = %d" % len(self.finalList))
     
             lastOccurrance = [-1] * len(self)
             nRefs = [-1] * len(self)
@@ -585,15 +586,15 @@ class EvalTree(list):
                     if lastOccurrance[j] == i and self[j][2] == -1: nInUse -= 1
                 maxInUse = max(maxInUse,nInUse)
                 #print "%d  %d  %d  %d  %d" % (i, nRefs[i], lastOccurrance[i], tup[2], nInUse)
-            print "Max in use at once = (smallest tree size for mem) = %d" % maxInUse
+            print("Max in use at once = (smallest tree size for mem) = %d" % maxInUse)
             
         else: #tree is split
-            print "Size of original tree = %d" % len(self)
-            print "Size of original gatestring_list = %d" % len(self.finalList)
-            print "Tree is split into %d sub-trees" % len(self.subTrees)
-            print "Sub-tree lengths = ", list(map(len,self.subTrees)), " (Sum = %d)" % sum(map(len,self.subTrees))
+            print("Size of original tree = %d" % len(self))
+            print("Size of original gatestring_list = %d" % len(self.finalList))
+            print("Tree is split into %d sub-trees" % len(self.subTrees))
+            print("Sub-tree lengths = ", list(map(len,self.subTrees)), " (Sum = %d)" % sum(map(len,self.subTrees)))
             for i,t in enumerate(self.subTrees):
-                print ">> sub-tree %d: " % i
+                print(">> sub-tree %d: " % i)
                 t.print_analysis()
 
         
