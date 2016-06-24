@@ -1,0 +1,7 @@
+#!/usr/bin/python
+
+import subprocess
+import os, sys
+
+print('Push hook activated')
+os.system('./setup_hooks.sh')
