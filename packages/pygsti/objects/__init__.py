@@ -11,6 +11,7 @@
 #Import Objects at package level
 from confidenceregion import ConfidenceRegion
 from dataset import DataSet
+from tddataset import TDDataSet
 from exceptions import *
 from evaltree import EvalTree
 from gate import Gate

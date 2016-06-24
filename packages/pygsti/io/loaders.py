@@ -134,6 +134,14 @@ def load_multidataset(filename, cache=False):
     return mds
 
 
+def load_tddataset(filename, cache=False):
+    """
+    Load a TDDataSet (time-dependent data set) from a file.
+    """
+    parser = _stdinput.StdInputParser()
+    tdds = parser.parse_tddatafile(filename)
+    return tdds
+
 
 def load_gateset(filename):
     """
