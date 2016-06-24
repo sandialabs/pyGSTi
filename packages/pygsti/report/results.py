@@ -57,6 +57,9 @@ class Results(object):
         self._bEssentialResultsSet = False
         self._LsAndGermInfoSet = False
 
+        # MPI communicator to be used for confidence region construction
+        self._comm = None #TODO: allow this to be passed to __init__?
+
         # Confidence regions: key == confidence level, val = ConfidenceRegion
         self._confidence_regions = {} # plain dict. Key == confidence level
         self._specials = _ResultCache(self._get_special_fns(), self, "special")
@@ -87,7 +90,7 @@ class Results(object):
                             'minProbClipForWeighting': 1e-4,
                             'probClipInterval': (-1e6,1e6),
                             'radius': 1e-4,
-                            'hessianProjection': 'std',
+                            'hessianProjection': 'optimal gate CIs',
                             'defaultDirectory': None,
                             'defaultBasename': None,
                             'linlogPercentile':  5,
