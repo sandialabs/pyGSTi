@@ -1,6 +1,0 @@
-pygsti.objects.TPParameterizedGate.copy
-=======================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: TPParameterizedGate.copy

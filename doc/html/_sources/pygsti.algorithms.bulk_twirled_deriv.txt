@@ -1,6 +1,0 @@
-pygsti.algorithms.bulk_twirled_deriv
-====================================
-
-.. currentmodule:: pygsti.algorithms
-
-.. autofunction:: bulk_twirled_deriv

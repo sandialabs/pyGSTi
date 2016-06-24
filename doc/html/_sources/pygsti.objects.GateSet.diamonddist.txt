@@ -1,6 +1,0 @@
-pygsti.objects.GateSet.diamonddist
-==================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: GateSet.diamonddist

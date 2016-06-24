@@ -1,6 +1,0 @@
-pygsti.objects.DataSet.itervalues
-=================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: DataSet.itervalues

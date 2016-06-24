@@ -1,6 +1,0 @@
-pygsti.drivers.gauge_optimize_gs_list
-=====================================
-
-.. currentmodule:: pygsti.drivers
-
-.. autofunction:: gauge_optimize_gs_list

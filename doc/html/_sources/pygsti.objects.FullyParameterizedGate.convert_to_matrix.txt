@@ -1,6 +1,0 @@
-pygsti.objects.FullyParameterizedGate.convert_to_matrix
-=======================================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: FullyParameterizedGate.convert_to_matrix

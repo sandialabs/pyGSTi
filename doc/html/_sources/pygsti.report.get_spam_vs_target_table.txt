@@ -1,6 +1,0 @@
-pygsti.report.get_spam_vs_target_table
-======================================
-
-.. currentmodule:: pygsti.report
-
-.. autofunction:: get_spam_vs_target_table

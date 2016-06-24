@@ -1,6 +1,0 @@
-pygsti.tools.jamiolkowski_iso_inv
-=================================
-
-.. currentmodule:: pygsti.tools
-
-.. autofunction:: jamiolkowski_iso_inv

@@ -1,6 +1,0 @@
-pygsti.objects.GateSet.product
-==============================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: GateSet.product

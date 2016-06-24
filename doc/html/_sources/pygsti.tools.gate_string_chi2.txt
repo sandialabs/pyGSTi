@@ -1,6 +1,0 @@
-pygsti.tools.gate_string_chi2
-=============================
-
-.. currentmodule:: pygsti.tools
-
-.. autofunction:: gate_string_chi2
