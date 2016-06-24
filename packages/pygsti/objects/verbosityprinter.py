@@ -32,7 +32,7 @@ show_progress: function that prints a progress bar to the screen.
 '''
 
 def _num_digits(n):
-    return int(_math.log10(n)) + 1
+    return int(_math.log10(n)) + 1 if n > 0 else 1
 
 # This function isn't a part of the public interface, instead it has a wrapper in the VerbosityPrinter class
 def _build_progress_bar (iteration, total, barLength = 100, numDecimals=2, fillChar='#',
