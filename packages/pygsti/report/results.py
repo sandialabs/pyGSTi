@@ -2852,7 +2852,7 @@ class Results(object):
             printer.log(" -- Error rate plots...")
             fig = set_fig_qtys("smallEigvalErrRateColorBoxPlot",
                                "smallEigvalErrRateBoxes.png", printer - 1)
-            printer.end_progresss()
+            printer.end_progress()
 
         else:
             for figkey in ["directLongSeqGSTColorBoxPlot",

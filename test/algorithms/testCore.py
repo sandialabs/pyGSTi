@@ -191,9 +191,11 @@ class TestCoreMethods(CoreTestCase):
 
         gs_exlgst_compare = pygsti.io.load_gateset("../cmp_chk_files/exlgst.gateset")
         gs_exlgst_reg_compare = pygsti.io.load_gateset("../cmp_chk_files/exlgst_reg.gateset")
+        gs_exlgst_go = pygsti.optimize_gauge(gs_exlgst, 'target', targetGateset=gs_exlgst_compare, spamWeight=1.0)
+        gs_exlgst_reg_go = pygsti.optimize_gauge(gs_exlgst_reg, 'target', targetGateset=gs_exlgst_reg_compare, spamWeight=1.0)
 
-        self.assertAlmostEqual( gs_exlgst.frobeniusdist(gs_exlgst_compare), 0)
-        self.assertAlmostEqual( gs_exlgst_reg.frobeniusdist(gs_exlgst_reg_compare), 0)
+        self.assertAlmostEqual( gs_exlgst_go.frobeniusdist(gs_exlgst_compare), 0, places=5)
+        self.assertAlmostEqual( gs_exlgst_reg_go.frobeniusdist(gs_exlgst_reg_compare), 0, places=5)
 
 
     def test_MC2GST(self):
@@ -269,8 +271,11 @@ class TestCoreMethods(CoreTestCase):
         gs_lsgst_compare = pygsti.io.load_gateset("../cmp_chk_files/lsgst.gateset")
         gs_lsgst_reg_compare = pygsti.io.load_gateset("../cmp_chk_files/lsgst_reg.gateset")
 
-        self.assertAlmostEqual( gs_lsgst.frobeniusdist(gs_lsgst_compare), 0)
-        self.assertAlmostEqual( gs_lsgst_reg.frobeniusdist(gs_lsgst_reg_compare), 0)
+        gs_lsgst_go = pygsti.optimize_gauge(gs_lsgst, 'target', targetGateset=gs_lsgst_compare, spamWeight=1.0)
+        gs_lsgst_reg_go = pygsti.optimize_gauge(gs_lsgst_reg, 'target', targetGateset=gs_lsgst_reg_compare, spamWeight=1.0)
+
+        self.assertAlmostEqual( gs_lsgst_go.frobeniusdist(gs_lsgst_compare), 0, places=5)
+        self.assertAlmostEqual( gs_lsgst_reg_go.frobeniusdist(gs_lsgst_reg_compare), 0, places=5)
 
 
     def test_MLGST(self):
@@ -340,7 +345,9 @@ class TestCoreMethods(CoreTestCase):
         #pygsti.io.write_gateset(gs_mlegst,"../cmp_chk_files/mle_gst.gateset", "Saved MLE-GST Gateset")
 
         gs_mle_compare = pygsti.io.load_gateset("../cmp_chk_files/mle_gst.gateset")
-        self.assertAlmostEqual( gs_mlegst.frobeniusdist(gs_mle_compare), 0)
+        gs_mlegst_go = pygsti.optimize_gauge(gs_mlegst, 'target', targetGateset=gs_mle_compare, spamWeight=1.0)
+
+        self.assertAlmostEqual( gs_mlegst_go.frobeniusdist(gs_mle_compare), 0, places=5)
 
     def test_LGST_1overSqrtN_dependence(self):
         my_datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0)
@@ -404,8 +411,8 @@ class TestCoreMethods(CoreTestCase):
         #pygsti.io.write_gateset(gs_lsgst,"../cmp_chk_files/lsgstMS.gateset", "Saved LSGST Gateset with model selection")
 
         gs_lsgst_compare = pygsti.io.load_gateset("../cmp_chk_files/lsgstMS.gateset")
-
-        self.assertAlmostEqual( gs_lsgst.frobeniusdist(gs_lsgst_compare), 0)
+        gs_lsgst_go = pygsti.optimize_gauge(gs_lsgst, 'target', targetGateset=gs_lsgst_compare, spamWeight=1.0)
+        self.assertAlmostEqual( gs_lsgst_go.frobeniusdist(gs_lsgst_compare), 0, places=5)
 
     def test_miscellaneous(self):
         ds = self.ds
