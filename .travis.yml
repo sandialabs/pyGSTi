@@ -1,0 +1,14 @@
+language: python
+python:
+  - "2.7"
+branches:
+  only:
+    - master
+    - unittests
+# command to install dependencies
+install:
+  - pip install -r requirements.txt
+# command to run tests
+script:
+  - cd test/test_tools/
+  - python runPackage.py tools
