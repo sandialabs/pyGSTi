@@ -1,6 +1,0 @@
-pygsti.report.get_gateset_gate_boxes_table
-==========================================
-
-.. currentmodule:: pygsti.report
-
-.. autofunction:: get_gateset_gate_boxes_table

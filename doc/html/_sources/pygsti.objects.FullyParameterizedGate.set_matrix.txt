@@ -1,6 +1,0 @@
-pygsti.objects.FullyParameterizedGate.set_matrix
-================================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: FullyParameterizedGate.set_matrix

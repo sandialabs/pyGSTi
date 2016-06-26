@@ -1,6 +1,0 @@
-pygsti.pp_to_gm
-===============
-
-.. currentmodule:: pygsti
-
-.. autofunction:: pp_to_gm

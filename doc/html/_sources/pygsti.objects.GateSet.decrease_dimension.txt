@@ -1,6 +1,0 @@
-pygsti.objects.GateSet.decrease_dimension
-=========================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: GateSet.decrease_dimension

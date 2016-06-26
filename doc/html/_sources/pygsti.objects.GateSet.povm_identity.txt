@@ -1,6 +1,0 @@
-pygsti.objects.GateSet.povm_identity
-====================================
-
-.. currentmodule:: pygsti.objects
-
-.. autoattribute:: GateSet.povm_identity

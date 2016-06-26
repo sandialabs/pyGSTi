@@ -1,6 +1,0 @@
-pygsti.report.logl_boxplot
-==========================
-
-.. currentmodule:: pygsti.report
-
-.. autofunction:: logl_boxplot

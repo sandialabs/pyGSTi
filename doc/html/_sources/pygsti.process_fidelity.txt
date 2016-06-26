@@ -1,6 +1,0 @@
-pygsti.process_fidelity
-=======================
-
-.. currentmodule:: pygsti
-
-.. autofunction:: process_fidelity

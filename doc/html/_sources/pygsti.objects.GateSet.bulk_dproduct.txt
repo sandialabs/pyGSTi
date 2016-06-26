@@ -1,6 +1,0 @@
-pygsti.objects.GateSet.bulk_dproduct
-====================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: GateSet.bulk_dproduct

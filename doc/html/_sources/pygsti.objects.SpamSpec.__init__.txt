@@ -1,6 +1,0 @@
-pygsti.objects.SpamSpec.__init__
-================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: SpamSpec.__init__

@@ -1,6 +1,0 @@
-pygsti.objects.GateSet.setdefault
-=================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: GateSet.setdefault

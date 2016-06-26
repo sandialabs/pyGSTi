@@ -293,3 +293,6 @@ texinfo_documents = [
 
 # If true, do not generate a @detailmenu in the "Top" node's menu.
 #texinfo_no_detailmenu = False
+
+# Make the primary domain python since that's the only language we're using
+primary_domain = 'py'
