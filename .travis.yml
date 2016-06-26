@@ -11,8 +11,8 @@ before_install:
   - sudo apt-get install -y gfortran libblas-dev liblapack-dev
 install:
   - pip install -r requirements.txt
+  - pip install cvxpy python-pptx
   - pip install -e .
-#  - python install_locally.py
 # command to run tests
 script:
   - cd test/test_tools/
