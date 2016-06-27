@@ -83,7 +83,7 @@ weights={None},
 gaugeOptParams={Dict[]},
 objective={chi2},
 constrainToTP={False},
-hessianProjection={std}  }
+hessianProjection={optimal gate CIs}  }
 }
 
 
@@ -343,10 +343,10 @@ $\rho_{0}$ & $ \begin{array}{c}
 0.6551
  \end{array} $
  & $ \begin{array}{c}
-0.0004 \\ 
-0.0012 \\ 
-0.0013 \\ 
-0.0013
+0.0014 \\ 
+0.0017 \\ 
+0.0018 \\ 
+0.0015
  \end{array} $
  & $ \left(\!\!\begin{array}{cc}
 0.9639 & 0.0011e^{-i0.155} \\ 
@@ -361,9 +361,9 @@ $E_{0}$ & $ \begin{array}{c}
  \end{array} $
  & $ \begin{array}{c}
 0.0004 \\ 
-0.0013 \\ 
-0.0013 \\ 
-0.0013
+0.0014 \\ 
+0.0015 \\ 
+0.0015
  \end{array} $
  & $ \left(\!\!\begin{array}{cc}
 0.0581 & 0.0018e^{i1.847} \\ 
@@ -381,7 +381,7 @@ $E_{0}$ & $ \begin{array}{c}
 \begin{tabular}[l]{|c|c|c|}
 \hline
  & $E_{0}$ & $E_C$ \\ \hline
-$\rho_{0}$ & $ \begin{array}{c} 0.091176 \\ \pm 0.001817 \end{array} $ & $ \begin{array}{c} 0.909263 \\ \pm 0.001648 \end{array} $ \\ \hline
+$\rho_{0}$ & $ \begin{array}{c} 0.091176 \\ \pm 0.00176 \end{array} $ & $ \begin{array}{c} 0.909263 \\ \pm 0.002476 \end{array} $ \\ \hline
 \end{tabular}
 
 \caption{\pdftooltip{{\color{blue}\texttt{.tables['bestGatesetSpamParametersTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['bestGatesetSpamParametersTable']}\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestGatesetSpamTable}.  The symbol $E_C$, when it appears, refers to the ``complement'' effect given by subtracting each of the other effects from the identity.\label{bestGatesetSpamParametersTable}}
@@ -400,8 +400,8 @@ Gi & $ \left(\!\!\begin{array}{cccc}
 0.0011 & 2\e{-5} & 0.0007 & 0.9485
  \end{array}\!\!\right) $
  & $ \left(\!\!\begin{array}{cccc}
-0.0003 & 0.0006 & 0.0006 & 0.0006 \\ 
-0.0007 & 0.0016 & 0.0017 & 0.0017 \\ 
+0.0004 & 0.0006 & 0.0007 & 0.0006 \\ 
+0.0007 & 0.0016 & 0.0016 & 0.0016 \\ 
 0.0006 & 0.0016 & 0.0016 & 0.0017 \\ 
 0.0006 & 0.0016 & 0.0017 & 0.0015
  \end{array}\!\!\right) $
@@ -413,10 +413,10 @@ Gx & $ \left(\!\!\begin{array}{cccc}
 0.0002 & 0.0003 & 0.949 & -0.0022
  \end{array}\!\!\right) $
  & $ \left(\!\!\begin{array}{cccc}
-0.0002 & 0.0005 & 0.0006 & 0.0006 \\ 
-0.0007 & 0.0016 & 0.0017 & 0.0016 \\ 
-0.0006 & 0.0013 & 0.0017 & 0.0008 \\ 
-0.0006 & 0.0013 & 0.0008 & 0.0011
+0.0003 & 0.0005 & 0.0018 & 0.0017 \\ 
+0.0006 & 0.0016 & 0.0005 & 0.0007 \\ 
+0.0003 & 0.0011 & 0.0012 & 0.0009 \\ 
+0.0003 & 0.001 & 0.0009 & 0.001
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
@@ -426,10 +426,10 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 -0.0002 & -0.949 & -0.0062 & -0.0005
  \end{array}\!\!\right) $
  & $ \left(\!\!\begin{array}{cccc}
-0.0002 & 0.0006 & 0.0005 & 0.0006 \\ 
-0.0006 & 0.0017 & 0.0017 & 0.0009 \\ 
-0.0006 & 0.0013 & 0.0016 & 0.0013 \\ 
-0.0006 & 0.0009 & 0.0015 & 0.001
+0.0003 & 0.0005 & 0.0006 & 0.0004 \\ 
+0.0003 & 0.0011 & 0.0006 & 0.0009 \\ 
+0.0006 & 0.0011 & 0.0016 & 0.0011 \\ 
+0.0003 & 0.0009 & 0.0007 & 0.0009
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -458,9 +458,9 @@ It's also useful to know \emph{how} the real gates (or, more precisely, GST's es
 \begin{tabular}[l]{|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
-Gi & $ \begin{array}{c} 0.039909 \\ \pm 0.000774 \end{array} $ & $ \begin{array}{c} 0.04008 \\ \pm 0.000735 \end{array} $ & $ \begin{array}{c} 0.040088 \\ \pm 0.000735 \end{array} $ \\ \hline
-Gx & $ \begin{array}{c} 0.037849 \\ \pm 0.000641 \end{array} $ & $ \begin{array}{c} 0.037916 \\ \pm 0.000617 \end{array} $ & $ \begin{array}{c} 0.037917 \\ \pm 0.000617 \end{array} $ \\ \hline
-Gy & $ \begin{array}{c} 0.037688 \\ \pm 0.00066 \end{array} $ & $ \begin{array}{c} 0.037764 \\ \pm 0.000635 \end{array} $ & $ \begin{array}{c} 0.037765 \\ \pm 0.000635 \end{array} $ \\ \hline
+Gi & $ \begin{array}{c} 0.039909 \\ \pm 0.0008 \end{array} $ & $ \begin{array}{c} 0.04008 \\ \pm 0.000742 \end{array} $ & $ \begin{array}{c} 0.040088 \\ \pm 0.000742 \end{array} $ \\ \hline
+Gx & $ \begin{array}{c} 0.037849 \\ \pm 0.000668 \end{array} $ & $ \begin{array}{c} 0.037916 \\ \pm 0.000624 \end{array} $ & $ \begin{array}{c} 0.037917 \\ \pm 0.000624 \end{array} $ \\ \hline
+Gy & $ \begin{array}{c} 0.037688 \\ \pm 0.000685 \end{array} $ & $ \begin{array}{c} 0.037764 \\ \pm 0.00064 \end{array} $ & $ \begin{array}{c} 0.037765 \\ \pm 0.00064 \end{array} $ \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -509,7 +509,7 @@ Gi & $ \begin{array}{c}
 0.9458e^{-i0.002}
  \end{array} $
  $\pm$ $ \begin{array}{c}
-0.0003 \\ 
+0.0004 \\ 
 0.0052 \\ 
 0.0036e^{i0.677} \\ 
 0.0036e^{i0.677}
@@ -526,7 +526,7 @@ Gi & $ \begin{array}{c}
 0.1486 \\ 
 0.3255
  \end{array} $
- & $ \begin{array}{c} 0.051182 \\ \pm 0.005245 \end{array} $ & $ \begin{array}{c} 0.054226 \\ \pm 0.002811 \end{array} $ \\ \hline
+ & $ \begin{array}{c} 0.051182 \\ \pm 0.005228 \end{array} $ & $ \begin{array}{c} 0.054226 \\ \pm 0.002802 \end{array} $ \\ \hline
 Gx & $ \begin{array}{c}
 0.949e^{i1.572} \\ 
 0.949e^{-i1.572} \\ 
@@ -534,9 +534,9 @@ Gx & $ \begin{array}{c}
 0.9506
  \end{array} $
  $\pm$ $ \begin{array}{c}
-0.0013e^{i0.688} \\ 
-0.0013e^{i0.688} \\ 
-0.0002 \\ 
+0.0013e^{i0.721} \\ 
+0.0013e^{i0.721} \\ 
+0.0003 \\ 
 0.0016
  \end{array} $
  & $ \begin{array}{c}
@@ -551,7 +551,7 @@ Gx & $ \begin{array}{c}
 6\e{-7} \\ 
 -0.0003
  \end{array} $
- & $ \begin{array}{c} 0.049448 \\ \pm 0.001598 \end{array} $ & $ \begin{array}{c} 0.050971 \\ \pm 0.000843 \end{array} $ \\ \hline
+ & $ \begin{array}{c} 0.049448 \\ \pm 0.001608 \end{array} $ & $ \begin{array}{c} 0.050971 \\ \pm 0.000864 \end{array} $ \\ \hline
 Gy & $ \begin{array}{c}
 1 \\ 
 0.9513 \\ 
@@ -559,10 +559,10 @@ Gy & $ \begin{array}{c}
 0.9489e^{-i1.571}
  \end{array} $
  $\pm$ $ \begin{array}{c}
-0.0002 \\ 
+0.0003 \\ 
 0.0016 \\ 
-0.0013e^{i0.740} \\ 
-0.0013e^{i0.740}
+0.0012e^{i0.794} \\ 
+0.0012e^{i0.794}
  \end{array} $
  & $ \begin{array}{c}
 1 \\ 
@@ -576,7 +576,7 @@ Gy & $ \begin{array}{c}
 -1 \\ 
 0.0012
  \end{array} $
- & $ \begin{array}{c} 0.048651 \\ \pm 0.001619 \end{array} $ & $ \begin{array}{c} 0.051062 \\ \pm 0.000873 \end{array} $ \\ \hline
+ & $ \begin{array}{c} 0.048651 \\ \pm 0.00163 \end{array} $ & $ \begin{array}{c} 0.051062 \\ \pm 0.000891 \end{array} $ \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -584,9 +584,9 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & $ \begin{array}{c}(0.000627 \\ \pm 0.00076)\pi \end{array} $ &  & $ \begin{array}{c}(0.11656 \\ \pm 0.134201)\pi \end{array} $ & $ \begin{array}{c}(0.548963 \\ \pm 0.171338)\pi \end{array} $ \\ \hline
-Gx & $ \begin{array}{c}(0.500353 \\ \pm 0.000344)\pi \end{array} $ & $ \begin{array}{c}(0.11656 \\ \pm 0.134201)\pi \end{array} $ &  & $ \begin{array}{c}(0.501708 \\ \pm 0.000521)\pi \end{array} $ \\ \hline
-Gy & $ \begin{array}{c}(0.500072 \\ \pm 0.000321)\pi \end{array} $ & $ \begin{array}{c}(0.548963 \\ \pm 0.171338)\pi \end{array} $ & $ \begin{array}{c}(0.501708 \\ \pm 0.000521)\pi \end{array} $ &  \\ \hline
+Gi & $ \begin{array}{c}(0.000627 \\ \pm 0.000758)\pi \end{array} $ &  & $ \begin{array}{c}(0.11656 \\ \pm 0.133588)\pi \end{array} $ & $ \begin{array}{c}(0.548963 \\ \pm 0.16945)\pi \end{array} $ \\ \hline
+Gx & $ \begin{array}{c}(0.500353 \\ \pm 0.00033)\pi \end{array} $ & $ \begin{array}{c}(0.11656 \\ \pm 0.133588)\pi \end{array} $ &  & $ \begin{array}{c}(0.501708 \\ \pm 0.000369)\pi \end{array} $ \\ \hline
+Gy & $ \begin{array}{c}(0.500072 \\ \pm 0.000294)\pi \end{array} $ & $ \begin{array}{c}(0.548963 \\ \pm 0.16945)\pi \end{array} $ & $ \begin{array}{c}(0.501708 \\ \pm 0.000369)\pi \end{array} $ &  \\ \hline
 \end{tabular}
 
 \caption{\pdftooltip{{\color{blue}\texttt{.tables['bestGatesetDecompTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['bestGatesetDecompTable']}\pdftooltip{{\color{blue}\texttt{.tables['bestGatesetRotnAxisTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['bestGatesetRotnAxisTable']}\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay''); and (7) the angle between each gate's rotation axis and the rotation axes of the other gates.  ``X'' indicates that the decomposition failed or couldn't be interpreted. \label{bestGatesetDecompTable}}
@@ -655,7 +655,7 @@ Gi & $ \left(\!\!\begin{array}{cccc}
  \end{array} $
  $\pm$ $ \begin{array}{c}
 0.0007 \\ 
-0.0007 \\ 
+0.0006 \\ 
 0.0007 \\ 
 0.0008
  \end{array} $
@@ -673,10 +673,10 @@ Gx & $ \left(\!\!\begin{array}{cccc}
 0.9622
  \end{array} $
  $\pm$ $ \begin{array}{c}
-0.0007 \\ 
-0.0006 \\ 
-0.0007 \\ 
-0.0006
+0.0004 \\ 
+0.0005 \\ 
+0.0004 \\ 
+0.0007
  \end{array} $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
@@ -692,9 +692,9 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 0.9623
  \end{array} $
  $\pm$ $ \begin{array}{c}
-0.0006 \\ 
-0.0006 \\ 
-0.0007 \\ 
+0.0005 \\ 
+0.0004 \\ 
+0.0004 \\ 
 0.0007
  \end{array} $
  \\ \hline
