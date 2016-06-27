@@ -1,3 +1,2 @@
-# copy ourselves, even? Who knows :)
 echo Setting up hooks
-cp * ../.git/hooks
+cp post-merge pre-commit ../.git/hooks

@@ -3,7 +3,6 @@ from __future__ import print_function
 import subprocess, sys
 
 print('Runnning post-merge hook - updating git hooks (hopefully)')
-
-subprocess.call(['git', 'pull'])
+subprocess.call(['./setup_hooks.sh'])
 
 sys.exit(0)
