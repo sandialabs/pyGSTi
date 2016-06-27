@@ -8,6 +8,7 @@
 import sys as _sys
 import os  as _os
 import re  as _re
+import subprocess  as _subprocess
 import collections as _collections
 import matplotlib  as _matplotlib
 import itertools   as _itertools
@@ -307,6 +308,47 @@ class Results(object):
         s += " PDF indicating how tables and figures in the PDF correspond\n"
         s += " to the values of .tables[ ] and .figures[ ] listed above.\n"
         return s
+
+    def _compile_latex_report(self, report_dir, report_base, latex_call,
+                              printer):
+        """Compile a PDF report from a TeX file. Will compile twice
+        automatically.
+
+        Parameters
+        ----------
+        report_dir : string
+            The directory for the output file.
+
+        report_base : string
+            The base name for the output file (not including any extensions).
+
+        latex_call : list of string
+            List containing the command and flags in the form that
+            :function:`subprocess.check_call` uses.
+
+        printer : VerbosityPrinter
+            Printer to handle logging.
+
+        Raises
+        ------
+        subprocess.CalledProcessException
+            If the call to the process comiling the PDF returns non-zero exit
+            status.
+
+        """
+        texFilename = report_base + ".tex"
+        pdfPathname = _os.path.join(report_dir, report_base + ".pdf")
+        call = latex_call + [texFilename]
+        _subprocess.check_call(call)
+        printer.log("Initial output PDF %s successfully generated." %
+                    pdfPathname)
+        # We could check if the log file contains "Rerun" in it,
+        # but we'll just re-run all the time now
+        _subprocess.check_call(call)
+        printer.log("Final output PDF %s successfully generated. " %
+                    pdfPathname + "Cleaning up .aux and .log files.")
+        _os.remove( report_base + ".log" )
+        _os.remove( report_base + ".aux" )
 
 
     def _get_table_fns(self):
@@ -1824,30 +1866,11 @@ class Results(object):
             _os.chdir(report_dir)
 
         try:
-            ret = _os.system( "%s %s %s" %
-                              (self.options.latex_cmd,
-                               _os.path.basename(mainTexFilename),
-                               self.options.latex_postcmd) )
-            if ret == 0:
-                #We could check if the log file contains "Rerun" in it,
-                # but we'll just re-run all the time now
-                printer.log("Initial output PDF %s successfully generated." \
-                        % pdfFilename)
-
-                ret = _os.system( "%s %s %s" %
-                                  (self.options.latex_cmd,
-                                   _os.path.basename(mainTexFilename),
-                                   self.options.latex_postcmd) )
-                if ret == 0:
-                    printer.log("Final output PDF %s successfully generated. Cleaning up .aux and .log files." % pdfFilename) #mainTexFilename
-                    _os.remove( report_base + ".log" )
-                    _os.remove( report_base + ".aux" )
-                else:
-                    printer.error("pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
-            else:
-                printer.error("pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
-        except:
-            printer.error("Error trying to run pdflatex to generate output PDF %s. Is '%s' on your path?" % (pdfFilename,self.options.latex_cmd))
+            self._compile_latex_report(report_dir, report_base,
+                                       self.options.latex_call, printer)
+        except _subprocess.CalledProcessError as e:
+            printer.error("pdflatex returned code %d " % e.returncode +
+                          "Check %s.log to see details." % report_base)
         finally:
             _os.chdir(cwd)
 
@@ -2105,29 +2128,11 @@ class Results(object):
             _os.chdir(report_dir)
 
         try:
-            ret = _os.system( "%s %s %s" %
-                              (self.options.latex_cmd,
-                               _os.path.basename(mainTexFilename),
-                               self.options.latex_postcmd) )
-            if ret == 0:
-                #We could check if the log file contains "Rerun" in it,
-                # but we'll just re-run all the time now
-                printer.log("Initial output PDF %s successfully generated." % \
-                        pdfFilename)
-                ret = _os.system( "%s %s %s" %
-                                  (self.options.latex_cmd,
-                                   _os.path.basename(mainTexFilename),
-                                   self.options.latex_postcmd) )
-                if ret == 0:
-                    printer.log("Final output PDF %s successfully generated. Cleaning up .aux and .log files." % pdfFilename) #mainTexFilename
-                    _os.remove( report_base + ".log" )
-                    _os.remove( report_base + ".aux" )
-                else:
-                    printer.error("Error: pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
-            else:
-                printer.error("Error: pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
-        except:
-            printer.error("Error trying to run pdflatex to generate output PDF %s. Is '%s' on your path?" % (pdfFilename,self.options.latex_cmd))
+            self._compile_latex_report(report_dir, report_base,
+                                       self.options.latex_call, printer)
+        except _subprocess.CalledProcessError as e:
+            printer.error("pdflatex returned code %d " % e.returncode +
+                          "Check %s.log to see details." % report_base)
         finally:
             _os.chdir(cwd)
 
@@ -2142,10 +2147,10 @@ class Results(object):
         """
         Create a GST presentation (i.e. slides) using the beamer latex package.
 
-        The slides can contain most (but not all) of the tables and figures from
-        the "full" report but contain only minimal descriptive text.  This output
-        if useful for those familiar with the GST full report who need to present
-        the results in a projector-friendly format.
+        The slides can contain most (but not all) of the tables and figures
+        from the "full" report but contain only minimal descriptive text.  This
+        output if useful for those familiar with the GST full report who need
+        to present the results in a projector-friendly format.
 
         Parameters
         ----------
@@ -2192,8 +2197,8 @@ class Results(object):
            particular part of the overall goodness of fit box plot.
 
         m, M : float, optional
-           Minimum and Maximum values of the color scale used in the presentation's
-           color box plots.
+           Minimum and Maximum values of the color scale used in the
+           presentation's color box plots.
 
         verbosity : int, optional
            How much detail to send to stdout.
@@ -2529,27 +2534,11 @@ class Results(object):
             _os.chdir(report_dir)
 
         try:
-            ret = _os.system( "%s %s %s" %
-                              (self.options.latex_cmd,
-                               _os.path.basename(mainTexFilename),
-                               self.options.latex_postcmd) )
-            if ret == 0:
-                #We could check if the log file contains "Rerun" in it, but we'll just re-run all the time now
-                printer.log("Initial output PDF %s successfully generated." % pdfFilename) #mainTexFilename
-                ret = _os.system( "%s %s %s" %
-                                  (self.options.latex_cmd,
-                                   _os.path.basename(mainTexFilename),
-                                   self.options.latex_postcmd) )
-                if ret == 0:
-                    printer.log("Final output PDF %s successfully generated. Cleaning up .aux and .log files." % pdfFilename) #mainTexFilename
-                    _os.remove( report_base + ".log" )
-                    _os.remove( report_base + ".aux" )
-                else:
-                    printer.error("pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
-            else:
-                printer.error("Error: pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
-        except:
-            printer.error("Error trying to run pdflatex to generate output PDF %s. Is '%s' on your path?" % (pdfFilename,self.options.latex_cmd))
+            self._compile_latex_report(report_dir, report_base,
+                                       self.options.latex_call, printer)
+        except _subprocess.CalledProcessError as e:
+            printer.error("pdflatex returned code %d " % e.returncode +
+                          "Check %s.log to see details." % report_base)
         finally:
             _os.chdir(cwd)
 
@@ -2566,14 +2555,14 @@ class Results(object):
         """
         Create a GST Microsoft Powerpoint presentation.
 
-        These slides can contain most (but not all) of the tables and figures from
-        the "full" report but contain only minimal descriptive text.  This method
-        uses the python-pptx package to write Powerpoint files.  The resulting
-        powerpoint slides are meant to parallel those of the PDF presentation
-        but are not as nice and clean.  This method exists because the Powerpoint
-        format is an industry standard and makes it very easy to shamelessly
-        co-opt GST figures or entire slides for incorporation into other
-        presentations.
+        These slides can contain most (but not all) of the tables and figures
+        from the "full" report but contain only minimal descriptive text.  This
+        method uses the python-pptx package to write Powerpoint files.  The
+        resulting powerpoint slides are meant to parallel those of the PDF
+        presentation but are not as nice and clean.  This method exists because
+        the Powerpoint format is an industry standard and makes it very easy to
+        shamelessly co-opt GST figures or entire slides for incorporation into
+        other presentations.
 
         Parameters
         ----------
@@ -2620,8 +2609,8 @@ class Results(object):
            particular part of the overall goodness of fit box plot.
 
         m, M : float, optional
-           Minimum and Maximum values of the color scale used in the presentation's
-           color box plots.
+           Minimum and Maximum values of the color scale used in the
+           presentation's color box plots.
 
         verbosity : int, optional
            How much detail to send to stdout.
@@ -3022,17 +3011,34 @@ class Results(object):
 
             cwd = _os.getcwd()
             _os.chdir(fileDir)
+
             try:
-                ret = _os.system("%s -shell-escape %s.tex %s" \
-                                     % (self.options.latex_cmd, key,
-                                        self.options.latex_postcmd) )
-                if ret == 0:
-                    _os.remove( "%s.tex" % key )
-                    _os.remove( "%s.log" % key )
-                    _os.remove( "%s.aux" % key )
-                else: raise ValueError("pdflatex returned code %d trying to render standalone %s" % (ret,key))
+                output = _subprocess.check_output(self.options.latex_call +
+                                                  ["-shell-escape",
+                                                   "%s.tex" % key],
+                                                  stderr=_subprocess.STDOUT)
+                # Trying to see if ImageMagick's 'convert' command is installed.
+                # Ideally I would check to see if stderr is empty and if it's
+                # not empty I would print this error message should 'convert'
+                # show up anywhere in stderr, but I don't currently understand
+                # subprocess well enough to make this work, so I send stderr to
+                # stdout and look for a more specific string that shows up on
+                # MacOS when 'convert' is not available.
+                if output.find(b"convert: command not found") > -1:
+                    printer.error("ImageMagick's 'convert' utility may not be" +
+                                  " installed, so a PNG may not have been " +
+                                  "generated for %s." % key)
+                _os.remove( "%s.tex" % key )
+                _os.remove( "%s.log" % key )
+                _os.remove( "%s.aux" % key )
+            except _subprocess.CalledProcessError as e:
+                printer.error("pdflatex returned code %d " % e.returncode +
+                              "trying to render standalone %s. " % key +
+                              "Check %s.log to see details." % key)
             except:
-                raise ValueError("pdflatex failed to render standalone %s" % key)
+                printer.error("pdflatex failed to render standalone %s" % key)
+                raise
+
             finally:
                 _os.chdir(cwd)
 
@@ -3727,30 +3733,11 @@ class Results(object):
             _os.chdir(report_dir)
 
         try:
-            ret = _os.system( "%s %s %s" %
-                              (self.options.latex_cmd,
-                               _os.path.basename(mainTexFilename),
-                               self.options.latex_postcmd) )
-            if ret == 0:
-                #We could check if the log file contains "Rerun" in it,
-                # but we'll just re-run all the time now
-                printer.log("Initial output PDF %s successfully generated." \
-                        % pdfFilename)
-
-                ret = _os.system( "%s %s %s" %
-                                  (self.options.latex_cmd,
-                                   _os.path.basename(mainTexFilename),
-                                   self.options.latex_postcmd) )
-                if ret == 0:
-                    printer.log("Final output PDF %s successfully generated. Cleaning up .aux and .log files." % pdfFilename) #mainTexFilename
-                    _os.remove( report_base + ".log" )
-                    _os.remove( report_base + ".aux" )
-                else:
-                    printer.error("pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
-            else:
-                printer.error("pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
-        except:
-            printer.error("Error trying to run pdflatex to generate output PDF %s. Is '%s' on your path?" % (pdfFilename,self.options.latex_cmd))
+            self._compile_latex_report(report_dir, report_base,
+                                       self.options.latex_call, printer)
+        except _subprocess.CalledProcessError as e:
+            printer.error("pdflatex returned code %d " % e.returncode +
+                          "Check %s.log to see details." % report_base)
         finally:
             _os.chdir(cwd)
 
@@ -3773,6 +3760,9 @@ class ResultOptions(object):
         self.table_class = "pygstiTbl"
         self.template_path = "."
         self.latex_cmd = "pdflatex"
+        # Don't allow LaTeX to try and recover from errors interactively.
+        self.latex_opts = ["-interaction=nonstopmode", "-halt-on-error"]
+        self.latex_call = [self.latex_cmd] + self.latex_opts
         if _os.path.exists("/dev/null"):
             self.latex_postcmd = "-halt-on-error </dev/null >/dev/null"
         else:
