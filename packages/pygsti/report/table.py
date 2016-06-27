@@ -1,4 +1,5 @@
 from . import tableformat as _tf
+from collections import OrderedDict as _OrderedDict
 
 class ReportTable(object):
     def __init__(self, colHeadings, formatters, customHeader=None):
@@ -190,8 +191,7 @@ class ReportTable(object):
         """Indexes the first column rowdata"""
         for row_data,formatters in self._rows:
             if len(row_data) > 0 and row_data[0] == key:
-                return { key:val for key,val in \
-                             zip(self._columnNames,row_data) }
+                return _OrderedDict( zip(self._columnNames,row_data) )
         raise KeyError("%s not found as a first-column value" % key)
 
     def __len__(self):
