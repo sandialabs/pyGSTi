@@ -3043,7 +3043,8 @@ class Results(object):
 
 
         def draw_pic(shapes, path, left, top, width, height):
-            pxWidth, pxHeight = Image.open(open(path)).size
+            with open(path, 'rb') as imagefile:
+                pxWidth, pxHeight = Image.open(imagefile).size
             pxAspect = pxWidth / float(pxHeight) #aspect ratio of image
             maxAspect = width / float(height) #aspect ratio of "max" box
             if pxAspect > maxAspect:
