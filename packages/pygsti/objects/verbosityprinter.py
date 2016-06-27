@@ -176,8 +176,8 @@ class VerbosityPrinter():
     def _verbose_iteration(self, iteration, total, prefix, suffix, verboseMessages, indent, end):
         iteration =  _build_verbose_iteration(iteration, total, prefix, suffix, end)
         iteration = indent + iteration
-   	for verboseMessage in verboseMessages:
-    	    iteration += (indent + verboseMessage + '\n')
+        for verboseMessage in verboseMessages:
+            iteration += (indent + verboseMessage + '\n')
         return iteration
 
     def __str__(self):
@@ -195,21 +195,21 @@ class VerbosityPrinter():
     def show_progress(self, iteration, total, messageLevel=1, barLength = 50, numDecimals=2, fillChar='#',
                     emptyChar='-', prefix='Progress:', suffix='', verboseMessages=[], indentChar='  ', end='\n'):
 
-	"""
-	Used for building a progress bar as a string
-	@params:
-	iteration       - Required  : current iteration (Int)
-	total           - Required  : total iterations (Int)
-	messageLevel    - Optional  : verbosity level at which the bar is printed (Int)
-	barLength       - Optional  : character length of bar (Int)
-	numDecimals     - Optional  : precision of progress percent (Int)
-	fillChar        - Optional  : replaces '#' as the bar-filling character (Str)
-	emptyChar       - Optional  : replaces '-' as the empty-bar character (Str)
-	prefix          - Optional  : message in front of the bar
-	suffix          - Optional  : message after the bar
-	verboseMessages - Optional  : list of messages that are printed out at the same indentation as the progress bar
-	indentChar      - Optional  : sets the level of indentation of the bar
-	"""
+        """
+        Used for building a progress bar as a string
+        @params:
+        iteration       - Required  : current iteration (Int)
+        total           - Required  : total iterations (Int)
+        messageLevel    - Optional  : verbosity level at which the bar is printed (Int)
+        barLength       - Optional  : character length of bar (Int)
+        numDecimals     - Optional  : precision of progress percent (Int)
+        fillChar        - Optional  : replaces '#' as the bar-filling character (Str)
+        emptyChar       - Optional  : replaces '-' as the empty-bar character (Str)
+        prefix          - Optional  : message in front of the bar
+        suffix          - Optional  : message after the bar
+        verboseMessages - Optional  : list of messages that are printed out at the same indentation as the progress bar
+        indentChar      - Optional  : sets the level of indentation of the bar
+        """
         indent = indentChar * self._progressStack[-1]
 
         # Print a standard progress bar if its verbosity matches ours,
@@ -248,23 +248,23 @@ if __name__ == "__main__":
     import time
 
     def demo(verbosity):
-	# usage of the show_progress function
-	printer = VerbosityPrinter.build_printer(verbosity)
-	data    = range(10)
+    # usage of the show_progress function
+    printer = VerbosityPrinter.build_printer(verbosity)
+    data    = range(10)
         with printer.progress_logging(2):
-	    for i, item in enumerate(data):
-	        printer.show_progress(i, len(data)-1, messageLevel=2,
-		    		  verboseMessages=['%s gates' % i], prefix='--- GST (', suffix=') ---')
-	        time.sleep(.05)
+        for i, item in enumerate(data):
+            printer.show_progress(i, len(data)-1, messageLevel=2,
+                      verboseMessages=['%s gates' % i], prefix='--- GST (', suffix=') ---')
+            time.sleep(.05)
 
     def nested_demo(verbosity):
         printer = VerbosityPrinter.build_printer(verbosity)
         printer.warning('Beginning demonstration of the verbosityprinter class. This could go wrong..')
-	data    = range(10)
+    data    = range(10)
         with printer.progress_logging(1):
-	    for i, item in enumerate(data):
-	        printer.show_progress(i, len(data)-1, messageLevel=1,
-				  verboseMessages=['%s gate strings' % i], prefix='-- IterativeGST (', suffix=') --')
+        for i, item in enumerate(data):
+            printer.show_progress(i, len(data)-1, messageLevel=1,
+                  verboseMessages=['%s gate strings' % i], prefix='-- IterativeGST (', suffix=') --')
                 if i == 5:
                     printer.error('The iterator is five. This caused an error, apparently')
                 demo(printer - 1)
