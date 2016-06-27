@@ -46,17 +46,17 @@ def create_gatestring_list(*args,**kwargs):
     >>> As = [('a1',), ('a2',)]
     >>> Bs = [('b1',), ('b2',)]
     >>> list1 = create_gatestring_list('a', 'a+b', a=As, b=Bs)
-    >>> print(map(tuple, list1))
-    [('a1',), ('a2',), ('a1', 'b1'), ('a1', 'b2'), ('a2', 'b1'), ('a2', 'b2')]
+    >>> print(list(map(str, list1)))
+    ['a1', 'a2', 'a1b1', 'a1b2', 'a2b1', 'a2b2']
 
     You can change the order in which the different iterables are advanced.
 
     >>> list2 = create_gatestring_list('a+b', a=As, b=Bs, order=['a', 'b'])
-    >>> print(map(tuple, list2))
-    [('a1', 'b1'), ('a1', 'b2'), ('a2', 'b1'), ('a2', 'b2')]
+    >>> print(list(map(str, list2)))
+    ['a1b1', 'a1b2', 'a2b1', 'a2b2']
     >>> list3 = create_gatestring_list('a+b', a=As, b=Bs, order=['b', 'a'])
-    >>> print(map(tuple, list3))
-    [('a1', 'b1'), ('a2', 'b1'), ('a1', 'b2'), ('a2', 'b2')]
+    >>> print(list(map(str, list3)))
+    ['a1b1', 'a2b1', 'a1b2', 'a2b2']
 
 
     """
