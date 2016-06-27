@@ -310,9 +310,9 @@ class Results(object):
         return s
 
     def _compile_latex_report(self, report_dir, report_base, latex_call,
-                              printer, cwd):
-        """Use the shell command defined in `latex_call` to compile the TeX file
-        `texFilename` to the PDF file `pdfFilename`.
+                              printer):
+        """Compile a PDF report from a TeX file. Will compile twice
+        automatically.
 
         Parameters
         ----------
@@ -327,35 +327,28 @@ class Results(object):
             :function:`subprocess.check_call` uses.
 
         printer : VerbosityPrinter
-            Printer to handle logging and errors.
+            Printer to handle logging.
 
-        cwd : string
-            The directory to change into after completing the compilation.
+        Raises
+        ------
+        subprocess.CalledProcessException
+            If the call to the process comiling the PDF returns non-zero exit
+            status.
 
         """
         texFilename = report_base + ".tex"
         pdfPathname = _os.path.join(report_dir, report_base + ".pdf")
         call = latex_call + [texFilename]
-        try:
-            _subprocess.check_call(call)
-            printer.log("Initial output PDF %s successfully generated." %
-                        pdfPathname)
-            try:
-                # We could check if the log file contains "Rerun" in it,
-                # but we'll just re-run all the time now
-                _subprocess.check_call(call)
-                printer.log("Final output PDF %s successfully generated. " %
-                            pdfPathname + "Cleaning up .aux and .log files.")
-                _os.remove( report_base + ".log" )
-                _os.remove( report_base + ".aux" )
-            except _subprocess.CalledProcessError as e:
-                printer.error("pdflatex returned code %d " % e.returncode +
-                              "Check %s.log to see details." % report_base)
-        except _subprocess.CalledProcessError as e:
-            printer.error("pdflatex returned code %d " % e.returncode +
-                          "Check %s.log to see details." % report_base)
-        finally:
-            _os.chdir(cwd)
+        _subprocess.check_call(call)
+        printer.log("Initial output PDF %s successfully generated." %
+                    pdfPathname)
+        # We could check if the log file contains "Rerun" in it,
+        # but we'll just re-run all the time now
+        _subprocess.check_call(call)
+        printer.log("Final output PDF %s successfully generated. " %
+                    pdfPathname + "Cleaning up .aux and .log files.")
+        _os.remove( report_base + ".log" )
+        _os.remove( report_base + ".aux" )
 
 
     def _get_table_fns(self):
@@ -1872,8 +1865,14 @@ class Results(object):
         if len(report_dir) > 0:
             _os.chdir(report_dir)
 
-        self._compile_latex_report(report_dir, report_base,
-                                   self.options.latex_call, printer, cwd)
+        try:
+            self._compile_latex_report(report_dir, report_base,
+                                       self.options.latex_call, printer)
+        except _subprocess.CalledProcessError as e:
+            printer.error("pdflatex returned code %d " % e.returncode +
+                          "Check %s.log to see details." % report_base)
+        finally:
+            _os.chdir(cwd)
 
         return
 
@@ -2128,8 +2127,14 @@ class Results(object):
         if len(report_dir) > 0:
             _os.chdir(report_dir)
 
-        self._compile_latex_report(report_dir, report_base,
-                                   self.options.latex_call, printer, cwd)
+        try:
+            self._compile_latex_report(report_dir, report_base,
+                                       self.options.latex_call, printer)
+        except _subprocess.CalledProcessError as e:
+            printer.error("pdflatex returned code %d " % e.returncode +
+                          "Check %s.log to see details." % report_base)
+        finally:
+            _os.chdir(cwd)
 
         return
 
@@ -2528,8 +2533,14 @@ class Results(object):
         if len(report_dir) > 0:
             _os.chdir(report_dir)
 
-        self._compile_latex_report(report_dir, report_base,
-                                   self.options.latex_call, printer, cwd)
+        try:
+            self._compile_latex_report(report_dir, report_base,
+                                       self.options.latex_call, printer)
+        except _subprocess.CalledProcessError as e:
+            printer.error("pdflatex returned code %d " % e.returncode +
+                          "Check %s.log to see details." % report_base)
+        finally:
+            _os.chdir(cwd)
 
         return
 
@@ -3721,8 +3732,14 @@ class Results(object):
         if len(report_dir) > 0:
             _os.chdir(report_dir)
 
-        self._compile_latex_report(report_dir, report_base,
-                                   self.options.latex_call, printer, cwd)
+        try:
+            self._compile_latex_report(report_dir, report_base,
+                                       self.options.latex_call, printer)
+        except _subprocess.CalledProcessError as e:
+            printer.error("pdflatex returned code %d " % e.returncode +
+                          "Check %s.log to see details." % report_base)
+        finally:
+            _os.chdir(cwd)
 
         return
 
