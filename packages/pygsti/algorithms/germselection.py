@@ -27,8 +27,8 @@ from .. import objects as _objs
 #    rotmat = _np.dot(wrtEvecsInv, _np.dot(mxToTwirl, wrtEvecs))
 #
 #    #destroy coherences between non-degenerate eigenvectors (this is what twirling does)
-#    for i in xrange(dim):
-#        for j in xrange(dim):
+#    for i in range(dim):
+#        for j in range(dim):
 #            if abs(wrtEvals[i] - wrtEvals[j]) > eps:
 #                rotmat[i,j] = 0
 #
@@ -399,12 +399,12 @@ def optimize_integer_germs_slack(gateset, germsList, initialWeights=None,
     score = compute_score(weights)
     L1 = sum(weights) # ~ L1 norm of weights
 
-   with printer.progress_logging(1):
-      for iIter in xrange(maxIter):
+    with printer.progress_logging(1):
+      for iIter in range(maxIter):
           scoreD_keys = scoreD.keys() #list of weight tuples already computed
 
           printer.show_progress(iIter, maxIter-1, suffix="score=%g, nGerms=%d" % (score, L1))
-        
+
           bFoundBetterNeighbor = False
           for neighborNum, neighbor in enumerate(get_neighbors(weights)):
               if tuple(neighbor) not in scoreD_keys:
@@ -442,11 +442,11 @@ def optimize_integer_germs_slack(gateset, germsList, initialWeights=None,
               if not bFoundBetterNeighbor: #Relaxing didn't help!
                   printer.log("Stationary point found!");
                   break #end main for loop
-        
+
           printer.log("Moving to better neighbor")
       else:
           printer.log("Hit max. iterations")
-    
+
     printer.log("score = %s" % score)
     printer.log("weights = %s" % weights)
     printer.log("L1(weights) = %s" % sum(weights))

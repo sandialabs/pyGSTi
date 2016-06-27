@@ -247,7 +247,6 @@ def write_fixed_hamming_weight_code(n,k):
     code += (k)*'\t'+'bitVecMat[counter]'+index_string+'=1\n'
     code += (k)*'\t'+'counter += 1\n'
     #fiducialselection_temp_pkl.pkl
-    code += 'print ("Writing File")\n'
     code += 'with open("fiducialselection_temp_pkl.pkl", "wb") as picklefile:\n'
     code += '    pickle.dump(bitVecMat, picklefile)\n'
     return code
@@ -340,7 +339,7 @@ def optimize_integer_fiducials_slack(gateset, fidList,
     threshold : float, optional (default is 1e6)
         Entire fiducial list is first scored before attempting to select fiducials; if score
         is above threshold, then fiducial selection will auto-fail.  If final fiducial set
-        selected is above threshold, then fiducial selection will print a warning, but 
+        selected is above threshold, then fiducial selection will print a warning, but
         return selected set.
 
     verbosity : int, optional
@@ -374,11 +373,11 @@ def optimize_integer_fiducials_slack(gateset, fidList,
 
     initial_test = test_fiducial_list(gateset,fidList,prepOrMeas,scoreFunc=scoreFunc,returnAll=True,threshold=threshold)
     if initial_test[0]:
-        print "Complete initial fiducial set succeeds."
-        print "Now searching for best fiducial set."
+        print("Complete initial fiducial set succeeds.")
+        print("Now searching for best fiducial set.")
     else:
-        print  "Complete initial fiducial set FAILS."
-        print  "Aborting search."
+        print("Complete initial fiducial set FAILS.")
+        print("Aborting search.")
         return None
 
     lessWeightOnly = False  #Initially allow adding to weight. -- maybe make this an argument??
@@ -443,7 +442,7 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         # Important that we run the script with the right version of python
         scriptoutput = subprocess.check_output([pythonVersion,
                              'fiducialselection_temp_script.py'])
-        with open('tutorial_files/fidscript.out', 'wb') as fidscriptout:
+        with open('fidscript.out', 'wb') as fidscriptout:
             fidscriptout.write(scriptoutput)
         with open('fiducialselection_temp_pkl.pkl','rb') as inputfile:
             bitVecMat = pickle.load(inputfile)
@@ -505,13 +504,13 @@ def optimize_integer_fiducials_slack(gateset, fidList,
     score = compute_score(weights)
     L1 = sum(weights) # ~ L1 norm of weights
 
-   with printer.progress_logging(1):
+    with printer.progress_logging(1):
 
-      for iIter in xrange(maxIter):
+      for iIter in range(maxIter):
           scoreD_keys = scoreD.keys() #list of weight tuples already computed
 
           printer.show_progress(iIter, maxIter-1, suffix="score=%g, nFids=%d" % (score, L1))
-        
+
           bFoundBetterNeighbor = False
           for neighborNum, neighbor in enumerate(get_neighbors(weights)):
               if tuple(neighbor) not in scoreD_keys:
@@ -549,11 +548,11 @@ def optimize_integer_fiducials_slack(gateset, fidList,
               if not bFoundBetterNeighbor: #Relaxing didn't help!
                   printer.log("Stationary point found!");
                   break #end main for loop
-        
+
           printer.log("Moving to better neighbor")
       else:
           printer.log("Hit max. iterations")
-    
+
     printer.log("score = %s"       % score)
     printer.log("weights = %s"     % weights)
     printer.log("L1(weights) = %s" % sum(weights))
@@ -565,9 +564,9 @@ def optimize_integer_fiducials_slack(gateset, fidList,
 
     final_test = test_fiducial_list(gateset,goodFidList,prepOrMeas,scoreFunc=scoreFunc,returnAll=True,threshold=threshold)
     if initial_test[0]:
-        print "Final fiducial set succeeds."
+        print("Final fiducial set succeeds.")
     else:
-        print  "WARNING: Final fiducial set FAILS."
+        print("WARNING: Final fiducial set FAILS.")
 
     if returnAll:
         return goodFidList, weights, scoreD
