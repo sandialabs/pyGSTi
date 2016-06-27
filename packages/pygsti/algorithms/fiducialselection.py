@@ -9,10 +9,14 @@ import numpy     as _np
 import itertools as _itertools
 import math      as _math
 import sys       as _sys
-import scipy
 import os
+import scipy
 import pickle
+import subprocess
 from .. import objects as _objs
+
+# Get the version of python as soon as this file is run OR imported
+pythonVersion = 'python3' if _sys.version_info[0] == 3 else 'python'
 
 #def bool_list_to_ind_list(boolList):
 #    output = _np.array([])
@@ -242,9 +246,10 @@ def write_fixed_hamming_weight_code(n,k):
     index_string += ']]'
     code += (k)*'\t'+'bitVecMat[counter]'+index_string+'=1\n'
     code += (k)*'\t'+'counter += 1\n'
-    code += 'fiducialselection_temp_pkl = open("fiducialselection_temp_pkl.pkl","w")\n'
-    code += 'pickle.dump(bitVecMat,fiducialselection_temp_pkl)\n'
-    code += 'fiducialselection_temp_pkl.close()\n'
+    #fiducialselection_temp_pkl.pkl
+    code += 'print ("Writing File")\n'
+    code += 'with open("fiducialselection_temp_pkl.pkl", "wb") as picklefile:\n'
+    code += '    pickle.dump(bitVecMat, picklefile)\n'
     return code
 
 def optimize_integer_fiducials_slack(gateset, fidList,
@@ -419,11 +424,15 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         code = write_fixed_hamming_weight_code(numBits, hammingWeight)
         with open('fiducialselection_temp_script.py','w') as code_file:
             code_file.writelines(code)
-        os.system('python fiducialselection_temp_script.py')
+        # Important that we run the script with the right version of python
+        scriptoutput = subprocess.check_output([pythonVersion,
+                             'fiducialselection_temp_script.py'])
+        with open('tutorial_files/fidscript.out', 'wb') as fidscriptout:
+            fidscriptout.write(scriptoutput)
         with open('fiducialselection_temp_pkl.pkl','rb') as inputfile:
-            bitVecMat = pickle.load(inputfile, encoding='latin1')
-        os.system('rm fiducialselection_temp_script.py')
-        os.system('rm fiducialselection_temp_pkl.pkl')
+            bitVecMat = pickle.load(inputfile)
+        os.remove('fiducialselection_temp_script.py')
+        os.remove('fiducialselection_temp_pkl.pkl')
         if forceEmpty:
             bitVecMat = _np.concatenate((_np.array([[1]*int(numFidLists)]).T,bitVecMat),axis=1)
         best_score = _np.inf
