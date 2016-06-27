@@ -3024,7 +3024,7 @@ class Results(object):
                 # subprocess well enough to make this work, so I send stderr to
                 # stdout and look for a more specific string that shows up on
                 # MacOS when 'convert' is not available.
-                if output.find('convert: command not found') > -1:
+                if output.find(b"convert: command not found") > -1:
                     printer.error("ImageMagick's 'convert' utility may not be" +
                                   " installed, so a PNG may not have been " +
                                   "generated for %s." % key)
