@@ -1,6 +1,0 @@
-pygsti.tools.std_to_gm
-======================
-
-.. currentmodule:: pygsti.tools
-
-.. autofunction:: std_to_gm

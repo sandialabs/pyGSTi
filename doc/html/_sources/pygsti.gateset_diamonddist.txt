@@ -1,6 +1,0 @@
-pygsti.gateset_diamonddist
-==========================
-
-.. currentmodule:: pygsti
-
-.. autofunction:: gateset_diamonddist

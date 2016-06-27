@@ -449,13 +449,13 @@ def splice_cmaps(cmaps, name=None, splice_points=None):
 
     Parameters
     ----------
-    cmaps : list of matplotlib cmaps
+    cmaps : list of matplotlib.colors.Colormap
         The colormaps ordered according to how they should appear in the final
         colormap
 
-    name : string
+    name : string, optional
         The name for the colormap. If no name is given, the name
-        "spliced_cmap1name_cmap2name_..." is assigned to the colormap.
+        ``"spliced_cmap1name_cmap2name_..."`` is assigned to the colormap.
 
     splice_points : ordered list of floats in (0, 1), optional
         The transition points when one colormap should end and the next should
@@ -465,7 +465,8 @@ def splice_cmaps(cmaps, name=None, splice_points=None):
 
     Returns
     -------
-    A cmap combining the provided cmaps
+    matplotlib.colors.LinearSegmentedColormap
+        A cmap combining the provided cmaps
     """
     if name is None:
         name = '_'.join(['spliced'] + [cmap.name for cmap in cmaps])
@@ -1817,11 +1818,11 @@ def direct_lgst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncate
 
     directLGSTgatesets = {}
     printer.log("--- Direct LGST precomputation ---")
-    for i,sigma in enumerate(gateStrings):
-        printer.show_progress(i, len(gateStrings)-1, prefix="--- Computing gateset for string -", suffix='---' )
-        directLGSTgatesets[sigma] = direct_lgst_gateset( sigma, "GsigmaLbl", dataset, specs, targetGateset,
-                                                        svdTruncateTo, verbosity)
-    printer.end_progress()
+    with printer.progress_logging(1):
+        for i,sigma in enumerate(gateStrings):
+            printer.show_progress(i, len(gateStrings)-1, prefix="--- Computing gateset for string -", suffix='---' )
+            directLGSTgatesets[sigma] = direct_lgst_gateset( sigma, "GsigmaLbl", dataset, specs, targetGateset,
+                                                            svdTruncateTo, verbosity)
     return directLGSTgatesets
 
 
@@ -1950,12 +1951,12 @@ def direct_mc2gst_gatesets(gateStrings, dataset, specs, targetGateset, svdTrunca
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
     directLSGSTgatesets = {}
     printer.log("--- Direct LSGST precomputation ---")
-    for i,sigma in enumerate(gateStrings):
-        printer.show_progress(i, len(gateStrings) - 1, prefix="--- Computing gateset for string-", suffix='---')
-        directLSGSTgatesets[sigma] = direct_mc2gst_gateset( sigma, "GsigmaLbl", dataset, specs, targetGateset,
-                                                        svdTruncateTo, minProbClipForWeighting,
-                                                        probClipInterval, verbosity)
-    printer.end_progress()
+    with printer.progress_logging(1):
+        for i,sigma in enumerate(gateStrings):
+            printer.show_progress(i, len(gateStrings) - 1, prefix="--- Computing gateset for string-", suffix='---')
+            directLSGSTgatesets[sigma] = direct_mc2gst_gateset( sigma, "GsigmaLbl", dataset, specs, targetGateset,
+                                                            svdTruncateTo, minProbClipForWeighting,
+                                                            probClipInterval, verbosity)
     return directLSGSTgatesets
 
 
@@ -2081,11 +2082,11 @@ def direct_mlgst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncat
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
     directMLEGSTgatesets = {}
     printer.log("--- Direct MLEGST precomputation ---")
-    for i,sigma in enumerate(gateStrings):
-        printer.show_progress(i, len(gateStrings) - 1, prefix="--- Computing gateset for string ", suffix="---")
-        directMLEGSTgatesets[sigma] = direct_mlgst_gateset( sigma, "GsigmaLbl", dataset, specs, targetGateset,
-                                                        svdTruncateTo, minProbClip, probClipInterval, verbosity)
-    printer.end_progress()
+    with printer.progress_logging(1):
+        for i,sigma in enumerate(gateStrings):
+            printer.show_progress(i, len(gateStrings) - 1, prefix="--- Computing gateset for string ", suffix="---")
+            directMLEGSTgatesets[sigma] = direct_mlgst_gateset( sigma, "GsigmaLbl", dataset, specs, targetGateset,
+                                                            svdTruncateTo, minProbClip, probClipInterval, verbosity)
     return directMLEGSTgatesets
 
 
@@ -2185,14 +2186,15 @@ def focused_mc2gst_gatesets(gateStrings, dataset, specs, startGateset,
         GateSet containing the LSGST estimate of that gate string stored under
         the gate label "GsigmaLbl".
     """
+
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
     focusedLSGSTgatesets = {}
     printer.log("--- Focused LSGST precomputation ---")
-    for i,sigma in enumerate(gateStrings):
-        printer.show_progress(i, len(gateStrings) - 1, prefix="--- Computing gateset for string", suffix='---')
-        focusedLSGSTgatesets[sigma] = focused_mc2gst_gateset( sigma, "GsigmaLbl", dataset, specs, startGateset,
-                                                           minProbClipForWeighting, probClipInterval, verbosity)
-    printer.end_progress()
+    with printer.progress_logging(1):
+        for i,sigma in enumerate(gateStrings):
+            printer.show_progress(i, len(gateStrings) - 1, prefix="--- Computing gateset for string", suffix='---')
+            focusedLSGSTgatesets[sigma] = focused_mc2gst_gateset( sigma, "GsigmaLbl", dataset, specs, startGateset,
+                                                               minProbClipForWeighting, probClipInterval, verbosity)
     return focusedLSGSTgatesets
 
 

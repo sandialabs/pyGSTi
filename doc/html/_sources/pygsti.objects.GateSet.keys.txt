@@ -1,6 +1,0 @@
-pygsti.objects.GateSet.keys
-===========================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: GateSet.keys

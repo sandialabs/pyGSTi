@@ -1,6 +1,0 @@
-pygsti.basis_element_labels
-===========================
-
-.. currentmodule:: pygsti
-
-.. autofunction:: basis_element_labels

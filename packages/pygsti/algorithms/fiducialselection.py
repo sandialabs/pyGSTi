@@ -261,6 +261,7 @@ def optimize_integer_fiducials_slack(gateset, fidList,
                               returnAll=False,
                               forceEmpty = True, forceEmptyScore = 1e100,
                               fixedNum = None,
+                              threshold=1e6,
 #                              forceMinScore = 1e100,
                               verbosity=1):
     """
@@ -336,6 +337,12 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         When forceMin is True, what score to assign any fiducial set
         that does not contain at least forceMinNum fiducials.
 
+    threshold : float, optional (default is 1e6)
+        Entire fiducial list is first scored before attempting to select fiducials; if score
+        is above threshold, then fiducial selection will auto-fail.  If final fiducial set
+        selected is above threshold, then fiducial selection will print a warning, but 
+        return selected set.
+
     verbosity : int, optional
         Integer >= 0 indicating the amount of detail to print.
 
@@ -364,6 +371,15 @@ def optimize_integer_fiducials_slack(gateset, fidList,
     elif scoreFunc == 'worst':
         def list_score(input_array):
             return 1./min(_np.abs(input_array))
+
+    initial_test = test_fiducial_list(gateset,fidList,prepOrMeas,scoreFunc=scoreFunc,returnAll=True,threshold=threshold)
+    if initial_test[0]:
+        print "Complete initial fiducial set succeeds."
+        print "Now searching for best fiducial set."
+    else:
+        print  "Complete initial fiducial set FAILS."
+        print  "Aborting search."
+        return None
 
     lessWeightOnly = False  #Initially allow adding to weight. -- maybe make this an argument??
 
@@ -489,53 +505,55 @@ def optimize_integer_fiducials_slack(gateset, fidList,
     score = compute_score(weights)
     L1 = sum(weights) # ~ L1 norm of weights
 
-    for iIter in range(maxIter):
-        scoreD_keys = list(scoreD.keys()) #list of weight tuples already computed
+   with printer.progress_logging(1):
 
-        printer.show_progress(iIter, maxIter-1, suffix="score=%g, nFids=%d" % (score, L1))
+      for iIter in xrange(maxIter):
+          scoreD_keys = scoreD.keys() #list of weight tuples already computed
 
-        bFoundBetterNeighbor = False
-        for neighborNum, neighbor in enumerate(get_neighbors(weights)):
-            if tuple(neighbor) not in scoreD_keys:
-                neighborL1 = sum(neighbor)
-                neighborScore = compute_score(neighbor)
-            else:
-                neighborL1 = sum(neighbor)
-                neighborScore = scoreD[tuple(neighbor)]
+          printer.show_progress(iIter, maxIter-1, suffix="score=%g, nFids=%d" % (score, L1))
+        
+          bFoundBetterNeighbor = False
+          for neighborNum, neighbor in enumerate(get_neighbors(weights)):
+              if tuple(neighbor) not in scoreD_keys:
+                  neighborL1 = sum(neighbor)
+                  neighborScore = compute_score(neighbor)
+              else:
+                  neighborL1 = sum(neighbor)
+                  neighborScore = scoreD[tuple(neighbor)]
 
-            #Move if we've found better position; if we've relaxed, we only move when L1 is improved.
-            if neighborScore <= score and (neighborL1 < L1 or lessWeightOnly == False):
-                weights, score, L1 = neighbor, neighborScore, neighborL1
-                bFoundBetterNeighbor = True
-                printer.log("Found better neighbor: nFids = %d score = %g" % (L1,score), 2)
+              #Move if we've found better position; if we've relaxed, we only move when L1 is improved.
+              if neighborScore <= score and (neighborL1 < L1 or lessWeightOnly == False):
+                  weights, score, L1 = neighbor, neighborScore, neighborL1
+                  bFoundBetterNeighbor = True
+                  printer.log("Found better neighbor: nFids = %d score = %g" % (L1,score), 2)
 
 
-        if not bFoundBetterNeighbor: # Time to relax our search.
-            lessWeightOnly=True #from now on, don't allow increasing weight L1
+          if not bFoundBetterNeighbor: # Time to relax our search.
+              lessWeightOnly=True #from now on, don't allow increasing weight L1
 
-            if fixedSlack:
-                slack = score + fixedSlack #Note score is positive (for sum of 1/lambda)
-            elif slackFrac:
-                slack = score * slackFrac
-            assert(slack > 0)
+              if fixedSlack:
+                  slack = score + fixedSlack #Note score is positive (for sum of 1/lambda)
+              elif slackFrac:
+                  slack = score * slackFrac
+              assert(slack > 0)
 
-            printer.log("No better neighbor. Relaxing score w/slack: %g => %g" % (score, score+slack), 2)
-            score += slack #artificially increase score and see if any neighbor is better now...
+              printer.log("No better neighbor. Relaxing score w/slack: %g => %g" % (score, score+slack), 2)
+              score += slack #artificially increase score and see if any neighbor is better now...
 
-            for neighborNum, neighbor in enumerate(get_neighbors(weights)):
-                if sum(neighbor) < L1 and scoreD[tuple(neighbor)] < score:
-                    weights, score, L1 = neighbor, scoreD[tuple(neighbor)], sum(neighbor)
-                    bFoundBetterNeighbor = True
-                    printer.log("Found better neighbor: nFids = %d score = %g" % (L1,score), 2)
+              for neighborNum, neighbor in enumerate(get_neighbors(weights)):
+                  if sum(neighbor) < L1 and scoreD[tuple(neighbor)] < score:
+                      weights, score, L1 = neighbor, scoreD[tuple(neighbor)], sum(neighbor)
+                      bFoundBetterNeighbor = True
+                      printer.log("Found better neighbor: nFids = %d score = %g" % (L1,score), 2)
 
-            if not bFoundBetterNeighbor: #Relaxing didn't help!
-                printer.log("Stationary point found!");
-                break #end main for loop
-
-        printer.log("Moving to better neighbor")
-    else:
-        printer.log("Hit max. iterations")
-
+              if not bFoundBetterNeighbor: #Relaxing didn't help!
+                  printer.log("Stationary point found!");
+                  break #end main for loop
+        
+          printer.log("Moving to better neighbor")
+      else:
+          printer.log("Hit max. iterations")
+    
     printer.log("score = %s"       % score)
     printer.log("weights = %s"     % weights)
     printer.log("L1(weights) = %s" % sum(weights))
@@ -544,6 +562,12 @@ def optimize_integer_fiducials_slack(gateset, fidList,
     for index,val in enumerate(weights):
         if val==1:
             goodFidList.append(fidList[index])
+
+    final_test = test_fiducial_list(gateset,goodFidList,prepOrMeas,scoreFunc=scoreFunc,returnAll=True,threshold=threshold)
+    if initial_test[0]:
+        print "Final fiducial set succeeds."
+    else:
+        print  "WARNING: Final fiducial set FAILS."
 
     if returnAll:
         return goodFidList, weights, scoreD

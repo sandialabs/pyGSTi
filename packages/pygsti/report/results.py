@@ -57,6 +57,9 @@ class Results(object):
         self._bEssentialResultsSet = False
         self._LsAndGermInfoSet = False
 
+        # MPI communicator to be used for confidence region construction
+        self._comm = None #TODO: allow this to be passed to __init__?
+
         # Confidence regions: key == confidence level, val = ConfidenceRegion
         self._confidence_regions = {} # plain dict. Key == confidence level
         self._specials = _ResultCache(self._get_special_fns(), self, "special")
@@ -87,7 +90,7 @@ class Results(object):
                             'minProbClipForWeighting': 1e-4,
                             'probClipInterval': (-1e6,1e6),
                             'radius': 1e-4,
-                            'hessianProjection': 'std',
+                            'hessianProjection': 'optimal gate CIs',
                             'defaultDirectory': None,
                             'defaultBasename': None,
                             'linlogPercentile':  5,
@@ -1323,7 +1326,6 @@ class Results(object):
         with open(outputFilename, 'w') as outputfile:
             outputfile.write(template)
 
-
     def _getBaseStrDict(self, remove_dups = True):
         #if remove_dups == True, remove duplicates in
         #  L_germ_tuple_to_baseStr_dict by replacing with None
@@ -1546,6 +1548,7 @@ class Results(object):
 
         # 1) get latex tables
         printer.log("*** Generating tables ***")
+	printer.log("*** Generating tables ***")
 
         std_tables = \
             ('targetSpamTable','targetGatesTable','datasetOverviewTable',
@@ -1567,12 +1570,12 @@ class Results(object):
         else:
             tables_to_blank += ls_and_germs_tables
 
-        for i, key in enumerate(tables_to_compute):
-            printer.show_progress(i, len(tables_to_compute) - 1, prefix='', end='')
-            qtys[key] = self.tables.get(key, verbosity=printer - 1).render(
-                'latex',longtables=self.options.long_tables, scratchDir=D)
-            qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
-        printer.end_progress()
+        with printer.progress_logging(1):
+            for i, key in enumerate(tables_to_compute):
+                printer.show_progress(i, len(tables_to_compute) - 1, prefix='', end='')
+                qtys[key] = self.tables.get(key, verbosity=printer - 1).render(
+                    'latex',longtables=self.options.long_tables, scratchDir=D)
+                qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
 
         for key in tables_to_blank:
             qtys[key] = _generation.get_blank_table().render(
@@ -1632,24 +1635,23 @@ class Results(object):
             else:
                 raise ValueError("Invalid objective value: %s"
                                  % self.parameters['objective'])
+           printer.log("%s plots (%d): " % (plotFnName, nPlots))
 
-            printer.log("%s plots (%d): " % (plotFnName, nPlots))
+            with printer.progress_logging(1):
+                printer.show_progress(0, 1, prefix='', end='')
+                fig = set_fig_qtys("bestEstimateColorBoxPlot",
+                                   "best%sBoxes.pdf" % plotFnName, printer - 1)
+                maxX = fig.get_extra_info()['nUsedXs']
+                maxY = fig.get_extra_info()['nUsedYs']
 
-            printer.show_progress(0, 1, prefix='', end='')
-            fig = set_fig_qtys("bestEstimateColorBoxPlot",
-                               "best%sBoxes.pdf" % plotFnName, printer - 1)
-            maxX = fig.get_extra_info()['nUsedXs']
-            maxY = fig.get_extra_info()['nUsedYs']
+                #qtys["bestEstimateColorBoxPlot_hist"] = \
+                #    incgr("best%sBoxes_hist.pdf" % plotFnName figFilenm)
+                #    #no tooltip for histogram... - probably should make it
+                #    # it's own element of .figures dict
 
-            #qtys["bestEstimateColorBoxPlot_hist"] = \
-            #    incgr("best%sBoxes_hist.pdf" % plotFnName figFilenm)
-            #    #no tooltip for histogram... - probably should make it
-            #    # it's own element of .figures dict
-
-            printer.show_progress(1, 1, prefix='', end='')
-            fig = set_fig_qtys("invertedBestEstimateColorBoxPlot",
-                               "best%sBoxes_inverted.pdf" % plotFnName, printer - 1)
-            printer.end_progress()
+                printer.show_progress(1, 1, prefix='', end='')
+                fig = set_fig_qtys("invertedBestEstimateColorBoxPlot",
+                                   "best%sBoxes_inverted.pdf" % plotFnName, printer - 1)
         else:
             for figkey in ["bestEstimateColorBoxPlot",
                            "invertedBestEstimateColorBoxPlot"]:
@@ -1659,36 +1661,36 @@ class Results(object):
         pixplots = ""
         if pixelPlotAppendix:
             Ls = self.parameters['max length list']
-            for i in range(st,len(Ls)-1):
+            with printer.progress_logging(1):
+                for i in range(st,len(Ls)-1):
 
-                printer.show_progress(i, len(Ls)-2, prefix='', end='') # -2 is intentional
+                    printer.show_progress(i, len(Ls)-2, prefix='', end='') # -2 is intentional
 
-                fig = self.figures.get("estimateForLIndex%dColorBoxPlot" % i,
-                                       verbosity=printer)
-                fig.save_to( _os.path.join(report_dir, D,
-                                           "L%d_%sBoxes.pdf" % (i,plotFnName)))
-                lx = fig.get_extra_info()['nUsedXs']
-                ly = fig.get_extra_info()['nUsedYs']
+                    fig = self.figures.get("estimateForLIndex%dColorBoxPlot" % i,
+                                           verbosity=printer)
+                    fig.save_to( _os.path.join(report_dir, D,
+                                               "L%d_%sBoxes.pdf" % (i,plotFnName)))
+                    lx = fig.get_extra_info()['nUsedXs']
+                    ly = fig.get_extra_info()['nUsedYs']
 
-                #scale figure size according to number of rows and columns+1
-                # (+1 for labels ~ another col) relative to initial plot
-                W = float(lx+1)/float(maxX+1) * maxW
-                H = float(ly)  /float(maxY)   * maxH
+                    #scale figure size according to number of rows and columns+1
+                    # (+1 for labels ~ another col) relative to initial plot
+                    W = float(lx+1)/float(maxX+1) * maxW
+                    H = float(ly)  /float(maxY)   * maxH
 
-                pixplots += "\n"
-                pixplots += "\\begin{figure}\n"
-                pixplots += "\\begin{center}\n"
-                pixplots += "\\includegraphics[width=%.2fin,height=%.2fin," \
-                    % (W,H) + "keepaspectratio]{%s/L%d_%sBoxes.pdf}\n" \
-                    %(D,i,plotFnName)
-                pixplots += \
-                    "\\caption{Box plot of iteration %d (L=%d) " % (i,Ls[i]) \
-                    + "gateset %s values.\label{L%dGateset%sBoxPlot}}\n" \
-                    % (plotFnLatex,i,plotFnName)
-                #TODO: add conditional tooltip string to start of caption
-                pixplots += "\\end{center}\n"
-                pixplots += "\\end{figure}\n"
-            printer.end_progress()
+                    pixplots += "\n"
+                    pixplots += "\\begin{figure}\n"
+                    pixplots += "\\begin{center}\n"
+                    pixplots += "\\includegraphics[width=%.2fin,height=%.2fin," \
+                        % (W,H) + "keepaspectratio]{%s/L%d_%sBoxes.pdf}\n" \
+                        %(D,i,plotFnName)
+                    pixplots += \
+                        "\\caption{Box plot of iteration %d (L=%d) " % (i,Ls[i]) \
+                        + "gateset %s values.\label{L%dGateset%sBoxPlot}}\n" \
+                        % (plotFnLatex,i,plotFnName)
+                    #TODO: add conditional tooltip string to start of caption
+                    pixplots += "\\end{center}\n"
+                    pixplots += "\\end{figure}\n"
 
         #Set template quantity (empty string if appendix disabled)
         qtys['intermediate_pixel_plot_figures'] = pixplots
@@ -1705,22 +1707,27 @@ class Results(object):
             #fig = set_fig_qtys("directLGSTColorBoxPlot",
             #                   "directLGST%sBoxes.pdf" % plotFnName)
 
-            printer.show_progress(0, 1, prefix='', end='')
-            fig = set_fig_qtys("directLongSeqGSTColorBoxPlot",
-                           "directLongSeqGST%sBoxes.pdf" % plotFnName, printer - 1)
+            with printer.progress_logging(1):
 
             #if verbosity > 0:
             #    print " ?",; _sys.stdout.flush()
             #fig = set_fig_qtys("directLGSTDeviationColorBoxPlot",
             #                   "directLGSTDeviationBoxes.pdf",W=4,H=5)
+                printer.show_progress(0, 1, prefix='', end='')
+                fig = set_fig_qtys("directLongSeqGSTColorBoxPlot",
+                               "directLongSeqGST%sBoxes.pdf" % plotFnName, printer - 1)
 
-            printer.show_progress(1, 1, prefix='', end='')
-            fig = set_fig_qtys("directLongSeqGSTDeviationColorBoxPlot",
-                               "directLongSeqGSTDeviationBoxes.pdf", printer - 1, W=4,H=5)
+                #if verbosity > 0:
+                #    print " ?",; _sys.stdout.flush()
+                #fig = set_fig_qtys("directLGSTDeviationColorBoxPlot",
+                #                   "directLGSTDeviationBoxes.pdf",W=4,H=5)
 
-            printer.log('')
+                printer.show_progress(1, 1, prefix='', end='')
+                fig = set_fig_qtys("directLongSeqGSTDeviationColorBoxPlot",
+                                   "directLongSeqGSTDeviationBoxes.pdf", printer - 1, W=4,H=5)
 
-            printer.end_progress()
+                printer.log('')
+
             #Small eigenvalue error rate
             printer.log(" -- Error rate plots...")
             fig = set_fig_qtys("smallEigvalErrRateColorBoxPlot",
@@ -1744,42 +1751,42 @@ class Results(object):
 
             printer.log(" -- Whack-a-mole plots (%d): " % (2*len(len1Germs)), end='')
 
-            for i, germ in enumerate(len1Germs):
+           with printer.progress_logging(1):
+                for i, germ in enumerate(len1Germs):
 
-                printer.show_progress(i,  len(len1Germs) - 1, prefix='', end='')
+                    printer.show_progress(i,  len(len1Germs) - 1, prefix='', end='')
 
-                fig = self.figures.get("whack%sMoleBoxes" % germ[0],verbosity=printer - 1)
-                fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.pdf"
-                                          % germ[0]))
+                    fig = self.figures.get("whack%sMoleBoxes" % germ[0],verbosity=printer - 1)
+                    fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.pdf"
+                                              % germ[0]))
 
-                whackamoleplots += "\n"
-                whackamoleplots += "\\begin{figure}\n"
-                whackamoleplots += "\\begin{center}\n"
-                whackamoleplots += "\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/whack%sMoleBoxes.pdf}\n" % (maxW,maxH,D,germ[0])
-                whackamoleplots += "\\caption{Whack-a-%s-mole box plot for $\mathrm{%s}^{%d}$." % (plotFnLatex,germ[0],highestL)
-                #TODO: add conditional tooltip string to start of caption
-                whackamoleplots += "  Hitting with hammer of weight %.1f.\label{Whack%sMoleBoxPlot}}\n" % (hammerWeight,germ[0])
-                whackamoleplots += "\\end{center}\n"
-                whackamoleplots += "\\end{figure}\n"
-            printer.end_progress()
+                    whackamoleplots += "\n"
+                    whackamoleplots += "\\begin{figure}\n"
+                    whackamoleplots += "\\begin{center}\n"
+                    whackamoleplots += "\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/whack%sMoleBoxes.pdf}\n" % (maxW,maxH,D,germ[0])
+                    whackamoleplots += "\\caption{Whack-a-%s-mole box plot for $\mathrm{%s}^{%d}$." % (plotFnLatex,germ[0],highestL)
+                    #TODO: add conditional tooltip string to start of caption
+                    whackamoleplots += "  Hitting with hammer of weight %.1f.\label{Whack%sMoleBoxPlot}}\n" % (hammerWeight,germ[0])
+                    whackamoleplots += "\\end{center}\n"
+                    whackamoleplots += "\\end{figure}\n"
 
-            for i,germ in enumerate(len1Germs):
-                printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
+            with printer.progress_logging(1):
+                for i,germ in enumerate(len1Germs):
+                    printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
 
-                fig = self.figures.get("whack%sMoleBoxesSummed" % germ[0],
-                                       verbosity=printer - 1)
-                fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxesSummed.pdf" % germ[0]))
+                    fig = self.figures.get("whack%sMoleBoxesSummed" % germ[0],
+                                           verbosity=printer - 1)
+                    fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxesSummed.pdf" % germ[0]))
 
-                whackamoleplots += "\n"
-                whackamoleplots += "\\begin{figure}\n"
-                whackamoleplots += "\\begin{center}\n"
-                whackamoleplots += "\\includegraphics[width=4in,height=5in,keepaspectratio]{%s/whack%sMoleBoxesSummed.pdf}\n" % (D,germ[0])
-                whackamoleplots += "\\caption{Whack-a-%s-mole box plot for $\mathrm{%s}^{%d}$, summed over fiducial matrix." % (plotFnLatex,germ[0],highestL)
-                #TODO: add conditional tooltip string to start of caption
-                whackamoleplots += "  Hitting with hammer of weight %.1f.\label{Whack%sMoleBoxPlotSummed}}\n" % (hammerWeight,germ[0])
-                whackamoleplots += "\\end{center}\n"
-                whackamoleplots += "\\end{figure}\n"
-            printer.end_progress()
+                    whackamoleplots += "\n"
+                    whackamoleplots += "\\begin{figure}\n"
+                    whackamoleplots += "\\begin{center}\n"
+                    whackamoleplots += "\\includegraphics[width=4in,height=5in,keepaspectratio]{%s/whack%sMoleBoxesSummed.pdf}\n" % (D,germ[0])
+                    whackamoleplots += "\\caption{Whack-a-%s-mole box plot for $\mathrm{%s}^{%d}$, summed over fiducial matrix." % (plotFnLatex,germ[0],highestL)
+                    #TODO: add conditional tooltip string to start of caption
+                    whackamoleplots += "  Hitting with hammer of weight %.1f.\label{Whack%sMoleBoxPlotSummed}}\n" % (hammerWeight,germ[0])
+                    whackamoleplots += "\\end{center}\n"
+                    whackamoleplots += "\\end{figure}\n"
 
             printer.log('')
         #Set template quantity (empty string if appendix disabled)
@@ -2375,13 +2382,12 @@ class Results(object):
                                  % self.parameters['objective'])
 
             printer.log(" -- %s plots (%d): " % (plotFnName, nPlots), end='')
-
-            printer.show_progress(0, 0, prefix='', end='')
+            with printer.progress_logging(1):
+                printer.show_progress(0, 0, prefix='', end='')
             fig = set_fig_qtys("bestEstimateColorBoxPlot",
                                "best%sBoxes.pdf" % plotFnName, printer - 1)
             maxX = fig.get_extra_info()['nUsedXs']
             maxY = fig.get_extra_info()['nUsedYs']
-            printer.end_progress()
 
         else:
             for figkey in ["bestEstimateColorBoxPlot"]:
@@ -2391,35 +2397,36 @@ class Results(object):
         pixplots = ""
         if pixelPlotAppendix:
             paramListLength = len(self.parameters['max length list'])-1
-            for i in range(st, paramListLength):
-                printer.show_progress(i, paramListLength-1, prefix='', end='')
-                #printer.log("%d " % (i-st+2), end='')
 
-                fig = self.figures.get("estimateForLIndex%dColorBoxPlot" % i,
-                                       verbosity=printer - 1)
-                fig.save_to( _os.path.join(report_dir, D,
-                                           "L%d_%sBoxes.pdf" % (i,plotFnName)) )
-                lx = fig.get_extra_info()['nUsedXs']
-                ly = fig.get_extra_info()['nUsedYs']
+            with printer.progress_logging(1):
+                for i in range(st, paramListLength):
+                    printer.show_progress(i, paramListLength-1, prefix='', end='')
+                    #printer.log("%d " % (i-st+2), end='')
 
-                #scale figure size according to number of rows and columns+1
-                # (+1 for labels ~ another col) relative to initial plot
-                W = float(lx+1)/float(maxX+1) * maxW
-                H = float(ly)  /float(maxY)   * maxH
+                    fig = self.figures.get("estimateForLIndex%dColorBoxPlot" % i,
+                                           verbosity=printer - 1)
+                    fig.save_to( _os.path.join(report_dir, D,
+                                               "L%d_%sBoxes.pdf" % (i,plotFnName)) )
+                    lx = fig.get_extra_info()['nUsedXs']
+                    ly = fig.get_extra_info()['nUsedYs']
 
-                pixplots += "\n"
-                pixplots += "\\begin{frame}\n"
-                pixplots += "\\frametitle{Iteration %d ($L=%d$): %s values}\n" \
-                    % (i, self.parameters['max length list'][i], plotFnLatex)
-                pixplots += "\\begin{figure}\n"
-                pixplots += "\\begin{center}\n"
-                #pixplots += "\\adjustbox{max height=\\dimexpr\\textheight-5.5cm\\relax, max width=\\textwidth}{"
-                pixplots += "\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/L%d_%sBoxes.pdf}\n" % (W,H,D,i,plotFnName)
-                #FUTURE: add caption and conditional tooltip string?
-                pixplots += "\\end{center}\n"
-                pixplots += "\\end{figure}\n"
-                pixplots += "\\end{frame}\n"
-            printer.end_progress()
+                    #scale figure size according to number of rows and columns+1
+                    # (+1 for labels ~ another col) relative to initial plot
+                    W = float(lx+1)/float(maxX+1) * maxW
+                    H = float(ly)  /float(maxY)   * maxH
+
+                    pixplots += "\n"
+                    pixplots += "\\begin{frame}\n"
+                    pixplots += "\\frametitle{Iteration %d ($L=%d$): %s values}\n" \
+                        % (i, self.parameters['max length list'][i], plotFnLatex)
+                    pixplots += "\\begin{figure}\n"
+                    pixplots += "\\begin{center}\n"
+                    #pixplots += "\\adjustbox{max height=\\dimexpr\\textheight-5.5cm\\relax, max width=\\textwidth}{"
+                    pixplots += "\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/L%d_%sBoxes.pdf}\n" % (W,H,D,i,plotFnName)
+                    #FUTURE: add caption and conditional tooltip string?
+                    pixplots += "\\end{center}\n"
+                    pixplots += "\\end{figure}\n"
+                    pixplots += "\\end{frame}\n"
 
         #Set template quantity (empty string if appendix disabled)
         qtys['intermediate_pixel_plot_slides'] = pixplots
@@ -2429,14 +2436,13 @@ class Results(object):
         if debugAidsAppendix:
             #Direct-GST and deviation
             printer.log(" -- Direct-X plots (2)", end='')
-
-            printer.show_progress(0, 1, prefix='', end='')
-            fig = set_fig_qtys("directLongSeqGSTColorBoxPlot",
-                           "directLongSeqGST%sBoxes.pdf" % plotFnName, printer - 1, H=maxHc)
-            printer.show_progress(1, 1, prefix='', end='')
-            fig = set_fig_qtys("directLongSeqGSTDeviationColorBoxPlot",
-                               "directLongSeqGSTDeviationBoxes.pdf", printer - 1, H=maxHc)
-            printer.end_progress()
+            with printer.progress_logging(1):
+                printer.show_progress(0, 1, prefix='', end='')
+                fig = set_fig_qtys("directLongSeqGSTColorBoxPlot",
+                               "directLongSeqGST%sBoxes.pdf" % plotFnName, printer - 1, H=maxHc)
+                printer.show_progress(1, 1, prefix='', end='')
+                fig = set_fig_qtys("directLongSeqGSTDeviationColorBoxPlot",
+                                   "directLongSeqGSTDeviationBoxes.pdf", printer - 1, H=maxHc)
             printer.log('')
 
             #Small eigenvalue error rate
@@ -2463,47 +2469,47 @@ class Results(object):
 
             printer.log(" -- Whack-a-mole plots (%d): " % (2*len(len1Germs)), end='')
 
-            for i,germ in enumerate(len1Germs):
-                printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
+           with printer.progress_logging(1):
+                for i,germ in enumerate(len1Germs):
+                    printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
 
-                fig = self.figures.get("whack%sMoleBoxes" % germ[0],verbosity=printer - 1)
-                fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.pdf"
-                                          % germ[0]))
+                    fig = self.figures.get("whack%sMoleBoxes" % germ[0],verbosity=printer - 1)
+                    fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.pdf"
+                                              % germ[0]))
 
-                whackamoleplots += "\n"
-                whackamoleplots += "\\begin{frame}\n"
-                whackamoleplots += "\\frametitle{Whack-a-%s-mole plot for $\mathrm{%s}^{%d}$}" % (plotFnLatex,germ[0],highestL)
-                whackamoleplots += "\\begin{figure}\n"
-                whackamoleplots += "\\begin{center}\n"
-                #whackamoleplots += "\\adjustbox{max height=\\dimexpr\\textheight-5.5cm\\relax, max width=\\textwidth}{"
-                whackamoleplots += "\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/whack%sMoleBoxes.pdf}\n" % (maxW,maxH,D,germ[0])
-                #FUTURE: add caption and conditional tooltip?
-                whackamoleplots += "\\end{center}\n"
-                whackamoleplots += "\\end{figure}\n"
-                whackamoleplots += "\\end{frame}\n"
+                    whackamoleplots += "\n"
+                    whackamoleplots += "\\begin{frame}\n"
+                    whackamoleplots += "\\frametitle{Whack-a-%s-mole plot for $\mathrm{%s}^{%d}$}" % (plotFnLatex,germ[0],highestL)
+                    whackamoleplots += "\\begin{figure}\n"
+                    whackamoleplots += "\\begin{center}\n"
+                    #whackamoleplots += "\\adjustbox{max height=\\dimexpr\\textheight-5.5cm\\relax, max width=\\textwidth}{"
+                    whackamoleplots += "\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/whack%sMoleBoxes.pdf}\n" % (maxW,maxH,D,germ[0])
+                    #FUTURE: add caption and conditional tooltip?
+                    whackamoleplots += "\\end{center}\n"
+                    whackamoleplots += "\\end{figure}\n"
+                    whackamoleplots += "\\end{frame}\n"
 
-            printer.end_progress()
-            for i,germ in enumerate(len1Germs):
-                # printer.log("%d " % (len(len1Germs)+i+1), end='')
-                printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
+            with printer.progress_logging(1):
+                for i,germ in enumerate(len1Germs):
+                    # printer.log("%d " % (len(len1Germs)+i+1), end='')
+                    printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
 
-                fig = self.figures.get("whack%sMoleBoxesSummed" % germ[0],
-                                       verbosity=printer - 1)
-                fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxesSummed.pdf" % germ[0]))
+                    fig = self.figures.get("whack%sMoleBoxesSummed" % germ[0],
+                                           verbosity=printer - 1)
+                    fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxesSummed.pdf" % germ[0]))
 
-                whackamoleplots += "\n"
-                whackamoleplots += "\\begin{frame}\n"
-                whackamoleplots += "\\frametitle{Summed whack-a-%s-mole plot for $\mathrm{%s}^{%d}$}" % (plotFnLatex,germ[0],highestL)
-                whackamoleplots += "\\begin{figure}\n"
-                whackamoleplots += "\\begin{center}\n"
-                #whackamoleplots += "\\adjustbox{max height=\\dimexpr\\textheight-5.5cm\\relax, max width=\\textwidth}{"
-                whackamoleplots += "\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/whack%sMoleBoxesSummed.pdf}\n" % (maxW,maxH,D,germ[0])
-                #FUTURE: add caption and conditional tooltip?
-                whackamoleplots += "\\end{center}\n"
-                whackamoleplots += "\\end{figure}\n"
-                whackamoleplots += "\\end{frame}\n"
+                    whackamoleplots += "\n"
+                    whackamoleplots += "\\begin{frame}\n"
+                    whackamoleplots += "\\frametitle{Summed whack-a-%s-mole plot for $\mathrm{%s}^{%d}$}" % (plotFnLatex,germ[0],highestL)
+                    whackamoleplots += "\\begin{figure}\n"
+                    whackamoleplots += "\\begin{center}\n"
+                    #whackamoleplots += "\\adjustbox{max height=\\dimexpr\\textheight-5.5cm\\relax, max width=\\textwidth}{"
+                    whackamoleplots += "\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/whack%sMoleBoxesSummed.pdf}\n" % (maxW,maxH,D,germ[0])
+                    #FUTURE: add caption and conditional tooltip?
+                    whackamoleplots += "\\end{center}\n"
+                    whackamoleplots += "\\end{figure}\n"
+                    whackamoleplots += "\\end{frame}\n"
 
-            printer.end_progress()
             printer.log('')
 
         #Set template quantity (empty string if appendix disabled)
@@ -2745,11 +2751,11 @@ class Results(object):
         else:
             tables_to_blank += ls_and_germs_tables
 
-        for i, key in enumerate(tables_to_compute):
-            printer.show_progress(i, len(tables_to_compute) - 1, prefix='', end='')
-            qtys[key] = self.tables.get(key, verbosity=printer)
-            qtys["tt_"+key] = tooltiptext(".tables['%s']" % key)
-        printer.end_progress()
+        with printer.progress_logging(1):
+            for i, key in enumerate(tables_to_compute):
+                printer.show_progress(i, len(tables_to_compute) - 1, prefix='', end='')
+                qtys[key] = self.tables.get(key, verbosity=printer)
+                qtys["tt_"+key] = tooltiptext(".tables['%s']" % key)
 
         for key in tables_to_blank:
             qtys[key] = _generation.get_blank_table()
@@ -2795,8 +2801,8 @@ class Results(object):
                                      % self.parameters['objective'])
 
             printer.log(" -- %s plots (%d): " % (plotFnName, nPlots), end='')
-            printer.show_progress(0, 0, prefix='', end='')
-            printer.end_progress()
+            with printer.progress_logging(1):
+                printer.show_progress(0, 0, prefix='', end='')
             fig = set_fig_qtys("bestEstimateColorBoxPlot",
                                "best%sBoxes.png" % plotFnName, printer - 1)
             maxX = fig.get_extra_info()['nUsedXs']
@@ -2810,27 +2816,27 @@ class Results(object):
         pixplots = []
         if pixelPlotAppendix:
             Ls = self.parameters['max length list']
-            for i in range(st,len(Ls)-1):
+            with printer.progress_logging(1):
+                for i in range(st,len(Ls)-1):
 
-                printer.show_progress(i, len(Ls)-2, prefix='', end='')
-                # printer.log("%d " % (i-st+2), end='')
+                    printer.show_progress(i, len(Ls)-2, prefix='', end='')
+                    # printer.log("%d " % (i-st+2), end='')
 
-                fig = self.figures.get("estimateForLIndex%dColorBoxPlot" % i,
-                                       verbosity=printer - 1)
-                fig.save_to( _os.path.join(report_dir, D,"L%d_%sBoxes.png" %
-                                           (i,plotFnName)) )
-                lx = fig.get_extra_info()['nUsedXs']
-                ly = fig.get_extra_info()['nUsedYs']
+                    fig = self.figures.get("estimateForLIndex%dColorBoxPlot" % i,
+                                           verbosity=printer - 1)
+                    fig.save_to( _os.path.join(report_dir, D,"L%d_%sBoxes.png" %
+                                               (i,plotFnName)) )
+                    lx = fig.get_extra_info()['nUsedXs']
+                    ly = fig.get_extra_info()['nUsedYs']
 
-                #scale figure size according to number of rows and columns+1
-                # (+1 for labels ~ another col) relative to initial plot
-                W = float(lx+1)/float(maxX+1) * maxW
-                H = float(ly)  /float(maxY)   * maxH
+                    #scale figure size according to number of rows and columns+1
+                    # (+1 for labels ~ another col) relative to initial plot
+                    W = float(lx+1)/float(maxX+1) * maxW
+                    H = float(ly)  /float(maxY)   * maxH
 
-                pixplots.append( _os.path.join(
-                        report_dir, D, "L%d_%sBoxes.png" % (i,plotFnName)) )
-                #FUTURE: Add tooltip caption info further down?
-            printer.end_progress()
+                    pixplots.append( _os.path.join(
+                            report_dir, D, "L%d_%sBoxes.png" % (i,plotFnName)) )
+                    #FUTURE: Add tooltip caption info further down?
 
         #Set template quantity (empty array if appendix disabled)
         qtys['intermediate_pixel_plot_slides'] = pixplots
@@ -2840,22 +2846,20 @@ class Results(object):
         if debugAidsAppendix:
             #Direct-GST and deviation
             printer.log(" -- Direct-X plots (2)", end="")
+            with printer.progress_logging(1):
+                printer.show_progress(0, 1, prefix='', end='')
+                fig = set_fig_qtys("directLongSeqGSTColorBoxPlot",
+                               "directLongSeqGST%sBoxes.png" % plotFnName, printer - 1)
 
-            printer.show_progress(0, 1, prefix='', end='')
-            fig = set_fig_qtys("directLongSeqGSTColorBoxPlot",
-                           "directLongSeqGST%sBoxes.png" % plotFnName, printer - 1)
+                printer.show_progress(1, 1, prefix='', end='')
+                fig = set_fig_qtys("directLongSeqGSTDeviationColorBoxPlot",
+                                   "directLongSeqGSTDeviationBoxes.png", printer - 1)
 
-            printer.show_progress(1, 1, prefix='', end='')
-            fig = set_fig_qtys("directLongSeqGSTDeviationColorBoxPlot",
-                               "directLongSeqGSTDeviationBoxes.png", printer - 1)
-
-            printer.log('')
-
-            #Small eigenvalue error rate
-            printer.log(" -- Error rate plots...")
-            fig = set_fig_qtys("smallEigvalErrRateColorBoxPlot",
-                               "smallEigvalErrRateBoxes.png", printer - 1)
-            printer.end_progress()
+                printer.log('')
+                #Small eigenvalue error rate
+                printer.log(" -- Error rate plots...")
+                fig = set_fig_qtys("smallEigvalErrRateColorBoxPlot",
+                                   "smallEigvalErrRateBoxes.png", printer - 1)
 
         else:
             for figkey in ["directLongSeqGSTColorBoxPlot",
@@ -2874,31 +2878,30 @@ class Results(object):
                           if len(g) == 1 ]
 
             printer.log(" -- Whack-a-mole plots (%d): " % (2*len(len1Germs)), end='')
+            with printer.progress_logging(1):
+                for i,germ in enumerate(len1Germs):
+                    printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
 
-            for i,germ in enumerate(len1Germs):
-                printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
+                    fig = self.figures.get("whack%sMoleBoxes" % germ[0],verbosity=printer -1)
+                    fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.png"
+                                              % germ[0]))
+                    whackamoleplots.append( _os.path.join(
+                            report_dir, D, "whack%sMoleBoxes.png" % germ[0]) )
+                    #FUTURE: Add tooltip caption info further down?
 
-                fig = self.figures.get("whack%sMoleBoxes" % germ[0],verbosity=printer -1)
-                fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.png"
-                                          % germ[0]))
-                whackamoleplots.append( _os.path.join(
-                        report_dir, D, "whack%sMoleBoxes.png" % germ[0]) )
-                #FUTURE: Add tooltip caption info further down?
-            printer.end_progress()
+            with printer.progress_logging(1):
+                for i,germ in enumerate(len1Germs):
+                    printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
+                    # printer.log("%d " % (len(len1Germs)+i+1), end='')
 
-            for i,germ in enumerate(len1Germs):
-                printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
-                # printer.log("%d " % (len(len1Germs)+i+1), end='')
+                    fig = self.figures.get("whack%sMoleBoxesSummed" % germ[0],
+                                           verbosity=printer - 1)
+                    fig.save_to(_os.path.join(
+                            report_dir, D, "whack%sMoleBoxesSummed.png" % germ[0]))
+                    whackamoleplots.append( _os.path.join(
+                            report_dir, D,"whack%sMoleBoxesSummed.png" % germ[0]) )
+                    #FUTURE: Add tooltip caption info further down?
 
-                fig = self.figures.get("whack%sMoleBoxesSummed" % germ[0],
-                                       verbosity=printer - 1)
-                fig.save_to(_os.path.join(
-                        report_dir, D, "whack%sMoleBoxesSummed.png" % germ[0]))
-                whackamoleplots.append( _os.path.join(
-                        report_dir, D,"whack%sMoleBoxesSummed.png" % germ[0]) )
-                #FUTURE: Add tooltip caption info further down?
-
-            printer.end_progress()
             printer.log('')
 
         #Set template quantity (empty array if appendix disabled)
@@ -3478,23 +3481,22 @@ class Results(object):
                                  % self.parameters['objective'])
 
             printer.log(" -- %s plots (%d): " % (plotFnName, nPlots), end='')
+            with printer.progress_logging(1):
+                printer.show_progress(0, 2, prefix='', end='')
 
-            printer.show_progress(0, 2, prefix='', end='')
+                w = min(len(self.gatestring_lists['prep fiducials']) * 0.3,maxW)
+                h = min(len(self.gatestring_lists['effect fiducials']) * 0.3,maxH)
+                fig = set_fig_qtys("colorBoxPlotKeyPlot",
+                                   "colorBoxPlotKey.png", printer - 1, w,h)
 
-            w = min(len(self.gatestring_lists['prep fiducials']) * 0.3,maxW)
-            h = min(len(self.gatestring_lists['effect fiducials']) * 0.3,maxH)
-            fig = set_fig_qtys("colorBoxPlotKeyPlot",
-                               "colorBoxPlotKey.png", printer - 1, w,h)
+                printer.show_progress(1, 2, prefix='', end='')
 
-            printer.show_progress(1, 2, prefix='', end='')
+                fig = set_fig_qtys("bestEstimateSummedColorBoxPlot",
+                                   "best%sBoxesSummed.png" % plotFnName,
+                                   printer - 1,
+                                   maxW, maxH-1.0) # -1 for room for caption
 
-            fig = set_fig_qtys("bestEstimateSummedColorBoxPlot",
-                               "best%sBoxesSummed.png" % plotFnName,
-                               printer - 1,
-                               maxW, maxH-1.0) # -1 for room for caption
-
-            printer.show_progress(2, 2, prefix='', end='')
-            printer.end_progress()
+                printer.show_progress(2, 2, prefix='', end='')
 
             figkey = "bestEstimateColorBoxPlotPages"
             figs = self._specials.get(figkey, verbosity=printer - 1)

@@ -2154,27 +2154,30 @@ class GateSet(object):
         Parameters
         ----------
         gate_noise : float, optional
-          apply depolarizing noise of strength 1-noise to all
-          gates in the gateset. (Multiplies each assumed-Pauli-basis gate
-          matrix by the diagonal matrix with (1.0-noise) along all
-          the diagonal elements except the first (the identity).
-
+         apply depolarizing noise of strength ``1-gate_noise`` to all gates in
+          the gateset. (Multiplies each assumed-Pauli-basis gate matrix by the
+          diagonal matrix with ``(1.0-gate_noise)`` along all the diagonal
+          elements except the first (the identity).
+    
         spam_noise : float, optional
-          apply depolarizing noise of strength 1-noise to all
-          SPAM vectors in the gateset. (Multiplies the non-identity
-          part of each assumed-Pauli-basis state preparation vector
-          and measurement vector by (1.0-noise).
+          apply depolarizing noise of strength ``1-spam_noise`` to all SPAM
+          vectors in the gateset. (Multiplies the non-identity part of each
+          assumed-Pauli-basis state preparation vector and measurement vector
+          by ``(1.0-spam_noise)``).
 
         max_gate_noise : float, optional
-          specified instead of 'gate_noise'; apply a random depolarization
-          with maximum strength 1-max_noise to each gate in the gateset.
 
+          specified instead of `gate_noise`; apply a random depolarization
+          with maximum strength ``1-max_gate_noise`` to each gate in the
+          gateset.
+    
         max_spam_noise : float, optional
-          specified instead of 'spam_noise'; apply a random depolarization
-          with maximum strength 1-max_noise to SPAM vector in the gateset.
-
+          specified instead of `spam_noise`; apply a random depolarization
+          with maximum strength ``1-max_spam_noise`` to SPAM vector in the
+          gateset.
+    
         seed : int, optional
-          if not None, seed numpy's random number generator with this value
+          if not ``None``, seed numpy's random number generator with this value
           before generating random depolarizations.
 
         Returns

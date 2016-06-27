@@ -1,6 +1,0 @@
-pygsti.objects.LinearlyParameterizedGate.transform
-==================================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: LinearlyParameterizedGate.transform

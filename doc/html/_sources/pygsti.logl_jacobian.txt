@@ -1,6 +1,0 @@
-pygsti.logl_jacobian
-====================
-
-.. currentmodule:: pygsti
-
-.. autofunction:: logl_jacobian

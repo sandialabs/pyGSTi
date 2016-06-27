@@ -1,6 +1,0 @@
-pygsti.frobeniusdist
-====================
-
-.. currentmodule:: pygsti
-
-.. autofunction:: frobeniusdist

@@ -1,6 +1,0 @@
-pygsti.tools.stdmx_to_gmvec
-===========================
-
-.. currentmodule:: pygsti.tools
-
-.. autofunction:: stdmx_to_gmvec

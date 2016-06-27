@@ -1,6 +1,0 @@
-pygsti.objects.GateSet.randomize_with_unitary
-=============================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: GateSet.randomize_with_unitary

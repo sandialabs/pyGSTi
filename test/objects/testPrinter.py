@@ -13,15 +13,15 @@ def _generate_with(printer):
     data     = list(range(2))
     printer.log(logMessage, 3)
     printer.warning(warningMessage)
-    for i, item in enumerate(data):
-        printer.show_progress(i, len(data)-1, verboseMessages=[('(%s data members remaining)' % (len(data) - (i + 1)))])
-        printer.log(logMessage)
-        if i == 1:
-            printer.error(errorMessage)
+   with printer.progress_logging(1):
         for i, item in enumerate(data):
-            printer.show_progress(i, len(data)-1, messageLevel=2)
-        printer.end_progress()
-    printer.end_progress()
+	    printer.show_progress(i, len(data)-1, verboseMessages=[('(%s data members remaining)' % (len(data) - (i + 1)))])
+	    printer.log(logMessage)
+	    if i == 1:
+	        printer.error(errorMessage)
+            with printer.progress_logging(2):
+	        for i, item in enumerate(data):
+	            printer.show_progress(i, len(data)-1, messageLevel=2)
 
 def _to_temp_file(printer):
     data     = list(range(2))
@@ -125,7 +125,7 @@ class TestVerbosePrinter(unittest.TestCase):
         _test_output_with(self, _to_redirected_stream, VerbosityPrinter.build_printer(2))
 
 if __name__ == '__main__':
-    unittest.main(verbosity=2, argv=[sys.argv[0]])
+    unittest.main(verbosity=2)
 
 
 '''

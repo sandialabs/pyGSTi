@@ -1,6 +1,0 @@
-pygsti.tools.two_delta_loglfn
-=============================
-
-.. currentmodule:: pygsti.tools
-
-.. autofunction:: two_delta_loglfn

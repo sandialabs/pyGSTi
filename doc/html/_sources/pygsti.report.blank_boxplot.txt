@@ -1,6 +1,0 @@
-pygsti.report.blank_boxplot
-===========================
-
-.. currentmodule:: pygsti.report
-
-.. autofunction:: blank_boxplot

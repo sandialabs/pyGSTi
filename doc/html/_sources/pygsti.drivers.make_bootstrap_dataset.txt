@@ -1,6 +1,0 @@
-pygsti.drivers.make_bootstrap_dataset
-=====================================
-
-.. currentmodule:: pygsti.drivers
-
-.. autofunction:: make_bootstrap_dataset

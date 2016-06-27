@@ -1,6 +1,0 @@
-pygsti.objects.GateSet.get_prep_labels
-======================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: GateSet.get_prep_labels

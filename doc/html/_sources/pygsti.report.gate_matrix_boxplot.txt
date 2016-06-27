@@ -1,6 +1,0 @@
-pygsti.report.gate_matrix_boxplot
-=================================
-
-.. currentmodule:: pygsti.report
-
-.. autofunction:: gate_matrix_boxplot

@@ -1,3 +1,4 @@
+#!/usr/bin/python
 from __future__  import print_function
 from .runPackage import run_package
 from .benchmarks  import benchmark
