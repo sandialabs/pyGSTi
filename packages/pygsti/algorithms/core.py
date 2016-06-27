@@ -808,24 +808,24 @@ def do_iterative_exlgst(
     elgstGateset = startGateset.copy(); nIters = len(gateStringLists)
 
     with printer.progress_logging(1):
-	for (i, stringsToEstimate) in enumerate(gateStringLists):
-	    if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
+        for (i, stringsToEstimate) in enumerate(gateStringLists):
+            if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
 
-	    printer.log('', 2) #newline if we have more info to print
-	    extraMessages = ["(%s)" % gateStringSetLabels[i]] if gateStringSetLabels else []
-	    printer.show_progress(i, nIters-1, messageLevel=1, prefix='--- Iterative eLGST: ', suffix = '; %s gate strings ---' % len(stringsToEstimate),
-				  verboseMessages=extraMessages)
+        printer.log('', 2) #newline if we have more info to print
+        extraMessages = ["(%s)" % gateStringSetLabels[i]] if gateStringSetLabels else []
+        printer.show_progress(i, nIters-1, messageLevel=1, prefix='--- Iterative eLGST: ', suffix = '; %s gate strings ---' % len(stringsToEstimate),
+                  verboseMessages=extraMessages)
 
-	    minErr, elgstGateset = do_exlgst(
-	      dataset, elgstGateset, stringsToEstimate, specs,
-	      targetGateset, spamDict, guessGatesetForGauge,
-	      svdTruncateTo, maxiter, maxfev, tol,
-	      regularizeFactor, printer, comm,
-	      check_jacobian )
+        minErr, elgstGateset = do_exlgst(
+          dataset, elgstGateset, stringsToEstimate, specs,
+          targetGateset, spamDict, guessGatesetForGauge,
+          svdTruncateTo, maxiter, maxfev, tol,
+          regularizeFactor, printer, comm,
+          check_jacobian )
 
-	    if returnAll:
-		elgstGatesets.append(elgstGateset)
-		minErrs.append(minErr)
+        if returnAll:
+            elgstGatesets.append(elgstGateset)
+            minErrs.append(minErr)
 
     if returnErrorVec:
         return (minErrs, elgstGatesets) if returnAll else (minErr, elgstGateset)
@@ -1605,35 +1605,35 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
     tRef = _time.time() #start time
 
     with printer.progress_logging(1):
-	for (i, stringsToEstimate) in enumerate(gateStringLists):
-	    printer.log('', 3)
-	    extraMessages = ["(%s)" % gateStringSetLabels[i]] if gateStringSetLabels else []
-	    printer.show_progress(i, nIters-1, verboseMessages=extraMessages, prefix= "--- Iterative MC2GST:", suffix=" %d gate strings ---" % len(stringsToEstimate))
+        for (i, stringsToEstimate) in enumerate(gateStringLists):
+            printer.log('', 3)
+            extraMessages = ["(%s)" % gateStringSetLabels[i]] if gateStringSetLabels else []
+            printer.show_progress(i, nIters-1, verboseMessages=extraMessages, prefix= "--- Iterative MC2GST:", suffix=" %d gate strings ---" % len(stringsToEstimate))
 
-	    if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
+            if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
 
-	    if gatestringWeightsDict is not None:
-		gatestringWeights = _np.ones( len(stringsToEstimate), 'd')
-		for gatestr,weight in gatestringWeightsDict.items():
-		    if gatestr in stringsToEstimate:
-			gatestringWeights[ stringsToEstimate.index(gatestr) ] = weight
-	    else: gatestringWeights = None
+            if gatestringWeightsDict is not None:
+                gatestringWeights = _np.ones( len(stringsToEstimate), 'd')
+                for gatestr, weight in gatestringWeightsDict.items():
+                    if gatestr in stringsToEstimate:
+                        gatestringWeights[ stringsToEstimate.index(gatestr) ] = weight
+            else: gatestringWeights = None
 
-	    minErr, lsgstGateset = do_mc2gst( dataset, lsgstGateset, stringsToEstimate,
-					      maxiter, maxfev, tol, cptp_penalty_factor,
-					      minProbClipForWeighting, probClipInterval,
-					      useFreqWeightedChiSq, regularizeFactor,
-					      printer, check, check_jacobian,
-					      gatestringWeights, None, memLimit, comm,
-					      distributeMethod)
-	    if returnAll:
-		lsgstGatesets.append(lsgstGateset)
-		minErrs.append(minErr)
+            minErr, lsgstGateset = do_mc2gst( dataset, lsgstGateset, stringsToEstimate,
+                              maxiter, maxfev, tol, cptp_penalty_factor,
+                              minProbClipForWeighting, probClipInterval,
+                              useFreqWeightedChiSq, regularizeFactor,
+                              printer, check, check_jacobian,
+                              gatestringWeights, None, memLimit, comm,
+                              distributeMethod)
+            if returnAll:
+                lsgstGatesets.append(lsgstGateset)
+                minErrs.append(minErr)
 
-	    if times is not None:
-		tNxt = _time.time();
-		times.append(('MC2GST Iteration %d: chi2-opt' % (i+1),tNxt-tRef))
-		tRef=tNxt
+            if times is not None:
+                tNxt = _time.time();
+                times.append(('MC2GST Iteration %d: chi2-opt' % (i+1),tNxt-tRef))
+                tRef=tNxt
 
     if returnErrorVec:
         return (minErrs, lsgstGatesets) if returnAll else (minErr, lsgstGateset)
@@ -1768,30 +1768,31 @@ def do_iterative_mc2gst_with_model_selection(
     #Run MC2GST iteratively on given sets of estimatable strings
     lsgstGatesets = [ ]; minErrs = [ ] #for returnAll == True case
     lsgstGateset = startGateset.copy(); nIters = len(gateStringLists)
-    for (i,stringsToEstimate) in enumerate(gateStringLists):
-        printer.log('', 2)
-        extraMessages = (["(%s) "] % gateStringSetLabels[i]) if gateStringSetLabels else []
-        printer.show_progress(i, nIters-1, prefix="--- Iterative MC2GST:", suffix= "%d gate strings ---"  % (len(stringsToEstimate)))
+    with printer.progress_logging(1):
+        for (i,stringsToEstimate) in enumerate(gateStringLists):
+            printer.log('', 2)
+            extraMessages = (["(%s) "] % gateStringSetLabels[i]) if gateStringSetLabels else []
+            printer.show_progress(i, nIters-1, prefix="--- Iterative MC2GST:", suffix= "%d gate strings ---"  % (len(stringsToEstimate)))
 
-        if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
+            if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
 
-        if gatestringWeightsDict is not None:
-            gatestringWeights = _np.ones( len(stringsToEstimate), 'd')
-            for gatestr,weight in gatestringWeightsDict.items():
-                if gatestr in stringsToEstimate:
-                    gatestringWeights[ stringsToEstimate.index(gatestr) ] = weight
-        else: gatestringWeights = None
+            if gatestringWeightsDict is not None:
+                gatestringWeights = _np.ones( len(stringsToEstimate), 'd')
+                for gatestr,weight in gatestringWeightsDict.items():
+                    if gatestr in stringsToEstimate:
+                        gatestringWeights[ stringsToEstimate.index(gatestr) ] = weight
+            else: gatestringWeights = None
 
-        minErr, lsgstGateset = do_mc2gst_with_model_selection(
-          dataset, lsgstGateset, dimDelta, stringsToEstimate,
-          maxiter, maxfev, tol, cptp_penalty_factor,
-          minProbClipForWeighting, probClipInterval,
-          useFreqWeightedChiSq, regularizeFactor, printer,
-          check, check_jacobian, gatestringWeights, memLimit, comm)
+            minErr, lsgstGateset = do_mc2gst_with_model_selection(
+              dataset, lsgstGateset, dimDelta, stringsToEstimate,
+              maxiter, maxfev, tol, cptp_penalty_factor,
+              minProbClipForWeighting, probClipInterval,
+              useFreqWeightedChiSq, regularizeFactor, printer,
+              check, check_jacobian, gatestringWeights, memLimit, comm)
 
-        if returnAll:
-            lsgstGatesets.append(lsgstGateset)
-            minErrs.append(minErr)
+            if returnAll:
+                lsgstGatesets.append(lsgstGateset)
+                minErrs.append(minErr)
 
     if returnErrorVec:
         return (minErrs, lsgstGatesets) if returnAll else (minErr, lsgstGateset)
@@ -2358,74 +2359,71 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
     tRef = _time.time() #start time
 
     with printer.progress_logging(1):
-	for (i,stringsToEstimate) in enumerate(gateStringLists):
-	    printer.log('', 2)
-	    extraMessages = [("(%s) " % gateStringSetLabels[i])] if gateStringSetLabels else []
-	    printer.show_progress(i, nIters-1, verboseMessages=extraMessages, prefix="--- Iterative MLGST:", suffix=" %d gate strings ---" % len(stringsToEstimate))
+         for (i,stringsToEstimate) in enumerate(gateStringLists):
+             printer.log('', 2)
+             extraMessages = [("(%s) " % gateStringSetLabels[i])] if gateStringSetLabels else []
+             printer.show_progress(i, nIters-1, verboseMessages=extraMessages, prefix="--- Iterative MLGST:", suffix=" %d gate strings ---" % len(stringsToEstimate))
 
-	    if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
-
-
-	    chi2Diff, mleGateset = do_mc2gst( dataset, mleGateset, stringsToEstimate,
-					      maxiter, maxfev, tol, 0, minProbClip,
-					      probClipInterval, useFreqWeightedChiSq,
-					      0, printer, check,
-					      False, None, None, memLimit, comm,
-					      distributeMethod)
-				  # Note maxLogL is really chi2 number here
-	    if times is not None:
-		tNxt = _time.time();
-		times.append(('MLGST Iteration %d: chi2-opt' % (i+1),tNxt-tRef))
-		tRef=tNxt
-
-	    logL_ub = _tools.logl_max(dataset, stringsToEstimate, None, poissonPicture, check)
-	    maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval,
-			       radius, None, None, poissonPicture, check)  #get maxLogL from chi2 estimate
-
-	    if times is not None:
-		tNxt = _time.time();
-		times.append(('MLGST Iteration %d: logl-comp' % (i+1),tNxt-tRef))
-		tRef=tNxt
-
-		printer.log("    2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL)))
-
-	    #OLD: do MLGST for all iterations
-	    #maxLogL, mleGateset = do_mlgst( dataset, mleGateset, stringsToEstimate,
-	    #                                maxiter, maxfev, tol,
-	    #                                minProbClip, probClipInterval, radius, poissonPicture,
-	    #                                verbosity, check, None, memLimit, comm)
-
-	    if i == len(gateStringLists)-1: #on the last iteration, do ML
-		printer.log("--- Last Iteration: switching to ML objective ---")
-		maxLogL_p, mleGateset_p = do_mlgst(
-		  dataset, mleGateset, stringsToEstimate, maxiter, maxfev, tol,
-		  minProbClip, probClipInterval, radius, poissonPicture, printer,
-		  check, None, memLimit, comm)
-
-		printer.log("    2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL_p)))
-
-		if maxLogL_p > maxLogL: #if do_mlgst improved the maximum log-likelihood
-		    maxLogL = maxLogL_p
-		    mleGateset = mleGateset_p
-		else:
-		    printer.log("   !!! Warning: MLGST failed to improve logl: retaining chi2-objective estimate !!!")
-
-		if times is not None:
-		    tNxt = _time.time();
-		    times.append(('MLGST Iteration %d: logl-opt' % (i+1),tNxt-tRef))
-		    tRef=tNxt
+             if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
 
 
-	    if returnAll:
-		mleGatesets.append(mleGateset)
-		maxLogLs.append(maxLogL)
+             chi2Diff, mleGateset = do_mc2gst( dataset, mleGateset, stringsToEstimate,
+                                                maxiter, maxfev, tol, 0, minProbClip,
+                                                probClipInterval, useFreqWeightedChiSq,
+                                                0, printer, check,
+                                                False, None, None, memLimit, comm,
+                                                distributeMethod)
+                                               # Note maxLogL is really chi2 number here
+             if times is not None:
+                 tNxt = _time.time();
+                 times.append(('MLGST Iteration %d: chi2-opt' % (i+1),tNxt-tRef))
+                 tRef=tNxt
+
+             logL_ub = _tools.logl_max(dataset, stringsToEstimate, None, poissonPicture, check)
+             maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval,
+                               radius, None, None, poissonPicture, check)  #get maxLogL from chi2 estimate
+
+             if times is not None:
+                 tNxt = _time.time();
+                 times.append(('MLGST Iteration %d: logl-comp' % (i+1),tNxt-tRef))
+                 tRef=tNxt
+                 printer.log("    2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL)))
+
+            #OLD: do MLGST for all iterations
+            #maxLogL, mleGateset = do_mlgst( dataset, mleGateset, stringsToEstimate,
+            #                                maxiter, maxfev, tol,
+            #                                minProbClip, probClipInterval, radius, poissonPicture,
+            #                                verbosity, check, None, memLimit, comm)
+
+             if i == len(gateStringLists)-1: #on the last iteration, do ML
+                 printer.log("--- Last Iteration: switching to ML objective ---")
+                 maxLogL_p, mleGateset_p = do_mlgst(
+                   dataset, mleGateset, stringsToEstimate, maxiter, maxfev, tol,
+                   minProbClip, probClipInterval, radius, poissonPicture, printer,
+                   check, None, memLimit, comm)
+
+                 printer.log("    2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL_p)))
+
+
+                 if maxLogL_p > maxLogL: #if do_mlgst improved the maximum log-likelihood
+                   maxLogL = maxLogL_p
+                   mleGateset = mleGateset_p
+                 else:
+                   printer.log("   !!! Warning: MLGST failed to improve logl: retaining chi2-objective estimate !!!")
+
+                 if times is not None:
+                   tNxt = _time.time();
+                   times.append(('MLGST Iteration %d: logl-opt' % (i+1),tNxt-tRef))
+                   tRef=tNxt
+
+                 if returnAll:
+                    mleGatesets.append(mleGateset)
+                    maxLogLs.append(maxLogL)
 
     if returnMaxLogL:
         return (maxLogL, mleGatesets) if returnAll else (maxLogL, mleGateset)
     else:
         return mleGatesets if returnAll else mleGateset
-
-
 
 ###################################################################################
 #                 Other Tools
@@ -3291,4 +3289,3 @@ def find_closest_unitary_gatemx(gateMx):
     #print "DEBUG: Chi Mx = \n", _tools.jamiolkowski_iso( gateMx)
     #return -solution.fun, gateMx
     return gateMx
-
