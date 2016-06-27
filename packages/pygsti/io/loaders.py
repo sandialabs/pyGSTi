@@ -5,7 +5,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ Functions for loading GST objects from text files."""
-from __future__ import print_function
 
 import os as _os
 import json as _json

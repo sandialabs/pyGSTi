@@ -6,7 +6,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Functions for generating plots """
 
-from __future__ import division, print_function
 import numpy             as _np
 import matplotlib.pyplot as _plt
 import matplotlib        as _matplotlib

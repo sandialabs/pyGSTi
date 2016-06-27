@@ -6,7 +6,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Defines the EvalTree class which implements an evaluation tree. """
 
-from __future__ import print_function
 import re as _re
 from . import gatestring as _gs
 import numpy as _np

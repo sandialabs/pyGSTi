@@ -5,9 +5,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ Defines classes which represent gates, as well as supporting functions """
-from __future__ import print_function, division
-
-
 
 import numpy as _np
 from ..      import optimize as _opt

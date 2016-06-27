@@ -9,7 +9,6 @@ Routines for converting python objects to HTML.  Parallel rountines as
 LatexUtil has for latex conversion.
 """
 
-from __future__ import print_function
 import numpy as _np
 import cmath
 from .. import objects as _objs

@@ -8,7 +8,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 Routines for converting python objects to Powerpoint compatible values.  Parallel rountines as
 LatexUtil has for latex conversion.
 """
-from __future__ import print_function
 import numpy as _np
 import cmath
 from .. import objects as _objs

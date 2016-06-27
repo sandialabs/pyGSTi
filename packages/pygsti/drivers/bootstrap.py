@@ -5,7 +5,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ Functions for generating bootstrapped error bars """
-from __future__ import print_function
 import numpy as _np
 import matplotlib as _mpl
 from .longsequence import do_long_sequence_gst as _do_long_sequence_gst

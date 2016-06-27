@@ -6,8 +6,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Defines the DataSet class and supporting classes and functions """
 
-from __future__ import print_function
-
 import numpy as _np
 import pickle as _pickle
 import warnings as _warnings

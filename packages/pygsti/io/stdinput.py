@@ -5,7 +5,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ Text-parsering classes and functions to read input files."""
-from __future__ import print_function
 
 import os as _os
 import sys as _sys

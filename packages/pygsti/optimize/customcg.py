@@ -5,7 +5,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ A custom conjugate gradient descent algorithm """
-from __future__ import print_function
 
 import numpy as _np
 

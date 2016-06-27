@@ -5,7 +5,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """Functions related to computation of the log-likelihood."""
-from __future__ import print_function
 
 import numpy as _np
 import warnings as _warnings
