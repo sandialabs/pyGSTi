@@ -1548,7 +1548,6 @@ class Results(object):
 
         # 1) get latex tables
         printer.log("*** Generating tables ***")
-	printer.log("*** Generating tables ***")
 
         std_tables = \
             ('targetSpamTable','targetGatesTable','datasetOverviewTable',
@@ -1635,7 +1634,7 @@ class Results(object):
             else:
                 raise ValueError("Invalid objective value: %s"
                                  % self.parameters['objective'])
-           printer.log("%s plots (%d): " % (plotFnName, nPlots))
+            printer.log("%s plots (%d): " % (plotFnName, nPlots))
 
             with printer.progress_logging(1):
                 printer.show_progress(0, 1, prefix='', end='')
@@ -1751,7 +1750,7 @@ class Results(object):
 
             printer.log(" -- Whack-a-mole plots (%d): " % (2*len(len1Germs)), end='')
 
-           with printer.progress_logging(1):
+            with printer.progress_logging(1):
                 for i, germ in enumerate(len1Germs):
 
                     printer.show_progress(i,  len(len1Germs) - 1, prefix='', end='')
@@ -2469,7 +2468,7 @@ class Results(object):
 
             printer.log(" -- Whack-a-mole plots (%d): " % (2*len(len1Germs)), end='')
 
-           with printer.progress_logging(1):
+            with printer.progress_logging(1):
                 for i,germ in enumerate(len1Germs):
                     printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
 
