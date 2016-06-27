@@ -38,7 +38,7 @@ def find_failed(output):
 
 def run_test(commands, filepath, failedtests):
     result = run_subprocess(commands)
-    print(result[1])
+    print(result[1].decode('utf-8'))
     if not result[0]:
         failedtests.append((find_failed(result[1]), filepath))
 
