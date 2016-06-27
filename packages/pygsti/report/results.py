@@ -2142,10 +2142,10 @@ class Results(object):
         """
         Create a GST presentation (i.e. slides) using the beamer latex package.
 
-        The slides can contain most (but not all) of the tables and figures from
-        the "full" report but contain only minimal descriptive text.  This output
-        if useful for those familiar with the GST full report who need to present
-        the results in a projector-friendly format.
+        The slides can contain most (but not all) of the tables and figures
+        from the "full" report but contain only minimal descriptive text.  This
+        output if useful for those familiar with the GST full report who need
+        to present the results in a projector-friendly format.
 
         Parameters
         ----------
@@ -2192,8 +2192,8 @@ class Results(object):
            particular part of the overall goodness of fit box plot.
 
         m, M : float, optional
-           Minimum and Maximum values of the color scale used in the presentation's
-           color box plots.
+           Minimum and Maximum values of the color scale used in the
+           presentation's color box plots.
 
         verbosity : int, optional
            How much detail to send to stdout.
@@ -2566,14 +2566,14 @@ class Results(object):
         """
         Create a GST Microsoft Powerpoint presentation.
 
-        These slides can contain most (but not all) of the tables and figures from
-        the "full" report but contain only minimal descriptive text.  This method
-        uses the python-pptx package to write Powerpoint files.  The resulting
-        powerpoint slides are meant to parallel those of the PDF presentation
-        but are not as nice and clean.  This method exists because the Powerpoint
-        format is an industry standard and makes it very easy to shamelessly
-        co-opt GST figures or entire slides for incorporation into other
-        presentations.
+        These slides can contain most (but not all) of the tables and figures
+        from the "full" report but contain only minimal descriptive text.  This
+        method uses the python-pptx package to write Powerpoint files.  The
+        resulting powerpoint slides are meant to parallel those of the PDF
+        presentation but are not as nice and clean.  This method exists because
+        the Powerpoint format is an industry standard and makes it very easy to
+        shamelessly co-opt GST figures or entire slides for incorporation into
+        other presentations.
 
         Parameters
         ----------
@@ -2620,8 +2620,8 @@ class Results(object):
            particular part of the overall goodness of fit box plot.
 
         m, M : float, optional
-           Minimum and Maximum values of the color scale used in the presentation's
-           color box plots.
+           Minimum and Maximum values of the color scale used in the
+           presentation's color box plots.
 
         verbosity : int, optional
            How much detail to send to stdout.
