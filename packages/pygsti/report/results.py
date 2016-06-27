@@ -3043,7 +3043,6 @@ class Results(object):
 
 
         def draw_pic(shapes, path, left, top, width, height):
-            print(path)
             with open(path, 'rb') as imagefile:
                 pxWidth, pxHeight = Image.open(imagefile).size
             pxAspect = pxWidth / float(pxHeight) #aspect ratio of image
