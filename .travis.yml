@@ -19,4 +19,4 @@ install:
 # command to run tests
 script:
   - cd test/test_tools/
-  - python runPackage.py tools
+  - python travisChecks.py 

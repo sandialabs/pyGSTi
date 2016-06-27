@@ -26,6 +26,7 @@ def run_subprocess(commands):
         return False, e.output
 
 def find_failed(output):
+    output = output.decode('utf-8')
     failedlines = [line for line in output.splitlines() if '... ERROR' in line or '... FAIL' in line]
     failedtests = []
     for line in failedlines:
@@ -82,9 +83,19 @@ def run_package(packageName, precommand=None, postcommand=None, lastFailed=''):
       
         testnames = get_test_names(failedtests)
         create_last_failed(testnames, packageName)
+        if len(testnames) > 0:
+            return (False, testnames)
+        else:
+            return (True, [])
 
 
 if __name__ == "__main__":
-   args, kwargs = get_args(sys.argv)
-   for name in args[0]:
-       run_package(name, **kwargs)
+    args, kwargs = get_args(sys.argv)
+    results = []
+    for name in args[0]:
+        result = run_package(name, **kwargs)
+        results.append(result[0])
+    if False not in results:
+        sys.exit(0)
+    else:
+        sys.exit(1)
