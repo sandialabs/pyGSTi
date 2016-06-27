@@ -100,7 +100,8 @@ class OutputData:
             import gzip
             file_data = _pickle.load(gzip.open(filename,'rb'))
         else:
-            file_data = _pickle.load(open(filename,'rb'))
+            with open(filename, 'rb') as picklefile
+                file_data = _pickle.load(picklefile)
         #except:
         #    raise ValueError("Error loading pickle data from %s" % filename)
         version = file_data.get("gst_output_data_version",0)
@@ -140,7 +141,8 @@ class OutputData:
             import gzip as _gzip
             _pickle.dump( dictToSave, _gzip.open(filename, "wb"))
         else:
-            _pickle.dump( dictToSave, open(filename, "wb"))
+            with open(filename, 'wb') as picklefile:
+                _pickle.dump( dictToSave, picklefile)
 
 
 
