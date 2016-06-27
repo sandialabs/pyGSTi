@@ -6,12 +6,10 @@ import os, sys
 import subprocess
 import pickle
 
-#tool makes the function act as if run from the test directory
-@tool
-def run_package(packageName, precommand='python3', postcommand=''):
 pythonCommand = 'python3' if sys.version_info[0] == 3 else 'python'
 
 last_failed_file = 'last_failed.pkl'
+
 
 def get_last_failed(packageName):
     with open(last_failed_file, 'rb') as picklefile:
@@ -41,7 +39,7 @@ def find_failed(output):
 
 def run_test(commands, filepath, failedtests):
     result = run_subprocess(commands)
-    print(result[1])
+    print(result[1].decode('utf-8'))
     if not result[0]:
         failedtests.append((find_failed(result[1]), filepath))
 
@@ -51,9 +49,8 @@ def get_test_names(failedtests):
 
 @contextmanager
 def package_dir(packageName):
->>>>>>> unittests
     os.chdir(packageName)
-    yield     
+    yield
     os.chdir('..')
 
 #tool makes the function act as if run from the test directory
@@ -77,14 +74,14 @@ def run_package(packageName, precommand=None, postcommand=None, lastFailed=''):
             for subdir, dirs, files in os.walk(os.getcwd()):
                 for filename in files:
                     filepath = subdir + os.sep + filename
-                
+
                     if filename.endswith('.py') and filename.startswith('test'):
                         # run ALL test files, even those that passed previously
                         print('Running %s' % filename)
                         commands = [precommand, filepath]
                         if postcommand is not None: commands.append(postcommand)
                         run_test(commands, filepath, failedtests)
-      
+
         testnames = get_test_names(failedtests)
         create_last_failed(testnames, packageName)
         if len(testnames) > 0:
