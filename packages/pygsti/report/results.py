@@ -3013,21 +3013,16 @@ class Results(object):
             _os.chdir(fileDir)
 
             try:
-                output = _subprocess.check_output(self.options.latex_call +
-                                                  ["-shell-escape",
-                                                   "%s.tex" % key],
-                                                  stderr=_subprocess.STDOUT)
-                # Trying to see if ImageMagick's 'convert' command is installed.
-                # Ideally I would check to see if stderr is empty and if it's
-                # not empty I would print this error message should 'convert'
-                # show up anywhere in stderr, but I don't currently understand
-                # subprocess well enough to make this work, so I send stderr to
-                # stdout and look for a more specific string that shows up on
-                # MacOS when 'convert' is not available.
-                if output.find(b"convert: command not found") > -1:
-                    printer.error("ImageMagick's 'convert' utility may not be" +
-                                  " installed, so a PNG may not have been " +
-                                  "generated for %s." % key)
+                latex_cmd = self.options.latex_call + \
+                            ["-shell-escape", "%s.tex" % key]
+                process = _subprocess.Popen(latex_cmd, stderr=_subprocess.PIPE,
+                                            stdout=_subprocess.PIPE)
+                standard_output, standard_error = process.communicate()
+                if standard_error is not None:
+                    printer.error(standard_error)
+                if process.returncode > 0:
+                    raise _subprocess.CalledProcessError(process.returncode,
+                                                         latex_cmd)
                 _os.remove( "%s.tex" % key )
                 _os.remove( "%s.log" % key )
                 _os.remove( "%s.aux" % key )
