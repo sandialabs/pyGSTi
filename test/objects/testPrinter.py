@@ -15,13 +15,13 @@ def _generate_with(printer):
     printer.warning(warningMessage)
     with printer.progress_logging(1):
         for i, item in enumerate(data):
-	    printer.show_progress(i, len(data)-1, verboseMessages=[('(%s data members remaining)' % (len(data) - (i + 1)))])
-	    printer.log(logMessage)
-	    if i == 1:
-	        printer.error(errorMessage)
+            printer.show_progress(i, len(data)-1, verboseMessages=[('(%s data members remaining)' % (len(data) - (i + 1)))])
+            printer.log(logMessage)
+            if i == 1:
+                printer.error(errorMessage)
             with printer.progress_logging(2):
-	        for i, item in enumerate(data):
-	            printer.show_progress(i, len(data)-1, messageLevel=2)
+                for i, item in enumerate(data):
+                    printer.show_progress(i, len(data)-1, messageLevel=2)
 
 def _to_temp_file(printer):
     data     = list(range(2))
