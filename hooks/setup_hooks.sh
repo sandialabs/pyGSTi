@@ -1,2 +1,2 @@
 echo Setting up hooks
-cp post-merge pre-commit ../.git/hooks
+cp post-recieve post-merge pre-commit ../.git/hooks
