@@ -1,0 +1,27 @@
+#!/usr/bin/python
+import subprocess
+import sys
+import os
+
+def get_branchname():
+    try:
+        branchname = subprocess.check_output(['bash', '.git/hooks/.get_branch'])
+    except subprocess.CalledProcessError:
+        branchname = 'unnamed_branch'
+    branchname = os.path.basename(branchname)
+    branchname = branchname.replace('\n', '')
+    return branchname
+
+updates_git_pages = ['master']
+
+branchname = get_branchname()
+
+if branchname in updates_git_pages:
+    print('Updating github pages!')
+    subprocess.call(['git', 'checkout', 'gh-pages'])
+    print(subprocess.check_output(['pwd']))
+    os.system('cp temp_html/*.html tutorials/')
+    subprocess.call(['git', 'add', 'tutorials/*.html'])
+    subprocess.call(['git', 'commit', '-m', '"Updates html in tutorials"'])
+    subprocess.call(['git', 'push'])
+    subprocess.call(['git', 'checkout', branchname])
