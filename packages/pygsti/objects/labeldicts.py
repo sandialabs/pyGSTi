@@ -204,7 +204,7 @@ class OrderedSPAMLabelDict(_collections.OrderedDict):
 
     def __setitem__(self, key, val):
         if not isinstance(key, str):
-            raise KeyError("SPAM labels must be strings!")
+            key = str(key)
         if type(val) != tuple or len(val) != 2:
             raise KeyError("SPAM label values must be 2-tuples!")
 
