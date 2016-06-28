@@ -3029,14 +3029,13 @@ class Results(object):
             try:
                 latex_cmd = self.options.latex_call + \
                             ["-shell-escape", "%s.tex" % key]
-                process = _subprocess.Popen(latex_cmd, stderr=_subprocess.PIPE,
-                                            stdout=_subprocess.PIPE)
-                standard_output, standard_error = process.communicate()
-                if standard_error is not None:
-                    printer.error(standard_error)
-                if process.returncode > 0:
-                    raise _subprocess.CalledProcessError(process.returncode,
-                                                         latex_cmd)
+                stdout, stderr, returncode = self._process_call(latex_cmd)
+                self._evaluate_call(latex_cmd, stdout, stderr, returncode,
+                                    printer)
+                # Check to see if the PNG was generated
+                if not _os.path.isfile("%s.png" % key):
+                    raise Exception("File %s.png was not created by pdflatex"
+                                    % key)
                 _os.remove( "%s.tex" % key )
                 _os.remove( "%s.log" % key )
                 _os.remove( "%s.aux" % key )
