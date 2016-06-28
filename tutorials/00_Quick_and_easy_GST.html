@@ -11751,7 +11751,7 @@ div#notebook {
 </div>
 <div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
-<h1 id="Getting-started-quickly-with-Gate-Set-Tomography!">Getting started quickly with Gate Set Tomography!<a class="anchor-link" href="#Getting-started-quickly-with-Gate-Set-Tomography!">&#182;</a></h1>
+<h1 id="Getting-started-quickly-with-Gate-Set-Tomography">Getting started quickly with Gate Set Tomography<a class="anchor-link" href="#Getting-started-quickly-with-Gate-Set-Tomography">&#182;</a></h1>
 </div>
 </div>
 </div>
@@ -11780,20 +11780,6 @@ div#notebook {
 <div class="prompt input_prompt">In&nbsp;[1]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span></span><span class="c1">#Make print statements compatible with Python 2 and 3</span>
-<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">print_function</span>
-</pre></div>
-
-</div>
-</div>
-</div>
-
-</div>
-<div class="cell border-box-sizing code_cell rendered">
-<div class="input">
-<div class="prompt input_prompt">In&nbsp;[2]:</div>
-<div class="inner_cell">
-    <div class="input_area">
 <div class=" highlight hl-ipython2"><pre><span></span><span class="c1">#Import the pygsti module (always do this)</span>
 <span class="kn">import</span> <span class="nn">pygsti</span>
 </pre></div>
@@ -11815,7 +11801,7 @@ div#notebook {
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[3]:</div>
+<div class="prompt input_prompt">In&nbsp;[2]:</div>
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython2"><pre><span></span><span class="c1">#Construct a target gateset</span>
@@ -11874,7 +11860,7 @@ div#notebook {
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[4]:</div>
+<div class="prompt input_prompt">In&nbsp;[3]:</div>
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython2"><pre><span></span><span class="c1">#Write it to a file</span>
@@ -11911,7 +11897,7 @@ div#notebook {
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[5]:</div>
+<div class="prompt input_prompt">In&nbsp;[4]:</div>
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython2"><pre><span></span><span class="c1">#Create fiducial gate string lists</span>
@@ -11944,7 +11930,7 @@ div#notebook {
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[6]:</div>
+<div class="prompt input_prompt">In&nbsp;[5]:</div>
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython2"><pre><span></span><span class="n">pygsti</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">write_gatestring_list</span><span class="p">(</span><span class="s2">&quot;tutorial_files/MyFiducials.txt&quot;</span><span class="p">,</span> <span class="n">fiducials</span><span class="p">,</span> <span class="s2">&quot;My fiducial gate strings&quot;</span><span class="p">)</span>
@@ -11976,7 +11962,7 @@ div#notebook {
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[7]:</div>
+<div class="prompt input_prompt">In&nbsp;[6]:</div>
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython2"><pre><span></span><span class="c1">#Create a list of GST experiments for this gateset, with</span>
@@ -12006,7 +11992,7 @@ div#notebook {
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[8]:</div>
+<div class="prompt input_prompt">In&nbsp;[7]:</div>
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython2"><pre><span></span><span class="c1">#Create a gateset of depolarized gates and SPAM relative to target, and generate fake data using this gateset.</span>
@@ -12032,7 +12018,7 @@ div#notebook {
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[9]:</div>
+<div class="prompt input_prompt">In&nbsp;[8]:</div>
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython2"><pre><span></span><span class="c1">#Save our dataset</span>
@@ -12071,7 +12057,7 @@ div#notebook {
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[10]:</div>
+<div class="prompt input_prompt">In&nbsp;[9]:</div>
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython2"><pre><span></span><span class="n">results</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">do_long_sequence_gst</span><span class="p">(</span><span class="s2">&quot;tutorial_files/MyDataset.txt&quot;</span><span class="p">,</span> <span class="n">gs_target</span><span class="p">,</span> 
@@ -12090,21 +12076,22 @@ div#notebook {
 <div class="output_area"><div class="prompt"></div>
 <div class="output_subarea output_stream output_stdout output_text">
 <pre>Loading tutorial_files/MyDataset.txt: 100%
-      (&#39;LGST: Singular values of I_tilde (truncating to first 4 of 6) = \n&#39;, array([  4.24408309e+00,   1.16717888e+00,   9.46858487e-01,
-         9.42447698e-01,   1.23388377e-03,   1.02887747e-03]))
-      
-  --- LGST ---
-      
-  --- Gauge Optimization to TP (L-BFGS-B) ---
-    2s           0.0000000000
-  The resulting TP penalty is: 1.26857e-13
-    The gauge matrix found (B^-1) is:
-[[  9.99999995e-01   1.05359901e-07   9.80970904e-09  -9.30682927e-08]
- [ -7.85457222e-16   1.00000000e+00  -2.26481760e-15   6.36903883e-15]
- [ -1.11534038e-14  -2.26481802e-15   1.00000000e+00   1.56960678e-14]
- [  1.99913094e-14   6.36903841e-15   1.56960678e-14   1.00000000e+00]]
+LGST: Singular values of I_tilde (truncating to first 4 of 6) = 
+[  4.24408309e+00   1.16717888e+00   9.46858487e-01   9.42447698e-01
+   1.23388377e-03   1.02887747e-03]
 
-    The gauge-corrected gates are:
+--- LGST ---
+
+--- Gauge Optimization to TP (L-BFGS-B) ---
+    9s           0.0000000000
+The resulting TP penalty is: 1.55599e-13
+The gauge matrix found (B^-1) is:
+[[  9.99999994e-01   1.35901232e-07  -4.62860923e-08  -5.64148161e-08]
+ [ -6.07434733e-16   1.00000000e+00  -9.79579066e-15   3.64175973e-15]
+ [ -1.14342244e-14  -9.79579066e-15   1.00000000e+00   2.02267007e-14]
+ [  2.48680282e-14   3.64175923e-15   2.02267007e-14   1.00000000e+00]]
+
+The gauge-corrected gates are:
 rho0 =    0.7071  -0.0214   0.0222   0.7508
 
 
@@ -12113,66 +12100,66 @@ E0 =    0.6846   0.0022  -0.0017  -0.6436
 
 Gi = 
    1.0000        0        0        0
-  -0.0032   0.9019   0.0004        0
-   0.0028  -0.0004   0.8988  -0.0008
-  -0.0031        0   0.0012   0.8995
+  -0.0035   0.9019  -0.0004        0
+   0.0033  -0.0018   0.8989  -0.0009
+  -0.0032  -0.0004   0.0012   0.8995
 
 
 Gx = 
    1.0000        0        0        0
-  -0.0035   0.9015   0.0070   0.0003
-   0.0005  -0.0012  -0.0072  -1.0000
+  -0.0039   0.9015   0.0060   0.0003
+        0  -0.0001  -0.0072  -1.0000
   -0.0628   0.0069   0.8104   0.0066
 
 
 Gy = 
    1.0000        0        0        0
-  -0.0010  -0.0064   0.0012   1.0003
-   0.0039   0.0065   0.8997  -0.0006
+  -0.0009  -0.0064   0.0017   1.0003
+   0.0037   0.0068   0.8997  -0.0006
   -0.0634  -0.8091  -0.0052   0.0073
 
 
 
-    
-  --- Iterative MLGST: Iter 0 of 6  92 gate strings ---: 
-  --- Minimum Chi^2 GST ---
-    Sum of Chi^2 = 72.1648 (92 data params - 31 model params = expected mean of 61; p-value = 0.155165)
-      2*Delta(log(L)) = 72.1648
-    
-  --- Iterative MLGST: Iter 1 of 6  92 gate strings ---: 
-  --- Minimum Chi^2 GST ---
-    Sum of Chi^2 = 72.1648 (92 data params - 31 model params = expected mean of 61; p-value = 0.155165)
-      2*Delta(log(L)) = 72.1648
-    
-  --- Iterative MLGST: Iter 2 of 6  168 gate strings ---: 
-  --- Minimum Chi^2 GST ---
-    Sum of Chi^2 = 168.56 (168 data params - 31 model params = expected mean of 137; p-value = 0.0346284)
-      2*Delta(log(L)) = 168.574
-    
-  --- Iterative MLGST: Iter 3 of 6  441 gate strings ---: 
-  --- Minimum Chi^2 GST ---
-    Sum of Chi^2 = 467.559 (441 data params - 31 model params = expected mean of 410; p-value = 0.0258252)
-      2*Delta(log(L)) = 467.576
-    
-  --- Iterative MLGST: Iter 4 of 6  817 gate strings ---: 
-  --- Minimum Chi^2 GST ---
-    Sum of Chi^2 = 889.926 (817 data params - 31 model params = expected mean of 786; p-value = 0.00569541)
-      2*Delta(log(L)) = 889.951
-    
-  --- Iterative MLGST: Iter 5 of 6  1201 gate strings ---: 
-  --- Minimum Chi^2 GST ---
-    Sum of Chi^2 = 1235.54 (1201 data params - 31 model params = expected mean of 1170; p-value = 0.089448)
-      2*Delta(log(L)) = 1235.56
-    
-  --- Iterative MLGST: Iter 6 of 6  1585 gate strings ---: 
-  --- Minimum Chi^2 GST ---
-    Sum of Chi^2 = 1626.42 (1585 data params - 31 model params = expected mean of 1554; p-value = 0.098289)
-      2*Delta(log(L)) = 1626.44
-  --- Last Iteration: switching to ML objective ---
-  --- MLGST ---
-      Maximum log(L) = 813.221 below upper bound of -2.65151e+09
-        2*Delta(log(L)) = 1626.44 (1585 data params - 31 model params = expected mean of 1554; p-value = 0.0982337)
-      2*Delta(log(L)) = 1626.44
+
+--- Iterative MLGST: Beginning iter 1 of 7 : 92 gate strings ---
+--- Minimum Chi^2 GST ---
+  Sum of Chi^2 = 75.7312 (92 data params - 31 model params = expected mean of 61; p-value = 0.0970417)
+    2*Delta(log(L)) = 75.7328
+
+--- Iterative MLGST: Beginning iter 2 of 7 : 92 gate strings ---
+--- Minimum Chi^2 GST ---
+  Sum of Chi^2 = 75.7312 (92 data params - 31 model params = expected mean of 61; p-value = 0.0970417)
+    2*Delta(log(L)) = 75.7328
+
+--- Iterative MLGST: Beginning iter 3 of 7 : 168 gate strings ---
+--- Minimum Chi^2 GST ---
+  Sum of Chi^2 = 173.206 (168 data params - 31 model params = expected mean of 137; p-value = 0.0197354)
+    2*Delta(log(L)) = 173.221
+
+--- Iterative MLGST: Beginning iter 4 of 7 : 441 gate strings ---
+--- Minimum Chi^2 GST ---
+  Sum of Chi^2 = 468.441 (441 data params - 31 model params = expected mean of 410; p-value = 0.024177)
+    2*Delta(log(L)) = 468.458
+
+--- Iterative MLGST: Beginning iter 5 of 7 : 817 gate strings ---
+--- Minimum Chi^2 GST ---
+  Sum of Chi^2 = 879.287 (817 data params - 31 model params = expected mean of 786; p-value = 0.0112333)
+    2*Delta(log(L)) = 879.31
+
+--- Iterative MLGST: Beginning iter 6 of 7 : 1201 gate strings ---
+--- Minimum Chi^2 GST ---
+  Sum of Chi^2 = 1219.75 (1201 data params - 31 model params = expected mean of 1170; p-value = 0.151964)
+    2*Delta(log(L)) = 1219.77
+
+--- Iterative MLGST: Beginning iter 7 of 7 : 1585 gate strings ---
+--- Minimum Chi^2 GST ---
+  Sum of Chi^2 = 1610.22 (1585 data params - 31 model params = expected mean of 1554; p-value = 0.156626)
+    2*Delta(log(L)) = 1610.24
+--- Last Iteration: switching to ML objective ---
+--- MLGST ---
+  Maximum log(L) = 805.118 below upper bound of -2.65151e+09
+    2*Delta(log(L)) = 1610.24 (1585 data params - 31 model params = expected mean of 1554; p-value = 0.156554)
+    2*Delta(log(L)) = 1610.24
 </pre>
 </div>
 </div>
@@ -12183,13 +12170,13 @@ Gy =
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[11]:</div>
+<div class="prompt input_prompt">In&nbsp;[10]:</div>
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython2"><pre><span></span><span class="kn">import</span> <span class="nn">pickle</span>
 <span class="n">s</span> <span class="o">=</span> <span class="n">pickle</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
 <span class="n">r2</span> <span class="o">=</span> <span class="n">pickle</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
-<span class="k">print</span><span class="p">(</span><span class="n">r2</span><span class="o">.</span><span class="n">gatesets</span><span class="p">[</span><span class="s1">&#39;final estimate&#39;</span><span class="p">])</span>
+<span class="k">print</span> <span class="n">r2</span><span class="o">.</span><span class="n">gatesets</span><span class="p">[</span><span class="s1">&#39;final estimate&#39;</span><span class="p">]</span>
 </pre></div>
 
 </div>
@@ -12202,31 +12189,31 @@ Gy =
 
 <div class="output_area"><div class="prompt"></div>
 <div class="output_subarea output_stream output_stdout output_text">
-<pre>rho0 =    0.7071   0.0001  -0.0001   0.7039
+<pre>rho0 =    0.7071        0  -0.0001   0.7106
 
 
-E0 =    0.7071        0        0  -0.7088
+E0 =    0.7071  -0.0001   0.0001  -0.7022
 
 
 Gi = 
    1.0000        0        0        0
-        0   0.9000   0.0001        0
+        0   0.9000   0.0002        0
         0        0   0.8999        0
-        0        0        0   0.9000
+        0   0.0001        0   0.9000
 
 
 Gx = 
    1.0000        0        0        0
-        0   0.9001        0        0
+        0   0.9001   0.0001        0
         0        0        0  -0.9000
-        0        0   0.9000        0
+        0        0   0.9000   0.0001
 
 
 Gy = 
    1.0000        0        0        0
-        0        0   0.0001   0.9000
-        0        0   0.9001        0
-        0  -0.9000        0        0
+        0        0        0   0.9000
+        0        0   0.9000  -0.0001
+        0  -0.9000   0.0002        0
 
 
 
@@ -12250,11 +12237,11 @@ Gy =
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[12]:</div>
+<div class="prompt input_prompt">In&nbsp;[11]:</div>
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython2"><pre><span></span><span class="c1"># Access to raw GST best gateset estimate</span>
-<span class="k">print</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">gatesets</span><span class="p">[</span><span class="s1">&#39;final estimate&#39;</span><span class="p">])</span>
+<span class="k">print</span> <span class="n">results</span><span class="o">.</span><span class="n">gatesets</span><span class="p">[</span><span class="s1">&#39;final estimate&#39;</span><span class="p">]</span>
 </pre></div>
 
 </div>
@@ -12267,31 +12254,31 @@ Gy =
 
 <div class="output_area"><div class="prompt"></div>
 <div class="output_subarea output_stream output_stdout output_text">
-<pre>rho0 =    0.7071   0.0001  -0.0001   0.7039
+<pre>rho0 =    0.7071        0  -0.0001   0.7106
 
 
-E0 =    0.7071        0        0  -0.7088
+E0 =    0.7071  -0.0001   0.0001  -0.7022
 
 
 Gi = 
    1.0000        0        0        0
-        0   0.9000   0.0001        0
+        0   0.9000   0.0002        0
         0        0   0.8999        0
-        0        0        0   0.9000
+        0   0.0001        0   0.9000
 
 
 Gx = 
    1.0000        0        0        0
-        0   0.9001        0        0
+        0   0.9001   0.0001        0
         0        0        0  -0.9000
-        0        0   0.9000        0
+        0        0   0.9000   0.0001
 
 
 Gy = 
    1.0000        0        0        0
-        0        0   0.0001   0.9000
-        0        0   0.9001        0
-        0  -0.9000        0        0
+        0        0        0   0.9000
+        0        0   0.9000  -0.0001
+        0  -0.9000   0.0002        0
 
 
 
@@ -12305,7 +12292,7 @@ Gy =
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[13]:</div>
+<div class="prompt input_prompt">In&nbsp;[12]:</div>
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython2"><pre><span></span><span class="c1">#create a full GST report (most detailed and pedagogical; best for those getting familiar with GST)</span>
@@ -12322,35 +12309,34 @@ Gy =
 
 <div class="output_area"><div class="prompt"></div>
 <div class="output_subarea output_stream output_stdout output_text">
-<pre>  *** Generating tables ***
-   Iter 00 of 16 :   Generating table: targetSpamTable (w/95% CIs)
-   Iter 01 of 16 :   Generating table: targetGatesTable (w/95% CIs)
-   Iter 02 of 16 :   Generating table: datasetOverviewTable (w/95% CIs)
-   Iter 03 of 16 :   Generating table: bestGatesetSpamTable (w/95% CIs)
-   Iter 04 of 16 :   Generating table: bestGatesetSpamParametersTable (w/95% CIs)
-   Iter 05 of 16 :   Generating table: bestGatesetGatesTable (w/95% CIs)
-   Iter 06 of 16 :   Generating table: bestGatesetChoiTable (w/95% CIs)
-   Iter 07 of 16 :   Generating table: bestGatesetDecompTable (w/95% CIs)
-   Iter 08 of 16 :   Generating table: bestGatesetRotnAxisTable (w/95% CIs)
-   Iter 09 of 16 :   Generating table: bestGatesetClosestUnitaryTable (w/95% CIs)
-   Iter 10 of 16 :   Generating table: bestGatesetVsTargetTable (w/95% CIs)
-   Iter 11 of 16 :   Generating table: bestGatesetErrorGenTable (w/95% CIs)
-   Iter 12 of 16 :   Generating table: fiducialListTable (w/95% CIs)
-   Iter 13 of 16 :   Generating table: prepStrListTable (w/95% CIs)
-   Iter 14 of 16 :   Generating table: effectStrListTable (w/95% CIs)
-   Iter 15 of 16 :   Generating table: germListTable (w/95% CIs)
-   Iter 16 of 16 :   Generating table: progressTable (w/95% CIs)
-  *** Generating plots ***
-  LogL plots (2): 
-   Iter 0 of 1 :   Generating figure: bestEstimateColorBoxPlot (w/95% CIs)
-  Generating figure: bestEstimateColorBoxPlot
-   Iter 1 of 1 :   Generating figure: invertedBestEstimateColorBoxPlot (w/95% CIs)
-  Generating figure: invertedBestEstimateColorBoxPlot
-  
-  *** Merging into template file ***
-  Latex file(s) successfully generated.  Attempting to compile with pdflatex...
-  Initial output PDF tutorial_files/easy_full.pdf successfully generated.
-  Final output PDF tutorial_files/easy_full.pdf successfully generated. Cleaning up .aux and .log files.
+<pre>*** Generating tables ***
+Generating table: targetSpamTable (w/95% CIs)
+Generating table: targetGatesTable (w/95% CIs)
+Generating table: datasetOverviewTable (w/95% CIs)
+Generating table: bestGatesetSpamTable (w/95% CIs)
+Generating table: bestGatesetSpamParametersTable (w/95% CIs)
+Generating table: bestGatesetGatesTable (w/95% CIs)
+Generating table: bestGatesetChoiTable (w/95% CIs)
+Generating table: bestGatesetDecompTable (w/95% CIs)
+Generating table: bestGatesetRotnAxisTable (w/95% CIs)
+Generating table: bestGatesetClosestUnitaryTable (w/95% CIs)
+Generating table: bestGatesetVsTargetTable (w/95% CIs)
+Generating table: bestGatesetErrorGenTable (w/95% CIs)
+Generating table: fiducialListTable (w/95% CIs)
+Generating table: prepStrListTable (w/95% CIs)
+Generating table: effectStrListTable (w/95% CIs)
+Generating table: germListTable (w/95% CIs)
+Generating table: progressTable (w/95% CIs)
+*** Generating plots ***
+ -- LogL plots (2):  1  Generating figure: bestEstimateColorBoxPlot (w/95% CIs)
+Generating figure: bestEstimateColorBoxPlot
+2  Generating figure: invertedBestEstimateColorBoxPlot (w/95% CIs)
+Generating figure: invertedBestEstimateColorBoxPlot
+
+*** Merging into template file ***
+Latex file(s) successfully generated.  Attempting to compile with pdflatex...
+Initial output PDF tutorial_files/easy_full.pdf successfully generated.
+Final output PDF tutorial_files/easy_full.pdf successfully generated. Cleaning up .aux and .log files.
 </pre>
 </div>
 </div>
@@ -12361,7 +12347,7 @@ Gy =
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[14]:</div>
+<div class="prompt input_prompt">In&nbsp;[13]:</div>
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython2"><pre><span></span><span class="c1">#create a brief GST report (just highlights of full report but fast to generate; best for folks familiar with GST)</span>
@@ -12378,20 +12364,20 @@ Gy =
 
 <div class="output_area"><div class="prompt"></div>
 <div class="output_subarea output_stream output_stdout output_text">
-<pre>  *** Generating tables ***
-  Retrieving cached table: bestGatesetSpamTable (w/95% CIs)
-  Retrieving cached table: bestGatesetSpamParametersTable (w/95% CIs)
-  Retrieving cached table: bestGatesetGatesTable (w/95% CIs)
-  Retrieving cached table: bestGatesetDecompTable (w/95% CIs)
-  Retrieving cached table: bestGatesetRotnAxisTable (w/95% CIs)
-  Retrieving cached table: bestGatesetVsTargetTable (w/95% CIs)
-  Retrieving cached table: bestGatesetErrorGenTable (w/95% CIs)
-  Retrieving cached table: progressTable (w/95% CIs)
-  *** Generating plots ***
-  *** Merging into template file ***
-  Latex file(s) successfully generated.  Attempting to compile with pdflatex...
-  Initial output PDF tutorial_files/easy_brief.pdf successfully generated.
-  Final output PDF tutorial_files/easy_brief.pdf successfully generated. Cleaning up .aux and .log files.
+<pre>*** Generating tables ***
+Retrieving cached table: bestGatesetSpamTable (w/95% CIs)
+Retrieving cached table: bestGatesetSpamParametersTable (w/95% CIs)
+Retrieving cached table: bestGatesetGatesTable (w/95% CIs)
+Retrieving cached table: bestGatesetDecompTable (w/95% CIs)
+Retrieving cached table: bestGatesetRotnAxisTable (w/95% CIs)
+Retrieving cached table: bestGatesetVsTargetTable (w/95% CIs)
+Retrieving cached table: bestGatesetErrorGenTable (w/95% CIs)
+Retrieving cached table: progressTable (w/95% CIs)
+*** Generating plots ***
+*** Merging into template file ***
+Latex file(s) successfully generated.  Attempting to compile with pdflatex...
+Initial output PDF tutorial_files/easy_brief.pdf successfully generated.
+Final output PDF tutorial_files/easy_brief.pdf successfully generated. Cleaning up .aux and .log files.
 </pre>
 </div>
 </div>
@@ -12402,7 +12388,7 @@ Gy =
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[15]:</div>
+<div class="prompt input_prompt">In&nbsp;[14]:</div>
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython2"><pre><span></span><span class="c1">#create GST slides (tables and figures of full report in latex-generated slides; best for folks familiar with GST)</span>
@@ -12419,30 +12405,30 @@ Gy =
 
 <div class="output_area"><div class="prompt"></div>
 <div class="output_subarea output_stream output_stdout output_text">
-<pre>  *** Generating tables ***
-  Retrieving cached table: targetSpamTable (w/95% CIs)
-  Retrieving cached table: targetGatesTable (w/95% CIs)
-  Retrieving cached table: datasetOverviewTable (w/95% CIs)
-  Retrieving cached table: bestGatesetSpamTable (w/95% CIs)
-  Retrieving cached table: bestGatesetSpamParametersTable (w/95% CIs)
-  Retrieving cached table: bestGatesetGatesTable (w/95% CIs)
-  Retrieving cached table: bestGatesetChoiTable (w/95% CIs)
-  Retrieving cached table: bestGatesetDecompTable (w/95% CIs)
-  Retrieving cached table: bestGatesetRotnAxisTable (w/95% CIs)
-  Retrieving cached table: bestGatesetVsTargetTable (w/95% CIs)
-  Retrieving cached table: bestGatesetErrorGenTable (w/95% CIs)
-  Retrieving cached table: fiducialListTable (w/95% CIs)
-  Retrieving cached table: prepStrListTable (w/95% CIs)
-  Retrieving cached table: effectStrListTable (w/95% CIs)
-  Retrieving cached table: germListTable (w/95% CIs)
-  Retrieving cached table: progressTable (w/95% CIs)
-  *** Generating plots ***
-   -- LogL plots (1):    Iter 0 of 0 :   Retrieving cached figure: bestEstimateColorBoxPlot (w/95% CIs)
-  
-  *** Merging into template file ***
-  Latex file(s) successfully generated.  Attempting to compile with pdflatex...
-  Initial output PDF tutorial_files/easy_slides.pdf successfully generated.
-  Final output PDF tutorial_files/easy_slides.pdf successfully generated. Cleaning up .aux and .log files.
+<pre>*** Generating tables ***
+Retrieving cached table: targetSpamTable (w/95% CIs)
+Retrieving cached table: targetGatesTable (w/95% CIs)
+Retrieving cached table: datasetOverviewTable (w/95% CIs)
+Retrieving cached table: bestGatesetSpamTable (w/95% CIs)
+Retrieving cached table: bestGatesetSpamParametersTable (w/95% CIs)
+Retrieving cached table: bestGatesetGatesTable (w/95% CIs)
+Retrieving cached table: bestGatesetChoiTable (w/95% CIs)
+Retrieving cached table: bestGatesetDecompTable (w/95% CIs)
+Retrieving cached table: bestGatesetRotnAxisTable (w/95% CIs)
+Retrieving cached table: bestGatesetVsTargetTable (w/95% CIs)
+Retrieving cached table: bestGatesetErrorGenTable (w/95% CIs)
+Retrieving cached table: fiducialListTable (w/95% CIs)
+Retrieving cached table: prepStrListTable (w/95% CIs)
+Retrieving cached table: effectStrListTable (w/95% CIs)
+Retrieving cached table: germListTable (w/95% CIs)
+Retrieving cached table: progressTable (w/95% CIs)
+*** Generating plots ***
+ -- LogL plots (1):  1  Retrieving cached figure: bestEstimateColorBoxPlot (w/95% CIs)
+
+*** Merging into template file ***
+Latex file(s) successfully generated.  Attempting to compile with pdflatex...
+Initial output PDF tutorial_files/easy_slides.pdf successfully generated.
+Final output PDF tutorial_files/easy_slides.pdf successfully generated. Cleaning up .aux and .log files.
 </pre>
 </div>
 </div>
@@ -12453,15 +12439,63 @@ Gy =
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[16]:</div>
+<div class="prompt input_prompt">In&nbsp;[15]:</div>
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython2"><pre><span></span><span class="c1">#create GST slides (tables and figures of full report in Powerpoint slides; best for folks familiar with GST)</span>
-<span class="c1">#Requires python-pptx and ImageMagick to be installed</span>
-<span class="c1">#results.create_presentation_ppt(confidenceLevel=95, filename=&quot;tutorial_files/easy_slides.pptx&quot;, verbosity=2)</span>
+<span class="n">results</span><span class="o">.</span><span class="n">create_presentation_ppt</span><span class="p">(</span><span class="n">confidenceLevel</span><span class="o">=</span><span class="mi">95</span><span class="p">,</span> <span class="n">filename</span><span class="o">=</span><span class="s2">&quot;tutorial_files/easy_slides.pptx&quot;</span><span class="p">,</span> <span class="n">verbosity</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
 </pre></div>
 
 </div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area"><div class="prompt"></div>
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>*** Generating tables ***
+Retrieving cached table: targetSpamTable (w/95% CIs)
+Retrieving cached table: targetGatesTable (w/95% CIs)
+Retrieving cached table: datasetOverviewTable (w/95% CIs)
+Retrieving cached table: bestGatesetSpamTable (w/95% CIs)
+Retrieving cached table: bestGatesetSpamParametersTable (w/95% CIs)
+Retrieving cached table: bestGatesetGatesTable (w/95% CIs)
+Retrieving cached table: bestGatesetChoiTable (w/95% CIs)
+Retrieving cached table: bestGatesetDecompTable (w/95% CIs)
+Retrieving cached table: bestGatesetRotnAxisTable (w/95% CIs)
+Retrieving cached table: bestGatesetVsTargetTable (w/95% CIs)
+Retrieving cached table: bestGatesetErrorGenTable (w/95% CIs)
+Retrieving cached table: fiducialListTable (w/95% CIs)
+Retrieving cached table: prepStrListTable (w/95% CIs)
+Retrieving cached table: effectStrListTable (w/95% CIs)
+Retrieving cached table: germListTable (w/95% CIs)
+Retrieving cached table: progressTable (w/95% CIs)
+*** Generating plots ***
+ -- LogL plots (1):  1  Retrieving cached figure: bestEstimateColorBoxPlot (w/95% CIs)
+
+*** Assembling PPT file ***
+Latexing progressTable table...
+Latexing bestGatesetVsTargetTable table...
+Latexing bestGatesetErrorGenTable table...
+Latexing bestGatesetDecompTable table...
+Latexing bestGatesetRotnAxisTable table...
+Latexing bestGatesetGatesTable table...
+Latexing bestGatesetSpamTable table...
+Latexing bestGatesetSpamParametersTable table...
+Latexing bestGatesetChoiTable table...
+Latexing targetSpamTable table...
+Latexing targetGatesTable table...
+Latexing fiducialListTable table...
+Latexing germListTable table...
+Latexing datasetOverviewTable table...
+Final output PPT tutorial_files/easy_slides.pptx successfully generated.
+</pre>
+</div>
+</div>
+
 </div>
 </div>
 
@@ -12510,7 +12544,7 @@ Gy =
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[17]:</div>
+<div class="prompt input_prompt">In&nbsp;[16]:</div>
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython2"><pre><span></span><span class="c1">#Import the &quot;stardard 1-qubit quantities for a gateset with X(pi/2), Y(pi/2), and idle gates&quot;</span>
@@ -12534,7 +12568,7 @@ Gy =
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[18]:</div>
+<div class="prompt input_prompt">In&nbsp;[17]:</div>
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython2"><pre><span></span><span class="n">gs_target</span> <span class="o">=</span> <span class="n">std1Q_XYI</span><span class="o">.</span><span class="n">gs_target</span>
@@ -12560,7 +12594,7 @@ Gy =
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[19]:</div>
+<div class="prompt input_prompt">In&nbsp;[18]:</div>
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython2"><pre><span></span><span class="n">gs_datagen</span> <span class="o">=</span> <span class="n">gs_target</span><span class="o">.</span><span class="n">depolarize</span><span class="p">(</span><span class="n">gate_noise</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">spam_noise</span><span class="o">=</span><span class="mf">0.001</span><span class="p">)</span>
@@ -12586,7 +12620,7 @@ Gy =
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[20]:</div>
+<div class="prompt input_prompt">In&nbsp;[19]:</div>
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython2"><pre><span></span><span class="n">results</span> <span class="o">=</span> <span class="n">pygsti</span><span class="o">.</span><span class="n">do_long_sequence_gst</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">gs_target</span><span class="p">,</span> <span class="n">fiducials</span><span class="p">,</span> <span class="n">fiducials</span><span class="p">,</span> <span class="n">germs</span><span class="p">,</span> <span class="n">maxLengths</span><span class="p">)</span>
@@ -12603,21 +12637,22 @@ Gy =
 
 <div class="output_area"><div class="prompt"></div>
 <div class="output_subarea output_stream output_stdout output_text">
-<pre>      (&#39;LGST: Singular values of I_tilde (truncating to first 4 of 6) = \n&#39;, array([  4.24408716e+00,   1.16704565e+00,   9.46892218e-01,
-         9.43237265e-01,   2.35094528e-03,   1.17450775e-03]))
-      
-  --- LGST ---
-      
-  --- Gauge Optimization to TP (L-BFGS-B) ---
-  112s           0.0000000000
-  The resulting TP penalty is: 8.35929e-14
-    The gauge matrix found (B^-1) is:
-[[  1.00000001e+00  -1.16682783e-10   2.25223489e-08  -6.58751282e-08]
- [  6.75238375e-15   1.00000000e+00  -1.83978263e-15  -8.60774482e-17]
- [ -3.24361724e-16  -1.83978263e-15   1.00000000e+00  -3.09340500e-15]
- [  9.80516580e-16  -8.60774482e-17  -3.09340481e-15   1.00000000e+00]]
+<pre>LGST: Singular values of I_tilde (truncating to first 4 of 6) = 
+[  4.24408716e+00   1.16704565e+00   9.46892218e-01   9.43237265e-01
+   2.35094528e-03   1.17450775e-03]
 
-    The gauge-corrected gates are:
+--- LGST ---
+
+--- Gauge Optimization to TP (L-BFGS-B) ---
+  218s           0.0000000000
+The resulting TP penalty is: 6.08156e-14
+The gauge matrix found (B^-1) is:
+[[  1.00000001e+00   8.44610165e-10   4.31321819e-09  -4.61967946e-08]
+ [  6.85266973e-15   1.00000000e+00  -2.50781656e-16  -3.00812235e-16]
+ [  5.75972729e-16  -2.50781477e-16   1.00000000e+00  -1.71008983e-15]
+ [  1.39495867e-15  -3.00812056e-16  -1.71008983e-15   1.00000000e+00]]
+
+The gauge-corrected gates are:
 rho0 =    0.7071  -0.0221   0.0217   0.7509
 
 
@@ -12626,95 +12661,94 @@ E0 =    0.6847   0.0021  -0.0021  -0.6438
 
 Gi = 
    1.0000        0        0        0
-  -0.0032   0.9003  -0.0001  -0.0013
-   0.0034  -0.0014   0.8998   0.0005
-  -0.0036        0   0.0004   0.8999
+  -0.0033   0.9003  -0.0004  -0.0013
+   0.0033  -0.0012   0.8997   0.0006
+  -0.0038  -0.0004   0.0004   0.8999
 
 
 Gx = 
    1.0000        0        0        0
-  -0.0039   0.8996   0.0064   0.0005
-   0.0003   0.0008  -0.0063  -1.0000
+  -0.0037   0.8996   0.0070   0.0005
+   0.0005   0.0003  -0.0063  -1.0000
   -0.0630   0.0062   0.8097   0.0066
 
 
 Gy = 
    1.0000        0        0        0
-        0  -0.0062   0.0010   0.9995
-   0.0037   0.0077   0.9005        0
+  -0.0002  -0.0061   0.0004   0.9995
+   0.0039   0.0070   0.9006        0
   -0.0626  -0.8101  -0.0059   0.0060
 
 
 
-    
-  --- Iterative MLGST: Iter 0 of 6  92 gate strings ---: 
-  --- Minimum Chi^2 GST ---
-    Sum of Chi^2 = 71.0026 (92 data params - 31 model params = expected mean of 61; p-value = 0.178793)
-      2*Delta(log(L)) = 71.0083
-    
-  --- Iterative MLGST: Iter 1 of 6  92 gate strings ---: 
-  --- Minimum Chi^2 GST ---
-    Sum of Chi^2 = 71.0026 (92 data params - 31 model params = expected mean of 61; p-value = 0.178794)
-      2*Delta(log(L)) = 71.0083
-    
-  --- Iterative MLGST: Iter 2 of 6  168 gate strings ---: 
-  --- Minimum Chi^2 GST ---
-    Sum of Chi^2 = 129.479 (168 data params - 31 model params = expected mean of 137; p-value = 0.663656)
-      2*Delta(log(L)) = 129.485
-    
-  --- Iterative MLGST: Iter 3 of 6  441 gate strings ---: 
-  --- Minimum Chi^2 GST ---
-    Sum of Chi^2 = 410.417 (441 data params - 31 model params = expected mean of 410; p-value = 0.484913)
-      2*Delta(log(L)) = 410.42
-    
-  --- Iterative MLGST: Iter 4 of 6  817 gate strings ---: 
-  --- Minimum Chi^2 GST ---
-    Sum of Chi^2 = 762.035 (817 data params - 31 model params = expected mean of 786; p-value = 0.72369)
-      2*Delta(log(L)) = 762.045
-    
-  --- Iterative MLGST: Iter 5 of 6  1201 gate strings ---: 
-  --- Minimum Chi^2 GST ---
-    Sum of Chi^2 = 1170.36 (1201 data params - 31 model params = expected mean of 1170; p-value = 0.491493)
-      2*Delta(log(L)) = 1170.39
-    
-  --- Iterative MLGST: Iter 6 of 6  1585 gate strings ---: 
-  --- Minimum Chi^2 GST ---
-    Sum of Chi^2 = 1578.97 (1585 data params - 31 model params = expected mean of 1554; p-value = 0.323667)
-      2*Delta(log(L)) = 1578.99
-  --- Last Iteration: switching to ML objective ---
-  --- MLGST ---
-      Maximum log(L) = 789.497 below upper bound of -2.65149e+09
-        2*Delta(log(L)) = 1578.99 (1585 data params - 31 model params = expected mean of 1554; p-value = 0.323513)
-      2*Delta(log(L)) = 1578.99
-  *** Generating tables ***
-   Iter 00 of 16 :   Generating table: targetSpamTable (w/95% CIs)
-   Iter 01 of 16 :   Generating table: targetGatesTable (w/95% CIs)
-   Iter 02 of 16 :   Generating table: datasetOverviewTable (w/95% CIs)
-   Iter 03 of 16 :   Generating table: bestGatesetSpamTable (w/95% CIs)
-   Iter 04 of 16 :   Generating table: bestGatesetSpamParametersTable (w/95% CIs)
-   Iter 05 of 16 :   Generating table: bestGatesetGatesTable (w/95% CIs)
-   Iter 06 of 16 :   Generating table: bestGatesetChoiTable (w/95% CIs)
-   Iter 07 of 16 :   Generating table: bestGatesetDecompTable (w/95% CIs)
-   Iter 08 of 16 :   Generating table: bestGatesetRotnAxisTable (w/95% CIs)
-   Iter 09 of 16 :   Generating table: bestGatesetClosestUnitaryTable (w/95% CIs)
-   Iter 10 of 16 :   Generating table: bestGatesetVsTargetTable (w/95% CIs)
-   Iter 11 of 16 :   Generating table: bestGatesetErrorGenTable (w/95% CIs)
-   Iter 12 of 16 :   Generating table: fiducialListTable (w/95% CIs)
-   Iter 13 of 16 :   Generating table: prepStrListTable (w/95% CIs)
-   Iter 14 of 16 :   Generating table: effectStrListTable (w/95% CIs)
-   Iter 15 of 16 :   Generating table: germListTable (w/95% CIs)
-   Iter 16 of 16 :   Generating table: progressTable (w/95% CIs)
-  *** Generating plots ***
-  LogL plots (2): 
-   Iter 0 of 1 :   Generating figure: bestEstimateColorBoxPlot (w/95% CIs)
-  Generating figure: bestEstimateColorBoxPlot
-   Iter 1 of 1 :   Generating figure: invertedBestEstimateColorBoxPlot (w/95% CIs)
-  Generating figure: invertedBestEstimateColorBoxPlot
-  
-  *** Merging into template file ***
-  Latex file(s) successfully generated.  Attempting to compile with pdflatex...
-  Initial output PDF tutorial_files/MyEvenEasierReport.pdf successfully generated.
-  Final output PDF tutorial_files/MyEvenEasierReport.pdf successfully generated. Cleaning up .aux and .log files.
+
+--- Iterative MLGST: Beginning iter 1 of 7 : 92 gate strings ---
+--- Minimum Chi^2 GST ---
+  Sum of Chi^2 = 71.1903 (92 data params - 31 model params = expected mean of 61; p-value = 0.174815)
+    2*Delta(log(L)) = 71.1959
+
+--- Iterative MLGST: Beginning iter 2 of 7 : 92 gate strings ---
+--- Minimum Chi^2 GST ---
+  Sum of Chi^2 = 71.1903 (92 data params - 31 model params = expected mean of 61; p-value = 0.174815)
+    2*Delta(log(L)) = 71.1959
+
+--- Iterative MLGST: Beginning iter 3 of 7 : 168 gate strings ---
+--- Minimum Chi^2 GST ---
+  Sum of Chi^2 = 136.78 (168 data params - 31 model params = expected mean of 137; p-value = 0.489224)
+    2*Delta(log(L)) = 136.785
+
+--- Iterative MLGST: Beginning iter 4 of 7 : 441 gate strings ---
+--- Minimum Chi^2 GST ---
+  Sum of Chi^2 = 417.967 (441 data params - 31 model params = expected mean of 410; p-value = 0.382209)
+    2*Delta(log(L)) = 417.971
+
+--- Iterative MLGST: Beginning iter 5 of 7 : 817 gate strings ---
+--- Minimum Chi^2 GST ---
+  Sum of Chi^2 = 757.605 (817 data params - 31 model params = expected mean of 786; p-value = 0.760559)
+    2*Delta(log(L)) = 757.614
+
+--- Iterative MLGST: Beginning iter 6 of 7 : 1201 gate strings ---
+--- Minimum Chi^2 GST ---
+  Sum of Chi^2 = 1166.29 (1201 data params - 31 model params = expected mean of 1170; p-value = 0.525114)
+    2*Delta(log(L)) = 1166.31
+
+--- Iterative MLGST: Beginning iter 7 of 7 : 1585 gate strings ---
+--- Minimum Chi^2 GST ---
+  Sum of Chi^2 = 1575.77 (1585 data params - 31 model params = expected mean of 1554; p-value = 0.344364)
+    2*Delta(log(L)) = 1575.79
+--- Last Iteration: switching to ML objective ---
+--- MLGST ---
+  Maximum log(L) = 787.896 below upper bound of -2.65149e+09
+    2*Delta(log(L)) = 1575.79 (1585 data params - 31 model params = expected mean of 1554; p-value = 0.344207)
+    2*Delta(log(L)) = 1575.79
+*** Generating tables ***
+Generating table: targetSpamTable (w/95% CIs)
+Generating table: targetGatesTable (w/95% CIs)
+Generating table: datasetOverviewTable (w/95% CIs)
+Generating table: bestGatesetSpamTable (w/95% CIs)
+Generating table: bestGatesetSpamParametersTable (w/95% CIs)
+Generating table: bestGatesetGatesTable (w/95% CIs)
+Generating table: bestGatesetChoiTable (w/95% CIs)
+Generating table: bestGatesetDecompTable (w/95% CIs)
+Generating table: bestGatesetRotnAxisTable (w/95% CIs)
+Generating table: bestGatesetClosestUnitaryTable (w/95% CIs)
+Generating table: bestGatesetVsTargetTable (w/95% CIs)
+Generating table: bestGatesetErrorGenTable (w/95% CIs)
+Generating table: fiducialListTable (w/95% CIs)
+Generating table: prepStrListTable (w/95% CIs)
+Generating table: effectStrListTable (w/95% CIs)
+Generating table: germListTable (w/95% CIs)
+Generating table: progressTable (w/95% CIs)
+*** Generating plots ***
+ -- LogL plots (2):  1  Generating figure: bestEstimateColorBoxPlot (w/95% CIs)
+Generating figure: bestEstimateColorBoxPlot
+2  Generating figure: invertedBestEstimateColorBoxPlot (w/95% CIs)
+Generating figure: invertedBestEstimateColorBoxPlot
+
+*** Merging into template file ***
+Latex file(s) successfully generated.  Attempting to compile with pdflatex...
+Initial output PDF tutorial_files/MyEvenEasierReport.pdf successfully generated.
+Final output PDF tutorial_files/MyEvenEasierReport.pdf successfully generated. Cleaning up .aux and .log files.
 </pre>
 </div>
 </div>
@@ -12735,11 +12769,11 @@ Gy =
 </div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
-<div class="prompt input_prompt">In&nbsp;[21]:</div>
+<div class="prompt input_prompt">In&nbsp;[20]:</div>
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython2"><pre><span></span><span class="c1"># Printing a Results object gives you information about how to extract information from it</span>
-<span class="k">print</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
+<span class="k">print</span> <span class="n">results</span>
 </pre></div>
 
 </div>
@@ -12889,19 +12923,6 @@ NOTE: passing &#39;tips=True&#39; to create_full_report_pdf or
 </div>
 </div>
 
-</div>
-</div>
-
-</div>
-<div class="cell border-box-sizing code_cell rendered">
-<div class="input">
-<div class="prompt input_prompt">In&nbsp;[&nbsp;]:</div>
-<div class="inner_cell">
-    <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span></span> 
-</pre></div>
-
-</div>
 </div>
 </div>
 
