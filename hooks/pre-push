@@ -4,7 +4,10 @@ import os
 
 updates_git_pages = ['develop', 'master']
 
-branchname = subprocess.check_output(['sh', 'get_branch'])
+try:
+    branchname = subprocess.check_output(['sh', 'get_branch'])
+except subprocess.CalledProcessError:
+    branchname = 'unnamed_branch'
 branchname = os.path.basename(branchname)
 branchname = branchname.replace('\n', '')
 
