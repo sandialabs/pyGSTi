@@ -657,6 +657,8 @@ def _optProjectionForGateCIs(gateset, base_hessian, nNonGaugeParams, nGaugeParam
                              maxfev = 10000, tol = 1e-6, verbosity = 0):
     printer = VerbosityPrinter.build_printer(verbosity)
 
+    printer = VerbosityPrinter.build_printer(verbosity)
+
     printer.log('', 3)
     printer.log("--- Hessian Projector Optimization for gate CIs (%s) ---" % method, 2, indentOffset=-1)
 
