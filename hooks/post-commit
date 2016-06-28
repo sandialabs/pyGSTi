@@ -13,4 +13,3 @@ if branchname in updates_git_pages:
     while os.path.basename(os.getcwd()) != 'pyGSTi':
         os.chdir('..')
     print(os.getcwd())
-~                                                    
