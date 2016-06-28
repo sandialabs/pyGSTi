@@ -309,6 +309,18 @@ class Results(object):
         s += " to the values of .tables[ ] and .figures[ ] listed above.\n"
         return s
 
+    def _process_call(self, call):
+        process = _subprocess.Popen(call, stdout=_subprocess.PIPE,
+                                    stderr=_subprocess.PIPE)
+        stdout, stderr = process.communicate()
+        return stdout, stderr, process.returncode
+
+    def _evaluate_call(self, call, stdout, stderr, returncode, printer):
+        if len(stderr) > 0:
+            printer.error(stderr)
+        if returncode > 0:
+            raise _subprocess.CalledProcessError(returncode, call)
+
     def _compile_latex_report(self, report_dir, report_base, latex_call,
                               printer):
         """Compile a PDF report from a TeX file. Will compile twice
@@ -339,12 +351,14 @@ class Results(object):
         texFilename = report_base + ".tex"
         pdfPathname = _os.path.join(report_dir, report_base + ".pdf")
         call = latex_call + [texFilename]
-        _subprocess.check_call(call)
+        stdout, stderr, returncode = self._process_call(call)
+        self._evaluate_call(call, stdout, stderr, returncode, printer)
         printer.log("Initial output PDF %s successfully generated." %
                     pdfPathname)
         # We could check if the log file contains "Rerun" in it,
         # but we'll just re-run all the time now
-        _subprocess.check_call(call)
+        stdout, stderr, returncode = self._process_call(call)
+        self._evaluate_call(call, stdout, stderr, returncode, printer)
         printer.log("Final output PDF %s successfully generated. " %
                     pdfPathname + "Cleaning up .aux and .log files.")
         _os.remove( report_base + ".log" )
