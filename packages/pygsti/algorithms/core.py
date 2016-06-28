@@ -2417,9 +2417,9 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                    times.append(('MLGST Iteration %d: logl-opt' % (i+1),tNxt-tRef))
                    tRef=tNxt
 
-                 if returnAll:
-                    mleGatesets.append(mleGateset)
-                    maxLogLs.append(maxLogL)
+             if returnAll:
+                mleGatesets.append(mleGateset)
+                maxLogLs.append(maxLogL)
 
     if returnMaxLogL:
         return (maxLogL, mleGatesets) if returnAll else (maxLogL, mleGateset)

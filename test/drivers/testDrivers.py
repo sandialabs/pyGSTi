@@ -208,7 +208,7 @@ class TestDriversMethods(DriversTestCase):
 
     def test_bootstrap(self):
         ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/drivers.dataset")
-        specs = pygsti.construction.build_spam_specs(std.fiducials)
+        specs = self.runSilent(pygsti.construction.build_spam_specs, std.fiducials)
         gs = pygsti.do_lgst(ds, specs, targetGateset=std.gs_target, svdTruncateTo=4, verbosity=0)
 
         bootds_p = pygsti.drivers.make_bootstrap_dataset(

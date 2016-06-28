@@ -13,7 +13,7 @@ class ReportTestCase(unittest.TestCase):
 
         # move working directories
         self.old = os.getcwd()
-        os.chdir(os.path.abspath(os.path.dirname(__file__)))
+        os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = True

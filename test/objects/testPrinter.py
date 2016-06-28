@@ -13,7 +13,7 @@ def _generate_with(printer):
     data     = list(range(2))
     printer.log(logMessage, 3)
     printer.warning(warningMessage)
-   with printer.progress_logging(1):
+    with printer.progress_logging(1):
         for i, item in enumerate(data):
 	    printer.show_progress(i, len(data)-1, verboseMessages=[('(%s data members remaining)' % (len(data) - (i + 1)))])
 	    printer.log(logMessage)

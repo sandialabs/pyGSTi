@@ -288,7 +288,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
             ('targetGatesMetric',"frobenius"),
             ('targetSpamMetric',"frobenius") ])
 
-    for i,gs in enumerate(go_gs_lsgst_list):
+    for i, gs in enumerate(go_gs_lsgst_list):
         args = go_params.copy()
         args['gateset'] = gs
         args['targetGateset'] = gs_target
