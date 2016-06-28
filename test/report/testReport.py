@@ -89,9 +89,17 @@ class ReportTestCase(unittest.TestCase):
         os.chdir(self.old)
 
     def checkFile(self, fn):
-        linesToTest = open("../temp_test_files/%s" % fn).readlines()
-        linesOK = open("../cmp_chk_files/%s" % fn).readlines()
-        self.assertEqual(linesToTest,linesOK)
+
+        if os.environ.has_key('PYGSTI_DEEP_TESTING') and \
+           os.environ['PYGSTI_DEEP_TESTING'].lower() in ("yes","1","true"):
+            # Deep testing -- do latex comparison
+            linesToTest = open("../temp_test_files/%s" % fn).readlines()
+            linesOK = open("../cmp_chk_files/%s" % fn).readlines()
+            self.assertEqual(linesToTest,linesOK)
+        else:
+            # Normal testing -- no latex comparison
+            pass
+
 
 
 class TestReport(ReportTestCase):
