@@ -5,9 +5,14 @@ import os
 updates_git_pages = ['develop', 'master']
 
 branchname = subprocess.check_output(['sh', 'get_branch'])
-branchname = branchname.rsplit('/', 1)[1] # Get the raw branchname
+branchname = os.path.basename(branchname)
+branchname = branchname.replace('\n', '')
 
 if branchname in updates_git_pages:
-    print(os.getcwd())
-    # subprocess.call(['git', 'stash'])
-    # subprocess.call(['git', 'checkout', ''])
+    while os.path.basename(os.getcwd()) != 'pyGSTi':
+        os.chdir('..')
+    subprocess.call(['git', 'checkout', 'gh-pages'])
+    os.chdir('tutorials')
+    print(subprocess.check_output(['ls']))
+    os.chdir('..')
+    subprocess.call(['git', 'checkout', branchname])

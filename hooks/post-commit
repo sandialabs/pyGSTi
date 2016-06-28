@@ -1,3 +1,16 @@
 #!/usr/bin/python
+import subprocess
+import os
 
-print('You just commited')
+updates_git_pages = ['develop', 'master']
+
+branchname = subprocess.check_output(['sh', 'get_branch'])
+branchname = os.path.basename(branchname)
+branchname = branchname.replace('\n', '')
+
+if branchname in updates_git_pages:
+    print(os.getcwd())
+    while os.path.basename(os.getcwd()) != 'pyGSTi':
+        os.chdir('..')
+    print(os.getcwd())
+~                                                    
