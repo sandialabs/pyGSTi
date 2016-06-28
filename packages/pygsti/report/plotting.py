@@ -1953,7 +1953,7 @@ def direct_mc2gst_gatesets(gateStrings, dataset, specs, targetGateset, svdTrunca
     printer.log("--- Direct LSGST precomputation ---")
     with printer.progress_logging(1):
         for i,sigma in enumerate(gateStrings):
-            printer.show_progress(i, len(gateString) - 1, prefix="--- Computing gateset for string-", suffix='---')
+            printer.show_progress(i, len(gateStrings) - 1, prefix="--- Computing gateset for string-", suffix='---')
             directLSGSTgatesets[sigma] = direct_mc2gst_gateset( sigma, "GsigmaLbl", dataset, specs, targetGateset,
                                                             svdTruncateTo, minProbClipForWeighting,
                                                             probClipInterval, verbosity)

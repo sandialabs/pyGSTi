@@ -2,6 +2,7 @@ from    __future__ import print_function
 from   copy        import deepcopy as _dc
 from contextlib    import contextmanager as _contextmanager
 import sys         as _sys
+import os          as _os
 import math        as _math # used for digit formatting
 
 '''
@@ -77,6 +78,7 @@ class VerbosityPrinter():
     _commFileExt  = '.txt'
 
     def _create_file(self, filename):
+        print(_os.getcwd())
         with open(filename, 'w') as newFile:
             newFile.close()
 

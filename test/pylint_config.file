@@ -1,0 +1,5 @@
+[MESSAGES CONTROL]
+disable=C
+max-locals=10
+max-return=4
+max-statements=100 #Function body length
