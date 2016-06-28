@@ -309,6 +309,18 @@ class Results(object):
         s += " to the values of .tables[ ] and .figures[ ] listed above.\n"
         return s
 
+    def _process_call(self, call):
+        process = _subprocess.Popen(call, stdout=_subprocess.PIPE,
+                                    stderr=_subprocess.PIPE)
+        stdout, stderr = process.communicate()
+        return stdout, stderr, process.returncode
+
+    def _evaluate_call(self, call, stdout, stderr, returncode, printer):
+        if len(stderr) > 0:
+            printer.error(stderr)
+        if returncode > 0:
+            raise _subprocess.CalledProcessError(returncode, call)
+
     def _compile_latex_report(self, report_dir, report_base, latex_call,
                               printer):
         """Compile a PDF report from a TeX file. Will compile twice
@@ -339,12 +351,14 @@ class Results(object):
         texFilename = report_base + ".tex"
         pdfPathname = _os.path.join(report_dir, report_base + ".pdf")
         call = latex_call + [texFilename]
-        _subprocess.check_call(call)
+        stdout, stderr, returncode = self._process_call(call)
+        self._evaluate_call(call, stdout, stderr, returncode, printer)
         printer.log("Initial output PDF %s successfully generated." %
                     pdfPathname)
         # We could check if the log file contains "Rerun" in it,
         # but we'll just re-run all the time now
-        _subprocess.check_call(call)
+        stdout, stderr, returncode = self._process_call(call)
+        self._evaluate_call(call, stdout, stderr, returncode, printer)
         printer.log("Final output PDF %s successfully generated. " %
                     pdfPathname + "Cleaning up .aux and .log files.")
         _os.remove( report_base + ".log" )
@@ -3013,21 +3027,15 @@ class Results(object):
             _os.chdir(fileDir)
 
             try:
-                output = _subprocess.check_output(self.options.latex_call +
-                                                  ["-shell-escape",
-                                                   "%s.tex" % key],
-                                                  stderr=_subprocess.STDOUT)
-                # Trying to see if ImageMagick's 'convert' command is installed.
-                # Ideally I would check to see if stderr is empty and if it's
-                # not empty I would print this error message should 'convert'
-                # show up anywhere in stderr, but I don't currently understand
-                # subprocess well enough to make this work, so I send stderr to
-                # stdout and look for a more specific string that shows up on
-                # MacOS when 'convert' is not available.
-                if output.find(b"convert: command not found") > -1:
-                    printer.error("ImageMagick's 'convert' utility may not be" +
-                                  " installed, so a PNG may not have been " +
-                                  "generated for %s." % key)
+                latex_cmd = self.options.latex_call + \
+                            ["-shell-escape", "%s.tex" % key]
+                stdout, stderr, returncode = self._process_call(latex_cmd)
+                self._evaluate_call(latex_cmd, stdout, stderr, returncode,
+                                    printer)
+                # Check to see if the PNG was generated
+                if not _os.path.isfile("%s.png" % key):
+                    raise Exception("File %s.png was not created by pdflatex"
+                                    % key)
                 _os.remove( "%s.tex" % key )
                 _os.remove( "%s.log" % key )
                 _os.remove( "%s.aux" % key )
