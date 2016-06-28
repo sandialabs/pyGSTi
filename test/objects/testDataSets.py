@@ -249,6 +249,13 @@ Gx^4 0.2 100
         #pygsti.io.write_dataset("../cmp_chk_files/Fake_Dataset_binom.txt", ds_binom, gateStrings)
         #pygsti.io.write_dataset("../cmp_chk_files/Fake_Dataset_multi.txt", ds_multi, gateStrings)
 
+        bDeepTesting = bool( os.environ.has_key('PYGSTI_DEEP_TESTING') and
+                             os.environ['PYGSTI_DEEP_TESTING'].lower() in ("yes","1","true") )
+          #Do not test *random* datasets for equality unless "deep testing", since different
+          # versions/installs of numpy give different random numbers and we don't expect
+          # datasets will be equal.
+
+
         saved_ds = pygsti.io.load_dataset("../cmp_chk_files/Fake_Dataset_none.txt", cache=True)
         self.assertEqualDatasets(ds_none, saved_ds)
 
@@ -256,10 +263,10 @@ Gx^4 0.2 100
         self.assertEqualDatasets(ds_round, saved_ds)
 
         saved_ds = pygsti.io.load_dataset("../cmp_chk_files/Fake_Dataset_binom.txt")
-        self.assertEqualDatasets(ds_binom, saved_ds)
+        if bDeepTesting: self.assertEqualDatasets(ds_binom, saved_ds) 
 
         saved_ds = pygsti.io.load_dataset("../cmp_chk_files/Fake_Dataset_multi.txt")
-        self.assertEqualDatasets(ds_multi, saved_ds)
+        if bDeepTesting: self.assertEqualDatasets(ds_multi, saved_ds)
 
         #Now test RB and RPE datasets
         rbDS = pygsti.construction.generate_sim_rb_data(depol_gateset, ds_binom, seed=1234)

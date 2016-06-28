@@ -128,8 +128,13 @@ class TestHessianMethods(HessianTestCase):
                1.68898356e+06,   2.12277359e+06,   3.30650801e+06,   3.75869331e+06,
                4.00195245e+06,   4.42427797e+06,   5.06956256e+06,   7.31166332e+06,
                9.19432790e+06,   9.99944236e+06,   1.31027722e+07,   5.80310818e+07] )
+
+        TOL = 1e-7
         for val,chk in zip(eigvals,eigvals_chk):
-            self.assertAlmostEqual(abs(val-chk)/(abs(chk)+1e-6), 0.0, places=3)
+            print "DB Checking %g vs %g => %g == 0 ??" % (val, chk, abs(val-chk)/(abs(chk)+1e-6))
+            if abs(val) > TOL or abs(chk) > TOL:
+                self.assertAlmostEqual(abs(val-chk)/(abs(chk)+TOL), 0.0, places=3)
+            # (else both chk and val are <= TOL, so both == 0 for our purposes)
         #print "eigvals = ",eigvals
 
     def test_confidenceRegion(self):
