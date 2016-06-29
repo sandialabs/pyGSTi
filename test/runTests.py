@@ -31,6 +31,8 @@ if __name__ == "__main__":
     else:
         packageNames = args[0]
 
+    print('Running packages %s' % (', '.join(packageNames)))
+
     # Generating info
     if 'info' in kwargs:
         gen_package_info(packageNames)
@@ -40,7 +42,7 @@ if __name__ == "__main__":
         if 'nose' in kwargs:
             pythonCommands += ['-m', 'nose']
 
-        lastFailed = kwargs['lastFailed'] if 'lastFailed' in kwargs else None
+        lastFailed = 'True' if 'lastFailed' in kwargs else None
         for package in packageNames:
             run_package(package, precommands=pythonCommands, postcommand=None, lastFailed=lastFailed)
 
