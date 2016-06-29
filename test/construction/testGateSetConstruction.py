@@ -355,8 +355,8 @@ class TestGateSetConstructionMethods(GateSetConstructionTestCase):
                 gateset_simple['Gx'] = [1,2,3,4]
             with self.assertRaises(ValueError):
                 gateset_simple['Gx'] = [[1,2,3,4],[5,6,7]]
-            with self.assertRaises(KeyError):
-                gateset_simple.spamdefs[1] = ('rho0','E0') #spam labels must be strings
+            #with self.assertRaises(KeyError):
+                #gateset_simple.spamdefs[1] = ('rho0','E0') #spam labels must be strings
             with self.assertRaises(KeyError):
                 gateset_simple.spamdefs['plus'] = 'not-a-2-tuple'
             with self.assertRaises(ValueError):
