@@ -25,3 +25,4 @@ if branchname in updates_git_pages:
     print(subprocess.check_output(['ls']))
     os.chdir('..')
     subprocess.call(['git', 'checkout', branchname])
+
