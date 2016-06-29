@@ -5,7 +5,7 @@ import sys
 
 if __name__ == "__main__":
 
-    enabled   = ','.join(sys.argv[1:])
+    enabled   = ','.join(sys.argv[2:])
     print('Generating %s in all of pygsti. This might take a few minutes' % enabled)
     commands  = ['pylint3', '--disable=all',
                             '--enable=%s' % enabled,
@@ -14,4 +14,4 @@ if __name__ == "__main__":
                             '../packages/pygsti']
     output = get_output(commands)
     print('\n'.join(output))
-    write_output(output, 'output/specific.out')
+    write_output(output, 'output/%s.out' % sys.argv[1])

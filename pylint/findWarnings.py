@@ -4,7 +4,7 @@ from readyaml import read_yaml
 
 if __name__ == "__main__":
     print('Generating warnings in all of pygsti. This might take a few minutes')
-    blacklist = read_yaml('config.yml')['blacklisted-errors']
+    blacklist = read_yaml('config.yml')['blacklisted-warnings']
     commands  = ['pylint3', '--disable=R,C,E,%s' % ','.join(blacklist),
                             '--rcfile=.lint.conf',
                             '--reports=n',

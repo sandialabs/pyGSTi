@@ -24,3 +24,7 @@ adjustables:
 blacklisted-errors:
   - function-redefined           # This happens to be allowed in our repository! (Should it be?)
   - no-member                    # You could also blacklist each affected module/class in .lint.conf
+
+blacklisted-warnings:
+  - pointless-string-statement   # Around here, these usually serve as documentation :)
+  - wildcard-import              # These might be fine for now, there are more important things
