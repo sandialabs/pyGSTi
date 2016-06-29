@@ -1,0 +1,22 @@
+# Adjustable settings set to defaults
+adjustables:
+  too-many-arguments: 
+      max-args=5
+
+  too-many-boolean-expressions: 
+      max-bool-expr=5
+
+  too-many-branches:
+      max-branches=12
+
+  too-many-instance-attributes:
+      max-attributes=7
+
+  too-many-locals:
+      max-locals=15
+
+  too-many-return-statements:
+      max-returns=6
+
+  too-many-statements:
+      max-statements=50 
