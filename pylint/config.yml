@@ -29,3 +29,10 @@ blacklisted-warnings:
   - pointless-string-statement   # Around here, these usually serve as documentation :)
   - wildcard-import              # Non-Breaking
   - unnecessary-semicolon        # Non-Breaking
+
+whitelisted-conventions:
+  - missing-docstring
+  - empty-docstring
+  
+whitelisted-refactors:
+  - redefined-variable-type
