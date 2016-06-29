@@ -20,3 +20,7 @@ adjustables:
 
   too-many-statements:
       max-statements=100 
+
+blacklisted-errors:
+  - function-redefined
+  - unsubscriptable-object

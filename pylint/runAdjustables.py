@@ -1,19 +1,7 @@
 #!/usr/bin/env python3
 from readyaml   import read_yaml
-import subprocess
+from helpers    import get_output, write_output
 import sys
-
-# A wrapper for subprocess
-def get_output(commands):
-    try:
-        output = subprocess.check_output(commands)
-        return output.decode('utf-8').splitlines()
-    except subprocess.CalledProcessError as e:
-        return e.output.decode('utf-8').splitlines()
-
-def write_output(output, filename):
-    with open(filename, 'w') as outputfile:
-        outputfile.write("\n".join(output))
 
 # A function that lets us adjust the value of the adjustable when linting
 def build_commands(adjustable, setting, value, package='packages/pygsti'):
