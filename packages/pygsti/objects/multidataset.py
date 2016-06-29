@@ -317,8 +317,8 @@ class MultiDataSet(object):
                      'gsIndexVals': list(self.gsIndex.values()) if self.gsIndex else [],
                      'slIndex': self.slIndex,
                      'countsKeys': list(self.countsDict.keys()) }  #Don't pickle countsDict numpy data b/c it's inefficient
-
-        bOpen = (type(fileOrFilename) == str)
+        # Compatability for unicode-literal filenames
+        bOpen = not (hasattr(fileOrFilename, 'write'))
         if bOpen:
             if fileOrFilename.endswith(".gz"):
                 import gzip as _gzip
@@ -344,7 +344,8 @@ class MultiDataSet(object):
             Either a filename or a file object.  In the former case, if the
             filename ends in ".gz", the file will be gzip uncompressed as it is read.
         """
-        bOpen = (type(fileOrFilename) == str)
+        # Compatability for unicode-literal filenames
+        bOpen = not (hasattr(fileOrFilename, 'write'))
         if bOpen:
             if fileOrFilename.endswith(".gz"):
                 import gzip as _gzip
