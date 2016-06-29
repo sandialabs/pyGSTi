@@ -60,4 +60,4 @@ def run_changed_packages(cutoffDirs=[], exclude=[], preCommand='../', endings=[]
 
 if __name__ == "__main__":
     args, kwargs = get_args(sys.argv)
-    run_changed_packages(*args, *kwargs)
+    run_changed_packages(*args, **kwargs)

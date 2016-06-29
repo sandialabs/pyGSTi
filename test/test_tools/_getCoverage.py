@@ -1,6 +1,6 @@
 #!/usr/bin/python
 from __future__ import print_function
-from .helpers    import *
+from helpers    import *
 import os, sys
 import subprocess
 
