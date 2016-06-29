@@ -14,7 +14,7 @@ from . import jamiolkowski as _jam
 
 TOL = 1e-20
 
-import sys #DEBUG TIMER
+#import sys #DEBUG TIMER
 
 # Functions for computing the log liklihood function and its derivatives
 

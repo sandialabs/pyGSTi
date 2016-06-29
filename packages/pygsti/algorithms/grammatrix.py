@@ -6,7 +6,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Utility functions related to Gram matrix construction."""
 
-from .. import tools as _tools
 from .. import construction as _construction
 from .core import gram_rank_and_evals as _gramRankAndEvals
 

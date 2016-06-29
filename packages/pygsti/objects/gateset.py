@@ -6,10 +6,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Defines the GateSet class and supporting functionality."""
 
-import warnings as _warnings
 import numpy as _np
 import numpy.linalg as _nla
-import numpy.random as _rndm
 import scipy as _scipy
 import itertools as _itertools
 

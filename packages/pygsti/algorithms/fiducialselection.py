@@ -7,8 +7,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Functions for selecting a complete set of fiducials for a GST analysis."""
 
 import numpy     as _np
-import itertools as _itertools
-import math      as _math
 import sys       as _sys
 import os
 import scipy

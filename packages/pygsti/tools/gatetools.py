@@ -8,9 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import scipy.linalg as _spl
-import scipy.optimize as _spo
 
-from ..tools import basistools as _bt
 from ..tools import jamiolkowski as _jam
 from ..tools import matrixtools as _mt
 
