@@ -18,10 +18,11 @@ def write_output(output, filename):
 # A function that lets us adjust the value of the adjustable when linting
 def build_commands(adjustable, setting, value, package='packages/pygsti'):
 	return ['pylint3', '--disable=all',
-				   '--enable=%s' % adjustable,
-				   '--%s=%s'     % (setting, value),
-				   '--reports=n',
-				   '../%s' % package]
+		           '--enable=%s' % adjustable,
+                           '--rcfile=.lint.conf',
+                           '--%s=%s'     % (setting, value),
+	                   '--reports=n',
+			   '../%s' % package]
 
 if __name__ == "__main__":
 
@@ -31,7 +32,12 @@ if __name__ == "__main__":
 
     adjustables = read_yaml('config.yml')['adjustables']
 
+    print('Beginning to lint for adjustable refactoring issues')
+    print('Many adjustments indicate a more serious problem, while few/none indicate normal code')
+
     for adjustable in adjustables:
+
+        print('    Linting for %s' % adjustable)
 
         default               = adjustables[adjustable]
         setting, defaultvalue = default.rsplit('=')
@@ -44,10 +50,14 @@ if __name__ == "__main__":
          
         # Adjust the value (ex: max arguments/function) until a properly sized file is generated
         while(len(output) > desiredLength):
+            print('      Adjusting the value of %s. Was %s, is now %s' % (setting, currentvalue, currentvalue + defaultvalue))
             currentvalue += defaultvalue 
-            output = get_output(adjust_commands(currentvalue))
+            output        = get_output(adjust_commands(currentvalue))
  
+        print('    Finished linting for %s, the final value of %s was %s\n' % (adjustable, setting, currentvalue))
         # Once the file is satisfactory, write the thing
         write_output(output, 'output/%s.txt' % adjustable)
+
+    print('Linting Complete')
     
     
