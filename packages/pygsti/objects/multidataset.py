@@ -27,6 +27,8 @@ class MultiDataSet_KeyValIterator(object):
         datasetName = next(self.countsDictIter)
         return datasetName, _DataSet(self.multidataset.countsDict[datasetName], gateStringIndices=self.multidataset.gsIndex,
                                     spamLabelIndices=self.multidataset.slIndex, bStatic=True)
+ 
+    next = __next__
 
 
 class MultiDataSet_ValIterator(object):
@@ -43,6 +45,7 @@ class MultiDataSet_ValIterator(object):
         return _DataSet(self.multidataset.countsDict[datasetName], gateStringIndices=self.multidataset.gsIndex,
                         spamLabelIndices=self.multidataset.slIndex, bStatic=True)
 
+    next = __next__
 
 class MultiDataSet(object):
     """

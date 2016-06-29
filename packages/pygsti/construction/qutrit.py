@@ -10,6 +10,8 @@ import numpy as _np
 from scipy import linalg as _linalg
 
 from ..tools import basistools as _bt
+from ..      import objects    as _objs
+
 
 #Define 2 qubit to symmetric (+) antisymmetric space transformation A:
 A = _np.matrix([[1,0,0,0],

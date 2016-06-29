@@ -7,7 +7,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Defines the OutputData class and supporting functions """
 
 import pickle as _pickle
-from dataset import upgrade_old_dataset as _UpgradeOldDataSet
 
 class OutputData:
     """
@@ -101,7 +100,7 @@ class OutputData:
             import gzip
             file_data = _pickle.load(gzip.open(filename,'rb'))
         else:
-            with open(filename, 'rb') as picklefile
+            with open(filename, 'rb') as picklefile:
                 file_data = _pickle.load(picklefile)
         #except:
         #    raise ValueError("Error loading pickle data from %s" % filename)
@@ -125,13 +124,6 @@ class OutputData:
         else:
             raise ValueError("Unknown version (%s) of gst output data file" % version)
 
-
-    def save(self):
-        """ Save data to the same file this OutputData was loaded from """
-        if self.filename is None:
-            raise ValueError("Cannot save this OutputData object when it wasn't loaded from a file -- must use save_to")
-        return save_to(self.filename)
-
     def save_to(self, filename):
         """ Save data to a file.  If filename ends in .gz it will be gzip compressed. """
         dictToSave = { 'gatesets': self.gatesets,
@@ -145,6 +137,13 @@ class OutputData:
             with open(filename, 'wb') as picklefile:
                 _pickle.dump( dictToSave, picklefile)
 
+
+
+    def save(self):
+        """ Save data to the same file this OutputData was loaded from """
+        if self.filename is None:
+            raise ValueError("Cannot save this OutputData object when it wasn't loaded from a file -- must use save_to")
+        return self.save_to(self.filename)
 
 
 #def upgrade_old_data_sets(outputDataWithOldDatasets):

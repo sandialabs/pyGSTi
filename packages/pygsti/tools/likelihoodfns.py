@@ -646,8 +646,9 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
             fill_count_vecs(cntVecMx,spam_lbl_rows,dataset,
                             evalSubTree.generate_gatestring_list())
         else:
-            for i in myFinalToParentFinalMap:
-                cntVecMx[:,ii] = countVecMx[:,i] #fill w/supplied countVecMx
+            # This local doesn't seem to exist, but the affected tests pass. However, pylint does not
+            for i in myFinalToParentFinalMap:    #pylint: disable=undefined-variable
+                cntVecMx[:,i] = countVecMx[:,i] #fill w/supplied countVecMx
         totalCntVec = _np.sum(cntVecMx, axis=0)
 
         if mode == "all at once":
