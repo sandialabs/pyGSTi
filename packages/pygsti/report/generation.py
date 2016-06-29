@@ -6,16 +6,9 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Functions for generating GST reports (PDF or HTML)."""
 
-import os as _os
-import re as _re
-import collections as _collections
 import warnings as _warnings
 import numpy as _np
-import scipy.linalg as _spl
-import scipy.optimize as _spo
 import scipy.stats as _stats
-import sys as _sys
-import matplotlib as _matplotlib
 
 from .. import algorithms as _alg
 from .. import tools as _tools

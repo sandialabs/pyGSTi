@@ -6,7 +6,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Defines the Results class and supporting functionality."""
 
-import sys as _sys
 import os  as _os
 import re  as _re
 import collections as _collections
@@ -18,7 +17,6 @@ from ..objects      import VerbosityPrinter
 from ..construction import spamspecconstruction as _ssc
 from ..algorithms   import optimize_gauge       as _optimizeGauge
 from ..tools        import listtools            as _lt
-from ..tools        import basistools           as _bt
 from ..             import _version
 
 from . import latex      as _latex

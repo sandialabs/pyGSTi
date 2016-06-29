@@ -9,7 +9,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy     as _np
 import itertools as _itertools
 import math      as _math
-import sys       as _sys
 from ..construction import gatestringconstruction as _gsc
 from ..tools        import remove_duplicates      as _remove_duplicates
 

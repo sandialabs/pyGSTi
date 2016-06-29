@@ -6,19 +6,9 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Defines an *experimental* gauge-invariant GateSet class and supporting functionality."""
 
-import itertools as _itertools
-import warnings as _warnings
 import numpy as _np
-import numpy.linalg as _nla
-import numpy.random as _rndm
-import scipy as _scipy
-import collections as _collections
 
 from ..tools import matrixtools as _mt
-from ..tools import basistools as _bt
-from ..tools import gatetools as _gt
-from ..tools import likelihoodfns as _lf
-from ..tools import jamiolkowski as _jt
 
 #import evaltree as _evaltree
 from . import gate as _gate
@@ -867,6 +857,7 @@ def _get_rhoTilde_mark2(ETilde, D0_params):
 
 def _deparameterize_real_gate_mx(Dj_params, D0_params, B0j_params,
                                  invY0, verbosity):
+    printer = VerbosityPrinter.build_printer(verbosity)
     assert(len(Dj_params) == len(D0_params))
 
     def abssum(ar):

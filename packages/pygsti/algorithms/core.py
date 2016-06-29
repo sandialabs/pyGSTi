@@ -6,7 +6,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Core GST algorithms """
 
-import sys            as _sys
 import numpy          as _np
 import scipy.optimize as _spo
 import scipy.stats    as _stats

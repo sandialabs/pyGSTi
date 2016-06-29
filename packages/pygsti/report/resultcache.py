@@ -5,9 +5,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 import collections as _collections
-import numpy       as _np
 import re          as _re
-import sys         as _sys
 import itertools   as _itertools
 
 from ..objects import VerbosityPrinter

@@ -8,11 +8,9 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import pickle as _pickle
-import warnings as _warnings
 from collections import OrderedDict as _OrderedDict
 
 from .dataset import DataSet as _DataSet
-from . import dataset as _ds
 from . import gatestring as _gs
 
 

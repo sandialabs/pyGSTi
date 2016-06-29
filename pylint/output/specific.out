@@ -1,0 +1,67 @@
+************* Module pygsti.report.results
+W:  9, 0: Unused sys imported as _sys (unused-import)
+W: 21, 0: Unused basistools imported from tools as _bt (unused-import)
+************* Module pygsti.report.generation
+W:  9, 0: Unused os imported as _os (unused-import)
+W: 10, 0: Unused re imported as _re (unused-import)
+W: 11, 0: Unused collections imported as _collections (unused-import)
+W: 14, 0: Unused scipy.linalg imported as _spl (unused-import)
+W: 15, 0: Unused scipy.optimize imported as _spo (unused-import)
+W: 17, 0: Unused sys imported as _sys (unused-import)
+W: 18, 0: Unused matplotlib imported as _matplotlib (unused-import)
+************* Module pygsti.report.resultcache
+W:  8, 0: Unused numpy imported as _np (unused-import)
+W: 10, 0: Unused sys imported as _sys (unused-import)
+************* Module pygsti.report.plotting
+W: 14, 0: Unused AutoMinorLocator imported from matplotlib.ticker as _AutoMinorLocator (unused-import)
+W: 15, 0: Unused FixedLocator imported from matplotlib.ticker as _FixedLocator (unused-import)
+************* Module pygsti.drivers.longsequence
+W: 20, 0: Unused objects imported as _objs (unused-import)
+W: 21, 0: Unused tools imported as _tools (unused-import)
+************* Module pygsti.io.stdinput
+W: 16, 0: Unused string imported as _string (unused-import)
+************* Module pygsti.algorithms.fiducialpairreduction
+W: 12, 0: Unused sys imported as _sys (unused-import)
+************* Module pygsti.algorithms.grammatrix
+W:  9, 0: Unused tools imported as _tools (unused-import)
+************* Module pygsti.algorithms.fiducialselection
+W: 10, 0: Unused itertools imported as _itertools (unused-import)
+W: 11, 0: Unused math imported as _math (unused-import)
+************* Module pygsti.algorithms.core
+W:  9, 0: Unused sys imported as _sys (unused-import)
+************* Module pygsti.algorithms.germselection
+W: 11, 0: Unused itertools imported as _itertools (unused-import)
+W: 12, 0: Unused math imported as _math (unused-import)
+W: 13, 0: Unused sys imported as _sys (unused-import)
+************* Module pygsti.construction.qutrit
+W: 10, 0: Unused pi imported from numpy (unused-import)
+************* Module pygsti.construction.stdlists
+W: 10, 0: Unused spamspec imported from objects as _ss (unused-import)
+************* Module pygsti.tools.gatetools
+W: 11, 0: Unused scipy.optimize imported as _spo (unused-import)
+W: 13, 0: Unused basistools imported from tools as _bt (unused-import)
+************* Module pygsti.tools.likelihoodfns
+W: 17, 0: Unused import sys (unused-import)
+************* Module pygsti.objects.gateset
+W:  9, 0: Unused warnings imported as _warnings (unused-import)
+W: 12, 0: Unused numpy.random imported as _rndm (unused-import)
+************* Module pygsti.objects.gigateset
+W:  9, 0: Unused itertools imported as _itertools (unused-import)
+W: 10, 0: Unused warnings imported as _warnings (unused-import)
+W: 12, 0: Unused numpy.linalg imported as _nla (unused-import)
+W: 13, 0: Unused numpy.random imported as _rndm (unused-import)
+W: 14, 0: Unused scipy imported as _scipy (unused-import)
+W: 15, 0: Unused collections imported as _collections (unused-import)
+W: 18, 0: Unused basistools imported from tools as _bt (unused-import)
+W: 19, 0: Unused gatetools imported from tools as _gt (unused-import)
+W: 20, 0: Unused likelihoodfns imported from tools as _lf (unused-import)
+W: 21, 0: Unused jamiolkowski imported from tools as _jt (unused-import)
+************* Module pygsti.objects.gatestring
+W: 10, 0: Unused total_ordering imported from functools (unused-import)
+************* Module pygsti.objects.evaltree
+W:  9, 0: Unused re imported as _re (unused-import)
+************* Module pygsti.objects.verbosityprinter
+W:  6, 0: Unused os imported as _os (unused-import)
+************* Module pygsti.objects.multidataset
+W: 11, 0: Unused warnings imported as _warnings (unused-import)
+W: 15, 0: Unused dataset imported as _ds (unused-import)

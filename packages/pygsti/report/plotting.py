@@ -11,8 +11,6 @@ import matplotlib.pyplot as _plt
 import matplotlib        as _matplotlib
 import os                as _os
 
-from matplotlib.ticker import AutoMinorLocator as _AutoMinorLocator
-from matplotlib.ticker import FixedLocator     as _FixedLocator
 from scipy.stats       import chi2             as _chi2
 
 from .. import algorithms   as _alg
@@ -1270,9 +1268,6 @@ def gof_boxplot_keyplot(strs, xlabel="$\\rho_i$", ylabel="$E_i$",
         if fig is not None: _plt.close(fig) #close the figure if we're saving it to a file
 
     return rptFig
-
-
-
 
     return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel,ylabel,
                             scale,prec,title,sumUp,boxLabels,histogram,histBins,save_to,ticSize,

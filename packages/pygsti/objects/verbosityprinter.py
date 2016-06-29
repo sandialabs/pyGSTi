@@ -1,9 +1,7 @@
 from __future__ import division, print_function, absolute_import, unicode_literals
-from    __future__ import print_function
 from   copy        import deepcopy as _dc
 from contextlib    import contextmanager as _contextmanager
 import sys         as _sys
-import os          as _os
 import math        as _math # used for digit formatting
 
 '''

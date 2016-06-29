@@ -7,7 +7,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Gate string list creation functions using repeated-germs limited by a max-length."""
 
 import itertools as _itertools
-from ..objects import spamspec as _ss
 from ..tools import listtools as _lt
 from . import gatestringconstruction as _gsc
 from . import spamspecconstruction as _ssc

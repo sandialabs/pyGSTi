@@ -17,8 +17,6 @@ from .. import report as _report
 from .. import algorithms as _alg
 from .. import construction as _construction
 from .. import io as _io
-from .. import objects as _objs
-from .. import tools as _tools
 
 def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                          prepStrsListOrFilename, effectStrsListOrFilename,

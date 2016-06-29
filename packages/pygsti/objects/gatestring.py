@@ -7,7 +7,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Defines the GateString class and derived classes which represent gate strings."""
 
 import numpy as _np
-from functools import total_ordering
 
 def _gateSeqToStr(seq):
     if len(seq) == 0: return "{}" #special case of empty gate string

@@ -7,7 +7,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Routines for building qutrit gates and gate sets """
 
 import numpy as _np
-from numpy import pi
 from scipy import linalg as _linalg
 
 from ..tools import basistools as _bt

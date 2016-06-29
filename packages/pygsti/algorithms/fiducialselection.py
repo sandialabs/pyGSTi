@@ -7,8 +7,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Functions for selecting a complete set of fiducials for a GST analysis."""
 
 import numpy     as _np
-import itertools as _itertools
-import math      as _math
 import sys       as _sys
 import os
 import scipy
@@ -452,6 +450,8 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         if forceEmpty:
             bitVecMat = _np.concatenate((_np.array([[1]*int(numFidLists)]).T,bitVecMat),axis=1)
         best_score = _np.inf
+        # Explicitly declare best_weights, even if it will soon be replaced
+        best_weights = []
         for weights in bitVecMat:
             temp_score = compute_score(weights,cache_score = True)
             if abs(temp_score - best_score) < 1e-8:#If scores are within machine precision, we want the fiducial set that requires fewer total button gate operations.

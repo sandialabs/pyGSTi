@@ -13,7 +13,6 @@ import warnings as _warnings
 from scipy.linalg import expm as _expm
 from collections import OrderedDict as _OrderedDict
 import pyparsing as _pp
-import string as _string
 
 from .. import objects as _objs
 from .. import tools as _tools
