@@ -27,4 +27,5 @@ blacklisted-errors:
 
 blacklisted-warnings:
   - pointless-string-statement   # Around here, these usually serve as documentation :)
-  - wildcard-import              # These might be fine for now, there are more important things
+  - wildcard-import              # Non-Breaking
+  - unnecessary-semicolon        # Non-Breaking
