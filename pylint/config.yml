@@ -22,5 +22,5 @@ adjustables:
       max-statements=100 
 
 blacklisted-errors:
-  - function-redefined
-  - unsubscriptable-object
+  - function-redefined           # This happens to be allowed in our repository! (Should it be?)
+  - no-member                    # You could also blacklist each affected module/class in .lint.conf
