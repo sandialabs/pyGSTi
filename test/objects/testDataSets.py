@@ -249,7 +249,7 @@ Gx^4 0.2 100
         #pygsti.io.write_dataset("../cmp_chk_files/Fake_Dataset_binom.txt", ds_binom, gateStrings)
         #pygsti.io.write_dataset("../cmp_chk_files/Fake_Dataset_multi.txt", ds_multi, gateStrings)
 
-        bDeepTesting = bool( os.environ.has_key('PYGSTI_DEEP_TESTING') and
+        bDeepTesting = bool( 'PYGSTI_DEEP_TESTING' in os.environ and
                              os.environ['PYGSTI_DEEP_TESTING'].lower() in ("yes","1","true") )
           #Do not test *random* datasets for equality unless "deep testing", since different
           # versions/installs of numpy give different random numbers and we don't expect

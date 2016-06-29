@@ -90,7 +90,7 @@ class ReportTestCase(unittest.TestCase):
 
     def checkFile(self, fn):
 
-        if os.environ.has_key('PYGSTI_DEEP_TESTING') and \
+        if 'PYGSTI_DEEP_TESTING' in os.environ and \
            os.environ['PYGSTI_DEEP_TESTING'].lower() in ("yes","1","true"):
             # Deep testing -- do latex comparison
             linesToTest = open("../temp_test_files/%s" % fn).readlines()
