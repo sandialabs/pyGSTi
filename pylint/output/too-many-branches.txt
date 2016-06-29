@@ -1,2 +1,10 @@
+************* Module pygsti.report.results
+R:1353, 4: Too many branches (11/10) (too-many-branches)
+R:2141, 4: Too many branches (11/10) (too-many-branches)
+R:2566, 4: Too many branches (12/10) (too-many-branches)
+************* Module pygsti.algorithms.core
+R: 30, 0: Too many branches (11/10) (too-many-branches)
 ************* Module pygsti.construction.gatesetconstruction
-R:130, 0: Too many branches (21/12) (too-many-branches)
+R:130, 0: Too many branches (21/10) (too-many-branches)
+************* Module pygsti.objects.evaltree
+R:318, 4: Too many branches (12/10) (too-many-branches)
