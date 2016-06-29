@@ -867,6 +867,7 @@ def _get_rhoTilde_mark2(ETilde, D0_params):
 
 def _deparameterize_real_gate_mx(Dj_params, D0_params, B0j_params,
                                  invY0, verbosity):
+    printer = VerbosityPrinter.build_printer(verbosity)
     assert(len(Dj_params) == len(D0_params))
 
     def abssum(ar):
