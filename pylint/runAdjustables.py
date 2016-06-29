@@ -33,18 +33,18 @@ if __name__ == "__main__":
 
     for adjustable in adjustables:
 
-        default = adjustables[adjustable]
+        default               = adjustables[adjustable]
         setting, defaultvalue = default.rsplit('=')
+        defaultvalue          = int(defaultvalue)
 
-        # Wrapper around build_commands for adjusting the value of the adjustable's setting :)
-        adjust_commands = lambda value : build_commands(adjustable, setting, value, package)
+        adjust_commands       = lambda value : build_commands(adjustable, setting, value, package)
 
-        currentvalue = defaultvalue
-        output = get_output(adjust_commands(currentvalue))
+        currentvalue          = defaultvalue
+        output                = get_output(adjust_commands(currentvalue))
          
         # Adjust the value (ex: max arguments/function) until a properly sized file is generated
         while(len(output) > desiredLength):
-            currentvalue += defaultvalue
+            currentvalue += defaultvalue 
             output = get_output(adjust_commands(currentvalue))
  
         # Once the file is satisfactory, write the thing
