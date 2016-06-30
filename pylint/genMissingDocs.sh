@@ -1,3 +1,3 @@
 #!/bin/bash
-./lookFor.py missingdocs missing-docstring empty-docstring
+./lookFor.py docs missing-docstring empty-docstring
 

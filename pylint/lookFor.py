@@ -8,7 +8,9 @@ import sys
 if __name__ == "__main__":
     if len(sys.argv) == 1:
         print('Please supply a filename and list of things to check for. (see https://docs.pylint.org/features.html#general-options)')
-        sys.exit(0)
+        sys.exit(1)
+    elif len(sys.argv) == 2:
+        sys.argv.append(sys.argv[1])
 
     enabled   = ','.join(sys.argv[2:])
     print('Generating %s in all of pygsti. This might take a few minutes' % enabled)
