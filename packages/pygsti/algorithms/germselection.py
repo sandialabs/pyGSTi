@@ -160,7 +160,8 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False):
 def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
                          returnSpectrum=False, tol=1e-6):
     """
-    Test whether a set of germs is able to amplify all of the gateset's non-gauge parameters.
+    Test whether a set of germs is able to amplify all of the gateset's
+    non-gauge parameters.
 
     Parameters
     ----------
@@ -199,7 +200,7 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
         matrix used to determine parameter amplification.
     """
 
-    #Remove any SPAM vectors from gateset since we only want
+    # Remove any SPAM vectors from gateset since we only want
     # to consider the set of *gate* parameters for amplification
     # and this makes sure our parameter counting is correct
     gateset = gateset.copy()
@@ -211,11 +212,17 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
 
     gate_dim = gateset.get_dimension()
     evt = gateset.bulk_evaltree(germToPowL)
-    dprods = gateset.bulk_dproduct(evt, flat=True) # nGerms*flattened_gate_dim x vec_gateset_dim
-    dprods = _np.reshape(dprods,(nGerms,gate_dim**2, dprods.shape[1])) # nGerms x flattened_gate_dim x vec_gateset_dim
+
+    # nGerms*flattened_gate_dim x vec_gateset_dim
+    dprods = gateset.bulk_dproduct(evt, flat=True)
+
+    # nGerms x flattened_gate_dim x vec_gateset_dim
+    dprods = _np.reshape(dprods,(nGerms,gate_dim**2, dprods.shape[1]))
 
     germLensSq = _np.array( [ float(len(s))**2 for s in germsToTest ], 'd' )
-    derivDaggerDeriv = _np.einsum('ijk,ijl->ikl', _np.conjugate(dprods), dprods) / germLensSq[:,None,None] # shape (nGerms, vec_gateset_dim, vec_gateset_dim)
+
+    # shape (nGerms, vec_gateset_dim, vec_gateset_dim)
+    derivDaggerDeriv = _np.einsum('ijk,ijl->ikl', _np.conjugate(dprods), dprods) / germLensSq[:,None,None]
        #result[i] = _np.dot( dprods[i].H, dprods[i] ) / len_of_ith_germString^2
        #result[i,k,l] = sum_j dprodsH[i,k,j] * dprods(i,j,l)
        #result[i,k,l] = sum_j dprods_conj[i,j,k] * dprods(i,j,l)
@@ -238,7 +245,8 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
 def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
                            returnSpectrum=False, threshold=1e6, check=False):
     """
-    Test whether a set of germs is able to amplify all of the gateset's non-gauge parameters.
+    Test whether a set of germs is able to amplify all of the gateset's
+    non-gauge parameters.
 
     Parameters
     ----------
@@ -259,9 +267,9 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
         to the success flag.
 
     threshold : float, optional
-        An eigenvalue of jacobian^T*jacobian is considered
-        zero and thus a parameter un-amplified when its reciprocal is greater than
-        threshold. Also used for eigenvector degeneracy testing in twirling operation.
+        An eigenvalue of jacobian^T*jacobian is considered zero and thus a
+        parameter un-amplified when its reciprocal is greater than threshold.
+        Also used for eigenvector degeneracy testing in twirling operation.
 
     check : bool, optional
       Whether to perform internal consistency checks, at the
@@ -287,7 +295,7 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
             return 1./min(input_array)
 
 
-    #Remove any SPAM vectors from gateset since we only want
+    # Remove any SPAM vectors from gateset since we only want
     # to consider the set of *gate* parameters for amplification
     # and this makes sure our parameter counting is correct
     gateset = gateset.copy()
@@ -297,14 +305,17 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
 
     germLengths = _np.array( map(len,germsToTest), 'i')
     twirledDeriv = bulk_twirled_deriv(gateset, germsToTest, 1./threshold, check) / germLengths[:,None,None]
-    twirledDerivDaggerDeriv = _np.einsum('ijk,ijl->ikl', _np.conjugate(twirledDeriv), twirledDeriv) #is conjugate needed? -- all should be real
-       #result[i] = _np.dot( twirledDeriv[i].H, twirledDeriv[i] ) i.e. matrix product
-       #result[i,k,l] = sum_j twirledDerivH[i,k,j] * twirledDeriv(i,j,l)
-       #result[i,k,l] = sum_j twirledDeriv_conj[i,j,k] * twirledDeriv(i,j,l)
+
+    #is conjugate needed? -- all should be real
+    twirledDerivDaggerDeriv = _np.einsum('ijk,ijl->ikl', _np.conjugate(twirledDeriv), twirledDeriv)
+       # result[i] = _np.dot( twirledDeriv[i].H, twirledDeriv[i] ) i.e. matrix
+       # product
+       # result[i,k,l] = sum_j twirledDerivH[i,k,j] * twirledDeriv(i,j,l)
+       # result[i,k,l] = sum_j twirledDeriv_conj[i,j,k] * twirledDeriv(i,j,l)
 
     if weights is None:
         nGerms = len(germsToTest)
-#        weights = _np.array( [1.0/nGerms]*nGerms, 'd')
+        # weights = _np.array( [1.0/nGerms]*nGerms, 'd')
         weights = _np.array( [1.0]*nGerms, 'd')
 
     combinedTDDD = _np.einsum('i,ijk',weights,twirledDerivDaggerDeriv)
