@@ -213,19 +213,19 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
     gate_dim = gateset.get_dimension()
     evt = gateset.bulk_evaltree(germToPowL)
 
-    # nGerms*flattened_gate_dim x vec_gateset_dim
+    # shape (nGerms*flattened_gate_dim, vec_gateset_dim)
     dprods = gateset.bulk_dproduct(evt, flat=True)
 
-    # nGerms x flattened_gate_dim x vec_gateset_dim
-    dprods = _np.reshape(dprods,(nGerms,gate_dim**2, dprods.shape[1]))
+    # shape (nGerms, flattened_gate_dim, vec_gateset_dim
+    dprods = _np.reshape(dprods, (nGerms, gate_dim**2, dprods.shape[1]))
 
     germLensSq = _np.array( [ float(len(s))**2 for s in germsToTest ], 'd' )
 
     # shape (nGerms, vec_gateset_dim, vec_gateset_dim)
     derivDaggerDeriv = _np.einsum('ijk,ijl->ikl', _np.conjugate(dprods), dprods) / germLensSq[:,None,None]
-       #result[i] = _np.dot( dprods[i].H, dprods[i] ) / len_of_ith_germString^2
-       #result[i,k,l] = sum_j dprodsH[i,k,j] * dprods(i,j,l)
-       #result[i,k,l] = sum_j dprods_conj[i,j,k] * dprods(i,j,l)
+       # result[i] = _np.dot( dprods[i].H, dprods[i] ) / len_of_ith_germString^2
+       # result[i,k,l] = sum_j dprodsH[i,k,j] * dprods(i,j,l)
+       # result[i,k,l] = sum_j dprods_conj[i,j,k] * dprods(i,j,l)
 
     if weights is None:
         nGerms = len(germsToTest)
