@@ -1,6 +1,0 @@
-pygsti.tools.error_generator
-============================
-
-.. currentmodule:: pygsti.tools
-
-.. autofunction:: error_generator

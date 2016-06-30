@@ -33,11 +33,32 @@ def create_gatestring_list(*args,**kwargs):
         evaluation is skipped and list construction proceeds.
 
     kwargs : dict
-        keys specify variable names that can be used in positional argument strings.
+        keys specify variable names that can be used in positional argument
+        strings.
 
     Returns
     -------
-    list of GateString objects
+    list of GateString
+
+    Examples
+    --------
+    >>> from pygsti.construction import create_gatestring_list
+    >>> As = [('a1',), ('a2',)]
+    >>> Bs = [('b1',), ('b2',)]
+    >>> list1 = create_gatestring_list('a', 'a+b', a=As, b=Bs)
+    >>> print(list(map(str, list1)))
+    ['a1', 'a2', 'a1b1', 'a1b2', 'a2b1', 'a2b2']
+
+    You can change the order in which the different iterables are advanced.
+
+    >>> list2 = create_gatestring_list('a+b', a=As, b=Bs, order=['a', 'b'])
+    >>> print(list(map(str, list2)))
+    ['a1b1', 'a1b2', 'a2b1', 'a2b2']
+    >>> list3 = create_gatestring_list('a+b', a=As, b=Bs, order=['b', 'a'])
+    >>> print(list(map(str, list3)))
+    ['a1b1', 'a2b1', 'a1b2', 'a2b2']
+
+
     """
     lst = []
     
@@ -261,17 +282,16 @@ def list_all_gatestrings(gateLabels, minlength, maxlength):
     list
         A list of GateString objects.
     """
-    ret = [ ]
-    for l in range(minlength, maxlength+1):
-        ret += list_all_gatestrings_onelen(gateLabels, l)
-    return ret
+    gateTuples = _itertools.chain(*[_itertools.product(gateLabels, repeat=N)
+                                    for N in range(minlength, maxlength + 1)])
+    return list(map(_gs.GateString, gateTuples))
 
 def gen_all_gatestrings(gateLabels, minlength, maxlength):
     """ Generator version of list_all_gatestrings """
-    ret = [ ]
-    for l in range(minlength, maxlength+1):
-        for s in gen_all_gatestrings_onelen(gateLabels, l):
-            yield s
+    gateTuples = _itertools.chain(*[_itertools.product(gateLabels, repeat=N)
+                                    for N in range(minlength, maxlength + 1)])
+    for gateTuple in gateTuples:
+        yield _gs.GateString(gateTuple)
 
 def list_all_gatestrings_onelen(gateLabels, length):
     """
@@ -290,22 +310,14 @@ def list_all_gatestrings_onelen(gateLabels, length):
     list
         A list of GateString objects.
     """
-    if length == 0: return [ _gs.GateString( () ) ]
-    if length == 1: return [ _gs.GateString( (g,) ) for g in gateLabels ]
-    m1StrList = list_all_gatestrings_onelen(gateLabels, length-1)
-    return [ _gs.GateString( (g,) ) + s for g in gateLabels for s in m1StrList ]
+    gateTuples = _itertools.product(gateLabels, repeat=length)
+    return list(map(_gs.GateString, gateTuples))
 
 
 def gen_all_gatestrings_onelen(gateLabels, length):
     """Generator version of list_all_gatestrings_onelen"""
-    if length == 0: yield _gs.GateString( () )
-    elif length == 1: 
-        for g in gateLabels:
-            yield _gs.GateString( (g,) )
-    else:
-        for g in gateLabels:
-            for s in gen_all_gatestrings_onelen(gateLabels, length-1):
-                yield _gs.GateString( (g,) ) + s
+    for gateTuple in _itertools.product(gateLabels, repeat=length):
+        yield _gs.GateString(gateTuple)
 
 
 def list_all_gatestrings_without_powers_and_cycles(gateLabels, maxLength):

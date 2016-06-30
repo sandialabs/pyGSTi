@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# Creates html of the ipython notebooks automatically
+# the .ipynb files you want to convert to html and run it.
+OIFS="$IFS"
+IFS=$'\n'
+cd tutorials
+for nbname in `ls *.ipynb`; do
+  ipython nbconvert --to html --template full "$nbname"
+  basenm=`basename "$nbname" .ipynb`
+  newname=`echo $basenm | sed -e 's/ /_/g' | tr -d \(\),\-`
+  mv "$basenm.html" "$newname.html"
+  echo "Created $newname.html"
+done
+IFS="$OIFS"

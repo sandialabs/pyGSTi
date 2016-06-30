@@ -1,6 +1,0 @@
-pygsti.construction.repeat_and_truncate
-=======================================
-
-.. currentmodule:: pygsti.construction
-
-.. autofunction:: repeat_and_truncate

@@ -1,6 +1,0 @@
-pygsti.algorithms.xor
-=====================
-
-.. currentmodule:: pygsti.algorithms
-
-.. autofunction:: xor

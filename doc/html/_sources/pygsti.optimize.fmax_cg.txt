@@ -1,6 +1,0 @@
-pygsti.optimize.fmax_cg
-=======================
-
-.. currentmodule:: pygsti.optimize
-
-.. autofunction:: fmax_cg

@@ -1,6 +1,0 @@
-pygsti.construction.build_gate
-==============================
-
-.. currentmodule:: pygsti.construction
-
-.. autofunction:: build_gate

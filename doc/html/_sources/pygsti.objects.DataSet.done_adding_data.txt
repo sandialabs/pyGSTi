@@ -1,6 +1,0 @@
-pygsti.objects.DataSet.done_adding_data
-=======================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: DataSet.done_adding_data

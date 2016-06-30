@@ -1,6 +1,0 @@
-pygsti.objects.MultiDataSet.__init__
-====================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: MultiDataSet.__init__

@@ -1,6 +1,0 @@
-pygsti.objects.StaticSPAMVec.deriv_wrt_params
-=============================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: StaticSPAMVec.deriv_wrt_params

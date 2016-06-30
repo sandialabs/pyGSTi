@@ -1,6 +1,0 @@
-pygsti.objects.TPParameterizedSPAMVec.copy
-==========================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: TPParameterizedSPAMVec.copy

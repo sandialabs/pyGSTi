@@ -67,6 +67,16 @@ Congratulations!  You're up and running with pyGSTi!
 
 
 
+
+Documentation
+-------------
+Online documentation is hosted on [Read the Docs](http://pygsti.readthedocs.io).
+Instructions for building the documentation locally are contained in the file
+`doc/build/howToBuild.txt`.
+
+
+
+
 Questions?
 ----------
 For help and support with pyGSTi, please contact the authors at
