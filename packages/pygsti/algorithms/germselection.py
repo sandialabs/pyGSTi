@@ -227,11 +227,9 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
        # result[i,k,l] = sum_j dprodsH[i,k,j] * dprods(i,j,l)
        # result[i,k,l] = sum_j dprods_conj[i,j,k] * dprods(i,j,l)
 
-    if weights is None:
-        nGerms = len(germsToTest)
-        weights = _np.ones(nGerms, 'd') / nGerms
-
-    combinedDDD = _np.einsum('i,ijk', weights, 1.0 / L**2 * derivDaggerDeriv)
+    # Take the average of the D^dagger*D/L^2 matrices associated with each germ
+    # with optional weights.
+    combineDDD = _np.average(derivDaggerDeriv, weights=weights, axis=0) / L**2
     sortedEigenvals = _np.sort(_np.real(_np.linalg.eigvalsh(combinedDDD)))
 
     nGaugeParams = gateset.num_gauge_params()
