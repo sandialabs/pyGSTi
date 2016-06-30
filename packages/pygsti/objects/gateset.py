@@ -10,6 +10,7 @@ import numpy as _np
 import numpy.linalg as _nla
 import scipy as _scipy
 import itertools as _itertools
+import collections as _collections
 
 from ..tools import matrixtools as _mt
 from ..tools import basistools as _bt
@@ -331,11 +332,11 @@ class GateSet(object):
 
         Returns
         -------
-        dict
+        OrderedDict
             a dictionary with keys == (prepLabel,effectLabel) tuples and
             values == SPAM labels.
         """
-        d = { }
+        d = _collections.OrderedDict()
         for label in self.spamdefs:
             d[  self.spamdefs[label] ] = label
         return d
@@ -2070,6 +2071,45 @@ class GateSet(object):
             penalty += abs(rhoVec[0,0] - firstEl)**2
 
         return _np.sqrt(penalty)
+
+
+    def strdiff(self, otherGateSet):
+        """
+        Return a string describing
+        the frobenius distances between
+        each corresponding gate, state prep,
+        and POVM effect.
+
+        Parameters
+        ----------
+        otherGateSet : GateSet
+            the other gate set to difference against.
+
+        Returns
+        -------
+        str
+        """
+        s =  "Gateset Difference:\n"
+        s += " Preps:\n"
+        for lbl in self.preps:
+            s += "  %s = %g\n" % \
+                (lbl, _np.linalg.norm(self.preps[lbl]-otherGateSet.preps[lbl]))
+
+        s += " Effects:\n"
+        for lbl in self.effects:
+            s += "  %s = %g\n" % \
+                (lbl, _np.linalg.norm(self.effects[lbl]-otherGateSet.effects[lbl]))
+        if self.povm_identity is not None:
+            s += "  Identity = %g\n" % \
+                _np.linalg.norm(self.povm_identity-otherGateSet.povm_identity)
+
+        s += " Gates:\n"
+        for lbl in self.gates:
+            s += "  %s = %g\n" % \
+                (lbl, _np.linalg.norm(self.gates[lbl]-otherGateSet.gates[lbl]))
+
+        return s
+
 
 
     def copy(self):

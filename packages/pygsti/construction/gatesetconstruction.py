@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import itertools as _itertools
+import collections as _collections
 import scipy.linalg as _spl
 
 from ..tools import basistools as _bt
@@ -941,8 +942,18 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
 
     ret.povm_identity = build_identity_vec(stateSpaceDims, basis)
 
-    for spamlabel,(rhoLbl,ELbl) in spamdefs.items():
-        ret.spamdefs[spamlabel] = (rhoLbl,ELbl)
+    #Note: since a GateSet's spamdefs are an *ordered* dictionary (for correspondence
+    #  to row indices in some bulk_ operations), we need to set the spamdefs in a
+    #  deterministic order -- e.g. we *cannot* iterate over the keys in a standard
+    #  dictionary.  So, unless we're given an ordered dict, add the keys (spam labels)
+    #  in alphabetical order.
+    if isinstance(spamdefs, _collections.OrderedDict):
+        for spamlabel,(rhoLbl,ELbl) in spamdefs.items():
+            ret.spamdefs[spamlabel] = (rhoLbl,ELbl)
+    else:
+        for spamlabel in sorted(list(spamdefs.keys())):
+            (rhoLbl,ELbl) = spamdefs[spamlabel]
+            ret.spamdefs[spamlabel] = (rhoLbl,ELbl)
 
     for (gateLabel,gateExpr) in zip(gateLabels, gateExpressions):
         ret.gates[gateLabel] = build_gate(stateSpaceDims, stateSpaceLabels,

@@ -1043,7 +1043,11 @@ class GateSetCalculator(object):
         for i,subtree in enumerate(evt.get_sub_trees()):
             li = my_gIndices.index(i) if (i in my_gIndices) else None
 
-            for spamLabel,rowIndex in spam_label_rows.items():
+            #Perform broadcasts for each spam label in definite order on all procs
+            #  (just iterating over spam_label_rows.items() does *not* ensure this)
+            spamLabels = sorted(list(spam_label_rows.keys()))
+            for spamLabel in spamLabels:
+                rowIndex = spam_label_rows[spamLabel]
                 for r in result_range:
                     if result_tup[r] is None:
                         continue #skip None result_tup elements
@@ -2088,7 +2092,7 @@ class GateSetCalculator(object):
 
         remainder_label = None
         sub_results = {}
-        for spamLabel,rowIndex in spam_label_rows.items():
+        for spamLabel in spam_label_rows.keys():
             if self._is_remainder_spamlabel(spamLabel):
                 remainder_label = spamLabel
                 continue
@@ -2442,15 +2446,15 @@ class GateSetCalculator(object):
                     sub_results[spamLabel][1] = _np.concatenate( to_concat, axis=1 )
                     sub_results[spamLabel] = tuple(sub_results[spamLabel])
 
-
             my_results.append(sub_results) #sub_results is a dict (keys = spam labels)
+
 
         #collect/gather results
         self._gather_subtree_results(evalTree, spam_label_rows, subTreeOwners,
                                      mySubTreeIndices, (prMxToFill, mxToFill),
                                      my_results, comm)
 
-        if clipTo is not None:
+        if clipTo is not None and prMxToFill is not None:
             _np.clip( prMxToFill, clipTo[0], clipTo[1], out=prMxToFill ) # in-place clip
 
         if check:
@@ -2667,7 +2671,7 @@ class GateSetCalculator(object):
                                      (prMxToFill, derivMxToFill, mxToFill),
                                      my_results, comm)
 
-        if clipTo is not None:
+        if clipTo is not None and prMxToFill is not None:
             _np.clip( prMxToFill, clipTo[0], clipTo[1], out=prMxToFill ) # in-place clip
 
         if check:

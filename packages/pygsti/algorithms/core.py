@@ -151,7 +151,7 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
     if identityVec is None and guessGatesetForGauge is not None:
         identityVec = guessGatesetForGauge.povm_identity
     if identityVec is None: #check again in case targetGateset.povm_identity == None
-        for (lr,el) in list(spamDict.keys()):
+        for (lr,el) in spamDict.keys():
             if el == remainderLabel and lr != remainderLabel: #then identityVec is required b/c this spamlabel represents Evec = identityVec - sum(other_Evecs)
                 raise ValueError("do_lgst cannot determine the identity vector from supplied parameters")
         #otherwise identityVec is not required, so OK if it's None
@@ -246,7 +246,9 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
         lgstGateset.povm_identity = padded_identityVec
 
     # Add SPAM label info to gateset
-    for (prepLabel, ELabel) in list(spamDict.keys()):
+    #  Note: this must be done in a *deterministic* order, which it is 
+    #    here because spamDict is an OrderedDict (cf. get_reverse_spam_defs())
+    for (prepLabel, ELabel) in spamDict.keys():
         lgstGateset.spamdefs[spamDict[(prepLabel,ELabel)]] = (prepLabel, ELabel)
 
     # Perform "guess" gauge transformation by computing the "B" matrix
@@ -949,6 +951,12 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     printer.log('', 3)
     printer.log("--- Minimum Chi^2 GST ---", 2, indentOffset=-1)
 
+    if comm is not None:
+        gs_cmp = comm.bcast(gs if (comm.Get_rank() == 0) else None, root=0)
+        if gs.frobeniusdist(gs_cmp) > 1e-6: 
+            raise ValueError("MPI ERROR: *different* MC2GST start gatesets" +
+                             " given to different processors!")
+
     #convert list of GateStrings to list of raw tuples since that's all we'll need
     if len(gateStringsToUse) > 0 and \
           isinstance(gateStringsToUse[0],_objs.GateString):
@@ -1235,6 +1243,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     full_minErrVec = objective_func(opt_x)  #note: calls gs.from_vector(opt_x,...) so don't need to call this again
     minErrVec = full_minErrVec if regularizeFactor == 0 else full_minErrVec[0:-len(x0)] #don't include regularization terms
     soln_gs = gs.copy();
+
     #soln_gs.log("MC2GST", { 'method': "leastsq", 'tol': tol,  'maxiter': maxiter } )
     #print "*** leastSQ TIME = ",(_time.time()-tStart) #TIMER!!!
 
@@ -1925,6 +1934,12 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
 
     printer.log('', 3)
     printer.log("--- MLGST ---", 2, indentOffset=-1)
+
+    if comm is not None:
+        gs_cmp = comm.bcast(gs if (comm.Get_rank() == 0) else None, root=0)
+        if gs.frobeniusdist(gs_cmp) > 1e-6: 
+            raise ValueError("MPI ERROR: *different* MLGST start gatesets" +
+                             " given to different processors!")
 
     spamLabels = gs.get_spam_labels() #fixes the ordering of the spam labels
     vec_gs_len = gs.num_params()
