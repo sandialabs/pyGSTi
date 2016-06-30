@@ -1,7 +1,7 @@
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ Functions for selecting a complete set of germs for a GST analysis."""
 from __future__ import division
@@ -16,9 +16,9 @@ import warnings as _warnings
 def num_non_spam_gauge_params(gateset):
     """Returns number of non-gauge parameters in a gateset, not including SPAM parameters"""
     gateset = gateset.copy()
-    for prepLabel in gateset.preps.keys():  
+    for prepLabel in gateset.preps.keys():
         del gateset.preps[prepLabel]
-    for effectLabel in gateset.effects.keys():  
+    for effectLabel in gateset.effects.keys():
         del gateset.effects[effectLabel]
     return gateset.num_gauge_params()
 
@@ -32,7 +32,7 @@ def num_non_spam_gauge_params(gateset):
 #    #Get spectrum and eigenvectors of wrt
 #    wrtEvals,wrtEvecs = _np.linalg.eig(wrt)
 #    wrtEvecsInv = _np.linalg.inv( wrtEvecs )
-#    
+#
 #    # rotate mxToTwirl to the eigenbasis of wrt
 #    rotmat = _np.dot(wrtEvecsInv, _np.dot(mxToTwirl, wrtEvecs))
 #
@@ -40,14 +40,14 @@ def num_non_spam_gauge_params(gateset):
 #    for i in xrange(dim):
 #        for j in xrange(dim):
 #            if abs(wrtEvals[i] - wrtEvals[j]) > eps:
-#                rotmat[i,j] = 0 
+#                rotmat[i,j] = 0
 #
 #    return _np.dot(wrtEvecs, _np.dot(rotmat, wrtEvecsInv)) # rotate back to the original basis
-    
+
 
 # wrt is gate_dim x gate_dim, so is M, Minv, Proj
 # so SOP is gate_dim^2 x gate_dim^2 and acts on vectorized *gates*
-# Recall vectorizing identity (when vec(.) concats rows as flatten does): 
+# Recall vectorizing identity (when vec(.) concats rows as flatten does):
 #     vec( A * X * B ) = A tensor B^T * vec( X )
 def _SuperOpForPerfectTwirl(wrt, eps):
     """ Return super operator for doing a perfect twirl with respect to wrt """
@@ -58,7 +58,7 @@ def _SuperOpForPerfectTwirl(wrt, eps):
     # Get spectrum and eigenvectors of wrt
     wrtEvals,wrtEvecs = _np.linalg.eig(wrt)
     wrtEvecsInv = _np.linalg.inv( wrtEvecs )
-    
+
     # We want to project  X -> M * (Proj_i * (Minv * X * M) * Proj_i) * Minv,
     # where M = wrtEvecs. So A = B = M * Proj_i * Minv and so
     # superop = A tensor B^T == A tensor A^T
@@ -74,14 +74,14 @@ def _SuperOpForPerfectTwirl(wrt, eps):
         # subspaces of dimension d > 1, giving us d * Proj_i tensor Proj_i^T.
         # We can fix this with a division by tr(Proj_i) = d.
         SuperOp += _np.kron(A, A.T) / _np.trace(Proj_i)
-        # SuperOp += _np.kron(A.T,A) #mimic Maple version (but I think this is
+        # SuperOp += _np.kron(A.T,A) # Mimic Maple version (but I think this is
         # wrong... or it doesn't matter?)
     return SuperOp  # a gate_dim^2 x gate_dim^2 matrix
-    
+
 
 
 def twirled_deriv(gateset, gatestring, eps=1e-6):
-    """ 
+    """
     Compute the "Twirled Derivative" of a gatestring, obtained
     by acting on the standard derivative of a gate string with
     the twirling superoperator.
@@ -101,7 +101,7 @@ def twirled_deriv(gateset, gatestring, eps=1e-6):
     Returns
     -------
     numpy array
-      An array of shape (gate_dim^2, num_gateset_params) 
+      An array of shape (gate_dim^2, num_gateset_params)
     """
     prod  = gateset.product(gatestring)
     dProd = gateset.dproduct(gatestring, flat=True) # flattened_gate_dim x vec_gateset_dim
@@ -110,7 +110,7 @@ def twirled_deriv(gateset, gatestring, eps=1e-6):
 
 
 def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False):
-    """ 
+    """
     Compute the "Twirled Derivative" of a gatestring, obtained
     by acting on the standard derivative of a gate string with
     the twirling superoperator.
@@ -134,16 +134,16 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False):
     Returns
     -------
     numpy array
-      An array of shape (num_gate_strings, gate_dim^2, num_gateset_params) 
+      An array of shape (num_gate_strings, gate_dim^2, num_gateset_params)
     """
     evalTree = gateset.bulk_evaltree(gatestrings)
     dProds, prods = gateset.bulk_dproduct(evalTree, flat=True, bReturnProds=True)#, memLimit=None)
     gate_dim = gateset.get_dimension()
     fd = gate_dim**2 # flattened gate dimension
-    
+
     ret = _np.empty( (len(gatestrings), fd, dProds.shape[1]), 'complex')
     for i in xrange(len(gatestrings)):
-        twirler = _SuperOpForPerfectTwirl(prods[i], eps) # flattened_gate_dim x flattened_gate_dim        
+        twirler = _SuperOpForPerfectTwirl(prods[i], eps) # flattened_gate_dim x flattened_gate_dim
         ret[i] = _np.dot( twirler, dProds[i*fd:(i+1)*fd] ) # flattened_gate_dim x vec_gateset_dim
 
     if check:
@@ -152,12 +152,12 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False):
             if _nla.norm(ret[i] - chk_ret) > 1e-6:
                 _warnings.warn( "bulk twirled derive norm mismatch = %g - %g = %g" % \
                    (_nla.norm(ret[i]), _nla.norm(chk_ret), _nla.norm(ret[i] - chk_ret)) )
-            
+
     return ret # nGateStrings x flattened_gate_dim x vec_gateset_dim
-    
 
 
-def test_germ_list_finitel(gateset, germsToTest, L, weights=None, 
+
+def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
                          returnSpectrum=False, tol=1e-6):
     """
     Test whether a set of germs is able to amplify all of the gateset's non-gauge parameters.
@@ -175,7 +175,7 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
         values take longer to compute but give more robust results.
 
     weights : numpy array, optional
-        A 1-D array of weights with length equal len(germsToTest), 
+        A 1-D array of weights with length equal len(germsToTest),
         which multiply the contribution of each germ to the total
         jacobian matrix determining parameter amplification. If
         None, a uniform weighting of 1.0/len(germsToTest) is applied.
@@ -194,7 +194,7 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
         Whether all non-gauge parameters were amplified.
 
     spectrum : numpy array
-        Only returned when returnSpectrum == True.  Sorted array of 
+        Only returned when returnSpectrum == True.  Sorted array of
         eigenvalues (from small to large) of the jacobian^T * jacobian
         matrix used to determine parameter amplification.
     """
@@ -229,13 +229,13 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
 
     nGaugeParams = gateset.num_gauge_params()
     bSuccess = bool(sortedEigenvals[nGaugeParams] > tol)
-    
+
     return (bSuccess,sortedEigenvals) if returnSpectrum else bSuccess
 
 
 
 
-def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None, 
+def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
                            returnSpectrum=False, threshold=1e6, check=False):
     """
     Test whether a set of germs is able to amplify all of the gateset's non-gauge parameters.
@@ -249,7 +249,7 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
         List of germs gate sequences to test for completeness.
 
     weights : numpy array, optional
-        A 1-D array of weights with length equal len(germsToTest), 
+        A 1-D array of weights with length equal len(germsToTest),
         which multiply the contribution of each germ to the total
         jacobian matrix determining parameter amplification. If
         None, a uniform weighting of 1.0/len(germsToTest) is applied.
@@ -260,7 +260,7 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
 
     threshold : float, optional
         An eigenvalue of jacobian^T*jacobian is considered
-        zero and thus a parameter un-amplified when its reciprocal is greater than 
+        zero and thus a parameter un-amplified when its reciprocal is greater than
         threshold. Also used for eigenvector degeneracy testing in twirling operation.
 
     check : bool, optional
@@ -274,7 +274,7 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
         Whether all non-gauge parameters were amplified.
 
     spectrum : numpy array
-        Only returned when returnSpectrum == True.  Sorted array of 
+        Only returned when returnSpectrum == True.  Sorted array of
         eigenvalues (from small to large) of the jacobian^T * jacobian
         matrix used to determine parameter amplification.
     """
@@ -301,7 +301,7 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
        #result[i] = _np.dot( twirledDeriv[i].H, twirledDeriv[i] ) i.e. matrix product
        #result[i,k,l] = sum_j twirledDerivH[i,k,j] * twirledDeriv(i,j,l)
        #result[i,k,l] = sum_j twirledDeriv_conj[i,j,k] * twirledDeriv(i,j,l)
-    
+
     if weights is None:
         nGerms = len(germsToTest)
 #        weights = _np.array( [1.0/nGerms]*nGerms, 'd')
@@ -312,14 +312,14 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
 
     nGaugeParams = gateset.num_gauge_params()
     bSuccess = bool(list_score(sortedEigenvals[nGaugeParams:]) < threshold)
-    
+
     return (bSuccess,sortedEigenvals) if returnSpectrum else bSuccess
-        
+
 def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
-                                 randomizationStrength = 1e-3, numCopies=None, seed = 0, 
+                                 randomizationStrength = 1e-3, numCopies=None, seed = 0,
                                  l1Penalty = 1e-2, gatePenalty = 1e-2,
-                                 initialWeights=None, scoreFunc='all', maxIter=100, 
-                                 fixedSlack=False, slackFrac=False, 
+                                 initialWeights=None, scoreFunc='all', maxIter=100,
+                                 fixedSlack=False, slackFrac=False,
                                  returnAll=False, tol=1e-6, check=False,
                                  forceSingletons = True, forceSingletonsScore = 1e100,
                                  threshold = 1e6, verbosity=1):
@@ -327,7 +327,7 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
     Find a locally optimal subset of the germs in germsList.
 
     Locally optimal here means that no single germ can be excluded
-    without making the smallest non-gauge eigenvalue of the 
+    without making the smallest non-gauge eigenvalue of the
     Jacobian.H*Jacobian matrix smaller, i.e. less amplified,
     by more than a fixed or variable amount of "slack", as
     specified by fixedSlack or slackFrac.
@@ -337,9 +337,9 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
     gatesetList : gateset object or list of gateset objects
         The list of gate sets to be tested.  To ensure that the returned germ set
         is amplficationally complete, it is a good idea to score potential germ sets
-        against a collection (~5-10) of similar gate sets.  The user may specify a single 
-        gatesetand a number of unitarily close copies to be made (set by the kwarg 
-        "numCopies", or the user may specify their own list of gatesets, each of which in 
+        against a collection (~5-10) of similar gate sets.  The user may specify a single
+        gatesetand a number of unitarily close copies to be made (set by the kwarg
+        "numCopies", or the user may specify their own list of gatesets, each of which in
         turn may or may not be randomized (set bythe kwarg "randomize").
 
     germsList : list of GateStrings
@@ -356,15 +356,15 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
         error, then germ selection will fail, as we score amplificational completeness
         in the limit of infinite sequence length (so any stochastic noise will completely
         depolarize any sequence in that limit).  Default is True.
-    
+
     randomizationStrength : float, optional
         The strength of the unitary noise used to randomize input gateset(s); is passed
         to randomize_with_unitary.  Default is 1e-3.
-        
+
     numCopies : int, optional
         The number of gateset copies to be made of the input gateset (prior to unitary
         randomization).  If more than one gateset is passed in, numCopies should be None.
-    
+
     seed : float, optional
         The starting seed used for unitary randomization.  If multiple gatesets are to
         be randomized, gatesetList[i] is randomized with seed + i.  Default is 0.
@@ -372,7 +372,7 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
     l1Penalty : float, optional
         How strong the penalty should be for increasing the germ set list by a single
         germ.  Default is 1e-2.
-    
+
     initialWeights : list-like
         List or array of either booleans or (0 or 1) integers
         specifying which germs in germList comprise the initial
@@ -391,12 +391,12 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
         The maximum number of iterations before giving up.
 
     fixedSlack : float, optional
-        If not None, a floating point number which specifies that excluding a 
+        If not None, a floating point number which specifies that excluding a
         germ is allowed to increase 1.0/smallest-non-gauge-eigenvalue by
         fixedSlack.  You must specify *either* fixedSlack or slackFrac.
 
     slackFrac : float, optional
-        If not None, a floating point number which specifies that excluding a 
+        If not None, a floating point number which specifies that excluding a
         germ is allowed to increase 1.0/smallest-non-gauge-eigenvalue by
         fixedFrac*100 percent.  You must specify *either* fixedSlack or slackFrac.
 
@@ -415,7 +415,7 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
         Whether or not to force all germ sets to contain each gate as a germ.
         IMPORTANT:  This only works if, for a gate set of k gates, the first k elements
         of germsList are the k gates.
-    
+
     forceSingletonsScore : float, optional (default is 1e100)
         When forceSingletons is True, what score to assign any germ set
         that does not contain each gate as a germ.
@@ -440,13 +440,13 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
     scoreDictionary : dict
         Dictionary with keys == tuples of 0s and 1s of length len(germList),
         specifying a subset of germs, and values == 1.0/smallest-non-gauge-
-        eigenvalue "scores".  
+        eigenvalue "scores".
     """
-    
+
     #Remove any SPAM vectors from gateset since we only want
     # to consider the set of *gate* parameters for amplification
     # and this makes sure our parameter counting is correct
-    
+
     if not isinstance(gatesetList,list):
         gatesetList = [gatesetList]
 
@@ -469,8 +469,8 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
         if len(gatesetList) > 1:
             for gatesetnum, gateset in enumerate(gatesetList):
                 newgatesetList.append(gateset.randomize_with_unitary(randomizationStrength,seed=seed+gatesetnum))
-#            gatesetList[gatesetnum] = 
-        else:           
+#            gatesetList[gatesetnum] =
+        else:
             for gatesetnum in xrange(numCopies):
                 newgatesetList.append(gatesetList[0].randomize_with_unitary(randomizationStrength,seed=seed+gatesetnum))
         gatesetList = newgatesetList
@@ -488,14 +488,14 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
     print "Now searching for best germ set."
 
     num_gatesets = len(gatesetList)
-    
+
     gateset0 = gatesetList[0].copy()
     for prepLabel in gateset0.preps.keys():  del gateset0.preps[prepLabel]
     for effectLabel in gateset0.effects.keys():  del gateset0.effects[effectLabel]
-    
+
     if (fixedSlack and slackFrac) or (not fixedSlack and not slackFrac):
         raise ValueError("Either fixedSlack *or* slackFrac should be specified")
-            
+
     lessWeightOnly = False  #Initially allow adding to weight. -- maybe make this an argument??
 
     nGaugeParams = gateset0.num_gauge_params()
@@ -508,20 +508,20 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
     #score dictionary:
     #  keys = tuple-ized weight vector of 1's and 0's only
     #  values = 1.0/critical_eval
-    scoreD = {} 
+    scoreD = {}
     numGates = len(gateset0.gates.keys())
     #twirledDerivDaggerDeriv == array J.H*J contributions from each germ (J=Jacobian)
     # indexed by (iGerm, iGatesetParam1, iGatesetParam2)
     # size (nGerms, vec_gateset_dim, vec_gateset_dim)
-    
+
     germLengths = _np.array( map(len,germsList), 'i')
-    
+
     twirledDerivDaggerDerivList = []
-    
+
     for gateset in gatesetList:
-        twirledDeriv = bulk_twirled_deriv(gateset, germsList, tol, check) / germLengths[:,None,None]        
+        twirledDeriv = bulk_twirled_deriv(gateset, germsList, tol, check) / germLengths[:,None,None]
         twirledDerivDaggerDerivList.append(_np.einsum('ijk,ijl->ikl', _np.conjugate(twirledDeriv), twirledDeriv))
-    
+
     def compute_score(wts,gateset_num):
         """ Returns a germ set "score" in which smaller is better
         Also returns intentionally bad score if wts do not include all individual gates as
@@ -562,7 +562,7 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
 
         if verbosity > 0:
             print "Iteration %d: score=%g, nGerms=%d" % (iIter, score, L1)
-        
+
         bFoundBetterNeighbor = False
         for neighborNum, neighbor in enumerate(get_neighbors(weights)):
 #            if force_singletons:
@@ -612,12 +612,12 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
             if not bFoundBetterNeighbor: #Relaxing didn't help!
                 print "Stationary point found!";
                 break #end main for loop
-        
+
         print "Moving to better neighbor"
 #        print score
     else:
         print "Hit max. iterations"
-    
+
     print "score = ", score
     print "weights = ",weights
     print "L1(weights) = ",sum(weights)
@@ -633,9 +633,9 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
         return goodGermsList
 
 #def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
-#                                 randomizationStrength = 1e-3, numCopies= None, seed = 0, 
-#                                 initialWeights=None, scoreFunc='all', maxIter=100, 
-#                                 fixedSlack=False, slackFrac=False, 
+#                                 randomizationStrength = 1e-3, numCopies= None, seed = 0,
+#                                 initialWeights=None, scoreFunc='all', maxIter=100,
+#                                 fixedSlack=False, slackFrac=False,
 #                                 returnAll=False, tol=1e-6, check=False,
 #                                 forceSingletons = True, forceSingletonsScore = 1e100,
 #                                 threshold = 1e6, verbosity=1):
@@ -643,7 +643,7 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
 #    Find a locally optimal subset of the germs in germsList.
 #
 #    Locally optimal here means that no single germ can be excluded
-#    without making the smallest non-gauge eigenvalue of the 
+#    without making the smallest non-gauge eigenvalue of the
 #    Jacobian.H*Jacobian matrix smaller, i.e. less amplified,
 #    by more than a fixed or variable amount of "slack", as
 #    specified by fixedSlack or slackFrac.
@@ -668,12 +668,12 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
 #        The maximum number of iterations before giving up.
 #
 #    fixedSlack : float, optional
-#        If not None, a floating point number which specifies that excluding a 
+#        If not None, a floating point number which specifies that excluding a
 #        germ is allowed to increase 1.0/smallest-non-gauge-eigenvalue by
 #        fixedSlack.  You must specify *either* fixedSlack or slackFrac.
 #
 #    slackFrac : float, optional
-#        If not None, a floating point number which specifies that excluding a 
+#        If not None, a floating point number which specifies that excluding a
 #        germ is allowed to increase 1.0/smallest-non-gauge-eigenvalue by
 #        fixedFrac*100 percent.  You must specify *either* fixedSlack or slackFrac.
 #
@@ -692,7 +692,7 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
 #        Whether or not to force all germ sets to contain each gate as a germ.
 #        IMPORTANT:  This only works if, for a gate set of k gates, the first k elements
 #        of germsList are the k gates.
-#    
+#
 #    forceSingletonsScore : float, optional (default is 1e100)
 #        When forceSingletons is True, what score to assign any germ set
 #        that does not contain each gate as a germ.
@@ -714,13 +714,13 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
 #    scoreDictionary : dict
 #        Dictionary with keys == tuples of 0s and 1s of length len(germList),
 #        specifying a subset of germs, and values == 1.0/smallest-non-gauge-
-#        eigenvalue "scores".  
+#        eigenvalue "scores".
 #    """
-#    
+#
 #    #Remove any SPAM vectors from gateset since we only want
 #    # to consider the set of *gate* parameters for amplification
 #    # and this makes sure our parameter counting is correct
-#    
+#
 #    if not isinstance(gatesetList,list):
 #        gatesetList = [gatesetList]
 #
@@ -743,8 +743,8 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
 #        if len(gatesetList) > 1:
 #            for gatesetnum, gateset in enumerate(gatesetList):
 #                newgatesetList.append(gateset.randomize_with_unitary(randomizationStrength,seed=seed+gatesetnum))
-##            gatesetList[gatesetnum] = 
-#        else:           
+##            gatesetList[gatesetnum] =
+#        else:
 #            for gatesetnum in xrange(numCopies):
 #                newgatesetList.append(gatesetList[0].randomize_with_unitary(randomizationStrength,seed=seed+gatesetnum))
 #        gatesetList = newgatesetList
@@ -762,14 +762,14 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
 #    print "Now searching for best germ set."
 #
 #    num_gatesets = len(gatesetList)
-#    
+#
 #    gateset0 = gatesetList[0].copy()
 #    for prepLabel in gateset0.preps.keys():  del gateset0.preps[prepLabel]
 #    for effectLabel in gateset0.effects.keys():  del gateset0.effects[effectLabel]
-#    
+#
 #    if (fixedSlack and slackFrac) or (not fixedSlack and not slackFrac):
 #        raise ValueError("Either fixedSlack *or* slackFrac should be specified")
-#            
+#
 #    lessWeightOnly = False  #Initially allow adding to weight. -- maybe make this an argument??
 #
 #    nGaugeParams = gateset0.num_gauge_params()
@@ -782,20 +782,20 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
 #    #score dictionary:
 #    #  keys = tuple-ized weight vector of 1's and 0's only
 #    #  values = 1.0/critical_eval
-#    scoreD = {} 
+#    scoreD = {}
 #    numGates = len(gateset0.gates.keys())
 #    #twirledDerivDaggerDeriv == array J.H*J contributions from each germ (J=Jacobian)
 #    # indexed by (iGerm, iGatesetParam1, iGatesetParam2)
 #    # size (nGerms, vec_gateset_dim, vec_gateset_dim)
-#    
+#
 #    germLengths = _np.array( map(len,germsList), 'i')
-#    
+#
 #    twirledDerivDaggerDerivList = []
-#        
+#
 #    for gateset in gatesetList:
 #        twirledDeriv = bulk_twirled_deriv(gateset, germsList, tol, check) / germLengths[:,None,None]
 #        twirledDerivDaggerDerivList.append(_np.einsum('ijk,ijl->ikl', _np.conjugate(twirledDeriv), twirledDeriv))
-#    
+#
 #    def compute_score(wts,gateset_num):
 #        """ Returns the 1/(first non-gauge eigenvalue) == a "score" in which smaller is better.
 #        Also returns intentionally bad score if wts do not include all individual gates as
@@ -835,7 +835,7 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
 #
 #        if verbosity > 0:
 #            print "Iteration %d: score=%g, nGerms=%d" % (iIter, score, L1)
-#        
+#
 #        bFoundBetterNeighbor = False
 #        for neighborNum, neighbor in enumerate(get_neighbors(weights)):
 ##            if force_singletons:
@@ -885,12 +885,12 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
 #            if not bFoundBetterNeighbor: #Relaxing didn't help!
 #                print "Stationary point found!";
 #                break #end main for loop
-#        
+#
 #        print "Moving to better neighbor"
 ##        print score
 #    else:
 #        print "Hit max. iterations"
-#    
+#
 #    print "score = ", score
 #    print "weights = ",weights
 #    print "L1(weights) = ",sum(weights)
@@ -905,8 +905,8 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
 #    else:
 #        return goodGermsList
 
-#def optimize_integer_germs_slack(gateset, germsList, initialWeights=None, 
-#                                 maxIter=100, fixedSlack=False, slackFrac=False, 
+#def optimize_integer_germs_slack(gateset, germsList, initialWeights=None,
+#                                 maxIter=100, fixedSlack=False, slackFrac=False,
 #                                 returnAll=False, tol=1e-6, check=False,
 #                                 forceSingletons = True, forceSingletonsScore = 1e100,
 #                                 verbosity=1):
@@ -914,7 +914,7 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
 #    Find a locally optimal subset of the germs in germsList.
 #
 #    Locally optimal here means that no single germ can be excluded
-#    without making the smallest non-gauge eigenvalue of the 
+#    without making the smallest non-gauge eigenvalue of the
 #    Jacobian.H*Jacobian matrix smaller, i.e. less amplified,
 #    by more than a fixed or variable amount of "slack", as
 #    specified by fixedSlack or slackFrac.
@@ -939,12 +939,12 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
 #        The maximum number of iterations before giving up.
 #
 #    fixedSlack : float, optional
-#        If not None, a floating point number which specifies that excluding a 
+#        If not None, a floating point number which specifies that excluding a
 #        germ is allowed to increase 1.0/smallest-non-gauge-eigenvalue by
 #        fixedSlack.  You must specify *either* fixedSlack or slackFrac.
 #
 #    slackFrac : float, optional
-#        If not None, a floating point number which specifies that excluding a 
+#        If not None, a floating point number which specifies that excluding a
 #        germ is allowed to increase 1.0/smallest-non-gauge-eigenvalue by
 #        fixedFrac*100 percent.  You must specify *either* fixedSlack or slackFrac.
 #
@@ -963,7 +963,7 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
 #        Whether or not to force all germ sets to contain each gate as a germ.
 #        IMPORTANT:  This only works if, for a gate set of k gates, the first k elements
 #        of germsList are the k gates.
-#    
+#
 #    forceSingletonsScore : float, optional (default is 1e100)
 #        When forceSingletons is True, what score to assign any germ set
 #        that does not contain each gate as a germ.
@@ -985,16 +985,16 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
 #    scoreDictionary : dict
 #        Dictionary with keys == tuples of 0s and 1s of length len(germList),
 #        specifying a subset of germs, and values == 1.0/smallest-non-gauge-
-#        eigenvalue "scores".  
+#        eigenvalue "scores".
 #    """
-#    
+#
 #    #Remove any SPAM vectors from gateset since we only want
 #    # to consider the set of *gate* parameters for amplification
 #    # and this makes sure our parameter counting is correct
 #    gateset = gateset.copy()
 #    for prepLabel in gateset.preps.keys():  del gateset.preps[prepLabel]
 #    for effectLabel in gateset.effects.keys():  del gateset.effects[effectLabel]
-#    
+#
 #    if (fixedSlack and slackFrac) or (not fixedSlack and not slackFrac):
 #        raise ValueError("Either fixedSlack *or* slackFrac should be specified")
 #    lessWeightOnly = False  #Initially allow adding to weight. -- maybe make this an argument??
@@ -1009,7 +1009,7 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
 #    #score dictionary:
 #    #  keys = tuple-ized weight vector of 1's and 0's only
 #    #  values = 1.0/critical_eval
-#    scoreD = {} 
+#    scoreD = {}
 #    numGates = len(gateset.gates.keys())
 #    #twirledDerivDaggerDeriv == array J.H*J contributions from each germ (J=Jacobian)
 #    # indexed by (iGerm, iGatesetParam1, iGatesetParam2)
@@ -1017,7 +1017,7 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
 #    germLengths = _np.array( map(len,germsList), 'i')
 #    twirledDeriv = bulk_twirled_deriv(gateset, germsList, tol, check) / germLengths[:,None,None]
 #    twirledDerivDaggerDeriv = _np.einsum('ijk,ijl->ikl', _np.conjugate(twirledDeriv), twirledDeriv)
-#    
+#
 #    def compute_score(wts):
 #        """ Returns the 1/(first non-gauge eigenvalue) == a "score" in which smaller is better.
 #        Also returns intentionally bad score if wts do not include all individual gates as
@@ -1051,7 +1051,7 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
 #
 #        if verbosity > 0:
 #            print "Iteration %d: score=%g, nGerms=%d" % (iIter, score, L1)
-#        
+#
 #        bFoundBetterNeighbor = False
 #        for neighborNum, neighbor in enumerate(get_neighbors(weights)):
 ##            if force_singletons:
@@ -1093,11 +1093,11 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
 #            if not bFoundBetterNeighbor: #Relaxing didn't help!
 #                print "Stationary point found!";
 #                break #end main for loop
-#        
+#
 #        print "Moving to better neighbor"
 #    else:
 #        print "Hit max. iterations"
-#    
+#
 #    print "score = ", score
 #    print "weights = ",weights
 #    print "L1(weights) = ",sum(weights)
