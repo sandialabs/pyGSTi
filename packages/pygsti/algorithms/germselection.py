@@ -229,7 +229,7 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
 
     if weights is None:
         nGerms = len(germsToTest)
-        weights = _np.array( [1.0/nGerms]*nGerms, 'd')
+        weights = _np.ones(nGerms, 'd') / nGerms
 
     combinedDDD = _np.einsum('i,ijk', weights, 1.0 / L**2 * derivDaggerDeriv)
     sortedEigenvals = _np.sort(_np.real(_np.linalg.eigvalsh(combinedDDD)))
