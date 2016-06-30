@@ -1237,7 +1237,7 @@ class GateSet(object):
     def bulk_dproduct(self, evalTree, flat=False, bReturnProds=False,
                       bScale=False, comm=None):
         """
-        Compute the derivative of a many gate strings at once.
+        Compute the derivative of many gate strings at once.
 
         Parameters
         ----------
@@ -1249,15 +1249,15 @@ class GateSet(object):
           Affects the shape of the returned derivative array (see below).
 
         bReturnProds : bool, optional
-          when set to True, additionally return the probabilities.
+          when set to True, additionally return the products.
 
         bScale : bool, optional
           When True, return a scaling factor (see below).
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is first done over the
-           set of parameters being differentiated with respect to.  If there are
+           across multiple processors.  Distribution is first done over the set
+           of parameters being differentiated with respect to.  If there are
            more processors than gateset parameters, distribution over a split
            evalTree (if given) is possible.
         
@@ -1266,32 +1266,33 @@ class GateSet(object):
         -------
         derivs : numpy array
           
-          * if flat == False, an array of shape S x M x G x G, where:
+          * if `flat` is ``False``, an array of shape S x M x G x G, where:
 
-            - S == len(gatestring_list)
-            - M == the length of the vectorized gateset
-            - G == the linear dimension of a gate matrix (G x G gate matrices)
+            - S = len(gatestring_list)
+            - M = the length of the vectorized gateset
+            - G = the linear dimension of a gate matrix (G x G gate matrices)
             
-            and derivs[i,j,k,l] holds the derivative of the (k,l)-th entry
+            and ``derivs[i,j,k,l]`` holds the derivative of the (k,l)-th entry
             of the i-th gate string product with respect to the j-th gateset
             parameter.
 
-          * if flat == True, an array of shape S*N x M where:
+          * if `flat` is ``True``, an array of shape S*N x M where:
 
-            - N == the number of entries in a single flattened gate (ordering same as numpy.flatten),
-            - S,M == as above,
+            - N = the number of entries in a single flattened gate (ordering
+              same as numpy.flatten),
+            - S,M = as above,
               
-            and deriv[i,j] holds the derivative of the (i % G^2)-th entry of
-            the (i / G^2)-th flattened gate string product  with respect to 
-            the j-th gateset parameter.
+            and ``deriv[i,j]`` holds the derivative of the ``(i % G^2)``-th
+            entry of the ``(i / G^2)``-th flattened gate string product  with
+            respect to the j-th gateset parameter.
 
         products : numpy array
-          Only returned when bReturnProds == True.  An array of shape  
-          S x G x G; products[i] is the i-th gate string product.
+          Only returned when `bReturnProds` is ``True``.  An array of shape  
+          S x G x G; ``products[i]`` is the i-th gate string product.
 
         scaleVals : numpy array
-          Only returned when bScale == True.  An array of shape S such that
-          scaleVals[i] contains the multiplicative scaling needed for
+          Only returned when `bScale` is ``True``.  An array of shape S such
+          that ``scaleVals[i]`` contains the multiplicative scaling needed for
           the derivatives and/or products for the i-th gate string.
         """
         return self._calc().bulk_dproduct(evalTree, flat, bReturnProds,
