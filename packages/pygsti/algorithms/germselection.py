@@ -4,6 +4,7 @@
 #    in the file "license.txt" in the top-level pyGSTi directory 
 #*****************************************************************
 """ Functions for selecting a complete set of germs for a GST analysis."""
+from __future__ import division
 
 import numpy           as _np
 import numpy.linalg    as _nla
@@ -59,16 +60,11 @@ def _SuperOpForPerfectTwirl(wrt, eps):
         # and other degenerate eigenvectors)
         Proj_i = _np.diag( [ (1 if (abs(wrtEvals[i] - wrtEvals[j]) <= eps)
                               else 0) for j in xrange(dim) ] )
+        A = _np.dot(wrtEvecs, _np.dot(Proj_i, wrtEvecsInv) )
         # Need to normalize, because we are overcounting projectors onto
         # subspaces of dimension d > 1, giving us d * Proj_i tensor Proj_i^T.
-        # To divide out the d, we can divide
-        # Proj_i by sqrt(tr(Proj_i)) = sqrt(d) so when we tensor two together
-        # we get d * Proj_i tensor Proj_i^T / d = Proj_i tensor Proj_i^T, like
-        # we want.  We could also save ourselves a call to sqrt by waiting to
-        # divide until SupOp.
-        Proj_i = Proj_i / float(_np.sqrt(_np.trace(Proj_i)))
-        A = _np.dot(wrtEvecs, _np.dot(Proj_i, wrtEvecsInv) )
-        SuperOp +=_np.kron(A, A.T) 
+        # We can fix this with a division by tr(Proj_i) = d.
+        SuperOp += _np.kron(A, A.T) / _np.trace(Proj_i)
         # SuperOp += _np.kron(A.T,A) #mimic Maple version (but I think this is
         # wrong... or it doesn't matter?)
     return SuperOp  # a gate_dim^2 x gate_dim^2 matrix
