@@ -35,31 +35,43 @@ from .. import objects as _objs
 #    return _np.dot(wrtEvecs, _np.dot(rotmat, wrtEvecsInv)) # rotate back to the original basis
     
 
-#wrt is gate_dim x gate_dim, so is M, Minv, Proj
+# wrt is gate_dim x gate_dim, so is M, Minv, Proj
 # so SOP is gate_dim^2 x gate_dim^2 and acts on vectorized *gates*
 # Recall vectorizing identity (when vec(.) concats rows as flatten does): 
 #     vec( A * X * B ) = A tensor B^T * vec( X )
 def _SuperOpForPerfectTwirl(wrt, eps):
     """ Return super operator for doing a perfect twirl with respect to wrt """
-    assert(wrt.shape[0] == wrt.shape[1]) #only square matrices allowed
+    assert(wrt.shape[0] == wrt.shape[1])    # only square matrices allowed
     dim = wrt.shape[0]
-    SuperOp = _np.zeros( (dim**2,dim**2), 'complex' )
+    SuperOp = _np.zeros( (dim**2, dim**2), 'complex' )
 
-    #Get spectrum and eigenvectors of wrt
+    # Get spectrum and eigenvectors of wrt
     wrtEvals,wrtEvecs = _np.linalg.eig(wrt)
     wrtEvecsInv = _np.linalg.inv( wrtEvecs )
     
-    # we want to project  X -> M * (Proj_i * (Minv * X * M) * Proj_i) * Minv, where M = wrtEvecs
-    #  So A = B = M * Proj_i * Minv and so superop = A tensor B^T == A tensor A^T 
-    #  NOTE: this == (A^T tensor A)^T and *Maple* germ functions seem to just use A^T tensor A -> ^T difference
+    # We want to project  X -> M * (Proj_i * (Minv * X * M) * Proj_i) * Minv,
+    # where M = wrtEvecs. So A = B = M * Proj_i * Minv and so
+    # superop = A tensor B^T == A tensor A^T
+    # NOTE: this == (A^T tensor A)^T while *Maple* germ functions seem to just
+    # use A^T tensor A -> ^T difference
     for i in xrange(dim):
-        #Create projector onto i-th eigenspace (spanned by i-th eigenvector and other degenerate eigenvectors)
-        Proj_i = _np.diag( [ (1 if (abs(wrtEvals[i] - wrtEvals[j]) <= eps) else 0) for j in xrange(dim) ] )
+        # Create projector onto i-th eigenspace (spanned by i-th eigenvector
+        # and other degenerate eigenvectors)
+        Proj_i = _np.diag( [ (1 if (abs(wrtEvals[i] - wrtEvals[j]) <= eps)
+                              else 0) for j in xrange(dim) ] )
+        # Need to normalize, because we are overcounting projectors onto
+        # subspaces of dimension d > 1, giving us d * Proj_i tensor Proj_i^T.
+        # To divide out the d, we can divide
+        # Proj_i by sqrt(tr(Proj_i)) = sqrt(d) so when we tensor two together
+        # we get d * Proj_i tensor Proj_i^T / d = Proj_i tensor Proj_i^T, like
+        # we want.  We could also save ourselves a call to sqrt by waiting to
+        # divide until SupOp.
         Proj_i = Proj_i / float(_np.sqrt(_np.trace(Proj_i)))
         A = _np.dot(wrtEvecs, _np.dot(Proj_i, wrtEvecsInv) )
-        SuperOp +=_np.kron(A,A.T) 
-        #SuperOp += _np.kron(A.T,A) #mimic Maple version (but I think this is wrong... or it doesn't matter?)
-    return SuperOp # a gate_dim^2 x gate_dim^2 matrix
+        SuperOp +=_np.kron(A, A.T) 
+        # SuperOp += _np.kron(A.T,A) #mimic Maple version (but I think this is
+        # wrong... or it doesn't matter?)
+    return SuperOp  # a gate_dim^2 x gate_dim^2 matrix
     
 
 
