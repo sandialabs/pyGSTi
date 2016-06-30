@@ -164,7 +164,7 @@ class GaugeInvGateSet(object):  #(_collections.OrderedDict):
             mx = _deparameterize_real_gate_mx(self.D_params[i],
                                               self.D_params[0],
                                               self.B0_params[i],
-                                              invY0, vb)
+                                              invY0, verbosity)
             gs.set_gate(gl, _gate.FullyParameterizedGate(mx))
 
         #Set identity vector (store it upon creation?)
@@ -274,7 +274,7 @@ def _parameterize_real_gate_mx(real_gate_mx, verbosity, debug):
                         _np.linalg.norm( _np.dot(evecs, _np.dot(_np.diag(evals),
                                          _np.linalg.inv(evecs))) - real_gate_mx))
 
-                    printrt.log("COMPLEX DEGEN PAIR", 5)
+                    printer.log("COMPLEX DEGEN PAIR", 5)
                     raise ValueError("Could not find conj pair")
 
                 j = iConj[0] #just take first one
@@ -850,8 +850,7 @@ def _get_rhoTilde_mark2(ETilde, D0_params):
             #TODO: maybe we divide by abs(b) before setting E_params??
 
     if len(D0_params) % 2 == 1: #then there's an un-paired real eigenvalue
-        rho_tilde[len(D0_params)-1] = Etilde[len(D0_params)-1] \
-            if Etilde[len(D0_params)-1] >= 0 else -Etilde[len(D0_params)-1]
+        rho_tilde[len(D0_params)-1] = Etilde[len(D0_params)-1] if Etilde[len(D0_params)-1] >= 0 else -Etilde[len(D0_params)-1] #pylint: disable=undefined-variable
 
     return rho_tilde
 

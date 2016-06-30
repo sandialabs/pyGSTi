@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 import os, sys
 
 # creates a message ~like so:
@@ -28,8 +28,12 @@ def get_args(rawArgs):
     kwargs    = {}
     # create kwargs
     for optional in optionals:
-        kv = optional[2:].split('=') # remove prepending '--' and seperate into key : value
-        kwargs[kv[0]] = kv[1]
+        if optional.count('=') > 0:
+            kv = optional[2:].split('=') # remove prepending '--' and seperate into key : value
+            kwargs[kv[0]] = kv[1]
+        else:
+            k = optional[2:] # only remove prepending '--'
+            kwargs[k] = k
 
     return args, kwargs
 

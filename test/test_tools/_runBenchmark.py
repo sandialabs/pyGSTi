@@ -1,9 +1,11 @@
 #!/usr/bin/python
-from __future__  import print_function
-from .runPackage import run_package
-from .benchmarks  import benchmark
-from .helpers     import *
-from .getCoverage import get_single_coverage
+
+from __future__    import print_function
+from .runPackage    import run_package
+from .benchmarks    import benchmark
+from .helpers       import *
+from ._getCoverage  import get_single_coverage
+
 import subprocess
 import os, sys
 

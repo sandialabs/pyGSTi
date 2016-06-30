@@ -1,7 +1,6 @@
-#!/usr/bin/python
-from __future__   import print_function
-from .helpers      import *
-from .runBenchmark import benchmark_coverage
+from __future__     import print_function
+from .helpers       import *
+from ._runBenchmark import benchmark_coverage
 import os, sys
 
 '''
@@ -39,6 +38,3 @@ def gen_info(names, output=None, package=''):
 
     return infoDict
 
-if __name__ == "__main__":
-    args, kwargs = get_args(sys.argv)
-    gen_info(*args, **kwargs)

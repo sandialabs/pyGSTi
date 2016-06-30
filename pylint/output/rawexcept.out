@@ -1,0 +1,42 @@
+************* Module pygsti.report.html
+W:222, 4: No exception type(s) specified (bare-except)
+************* Module pygsti.report.tableformat
+W:118, 8: No exception type(s) specified (bare-except)
+************* Module pygsti.report.results
+W:1853, 8: No exception type(s) specified (bare-except)
+W:2133, 8: No exception type(s) specified (bare-except)
+W:2556, 8: No exception type(s) specified (bare-except)
+W:3755, 8: No exception type(s) specified (bare-except)
+************* Module pygsti.report.latex
+W:213, 4: No exception type(s) specified (bare-except)
+************* Module pygsti.report.plotting
+W:693, 8: No exception type(s) specified (bare-except)
+W:2633, 8: No exception type(s) specified (bare-except)
+************* Module pygsti.report.ppt
+W:205, 4: No exception type(s) specified (bare-except)
+************* Module pygsti.optimize.customcg
+W: 13, 0: No exception type(s) specified (bare-except)
+************* Module pygsti.optimize.optimize
+W: 17, 0: No exception type(s) specified (bare-except)
+************* Module pygsti.io.loaders
+W: 58, 4: No exception type(s) specified (bare-except)
+W: 69,16: No exception type(s) specified (bare-except)
+W:111, 4: No exception type(s) specified (bare-except)
+W:121,16: No exception type(s) specified (bare-except)
+************* Module pygsti.io.stdinput
+W:205,12: No exception type(s) specified (bare-except)
+W:356,12: No exception type(s) specified (bare-except)
+W:496,12: No exception type(s) specified (bare-except)
+************* Module pygsti.algorithms.fiducialpairreduction
+W: 79, 8: No exception type(s) specified (bare-except)
+************* Module pygsti.algorithms.core
+W:1251, 8: No exception type(s) specified (bare-except)
+W:2182,12: No exception type(s) specified (bare-except)
+************* Module pygsti.construction.datasetconstruction
+W: 88,12: No exception type(s) specified (bare-except)
+************* Module pygsti.tools.rpetools
+W:318, 4: No exception type(s) specified (bare-except)
+W:322, 4: No exception type(s) specified (bare-except)
+W:326, 4: No exception type(s) specified (bare-except)
+************* Module pygsti.objects.spamspec
+W: 45, 8: No exception type(s) specified (bare-except)

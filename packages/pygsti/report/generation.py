@@ -747,11 +747,11 @@ def get_gateset_eigenval_table(gateset, targetGateset,
 
         if confidenceRegionInfo is None:
             evals = qtys['%s eigenvalues' % gl].get_value()
-            evals = evals.reshape(evals.size/2, 2) #assumes len(evals) is even!
+            evals = evals.reshape(evals.size//2, 2) #assumes len(evals) is even!
             rowData = [gl, (evals,None), figInfo]
         else:
             evals, evalsEB = qtys['%s eigenvalues' % gl].get_value_and_err_bar()
-            evals = evals.reshape(evals.size/2, 2) #assumes len(evals) is even!
+            evals = evals.reshape(evals.size//2, 2) #assumes len(evals) is even!
             rowData = [gl, (evals,evalsEB), figInfo]
 
         table.addrow(rowData, formatters)
@@ -829,11 +829,11 @@ def get_gateset_relative_eigenval_table(gateset, targetGateset,
 
         if confidenceRegionInfo is None:
             rel_evals = qtys['%s relative eigenvalues' % gl].get_value()
-            rel_evals = rel_evals.reshape(rel_evals.size/2, 2)
+            rel_evals = rel_evals.reshape(rel_evals.size//2, 2)
             rowData = [gl, (rel_evals,None), figInfo]
         else:
             rel_evals, rel_evalsEB = qtys['%s relative eigenvalues' % gl].get_value_and_err_bar()
-            rel_evals = rel_evals.reshape(rel_evals.size/2, 2)
+            rel_evals = rel_evals.reshape(rel_evals.size//2, 2)
             rowData = [gl, (rel_evals,rel_evalsEB), figInfo]
 
         table.addrow(rowData, formatters)
@@ -890,7 +890,7 @@ def get_gateset_choi_eigenval_table(gateset, figFilePrefix,
     for gl in gateLabels:
 
         evals, evalsEB = qtys['%s choi eigenvalues' % gl].get_value_and_err_bar()
-        evals = evals.reshape(evals.size/4, 4) #assumes len(evals) is multiple of 4!
+        evals = evals.reshape(evals.size//4, 4) #assumes len(evals) is multiple of 4!
         nm = figFilePrefix + "_" + gl
 
         if confidenceRegionInfo is None:
@@ -898,14 +898,13 @@ def get_gateset_choi_eigenval_table(gateset, figFilePrefix,
             figInfo = (fig,nm,sz,sz)
             table.addrow((gl, evals, figInfo), (None, _tf.Nml, _tf.Fig))
         else:
-            evalsEB = evalsEB.reshape(evalsEB.size/4, 4)
+            evalsEB = evalsEB.reshape(evalsEB.size//4, 4)
             fig = _plotting.choi_eigenvalue_barplot(evals, evalsEB, ylabel="")
             figInfo = (fig,nm,sz,sz)
             table.addrow((gl, (evals,evalsEB), figInfo), (None, _tf.EBvec, _tf.Fig))
 
     table.finish()
     return table
-
 
 
 def get_dataset_overview_table(dataset, target, maxlen=10, fixedLists=None,

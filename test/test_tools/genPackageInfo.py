@@ -1,11 +1,8 @@
-#!/usr/bin/python
-from __future__   import print_function
-from .helpers      import *
-from .runBenchmark import *
-from .runChanged   import get_changed_test_packages
+from __future__     import print_function
+from .helpers       import *
+from ._runBenchmark import *
+from .runChanged    import get_changed_test_packages
 import os, sys
-
-exclude = ['benchmarks', 'output', 'cmp_chk_files', 'temp_test_files', 'Tutorials', 'test_tools']
 
 '''
 A tool for generating info about each of the packages in the test directory
@@ -22,14 +19,8 @@ optionally, the argument --infoType='' can be sent as either:
 
 #the tool decorator makes the function act as if it were run from the test directory
 @tool
-def gen_package_info(extra_exclude, infoType='', changedOnly=''):
-    # build the full list of excluded packages
-    excludes = exclude + extra_exclude
+def gen_package_info(packageNames, infoType='', changedOnly=''):
     packageDict = {}
-    if changedOnly == 'True':
-        packageNames = [name for name in get_changed_test_packages() if name not in excludes]
-    else:
-        packageNames = [name for name in get_package_names() if name not in excludes]
 
     for name in packageNames:
         if infoType   == 'coverage':
@@ -51,6 +42,3 @@ def gen_package_info(extra_exclude, infoType='', changedOnly=''):
                            (('_%s_' % infoType) if infoType != '' else ''),
                           list(packageDict.items()))
 
-if __name__ == "__main__":
-    args, kwargs = get_args(sys.argv)
-    gen_package_info(*args, **kwargs)

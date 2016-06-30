@@ -28,6 +28,8 @@ class DataSet_KeyValIterator(object):
 
     def __next__(self): # Python 3: def __next__(self)
         return next(self.gsIter), DataSetRow(self.dataset, next(self.countIter))
+   
+    next = __next__
 
 
 class DataSet_ValIterator(object):
@@ -42,6 +44,7 @@ class DataSet_ValIterator(object):
     def __next__(self): # Python 3: def __next__(self)
         return DataSetRow(self.dataset, next(self.countIter))
 
+    next = __next__
 
 class DataSetRow(object):
     """
@@ -109,6 +112,7 @@ class DataSetRow_KeyValIterator(object):
     def __next__(self):
         return next(self.spamLabelIter), next(self.rowDataIter)
 
+    next = __next__
 
 
 class DataSet(object):

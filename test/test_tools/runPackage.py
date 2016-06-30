@@ -1,6 +1,6 @@
 #!/usr/bin/python
-from __future__ import print_function
-from helpers    import *
+from __future__ import print_function, absolute_import
+from .helpers    import *
 from contextlib import contextmanager
 import os, sys
 import subprocess
@@ -55,9 +55,9 @@ def package_dir(packageName):
 
 #tool makes the function act as if run from the test directory
 @tool
-def run_package(packageName, precommand=None, postcommand=None, lastFailed=''):
+def run_package(packageName, precommands=None, postcommand=None, lastFailed=''):
     # determine what command will be used to run the tests (python/python3 by default)
-    precommand = pythonCommand if precommand is None else precommand
+    precommands = [pythonCommand] if precommands is None else precommands
 
     # enter the package directory to begin running tests and leave when done
     with package_dir(packageName):
@@ -68,7 +68,7 @@ def run_package(packageName, precommand=None, postcommand=None, lastFailed=''):
             for testname in get_last_failed(packageName):
                 # Run a specific test in each file, ex: python testMyCase.py MyCase.testItIsHot
                 print('Running %s' % testname[1].rsplit('/', 1)[1])
-                run_test([precommand, testname[1], testname[0]], testname[1], failedtests)
+                run_test(precommands + [testname[1], testname[0]], testname[1], failedtests)
         else:
             print('Running all tests in %s' % packageName)
             for subdir, dirs, files in os.walk(os.getcwd()):
@@ -78,7 +78,7 @@ def run_package(packageName, precommand=None, postcommand=None, lastFailed=''):
                     if filename.endswith('.py') and filename.startswith('test'):
                         # run ALL test files, even those that passed previously
                         print('Running %s' % filename)
-                        commands = [precommand, filepath]
+                        commands = precommands + [filepath]
                         if postcommand is not None: commands.append(postcommand)
                         run_test(commands, filepath, failedtests)
 

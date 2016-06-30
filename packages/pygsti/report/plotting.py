@@ -429,8 +429,8 @@ class MidPointNorm(_matplotlib.colors.Normalize):
         if _matplotlib.cbook.iterable(value):
             val = _np.ma.asarray(value)
             val = 2 * (val-0.5)
-            val[val>0]  *= abs(vmax - midpoint)
-            val[val<0] *= abs(vmin - midpoint)
+            val[val>0] *= abs(vmax - midpoint) #pylint: disable=unsubscriptable-object
+            val[val<0] *= abs(vmin - midpoint) #pylint: disable=unsubscriptable-object
             val += midpoint
             return val
         else:
@@ -1269,9 +1269,10 @@ def gof_boxplot_keyplot(strs, xlabel="$\\rho_i$", ylabel="$E_i$",
 
     return rptFig
 
-    return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel,ylabel,
-                            scale,prec,title,sumUp,boxLabels,histogram,histBins,save_to,ticSize,
-                            invert, prepStrs, effectStrs, r"$\rho_i$", r"$E_i$")
+    # OLD?
+    #return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel,ylabel,
+     #                       scale,prec,title,sumUp,boxLabels,histogram,histBins,save_to,ticSize,
+      #                      invert, prepStrs, effectStrs, r"$\rho_i$", r"$E_i$")
 
 
 

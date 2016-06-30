@@ -314,7 +314,8 @@ class GateSetCalculator(object):
             vec_gs_size = flattened_dprod.shape[1]
             return _np.swapaxes( flattened_dprod, 0, 1 ).reshape( (vec_gs_size, dim, dim) ) # axes = (gate_ij, prod_row, prod_col)
 
-            return ret
+            #OLD?
+            ##return ret
 
     def hproduct(self, gatestring, flat=False, wrtFilter=None):
         """
@@ -1238,7 +1239,9 @@ class GateSetCalculator(object):
                     #  all of them or none of them)
                     trees_to_use = evalTree.get_sub_trees()
                     raise NotImplementedError("Need to finish implementing this case!")
-
+                     
+                    # Commented out until implementation
+                    '''
                     subtrees = evalTree.get_sub_trees()
                     allSubTreeIndices = list(range(len(subtrees)))
                     mySubTreeIndices, subTreeOwners, mySubComm = \
@@ -1256,7 +1259,7 @@ class GateSetCalculator(object):
                         evalTree, subTreeOwners, mySubTreeIndices, my_results,
                         None, psd, myComm, comm)  #this fn needs to gather tree results
                         # only from the *root* processors of each myComm group... then broadcast?
-
+                    '''
                 else:
                     _warnings.warn("Increased speed could be obtained" +
                                    " by giving dproduct cache computation" +
@@ -1373,6 +1376,9 @@ class GateSetCalculator(object):
                     trees_to_use = evalTree.get_sub_trees()
                     raise NotImplementedError("Need to finish implementing this case!")
 
+                    # Commented out until implementation
+                    '''
+
                     subtrees = evalTree.get_sub_trees()
                     allSubTreeIndices = list(range(len(subtrees)))
                     mySubTreeIndices, subTreeOwners, mySubComm = \
@@ -1391,6 +1397,7 @@ class GateSetCalculator(object):
                         None, psd, myComm, comm)  #this fn needs to gather tree results
                         # only from the *root* processors of each myComm group... then broadcast?
 
+                    '''
                 else:
                     _warnings.warn("Increased speed could be obtained" +
                                    " by giving hproduct cache computation" +
@@ -1483,7 +1490,6 @@ class GateSetCalculator(object):
         return hProdCache
 
 ## END CACHE FUNCTIONS
-
 
     def bulk_product(self, evalTree, bScale=False, comm=None):
         """

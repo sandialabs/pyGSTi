@@ -26,25 +26,27 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                          objective="logl", advancedOptions={}, lsgstLists=None,
                          truncScheme="whole germ powers", comm=None):
     """
-    Perform end-to-end GST analysis using Ls and germs, with L as a maximum length.
+    Perform end-to-end GST analysis using Ls and germs, with L as a maximum
+    length.
 
-    Constructs gate strings by repeating germ strings an integer number of times
-    such that the length of the repeated germ is less than or equal to the
-    maximum length set in maxLengths.  The LGST estimate of the gates is computed,
-    gauge optimized, and then and used as the seed for either LSGST or MLEGST.
+    Constructs gate strings by repeating germ strings an integer number of
+    times such that the length of the repeated germ is less than or equal to
+    the maximum length set in maxLengths.  The LGST estimate of the gates is
+    computed, gauge optimized, and then used as the seed for either LSGST or
+    MLEGST.
 
-    LSGST is iterated len(maxLengths) times with successively larger sets of gate
-    strings.  On the i-th iteration, the repeated germs sequences limited by
-    maxLengths[i] are included in the growing set of strings used by LSGST.  The
-    final iteration will use MLEGST when objective == "logl" to maximize the
-    true log-likelihood instead of minimizing the chi-squared function.
+    LSGST is iterated ``len(maxLengths)`` times with successively larger sets
+    of gate strings.  On the i-th iteration, the repeated germs sequences
+    limited by ``maxLengths[i]`` are included in the growing set of strings
+    used by LSGST.  The final iteration will use MLEGST when ``objective ==
+    "logl"`` to maximize the true log-likelihood instead of minimizing the
+    chi-squared function.
 
-    Once computed, the gate set estimates are gauge optimized to the
-    CPTP space (if gaugeOptToCPTP == True) and then to the target gate set
-    (using gaugeOptRatio). A Results object is returned, which encapsulates the
-    input and outputs of this GST analysis, and can to generate final end-user
-    output such as reports and presentations.
-
+    Once computed, the gate set estimates are gauge optimized to the CPTP space
+    (if ``gaugeOptToCPTP == True``) and then to the target gate set (using
+    `gaugeOptRatio`). A :class:`~pygsti.report.Results` object is returned,
+    which encapsulates the input and outputs of this GST analysis, and can
+    generate final end-user output such as reports and presentations.
 
     Parameters
     ----------
@@ -61,8 +63,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         or by the filename of a gate string list file (text format).
 
     effectStrsListOrFilename : (list of GateStrings) or string or None
-        The measurement fiducial gate strings, specified either directly
-        or by the filename of a gate string list file (text format).  If None,
+        The measurement fiducial gate strings, specified either directly or by
+        the filename of a gate string list file (text format).  If ``None``,
         then use the same strings as specified by prepStrsListOrFilename.
 
     germsListOrFilename : (list of GateStrings) or string
@@ -77,57 +79,62 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
 
     gateLabels : list or tuple
         A list or tuple of the gate labels to use when generating the sets of
-        gate strings used in LSGST iterations.  If None, then the gate labels
-        of the target gateset will be used.  This option is useful if you
-        only want to include a *subset* of the available gates in the LSGST
+        gate strings used in LSGST iterations.  If ``None``, then the gate
+        labels of the target gateset will be used.  This option is useful if
+        you only want to include a *subset* of the available gates in the LSGST
         strings (e.g. leaving out the identity gate).
 
     weightsDict : dict, optional
-        A dictionary with keys == gate strings and values == multiplicative scaling
-        factor for the corresponding gate string. The default is no weight scaling at all.
+        A dictionary with ``keys == gate strings`` and ``values ==
+        multiplicative`` scaling factor for the corresponding gate string. The
+        default is no weight scaling at all.
 
     fidPairs : list of 2-tuples, optional
-        Specifies a subset of all prepStr,effectStr string pairs to be used in this
-        analysis.  Each element of fidPairs is a (iRhoStr, iEStr) 2-tuple of integers,
-        which index a string within the state preparation and measurement fiducial
-        strings respectively.
+        Specifies a subset of all prepStr,effectStr string pairs to be used in
+        this analysis.  Each element of `fidPairs` is a ``(iRhoStr, iEStr)``
+        2-tuple of integers, which index a string within the state preparation
+        and measurement fiducial strings respectively.
 
     constrainToTP : bool, optional
         Whether to constrain GST to trace-preserving gatesets.
 
     gaugeOptToCPTP : bool, optional
-        If True, resulting gate sets are first optimized to CPTP and then to the target.
-        If False, gate sets are only optimized to the target gate set.
-
+        If ``True``, resulting gate sets are first optimized to CPTP and then
+        to the target.  If ``False``, gate sets are only optimized to the
+        target gate set.
+        
     gaugeOptRatio : float, optional
-        The ratio spamWeight/gateWeight used for gauge optimizing to the target gate set.
-
+        The ratio spamWeight/gateWeight used for gauge optimizing to the target
+        gate set.
+    
     objective : {'chi2', 'logl'}, optional
         Specifies which final objective function is used: the chi-squared or
         the log-likelihood.
 
     advancedOptions : dict, optional
-        Specifies advanced options most of which deal with numerical details of the
-        objective function.   The 'verbosity' option is an integer specifying the level
-        of detail printed to stdout during the GST calculation.
+        Specifies advanced options most of which deal with numerical details of
+        the objective function.   The 'verbosity' option is an integer
+        specifying the level of detail printed to stdout during the GST
+        calculation.
 
     lsgstLists : list of gate string lists, optional
-        Provides explicit list of gate string lists to be used in analysis; to be given if
-        the dataset uses "incomplete" or "reduced" sets of gate string.  Default is None.
+        Provides explicit list of gate string lists to be used in analysis; to
+        be given if the dataset uses "incomplete" or "reduced" sets of gate
+        string.  Default is ``None``.
 
     truncScheme : str, optional
         Truncation scheme used to interpret what the list of maximum lengths
         means. If unsure, leave as default. Allowed values are:
-
-        - 'whole germ powers' -- germs are repeated an integer number of
+        
+        - ``'whole germ powers'`` -- germs are repeated an integer number of 
           times such that the length is less than or equal to the max.
-        - 'truncated germ powers' -- repeated germ string is truncated
+        - ``'truncated germ powers'`` -- repeated germ string is truncated
           to be exactly equal to the max (partial germ at end is ok).
-        - 'length as exponent' -- max. length is instead interpreted
+        - ``'length as exponent'`` -- max. length is instead interpreted
           as the germ exponent (the number of germ repetitions).
 
     comm : mpi4py.MPI.Comm, optional
-        When not None, an MPI communicator for distributing the computation
+        When not ``None``, an MPI communicator for distributing the computation
         across multiple processors.
 
 
