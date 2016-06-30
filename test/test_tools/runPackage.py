@@ -1,6 +1,6 @@
 #!/usr/bin/python
-from __future__ import print_function
-from helpers    import *
+from __future__ import print_function, absolute_import
+from .helpers    import *
 from contextlib import contextmanager
 import os, sys
 import subprocess

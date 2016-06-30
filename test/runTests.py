@@ -1,12 +1,15 @@
 #!/usr/bin/env python
-from __future__            import print_function, division, unicode_literals, absolute_import
-from test_tools.helpers    import *
-from test_tools.runChanged import *
-from test_tools.runPackage import run_package
+from __future__                import print_function, division, unicode_literals, absolute_import
+from test_tools.helpers        import *
+from test_tools.runChanged     import *
+from test_tools.runPackage     import run_package
+from test_tools.readyaml       import read_yaml
 from test_tools.genPackageInfo import gen_package_info
 import sys
 
-slowTests = ['report', 'drivers']
+config = read_yaml('test_tools/testconfig.yml')
+
+slowTests = config['slow-tests']
     
 if __name__ == "__main__":
     # Setup arguments and other variables:
