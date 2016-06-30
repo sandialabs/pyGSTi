@@ -195,7 +195,7 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
         Whether all non-gauge parameters were amplified.
 
     spectrum : numpy array
-        Only returned when returnSpectrum == True.  Sorted array of
+        Only returned when `returnSpectrum` is ``True``.  Sorted array of
         eigenvalues (from small to large) of the jacobian^T * jacobian
         matrix used to determine parameter amplification.
     """
@@ -280,7 +280,7 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
         Whether all non-gauge parameters were amplified.
 
     spectrum : numpy array
-        Only returned when returnSpectrum == True.  Sorted array of
+        Only returned when `returnSpectrum` is ``True``.  Sorted array of
         eigenvalues (from small to large) of the jacobian^T * jacobian
         matrix used to determine parameter amplification.
     """
