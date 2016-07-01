@@ -1,9 +1,11 @@
 #!/usr/bin/python
-from __future__  import print_function
-from runPackage import run_package
-from benchmarks  import benchmark
-from helpers     import *
-from getCoverage import get_single_coverage
+
+from __future__    import print_function
+from .runPackage    import run_package
+from .benchmarks    import benchmark
+from .helpers       import *
+from ._getCoverage  import get_single_coverage
+
 import subprocess
 import os, sys
 
@@ -54,7 +56,7 @@ def run_benchmarks(names, output=None):
             print('%s is neither a valid package, nor a valid filename' % name)
 
     if output != None:
-        write_formatted_table(output, benchDict.items())
+        write_formatted_table(output, list(benchDict.items()))
     return benchDict
 
 if __name__ == "__main__":

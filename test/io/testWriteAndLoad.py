@@ -54,7 +54,7 @@ class TestWriteAndLoad(WriteAndLoadTestCase):
         ds.done_adding_data()
 
         pygsti.io.write_dataset("../temp_test_files/dataset_loadwrite.txt",
-                                ds, pygsti.construction.gatestring_list(ds.keys())[0:10]) #write only first 10 strings
+                                ds, pygsti.construction.gatestring_list(list(ds.keys()))[0:10]) #write only first 10 strings
         ds2 = pygsti.io.load_dataset("../temp_test_files/dataset_loadwrite.txt")
         ds3 = pygsti.io.load_dataset("../temp_test_files/dataset_loadwrite.txt", cache=True) #creates cache file
         ds4 = pygsti.io.load_dataset("../temp_test_files/dataset_loadwrite.txt", cache=True) #loads from cache file
@@ -82,7 +82,8 @@ Gx 10 90 0.1 100
 GxGy 40 60 0.4 100
 Gx^4 20 80 0.2 100
 """
-        open("../temp_test_files/TestMultiDataset.txt","w").write(multi_dataset_txt)
+        with open("../temp_test_files/TestMultiDataset.txt","w") as output:
+            output.write(multi_dataset_txt)
 
 
         ds = pygsti.io.load_multidataset("../temp_test_files/TestMultiDataset.txt")
@@ -189,7 +190,8 @@ SPAMLABEL plus0 = rho0 E
 SPAMLABEL plus1 = rho1 E
 SPAMLABEL minus = remainder
 """
-        open("../temp_test_files/formatExample.gateset","w").write(gateset_txt)
+        with open("../temp_test_files/formatExample.gateset","w") as output:
+            output.write(gateset_txt)
         gs_formats = pygsti.io.load_gateset("../temp_test_files/formatExample.gateset")
         #print gs_formats
 
@@ -218,7 +220,8 @@ SPAMLABEL minus = remainder
 
     def test_gatestring_dict_file(self):
         file_txt = "# Gate string dictionary\nF1 GxGx\nF2 GxGy"  #TODO: make a Writers function for gate string dicts
-        open("../temp_test_files/gatestringdict_loadwrite.txt","w").write(file_txt)
+        with open("../temp_test_files/gatestringdict_loadwrite.txt","w") as output:
+            output.write(file_txt)
 
         d = pygsti.io.load_gatestring_dict("../temp_test_files/gatestringdict_loadwrite.txt")
         self.assertEqual( tuple(d['F1']), ('Gx','Gx'))

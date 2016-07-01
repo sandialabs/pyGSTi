@@ -1,3 +1,4 @@
+from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
@@ -12,6 +13,7 @@ import itertools as _itertools
 import math as _math
 import sys as _sys
 import warnings as _warnings
+from .. import objects as _objs
 
 def num_non_spam_gauge_params(gateset):
     """Returns number of non-gauge parameters in a gateset, not including SPAM parameters"""
@@ -37,8 +39,8 @@ def num_non_spam_gauge_params(gateset):
 #    rotmat = _np.dot(wrtEvecsInv, _np.dot(mxToTwirl, wrtEvecs))
 #
 #    #destroy coherences between non-degenerate eigenvectors (this is what twirling does)
-#    for i in xrange(dim):
-#        for j in xrange(dim):
+#    for i in range(dim):
+#        for j in range(dim):
 #            if abs(wrtEvals[i] - wrtEvals[j]) > eps:
 #                rotmat[i,j] = 0
 #
@@ -64,11 +66,11 @@ def _SuperOpForPerfectTwirl(wrt, eps):
     # superop = A tensor B^T == A tensor A^T
     # NOTE: this == (A^T tensor A)^T while *Maple* germ functions seem to just
     # use A^T tensor A -> ^T difference
-    for i in xrange(dim):
+    for i in range(dim):
         # Create projector onto i-th eigenspace (spanned by i-th eigenvector
         # and other degenerate eigenvectors)
         Proj_i = _np.diag( [ (1 if (abs(wrtEvals[i] - wrtEvals[j]) <= eps)
-                              else 0) for j in xrange(dim) ] )
+                              else 0) for j in range(dim) ] )
         A = _np.dot(wrtEvecs, _np.dot(Proj_i, wrtEvecsInv) )
         # Need to normalize, because we are overcounting projectors onto
         # subspaces of dimension d > 1, giving us d * Proj_i tensor Proj_i^T.
@@ -142,12 +144,12 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False):
     fd = gate_dim**2 # flattened gate dimension
 
     ret = _np.empty( (len(gatestrings), fd, dProds.shape[1]), 'complex')
-    for i in xrange(len(gatestrings)):
+    for i in range(len(gatestrings)):
         twirler = _SuperOpForPerfectTwirl(prods[i], eps) # flattened_gate_dim x flattened_gate_dim
         ret[i] = _np.dot( twirler, dProds[i*fd:(i+1)*fd] ) # flattened_gate_dim x vec_gateset_dim
 
     if check:
-        for i in xrange(len(gatestrings)):
+        for i in range(len(gatestrings)):
             chk_ret = twirled_deriv(gateset, gatestrings[i], eps)
             if _nla.norm(ret[i] - chk_ret) > 1e-6:
                 _warnings.warn( "bulk twirled derive norm mismatch = %g - %g = %g" % \
@@ -204,8 +206,8 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
     # to consider the set of *gate* parameters for amplification
     # and this makes sure our parameter counting is correct
     gateset = gateset.copy()
-    for prepLabel in gateset.preps.keys():  del gateset.preps[prepLabel]
-    for effectLabel in gateset.effects.keys():  del gateset.effects[effectLabel]
+    for prepLabel in list(gateset.preps.keys()):  del gateset.preps[prepLabel]
+    for effectLabel in list(gateset.effects.keys()):  del gateset.effects[effectLabel]
 
     nGerms = len(germsToTest)
     germToPowL = [ germ*L for germ in germsToTest ]
@@ -301,7 +303,7 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
     for effectLabel in gateset.effects.keys():  del gateset.effects[effectLabel]
 
 
-    germLengths = _np.array( map(len,germsToTest), 'i')
+    germLengths = _np.array( list(map(len,germsToTest)), 'i')
     twirledDeriv = bulk_twirled_deriv(gateset, germsToTest, 1./threshold, check) / germLengths[:,None,None]
 
     # Is conjugate needed? -- all should be real
@@ -458,6 +460,8 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
         eigenvalue "scores".
     """
 
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+
     # Remove any SPAM vectors from gateset since we only want
     # to consider the set of *gate* parameters for amplification
     # and this makes sure our parameter counting is correct
@@ -529,7 +533,7 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
     # indexed by (iGerm, iGatesetParam1, iGatesetParam2)
     # size (nGerms, vec_gateset_dim, vec_gateset_dim)
 
-    germLengths = _np.array( map(len,germsList), 'i')
+    germLengths = _np.array( list(map(len,germsList)), 'i')
 
     twirledDerivDaggerDerivList = []
 
@@ -555,7 +559,7 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
         return score
 
     def get_neighbors(boolVec):
-        for i in xrange(nGerms):
+        for i in range(nGerms):
             v = boolVec.copy()
             v[i] = (v[i] + 1) % 2 #toggle v[i] btwn 0 and 1
             yield v
@@ -572,70 +576,83 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
 #    print score
     L1 = sum(weights) # ~ L1 norm of weights
 
-    for iIter in xrange(maxIter):
-        scoreD_keys = scoreD.keys() #list of weight tuples already computed
+    with printer.progress_logging(1):
+        for iIter in range(maxIter):
+            # List of weight tuples already computed
+            scoreD_keys = scoreD.keys()
 
-        if verbosity > 0:
-            print "Iteration %d: score=%g, nGerms=%d" % (iIter, score, L1)
+            printer.show_progress(iIter, maxIter-1,
+                                  suffix="score=%g, nGerms=%d" % (score, L1))
 
-        bFoundBetterNeighbor = False
-        for neighborNum, neighbor in enumerate(get_neighbors(weights)):
-#            if force_singletons:
-#                if _np.count_nonzeros(neighbor[:numGates]) != numGates
-#                    continue
-            neighborScoreList = []
-            for gateset_num, gateset in enumerate(gatesetList):
-                if (gateset_num,tuple(neighbor)) not in scoreD_keys:
-                    neighborL1 = sum(neighbor)
-                    neighborScoreList.append(compute_score(neighbor,gateset_num))
-                else:
-                    neighborL1 = sum(neighbor)
-                    neighborScoreList.append(scoreD[gateset_num,tuple(neighbor)])
-
-            neighborScore = _np.max(neighborScoreList)#Take worst case.
-#            print "neighborScore:", neighborScore
-#            print "score:", score
-            #Move if we've found better position; if we've relaxed, we only move when L1 is improved.
-            if neighborScore <= score and (neighborL1 < L1 or lessWeightOnly == False):
-                weights, score, L1 = neighbor, neighborScore, neighborL1
-                bFoundBetterNeighbor = True
-
-                if verbosity > 1: print "Found better neighbor: nGerms = %d score = %g" % (L1,score)
-
-        if not bFoundBetterNeighbor: # Time to relax our search.
-            lessWeightOnly=True #from now on, don't allow increasing weight L1
-
-            if fixedSlack==False:
-                slack = score*slackFrac #Note score is positive (for sum of 1/lambda)
-#                print "slack =", slack
-            else:
-                slack = fixedSlack
-            assert(slack > 0)
-
-            if verbosity > 1:
-                print "No better neighbor. Relaxing score w/slack: %g => %g" % (score, score+slack)
-            score += slack #artificially increase score and see if any neighbor is better now...
-
+            bFoundBetterNeighbor = False
             for neighborNum, neighbor in enumerate(get_neighbors(weights)):
-                scoreList = [scoreD[gateset_num,tuple(neighbor)] for gateset_num in xrange(len(gatesetList))]
-                maxScore = _np.max(scoreList)
-                if sum(neighbor) < L1 and maxScore < score:
-                    weights, score, L1 = neighbor, maxScore, sum(neighbor)
+                # if force_singletons:
+                #     if _np.count_nonzeros(neighbor[:numGates]) != numGates
+                #         continue
+                neighborScoreList = []
+                for gateset_num, gateset in enumerate(gatesetList):
+                    if (gateset_num,tuple(neighbor)) not in scoreD_keys:
+                        neighborL1 = sum(neighbor)
+                        neighborScoreList.append(compute_score(neighbor,
+                                                               gateset_num))
+                    else:
+                        neighborL1 = sum(neighbor)
+                        neighborScoreList.append(scoreD[gateset_num,
+                                                        tuple(neighbor)])
+
+                neighborScore = _np.max(neighborScoreList)#Take worst case.
+                # print "neighborScore:", neighborScore
+                # print "score:", score
+                # Move if we've found better position; if we've relaxed, we
+                # only move when L1 is improved.
+                if neighborScore <= score and (neighborL1 < L1 or
+                                               lessWeightOnly == False):
+                    weights, score, L1 = neighbor, neighborScore, neighborL1
                     bFoundBetterNeighbor = True
-                    if verbosity > 1: print "Found better neighbor: nGerms = %d score = %g" % (L1,score)
 
-            if not bFoundBetterNeighbor: #Relaxing didn't help!
-                print "Stationary point found!";
-                break #end main for loop
+                    printer.log("Found better neighbor: "
+                                + "nGerms = %d score = %g" % (L1,score), 2)
 
-        print "Moving to better neighbor"
-#        print score
-    else:
-        print "Hit max. iterations"
+            if not bFoundBetterNeighbor: # Time to relax our search.
+                # From now on, don't allow increasing weight L1
+                lessWeightOnly=True
 
-    print "score = ", score
-    print "weights = ",weights
-    print "L1(weights) = ",sum(weights)
+                if fixedSlack==False:
+                    # Note score is positive (for sum of 1/lambda)
+                    slack = score*slackFrac 
+                    # print "slack =", slack
+                else:
+                    slack = fixedSlack
+                assert(slack > 0)
+
+                printer.log("No better neighbor. Relaxing score w/slack: "
+                            + "%g => %g" % (score, score+slack), 2)
+                # Artificially increase score and see if any neighbor is better
+                # now...
+                score += slack 
+
+                for neighborNum, neighbor in enumerate(get_neighbors(weights)):
+                    scoreList = [scoreD[gateset_num,tuple(neighbor)]
+                                 for gateset_num in range(len(gatesetList))]
+                    maxScore = _np.max(scoreList)
+                    if sum(neighbor) < L1 and maxScore < score:
+                        weights, score, L1 = neighbor, maxScore, sum(neighbor)
+                        bFoundBetterNeighbor = True
+                        printer.log("Found better neighbor: "
+                                    + "nGerms = %d score = %g" % (L1,score), 2)
+
+                if not bFoundBetterNeighbor: # Relaxing didn't help!
+                    printer.log("Stationary point found!");
+                    break # end main for loop
+
+            printer.log("Moving to better neighbor")
+            # print score
+        else:
+            printer.log("Hit max. iterations")
+
+    printer.log("score = %s" % score)
+    printer.log("weights = %s" % weights)
+    printer.log("L1(weights) = %s" % sum(weights))
 
     goodGermsList = []
     for index,val in enumerate(weights):

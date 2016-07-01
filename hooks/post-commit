@@ -2,17 +2,18 @@
 import subprocess
 import os
 
+def get_branchname():
+    try:
+        branchname = subprocess.check_output(['bash', '.git/hooks/./.get_branch'])
+    except subprocess.CalledProcessError:
+        branchname = 'unnamed_branch'
+    branchname = os.path.basename(branchname)
+    branchname = branchname.replace('\n', '')
+    return branchname
+
 updates_git_pages = ['develop', 'master']
-try:
-    branchname = subprocess.check_output(['sh', 'get_branch'])
-except subprocess.CalledProcessError:
-    branchname = 'unnamed_branch'
-branchname = os.path.basename(branchname)
-branchname = branchname.replace('\n', '')
+branchname = get_branchname()
 
 if branchname in updates_git_pages:
-    print(os.getcwd())
-    while os.path.basename(os.getcwd()) != 'pyGSTi':
-        os.chdir('..')
-    print(os.getcwd())
-    
+    subprocess.call(['bash', '.git/hooks/create_git_html'])
+        

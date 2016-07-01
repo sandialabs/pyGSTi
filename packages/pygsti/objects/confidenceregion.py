@@ -1,3 +1,4 @@
+from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
@@ -10,8 +11,8 @@ import scipy.stats as _stats
 import warnings    as _warnings
 from .. import optimize as _opt
 
-from gateset import P_RANK_TOL
-from verbosityprinter import VerbosityPrinter
+from .gateset import P_RANK_TOL
+from .verbosityprinter import VerbosityPrinter
 
 # NON-MARKOVIAN ERROR BARS
 #Connection with Robin's notes:
@@ -551,7 +552,7 @@ class ConfidenceRegion(object):
         gsEps = self.gateset.copy()
 
         #loop just over parameterized objects - don't use get_preps() here...
-        for prepLabel,rhoVec in self.gateset.preps.iteritems():
+        for prepLabel,rhoVec in self.gateset.preps.items():
             nRhoParams = rhoVec.num_params()
             off = self.gateset_offsets[prepLabel][0]
             vec = rhoVec.to_vector()
@@ -563,7 +564,7 @@ class ConfidenceRegion(object):
             gsEps.preps[prepLabel] = rhoVec.copy()  #reset gsEps (copy() just to be safe)
 
         #loop just over parameterized objects - don't use get_effects() here...
-        for ELabel,EVec in self.gateset.effects.iteritems():
+        for ELabel,EVec in self.gateset.effects.items():
             nEParams = EVec.num_params()
             off = self.gateset_offsets[ELabel][0]
             vec = EVec.to_vector()

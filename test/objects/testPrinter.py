@@ -10,29 +10,28 @@ errorMessage    = 'Something terrible happened'
 logMessage      = 'Data recieved'
 
 def _generate_with(printer):
-    data     = range(2)
+    data     = list(range(2))
     printer.log(logMessage, 3)
     printer.warning(warningMessage)
     with printer.progress_logging(1):
         for i, item in enumerate(data):
-	    printer.show_progress(i, len(data)-1, verboseMessages=[('(%s data members remaining)' % (len(data) - (i + 1)))])
-	    printer.log(logMessage)
-	    if i == 1:
-	        printer.error(errorMessage)
+            printer.show_progress(i, len(data)-1, verboseMessages=[('(%s data members remaining)' % (len(data) - (i + 1)))])
+            printer.log(logMessage)
+            if i == 1:
+                printer.error(errorMessage)
             with printer.progress_logging(2):
-	        for i, item in enumerate(data):
-	            printer.show_progress(i, len(data)-1, messageLevel=2)
+                for i, item in enumerate(data):
+                    printer.show_progress(i, len(data)-1, messageLevel=2)
 
 def _to_temp_file(printer):
-    data     = range(2)
-
+    data     = list(range(2))
     _generate_with(printer)
 
     generated = []
     with open(filePath, 'r') as output:
-	for line in output.read().splitlines():
-	    if line != '':
-		generated.append(line)
+        for line in output.read().splitlines():
+            if line != '':
+                generated.append(line)
 
     os.remove(filePath)
     return generated
@@ -80,10 +79,10 @@ def _test_output_with(testcase, method, printer):
 
     if printer.filename != None:
 
-	testcase.assertEqual(generated, ['      Data recieved', 'WARNING: This might go badly', '  Progress: Iter 0 of 1 : ',
-					 '  (1 data members remaining)', '  Data recieved', '    Progress: Iter 0 of 1 : ',
-					 '    Progress: Iter 1 of 1 : ', '    Progress: Iter 1 of 1 : ', '    (0 data members remaining)',
-					 '  Data recieved', 'ERROR: Something terrible happened', '    Progress: Iter 0 of 1 : ', '    Progress: Iter 1 of 1 : '])
+        testcase.assertEqual(generated, ['      Data recieved', 'WARNING: This might go badly', '  Progress: Iter 0 of 1 : ',
+                         '  (1 data members remaining)', '  Data recieved', '    Progress: Iter 0 of 1 : ',
+                         '    Progress: Iter 1 of 1 : ', '    Progress: Iter 1 of 1 : ', '    (0 data members remaining)',
+                         '  Data recieved', 'ERROR: Something terrible happened', '    Progress: Iter 0 of 1 : ', '    Progress: Iter 1 of 1 : '])
 
     else:
         testcase.assertEqual(generated, ['      Data recieved', 'WARNING: This might go badly', '  Progress: Iter 0 of 1 : ', '  (1 data members remaining)',

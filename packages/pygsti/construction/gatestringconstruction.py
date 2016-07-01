@@ -1,7 +1,8 @@
+from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ Utility functions for creating and acting on lists of gate strings."""
 
@@ -11,7 +12,7 @@ import numpy.random as _rndm
 
 from ..tools import listtools as _lt
 from ..objects import gatestring as _gs
-from spamspecconstruction import get_spam_strs as _get_spam_strs
+from .spamspecconstruction import get_spam_strs as _get_spam_strs
 
 
 def _runExpression(str_expression, myLocals):
@@ -23,7 +24,7 @@ def create_gatestring_list(*args,**kwargs):
     Create a list of gate strings using a nested loop.  Positional arguments
     specify evaluation strings, which are evaluated within the inner-loop
     for a nested loop over all list or tuple type keyword arguments.
-    
+
     Parameters
     ----------
     args : list of strings
@@ -61,22 +62,22 @@ def create_gatestring_list(*args,**kwargs):
 
     """
     lst = []
-    
+
     loopOrder = kwargs.pop('order',[])
     loopLists = {}; loopLocals = { 'True': True, 'False': False, 'str':str, 'int': int, 'float': float}
-    for key,val in kwargs.iteritems():
+    for key,val in kwargs.items():
         if type(val) in (list,tuple): #key describes a variable to loop over
             loopLists[key] = val
-            if key not in loopOrder: 
+            if key not in loopOrder:
                 loopOrder.append(key)
         else: # callable(val): #key describes a function or variable to pass through to exec
             loopLocals[key] = val
-    
+
     #print "DEBUG: looplists = ",loopLists
     for str_expression in args:
         if len(str_expression) == 0:
             lst.append( _gs.GateString( () ) ); continue #special case
-            
+
         keysToLoop = [ key for key in loopOrder if key in str_expression ]
         loopListsToLoop = [ loopLists[key] for key in keysToLoop ] #list of lists
         for allVals in _itertools.product(*loopListsToLoop):
@@ -93,7 +94,7 @@ def create_gatestring_list(*args,**kwargs):
             elif isinstance(result,str):
                 gateStr = _gs.GateString(None, result)
             lst.append(gateStr)
-            
+
     return lst
 
 
@@ -172,7 +173,7 @@ def repeat_with_max_length(x,maxLength,assertAtLeastOneRep=False):
 
     Returns
     -------
-    tuple or GateString (whichever x was)    
+    tuple or GateString (whichever x was)
         the repeated gate string
     """
     return repeat(x,repeat_count_with_max_length(x,maxLength,assertAtLeastOneRep),assertAtLeastOneRep)
@@ -200,7 +201,7 @@ def repeat_and_truncate(x,N,assertAtLeastOneRep=False):
 
     Returns
     -------
-    tuple or GateString (whichever x was)    
+    tuple or GateString (whichever x was)
         the repeated-then-truncated gate string
     """
     reps = repeat_count_with_max_length(x,N,assertAtLeastOneRep) + 1
@@ -227,7 +228,7 @@ def repeat_remainder_for_truncation(x,N,assertAtLeastOneRep=False):
 
     Returns
     -------
-    tuple or GateString (whichever x was)    
+    tuple or GateString (whichever x was)
         the remainder gate string
 
     """
@@ -245,7 +246,7 @@ def simplify_str(gateStringStr):
     gateStringStr : string
         the string representation of a gate string to be simplified.
         (e.g. "Gx{}", "Gy^1Gx")
-        
+
     Returns
     -------
     string
@@ -265,7 +266,7 @@ def simplify_str(gateStringStr):
 def list_all_gatestrings(gateLabels, minlength, maxlength):
     """
     List all the gate strings in a given length range.
-    
+
     Parameters
     ----------
     gateLabels : tuple
@@ -296,7 +297,7 @@ def gen_all_gatestrings(gateLabels, minlength, maxlength):
 def list_all_gatestrings_onelen(gateLabels, length):
     """
     List all the gate strings of a given length.
-    
+
     Parameters
     ----------
     gateLabels : tuple
@@ -325,15 +326,15 @@ def list_all_gatestrings_without_powers_and_cycles(gateLabels, maxLength):
     #Are we trying to add a germ that is a permutation of a germ we already have?  False if no, True if yes.
     def perm_check(testStr,strList): # works with python strings, so can use "in" to test for substring inclusion
         return any( [ testStr in s*2 for s in strList ] )
-    
+
     #Are we trying to add a germ that is a power of a germ we already have?  False if no, True if yes.
     def pow_check(testStr,strListDict):
         L = len(testStr)
-        for k in strListDict.keys():
+        for k in list(strListDict.keys()):
             if L % k == 0:
                 rep = L // k
                 if any([testStr == s*rep for s in strListDict[k] ]):
-                        return True
+                    return True
         return False
 
     outputDict = {}
@@ -359,7 +360,7 @@ def list_all_gatestrings_without_powers_and_cycles(gateLabels, maxLength):
 def list_random_gatestrings_onelen(gateLabels, length, count, seed=None):
     """
     Create a list of random gate strings of a given length.
-    
+
     Parameters
     ----------
     gateLabels : tuple
@@ -379,7 +380,7 @@ def list_random_gatestrings_onelen(gateLabels, length, count, seed=None):
     -------
     list of GateStrings
         A list of random gate strings as GateString objects.
-    """    
+    """
     ret = [ ]
     rndm = _rndm.RandomState(seed) # ok if seed is None
     for i in range(count):
@@ -415,7 +416,7 @@ def list_lgst_gatestrings(specs, gateLabels):
     Parameters
     ----------
     specs : 2-tuple
-        A (prepSpecs,effectSpecs) tuple usually generated by calling 
+        A (prepSpecs,effectSpecs) tuple usually generated by calling
         build_spam_specs(...).
 
     gateLabels : tuple
@@ -435,58 +436,58 @@ def list_lgst_gatestrings(specs, gateLabels):
 
 
 def list_strings_lgst_can_estimate(dataset, specs):
-  """ 
-    Compute the gate strings that LGST is able to estimate
-    given a set of fiducial strings or prepSpecs and effectSpecs.
+    """
+      Compute the gate strings that LGST is able to estimate
+      given a set of fiducial strings or prepSpecs and effectSpecs.
 
-    Parameters
-    ----------
-    dataset : DataSet
-        The data used to generate the LGST estimates
+      Parameters
+      ----------
+      dataset : DataSet
+          The data used to generate the LGST estimates
 
-    specs : 2-tuple
-        A (prepSpecs,effectSpecs) tuple usually generated by calling 
-        build_spam_specs(...)
+      specs : 2-tuple
+          A (prepSpecs,effectSpecs) tuple usually generated by calling
+          build_spam_specs(...)
 
-    Returns
-    -------
-    list of lists of tuples
-       each list of tuples specifyies a gate string that LGST can estimate.
+      Returns
+      -------
+      list of lists of tuples
+         each list of tuples specifyies a gate string that LGST can estimate.
 
-  """
+    """
 
-  #Process input parameters
-  prepSpecs, effectSpecs = specs
+    #Process input parameters
+    prepSpecs, effectSpecs = specs
 
-  estimatable = []
-  gateStrings = dataset.keys()
-  pre = tuple(effectSpecs[0].str);     l0 = len(pre)   #the first effectSpec string prefix
-  post = tuple(prepSpecs[0].str); l1 = len(post)  #the first prepSpec string postfix
+    estimatable = []
+    gateStrings = list(dataset.keys())
+    pre = tuple(effectSpecs[0].str);     l0 = len(pre)   #the first effectSpec string prefix
+    post = tuple(prepSpecs[0].str); l1 = len(post)  #the first prepSpec string postfix
 
-  def root_is_ok(rootStr):
-    for espec in effectSpecs:
-      for rhospec in prepSpecs:
-        if tuple(rhospec.str) + tuple(rootStr) + tuple(espec.str) not in gateStrings: # LEXICOGRAPHICAL VS MATRIX ORDER
-          return False
-    return True
+    def root_is_ok(rootStr):
+        for espec in effectSpecs:
+            for rhospec in prepSpecs:
+                if tuple(rhospec.str) + tuple(rootStr) + tuple(espec.str) not in gateStrings: # LEXICOGRAPHICAL VS MATRIX ORDER
+                    return False
+        return True
 
-  #check if string has first fiducial at beginning & end, and if so
-  # strip that first fiducial off, leaving a 'root' string that we can test
-  for s in gateStrings:
-    if s[0:l0] == pre and s[len(s)-l1:] == post:
-      root = s[l0:len(s)-l1]
-      if root_is_ok( root ):
-        estimatable.append( root )
-            
-  return gatestring_list(estimatable)
+    #check if string has first fiducial at beginning & end, and if so
+    # strip that first fiducial off, leaving a 'root' string that we can test
+    for s in gateStrings:
+        if s[0:l0] == pre and s[len(s)-l1:] == post:
+            root = s[l0:len(s)-l1]
+            if root_is_ok( root ):
+                estimatable.append( root )
+
+    return gatestring_list(estimatable)
 
 
 
 def gatestring_list( listOfGateLabelTuplesOrStrings ):
-    """ 
-    Converts a list of gate label tuples or strings to 
+    """
+    Converts a list of gate label tuples or strings to
      a list of GateString objects.
-     
+
     Parameters
     ----------
     listOfGateLabelTuplesOrStrings : list
@@ -562,22 +563,19 @@ def gatestring_list( listOfGateLabelTuplesOrStrings ):
 #
 #    ret = [ ]
 #    for line in open(filename):
-#        if line[0][0]=='#': continue        
+#        if line[0][0]=='#': continue
 #        splitline = line.split()
 #        if len(splitline) == 0: continue
-#        charStr = splitline[0]  
+#        charStr = splitline[0]
 #        if charStr == emptyCode:
-#            gateString = () 
+#            gateString = ()
 #        elif mode == "comma-delim":
 #            gateString = tuple( charStr.split(",") )
-#        elif mode == "const-length":            
+#        elif mode == "const-length":
 #            gateString = tuple( [ charStr[i:i+L] for i in range(0,len(charStr),L) ] )
-#        else: 
+#        else:
 #            raise ValueError("Invalid mode passed to read_gatestring_list: %s" % mode)
 #
 #        ret.append(gateString)
-#        
+#
 #    return ret
-
-
-

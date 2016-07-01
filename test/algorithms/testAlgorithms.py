@@ -69,7 +69,7 @@ class TestAlgorithmMethods(AlgorithmTestCase):
             returnAll=True, verbosity=4)
 
 
-        fiducials_to_try = pygsti.construction.list_all_gatestrings(std.gs_target.gates.keys(), 0, 2)
+        fiducials_to_try = pygsti.construction.list_all_gatestrings(list(std.gs_target.gates.keys()), 0, 2)
         prepFidList2 = pygsti.alg.optimize_integer_fiducials_slack(
             std.gs_target, fiducials_to_try, prepOrMeas = "prep",
             initialWeights=None, scoreFunc='worst', maxIter=100,
@@ -93,10 +93,10 @@ class TestAlgorithmMethods(AlgorithmTestCase):
             pygsti.alg.optimize_integer_fiducials_slack(
             std.gs_target, std.fiducials, prepOrMeas = "meas") #neither fixedSlack nor slackFrac given
 
-        print "prepFidList = ",prepFidList
-        print "measFidList = ",measFidList
-        print "wts = ",wts
-        print "scoredict = ",scoredict
+        print("prepFidList = ",prepFidList)
+        print("measFidList = ",measFidList)
+        print("wts = ",wts)
+        print("scoredict = ",scoredict)
 
         self.assertTrue(pygsti.alg.test_fiducial_list(
                 std.gs_target,prepFidList,"prep",
@@ -144,7 +144,7 @@ class TestAlgorithmMethods(AlgorithmTestCase):
 
     def test_germSelection(self):
         germsToTest = pygsti.construction.list_all_gatestrings_without_powers_and_cycles(
-            std.gs_target.gates.keys(), 2)
+            list(std.gs_target.gates.keys()), 2)
 
 
         bSuccess, eigvals_finiteL = pygsti.alg.test_germ_list_finitel(
@@ -156,10 +156,10 @@ class TestAlgorithmMethods(AlgorithmTestCase):
         self.assertFalse(bSuccess)
 
         germsToTest = pygsti.construction.list_all_gatestrings_without_powers_and_cycles(
-            std.gs_target.gates.keys(), 3)
+            list(std.gs_target.gates.keys()), 3)
 
         germsToTest2 = pygsti.construction.list_all_gatestrings_without_powers_and_cycles(
-            std.gs_target.gates.keys(), 4)
+            list(std.gs_target.gates.keys()), 4)
 
         finalGerms = pygsti.alg.optimize_integer_germs_slack(
             self.gs_target_noisy, germsToTest, initialWeights=None,

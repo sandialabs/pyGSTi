@@ -30,7 +30,7 @@ def wait_for_turn(comm):
         comm.Barrier()
     # Raise any exception
     if exc_info is not None and comm.Get_rank() == 0:
-        raise exc_info[0], exc_info[1], exc_info[2]
+        raise exc_info[0](exc_info[1]).with_traceback(exc_info[2])
 
 def mprint(comm, *args):
     assert isinstance(comm, MPI.Comm)
@@ -125,7 +125,7 @@ class MpiWorkers:
 def _mpi_worker(addr):
     import importlib
     import zmq
-    from cPickle import loads, dumps
+    from pickle import loads, dumps
 
     rank = MPI.COMM_WORLD.Get_rank()
     if rank == 0:
@@ -190,7 +190,7 @@ def mpitest(nprocs):
 
         @functools.wraps(func)
         def replacement_func(_return_status=False):
-            from cPickle import dumps
+            from pickle import dumps
             
             n = MPI.COMM_WORLD.Get_size()
             rank = MPI.COMM_WORLD.Get_rank()

@@ -1,7 +1,6 @@
-#!/usr/bin/python
-from __future__   import print_function
-from helpers      import *
-from runBenchmark import benchmark_coverage
+from __future__     import print_function
+from .helpers       import *
+from ._runBenchmark import benchmark_coverage
 import os, sys
 
 '''
@@ -35,10 +34,7 @@ def gen_info(names, output=None, package=''):
     infoDict = { key : ('%s%% coverage | %s' % infoDict[key]) for key in infoDict }
 
     if output != None:
-        write_formatted_table(output, infoDict.items())
+        write_formatted_table(output, list(infoDict.items()))
 
     return infoDict
 
-if __name__ == "__main__":
-    args, kwargs = get_args(sys.argv)
-    gen_info(*args, **kwargs)

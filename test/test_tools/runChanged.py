@@ -1,7 +1,7 @@
 #!/usr/bin/python
 from __future__ import print_function
-from runPackage import run_package
-from helpers    import *
+from .runPackage import run_package
+from .helpers    import *
 import subprocess
 import os
 import sys
@@ -60,4 +60,4 @@ def run_changed_packages(cutoffDirs=[], exclude=[], preCommand='../', endings=[]
 
 if __name__ == "__main__":
     args, kwargs = get_args(sys.argv)
-    run_changed_packages(*args, *kwargs)
+    run_changed_packages(*args, **kwargs)

@@ -131,7 +131,6 @@ class TestHessianMethods(HessianTestCase):
 
         TOL = 1e-7
         for val,chk in zip(eigvals,eigvals_chk):
-            print "DB Checking %g vs %g => %g == 0 ??" % (val, chk, abs(val-chk)/(abs(chk)+1e-6))
             if abs(val) > TOL or abs(chk) > TOL:
                 self.assertAlmostEqual(abs(val-chk)/(abs(chk)+TOL), 0.0, places=3)
             # (else both chk and val are <= TOL, so both == 0 for our purposes)

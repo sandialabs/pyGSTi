@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os, site
 
 myPackagePath = os.path.join( os.path.dirname(os.path.abspath(__file__)), "packages")
@@ -11,13 +12,13 @@ pathspec = r"""
 %s
 """ % myPackagePath
 
-print "Adding path:",myPackagePath
+print("Adding path:",myPackagePath)
 
 usp = site.getusersitepackages()
 if not os.path.exists(usp):
     os.makedirs(usp)
 uspfile = os.path.join(usp, 'GST.pth')
 open(uspfile, 'w').write(pathspec)
-print 'Wrote to ' + uspfile
+print('Wrote to ' + uspfile)
 
-print "GST package installed successfully!"
+print("GST package installed successfully!")

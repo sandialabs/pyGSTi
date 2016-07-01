@@ -1,10 +1,10 @@
+from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ End-to-end functions for performing long-sequence GST """
-from __future__ import print_function
 
 import os as _os
 import warnings as _warnings
@@ -17,13 +17,11 @@ from .. import report as _report
 from .. import algorithms as _alg
 from .. import construction as _construction
 from .. import io as _io
-from .. import objects as _objs
-from .. import tools as _tools
 
 def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                          prepStrsListOrFilename, effectStrsListOrFilename,
-                         germsListOrFilename, maxLengths, gateLabels=None, 
-                         weightsDict=None, fidPairs=None, constrainToTP=True, 
+                         germsListOrFilename, maxLengths, gateLabels=None,
+                         weightsDict=None, fidPairs=None, constrainToTP=True,
                          gaugeOptToCPTP=False, gaugeOptRatio=0.001,
                          objective="logl", advancedOptions={}, lsgstLists=None,
                          truncScheme="whole germ powers", comm=None):
@@ -57,11 +55,11 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         or by the filename of a dataset file (in text format).
 
     targetGateFilenameOrSet : GateSet or string
-        The target gate set, specified either directly or by the filename of a 
+        The target gate set, specified either directly or by the filename of a
         gateset file (text format).
 
     prepStrsListOrFilename : (list of GateStrings) or string
-        The state preparation fiducial gate strings, specified either directly 
+        The state preparation fiducial gate strings, specified either directly
         or by the filename of a gate string list file (text format).
 
     effectStrsListOrFilename : (list of GateStrings) or string or None
@@ -76,7 +74,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     maxLengths : list of ints
         List of integers, one per LSGST iteration, which set truncation lengths
         for repeated germ strings.  The list of gate strings for the i-th LSGST
-        iteration includes the repeated germs truncated to the L-values *up to* 
+        iteration includes the repeated germs truncated to the L-values *up to*
         and including the i-th one.
 
     gateLabels : list or tuple
@@ -112,7 +110,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     objective : {'chi2', 'logl'}, optional
         Specifies which final objective function is used: the chi-squared or
         the log-likelihood.
-        
+
     advancedOptions : dict, optional
         Specifies advanced options most of which deal with numerical details of
         the objective function.   The 'verbosity' option is an integer
@@ -144,7 +142,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     -------
     Results
     """
-                    
+
     cwd = _os.getcwd()
     tRef = _time.time(); times_list = []
 
@@ -165,7 +163,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
 
     #Get gate strings and labels
     if gateLabels is None:
-        gateLabels = gs_target.gates.keys()
+        gateLabels = list(gs_target.gates.keys())
 
     if isinstance(prepStrsListOrFilename, str):
         prepStrs = _io.load_gatestring_list(prepStrsListOrFilename)
@@ -186,7 +184,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         lsgstLists = _construction.stdlists.make_lsgst_lists(
             gateLabels, prepStrs, effectStrs, germs, maxLengths, fidPairs,
             truncScheme, nest)
-    
+
     tNxt = _time.time()
     times_list.append( ('Loading',tNxt-tRef) ); tRef=tNxt
 
@@ -209,7 +207,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
 
         if minPenalty > 0:
             gs_in_TP = _alg.contract(gs_in_TP, "TP")
-            if minPenalty > 1e-5: 
+            if minPenalty > 1e-5:
                 _warnings.warn("Could not gauge optimize to TP (penalty=%g), so contracted LGST gateset to TP" % minPenalty)
 
         gs_after_gauge_opt = _alg.optimize_gauge(
@@ -217,7 +215,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
             spamWeight=1.0, gateWeight=1.0)
 
         firstElIdentityVec = _np.zeros( (gate_dim,1) )
-        firstElIdentityVec[0] = gate_dim**0.25 # first basis el is assumed = sqrt(gate_dim)-dimensional identity density matrix 
+        firstElIdentityVec[0] = gate_dim**0.25 # first basis el is assumed = sqrt(gate_dim)-dimensional identity density matrix
         gs_after_gauge_opt.povm_identity = firstElIdentityVec # declare that this basis has the identity as its first element
 
     else: # no TP constraint
@@ -239,7 +237,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     #Run LSGST on data
     if objective == "chi2":
         gs_lsgst_list = _alg.do_iterative_mc2gst(
-            ds, gs_after_gauge_opt, lsgstLists, 
+            ds, gs_after_gauge_opt, lsgstLists,
             minProbClipForWeighting=advancedOptions.get(
                 'minProbClipForWeighting',1e-4),
             probClipInterval = advancedOptions.get(
@@ -256,7 +254,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
           ds, gs_after_gauge_opt, lsgstLists,
           minProbClip = advancedOptions.get('minProbClip',1e-4),
           probClipInterval = advancedOptions.get('probClipInterval',(-1e6,1e6)),
-          radius=advancedOptions.get('radius',1e-4), 
+          radius=advancedOptions.get('radius',1e-4),
           returnAll=True, verbosity=advancedOptions.get('verbosity',2),
           memLimit=advancedOptions.get('memoryLimitInBytes',None),
           useFreqWeightedChiSq=advancedOptions.get(
@@ -280,9 +278,9 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         times_list.append( ('Gauge opt to CPTP',tNxt-tRef) ); tRef=tNxt
     else:
         go_gs_lsgst_list = gs_lsgst_list
-        
+
     #Note: we used to make constrainToCP contingent on whether each
-    # gateset was already in CP, i.e. only constrain if 
+    # gateset was already in CP, i.e. only constrain if
     # _tools.sum_of_negative_choi_evals(gs) < 1e-8.  But we rarely use
     # CP constraints, and this complicates the logic -- so now when
     # gaugeOptToCPTP == True, always constrain to CP.
@@ -295,19 +293,19 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
             ('targetGatesMetric',"frobenius"),
             ('targetSpamMetric',"frobenius") ])
 
-    for i,gs in enumerate(go_gs_lsgst_list):
+    for i, gs in enumerate(go_gs_lsgst_list):
         args = go_params.copy()
         args['gateset'] = gs
         args['targetGateset'] = gs_target
         go_gs_lsgst_list[i] = _alg.optimize_gauge(**args)
-            
+
     tNxt = _time.time()
     times_list.append( ('Gauge opt to target',tNxt-tRef) ); tRef=tNxt
 
     truncFn = _construction.stdlists._getTruncFunction(truncScheme)
 
     ret = _report.Results()
-    ret.init_Ls_and_germs(objective, gs_target, ds, 
+    ret.init_Ls_and_germs(objective, gs_target, ds,
                         gs_after_gauge_opt, maxLengths, germs,
                         go_gs_lsgst_list, lsgstLists, prepStrs, effectStrs,
                         truncFn,  constrainToTP, fidPairs, gs_lsgst_list)

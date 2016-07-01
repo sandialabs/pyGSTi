@@ -1,6 +1,6 @@
 #!/usr/bin/python
 from __future__ import print_function
-from helpers    import *
+from .helpers    import *
 import os, sys
 import subprocess
 
@@ -66,7 +66,7 @@ def get_coverage(names, output=None, package=''):
             print('%s is neither a valid package, nor a valid filename' % name)
 
     if output != None:
-        write_formatted_table(output, coverageDict.items())
+        write_formatted_table(output, list(coverageDict.items()))
 
     return coverageDict
 
