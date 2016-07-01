@@ -303,13 +303,15 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
     sortedEigenvals = _np.sort(_np.real(_np.linalg.eigvalsh(combinedTDDD)))
 
     nGaugeParams = gateset.num_gauge_params()
+
     bSuccess = bool(list_score(sortedEigenvals[nGaugeParams:]) < threshold)
-    
+
     return (bSuccess,sortedEigenvals) if returnSpectrum else bSuccess
-        
-def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
+
+#@profile
+def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                                  randomizationStrength = 1e-3, numCopies=None, seed = 0, 
-                                 l1Penalty = 1e-2, gatePenalty = 1e-2,
+                                 l1Penalty = 1e-2, gatePenalty = 0,
                                  initialWeights=None, scoreFunc='all', maxIter=100, 
                                  fixedSlack=False, slackFrac=False, 
                                  returnAll=False, tol=1e-6, check=False,
@@ -364,6 +366,10 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
     l1Penalty : float, optional
         How strong the penalty should be for increasing the germ set list by a single
         germ.  Default is 1e-2.
+    
+    gatePenalty : float, optional
+        How strong the penalty should be for increasing a germ in the germ set list by a 
+        single gate.  Default is 0. 
     
     initialWeights : list-like
         List or array of either booleans or (0 or 1) integers
@@ -562,12 +568,13 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
 #                    continue
             neighborScoreList = []
             for gateset_num, gateset in enumerate(gatesetList):
-                if (gateset_num,tuple(neighbor)) not in scoreD_keys:
-                    neighborL1 = sum(neighbor)
-                    neighborScoreList.append(compute_score(neighbor,gateset_num))
-                else:
-                    neighborL1 = sum(neighbor)
+#                if (gateset_num,tuple(neighbor)) not in scoreD_keys:
+                try:
                     neighborScoreList.append(scoreD[gateset_num,tuple(neighbor)])
+                    neighborL1 = sum(neighbor)
+                except:
+                    neighborScoreList.append(compute_score(neighbor,gateset_num))
+                    neighborL1 = sum(neighbor)
 
             neighborScore = _np.max(neighborScoreList)#Take worst case.
 #            print "neighborScore:", neighborScore
