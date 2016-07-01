@@ -256,6 +256,15 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
     germsToTest : list of GateStrings
         List of germs gate sequences to test for completeness.
 
+    scoreFunc : str ('all' or 'worst'), optional (default is 'all')
+        Sets the objective function for scoring a germ set.  If 'all', score is
+        l1Penalty*(number of germs) + sum(1/Eigenvalues of score matrix).  If
+        'worst', score is l1Penalty*(number of germs) + * 1/min(Eigenvalues of
+        score matrix).  (Also note- because we are using a simple integer
+        program to choose germs, it is possible to get stuck in a local
+        minimum, and choosing one or the other objective function can help
+        avoid such minima in different circumstances.)
+
     weights : numpy array, optional
         A 1-D array of weights with length equal len(germsToTest),
         which multiply the contribution of each germ to the total
