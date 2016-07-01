@@ -14,21 +14,16 @@ import numpy        as _np
 import re           as _re
 import os           as _os
 
-#Dangerous (!) Global variable -- to be removed when formatters
-# get rolled into a class that can be instantiated with a
-# scratch directory
-SCRATCHDIR = None
-
 # A factory function for building formatting functions
-def build_formatter(stringreplace=None, regexreplace=None, formatstring='%s', stringreturn=None, multireplace=None):
+def build_formatter(regexreplace=None, formatstring='%s', stringreturn=None, stringreplacers=None):
     '''
     Factory function for building formatters!
 
     Parameters
     --------
-    stringreplace : A tuple of the form (pattern, replacement)
+    stringreplacers : tuples of the form (pattern, replacement)
                    (replacement is a normal string)
-                 Ex : ('rho', '&rho;')
+                 Ex : [('rho', '&rho;')]
     regexreplace  : A tuple of the form (regex,   replacement)
                    (replacement is formattable string,
                       gets formatted with grouped result of regex matching on label)
@@ -36,11 +31,6 @@ def build_formatter(stringreplace=None, regexreplace=None, formatstring='%s', st
 
     formatstring : Outer formatting for after both replacements have been made
  
-    stringreturn : Checks for string equality, returning stringreturn[1] if true,
-                     and running the other format items otherwise.
-
-    multireplace : For replacing many patterns sequentially
-
     Returns
     --------
     template :
@@ -61,10 +51,8 @@ def build_formatter(stringreplace=None, regexreplace=None, formatstring='%s', st
         if stringreturn is not None:
             if label == stringreturn[0]: return stringreturn[1]
 
-        if stringreplace is not None:
-             label = label.replace(stringreplace[0], stringreplace[1])
-        if multireplace is not None:
-            for stringreplace in multireplace:
+        if stringreplacers is not None:
+            for stringreplace in stringreplacers:
                 label = label.replace(stringreplace[0], stringreplace[1])
         if regexreplace is not None:
              result = _re.match(regexreplace[0], label)
@@ -80,15 +68,14 @@ no_format = lambda label : label # Do nothing! :)
 #Formatting functions
 ##############################################################################
 # 'rho' (state prep) formatting
-# Hopefully this is an improvement, but there is still duplicate code (see 'rho' and the digit regex)
-Rho = { 'html' : build_formatter(('rho', '&rho;'), ('.*?([0-9]+)$', '<sub>%s</sub>')), 
-        'latex': build_formatter(('rho', '\\rho'), ('.*?([0-9]+)$', '_{%s}'), '$%s$'), 
+Rho = { 'html' : build_formatter(stringreplacers=[('rho', '&rho;')], 
+                                 regexreplace=('.*?([0-9]+)$', '<sub>%s</sub>')), 
+        'latex': build_formatter(stringreplacers=[('rho', '\\rho')], 
+                                 regexreplace=('.*?([0-9]+)$', '_{%s}'), formatstring='$%s$'), 
         'py'   : no_format,
         'ppt'  : no_format }
 
-'''
 # 'E' (POVM) effect formatting
-# These are more complex:
 E = { 'html'  : build_formatter(stringreturn=('remainder', 'E<sub>C</sub>'), 
                                 regexreplace=('.*?([0-9]+)$', '<sub>%s</sub>')), # Regexreplace potentially doesn't run
       'latex' : build_formatter(stringreturn=('remainder', '$E_C$'),
@@ -96,10 +83,7 @@ E = { 'html'  : build_formatter(stringreturn=('remainder', 'E<sub>C</sub>'),
       'py'    : no_format, 
       'ppt'   : no_format}
 
-
-##Gate Label formatting
-#G = { 'html': _fmtG_html, 'latex': _fmtG_latex, 'py': _fmtG_py, 'ppt': _fmtG_ppt }
-
+# Normal replacements
 Nml = { 'html'  : _hu.html, 
         'latex' : _lu.latex, 
         'py'    : no_format, 
@@ -123,6 +107,7 @@ def _fmtPi_py(x):
     else:
         try: return x * _np.pi #but sometimes can't take product b/c x isn't a number
         except: return x
+
 Pi = { 'html'  : lambda x : x if x == "--" or x == "" else _hu.html(x) + '&pi;', 
        'latex' : lambda x : x if x == "--" or x == "" else _lu.latex(x) + '$\\pi$', 
        'py'    : _fmtPi_py,
@@ -133,7 +118,10 @@ Brk = { 'html'  : lambda x : _hu.html(x, brackets=True),
         'py'    : no_format, 
         'ppt'   : lambda x : _pu.ppt(x, brackets=True)}
 
-# These formatters are more complex, I'll keep them how they are for now.
+
+# ####################################################################### #
+# These formatters are more complex, I'll keep them how they are for now. #
+# ####################################################################### #
 
 # 'conversion' formatting: catch all for find/replacing specially formatted text
 def _fmtCnv_html(x):
@@ -158,8 +146,8 @@ def _fmtCnv_latex(x):
 
 TxtCnv = { 'html'  : _fmtCnv_html, 
            'latex' : _fmtCnv_latex, 
-           'py'    : build_formatter(multireplace=[('<STAR>', '*'), ('|', ' ')]), 
-           'ppt'   : build_formatter(multireplace=[('<STAR>', '*'), ('|', '\n')])}
+           'py'    : build_formatter(stringreplacers=[('<STAR>', '*'), ('|', ' ')]), 
+           'ppt'   : build_formatter(stringreplacers=[('<STAR>', '*'), ('|', '\n')])}
 
 # 'errorbars' formatting: display a scalar value +/- error bar
 def _fmtEB_html(t):
@@ -231,25 +219,30 @@ Pre = { 'html'   : lambda x : x['html'],
         'py'     : lambda x : x['py'], 
         'ppt'    : lambda x : x['ppt'] }
 
+# Still a bit hacky, but no global required
+def build_figure_formatters(scratchDir):
 
-# Figure formatting, where a GST figure is displayed in a table cell
-def _fmtFig_html(figInfo):
-    fig, name, W, H = figInfo
-    fig.save_to(_os.path.join(SCRATCHDIR, name + ".png"))
-    return "<img width='%.2f' height='%.2f' src='%s/%s'>" \
-        % (W,H,SCRATCHDIR,name + ".png")
-def _fmtFig_latex(figInfo):
-    fig, name, W, H = figInfo
-    fig.save_to(_os.path.join(SCRATCHDIR, name + ".pdf"))
-    return "\\vcenteredhbox{\\includegraphics[width=%.2fin,height=%.2fin" \
-        % (W,H) + ",keepaspectratio]{%s/%s}}" % (SCRATCHDIR,name + ".pdf")
-def _fmtFig_py(figInfo):
-    fig, name, W, H = figInfo
-    return fig
-def _fmtFig_ppt(figInfo):
-    return "Not Impl."
-Fig = { 'html': _fmtFig_html, 'latex': _fmtFig_latex, 'py': _fmtFig_py, 'ppt': _fmtFig_ppt }
+    # Figure formatting, where a GST figure is displayed in a table cell
+    def _fmtFig_html(figInfo):
+        fig, name, W, H = figInfo
+        fig.save_to(_os.path.join(scratchDir, name + ".png"))
+        return "<img width='%.2f' height='%.2f' src='%s/%s'>" \
+            % (W, H, scratchDir,name + ".png")
+    def _fmtFig_latex(figInfo):
+        fig, name, W, H = figInfo
+        fig.save_to(_os.path.join(scratchDir, name + ".pdf"))
+        return "\\vcenteredhbox{\\includegraphics[width=%.2fin,height=%.2fin" \
+            % (W,H) + ",keepaspectratio]{%s/%s}}" % (scratchDir, name + ".pdf")
+    def _fmtFig_py(figInfo):
+        fig, name, W, H = figInfo
+        return fig
+    def _fmtFig_ppt(figInfo):
+        return "Not Impl."
+    
+    Fig = { 'html': _fmtFig_html, 'latex': _fmtFig_latex, 'py': _fmtFig_py, 'ppt': _fmtFig_ppt }
+    return Fig
 
+Fig = build_figure_formatters 
 
 # Bold formatting
 Bold = { 'html'  : lambda x : '<b>%s</b>' % _hu.html(x),
@@ -259,12 +252,15 @@ Bold = { 'html'  : lambda x : '<b>%s</b>' % _hu.html(x),
 
 
 
-def formatList(items, formatters, fmt):
+def formatList(items, formatters, fmt, scratchDir=None):
     assert(len(items) == len(formatters))
     formatted_items = []
-    for i,item in enumerate(items):
-        if formatters[i] is not None:
-            formatted_items.append( formatters[i][fmt](item) )
+    for item, formatter in zip(items, formatters):
+        if formatter is not None:
+            # If the formatter requires additional information to do its job, give it.
+            if callable(formatter):
+                formatter = formatter(scratchDir)
+            formatted_items.append( formatter[fmt](item) )
         else:
             formatted_items.append( item )
     return formatted_items

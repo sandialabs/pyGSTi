@@ -24,10 +24,8 @@ class ReportTable(object):
     def render(self, fmt, longtables=False, tableclass='pygstiTbl',
                scratchDir=None):
 
-
         if fmt == "latex":
 
-            _tf.SCRATCHDIR = scratchDir #Dangerous global
             table = "longtable" if longtables else "tabular"
             if self._customHeadings is not None \
                     and "latex" in self._customHeadings:
@@ -36,7 +34,7 @@ class ReportTable(object):
                 if self._headingFormatters is not None:
                     colHeadings_formatted = \
                         _tf.formatList(self._headings,
-                                       self._headingFormatters, "latex")
+                                       self._headingFormatters, "latex", scratchDir)
                 else: #headingFormatters is None => headings is dict w/formats
                     colHeadings_formatted = self._headings['latex']
 
@@ -46,18 +44,16 @@ class ReportTable(object):
                     (" & ".join(colHeadings_formatted))
 
             for rowData,formatters in self._rows:
-                formatted_rowData = _tf.formatList(rowData, formatters, "latex")
+                formatted_rowData = _tf.formatList(rowData, formatters, "latex", scratchDir)
                 if len(formatted_rowData) > 0:
                     latex += " & ".join(formatted_rowData) + " \\\\ \hline\n"
 
             latex += "\end{%s}\n" % table
-            _tf.SCRATCHDIR = None #Dangerous global
             return latex
 
 
         elif fmt == "html":
 
-            _tf.SCRATCHDIR = scratchDir #Dangerous global
             if self._customHeadings is not None \
                     and "html" in self._customHeadings:
                 html = self._customHeadings['html']
@@ -65,7 +61,7 @@ class ReportTable(object):
                 if self._headingFormatters is not None:
                     colHeadings_formatted = \
                         _tf.formatList(self._headings,
-                                       self._headingFormatters, "html")
+                                       self._headingFormatters, "html", scratchDir)
                 else: #headingFormatters is None => headings is dict w/formats
                     colHeadings_formatted = self._headings['html']
 
@@ -75,13 +71,12 @@ class ReportTable(object):
                 html += "</thead><tbody>"
 
             for rowData,formatters in self._rows:
-                formatted_rowData = _tf.formatList(rowData, formatters, "html")
+                formatted_rowData = _tf.formatList(rowData, formatters, "html", scratchDir)
                 if len(formatted_rowData) > 0:
                     html += "<tr><td>" + \
                         "</td><td>".join(formatted_rowData) + "</td></tr>\n"
 
             html += "</tbody></table>"
-            _tf.SCRATCHDIR = None #Dangerous global
             return html
 
 
@@ -94,7 +89,7 @@ class ReportTable(object):
             if self._headingFormatters is not None:
                 colHeadings_formatted = \
                     _tf.formatList(self._headings,
-                                   self._headingFormatters, "py")
+                                   self._headingFormatters, "py", scratchDir)
             else: #headingFormatters is None => headings is dict w/formats
                 colHeadings_formatted = self._headings['py']
 
@@ -103,7 +98,7 @@ class ReportTable(object):
 
             for rowData,formatters in self._rows:
                 print(rowData)
-                formatted_rowData = _tf.formatList(rowData, formatters, "py")
+                formatted_rowData = _tf.formatList(rowData, formatters, "py", scratchDir)
                 if len(formatted_rowData) > 0:
                     py['row data'].append( formatted_rowData )
 
@@ -120,7 +115,7 @@ class ReportTable(object):
             if self._headingFormatters is not None:
                 colHeadings_formatted = \
                     _tf.formatList(self._headings,
-                                   self._headingFormatters, "ppt")
+                                   self._headingFormatters, "ppt", scratchDir)
             else: #headingFormatters is None => headings is dict w/formats
                 colHeadings_formatted = self._headings['ppt']
 
@@ -128,7 +123,7 @@ class ReportTable(object):
                     'row data' : [] }
 
             for rowData,formatters in self._rows:
-                formatted_rowData = _tf.formatList(rowData, formatters, "ppt")
+                formatted_rowData = _tf.formatList(rowData, formatters, "ppt", scratchDir)
                 if len(formatted_rowData) > 0:
                     ppt['row data'].append( formatted_rowData )
 
