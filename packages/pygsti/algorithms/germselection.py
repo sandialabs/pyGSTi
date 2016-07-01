@@ -304,7 +304,7 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
     germLengths = _np.array( map(len,germsToTest), 'i')
     twirledDeriv = bulk_twirled_deriv(gateset, germsToTest, 1./threshold, check) / germLengths[:,None,None]
 
-    #is conjugate needed? -- all should be real
+    # Is conjugate needed? -- all should be real
     twirledDerivDaggerDeriv = _np.einsum('ijk,ijl->ikl', _np.conjugate(twirledDeriv), twirledDeriv)
        # result[i] = _np.dot( twirledDeriv[i].H, twirledDeriv[i] ) i.e. matrix
        # product
@@ -316,7 +316,7 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
         # weights = _np.array( [1.0/nGerms]*nGerms, 'd')
         weights = _np.array( [1.0]*nGerms, 'd')
 
-    combinedTDDD = _np.einsum('i,ijk',weights,twirledDerivDaggerDeriv)
+    combinedTDDD = _np.einsum('i,ijk', weights, twirledDerivDaggerDeriv)
     sortedEigenvals = _np.sort(_np.real(_np.linalg.eigvalsh(combinedTDDD)))
 
     nGaugeParams = gateset.num_gauge_params()
@@ -344,12 +344,13 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
     Parameters
     ----------
     gatesetList : gateset object or list of gateset objects
-        The list of gate sets to be tested.  To ensure that the returned germ set
-        is amplficationally complete, it is a good idea to score potential germ sets
-        against a collection (~5-10) of similar gate sets.  The user may specify a single
-        gatesetand a number of unitarily close copies to be made (set by the kwarg
-        "numCopies", or the user may specify their own list of gatesets, each of which in
-        turn may or may not be randomized (set bythe kwarg "randomize").
+        The list of gate sets to be tested.  To ensure that the returned germ
+        set is amplficationally complete, it is a good idea to score potential
+        germ sets against a collection (~5-10) of similar gate sets.  The user
+        may specify a single gatesetand a number of unitarily close copies to
+        be made (set by the kwarg "numCopies", or the user may specify their
+        own list of gatesets, each of which in turn may or may not be
+        randomized (set bythe kwarg "randomize").
 
     germsList : list of GateStrings
         List of all germs gate sequences to consider.
@@ -357,30 +358,33 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
         germsList must be all k gates in gateset.
 
     randomize : Bool, optional
-        Whether or not the input gateset(s) are subject first subject to unitary
-        randomization.  If False, the user should perform the unitary randomization
-        themselves.  Note:  If the gateset(s) are perfect (e.g. std1Q_XYI.gs_target),
-        then the germ selection output should not be trusted, due to accidental
-        degeneracies in the gateset.  If the gateset(s) include stochastic (non-unitary)
-        error, then germ selection will fail, as we score amplificational completeness
-        in the limit of infinite sequence length (so any stochastic noise will completely
+        Whether or not the input gateset(s) are subject first subject to
+        unitary randomization.  If False, the user should perform the unitary
+        randomization themselves.  Note:  If the gateset(s) are perfect (e.g.
+        std1Q_XYI.gs_target), then the germ selection output should not be
+        trusted, due to accidental degeneracies in the gateset.  If the
+        gateset(s) include stochastic (non-unitary) error, then germ selection
+        will fail, as we score amplificational completeness in the limit of
+        infinite sequence length (so any stochastic noise will completely
         depolarize any sequence in that limit).  Default is True.
 
     randomizationStrength : float, optional
-        The strength of the unitary noise used to randomize input gateset(s); is passed
-        to randomize_with_unitary.  Default is 1e-3.
+        The strength of the unitary noise used to randomize input gateset(s);
+        is passed to randomize_with_unitary.  Default is 1e-3.
 
     numCopies : int, optional
-        The number of gateset copies to be made of the input gateset (prior to unitary
-        randomization).  If more than one gateset is passed in, numCopies should be None.
+        The number of gateset copies to be made of the input gateset (prior to
+        unitary randomization).  If more than one gateset is passed in,
+        numCopies should be None.
 
     seed : float, optional
-        The starting seed used for unitary randomization.  If multiple gatesets are to
-        be randomized, gatesetList[i] is randomized with seed + i.  Default is 0.
+        The starting seed used for unitary randomization.  If multiple gatesets
+        are to be randomized, gatesetList[i] is randomized with seed + i.
+        Default is 0.
 
     l1Penalty : float, optional
-        How strong the penalty should be for increasing the germ set list by a single
-        germ.  Default is 1e-2.
+        How strong the penalty should be for increasing the germ set list by a
+        single germ.  Default is 1e-2.
 
     initialWeights : list-like
         List or array of either booleans or (0 or 1) integers
@@ -389,12 +393,13 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
         germs.
 
     scoreFunc : str ('all' or 'worst'), optional (default is 'all')
-        Sets the objective function for scoring a germ set.
-        If 'all', score is l1Penalty*(number of germs) + sum(1/Eigenvalues of score matrix).
-        If 'worst', score is l1Penalty*(number of germs) + * 1/min(Eigenvalues of score matrix).
-        (Also note- because we are using a simple integer program to choose germs,
-        it is possible to get stuck in a local minimum, and choosing one or the other
-        objective function can help avoid such minima in different circumstances.)
+        Sets the objective function for scoring a germ set.  If 'all', score is
+        l1Penalty*(number of germs) + sum(1/Eigenvalues of score matrix).  If
+        'worst', score is l1Penalty*(number of germs) + * 1/min(Eigenvalues of
+        score matrix).  (Also note- because we are using a simple integer
+        program to choose germs, it is possible to get stuck in a local
+        minimum, and choosing one or the other objective function can help
+        avoid such minima in different circumstances.)
 
     maxIter : int, optional
         The maximum number of iterations before giving up.
@@ -407,7 +412,8 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
     slackFrac : float, optional
         If not None, a floating point number which specifies that excluding a
         germ is allowed to increase 1.0/smallest-non-gauge-eigenvalue by
-        fixedFrac*100 percent.  You must specify *either* fixedSlack or slackFrac.
+        fixedFrac*100 percent.  You must specify *either* fixedSlack or
+        slackFrac.
 
     returnAll : bool, optional
         If True, return the final "weights" vector and score dictionary
@@ -417,13 +423,13 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
         Tolerance used for eigenvector degeneracy testing in twirling operation.
 
     check : bool, optional
-      Whether to perform internal consistency checks, at the
-      expense of making the function slower.
+        Whether to perform internal consistency checks, at the
+        expense of making the function slower.
 
     forceSingletons : bool, optional (default is True)
         Whether or not to force all germ sets to contain each gate as a germ.
-        IMPORTANT:  This only works if, for a gate set of k gates, the first k elements
-        of germsList are the k gates.
+        IMPORTANT:  This only works if, for a gate set of k gates, the first k
+        elements of germsList are the k gates.
 
     forceSingletonsScore : float, optional (default is 1e100)
         When forceSingletons is True, what score to assign any germ set
@@ -452,7 +458,7 @@ def optimize_integer_germs_slack_l1reg(gatesetList, germsList, randomize=True,
         eigenvalue "scores".
     """
 
-    #Remove any SPAM vectors from gateset since we only want
+    # Remove any SPAM vectors from gateset since we only want
     # to consider the set of *gate* parameters for amplification
     # and this makes sure our parameter counting is correct
 
