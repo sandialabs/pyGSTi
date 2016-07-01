@@ -7,17 +7,69 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Functions for generating report tables in different formats """
 
 from . import latex as _lu
-from . import html as _hu
-from . import ppt as _pu
-import cgi as _cgi
-import numpy as _np
-import re as _re
-import os as _os
+from . import html  as _hu
+from . import ppt   as _pu
+import cgi          as _cgi
+import numpy        as _np
+import re           as _re
+import os           as _os
 
 #Dangerous (!) Global variable -- to be removed when formatters
 # get rolled into a class that can be instantiated with a
 # scratch directory
 SCRATCHDIR = None
+
+# A factory function for building formatting functions
+def build_formatter(stringreplace=None, regexreplace=None, formatstring='%s', stringreturn=None):
+    '''
+    Factory function for building formatters!
+
+    Parameters
+    --------
+    stringreplace : A tuple of the form (pattern, replacement)
+                   (replacement is a normal string)
+                 Ex : ('rho', '&rho;')
+    regexreplace  : A tuple of the form (regex,   replacement)
+                   (replacement is formattable string,
+                      gets formatted with grouped result of regex matching on label)
+                 Ex : ('.*?([0-9]+)$', '_{%s}')
+
+    formatstring : Outer formatting for after both replacements have been made
+ 
+    stringreturn : Checks for string equality, returning stringreturn[1] if true,
+                     and running the other format items otherwise.
+
+    Returns
+    --------
+    template :
+    Formatting function
+    '''
+    def template(label):
+        '''
+        Formatting function template
+
+        Parameters
+        --------
+        label : the label to be formatted!
+        Returns
+        --------
+        Formatted label
+        '''
+        # Potential early exit:
+        if stringreturn is not None:
+            if label == stringreturn[0]: return stringreturn[1]
+
+        if stringreplace is not None:
+             label = label.replace(stringreplace[0], stringreplace[1])
+        if regexreplace is not None:
+             result = _re.match(regexreplace[0], label)
+             if result is not None:
+                 grouped = result.group(1)
+                 label = label[0:-len(grouped)] + (regexreplace[1] % grouped)
+        return formatstring % label
+    return template
+
+no_format = lambda label : label # Do nothing! :)
 
 ##############################################################################
 #Formatting functions
@@ -28,6 +80,14 @@ SCRATCHDIR = None
 #def _fmtRho_latex(j): return '$\\rho_{%d}$' % j
 #def _fmtRho_py(j): return 'rho_%d' % j
 #def _fmtRho_ppt(j): return 'rho_%d' % j
+
+'''
+_fmtRho_html  = build_formatter(('rho', '&rho;'), ('.*?([0-9]+)$', '<sub>%s</sub>'))
+_fmtRho_latex = build_formatter(('rho', '\\rho'), ('.*?([0-9]+)$', '_{%s}'))
+_fmtRho_py    = no_format
+_fmtRho_ppt   = no_format
+
+
 def _fmtRho_html(lbl):
     l = lbl.replace('rho','&rho;')
     m = _re.match('.*?([0-9]+)$', l)
@@ -42,10 +102,18 @@ def _fmtRho_latex(lbl):
         n = m.group(1) #trailing digits
         l = l[0:-len(n)] + "_{%s}" % n
     return '$%s$' % l
+
 def _fmtRho_py(lbl): return '%s' % lbl
 def _fmtRho_ppt(lbl): return '%s' % lbl
-Rho = { 'html': _fmtRho_html, 'latex': _fmtRho_latex, 'py': _fmtRho_py, 'ppt': _fmtRho_ppt }
+'''
 
+# Hopefully this is an improvement, but there is still duplicate code (see 'rho' and the digit regex)
+Rho = { 'html' : build_formatter(('rho', '&rho;'), ('.*?([0-9]+)$', '<sub>%s</sub>')), 
+        'latex': build_formatter(('rho', '\\rho'), ('.*?([0-9]+)$', '_{%s}'), '$%s$'), 
+        'py'   : no_format,
+        'ppt'  : no_format }
+
+'''
 # 'E' (POVM) effect formatting
 #def _fmtE_html(j):  return 'E<sub>%d</sub>' % j
 #def _fmtE_latex(j): return '$E_{%d}$' % j
@@ -67,7 +135,15 @@ def _fmtE_latex(lbl):
     return '$%s$' % lbl
 def _fmtE_py(lbl): return '%s' % lbl
 def _fmtE_ppt(lbl): return '%s' % lbl
-E = { 'html': _fmtE_html, 'latex': _fmtE_latex, 'py': _fmtE_py, 'ppt': _fmtE_ppt }
+'''
+
+# These are more complex:
+E = { 'html'  : build_formatter(stringreturn=('remainder', 'E<sub>C</sub>'), 
+                                regexreplace=('.*?([0-9]+)$', '<sub>%s</sub>')), # Regexreplace potentially doesn't run
+      'latex' : build_formatter(stringreturn=('remainder', '$E_C$'),
+                                regexreplace=('.*?([0-9]+)$', '_{%s}')), 
+      'py'    : no_format, 
+      'ppt'   : no_format}
 
 
 ##Gate Label formatting
@@ -84,26 +160,36 @@ E = { 'html': _fmtE_html, 'latex': _fmtE_latex, 'py': _fmtE_py, 'ppt': _fmtE_ppt
 #G = { 'html': _fmtG_html, 'latex': _fmtG_latex, 'py': _fmtG_py, 'ppt': _fmtG_ppt }
 
 # 'normal' formatting
-def _fmtNml_html(x):  return _hu.html(x)
-def _fmtNml_latex(x): return _lu.latex(x)
-def _fmtNml_py(x): return x
-def _fmtNml_ppt(x): return _pu.ppt(x)
-Nml = { 'html': _fmtNml_html, 'latex': _fmtNml_latex, 'py': _fmtNml_py, 'ppt': _fmtNml_ppt }
+# def _fmtNml_html(x):  return _hu.html(x)
+# def _fmtNml_latex(x): return _lu.latex(x)
+# def _fmtNml_py(x): return x
+# def _fmtNml_ppt(x): return _pu.ppt(x)
+Nml = { 'html'  : _hu.html, 
+        'latex' : _lu.latex, 
+        'py'    : no_format, 
+        'ppt'   : _pu.ppt } # Does this work?
 
 # 'normal' formatting but round to 2 decimal places
-def _fmtNml2_html(x):  return _hu.html_value(x,ROUND=2)
-def _fmtNml2_latex(x): return _lu.latex_value(x,ROUND=2)
-def _fmtNml2_py(x): return x
-def _fmtNml2_ppt(x): return _pu.ppt_value(x,ROUND=2)
-Nml2 = { 'html': _fmtNml2_html, 'latex': _fmtNml2_latex, 'py': _fmtNml2_py, 'ppt': _fmtNml2_ppt }
+# def _fmtNml2_html(x):  return _hu.html_value(x,ROUND=2)
+# def _fmtNml2_latex(x): return _lu.latex_value(x,ROUND=2)
+# def _fmtNml2_py(x): return x
+# def _fmtNml2_ppt(x): return _pu.ppt_value(x,ROUND=2)
+Nml2 = { 'html'  : lambda x : _hu.html_value(x, ROUND=2), 
+         'latex' : lambda x : _lu.latex_value(x, ROUND=2), 
+         'py'    : no_format, 
+         'ppt'   : lambda x : _pu.ppt_value(x, ROUND=2) }
 
 # 'small' formating - make text smaller
-def _fmtSml_html(x):  return _hu.html(x)
-def _fmtSml_latex(x): return "\\small" + _lu.latex(x)
-def _fmtSml_py(x): return x
-def _fmtSml_ppt(x): return _pu.ppt(x)
-Sml = { 'html': _fmtSml_html, 'latex': _fmtSml_latex, 'py': _fmtSml_py, 'ppt': _fmtSml_ppt }
+# def _fmtSml_html(x):  return _hu.html(x)
+# def _fmtSml_latex(x): return "\\small" + _lu.latex(x)
+# def _fmtSml_py(x): return x
+# def _fmtSml_ppt(x): return _pu.ppt(x)
+Sml = { 'html'  : _hu.html, 
+        'latex' : lambda x : '\\small' + _lu.latex(x), 
+        'py'    : no_format, 
+        'ppt'   : _pu.ppt}
 
+'''
 # 'pi' formatting: add pi symbol/text after given quantity
 def _fmtPi_html(x):
     if x == "" or x == "--": return x
@@ -111,22 +197,35 @@ def _fmtPi_html(x):
 def _fmtPi_latex(x):
     if x == "" or x == "--": return x
     else: return _lu.latex(x) + "$\\pi$"
+'''
 def _fmtPi_py(x):
     if x == "" or x == "--": return ""
     else:
         try: return x * _np.pi #but sometimes can't take product b/c x isn't a number
         except: return None
+'''
 def _fmtPi_ppt(x):
     if x == "" or x == "--": return ""
     else: return _pu.ppt(x) + "pi"
-Pi = { 'html': _fmtPi_html, 'latex': _fmtPi_latex, 'py': _fmtPi_py, 'ppt': _fmtPi_ppt }
+'''
+Pi = { 'html'  : lambda x : x if x == "--" or x == "" else _hu.html(x) + '&pi;', 
+       'latex' : lambda x : x if x == "--" or x == "" else _lu.latex(x) + '$\\pi$', 
+       'py'    : _fmtPi_py,
+       'ppt'   : lambda x : x if x == "--" or x == "" else _pu.ppt(x) + 'pi' }
 
+'''
 # 'bracket' formatting: add brackets around given quantity
 def _fmtBrk_html(x):  return _hu.html(x, brackets=True)
 def _fmtBrk_latex(x): return _lu.latex(x, brackets=True)
 def _fmtBrk_py(x): return x
 def _fmtBrk_ppt(x): return _pu.ppt(x, brackets=True)
-Brk = { 'html': _fmtBrk_html, 'latex': _fmtBrk_latex, 'py': _fmtBrk_py, 'ppt': _fmtBrk_ppt }
+'''
+Brk = { 'html'  : lambda x : _hu.html(x, brackets=True), 
+        'latex' : lambda x : _lu.latex(x, brackets=True), 
+        'py'    : no_format, 
+        'ppt'   : lambda x : _pu.ppt(x, brackets=True)}
+
+# These formatters are more complex, I'll keep them how they are for now.
 
 # 'conversion' formatting: catch all for find/replacing specially formatted text
 def _fmtCnv_html(x):
@@ -211,26 +310,37 @@ EBPi = { 'html': _fmtEBPi_html, 'latex': _fmtEBPi_latex, 'py': _fmtEBPi_py, 'ppt
 
 
 # 'gatestring' formatting: display a gate string
+'''
 def _fmtGStr_html(s):
     return '.'.join(s) if s is not None else ""
+'''
 def _fmtGStr_latex(s):
     if s is None:
         return ""
     else:
         boxed = [ ("\\mbox{%s}" % gl) for gl in s ]
         return "$" + '\\cdot'.join(boxed) + "$"
+'''
 def _fmtGStr_py(s):
     return tuple(s) if s is not None else None
 def _fmtGStr_ppt(s):
     return '.'.join(s) if s is not None else ""
-GStr = { 'html': _fmtGStr_html, 'latex': _fmtGStr_latex, 'py': _fmtGStr_py, 'ppt': _fmtGStr_ppt }
-
+'''
+GStr = { 'html'  : lambda s : '.'.join(s) if s is not None else '', 
+         'latex' : _fmtGStr_latex, 
+         'py'    : lambda s : tuple(s) if s is not None else '', 
+         'ppt'   : lambda s : '.'.join(s) if s is not None else ''}
+'''
 # 'pre' formatting, where the user gives the data in separate formats
 def _fmtPre_html(x):  return x['html']
 def _fmtPre_latex(x): return x['latex']
 def _fmtPre_py(x): return x['py']
 def _fmtPre_ppt(x): return x['ppt']
-Pre = { 'html': _fmtPre_html, 'latex': _fmtPre_latex, 'py': _fmtPre_py, 'ppt': _fmtPre_ppt }
+'''
+Pre = { 'html'  : lambda x : x['html'], 
+        'latex' : lambda x : x['latex'], 
+        'py'    : lambda x : x['py'], 
+        'ppt'   : lambda x : x['ppt'] }
 
 
 # Figure formatting, where a GST figure is displayed in a table cell
@@ -251,13 +361,17 @@ def _fmtFig_ppt(figInfo):
     return "Not Impl."
 Fig = { 'html': _fmtFig_html, 'latex': _fmtFig_latex, 'py': _fmtFig_py, 'ppt': _fmtFig_ppt }
 
-
+'''
 # 'normal' formatting
 def _fmtBold_html(x):  return "<b>%s</b>" % _hu.html(x)
 def _fmtBold_latex(x): return "\\textbf{%s}" % _lu.latex(x)
 def _fmtBold_py(x): return "**%s**" % x
 def _fmtBold_ppt(x): return _pu.ppt(x) #don't know how to bold in ppt...
-Bold = { 'html': _fmtBold_html, 'latex': _fmtBold_latex, 'py': _fmtBold_py, 'ppt': _fmtBold_ppt }
+'''
+Bold = { 'html'  : lambda x : '<b>%s</b>' % _hu.html(x),
+         'latex' : lambda x : '\\textbf{%s}' % _lu.latex(x), 
+         'py'    : build_formatter(formatstring='**%s**'), 
+         'ppt'   : lambda x : _pu.ppt(x)}
 
 
 
@@ -269,4 +383,4 @@ def formatList(items, formatters, fmt):
             formatted_items.append( formatters[i][fmt](item) )
         else:
             formatted_items.append( item )
-    return formatted_items
+
