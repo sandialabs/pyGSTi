@@ -1,6 +1,0 @@
-pygsti.construction.simplify_str
-================================
-
-.. currentmodule:: pygsti.construction
-
-.. autofunction:: simplify_str

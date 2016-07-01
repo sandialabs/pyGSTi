@@ -1,6 +1,0 @@
-pygsti.tools.rhovec_penalty
-===========================
-
-.. currentmodule:: pygsti.tools
-
-.. autofunction:: rhovec_penalty

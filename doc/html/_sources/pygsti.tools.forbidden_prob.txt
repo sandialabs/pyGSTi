@@ -1,6 +1,0 @@
-pygsti.tools.forbidden_prob
-===========================
-
-.. currentmodule:: pygsti.tools
-
-.. autofunction:: forbidden_prob

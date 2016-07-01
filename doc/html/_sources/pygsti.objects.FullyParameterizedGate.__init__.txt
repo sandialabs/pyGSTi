@@ -1,6 +1,0 @@
-pygsti.objects.FullyParameterizedGate.__init__
-==============================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: FullyParameterizedGate.__init__

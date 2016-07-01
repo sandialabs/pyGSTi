@@ -1,0 +1,21 @@
+#!/usr/bin/python
+import subprocess
+import os
+
+updates_git_pages = ['develop', 'master']
+
+try:
+    branchname = subprocess.check_output(['sh', 'get_branch'])
+except subprocess.CalledProcessError:
+    branchname = 'unnamed_branch'
+branchname = os.path.basename(branchname)
+branchname = branchname.replace('\n', '')
+
+if branchname in updates_git_pages:
+    while os.path.basename(os.getcwd()) != 'pyGSTi':
+        os.chdir('..')
+    subprocess.call(['git', 'checkout', 'gh-pages'])
+    os.chdir('tutorials')
+    print(subprocess.check_output(['ls']))
+    os.chdir('..')
+    subprocess.call(['git', 'checkout', branchname])

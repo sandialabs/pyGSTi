@@ -1,6 +1,0 @@
-pygsti.drivers.gateset_diamonddist
-==================================
-
-.. currentmodule:: pygsti.drivers
-
-.. autofunction:: gateset_diamonddist

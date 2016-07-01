@@ -1,6 +1,0 @@
-pygsti.objects.GateSet.bulk_hprobs_by_column
-============================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: GateSet.bulk_hprobs_by_column

@@ -1,6 +1,0 @@
-pygsti.optimize.create_obj_func_printer
-=======================================
-
-.. currentmodule:: pygsti.optimize
-
-.. autofunction:: create_obj_func_printer

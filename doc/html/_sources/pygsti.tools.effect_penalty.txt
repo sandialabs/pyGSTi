@@ -1,6 +1,0 @@
-pygsti.tools.effect_penalty
-===========================
-
-.. currentmodule:: pygsti.tools
-
-.. autofunction:: effect_penalty

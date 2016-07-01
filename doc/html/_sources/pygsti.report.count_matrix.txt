@@ -1,6 +1,0 @@
-pygsti.report.count_matrix
-==========================
-
-.. currentmodule:: pygsti.report
-
-.. autofunction:: count_matrix
