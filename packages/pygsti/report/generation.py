@@ -6,17 +6,18 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Functions for generating GST reports (PDF or HTML)."""
 
-import warnings as _warnings
-import numpy as _np
-import scipy.stats as _stats
+import warnings           as _warnings
+import numpy              as _np
+import scipy.stats        as _stats
 
 from .. import algorithms as _alg
-from .. import tools as _tools
-from .. import objects as _objs
+from .. import tools      as _tools
+from .. import objects    as _objs
 
 from . import reportables as _cr
 from . import tableformat as _tf
-from . import plotting as _plotting
+from . import plotting    as _plotting
+
 from .table import ReportTable as _ReportTable
 
 
@@ -58,10 +59,10 @@ def get_gateset_spam_table(gateset, confidenceRegionInfo=None,
     if confidenceRegionInfo is None:
         if includeHSVec:
             colHeadings = ('Operator','Hilbert-Schmidt vector (%s basis)' % basisNm,'Matrix')
-            formatters = (None,None,None)
+            formatters  = (None,None,None)
         else:
             colHeadings = ('Operator','Matrix')
-            formatters = (None,None)
+            formatters  = (None,None)
 
     else:
         if includeHSVec:
@@ -69,7 +70,7 @@ def get_gateset_spam_table(gateset, confidenceRegionInfo=None,
                            'Hilbert-Schmidt vector (%s basis)' % basisNm,
                            '%g%% C.I. half-width' % confidenceRegionInfo.level,
                            'Matrix')
-            formatters = (None,None,_tf.TxtCnv,None)
+            formatters  = (None,None,_tf.TxtCnv,None)
         else:
             colHeadings = ('Operator',
                            'Matrix')
