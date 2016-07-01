@@ -5,7 +5,7 @@ import pygsti
 
 #if __name__ == "__main__":
 #    tutorialFile = "01 GateSets.ipynb"
-#    tutorialDir = os.path.join("..","ipython_notebooks","Tutorials")
+#    tutorialDir = os.path.join("..","jupyter_notebooks","Tutorials")
 #    tutorialModuleName = os.path.splitext(tutorialFile)[0]
 #    os.chdir(tutorialDir)
 #    sys.path.append(".") #tutorialDir)
@@ -16,7 +16,7 @@ import pygsti
 #    #sys.path.pop()
 #    exit()
 
-tutorialDir = os.path.join("../..","ipython_notebooks","Tutorials")
+tutorialDir = os.path.join("../..","jupyter_notebooks","Tutorials")
 
 class TutorialsTestCase(unittest.TestCase):
 
@@ -35,7 +35,7 @@ class TutorialsTestCase(unittest.TestCase):
         tutorialModuleName = os.path.splitext(tutorialFile)[0]
         cwd = os.getcwd()
         os.chdir(tutorialDir)
-        os.system('ipython nbconvert --to script "%s"' % tutorialFile)
+        os.system('jupyter nbconvert --to script "%s"' % tutorialFile)
         sys.path.append(".") # not "tutorialDir" b/c of chdir above
 
         orig_stdout = sys.stdout
@@ -56,9 +56,9 @@ class TutorialsTestCase(unittest.TestCase):
             sys.path.pop()
             os.chdir(cwd)
 
-    def runTutorial_ipython(self, tutorialFile, inplace=True):
+    def runTutorial_jupyter(self, tutorialFile, inplace=True):
 
-        #check whether an ipython notebook contains any "error" cells
+        #check whether an jupyter notebook contains any "error" cells
         def containsErrors(fn):
             for line in open(fn, 'r'):
                 if '"output_type": "error"' in line:
@@ -70,7 +70,7 @@ class TutorialsTestCase(unittest.TestCase):
         cwd = os.getcwd()
         os.chdir(tutorialDir)
         if inplace:
-            os.system('ipython nbconvert --to notebook --execute ' +
+            os.system('jupyter nbconvert --to notebook --execute ' +
                       '--ExecutePreprocessor.timeout=3600 --inplace ' +
                       '"%s"' % tutorialFile)
             outName = tutorialFile # executed notebook (side benefit of updating notebook)
@@ -80,7 +80,7 @@ class TutorialsTestCase(unittest.TestCase):
                                  "  open notebook to see error details.")
             # (never remove original notebook)
         else:
-            os.system('ipython nbconvert --to notebook --execute "%s"' % tutorialFile)
+            os.system('jupyter nbconvert --to notebook --execute "%s"' % tutorialFile)
             outName = tutorialName + ".nbconvert." + Ext # executed notebook
             if containsErrors(outName): 
                 os.chdir(cwd)
@@ -95,49 +95,49 @@ class TutorialsTestCase(unittest.TestCase):
 class TutorialsMethods(TutorialsTestCase):
 
     def test_tutorial_00(self):
-        self.runTutorial_ipython("00 Quick and easy GST.ipynb")
+        self.runTutorial_jupyter("00 Quick and easy GST.ipynb")
 
     def test_tutorial_01(self):
-        self.runTutorial_ipython("01 GateSets.ipynb")
+        self.runTutorial_jupyter("01 GateSets.ipynb")
 
     def test_tutorial_02(self):
-        self.runTutorial_ipython("02 Gatestring lists.ipynb")
+        self.runTutorial_jupyter("02 Gatestring lists.ipynb")
     
     def test_tutorial_03(self):
-        self.runTutorial_ipython("03 DataSets.ipynb")
+        self.runTutorial_jupyter("03 DataSets.ipynb")
     
     def test_tutorial_04(self):
-        self.runTutorial_ipython("04 Algorithms.ipynb")
+        self.runTutorial_jupyter("04 Algorithms.ipynb")
 
     def test_tutorial_05(self):
-        self.runTutorial_ipython("05 Plotting.ipynb")
+        self.runTutorial_jupyter("05 Plotting.ipynb")
 
     def test_tutorial_06(self):
-        self.runTutorial_ipython("06 Advanced Algorithms.ipynb")
+        self.runTutorial_jupyter("06 Advanced Algorithms.ipynb")
     
     def test_tutorial_07(self):
-        self.runTutorial_ipython("07 Report Generation.ipynb")
+        self.runTutorial_jupyter("07 Report Generation.ipynb")
     
     def test_tutorial_08(self):
-        self.runTutorial_ipython("08 Fiducial Reduction.ipynb")
+        self.runTutorial_jupyter("08 Fiducial Reduction.ipynb")
 
     def test_tutorial_09(self):
-        self.runTutorial_ipython("09 Bootstrapped Error Bars.ipynb")
+        self.runTutorial_jupyter("09 Bootstrapped Error Bars.ipynb")
 
     def test_tutorial_10(self):
-        self.runTutorial_ipython("10 Fiducial Selection - 1 qubit (X, Y).ipynb")
+        self.runTutorial_jupyter("10 Fiducial Selection - 1 qubit (X, Y).ipynb")
 
     def test_tutorial_11(self):
-        self.runTutorial_ipython("11 Fiducial Selection - 2 qubits (IX, IY, XI, XY, Entangling).ipynb")
+        self.runTutorial_jupyter("11 Fiducial Selection - 2 qubits (IX, IY, XI, XY, Entangling).ipynb")
 
     def test_tutorial_12(self):
-        self.runTutorial_ipython("12 Germ Selection.ipynb")
+        self.runTutorial_jupyter("12 Germ Selection.ipynb")
 
     def test_tutorial_13(self):
-        self.runTutorial_ipython("13 GST on 2 qubits.ipynb")
+        self.runTutorial_jupyter("13 GST on 2 qubits.ipynb")
 
     def test_tutorial_14(self):
-        self.runTutorial_ipython("14 GST on 2 qubits - custom 2Q gate.ipynb")
+        self.runTutorial_jupyter("14 GST on 2 qubits - custom 2Q gate.ipynb")
 
 
       
