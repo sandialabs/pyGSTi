@@ -102,6 +102,7 @@ class ReportTable(object):
                    'row data': [] }
 
             for rowData,formatters in self._rows:
+                print(rowData)
                 formatted_rowData = _tf.formatList(rowData, formatters, "py")
                 if len(formatted_rowData) > 0:
                     py['row data'].append( formatted_rowData )

@@ -74,7 +74,6 @@ no_format = lambda label : label # Do nothing! :)
 ##############################################################################
 #Formatting functions
 ##############################################################################
-
 # 'rho' (state prep) formatting
 #def _fmtRho_html(j):  return '&rho;<sub>%d</sub>' % j
 #def _fmtRho_latex(j): return '$\\rho_{%d}$' % j
@@ -202,7 +201,7 @@ def _fmtPi_py(x):
     if x == "" or x == "--": return ""
     else:
         try: return x * _np.pi #but sometimes can't take product b/c x isn't a number
-        except: return None
+        except: return x
 '''
 def _fmtPi_ppt(x):
     if x == "" or x == "--": return ""
@@ -322,7 +321,7 @@ def _fmtGStr_latex(s):
         return "$" + '\\cdot'.join(boxed) + "$"
 '''
 def _fmtGStr_py(s):
-    return tuple(s) if s is not None else None
+    return tuple(s) if s is not None else ''
 def _fmtGStr_ppt(s):
     return '.'.join(s) if s is not None else ""
 '''
@@ -383,4 +382,4 @@ def formatList(items, formatters, fmt):
             formatted_items.append( formatters[i][fmt](item) )
         else:
             formatted_items.append( item )
-
+    return formatted_items
