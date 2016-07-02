@@ -24,15 +24,15 @@ def runMC2GSTAnalysis(myspecs, mygerms, gsTarget, seed,
                       comm=None):
     rhoStrs, EStrs = pygsti.construction.get_spam_strs(myspecs)
     lgstStrings = pygsti.construction.list_lgst_gatestrings(
-        myspecs, gsTarget.gates.keys())
+        myspecs, list(gsTarget.gates.keys()))
     lsgstStrings = pygsti.construction.make_lsgst_lists(
-            gsTarget.gates.keys(), rhoStrs, EStrs, mygerms, maxLs, fidPairList )
+            list(gsTarget.gates.keys()), rhoStrs, EStrs, mygerms, maxLs, fidPairList )
 
-    print len(myspecs[0]), " rho specifiers"
-    print len(myspecs[1]), " effect specifiers"
-    print len(mygerms), " germs"
-    print len(lgstStrings), " total LGST gate strings"
-    print len(lsgstStrings[-1]), " LSGST strings before thinning"
+    print(len(myspecs[0]), " rho specifiers")
+    print(len(myspecs[1]), " effect specifiers")
+    print(len(mygerms), " germs")
+    print(len(lgstStrings), " total LGST gate strings")
+    print(len(lsgstStrings[-1]), " LSGST strings before thinning")
     
     lsgstStringsToUse = lsgstStrings
     allRequiredStrs = pygsti.remove_duplicates(lgstStrings + lsgstStrings[-1])
@@ -58,7 +58,7 @@ def runMC2GSTAnalysis(myspecs, mygerms, gsTarget, seed,
         verbosity=1, memLimit=3*(1024)**3, returnAll=True, 
         useFreqWeightedChiSq=useFreqWeightedChiSq, comm=comm)
     tEnd = time.time()
-    print "Time = ",(tEnd-tStart)/3600.0,"hours ( =",(tEnd-tStart)," secs)"
+    print("Time = ",(tEnd-tStart)/3600.0,"hours ( =",(tEnd-tStart)," secs)")
     
     return all_gs_lsgst, gs_dataGen
     

@@ -2,7 +2,7 @@ import unittest
 import pygsti
 from pygsti.construction import std1Q_XYI as std
 import numpy as np
-import os
+import os, sys
 
 class MetricsTestCase(unittest.TestCase):
 
@@ -27,8 +27,8 @@ Gx 10 90
 GxGy 40 60
 Gx^4 20 90
 """
-
-        open("../temp_test_files/MetricsDataset.txt","w").write(dataset_txt)
+        with open("../temp_test_files/MetricsDataset.txt","w") as output:
+            output.write(dataset_txt)
         self.ds = pygsti.io.load_dataset("../temp_test_files/MetricsDataset.txt")
 
     def tearDown(self):

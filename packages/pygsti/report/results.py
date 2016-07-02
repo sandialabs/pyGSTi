@@ -1,3 +1,4 @@
+from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
@@ -5,7 +6,6 @@
 #*****************************************************************
 """ Defines the Results class and supporting functionality."""
 
-import sys as _sys
 import os  as _os
 import re  as _re
 import subprocess  as _subprocess
@@ -18,14 +18,13 @@ from ..objects      import VerbosityPrinter
 from ..construction import spamspecconstruction as _ssc
 from ..algorithms   import optimize_gauge       as _optimizeGauge
 from ..tools        import listtools            as _lt
-from ..tools        import basistools           as _bt
 from ..             import _version
 
-import latex      as _latex
-import generation as _generation
-import plotting   as _plotting
+from . import latex      as _latex
+from . import generation as _generation
+from . import plotting   as _plotting
 
-from resultcache import ResultCache as _ResultCache
+from .resultcache import ResultCache as _ResultCache
 
 class Results(object):
     """
@@ -281,23 +280,23 @@ class Results(object):
         s += " .dataset    -- the DataSet used to generate these results\n\n"
         s += " .gatesets   -- a dictionary of GateSet objects w/keys:\n"
         s += " ---------------------------------------------------------\n"
-        s += "  " + "\n  ".join(self.gatesets.keys()) + "\n"
+        s += "  " + "\n  ".join(list(self.gatesets.keys())) + "\n"
         s += "\n"
         s += " .gatestring_lists   -- a dict of GateString lists w/keys:\n"
         s += " ---------------------------------------------------------\n"
-        s += "  " + "\n  ".join(self.gatestring_lists.keys()) + "\n"
+        s += "  " + "\n  ".join(list(self.gatestring_lists.keys())) + "\n"
         s += "\n"
         s += " .tables   -- a dict of ReportTable objects w/keys:\n"
         s += " ---------------------------------------------------------\n"
-        s += "  " + "\n  ".join(self.tables.keys()) + "\n"
+        s += "  " + "\n  ".join(list(self.tables.keys())) + "\n"
         s += "\n"
         s += " .figures   -- a dict of ReportFigure objects w/keys:\n"
         s += " ---------------------------------------------------------\n"
-        s += "  " + "\n  ".join(self.figures.keys()) + "\n"
+        s += "  " + "\n  ".join(list(self.figures.keys())) + "\n"
         s += "\n"
         s += " .parameters   -- a dict of simulation parameters:\n"
         s += " ---------------------------------------------------------\n"
-        s += "  " + "\n  ".join(self.parameters.keys()) + "\n"
+        s += "  " + "\n  ".join(list(self.parameters.keys())) + "\n"
         s += "\n"
         s += " .options   -- a container of display options:\n"
         s += " ---------------------------------------------------------\n"
@@ -1048,7 +1047,7 @@ class Results(object):
 
             ret = {}
 
-            for gaugeKey,gopt_gs in best_gs_gauges.iteritems():
+            for gaugeKey,gopt_gs in best_gs_gauges.items():
                 #FUTURE: add confidence region support to these appendices?
                 # -- would need to compute confidenceRegionInfo (cri)
                 #    for each gauge-optimized gateset, gopt_gs and pass
@@ -1369,7 +1368,9 @@ class Results(object):
             templateFilename = _os.path.join( self.options.template_path,
                                               templateFilename )
 
-        template = open(templateFilename,"r").read()
+        template = ''
+        with open(templateFilename, 'r') as templatefile:
+            template = templatefile.read()
         template = template.replace("{", "{{").replace("}", "}}") #double curly braces (for format processing)
 
         # Replace template field markers with `str.format` fields.
@@ -1377,8 +1378,8 @@ class Results(object):
 
         # Replace str.format fields with values and write to output file
         template = template.format(**qtys)
-        open(outputFilename,'w').write(template)
-
+        with open(outputFilename, 'w') as outputfile:
+            outputfile.write(template)
 
     def _getBaseStrDict(self, remove_dups = True):
         #if remove_dups == True, remove duplicates in
@@ -1588,7 +1589,7 @@ class Results(object):
                    ('opt_template_path', self.options.template_path),
                    ('opt_latex_cmd', self.options.latex_cmd) ]
                    #('opt_latex_postcmd', self.options.latex_postcmd) #TODO: add this
-        for key,val in self.parameters.iteritems():
+        for key,val in self.parameters.items():
             pdfInfo.append( (key, val) )
         qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
 
@@ -1601,7 +1602,7 @@ class Results(object):
 
 
         # 1) get latex tables
-	printer.log("*** Generating tables ***")
+        printer.log("*** Generating tables ***")
 
         std_tables = \
             ('targetSpamTable','targetGatesTable','datasetOverviewTable',
@@ -1653,7 +1654,7 @@ class Results(object):
 
 
         # 2) generate plots
-	printer.log("*** Generating plots ***")
+        printer.log("*** Generating plots ***")
 
         if _matplotlib.is_interactive():
             _matplotlib.pyplot.ioff()
@@ -1688,7 +1689,6 @@ class Results(object):
             else:
                 raise ValueError("Invalid objective value: %s"
                                  % self.parameters['objective'])
-
             printer.log("%s plots (%d): " % (plotFnName, nPlots))
 
             with printer.progress_logging(1):
@@ -1763,6 +1763,10 @@ class Results(object):
 
             with printer.progress_logging(1):
 
+            #if verbosity > 0:
+            #    print " ?",; _sys.stdout.flush()
+            #fig = set_fig_qtys("directLGSTDeviationColorBoxPlot",
+            #                   "directLGSTDeviationBoxes.pdf",W=4,H=5)
                 printer.show_progress(0, 1, prefix='', end='')
                 fig = set_fig_qtys("directLongSeqGSTColorBoxPlot",
                                "directLongSeqGST%sBoxes.pdf" % plotFnName, printer - 1)
@@ -2039,7 +2043,7 @@ class Results(object):
                    ('opt_table_class', self.options.table_class),
                    ('opt_template_path', self.options.template_path),
                    ('opt_latex_cmd', self.options.latex_cmd) ]
-        for key,val in self.parameters.iteritems():
+        for key,val in self.parameters.items():
             pdfInfo.append( (key, val) )
         qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
 
@@ -2310,7 +2314,7 @@ class Results(object):
                    ('opt_table_class', self.options.table_class),
                    ('opt_template_path', self.options.template_path),
                    ('opt_latex_cmd', self.options.latex_cmd) ]
-        for key,val in self.parameters.iteritems():
+        for key,val in self.parameters.items():
             pdfInfo.append( (key, val) )
         qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
 
@@ -2410,6 +2414,7 @@ class Results(object):
         pixplots = ""
         if pixelPlotAppendix:
             paramListLength = len(self.parameters['max length list'])-1
+
             with printer.progress_logging(1):
                 for i in range(st, paramListLength):
                     printer.show_progress(i, paramListLength-1, prefix='', end='')
@@ -2852,7 +2857,6 @@ class Results(object):
                                    "directLongSeqGSTDeviationBoxes.png", printer - 1)
 
                 printer.log('')
-
                 #Small eigenvalue error rate
                 printer.log(" -- Error rate plots...")
                 fig = set_fig_qtys("smallEigvalErrRateColorBoxPlot",
@@ -2875,7 +2879,6 @@ class Results(object):
                           if len(g) == 1 ]
 
             printer.log(" -- Whack-a-mole plots (%d): " % (2*len(len1Germs)), end='')
-
             with printer.progress_logging(1):
                 for i,germ in enumerate(len1Germs):
                     printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
@@ -3055,7 +3058,8 @@ class Results(object):
 
 
         def draw_pic(shapes, path, left, top, width, height):
-            pxWidth, pxHeight = Image.open(open(path)).size
+            with open(path, 'rb') as imagefile:
+                pxWidth, pxHeight = Image.open(imagefile).size
             pxAspect = pxWidth / float(pxHeight) #aspect ratio of image
             maxAspect = width / float(height) #aspect ratio of "max" box
             if pxAspect > maxAspect:
@@ -3163,7 +3167,7 @@ class Results(object):
 
         if pixelPlotAppendix:
             Ls = self.parameters['max length list']
-            for i,pixPlotPath in zip( range(st,len(Ls)-1), pixplots ):
+            for i,pixPlotPath in zip( list(range(st,len(Ls)-1)), pixplots ):
                 slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Iteration %d (L=%d): %s values" % (i,Ls[i],plotFnName))
                 draw_pic(slide.shapes, pixPlotPath, 1, 1.5, 8, 5.5)
 
@@ -3344,7 +3348,7 @@ class Results(object):
                    ('opt_table_class', self.options.table_class),
                    ('opt_template_path', self.options.template_path),
                    ('opt_latex_cmd', self.options.latex_cmd) ]
-        for key,val in self.parameters.iteritems():
+        for key,val in self.parameters.items():
             pdfInfo.append( (key, val) )
         qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
 
@@ -3489,7 +3493,6 @@ class Results(object):
                                  % self.parameters['objective'])
 
             printer.log(" -- %s plots (%d): " % (plotFnName, nPlots), end='')
-
             with printer.progress_logging(1):
                 printer.show_progress(0, 2, prefix='', end='')
 
@@ -3807,7 +3810,7 @@ def _to_pdfinfo(list_of_keyval_tuples):
         elif type(val) in (dict,_collections.OrderedDict):
             sanitized_val = "Dict[" + \
                 ", ".join([ "%s: %s" % (sanitize(k),sanitize(v)) for k,v
-                            in val.iteritems()]) + "]"
+                            in val.items()]) + "]"
         else:
             sanitized_val = sanitize_str( str(val) )
         return sanitized_val

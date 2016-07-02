@@ -1,0 +1,42 @@
+************* Module pygsti.report.generation
+W:962,48: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+************* Module pygsti.report.plotting
+W:3637,30: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+************* Module pygsti.optimize.optimize
+W:575,21: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+W:599,25: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+************* Module pygsti.io.stdinput
+W:690,42: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+************* Module pygsti.io.writers
+W:248,34: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+************* Module pygsti.algorithms.fiducialpairreduction
+W:175,83: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+************* Module pygsti.algorithms.fiducialselection
+W:177,33: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+W:392,33: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+************* Module pygsti.algorithms.core
+W:568,88: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+W:595,88: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+W:1100,92: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+W:1118,92: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+************* Module pygsti.algorithms.germselection
+W:262,34: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+W:373,34: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+************* Module pygsti.tools.likelihoodfns
+W:561,67: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+W:714,30: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+************* Module pygsti.objects.dataset
+W:531,41: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+W:561,41: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+************* Module pygsti.objects.gigateset
+W:588,19: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+W:864,19: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+************* Module pygsti.objects.evaltree
+W:316,24: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+W:402,51: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+W:594,46: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+W:594,91: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+************* Module pygsti.objects.multidataset
+W:284,51: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+W:294,41: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)
+W:317,41: Used builtin function 'map'. Using a list comprehension can be clearer. (bad-builtin)

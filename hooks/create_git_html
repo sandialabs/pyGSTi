@@ -4,12 +4,13 @@
 # the .ipynb files you want to convert to html and run it.
 OIFS="$IFS"
 IFS=$'\n'
-cd tutorials
-for nbname in `ls *.ipynb`; do
-  ipython nbconvert --to html --template full "$nbname"
+
+DIR=ipython_notebooks/Tutorials/
+for nbname in `ls $DIR*.ipynb`; do
+  jupyter nbconvert --to html --template full "$nbname"
   basenm=`basename "$nbname" .ipynb`
   newname=`echo $basenm | sed -e 's/ /_/g' | tr -d \(\),\-`
-  mv "$basenm.html" "$newname.html"
-  echo "Created $newname.html"
+  mv "$DIR$basenm.html" "../../temp_html/$newname.html"
+  echo "Created $basenm.html"
 done
 IFS="$OIFS"

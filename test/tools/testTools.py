@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 import scipy.linalg
 import pygsti
-import os
+import os, sys
 from pygsti.construction import std1Q_XYI as std
 
 

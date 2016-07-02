@@ -1,13 +1,13 @@
+from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ Functions for generating bootstrapped error bars """
-from __future__ import print_function
 import numpy as _np
 import matplotlib as _mpl
-from longsequence import do_long_sequence_gst as _do_long_sequence_gst
+from .longsequence import do_long_sequence_gst as _do_long_sequence_gst
 
 from .. import objects as _obj
 from .. import algorithms as _alg
@@ -27,7 +27,7 @@ def make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=None,
       The type of dataset to generate.  'parametric' generates a DataSet
       with the same gate strings and sample counts as inputDataSet but
       using the probabilities in inputGateSet (which must be provided).
-      'nonparametric' generates a DataSet with the same gate strings 
+      'nonparametric' generates a DataSet with the same gate strings
       and sample counts as inputDataSet using the count frequencies of
       inputDataSet as probabilities.
 
@@ -35,7 +35,7 @@ def make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=None,
        The gate set used to compute the probabilities for gate strings when
        generationMethod is set to 'parametric'.  If 'nonparametric' is selected,
        this argument must be set to None (the default).
-                      
+
     seed : int, optional
        A seed value for numpy's random number generator.
 
@@ -68,9 +68,9 @@ def make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=None,
 
     possibleSpamLabels = inputDataSet.get_spam_labels()
     assert( all([sl in possibleSpamLabels for sl in spamLabels]) )
-    
+
     simDS = _obj.DataSet(spamLabels=spamLabels) #create new dataset
-    gatestring_list = inputDataSet.keys()
+    gatestring_list = list(inputDataSet.keys())
     for s in gatestring_list:
         nSamples = inputDataSet[s].total()
         if generationMethod == 'parametric':
@@ -111,7 +111,7 @@ def make_bootstrap_gatesets(numGateSets, inputDataSet, generationMethod,
       The type of datasets to generate.  'parametric' generates DataSets
       with the same gate strings and sample counts as inputDataSet but
       using the probabilities in inputGateSet (which must be provided).
-      'nonparametric' generates DataSets with the same gate strings 
+      'nonparametric' generates DataSets with the same gate strings
       and sample counts as inputDataSet using the count frequencies of
       inputDataSet as probabilities.
 
@@ -127,7 +127,7 @@ def make_bootstrap_gatesets(numGateSets, inputDataSet, generationMethod,
     maxLengths : list of ints
         List of integers, one per MLGST iteration, which set truncation lengths
         for repeated germ strings.  The list of gate strings for the i-th LSGST
-        iteration includes the repeated germs truncated to the L-values *up to* 
+        iteration includes the repeated germs truncated to the L-values *up to*
         and including the i-th one.
 
     inputGateSet : GateSet, optional
@@ -158,7 +158,7 @@ def make_bootstrap_gatesets(numGateSets, inputDataSet, generationMethod,
         gate string.  Default is None.
 
     returnData : bool
-        Whether generated data sets should be returned in addition to 
+        Whether generated data sets should be returned in addition to
         gate sets.
 
     verbosity : int
@@ -170,7 +170,7 @@ def make_bootstrap_gatesets(numGateSets, inputDataSet, generationMethod,
        The list of generated GateSet objects.
 
     datasets : list
-       The list of generated DataSet objects, only returned when 
+       The list of generated DataSet objects, only returned when
        returnData == True.
     """
 
@@ -188,7 +188,7 @@ def make_bootstrap_gatesets(numGateSets, inputDataSet, generationMethod,
 
     datasetList = []
     print("Creating DataSets: ")
-    for run in xrange(numGateSets):
+    for run in range(numGateSets):
         print("%d " % run, end='')
         datasetList.append(
             make_bootstrap_dataset(inputDataSet,generationMethod,
@@ -198,7 +198,7 @@ def make_bootstrap_gatesets(numGateSets, inputDataSet, generationMethod,
 
     gatesetList = []
     print("Creating GateSets: ")
-    for run in xrange(numGateSets):
+    for run in range(numGateSets):
         print("Running MLGST Iteration %d " % run)
         results = _do_long_sequence_gst(
             datasetList[run], targetGateSet, fiducialPrep, fiducialMeasure,
@@ -216,8 +216,8 @@ def gauge_optimize_gs_list(gsList, targetGateset, constrainToTP=True,
                            gateMetric = 'frobenius', spamMetric = 'frobenius',
                            plot=True):
     """
-    Optimizes the "spam weight" parameter used in gauge optimization by 
-    attempting spam a range of spam weights and taking the one the minimizes 
+    Optimizes the "spam weight" parameter used in gauge optimization by
+    attempting spam a range of spam weights and taking the one the minimizes
     the average spam error multiplied by the average gate error (with respect
     to a target gate set).
 
@@ -231,7 +231,7 @@ def gauge_optimize_gs_list(gsList, targetGateset, constrainToTP=True,
        to gauge-optimize them to (as a parameter to optimize_gauge).
 
     constrainToTP : bool
-       Whether to constrain the gauge optimization so that initially 
+       Whether to constrain the gauge optimization so that initially
        trace-preserving (TP) gates will remain TP.
 
     gateMetric : { "frobenius", "fidelity", "tracedist" }, optional
@@ -275,7 +275,7 @@ def gauge_optimize_gs_list(gsList, targetGateset, constrainToTP=True,
 
         GateSetGOtoTargetVarSpamVecArray = _np.zeros([numResamples],
                                                      dtype='object')
-        for i in xrange(numResamples):
+        for i in range(numResamples):
             GateSetGOtoTargetVarSpamVecArray[i] = \
                 listOfBootStrapEstsNoOptG0toTargetVarSpam[i].to_vector()
 
@@ -284,12 +284,12 @@ def gauge_optimize_gs_list(gsList, targetGateset, constrainToTP=True,
         gsStdevVecGates = gsStdevVec[8:]
 
         SPAMMin.append(_np.min(gsStdevVecSPAM))
-        SPAMMax.append(_np.max(gsStdevVecSPAM))    
+        SPAMMax.append(_np.max(gsStdevVecSPAM))
         SPAMMean.append(_np.mean(gsStdevVecSPAM))
 
         gateMin.append(_np.min(gsStdevVecGates))
         gateMax.append(_np.max(gsStdevVecGates))
-        gateMean.append(_np.mean(gsStdevVecGates))    
+        gateMean.append(_np.mean(gsStdevVecGates))
 
     if plot:
         _mpl.pyplot.loglog(_np.logspace(-4,0,13),SPAMMean,'b-o')
@@ -332,7 +332,7 @@ def gauge_optimize_gs_list(gsList, targetGateset, constrainToTP=True,
 ################################################################################
 #TODO: need to add docstrings and perhaps relocate the utility functions below #
 ################################################################################
-    
+
 #For metrics that evaluate gateset with single scalar:
 def gs_stdev(gsFunc, gsEnsemble, ddof=1, **kwargs):
     return _np.std([gsFunc(gs, **kwargs) for gs in gsEnsemble],ddof=ddof)
@@ -353,7 +353,7 @@ def to_vector(gs):
 def to_mean_gateset(gsList,target_gs):
     numResamples = len(gsList)
     gsVecArray = _np.zeros([numResamples],dtype='object')
-    for i in xrange(numResamples):
+    for i in range(numResamples):
         gsVecArray[i] = gsList[i].to_vector()
     output_gs = target_gs.copy()
     output_gs.from_vector(_np.mean(gsVecArray))
@@ -362,7 +362,7 @@ def to_mean_gateset(gsList,target_gs):
 def to_std_gateset(gsList,target_gs,ddof=1):
     numResamples = len(gsList)
     gsVecArray = _np.zeros([numResamples],dtype='object')
-    for i in xrange(numResamples):
+    for i in range(numResamples):
         gsVecArray[i] = gsList[i].to_vector()
     output_gs = target_gs.copy()
     output_gs.from_vector(_np.std(gsVecArray,ddof=ddof))
@@ -371,7 +371,7 @@ def to_std_gateset(gsList,target_gs,ddof=1):
 def to_rms_gateset(gsList,target_gs):
     numResamples = len(gsList)
     gsVecArray = _np.zeros([numResamples],dtype='object')
-    for i in xrange(numResamples):
+    for i in range(numResamples):
         gsVecArray[i] = _np.sqrt(gsList[i].to_vector()**2)
     output_gs = target_gs.copy()
     output_gs.from_vector(_np.mean(gsVecArray))
@@ -419,9 +419,8 @@ def gateset_diamonddist(gs,gs_target,mxBasis="gm"):
     for i, gate in enumerate(gs_target.gates.keys()):
         output[i] = _tools.diamonddist(gs.gates[gate],gs_target.gates[gate],mxBasis=mxBasis)
     return output
-    
-def spamrameter(gs):
-    firstRho = gs.preps.keys()[0]
-    firstE = gs.effects.keys()[0]
-    return _np.dot(gs.preps[firstRho].T,gs.effects[firstE])[0,0]
 
+def spamrameter(gs):
+    firstRho = list(gs.preps.keys())[0]
+    firstE = list(gs.effects.keys())[0]
+    return _np.dot(gs.preps[firstRho].T,gs.effects[firstE])[0,0]

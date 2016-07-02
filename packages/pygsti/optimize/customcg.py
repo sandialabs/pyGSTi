@@ -1,17 +1,17 @@
+from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ A custom conjugate gradient descent algorithm """
-from __future__ import print_function
 
 import numpy as _np
 
 try:
-  from scipy.optimize import Result as _optResult #for earlier scipy versions
+    from scipy.optimize import Result as _optResult #for earlier scipy versions
 except:
-  from scipy.optimize import OptimizeResult as _optResult #for later scipy versions
+    from scipy.optimize import OptimizeResult as _optResult #for later scipy versions
 
 
 def fmax_cg(f, x0, maxiters=100, tol=1e-8, dfdx_and_bdflag = None, xopt=None):
@@ -34,7 +34,7 @@ def fmax_cg(f, x0, maxiters=100, tol=1e-8, dfdx_and_bdflag = None, xopt=None):
 
     tol : float, optional
         Tolerace for convergence (compared to absolute difference in f)
-     
+
     dfdx_and_bdflag : function, optional
         Function to compute jacobian of f as well as a boundary-flag.
 
@@ -62,6 +62,8 @@ def fmax_cg(f, x0, maxiters=100, tol=1e-8, dfdx_and_bdflag = None, xopt=None):
     step = 0
     x = x0; last_fx = f(x0); last_x = x0
     lastchange = 0
+    lastgradnorm = 0.0 # Safer than relying on uninitialized variables
+    lastgrad     = 0.0 
     if last_fx is None: raise ValueError("fmax_cg was started out of bounds!")
     while( step < maxiters and ((stepsize>MIN_STEPSIZE) or (step%RESET !=1 and RESET>1))):
 
@@ -76,10 +78,10 @@ def fmax_cg(f, x0, maxiters=100, tol=1e-8, dfdx_and_bdflag = None, xopt=None):
             change = grad + beta * lastchange
 
         for i in range(len(change)):
-            if boundaryFlag[i]*change[i] > 0: 
+            if boundaryFlag[i]*change[i] > 0:
                 change[i] = 0
                 print("DEBUG: fmax Preventing motion along dim %s" % i)
-        
+
         if max(abs(change)) == 0:
             print("Warning: Completely Boxed in!")
             fx = last_fx; x = last_x
@@ -91,16 +93,16 @@ def fmax_cg(f, x0, maxiters=100, tol=1e-8, dfdx_and_bdflag = None, xopt=None):
 
         lastgrad = grad
         lastgradnorm = gradnorm
-        
+
         multiplier = 1.0/max(abs(change))
         change *= multiplier
-        
+
         # Now "change" has largest element 1.  Time to do a linear search to find optimal stepsize.
         # If the last step had crazy short length, reset stepsize
         if stepsize < MIN_STEPSIZE: stepsize = MIN_STEPSIZE;
         g = lambda s: f(x+s*change) # f along a line given by changedir.  Argument to function is stepsize.
         stepsize = _maximize1D(g,0,abs(stepsize),last_fx)  #find optimal stepsize along change direction
-		
+
         predicted_difference = stepsize * _np.dot(grad,change)
         if xopt is not None: xopt_dot = _np.dot(change, xopt-x) / (_np.linalg.norm(change) * _np.linalg.norm(xopt-x))
         x += stepsize * change; fx = f(x)
@@ -124,11 +126,11 @@ def fmax_cg(f, x0, maxiters=100, tol=1e-8, dfdx_and_bdflag = None, xopt=None):
     solution.x = x; solution.fun = -fx if fx is not None else None  # negate maximum to conform to other minimization routines
     if step < maxiters:
         solution.success = True
-    else: 
+    else:
         solution.success = False
         solution.message = "Maximum iterations exceeded"
     return solution
-        
+
 
 # Minimize g(s), given (s1,g1=g(s1)) as a starting point and guess, s2 for minimum
 def _maximize1D(g,s1,s2,g1):
@@ -158,7 +160,7 @@ def _maximize1D(g,s1,s2,g1):
                 if s3_on_bd: print("** Returning on bd"); return s3 #can't expand any further to right
                 s2,g2 = s3,g3
                 s3 = s1 + (s3-s1)*PHI; g3 = g(s3)
-                if g3 is None: 
+                if g3 is None:
                     s3,g3 = _findBoundary(g,s2,s3)
                     s3_on_bd = True
             else:  # contract to the left.
@@ -169,7 +171,7 @@ def _maximize1D(g,s1,s2,g1):
                 if s1_on_bd: print("** Returning on bd2"); return s1 #can't expand any further to left
                 s2,g2 = s1,g1
                 s1 = s3 - (s3-s1)*PHI; g1 = g(s1)
-                if g1 is None: 
+                if g1 is None:
                     s1,g1 = _findBoundary(g,s2,s1)
                     s1_on_bd = True
 
@@ -179,7 +181,7 @@ def _maximize1D(g,s1,s2,g1):
     print("Warning: maximize_1d could not find bracket")
 
     ret = s2 if g2 is not None else s1 #return s2 if it evaluates to a valid point
-    assert( g(ret) is not None )       #  otherwise return s1, since it should always be valid   
+    assert( g(ret) is not None )       #  otherwise return s1, since it should always be valid
     return ret
 
 
@@ -216,8 +218,8 @@ def _findBoundary(g,s1,s2):
         if gm is None: s2 = m
         else: s1 = m
     return s1,g(s1)
-    
-    
+
+
 
 
 #provide finite difference derivatives with boundary for a given function f.  Boundaries are
@@ -225,7 +227,7 @@ def _findBoundary(g,s1,s2):
 def _finite_diff_dfdx_and_bdflag(f,x,DELTA):
     x = x.copy() #make sure x is unaltered
     N = len(x)
-    dfdx = _np.zeros(N) #complex? 
+    dfdx = _np.zeros(N) #complex?
     bd   = _np.zeros(N)
     for k in range(N):
         x[k] += DELTA;   fPlus  = f(x)
@@ -249,4 +251,3 @@ def _finite_diff_dfdx_and_bdflag(f,x,DELTA):
 #    f6 =  0.5 - (num/denom)
 #    errorf6 = 1 - f6
 #    return f6, errorf6;
-
