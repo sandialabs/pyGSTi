@@ -4,7 +4,7 @@ python:
 branches:
   only:
     - master
-    - unittests
+    - develop
 # command to install dependencies
 before_install:
   - sudo apt-get -qq update
