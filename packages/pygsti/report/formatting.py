@@ -106,22 +106,24 @@ Small = {
         'text'   : no_format, 
         'ppt'    : ppt}
 
+emptyOrDash = lambda x : return x == '--' or x = ''
+
 # 'pi' formatting: add pi symbol/text after given quantity
 def _fmtPi_text(x):
-    if x == "" or x == "--": return ""
+    if emptyOrDash(x): return ""
     else:
         try: return x * _np.pi #but sometimes can't take product b/c x isn't a number
         except: return x
 
-Pi = { 'html'   : lambda x : x if x == "--" or x == "" else html(x) + '&pi;', 
-       'latex'  : lambda x : x if x == "--" or x == "" else latex(x) + '$\\pi$', 
+Pi = { 'html'   : lambda x : x if emptyOrDash(x) else html(x) + '&pi;', 
+       'latex'  : lambda x : x if emptyOrDash(x) else latex(x) + '$\\pi$', 
        'text'   : _fmtPi_text,
-       'ppt'    : lambda x : x if x == "--" or x == "" else ppt(x) + 'pi' }
+       'ppt'    : lambda x : x if emptyOrDash(x) else ppt(x) + 'pi' }
 
 Brackets = { 
         'html'  : lambda x : html(x, brackets=True), 
         'latex' : lambda x : latex(x, brackets=True), 
-        'text'    : no_format, 
+        'text'  : no_format, 
         'ppt'   : lambda x : ppt(x, brackets=True)}
 
 
@@ -208,18 +210,9 @@ def _fmtEBPi_ppt(t):
     else: return ppt(t[0])
 PiErrorBars = { 'html': _fmtEBPi_html, 'latex': _fmtEBPi_latex, 'text': _fmtEBPi_text, 'ppt': _fmtEBPi_ppt }
 
-
-# 'gatestring' formatting: display a gate string
-def _fmtGStr_latex(s):
-    if s is None:
-        return ""
-    else:
-        boxed = [ ("\\mbox{%s}" % gl) for gl in s ]
-        return "$" + '\\cdot'.join(boxed) + "$"
-
 GateString = {
          'html'  : lambda s : '.'.join(s) if s is not None else '', 
-         'latex' : _fmtGStr_latex, 
+         'latex' : lambda s : '' if s is None else ('$%s$' % '\\cdot'.join([ ('\\mbox{%s}' % gl) for gl in s])), 
          'text'  : lambda s : tuple(s) if s is not None else '', 
          'ppt'   : lambda s : '.'.join(s) if s is not None else ''}
 # 'pre' formatting, where the user gives the data in separate formats
@@ -230,6 +223,8 @@ Pre = { 'html'   : lambda x : x['html'],
 
 # Still a bit hacky, but no global required
 def build_figure_formatters(scratchDir):
+    # Specifically, this function remains unevaluated until table rendering - which calls formatList (below)
+    #   in formatList, the scratchDir is given, and this function returns the appropriate dictionary of formatters
 
     # Figure formatting, where a GST figure is displayed in a table cell
     def _fmtFig_html(figInfo):
@@ -242,13 +237,11 @@ def build_figure_formatters(scratchDir):
         fig.save_to(_os.path.join(scratchDir, name + ".pdf"))
         return "\\vcenteredhbox{\\includegraphics[width=%.2fin,height=%.2fin" \
             % (W,H) + ",keepaspectratio]{%s/%s}}" % (scratchDir, name + ".pdf")
-    def _fmtFig_text(figInfo):
-        fig, name, W, H = figInfo
-        return fig
-    def _fmtFig_ppt(figInfo):
-        return "Not Impl."
     
-    Fig = { 'html': _fmtFig_html, 'latex': _fmtFig_latex, 'text': _fmtFig_text, 'ppt': _fmtFig_ppt }
+    Fig = { 'html' : _fmtFig_html, 
+            'latex': _fmtFig_latex, 
+            'text' : lambda figinfo : return figInfo[0], 
+            'ppt'  : lambda figinfo : 'Not implemented' }
     return Fig
 
 Figure = build_figure_formatters 
