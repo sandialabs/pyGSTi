@@ -1,6 +1,0 @@
-pygsti.construction.make_rpe_data_set
-=====================================
-
-.. currentmodule:: pygsti.construction
-
-.. autofunction:: make_rpe_data_set

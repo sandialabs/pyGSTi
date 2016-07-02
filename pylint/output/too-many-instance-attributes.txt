@@ -1,0 +1,12 @@
+************* Module pygsti.report.results
+R: 28, 0: Too many instance attributes (13/6) (too-many-instance-attributes)
+************* Module pygsti.report.plotting
+R:607, 0: Too many instance attributes (7/6) (too-many-instance-attributes)
+************* Module pygsti.objects.gateset
+R: 31, 0: Too many instance attributes (13/6) (too-many-instance-attributes)
+************* Module pygsti.objects.gate
+R:801, 0: Too many instance attributes (8/6) (too-many-instance-attributes)
+************* Module pygsti.objects.confidenceregion
+R: 43, 0: Too many instance attributes (13/6) (too-many-instance-attributes)
+************* Module pygsti.objects.gscalc
+R: 28, 0: Too many instance attributes (17/6) (too-many-instance-attributes)

@@ -1,6 +1,0 @@
-pygsti.objects.TPParameterizedSPAMVec.convert_to_vector
-=======================================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: TPParameterizedSPAMVec.convert_to_vector

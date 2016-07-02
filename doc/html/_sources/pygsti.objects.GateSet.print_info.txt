@@ -1,6 +1,0 @@
-pygsti.objects.GateSet.print_info
-=================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: GateSet.print_info

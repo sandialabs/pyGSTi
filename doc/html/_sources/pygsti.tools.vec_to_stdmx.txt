@@ -1,6 +1,0 @@
-pygsti.tools.vec_to_stdmx
-=========================
-
-.. currentmodule:: pygsti.tools
-
-.. autofunction:: vec_to_stdmx

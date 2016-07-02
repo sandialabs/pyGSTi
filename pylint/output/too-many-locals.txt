@@ -1,0 +1,9 @@
+************* Module pygsti.report.results
+R:1353, 4: Too many local variables (67/60) (too-many-locals)
+R:2141, 4: Too many local variables (65/60) (too-many-locals)
+R:2566, 4: Too many local variables (85/60) (too-many-locals)
+R:3178, 4: Too many local variables (62/60) (too-many-locals)
+************* Module pygsti.algorithms.core
+R: 30, 0: Too many local variables (66/60) (too-many-locals)
+R:840, 0: Too many local variables (71/60) (too-many-locals)
+R:1844, 0: Too many local variables (63/60) (too-many-locals)

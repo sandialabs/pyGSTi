@@ -1,6 +1,0 @@
-pygsti.logl
-===========
-
-.. currentmodule:: pygsti
-
-.. autofunction:: logl

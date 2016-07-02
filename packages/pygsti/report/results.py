@@ -1,3 +1,4 @@
+from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
@@ -5,9 +6,9 @@
 #*****************************************************************
 """ Defines the Results class and supporting functionality."""
 
-import sys as _sys
 import os  as _os
 import re  as _re
+import subprocess  as _subprocess
 import collections as _collections
 import matplotlib  as _matplotlib
 import itertools   as _itertools
@@ -17,14 +18,13 @@ from ..objects      import VerbosityPrinter
 from ..construction import spamspecconstruction as _ssc
 from ..algorithms   import optimize_gauge       as _optimizeGauge
 from ..tools        import listtools            as _lt
-from ..tools        import basistools           as _bt
 from ..             import _version
 
-import latex      as _latex
-import generation as _generation
-import plotting   as _plotting
+from . import latex      as _latex
+from . import generation as _generation
+from . import plotting   as _plotting
 
-from resultcache import ResultCache as _ResultCache
+from .resultcache import ResultCache as _ResultCache
 
 class Results(object):
     """
@@ -280,23 +280,23 @@ class Results(object):
         s += " .dataset    -- the DataSet used to generate these results\n\n"
         s += " .gatesets   -- a dictionary of GateSet objects w/keys:\n"
         s += " ---------------------------------------------------------\n"
-        s += "  " + "\n  ".join(self.gatesets.keys()) + "\n"
+        s += "  " + "\n  ".join(list(self.gatesets.keys())) + "\n"
         s += "\n"
         s += " .gatestring_lists   -- a dict of GateString lists w/keys:\n"
         s += " ---------------------------------------------------------\n"
-        s += "  " + "\n  ".join(self.gatestring_lists.keys()) + "\n"
+        s += "  " + "\n  ".join(list(self.gatestring_lists.keys())) + "\n"
         s += "\n"
         s += " .tables   -- a dict of ReportTable objects w/keys:\n"
         s += " ---------------------------------------------------------\n"
-        s += "  " + "\n  ".join(self.tables.keys()) + "\n"
+        s += "  " + "\n  ".join(list(self.tables.keys())) + "\n"
         s += "\n"
         s += " .figures   -- a dict of ReportFigure objects w/keys:\n"
         s += " ---------------------------------------------------------\n"
-        s += "  " + "\n  ".join(self.figures.keys()) + "\n"
+        s += "  " + "\n  ".join(list(self.figures.keys())) + "\n"
         s += "\n"
         s += " .parameters   -- a dict of simulation parameters:\n"
         s += " ---------------------------------------------------------\n"
-        s += "  " + "\n  ".join(self.parameters.keys()) + "\n"
+        s += "  " + "\n  ".join(list(self.parameters.keys())) + "\n"
         s += "\n"
         s += " .options   -- a container of display options:\n"
         s += " ---------------------------------------------------------\n"
@@ -307,6 +307,61 @@ class Results(object):
         s += " PDF indicating how tables and figures in the PDF correspond\n"
         s += " to the values of .tables[ ] and .figures[ ] listed above.\n"
         return s
+
+    def _process_call(self, call):
+        process = _subprocess.Popen(call, stdout=_subprocess.PIPE,
+                                    stderr=_subprocess.PIPE)
+        stdout, stderr = process.communicate()
+        return stdout, stderr, process.returncode
+
+    def _evaluate_call(self, call, stdout, stderr, returncode, printer):
+        if len(stderr) > 0:
+            printer.error(stderr)
+        if returncode > 0:
+            raise _subprocess.CalledProcessError(returncode, call)
+
+    def _compile_latex_report(self, report_dir, report_base, latex_call,
+                              printer):
+        """Compile a PDF report from a TeX file. Will compile twice
+        automatically.
+
+        Parameters
+        ----------
+        report_dir : string
+            The directory for the output file.
+
+        report_base : string
+            The base name for the output file (not including any extensions).
+
+        latex_call : list of string
+            List containing the command and flags in the form that
+            :function:`subprocess.check_call` uses.
+
+        printer : VerbosityPrinter
+            Printer to handle logging.
+
+        Raises
+        ------
+        subprocess.CalledProcessException
+            If the call to the process comiling the PDF returns non-zero exit
+            status.
+
+        """
+        texFilename = report_base + ".tex"
+        pdfPathname = _os.path.join(report_dir, report_base + ".pdf")
+        call = latex_call + [texFilename]
+        stdout, stderr, returncode = self._process_call(call)
+        self._evaluate_call(call, stdout, stderr, returncode, printer)
+        printer.log("Initial output PDF %s successfully generated." %
+                    pdfPathname)
+        # We could check if the log file contains "Rerun" in it,
+        # but we'll just re-run all the time now
+        stdout, stderr, returncode = self._process_call(call)
+        self._evaluate_call(call, stdout, stderr, returncode, printer)
+        printer.log("Final output PDF %s successfully generated. " %
+                    pdfPathname + "Cleaning up .aux and .log files.")
+        _os.remove( report_base + ".log" )
+        _os.remove( report_base + ".aux" )
 
 
     def _get_table_fns(self):
@@ -992,7 +1047,7 @@ class Results(object):
 
             ret = {}
 
-            for gaugeKey,gopt_gs in best_gs_gauges.iteritems():
+            for gaugeKey,gopt_gs in best_gs_gauges.items():
                 #FUTURE: add confidence region support to these appendices?
                 # -- would need to compute confidenceRegionInfo (cri)
                 #    for each gauge-optimized gateset, gopt_gs and pass
@@ -1313,7 +1368,9 @@ class Results(object):
             templateFilename = _os.path.join( self.options.template_path,
                                               templateFilename )
 
-        template = open(templateFilename,"r").read()
+        template = ''
+        with open(templateFilename, 'r') as templatefile:
+            template = templatefile.read()
         template = template.replace("{", "{{").replace("}", "}}") #double curly braces (for format processing)
 
         # Replace template field markers with `str.format` fields.
@@ -1321,8 +1378,8 @@ class Results(object):
 
         # Replace str.format fields with values and write to output file
         template = template.format(**qtys)
-        open(outputFilename,'w').write(template)
-
+        with open(outputFilename, 'w') as outputfile:
+            outputfile.write(template)
 
     def _getBaseStrDict(self, remove_dups = True):
         #if remove_dups == True, remove duplicates in
@@ -1532,7 +1589,7 @@ class Results(object):
                    ('opt_template_path', self.options.template_path),
                    ('opt_latex_cmd', self.options.latex_cmd) ]
                    #('opt_latex_postcmd', self.options.latex_postcmd) #TODO: add this
-        for key,val in self.parameters.iteritems():
+        for key,val in self.parameters.items():
             pdfInfo.append( (key, val) )
         qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
 
@@ -1545,7 +1602,7 @@ class Results(object):
 
 
         # 1) get latex tables
-	printer.log("*** Generating tables ***")
+        printer.log("*** Generating tables ***")
 
         std_tables = \
             ('targetSpamTable','targetGatesTable','datasetOverviewTable',
@@ -1597,7 +1654,7 @@ class Results(object):
 
 
         # 2) generate plots
-	printer.log("*** Generating plots ***")
+        printer.log("*** Generating plots ***")
 
         if _matplotlib.is_interactive():
             _matplotlib.pyplot.ioff()
@@ -1632,7 +1689,6 @@ class Results(object):
             else:
                 raise ValueError("Invalid objective value: %s"
                                  % self.parameters['objective'])
-
             printer.log("%s plots (%d): " % (plotFnName, nPlots))
 
             with printer.progress_logging(1):
@@ -1707,6 +1763,10 @@ class Results(object):
 
             with printer.progress_logging(1):
 
+            #if verbosity > 0:
+            #    print " ?",; _sys.stdout.flush()
+            #fig = set_fig_qtys("directLGSTDeviationColorBoxPlot",
+            #                   "directLGSTDeviationBoxes.pdf",W=4,H=5)
                 printer.show_progress(0, 1, prefix='', end='')
                 fig = set_fig_qtys("directLongSeqGSTColorBoxPlot",
                                "directLongSeqGST%sBoxes.pdf" % plotFnName, printer - 1)
@@ -1824,30 +1884,11 @@ class Results(object):
             _os.chdir(report_dir)
 
         try:
-            ret = _os.system( "%s %s %s" %
-                              (self.options.latex_cmd,
-                               _os.path.basename(mainTexFilename),
-                               self.options.latex_postcmd) )
-            if ret == 0:
-                #We could check if the log file contains "Rerun" in it,
-                # but we'll just re-run all the time now
-                printer.log("Initial output PDF %s successfully generated." \
-                        % pdfFilename)
-
-                ret = _os.system( "%s %s %s" %
-                                  (self.options.latex_cmd,
-                                   _os.path.basename(mainTexFilename),
-                                   self.options.latex_postcmd) )
-                if ret == 0:
-                    printer.log("Final output PDF %s successfully generated. Cleaning up .aux and .log files." % pdfFilename) #mainTexFilename
-                    _os.remove( report_base + ".log" )
-                    _os.remove( report_base + ".aux" )
-                else:
-                    printer.error("pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
-            else:
-                printer.error("pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
-        except:
-            printer.error("Error trying to run pdflatex to generate output PDF %s. Is '%s' on your path?" % (pdfFilename,self.options.latex_cmd))
+            self._compile_latex_report(report_dir, report_base,
+                                       self.options.latex_call, printer)
+        except _subprocess.CalledProcessError as e:
+            printer.error("pdflatex returned code %d " % e.returncode +
+                          "Check %s.log to see details." % report_base)
         finally:
             _os.chdir(cwd)
 
@@ -2002,7 +2043,7 @@ class Results(object):
                    ('opt_table_class', self.options.table_class),
                    ('opt_template_path', self.options.template_path),
                    ('opt_latex_cmd', self.options.latex_cmd) ]
-        for key,val in self.parameters.iteritems():
+        for key,val in self.parameters.items():
             pdfInfo.append( (key, val) )
         qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
 
@@ -2105,29 +2146,11 @@ class Results(object):
             _os.chdir(report_dir)
 
         try:
-            ret = _os.system( "%s %s %s" %
-                              (self.options.latex_cmd,
-                               _os.path.basename(mainTexFilename),
-                               self.options.latex_postcmd) )
-            if ret == 0:
-                #We could check if the log file contains "Rerun" in it,
-                # but we'll just re-run all the time now
-                printer.log("Initial output PDF %s successfully generated." % \
-                        pdfFilename)
-                ret = _os.system( "%s %s %s" %
-                                  (self.options.latex_cmd,
-                                   _os.path.basename(mainTexFilename),
-                                   self.options.latex_postcmd) )
-                if ret == 0:
-                    printer.log("Final output PDF %s successfully generated. Cleaning up .aux and .log files." % pdfFilename) #mainTexFilename
-                    _os.remove( report_base + ".log" )
-                    _os.remove( report_base + ".aux" )
-                else:
-                    printer.error("Error: pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
-            else:
-                printer.error("Error: pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
-        except:
-            printer.error("Error trying to run pdflatex to generate output PDF %s. Is '%s' on your path?" % (pdfFilename,self.options.latex_cmd))
+            self._compile_latex_report(report_dir, report_base,
+                                       self.options.latex_call, printer)
+        except _subprocess.CalledProcessError as e:
+            printer.error("pdflatex returned code %d " % e.returncode +
+                          "Check %s.log to see details." % report_base)
         finally:
             _os.chdir(cwd)
 
@@ -2142,10 +2165,10 @@ class Results(object):
         """
         Create a GST presentation (i.e. slides) using the beamer latex package.
 
-        The slides can contain most (but not all) of the tables and figures from
-        the "full" report but contain only minimal descriptive text.  This output
-        if useful for those familiar with the GST full report who need to present
-        the results in a projector-friendly format.
+        The slides can contain most (but not all) of the tables and figures
+        from the "full" report but contain only minimal descriptive text.  This
+        output if useful for those familiar with the GST full report who need
+        to present the results in a projector-friendly format.
 
         Parameters
         ----------
@@ -2192,8 +2215,8 @@ class Results(object):
            particular part of the overall goodness of fit box plot.
 
         m, M : float, optional
-           Minimum and Maximum values of the color scale used in the presentation's
-           color box plots.
+           Minimum and Maximum values of the color scale used in the
+           presentation's color box plots.
 
         verbosity : int, optional
            How much detail to send to stdout.
@@ -2291,7 +2314,7 @@ class Results(object):
                    ('opt_table_class', self.options.table_class),
                    ('opt_template_path', self.options.template_path),
                    ('opt_latex_cmd', self.options.latex_cmd) ]
-        for key,val in self.parameters.iteritems():
+        for key,val in self.parameters.items():
             pdfInfo.append( (key, val) )
         qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
 
@@ -2391,6 +2414,7 @@ class Results(object):
         pixplots = ""
         if pixelPlotAppendix:
             paramListLength = len(self.parameters['max length list'])-1
+
             with printer.progress_logging(1):
                 for i in range(st, paramListLength):
                     printer.show_progress(i, paramListLength-1, prefix='', end='')
@@ -2529,27 +2553,11 @@ class Results(object):
             _os.chdir(report_dir)
 
         try:
-            ret = _os.system( "%s %s %s" %
-                              (self.options.latex_cmd,
-                               _os.path.basename(mainTexFilename),
-                               self.options.latex_postcmd) )
-            if ret == 0:
-                #We could check if the log file contains "Rerun" in it, but we'll just re-run all the time now
-                printer.log("Initial output PDF %s successfully generated." % pdfFilename) #mainTexFilename
-                ret = _os.system( "%s %s %s" %
-                                  (self.options.latex_cmd,
-                                   _os.path.basename(mainTexFilename),
-                                   self.options.latex_postcmd) )
-                if ret == 0:
-                    printer.log("Final output PDF %s successfully generated. Cleaning up .aux and .log files." % pdfFilename) #mainTexFilename
-                    _os.remove( report_base + ".log" )
-                    _os.remove( report_base + ".aux" )
-                else:
-                    printer.error("pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
-            else:
-                printer.error("Error: pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
-        except:
-            printer.error("Error trying to run pdflatex to generate output PDF %s. Is '%s' on your path?" % (pdfFilename,self.options.latex_cmd))
+            self._compile_latex_report(report_dir, report_base,
+                                       self.options.latex_call, printer)
+        except _subprocess.CalledProcessError as e:
+            printer.error("pdflatex returned code %d " % e.returncode +
+                          "Check %s.log to see details." % report_base)
         finally:
             _os.chdir(cwd)
 
@@ -2566,14 +2574,14 @@ class Results(object):
         """
         Create a GST Microsoft Powerpoint presentation.
 
-        These slides can contain most (but not all) of the tables and figures from
-        the "full" report but contain only minimal descriptive text.  This method
-        uses the python-pptx package to write Powerpoint files.  The resulting
-        powerpoint slides are meant to parallel those of the PDF presentation
-        but are not as nice and clean.  This method exists because the Powerpoint
-        format is an industry standard and makes it very easy to shamelessly
-        co-opt GST figures or entire slides for incorporation into other
-        presentations.
+        These slides can contain most (but not all) of the tables and figures
+        from the "full" report but contain only minimal descriptive text.  This
+        method uses the python-pptx package to write Powerpoint files.  The
+        resulting powerpoint slides are meant to parallel those of the PDF
+        presentation but are not as nice and clean.  This method exists because
+        the Powerpoint format is an industry standard and makes it very easy to
+        shamelessly co-opt GST figures or entire slides for incorporation into
+        other presentations.
 
         Parameters
         ----------
@@ -2620,8 +2628,8 @@ class Results(object):
            particular part of the overall goodness of fit box plot.
 
         m, M : float, optional
-           Minimum and Maximum values of the color scale used in the presentation's
-           color box plots.
+           Minimum and Maximum values of the color scale used in the
+           presentation's color box plots.
 
         verbosity : int, optional
            How much detail to send to stdout.
@@ -2849,7 +2857,6 @@ class Results(object):
                                    "directLongSeqGSTDeviationBoxes.png", printer - 1)
 
                 printer.log('')
-
                 #Small eigenvalue error rate
                 printer.log(" -- Error rate plots...")
                 fig = set_fig_qtys("smallEigvalErrRateColorBoxPlot",
@@ -2872,7 +2879,6 @@ class Results(object):
                           if len(g) == 1 ]
 
             printer.log(" -- Whack-a-mole plots (%d): " % (2*len(len1Germs)), end='')
-
             with printer.progress_logging(1):
                 for i,germ in enumerate(len1Germs):
                     printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
@@ -3022,17 +3028,28 @@ class Results(object):
 
             cwd = _os.getcwd()
             _os.chdir(fileDir)
+
             try:
-                ret = _os.system("%s -shell-escape %s.tex %s" \
-                                     % (self.options.latex_cmd, key,
-                                        self.options.latex_postcmd) )
-                if ret == 0:
-                    _os.remove( "%s.tex" % key )
-                    _os.remove( "%s.log" % key )
-                    _os.remove( "%s.aux" % key )
-                else: raise ValueError("pdflatex returned code %d trying to render standalone %s" % (ret,key))
+                latex_cmd = self.options.latex_call + \
+                            ["-shell-escape", "%s.tex" % key]
+                stdout, stderr, returncode = self._process_call(latex_cmd)
+                self._evaluate_call(latex_cmd, stdout, stderr, returncode,
+                                    printer)
+                # Check to see if the PNG was generated
+                if not _os.path.isfile("%s.png" % key):
+                    raise Exception("File %s.png was not created by pdflatex"
+                                    % key)
+                _os.remove( "%s.tex" % key )
+                _os.remove( "%s.log" % key )
+                _os.remove( "%s.aux" % key )
+            except _subprocess.CalledProcessError as e:
+                printer.error("pdflatex returned code %d " % e.returncode +
+                              "trying to render standalone %s. " % key +
+                              "Check %s.log to see details." % key)
             except:
-                raise ValueError("pdflatex failed to render standalone %s" % key)
+                printer.error("pdflatex failed to render standalone %s" % key)
+                raise
+
             finally:
                 _os.chdir(cwd)
 
@@ -3041,7 +3058,8 @@ class Results(object):
 
 
         def draw_pic(shapes, path, left, top, width, height):
-            pxWidth, pxHeight = Image.open(open(path)).size
+            with open(path, 'rb') as imagefile:
+                pxWidth, pxHeight = Image.open(imagefile).size
             pxAspect = pxWidth / float(pxHeight) #aspect ratio of image
             maxAspect = width / float(height) #aspect ratio of "max" box
             if pxAspect > maxAspect:
@@ -3149,7 +3167,7 @@ class Results(object):
 
         if pixelPlotAppendix:
             Ls = self.parameters['max length list']
-            for i,pixPlotPath in zip( range(st,len(Ls)-1), pixplots ):
+            for i,pixPlotPath in zip( list(range(st,len(Ls)-1)), pixplots ):
                 slide = add_slide(SLD_LAYOUT_TITLE_NO_CONTENT, "Iteration %d (L=%d): %s values" % (i,Ls[i],plotFnName))
                 draw_pic(slide.shapes, pixPlotPath, 1, 1.5, 8, 5.5)
 
@@ -3330,7 +3348,7 @@ class Results(object):
                    ('opt_table_class', self.options.table_class),
                    ('opt_template_path', self.options.template_path),
                    ('opt_latex_cmd', self.options.latex_cmd) ]
-        for key,val in self.parameters.iteritems():
+        for key,val in self.parameters.items():
             pdfInfo.append( (key, val) )
         qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
 
@@ -3475,7 +3493,6 @@ class Results(object):
                                  % self.parameters['objective'])
 
             printer.log(" -- %s plots (%d): " % (plotFnName, nPlots), end='')
-
             with printer.progress_logging(1):
                 printer.show_progress(0, 2, prefix='', end='')
 
@@ -3727,30 +3744,11 @@ class Results(object):
             _os.chdir(report_dir)
 
         try:
-            ret = _os.system( "%s %s %s" %
-                              (self.options.latex_cmd,
-                               _os.path.basename(mainTexFilename),
-                               self.options.latex_postcmd) )
-            if ret == 0:
-                #We could check if the log file contains "Rerun" in it,
-                # but we'll just re-run all the time now
-                printer.log("Initial output PDF %s successfully generated." \
-                        % pdfFilename)
-
-                ret = _os.system( "%s %s %s" %
-                                  (self.options.latex_cmd,
-                                   _os.path.basename(mainTexFilename),
-                                   self.options.latex_postcmd) )
-                if ret == 0:
-                    printer.log("Final output PDF %s successfully generated. Cleaning up .aux and .log files." % pdfFilename) #mainTexFilename
-                    _os.remove( report_base + ".log" )
-                    _os.remove( report_base + ".aux" )
-                else:
-                    printer.error("pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
-            else:
-                printer.error("pdflatex returned code %d. Check %s.log to see details" % (ret, report_base))
-        except:
-            printer.error("Error trying to run pdflatex to generate output PDF %s. Is '%s' on your path?" % (pdfFilename,self.options.latex_cmd))
+            self._compile_latex_report(report_dir, report_base,
+                                       self.options.latex_call, printer)
+        except _subprocess.CalledProcessError as e:
+            printer.error("pdflatex returned code %d " % e.returncode +
+                          "Check %s.log to see details." % report_base)
         finally:
             _os.chdir(cwd)
 
@@ -3773,6 +3771,9 @@ class ResultOptions(object):
         self.table_class = "pygstiTbl"
         self.template_path = "."
         self.latex_cmd = "pdflatex"
+        # Don't allow LaTeX to try and recover from errors interactively.
+        self.latex_opts = ["-interaction=nonstopmode", "-halt-on-error"]
+        self.latex_call = [self.latex_cmd] + self.latex_opts
         if _os.path.exists("/dev/null"):
             self.latex_postcmd = "-halt-on-error </dev/null >/dev/null"
         else:
@@ -3809,7 +3810,7 @@ def _to_pdfinfo(list_of_keyval_tuples):
         elif type(val) in (dict,_collections.OrderedDict):
             sanitized_val = "Dict[" + \
                 ", ".join([ "%s: %s" % (sanitize(k),sanitize(v)) for k,v
-                            in val.iteritems()]) + "]"
+                            in val.items()]) + "]"
         else:
             sanitized_val = sanitize_str( str(val) )
         return sanitized_val

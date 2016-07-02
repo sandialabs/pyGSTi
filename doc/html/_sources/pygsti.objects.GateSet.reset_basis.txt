@@ -1,6 +1,0 @@
-pygsti.objects.GateSet.reset_basis
-==================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: GateSet.reset_basis

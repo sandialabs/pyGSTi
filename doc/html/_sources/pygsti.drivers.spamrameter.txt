@@ -1,6 +1,0 @@
-pygsti.drivers.spamrameter
-==========================
-
-.. currentmodule:: pygsti.drivers
-
-.. autofunction:: spamrameter

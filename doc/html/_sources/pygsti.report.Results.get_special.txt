@@ -1,6 +1,0 @@
-pygsti.report.Results.get_special
-=================================
-
-.. currentmodule:: pygsti.report
-
-.. automethod:: Results.get_special
