@@ -6,9 +6,10 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Functions for generating report tables in different formats """
 
-from . import latex as _lu
-from . import html  as _hu
-from . import ppt   as _pu
+from .latex import latex, latex_value
+from .html  import html,  html_value
+from .pu    import ppt,   ppt_value
+
 import cgi          as _cgi
 import numpy        as _np
 import re           as _re
@@ -85,24 +86,24 @@ Effect = { 'html'   : build_formatter(stringreturn=('remainder', 'E<sub>C</sub>'
 
 # Normal replacements
 Normal = { 
-        'html'   : _hu.html, 
-        'latex'  : _lu.latex, 
+        'html'   : html, 
+        'latex'  : latex, 
         'py'     : no_format, 
-        'ppt'    : _pu.ppt }
+        'ppt'    : ppt }
 
 # 'normal' formatting but round to 2 decimal places
 Rounded = { 
-         'html'  : lambda x : _hu.html_value(x, ROUND=2), 
-         'latex' : lambda x : _lu.latex_value(x, ROUND=2), 
+         'html'  : lambda x : html_value(x, ROUND=2), 
+         'latex' : lambda x : latex_value(x, ROUND=2), 
          'py'    : no_format, 
-         'ppt'   : lambda x : _pu.ppt_value(x, ROUND=2) }
+         'ppt'   : lambda x : ppt_value(x, ROUND=2) }
 
 # 'small' formating - make text smaller
 Small = { 
-        'html'   : _hu.html, 
-        'latex'  : lambda x : '\\small' + _lu.latex(x), 
+        'html'   : html, 
+        'latex'  : lambda x : '\\small' + latex(x), 
         'py'     : no_format, 
-        'ppt'    : _pu.ppt}
+        'ppt'    : ppt}
 
 # 'pi' formatting: add pi symbol/text after given quantity
 def _fmtPi_py(x):
@@ -111,16 +112,16 @@ def _fmtPi_py(x):
         try: return x * _np.pi #but sometimes can't take product b/c x isn't a number
         except: return x
 
-Pi = { 'html'   : lambda x : x if x == "--" or x == "" else _hu.html(x) + '&pi;', 
-       'latex'  : lambda x : x if x == "--" or x == "" else _lu.latex(x) + '$\\pi$', 
+Pi = { 'html'   : lambda x : x if x == "--" or x == "" else html(x) + '&pi;', 
+       'latex'  : lambda x : x if x == "--" or x == "" else latex(x) + '$\\pi$', 
        'py'     : _fmtPi_py,
-       'ppt'    : lambda x : x if x == "--" or x == "" else _pu.ppt(x) + 'pi' }
+       'ppt'    : lambda x : x if x == "--" or x == "" else ppt(x) + 'pi' }
 
 Brackets = { 
-        'html'  : lambda x : _hu.html(x, brackets=True), 
-        'latex' : lambda x : _lu.latex(x, brackets=True), 
+        'html'  : lambda x : html(x, brackets=True), 
+        'latex' : lambda x : latex(x, brackets=True), 
         'py'    : no_format, 
-        'ppt'   : lambda x : _pu.ppt(x, brackets=True)}
+        'ppt'   : lambda x : ppt(x, brackets=True)}
 
 
 # ####################################################################### #
@@ -157,18 +158,18 @@ Conversion = {
 # 'errorbars' formatting: display a scalar value +/- error bar
 def _fmtEB_html(t):
     if t[1] is not None:
-        return "%s +/- %s" % (_hu.html(t[0]), _hu.html(t[1]))
-    else: return _hu.html(t[0])
+        return "%s +/- %s" % (html(t[0]), html(t[1]))
+    else: return html(t[0])
 def _fmtEB_latex(t):
     if t[1] is not None:
-        return "$ \\begin{array}{c} %s \\\\ \pm %s \\end{array} $" % (_lu.latex_value(t[0]), _lu.latex_value(t[1]))
-    else: return _lu.latex_value(t[0])
+        return "$ \\begin{array}{c} %s \\\\ \pm %s \\end{array} $" % (latex_value(t[0]), latex_value(t[1]))
+    else: return latex_value(t[0])
 def _fmtEB_py(t):
     return { 'value': t[0], 'errbar': t[1] }
 def _fmtEB_ppt(t):
     if t[1] is not None:
-        return "%s +/- %s" % (_pu.ppt(t[0]), _pu.ppt(t[1]))
-    else: return _pu.ppt(t[0])
+        return "%s +/- %s" % (ppt(t[0]), ppt(t[1]))
+    else: return ppt(t[0])
 
 ErrorBars = { 'html': _fmtEB_html, 'latex': _fmtEB_latex, 'py': _fmtEB_py, 'ppt': _fmtEB_ppt }
 
@@ -176,34 +177,34 @@ ErrorBars = { 'html': _fmtEB_html, 'latex': _fmtEB_latex, 'py': _fmtEB_py, 'ppt'
 # 'vector errorbars' formatting: display a vector value +/- error bar
 def _fmtEBvec_html(t):
     if t[1] is not None:
-        return "%s +/- %s" % (_hu.html(t[0]), _hu.html(t[1]))
-    else: return _hu.html(t[0])
+        return "%s +/- %s" % (html(t[0]), html(t[1]))
+    else: return html(t[0])
 def _fmtEBvec_latex(t):
     if t[1] is not None:
-        return "%s $\pm$ %s" % (_lu.latex(t[0]), _lu.latex(t[1]))
-    else: return _lu.latex(t[0])
+        return "%s $\pm$ %s" % (latex(t[0]), latex(t[1]))
+    else: return latex(t[0])
 def _fmtEBvec_py(t): return { 'value': t[0], 'errbar': t[1] }
 def _fmtEBvec_ppt(t):
     if t[1] is not None:
-        return "%s +/- %s" % (_pu.ppt(t[0]), _pu.ppt(t[1]))
-    else: return _pu.ppt(t[0])
+        return "%s +/- %s" % (ppt(t[0]), ppt(t[1]))
+    else: return ppt(t[0])
 VecErrorBars = { 'html': _fmtEBvec_html, 'latex': _fmtEBvec_latex, 'py': _fmtEBvec_py, 'ppt': _fmtEBvec_ppt }
 
 
 # 'errorbars with pi' formatting: display (scalar_value +/- error bar) * pi
 def _fmtEBPi_html(t):
     if t[1] is not None:
-        return "(%s +/- %s)&pi;" % (_hu.html(t[0]), _hu.html(t[1]))
+        return "(%s +/- %s)&pi;" % (html(t[0]), html(t[1]))
     else: return _fmtPi_html(t[0])
 def _fmtEBPi_latex(t):
     if t[1] is not None:
-        return "$ \\begin{array}{c}(%s \\\\ \pm %s)\\pi \\end{array} $" % (_lu.latex(t[0]), _lu.latex(t[1]))
+        return "$ \\begin{array}{c}(%s \\\\ \pm %s)\\pi \\end{array} $" % (latex(t[0]), latex(t[1]))
     else: return _fmtPi_latex(t[0])
 def _fmtEBPi_py(t): return { 'value': t[0], 'errbar': t[1] }
 def _fmtEBPi_ppt(t):
     if t[1] is not None:
-        return "(%s +/- %s)pi" % (_pu.ppt(t[0]), _pu.ppt(t[1]))
-    else: return _pu.ppt(t[0])
+        return "(%s +/- %s)pi" % (ppt(t[0]), ppt(t[1]))
+    else: return ppt(t[0])
 PiErrorBars = { 'html': _fmtEBPi_html, 'latex': _fmtEBPi_latex, 'py': _fmtEBPi_py, 'ppt': _fmtEBPi_ppt }
 
 
@@ -252,10 +253,10 @@ def build_figure_formatters(scratchDir):
 Figure = build_figure_formatters 
 
 # Bold formatting
-Bold = { 'html'  : lambda x : '<b>%s</b>' % _hu.html(x),
-         'latex' : lambda x : '\\textbf{%s}' % _lu.latex(x), 
+Bold = { 'html'  : lambda x : '<b>%s</b>' % html(x),
+         'latex' : lambda x : '\\textbf{%s}' % latex(x), 
          'py'    : build_formatter(formatstring='**%s**'), 
-         'ppt'   : lambda x : _pu.ppt(x)}
+         'ppt'   : lambda x : ppt(x)}
 
 
 
