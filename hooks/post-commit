@@ -16,4 +16,3 @@ branchname = get_branchname()
 
 if branchname in updates_git_pages:
     subprocess.call(['bash', '.git/hooks/create_git_html'])
-        
