@@ -4,10 +4,10 @@ from collections import OrderedDict as _OrderedDict
 
 class ReportTable(object):
     def __init__(self, colHeadings, formatters, customHeader=None):
-        self._headings = colHeadings
+        self._headings          = colHeadings
         self._headingFormatters = formatters
-        self._customHeadings = customHeader
-        self._rows = []
+        self._customHeadings    = customHeader
+        self._rows              = []
 
         if self._headingFormatters is not None:
             self._columnNames = self._headings

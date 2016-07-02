@@ -76,30 +76,33 @@ Rho = { 'html' : build_formatter(stringreplacers=[('rho', '&rho;')],
         'ppt'  : no_format }
 
 # 'E' (POVM) effect formatting
-E = { 'html'  : build_formatter(stringreturn=('remainder', 'E<sub>C</sub>'), 
+Effect = { 'html'   : build_formatter(stringreturn=('remainder', 'E<sub>C</sub>'), 
                                 regexreplace=('.*?([0-9]+)$', '<sub>%s</sub>')), # Regexreplace potentially doesn't run
-      'latex' : build_formatter(stringreturn=('remainder', '$E_C$'),
+      'latex'  : build_formatter(stringreturn=('remainder', '$E_C$'),
                                 regexreplace=('.*?([0-9]+)$', '_{%s}')), 
-      'py'    : no_format, 
-      'ppt'   : no_format}
+      'py'     : no_format, 
+      'ppt'    : no_format}
 
 # Normal replacements
-Nml = { 'html'  : _hu.html, 
-        'latex' : _lu.latex, 
-        'py'    : no_format, 
-        'ppt'   : _pu.ppt } # Does this work?
+Normal = { 
+        'html'   : _hu.html, 
+        'latex'  : _lu.latex, 
+        'py'     : no_format, 
+        'ppt'    : _pu.ppt }
 
 # 'normal' formatting but round to 2 decimal places
-Nml2 = { 'html'  : lambda x : _hu.html_value(x, ROUND=2), 
+Rounded = { 
+         'html'  : lambda x : _hu.html_value(x, ROUND=2), 
          'latex' : lambda x : _lu.latex_value(x, ROUND=2), 
          'py'    : no_format, 
          'ppt'   : lambda x : _pu.ppt_value(x, ROUND=2) }
 
 # 'small' formating - make text smaller
-Sml = { 'html'  : _hu.html, 
-        'latex' : lambda x : '\\small' + _lu.latex(x), 
-        'py'    : no_format, 
-        'ppt'   : _pu.ppt}
+Small = { 
+        'html'   : _hu.html, 
+        'latex'  : lambda x : '\\small' + _lu.latex(x), 
+        'py'     : no_format, 
+        'ppt'    : _pu.ppt}
 
 # 'pi' formatting: add pi symbol/text after given quantity
 def _fmtPi_py(x):
@@ -108,12 +111,13 @@ def _fmtPi_py(x):
         try: return x * _np.pi #but sometimes can't take product b/c x isn't a number
         except: return x
 
-Pi = { 'html'  : lambda x : x if x == "--" or x == "" else _hu.html(x) + '&pi;', 
-       'latex' : lambda x : x if x == "--" or x == "" else _lu.latex(x) + '$\\pi$', 
-       'py'    : _fmtPi_py,
-       'ppt'   : lambda x : x if x == "--" or x == "" else _pu.ppt(x) + 'pi' }
+Pi = { 'html'   : lambda x : x if x == "--" or x == "" else _hu.html(x) + '&pi;', 
+       'latex'  : lambda x : x if x == "--" or x == "" else _lu.latex(x) + '$\\pi$', 
+       'py'     : _fmtPi_py,
+       'ppt'    : lambda x : x if x == "--" or x == "" else _pu.ppt(x) + 'pi' }
 
-Brk = { 'html'  : lambda x : _hu.html(x, brackets=True), 
+Brackets = { 
+        'html'  : lambda x : _hu.html(x, brackets=True), 
         'latex' : lambda x : _lu.latex(x, brackets=True), 
         'py'    : no_format, 
         'ppt'   : lambda x : _pu.ppt(x, brackets=True)}
@@ -144,7 +148,8 @@ def _fmtCnv_latex(x):
     else:
         return x
 
-TxtCnv = { 'html'  : _fmtCnv_html, 
+Conversion = { 
+           'html'  : _fmtCnv_html, 
            'latex' : _fmtCnv_latex, 
            'py'    : build_formatter(stringreplacers=[('<STAR>', '*'), ('|', ' ')]), 
            'ppt'   : build_formatter(stringreplacers=[('<STAR>', '*'), ('|', '\n')])}
@@ -164,7 +169,8 @@ def _fmtEB_ppt(t):
     if t[1] is not None:
         return "%s +/- %s" % (_pu.ppt(t[0]), _pu.ppt(t[1]))
     else: return _pu.ppt(t[0])
-EB = { 'html': _fmtEB_html, 'latex': _fmtEB_latex, 'py': _fmtEB_py, 'ppt': _fmtEB_ppt }
+
+ErrorBars = { 'html': _fmtEB_html, 'latex': _fmtEB_latex, 'py': _fmtEB_py, 'ppt': _fmtEB_ppt }
 
 
 # 'vector errorbars' formatting: display a vector value +/- error bar
@@ -181,7 +187,7 @@ def _fmtEBvec_ppt(t):
     if t[1] is not None:
         return "%s +/- %s" % (_pu.ppt(t[0]), _pu.ppt(t[1]))
     else: return _pu.ppt(t[0])
-EBvec = { 'html': _fmtEBvec_html, 'latex': _fmtEBvec_latex, 'py': _fmtEBvec_py, 'ppt': _fmtEBvec_ppt }
+VecErrorBars = { 'html': _fmtEBvec_html, 'latex': _fmtEBvec_latex, 'py': _fmtEBvec_py, 'ppt': _fmtEBvec_ppt }
 
 
 # 'errorbars with pi' formatting: display (scalar_value +/- error bar) * pi
@@ -198,7 +204,7 @@ def _fmtEBPi_ppt(t):
     if t[1] is not None:
         return "(%s +/- %s)pi" % (_pu.ppt(t[0]), _pu.ppt(t[1]))
     else: return _pu.ppt(t[0])
-EBPi = { 'html': _fmtEBPi_html, 'latex': _fmtEBPi_latex, 'py': _fmtEBPi_py, 'ppt': _fmtEBPi_ppt }
+PiErrorBars = { 'html': _fmtEBPi_html, 'latex': _fmtEBPi_latex, 'py': _fmtEBPi_py, 'ppt': _fmtEBPi_ppt }
 
 
 # 'gatestring' formatting: display a gate string
@@ -209,7 +215,8 @@ def _fmtGStr_latex(s):
         boxed = [ ("\\mbox{%s}" % gl) for gl in s ]
         return "$" + '\\cdot'.join(boxed) + "$"
 
-GStr = { 'html'  : lambda s : '.'.join(s) if s is not None else '', 
+GateString = {
+         'html'  : lambda s : '.'.join(s) if s is not None else '', 
          'latex' : _fmtGStr_latex, 
          'py'    : lambda s : tuple(s) if s is not None else '', 
          'ppt'   : lambda s : '.'.join(s) if s is not None else ''}
@@ -242,7 +249,7 @@ def build_figure_formatters(scratchDir):
     Fig = { 'html': _fmtFig_html, 'latex': _fmtFig_latex, 'py': _fmtFig_py, 'ppt': _fmtFig_ppt }
     return Fig
 
-Fig = build_figure_formatters 
+Figure = build_figure_formatters 
 
 # Bold formatting
 Bold = { 'html'  : lambda x : '<b>%s</b>' % _hu.html(x),
