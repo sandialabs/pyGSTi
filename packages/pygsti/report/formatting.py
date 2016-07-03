@@ -12,8 +12,10 @@ from .ppt   import ppt,   ppt_value
 
 import cgi          as _cgi
 import numpy        as _np
+import numbers      as _numbers
 import re           as _re
 import os           as _os
+
 
 # A factory function for building formatting functions
 def build_formatter(regexreplace=None, formatstring='%s', stringreturn=None, stringreplacers=None):
@@ -108,16 +110,9 @@ Small = {
 
 emptyOrDash = lambda x : return x == '--' or x = ''
 
-# 'pi' formatting: add pi symbol/text after given quantity
-def _fmtPi_text(x):
-    if emptyOrDash(x): return ""
-    else:
-        try: return x * _np.pi #but sometimes can't take product b/c x isn't a number
-        except: return x
-
 Pi = { 'html'   : lambda x : x if emptyOrDash(x) else html(x) + '&pi;', 
        'latex'  : lambda x : x if emptyOrDash(x) else latex(x) + '$\\pi$', 
-       'text'   : _fmtPi_text,
+       'text'   : lambda x : x if emptyOrDash(x) or not isinstance(x, _numbers.Number else x * _np.pi,
        'ppt'    : lambda x : x if emptyOrDash(x) else ppt(x) + 'pi' }
 
 Brackets = { 
@@ -155,61 +150,43 @@ def _fmtCnv_latex(x):
 Conversion = { 
            'html'  : _fmtCnv_html, 
            'latex' : _fmtCnv_latex, 
-           'text'    : build_formatter(stringreplacers=[('<STAR>', '*'), ('|', ' ')]), 
+           'text'  : build_formatter(stringreplacers=[('<STAR>', '*'), ('|', ' ')]), 
            'ppt'   : build_formatter(stringreplacers=[('<STAR>', '*'), ('|', '\n')])}
 
-# 'errorbars' formatting: display a scalar value +/- error bar
-def _fmtEB_html(t):
-    if t[1] is not None:
-        return "%s +/- %s" % (html(t[0]), html(t[1]))
-    else: return html(t[0])
-def _fmtEB_latex(t):
-    if t[1] is not None:
-        return "$ \\begin{array}{c} %s \\\\ \pm %s \\end{array} $" % (latex_value(t[0]), latex_value(t[1]))
-    else: return latex_value(t[0])
-def _fmtEB_text(t):
-    return { 'value': t[0], 'errbar': t[1] }
-def _fmtEB_ppt(t):
-    if t[1] is not None:
-        return "%s +/- %s" % (ppt(t[0]), ppt(t[1]))
-    else: return ppt(t[0])
+# Essentially takes two formatters and decides which to use, based on if the error bar exists
+def eb_template(a, b):
+    def template(t):
+        if t[1] is not None:
+            # A corresponds to when the error bar is present
+            return a(t)
+        else:
+            return b(t)
 
-ErrorBars = { 'html': _fmtEB_html, 'latex': _fmtEB_latex, 'text': _fmtEB_text, 'ppt': _fmtEB_ppt }
+ErrorBars = { 'html'  : eb_template(lambda t : '%s +/- %s' % (html(t[0], html(t[1])
+                                    lambda t : html(t[0])), 
+              'latex' : eb_template(lambda t : '$ \\begin{array}{c} %s \\\\ \pm %s \\end{array} $' % (latex_value(t[0]), latex_value(t[1])),
+                                    lambda t : latex_value(t[0])) 
+              'text'  : lambda t : { 'value' : t[0], 'errbar' : t[1] }, 
+              'ppt'   : eb_template(lambda t : '%s +/- %s' % (ppt(t[0]), ppt(t[1])),
+                                    lambda t : ppt(t[0]))}
 
-
-# 'vector errorbars' formatting: display a vector value +/- error bar
-def _fmtEBvec_html(t):
-    if t[1] is not None:
-        return "%s +/- %s" % (html(t[0]), html(t[1]))
-    else: return html(t[0])
-def _fmtEBvec_latex(t):
-    if t[1] is not None:
-        return "%s $\pm$ %s" % (latex(t[0]), latex(t[1]))
-    else: return latex(t[0])
-def _fmtEBvec_text(t): return { 'value': t[0], 'errbar': t[1] }
-def _fmtEBvec_ppt(t):
-    if t[1] is not None:
-        return "%s +/- %s" % (ppt(t[0]), ppt(t[1]))
-    else: return ppt(t[0])
-VecErrorBars = { 'html': _fmtEBvec_html, 'latex': _fmtEBvec_latex, 'text': _fmtEBvec_text, 'ppt': _fmtEBvec_ppt }
+VecErrorBars = { 'html'  : eb_template(lambda t : '%s +/- %s' % (html(t[0]), html(t[1])),
+                                       lambda t : html(t[0]), 
+                 'latex' : eb_template(lambda t : '%s $\pm$ %s' % (latex(t[0]), latex(t[1])),
+                                       lambda t : latex(t[0])), 
+                 'text'  : lambda t : return { 'value' : t[0], 'errbar' : t[1] }, 
+                 'ppt'   : eb_template(lambda t : '%s +/- %s' % (ppt(t[0]), ppt(t[1])),
+                                       lambda t : ppt(t[0])}
 
 
 # 'errorbars with pi' formatting: display (scalar_value +/- error bar) * pi
-def _fmtEBPi_html(t):
-    if t[1] is not None:
-        return "(%s +/- %s)&pi;" % (html(t[0]), html(t[1]))
-    else: return _fmtPi_html(t[0])
-def _fmtEBPi_latex(t):
-    if t[1] is not None:
-        return "$ \\begin{array}{c}(%s \\\\ \pm %s)\\pi \\end{array} $" % (latex(t[0]), latex(t[1]))
-    else: return _fmtPi_latex(t[0])
-def _fmtEBPi_text(t): return { 'value': t[0], 'errbar': t[1] }
-def _fmtEBPi_ppt(t):
-    if t[1] is not None:
-        return "(%s +/- %s)pi" % (ppt(t[0]), ppt(t[1]))
-    else: return ppt(t[0])
-PiErrorBars = { 'html': _fmtEBPi_html, 'latex': _fmtEBPi_latex, 'text': _fmtEBPi_text, 'ppt': _fmtEBPi_ppt }
-
+PiErrorBars = { 'html'  : eb_template(lambda t : '(%s +/- %s)&pi;' % (html(t[0]), html(t[1])),
+                                      lambda t : Pi['html'](t[0])), 
+                'latex' : eb_template(lambda t : '$ \\begin{array}{c}(%s \\\\ ]pm %s)\\pi \\end{array} $' % (latex(t[0]), latex(t[1])),
+                                      lambda t : Pi['latex'](t[0])), 
+                'text'  : lambda t : {'value' : t[0], 'errbar' : t[1]}, 
+                'ppt'   : eb_template(lambda t : '(%s +/- %s)pi' % (ppt(t[0]), ppt(t[1])),
+                                      lambda t : ppt(t[0]))}
 GateString = {
          'html'  : lambda s : '.'.join(s) if s is not None else '', 
          'latex' : lambda s : '' if s is None else ('$%s$' % '\\cdot'.join([ ('\\mbox{%s}' % gl) for gl in s])), 
