@@ -1,13 +1,7 @@
 """A python implementation of Gate Set Tomography"""
 
 from distutils.core import setup
-
-
-down vote
-accepted
 	
-
-
 #execfile("packages/pygsti/_version.py")
 
 # 3.0 changes the way exec has to be called
