@@ -1,10 +1,9 @@
 #!/usr/bin/python
 from __future__ import print_function
-from runPackage import run_package
+from test_tools.runPackage import run_package
 import sys
 
 travisPackages = ['tools', 'objects', 'construction', 'io', 'optimize', 'algorithms']
-#travisPackages=['tools']
 
 results = []
 for package in travisPackages:
