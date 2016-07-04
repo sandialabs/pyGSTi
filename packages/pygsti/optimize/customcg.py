@@ -141,7 +141,7 @@ def _maximize1D(g,s1,s2,g1):
     # Note (s1,g1) and s2 are given.  Start with bracket (s1,s2,s3)
     #s3 = s2*(1.0+PHI); g2 = g(s2); g3 = g(s3)
     s3 = s2 + PHI*(s2-s1); g2 = g(s2); g3 = g(s3)
-    s4,g4 = None,None
+    # s4,g4 = None,None
     s1_on_bd = s3_on_bd = False
 
     #print "DEBUG: BEGIN MAX 1D: s1,s3=", (s1,s3)
@@ -185,7 +185,7 @@ def _maximize1D(g,s1,s2,g1):
     return ret
 
 
-
+#TODO: g3 and g1 are unused!
 def _max_within_bracket(g,s1,g1,s2,g2,s3,g3):
     TOL = 1e-10; FRAC_TOL = 1e-6
     assert( s2-s1 > TOL )  # a legit bracket must have s1 < s2

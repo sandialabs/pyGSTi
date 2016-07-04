@@ -20,6 +20,7 @@ from ..objects import gateset as _gateset
 # Build gates based on "standard" gate names
 ############################################
 
+#TODO: stateSpaceLabels is never used?
 def build_vector(stateSpaceDims, stateSpaceLabels, vecExpr, basis="gm"):
     """
     Build a rho or E vector from an expression.
@@ -60,7 +61,7 @@ def build_vector(stateSpaceDims, stateSpaceLabels, vecExpr, basis="gm"):
     numpy array
         The vector specified by vecExpr in the desired basis.
     """
-    dmDim,gateDim,blockDims = _bt._processBlockDims(stateSpaceDims)
+    _, gateDim, blockDims = _bt._processBlockDims(stateSpaceDims)
     vecInReducedStdBasis = _np.zeros( (gateDim,1), 'd' ) # assume index given as vecExpr refers to a
                                                          #Hilbert-space state index, so "reduced-std" basis
 
@@ -109,7 +110,7 @@ def build_identity_vec(stateSpaceDims, basis="gm"):
     numpy array
         The identity vector in the desired basis.
     """
-    dmDim, gateDim, blockDims = _bt._processBlockDims(stateSpaceDims)
+    _, gateDim, blockDims = _bt._processBlockDims(stateSpaceDims)
     vecInReducedStdBasis = _np.zeros( (gateDim,1), 'd' ) # assume index given as vecExpr refers to a Hilbert-space state index, so "reduced-std" basis
 
     #set all diagonal elements of density matrix to 1.0 (end result = identity density mx)
@@ -162,7 +163,7 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
 
     #Gate matrix will be in matrix unit basis, which we order by vectorizing
     # (by concatenating rows) each block of coherent states in the order given.
-    dmDim, gateDim, blockDims = _bt._processBlockDims(stateSpaceDims)
+    dmDim, _ , _ = _bt._processBlockDims(stateSpaceDims)
     fullOpDim = dmDim**2
 
     #Store each tensor product blocks start index (within the density matrix), which tensor product block
@@ -447,7 +448,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
     #  each of which is given additional parameters specifying which indices it acts upon
 
     dmDim, gateDim, blockDims = _bt._processBlockDims(stateSpaceDims)
-    fullOpDim = dmDim**2
+    #fullOpDim = dmDim**2
 
     #Store each tensor product blocks start index (within the density matrix), which tensor product block
     #  each label is in, and check to make sure dimensions match stateSpaceDims
@@ -597,7 +598,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
             this function merges together basis indices for the operated-on and
             not-operated-on tensor product components.  
             Note: return value always have length == len(basisInds) == number
-            of components
+            of componens
             """
             ret = list(noop_b[:])    #start with noop part...
             for li,b_el in sorted( zip(labelIndices,gate_b), key=lambda x: x[0]):
@@ -619,7 +620,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
                 gate_b1 = decomp_gate_index(gate_i) # gate_b? are lists of dm basis indices, one index per
                 gate_b2 = decomp_gate_index(gate_j) #  tensor product component that the gate operates on (2 components for a 2-qubit gate)
 
-                for i,b_noop in enumerate(tensorBlkEls_noop): #loop over all state configurations we don't operate on - so really a loop over diagonal dm elements
+                for b_noop in tensorBlkEls_noop: #loop over all state configurations we don't operate on - so really a loop over diagonal dm elements
                     b_out = merge_gate_and_noop_bases(gate_b1, b_noop)  # using same b_noop for in and out says we're acting
                     b_in  = merge_gate_and_noop_bases(gate_b2, b_noop)  #  as the identity on the no-op state space
                     out_vec_index = lookup_blkElIndex[ tuple(b_out) ] # index of output dm basis el within vec(tensor block basis)

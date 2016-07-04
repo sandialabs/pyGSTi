@@ -44,7 +44,7 @@ class OutputData:
           If no parameter of that name is found, returns None.
         """
         if paramCategory is None:
-            for (cat,cat_dict) in self.parameters.items():
+            for (_,cat_dict) in self.parameters.items():
                 if paramName in cat_dict:
                     return cat_dict[paramName]
         elif paramCategory in self.parameters:

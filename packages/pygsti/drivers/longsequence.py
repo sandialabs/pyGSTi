@@ -143,7 +143,6 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     Results
     """
 
-    cwd = _os.getcwd()
     tRef = _time.time(); times_list = []
 
     #Get target gateset
@@ -201,7 +200,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     if constrainToTP: #gauge optimize (and contract if needed) to TP, then lock down first basis element as the identity
         #TODO: instead contract to vSPAM? (this could do more than just alter the 1st element...)
         gs_lgst.set_all_parameterizations("full") #make sure we can do gauge optimization
-        minPenalty, gaugeMx, gs_in_TP = _alg.optimize_gauge(
+        minPenalty, _, gs_in_TP = _alg.optimize_gauge(
             gs_lgst, "TP",  returnAll=True, spamWeight=1.0, gateWeight=1.0,
             verbosity=3)
 
