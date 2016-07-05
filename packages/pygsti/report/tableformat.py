@@ -79,7 +79,7 @@ Rho = { 'html' : build_formatter(stringreplacers=[('rho', '&rho;')],
 Effect = { 'html'   : build_formatter(stringreturn=('remainder', 'E<sub>C</sub>'), 
                                 regexreplace=('.*?([0-9]+)$', '<sub>%s</sub>')), # Regexreplace potentially doesn't run
       'latex'  : build_formatter(stringreturn=('remainder', '$E_C$'),
-                                regexreplace=('.*?([0-9]+)$', '_{%s}')), 
+                                regexreplace=('.*?([0-9]+)$', '_{%s}'), formatstring='$%s$'), 
       'py'     : no_format, 
       'ppt'    : no_format}
 
@@ -198,7 +198,7 @@ def _fmtEBPi_html(t):
 def _fmtEBPi_latex(t):
     if t[1] is not None:
         return "$ \\begin{array}{c}(%s \\\\ \pm %s)\\pi \\end{array} $" % (_lu.latex(t[0]), _lu.latex(t[1]))
-    else: return _fmtPi_latex(t[0])
+    else: return Pi['latex'](t[0])
 def _fmtEBPi_py(t): return { 'value': t[0], 'errbar': t[1] }
 def _fmtEBPi_ppt(t):
     if t[1] is not None:
