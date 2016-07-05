@@ -337,13 +337,13 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
 
 #@profile
 def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
-                                 randomizationStrength = 1e-3, numCopies=None, seed = 0, 
-                                 l1Penalty = 1e-2, gatePenalty = 0,
+                                 randomizationStrength=1e-3, numCopies=None, seed=0, 
+                                 l1Penalty=1e-2, gatePenalty=0,
                                  initialWeights=None, scoreFunc='all', maxIter=100, 
                                  fixedSlack=False, slackFrac=False, 
                                  returnAll=False, tol=1e-6, check=False,
-                                 forceSingletons = True, forceSingletonsScore = 1e100,
-                                 threshold = 1e6, verbosity=1):
+                                 forceSingletons=True, forceSingletonsScore=1e100,
+                                 threshold=1e6, verbosity=1):
     """
     Find a locally optimal subset of the germs in germsList.
 
@@ -351,7 +351,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     without making the smallest non-gauge eigenvalue of the
     Jacobian.H*Jacobian matrix smaller, i.e. less amplified,
     by more than a fixed or variable amount of "slack", as
-    specified by fixedSlack or slackFrac.
+    specified by `fixedSlack` or `slackFrac`.
 
     Parameters
     ----------
@@ -359,35 +359,36 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         The list of gate sets to be tested.  To ensure that the returned germ
         set is amplficationally complete, it is a good idea to score potential
         germ sets against a collection (~5-10) of similar gate sets.  The user
-        may specify a single gatesetand a number of unitarily close copies to
-        be made (set by the kwarg "numCopies", or the user may specify their
+        may specify a single gateset and a number of unitarily close copies to
+        be made (set by the kwarg `numCopies`, or the user may specify their
         own list of gatesets, each of which in turn may or may not be
-        randomized (set bythe kwarg "randomize").
+        randomized (set by the kwarg `randomize`).
 
     germsList : list of GateStrings
         List of all germs gate sequences to consider.
-        IMPORTANT:  If forceSingletons is True, the first k elements of
+        IMPORTANT:  If `forceSingletons` is ``True``, the first k elements of
         germsList must be all k gates in gateset.
 
     randomize : Bool, optional
         Whether or not the input gateset(s) are subject first subject to
-        unitary randomization.  If False, the user should perform the unitary
-        randomization themselves.  Note:  If the gateset(s) are perfect (e.g.
-        std1Q_XYI.gs_target), then the germ selection output should not be
-        trusted, due to accidental degeneracies in the gateset.  If the
+        unitary randomization.  If ``False``, the user should perform the
+        unitary randomization themselves.  Note:  If the gateset(s) are perfect
+        (e.g.  std1Q_XYI.gs_target), then the germ selection output should not
+        be trusted, due to accidental degeneracies in the gateset.  If the
         gateset(s) include stochastic (non-unitary) error, then germ selection
         will fail, as we score amplificational completeness in the limit of
         infinite sequence length (so any stochastic noise will completely
-        depolarize any sequence in that limit).  Default is True.
+        depolarize any sequence in that limit).  Default is ``True``.
 
     randomizationStrength : float, optional
         The strength of the unitary noise used to randomize input gateset(s);
-        is passed to randomize_with_unitary.  Default is 1e-3.
+        is passed to ``randomize_with_unitary``.  Default is ``1e-3``.
 
     numCopies : int, optional
         The number of gateset copies to be made of the input gateset (prior to
         unitary randomization).  If more than one gateset is passed in,
-        numCopies should be None.
+        `numCopies` should be ``None``.  If only one gateset is passed in and
+        `numCopies` is ``None``, no gateset copies are made.
 
     seed : float, optional
         The starting seed used for unitary randomization.  If multiple gatesets
