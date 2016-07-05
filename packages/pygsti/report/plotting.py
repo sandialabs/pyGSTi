@@ -1638,7 +1638,7 @@ def small_eigval_err_rate_boxplot( xvals, yvals, xy_gatestring_dict, dataset, di
 
     def mx_fn(gateStr): #error rate as 1x1 matrix which we have plotting function sum up
         return _np.array( [[ small_eigval_err_rate(gateStr, dataset,  directGSTgatesets) ]] )
-    xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,True)
+    xvals, yvals, subMxs, _, _ = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,True)
     max_abs = max([ _np.max(_np.abs(subMxs[iy][ix]))
                     for ix in range(len(xvals))
                     for iy in range(len(yvals)) ])
@@ -1891,7 +1891,7 @@ def direct_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs
         gatestrings.extend( [ prepStr + _objs.GateString( (gateLabel,), bCheck=False) + effectStr
                               for prepStr in prepStrs for effectStr in effectStrs ] )
 
-    errvec, direct_lsgst = _alg.do_mc2gst(
+    _, direct_lsgst = _alg.do_mc2gst(
         dataset, direct_lgst, gatestrings,
         minProbClipForWeighting=minProbClipForWeighting,
         probClipInterval=probClipInterval, verbosity=verbosity,
@@ -2024,7 +2024,7 @@ def direct_mlgst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs,
         gatestrings.extend( [ prepStr + _objs.GateString( (gateLabel,), bCheck=False) + effectStr
                               for prepStr in prepStrs for effectStr in effectStrs ] )
 
-    maxLogL, direct_mlegst = _alg.do_mlgst(
+    _, direct_mlegst = _alg.do_mlgst(
         dataset, direct_lgst, gatestrings, minProbClip=minProbClip,
         probClipInterval=probClipInterval, verbosity=verbosity,
         gateLabelAliases={gateStringLabel: gateStringToEstimate} )
@@ -2133,7 +2133,7 @@ def focused_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, spec
     prepStrs, effectStrs = _construction.get_spam_strs(specs) # LEXICOGRAPHICAL VS MATRIX ORDER
     gatestrings = [ prepStr + gateStringToEstimate + effectStr for prepStr in prepStrs for effectStr in effectStrs ]
 
-    errvec, focused_lsgst = _alg.do_mc2gst(
+    _, focused_lsgst = _alg.do_mc2gst(
         dataset, startGateset, gatestrings,
         minProbClipForWeighting=minProbClipForWeighting,
         probClipInterval=probClipInterval, verbosity=verbosity)
@@ -2748,11 +2748,11 @@ def direct_deviation_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset
         gate_direct = directGatesets[ gateStr ].gates[ "GsigmaLbl" ]
         #evals = _np.linalg.eigvals(gate)
         #evals_direct = _np.linalg.eigvals(gate_direct)
-        ubF, ubGateMx = _tools.fidelity_upper_bound(gate)
+        ubF, _ = _tools.fidelity_upper_bound(gate)
         ubF_direct, ubGateMx = _tools.fidelity_upper_bound(gate_direct)
         return _np.array( ubF_direct - ubF, dtype='float64' )
 
-    xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,True)
+    xvals, yvals, subMxs, _, _ = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,True)
     max_abs = max([ _np.max(_np.abs(subMxs[iy][ix]))
                     for ix in range(len(xvals))
                     for iy in range(len(yvals)) ])
@@ -3262,7 +3262,7 @@ def gate_matrix_boxplot(gateMatrix, size=None, m=-1.0, M=1.0,
 
     else: #display a color bar
         tickVals = [one_sigfig(m), one_sigfig((m+M)/2), one_sigfig(M)]
-        cbar = _plt.colorbar(cax,shrink=.75, pad=.1, aspect=18, ticks=tickVals)
+        cbar = _plt.colorbar(cax,shrink=.75, pad=.1, aspect=18, ticks=tickVals) #pylint: disable=unused-variable
 
     rptFig = _ReportFigure(axes)
 
@@ -3616,8 +3616,8 @@ def choi_eigenvalue_barplot(evals, errbars=None, size=(8,5), barWidth=1,
     if errbars is None:
         pos_evals = _np.maximum(evals.flatten().real,0.0)
         neg_evals = _np.abs(_np.minimum(evals.flatten().real,0.0))
-        rects = axes.bar(ind, pos_evals, barWidth, color=(0.5,0.5,0.5))
-        rects = axes.bar(ind, neg_evals, barWidth, color='r')
+        rects = axes.bar(ind, pos_evals, barWidth, color=(0.5,0.5,0.5)) #pylint: disable=unused-variable
+        rects = axes.bar(ind, neg_evals, barWidth, color='r') #pylint: disable=unused-variable
     else:
         evalsEB = _np.asarray(errbars)
         pos_evals = []; pos_err = []

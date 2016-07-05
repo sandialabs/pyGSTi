@@ -106,7 +106,7 @@ def write_dataset(filename, dataset, gatestring_list=None, spamLabelOrder=None):
         spamLabels = spamLabelOrder
 
     headerString = '## Columns = ' + ", ".join( [ "%s count" % sl for sl in spamLabels ])
-    parser = _stdinput.StdInputParser()
+    # parser = _stdinput.StdInputParser()
 
     with open(filename, 'w') as output:
         output.write(headerString + '\n')
@@ -153,7 +153,7 @@ def write_multidataset(filename, multidataset, gatestring_list=None, spamLabelOr
     headerString = '## Columns = ' + ", ".join( [ "%s %s count" % (dsl,sl)
                                                   for dsl in dsLabels
                                                   for sl in spamLabels ])
-    parser = _stdinput.StdInputParser()
+    # parser = _stdinput.StdInputParser()
 
     with open(filename, 'w') as output:
         output.write(headerString + '\n')

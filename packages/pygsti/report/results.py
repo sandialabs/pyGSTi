@@ -400,19 +400,19 @@ class Results(object):
 
         # target gateset tables
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest = setup()
+            gsTgt, _ = setup()
             return _generation.get_gateset_spam_table(gsTgt, None)
         fns['targetSpamTable'] = (fn, validate_essential)
 
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest = setup()
+            gsTgt, _ = setup()
             return _generation.get_gateset_spam_table(gsTgt, None, False)
         fns['targetSpamBriefTable'] = (fn, validate_essential)
 
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest = setup()
+            gsTgt, _ = setup()
             return _generation.get_unitary_gateset_gates_table(
                 gsTgt, None)
         fns['targetGatesTable'] = (fn, validate_essential)
@@ -422,7 +422,7 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             #maxLen = max( 2*max( map(len,self.prepStrs + self.effectStrs) ),
             #             10 ) #heuristic (unused)
-            gsTgt, gsBest = setup()
+            gsTgt, _ = setup()
             if self._LsAndGermInfoSet:
                 strs = ( self.gatestring_lists['prep fiducials'],
                          self.gatestring_lists['effect fiducials'] )
@@ -432,7 +432,7 @@ class Results(object):
         fns['datasetOverviewTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest = setup()
+            setup()
             strs = ( self.gatestring_lists['prep fiducials'],
                      self.gatestring_lists['effect fiducials'] )
 
@@ -441,28 +441,28 @@ class Results(object):
         fns['fiducialListTable'] = (fn, validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest = setup()
+            setup()
             return _generation.get_gatestring_table(
                 self.gatestring_lists['prep fiducials'],
                 "Preparation Fiducial")
         fns['prepStrListTable'] = (fn, validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest = setup()
+            setup()
             return _generation.get_gatestring_table(
                 self.gatestring_lists['effect fiducials'],
                 "Measurement Fiducial")
         fns['effectStrListTable'] = (fn, validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest = setup()
+            setup()
             return _generation.get_gatestring_table(
                 self.gatestring_lists['germs'], "Germ")
         fns['germListTable'] = (fn, validate_LsAndGerms)
 
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest = setup()
+            setup()
             return _generation.get_gatestring_table(
                 self.gatestring_lists['germs'], "Germ", nCols=2)
         fns['germList2ColTable'] = (fn, validate_LsAndGerms)
@@ -470,43 +470,43 @@ class Results(object):
 
         # Estimated gateset tables
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest = setup()
+            _, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
             return _generation.get_gateset_spam_table(gsBest, cri)
         fns['bestGatesetSpamTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest = setup()
+            _, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
             return _generation.get_gateset_spam_table(gsBest, cri, False)
         fns['bestGatesetSpamBriefTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest = setup()
+            _, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
             return _generation.get_gateset_spam_parameters_table(gsBest, cri)
         fns['bestGatesetSpamParametersTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest = setup()
+            _, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
             return _generation.get_gateset_gates_table(gsBest, cri)
         fns['bestGatesetGatesTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest = setup()
+            _, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
             return _generation.get_gateset_choi_table(gsBest, cri)
         fns['bestGatesetChoiTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest = setup()
+            _, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
             return _generation.get_gateset_decomp_table(gsBest, cri)
         fns['bestGatesetDecompTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest = setup()
+            _, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
             return _generation.get_gateset_rotn_axis_table(gsBest, cri, True)
         fns['bestGatesetRotnAxisTable'] = (fn, validate_essential)
@@ -518,7 +518,7 @@ class Results(object):
         fns['bestGatesetEvalTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest = setup()
+            _, gsBest = setup()
             #cri = self._get_confidence_region(confidenceLevel)
             return _generation.get_gateset_closest_unitary_table(gsBest) #, cri)
         fns['bestGatesetClosestUnitaryTable'] = (fn, validate_essential)
@@ -550,17 +550,15 @@ class Results(object):
         fns['bestGatesetVsTargetAnglesTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest = setup()
-            cri = self._get_confidence_region(confidenceLevel)
+            setup()
+            self._get_confidence_region(confidenceLevel)
             return _generation.get_gaugeopt_params_table(
                 self.parameters['gaugeOptParams'])
         fns['bestGatesetGaugeOptParamsTable'] = (fn, validate_essential)
 
-
-
         # progress tables
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest = setup()
+            setup()
             return _generation.get_chi2_progress_table(
                 self.parameters['max length list'],
                 self.gatesets['iteration estimates'],
@@ -568,7 +566,7 @@ class Results(object):
         fns['chi2ProgressTable'] = (fn, validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest = setup()
+            setup()
             return _generation.get_logl_progress_table(
                 self.parameters['max length list'],
                 self.gatesets['iteration estimates'],
@@ -576,7 +574,7 @@ class Results(object):
         fns['logLProgressTable'] = (fn, validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest = setup()
+            setup()
             if self.parameters['objective'] == "logl":
                 return _generation.get_logl_progress_table(
                     self.parameters['max length list'],
@@ -594,7 +592,7 @@ class Results(object):
 
         # figure-containing tables
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest = setup()
+            gsTgt, _ = setup()
             return _generation.get_gateset_gate_boxes_table(
                 gsTgt, "targetGatesBoxes")
         fns['targetGatesBoxTable'] = (fn, validate_essential)
@@ -618,7 +616,7 @@ class Results(object):
         fns['bestGatesetRelEvalTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
-            gsTgt, gsBest = setup()
+            _, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
             return _generation.get_gateset_choi_eigenval_table(
                 gsBest, "bestChoiEvalBars", confidenceRegionInfo=cri)
@@ -698,7 +696,7 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
             plotFn = getPlotFn();  mpc = getMPC()
-            Ls,germs,gsBest,fidPairs,m,M,baseStr_dict,strs,st = plot_setup()
+            Ls,germs, gsBest, fidPairs, _, _, baseStr_dict, strs, st = plot_setup()
             return plotFn(Ls[st:], germs, baseStr_dict,
                           self.dataset, gsBest, strs,
                           r"$L$", "germ", scale=1.0, sumUp=False,
@@ -710,7 +708,7 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
             plotFn = getPlotFn(); mpc = getMPC()
-            Ls,germs,gsBest,fidPairs,m,M,baseStr_dict,strs,st = plot_setup()
+            Ls,germs, gsBest, fidPairs, _, _, baseStr_dict, strs, st = plot_setup()
             return plotFn( Ls[st:], germs, baseStr_dict,
                            self.dataset, gsBest, strs,
                            r"$L$", "germ", scale=1.0, sumUp=False,
@@ -722,9 +720,9 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
             plotFn = getPlotFn();  mpc = getMPC()
-            Ls,germs,gsBest,fidPairs,m,M,baseStr_dict,strs,st = plot_setup()
-            sumScale = len(strs[0])*len(strs[1]) \
-                if fidPairs is None else len(fidPairs)
+            Ls,germs, gsBest, fidPairs, _, _, baseStr_dict, strs, st = plot_setup()
+            #sumScale = len(strs[0])*len(strs[1]) \
+            #    if fidPairs is None else len(fidPairs)
             return plotFn( Ls[st:], germs, baseStr_dict,
                            self.dataset, gsBest, strs,
                           r"$L$", "germ", scale=1.0,
@@ -738,7 +736,7 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
             plotFn = getPlotFn();  mpc = getMPC()
-            Ls,germs,gsBest,fidPairs,m,M,baseStr_dict,strs,st = plot_setup()
+            Ls,germs, gsBest, fidPairs, _, _, baseStr_dict, strs, st = plot_setup()
             i = int(_re.match(expr1,key).group(1))
             return plotFn( Ls[st:i+1], germs, baseStr_dict,
                         self.dataset, self.gatesets['iteration estimates'][i],
@@ -757,7 +755,7 @@ class Results(object):
 
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
-            Ls,germs,gsBest,fidPairs,m,M,baseStr_dict,strs,st = plot_setup()
+            Ls,germs, gsBest, fidPairs, _, _, baseStr_dict, strs, st = plot_setup()
             return _plotting.blank_boxplot(
                 Ls[st:], germs, baseStr_dict, strs, r"$L$", "germ",
                 scale=1.0, title="", sumUp=False, save_to="", ticSize=20)
@@ -765,7 +763,7 @@ class Results(object):
 
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
-            Ls,germs,gsBest,fidPairs,m,M,baseStr_dict,strs,st = plot_setup()
+            Ls,germs, gsBest, fidPairs, _, _, baseStr_dict, strs, st = plot_setup()
             return _plotting.blank_boxplot(
                 Ls[st:], germs, baseStr_dict, strs, r"$L$", "germ",
                 scale=1.0, title="", sumUp=True, save_to="", ticSize=20)
@@ -775,7 +773,7 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
             directPlotFn = getDirectPlotFn(); mpc = getMPC()
-            Ls,germs,gsBest,fidPairs,m,M,baseStr_dict,strs,st = plot_setup()
+            Ls,germs, gsBest, fidPairs, _, _, baseStr_dict, strs, st = plot_setup()
             directLGST = self._specials.get('direct_lgst_gatesets',verbosity=vb)
             return directPlotFn( Ls[st:], germs, baseStr_dict, self.dataset,
                                  directLGST, strs, r"$L$", "germ",
@@ -787,7 +785,7 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
             directPlotFn = getDirectPlotFn(); mpc = getMPC()
-            Ls,germs,gsBest,fidPairs,m,M,baseStr_dict,strs,st = plot_setup()
+            Ls,germs, gsBest, fidPairs, _, _, baseStr_dict, strs, st = plot_setup()
             directLongSeqGST = self._specials.get('DirectLongSeqGatesets',
                                                   verbosity=vb)
             return directPlotFn( Ls[st:], germs, baseStr_dict, self.dataset,
@@ -799,7 +797,7 @@ class Results(object):
 
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
-            Ls,germs,gsBest,fidPairs,m,M,baseStr_dict,strs,st = plot_setup()
+            Ls,germs, gsBest, fidPairs, _, _, baseStr_dict, strs, st = plot_setup()
             directLGST = self._specials.get('direct_lgst_gatesets',verbosity=vb)
             return _plotting.direct_deviation_boxplot(
                 Ls[st:], germs, baseStr_dict, self.dataset,
@@ -809,7 +807,7 @@ class Results(object):
 
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
-            Ls,germs,gsBest,fidPairs,m,M,baseStr_dict,strs,st = plot_setup()
+            Ls,germs, gsBest, fidPairs, _, _, baseStr_dict, strs, st = plot_setup()
             directLongSeqGST = self._specials.get('DirectLongSeqGatesets',
                                                   verbosity=vb)
             return _plotting.direct_deviation_boxplot(
@@ -820,7 +818,7 @@ class Results(object):
 
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
-            Ls,germs,gsBest,fidPairs,m,M,baseStr_dict,strs,st = plot_setup()
+            Ls,germs, gsBest, fidPairs, _, _, baseStr_dict, strs, st = plot_setup()
             directLongSeqGST = self._specials.get('DirectLongSeqGatesets',
                                                   verbosity=vb)
             return _plotting.small_eigval_err_rate_boxplot(
@@ -833,7 +831,7 @@ class Results(object):
         expr2 = "whack(.+?)MoleBoxes"
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
-            Ls,germs,gsBest,fidPairs,m,M,baseStr_dict,strs,st = plot_setup()
+            Ls,germs, gsBest, fidPairs, _, _, baseStr_dict, strs, st = plot_setup()
             highestL = Ls[-1]; hammerWeight = 10.0; mpc = getMPC()
             gateLabel = _re.match(expr2,key).group(1)
             strToWhack = _gs.GateString( (gateLabel,)*highestL )
@@ -861,7 +859,7 @@ class Results(object):
         expr3 = "whack(.+?)MoleBoxesSummed"
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
-            Ls,germs,gsBest,fidPairs,m,M,baseStr_dict,strs,st = plot_setup()
+            Ls,germs, gsBest, fidPairs, _, _, baseStr_dict, strs, st = plot_setup()
             highestL = Ls[-1]; hammerWeight = 10.0; mpc = getMPC()
             gateLabel = _re.match(expr3,key).group(1)
             strToWhack = _gs.GateString( (gateLabel,)*highestL )
@@ -1543,8 +1541,8 @@ class Results(object):
 
         #Note: for now, we assume the best gateset corresponds to the last
         #      L-value
-        best_gs = self.gatesets['final estimate']
-        v = verbosity # shorthand
+        # best_gs = self.gatesets['final estimate']
+        # v = verbosity # shorthand
 
         if not self._LsAndGermInfoSet: #cannot create appendices
             debugAidsAppendix = False  # which depend on this structure
@@ -1798,7 +1796,7 @@ class Results(object):
         if whackamoleAppendix:
             #Whack-a-mole plots for highest L of each length-1 germ
             Ls = self.parameters['max length list']
-            highestL = Ls[-1]; allGateStrings = self.gatestring_lists['all']
+            highestL = Ls[-1]; # allGateStrings = self.gatestring_lists['all']
             hammerWeight = 10.0
             len1Germs = [ g for g in self.gatestring_lists['germs']
                           if len(g) == 1 ]

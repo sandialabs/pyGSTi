@@ -57,22 +57,22 @@ class StdInputParser(object):
         #    self.exprStack.append( toks[0] )
         #    self.exprStack.append( 'COUNT' )
 
-        #caps = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        lowers = 'abcdefghijklmnopqrstuvwxyz' #caps.lower()
+        # caps = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        # lowers = 'abcdefghijklmnopqrstuvwxyz' #caps.lower()
         digits = _pp.nums #"0123456789"  #same as "nums"
         #point = _pp.Literal( "." )
         #e     = _pp.CaselessLiteral( "E" )
         #real  = _pp.Combine( _pp.Word( "+-"+_pp.nums, _pp.nums ) +
         #                  _pp.Optional( point + _pp.Optional( _pp.Word( _pp.nums ) ) ) +
         #                  _pp.Optional( e + _pp.Word( "+-"+_pp.nums, _pp.nums ) ) ).setParseAction(push_first)
-        real = _pp.Regex(r'[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?') #faster than above
+        # real = _pp.Regex(r'[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?') #faster than above
         nop   = _pp.Literal("{}").setParseAction(push_first)
 
         expop = _pp.Literal( "^" )
         lpar  = _pp.Literal( "(" ).suppress()
         rpar  = _pp.Literal( ")" ).suppress()
-        lbrk  = _pp.Literal( "[" ).suppress()
-        rbrk  = _pp.Literal( "]" ).suppress()
+        # lbrk  = _pp.Literal( "[" ).suppress()
+        # rbrk  = _pp.Literal( "]" ).suppress()
 
         integer = _pp.Word( digits ).setParseAction(push_first)
         reflbl  = _pp.Word(_pp.alphas+_pp.nums+"_").setParseAction(push_first)
@@ -160,7 +160,7 @@ class StdInputParser(object):
         self.lookup = lookup
         self.exprStack = []
         try:
-            result = self.string_parser.parseString(s)
+            self.string_parser.parseString(s)
         except _pp.ParseException as e:
             raise ValueError("Parsing error when parsing %s: %s" % (s,str(e)))
         #print "DB: result = ",result
@@ -505,7 +505,7 @@ class StdInputParser(object):
                 line = line.strip()
                 if len(line) == 0 or line[0] == '#': continue
                 try:
-                    gateStringTuple, gateStringStr, valueList = self.parse_dataline(line, lookupDict, nDataCols)
+                    gateStringTuple, _, valueList = self.parse_dataline(line, lookupDict, nDataCols)
                 except ValueError as e:
                     raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 

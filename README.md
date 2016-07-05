@@ -2,6 +2,8 @@
   pyGSTi 0.9 
 ********************************************************************************
 
+[![Build Status](https://travis-ci.org/pyGSTio/pyGSTi.svg?branch=develop)](https://travis-ci.org/pyGSTio/pyGSTi)
+
 Overview:
 --------
 This is the root directory of the pyGSTi software, which is a Python

@@ -66,11 +66,11 @@ def make_prep_mxs(gs,prepFidList):
     """
 
     dimRho = gs.get_dimension()
-    numRho = len(gs.preps)
+    #numRho = len(gs.preps)
     numFid = len(prepFidList)
     outputMatList = []
     for rho in list(gs.preps.values()):
-        outputMat = _np.zeros([dimRho,numFid],float)
+        outputMat = _np.zeros([dimRho, numFid],float)
         counter = 0
         for prepFid in prepFidList:
             outputMat[:,counter] = _np.dot(gs.product(prepFid),rho).T[0]
@@ -100,7 +100,7 @@ def make_meas_mxs(gs,prepMeasList):
     """
 
     dimE = gs.get_dimension()
-    numE = len(gs.effects)
+    # numE = len(gs.effects)
     numFid = len(prepMeasList)
     outputMatList = []
     for E in list(gs.effects.values()):
@@ -170,11 +170,11 @@ def test_fiducial_list(gateset,fidList,prepOrMeas,scoreFunc='all',returnAll=Fals
         def list_score(input_array):
             return 1./min(input_array)
 
-    nFids = len(fidList)
+    # nFids = len(fidList)
 
     dimRho = gateset.get_dimension()
 
-    fidLengths = _np.array( list(map(len,fidList)), 'i')
+    # fidLengths = _np.array( list(map(len,fidList)), 'i')
     if prepOrMeas == 'prep':
         fidArrayList = make_prep_mxs(gateset,fidList)
     elif prepOrMeas == 'meas':
@@ -389,7 +389,7 @@ def optimize_integer_fiducials_slack(gateset, fidList,
 
     scoreD = {}
 
-    fidLengths = _np.array( list(map(len,fidList)), 'i')
+    #fidLengths = _np.array( list(map(len,fidList)), 'i')
     if prepOrMeas == 'prep':
         fidArrayList = make_prep_mxs(gateset,fidList)
     elif prepOrMeas == 'meas':
@@ -513,7 +513,7 @@ def optimize_integer_fiducials_slack(gateset, fidList,
           printer.show_progress(iIter, maxIter-1, suffix="score=%g, nFids=%d" % (score, L1))
 
           bFoundBetterNeighbor = False
-          for neighborNum, neighbor in enumerate(get_neighbors(weights)):
+          for neighbor in get_neighbors(weights):
               if tuple(neighbor) not in scoreD_keys:
                   neighborL1 = sum(neighbor)
                   neighborScore = compute_score(neighbor)
@@ -540,7 +540,7 @@ def optimize_integer_fiducials_slack(gateset, fidList,
               printer.log("No better neighbor. Relaxing score w/slack: %g => %g" % (score, score+slack), 2)
               score += slack #artificially increase score and see if any neighbor is better now...
 
-              for neighborNum, neighbor in enumerate(get_neighbors(weights)):
+              for neighbor in get_neighbors(weights):
                   if sum(neighbor) < L1 and scoreD[tuple(neighbor)] < score:
                       weights, score, L1 = neighbor, scoreD[tuple(neighbor)], sum(neighbor)
                       bFoundBetterNeighbor = True
@@ -563,7 +563,7 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         if val==1:
             goodFidList.append(fidList[index])
 
-    final_test = test_fiducial_list(gateset,goodFidList,prepOrMeas,scoreFunc=scoreFunc,returnAll=True,threshold=threshold)
+    #final_test = test_fiducial_list(gateset,goodFidList,prepOrMeas,scoreFunc=scoreFunc,returnAll=True,threshold=threshold)
     if initial_test[0]:
         print("Final fiducial set succeeds.")
     else:
