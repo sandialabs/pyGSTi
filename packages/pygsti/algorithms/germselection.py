@@ -5,7 +5,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ Functions for selecting a complete set of germs for a GST analysis."""
-from __future__ import division
 
 import numpy as _np
 import numpy.linalg as _nla
@@ -505,7 +504,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                 newgatesetList.append(gateset.randomize_with_unitary(randomizationStrength,seed=seed+gatesetnum))
 #            gatesetList[gatesetnum] =
         else:
-            for gatesetnum in xrange(numCopies):
+            for gatesetnum in range(numCopies):
                 newgatesetList.append(gatesetList[0].randomize_with_unitary(randomizationStrength,seed=seed+gatesetnum))
         gatesetList = newgatesetList
 
@@ -515,11 +514,12 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
 #            print "Complete initial fiducial set succeeds."
 #            print "Now searching for best fiducial set."
         if not initial_test:
-            print  "Complete initial germ set FAILS on gateset "+str(gatesetnum)+"."
-            print  "Aborting search."
+            printer.log("Complete initial germ set FAILS on gateset "
+                        + str(gatesetnum) + ".")
+            printer.log("Aborting search.")
             return None
-    print "Complete initial germ set succeeds on all input gatesets."
-    print "Now searching for best germ set."
+    printer.log("Complete initial germ set succeeds on all input gatesets.")
+    printer.log("Now searching for best germ set.")
 
     num_gatesets = len(gatesetList)
 
@@ -535,9 +535,8 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     nGaugeParams = gateset0.num_gauge_params()
     nGerms = len(germsList)
 
-    if verbosity > 0:
-        print "Starting germ set optimization. Lower score is better."
-        print "Gateset has %d gauge params." % nGaugeParams
+    printer.log("Starting germ set optimization. Lower score is better.", 1)
+    printer.log("Gateset has %d gauge params." % nGaugeParams, 1)
 
     #score dictionary:
     #  keys = tuple-ized weight vector of 1's and 0's only
@@ -585,7 +584,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         weights = _np.ones( nGerms, 'i' ) #default: start with all germs
 #        lessWeightOnly = True #we're starting at the max-weight vector
 
-    scoreList = [compute_score(weights,gateset_num) for gateset_num in xrange(num_gatesets)]
+    scoreList = [compute_score(weights,gateset_num) for gateset_num in range(num_gatesets)]
     score = _np.max(scoreList)
 #    print "scoreList:", scoreList
 #    print score
