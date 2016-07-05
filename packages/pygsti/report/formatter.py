@@ -16,11 +16,9 @@ import numbers      as _numbers
 import re           as _re
 import os           as _os
 
-
-# A factory function for building formatting functions
-def build_formatter(regexreplace=None, formatstring='%s', stringreturn=None, stringreplacers=None):
+class Formatter():
     '''
-    Factory function for building formatters!
+    Class for formatting strings to html, latex, powerpoint, or text
 
     Parameters
     --------
@@ -39,7 +37,13 @@ def build_formatter(regexreplace=None, formatstring='%s', stringreturn=None, str
     template :
     Formatting function
     '''
-    def template(label):
+
+    def __init__(stringreplacers=None, regexreplace=None, formatstring='%s', stringreturn=None):
+        self.stringreplacers = stringreplacers
+        self.regexreplace = regexreplace
+        self.formatstring = formatstring
+
+    def __call__():
         '''
         Formatting function template
 
@@ -50,39 +54,39 @@ def build_formatter(regexreplace=None, formatstring='%s', stringreturn=None, str
         --------
         Formatted label
         '''
-        # Potential early exit:
-        if stringreturn is not None:
-            if label == stringreturn[0]: return stringreturn[1]
+        if self.stringreturn is not None:
+            return self.formatstring % label.replace(stringreturn[0], stringreturn[1])
 
-        if stringreplacers is not None:
-            for stringreplace in stringreplacers:
+        if self.stringreplacers is not None:
+            for stringreplace in self.stringreplacers:
                 label = label.replace(stringreplace[0], stringreplace[1])
-        if regexreplace is not None:
-             result = _re.match(regexreplace[0], label)
+        if self.regexreplace is not None:
+             result = _re.match(self.regexreplace[0], label)
              if result is not None:
                  grouped = result.group(1)
-                 label = label[0:-len(grouped)] + (regexreplace[1] % grouped)
-        return formatstring % label
-    return template
+                 label   = label[0:-len(grouped)] + (self.regexreplace[1] % grouped)
+        return self.formatstring % label
 
-no_format = lambda label : label # Do nothing! :)
+# A traditional function, so that pickling is possible
+def no_format(label):
+    return label
 
 ##############################################################################
 #Formatting functions
 ##############################################################################
 # 'rho' (state prep) formatting
-Rho = { 'html' : build_formatter(stringreplacers=[('rho', '&rho;')], 
+Rho = { 'html' : Formatter(stringreplacers=[('rho', '&rho;')], 
                                  regexreplace=('.*?([0-9]+)$', '<sub>%s</sub>')), 
-        'latex': build_formatter(stringreplacers=[('rho', '\\rho')], 
+        'latex': Formatter(stringreplacers=[('rho', '\\rho')], 
                                  regexreplace=('.*?([0-9]+)$', '_{%s}'), formatstring='$%s$'), 
         'text'   : no_format,
         'ppt'  : no_format }
 
 # 'E' (POVM) effect formatting
 Effect = { 
-      'html'   : build_formatter(stringreturn=('remainder', 'E<sub>C</sub>'), 
+      'html'   : Formatter(stringreturn=('remainder', 'E<sub>C</sub>'), 
                                 regexreplace=('.*?([0-9]+)$', '<sub>%s</sub>')), # Regexreplace potentially doesn't run
-      'latex'  : build_formatter(stringreturn=('remainder', '$E_C$'),
+      'latex'  : Formatter(stringreturn=('remainder', '$E_C$'),
                                 regexreplace=('.*?([0-9]+)$', '_{%s}')), 
       'text'   : no_format, 
       'ppt'    : no_format}
@@ -150,8 +154,8 @@ def _fmtCnv_latex(x):
 Conversion = { 
            'html'  : _fmtCnv_html, 
            'latex' : _fmtCnv_latex, 
-           'text'  : build_formatter(stringreplacers=[('<STAR>', '*'), ('|', ' ')]), 
-           'ppt'   : build_formatter(stringreplacers=[('<STAR>', '*'), ('|', '\n')])}
+           'text'  : Formatter(stringreplacers=[('<STAR>', '*'), ('|', ' ')]), 
+           'ppt'   : Formatter(stringreplacers=[('<STAR>', '*'), ('|', '\n')])}
 
 # Essentially takes two formatters and decides which to use, based on if the error bar exists
 def eb_template(a, b):
@@ -226,7 +230,7 @@ Figure = build_figure_formatters
 # Bold formatting
 Bold = { 'html'  : lambda x : '<b>%s</b>' % html(x),
          'latex' : lambda x : '\\textbf{%s}' % latex(x), 
-         'text'    : build_formatter(formatstring='**%s**'), 
+         'text'  : Formatter(formatstring='**%s**'), 
          'ppt'   : lambda x : ppt(x)}
 
 
