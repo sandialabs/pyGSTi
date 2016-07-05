@@ -2432,8 +2432,9 @@ class GateSet(object):
         for gateLabel in list(gs_pauli.gates.keys()):
             randMat = scale * (rndm.randn(unitary_dim,unitary_dim) \
                                    + 1j * rndm.randn(unitary_dim,unitary_dim))
-            randMat = _np.dot(_np.transpose(_np.conjugate(randMat)),randMat)
-                        # make randMat Hermetian: (A_dag*A)^dag = (A_dag*A)
+#            randMat = _np.dot(_np.transpose(_np.conjugate(randMat)),randMat)
+            randMat = _np.transpose(_np.conjugate(randMat)) + randMat
+                        # make randMat Hermetian: (A_dag + A)^dag = (A_dag + A)
             randU   = _scipy.linalg.expm(-1j*randMat)
 
             if unitary_dim == 2:
