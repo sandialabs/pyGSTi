@@ -231,7 +231,7 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
     # Take the average of the D^dagger*D/L^2 matrices associated with each germ
     # with optional weights.
     combineDDD = _np.average(derivDaggerDeriv, weights=weights, axis=0) / L**2
-    sortedEigenvals = _np.sort(_np.real(_np.linalg.eigvalsh(combinedDDD)))
+    sortedEigenvals = _np.sort(_np.real(_np.linalg.eigvalsh(combineDDD)))
 
     nGaugeParams = gateset.num_gauge_params()
     bSuccess = bool(sortedEigenvals[nGaugeParams] > tol)
@@ -505,7 +505,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                 newgatesetList.append(gateset.randomize_with_unitary(randomizationStrength,seed=seed+gatesetnum))
 #            gatesetList[gatesetnum] =
         else:
-            for gatesetnum in range(numCopies):
+            for gatesetnum in range(numCopies is numCopies is not None else 0):
                 newgatesetList.append(gatesetList[0].randomize_with_unitary(randomizationStrength,seed=seed+gatesetnum))
         gatesetList = newgatesetList
 
