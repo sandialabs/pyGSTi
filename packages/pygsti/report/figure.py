@@ -57,7 +57,7 @@ class ReportFigure(object):
         return self.extraInfo
 
     def check(self):
-        axes = _pickle.loads(self.pickledAxes)
+        axes = _pickle.loads(self.pickledAxes) #pylint: disable=unused-variable
           #this creates a new (current) figure in matplotlib
         curFig = _plt.gcf() # gcf == "get current figure"
         curFig.callbacks.callbacks = {} # initialize fig's CallbackRegistry...

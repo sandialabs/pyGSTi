@@ -2,9 +2,10 @@
 *.tmp
 *.bak
 *.swp
+*.pkl
 .ipynb_checkpoints
 test/temp_test_files/*
-ipython_notebooks/Tutorials/tutorial_files
+jupyter_notebooks/Tutorials/tutorial_files
 
 # Compiled source #
 ###################

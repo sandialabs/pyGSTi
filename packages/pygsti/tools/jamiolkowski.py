@@ -345,7 +345,7 @@ def sums_of_negative_choi_evals(gateset):
         for the corresponding gate (as ordered  by gateset.gates.iteritems()).
     """
     ret = []
-    for (label,gate) in gateset.gates.items():
+    for (_, gate) in gateset.gates.items():
         J = jamiolkowski_iso( gate, choiMxBasis="std" )
         evals = _np.linalg.eigvals( J )  #could use eigvalsh, but wary of this since eigh can be wrong...
         sumOfNeg = 0.0
@@ -373,7 +373,7 @@ def mags_of_negative_choi_evals(gateset):
         as positive eigenvalues contribute nothing to this list.
     """
     ret = []
-    for (label,gate) in gateset.gates.items():
+    for (_, gate) in gateset.gates.items():
         J = jamiolkowski_iso( gate, choiMxBasis="std" )
         evals = _np.linalg.eigvals( J )  #could use eigvalsh, but wary of this since eigh can be wrong...
         for ev in evals:

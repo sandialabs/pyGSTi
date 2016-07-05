@@ -13,6 +13,15 @@ import numpy as _np
 import cmath
 from .. import objects as _objs
 
+#Define basestring in python3 so unicode
+# strings can be tested for in python2 using
+# python2's built-in basestring type.
+# When removing __future__ imports, remove
+# this and change basestring => str below.
+try:  basestring
+except NameError: basestring = str
+
+
 def latex(x, brackets=False):
     """
     Convert a numpy array, number, or string to latex.
@@ -45,7 +54,7 @@ def latex(x, brackets=False):
         return latex_list(x)
     elif type(x) in (float,int,complex,_np.float64,_np.int64):
         return latex_value(x)
-    elif type(x) == str:
+    elif isinstance(x,basestring):
         return latex_escaped(x)
     else:
         print("Warning: %s not specifically converted to latex" % str(type(x)))
@@ -188,7 +197,8 @@ def latex_value(el,ROUND=6,complexAsPolar=True):
             if s.endswith("."): s = s[:-1]
         return s
 
-    if type(el) == str: return el
+    if isinstance(el,basestring):
+        return el
     if type(el) in (int,_np.int64):
         return "%d" % el
     if el is None or _np.isnan(el): return "--"

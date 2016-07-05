@@ -244,7 +244,7 @@ def basis_element_labels(basis, dimOrBlockDims):
     #Note: the loops constructing the labels in this function
     # must be in-sync with those for constructing the matrices
     # in std_matrices, gm_matrices, and pp_matrices.
-    dmDim, gateDim, blockDims = _processBlockDims(dimOrBlockDims)
+    _, _, blockDims = _processBlockDims(dimOrBlockDims)
 
     lblList = []; start = 0
     if basis == "std":
@@ -378,7 +378,7 @@ def expand_from_std_direct_sum_mx(mxInStdBasis, dimOrBlockDims):
         assert(mxInStdBasis.shape == (dimOrBlockDims,dimOrBlockDims) )
         return mxInStdBasis
     else:
-        dmDim, gateDim, blockDims = _processBlockDims(dimOrBlockDims)
+        dmDim, _, blockDims = _processBlockDims(dimOrBlockDims)
 
         N = dmDim**2 #dimension of space in which density matrix is not restricted (the "embedding" density matrix space)
         mx = _np.zeros( (N,N), 'complex') #zeros since all added basis elements are coherences which get completely collapsed
@@ -625,7 +625,7 @@ def gm_to_std_transform_matrix(dimOrBlockDims):
         basis matrices along it's columns.
     """
     #vectorize Gell Mann mxs and place appropriate elements into columns of a matrix
-    dmDim, gateDim, blockDims = _processBlockDims(dimOrBlockDims)
+    _, gateDim, blockDims = _processBlockDims(dimOrBlockDims)
     gmToStd = _np.zeros( (gateDim,gateDim), 'complex' )
 
     #Since a multi-block basis is just the direct sum of the individual block bases,
@@ -829,7 +829,7 @@ def pp_to_std_transform_matrix(dimOrBlockDims):
     """
 
     #vectorize tensor products of Pauli mxs and place them as columns into a matrix
-    dmDim, gateDim, blockDims = _processBlockDims(dimOrBlockDims)
+    _, gateDim, blockDims = _processBlockDims(dimOrBlockDims)
     ppToStd = _np.zeros( (gateDim,gateDim), 'complex' )
 
     #Since a multi-block basis is just the direct sum of the individual block bases,

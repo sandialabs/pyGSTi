@@ -6,17 +6,18 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Functions for generating GST reports (PDF or HTML)."""
 
-import warnings as _warnings
-import numpy as _np
-import scipy.stats as _stats
+import warnings           as _warnings
+import numpy              as _np
+import scipy.stats        as _stats
 
 from .. import algorithms as _alg
-from .. import tools as _tools
-from .. import objects as _objs
+from .. import tools      as _tools
+from .. import objects    as _objs
 
 from . import reportables as _cr
 from . import tableformat as _tf
-from . import plotting as _plotting
+from . import plotting    as _plotting
+
 from .table import ReportTable as _ReportTable
 
 
@@ -58,10 +59,10 @@ def get_gateset_spam_table(gateset, confidenceRegionInfo=None,
     if confidenceRegionInfo is None:
         if includeHSVec:
             colHeadings = ('Operator','Hilbert-Schmidt vector (%s basis)' % basisNm,'Matrix')
-            formatters = (None,None,None)
+            formatters  = (None,None,None)
         else:
             colHeadings = ('Operator','Matrix')
-            formatters = (None,None)
+            formatters  = (None,None)
 
     else:
         if includeHSVec:
@@ -69,7 +70,7 @@ def get_gateset_spam_table(gateset, confidenceRegionInfo=None,
                            'Hilbert-Schmidt vector (%s basis)' % basisNm,
                            '%g%% C.I. half-width' % confidenceRegionInfo.level,
                            'Matrix')
-            formatters = (None,None,_tf.TxtCnv,None)
+            formatters  = (None,None,_tf.Conversion,None)
         else:
             colHeadings = ('Operator',
                            'Matrix')
@@ -83,15 +84,15 @@ def get_gateset_spam_table(gateset, confidenceRegionInfo=None,
 
         if includeHSVec:
             if confidenceRegionInfo is None:
-                table.addrow((lbl, rhoVec, rhoMx), (_tf.Rho,_tf.Nml,_tf.Brk))
+                table.addrow((lbl, rhoVec, rhoMx), (_tf.Rho,_tf.Normal,_tf.Brackets))
             else:
                 intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(lbl)[:,None]
                 if intervalVec.shape[0] == gateset.get_dimension()-1: #TP constrained, so pad with zero top row
                     intervalVec = _np.concatenate( (_np.zeros((1,1),'d'),intervalVec), axis=0 )
-                table.addrow((lbl, rhoVec, intervalVec, rhoMx), (_tf.Rho,_tf.Nml,_tf.Nml,_tf.Brk))
+                table.addrow((lbl, rhoVec, intervalVec, rhoMx), (_tf.Rho,_tf.Normal,_tf.Normal,_tf.Brackets))
         else:
             #no dependence on confidence region (yet) when HS vector is not shown...
-            table.addrow((lbl, rhoMx), (_tf.Rho,_tf.Brk))
+            table.addrow((lbl, rhoMx), (_tf.Rho,_tf.Brackets))
 
 
     for lbl,EVec in gateset.effects.items():
@@ -99,13 +100,13 @@ def get_gateset_spam_table(gateset, confidenceRegionInfo=None,
 
         if includeHSVec:
             if confidenceRegionInfo is None:
-                table.addrow((lbl, EVec, EMx), (_tf.E,_tf.Nml,_tf.Brk))
+                table.addrow((lbl, EVec, EMx), (_tf.Effect, _tf.Normal, _tf.Brackets))
             else:
                 intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(lbl)[:,None]
-                table.addrow((lbl, EVec, intervalVec, EMx), (_tf.E,_tf.Nml,_tf.Nml,_tf.Brk))
+                table.addrow((lbl, EVec, intervalVec, EMx), (_tf.Effect,_tf.Normal,_tf.Normal,_tf.Brackets))
         else:
             #no dependence on confidence region (yet) when HS vector is not shown...
-            table.addrow((lbl, EMx), (_tf.E,_tf.Brk))
+            table.addrow((lbl, EMx), (_tf.Effect,_tf.Brackets))
 
     table.finish()
     return table
@@ -131,14 +132,14 @@ def get_gateset_spam_parameters_table(gateset, confidenceRegionInfo=None):
     ReportTable
     """
     colHeadings = [''] + list(gateset.get_effect_labels())
-    formatters = [None] + [ _tf.E ]*len(gateset.get_effect_labels())
+    formatters = [None] + [ _tf.Effect ]*len(gateset.get_effect_labels())
 
     table = _ReportTable(colHeadings, formatters)
 
     spamDotProdsQty = _cr.compute_gateset_qty("Spam DotProds", gateset, confidenceRegionInfo)
     DPs, DPEBs = spamDotProdsQty.get_value_and_err_bar()
 
-    formatters = [ _tf.Rho ] + [ _tf.EB ]*len(gateset.get_effect_labels()) #for rows below
+    formatters = [ _tf.Rho ] + [ _tf.ErrorBars ]*len(gateset.get_effect_labels()) #for rows below
 
     for ii,prepLabel in enumerate(gateset.get_prep_labels()): # ii enumerates rhoLabels to index DPs
         rowData = [prepLabel]
@@ -182,13 +183,13 @@ def get_gateset_gates_table(gateset, confidenceRegionInfo=None):
     else:
         colHeadings = ('Gate','Superoperator (%s basis)' % basisNm,
                        '%g%% C.I. half-width' % confidenceRegionInfo.level)
-        formatters = (None,None,_tf.TxtCnv)
+        formatters = (None,None,_tf.Conversion)
 
     table = _ReportTable(colHeadings, formatters)
 
     for gl in gateLabels:
         if confidenceRegionInfo is None:
-            table.addrow((gl, gateset.gates[gl]), (None,_tf.Brk))
+            table.addrow((gl, gateset.gates[gl]), (None,_tf.Brackets))
         else:
             intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(gl)[:,None]
             if isinstance(gateset.gates[gl], _objs.FullyParameterizedGate): #then we know how to reshape into a matrix
@@ -200,7 +201,7 @@ def get_gateset_gates_table(gateset, confidenceRegionInfo=None):
                                                 intervalVec.reshape(gate_dim-1,gate_dim)), axis=0 )
             else:
                 intervalMx = intervalVec # we don't know how best to reshape vector of parameter intervals, so don't
-            table.addrow((gl, gateset.gates[gl], intervalMx), (None,_tf.Brk,_tf.Brk))
+            table.addrow((gl, gateset.gates[gl], intervalMx), (None,_tf.Brackets,_tf.Brackets))
 
     table.finish()
     return table
@@ -239,7 +240,7 @@ def get_unitary_gateset_gates_table(gateset, confidenceRegionInfo=None):
         colHeadings = ('Gate','Superoperator (%s basis)' % basisNm,
                        '%g%% C.I. half-width' % confidenceRegionInfo.level,
                        'Rotation axis','Angle')
-        formatters = (None,None,_tf.TxtCnv,None,None)
+        formatters = (None,None,_tf.Conversion,None,None)
 
     table = _ReportTable(colHeadings, formatters)
 
@@ -248,7 +249,7 @@ def get_unitary_gateset_gates_table(gateset, confidenceRegionInfo=None):
         if confidenceRegionInfo is None:
             table.addrow(
                         (gl, gateset.gates[gl],decomp.get('axis of rotation','X'),decomp.get('pi rotations','X')),
-                        (None, _tf.Brk, _tf.Nml, _tf.Pi) )
+                        (None, _tf.Brackets, _tf.Normal, _tf.Pi) )
         else:
             intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(gl)[:,None]
             if isinstance(gateset.gates[gl], _objs.FullyParameterizedGate): #then we know how to reshape into a matrix
@@ -264,7 +265,7 @@ def get_unitary_gateset_gates_table(gateset, confidenceRegionInfo=None):
             table.addrow(
                         (gl, gateset.gates[gl],decomp.get('axis of rotation','X'),
                          (decomp.get('pi rotations','X'), decompEB.get('pi rotations','X')) ),
-                        (None, _tf.Brk, _tf.Nml, _tf.EBPi) )
+                        (None, _tf.Brackets, _tf.Normal, _tf.PiErrorBars) )
 
     table.finish()
     return table
@@ -308,9 +309,9 @@ def get_gateset_choi_table(gateset, confidenceRegionInfo=None):
 
         choiMx,choiEB = qtys['%s choi matrix' % gl].get_value_and_err_bar()
         if confidenceRegionInfo is None:
-            table.addrow((gl, choiMx, evals), (None, _tf.Brk, _tf.Nml))
+            table.addrow((gl, choiMx, evals), (None, _tf.Brackets, _tf.Normal))
         else:
-            table.addrow((gl, choiMx, (evals,evalsEB)), (None, _tf.Brk, _tf.EBvec))
+            table.addrow((gl, choiMx, (evals,evalsEB)), (None, _tf.Brackets, _tf.VecErrorBars))
 
     table.finish()
     return table
@@ -338,7 +339,7 @@ def get_gates_vs_target_table(gateset, targetGateset,
     gateLabels = list(gateset.gates.keys())  # gate labels
 
     colHeadings = ('Gate', "Process|Infidelity", "1/2 Trace|Distance", "1/2 Diamond-Norm") #, "Frobenius|Distance"
-    formatters = (None,_tf.TxtCnv,_tf.TxtCnv,_tf.TxtCnv) # ,_tf.TxtCnv
+    formatters = (None,_tf.Conversion,_tf.Conversion,_tf.Conversion) # ,_tf.Conversion
 
     qtyNames = ('infidelity','Jamiolkowski trace dist','diamond norm') #,'Frobenius diff'
     qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames for gl in gateLabels ]
@@ -347,7 +348,7 @@ def get_gates_vs_target_table(gateset, targetGateset,
 
     table = _ReportTable(colHeadings, formatters)
 
-    formatters = [None] + [ _tf.EB ]*len(qtyNames)
+    formatters = [None] + [ _tf.ErrorBars ]*len(qtyNames)
 
     for gl in gateLabels:
         if confidenceRegionInfo is None:
@@ -383,13 +384,13 @@ def get_spam_vs_target_table(gateset, targetGateset,
     effectLabels = gateset.get_effect_labels()
 
     colHeadings = ('Prep/POVM', "State|Infidelity", "1/2 Trace|Distance")
-    formatters = (None,_tf.TxtCnv,_tf.TxtCnv)
+    formatters = (None,_tf.Conversion,_tf.Conversion)
 
     table = _ReportTable(colHeadings, formatters)
 
     qtyNames = ('state infidelity','trace dist')
 
-    formatters = [ _tf.Rho ] + [ _tf.EB ]*len(qtyNames)
+    formatters = [ _tf.Rho ] + [ _tf.ErrorBars ]*len(qtyNames)
     qtys_to_compute = [ '%s prep %s' % (l,qty) for qty in qtyNames for l in prepLabels ]
     qtys = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
                                             confidenceRegionInfo)
@@ -400,7 +401,7 @@ def get_spam_vs_target_table(gateset, targetGateset,
             rowData = [l] + [ qtys['%s prep %s' % (l,qty)].get_value_and_err_bar() for qty in qtyNames ]
         table.addrow(rowData, formatters)
 
-    formatters = [ _tf.E ] + [ _tf.EB ]*len(qtyNames)
+    formatters = [ _tf.Effect ] + [ _tf.ErrorBars ]*len(qtyNames)
     qtys_to_compute = [ '%s effect %s' % (l,qty) for qty in qtyNames for l in effectLabels ]
     qtys = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
                                             confidenceRegionInfo)
@@ -443,7 +444,7 @@ def get_gates_vs_target_err_gen_table(gateset, targetGateset,
     for gl in gateLabels:
         table.addrow((gl, _tools.error_generator(gateset.gates[gl],
                                                  targetGateset.gates[gl])),
-                     (None, _tf.Brk))
+                     (None, _tf.Brackets))
     table.finish()
     return table
 
@@ -471,7 +472,7 @@ def get_gates_vs_target_angles_table(gateset, targetGateset,
     gateLabels = list(gateset.gates.keys())  # gate labels
 
     colHeadings = ('Gate', "Angle between|rotation axes")
-    formatters = (None,_tf.TxtCnv)
+    formatters = (None,_tf.Conversion)
 
     qtyNames = ('angle btwn rotn axes',)
     qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames for gl in gateLabels ]
@@ -480,7 +481,7 @@ def get_gates_vs_target_angles_table(gateset, targetGateset,
 
     table = _ReportTable(colHeadings, formatters)
 
-    formatters = [None] + [ _tf.EBPi ]*len(qtyNames)
+    formatters = [None] + [ _tf.PiErrorBars ]*len(qtyNames)
 
     for gl in gateLabels:
         if confidenceRegionInfo is None:
@@ -513,7 +514,7 @@ def get_gateset_closest_unitary_table(gateset, confidenceRegionInfo=None):
 
     gateLabels = list(gateset.gates.keys())  # gate labels
     colHeadings = ('Gate','Process|Infidelity','1/2 Trace|Distance','Rotation|Axis','Rotation|Angle','Sanity Check')
-    formatters = (None,_tf.TxtCnv,_tf.TxtCnv,_tf.TxtCnv,_tf.TxtCnv,_tf.TxtCnv)
+    formatters = (None,_tf.Conversion,_tf.Conversion,_tf.Conversion,_tf.Conversion,_tf.Conversion)
 
     if gateset.get_dimension() != 4:
         table = _ReportTable(colHeadings, formatters)
@@ -530,7 +531,7 @@ def get_gateset_closest_unitary_table(gateset, confidenceRegionInfo=None):
 
     table = _ReportTable(colHeadings, formatters)
 
-    formatters = [None, _tf.EB, _tf.EB, _tf.EBvec, _tf.EBPi, _tf.Nml ] # Note len(decompNames)==2, 2nd el is rotn angle
+    formatters = [None, _tf.ErrorBars, _tf.ErrorBars, _tf.VecErrorBars, _tf.PiErrorBars, _tf.Normal ] # Note len(decompNames)==2, 2nd el is rotn angle
 
     for gl in gateLabels:
         fUB,fUB_EB = qtys['%s upper bound on fidelity with unitary' % gl].get_value_and_err_bar()
@@ -582,7 +583,7 @@ def get_gateset_decomp_table(gateset, confidenceRegionInfo=None):
 
     table = _ReportTable(colHeadings, formatters)
 
-    formatters = (None, _tf.EBvec, _tf.Nml, _tf.Nml, _tf.EB, _tf.EB)
+    formatters = (None, _tf.VecErrorBars, _tf.Normal, _tf.Normal, _tf.ErrorBars, _tf.ErrorBars)
 
     for gl in gateLabels:
         decomp, decompEB = qtys['%s decomposition' % gl].get_value_and_err_bar()
@@ -644,7 +645,7 @@ def get_gateset_rotn_axis_table(gateset, confidenceRegionInfo=None,
     table = _ReportTable(colHeadings, formatters,
                          customHeader={'latex': latex_head} )
 
-    formatters = [None, _tf.EBPi] + [ _tf.EBPi ] * len(gateLabels)
+    formatters = [None, _tf.PiErrorBars] + [ _tf.PiErrorBars ] * len(gateLabels)
 
     rotnAxisAngles, rotnAxisAnglesEB = qtys['Gateset Axis Angles'].get_value_and_err_bar()
     rotnAngles = [ qtys['%s decomposition' % gl].get_value().get('pi rotations','X') \
@@ -728,7 +729,7 @@ def get_gateset_eigenval_table(gateset, targetGateset,
 
     table = _ReportTable(colHeadings, formatters)
 
-    formatters = (None, _tf.EBvec, _tf.Fig)
+    formatters = (None, _tf.VecErrorBars, _tf.Figure)
     nRows = len(gateLabels)
 
     for gl in gateLabels:
@@ -811,7 +812,7 @@ def get_gateset_relative_eigenval_table(gateset, targetGateset,
 
     table = _ReportTable(colHeadings, formatters)
 
-    formatters = (None, _tf.EBvec, _tf.Fig)
+    formatters = (None, _tf.VecErrorBars, _tf.Figure)
     nRows = len(gateLabels)
 
     for gl in gateLabels:
@@ -896,12 +897,12 @@ def get_gateset_choi_eigenval_table(gateset, figFilePrefix,
         if confidenceRegionInfo is None:
             fig = _plotting.choi_eigenvalue_barplot(evals, ylabel="")
             figInfo = (fig,nm,sz,sz)
-            table.addrow((gl, evals, figInfo), (None, _tf.Nml, _tf.Fig))
+            table.addrow((gl, evals, figInfo), (None, _tf.Normal, _tf.Figure))
         else:
             evalsEB = evalsEB.reshape(evalsEB.size//4, 4)
             fig = _plotting.choi_eigenvalue_barplot(evals, evalsEB, ylabel="")
             figInfo = (fig,nm,sz,sz)
-            table.addrow((gl, (evals,evalsEB), figInfo), (None, _tf.EBvec, _tf.Fig))
+            table.addrow((gl, (evals,evalsEB), figInfo), (None, _tf.VecErrorBars, _tf.Figure))
 
     table.finish()
     return table
@@ -956,7 +957,7 @@ def get_dataset_overview_table(dataset, target, maxlen=10, fixedLists=None,
     table.addrow(("SPAM labels",  ", ".join(dataset.get_spam_labels()) ), (None,None))
     table.addrow(("Counts per string", cntStr  ), (None,None))
     table.addrow(("Gram singular values| (right column gives the values|when using the target gate set)",
-                  svals_2col), (_tf.TxtCnv,_tf.Sml))
+                  svals_2col), (_tf.Conversion,_tf.Small))
     if maxLengthList is not None:
         table.addrow(("Max. Lengths", ", ".join(map(str,maxLengthList)) ), (None,None))
 
@@ -1013,7 +1014,7 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset):
         else: rating = 1
         table.addrow(
                     (str(L),chi2,k,chi2-k,_np.sqrt(2*k),pv,Ns,Np,"<STAR>"*rating),
-                    (None,_tf.Nml,_tf.Nml,_tf.Nml,_tf.Nml,_tf.Nml2,_tf.Nml,_tf.Nml,_tf.TxtCnv))
+                    (None,_tf.Normal,_tf.Normal,_tf.Normal,_tf.Normal,_tf.Rounded,_tf.Normal,_tf.Normal,_tf.Conversion))
 
     table.finish()
     return table
@@ -1072,7 +1073,7 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset):
 
         table.addrow(
                     (str(L),twoDeltaLogL,k,twoDeltaLogL-k,_np.sqrt(2*k),pv,Ns,Np,"<STAR>"*rating),
-                    (None,_tf.Nml,_tf.Nml,_tf.Nml,_tf.Nml,_tf.Nml2,_tf.Nml,_tf.Nml,_tf.TxtCnv))
+                    (None,_tf.Normal,_tf.Normal,_tf.Normal,_tf.Normal,_tf.Rounded,_tf.Normal,_tf.Normal,_tf.Conversion))
 
     table.finish()
     return table
@@ -1100,14 +1101,14 @@ def get_gatestring_table(gsList, title, nCols=1):
     ReportTable
     """
     colHeadings = ('#',title)*nCols
-    formatters = (_tf.TxtCnv,_tf.Nml)*nCols
+    formatters = (_tf.Conversion, _tf.Normal)*nCols
 
     table = _ReportTable(colHeadings, formatters)
 
     nRows = (len(gsList)+(nCols-1)) // nCols
 
     for i in range(nRows):
-        formatters = (_tf.Nml,_tf.GStr)*nCols
+        formatters = (_tf.Normal,_tf.GateString)*nCols
         rowdata = []
         for k in range(nCols):
             l = i+nRows*k #index of gatestring
@@ -1139,7 +1140,7 @@ def get_gatestring_multi_table(gsLists, titles, commonTitle=None):
     ReportTable
     """
     colHeadings = ('#',) + tuple(titles)
-    formatters = (_tf.TxtCnv,) + (_tf.Nml,)*len(titles)
+    formatters = (_tf.Conversion,) + (_tf.Normal,)*len(titles)
 
     if commonTitle is None:
         table = _ReportTable(colHeadings, formatters)
@@ -1158,7 +1159,7 @@ def get_gatestring_multi_table(gsLists, titles, commonTitle=None):
                              customHeader={'latex': latex_head,
                                            'html': html_head})
 
-    formatters = (_tf.Nml,) + (_tf.GStr,)*len(gsLists)
+    formatters = (_tf.Normal,) + (_tf.GateString,)*len(gsLists)
 
     for i in range( max([len(gsl) for gsl in gsLists]) ):
         rowData = [i+1]
@@ -1218,7 +1219,7 @@ def get_gateset_gate_boxes_table(gateset, figFilePrefix, maxWidth=6.5,
     else:
         colHeadings = ('Gate','Superoperator (%s basis)' % basisLongNm,
                        '%g%% C.I. half-width' % confidenceRegionInfo.level)
-        formatters = (None,None,_tf.TxtCnv)
+        formatters = (None,None,_tf.Conversion)
 
     table = _ReportTable(colHeadings, formatters)
     nRows = len(gateset.gates)
@@ -1234,7 +1235,7 @@ def get_gateset_gate_boxes_table(gateset, figFilePrefix, maxWidth=6.5,
         nm = figFilePrefix + "_" + gl
 
         figInfo = (fig,nm,sz,sz)
-        table.addrow((gl, figInfo ), (None,_tf.Fig))
+        table.addrow((gl, figInfo ), (None,_tf.Figure))
 
     table.finish()
     return table
@@ -1307,7 +1308,7 @@ def get_gates_vs_target_err_gen_boxes_table(gateset, targetGateset,
         hamdecomp_figInfo = (hamdecomp_fig,nm,sz,sz)
 
         table.addrow((gl, errgen_figInfo, hamdecomp_figInfo),
-                     (None, _tf.Fig, _tf.Fig))
+                     (None, _tf.Figure, _tf.Figure))
     table.finish()
     return table
 

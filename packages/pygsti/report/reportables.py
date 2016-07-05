@@ -349,8 +349,7 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
         return decomp.get('decay of off diagonal rotation terms',0)
 
     def upper_bound_fidelity(gate):
-        ubF, ubGateMx = _tools.fidelity_upper_bound(gate)
-        return ubF
+        return _tools.fidelity_upper_bound(gate)[0]
 
     def closest_ujmx(gate):
         closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
@@ -364,7 +363,8 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
 
     def maximum_trace_dist(gate):
         closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
-        closestUJMx = _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
+        #closestUJMx = _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
+        _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
         return _tools.jtracedist(gate, closestUGateMx)
 
     def spam_dotprods(rhoVecs, EVecs):
@@ -565,7 +565,7 @@ def compute_gateset_dataset_qtys(qtynames, gateset, dataset, gatestrings=None):
 
     if any( [qtyname in per_gatestring_qtys for qtyname in qtynames ] ):
         if gatestrings is None: gatestrings = list(dataset.keys())
-        for (i,gs) in enumerate(gatestrings):
+        for gs in gatestrings:
             if gs in dataset: # skip gate strings given that are not in dataset
                 dsRow = dataset[gs]
             else: continue

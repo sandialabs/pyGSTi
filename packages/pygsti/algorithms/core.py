@@ -262,16 +262,16 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
 
         guessPj = _np.zeros( (K,guessTrunc), 'd') # shape = (K, guessTrunc) projector with only trunc columns
         for i in range(guessTrunc): guessPj[i,i] = 1.0
-        guessPjt = _np.transpose(guessPj)         # shape = (guessTrunc, K)
+        # guessPjt = _np.transpose(guessPj)         # shape = (guessTrunc, K)
 
         AMat = _constructA(effectSpecs, guessGatesetForGauge)    # shape = (nESpecs, gsDim)
-        AMat_p = _np.dot( guessPjt, _np.dot(Ud, AMat)) #truncate Evec => Evec', shape (guessTrunc,gsDim) (square!)
+        # AMat_p = _np.dot( guessPjt, _np.dot(Ud, AMat)) #truncate Evec => Evec', shape (guessTrunc,gsDim) (square!)
 
         BMat = _constructB(prepSpecs, guessGatesetForGauge)  # shape = (gsDim, nRhoSpecs)
         BMat_p = _np.dot( _np.dot(BMat, Vd), guessPj ) #truncate Evec => Evec', shape (gsDim,guessTrunc) (square!)
 
         guess_ABMat = _np.dot(AMat,BMat)
-        guess_U,guess_s,guess_V = _np.linalg.svd(guess_ABMat, full_matrices=False)
+        _, guess_s, _ = _np.linalg.svd(guess_ABMat, full_matrices=False)
 
         printer.log("LGST: Singular values of target I_tilde (truncating to first %d of %d) = \n" % (guessTrunc,len(guess_s)), 2)
         printer.log(guess_s, 2)
@@ -410,11 +410,11 @@ def gram_rank_and_evals(dataset, specs, targetGateset=None, spamDict=None):
         else: raise ValueError("do_lgst cannot determine SPAM dictionary from supplied parameters")
 
     ABMat = _constructAB(prepSpecs, effectSpecs, spamDict, dataset)
-    U,s,V = _np.linalg.svd(ABMat)
+    _, s, _ = _np.linalg.svd(ABMat)
 
     if targetGateset is not None:
         ABMat_tgt = _constructTargetAB(prepSpecs, effectSpecs, spamDict, targetGateset)
-        U,s_tgt,V = _np.linalg.svd(ABMat_tgt)
+        _, s_tgt, _ = _np.linalg.svd(ABMat_tgt)
     else: s_tgt = None
 
     return _np.linalg.matrix_rank(ABMat), s, s_tgt #_np.linalg.eigvals(ABMat)
@@ -547,7 +547,7 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs,
                            verbosity=0) #override verbosity
 
     estimates = _np.empty( (len(gateStringsToUseInEstimation), gate_dim, gate_dim), 'd')
-    for (i,gateStr) in enumerate(gateStringsToUseInEstimation):
+    for i in range(len(gateStringsToUseInEstimation)):
         estimates[i] = lgstEstimates.gates[ "Gestimator%d" % i ]
 
     evTree = gs.bulk_evaltree(gateStringsToUseInEstimation)
@@ -660,7 +660,7 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs,
 
     #Step 3: solve least squares minimization problem
     x0 = gs.to_vector()
-    opt_x, opt_jac, info, msg, flag = \
+    opt_x, _, _, _, _ = \
         _spo.leastsq( objective_func, x0, xtol=tol, ftol=tol, gtol=tol,
                  maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=jacobian)
     full_minErrVec = objective_func(opt_x)
@@ -1238,7 +1238,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     #Step 3: solve least squares minimization problem
     #tStart = _time.time() #TIMER!!!
     x0 = gs.to_vector()
-    opt_x, opt_jac, info, msg, flag = \
+    opt_x, _, _, _, _ = \
         _spo.leastsq( objective_func, x0, xtol=tol, ftol=tol, gtol=tol,
                  maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=jacobian )
     full_minErrVec = objective_func(opt_x)  #note: calls gs.from_vector(opt_x,...) so don't need to call this again
@@ -1782,7 +1782,7 @@ def do_iterative_mc2gst_with_model_selection(
         for (i,stringsToEstimate) in enumerate(gateStringLists):
             printer.log('', 2)
             extraMessages = (["(%s) "] % gateStringSetLabels[i]) if gateStringSetLabels else []
-            printer.show_progress(i, nIters-1, prefix="--- Iterative MC2GST:", suffix= "%d gate strings ---"  % (len(stringsToEstimate)))
+            printer.show_progress(i, nIters-1, prefix="--- Iterative MC2GST:", suffix= "%d gate strings ---"  % (len(stringsToEstimate)), verboseMessages=extraMessages)
 
             if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
 
@@ -2173,7 +2173,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
 
     #Run optimization (use leastsq)
     x0 = gs.to_vector()
-    opt_x, opt_jac, info, msg, flag = \
+    opt_x, _, _, msg, flag = \
         _spo.leastsq( objective_func, x0, xtol=tol, ftol=tol, gtol=0,
                       maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=jacobian )
     printer.log("Least squares msg = %s; flag =%s" % (msg, flag), 2)
@@ -2383,7 +2383,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
              if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
 
 
-             chi2Diff, mleGateset = do_mc2gst( dataset, mleGateset, stringsToEstimate,
+             _, mleGateset = do_mc2gst( dataset, mleGateset, stringsToEstimate,
                                                 maxiter, maxfev, tol, 0, minProbClip,
                                                 probClipInterval, useFreqWeightedChiSq,
                                                 0, printer-2, check,
@@ -2631,7 +2631,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
             tpGateset = gateset
             tpGaugeMx = _np.identity( gateDim, 'd' )
         else:
-            minf, tpGaugeMx, tpGateset = optimize_gauge(gateset,"TP", maxiter, maxfev, tol,
+            _, tpGaugeMx, tpGateset = optimize_gauge(gateset,"TP", maxiter, maxfev, tol,
                                                        'L-BFGS-B', targetGateset, targetFactor,
                                                        constrainToTP, constrainToCP, constrainToValidSpam, True,
                                                        gateWeight, spamWeight, printer-1)
@@ -2725,7 +2725,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
             tpGateset = gateset
             tpGaugeMx = _np.identity( gateDim, 'd' )
         else:
-            minf, tpGaugeMx, tpGateset = optimize_gauge(gateset, "TP and target", maxiter, maxfev, tol,
+            _, tpGaugeMx, tpGateset = optimize_gauge(gateset, "TP and target", maxiter, maxfev, tol,
                                                        'L-BFGS-B', targetGateset, targetFactor,
                                                        constrainToTP, constrainToCP, constrainToValidSpam, True,
                                                        gateWeight, spamWeight, printer-1)
@@ -3265,8 +3265,8 @@ def find_closest_unitary_gatemx(gateMx):
     """
 
     gate_JMx = _tools.jamiolkowski_iso( gateMx, choiMxBasis="std" )
-    d = _np.sqrt(gateMx.shape[0])
-    I = _np.identity(d)
+    # d = _np.sqrt(gateMx.shape[0])
+    # I = _np.identity(d)
 
     #def getu_1q(basisVec):  # 1 qubit version
     #    return _spl.expm( 1j * (basisVec[0]*_tools.sigmax + basisVec[1]*_tools.sigmay + basisVec[2]*_tools.sigmaz) )
@@ -3294,7 +3294,7 @@ def find_closest_unitary_gatemx(gateMx):
         #JU = _np.kron( vU, _np.transpose(_np.conjugate(vU))) # Choi matrix corresponding to U
         return -_tools.fidelity(gate_JMx, JU)
 
-    print_obj_func = _opt.create_obj_func_printer(objective_func)
+    # print_obj_func = _opt.create_obj_func_printer(objective_func)
     solution = _spo.minimize(objective_func, initialBasisVec,  options={'maxiter': 10000},
                              method='Nelder-Mead',callback=None, tol=1e-8) # if verbosity > 2 else None
     gateMx = getGateMx(solution.x)

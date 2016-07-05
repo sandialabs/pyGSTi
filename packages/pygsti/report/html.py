@@ -13,6 +13,14 @@ import numpy as _np
 import cmath
 from .. import objects as _objs
 
+#Define basestring in python3 so unicode
+# strings can be tested for in python2 using
+# python2's built-in basestring type.
+# When removing __future__ imports, remove
+# this and change basestring => str below.
+try:  basestring
+except NameError: basestring = str
+
 
 def html(x, brackets=False):
     """
@@ -46,7 +54,7 @@ def html(x, brackets=False):
         return html_value(x)
     elif type(x) in (list,tuple):
         return html_list(x)
-    elif type(x) == str:
+    elif isinstance(x,basestring):
         return html_escaped(x)
     else:
         print("Warning: %s not specifically converted to html" % str(type(x)))
@@ -198,7 +206,8 @@ def html_value(el,ROUND=6,complexAsPolar=True):
         return s
 
 
-    if type(el) == str: return el
+    if isinstance(el,basestring):
+        return el
     if type(el) in (int,_np.int64):
         return "%d" % el
     if el is None or _np.isnan(el): return "--"

@@ -622,7 +622,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
 
 
 
-    tStart = _time.time() #TIMER
+    # tStart = _time.time() #TIMER
 
     final_hessian = None #final computed quantity
 
@@ -634,7 +634,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
     # subtrees would just add unnecessary complication.
 
     #Loop over subtrees
-    for iTree,evalSubTree in enumerate(evalTree.get_sub_trees()):
+    for evalSubTree in evalTree.get_sub_trees():
         sub_nGateStrings = evalSubTree.num_final_strings()
 
         #  Create views into pre-allocated memory
@@ -676,7 +676,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
                                     comm=comm)
             pos_probs = _np.where(probs < min_p, min_p, probs)
 
-            k = 0 #DEBUG
+            # k = 0 #DEBUG
 
 
             #perform parallelization over columns

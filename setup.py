@@ -1,8 +1,13 @@
 """A python implementation of Gate Set Tomography"""
 
 from distutils.core import setup
+	
+#execfile("packages/pygsti/_version.py")
 
-execfile("packages/pygsti/_version.py")
+# 3.0 changes the way exec has to be called
+with open("packages/pygsti/_version.py") as f:
+    code = compile(f.read(), "packages/pygsti/_version.py", 'exec')
+    exec(code)
 
 
 classifiers = """\
