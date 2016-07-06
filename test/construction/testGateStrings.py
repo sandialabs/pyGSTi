@@ -171,6 +171,7 @@ class TestGateStringMethods(GateStringTestCase):
         gateLabels = ['Gx','Gy']
         strs = pygsti.construction.gatestring_list( [('Gx',),('Gy',),('Gx','Gx')] )
         germs = pygsti.construction.gatestring_list( [('Gx','Gy'),('Gy','Gy')] )
+        testFidPairs = [(0,1)]
 
         # LSGST
         maxLens = [0,1,2]
@@ -191,6 +192,10 @@ class TestGateStringMethods(GateStringTestCase):
             gateLabels, strs, strs, germs, maxLens, fidPairs=None,
             truncScheme="whole germ powers", nest=False)
 
+        lsgstLists5 = pygsti.construction.make_lsgst_lists(
+            gateLabels, strs, strs, germs, maxLens, fidPairs=testFidPairs,
+            truncScheme="whole germ powers")
+
         lsgstExpList = pygsti.construction.make_lsgst_experiment_list(
             gateLabels, strs, strs, germs, maxLens, fidPairs=None,
             truncScheme="whole germ powers")
@@ -199,6 +204,15 @@ class TestGateStringMethods(GateStringTestCase):
             pygsti.construction.make_lsgst_lists(
                 gateLabels, strs, strs, germs, maxLens, fidPairs=None,
                 truncScheme="foobar")
+
+        lsgstLists6 = pygsti.construction.make_lsgst_lists(
+            gateLabels, strs, strs, germs, maxLens, fidPairs=None,
+            truncScheme="whole germ powers", keepFraction=0.5, keepSeed=1234)
+
+        lsgstLists7 = pygsti.construction.make_lsgst_lists(
+            gateLabels, strs, strs, germs, maxLens, fidPairs=testFidPairs,
+            truncScheme="whole germ powers", keepFraction=0.7, keepSeed=1234)
+
 
 
 
