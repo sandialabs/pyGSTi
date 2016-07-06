@@ -6,15 +6,15 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Functions for generating report tables in different formats """
 
-from .latex import latex, latex_value
 from .html  import html,  html_value
+from .latex import latex, latex_value
 from .ppt   import ppt,   ppt_value
 
-import cgi          as _cgi
-import numpy        as _np
-import numbers      as _numbers
-import re           as _re
-import os           as _os
+import cgi     as _cgi
+import numpy   as _np
+import numbers as _numbers
+import re      as _re
+import os      as _os
 
 class Formatter():
     '''
@@ -32,18 +32,22 @@ class Formatter():
 
     formatstring : Outer formatting for after both replacements have been made
  
+    custom : tuple of a function and additional key word arguments
+
     Returns
     --------
     template :
     Formatting function
     '''
 
-    def __init__(stringreplacers=None, regexreplace=None, formatstring='%s', stringreturn=None):
+    def __init__(self, stringreplacers=None, regexreplace=None, formatstring='%s', stringreturn=None, custom=None):
         self.stringreplacers = stringreplacers
-        self.regexreplace = regexreplace
-        self.formatstring = formatstring
+        self.regexreplace    = regexreplace
+        self.formatstring    = formatstring
+        self.stringreturn    = stringreturn
+        self.custom          = custom
 
-    def __call__():
+    def __call__(self, label):
         '''
         Formatting function template
 
@@ -54,8 +58,11 @@ class Formatter():
         --------
         Formatted label
         '''
+        if self.custom is not None:
+            return self.custom[0](label, **self.custom[1])
+
         if self.stringreturn is not None:
-            return self.formatstring % label.replace(stringreturn[0], stringreturn[1])
+            return self.formatstring % label.replace(self.stringreturn[0], self.stringreturn[1])
 
         if self.stringreplacers is not None:
             for stringreplace in self.stringreplacers:
@@ -79,7 +86,7 @@ Rho = { 'html' : Formatter(stringreplacers=[('rho', '&rho;')],
                                  regexreplace=('.*?([0-9]+)$', '<sub>%s</sub>')), 
         'latex': Formatter(stringreplacers=[('rho', '\\rho')], 
                                  regexreplace=('.*?([0-9]+)$', '_{%s}'), formatstring='$%s$'), 
-        'text'   : no_format,
+        'text' : no_format,
         'ppt'  : no_format }
 
 # 'E' (POVM) effect formatting
@@ -100,30 +107,43 @@ Normal = {
 
 # 'normal' formatting but round to 2 decimal places
 Rounded = { 
-         'html'  : lambda x : html_value(x, ROUND=2), 
-         'latex' : lambda x : latex_value(x, ROUND=2), 
+         'html'  : Formatter(custom=(html_value, {'ROUND' : 2})), 
+         'latex' : Formatter(custom=(latex_value, {'ROUND' : 2})), 
          'text'  : no_format, 
-         'ppt'   : lambda x : ppt_value(x, ROUND=2) }
+         'ppt'   : Formatter(custom=(ppt_value, {'ROUND' : 2}))}
 
 # 'small' formating - make text smaller
 Small = { 
         'html'   : html, 
-        'latex'  : lambda x : '\\small' + latex(x), 
+        'latex'  : Formatter(formatstring='\\small%s', custom=(latex, {})), 
         'text'   : no_format, 
-        'ppt'    : ppt}
+        'ppt'    : ppt }
 
-emptyOrDash = lambda x : return x == '--' or x = ''
+def emptyOrDash (x): 
+    return x == '--' or x == ''
 
-Pi = { 'html'   : lambda x : x if emptyOrDash(x) else html(x) + '&pi;', 
-       'latex'  : lambda x : x if emptyOrDash(x) else latex(x) + '$\\pi$', 
-       'text'   : lambda x : x if emptyOrDash(x) or not isinstance(x, _numbers.Number else x * _np.pi,
-       'ppt'    : lambda x : x if emptyOrDash(x) else ppt(x) + 'pi' }
+def _pi_html(x):
+    return x if emptyOrDash(x) else html(x) + '&pi;'
+
+def _pi_latex(x):
+    return x if emptyOrDash(x) else latex(x) + '$\\pi$'
+
+def _pi_text(x):
+    return x if emptyOrDash(x) or not isinstance(x, _numbers.Number) else x * _np.pi
+
+def _pi_ppt(x):
+    return x if emptyOrDash(x) else ppt(x) + 'pi'
+
+Pi = { 'html'   : _pi_html, 
+       'latex'  : _pi_latex, 
+       'text'   : _pi_text,
+       'ppt'    : _pi_ppt}
 
 Brackets = { 
-        'html'  : lambda x : html(x, brackets=True), 
-        'latex' : lambda x : latex(x, brackets=True), 
+        'html'  : Formatter(custom=(html, {'brackets' : True})), 
+        'latex' : Formatter(custom=(latex, {'brackets' : True})), 
         'text'  : no_format, 
-        'ppt'   : lambda x : ppt(x, brackets=True)}
+        'ppt'   : Formatter(custom=(ppt, {'brackets' : True}))}
 
 
 # ####################################################################### #
@@ -157,81 +177,124 @@ Conversion = {
            'text'  : Formatter(stringreplacers=[('<STAR>', '*'), ('|', ' ')]), 
            'ppt'   : Formatter(stringreplacers=[('<STAR>', '*'), ('|', '\n')])}
 
-# Essentially takes two formatters and decides which to use, based on if the error bar exists
-def eb_template(a, b):
-    def template(t):
+class ErrorBarFormatter():
+    # Essentially takes two formatters and decides which to use, based on if the error bar exists
+    def __init__(self, a, b):
+        self.a = a
+        self.b = b
+
+    def __call__(self, t):
         if t[1] is not None:
             # A corresponds to when the error bar is present
-            return a(t)
+            return self.a(t)
         else:
-            return b(t)
+            return self.b(t)
 
-ErrorBars = { 'html'  : eb_template(lambda t : '%s +/- %s' % (html(t[0], html(t[1])
-                                    lambda t : html(t[0])), 
-              'latex' : eb_template(lambda t : '$ \\begin{array}{c} %s \\\\ \pm %s \\end{array} $' % (latex_value(t[0]), latex_value(t[1])),
-                                    lambda t : latex_value(t[0])) 
-              'text'  : lambda t : { 'value' : t[0], 'errbar' : t[1] }, 
-              'ppt'   : eb_template(lambda t : '%s +/- %s' % (ppt(t[0]), ppt(t[1])),
-                                    lambda t : ppt(t[0]))}
+def _text_error_bar(t):
+    return {'value' : t[0], 'errbar' : t[1]}
 
-VecErrorBars = { 'html'  : eb_template(lambda t : '%s +/- %s' % (html(t[0]), html(t[1])),
-                                       lambda t : html(t[0]), 
-                 'latex' : eb_template(lambda t : '%s $\pm$ %s' % (latex(t[0]), latex(t[1])),
-                                       lambda t : latex(t[0])), 
-                 'text'  : lambda t : return { 'value' : t[0], 'errbar' : t[1] }, 
-                 'ppt'   : eb_template(lambda t : '%s +/- %s' % (ppt(t[0]), ppt(t[1])),
-                                       lambda t : ppt(t[0])}
+def _latex_error_bar(t):
+    return '$ \\begin{array}{c} %s \\\\ \pm %s \\end{array} $' % (latex_value(t[0]), latex_value(t[1]))
 
+def _plus_or_minus(t, f=no_format):
+    return '%s +/- %s' % (f(t[0]), f(t[1]))
+
+def _first_tuple_elem(t, f=no_format):
+    return f(t[0])
+
+_html_error_bar = ErrorBarFormatter(Formatter(custom=(_plus_or_minus, {'f' : html})),
+                                          Formatter(custom=(_first_tuple_elem, {'f' : html})))
+
+ErrorBars = { 'html'  : _html_error_bar, 
+              'latex' : ErrorBarFormatter(_latex_error_bar,
+                                          Formatter(custom=(_first_tuple_elem, {'f' : latex_value}))), 
+              'text'  : _text_error_bar, 
+              'ppt'   : ErrorBarFormatter(Formatter(custom=(_plus_or_minus, {'f' : ppt})),
+                                          Formatter(custom=(_first_tuple_elem, {'f' : ppt})))}
+def _latex_vec_error_bar(t):
+    return '%s $\pm$ %s' % (latex(t[0]), latex(t[1]))
+
+VecErrorBars = { 'html'  : _html_error_bar, 
+                 'latex' : ErrorBarFormatter(_latex_vec_error_bar,
+                                             Formatter(custom=(_first_tuple_elem, {'f' : latex}))), 
+                 'text'  : _text_error_bar, 
+                 'ppt'   : ErrorBarFormatter(Formatter(custom=(_plus_or_minus,    {'f' : ppt})),
+                                             Formatter(custom=(_first_tuple_elem, {'f' : ppt})))}
+def _latex_pi_error_bar(t):
+    '$ \\begin{array}{c}(%s \\\\ ]pm %s)\\pi \\end{array} $' % (latex(t[0]), latex(t[1]))
 
 # 'errorbars with pi' formatting: display (scalar_value +/- error bar) * pi
-PiErrorBars = { 'html'  : eb_template(lambda t : '(%s +/- %s)&pi;' % (html(t[0]), html(t[1])),
-                                      lambda t : Pi['html'](t[0])), 
-                'latex' : eb_template(lambda t : '$ \\begin{array}{c}(%s \\\\ ]pm %s)\\pi \\end{array} $' % (latex(t[0]), latex(t[1])),
-                                      lambda t : Pi['latex'](t[0])), 
-                'text'  : lambda t : {'value' : t[0], 'errbar' : t[1]}, 
-                'ppt'   : eb_template(lambda t : '(%s +/- %s)pi' % (ppt(t[0]), ppt(t[1])),
-                                      lambda t : ppt(t[0]))}
+PiErrorBars = { 'html'  : ErrorBarFormatter(Formatter(formatstring='(%s)&pi;', custom=(_plus_or_minus, {'f' : html})),
+                                            Formatter(custom=(_first_tuple_elem, {'f' : Pi['html']}))), 
+                'latex' : ErrorBarFormatter(_latex_pi_error_bar,
+                                            Formatter(custom=(_first_tuple_elem, {'f' : latex}))), 
+                'text'  : _text_error_bar, 
+                'ppt'   : ErrorBarFormatter(Formatter(formatstring='(%s)&pi;', custom=(_plus_or_minus, {'f' : ppt})),
+                                            Formatter(custom=(_first_tuple_elem, {'f' : ppt})))}
+
+def _html_gatestring(s):
+    return '.'.join(s) if s is not None else ''
+
+def _latex_gatestring(s):
+    return '' if s is None else ('$%s$' % '\\cdot'.join([ ('\\mbox{%s}' % gl) for gl in s]))
+
+def _text_gatestring(s):
+    return tuple(s) if s is not None else ''
+
+def _ppt_gatestring(s):
+    return '.'.join(s) if s is not None else ''
+
 GateString = {
-         'html'  : lambda s : '.'.join(s) if s is not None else '', 
-         'latex' : lambda s : '' if s is None else ('$%s$' % '\\cdot'.join([ ('\\mbox{%s}' % gl) for gl in s])), 
-         'text'  : lambda s : tuple(s) if s is not None else '', 
-         'ppt'   : lambda s : '.'.join(s) if s is not None else ''}
+         'html'  : _html_gatestring, 
+         'latex' : _latex_gatestring, 
+         'text'  : _text_gatestring, 
+         'ppt'   : _ppt_gatestring}
+
+def _pre_html(x):
+    return x['html']
+def _pre_latex(x):
+    return x['latex']
+def _pre_text(x):
+    return x['text']
+def _pre_ppt(x):
+    return x['ppt']
+
 # 'pre' formatting, where the user gives the data in separate formats
-Pre = { 'html'   : lambda x : x['html'], 
-        'latex'  : lambda x : x['latex'], 
-        'text'   : lambda x : x['text'], 
-        'ppt'    : lambda x : x['ppt'] }
+Pre = { 'html'   : _pre_html,
+        'latex'  : _pre_latex, 
+        'text'   : _pre_text, 
+        'ppt'    : _pre_ppt}
 
-# Still a bit hacky, but no global required
-def build_figure_formatters(scratchDir):
-    # Specifically, this function remains unevaluated until table rendering - which calls formatList (below)
-    #   in formatList, the scratchDir is given, and this function returns the appropriate dictionary of formatters
+class FigureFormatter():
+    def __init__(self, extension=None, formatstring='%s%s%s%s', custom=None):
+        self.scratchDir = None
+        
 
-    # Figure formatting, where a GST figure is displayed in a table cell
-    def _fmtFig_html(figInfo):
+    def __call__(self, figInfo):
         fig, name, W, H = figInfo
-        fig.save_to(_os.path.join(scratchDir, name + ".png"))
-        return "<img width='%.2f' height='%.2f' src='%s/%s'>" \
-            % (W, H, scratchDir,name + ".png")
-    def _fmtFig_latex(figInfo):
-        fig, name, W, H = figInfo
-        fig.save_to(_os.path.join(scratchDir, name + ".pdf"))
-        return "\\vcenteredhbox{\\includegraphics[width=%.2fin,height=%.2fin" \
-            % (W,H) + ",keepaspectratio]{%s/%s}}" % (scratchDir, name + ".pdf")
-    
-    Fig = { 'html' : _fmtFig_html, 
-            'latex': _fmtFig_latex, 
-            'text' : lambda figinfo : return figInfo[0], 
-            'ppt'  : lambda figinfo : 'Not implemented' }
-    return Fig
+        if extension is not None:
+            fig.save_to(_os.path.join(scratchDir, name + self.extension))
+            if custom is not None:
+                return formatstring % custom[0](W, H, scratchDir, name + self.extension, **custom[1])
+            else:
+                return formatstring % (W, H, scratchDir, name + self.extension)
+        elif custom is not None:
+            return custom[0](figInfo, **custom[1])
+        else:
+            return 'Figure generation for this Formatter is not implemented.'
 
-Figure = build_figure_formatters 
+Figure = {
+         'html'  : FigureFormatter(formatstring="<img width='%.2f' height='%.2f' src='%s/%s'>", extension='.png'),
+         'latex' : FigureFormatter(formatstring="\\vcenteredhbox{\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/%s}}", extension='.pdf'),
+         'text'  : FigureFormatter(custom=(_first_tuple_elem, {})),
+         'ppt'   : FigureFormatter()
+         }
 
 # Bold formatting
-Bold = { 'html'  : lambda x : '<b>%s</b>' % html(x),
-         'latex' : lambda x : '\\textbf{%s}' % latex(x), 
+Bold = { 'html'  : Formatter(formatstring='<b>%s</b>', custom=(html, {})),
+         'latex' : Formatter(formatstring='\\textbf{%s}', custom=(latex, {})), 
          'text'  : Formatter(formatstring='**%s**'), 
-         'ppt'   : lambda x : ppt(x)}
+         'ppt'   : Formatter(custom=(ppt, {}))}
 
 
 
@@ -240,9 +303,9 @@ def formatList(items, formatters, fmt, scratchDir=None):
     formatted_items = []
     for item, formatter in zip(items, formatters):
         if formatter is not None:
-            # If the formatter requires additional information to do its job, give it.
-            if callable(formatter):
-                formatter = formatter(scratchDir)
+            # If the formatter requires a scratch directory to do its job, give it.
+            if hasattr(formatter, 'scratchDir'):
+                formatter.scratchDir = scratchDir
             formatted_items.append( formatter[fmt](item) )
         else:
             formatted_items.append( item )

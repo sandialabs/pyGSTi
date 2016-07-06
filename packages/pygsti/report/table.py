@@ -1,5 +1,5 @@
 from __future__ import division, print_function, absolute_import, unicode_literals
-from . import formatting as _formatting
+from . import formatter as _formatter
 from collections import OrderedDict as _OrderedDict
 
 class ReportTable(object):
@@ -33,7 +33,7 @@ class ReportTable(object):
             else:
                 if self._headingFormatters is not None:
                     colHeadings_formatted = \
-                        _formatting.formatList(self._headings,
+                        _formatter.formatList(self._headings,
                                        self._headingFormatters, "latex", scratchDir)
                 else: #headingFormatters is None => headings is dict w/formats
                     colHeadings_formatted = self._headings['latex']
@@ -44,7 +44,7 @@ class ReportTable(object):
                     (" & ".join(colHeadings_formatted))
 
             for rowData,formatters in self._rows:
-                formatted_rowData = _formatting.formatList(rowData, formatters, "latex", scratchDir)
+                formatted_rowData = _formatter.formatList(rowData, formatters, "latex", scratchDir)
                 if len(formatted_rowData) > 0:
                     latex += " & ".join(formatted_rowData) + " \\\\ \hline\n"
 
@@ -60,7 +60,7 @@ class ReportTable(object):
             else:
                 if self._headingFormatters is not None:
                     colHeadings_formatted = \
-                        _formatting.formatList(self._headings,
+                        _formatter.formatList(self._headings,
                                        self._headingFormatters, "html", scratchDir)
                 else: #headingFormatters is None => headings is dict w/formats
                     colHeadings_formatted = self._headings['html']
@@ -71,7 +71,7 @@ class ReportTable(object):
                 html += "</thead><tbody>"
 
             for rowData,formatters in self._rows:
-                formatted_rowData = _formatting.formatList(rowData, formatters, "html", scratchDir)
+                formatted_rowData = _formatter.formatList(rowData, formatters, "html", scratchDir)
                 if len(formatted_rowData) > 0:
                     html += "<tr><td>" + \
                         "</td><td>".join(formatted_rowData) + "</td></tr>\n"
@@ -88,7 +88,7 @@ class ReportTable(object):
 
             if self._headingFormatters is not None:
                 colHeadings_formatted = \
-                    _formatting.formatList(self._headings,
+                    _formatter.formatList(self._headings,
                                    self._headingFormatters, 'text', scratchDir)
             else: #headingFormatters is None => headings is dict w/formats
                 colHeadings_formatted = self._headings['text']
@@ -98,7 +98,7 @@ class ReportTable(object):
 
             for rowData,formatters in self._rows:
                 print(rowData)
-                formatted_rowData = _formatting.formatList(rowData, formatters, 'text', scratchDir)
+                formatted_rowData = _formatter.formatList(rowData, formatters, 'text', scratchDir)
                 if len(formatted_rowData) > 0:
                    text['row data'].append( formatted_rowData )
 
@@ -114,7 +114,7 @@ class ReportTable(object):
 
             if self._headingFormatters is not None:
                 colHeadings_formatted = \
-                    _formatting.formatList(self._headings,
+                    _formatter.formatList(self._headings,
                                    self._headingFormatters, "ppt", scratchDir)
             else: #headingFormatters is None => headings is dict w/formats
                 colHeadings_formatted = self._headings['ppt']
@@ -123,7 +123,7 @@ class ReportTable(object):
                     'row data' : [] }
 
             for rowData,formatters in self._rows:
-                formatted_rowData = _formatting.formatList(rowData, formatters, "ppt", scratchDir)
+                formatted_rowData = _formatter.formatList(rowData, formatters, "ppt", scratchDir)
                 if len(formatted_rowData) > 0:
                     ppt['row data'].append( formatted_rowData )
 
