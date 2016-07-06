@@ -337,13 +337,14 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
 
 #@profile
 def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
-                                 randomizationStrength=1e-3, numCopies=None, seed=0, 
-                                 l1Penalty=1e-2, gatePenalty=0,
-                                 initialWeights=None, scoreFunc='all', maxIter=100, 
-                                 fixedSlack=False, slackFrac=False, 
-                                 returnAll=False, tol=1e-6, check=False,
-                                 forceSingletons=True, forceSingletonsScore=1e100,
-                                 threshold=1e6, verbosity=1):
+                                 randomizationStrength=1e-3, numCopies=None,
+                                 seed=0, l1Penalty=1e-2, gatePenalty=0,
+                                 initialWeights=None, scoreFunc='all',
+                                 maxIter=100, fixedSlack=False,
+                                 slackFrac=False, returnAll=False, tol=1e-6,
+                                 check=False, forceSingletons=True,
+                                 forceSingletonsScore=1e100, threshold=1e6,
+                                 verbosity=1):
     """
     Find a locally optimal subset of the germs in germsList.
 
@@ -388,7 +389,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         The number of gateset copies to be made of the input gateset (prior to
         unitary randomization).  If more than one gateset is passed in,
         `numCopies` should be ``None``.  If only one gateset is passed in and
-        `numCopies` is ``None``, no gateset copies are made.
+        `numCopies` is ``None``, no extra copies are made.
 
     seed : float, optional
         The starting seed used for unitary randomization.  If multiple gatesets
@@ -505,7 +506,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                 newgatesetList.append(gateset.randomize_with_unitary(randomizationStrength,seed=seed+gatesetnum))
 #            gatesetList[gatesetnum] =
         else:
-            for gatesetnum in range(numCopies is numCopies is not None else 0):
+            for gatesetnum in range(numCopies if numCopies is not None else 1):
                 newgatesetList.append(gatesetList[0].randomize_with_unitary(randomizationStrength,seed=seed+gatesetnum))
         gatesetList = newgatesetList
 
