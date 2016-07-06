@@ -15,7 +15,7 @@ import warnings as _warnings
 from .. import objects as _objs
 
 def num_non_spam_gauge_params(gateset):
-    """Returns number of non-gauge parameters in a gateset, not including SPAM parameters"""
+    """Returns number of non-gauge parameters in a GateSet, not including SPAM parameters"""
     gateset = gateset.copy()
     for prepLabel in gateset.preps.keys():
         del gateset.preps[prepLabel]
@@ -90,7 +90,7 @@ def twirled_deriv(gateset, gatestring, eps=1e-6):
     Parameters
     ----------
     gateset : Gateset object
-      The gateset which associates gate labels with operators.
+      The GateSet which associates gate labels with operators.
 
     gatestring : GateString object
       The gate string to take a twirled derivative of.
@@ -119,7 +119,7 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False):
     Parameters
     ----------
     gateset : Gateset object
-      The gateset which associates gate labels with operators.
+      The GateSet which associates gate labels with operators.
 
     gatestrings : list of GateString objects
       The gate string to take a twirled derivative of.
@@ -161,13 +161,13 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False):
 def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
                          returnSpectrum=False, tol=1e-6):
     """
-    Test whether a set of germs is able to amplify all of the gateset's
+    Test whether a set of germs is able to amplify all of the GateSet's
     non-gauge parameters.
 
     Parameters
     ----------
     gateset : GateSet
-        The gate set (associates gate matrices with gate labels).
+        The GateSet (associates gate matrices with gate labels).
 
     germsToTest : list of GateStrings
         List of germs gate sequences to test for completeness.
@@ -244,13 +244,13 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
 def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
                            returnSpectrum=False, threshold=1e6, check=False):
     """
-    Test whether a set of germs is able to amplify all of the gateset's
+    Test whether a set of germs is able to amplify all of the GateSet's
     non-gauge parameters.
 
     Parameters
     ----------
     gateset : GateSet
-        The gate set (associates gate matrices with gate labels).
+        The GateSet (associates gate matrices with gate labels).
 
     germsToTest : list of GateString
         List of germs gate sequences to test for completeness.
@@ -357,42 +357,42 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     Parameters
     ----------
     gatesetList : GateSet or list of GateSet
-        The list of gate sets to be tested.  To ensure that the returned germ
+        The list of GateSets to be tested.  To ensure that the returned germ
         set is amplficationally complete, it is a good idea to score potential
         germ sets against a collection (~5-10) of similar gate sets.  The user
-        may specify a single gateset and a number of unitarily close copies to
+        may specify a single GateSet and a number of unitarily close copies to
         be made (set by the kwarg `numCopies`, or the user may specify their
-        own list of gatesets, each of which in turn may or may not be
+        own list of GateSets, each of which in turn may or may not be
         randomized (set by the kwarg `randomize`).
 
     germsList : list of GateString
         List of all germs gate sequences to consider.
         IMPORTANT:  If `forceSingletons` is ``True``, the first k elements of
-        germsList must be all k gates in gateset.
+        germsList must be all k gates in GateSet.
 
     randomize : Bool, optional
-        Whether or not the input gateset(s) are subject first subject to
+        Whether or not the input GateSet(s) are subject first subject to
         unitary randomization.  If ``False``, the user should perform the
-        unitary randomization themselves.  Note:  If the gateset(s) are perfect
+        unitary randomization themselves.  Note:  If the GateSet(s) are perfect
         (e.g.  std1Q_XYI.gs_target), then the germ selection output should not
-        be trusted, due to accidental degeneracies in the gateset.  If the
-        gateset(s) include stochastic (non-unitary) error, then germ selection
+        be trusted, due to accidental degeneracies in the GateSet.  If the
+        GateSet(s) include stochastic (non-unitary) error, then germ selection
         will fail, as we score amplificational completeness in the limit of
         infinite sequence length (so any stochastic noise will completely
         depolarize any sequence in that limit).  Default is ``True``.
 
     randomizationStrength : float, optional
-        The strength of the unitary noise used to randomize input gateset(s);
+        The strength of the unitary noise used to randomize input GateSet(s);
         is passed to ``randomize_with_unitary``.  Default is ``1e-3``.
 
     numCopies : int, optional
-        The number of gateset copies to be made of the input gateset (prior to
-        unitary randomization).  If more than one gateset is passed in,
-        `numCopies` should be ``None``.  If only one gateset is passed in and
+        The number of GateSet copies to be made of the input GateSet (prior to
+        unitary randomization).  If more than one GateSet is passed in,
+        `numCopies` should be ``None``.  If only one GateSet is passed in and
         `numCopies` is ``None``, no extra copies are made.
 
     seed : float, optional
-        The starting seed used for unitary randomization.  If multiple gatesets
+        The starting seed used for unitary randomization.  If multiple GateSets
         are to be randomized, gatesetList[i] is randomized with seed + i.
         Default is 0.
 
