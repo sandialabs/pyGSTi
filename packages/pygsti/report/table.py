@@ -1,5 +1,5 @@
 from __future__ import division, print_function, absolute_import, unicode_literals
-from . import tableformat as _tf
+from . import formatter as _formatter
 from collections import OrderedDict as _OrderedDict
 
 class ReportTable(object):
@@ -12,7 +12,7 @@ class ReportTable(object):
         if self._headingFormatters is not None:
             self._columnNames = self._headings
         else: #headingFormatters is None => headings is dict w/formats
-            self._columnNames = self._headings['py'] #use python heading
+            self._columnNames = self._headings['text'] #use text heading
 
 
     def addrow(self, rowData, formatters):
@@ -33,7 +33,7 @@ class ReportTable(object):
             else:
                 if self._headingFormatters is not None:
                     colHeadings_formatted = \
-                        _tf.formatList(self._headings,
+                        _formatter.formatList(self._headings,
                                        self._headingFormatters, "latex", scratchDir)
                 else: #headingFormatters is None => headings is dict w/formats
                     colHeadings_formatted = self._headings['latex']
@@ -44,7 +44,7 @@ class ReportTable(object):
                     (" & ".join(colHeadings_formatted))
 
             for rowData,formatters in self._rows:
-                formatted_rowData = _tf.formatList(rowData, formatters, "latex", scratchDir)
+                formatted_rowData = _formatter.formatList(rowData, formatters, "latex", scratchDir)
                 if len(formatted_rowData) > 0:
                     latex += " & ".join(formatted_rowData) + " \\\\ \hline\n"
 
@@ -60,7 +60,7 @@ class ReportTable(object):
             else:
                 if self._headingFormatters is not None:
                     colHeadings_formatted = \
-                        _tf.formatList(self._headings,
+                        _formatter.formatList(self._headings,
                                        self._headingFormatters, "html", scratchDir)
                 else: #headingFormatters is None => headings is dict w/formats
                     colHeadings_formatted = self._headings['html']
@@ -71,7 +71,7 @@ class ReportTable(object):
                 html += "</thead><tbody>"
 
             for rowData,formatters in self._rows:
-                formatted_rowData = _tf.formatList(rowData, formatters, "html", scratchDir)
+                formatted_rowData = _formatter.formatList(rowData, formatters, "html", scratchDir)
                 if len(formatted_rowData) > 0:
                     html += "<tr><td>" + \
                         "</td><td>".join(formatted_rowData) + "</td></tr>\n"
@@ -80,29 +80,29 @@ class ReportTable(object):
             return html
 
 
-        elif fmt == "py":
+        elif fmt == 'text':
 
             if self._customHeadings is not None \
-                    and "py" in self._customHeadings:
-                raise ValueError("custom headers unsupported for python format")
+                    and 'text' in self._customHeadings:
+                raise ValueError("custom headers unsupported for text format")
 
             if self._headingFormatters is not None:
                 colHeadings_formatted = \
-                    _tf.formatList(self._headings,
-                                   self._headingFormatters, "py", scratchDir)
+                    _formatter.formatList(self._headings,
+                                   self._headingFormatters, 'text', scratchDir)
             else: #headingFormatters is None => headings is dict w/formats
-                colHeadings_formatted = self._headings['py']
+                colHeadings_formatted = self._headings['text']
 
-            py = { 'column names': colHeadings_formatted,
+            text = { 'column names': colHeadings_formatted,
                    'row data': [] }
 
             for rowData,formatters in self._rows:
                 print(rowData)
-                formatted_rowData = _tf.formatList(rowData, formatters, "py", scratchDir)
+                formatted_rowData = _formatter.formatList(rowData, formatters, 'text', scratchDir)
                 if len(formatted_rowData) > 0:
-                    py['row data'].append( formatted_rowData )
+                   text['row data'].append( formatted_rowData )
 
-            return py
+            return text
 
 
         elif fmt == "ppt":
@@ -114,7 +114,7 @@ class ReportTable(object):
 
             if self._headingFormatters is not None:
                 colHeadings_formatted = \
-                    _tf.formatList(self._headings,
+                    _formatter.formatList(self._headings,
                                    self._headingFormatters, "ppt", scratchDir)
             else: #headingFormatters is None => headings is dict w/formats
                 colHeadings_formatted = self._headings['ppt']
@@ -123,7 +123,7 @@ class ReportTable(object):
                     'row data' : [] }
 
             for rowData,formatters in self._rows:
-                formatted_rowData = _tf.formatList(rowData, formatters, "ppt", scratchDir)
+                formatted_rowData = _formatter.formatList(rowData, formatters, "ppt", scratchDir)
                 if len(formatted_rowData) > 0:
                     ppt['row data'].append( formatted_rowData )
 
@@ -143,7 +143,7 @@ class ReportTable(object):
             lines = str(x).split('\n')
             return lines[i] if i < len(lines) else ""
 
-        data = self.render('py')
+        data = self.render('text')
         col_widths = [0]*len(self._columnNames)
         row_lines = [0]*len(self._rows)
         header_lines = 0
