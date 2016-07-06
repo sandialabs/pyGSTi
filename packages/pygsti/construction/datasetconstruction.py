@@ -105,7 +105,7 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples, sampleError=
             counts[spamLabel1] = rndm.binomial(nWeightedSamples, p1) #numpy.clip(p1,0,1) )
             counts[spamLabel2] = nWeightedSamples - counts[spamLabel1]
         elif sampleError == "multinomial":
-            nOutcomes = len(list(ps.keys()))
+            #nOutcomes = len(list(ps.keys()))
             countsArray = rndm.multinomial(nWeightedSamples, list(ps.values()), size=1)
             for i,spamLabel in enumerate(ps.keys()):
                 counts[spamLabel] = countsArray[0,i]

@@ -107,7 +107,6 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
 
     #Loop through fiducial pairs and add all derivative rows (1 x nGatesetParams) to test matrix
     # then check if testMatrix has full rank ( == nGatesetParams)
-    fiducialPairs = []
 
     nPossiblePairs = len(prepStrs)*len(effectStrs)
     allPairIndices = list(range(nPossiblePairs))

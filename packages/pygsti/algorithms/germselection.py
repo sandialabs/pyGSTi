@@ -404,7 +404,7 @@ def optimize_integer_germs_slack(gateset, germsList, initialWeights=None,
           printer.show_progress(iIter, maxIter-1, suffix="score=%g, nGerms=%d" % (score, L1))
 
           bFoundBetterNeighbor = False
-          for neighborNum, neighbor in enumerate(get_neighbors(weights)):
+          for neighbor in get_neighbors(weights):
               if tuple(neighbor) not in scoreD_keys:
                   neighborL1 = sum(neighbor)
                   neighborScore = compute_score(neighbor)
@@ -431,7 +431,7 @@ def optimize_integer_germs_slack(gateset, germsList, initialWeights=None,
               printer.log("No better neighbor. Relaxing score w/slack: %g => %g" % (score, score+slack), 2)
               score += slack #artificially increase score and see if any neighbor is better now...
 
-              for neighborNum, neighbor in enumerate(get_neighbors(weights)):
+              for neighbor in get_neighbors(weights):
                   if sum(neighbor) < L1 and scoreD[tuple(neighbor)] < score:
                       weights, score, L1 = neighbor, scoreD[tuple(neighbor)], sum(neighbor)
                       bFoundBetterNeighbor = True
