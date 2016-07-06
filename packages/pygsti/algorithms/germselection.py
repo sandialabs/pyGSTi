@@ -252,14 +252,14 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
     gateset : GateSet
         The gate set (associates gate matrices with gate labels).
 
-    germsToTest : list of GateStrings
+    germsToTest : list of GateString
         List of germs gate sequences to test for completeness.
 
-    scoreFunc : str ('all' or 'worst'), optional (default is 'all')
+    scoreFunc : {'all'm 'worst'}, optional (default is 'all')
         Sets the objective function for scoring a germ set.  If 'all', score is
-        l1Penalty*(number of germs) + sum(1/Eigenvalues of score matrix).  If
-        'worst', score is l1Penalty*(number of germs) + * 1/min(Eigenvalues of
-        score matrix).  (Also note- because we are using a simple integer
+        `l1Penalty`*(number of germs) + sum(1/Eigenvalues of score matrix).  If
+        'worst', score is `l1Penalty`*(number of germs) + * 1/min(Eigenvalues of
+        score matrix).  (Also note: because we are using a simple integer
         program to choose germs, it is possible to get stuck in a local
         minimum, and choosing one or the other objective function can help
         avoid such minima in different circumstances.)
@@ -271,7 +271,7 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
         None, a uniform weighting of 1.0/len(germsToTest) is applied.
 
     returnSpectrum : bool, optional
-        If True, return the jacobian^T*jacobian spectrum in addition
+        If ``True``, return the jacobian^T*jacobian spectrum in addition
         to the success flag.
 
     threshold : float, optional
@@ -356,7 +356,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
 
     Parameters
     ----------
-    gatesetList : gateset object or list of gateset objects
+    gatesetList : GateSet or list of GateSet
         The list of gate sets to be tested.  To ensure that the returned germ
         set is amplficationally complete, it is a good idea to score potential
         germ sets against a collection (~5-10) of similar gate sets.  The user
@@ -365,7 +365,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         own list of gatesets, each of which in turn may or may not be
         randomized (set by the kwarg `randomize`).
 
-    germsList : list of GateStrings
+    germsList : list of GateString
         List of all germs gate sequences to consider.
         IMPORTANT:  If `forceSingletons` is ``True``, the first k elements of
         germsList must be all k gates in gateset.
@@ -410,31 +410,31 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         germ set.  If None, then starting point includes all
         germs.
 
-    scoreFunc : str ('all' or 'worst'), optional (default is 'all')
+    scoreFunc : {'all', 'worst'}, optional (default is 'all')
         Sets the objective function for scoring a germ set.  If 'all', score is
-        l1Penalty*(number of germs) + sum(1/Eigenvalues of score matrix).  If
-        'worst', score is l1Penalty*(number of germs) + * 1/min(Eigenvalues of
-        score matrix).  (Also note- because we are using a simple integer
-        program to choose germs, it is possible to get stuck in a local
-        minimum, and choosing one or the other objective function can help
-        avoid such minima in different circumstances.)
+        `l1Penalty`*(number of germs) + sum(1/Eigenvalues of score matrix).
+        If 'worst', score is `l1Penalty`*(number of germs) +
+        1/min(Eigenvalues of score matrix).  (Also note: because we are using a
+        simple integer program to choose germs, it is possible to get stuck in
+        a local minimum, and choosing one or the other objective function can
+        help avoid such minima in different circumstances.)
 
     maxIter : int, optional
         The maximum number of iterations before giving up.
 
     fixedSlack : float, optional
-        If not None, a floating point number which specifies that excluding a
-        germ is allowed to increase 1.0/smallest-non-gauge-eigenvalue by
-        fixedSlack.  You must specify *either* fixedSlack or slackFrac.
+        If not ``None``, a floating point number which specifies that excluding
+        a germ is allowed to increase 1.0/smallest-non-gauge-eigenvalue by
+        `fixedSlack`.  You must specify *either* `fixedSlack` or `slackFrac`.
 
     slackFrac : float, optional
-        If not None, a floating point number which specifies that excluding a
-        germ is allowed to increase 1.0/smallest-non-gauge-eigenvalue by
-        fixedFrac*100 percent.  You must specify *either* fixedSlack or
-        slackFrac.
+        If not ``None``, a floating point number which specifies that excluding
+        a germ is allowed to increase 1.0/smallest-non-gauge-eigenvalue by
+        `fixedFrac`*100 percent.  You must specify *either* `fixedSlack` or
+        `slackFrac`.
 
     returnAll : bool, optional
-        If True, return the final "weights" vector and score dictionary
+        If ``True``, return the final ``weights`` vector and score dictionary
         in addition to the optimal germ list (see below).
 
     tol : float, optional
@@ -450,7 +450,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         elements of germsList are the k gates.
 
     forceSingletonsScore : float, optional (default is 1e100)
-        When forceSingletons is True, what score to assign any germ set
+        When `forceSingletons` is ``True``, what score to assign any germ set
         that does not contain each gate as a germ.
 
     threshold : float, optional (default is 1e6)
@@ -463,17 +463,17 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     Returns
     -------
     finalGermList : list
-        Sublist of germList specifying the final, optimal, set of germs.
+        Sublist of `germList` specifying the final, optimal set of germs.
 
     weights : array
-        Integer array, of length len(germList), containing 0s and 1s to
-        indicate which elements of germList were chosen as finalGermList.
-        Only returned when returnAll == True.
+        Integer array, of length ``len(germList)``, containing 0s and 1s to
+        indicate which elements of `germList` were chosen as `finalGermList`.
+        Only returned when `returnAll` is ``True``.
 
     scoreDictionary : dict
-        Dictionary with keys == tuples of 0s and 1s of length len(germList),
-        specifying a subset of germs, and values == 1.0/smallest-non-gauge-
-        eigenvalue "scores".
+        Dictionary with keys which are tuples of 0s and 1s of length
+        ``len(germList)``, specifying a subset of germs, and values ==
+        1.0/smallest-non-gauge-eigenvalue "scores".
     """
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
@@ -600,7 +600,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
             # List of weight tuples already computed
             scoreD_keys = scoreD.keys()
 
-            printer.show_progress(iIter, maxIter-1,
+            printer.show_progress(iIter + 1, maxIter,
                                   suffix="score=%g, nGerms=%d" % (score, L1))
 
             bFoundBetterNeighbor = False
