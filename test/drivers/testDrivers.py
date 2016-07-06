@@ -174,6 +174,48 @@ class TestDriversMethods(DriversTestCase):
                                       verbosity=2)
 
 
+    def test_longSequenceGST_randomReduction(self):
+        ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/drivers.dataset")
+        ts = "whole germ powers"
+        maxLens = self.maxLens
+
+        #Without fixed initial fiducial pairs
+        fidPairs = None
+        reducedLists = pygsti.construction.make_lsgst_lists(
+            std.gs_target.gates.keys(), std.fiducials, std.fiducials, std.germs,
+            maxLens, fidPairs, ts, keepFraction=0.5, keepSeed=1234)
+        trunc_ds = ds.truncate(reducedLists[-1]) # ok to use [-1] since nest=True
+        result = self.runSilent(pygsti.do_long_sequence_gst,
+                                trunc_ds, std.gs_target, std.fiducials, std.fiducials,
+                                std.germs, maxLens, truncScheme=ts, fidPairs=None,
+                                lsgstLists = reducedLists)
+        
+        #create a report...
+        result.create_full_report_pdf(filename="../temp_test_files/full_report_RFPR.pdf",
+                                      debugAidsAppendix=False, gaugeOptAppendix=False,
+                                      pixelPlotAppendix=False, whackamoleAppendix=False,
+                                      verbosity=2)
+
+
+        #With fixed initial fiducial pairs
+        fidPairs = pygsti.alg.find_sufficient_fiducial_pairs(
+            std.gs_target, std.fiducials, std.fiducials, std.germs, verbosity=0)
+        reducedLists = pygsti.construction.make_lsgst_lists(
+            std.gs_target.gates.keys(), std.fiducials, std.fiducials, std.germs,
+            maxLens, fidPairs, ts, keepFraction=0.5, keepSeed=1234)
+        trunc_ds = ds.truncate(reducedLists[-1]) # ok to use [-1] since nest=True
+        result2 = self.runSilent(pygsti.do_long_sequence_gst,
+                                 trunc_ds, std.gs_target, std.fiducials, std.fiducials,
+                                 std.germs, maxLens, truncScheme=ts, fidPairs=None,
+                                 lsgstLists = reducedLists)
+
+        #create a report...
+        result2.create_full_report_pdf(filename="../temp_test_files/full_report_RFPR2.pdf",
+                                      debugAidsAppendix=False, gaugeOptAppendix=False,
+                                      pixelPlotAppendix=False, whackamoleAppendix=False,
+                                      verbosity=2)
+
+
     def test_longSequenceGST_parameterizedGates(self):
         ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/drivers.dataset")
         ts = "whole germ powers"

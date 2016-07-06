@@ -160,10 +160,6 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         ds = dataFilenameOrSet #assume a Dataset object
         default_dir = default_base = None
 
-    #Get gate strings and labels
-    if gateLabels is None:
-        gateLabels = list(gs_target.gates.keys())
-
     if isinstance(prepStrsListOrFilename, str):
         prepStrs = _io.load_gatestring_list(prepStrsListOrFilename)
     else: prepStrs = prepStrsListOrFilename
@@ -179,6 +175,11 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         germs = _io.load_gatestring_list(germsListOrFilename)
     else: germs = germsListOrFilename
     if lsgstLists is None:
+
+        #Get gate strings and labels
+        if gateLabels is None:
+            gateLabels = list(gs_target.gates.keys())
+
         nest = advancedOptions.get('nestedGateStringLists',True)
         lsgstLists = _construction.stdlists.make_lsgst_lists(
             gateLabels, prepStrs, effectStrs, germs, maxLengths, fidPairs,

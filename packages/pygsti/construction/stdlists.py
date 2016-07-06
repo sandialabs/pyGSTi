@@ -6,6 +6,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Gate string list creation functions using repeated-germs limited by a max-length."""
 
+import numpy.random as _rndm
 import itertools as _itertools
 from ..tools import listtools as _lt
 from . import gatestringconstruction as _gsc
@@ -13,7 +14,8 @@ from . import spamspecconstruction as _ssc
 
 
 def make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
-                     fidPairs=None, truncScheme="whole germ powers", nest=True):
+                     fidPairs=None, truncScheme="whole germ powers", nest=True,
+                     keepFraction=1, keepSeed=None):
     """
     Create a set of gate string lists for LSGST based on germs and max-lengths.
 
@@ -86,6 +88,20 @@ def make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
         length == L contains *only* those gate strings specified in the
         description above, and *not* those for previous values of L.
 
+    keepFraction : float, optional
+        The fraction of fiducial pairs selected for each germ-power base
+        string.  The default includes all fiducial pairs.  Note that
+        for each germ-power the selected pairs are *different* random
+        sets of all possible pairs (unlike fidPairs, which specifies the
+        *same* fiduicial pairs for *all* germ-power base strings).  If
+        fidPairs is used in conjuction with keepFraction, the pairs 
+        specified by fidPairs are always selected, and any additional
+        pairs are randomly selected.
+
+    keepSeed : int, optional
+        The seed used for random fiducial pair selection (only relevant
+        when keepFraction < 1).
+
     Returns
     -------
     list of (lists of GateStrings)
@@ -97,6 +113,12 @@ def make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
     lgstStrings = _gsc.list_lgst_gatestrings( _ssc.build_spam_specs(prepStrs = prepStrs, effectStrs = effectStrs),
                                               gateLabels)
     lsgst_list = _gsc.gatestring_list([ () ]) #running list of all strings so far
+
+    if keepFraction < 1.0:
+        rndm = _rndm.RandomState(keepSeed) # ok if seed is None
+        nPairs = len(prepStrs)*len(effectStrs)
+        nPairsToKeep = int(round(float(keepFraction) * nPairs))
+    else: rndm = None
 
     if fidPairs is not None:
         fiducialPairs = [ (prepStrs[i],effectStrs[j]) for (i,j) in fidPairs ]
@@ -111,8 +133,35 @@ def make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
     Rfn = _getTruncFunction(truncScheme)
 
     for maxLen in maxLengthList:
+
+        if rndm is None:
+            fiducialPairsThisIter = fiducialPairs
+
+        elif fidPairs is not None:
+            remainingPairs = [ (prepStrs[i],effectStrs[j])
+                               for i in range(len(prepStrs))
+                               for j in range(len(effectStrs))
+                               if (i,j) not in fidPairs ]
+            nPairsRemaining = len(remainingPairs)
+            nPairsToChoose = nPairsToKeep-len(fidPairs)
+            nPairsToChoose = max(0,min(nPairsToChoose,nPairsRemaining))
+            assert(0 <= nPairsToChoose <= nPairsRemaining)
+            # FUTURE: issue warnings when clipping nPairsToChoose?
+
+            fiducialPairsThisIter = fiducialPairs + \
+                [ remainingPairs[k] for k in 
+                  sorted(rndm.choice(nPairsRemaining,nPairsToChoose,
+                                     replace=False))]
+
+        else: # rndm is not None and fidPairs is None
+            assert(nPairsToKeep <= nPairs) # keepFraction must be <= 1.0
+            fiducialPairsThisIter = \
+                [ fiducialPairs[k] for k in 
+                  sorted(rndm.choice(nPairs,nPairsToKeep,replace=False))]
+
+
         lst = _gsc.create_gatestring_list("f[0]+R(germ,N)+f[1]",
-                                          f=fiducialPairs,
+                                          f=fiducialPairsThisIter,
                                           germ=germList, N=maxLen,
                                           R=Rfn, order=('germ','f'))
         if nest:
@@ -126,7 +175,8 @@ def make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
 
 
 def make_lsgst_experiment_list(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
-                               fidPairs=None, truncScheme="whole germ powers"):
+                               fidPairs=None, truncScheme="whole germ powers",
+                               keepFraction=1, keepSeed=None):
     """
     Create a list of all the gate strings (i.e. the experiments) required for
     long-sequence GST (LSGST) algorithms.
@@ -179,14 +229,29 @@ def make_lsgst_experiment_list(gateLabels, prepStrs, effectStrs, germList, maxLe
         - 'length as exponent' -- max. length is instead interpreted
           as the germ exponent (the number of germ repetitions).
 
+    keepFraction : float, optional
+        The fraction of fiducial pairs selected for each germ-power base
+        string.  The default includes all fiducial pairs.  Note that
+        for each germ-power the selected pairs are *different* random
+        sets of all possible pairs (unlike fidPairs, which specifies the
+        *same* fiduicial pairs for *all* germ-power base strings).  If
+        fidPairs is used in conjuction with keepFraction, the pairs 
+        specified by fidPairs are always selected, and any additional
+        pairs are randomly selected.
+
+    keepSeed : int, optional
+        The seed used for random fiducial pair selection (only relevant
+        when keepFraction < 1).
+
+
     Returns
     -------
     list of GateStrings
     """
-
-    #When nest == True the final list contains all of the strings
+    nest = True # => the final list contains all of the strings
     return make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList,
-                            maxLengthList, fidPairs, truncScheme, nest=True)[-1]
+                            maxLengthList, fidPairs, truncScheme, nest,
+                            keepFraction, keepSeed)[-1]
 
 
 
