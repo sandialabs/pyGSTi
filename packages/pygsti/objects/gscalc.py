@@ -27,7 +27,7 @@ HSMALL = 1e-100
 
 class GateSetCalculator(object):
     """
-    Encapsulates a calulation tool used by gate set objects to perform product
+    Encapsulates a calculation tool used by gate set objects to perform product
     and derivatives-of-product calculations.
 
     This is contained in a class separate from GateSet to allow for additional
