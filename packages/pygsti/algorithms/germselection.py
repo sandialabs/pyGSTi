@@ -485,6 +485,9 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     if not isinstance(gatesetList,list):
         gatesetList = [gatesetList]
 
+    if (fixedSlack and slackFrac) or (not fixedSlack and not slackFrac):
+        raise ValueError("Either fixedSlack *or* slackFrac should be specified")
+
     if len(gatesetList) > 1 and numCopies is not None:
         raise ValueError("Input multiple gate sets XOR request multiple copies only!")
 
@@ -519,7 +522,10 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
             printer.log("Complete initial germ set FAILS on gateset "
                         + str(gatesetnum) + ".")
             printer.log("Aborting search.")
-            return None
+            if returnAll:
+                return None, None, None
+            else:
+                return None
     printer.log("Complete initial germ set succeeds on all input gatesets.")
     printer.log("Now searching for best germ set.")
 
@@ -528,9 +534,6 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     gateset0 = gatesetList[0].copy()
     for prepLabel in gateset0.preps.keys():  del gateset0.preps[prepLabel]
     for effectLabel in gateset0.effects.keys():  del gateset0.effects[effectLabel]
-
-    if (fixedSlack and slackFrac) or (not fixedSlack and not slackFrac):
-        raise ValueError("Either fixedSlack *or* slackFrac should be specified")
 
     lessWeightOnly = False  #Initially allow adding to weight. -- maybe make this an argument??
 
