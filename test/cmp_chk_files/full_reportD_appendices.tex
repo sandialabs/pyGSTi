@@ -62,12 +62,12 @@ Operator & Hilbert-Schmidt vector (Pauli basis) & Matrix \\ \hline
 $\rho_{0}$ & $ \begin{array}{c}
 0.7071 \\ 
 0.0011 \\ 
--6\e{-6} \\ 
+6\e{-6} \\ 
 0.6435
  \end{array} $
  & $ \left(\!\!\begin{array}{cc}
-0.955 & 0.0008e^{i0.0} \\ 
-0.0008e^{-i0.0} & 0.045
+0.955 & 0.0008e^{-i0.005} \\ 
+0.0008e^{i0.005} & 0.045
  \end{array}\!\!\right) $
  \\ \hline
 $E_{0}$ & $ \begin{array}{c}
@@ -77,8 +77,8 @@ $E_{0}$ & $ \begin{array}{c}
 -0.6442
  \end{array} $
  & $ \left(\!\!\begin{array}{cc}
-0.0497 & 0.0019e^{i1.6} \\ 
-0.0019e^{-i1.6} & 0.9608
+0.0497 & 0.0019e^{i1.613} \\ 
+0.0019e^{-i1.613} & 0.9608
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -113,7 +113,7 @@ Gi & $ \left(\!\!\begin{array}{cccc}
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
-0.0003 & 0.9505 & -0.0051 & -0.0051 \\ 
+0.0003 & 0.9505 & -0.0051 & -0.0052 \\ 
 0.0102 & 0.0005 & 0.0003 & -0.9491 \\ 
 0.0108 & 0.0005 & 0.9491 & -0.0025
  \end{array}\!\!\right) $
@@ -133,12 +133,12 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 
 \begin{table}[h]
 \begin{center}
-\begin{tabular}[l]{|c|c|c|c|c|}
+\begin{tabular}[l]{|c|c|c|c|}
 \hline
-Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm & \begin{tabular}{c}Frobenius\\Distance\end{tabular} \\ \hline
-Gi & 0.039929 & 0.040101 & 0.040111 & 0.092993 \\ \hline
-Gx & 0.037847 & 0.038186 & 0.038965 & 0.088997 \\ \hline
-Gy & 0.037739 & 0.038059 & 0.038835 & 0.088657 \\ \hline
+Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
+Gi & 0.039929 & 0.040101 & 0.040111 \\ \hline
+Gx & 0.037847 & 0.038186 & 0.038965 \\ \hline
+Gy & 0.037739 & 0.038059 & 0.038835 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -179,8 +179,8 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 Gate & Eigenvalues & Fixed pt & Rotn. axis & Diag. decay & Off-diag. decay \\ \hline
 Gi & $ \begin{array}{c}
 0.9487 \\ 
-0.9458e^{i0.0} \\ 
-0.9458e^{-i0.0} \\ 
+0.9458e^{i0.002} \\ 
+0.9458e^{-i0.002} \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
@@ -197,15 +197,15 @@ Gi & $ \begin{array}{c}
  \end{array} $
  & 0.05127 & 0.054222 \\ \hline
 Gx & $ \begin{array}{c}
-0.9491e^{i1.6} \\ 
-0.9491e^{-i1.6} \\ 
+0.9491e^{i1.572} \\ 
+0.9491e^{-i1.572} \\ 
 0.9505 \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
 0.9998 \\ 
 0.0059 \\ 
--4\e{-5} \\ 
+-2\e{-5} \\ 
 0.0107
  \end{array} $
  & $ \begin{array}{c}
@@ -216,8 +216,8 @@ Gx & $ \begin{array}{c}
  \end{array} $
  & 0.049514 & 0.050938 \\ \hline
 Gy & $ \begin{array}{c}
-0.9489e^{i1.6} \\ 
-0.9489e^{-i1.6} \\ 
+0.9489e^{i1.571} \\ 
+0.9489e^{-i1.571} \\ 
 0.9512 \\ 
 1
  \end{array} $
@@ -241,8 +241,8 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & 0.000625$\pi$ &  & 0.884301$\pi$ & 0.548566$\pi$ \\ \hline
-Gx & 0.500356$\pi$ & 0.884301$\pi$ &  & 0.498289$\pi$ \\ \hline
+Gi & 0.000625$\pi$ &  & 0.8843$\pi$ & 0.548566$\pi$ \\ \hline
+Gx & 0.500356$\pi$ & 0.8843$\pi$ &  & 0.498289$\pi$ \\ \hline
 Gy & 0.50007$\pi$ & 0.548566$\pi$ & 0.498289$\pi$ &  \\ \hline
 \end{tabular}
 
@@ -258,9 +258,9 @@ Gy & 0.50007$\pi$ & 0.548566$\pi$ & 0.498289$\pi$ &  \\ \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & \begin{tabular}{c}Rotation\\Axis\end{tabular} & \begin{tabular}{c}Rotation\\Angle\end{tabular} & Sanity \checkmark \\ \hline
 Gi & 0.03992 & 0.039924 & $ \begin{array}{c}
 0 \\ 
--0.2623 \\ 
--0.7415 \\ 
-0.6175
+0.2623 \\ 
+0.7415 \\ 
+-0.6175
  \end{array} $
  & 0.002002$\pi$ & 0.000006 \\ \hline
 Gx & 0.037843 & 0.038112 & $ \begin{array}{c}
@@ -272,9 +272,9 @@ Gx & 0.037843 & 0.038112 & $ \begin{array}{c}
  & 0.500357$\pi$ & 0.000383 \\ \hline
 Gy & 0.037735 & 0.037988 & $ \begin{array}{c}
 0 \\ 
--0.0027 \\ 
-1 \\ 
-0.0005
+0.0027 \\ 
+-1 \\ 
+-0.0005
  \end{array} $
  & 0.500071$\pi$ & 0.000355 \\ \hline
 \end{tabular}
@@ -290,10 +290,10 @@ Gy & 0.037735 & 0.037988 & $ \begin{array}{c}
 \hline
 Gate & Choi matrix (Pauli basis) & Eigenvalues \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
-0.9601 & 0.0008e^{i1.9} & 0.0022e^{-i1.6} & 0.0019e^{-i1.4} \\ 
-0.0008e^{-i1.9} & 0.0123 & 0.0014e^{-i0.3} & 0.0022e^{-i3.1} \\ 
-0.0022e^{i1.6} & 0.0014e^{i0.3} & 0.0135 & 0.0012e^{i2.9} \\ 
-0.0019e^{i1.4} & 0.0022e^{i3.1} & 0.0012e^{-i2.9} & 0.0142
+0.9601 & 0.0008e^{i1.857} & 0.0022e^{-i1.615} & 0.0019e^{-i1.358} \\ 
+0.0008e^{-i1.857} & 0.0123 & 0.0014e^{-i0.296} & 0.0022e^{-i3.097} \\ 
+0.0022e^{i1.615} & 0.0014e^{i0.296} & 0.0135 & 0.0012e^{i2.942} \\ 
+0.0019e^{i1.358} & 0.0022e^{i3.097} & 0.0012e^{-i2.942} & 0.0142
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.0106 \\ 
@@ -303,10 +303,10 @@ Gi & $ \left(\!\!\begin{array}{cccc}
  \end{array} $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
-0.4871 & 0.4745e^{-i1.6} & 0.0029e^{-i2.6} & 0.003e^{-i0.5} \\ 
-0.4745e^{i1.6} & 0.4882 & 0.0029e^{-i1.2} & 0.0028e^{-i2.0} \\ 
-0.0029e^{i2.6} & 0.0029e^{i1.2} & 0.0131 & 0.0001e^{-i1.5} \\ 
-0.003e^{i0.5} & 0.0028e^{i2.0} & 0.0001e^{i1.5} & 0.0117
+0.4871 & 0.4745e^{-i1.571} & 0.0029e^{-i2.637} & 0.003e^{-i0.477} \\ 
+0.4745e^{i1.571} & 0.4882 & 0.0029e^{-i1.163} & 0.0028e^{-i2.002} \\ 
+0.0029e^{i2.637} & 0.0029e^{i1.163} & 0.0131 & 0.0001e^{-i1.553} \\ 
+0.003e^{i0.477} & 0.0028e^{i2.002} & 0.0001e^{i1.553} & 0.0117
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.0082 \\ 
@@ -316,10 +316,10 @@ Gx & $ \left(\!\!\begin{array}{cccc}
  \end{array} $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-0.4877 & 0.0031e^{i2.5} & 0.4745e^{i1.6} & 0.0029e^{-i0.5} \\ 
-0.0031e^{-i2.5} & 0.0124 & 0.0026e^{-i1.3} & 0.0001e^{-i2.4} \\ 
-0.4745e^{-i1.6} & 0.0026e^{i1.3} & 0.4879 & 0.0028e^{i1.2} \\ 
-0.0029e^{i0.5} & 0.0001e^{i2.4} & 0.0028e^{-i1.2} & 0.012
+0.4877 & 0.0031e^{i2.535} & 0.4745e^{i1.571} & 0.0029e^{-i0.544} \\ 
+0.0031e^{-i2.535} & 0.0124 & 0.0026e^{-i1.261} & 0.0001e^{-i2.382} \\ 
+0.4745e^{-i1.571} & 0.0026e^{i1.261} & 0.4879 & 0.0028e^{i1.189} \\ 
+0.0029e^{i0.544} & 0.0001e^{i2.382} & 0.0028e^{-i1.189} & 0.012
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.0086 \\ 
@@ -348,12 +348,12 @@ Operator & Hilbert-Schmidt vector (Pauli basis) & Matrix \\ \hline
 $\rho_{0}$ & $ \begin{array}{c}
 0.7071 \\ 
 0.0001 \\ 
--0.0001 \\ 
+-5\e{-5} \\ 
 0.6631
  \end{array} $
  & $ \left(\!\!\begin{array}{cc}
-0.9689 & 0.0001e^{i0.8} \\ 
-0.0001e^{-i0.8} & 0.0311
+0.9689 & 0.0001e^{i0.754} \\ 
+0.0001e^{-i0.754} & 0.0311
  \end{array}\!\!\right) $
  \\ \hline
 $E_{0}$ & $ \begin{array}{c}
@@ -363,8 +363,8 @@ $E_{0}$ & $ \begin{array}{c}
 -0.6633
  \end{array} $
  & $ \left(\!\!\begin{array}{cc}
-0.0615 & 0.0002e^{i1.4} \\ 
-0.0002e^{-i1.4} & 0.9996
+0.0615 & 0.0002e^{i1.408} \\ 
+0.0002e^{-i1.408} & 0.9996
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -399,14 +399,14 @@ Gi & $ \left(\!\!\begin{array}{cccc}
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
-0.0005 & 0.9505 & -0.005 & -0.0051 \\ 
+0.0006 & 0.9505 & -0.005 & -0.0052 \\ 
 0.0628 & 0.0007 & 0.0019 & -0.947 \\ 
 0.0629 & 0.0007 & 0.9511 & -0.004
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
--0.0624 & -0.0001 & -0.0083 & 0.9466 \\ 
+-0.0625 & -0.0002 & -0.0083 & 0.9466 \\ 
 0.0002 & 0.0035 & 0.9512 & 0.0036 \\ 
 0.0622 & -0.9512 & -0.002 & -0.0003
  \end{array}\!\!\right) $
@@ -419,12 +419,12 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 
 \begin{table}[h]
 \begin{center}
-\begin{tabular}[l]{|c|c|c|c|c|}
+\begin{tabular}[l]{|c|c|c|c|}
 \hline
-Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm & \begin{tabular}{c}Frobenius\\Distance\end{tabular} \\ \hline
-Gi & 0.039929 & 0.040118 & 0.040177 & 0.093073 \\ \hline
-Gx & 0.037844 & 0.056485 & 0.068504 & 0.124988 \\ \hline
-Gy & 0.037743 & 0.055566 & 0.069774 & 0.124424 \\ \hline
+Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
+Gi & 0.039929 & 0.040118 & 0.040177 \\ \hline
+Gx & 0.037844 & 0.056484 & 0.068511 \\ \hline
+Gy & 0.037743 & 0.055553 & 0.069803 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -440,15 +440,15 @@ Gi & $ \left(\!\!\begin{array}{cccc}
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
-0.0006 & -0.0508 & -0.0053 & -0.0054 \\ 
+0.0006 & -0.0508 & -0.0053 & -0.0055 \\ 
 0.0644 & 0.0008 & -0.0501 & -0.0042 \\ 
--0.0645 & -0.0007 & -0.002 & -0.0544
+-0.0645 & -0.0007 & -0.002 & -0.0545
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
--0.0638 & -0.05 & 0.0021 & 0.0003 \\ 
-0.0004 & 0.0037 & -0.05 & 0.0037 \\ 
+-0.0637 & -0.05 & 0.0021 & 0.0003 \\ 
+0.0004 & 0.0037 & -0.05 & 0.0038 \\ 
 -0.0642 & -0.0001 & -0.0087 & -0.0549
  \end{array}\!\!\right) $
  \\ \hline
@@ -465,13 +465,13 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 Gate & Eigenvalues & Fixed pt & Rotn. axis & Diag. decay & Off-diag. decay \\ \hline
 Gi & $ \begin{array}{c}
 0.9487 \\ 
-0.9458e^{i0.0} \\ 
-0.9458e^{-i0.0} \\ 
+0.9458e^{i0.002} \\ 
+0.9458e^{-i0.002} \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
 0.9923 \\ 
--0.0232 \\ 
+-0.0233 \\ 
 0.0107 \\ 
 0.0834
  \end{array} $
@@ -483,13 +483,13 @@ Gi & $ \begin{array}{c}
  \end{array} $
  & 0.05127 & 0.054222 \\ \hline
 Gx & $ \begin{array}{c}
-0.9491e^{i1.6} \\ 
-0.9491e^{-i1.6} \\ 
+0.9491e^{i1.572} \\ 
+0.9491e^{-i1.572} \\ 
 0.9505 \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
-0.9958 \\ 
+0.9959 \\ 
 0.0042 \\ 
 0.0018 \\ 
 0.0641
@@ -497,19 +497,19 @@ Gx & $ \begin{array}{c}
  & $ \begin{array}{c}
 0 \\ 
 -1 \\ 
-4\e{-5} \\ 
+3\e{-5} \\ 
 -0.0007
  \end{array} $
  & 0.049514 & 0.050938 \\ \hline
 Gy & $ \begin{array}{c}
-0.9489e^{i1.6} \\ 
-0.9489e^{-i1.6} \\ 
+0.9489e^{i1.571} \\ 
+0.9489e^{-i1.571} \\ 
 0.9512 \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
 0.9958 \\ 
--0.0019 \\ 
+-0.002 \\ 
 0.0082 \\ 
 0.0637
  \end{array} $
@@ -527,9 +527,9 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & 0.000625$\pi$ &  & 0.884023$\pi$ & 0.548753$\pi$ \\ \hline
-Gx & 0.500356$\pi$ & 0.884023$\pi$ &  & 0.498265$\pi$ \\ \hline
-Gy & 0.50007$\pi$ & 0.548753$\pi$ & 0.498265$\pi$ &  \\ \hline
+Gi & 0.000625$\pi$ &  & 0.88402$\pi$ & 0.548742$\pi$ \\ \hline
+Gx & 0.500356$\pi$ & 0.88402$\pi$ &  & 0.498277$\pi$ \\ \hline
+Gy & 0.50007$\pi$ & 0.548742$\pi$ & 0.498277$\pi$ &  \\ \hline
 \end{tabular}
 
 \caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); and (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay'').  ``--'' indicates that the decomposition failed or couldn't be interpreted. \label{bestTargetSpamGatesetDecompTable}}
@@ -549,20 +549,20 @@ Gi & 0.03992 & 0.039942 & $ \begin{array}{c}
 -0.6159
  \end{array} $
  & 0.001997$\pi$ & 0.000031 \\ \hline
-Gx & 0.037841 & 0.056425 & $ \begin{array}{c}
+Gx & 0.037841 & 0.056424 & $ \begin{array}{c}
 0 \\ 
--1 \\ 
-0.0027 \\ 
--0.0003
+1 \\ 
+-0.0027 \\ 
+0.0003
  \end{array} $
  & 0.500357$\pi$ & 0.013946 \\ \hline
-Gy & 0.037734 & 0.055462 & $ \begin{array}{c}
+Gy & 0.037734 & 0.055449 & $ \begin{array}{c}
 0 \\ 
 -0.0027 \\ 
 1 \\ 
 0.0035
  \end{array} $
- & 0.500071$\pi$ & 0.013728 \\ \hline
+ & 0.500071$\pi$ & 0.013727 \\ \hline
 \end{tabular}
 
 \caption{Information pertaining to the closest unitary gate to each of the estimated gates.\label{bestTargetSpamGatesetClosestUnitaryTable}}
@@ -576,10 +576,10 @@ Gy & 0.037734 & 0.055462 & $ \begin{array}{c}
 \hline
 Gate & Choi matrix (Pauli basis) & Eigenvalues \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
-0.9601 & 0.0008e^{i1.7} & 0.0022e^{-i1.6} & 0.0021e^{-i1.0} \\ 
-0.0008e^{-i1.7} & 0.0123 & 0.0017e^{-i0.7} & 0.0022e^{-i3.1} \\ 
-0.0022e^{i1.6} & 0.0017e^{i0.7} & 0.0135 & 0.0011e^{i3.0} \\ 
-0.0021e^{i1.0} & 0.0022e^{i3.1} & 0.0011e^{-i3.0} & 0.0142
+0.9601 & 0.0008e^{i1.727} & 0.0022e^{-i1.602} & 0.0021e^{-i1.037} \\ 
+0.0008e^{-i1.727} & 0.0123 & 0.0017e^{-i0.696} & 0.0022e^{-i3.111} \\ 
+0.0022e^{i1.602} & 0.0017e^{i0.696} & 0.0135 & 0.0011e^{i3.034} \\ 
+0.0021e^{i1.037} & 0.0022e^{i3.111} & 0.0011e^{-i3.034} & 0.0142
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.0104 \\ 
@@ -589,10 +589,10 @@ Gi & $ \left(\!\!\begin{array}{cccc}
  \end{array} $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
-0.4871 & 0.4745e^{-i1.6} & 0.0158e^{-i3.0} & 0.0158e^{-i0.1} \\ 
-0.4745e^{i1.6} & 0.4882 & 0.0158e^{-i1.5} & 0.0157e^{-i1.6} \\ 
-0.0158e^{i3.0} & 0.0158e^{i1.5} & 0.0139 & 0.001e^{-i3.0} \\ 
-0.0158e^{i0.1} & 0.0157e^{i1.6} & 0.001e^{i3.0} & 0.0109
+0.4871 & 0.4745e^{-i1.571} & 0.0158e^{-i3.048} & 0.0158e^{-i0.090} \\ 
+0.4745e^{i1.571} & 0.4882 & 0.0158e^{-i1.502} & 0.0157e^{-i1.642} \\ 
+0.0158e^{i3.048} & 0.0158e^{i1.502} & 0.0138 & 0.001e^{-i3.009} \\ 
+0.0158e^{i0.090} & 0.0157e^{i1.642} & 0.001e^{i3.009} & 0.0109
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 -0.0104 \\ 
@@ -602,10 +602,10 @@ Gx & $ \left(\!\!\begin{array}{cccc}
  \end{array} $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-0.4877 & 0.0157e^{i3.1} & 0.4745e^{i1.6} & 0.0158e^{-i0.2} \\ 
-0.0157e^{-i3.1} & 0.0123 & 0.0156e^{-i1.5} & 0.0012e^{-i3.1} \\ 
-0.4745e^{-i1.6} & 0.0156e^{i1.5} & 0.4879 & 0.0156e^{i1.6} \\ 
-0.0158e^{i0.2} & 0.0012e^{i3.1} & 0.0156e^{-i1.6} & 0.0121
+0.4877 & 0.0157e^{i3.053} & 0.4745e^{i1.571} & 0.0158e^{-i0.188} \\ 
+0.0157e^{-i3.053} & 0.0122 & 0.0156e^{-i1.495} & 0.0012e^{-i3.103} \\ 
+0.4745e^{-i1.571} & 0.0156e^{i1.495} & 0.4879 & 0.0156e^{i1.597} \\ 
+0.0158e^{i0.188} & 0.0012e^{i3.103} & 0.0156e^{-i1.597} & 0.0122
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 -0.0094 \\ 
@@ -634,23 +634,23 @@ Operator & Hilbert-Schmidt vector (Pauli basis) & Matrix \\ \hline
 $\rho_{0}$ & $ \begin{array}{c}
 0.7071 \\ 
 0.0016 \\ 
-0.0003 \\ 
-0.6396
+0.0002 \\ 
+0.6374
  \end{array} $
  & $ \left(\!\!\begin{array}{cc}
-0.9523 & 0.0012e^{-i0.2} \\ 
-0.0012e^{i0.2} & 0.0477
+0.9507 & 0.0012e^{-i0.153} \\ 
+0.0012e^{i0.153} & 0.0493
  \end{array}\!\!\right) $
  \\ \hline
 $E_{0}$ & $ \begin{array}{c}
 0.7078 \\ 
 -0.0002 \\ 
 -0.0031 \\ 
--0.6407
+-0.6429
  \end{array} $
  & $ \left(\!\!\begin{array}{cc}
-0.0475 & 0.0022e^{i1.6} \\ 
-0.0022e^{-i1.6} & 0.9535
+0.0459 & 0.0022e^{i1.647} \\ 
+0.0022e^{-i1.647} & 0.9551
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -705,12 +705,12 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 
 \begin{table}[h]
 \begin{center}
-\begin{tabular}[l]{|c|c|c|c|c|}
+\begin{tabular}[l]{|c|c|c|c|}
 \hline
-Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm & \begin{tabular}{c}Frobenius\\Distance\end{tabular} \\ \hline
-Gi & 0.039929 & 0.0401 & 0.040106 & 0.092986 \\ \hline
-Gx & 0.037847 & 0.037918 & 0.037919 & 0.087745 \\ \hline
-Gy & 0.037738 & 0.037805 & 0.037805 & 0.087502 \\ \hline
+Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
+Gi & 0.039929 & 0.0401 & 0.040106 \\ \hline
+Gx & 0.037847 & 0.037918 & 0.03792 \\ \hline
+Gy & 0.037738 & 0.037805 & 0.037805 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -751,15 +751,15 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 Gate & Eigenvalues & Fixed pt & Rotn. axis & Diag. decay & Off-diag. decay \\ \hline
 Gi & $ \begin{array}{c}
 0.9487 \\ 
-0.9458e^{i0.0} \\ 
-0.9458e^{-i0.0} \\ 
+0.9458e^{i0.002} \\ 
+0.9458e^{-i0.002} \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
 0.999 \\ 
--0.0223 \\ 
+-0.0222 \\ 
 0.0093 \\ 
-0.0207
+0.0206
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
@@ -769,34 +769,34 @@ Gi & $ \begin{array}{c}
  \end{array} $
  & 0.05127 & 0.054222 \\ \hline
 Gx & $ \begin{array}{c}
-0.9491e^{i1.6} \\ 
-0.9491e^{-i1.6} \\ 
+0.9491e^{i1.572} \\ 
+0.9491e^{-i1.572} \\ 
 0.9505 \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
 1 \\ 
-0.0064 \\ 
--9\e{-6} \\ 
+0.0063 \\ 
+-2\e{-5} \\ 
 0.0003
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
 -1 \\ 
-6\e{-6} \\ 
+7\e{-6} \\ 
 -0.0003
  \end{array} $
  & 0.049514 & 0.050938 \\ \hline
 Gy & $ \begin{array}{c}
-0.9489e^{i1.6} \\ 
-0.9489e^{-i1.6} \\ 
+0.9489e^{i1.571} \\ 
+0.9489e^{-i1.571} \\ 
 0.9512 \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
 1 \\ 
--1\e{-5} \\ 
-0.0067 \\ 
+-2\e{-5} \\ 
+0.0066 \\ 
 -0.0001
  \end{array} $
  & $ \begin{array}{c}
@@ -813,9 +813,9 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & 0.000625$\pi$ &  & 0.884314$\pi$ & 0.54854$\pi$ \\ \hline
-Gx & 0.500356$\pi$ & 0.884314$\pi$ &  & 0.498288$\pi$ \\ \hline
-Gy & 0.50007$\pi$ & 0.54854$\pi$ & 0.498288$\pi$ &  \\ \hline
+Gi & 0.000625$\pi$ &  & 0.884313$\pi$ & 0.548541$\pi$ \\ \hline
+Gx & 0.500356$\pi$ & 0.884313$\pi$ &  & 0.498288$\pi$ \\ \hline
+Gy & 0.50007$\pi$ & 0.548541$\pi$ & 0.498288$\pi$ &  \\ \hline
 \end{tabular}
 
 \caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); and (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay'').  ``--'' indicates that the decomposition failed or couldn't be interpreted. \label{bestTargetGatesGatesetDecompTable}}
@@ -830,23 +830,23 @@ Gy & 0.50007$\pi$ & 0.54854$\pi$ & 0.498288$\pi$ &  \\ \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & \begin{tabular}{c}Rotation\\Axis\end{tabular} & \begin{tabular}{c}Rotation\\Angle\end{tabular} & Sanity \checkmark \\ \hline
 Gi & 0.03992 & 0.039923 & $ \begin{array}{c}
 0 \\ 
--0.2621 \\ 
--0.7412 \\ 
-0.618
+0.2621 \\ 
+0.7412 \\ 
+-0.618
  \end{array} $
  & 0.002002$\pi$ & 0.000004 \\ \hline
 Gx & 0.037844 & 0.037844 & $ \begin{array}{c}
 0 \\ 
-1 \\ 
--0.0027 \\ 
-1\e{-6}
+-1 \\ 
+0.0027 \\ 
+-1\e{-6}
  \end{array} $
  & 0.500357$\pi$ & 0.000001 \\ \hline
 Gy & 0.037735 & 0.037735 & $ \begin{array}{c}
 0 \\ 
-0.0027 \\ 
--1 \\ 
--2\e{-6}
+-0.0027 \\ 
+1 \\ 
+4\e{-6}
  \end{array} $
  & 0.500071$\pi$ & 2\e{-7} \\ \hline
 \end{tabular}
@@ -862,10 +862,10 @@ Gy & 0.037735 & 0.037735 & $ \begin{array}{c}
 \hline
 Gate & Choi matrix (Pauli basis) & Eigenvalues \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
-0.9601 & 0.0008e^{i1.9} & 0.0022e^{-i1.6} & 0.0019e^{-i1.4} \\ 
-0.0008e^{-i1.9} & 0.0123 & 0.0013e^{-i0.2} & 0.0022e^{-i3.1} \\ 
-0.0022e^{i1.6} & 0.0013e^{i0.2} & 0.0135 & 0.0012e^{i2.9} \\ 
-0.0019e^{i1.4} & 0.0022e^{i3.1} & 0.0012e^{-i2.9} & 0.0142
+0.9601 & 0.0008e^{i1.878} & 0.0022e^{-i1.620} & 0.0019e^{-i1.428} \\ 
+0.0008e^{-i1.878} & 0.0123 & 0.0013e^{-i0.200} & 0.0022e^{-i3.092} \\ 
+0.0022e^{i1.620} & 0.0013e^{i0.200} & 0.0135 & 0.0012e^{i2.928} \\ 
+0.0019e^{i1.428} & 0.0022e^{i3.092} & 0.0012e^{-i2.928} & 0.0142
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.0107 \\ 
@@ -875,10 +875,10 @@ Gi & $ \left(\!\!\begin{array}{cccc}
  \end{array} $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
-0.4871 & 0.4745e^{-i1.6} & 0.0014e^{-i1.6} & 0.0013e^{-i1.5} \\ 
-0.4745e^{i1.6} & 0.4882 & 0.0012e^{-i0.1} & 0.0013e^{-i3.1} \\ 
-0.0014e^{i1.6} & 0.0012e^{i0.1} & 0.013 & 0.0001e^{-i1.3} \\ 
-0.0013e^{i1.5} & 0.0013e^{i3.1} & 0.0001e^{i1.3} & 0.0118
+0.4871 & 0.4745e^{-i1.571} & 0.0014e^{-i1.621} & 0.0013e^{-i1.505} \\ 
+0.4745e^{i1.571} & 0.4882 & 0.0012e^{-i0.073} & 0.0013e^{-i3.085} \\ 
+0.0014e^{i1.621} & 0.0012e^{i0.073} & 0.013 & 0.0001e^{-i1.266} \\ 
+0.0013e^{i1.505} & 0.0013e^{i3.085} & 0.0001e^{i1.266} & 0.0118
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.0105 \\ 
@@ -888,10 +888,10 @@ Gx & $ \left(\!\!\begin{array}{cccc}
  \end{array} $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-0.4877 & 0.0018e^{i1.6} & 0.4745e^{i1.6} & 0.0013e^{-i1.6} \\ 
-0.0018e^{-i1.6} & 0.0123 & 0.0007e^{i0.0} & 0.0001e^{-i2.1} \\ 
-0.4745e^{-i1.6} & 0.0007e^{-i0.0} & 0.4879 & 0.0013e^{-i0.0} \\ 
-0.0013e^{i1.6} & 0.0001e^{i2.1} & 0.0013e^{i0.0} & 0.0121
+0.4877 & 0.0018e^{i1.557} & 0.4745e^{i1.571} & 0.0013e^{-i1.584} \\ 
+0.0018e^{-i1.557} & 0.0123 & 0.0007e^{i0.023} & 0.0001e^{-i2.152} \\ 
+0.4745e^{-i1.571} & 0.0007e^{-i0.023} & 0.4879 & 0.0013e^{-i0.020} \\ 
+0.0013e^{i1.584} & 0.0001e^{i2.152} & 0.0013e^{i0.020} & 0.0121
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.0107 \\ 
@@ -919,12 +919,12 @@ Operator & Hilbert-Schmidt vector (Pauli basis) & Matrix \\ \hline
 $\rho_{0}$ & $ \begin{array}{c}
 0.7071 \\ 
 0.0011 \\ 
--6\e{-6} \\ 
+6\e{-6} \\ 
 0.6435
  \end{array} $
  & $ \left(\!\!\begin{array}{cc}
-0.955 & 0.0008e^{i0.0} \\ 
-0.0008e^{-i0.0} & 0.045
+0.955 & 0.0008e^{-i0.005} \\ 
+0.0008e^{i0.005} & 0.045
  \end{array}\!\!\right) $
  \\ \hline
 $E_{0}$ & $ \begin{array}{c}
@@ -934,8 +934,8 @@ $E_{0}$ & $ \begin{array}{c}
 -0.6442
  \end{array} $
  & $ \left(\!\!\begin{array}{cc}
-0.0497 & 0.0019e^{i1.6} \\ 
-0.0019e^{-i1.6} & 0.9608
+0.0497 & 0.0019e^{i1.613} \\ 
+0.0019e^{-i1.613} & 0.9608
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -970,7 +970,7 @@ Gi & $ \left(\!\!\begin{array}{cccc}
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
-0.0003 & 0.9505 & -0.0051 & -0.0051 \\ 
+0.0003 & 0.9505 & -0.0051 & -0.0052 \\ 
 0.0102 & 0.0005 & 0.0003 & -0.9491 \\ 
 0.0108 & 0.0005 & 0.9491 & -0.0025
  \end{array}\!\!\right) $
@@ -990,12 +990,12 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 
 \begin{table}[h]
 \begin{center}
-\begin{tabular}[l]{|c|c|c|c|c|}
+\begin{tabular}[l]{|c|c|c|c|}
 \hline
-Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm & \begin{tabular}{c}Frobenius\\Distance\end{tabular} \\ \hline
-Gi & 0.039929 & 0.040101 & 0.040111 & 0.092993 \\ \hline
-Gx & 0.037847 & 0.038186 & 0.038965 & 0.088997 \\ \hline
-Gy & 0.037739 & 0.038059 & 0.038835 & 0.088657 \\ \hline
+Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
+Gi & 0.039929 & 0.040101 & 0.040111 \\ \hline
+Gx & 0.037847 & 0.038186 & 0.038965 \\ \hline
+Gy & 0.037739 & 0.038059 & 0.038835 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -1036,8 +1036,8 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 Gate & Eigenvalues & Fixed pt & Rotn. axis & Diag. decay & Off-diag. decay \\ \hline
 Gi & $ \begin{array}{c}
 0.9487 \\ 
-0.9458e^{i0.0} \\ 
-0.9458e^{-i0.0} \\ 
+0.9458e^{i0.002} \\ 
+0.9458e^{-i0.002} \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
@@ -1054,15 +1054,15 @@ Gi & $ \begin{array}{c}
  \end{array} $
  & 0.05127 & 0.054222 \\ \hline
 Gx & $ \begin{array}{c}
-0.9491e^{i1.6} \\ 
-0.9491e^{-i1.6} \\ 
+0.9491e^{i1.572} \\ 
+0.9491e^{-i1.572} \\ 
 0.9505 \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
 0.9998 \\ 
 0.0059 \\ 
--4\e{-5} \\ 
+-2\e{-5} \\ 
 0.0107
  \end{array} $
  & $ \begin{array}{c}
@@ -1073,8 +1073,8 @@ Gx & $ \begin{array}{c}
  \end{array} $
  & 0.049514 & 0.050938 \\ \hline
 Gy & $ \begin{array}{c}
-0.9489e^{i1.6} \\ 
-0.9489e^{-i1.6} \\ 
+0.9489e^{i1.571} \\ 
+0.9489e^{-i1.571} \\ 
 0.9512 \\ 
 1
  \end{array} $
@@ -1098,8 +1098,8 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & 0.000625$\pi$ &  & 0.884301$\pi$ & 0.548566$\pi$ \\ \hline
-Gx & 0.500356$\pi$ & 0.884301$\pi$ &  & 0.498289$\pi$ \\ \hline
+Gi & 0.000625$\pi$ &  & 0.8843$\pi$ & 0.548566$\pi$ \\ \hline
+Gx & 0.500356$\pi$ & 0.8843$\pi$ &  & 0.498289$\pi$ \\ \hline
 Gy & 0.50007$\pi$ & 0.548566$\pi$ & 0.498289$\pi$ &  \\ \hline
 \end{tabular}
 
@@ -1115,9 +1115,9 @@ Gy & 0.50007$\pi$ & 0.548566$\pi$ & 0.498289$\pi$ &  \\ \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & \begin{tabular}{c}Rotation\\Axis\end{tabular} & \begin{tabular}{c}Rotation\\Angle\end{tabular} & Sanity \checkmark \\ \hline
 Gi & 0.03992 & 0.039924 & $ \begin{array}{c}
 0 \\ 
--0.2623 \\ 
--0.7415 \\ 
-0.6175
+0.2623 \\ 
+0.7415 \\ 
+-0.6175
  \end{array} $
  & 0.002002$\pi$ & 0.000006 \\ \hline
 Gx & 0.037843 & 0.038112 & $ \begin{array}{c}
@@ -1129,9 +1129,9 @@ Gx & 0.037843 & 0.038112 & $ \begin{array}{c}
  & 0.500357$\pi$ & 0.000383 \\ \hline
 Gy & 0.037735 & 0.037988 & $ \begin{array}{c}
 0 \\ 
--0.0027 \\ 
-1 \\ 
-0.0005
+0.0027 \\ 
+-1 \\ 
+-0.0005
  \end{array} $
  & 0.500071$\pi$ & 0.000355 \\ \hline
 \end{tabular}
@@ -1147,10 +1147,10 @@ Gy & 0.037735 & 0.037988 & $ \begin{array}{c}
 \hline
 Gate & Choi matrix (Pauli basis) & Eigenvalues \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
-0.9601 & 0.0008e^{i1.9} & 0.0022e^{-i1.6} & 0.0019e^{-i1.4} \\ 
-0.0008e^{-i1.9} & 0.0123 & 0.0014e^{-i0.3} & 0.0022e^{-i3.1} \\ 
-0.0022e^{i1.6} & 0.0014e^{i0.3} & 0.0135 & 0.0012e^{i2.9} \\ 
-0.0019e^{i1.4} & 0.0022e^{i3.1} & 0.0012e^{-i2.9} & 0.0142
+0.9601 & 0.0008e^{i1.857} & 0.0022e^{-i1.615} & 0.0019e^{-i1.358} \\ 
+0.0008e^{-i1.857} & 0.0123 & 0.0014e^{-i0.296} & 0.0022e^{-i3.097} \\ 
+0.0022e^{i1.615} & 0.0014e^{i0.296} & 0.0135 & 0.0012e^{i2.942} \\ 
+0.0019e^{i1.358} & 0.0022e^{i3.097} & 0.0012e^{-i2.942} & 0.0142
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.0106 \\ 
@@ -1160,10 +1160,10 @@ Gi & $ \left(\!\!\begin{array}{cccc}
  \end{array} $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
-0.4871 & 0.4745e^{-i1.6} & 0.0029e^{-i2.6} & 0.003e^{-i0.5} \\ 
-0.4745e^{i1.6} & 0.4882 & 0.0029e^{-i1.2} & 0.0028e^{-i2.0} \\ 
-0.0029e^{i2.6} & 0.0029e^{i1.2} & 0.0131 & 0.0001e^{-i1.5} \\ 
-0.003e^{i0.5} & 0.0028e^{i2.0} & 0.0001e^{i1.5} & 0.0117
+0.4871 & 0.4745e^{-i1.571} & 0.0029e^{-i2.637} & 0.003e^{-i0.477} \\ 
+0.4745e^{i1.571} & 0.4882 & 0.0029e^{-i1.163} & 0.0028e^{-i2.002} \\ 
+0.0029e^{i2.637} & 0.0029e^{i1.163} & 0.0131 & 0.0001e^{-i1.553} \\ 
+0.003e^{i0.477} & 0.0028e^{i2.002} & 0.0001e^{i1.553} & 0.0117
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.0082 \\ 
@@ -1173,10 +1173,10 @@ Gx & $ \left(\!\!\begin{array}{cccc}
  \end{array} $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-0.4877 & 0.0031e^{i2.5} & 0.4745e^{i1.6} & 0.0029e^{-i0.5} \\ 
-0.0031e^{-i2.5} & 0.0124 & 0.0026e^{-i1.3} & 0.0001e^{-i2.4} \\ 
-0.4745e^{-i1.6} & 0.0026e^{i1.3} & 0.4879 & 0.0028e^{i1.2} \\ 
-0.0029e^{i0.5} & 0.0001e^{i2.4} & 0.0028e^{-i1.2} & 0.012
+0.4877 & 0.0031e^{i2.535} & 0.4745e^{i1.571} & 0.0029e^{-i0.544} \\ 
+0.0031e^{-i2.535} & 0.0124 & 0.0026e^{-i1.261} & 0.0001e^{-i2.382} \\ 
+0.4745e^{-i1.571} & 0.0026e^{i1.261} & 0.4879 & 0.0028e^{i1.189} \\ 
+0.0029e^{i0.544} & 0.0001e^{i2.382} & 0.0028e^{-i1.189} & 0.012
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.0086 \\ 
@@ -1211,23 +1211,23 @@ Operator & Hilbert-Schmidt vector (Pauli basis) & Matrix \\ \hline
 $\rho_{0}$ & $ \begin{array}{c}
 0.7071 \\ 
 0.0016 \\ 
-0.0003 \\ 
-0.6396
+0.0002 \\ 
+0.6373
  \end{array} $
  & $ \left(\!\!\begin{array}{cc}
-0.9522 & 0.0012e^{-i0.2} \\ 
-0.0012e^{i0.2} & 0.0478
+0.9506 & 0.0012e^{-i0.153} \\ 
+0.0012e^{i0.153} & 0.0494
  \end{array}\!\!\right) $
  \\ \hline
 $E_{0}$ & $ \begin{array}{c}
 0.7077 \\ 
 -0.0002 \\ 
 -0.0031 \\ 
--0.6407
+-0.6429
  \end{array} $
  & $ \left(\!\!\begin{array}{cc}
-0.0474 & 0.0022e^{i1.6} \\ 
-0.0022e^{-i1.6} & 0.9534
+0.0458 & 0.0022e^{i1.647} \\ 
+0.0022e^{-i1.647} & 0.9551
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -1257,7 +1257,7 @@ Gi & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
 -0.001 & 0.9447 & -0.0063 & -0.0088 \\ 
 0.0004 & 0.0011 & 0.9471 & 0.0038 \\ 
-0.0011 & 3\e{-5} & 0.0007 & 0.9485
+0.001 & 3\e{-5} & 0.0007 & 0.9485
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
@@ -1282,12 +1282,12 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 
 \begin{table}[h]
 \begin{center}
-\begin{tabular}[l]{|c|c|c|c|c|}
+\begin{tabular}[l]{|c|c|c|c|}
 \hline
-Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm & \begin{tabular}{c}Frobenius\\Distance\end{tabular} \\ \hline
-Gi & 0.039929 & 0.0401 & 0.040106 & 0.092986 \\ \hline
-Gx & 0.037847 & 0.037918 & 0.037919 & 0.087744 \\ \hline
-Gy & 0.037738 & 0.037805 & 0.037806 & 0.087502 \\ \hline
+Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
+Gi & 0.039929 & 0.0401 & 0.040106 \\ \hline
+Gx & 0.037847 & 0.037918 & 0.037919 \\ \hline
+Gy & 0.037738 & 0.037805 & 0.037806 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -1328,15 +1328,15 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 Gate & Eigenvalues & Fixed pt & Rotn. axis & Diag. decay & Off-diag. decay \\ \hline
 Gi & $ \begin{array}{c}
 0.9487 \\ 
-0.9458e^{i0.0} \\ 
-0.9458e^{-i0.0} \\ 
+0.9458e^{i0.002} \\ 
+0.9458e^{-i0.002} \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
 0.999 \\ 
--0.0223 \\ 
+-0.0222 \\ 
 0.0093 \\ 
-0.0205
+0.0204
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
@@ -1346,8 +1346,8 @@ Gi & $ \begin{array}{c}
  \end{array} $
  & 0.05127 & 0.054222 \\ \hline
 Gx & $ \begin{array}{c}
-0.9491e^{i1.6} \\ 
-0.9491e^{-i1.6} \\ 
+0.9491e^{i1.572} \\ 
+0.9491e^{-i1.572} \\ 
 0.9505 \\ 
 1
  \end{array} $
@@ -1365,15 +1365,15 @@ Gx & $ \begin{array}{c}
  \end{array} $
  & 0.049514 & 0.050938 \\ \hline
 Gy & $ \begin{array}{c}
-0.9489e^{i1.6} \\ 
-0.9489e^{-i1.6} \\ 
+0.9489e^{i1.571} \\ 
+0.9489e^{-i1.571} \\ 
 0.9512 \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
 1 \\ 
 -1\e{-5} \\ 
-0.0067 \\ 
+0.0066 \\ 
 -0.0002
  \end{array} $
  & $ \begin{array}{c}
@@ -1390,9 +1390,9 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & 0.000625$\pi$ &  & 0.884314$\pi$ & 0.54854$\pi$ \\ \hline
-Gx & 0.500356$\pi$ & 0.884314$\pi$ &  & 0.498288$\pi$ \\ \hline
-Gy & 0.50007$\pi$ & 0.54854$\pi$ & 0.498288$\pi$ &  \\ \hline
+Gi & 0.000625$\pi$ &  & 0.884313$\pi$ & 0.54854$\pi$ \\ \hline
+Gx & 0.500356$\pi$ & 0.884313$\pi$ &  & 0.498289$\pi$ \\ \hline
+Gy & 0.50007$\pi$ & 0.54854$\pi$ & 0.498289$\pi$ &  \\ \hline
 \end{tabular}
 
 \caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); and (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay'').  ``--'' indicates that the decomposition failed or couldn't be interpreted. \label{bestCPTPGatesetDecompTable}}
@@ -1416,16 +1416,16 @@ Gx & 0.037844 & 0.037844 & $ \begin{array}{c}
 0 \\ 
 1 \\ 
 -0.0027 \\ 
--2\e{-6}
+-1\e{-6}
  \end{array} $
  & 0.500357$\pi$ & 3\e{-7} \\ \hline
 Gy & 0.037735 & 0.037735 & $ \begin{array}{c}
 0 \\ 
-0.0027 \\ 
--1 \\ 
-2\e{-6}
+-0.0027 \\ 
+1 \\ 
+-1\e{-6}
  \end{array} $
- & 0.500072$\pi$ & 3\e{-7} \\ \hline
+ & 0.500071$\pi$ & 3\e{-7} \\ \hline
 \end{tabular}
 
 \caption{Information pertaining to the closest unitary gate to each of the estimated gates.\label{bestCPTPGatesetClosestUnitaryTable}}
@@ -1439,10 +1439,10 @@ Gy & 0.037735 & 0.037735 & $ \begin{array}{c}
 \hline
 Gate & Choi matrix (Pauli basis) & Eigenvalues \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
-0.9601 & 0.0008e^{i1.9} & 0.0022e^{-i1.6} & 0.0019e^{-i1.4} \\ 
-0.0008e^{-i1.9} & 0.0123 & 0.0013e^{-i0.2} & 0.0022e^{-i3.1} \\ 
-0.0022e^{i1.6} & 0.0013e^{i0.2} & 0.0135 & 0.0012e^{i2.9} \\ 
-0.0019e^{i1.4} & 0.0022e^{i3.1} & 0.0012e^{-i2.9} & 0.0142
+0.9601 & 0.0008e^{i1.878} & 0.0022e^{-i1.620} & 0.0019e^{-i1.429} \\ 
+0.0008e^{-i1.878} & 0.0123 & 0.0013e^{-i0.199} & 0.0022e^{-i3.092} \\ 
+0.0022e^{i1.620} & 0.0013e^{i0.199} & 0.0135 & 0.0012e^{i2.928} \\ 
+0.0019e^{i1.429} & 0.0022e^{i3.092} & 0.0012e^{-i2.928} & 0.0142
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.0107 \\ 
@@ -1452,10 +1452,10 @@ Gi & $ \left(\!\!\begin{array}{cccc}
  \end{array} $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
-0.4871 & 0.4745e^{-i1.6} & 0.0014e^{-i1.6} & 0.0013e^{-i1.5} \\ 
-0.4745e^{i1.6} & 0.4882 & 0.0011e^{-i0.0} & 0.0013e^{-i3.1} \\ 
-0.0014e^{i1.6} & 0.0011e^{i0.0} & 0.013 & 0.0001e^{-i1.3} \\ 
-0.0013e^{i1.5} & 0.0013e^{i3.1} & 0.0001e^{i1.3} & 0.0118
+0.4871 & 0.4745e^{-i1.571} & 0.0014e^{-i1.600} & 0.0013e^{-i1.531} \\ 
+0.4745e^{i1.571} & 0.4882 & 0.0011e^{-i0.045} & 0.0013e^{-i3.109} \\ 
+0.0014e^{i1.600} & 0.0011e^{i0.045} & 0.013 & 0.0001e^{-i1.240} \\ 
+0.0013e^{i1.531} & 0.0013e^{i3.109} & 0.0001e^{i1.240} & 0.0118
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.0105 \\ 
@@ -1465,10 +1465,10 @@ Gx & $ \left(\!\!\begin{array}{cccc}
  \end{array} $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-0.4877 & 0.0018e^{i1.5} & 0.4745e^{i1.6} & 0.0013e^{-i1.6} \\ 
-0.0018e^{-i1.5} & 0.0123 & 0.0007e^{i0.1} & 0.0001e^{-i2.1} \\ 
-0.4745e^{-i1.6} & 0.0007e^{-i0.1} & 0.4879 & 0.0013e^{-i0.0} \\ 
-0.0013e^{i1.6} & 0.0001e^{i2.1} & 0.0013e^{i0.0} & 0.0121
+0.4877 & 0.0018e^{i1.540} & 0.4745e^{i1.571} & 0.0013e^{-i1.609} \\ 
+0.0018e^{-i1.540} & 0.0123 & 0.0007e^{i0.065} & 0.0001e^{-i2.129} \\ 
+0.4745e^{-i1.571} & 0.0007e^{-i0.065} & 0.4879 & 0.0013e^{-i0.045} \\ 
+0.0013e^{i1.609} & 0.0001e^{i2.129} & 0.0013e^{i0.045} & 0.0121
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.0107 \\ 

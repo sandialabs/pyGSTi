@@ -1,6 +1,0 @@
-pygsti.optimize.check_jac
-=========================
-
-.. currentmodule:: pygsti.optimize
-
-.. autofunction:: check_jac

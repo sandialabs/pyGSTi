@@ -1,0 +1,12 @@
+************* Module pygsti.report.plotting
+R:983, 0: Too many arguments (22/20) (too-many-arguments)
+R:1278, 0: Too many arguments (21/20) (too-many-arguments)
+R:1383, 0: Too many arguments (21/20) (too-many-arguments)
+R:2246, 0: Too many arguments (21/20) (too-many-arguments)
+R:2407, 0: Too many arguments (21/20) (too-many-arguments)
+R:2516, 0: Too many arguments (21/20) (too-many-arguments)
+R:2766, 0: Too many arguments (25/20) (too-many-arguments)
+R:2949, 0: Too many arguments (25/20) (too-many-arguments)
+************* Module pygsti.algorithms.core
+R:1473, 0: Too many arguments (22/20) (too-many-arguments)
+R:1645, 0: Too many arguments (21/20) (too-many-arguments)

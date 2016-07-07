@@ -1,3 +1,4 @@
+from __future__ import division, print_function, absolute_import, unicode_literals
 import pickle as _pickle
 import matplotlib.pyplot as _plt
 
@@ -6,12 +7,12 @@ class ReportFigure(object):
     """
     Encapsulates a single report figure.
 
-    Essentially a matplotlib figure, but with better persistence.  In 
+    Essentially a matplotlib figure, but with better persistence.  In
     particular, the figure can be held in memory or on disk and saved
     in different formats independently of the state of the "matplotlib
     cloud".
     """
-    
+
     def __init__(self, axes, extraInfo=None):
         """
         Create a new ReportFigure.
@@ -31,10 +32,10 @@ class ReportFigure(object):
     def save_to(self, filename):
         if filename is not None and len(filename) > 0:
             try:
-                axes = _pickle.loads(self.pickledAxes) 
+                axes = _pickle.loads(self.pickledAxes)
                   #this creates a new (current) figure in matplotlib
                 curFig = _plt.gcf() # gcf == "get current figure"
-                curFig.callbacks.callbacks = {} 
+                curFig.callbacks.callbacks = {}
                   # initialize fig's CallbackRegistry, which doesn't
                   # unpickle properly in matplotlib 1.5.1 (bug?)
             except:
@@ -54,9 +55,9 @@ class ReportFigure(object):
 
     def get_extra_info(self):
         return self.extraInfo
-    
+
     def check(self):
-        axes = _pickle.loads(self.pickledAxes) 
+        axes = _pickle.loads(self.pickledAxes) #pylint: disable=unused-variable
           #this creates a new (current) figure in matplotlib
         curFig = _plt.gcf() # gcf == "get current figure"
         curFig.callbacks.callbacks = {} # initialize fig's CallbackRegistry...

@@ -1,6 +1,0 @@
-pygsti.do_long_sequence_gst
-===========================
-
-.. currentmodule:: pygsti
-
-.. autofunction:: do_long_sequence_gst

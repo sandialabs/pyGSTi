@@ -1,10 +1,11 @@
 *~
 *.tmp
 *.bak
+*.swp
+*.pkl
 .ipynb_checkpoints
 test/temp_test_files/*
-ipython_notebooks/Tutorials/tutorial_files
-doc/build/*.rst
+jupyter_notebooks/Tutorials/tutorial_files
 
 # Compiled source #
 ###################
@@ -40,9 +41,16 @@ doc/build/*.rst
 
 # OS generated files #
 ######################
+.DS_Store
 .DS_Store?
 ehthumbs.db
 Icon?
 Thumbs.db
 .idea/
 HighImpactPaper1/texFiles/.DS_Store
+
+# Generated documentation #
+###########################
+doc/html/*
+doc/build/*.rst
+doc/build/_build/*

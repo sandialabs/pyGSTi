@@ -1,20 +1,19 @@
+from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ Utility functions operating on gate matrices """
 
 import numpy as _np
 import scipy.linalg as _spl
-import scipy.optimize as _spo
 
-from ..tools import basistools as _bt
 from ..tools import jamiolkowski as _jam
 from ..tools import matrixtools as _mt
 
 def _hack_sqrtm(A):
-    return _spl.sqrtm(A) #Travis found this scipy function 
+    return _spl.sqrtm(A) #Travis found this scipy function
                          # to be incorrect in certain cases (we need a workaround)
     #return _np.array( (_np.matrix(A))**0.5 ) #gives error about int power
 
@@ -107,6 +106,21 @@ def frobeniusdist2(A, B):
     return _mt.frobeniusnorm2(A-B)
 
 
+def tracedist(A, B):
+    """
+    Compute the trace distance between matrices A and B,
+    given by:
+
+      D = 0.5 * Tr( sqrt{ (A-B)^2 } )
+
+    Parameters
+    ----------
+    A, B : numpy array
+        The matrices to compute the distance between.
+    """
+    evals = _np.linalg.eigvals( A-B )
+    return 0.5 * sum( [abs(ev) for ev in evals] )
+
 
 
 def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
@@ -114,8 +128,8 @@ def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
     Returns the approximate diamond norm describing the difference between gate
     matrices A and B given by :
 
-      D = ||A - B ||_diamond = sup_rho || AxI(rho) - BxI(rho) ||_1 
-      
+      D = ||A - B ||_diamond = sup_rho || AxI(rho) - BxI(rho) ||_1
+
     Parameters
     ----------
     A, B : numpy array
@@ -136,25 +150,25 @@ def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
     """
 
     #currently cvxpy is only needed for this function, so don't import until here
-    import cvxpy as _cvxpy 
+    import cvxpy as _cvxpy
 
     # This SDP implementation is a modified version of Kevin's code
 
     #Compute the diamond norm
 
     #Uses the primal SDP from arXiv:1207.5726v2, Sec 3.2
-    
+
     #Maximize 1/2 ( < J(phi), X > + < J(phi).dag, X.dag > )
     #Subject to  [[ I otimes rho0, X],
     #            [X.dag, I otimes rho1]] >> 0
     #              rho0, rho1 are density matrices
     #              X is linear operator
-    
+
     #Jamiolkowski representation of the process
     #  J(phi) = sum_ij Phi(Eij) otimes Eij
-    
+
     #< A, B > = Tr(A.dag B)
-    
+
     #def vec(matrix_in):
     #    # Stack the columns of a matrix to return a vector
     #    return _np.transpose(matrix_in).flatten()
@@ -172,7 +186,7 @@ def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
     #Code below assumes *un-normalized* Jamiol-isomorphism, so multiply by density mx dimension
     JAstd = smallDim * _jam.jamiolkowski_iso(A, mxBasis, "std", dimOrStateSpaceDims)
     JBstd = smallDim * _jam.jamiolkowski_iso(B, mxBasis, "std", dimOrStateSpaceDims)
-    
+
     #CHECK: Kevin's jamiolowski, which implements the un-normalized isomorphism:
     #  smallDim * _jam.jamiolkowski_iso(M, "std", "std")
     #def kevins_jamiolkowski(process, representation = 'superoperator'):
@@ -208,7 +222,7 @@ def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
 
     Y = _cvxpy.Variable(dim, dim) # X.real
     Z = _cvxpy.Variable(dim, dim) # X.imag
-    
+
     sig0 = _cvxpy.Variable(smallDim,smallDim) # rho0.real
     sig1 = _cvxpy.Variable(smallDim,smallDim) # rho1.real
     tau0 = _cvxpy.Variable(smallDim,smallDim) # rho1.imag
@@ -242,8 +256,8 @@ def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
 #        return -1
     return prob.value
 
- 
-#Kenny's Monte-Carlo version   
+
+#Kenny's Monte-Carlo version
 # had additional params: nSamples=1000, seed=None
 #
 #    nSamples : int, optional
@@ -286,7 +300,7 @@ def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
 #        x = _np.reshape(x.T,[(state_dim*2)**2,1]) #density matrix in std basis
 #        return x
 #
-#    #Note:  We are using definition that ||X||_1 = Tr(sqrt(X^dagger X)), not 0.5 * Tr(sqrt(X^dagger X)) 
+#    #Note:  We are using definition that ||X||_1 = Tr(sqrt(X^dagger X)), not 0.5 * Tr(sqrt(X^dagger X))
 #    def one_shot_one_qubit_diamond_norm(gateDiffTensorId):
 #        randStateDM = random_two_state_density_mx() # in std basis
 #        outDM = _np.dot(gateDiffTensorId,randStateDM) # in std basis
@@ -319,8 +333,8 @@ def jtracedist(A, B, mxBasis="gm"): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)
     Compute the Jamiolkowski trace distance between gate matrices A and B,
     given by:
 
-      D = 0.5 * Tr( sqrt{ (J(A)-J(B))^2 } ) 
-      
+      D = 0.5 * Tr( sqrt{ (J(A)-J(B))^2 } )
+
     where J(.) is the Jamiolkowski isomorphism map that maps a gate matrix
     to it's corresponding Choi Matrix.
 
@@ -335,8 +349,7 @@ def jtracedist(A, B, mxBasis="gm"): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)
     """
     JA = _jam.jamiolkowski_iso(A, gateMxBasis=mxBasis)
     JB = _jam.jamiolkowski_iso(B, gateMxBasis=mxBasis)
-    evals = _np.linalg.eigvals( JA-JB )
-    return 0.5 * sum( [abs(ev) for ev in evals] )
+    return tracedist(JA,JB)
 
 
 def process_fidelity(A, B, mxBasis="gm"):
@@ -345,7 +358,7 @@ def process_fidelity(A, B, mxBasis="gm"):
       matrices A and B given by :
 
       F = Tr( sqrt{ sqrt(J(A)) * J(B) * sqrt(J(A)) } )^2
-      
+
     where J(.) is the Jamiolkowski isomorphism map that maps a gate matrix
     to it's corresponding Choi Matrix.
 
@@ -396,7 +409,7 @@ def fidelity_upper_bound(gateMx):
 
 
     maxF = fidelity(choi, closestJmx)
-    
+
     if not _np.isnan(maxF):
 
         #Uncomment for debugging
@@ -426,7 +439,7 @@ def fidelity_upper_bound(gateMx):
 def decompose_gate_matrix(gateMx):
     """
     Compute how the action of a gate matrix can be
-    is decomposed into fixed points, axes of rotation, 
+    is decomposed into fixed points, axes of rotation,
     angles of rotation, and decays.  Also determines
     whether a gate appears to be valid and/or unitary.
 
@@ -440,7 +453,7 @@ def decompose_gate_matrix(gateMx):
     dict
        A dictionary describing the decomposed action. Keys are:
 
-         'isValid' : bool 
+         'isValid' : bool
              whether decomposition succeeded
          'isUnitary' : bool
              whether gateMx describes unitary action
@@ -461,9 +474,9 @@ def decompose_gate_matrix(gateMx):
     """
 
     gate_evals,gate_evecs = _np.linalg.eig(_np.asarray(gateMx))
-    fp_eigenvec = None
-    aor_eval = None; aor_eigenvec = None
-    ra_eval  = None; ra1_eigenvec = None; ra2_eigenvec = None
+    # fp_eigenvec = None
+    # aor_eval = None; aor_eigenvec = None
+    # ra_eval  = None; ra1_eigenvec = None; ra2_eigenvec = None
 
     TOL = 1e-4 #1e-7
 
@@ -490,7 +503,7 @@ def decompose_gate_matrix(gateMx):
     #if len(real_eval_indices + unit_eval_indices) > 0:
     #    max_real_eval = max([ gate_evals[i] for i in real_eval_indices + unit_eval_indices])
     #    min_real_eval = min([ gate_evals[i] for i in real_eval_indices + unit_eval_indices])
-    #else: 
+    #else:
     #    max_real_eval = _np.nan
     #    min_real_eval = _np.nan
     #
@@ -535,7 +548,7 @@ def decompose_gate_matrix(gateMx):
             x = _np.dot( _np.linalg.pinv( _np.dot(A.T,A) ), _np.dot(A.T, b))
             fixedPtVec = _np.dot(A,x); fixedPtVec / _np.linalg.norm(fixedPtVec)
             fixedPtVec = fixedPtVec[:,0]
-            
+
             iLargestContrib = _np.argmax(_np.abs(x)) #index of gate eigenvector which contributed the most
             for ii,i in enumerate(unit_eval_indices):
                 if ii == iLargestContrib:
@@ -555,7 +568,7 @@ def decompose_gate_matrix(gateMx):
             # ...OR take eigenvector corresponding to a real unpaired eigenvalue closest to identity:
             idmx = _np.array( [[1],[0],[0],[0]], 'd') #identity density mx
             iFixedPt = real_eval_indices[ _np.argmin( [ _np.linalg.norm(gate_evecs[i]-idmx) for i in real_eval_indices ] ) ]
-            
+
         else:
             #No unit or real eigenvalues => two complex conjugate pairs or unpaired complex evals --> bail out
             return { 'isValid': False, 'isUnitary': False, 'msg': "All evals are complex." }
@@ -564,13 +577,13 @@ def decompose_gate_matrix(gateMx):
         #Find eigenvector corresponding to axis of rotation: find the *largest* unpaired real/unit eval
         indsToConsider = (unit_eval_indices + real_eval_indices)[:]
         del indsToConsider[ indsToConsider.index(iFixedPt) ] #don't consider fixed pt evec
-        
+
         if len(indsToConsider) > 0:
             iRotAxis = indsToConsider[ _np.argmax( [ gate_evals[i] for i in indsToConsider ] ) ]
         else:
             #No unit or real eigenvalues => an unpaired complex eval --> bail out
             return { 'isValid': False, 'isUnitary': False, 'msg': "Unpaired complex eval." }
-            
+
         #There are only 2 eigenvalues left -- hopefully a conjugate pair giving rotation
         inds = list(range(4))
         del inds[ inds.index( iFixedPt ) ]
@@ -589,13 +602,13 @@ def decompose_gate_matrix(gateMx):
                  'decay of diagonal rotation terms': 1.0 - abs(gate_evals[iRotAxis]),
                  'decay of off diagonal rotation terms': 1.0 - abs(gate_evals[iConjPair1]),
                  'pi rotations': _np.angle(gate_evals[iConjPair1])/_np.pi,
-                 'msg': "Success" }        
-                
+                 'msg': "Success" }
+
     else:
         return { 'isValid': False,
                  'isUnitary': False,
                  'msg': "Unsupported number of qubits: %d" % nQubits }
-                         
+
 
 def unitary_to_process_mx(U):
     """
@@ -617,3 +630,30 @@ def unitary_to_process_mx(U):
     # U -> kron(U,Uc) since U rho U_dag -> kron(U,Uc)
     #  since AXB --row-vectorize--> kron(A,B.T)*vec(X)
     return _np.kron(U,_np.conjugate(U))
+
+
+
+def error_generator(gate, target_gate):
+    """
+    Construct the error generator from a gate and its target.
+
+    Computes the value of the error generator given by
+    errgen = log( inv(target_gate) * gate ), so that
+    gate = target_gate * exp(errgen).
+
+    Parameters
+    ----------
+    gate : ndarray
+      The gate matrix
+
+    target_gate : ndarray
+      The target gate matrix
+
+    Returns
+    -------
+    errgen : ndarray
+      The error generator.
+    """
+    target_gate_inv = _spl.inv(target_gate)
+    error_gen = _np.real_if_close(_spl.logm(_np.dot(target_gate_inv,gate)))
+    return error_gen

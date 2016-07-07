@@ -1,6 +1,0 @@
-pygsti.objects.GateSet.from_vector
-==================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: GateSet.from_vector

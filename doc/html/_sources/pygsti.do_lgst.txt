@@ -1,6 +1,0 @@
-pygsti.do_lgst
-==============
-
-.. currentmodule:: pygsti
-
-.. autofunction:: do_lgst

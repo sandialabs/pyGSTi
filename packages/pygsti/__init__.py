@@ -1,23 +1,23 @@
 # *****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level Albany directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" A python implementation of Gate Set Tomography """
+""" A Python implementation of Gate Set Tomography """
 
 #Import the most important/useful routines of each module/sub-package
 # into the package namespace
-from _version import __version__
+from ._version import __version__
 
-import algorithms as alg
-import construction as cst
-import objects as obj
-import report as rpt
+from . import algorithms as alg
+from . import construction as cst
+from . import objects as obj
+from . import report as rpt
 
-from algorithms.core import *
-from algorithms.grammatrix import *
-from tools import *
-from drivers import *
+from .algorithms.core import *
+from .algorithms.grammatrix import *
+from .tools import *
+from .drivers import *
 
 
 #OLD
@@ -25,7 +25,7 @@ from drivers import *
 #    doIterativeExLGST, doLSGST, doLSGSTwithModelSelection, doIterativeLSGST, \
 #    doIterativeLSGSTwithModelSelection, doMLEGST, doIterativeMLEGST, optimizeGauge, contract, \
 #    printGatesetInfo, getRhoAndESpecs, getRhoAndEStrs
-##gramRankAndEvals, listStringsLGSTcanEstimate, 
+##gramRankAndEvals, listStringsLGSTcanEstimate,
 #
 #from MatrixOps import printMx
 #from GateSetConstruction import buildGate, buildVector, buildGateset, buildIdentityVector

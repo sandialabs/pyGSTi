@@ -1,16 +1,25 @@
+from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """
 Routines for converting python objects to Powerpoint compatible values.  Parallel rountines as
 LatexUtil has for latex conversion.
 """
-
 import numpy as _np
 import cmath
 from .. import objects as _objs
+
+#Define basestring in python3 so unicode
+# strings can be tested for in python2 using
+# python2's built-in basestring type.
+# When removing __future__ imports, remove
+# this and change basestring => str below.
+try:  basestring
+except NameError: basestring = str
+
 
 def ppt(x, brackets=False):
     """
@@ -20,7 +29,7 @@ def ppt(x, brackets=False):
     ----------
     x : anything
         Value to convert into powerpoint-friendly value.
-        
+
     brackets : bool, optional
         Whether to include brackets in the output for array-type variables.
 
@@ -35,6 +44,7 @@ def ppt(x, brackets=False):
         d = 0
         for l in x.shape:
             if l > 1: d += 1
+        x = _np.squeeze(x)
         if d == 0: return ppt_value(x)
         if d == 1: return ppt_vector(x, brackets=brackets)
         if d == 2: return ppt_matrix(x, brackets=brackets)
@@ -43,10 +53,10 @@ def ppt(x, brackets=False):
         return ppt_value(x)
     elif type(x) in (list,tuple):
         return ppt_list(x)
-    elif type(x) == str:
+    elif isinstance(x,basestring):
         return ppt_escaped(x)
     else:
-        print "Warning: %s not specifically converted to ppt" % str(type(x))
+        print("Warning: %s not specifically converted to ppt" % str(type(x)))
         return str(x)
 
 
@@ -58,7 +68,7 @@ def ppt_list(l, brackets=False):
     ----------
     l : list
         list to convert into powerpoint.
-        
+
     brackets : bool, optional
         Whether to include brackets in the output powerpoint string.
 
@@ -82,7 +92,7 @@ def ppt_vector(v, brackets=False):
     ----------
     v : numpy array
         1D array to convert into powerpoint.
-        
+
     brackets : bool, optional
         Whether to include brackets in the output powerpoint.
 
@@ -111,7 +121,7 @@ def ppt_matrix(m, fontsize=None, brackets=False):
 
     fontsize : int, optional
         If not None, the fontsize.
-        
+
     brackets : bool, optional
         Whether to include brackets in the output powerpoint.
 
@@ -138,7 +148,7 @@ def ppt_value(el,ROUND=6,complexAsPolar=True):
 
     Parameters
     ----------
-    el : float or complex 
+    el : float or complex
         Value to convert into powerpoint.
 
     ROUND : int, optional
@@ -156,7 +166,6 @@ def ppt_value(el,ROUND=6,complexAsPolar=True):
 
     # ROUND = digits to round values to
     TOL = 1e-9  #tolerance for printing zero values
-    if el == _np.nan: return "--"
 
     def render(x):
         if abs(x) < 5*10**(-(ROUND+1)):
@@ -171,7 +180,7 @@ def ppt_value(el,ROUND=6,complexAsPolar=True):
 
         #Fix scientific notition
         p = s.split('e')
-        if len(p) == 2: 
+        if len(p) == 2:
             ex = str(int(p[1])) #exponent without extras (e.g. +04 => 4)
             s = p[0] + "x10^" + ex
 
@@ -181,11 +190,14 @@ def ppt_value(el,ROUND=6,complexAsPolar=True):
             if s.endswith("."): s = s[:-1]
         return s
 
+    if isinstance(el,basestring):
+        return el
     if type(el) in (int,_np.int64):
         return "%d" % el
+    if el is None or _np.isnan(el): return "--"
 
     try:
-        if abs(el.real) > TOL: 
+        if abs(el.real) > TOL:
             if abs(el.imag) > TOL:
                 if complexAsPolar:
                     r,phi = cmath.polar(el)
@@ -210,7 +222,7 @@ def ppt_value(el,ROUND=6,complexAsPolar=True):
         s = str(el)
 
     return s
-            
+
 
 def ppt_escaped(txt):
     """
@@ -223,6 +235,6 @@ def ppt_escaped(txt):
 
     Returns
     -------
-    string 
+    string
     """
     return txt
