@@ -24,28 +24,6 @@ def num_non_spam_gauge_params(gateset):
     return gateset.num_gauge_params()
 
 
-#def _PerfectTwirl(mxToTwirl,wrt,eps):
-#    """ Perform twirl on mxToTwirl with respect to wrt """
-#    assert(mxToTwirl.shape[0] == mxToTwirl.shape[1]) #only square matrices allowed
-#    assert(wrt.shape[0] == wrt.shape[1])
-#    dim = mxToTwirl.shape[0]
-#
-#    #Get spectrum and eigenvectors of wrt
-#    wrtEvals,wrtEvecs = _np.linalg.eig(wrt)
-#    wrtEvecsInv = _np.linalg.inv( wrtEvecs )
-#
-#    # rotate mxToTwirl to the eigenbasis of wrt
-#    rotmat = _np.dot(wrtEvecsInv, _np.dot(mxToTwirl, wrtEvecs))
-#
-#    #destroy coherences between non-degenerate eigenvectors (this is what twirling does)
-#    for i in range(dim):
-#        for j in range(dim):
-#            if abs(wrtEvals[i] - wrtEvals[j]) > eps:
-#                rotmat[i,j] = 0
-#
-#    return _np.dot(wrtEvecs, _np.dot(rotmat, wrtEvecsInv)) # rotate back to the original basis
-
-
 # wrt is gate_dim x gate_dim, so is M, Minv, Proj
 # so SOP is gate_dim^2 x gate_dim^2 and acts on vectorized *gates*
 # Recall vectorizing identity (when vec(.) concats rows as flatten does):
