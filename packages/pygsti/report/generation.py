@@ -662,8 +662,8 @@ def get_gateset_rotn_axis_table(gateset, confidenceRegionInfo=None,
 
             if gl_other == gl:
                 angles_btwn_rotn_axes.append( ("",None) )
-            elif rotnAngle == 'X' or abs(rotnAngle) < 1e-4 or \
-                 rotnAngle_other == 'X' or abs(rotnAngle_other) < 1e-4:
+            elif str(rotnAngle) == 'X' or abs(rotnAngle) < 1e-4 or \
+                 str(rotnAngle_other) == 'X' or abs(rotnAngle_other) < 1e-4:
                 angles_btwn_rotn_axes.append( ("--",None) )
             elif not _np.isnan(rotnAxisAngles[i,j]):
                 if showAxisAngleErrBars and rotnAxisAnglesEB is not None:

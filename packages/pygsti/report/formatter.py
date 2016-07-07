@@ -120,7 +120,7 @@ Small = {
         'ppt'    : ppt }
 
 def emptyOrDash (x): 
-    return x == '--' or x == ''
+    return str(x) == '--' or str(x) == ''
 
 def _pi_html(x):
     return x if emptyOrDash(x) else html(x) + '&pi;'
@@ -214,23 +214,35 @@ ErrorBars = { 'html'  : _html_error_bar,
 def _latex_vec_error_bar(t):
     return '%s $\pm$ %s' % (latex(t[0]), latex(t[1]))
 
-VecErrorBars = { 'html'  : _html_error_bar, 
-                 'latex' : ErrorBarFormatter(_latex_vec_error_bar,
-                                             Formatter(custom=(_first_tuple_elem, {'f' : latex}))), 
-                 'text'  : _text_error_bar, 
-                 'ppt'   : ErrorBarFormatter(Formatter(custom=(_plus_or_minus,    {'f' : ppt})),
-                                             Formatter(custom=(_first_tuple_elem, {'f' : ppt})))}
+VecErrorBars = {'html': _html_error_bar,
+                'latex': ErrorBarFormatter(_latex_vec_error_bar,
+                                           Formatter(custom=(_first_tuple_elem,
+                                                             {'f': latex}))),
+                'text': _text_error_bar,
+                'ppt': ErrorBarFormatter(Formatter(custom=(_plus_or_minus,
+                                                           {'f': ppt})),
+                                         Formatter(custom=(_first_tuple_elem,
+                                                           {'f': ppt})))}
+
 def _latex_pi_error_bar(t):
-    '$ \\begin{array}{c}(%s \\\\ ]pm %s)\\pi \\end{array} $' % (latex(t[0]), latex(t[1]))
+    return ('$ \\begin{array}{c}(%s \\\\ ]pm %s)\\pi \\end{array} $'
+            % (latex(t[0]), latex(t[1])))
 
 # 'errorbars with pi' formatting: display (scalar_value +/- error bar) * pi
-PiErrorBars = { 'html'  : ErrorBarFormatter(Formatter(formatstring='(%s)&pi;', custom=(_plus_or_minus, {'f' : html})),
-                                            Formatter(custom=(_first_tuple_elem, {'f' : Pi['html']}))), 
-                'latex' : ErrorBarFormatter(_latex_pi_error_bar,
-                                            Formatter(custom=(_first_tuple_elem, {'f' : latex}))), 
-                'text'  : _text_error_bar, 
-                'ppt'   : ErrorBarFormatter(Formatter(formatstring='(%s)&pi;', custom=(_plus_or_minus, {'f' : ppt})),
-                                            Formatter(custom=(_first_tuple_elem, {'f' : ppt})))}
+PiErrorBars = {'html': ErrorBarFormatter(Formatter(formatstring='(%s)&pi;',
+                                                   custom=(_plus_or_minus,
+                                                           {'f': html})),
+                                         Formatter(custom=(_first_tuple_elem,
+                                                           {'f': Pi['html']}))),
+               'latex': ErrorBarFormatter(_latex_pi_error_bar,
+                                          Formatter(custom=(_first_tuple_elem,
+                                                            {'f': latex}))),
+               'text': _text_error_bar,
+               'ppt': ErrorBarFormatter(Formatter(formatstring='(%s)&pi;',
+                                                  custom=(_plus_or_minus,
+                                                          {'f': ppt})),
+                                        Formatter(custom=(_first_tuple_elem,
+                                                          {'f': ppt})))}
 
 def _html_gatestring(s):
     return '.'.join(s) if s is not None else ''
@@ -310,7 +322,8 @@ def formatList(items, formatters, fmt, scratchDir=None):
     formatted_items = []
     for item, formatter in zip(items, formatters):
         if formatter is not None:
-            # If the formatter requires a scratch directory to do its job, give it.
+            # If the formatter requires a scratch directory to do its job, give
+            # it.
             if hasattr(formatter, 'scratchDir'):
                 formatter.scratchDir = scratchDir
             formatted_items.append( formatter[fmt](item) )
