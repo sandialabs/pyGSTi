@@ -11,18 +11,18 @@ def get_branchname():
     branchname = branchname.replace('\n', '')
     return branchname
 
-updates_git_pages = ['develop', 'master']
+updates_git_pages = ['master']
 
-branchname = get_branchname
+branchname = get_branchname()
 
 if branchname in updates_git_pages:
-    #while os.path.basename(os.getcwd()) != 'pyGSTi':
-    #    os.chdir('..')
-    subprocess.call(['git', 'stash'])
+    print('Updating github pages!')
+    #subprocess.call(['git', 'stash'])
     subprocess.call(['git', 'checkout', 'gh-pages'])
-    os.chdir('tutorials')
-    subprocess.call(['cp', '../temp_html', '.'])
-    print(subprocess.check_output(['ls']))
-    os.chdir('..')
+    print(subprocess.check_output(['pwd']))
+    os.system('cp temp_html/*.html tutorials/')
+    subprocess.call(['git', 'add', 'tutorials/*.html'])
+    subprocess.call(['git', 'commit', '-m', '"Updates html in tutorials"'])
+    subprocess.call(['git', 'push'])
     subprocess.call(['git', 'checkout', branchname])
-
+    #subprocess.call(['git', 'apply'])

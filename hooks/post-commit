@@ -11,7 +11,7 @@ def get_branchname():
     branchname = branchname.replace('\n', '')
     return branchname
 
-updates_git_pages = ['develop', 'master']
+updates_git_pages = ['master']
 branchname = get_branchname()
 
 if branchname in updates_git_pages:
