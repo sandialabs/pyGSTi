@@ -58,6 +58,43 @@ def _SuperOpForPerfectTwirl(wrt, eps):
     return SuperOp  # a gate_dim^2 x gate_dim^2 matrix
 
 
+def list_score(input_array, scoreFunc='all'):
+    """
+    Score a set of germs based on the singular values of the Jacobian which
+    correspond to non-gauge degrees of freedom in the gate set. Smaller scores
+    ought to correspond to better-performing germ sets.
+
+    Parameters
+    ----------
+    input_array : numpy array
+        The singular values of the germ-set Jacobian corresponding to non-gauge
+        degrees of freedom.
+
+    scoreFunc : {'all', 'worst'}, optional (default is 'all')
+        Sets the objective function for scoring a germ set.  If 'all', score is
+        `l1Penalty` * (number of germs) + sum(1/Eigenvalues of score matrix).  If
+        'worst', score is `l1Penalty` * (number of germs) + 1/min(Eigenvalues of
+        score matrix).  (Also note: because we are using a simple integer
+        program to choose germs, it is possible to get stuck in a local
+        minimum, and choosing one or the other objective function can help
+        avoid such minima in different circumstances.)
+
+    Returns
+    -------
+    float
+        Score for the evaluated germ set.
+
+    """
+    if scoreFunc == 'all':
+        score = sum(1. / _np.abs(input_array))
+    elif scoreFunc == 'worst':
+        score = 1. / min(_np.abs(input_array))
+    else:
+        raise ValueError("'%s' is not a valid value for scoreFunc. " % scoreFunc
+                         + "Either 'all' or 'worst' must be specified!")
+
+    return score
+
 
 def twirled_deriv(gateset, gatestring, eps=1e-6):
     """
@@ -219,7 +256,8 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
     sortedEigenvals = _np.sort(_np.real(_np.linalg.eigvalsh(combinedDDD)))
 
     nGaugeParams = gateset.num_gauge_params()
-    bSuccess = bool(sortedEigenvals[nGaugeParams] > tol)
+    observableEigenvals = sortedEigenvals[nGaugeParams:]
+    bSuccess = bool(list_score(observableEigenvals, 'worst') < 1/tol)
 
     return (bSuccess, sortedEigenvals) if returnSpectrum else bSuccess
 
@@ -240,14 +278,9 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
     germsToTest : list of GateString
         List of germs gate sequences to test for completeness.
 
-    scoreFunc : {'all'm 'worst'}, optional (default is 'all')
-        Sets the objective function for scoring a germ set.  If 'all', score is
-        `l1Penalty`*(number of germs) + sum(1/Eigenvalues of score matrix).  If
-        'worst', score is `l1Penalty`*(number of germs) + * 1/min(Eigenvalues of
-        score matrix).  (Also note: because we are using a simple integer
-        program to choose germs, it is possible to get stuck in a local
-        minimum, and choosing one or the other objective function can help
-        avoid such minima in different circumstances.)
+    scoreFunc : string
+        Label to indicate how a germ set is scored. See :meth:`list_score` for
+        details.
 
     weights : numpy array, optional
         A 1-D array of weights with length equal len(germsToTest),
@@ -280,14 +313,6 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
         matrix used to determine parameter amplification.
     """
 
-    if scoreFunc == 'all':
-        def list_score(input_array):
-            return sum(1./input_array)
-    elif scoreFunc == 'worst':
-        def list_score(input_array):
-            return 1./min(input_array)
-
-
     # Remove any SPAM vectors from gateset since we only want
     # to consider the set of *gate* parameters for amplification
     # and this makes sure our parameter counting is correct
@@ -318,8 +343,9 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
     sortedEigenvals = _np.sort(_np.real(_np.linalg.eigvalsh(combinedTDDD)))
 
     nGaugeParams = gateset.num_gauge_params()
+    observableEigenvals = sortedEigenvals[nGaugeParams:]
 
-    bSuccess = bool(list_score(sortedEigenvals[nGaugeParams:]) < threshold)
+    bSuccess = bool(list_score(observableEigenvals, scoreFunc) < threshold)
 
     return (bSuccess, sortedEigenvals) if returnSpectrum else bSuccess
 
@@ -398,14 +424,9 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         germ set.  If ``None``, then starting point includes all
         germs.
 
-    scoreFunc : {'all', 'worst'}, optional (default is 'all')
-        Sets the objective function for scoring a germ set.  If 'all', score is
-        `l1Penalty`*(number of germs) + sum(1/Eigenvalues of score matrix).
-        If 'worst', score is `l1Penalty`*(number of germs) +
-        1/min(Eigenvalues of score matrix).  (Also note: because we are using a
-        simple integer program to choose germs, it is possible to get stuck in
-        a local minimum, and choosing one or the other objective function can
-        help avoid such minima in different circumstances.)
+    scoreFunc : string
+        Label to indicate how a germ set is scored. See :meth:`list_score` for
+        details.
 
     maxIter : int, optional
         The maximum number of iterations before giving up.
@@ -484,15 +505,6 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     if len(gatesetList) > 1 and numCopies is not None:
         raise ValueError("Input multiple gate sets XOR request multiple copies only!")
 
-    if scoreFunc == 'all':
-        def list_score(input_array):
-            return sum(1./_np.abs(input_array))
-    elif scoreFunc == 'worst':
-        def list_score(input_array):
-            return 1./min(_np.abs(input_array))
-    else:
-        raise ValueError("Either 'all' or 'worst' must be specified for scoreFunc!")
-
     if randomize:
 #        if seed:
 #            _np.random.seed(seed)
@@ -565,7 +577,8 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
             combinedTDDD = _np.einsum('i,ijk', wts,
                                       twirledDerivDaggerDerivList[gateset_num])
             sortedEigenvals = _np.sort(_np.real(_nla.eigvalsh(combinedTDDD)))
-            score = (list_score(sortedEigenvals[nGaugeParams:])
+            observableEigenvals = sortedEigenvals[nGaugeParams:]
+            score = (list_score(observableEigenvals, scoreFunc)
                      + l1Penalty*_np.sum(wts)
                      + gatePenalty*_np.dot(germLengths, wts))
         # Side effect: calling compute_score caches result in scoreD
