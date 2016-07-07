@@ -3372,11 +3372,12 @@ class GateSetCalculator(object):
            weighting factor for differences between elements of spam vectors.
 
         itemWeights : dict, optional
-           Dictionary of weighting factors for individual gates and spam operators.
-           Weights are applied multiplicatively to the squared differences, i.e.,
-           (*before* the final square root is taken).  Keys can be gate, state
-           preparation, POVM effect, or spam labels.  Values are floating point
-           numbers.  By default, weights are set by gateWeight and spamWeight.
+           Dictionary of weighting factors for individual gates and spam
+           operators. Weights are applied multiplicatively to the squared
+           differences, i.e., (*before* the final square root is taken).  Keys
+           can be gate, state preparation, POVM effect, or spam labels.  Values
+           are floating point numbers.  By default, weights are set by
+           gateWeight and spamWeight.
 
         normalize : bool, optional
            if True (the default), the frobenius difference is defined by the
@@ -3389,6 +3390,7 @@ class GateSetCalculator(object):
         """
         d = 0; T = transformMx
         nSummands = 0.0
+        if itemWeights is None: itemWeights = {}
 
         if T is not None:
             Ti = _nla.inv(T)
@@ -3412,7 +3414,7 @@ class GateSetCalculator(object):
                 nSummands += wt * _np.size(Evec)
 
             if self.povm_identity is not None:
-                wt = itemWeights.get(self._identitylabel, spamWeight)
+                wt = itemWeights.get(self._identityLabel, spamWeight)
                 d += wt * _gt.frobeniusdist2(_np.dot(
                     _np.transpose(T),self.povm_identity),otherCalc.povm_identity)
                 nSummands += wt * _np.size(self.povm_identity)
@@ -3437,7 +3439,7 @@ class GateSetCalculator(object):
 
             if self.povm_identity is not None and \
                otherCalc.povm_identity is not None:
-                wt = itemWeights.get(self._identitylabel, spamWeight)
+                wt = itemWeights.get(self._identityLabel, spamWeight)
                 d += wt * _gt.frobeniusdist2(self.povm_identity,
                                              otherCalc.povm_identity)
                 nSummands += wt * _np.size(self.povm_identity)

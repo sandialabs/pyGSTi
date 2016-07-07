@@ -2573,6 +2573,8 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
     #      gateset and targetGateset, which must be specified.
 
     if maxfev is None: maxfev = maxiter
+    if itemWeights is None: itemWeights = {}
+
     gateDim = gateset.get_dimension()
     firstRowForTP = _np.zeros(gateDim); firstRowForTP[0] = 1.0
 
@@ -2655,10 +2657,11 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
             tpGateset = gateset
             tpGaugeMx = _np.identity( gateDim, 'd' )
         else:
-            _, tpGaugeMx, tpGateset = optimize_gauge(gateset,"TP", maxiter, maxfev, tol,
-                                                     'L-BFGS-B', targetGateset, targetFactor,
-                                                     constrainToTP, constrainToCP, constrainToValidSpam, True,
-                                                     gateWeight, spamWeight, itemWeights printer-1)
+            _, tpGaugeMx, tpGateset = optimize_gauge(
+                gateset,"TP", maxiter, maxfev, tol,
+                'L-BFGS-B', targetGateset, targetFactor,
+                constrainToTP, constrainToCP, constrainToValidSpam, True,
+                gateWeight, spamWeight, itemWeights, printer-1)
 
         printer.log('', 2)
         printer.log(("--- Gauge Optimization to CPTP w/valid SPAM (%s) ---" % method), 1, indentOffset=-1)
