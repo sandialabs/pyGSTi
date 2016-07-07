@@ -120,7 +120,7 @@ Small = {
         'ppt'    : ppt }
 
 def emptyOrDash (x): 
-    return x == '--' or x == ''
+    return str(x) == '--' or str(x) == ''
 
 def _pi_html(x):
     return x if emptyOrDash(x) else html(x) + '&pi;'

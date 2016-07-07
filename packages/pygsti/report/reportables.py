@@ -387,8 +387,8 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
                 decomp_other = _tools.decompose_gate_matrix(gateset.gates[gl_other])
                 rotnAngle_other = decomp_other.get('pi rotations','X')
 
-                if rotnAngle == 'X' or abs(rotnAngle) < 1e-4 or \
-                   rotnAngle_other == 'X' or abs(rotnAngle_other) < 1e-4:
+                if str(rotnAngle) == 'X' or abs(rotnAngle) < 1e-4 or \
+                   str(rotnAngle_other) == 'X' or abs(rotnAngle_other) < 1e-4:
                     angles_btwn_rotn_axes[i,j] =  _np.nan
                 else:
                     axisOfRotn_other = decomp_other.get('axis of rotation',None)
