@@ -338,6 +338,7 @@ def make_rpe_data_set(gatesetOrDataset,stringListD,nSamples,sampleError='binomia
 
 
 
+#TODO savePlot arg is never used?
 def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs,
                   plot=False, savePlot=False):
 

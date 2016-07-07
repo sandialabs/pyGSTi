@@ -308,7 +308,7 @@ def gauge_optimize_gs_list(gsList, targetGateset, constrainToTP=True,
                             'gates-mean','gates-min','gates-max'],
                            bbox_to_anchor=(1.4, 1.))
 
-    gateTimesSPAMMean = _np.array(SPAMMean) * _np.array(gateMean)
+    # gateTimesSPAMMean = _np.array(SPAMMean) * _np.array(gateMean)
 
     bestSPAMWeight = _np.logspace(-4,0,13)[ _np.argmin(
             _np.array(SPAMMean)*_np.array(gateMean)) ]

@@ -105,7 +105,7 @@ def minimize(fn,x0, method='cg', callback=None,
 
     elif method == 'brute':
         ranges = [ (0.0,1.0) ] * len(x0); Ns = 4  #params for 'brute' algorithm
-        xmin,fmin = _spo.brute(fn, ranges, (), Ns) #jac=jac
+        xmin, _ = _spo.brute(fn, ranges, (), Ns) #jac=jac
         #print "DEBUG: Brute fmin = ",fmin
         solution = _spo.minimize(fn,xmin,method="Nelder-Mead", options={}, tol=tol, callback = callback, jac=jac)
 
@@ -333,7 +333,7 @@ def fmin_simplex(fn, x0, slide=1.0, tol=1e-8, maxiter=1000):
 
 
 
-
+#TODO err_crit is never used?
 def fmin_particle_swarm(f, x0, err_crit, iter_max, popsize=100, c1=2, c2=2):
     """
     A simple implementation of the Particle Swarm Optimization Algorithm.
@@ -387,7 +387,7 @@ def fmin_particle_swarm(f, x0, err_crit, iter_max, popsize=100, c1=2, c2=2):
 
     # let the first particle be the global best
     gbest = particles[0]; ibest = 0
-    bDoLocalFitnessOpt = False
+    # bDoLocalFitnessOpt = False
 
     #DEBUG
     #if False:
@@ -447,8 +447,8 @@ def fmin_particle_swarm(f, x0, err_crit, iter_max, popsize=100, c1=2, c2=2):
         w = 1.0 #- i/iter_max
 
         #bDoLocalFitnessOpt = bool(iter_num > 20 and abs(lastBest-gbest.fitness) < 0.001 and iter_num % 10 == 0)
-        lastBest = gbest.fitness
-        minDistToBest = 1e10; minV = 1e10; maxV = 0 #DEBUG
+        # lastBest = gbest.fitness
+        # minDistToBest = 1e10; minV = 1e10; maxV = 0 #DEBUG
 
         for (ip,p) in enumerate(particles):
             fitness = f(p.params)

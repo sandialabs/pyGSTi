@@ -888,7 +888,8 @@ class GateSet(object):
     def _calc(self):
         return _gscalc.GateSetCalculator(self._dim, self.gates, self.preps,
                                          self.effects, self.povm_identity,
-                                         self.spamdefs, self._remainderlabel)
+                                         self.spamdefs, self._remainderlabel,
+                                         self._identitylabel)
 
     def product(self, gatestring, bScale=False):
         """
@@ -1237,7 +1238,7 @@ class GateSet(object):
     def bulk_dproduct(self, evalTree, flat=False, bReturnProds=False,
                       bScale=False, comm=None):
         """
-        Compute the derivative of a many gate strings at once.
+        Compute the derivative of many gate strings at once.
 
         Parameters
         ----------
@@ -1249,15 +1250,15 @@ class GateSet(object):
           Affects the shape of the returned derivative array (see below).
 
         bReturnProds : bool, optional
-          when set to True, additionally return the probabilities.
+          when set to True, additionally return the products.
 
         bScale : bool, optional
           When True, return a scaling factor (see below).
 
         comm : mpi4py.MPI.Comm, optional
            When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is first done over the
-           set of parameters being differentiated with respect to.  If there are
+           across multiple processors.  Distribution is first done over the set
+           of parameters being differentiated with respect to.  If there are
            more processors than gateset parameters, distribution over a split
            evalTree (if given) is possible.
 
@@ -1265,33 +1266,34 @@ class GateSet(object):
         Returns
         -------
         derivs : numpy array
+          
+          * if `flat` is ``False``, an array of shape S x M x G x G, where:
 
-          * if flat == False, an array of shape S x M x G x G, where:
-
-            - S == len(gatestring_list)
-            - M == the length of the vectorized gateset
-            - G == the linear dimension of a gate matrix (G x G gate matrices)
-
-            and derivs[i,j,k,l] holds the derivative of the (k,l)-th entry
+            - S = len(gatestring_list)
+            - M = the length of the vectorized gateset
+            - G = the linear dimension of a gate matrix (G x G gate matrices)
+            
+            and ``derivs[i,j,k,l]`` holds the derivative of the (k,l)-th entry
             of the i-th gate string product with respect to the j-th gateset
             parameter.
 
-          * if flat == True, an array of shape S*N x M where:
+          * if `flat` is ``True``, an array of shape S*N x M where:
 
-            - N == the number of entries in a single flattened gate (ordering same as numpy.flatten),
-            - S,M == as above,
-
-            and deriv[i,j] holds the derivative of the (i % G^2)-th entry of
-            the (i / G^2)-th flattened gate string product  with respect to
-            the j-th gateset parameter.
+            - N = the number of entries in a single flattened gate (ordering
+              same as numpy.flatten),
+            - S,M = as above,
+              
+            and ``deriv[i,j]`` holds the derivative of the ``(i % G^2)``-th
+            entry of the ``(i / G^2)``-th flattened gate string product  with
+            respect to the j-th gateset parameter.
 
         products : numpy array
-          Only returned when bReturnProds == True.  An array of shape
-          S x G x G; products[i] is the i-th gate string product.
+          Only returned when `bReturnProds` is ``True``.  An array of shape  
+          S x G x G; ``products[i]`` is the i-th gate string product.
 
         scaleVals : numpy array
-          Only returned when bScale == True.  An array of shape S such that
-          scaleVals[i] contains the multiplicative scaling needed for
+          Only returned when `bScale` is ``True``.  An array of shape S such
+          that ``scaleVals[i]`` contains the multiplicative scaling needed for
           the derivatives and/or products for the i-th gate string.
         """
         return self._calc().bulk_dproduct(evalTree, flat, bReturnProds,
@@ -1960,7 +1962,8 @@ class GateSet(object):
 
 
     def frobeniusdist(self, otherGateSet, transformMx=None,
-                      gateWeight=1.0, spamWeight=1.0, normalize=True):
+                      gateWeight=1.0, spamWeight=1.0, itemWeights=None,
+                      normalize=True):
         """
         Compute the weighted frobenius norm of the difference between this
         gateset and otherGateSet.  Differences in each corresponding gate
@@ -1987,6 +1990,14 @@ class GateSet(object):
         spamWeight : float, optional
            weighting factor for differences between elements of spam vectors.
 
+        itemWeights : dict, optional
+           Dictionary of weighting factors for individual gates and spam
+           operators. Weights are applied multiplicatively to the squared
+           differences, i.e., (*before* the final square root is taken).  Keys
+           can be gate, state preparation, POVM effect, or spam labels.  Values
+           are floating point numbers.  By default, weights are set by
+           gateWeight and spamWeight.
+
         normalize : bool, optional
            if True (the default), the frobenius difference is defined by the
            sum of weighted squared-differences divided by the number of
@@ -1997,7 +2008,8 @@ class GateSet(object):
         float
         """
         return self._calc().frobeniusdist(otherGateSet._calc(), transformMx,
-                                          gateWeight, spamWeight, normalize)
+                                          gateWeight, spamWeight, itemWeights, 
+                                          normalize)
 
 
     def jtracedist(self, otherGateSet, transformMx=None):
@@ -2432,8 +2444,9 @@ class GateSet(object):
         for gateLabel in list(gs_pauli.gates.keys()):
             randMat = scale * (rndm.randn(unitary_dim,unitary_dim) \
                                    + 1j * rndm.randn(unitary_dim,unitary_dim))
-            randMat = _np.dot(_np.transpose(_np.conjugate(randMat)),randMat)
-                        # make randMat Hermetian: (A_dag*A)^dag = (A_dag*A)
+#            randMat = _np.dot(_np.transpose(_np.conjugate(randMat)),randMat)
+            randMat = _np.transpose(_np.conjugate(randMat)) + randMat
+                        # make randMat Hermetian: (A_dag + A)^dag = (A_dag + A)
             randU   = _scipy.linalg.expm(-1j*randMat)
 
             if unitary_dim == 2:

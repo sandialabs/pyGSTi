@@ -60,10 +60,11 @@ class TutorialsTestCase(unittest.TestCase):
 
         #check whether an jupyter notebook contains any "error" cells
         def containsErrors(fn):
-            for line in open(fn, 'r'):
-                if '"output_type": "error"' in line:
-                    return True
-            return False
+            with open(fn, 'r') as fn_file:
+                for line in fn_file:
+                    if '"output_type": "error"' in line:
+                        return True
+                return False
 
         tutorialName,Ext = os.path.splitext(tutorialFile)
 

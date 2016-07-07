@@ -58,7 +58,7 @@ def load_dataset(filename, cache=False):
     except:
 
         if cache:
-            bReadCache = False
+            #bReadCache = False
             cache_filename = filename + ".cache"
             if _os.path.exists( cache_filename ) and \
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
@@ -110,7 +110,7 @@ def load_multidataset(filename, cache=False):
         mds = _objs.MultiDataSet(fileToLoadFrom=filename)
     except:
         if cache:
-            bReadCache = False
+            # bReadCache = False
             cache_filename = filename + ".cache"
             if _os.path.exists( cache_filename ) and \
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
