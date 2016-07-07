@@ -43,6 +43,11 @@ setup(name='pyGSTi',
       package_dir={'': 'packages'},
       package_data={'pygsti.report': ['templates/*.tex', 'templates/*.pptx']},
       requires=['numpy','scipy','matplotlib','pyparsing'],
+      extras_require = {
+           'diamond norm computation':  ['cvxpy', 'cvxopt'],
+           'powerpoint file generation': ['python-pptx'],
+           'nose testing' : ['nose']
+      },
       platforms = ["any"],      
       url = 'http://www.pygsti.info',
       download_url = 'https://github.com/pyGSTio/pyGSTi/archive/v0.9.1-beta.tar.gz',
