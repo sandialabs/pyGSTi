@@ -221,7 +221,8 @@ VecErrorBars = { 'html'  : _html_error_bar,
                  'ppt'   : ErrorBarFormatter(Formatter(custom=(_plus_or_minus,    {'f' : ppt})),
                                              Formatter(custom=(_first_tuple_elem, {'f' : ppt})))}
 def _latex_pi_error_bar(t):
-    '$ \\begin{array}{c}(%s \\\\ ]pm %s)\\pi \\end{array} $' % (latex(t[0]), latex(t[1]))
+    return ('$ \\begin{array}{c}(%s \\\\ ]pm %s)\\pi \\end{array} $'
+            % (latex(t[0]), latex(t[1])))
 
 # 'errorbars with pi' formatting: display (scalar_value +/- error bar) * pi
 PiErrorBars = { 'html'  : ErrorBarFormatter(Formatter(formatstring='(%s)&pi;', custom=(_plus_or_minus, {'f' : html})),
