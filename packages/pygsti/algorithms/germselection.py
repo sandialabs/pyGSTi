@@ -15,7 +15,7 @@ import warnings as _warnings
 from .. import objects as _objs
 
 def num_non_spam_gauge_params(gateset):
-    """Returns number of non-gauge parameters in a gateset, not including SPAM parameters"""
+    """Returns number of non-gauge parameters in a GateSet, not including SPAM parameters"""
     gateset = gateset.copy()
     for prepLabel in gateset.preps.keys():
         del gateset.preps[prepLabel]
@@ -90,7 +90,7 @@ def twirled_deriv(gateset, gatestring, eps=1e-6):
     Parameters
     ----------
     gateset : Gateset object
-      The gateset which associates gate labels with operators.
+      The GateSet which associates gate labels with operators.
 
     gatestring : GateString object
       The gate string to take a twirled derivative of.
@@ -119,7 +119,7 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False):
     Parameters
     ----------
     gateset : Gateset object
-      The gateset which associates gate labels with operators.
+      The GateSet which associates gate labels with operators.
 
     gatestrings : list of GateString objects
       The gate string to take a twirled derivative of.
@@ -161,13 +161,13 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False):
 def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
                          returnSpectrum=False, tol=1e-6):
     """
-    Test whether a set of germs is able to amplify all of the gateset's
+    Test whether a set of germs is able to amplify all of the GateSet's
     non-gauge parameters.
 
     Parameters
     ----------
     gateset : GateSet
-        The gate set (associates gate matrices with gate labels).
+        The GateSet (associates gate matrices with gate labels).
 
     germsToTest : list of GateStrings
         List of germs gate sequences to test for completeness.
@@ -244,13 +244,13 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
 def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
                            returnSpectrum=False, threshold=1e6, check=False):
     """
-    Test whether a set of germs is able to amplify all of the gateset's
+    Test whether a set of germs is able to amplify all of the GateSet's
     non-gauge parameters.
 
     Parameters
     ----------
     gateset : GateSet
-        The gate set (associates gate matrices with gate labels).
+        The GateSet (associates gate matrices with gate labels).
 
     germsToTest : list of GateString
         List of germs gate sequences to test for completeness.
@@ -357,44 +357,44 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     Parameters
     ----------
     gatesetList : GateSet or list of GateSet
-        The list of gate sets to be tested.  To ensure that the returned germ
+        The list of GateSets to be tested.  To ensure that the returned germ
         set is amplficationally complete, it is a good idea to score potential
         germ sets against a collection (~5-10) of similar gate sets.  The user
-        may specify a single gateset and a number of unitarily close copies to
+        may specify a single GateSet and a number of unitarily close copies to
         be made (set by the kwarg `numCopies`, or the user may specify their
-        own list of gatesets, each of which in turn may or may not be
+        own list of GateSets, each of which in turn may or may not be
         randomized (set by the kwarg `randomize`).
 
     germsList : list of GateString
         List of all germs gate sequences to consider.
         IMPORTANT:  If `forceSingletons` is ``True``, the first k elements of
-        germsList must be all k gates in gateset.
+        `germsList` must be all k gates in GateSet.
 
     randomize : Bool, optional
-        Whether or not the input gateset(s) are subject first subject to
+        Whether or not the input GateSet(s) are subject first subject to
         unitary randomization.  If ``False``, the user should perform the
-        unitary randomization themselves.  Note:  If the gateset(s) are perfect
-        (e.g.  std1Q_XYI.gs_target), then the germ selection output should not
-        be trusted, due to accidental degeneracies in the gateset.  If the
-        gateset(s) include stochastic (non-unitary) error, then germ selection
+        unitary randomization themselves.  Note:  If the GateSet(s) are perfect
+        (e.g. ``std1Q_XYI.gs_target``), then the germ selection output should
+        not be trusted, due to accidental degeneracies in the GateSet.  If the
+        GateSet(s) include stochastic (non-unitary) error, then germ selection
         will fail, as we score amplificational completeness in the limit of
         infinite sequence length (so any stochastic noise will completely
         depolarize any sequence in that limit).  Default is ``True``.
 
     randomizationStrength : float, optional
-        The strength of the unitary noise used to randomize input gateset(s);
+        The strength of the unitary noise used to randomize input GateSet(s);
         is passed to ``randomize_with_unitary``.  Default is ``1e-3``.
 
     numCopies : int, optional
-        The number of gateset copies to be made of the input gateset (prior to
-        unitary randomization).  If more than one gateset is passed in,
-        `numCopies` should be ``None``.  If only one gateset is passed in and
+        The number of GateSet copies to be made of the input GateSet (prior to
+        unitary randomization).  If more than one GateSet is passed in,
+        `numCopies` should be ``None``.  If only one GateSet is passed in and
         `numCopies` is ``None``, no extra copies are made.
 
     seed : float, optional
-        The starting seed used for unitary randomization.  If multiple gatesets
-        are to be randomized, gatesetList[i] is randomized with seed + i.
-        Default is 0.
+        The starting seed used for unitary randomization.  If multiple GateSets
+        are to be randomized, ``gatesetList[i]`` is randomized with ``seed +
+        i``.  Default is 0.
 
     l1Penalty : float, optional
         How strong the penalty should be for increasing the germ set list by a
@@ -406,8 +406,8 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     
     initialWeights : list-like
         List or array of either booleans or (0 or 1) integers
-        specifying which germs in germList comprise the initial
-        germ set.  If None, then starting point includes all
+        specifying which germs in `germList` comprise the initial
+        germ set.  If ``None``, then starting point includes all
         germs.
 
     scoreFunc : {'all', 'worst'}, optional (default is 'all')
@@ -474,6 +474,11 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         Dictionary with keys which are tuples of 0s and 1s of length
         ``len(germList)``, specifying a subset of germs, and values ==
         1.0/smallest-non-gauge-eigenvalue "scores".
+
+    See Also
+    --------
+    :class:`~pygsti.objects.GateSet`
+    :class:`~pygsti.objects.GateString`
     """
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
@@ -544,15 +549,15 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     printer.log("Gateset has %d gauge params." % nGaugeParams, 1)
 
     #score dictionary:
-    #  keys = tuple-ized weight vector of 1's and 0's only
-    #  values = 1.0/critical_eval
+    #  keys = (gatesetNum, tuple-ized weight vector of 1's and 0's only)
+    #  values = list_score
     scoreD = {}
     numGates = len(gateset0.gates.keys())
     #twirledDerivDaggerDeriv == array J.H*J contributions from each germ (J=Jacobian)
     # indexed by (iGerm, iGatesetParam1, iGatesetParam2)
     # size (nGerms, vec_gateset_dim, vec_gateset_dim)
 
-    germLengths = _np.array( list(map(len,germsList)), 'i')
+    germLengths = _np.array(list(map(len,germsList)), 'i')
 
     twirledDerivDaggerDerivList = []
 
@@ -561,26 +566,28 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         twirledDerivDaggerDerivList.append(_np.einsum('ijk,ijl->ikl', _np.conjugate(twirledDeriv), twirledDeriv))
 
     def compute_score(wts,gateset_num):
-        """ Returns a germ set "score" in which smaller is better
-        Also returns intentionally bad score if wts do not include all individual gates as
-        individual germs, if forceSingletons is True. """
+        """Returns a germ set "score" in which smaller is better.  Also returns
+        intentionally bad score if wts do not include all individual gates as
+        individual germs, if forceSingletons is True.
+
+        """
         if forceSingletons and _np.count_nonzero(wts[:numGates]) != numGates:
             score = forceSingletonsScore
         else:
-            combinedTDDD = _np.einsum('i,ijk',wts,twirledDerivDaggerDerivList[gateset_num])
-            sortedEigenvals = _np.sort(_np.real(_np.linalg.eigvalsh(combinedTDDD)))
-#            print sortedEigenvals
-#            score = list_score(sortedEigenvals[nGaugeParams:])
-            score = list_score(sortedEigenvals[nGaugeParams:]) + l1Penalty*_np.sum(wts) +\
-                    gatePenalty*_np.dot(germLengths,wts)
-#            print gateset_num, score
-        scoreD[gateset_num,tuple(wts)] = score # side affect: calling compute_score caches result in scoreD
+            combinedTDDD = _np.einsum('i,ijk', wts,
+                                      twirledDerivDaggerDerivList[gateset_num])
+            sortedEigenvals = _np.sort(_np.real(_nla.eigvalsh(combinedTDDD)))
+            score = (list_score(sortedEigenvals[nGaugeParams:])
+                     + l1Penalty*_np.sum(wts)
+                     + gatePenalty*_np.dot(germLengths, wts))
+        # Side effect: calling compute_score caches result in scoreD
+        scoreD[gateset_num,tuple(wts)] = score
         return score
 
     def get_neighbors(boolVec):
         for i in range(nGerms):
             v = boolVec.copy()
-            v[i] = (v[i] + 1) % 2 #toggle v[i] btwn 0 and 1
+            v[i] = (v[i] + 1) % 2 # Toggle v[i] btwn 0 and 1
             yield v
 
     if initialWeights is not None:

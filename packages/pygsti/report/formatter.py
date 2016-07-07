@@ -267,19 +267,26 @@ Pre = { 'html'   : _pre_html,
 
 class FigureFormatter():
     def __init__(self, extension=None, formatstring='%s%s%s%s', custom=None):
+        self.extension = extension
+        self.custom = custom
+        self.formatstring = formatstring
         self.scratchDir = None
         
 
     def __call__(self, figInfo):
         fig, name, W, H = figInfo
-        if extension is not None:
-            fig.save_to(_os.path.join(scratchDir, name + self.extension))
-            if custom is not None:
-                return formatstring % custom[0](W, H, scratchDir, name + self.extension, **custom[1])
+        if self.extension is not None:
+            fig.save_to(_os.path.join(self.scratchDir, name + self.extension))
+            if self.custom is not None:
+                return (self.formatstring
+                        % self.custom[0](W, H, self.scratchDir,
+                                         name + self.extension,
+                                         **self.custom[1]))
             else:
-                return formatstring % (W, H, scratchDir, name + self.extension)
-        elif custom is not None:
-            return custom[0](figInfo, **custom[1])
+                return self.formatstring % (W, H, self.scratchDir,
+                                            name + self.extension)
+        elif self.custom is not None:
+            return self.custom[0](figInfo, **self.custom[1])
         else:
             return 'Figure generation for this Formatter is not implemented.'
 
