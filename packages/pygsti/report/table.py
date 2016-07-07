@@ -16,7 +16,7 @@ class ReportTable(object):
 
 
     def addrow(self, rowData, formatters):
-        self._rows.append( (rowData, formatters) )
+        self._rows.append((rowData, formatters))
 
     def finish(self):
         pass #nothing to do currently
@@ -34,17 +34,19 @@ class ReportTable(object):
                 if self._headingFormatters is not None:
                     colHeadings_formatted = \
                         _formatter.formatList(self._headings,
-                                       self._headingFormatters, "latex", scratchDir)
+                                              self._headingFormatters, "latex",
+                                              scratchDir)
                 else: #headingFormatters is None => headings is dict w/formats
                     colHeadings_formatted = self._headings['latex']
 
                 latex  = "\\begin{%s}[l]{%s}\n\hline\n" % \
                     (table, "|c" * len(colHeadings_formatted) + "|")
-                latex += "%s \\\\ \hline\n" % \
-                    (" & ".join(colHeadings_formatted))
+                latex += ("%s \\\\ \hline\n"
+                          % (" & ".join(colHeadings_formatted)))
 
-            for rowData,formatters in self._rows:
-                formatted_rowData = _formatter.formatList(rowData, formatters, "latex", scratchDir)
+            for rowData, formatters in self._rows:
+                formatted_rowData = _formatter.formatList(rowData, formatters,
+                                                          "latex", scratchDir)
                 if len(formatted_rowData) > 0:
                     latex += " & ".join(formatted_rowData) + " \\\\ \hline\n"
 
