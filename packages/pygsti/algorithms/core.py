@@ -2447,10 +2447,11 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
 
 #Note: this code overlaps do_mlgst a lot -- consolidate in FUTURE?
 def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
-                  method='L-BFGS-B', targetGateset=None, targetFactor=0.0001,
-                  constrainToTP=False, constrainToCP=False, constrainToValidSpam=False,
-                  returnAll=False, gateWeight=1.0, spamWeight=0.0,
-                  targetGatesMetric="frobenius", targetSpamMetric="frobenius", verbosity=0):
+                   method='L-BFGS-B', targetGateset=None, targetFactor=0.0001,
+                   constrainToTP=False, constrainToCP=False, constrainToValidSpam=False,
+                   returnAll=False, gateWeight=1.0, spamWeight=1.0, itemWeights=None,
+                   targetGatesMetric="frobenius", targetSpamMetric="frobenius",
+                   verbosity=0):
     """
     Optimize the gauge of a GateSet using some 'goodness' function.
 
@@ -2528,6 +2529,13 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
        and measuement vectors (or gates, depending on the metric used) before
        summing them into the total norm between two gatesets.
 
+    itemWeights : dict, optional
+       Dictionary of weighting factors for individual gates and spam operators.
+       Keys can be gate, state preparation, POVM effect, or spam labels.  Values
+       are floating point numbers.  By default, weights are set by gateWeight 
+       and spamWeight.  All values *present* in itemWeights override gateWeight
+       and spamWeight.
+
     targetGatesMetric : string, optional
        When toGetTo == "target", this specifies the metric used to evaluate what
        "close to the target" means for the gate matrices.  Allowed values are
@@ -2565,6 +2573,8 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
     #      gateset and targetGateset, which must be specified.
 
     if maxfev is None: maxfev = maxiter
+    if itemWeights is None: itemWeights = {}
+
     gateDim = gateset.get_dimension()
     firstRowForTP = _np.zeros(gateDim); firstRowForTP[0] = 1.0
 
@@ -2597,29 +2607,45 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
             #Special case of full frobenius norm
                 # TODO: remove?  but note this is different from the separate cases summed b/c of normalization
             if targetGatesMetric == "frobenius" and targetSpamMetric == "frobenius":
-                return gs.frobeniusdist(targetGateset, None, gateWeight, spamWeight)
+                return gs.frobeniusdist(targetGateset, None, gateWeight,
+                                        spamWeight, itemWeights)
 
             diff = 0
             if targetGatesMetric == "frobenius":
-                diff += gs.frobeniusdist(targetGateset, None, gateWeight, 0.0)
+                diff += gs.frobeniusdist(targetGateset, None, gateWeight,
+                                         0.0, itemWeights)
+
             elif targetGatesMetric == "fidelity":
                 for gateLbl in gs.gates:
-                    diff += gateWeight * (1.0 - _tools.process_fidelity(targetGateset.gates[gateLbl], gs.gates[gateLbl]))
+                    wt = itemWeights.get(gateLbl, gateWeight)
+                    diff += wt * (1.0 - _tools.process_fidelity(
+                            targetGateset.gates[gateLbl], gs.gates[gateLbl]))
+
             elif targetGatesMetric == "tracedist":
                 for gateLbl in gs.gates:
-                    diff += gateWeight * _tools.jtracedist(targetGateset.gates[gateLbl], gs.gates[gateLbl])
+                    wt = itemWeights.get(gateLbl, gateWeight)
+                    diff += gateWeight * _tools.jtracedist(
+                        targetGateset.gates[gateLbl], gs.gates[gateLbl])
             else: raise ValueError("Invalid targetGatesMetric: %s" % targetGatesMetric)
 
             if targetSpamMetric == "frobenius":
-                diff += gs.frobeniusdist(targetGateset, None, 0.0, spamWeight)
+                diff += gs.frobeniusdist(targetGateset, None, 0.0, 
+                                         spamWeight, itemWeights)
+
             elif targetSpamMetric == "fidelity":
                 for spamlabel in gs.get_spam_labels():
-                    diff += spamWeight * (1.0 - _tools.process_fidelity(targetGateset.get_spamgate(spamlabel),
-                                                                        gs.get_spamgate(spamlabel)))
+                    wt = itemWeights.get(spamlabel, spamWeight)
+                    diff += wt * (1.0 - _tools.process_fidelity(
+                            targetGateset.get_spamgate(spamlabel),
+                            gs.get_spamgate(spamlabel)))
+
             elif targetSpamMetric == "tracedist":
                 for spamlabel in gs.get_spam_labels():
-                    diff += spamWeight * _tools.jtracedist(targetGateset.get_spamgate(spamlabel),
-                                                           gs.get_spamgate(spamlabel))
+                    wt = itemWeights.get(spamlabel, spamWeight)
+                    diff += wt * _tools.jtracedist(
+                        targetGateset.get_spamgate(spamlabel),
+                        gs.get_spamgate(spamlabel))
+
             else: raise ValueError("Invalid targetSpamMetric: %s" % targetGatesMetric)
 
             return diff
@@ -2631,10 +2657,11 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
             tpGateset = gateset
             tpGaugeMx = _np.identity( gateDim, 'd' )
         else:
-            _, tpGaugeMx, tpGateset = optimize_gauge(gateset,"TP", maxiter, maxfev, tol,
-                                                       'L-BFGS-B', targetGateset, targetFactor,
-                                                       constrainToTP, constrainToCP, constrainToValidSpam, True,
-                                                       gateWeight, spamWeight, printer-1)
+            _, tpGaugeMx, tpGateset = optimize_gauge(
+                gateset,"TP", maxiter, maxfev, tol,
+                'L-BFGS-B', targetGateset, targetFactor,
+                constrainToTP, constrainToCP, constrainToValidSpam, True,
+                gateWeight, spamWeight, itemWeights, printer-1)
 
         printer.log('', 2)
         printer.log(("--- Gauge Optimization to CPTP w/valid SPAM (%s) ---" % method), 1, indentOffset=-1)
@@ -2715,7 +2742,9 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
             for rhoVec in list(gs.preps.values()):
                 tpPenalty += (rhoVecFirstEl - rhoVec[0])**2
 
-            return tpPenalty + gs.frobeniusdist(targetGateset, None, gateWeight, spamWeight) * targetFactor
+            return tpPenalty + gs.frobeniusdist(targetGateset, None, 
+                                                gateWeight, spamWeight,
+                                                itemWeights) * targetFactor
 
 
     elif toGetTo == "CPTP and target":
@@ -2726,9 +2755,9 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
             tpGaugeMx = _np.identity( gateDim, 'd' )
         else:
             _, tpGaugeMx, tpGateset = optimize_gauge(gateset, "TP and target", maxiter, maxfev, tol,
-                                                       'L-BFGS-B', targetGateset, targetFactor,
-                                                       constrainToTP, constrainToCP, constrainToValidSpam, True,
-                                                       gateWeight, spamWeight, printer-1)
+                                                     'L-BFGS-B', targetGateset, targetFactor,
+                                                     constrainToTP, constrainToCP, constrainToValidSpam, True,
+                                                     gateWeight, spamWeight, itemWeights, printer-1)
 
         printer.log('', 2)
         printer.log(("--- Gauge Optimization to CPTP and target w/valid SPAM (%s) ---" % method), 1, indentOffset=-1)
@@ -2745,7 +2774,8 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
             spamPenalty =  sum( [ _tools.prep_penalty(rhoVec) for rhoVec in list(gs.preps.values()) ] )
             spamPenalty += sum( [ _tools.effect_penalty(EVec)     for EVec   in list(gs.effects.values()) ] )
 
-            targetPenalty = gs.frobeniusdist(targetGateset, None, gateWeight, spamWeight) * targetFactor
+            targetPenalty = targetFactor * gs.frobeniusdist(
+                targetGateset, None, gateWeight, spamWeight, itemWeights) 
 
             penalty = cpPenalty + spamPenalty + targetPenalty
             if penalty > 1e-100: return _np.log10(penalty)

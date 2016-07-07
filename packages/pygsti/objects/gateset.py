@@ -888,7 +888,8 @@ class GateSet(object):
     def _calc(self):
         return _gscalc.GateSetCalculator(self._dim, self.gates, self.preps,
                                          self.effects, self.povm_identity,
-                                         self.spamdefs, self._remainderlabel)
+                                         self.spamdefs, self._remainderlabel,
+                                         self._identitylabel)
 
     def product(self, gatestring, bScale=False):
         """
@@ -1961,7 +1962,8 @@ class GateSet(object):
 
 
     def frobeniusdist(self, otherGateSet, transformMx=None,
-                      gateWeight=1.0, spamWeight=1.0, normalize=True):
+                      gateWeight=1.0, spamWeight=1.0, itemWeights=None,
+                      normalize=True):
         """
         Compute the weighted frobenius norm of the difference between this
         gateset and otherGateSet.  Differences in each corresponding gate
@@ -1988,6 +1990,14 @@ class GateSet(object):
         spamWeight : float, optional
            weighting factor for differences between elements of spam vectors.
 
+        itemWeights : dict, optional
+           Dictionary of weighting factors for individual gates and spam
+           operators. Weights are applied multiplicatively to the squared
+           differences, i.e., (*before* the final square root is taken).  Keys
+           can be gate, state preparation, POVM effect, or spam labels.  Values
+           are floating point numbers.  By default, weights are set by
+           gateWeight and spamWeight.
+
         normalize : bool, optional
            if True (the default), the frobenius difference is defined by the
            sum of weighted squared-differences divided by the number of
@@ -1998,7 +2008,8 @@ class GateSet(object):
         float
         """
         return self._calc().frobeniusdist(otherGateSet._calc(), transformMx,
-                                          gateWeight, spamWeight, normalize)
+                                          gateWeight, spamWeight, itemWeights, 
+                                          normalize)
 
 
     def jtracedist(self, otherGateSet, transformMx=None):

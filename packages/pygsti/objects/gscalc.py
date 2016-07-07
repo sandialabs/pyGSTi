@@ -37,7 +37,7 @@ class GateSetCalculator(object):
     """
 
     def __init__(self, dim, gates, preps, effects, povm_identity, spamdefs,
-                 remainderLabel):
+                 remainderLabel, identityLabel):
         """
         Construct a new GateSetCalculator object.
 
@@ -69,8 +69,12 @@ class GateSetCalculator(object):
         remainderLabel : string
             A string that may appear in the values of spamdefs to designate
             special behavior.
+
+        identityLabel : string
+            The string used to designate the identity POVM vector.
         """
         self._remainderLabel = remainderLabel
+        self._identityLabel = identityLabel
         self.dim = dim
         self.gates = gates
         self.preps = preps
@@ -3339,7 +3343,8 @@ class GateSetCalculator(object):
 
 
     def frobeniusdist(self, otherCalc, transformMx=None,
-                      gateWeight=1.0, spamWeight=1.0, normalize=True):
+                      gateWeight=1.0, spamWeight=1.0, itemWeights=None,
+                      normalize=True):
         """
         Compute the weighted frobenius norm of the difference between two
         gatesets.  Differences in each corresponding gate matrix and spam
@@ -3366,6 +3371,14 @@ class GateSetCalculator(object):
         spamWeight : float, optional
            weighting factor for differences between elements of spam vectors.
 
+        itemWeights : dict, optional
+           Dictionary of weighting factors for individual gates and spam
+           operators. Weights are applied multiplicatively to the squared
+           differences, i.e., (*before* the final square root is taken).  Keys
+           can be gate, state preparation, POVM effect, or spam labels.  Values
+           are floating point numbers.  By default, weights are set by
+           gateWeight and spamWeight.
+
         normalize : bool, optional
            if True (the default), the frobenius difference is defined by the
            sum of weighted squared-differences divided by the number of
@@ -3377,52 +3390,62 @@ class GateSetCalculator(object):
         """
         d = 0; T = transformMx
         nSummands = 0.0
+        if itemWeights is None: itemWeights = {}
+
         if T is not None:
             Ti = _nla.inv(T)
             for gateLabel in self.gates:
-                d += gateWeight * _gt.frobeniusdist2(_np.dot(
+                wt = itemWeights.get(gateLabel, gateWeight)
+                d += wt * _gt.frobeniusdist2(_np.dot(
                     Ti,_np.dot(self.gates[gateLabel],T)),
                     otherCalc.gates[gateLabel] )
-                nSummands += gateWeight * _np.size(self.gates[gateLabel])
+                nSummands += wt * _np.size(self.gates[gateLabel])
 
             for (lbl,rhoV) in self.preps.items():
-                d += spamWeight * _gt.frobeniusdist2(_np.dot(Ti,rhoV),
-                                                     otherCalc.preps[lbl])
-                nSummands += spamWeight * _np.size(rhoV)
+                wt = itemWeights.get(lbl, spamWeight)
+                d += wt * _gt.frobeniusdist2(_np.dot(Ti,rhoV),
+                                             otherCalc.preps[lbl])
+                nSummands += wt * _np.size(rhoV)
 
             for (lbl,Evec) in self.effects.items():
-                d += spamWeight * _gt.frobeniusdist2(_np.dot(
+                wt = itemWeights.get(lbl, spamWeight)
+                d += wt * _gt.frobeniusdist2(_np.dot(
                     _np.transpose(T),Evec),otherCalc.effects[lbl])
-                nSummands += spamWeight * _np.size(Evec)
+                nSummands += wt * _np.size(Evec)
 
             if self.povm_identity is not None:
-                d += spamWeight * _gt.frobeniusdist2(_np.dot(
+                wt = itemWeights.get(self._identityLabel, spamWeight)
+                d += wt * _gt.frobeniusdist2(_np.dot(
                     _np.transpose(T),self.povm_identity),otherCalc.povm_identity)
-                nSummands += spamWeight * _np.size(self.povm_identity)
+                nSummands += wt * _np.size(self.povm_identity)
 
         else:
             for gateLabel in self.gates:
-                d += gateWeight * _gt.frobeniusdist2(self.gates[gateLabel],
-                                                     otherCalc.gates[gateLabel])
-                nSummands += gateWeight * _np.size(self.gates[gateLabel])
+                wt = itemWeights.get(gateLabel, gateWeight)
+                d += wt * _gt.frobeniusdist2(self.gates[gateLabel],
+                                             otherCalc.gates[gateLabel])
+                nSummands += wt * _np.size(self.gates[gateLabel])
 
             for (lbl,rhoV) in self.preps.items():
-                d += spamWeight * _gt.frobeniusdist2(rhoV,
-                                      otherCalc.preps[lbl])
-                nSummands += spamWeight *  _np.size(rhoV)
+                wt = itemWeights.get(lbl, spamWeight)
+                d += wt * _gt.frobeniusdist2(rhoV,
+                                             otherCalc.preps[lbl])
+                nSummands += wt *  _np.size(rhoV)
 
             for (lbl,Evec) in self.effects.items():
-                d += spamWeight * _gt.frobeniusdist2(Evec,otherCalc.effects[lbl])
-                nSummands += spamWeight * _np.size(Evec)
+                wt = itemWeights.get(lbl, spamWeight)
+                d += wt * _gt.frobeniusdist2(Evec,otherCalc.effects[lbl])
+                nSummands += wt * _np.size(Evec)
 
             if self.povm_identity is not None and \
                otherCalc.povm_identity is not None:
-                d += spamWeight * _gt.frobeniusdist2(self.povm_identity,
-                                                     otherCalc.povm_identity)
-                nSummands += spamWeight * _np.size(self.povm_identity)
+                wt = itemWeights.get(self._identityLabel, spamWeight)
+                d += wt * _gt.frobeniusdist2(self.povm_identity,
+                                             otherCalc.povm_identity)
+                nSummands += wt * _np.size(self.povm_identity)
 
         if normalize and nSummands > 0:
-            return _np.sqrt( d / float(nSummands) )
+            return _np.sqrt( d / nSummands )
         else:
             return _np.sqrt(d)
 

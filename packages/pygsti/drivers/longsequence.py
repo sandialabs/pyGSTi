@@ -22,8 +22,9 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                          prepStrsListOrFilename, effectStrsListOrFilename,
                          germsListOrFilename, maxLengths, gateLabels=None,
                          weightsDict=None, fidPairs=None, constrainToTP=True,
-                         gaugeOptToCPTP=False, gaugeOptRatio=0.001,
-                         objective="logl", advancedOptions={}, lsgstLists=None,
+                         gaugeOptToCPTP=False, gaugeOptRatio=0.001, 
+                         gaugeOptItemWeights=None, objective="logl",
+                         advancedOptions={}, lsgstLists=None,
                          truncScheme="whole germ powers", comm=None):
     """
     Perform end-to-end GST analysis using Ls and germs, with L as a maximum
@@ -44,9 +45,10 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
 
     Once computed, the gate set estimates are gauge optimized to the CPTP space
     (if ``gaugeOptToCPTP == True``) and then to the target gate set (using
-    `gaugeOptRatio`). A :class:`~pygsti.report.Results` object is returned,
-    which encapsulates the input and outputs of this GST analysis, and can
-    generate final end-user output such as reports and presentations.
+    `gaugeOptRatio` and `gaugeOptItemWeights`). A :class:`~pygsti.report.Results`
+    object is returned, which encapsulates the input and outputs of this GST
+    analysis, and can generate final end-user output such as reports and
+    presentations.
 
     Parameters
     ----------
@@ -106,6 +108,12 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     gaugeOptRatio : float, optional
         The ratio spamWeight/gateWeight used for gauge optimizing to the target
         gate set.
+
+    gaugeOptItemWeights : dict, optional
+       Dictionary of weighting factors for individual gates and spam operators
+       used during gauge optimization.   Keys can be gate, state preparation,
+       POVM effect, or spam labels.  Values are floating point numbers.  By
+       default, gate weights are set to 1.0 and spam weights to gaugeOptRatio.
     
     objective : {'chi2', 'logl'}, optional
         Specifies which final objective function is used: the chi-squared or
@@ -202,8 +210,9 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         #TODO: instead contract to vSPAM? (this could do more than just alter the 1st element...)
         gs_lgst.set_all_parameterizations("full") #make sure we can do gauge optimization
         minPenalty, _, gs_in_TP = _alg.optimize_gauge(
-            gs_lgst, "TP",  returnAll=True, spamWeight=1.0, gateWeight=1.0,
-            verbosity=3)
+            gs_lgst, "TP",  returnAll=True, spamWeight=1.0,
+            gateWeight=1.0, verbosity=3)
+            #Note: no  itemWeights=gaugeOptItemWeights here (LGST)
 
         if minPenalty > 0:
             gs_in_TP = _alg.contract(gs_in_TP, "TP")
@@ -213,14 +222,20 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         gs_after_gauge_opt = _alg.optimize_gauge(
             gs_in_TP, "target", targetGateset=gs_target, constrainToTP=True,
             spamWeight=1.0, gateWeight=1.0)
+            #Note: no  itemWeights=gaugeOptItemWeights here (LGST)
 
         firstElIdentityVec = _np.zeros( (gate_dim,1) )
         firstElIdentityVec[0] = gate_dim**0.25 # first basis el is assumed = sqrt(gate_dim)-dimensional identity density matrix
         gs_after_gauge_opt.povm_identity = firstElIdentityVec # declare that this basis has the identity as its first element
 
     else: # no TP constraint
-        gs_after_gauge_opt = _alg.optimize_gauge(gs_lgst, "target", targetGateset=gs_target, spamWeight=1.0, gateWeight=1.0)
+        gs_after_gauge_opt = _alg.optimize_gauge(
+            gs_lgst, "target", targetGateset=gs_target, 
+            spamWeight=1.0, gateWeight=1.0)
+            #Note: no  itemWeights=gaugeOptItemWeights here (LGST)
+
         #TODO: set identity vector, or leave as is, which assumes LGST had the right one and contraction doesn't change it ??
+        # Really, should we even allow use of the identity vector when doing a non-TP-constrained optimization?
 
     #Advanced Options can specify further manipulation of LGST seed
     if advancedOptions.get('contractLGSTtoCPTP',False):
@@ -273,6 +288,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         print("\nGauge Optimizing to CPTP..."); _sys.stdout.flush()
         go_gs_lsgst_list = [_alg.optimize_gauge(
                 gs,'CPTP',constrainToTP=constrainToTP) for gs in gs_lsgst_list]
+        #Note: don't set itemWeights in optimize_gauge (doesn't apply to CPTP)
 
         tNxt = _time.time()
         times_list.append( ('Gauge opt to CPTP',tNxt-tRef) ); tRef=tNxt
@@ -291,7 +307,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
             ('gateWeight', 1.0),
             ('spamWeight', gaugeOptRatio),
             ('targetGatesMetric',"frobenius"),
-            ('targetSpamMetric',"frobenius") ])
+            ('targetSpamMetric',"frobenius"),
+            ('itemWeights', gaugeOptItemWeights) ])
 
     for i, gs in enumerate(go_gs_lsgst_list):
         args = go_params.copy()
