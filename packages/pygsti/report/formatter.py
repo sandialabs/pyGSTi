@@ -284,8 +284,9 @@ def _latex_pi_error_bar(t):
 
 # See eb_fmt_template. The only addition is the formatstring '(%s)&pi;'
 def pi_eb_fmt_template(f):
-    return eb_template(Formatter(custom=(_plus_or_minus,    {'f' : f}), formatstring ='(%s)&pi;'),
-                      Formatter(custom=(_first_tuple_elem, {'f' : f}))) 
+    return eb_template(Formatter(custom=(_plus_or_minus,    {'f' : f}), 
+                                 formatstring ='(%s)&pi;'),
+                       Formatter(custom=(_first_tuple_elem, {'f' : f}))) 
 
 # 'errorbars with pi' formatting: display (scalar_value +/- error bar) * pi
 PiErrorBars = { 
@@ -374,7 +375,6 @@ Bold = {
     'latex' : Formatter(formatstring='\\textbf{%s}', custom=latex), 
     'text'  : Formatter(formatstring='**%s**'), 
     'ppt'   : ppt} # No bold in ppt?
-
 
 
 def formatList(items, formatters, fmt, scratchDir=None):
