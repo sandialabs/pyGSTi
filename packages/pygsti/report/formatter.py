@@ -340,16 +340,21 @@ class FigureFormatter():
 
     def __call__(self, figInfo):
         fig, name, W, H = figInfo
-        if extension is not None and scratchDir is not None:
-            fig.save_to(_os.path.join(scratchDir, name + self.extension))
-            if custom is not None:
-                return (formatstring 
-                        % custom[0](W, H, scratchDir, 
-                                    name + self.extension, 
-                                    **custom[1]))
+        if self.extension is not None:
+            if self.scratchDir is None:
+                raise ValueError("Must supply scratch " +
+                                 "directory to FigureFormatter")
+
+            fig.save_to(_os.path.join(self.scratchDir, name + self.extension))
+            if self.custom is not None:
+                return (self.formatstring
+                        % self.custom[0](W, H, self.scratchDir,
+                                         name + self.extension,
+                                         **self.custom[1]))
             else:
                 return self.formatstring % (W, H, self.scratchDir,
                                             name + self.extension)
+
         elif self.custom is not None:
             return self.custom[0](figInfo, **self.custom[1])
         else:
@@ -379,9 +384,16 @@ def formatList(items, formatters, fmt, scratchDir=None):
         if formatter is not None:
             # If the formatter requires a scratch directory to do its job, give
             # it.
-            if hasattr(formatter, 'scratchDir'):
-                formatter.scratchDir = scratchDir
+            if hasattr(formatter[fmt], 'scratchDir'):
+                formatter[fmt].scratchDir = scratchDir
+            formatted_item = formatter[fmt](item)
+            if formatted_item is None:
+                raise ValueError("Formatter " + str(type(formatter[fmt]))
+                                 + " returned None for item = " + str(item))
             formatted_items.append( formatter[fmt](item) )
         else:
+            if item is None:
+                raise ValueError("Unformatted None in formatList")
             formatted_items.append( item )
+
     return formatted_items
