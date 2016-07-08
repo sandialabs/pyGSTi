@@ -401,7 +401,7 @@ def get_spam_vs_target_table(gateset, targetGateset,
             rowData = [l] + [ qtys['%s prep %s' % (l,qty)].get_value_and_err_bar() for qty in qtyNames ]
         table.addrow(rowData, formatters)
 
-    formatters = [ _formatter.Effects ] + [ _formatter.ErrorBars ]*len(qtyNames)
+    formatters = [ _tf.Effect ] + [ _tf.ErrorBars ]*len(qtyNames)
     qtys_to_compute = [ '%s effect %s' % (l,qty) for qty in qtyNames for l in effectLabels ]
     qtys = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
                                             confidenceRegionInfo)

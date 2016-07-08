@@ -482,7 +482,8 @@ class TestReport(ReportTestCase):
             {'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
              'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
              'weights': None, 'defaultDirectory': "../temp_test_files",
-             'defaultBasename': "MyDefaultReportName" } )
+             'defaultBasename': "MyDefaultReportName",
+             'hessianProjection': 'std'} )
 
         results.create_full_report_pdf(
             filename="../temp_test_files/singleReport.pdf")
@@ -512,7 +513,8 @@ class TestReport(ReportTestCase):
             {'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
              'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
              'weights': None, 'defaultDirectory': "../temp_test_files",
-             'defaultBasename': "MyDefaultReportName" } )
+             'defaultBasename': "MyDefaultReportName",
+             'hessianProjection': "std"} )
         results2.parameters['memLimit'] = 10*(1024)**2 #10MB
         results2.create_brief_report_pdf(confidenceLevel=95,
             filename="../temp_test_files/singleBriefMemLimit2.pdf")
