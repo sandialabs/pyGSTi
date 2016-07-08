@@ -1324,15 +1324,16 @@ class Results(object):
 
             #Negative confidence levels ==> non-Markovian error bars
             if confidenceLevel < 0:
-                confidenceLevel = -confidenceLevel
+                actual_confidenceLevel = -confidenceLevel
                 regionType = "non-markovian"
             else:
+                actual_confidenceLevel = confidenceLevel
                 regionType = "std"
 
             if self.parameters['objective'] == "logl":
                 cr = _generation.get_logl_confidence_region(
                     self.gatesets['final estimate'], self.dataset,
-                    confidenceLevel,
+                    actual_confidenceLevel,
                     self.gatestring_lists['final'],
                     self.parameters['probClipInterval'],
                     self.parameters['minProbClip'],
@@ -1343,7 +1344,7 @@ class Results(object):
             elif self.parameters['objective'] == "chi2":
                 cr = _generation.get_chi2_confidence_region(
                     self.gatesets['final estimate'], self.dataset,
-                    confidenceLevel,
+                    actual_confidenceLevel,
                     self.gatestring_lists['final'],
                     self.parameters['probClipInterval'],
                     self.parameters['minProbClipForWeighting'],

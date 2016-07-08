@@ -1,0 +1,4 @@
+#!/bin/bash
+
+branch_name="$(git symbolic-ref HEAD 2>/dev/null)" || branch_name="(unnamed branch)"
+echo "$branch_name"

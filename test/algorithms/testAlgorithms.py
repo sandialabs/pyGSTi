@@ -159,7 +159,7 @@ class TestAlgorithmMethods(AlgorithmTestCase):
             list(std.gs_target.gates.keys()), 3)
 
         germsToTest2 = pygsti.construction.list_all_gatestrings_without_powers_and_cycles(
-            list(std.gs_target.gates.keys()), 4)
+            list(std.gs_target.gates.keys()), 4) + std.germs
 
         finalGerms = pygsti.alg.optimize_integer_germs_slack(
             self.gs_target_noisy, germsToTest, initialWeights=None,
