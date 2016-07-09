@@ -23,9 +23,10 @@ from . import spamvec as _sv
 from . import labeldicts as _ld
 from . import gscalc as _gscalc
 
-# Tolerace for matrix_rank when finding rank of a *normalized* projection matrix.
-#  This is a legitimate tolerace since a normalized projection matrix should have
-#  just 0 and 1 eigenvalues, and thus a tolerace << 1.0 will work well.
+# Tolerace for matrix_rank when finding rank of a *normalized* projection
+# matrix.  This is a legitimate tolerace since a normalized projection matrix
+# should have just 0 and 1 eigenvalues, and thus a tolerace << 1.0 will work
+# well.
 P_RANK_TOL = 1e-7
 
 
@@ -2411,7 +2412,7 @@ class GateSet(object):
         return newGateset
 
 
-    def randomize_with_unitary(self,scale,seed=None):
+    def randomize_with_unitary(self, scale, seed=None):
         """
         Apply a random unitary to each element of a gateset, and return the
         result, without modifying the original (this) gateset. This method
@@ -2422,7 +2423,8 @@ class GateSet(object):
         Parameters
         ----------
         scale : float
-          maximum element magnitude in the generator of each random unitary transform.
+          maximum element magnitude in the generator of each random unitary
+          transform.
 
         seed : int, optional
           if not None, seed numpy's random number generator with this value
@@ -2439,7 +2441,8 @@ class GateSet(object):
         gate_dim = gs_pauli.get_dimension()
         if gate_dim == 4: unitary_dim = 2
         elif gate_dim == 16: unitary_dim = 4
-        else: raise ValueError("Gateset dimension must be either 4 (single-qubit) or 16 (two-qubit)")
+        else: raise ValueError("Gateset dimension must be either 4"
+                               " (single-qubit) or 16 (two-qubit)")
 
         for gateLabel in list(gs_pauli.gates.keys()):
             randMat = scale * (rndm.randn(unitary_dim,unitary_dim) \
