@@ -1189,12 +1189,12 @@ class GateSetCalculator(object):
 
         #evaluate gate strings using tree (skip over the zero and single-gate-strings)
         #cnt = 0
-        for (i,tup) in enumerate(evalTree[nZeroAndSingleStrs:],start=nZeroAndSingleStrs):
+        for (i, tup) in enumerate(evalTree[nZeroAndSingleStrs:],start=nZeroAndSingleStrs):
 
             # combine iLeft + iRight => i
             # LEXICOGRAPHICAL VS MATRIX ORDER Note: we reverse iLeft <=> iRight from evalTree because
             # (iRight,iLeft,iFinal) = tup implies gatestring[i] = gatestring[iLeft] + gatestring[iRight], but we want:
-            (iRight,iLeft,iFinal) = tup   # since then matrixOf(gatestring[i]) = matrixOf(gatestring[iLeft]) * matrixOf(gatestring[iRight])
+            (iRight,iLeft,_) = tup   # since then matrixOf(gatestring[i]) = matrixOf(gatestring[iLeft]) * matrixOf(gatestring[iRight])
             L,R = prodCache[iLeft], prodCache[iRight]
             prodCache[i] = _np.dot(L,R)
             scaleCache[i] = scaleCache[iLeft] + scaleCache[iRight]
@@ -1223,7 +1223,7 @@ class GateSetCalculator(object):
 
         #tStart = _time.time() #TIMER!!!
         dim = self.dim
-        nGateStrings = evalTree.num_final_strings()
+        #nGateStrings = evalTree.num_final_strings()
         nGateDerivCols = self.tot_gate_params if (wrtFilter is None) else len(wrtFilter)
         deriv_shape = (nGateDerivCols, dim, dim)
         cacheSize = len(evalTree)
@@ -1241,7 +1241,7 @@ class GateSetCalculator(object):
                 if evalTree.is_split():
                     #Parallelize using *all* subtrees (either we use
                     #  all of them or none of them)
-                    trees_to_use = evalTree.get_sub_trees()
+                    #trees_to_use = evalTree.get_sub_trees()
                     raise NotImplementedError("Need to finish implementing this case!")
                      
                     # Commented out until implementation
@@ -1272,7 +1272,7 @@ class GateSetCalculator(object):
 
             # Use comm to distribute columns
             allDerivColIndices = list(range(nGateDerivCols)) if (wrtFilter is None) else wrtFilter
-            myDerivColIndices, derivColOwners, mySubComm = \
+            myDerivColIndices, _, mySubComm = \
                 self._distribute_indices(allDerivColIndices, comm)
             #print "MPI: _compute_dproduct_cache over %d cols (%s) (rank %d computing %s)" \
             #    % (nGateDerivCols, str(allDerivColIndices), comm.Get_rank(), str(myDerivColIndices))
@@ -1325,7 +1325,7 @@ class GateSetCalculator(object):
             # combine iLeft + iRight => i
             # LEXICOGRAPHICAL VS MATRIX ORDER Note: we reverse iLeft <=> iRight from evalTree because
             # (iRight,iLeft,iFinal) = tup implies gatestring[i] = gatestring[iLeft] + gatestring[iRight], but we want:
-            (iRight,iLeft,iFinal) = tup   # since then matrixOf(gatestring[i]) = matrixOf(gatestring[iLeft]) * matrixOf(gatestring[iRight])
+            (iRight,iLeft,_) = tup   # since then matrixOf(gatestring[i]) = matrixOf(gatestring[iLeft]) * matrixOf(gatestring[iRight])
             L,R = prodCache[iLeft], prodCache[iRight]
             dL,dR = dProdCache[iLeft], dProdCache[iRight]
             dProdCache[i] = _np.dot(dL, R) + \
@@ -1353,14 +1353,14 @@ class GateSetCalculator(object):
         from using a split tree.
         """
 
-        tStart = _time.time() #TIMER!!!
+        ###tStart = _time.time() #TIMER!!!
 
         dim = self.dim
 
-        nGateStrings = evalTree.num_final_strings() #len(gatestring_list)
+        #nGateStrings = evalTree.num_final_strings() #len(gatestring_list)
         nGateDerivCols1 = self.tot_gate_params
         nGateDerivCols2 = nGateDerivCols1 if (wrtFilter is None) else len(wrtFilter)
-        deriv_shape = (nGateDerivCols1, dim, dim)
+        #deriv_shape = (nGateDerivCols1, dim, dim)
         hessn_shape = (nGateDerivCols1, nGateDerivCols2, dim, dim)
         cacheSize = len(evalTree)
 
@@ -1377,7 +1377,7 @@ class GateSetCalculator(object):
                 if evalTree.is_split():
                 #Parallelize using *all* subtrees (either we use
                 #  all of them or none of them)
-                    trees_to_use = evalTree.get_sub_trees()
+                    #trees_to_use = evalTree.get_sub_trees()
                     raise NotImplementedError("Need to finish implementing this case!")
 
                     # Commented out until implementation
@@ -1410,7 +1410,7 @@ class GateSetCalculator(object):
 
             # Use comm to distribute columns
             allDeriv2ColIndices = list(range(nGateDerivCols2)) if (wrtFilter is None) else wrtFilter
-            myDerivColIndices, derivColOwners, mySubComm = \
+            myDerivColIndices, _, mySubComm = \
                 self._distribute_indices(allDeriv2ColIndices, comm)
             #print "MPI: _compute_hproduct_cache over %d cols (rank %d computing %s)" \
             #    % (nGateDerivCols2, comm.Get_rank(), str(myDerivColIndices))
@@ -1436,7 +1436,7 @@ class GateSetCalculator(object):
         hProdCache = _np.zeros( (cacheSize,) + hessn_shape )
 
         #First element of cache are given by evalTree's initial single- or zero-gate labels
-        for i,gateLabel in enumerate(evalTree.get_init_labels()):
+        for i, _ in enumerate(evalTree.get_init_labels()):
             hProdCache[i] = _np.zeros( hessn_shape )
             #assume all gate elements are at most linear in params,
             # all hessiansl for single- or zero-gate strings are zero.
@@ -1473,7 +1473,7 @@ class GateSetCalculator(object):
             # combine iLeft + iRight => i
             # LEXICOGRAPHICAL VS MATRIX ORDER Note: we reverse iLeft <=> iRight from evalTree because
             # (iRight,iLeft,iFinal) = tup implies gatestring[i] = gatestring[iLeft] + gatestring[iRight], but we want:
-            (iRight,iLeft,iFinal) = tup   # since then matrixOf(gatestring[i]) = matrixOf(gatestring[iLeft]) * matrixOf(gatestring[iRight])
+            (iRight,iLeft,_) = tup   # since then matrixOf(gatestring[i]) = matrixOf(gatestring[iLeft]) * matrixOf(gatestring[iRight])
             L,R = prodCache[iLeft], prodCache[iRight]
             dL,dR = dProdCache[iLeft], dProdCache[iRight]
             hL,hR = hProdCache[iLeft], hProdCache[iRight]

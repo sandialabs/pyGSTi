@@ -528,7 +528,7 @@ class DataSet(object):
 
 
     def __getstate__(self):
-        toPickle = { 'gsIndexKeys': list(map(_gs.CompressedGateString, list(self.gsIndex.keys()))),
+        toPickle = { 'gsIndexKeys': [_gs.CompressedGateString(key) for key in self.gsIndex.keys()], #list(map(_gs.CompressedGateString, list(self.gsIndex.keys()))),
                      'gsIndexVals': list(self.gsIndex.values()),
                      'slIndex': self.slIndex,
                      'bStatic': self.bStatic,
@@ -558,7 +558,7 @@ class DataSet(object):
         None
         """
 
-        toPickle = { 'gsIndexKeys': list(map(_gs.CompressedGateString, list(self.gsIndex.keys()))) if self.gsIndex else [],
+        toPickle = { 'gsIndexKeys': [_gs.CompressedGateString(key) for key in (self.gsIndex.keys() if self.gsIndex else [])],  #list(map(_gs.CompressedGateString, list(self.gsIndex.keys()))) if self.gsIndex else [],
                      'gsIndexVals': list(self.gsIndex.values()) if self.gsIndex else [],
                      'slIndex': self.slIndex,
                      'bStatic': self.bStatic } #Don't pickle counts numpy data b/c it's inefficient
@@ -626,7 +626,7 @@ class DataSet(object):
             self.counts = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
         else:
             self.counts = []
-            for i in range(state_dict['nRows']):
+            for i in range(state_dict['nRows']): #pylint: disable=unused-variable
                 self.counts.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
         if bOpen: f.close()
 
