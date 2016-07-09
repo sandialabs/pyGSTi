@@ -7,15 +7,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Functions for selecting a complete set of fiducials for a GST analysis."""
 
 import numpy     as _np
-import sys       as _sys
-import os
 import scipy
-import pickle
-import subprocess
 from .. import objects as _objs
-
-# Get the version of python as soon as this file is run OR imported
-pythonVersion = 'python3' if _sys.version_info[0] == 3 else 'python'
 
 #def bool_list_to_ind_list(boolList):
 #    output = _np.array([])
@@ -209,11 +202,10 @@ def test_fiducial_list(gateset,fidList,prepOrMeas,scoreFunc='all',returnAll=Fals
         else:
             return testResult
 
-def write_fixed_hamming_weight_code(n,k):
-    """
-    This is an auxiliary function (probably to be deprecated soon) for the fixedNum
-    mode of optimize_integer_fiducials_slack.  It generates a string that, when executed,
-    creates an exhaustive array of binary vectors of fixed length and Hamming weight.
+
+def build_bitvec_mx(n, k):
+    '''
+    Creates an exhaustive array of binary vectors of fixed length and Hamming weight.
 
     Parameters
     ----------
@@ -224,31 +216,54 @@ def write_fixed_hamming_weight_code(n,k):
 
     Returns
     ----------
-    code : str
-        A string that is to be written to disk, run, then deleted.  When executed, the
-        resulting file will write to disk (as a pickle object) the array bitVecMat;
+    bitVecMx : _np array
         this is the array of binary vectors of a fixed length n and fixed Hamming weight k.
-    """
-    assert type(n) is int
-    assert type(k) is int
-    code = 'import numpy as _np\n'
-    code += 'import scipy.special\n'
-    code += 'import pickle\n'
-    code += 'bitVecMat = _np.zeros([int(scipy.special.binom('+str(n)+','+str(k)+')),'+str(n)+'])\n'
-    code += 'counter = 0\n'
-    code += 'for bit_loc_0 in range('+str(n)+'-'+str(k)+'+1):\n'
-    for sub_k in range(1,k):
-        code += sub_k*'\t'+'for bit_loc_'+str(sub_k)+' in range(1+bit_loc_'+str(sub_k-1)+','+str(n)+'-'+str(k)+'+'+str(sub_k)+'+1):\n'
-    index_string = '[['
-    for sub_k in range(k):
-        index_string += 'bit_loc_'+str(sub_k)+','
-    index_string += ']]'
-    code += (k)*'\t'+'bitVecMat[counter]'+index_string+'=1\n'
-    code += (k)*'\t'+'counter += 1\n'
-    #fiducialselection_temp_pkl.pkl
-    code += 'with open("fiducialselection_temp_pkl.pkl", "wb") as picklefile:\n'
-    code += '    pickle.dump(bitVecMat, picklefile)\n'
-    return code
+    '''
+    bitVecMx = _np.zeros([int(scipy.special.binom(n, k)), n])
+    diff = n - k
+
+    # Recursive function for populating a matrix of arbitrary size
+    def build_mx(previous_bit_locs, i, counter):
+        '''
+        Allows arbitrary nesting of for loops
+
+        Parameters
+        ----------
+        previous_bit_locs : tuple
+            current loop contents, ex:
+            for i in range(10):
+                for j in range(10):
+                    (i, j)
+        i : int
+            Loop depth
+        counter : int
+            tracks which fields of mx have been already set
+        
+        Returns
+        ----------
+        counter : int
+            for updating the counter one loop above the current one
+        '''
+        if i == 0:
+            bitVecMx[counter][[previous_bit_locs]] = 1
+            counter += 1
+        else:
+            subK = k - i
+            # Recursive definition allowing arbitrary size
+            last_bit_loc = previous_bit_locs[-1] # More explicit?
+            for bit_loc in range(1+last_bit_loc, diff+subK+1):
+                current_bit_locs = previous_bit_locs + (bit_loc,)
+
+                counter = build_mx(current_bit_locs, i - 1, counter)
+
+        # An alternative to shared state
+        return counter
+
+    counter = 0
+    for bit_loc_0 in range(diff+1):
+        counter = build_mx((bit_loc_0,), k - 1, counter) # Do subK additional iterations
+
+    return bitVecMx
 
 def optimize_integer_fiducials_slack(gateset, fidList,
                               prepOrMeas = None,
@@ -435,18 +450,9 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         printer.warning("If this is very large, you may wish to abort.")
 #        print "Num bits:", numBits
 #        print "Num Fid Options:", hammingWeight
-        code = write_fixed_hamming_weight_code(numBits, hammingWeight)
-        with open('fiducialselection_temp_script.py','w') as code_file:
-            code_file.writelines(code)
-        # Important that we run the script with the right version of python
-        scriptoutput = subprocess.check_output([pythonVersion,
-                             'fiducialselection_temp_script.py'])
-        with open('fidscript.out', 'wb') as fidscriptout:
-            fidscriptout.write(scriptoutput)
-        with open('fiducialselection_temp_pkl.pkl','rb') as inputfile:
-            bitVecMat = pickle.load(inputfile)
-        os.remove('fiducialselection_temp_script.py')
-        os.remove('fiducialselection_temp_pkl.pkl')
+        # Now a non auxillary function:
+        bitVecMat = build_bitvec_mx(numBits, hammingWeight)
+
         if forceEmpty:
             bitVecMat = _np.concatenate((_np.array([[1]*int(numFidLists)]).T,bitVecMat),axis=1)
         best_score = _np.inf
