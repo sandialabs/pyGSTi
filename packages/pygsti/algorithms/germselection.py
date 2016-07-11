@@ -661,13 +661,13 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                                   suffix="score=%g, nGerms=%d" % (score, L1))
 
             bFoundBetterNeighbor = False
-            for neighborNum, neighbor in enumerate(get_neighbors(weights)):
+            for neighbor in get_neighbors(weights):
                 # if force_singletons:
                 #     if _np.count_nonzeros(neighbor[:numGates]) != numGates
                 #         continue
                 neighborScoreList = []
-                for gateset_num, gateset in enumerate(gatesetList):
-                    if (gateset_num,tuple(neighbor)) not in scoreD_keys:
+                for gateset_num in range(len(gatesetList)):
+                    if (gateset_num, tuple(neighbor)) not in scoreD_keys:
                         neighborL1 = sum(neighbor)
                         neighborScoreList.append(compute_score(neighbor,
                                                                gateset_num))
@@ -676,7 +676,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                         neighborScoreList.append(scoreD[gateset_num,
                                                         tuple(neighbor)])
 
-                neighborScore = _np.max(neighborScoreList)#Take worst case.
+                neighborScore = _np.max(neighborScoreList)  # Take worst case.
                 # Move if we've found better position; if we've relaxed, we
                 # only move when L1 is improved.
                 if neighborScore <= score and (neighborL1 < L1 or
@@ -685,7 +685,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                     bFoundBetterNeighbor = True
 
                     printer.log("Found better neighbor: "
-                                + "nGerms = %d score = %g" % (L1,score), 2)
+                                "nGerms = %d score = %g" % (L1,score), 2)
 
             if not bFoundBetterNeighbor: # Time to relax our search.
                 # From now on, don't allow increasing weight L1
@@ -705,7 +705,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                 # now...
                 score += slack 
 
-                for neighborNum, neighbor in enumerate(get_neighbors(weights)):
+                for neighbor in get_neighbors(weights):
                     scoreList = [scoreD[gateset_num,tuple(neighbor)]
                                  for gateset_num in range(len(gatesetList))]
                     maxScore = _np.max(scoreList)
