@@ -143,7 +143,7 @@ def get_gateset_spam_parameters_table(gateset, confidenceRegionInfo=None):
 
     for ii,prepLabel in enumerate(gateset.get_prep_labels()): # ii enumerates rhoLabels to index DPs
         rowData = [prepLabel]
-        for jj,effectLabel in enumerate(gateset.get_effect_labels()): # jj enumerates eLabels to index DPs
+        for jj,_ in enumerate(gateset.get_effect_labels()): # jj enumerates eLabels to index DPs
             if confidenceRegionInfo is None:
                 rowData.append((DPs[ii,jj],None))
             else:

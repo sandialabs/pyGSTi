@@ -125,7 +125,7 @@ class OrderedGateDict(PrefixOrderedDict):
         else:
             try:
                 d1 = len(M)
-                d2 = len(M[0])
+                d2 = len(M[0]) #pylint: disable=unused-variable
             except:
                 raise ValueError("%s doesn't look like a 2D array/list" % M)
             if any([len(row) != d1 for row in M]):

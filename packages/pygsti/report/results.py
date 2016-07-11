@@ -1327,6 +1327,7 @@ class Results(object):
                 actual_confidenceLevel = -confidenceLevel
                 regionType = "non-markovian"
             else:
+                actual_confidenceLevel = confidenceLevel
                 regionType = "std"
 
             if self.parameters['objective'] == "logl":

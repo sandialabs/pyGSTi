@@ -130,9 +130,9 @@ class MultiDataSet(object):
         if countsDict is not None:
             self.countsDict = _OrderedDict( [ (name,counts) for name,counts in countsDict.items() ] ) #copy OrderedDict but share counts arrays
             if self.gsIndex:  #Note: tests if not none and nonempty
-                minIndex = min(self.gsIndex.values())
+                #minIndex = min(self.gsIndex.values())
                 maxIndex = max(self.gsIndex.values())
-                for dsName,counts in self.countsDict.items():
+                for _,counts in self.countsDict.items():
                     assert( counts.shape[0] > maxIndex and counts.shape[1] == len(self.slIndex) )
         else:
             self.countsDict = _OrderedDict()
@@ -330,7 +330,7 @@ class MultiDataSet(object):
             f = fileOrFilename
 
         _pickle.dump(toPickle,f)
-        for key,data in self.countsDict.items():
+        for _,data in self.countsDict.items():
             _np.save(f, data)
         if bOpen: f.close()
 
