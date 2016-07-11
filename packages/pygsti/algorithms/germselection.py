@@ -15,8 +15,9 @@ import warnings as _warnings
 from .. import objects as _objs
 
 def num_non_spam_gauge_params(gateset):
-    """Returns number of non-gauge parameters in a GateSet, not including SPAM
-    parameters"""
+    """Return number of non-gauge, non-SPAM parameters in a GateSet.
+
+    """
     gateset = gateset.copy()
     for prepLabel in gateset.preps.keys():
         del gateset.preps[prepLabel]
@@ -30,7 +31,9 @@ def num_non_spam_gauge_params(gateset):
 # Recall vectorizing identity (when vec(.) concats rows as flatten does):
 #     vec( A * X * B ) = A tensor B^T * vec( X )
 def _SuperOpForPerfectTwirl(wrt, eps):
-    """ Return super operator for doing a perfect twirl with respect to wrt """
+    """Return super operator for doing a perfect twirl with respect to wrt.
+
+    """
     assert(wrt.shape[0] == wrt.shape[1])    # only square matrices allowed
     dim = wrt.shape[0]
     SuperOp = _np.zeros( (dim**2, dim**2), 'complex' )
@@ -109,12 +112,12 @@ def list_score(input_array, scoreFunc='all'):
 
     scoreFunc : {'all', 'worst'}, optional (default is 'all')
         Sets the objective function for scoring a germ set.  If 'all', score is
-        `l1Penalty` * (number of germs) + sum(1/Eigenvalues of score matrix).  If
-        'worst', score is `l1Penalty` * (number of germs) + 1/min(Eigenvalues of
-        score matrix).  (Also note: because we are using a simple integer
-        program to choose germs, it is possible to get stuck in a local
-        minimum, and choosing one or the other objective function can help
-        avoid such minima in different circumstances.)
+        `l1Penalty` * (number of germs) + sum(1/Eigenvalues of score matrix).
+        If 'worst', score is `l1Penalty` * (number of germs) +
+        1/min(Eigenvalues of score matrix).  (Also note: because we are using a
+        simple integer program to choose germs, it is possible to get stuck in
+        a local minimum, and choosing one or the other objective function can
+        help avoid such minima in different circumstances.)
 
     Returns
     -------
@@ -127,8 +130,9 @@ def list_score(input_array, scoreFunc='all'):
     elif scoreFunc == 'worst':
         score = 1. / min(_np.abs(input_array))
     else:
-        raise ValueError("'%s' is not a valid value for scoreFunc. " % scoreFunc
-                         + "Either 'all' or 'worst' must be specified!")
+        raise ValueError("'%s' is not a valid value for scoreFunc.  "
+                         "Either 'all' or 'worst' must be specified!"
+                         % scoreFunc)
 
     return score
 
@@ -200,17 +204,23 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False):
     gate_dim = gateset.get_dimension()
     fd = gate_dim**2 # flattened gate dimension
 
-    ret = _np.empty( (len(gatestrings), fd, dProds.shape[1]), 'complex')
+    ret = _np.empty((len(gatestrings), fd, dProds.shape[1]), 'complex')
     for i in range(len(gatestrings)):
-        twirler = _SuperOpForPerfectTwirl(prods[i], eps) # flattened_gate_dim x flattened_gate_dim
-        ret[i] = _np.dot( twirler, dProds[i*fd:(i+1)*fd] ) # flattened_gate_dim x vec_gateset_dim
+
+        # flattened_gate_dim x flattened_gate_dim
+        twirler = _SuperOpForPerfectTwirl(prods[i], eps)
+
+        # flattened_gate_dim x vec_gateset_dim
+        ret[i] = _np.dot(twirler, dProds[i*fd:(i+1)*fd])
 
     if check:
         for i in range(len(gatestrings)):
             chk_ret = twirled_deriv(gateset, gatestrings[i], eps)
             if _nla.norm(ret[i] - chk_ret) > 1e-6:
-                _warnings.warn( "bulk twirled derive norm mismatch = %g - %g = %g" % \
-                   (_nla.norm(ret[i]), _nla.norm(chk_ret), _nla.norm(ret[i] - chk_ret)) )
+                _warnings.warn("bulk twirled derive norm mismatch = "
+                               "%g - %g = %g"
+                               % (_nla.norm(ret[i]), _nla.norm(chk_ret),
+                                  _nla.norm(ret[i] - chk_ret)))
 
     return ret # nGateStrings x flattened_gate_dim x vec_gateset_dim
 
@@ -291,8 +301,6 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
     bSuccess = bool(list_score(observableEigenvals, 'worst') < 1/tol)
 
     return (bSuccess, sortedEigenvals) if returnSpectrum else bSuccess
-
-
 
 
 def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
