@@ -142,7 +142,7 @@ class SPAMVec(object):
             vector = _np.asarray(V).copy()
         else:
             try:
-                dim = len(V)
+                dim = len(V) #pylint: disable=unused-variable
             except:
                 raise ValueError("%s doesn't look like an array/list" % V)
             try:

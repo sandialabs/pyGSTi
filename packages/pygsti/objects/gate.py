@@ -264,7 +264,7 @@ class Gate(object):
         else:
             try:
                 dim = len(M)
-                d2 = len(M[0])
+                d2 = len(M[0]) #pylint : disable=unused-variable
             except:
                 raise ValueError("%s doesn't look like a 2D array/list" % M)
             if any([len(row) != dim for row in M]):
@@ -970,7 +970,7 @@ class LinearlyParameterizedGate(Gate):
         numpy array
             Array of derivatives, shape == (dimension^2, num_params)
         """
-        k = 0
+        #k = 0
         derivMx = _np.zeros( (self.dim**2, self.numParams), 'd' )
         for (i,j),terms in list(self.elementExpressions.items()):
             vec_ij = i*self.dim + j

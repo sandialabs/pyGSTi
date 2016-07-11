@@ -771,7 +771,7 @@ class GateSet(object):
         M = _np.concatenate( (dP,dG), axis=1 )
 
         def nullspace(m, tol=1e-7): #get the nullspace of a matrix
-            u,s,vh = _np.linalg.svd(m)
+            _,s,vh = _np.linalg.svd(m)
             rank = (s > tol).sum()
             return vh[rank:].T.copy()
 

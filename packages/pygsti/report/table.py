@@ -145,7 +145,7 @@ class ReportTable(object):
             lines = str(x).split('\n')
             return lines[i] if i < len(lines) else ""
 
-        data = self.render('text')
+        self.render('text')
         col_widths = [0]*len(self._columnNames)
         row_lines = [0]*len(self._rows)
         header_lines = 0
@@ -153,7 +153,7 @@ class ReportTable(object):
         for i,nm in enumerate(self._columnNames):
             col_widths[i] = max( strlen(nm), col_widths[i] )
             header_lines = max(header_lines, nlines(nm))
-        for k,(d,f) in enumerate(self._rows):
+        for k,(d,_) in enumerate(self._rows):
             for i,el in enumerate(d):
                 col_widths[i] = max( strlen(el), col_widths[i] )
                 row_lines[k] = max(row_lines[k], nlines(el))
@@ -170,7 +170,7 @@ class ReportTable(object):
             s += "|\n"
         s += row_separator
 
-        for rowIndex,(rowEls,rowFormatters) in enumerate(self._rows):
+        for rowIndex,(rowEls,_) in enumerate(self._rows):
             for k in range(row_lines[rowIndex]):
                 for i,el in enumerate(rowEls):
                     s += "|  %*s  " % (col_widths[i],getline(el,k))
@@ -188,7 +188,7 @@ class ReportTable(object):
 
     def __getitem__(self, key):
         """Indexes the first column rowdata"""
-        for row_data,formatters in self._rows:
+        for row_data,_ in self._rows:
             if len(row_data) > 0 and row_data[0] == key:
                 return _OrderedDict( zip(self._columnNames,row_data) )
         raise KeyError("%s not found as a first-column value" % key)
@@ -213,7 +213,7 @@ class ReportTable(object):
         if key is not None:
             if index is not None:
                 raise ValueError("Cannot specify *both* key and index")
-            for row_data,formatters in self._rows:
+            for row_data,_ in self._rows:
                 if len(row_data) > 0 and row_data[0] == key:
                     return row_data
             raise KeyError("%s not found as a first-column value" % key)

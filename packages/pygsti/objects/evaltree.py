@@ -27,6 +27,7 @@ class EvalTree(list):
         self.finalList = []
         self.myFinalToParentFinalMap = None
         self.subTrees = []
+        self.parentIndexMap = None          # Was previously initialized elsewhere
         super(EvalTree, self).__init__(items)
 
     def initialize(self, gateLabels, gatestring_list):
@@ -87,7 +88,7 @@ class EvalTree(list):
             self.append( (None,None,-1) ) #iLeft = iRight = None for always-evaluated zero string
 
         #avgBiteSize = 0
-        useCounts = {}
+        #useCounts = {}
         for (k,gateString) in enumerate(gatestring_list):
             L = len(gateString)
             if L == 0:
@@ -383,7 +384,7 @@ class EvalTree(list):
                 sortedIntersects = sorted(iter(intersectSizes.items()),
                                             key=lambda x: x[1])
                 iStartingTrees = []
-                for (i,j),intSize in sortedIntersects:
+                for (i,j),_ in sortedIntersects:
                     if i in iStartingTrees or j in iStartingTrees: continue
                     iStartingTrees.append(i)
                     if len(iStartingTrees) == numSubTrees:  break
@@ -524,7 +525,7 @@ class EvalTree(list):
 
     def _walkSubTree(self,indx,out):
         if indx not in out: out.append(indx)
-        (iLeft,iRight,iFinal) = self[indx]
+        (iLeft,iRight,_) = self[indx]
         if iLeft is not None: self._walkSubTree(iLeft,out)
         if iRight is not None: self._walkSubTree(iRight,out)
 
@@ -567,7 +568,7 @@ class EvalTree(list):
             lastOccurrance = [-1] * len(self)
             nRefs = [-1] * len(self)
             for i,tup in enumerate(self):
-                iLeft,iRight,iFinal = tup
+                iLeft,iRight,_ = tup
 
                 if iLeft is not None:
                     nRefs[iLeft] += 1
@@ -617,7 +618,7 @@ class EvalTree(list):
             xs.extend( list(sorted(subTree) + [None]) )
 
             for k,t in enumerate(self):
-                (iLeft,iRight,iFinal) = t
+                (iLeft,iRight,_) = t
                 if i in (iLeft,iRight):
                     lastIndxSeen[i] = k
 
