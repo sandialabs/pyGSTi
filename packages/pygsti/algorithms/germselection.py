@@ -531,11 +531,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
-    # Remove any SPAM vectors from gateset since we only want
-    # to consider the set of *gate* parameters for amplification
-    # and this makes sure our parameter counting is correct
-
-    if not isinstance(gatesetList,list):
+    if not isinstance(gatesetList, list):
         gatesetList = [gatesetList]
 
     if (fixedSlack and slackFrac) or (not fixedSlack and not slackFrac):
@@ -566,9 +562,6 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         initial_test = test_germ_list_infl(gateset, germsList,
                                            scoreFunc=scoreFunc,
                                            threshold=threshold)
-#        if initial_test:
-#            print "Complete initial fiducial set succeeds."
-#            print "Now searching for best fiducial set."
         if not initial_test:
             printer.log("Complete initial germ set FAILS on gateset "
                         + str(gatesetnum) + ".")
@@ -582,11 +575,18 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
 
     num_gatesets = len(gatesetList)
 
-    gateset0 = gatesetList[0].copy()
-    for prepLabel in gateset0.preps.keys():  del gateset0.preps[prepLabel]
-    for effectLabel in gateset0.effects.keys():  del gateset0.effects[effectLabel]
+    # Remove any SPAM vectors from gateset since we only want
+    # to consider the set of *gate* parameters for amplification
+    # and this makes sure our parameter counting is correct
 
-    lessWeightOnly = False  #Initially allow adding to weight. -- maybe make this an argument??
+    gateset0 = gatesetList[0].copy()
+    for prepLabel in gateset0.preps.keys():
+        del gateset0.preps[prepLabel]
+    for effectLabel in gateset0.effects.keys():
+        del gateset0.effects[effectLabel]
+
+    # Initially allow adding to weight. -- maybe make this an argument??
+    lessWeightOnly = False
 
     nGaugeParams = gateset0.num_gauge_params()
     nGerms = len(germsList)
@@ -677,8 +677,6 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                                                         tuple(neighbor)])
 
                 neighborScore = _np.max(neighborScoreList)#Take worst case.
-                # print "neighborScore:", neighborScore
-                # print "score:", score
                 # Move if we've found better position; if we've relaxed, we
                 # only move when L1 is improved.
                 if neighborScore <= score and (neighborL1 < L1 or
