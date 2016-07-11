@@ -14,16 +14,88 @@ import sys as _sys
 import warnings as _warnings
 from .. import objects as _objs
 
+
+def compute_score(weights, gateset_num, scoreFunc, derivDaggerDerivList,
+                  forceSingletons, forceSingletonsScore, numGates,
+                  nGaugeParams, gatePenalty, germLengths, l1Penalty=1e-2,
+                  scoreDict=None):
+    """Returns a germ set "score" in which smaller is better.  Also returns
+    intentionally bad score if `weights` does not include all individual gates
+    as individual germs when `forceSingletons` is ``True``.
+
+    """
+    if forceSingletons and _np.count_nonzero(weights[:numGates]) != numGates:
+        score = forceSingletonsScore
+    else:
+        combinedDDD = _np.einsum('i,ijk', weights,
+                                  derivDaggerDerivList[gateset_num])
+        sortedEigenvals = _np.sort(_np.real(_nla.eigvalsh(combinedDDD)))
+        observableEigenvals = sortedEigenvals[nGaugeParams:]
+        score = (list_score(observableEigenvals, scoreFunc)
+                 + l1Penalty*_np.sum(weights)
+                 + gatePenalty*_np.dot(germLengths, weights))
+    if scoreDict is not None:
+        # Side effect: calling compute_score caches result in scoreDict
+        scoreDict[gateset_num, tuple(weights)] = score
+    return score
+
+
+def randomizeGatesetList(gatesetList, randomizationStrength, numCopies, seed):
+    if len(gatesetList) > 1 and numCopies is not None:
+        raise ValueError("Input multiple gate sets XOR request multiple "
+                         "copies only!")
+    newgatesetList = []
+    if len(gatesetList) > 1:
+        for gatesetnum, gateset in enumerate(gatesetList):
+            newgatesetList.append(gateset.randomize_with_unitary(
+                                    randomizationStrength,
+                                    seed=seed+gatesetnum))
+    else:
+        for gatesetnum in range(numCopies if numCopies is not None else 1):
+            newgatesetList.append(gatesetList[0].randomize_with_unitary(
+                                    randomizationStrength,
+                                    seed=seed+gatesetnum))
+    return newgatesetList
+
+
+def checkGermsListCompleteness(gatesetList, germsList, scoreFunc, threshold):
+    """Check to see if the germsList is amplificationally complete (AC) for
+    all the GateSets in `gatesetList, returning the index of the first GateSet
+    for which it is not AC or `-1` if it is AC for all GateSets
+
+    """
+    for gatesetnum, gateset in enumerate(gatesetList):
+        initial_test = test_germ_list_infl(gateset, germsList,
+                                           scoreFunc=scoreFunc,
+                                           threshold=threshold)
+        if not initial_test:
+            return gatesetNum
+
+    # If the germsList is complete for all gatesets, return -1
+    return -1
+
+
+def removeSPAMVectors(gateset):
+    reducedGateset = gateset.copy()
+    for prepLabel in reducedGateset.preps.keys():
+        del reducedGateset.preps[prepLabel]
+    for effectLabel in reducedGateset.effects.keys():
+        del reducedGateset.effects[effectLabel]
+    return reducedGateset
+
+
+def get_neighbors(boolVec):
+    for i in range(len(boolVec)):
+        v = boolVec.copy()
+        v[i] = (v[i] + 1) % 2 # Toggle v[i] btwn 0 and 1
+        yield v
+
+
 def num_non_spam_gauge_params(gateset):
     """Return number of non-gauge, non-SPAM parameters in a GateSet.
 
     """
-    gateset = gateset.copy()
-    for prepLabel in gateset.preps.keys():
-        del gateset.preps[prepLabel]
-    for effectLabel in gateset.effects.keys():
-        del gateset.effects[effectLabel]
-    return gateset.num_gauge_params()
+    return removeSPAMVectors(gateset).num_gauge_params()
 
 
 # wrt is gate_dim x gate_dim, so is M, Minv, Proj
@@ -541,35 +613,31 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         raise ValueError("Input multiple gate sets XOR request multiple "
                          "copies only!")
 
-    if randomize:
-#        if seed:
-#            _np.random.seed(seed)
-        newgatesetList = []
-        if len(gatesetList) > 1:
-            for gatesetnum, gateset in enumerate(gatesetList):
-                newgatesetList.append(gateset.randomize_with_unitary(
-                                        randomizationStrength,
-                                        seed=seed+gatesetnum))
-#            gatesetList[gatesetnum] =
-        else:
-            for gatesetnum in range(numCopies if numCopies is not None else 1):
-                newgatesetList.append(gatesetList[0].randomize_with_unitary(
-                                        randomizationStrength,
-                                        seed=seed+gatesetnum))
-        gatesetList = newgatesetList
+    if initialWeights is not None:
+        if len(germsList) != len(initialWeights):
+            raise ValueError("The lengths of germsList (%d) and "
+                             "initialWeights (%d) must match."
+                             % (len(germsList), len(initialWeights)))
+        # Normalize the weights array to be 0s and 1s even if it is provided as
+        # bools
+        weights = _np.array([1 if x else 0 for x in initialWeights ])
+    else:
+        weights = _np.ones(len(germsList), 'i') # default: start with all germs
+#        lessWeightOnly = True # we're starting at the max-weight vector
 
-    for gatesetnum, gateset in enumerate(gatesetList):
-        initial_test = test_germ_list_infl(gateset, germsList,
-                                           scoreFunc=scoreFunc,
-                                           threshold=threshold)
-        if not initial_test:
-            printer.log("Complete initial germ set FAILS on gateset "
-                        + str(gatesetnum) + ".")
-            printer.log("Aborting search.")
-            if returnAll:
-                return None, None, None
-            else:
-                return None
+    if randomize:
+        gatesetList = randomizeGatesetList(gatesetList, randomizationStrength,
+                                           numCopies, seed)
+
+    undercompleteGatesetNum = checkGermsListCompleteness(gatesetList,
+                                                         germsList, scoreFunc,
+                                                         threshold)
+    if undercompleteGatesetNum > -1:
+        printer.log("Complete initial germ set FAILS on gateset "
+                    + str(undercompleteGatesetNum) + ".")
+        printer.log("Aborting search.")
+        return (None, None, None) if returnAll else None
+
     printer.log("Complete initial germ set succeeds on all input gatesets.")
     printer.log("Now searching for best germ set.")
 
@@ -578,12 +646,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     # Remove any SPAM vectors from gateset since we only want
     # to consider the set of *gate* parameters for amplification
     # and this makes sure our parameter counting is correct
-
-    gateset0 = gatesetList[0].copy()
-    for prepLabel in gateset0.preps.keys():
-        del gateset0.preps[prepLabel]
-    for effectLabel in gateset0.effects.keys():
-        del gateset0.effects[effectLabel]
+    gateset0 = removeSPAMVectors(gatesetList[0])
 
     # Initially allow adding to weight. -- maybe make this an argument??
     lessWeightOnly = False
@@ -594,62 +657,43 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     printer.log("Starting germ set optimization. Lower score is better.", 1)
     printer.log("Gateset has %d gauge params." % nGaugeParams, 1)
 
-    #score dictionary:
-    #  keys = (gatesetNum, tuple-ized weight vector of 1's and 0's only)
-    #  values = list_score
+    # score dictionary:
+    #   keys = (gatesetNum, tuple-ized weight vector of 1's and 0's only)
+    #   values = list_score
     scoreD = {}
     numGates = len(gateset0.gates.keys())
-    #twirledDerivDaggerDeriv == array J.H*J contributions from each germ (J=Jacobian)
-    # indexed by (iGerm, iGatesetParam1, iGatesetParam2)
-    # size (nGerms, vec_gateset_dim, vec_gateset_dim)
 
     germLengths = _np.array(list(map(len,germsList)), 'i')
 
+    # twirledDerivDaggerDeriv == array J.H*J contributions from each germ
+    # (J=Jacobian) indexed by (iGerm, iGatesetParam1, iGatesetParam2)
+    # size (nGerms, vec_gateset_dim, vec_gateset_dim)
     twirledDerivDaggerDerivList = []
-
     for gateset in gatesetList:
-        twirledDeriv = bulk_twirled_deriv(gateset, germsList, tol, check) / germLengths[:,None,None]
+        twirledDeriv = (bulk_twirled_deriv(gateset, germsList, tol, check)
+                        / germLengths[:,None,None])
         twirledDerivDaggerDerivList.append(_np.einsum('ijk,ijl->ikl',
                                                 _np.conjugate(twirledDeriv),
                                                 twirledDeriv))
 
-    def compute_score(wts,gateset_num):
-        """Returns a germ set "score" in which smaller is better.  Also returns
-        intentionally bad score if wts do not include all individual gates as
-        individual germs, if forceSingletons is True.
+    # Dict of keyword arguments passed to compute_score that don't change from
+    # call to call
+    cs_kwargs = {
+                    'scoreFunc': scoreFunc,
+                    'derivDaggerDerivList': twirledDerivDaggerDerivList,
+                    'forceSingletons': forceSingletons,
+                    'forceSingletonsScore': forceSingletonsScore,
+                    'numGates': numGates,
+                    'nGaugeParams': nGaugeParams,
+                    'gatePenalty': gatePenalty,
+                    'germLengths': germLengths,
+                    'l1Penalty': l1Penalty,
+                    'scoreDict': scoreD,
+                }
 
-        """
-        if forceSingletons and _np.count_nonzero(wts[:numGates]) != numGates:
-            score = forceSingletonsScore
-        else:
-            combinedTDDD = _np.einsum('i,ijk', wts,
-                                      twirledDerivDaggerDerivList[gateset_num])
-            sortedEigenvals = _np.sort(_np.real(_nla.eigvalsh(combinedTDDD)))
-            observableEigenvals = sortedEigenvals[nGaugeParams:]
-            score = (list_score(observableEigenvals, scoreFunc)
-                     + l1Penalty*_np.sum(wts)
-                     + gatePenalty*_np.dot(germLengths, wts))
-        # Side effect: calling compute_score caches result in scoreD
-        scoreD[gateset_num,tuple(wts)] = score
-        return score
-
-    def get_neighbors(boolVec):
-        for i in range(nGerms):
-            v = boolVec.copy()
-            v[i] = (v[i] + 1) % 2 # Toggle v[i] btwn 0 and 1
-            yield v
-
-    if initialWeights is not None:
-        weights = _np.array( [1 if x else 0 for x in initialWeights ] )
-    else:
-        weights = _np.ones( nGerms, 'i' ) #default: start with all germs
-#        lessWeightOnly = True #we're starting at the max-weight vector
-
-    scoreList = [compute_score(weights,gateset_num)
+    scoreList = [compute_score(weights, gateset_num, **cs_kwargs)
                  for gateset_num in range(num_gatesets)]
     score = _np.max(scoreList)
-#    print "scoreList:", scoreList
-#    print score
     L1 = sum(weights) # ~ L1 norm of weights
 
     with printer.progress_logging(1):
@@ -670,7 +714,8 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                     if (gateset_num, tuple(neighbor)) not in scoreD_keys:
                         neighborL1 = sum(neighbor)
                         neighborScoreList.append(compute_score(neighbor,
-                                                               gateset_num))
+                                                               gateset_num,
+                                                               **cs_kwargs))
                     else:
                         neighborL1 = sum(neighbor)
                         neighborScoreList.append(scoreD[gateset_num,
