@@ -15,7 +15,8 @@ import warnings as _warnings
 from .. import objects as _objs
 
 def num_non_spam_gauge_params(gateset):
-    """Returns number of non-gauge parameters in a GateSet, not including SPAM parameters"""
+    """Returns number of non-gauge parameters in a GateSet, not including SPAM
+    parameters"""
     gateset = gateset.copy()
     for prepLabel in gateset.preps.keys():
         del gateset.preps[prepLabel]
@@ -494,7 +495,8 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         raise ValueError("Either fixedSlack *or* slackFrac should be specified")
 
     if len(gatesetList) > 1 and numCopies is not None:
-        raise ValueError("Input multiple gate sets XOR request multiple copies only!")
+        raise ValueError("Input multiple gate sets XOR request multiple "
+                         "copies only!")
 
     if scoreFunc == 'all':
         def list_score(input_array):
@@ -503,7 +505,8 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         def list_score(input_array):
             return 1./min(_np.abs(input_array))
     else:
-        raise ValueError("Either 'all' or 'worst' must be specified for scoreFunc!")
+        raise ValueError("Either 'all' or 'worst' must be specified for "
+                         "scoreFunc!")
 
     if randomize:
 #        if seed:
@@ -511,15 +514,21 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         newgatesetList = []
         if len(gatesetList) > 1:
             for gatesetnum, gateset in enumerate(gatesetList):
-                newgatesetList.append(gateset.randomize_with_unitary(randomizationStrength,seed=seed+gatesetnum))
+                newgatesetList.append(gateset.randomize_with_unitary(
+                                        randomizationStrength,
+                                        seed=seed+gatesetnum))
 #            gatesetList[gatesetnum] =
         else:
             for gatesetnum in range(numCopies if numCopies is not None else 1):
-                newgatesetList.append(gatesetList[0].randomize_with_unitary(randomizationStrength,seed=seed+gatesetnum))
+                newgatesetList.append(gatesetList[0].randomize_with_unitary(
+                                        randomizationStrength,
+                                        seed=seed+gatesetnum))
         gatesetList = newgatesetList
 
     for gatesetnum, gateset in enumerate(gatesetList):
-        initial_test = test_germ_list_infl(gateset,germsList,scoreFunc=scoreFunc,threshold=threshold)
+        initial_test = test_germ_list_infl(gateset, germsList,
+                                           scoreFunc=scoreFunc,
+                                           threshold=threshold)
 #        if initial_test:
 #            print "Complete initial fiducial set succeeds."
 #            print "Now searching for best fiducial set."
@@ -563,7 +572,9 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
 
     for gateset in gatesetList:
         twirledDeriv = bulk_twirled_deriv(gateset, germsList, tol, check) / germLengths[:,None,None]
-        twirledDerivDaggerDerivList.append(_np.einsum('ijk,ijl->ikl', _np.conjugate(twirledDeriv), twirledDeriv))
+        twirledDerivDaggerDerivList.append(_np.einsum('ijk,ijl->ikl',
+                                                _np.conjugate(twirledDeriv),
+                                                twirledDeriv))
 
     def compute_score(wts,gateset_num):
         """Returns a germ set "score" in which smaller is better.  Also returns
@@ -596,7 +607,8 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         weights = _np.ones( nGerms, 'i' ) #default: start with all germs
 #        lessWeightOnly = True #we're starting at the max-weight vector
 
-    scoreList = [compute_score(weights,gateset_num) for gateset_num in range(num_gatesets)]
+    scoreList = [compute_score(weights,gateset_num)
+                 for gateset_num in range(num_gatesets)]
     score = _np.max(scoreList)
 #    print "scoreList:", scoreList
 #    print score
