@@ -654,16 +654,13 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     nGaugeParams = gateset0.num_gauge_params()
     nGerms = len(germsList)
 
-    printer.log("Starting germ set optimization. Lower score is better.", 1)
-    printer.log("Gateset has %d gauge params." % nGaugeParams, 1)
-
     # score dictionary:
     #   keys = (gatesetNum, tuple-ized weight vector of 1's and 0's only)
     #   values = list_score
     scoreD = {}
     numGates = len(gateset0.gates.keys())
 
-    germLengths = _np.array(list(map(len,germsList)), 'i')
+    germLengths = _np.array(list(map(len, germsList)), 'i')
 
     # twirledDerivDaggerDeriv == array J.H*J contributions from each germ
     # (J=Jacobian) indexed by (iGerm, iGatesetParam1, iGatesetParam2)
@@ -695,6 +692,9 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                  for gateset_num in range(num_gatesets)]
     score = _np.max(scoreList)
     L1 = sum(weights) # ~ L1 norm of weights
+
+    printer.log("Starting germ set optimization. Lower score is better.", 1)
+    printer.log("Gateset has %d gauge params." % nGaugeParams, 1)
 
     with printer.progress_logging(1):
         for iIter in range(maxIter):
