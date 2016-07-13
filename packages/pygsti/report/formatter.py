@@ -18,6 +18,11 @@ import numbers as _numbers
 import re      as _re
 import os      as _os
 
+class FormatDict(dict):
+    pass
+
+formatDict = FormatDict()
+
 class Formatter():
     '''
     Class for formatting strings to html, latex, powerpoint, or text
@@ -118,7 +123,7 @@ class BranchingFormatter():
 # 'rho' (state prep) formatting
 # Replace rho with &rho;
 # Numbers following 'rho' -> subscripts
-Rho = { 
+formatDict['Rho'] = { 
     'html'  : Formatter(stringreplacers=[('rho', '&rho;')],              
                        regexreplace=('.*?([0-9]+)$', '<sub>%s</sub>')), 
     'latex' : Formatter(stringreplacers=[('rho', '\\rho')], 
@@ -127,7 +132,7 @@ Rho = {
     'ppt'   : no_format}
 
 # 'E' (POVM) effect formatting
-Effect = { 
+formatDict['Effect'] = { 
     # If label == 'remainder', return E sub C
     # Otherwise, match regex and replace with subscript 
     'html'  : Formatter(stringreturn=('remainder', 'E<sub>C</sub>'),     
@@ -138,21 +143,21 @@ Effect = {
     'ppt'   : no_format}
 
 # Normal replacements
-Normal = { 
+formatDict['Normal'] = { 
     'html'  : html, 
     'latex' : latex, 
     'text'  : no_format, 
     'ppt'   : ppt }
 
 # 'normal' formatting but round to 2 decimal places
-Rounded = { 
+formatDict['Rounded'] = { 
     'html'  : Formatter(custom=(html_value,  {'ROUND' : 2})), # return custom(label, ROUND=2) (Since formatstring is just '%s')
     'latex' : Formatter(custom=(latex_value, {'ROUND' : 2})), 
     'text'  : no_format, 
     'ppt'   : Formatter(custom=(ppt_value,   {'ROUND' : 2}))}
 
 # 'small' formating - make text smaller
-Small = { 
+formatDict['Small'] = { 
     'html'  : html, 
     'latex' : Formatter(formatstring='\\small%s', custom=latex), 
     'text'  : no_format, 
@@ -177,13 +182,13 @@ def _pi_text(label):
         return label * _np.pi
 
 # Pi formatters
-Pi = { 
+formatDict['Pi'] = { 
     'html'  : pi_fmt_template(Formatter(custom=html,  formatstring='%s&pi;')), 
     'latex' : pi_fmt_template(Formatter(custom=latex, formatstring='%s$\\pi$')), 
     'text'  : _pi_text,
     'ppt'   : pi_fmt_template(Formatter(custom=ppt,   formatstring='%spi'))}
 
-Brackets = { 
+formatDict['Brackets'] = { 
     'html'  : Formatter(custom=(html,  {'brackets' : True})), 
     'latex' : Formatter(custom=(latex, {'brackets' : True})), 
     'text'  : no_format, 
@@ -218,7 +223,7 @@ def _fmtCnv_latex(x):
     else:
         return x
 
-Conversion = { 
+formatDict['Conversion'] = { 
     'html'  : _fmtCnv_html, 
     'latex' : _fmtCnv_latex, 
     'text'  : Formatter(stringreplacers=[('<STAR>', '*'), ('|', ' ')]),  
@@ -261,7 +266,7 @@ def _latex_error_bar(t):
 def _text_error_bar(t):
     return {'value' : t[0], 'errbar' : t[1]}
 
-ErrorBars = { 
+formatDict['ErrorBars'] = { 
     'html'  : _html_error_bar, 
     'latex' : eb_template(_latex_error_bar,
                          Formatter(custom=(_first_tuple_elem, 
@@ -275,7 +280,7 @@ ErrorBars = {
 def _latex_vec_error_bar(t):
     return '%s $\pm$ %s' % (latex(t[0]), latex(t[1]))
 
-VecErrorBars = { 
+formatDict['VecErrorBars'] = { 
     'html'  : _html_error_bar, 
     'latex' : eb_template(_latex_vec_error_bar,
                           Formatter(custom=(_first_tuple_elem, {'f' : latex}))), 
@@ -300,7 +305,7 @@ def pi_eb_fmt_template(f):
                        Formatter(custom=(_first_tuple_elem, {'f' : f}))) 
 
 # 'errorbars with pi' formatting: display (scalar_value +/- error bar) * pi
-PiErrorBars = { 
+formatDict['PiErrorBars'] = { 
     'html'  : pi_eb_fmt_template(html), 
     'latex' : _latex_pi_error_bar,
     'text'  : _text_error_bar, 
@@ -321,7 +326,7 @@ def _text_gatestring(s):
 def _ppt_gatestring(s):
     return '.'.join(s) if s is not None else ''
 
-GateString = {
+formatDict['GateString'] = {
     'html'  : _html_gatestring, 
     'latex' : _latex_gatestring, 
     'text'  : _text_gatestring, 
@@ -335,7 +340,7 @@ def _pre_format(label, formatname=''):
 def _pre_fmt_template(formatname):
     return Formatter(custom=(_pre_format, {'formatname' : formatname}))
 
-Pre = { 
+formatDict['Pre'] = { 
     'html'   : _pre_fmt_template('html'),
     'latex'  : _pre_fmt_template('latex'), 
     'text'   : _pre_fmt_template('text'), 
@@ -371,7 +376,7 @@ class FigureFormatter():
         else:
             return 'Figure generation for this Formatter is not implemented.'
 
-Figure = {
+formatDict['Figure'] = {
     'html'  : FigureFormatter(formatstring="<img width='%.2f' height='%.2f' src='%s/%s'>", 
                               extension='.png'),
     'latex' : FigureFormatter(formatstring="\\vcenteredhbox{\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/%s}}", 
@@ -380,7 +385,7 @@ Figure = {
     'ppt'   : FigureFormatter()} # Not Implemented
 
 # Bold formatting
-Bold = { 
+formatDict['Bold'] = { 
     'html'  : Formatter(formatstring='<b>%s</b>', custom=html),
     'latex' : Formatter(formatstring='\\textbf{%s}', custom=latex), 
     'text'  : Formatter(formatstring='**%s**'), 
@@ -392,6 +397,7 @@ def formatList(items, formatters, fmt, scratchDir=None):
     formatted_items = []
     for item, formatter in zip(items, formatters):
         if formatter is not None:
+            formatter = formatDict[formatter]
             # If the formatter requires a scratch directory to do its job, give
             # it.
             if hasattr(formatter[fmt], 'scratchDir'):
