@@ -3078,14 +3078,14 @@ def _contractToCP_direct(gateset,verbosity,TPalso=False,maxiter=100000,tol=1e-8)
             evals_left = len(sorted_evals_with_inds)
             ideal_shift = shift_left / evals_left
 
-            for (i,eval) in sorted_evals_with_inds: #loop over new_evals from smallest to largest (note all > 0)
+            for (i, sorted_eval) in sorted_evals_with_inds: #loop over new_evals from smallest to largest (note all > 0)
                 evals_left -= 1  #number of eigenvalue beyond current eval (in sorted order)
-                if eval+ideal_shift >= 0:
-                    new_evals[i] = eval + ideal_shift
+                if sorted_eval+ideal_shift >= 0:
+                    new_evals[i] = sorted_eval + ideal_shift
                     shift_left -= ideal_shift
                 elif evals_left > 0:
                     new_evals[i] = 0
-                    shift_left += eval
+                    shift_left += sorted_eval
                     ideal_shift = shift_left / evals_left #divide remaining shift evenly among remaining eigenvalues
                 else: #last eigenvalue would be < 0 with ideal shift and can't set == 0 b/c all others must be zero too
                     new_evals[i] = 1.0 # so set what was the largest eigenvalue == 1.0

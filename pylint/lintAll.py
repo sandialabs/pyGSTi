@@ -9,11 +9,10 @@ def lint_all():
  
     blacklisted_warnings    = config['blacklisted-warnings']
     blacklisted_errors      = config['blacklisted-errors']
-    whitelisted_conventions = config['whitelisted-conventions']
     whitelisted_refactors   = config['whitelisted-refactors']
 
     blacklist = blacklisted_warnings + blacklisted_errors
-    whitelist = whitelisted_conventions + whitelisted_refactors 
+    whitelist = whitelisted_refactors 
 
     commands  = ['pylint3', '--disable=R,%s' % ','.join(blacklist),
                             '--enable=%s'  % ','.join(whitelist),

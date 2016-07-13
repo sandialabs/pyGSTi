@@ -1263,7 +1263,7 @@ class GateSetCalculator(object):
                         evalTree, subTreeOwners, mySubTreeIndices, my_results,
                         None, psd, myComm, comm)  #this fn needs to gather tree results
                         # only from the *root* processors of each myComm group... then broadcast?
-                    '''
+                    ''' #pylint: disable=unreachable
                 else:
                     _warnings.warn("Increased speed could be obtained" +
                                    " by giving dproduct cache computation" +
@@ -1401,7 +1401,7 @@ class GateSetCalculator(object):
                         None, psd, myComm, comm)  #this fn needs to gather tree results
                         # only from the *root* processors of each myComm group... then broadcast?
 
-                    '''
+                    '''#pylint: disable=unreachable
                 else:
                     _warnings.warn("Increased speed could be obtained" +
                                    " by giving hproduct cache computation" +
