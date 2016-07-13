@@ -102,7 +102,7 @@ class ReportTable(object):
                 print(rowData)
                 formatted_rowData = _formatter.formatList(rowData, formatters, 'text', scratchDir)
                 if len(formatted_rowData) > 0:
-                   text['row data'].append( formatted_rowData )
+                    text['row data'].append( formatted_rowData )
 
             return text
 

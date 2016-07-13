@@ -2375,64 +2375,64 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
     tRef = _time.time() #start time
 
     with printer.progress_logging(1):
-         for (i,stringsToEstimate) in enumerate(gateStringLists):
-             printer.log('', 2)
-             extraMessages = [("(%s) " % gateStringSetLabels[i])] if gateStringSetLabels else []
-             printer.show_progress(i, nIters-1, verboseMessages=extraMessages, prefix="--- Iterative MLGST:", suffix=" %d gate strings ---" % len(stringsToEstimate))
+        for (i,stringsToEstimate) in enumerate(gateStringLists):
+            printer.log('', 2)
+            extraMessages = [("(%s) " % gateStringSetLabels[i])] if gateStringSetLabels else []
+            printer.show_progress(i, nIters-1, verboseMessages=extraMessages, prefix="--- Iterative MLGST:", suffix=" %d gate strings ---" % len(stringsToEstimate))
 
-             if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
-
-
-             _, mleGateset = do_mc2gst( dataset, mleGateset, stringsToEstimate,
-                                                maxiter, maxfev, tol, 0, minProbClip,
-                                                probClipInterval, useFreqWeightedChiSq,
-                                                0, printer-2, check,
-                                                False, None, None, memLimit, comm,
-                                                distributeMethod)
-                                               # Note maxLogL is really chi2 number here
-             if times is not None:
-                 tNxt = _time.time();
-                 times.append(('MLGST Iteration %d: chi2-opt' % (i+1),tNxt-tRef))
-                 tRef=tNxt
-
-             logL_ub = _tools.logl_max(dataset, stringsToEstimate, None, poissonPicture, check)
-             maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval,
-                               radius, None, None, poissonPicture, check)  #get maxLogL from chi2 estimate
-
-             if times is not None:
-                 tNxt = _time.time();
-                 times.append(('MLGST Iteration %d: logl-comp' % (i+1),tNxt-tRef))
-                 tRef=tNxt
-                 printer.log("    2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL)),2)
-
-            #OLD: do MLGST for all iterations
-            #maxLogL, mleGateset = do_mlgst( dataset, mleGateset, stringsToEstimate,
-            #                                maxiter, maxfev, tol,
-            #                                minProbClip, probClipInterval, radius, poissonPicture,
-            #                                verbosity, check, None, memLimit, comm)
-
-             if i == len(gateStringLists)-1: #on the last iteration, do ML
-                 printer.log("--- Last Iteration: switching to ML objective ---",2)
-                 maxLogL_p, mleGateset_p = do_mlgst(
-                   dataset, mleGateset, stringsToEstimate, maxiter, maxfev, tol,
-                   minProbClip, probClipInterval, radius, poissonPicture, printer,
-                   check, None, memLimit, comm)
-
-                 printer.log("    2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL_p)),2)
+            if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
 
 
-                 if maxLogL_p > maxLogL: #if do_mlgst improved the maximum log-likelihood
-                   maxLogL = maxLogL_p
-                   mleGateset = mleGateset_p
-                 else:
-                   printer.warning("MLGST failed to improve logl: retaining chi2-objective estimate")
+            _, mleGateset = do_mc2gst( dataset, mleGateset, stringsToEstimate,
+                                               maxiter, maxfev, tol, 0, minProbClip,
+                                               probClipInterval, useFreqWeightedChiSq,
+                                               0, printer-2, check,
+                                               False, None, None, memLimit, comm,
+                                               distributeMethod)
+                                              # Note maxLogL is really chi2 number here
+            if times is not None:
+                tNxt = _time.time();
+                times.append(('MLGST Iteration %d: chi2-opt' % (i+1),tNxt-tRef))
+                tRef=tNxt
 
-                 if times is not None:
-                   tNxt = _time.time();
-                   times.append(('MLGST Iteration %d: logl-opt' % (i+1),tNxt-tRef))
-                   tRef=tNxt
+            logL_ub = _tools.logl_max(dataset, stringsToEstimate, None, poissonPicture, check)
+            maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval,
+                              radius, None, None, poissonPicture, check)  #get maxLogL from chi2 estimate
 
-             if returnAll:
+            if times is not None:
+                tNxt = _time.time();
+                times.append(('MLGST Iteration %d: logl-comp' % (i+1),tNxt-tRef))
+                tRef=tNxt
+                printer.log("    2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL)),2)
+
+           #OLD: do MLGST for all iterations
+           #maxLogL, mleGateset = do_mlgst( dataset, mleGateset, stringsToEstimate,
+           #                                maxiter, maxfev, tol,
+           #                                minProbClip, probClipInterval, radius, poissonPicture,
+           #                                verbosity, check, None, memLimit, comm)
+
+            if i == len(gateStringLists)-1: #on the last iteration, do ML
+                printer.log("--- Last Iteration: switching to ML objective ---",2)
+                maxLogL_p, mleGateset_p = do_mlgst(
+                  dataset, mleGateset, stringsToEstimate, maxiter, maxfev, tol,
+                  minProbClip, probClipInterval, radius, poissonPicture, printer,
+                  check, None, memLimit, comm)
+
+                printer.log("    2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL_p)),2)
+
+
+                if maxLogL_p > maxLogL: #if do_mlgst improved the maximum log-likelihood
+                    maxLogL = maxLogL_p
+                    mleGateset = mleGateset_p
+                else:
+                    printer.warning("MLGST failed to improve logl: retaining chi2-objective estimate")
+
+                if times is not None:
+                    tNxt = _time.time();
+                    times.append(('MLGST Iteration %d: logl-opt' % (i+1),tNxt-tRef))
+                    tRef=tNxt
+
+            if returnAll:
                 mleGatesets.append(mleGateset)
                 maxLogLs.append(maxLogL)
 
