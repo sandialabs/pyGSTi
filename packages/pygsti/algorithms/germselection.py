@@ -77,9 +77,9 @@ def checkGermsListCompleteness(gatesetList, germsList, scoreFunc, threshold):
 
 def removeSPAMVectors(gateset):
     reducedGateset = gateset.copy()
-    for prepLabel in reducedGateset.preps.keys():
+    for prepLabel in reducedGateset.preps:
         del reducedGateset.preps[prepLabel]
-    for effectLabel in reducedGateset.effects.keys():
+    for effectLabel in reducedGateset.effects:
         del reducedGateset.effects[effectLabel]
     return reducedGateset
 
@@ -344,9 +344,7 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
     # Remove any SPAM vectors from gateset since we only want
     # to consider the set of *gate* parameters for amplification
     # and this makes sure our parameter counting is correct
-    gateset = gateset.copy()
-    for prepLbl in list(gateset.preps.keys()):  del gateset.preps[prepLbl]
-    for effLbl in list(gateset.effects.keys()):  del gateset.effects[effLbl]
+    gateset = removeSPAMVectors(gateset)
 
     nGerms = len(germsToTest)
     germToPowL = [ germ*L for germ in germsToTest ]
@@ -427,9 +425,7 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
     # Remove any SPAM vectors from gateset since we only want
     # to consider the set of *gate* parameters for amplification
     # and this makes sure our parameter counting is correct
-    gateset = gateset.copy()
-    for prepLabel in gateset.preps.keys():  del gateset.preps[prepLabel]
-    for effectLabel in gateset.effects.keys():  del gateset.effects[effectLabel]
+    gateset = removeSPAMVectors(gateset)
 
 
     germLengths = _np.array( list(map(len,germsToTest)), 'i')
