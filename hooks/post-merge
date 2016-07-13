@@ -5,7 +5,7 @@ import subprocess, os, sys
 print('Runnning post-merge hook - updating git hooks (hopefully)')
 
 old_wd = os.getcwd()
-os.chdir('../../hooks/')
+os.chdir('hooks/')
 subprocess.call(['sh', 'setup_hooks.sh'])
 os.chdir(old_wd)
 

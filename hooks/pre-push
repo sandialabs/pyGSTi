@@ -1,6 +1,6 @@
 #!/usr/bin/python
 import subprocess
-import os
+import os, sys
 
 def get_branchname():
     try:
@@ -11,18 +11,26 @@ def get_branchname():
     branchname = branchname.replace('\n', '')
     return branchname
 
-updates_git_pages = ['master']
+if __name__ == "__main__":
 
-branchname = get_branchname()
+    updates_git_pages = ['master']
 
-if branchname in updates_git_pages:
-    print('Updating github pages!')
-    #subprocess.call(['git', 'stash'])
-    subprocess.call(['git', 'checkout', 'gh-pages'])
-    print(subprocess.check_output(['pwd']))
-    os.system('cp temp_html/*.html tutorials/')
-    subprocess.call(['git', 'add', 'tutorials/*.html'])
-    subprocess.call(['git', 'commit', '-m', '"Updates html in tutorials"'])
-    subprocess.call(['git', 'push'])
-    subprocess.call(['git', 'checkout', branchname])
-    #subprocess.call(['git', 'apply'])
+    branchname = get_branchname()
+
+    if branchname in updates_git_pages:
+        print('Updating github pages!')
+        #subprocess.call(['git', 'stash'])
+        subprocess.call(['git', 'checkout', 'gh-pages'])
+        print(subprocess.check_output(['pwd']))
+        os.system('cp temp_html/*.html tutorials/')
+        subprocess.call(['git', 'add', 'tutorials/*.html'])
+        subprocess.call(['git', 'commit', '-m', '"Updates html in tutorials"'])
+        subprocess.call(['git', 'push'])
+        subprocess.call(['git', 'checkout', branchname])
+        #subprocess.call(['git', 'apply'])
+
+    old_wd = os.getcwd()
+    os.chdir('pylint/')
+    passes = subprocess.call(['./score.py'])
+    os.chdir(old_wd)
+    sys.exit(int(passes))
