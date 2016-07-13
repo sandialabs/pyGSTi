@@ -81,7 +81,7 @@ class TestAlgorithmMethods(AlgorithmTestCase):
             initialWeights=None, scoreFunc='all', maxIter=100,
             fixedSlack=False, slackFrac=0.1, fixedNum=4,
             returnAll=False, verbosity=4)
-        pygsti.alg.write_fixed_hamming_weight_code(3,1)
+        pygsti.alg.build_bitvec_mx(3,1)
 
         self.runSilent(pygsti.alg.optimize_integer_fiducials_slack,
             std.gs_target, fiducials_to_try, prepOrMeas = "prep",

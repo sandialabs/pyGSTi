@@ -114,11 +114,11 @@ weights={None}  }
 \begin{tabular}[l]{|c|c|c|c|c|c|c|c|c|}
 \hline
 L & $2\Delta\log(\mathcal{L})$ & $k$ & $2\Delta\log(\mathcal{L})-k$ & $\sqrt{2k}$ & $p$ & $N_s$ & $N_p$ & Rating \\ \hline
-0 & 53.74648 & 61 & -7.253515 & 11.04536 & 0.73 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-1 & 53.7465 & 61 & -7.253495 & 11.04536 & 0.73 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-2 & 106.745 & 137 & -30.25503 & 16.55295 & 0.97 & 168 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-4 & 354.3551 & 410 & -55.64485 & 28.63564 & 0.98 & 441 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-8 & 691.0842 & 786 & -94.91577 & 39.64846 & 0.99 & 817 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+0 & 53.74371 & 61 & -7.256288 & 11.04536 & 0.73 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+1 & 53.74377 & 61 & -7.256232 & 11.04536 & 0.73 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+2 & 106.7092 & 137 & -30.29084 & 16.55295 & 0.97 & 168 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+4 & 354.3257 & 410 & -55.6743 & 28.63564 & 0.98 & 441 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+8 & 691.064 & 786 & -94.93602 & 39.64846 & 0.99 & 817 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
 \end{tabular}
 }
 \caption{Comparison between the computed and expected $2\Delta\log{\mathcal{L}}$ for different values of $L$}
@@ -133,7 +133,7 @@ L & $2\Delta\log(\mathcal{L})$ & $k$ & $2\Delta\log(\mathcal{L})-k$ & $\sqrt{2k}
 
 \begin{figure}
 \begin{center}
-\includegraphics[width=4.00in,height=3.00in,keepaspectratio]{slidesC_files/bestLogLBoxes.pdf}
+\includegraphics[width=4.00in,height=3.00in,keepaspectratio]{slidesCv3_files/bestLogLBoxes.pdf}
 \end{center}
 \end{figure}
 \end{frame}
@@ -158,9 +158,9 @@ L & $2\Delta\log(\mathcal{L})$ & $k$ & $2\Delta\log(\mathcal{L})-k$ & $\sqrt{2k}
 \begin{tabular}[l]{|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
-Gi & 0.039929 & 0.0401 & 0.040106 \\ \hline
+Gi & 0.03993 & 0.0401 & 0.040106 \\ \hline
 Gx & 0.037847 & 0.037918 & 0.037919 \\ \hline
-Gy & 0.037738 & 0.037805 & 0.037805 \\ \hline
+Gy & 0.037739 & 0.037806 & 0.037806 \\ \hline
 \end{tabular}
 
 \\
@@ -187,7 +187,7 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
 0.0002 & -0.0523 & 0.0065 & 0.0005 \\ 
 0.0003 & 0.0011 & -0.05 & 0.0012 \\ 
-0.0002 & 0.0001 & -0.0042 & -0.0525
+0.0002 & 0.0001 & -0.0042 & -0.0526
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -222,15 +222,15 @@ Gi & $ \begin{array}{c}
 0.999 \\ 
 -0.0222 \\ 
 0.0093 \\ 
-0.0204
+0.0205
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
 0.9348 \\ 
--0.1473 \\ 
+-0.1468 \\ 
 -0.3233
  \end{array} $
- & 0.05127 & 0.054222 \\ \hline
+ & 0.051273 & 0.054221 \\ \hline
 Gx & $ \begin{array}{c}
 0.9491e^{i1.572} \\ 
 0.9491e^{-i1.572} \\ 
@@ -239,14 +239,14 @@ Gx & $ \begin{array}{c}
  \end{array} $
  & $ \begin{array}{c}
 1 \\ 
-0.0064 \\ 
--9\e{-6} \\ 
+0.0063 \\ 
+2\e{-5} \\ 
 0.0002
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
 -1 \\ 
-1\e{-5} \\ 
+8\e{-6} \\ 
 -0.0003
  \end{array} $
  & 0.049514 & 0.050938 \\ \hline
@@ -258,7 +258,7 @@ Gy & $ \begin{array}{c}
  \end{array} $
  & $ \begin{array}{c}
 1 \\ 
--4\e{-6} \\ 
+6\e{-6} \\ 
 0.0067 \\ 
 -0.0002
  \end{array} $
@@ -268,7 +268,7 @@ Gy & $ \begin{array}{c}
 1 \\ 
 -0.0012
  \end{array} $
- & 0.048788 & 0.051084 \\ \hline
+ & 0.048789 & 0.051085 \\ \hline
 \end{tabular}
 
 \\
@@ -278,9 +278,9 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & 0.000625$\pi$ &  & 0.884314$\pi$ & 0.548545$\pi$ \\ \hline
-Gx & 0.500356$\pi$ & 0.884314$\pi$ &  & 0.498284$\pi$ \\ \hline
-Gy & 0.50007$\pi$ & 0.548545$\pi$ & 0.498284$\pi$ &  \\ \hline
+Gi & 0.000626$\pi$ &  & 0.884367$\pi$ & 0.548403$\pi$ \\ \hline
+Gx & 0.500356$\pi$ & 0.884367$\pi$ &  & 0.498288$\pi$ \\ \hline
+Gy & 0.50007$\pi$ & 0.548403$\pi$ & 0.498288$\pi$ &  \\ \hline
 \end{tabular}
 
 \end{tabular}
@@ -306,12 +306,12 @@ Gi & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
 -0.001 & 0.9447 & -0.0063 & -0.0088 \\ 
 0.0004 & 0.0011 & 0.9471 & 0.0038 \\ 
-0.001 & 3\e{-5} & 0.0007 & 0.9485
+0.0011 & 3\e{-5} & 0.0007 & 0.9485
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
-0.0003 & 0.9505 & -0.0049 & -0.0054 \\ 
+0.0003 & 0.9505 & -0.0048 & -0.0054 \\ 
 0.0002 & 0.0003 & 0.0001 & -0.9491 \\ 
 0.0002 & 0.0003 & 0.949 & -0.0022
  \end{array}\!\!\right) $
@@ -319,8 +319,8 @@ Gx & $ \left(\!\!\begin{array}{cccc}
 Gy & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
 0.0002 & 0.0001 & -0.004 & 0.9488 \\ 
-0.0003 & 0.0011 & 0.9512 & 0.0011 \\ 
--0.0002 & -0.949 & -0.0062 & -0.0005
+0.0003 & 0.001 & 0.9512 & 0.0011 \\ 
+-0.0001 & -0.949 & -0.0062 & -0.0005
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -347,22 +347,22 @@ $\rho_{0}$ & $ \begin{array}{c}
 0.7071 \\ 
 0.0016 \\ 
 0.0003 \\ 
-0.6373
+0.6369
  \end{array} $
  & $ \left(\!\!\begin{array}{cc}
-0.9506 & 0.0012e^{-i0.159} \\ 
-0.0012e^{i0.159} & 0.0494
+0.9503 & 0.0012e^{-i0.171} \\ 
+0.0012e^{i0.171} & 0.0497
  \end{array}\!\!\right) $
  \\ \hline
 $E_{0}$ & $ \begin{array}{c}
 0.7077 \\ 
--0.0002 \\ 
+-0.0004 \\ 
 -0.0031 \\ 
--0.6429
+-0.6432
  \end{array} $
  & $ \left(\!\!\begin{array}{cc}
-0.0458 & 0.0022e^{i1.648} \\ 
-0.0022e^{-i1.648} & 0.9551
+0.0456 & 0.0022e^{i1.708} \\ 
+0.0022e^{-i1.708} & 0.9553
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -373,7 +373,7 @@ $E_{0}$ & $ \begin{array}{c}
 \begin{tabular}[l]{|c|c|c|}
 \hline
  & $E_{0}$ & $E_C$ \\ \hline
-$\rho_{0}$ & 0.090701 & 0.9092 \\ \hline
+$\rho_{0}$ & 0.090768 & 0.909305 \\ \hline
 \end{tabular}
 
 \end{tabular}
@@ -408,10 +408,10 @@ Gi & $ \left(\!\!\begin{array}{cccc}
  \end{array} $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
-0.4871 & 0.4745e^{-i1.571} & 0.0014e^{-i1.601} & 0.0013e^{-i1.532} \\ 
-0.4745e^{i1.571} & 0.4882 & 0.0012e^{-i0.043} & 0.0013e^{-i3.108} \\ 
-0.0014e^{i1.601} & 0.0012e^{i0.043} & 0.013 & 0.0001e^{-i1.247} \\ 
-0.0013e^{i1.532} & 0.0013e^{i3.108} & 0.0001e^{i1.247} & 0.0118
+0.4871 & 0.4745e^{-i1.571} & 0.0014e^{-i1.610} & 0.0013e^{-i1.531} \\ 
+0.4745e^{i1.571} & 0.4882 & 0.0011e^{-i0.045} & 0.0013e^{-i3.098} \\ 
+0.0014e^{i1.610} & 0.0011e^{i0.045} & 0.013 & 0.0001e^{-i1.296} \\ 
+0.0013e^{i1.531} & 0.0013e^{i3.098} & 0.0001e^{i1.296} & 0.0118
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.0105 \\ 
@@ -421,14 +421,14 @@ Gx & $ \left(\!\!\begin{array}{cccc}
  \end{array} $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-0.4877 & 0.0018e^{i1.539} & 0.4745e^{i1.571} & 0.0013e^{-i1.607} \\ 
-0.0018e^{-i1.539} & 0.0123 & 0.0007e^{i0.063} & 0.0001e^{-i2.116} \\ 
-0.4745e^{-i1.571} & 0.0007e^{-i0.063} & 0.4879 & 0.0013e^{-i0.046} \\ 
-0.0013e^{i1.607} & 0.0001e^{i2.116} & 0.0013e^{i0.046} & 0.0121
+0.4877 & 0.0018e^{i1.541} & 0.4745e^{i1.571} & 0.0013e^{-i1.600} \\ 
+0.0018e^{-i1.541} & 0.0123 & 0.0007e^{i0.050} & 0.0001e^{-i2.262} \\ 
+0.4745e^{-i1.571} & 0.0007e^{-i0.050} & 0.4879 & 0.0013e^{-i0.043} \\ 
+0.0013e^{i1.600} & 0.0001e^{i2.262} & 0.0013e^{i0.043} & 0.0121
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.0107 \\ 
-0.0123 \\ 
+0.0122 \\ 
 0.0148 \\ 
 0.9623
  \end{array} $

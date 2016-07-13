@@ -33,6 +33,16 @@ class DataSetTestCase(unittest.TestCase):
             self.assertTrue(len(warning_list) > 0)
         return result
 
+    def isPython2(self):
+        #Check if interpreter is python2 by checking for basestring
+        #  (which is only defined in python2)
+        try:
+            basestring
+        except NameError: 
+            return False
+        return True
+
+
 
 class TestDataSetMethods(DataSetTestCase):
 
@@ -263,10 +273,10 @@ Gx^4 0.2 100
         self.assertEqualDatasets(ds_round, saved_ds)
 
         saved_ds = pygsti.io.load_dataset("../cmp_chk_files/Fake_Dataset_binom.txt")
-        if bDeepTesting: self.assertEqualDatasets(ds_binom, saved_ds) 
+        if bDeepTesting and self.isPython2(): self.assertEqualDatasets(ds_binom, saved_ds) 
 
         saved_ds = pygsti.io.load_dataset("../cmp_chk_files/Fake_Dataset_multi.txt")
-        if bDeepTesting: self.assertEqualDatasets(ds_multi, saved_ds)
+        if bDeepTesting and self.isPython2(): self.assertEqualDatasets(ds_multi, saved_ds)
 
         #Now test RB and RPE datasets
         rbDS = pygsti.construction.generate_sim_rb_data(depol_gateset, ds_binom, seed=1234)
