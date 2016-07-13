@@ -23,7 +23,7 @@ class Formatter():
     Class for formatting strings to html, latex, powerpoint, or text
 
     Parameters
-    --------
+    ----------
     stringreplacers : tuples of the form (pattern, replacement)
                    (replacement is a normal string)
                  Ex : [('rho', '&rho;')]
@@ -35,8 +35,9 @@ class Formatter():
     formatstring : Outer formatting for after both replacements have been made
  
     custom : tuple of a function and additional keyword arguments
+
     Returns
-    --------
+    -------
     None
 
     '''
@@ -56,6 +57,7 @@ class Formatter():
         Parameters
         --------
         label : the label to be formatted!
+
         Returns
         --------
         Formatted label
@@ -70,9 +72,12 @@ class Formatter():
                 return self.formatstring % self.custom(label)
 
         # Exit early if string matches stringreturn
-        if self.stringreturn is not None:
-            return (self.formatstring 
-                    % label.replace(self.stringreturn[0], self.stringreturn[1]))
+        if self.stringreturn is not None and self.stringreturn[0] == label:
+            return self.stringreturn[1]
+            #Changed by EGN: no need to format string here, but do need to
+            # check for equality above
+            #return (self.formatstring 
+            #        % label.replace(self.stringreturn[0], self.stringreturn[1]))
 
         # Below is the standard formatter case:
         # Replace all occurances of certain substrings
@@ -128,7 +133,7 @@ Effect = {
     'html'  : Formatter(stringreturn=('remainder', 'E<sub>C</sub>'),     
                          regexreplace=('.*?([0-9]+)$', '<sub>%s</sub>')), 
     'latex' : Formatter(stringreturn=('remainder', '$E_C$'),
-                         regexreplace=('.*?([0-9]+)$', '_{%s}')), 
+                         regexreplace=('.*?([0-9]+)$', '_{%s}'), formatstring='$%s$'), 
     'text'  : no_format, 
     'ppt'   : no_format}
 
@@ -277,10 +282,16 @@ VecErrorBars = {
     'text'  : _text_error_bar, 
     'ppt'   : _ppt_error_bar}
 
+
 # See _latex_vec_error_bar (This formatter is simpler as a function)
 def _latex_pi_error_bar(t):
-    return ('$ \\begin{array}{c}(%s \\\\ ]pm %s)\\pi \\end{array} $'
-            % (latex(t[0]), latex(t[1])))
+    if str(t[0]) == '--' or str(t[0]) == '':  return t[0]
+    if eb_exists(t):
+        return ('$ \\begin{array}{c}(%s \\\\ \\pm %s)\\pi \\end{array} $'
+                % (latex(t[0]), latex(t[1])))
+    else:
+        return '%s$\\pi$' % latex(t[0])
+
 
 # See eb_fmt_template. The only addition is the formatstring '(%s)&pi;'
 def pi_eb_fmt_template(f):
@@ -291,8 +302,7 @@ def pi_eb_fmt_template(f):
 # 'errorbars with pi' formatting: display (scalar_value +/- error bar) * pi
 PiErrorBars = { 
     'html'  : pi_eb_fmt_template(html), 
-    'latex' : eb_template(_latex_pi_error_bar,
-                          Formatter(custom=(_first_tuple_elem, {'f' : latex}))), 
+    'latex' : _latex_pi_error_bar,
     'text'  : _text_error_bar, 
     'ppt'   : pi_eb_fmt_template(ppt)}
 

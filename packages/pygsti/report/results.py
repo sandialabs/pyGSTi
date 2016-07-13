@@ -1588,8 +1588,10 @@ class Results(object):
                    ('opt_template_path', self.options.template_path),
                    ('opt_latex_cmd', self.options.latex_cmd) ]
                    #('opt_latex_postcmd', self.options.latex_postcmd) #TODO: add this
-        for key,val in self.parameters.items():
-            pdfInfo.append( (key, val) )
+
+        # Note: use definite ordering of parameters
+        for key in sorted(list(self.parameters.keys())):
+            pdfInfo.append( (key, self.parameters[key]) )
         qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
 
 
@@ -2042,8 +2044,9 @@ class Results(object):
                    ('opt_table_class', self.options.table_class),
                    ('opt_template_path', self.options.template_path),
                    ('opt_latex_cmd', self.options.latex_cmd) ]
-        for key,val in self.parameters.items():
-            pdfInfo.append( (key, val) )
+        # Note: use definite ordering of parameters
+        for key in sorted(list(self.parameters.keys())):
+            pdfInfo.append( (key, self.parameters[key]) )
         qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
 
         #Get figure directory for figure generation *and* as a
@@ -2313,8 +2316,10 @@ class Results(object):
                    ('opt_table_class', self.options.table_class),
                    ('opt_template_path', self.options.template_path),
                    ('opt_latex_cmd', self.options.latex_cmd) ]
-        for key,val in self.parameters.items():
-            pdfInfo.append( (key, val) )
+
+        # Note: use definite ordering of parameters
+        for key in sorted(list(self.parameters.keys())):
+            pdfInfo.append( (key, self.parameters[key]) )
         qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
 
 
@@ -3347,8 +3352,10 @@ class Results(object):
                    ('opt_table_class', self.options.table_class),
                    ('opt_template_path', self.options.template_path),
                    ('opt_latex_cmd', self.options.latex_cmd) ]
-        for key,val in self.parameters.items():
-            pdfInfo.append( (key, val) )
+
+        # Note: use definite ordering of parameters
+        for key in sorted(list(self.parameters.keys())):
+            pdfInfo.append( (key, self.parameters[key]) )
         qtys['pdfinfo'] = _to_pdfinfo( pdfInfo )
 
         #Get figure directory for figure generation *and* as a

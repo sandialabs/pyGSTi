@@ -41,7 +41,7 @@ class ReportTestCase(unittest.TestCase):
         #ds.save("../cmp_chk_files/reportgen.dataset")
 
         gs_lgst = pygsti.do_lgst(self.ds, self.specs, self.targetGateset, svdTruncateTo=4, verbosity=0)
-        gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",targetGateset=self.targetGateset)
+        gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",targetGateset=self.targetGateset,gateWeight=1.0,spamWeight=0.0)
         self.gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
         self.gs_clgst_tp = pygsti.contract(self.gs_clgst, "vSPAM")
         self.gs_clgst_tp.set_all_parameterizations("TP")
@@ -84,6 +84,11 @@ class ReportTestCase(unittest.TestCase):
         self.results_logL.init_Ls_and_germs("logl", self.targetGateset, self.ds, self.gs_clgst_tp, self.maxLengthList, self.germs,
                                      lsgst_gatesets_TP, self.lsgstStrings, self.fiducials, self.fiducials,
                                      pygsti.construction.repeat_with_max_length, True)
+        try:
+            basestring #Only defined in Python 2
+            self.versionsuffix = "" #Python 2
+        except NameError:
+            self.versionsuffix = "v3" #Python 3
 
     def tearDown(self):
         os.chdir(self.old)
@@ -93,9 +98,13 @@ class ReportTestCase(unittest.TestCase):
         if 'PYGSTI_DEEP_TESTING' in os.environ and \
            os.environ['PYGSTI_DEEP_TESTING'].lower() in ("yes","1","true"):
             # Deep testing -- do latex comparison
-            linesToTest = open("../temp_test_files/%s" % fn).readlines()
-            linesOK = open("../cmp_chk_files/%s" % fn).readlines()
-            self.assertEqual(linesToTest,linesOK)
+            cmpFilenm = "../cmp_chk_files/%s" % fn
+            if os.path.exists(cmpFilenm):
+                linesToTest = open("../temp_test_files/%s" % fn).readlines()
+                linesOK = open(cmpFilenm).readlines()
+                self.assertEqual(linesToTest,linesOK)
+            else:
+                print("WARNING! No reference file to compare against: %s" % cmpFilenm)
         else:
             # Normal testing -- no latex comparison
             pass
@@ -106,11 +115,12 @@ class TestReport(ReportTestCase):
 
     def test_reports_chi2_noCIs(self):
 
-        self.results.create_full_report_pdf(filename="../temp_test_files/full_reportA.pdf", confidenceLevel=None,
+        vs = self.versionsuffix
+        self.results.create_full_report_pdf(filename="../temp_test_files/full_reportA%s.pdf" % vs, confidenceLevel=None,
                                          debugAidsAppendix=False, gaugeOptAppendix=False,
                                          pixelPlotAppendix=False, whackamoleAppendix=False)
-        self.results.create_brief_report_pdf(filename="../temp_test_files/brief_reportA.pdf", confidenceLevel=None)
-        self.results.create_presentation_pdf(filename="../temp_test_files/slidesA.pdf", confidenceLevel=None,
+        self.results.create_brief_report_pdf(filename="../temp_test_files/brief_reportA%s.pdf" % vs, confidenceLevel=None)
+        self.results.create_presentation_pdf(filename="../temp_test_files/slidesA%s.pdf" % vs, confidenceLevel=None,
                                            debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False)
         if self.have_python_pptx:
             self.results.create_presentation_ppt(filename="../temp_test_files/slidesA.ppt", confidenceLevel=None,
@@ -128,100 +138,105 @@ class TestReport(ReportTestCase):
                                                  debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False)
 
         #Compare the text files, assume if these match the PDFs are equivalent
-        self.checkFile("full_reportA.tex")
-        self.checkFile("brief_reportA.tex")
-        self.checkFile("slidesA.tex")
+        self.checkFile("full_reportA%s.tex" % vs)
+        self.checkFile("brief_reportA%s.tex" % vs)
+        self.checkFile("slidesA%s.tex" % vs)
 
 
 
     def test_reports_chi2_wCIs(self):
+        vs = self.versionsuffix
 
-        self.results.create_full_report_pdf(filename="../temp_test_files/full_reportB.pdf", confidenceLevel=95,
+        self.results.create_full_report_pdf(filename="../temp_test_files/full_reportB%s.pdf" % vs, confidenceLevel=95,
                                          debugAidsAppendix=True, gaugeOptAppendix=True,
                                          pixelPlotAppendix=True, whackamoleAppendix=True,
                                          verbosity=2)
-        self.results.create_full_report_pdf(filename="../temp_test_files/full_reportB-noGOpt.pdf", confidenceLevel=95,
+        self.results.create_full_report_pdf(filename="../temp_test_files/full_reportB-noGOpt%s.pdf" % vs, confidenceLevel=95,
                                          debugAidsAppendix=True, gaugeOptAppendix=False,
                                          pixelPlotAppendix=True, whackamoleAppendix=True) # to test blank GOpt tables
-        self.results.create_brief_report_pdf(filename="../temp_test_files/brief_reportB.pdf", confidenceLevel=95, verbosity=2)
-        self.results.create_presentation_pdf(filename="../temp_test_files/slidesB.pdf", confidenceLevel=95,
+        self.results.create_brief_report_pdf(filename="../temp_test_files/brief_reportB%s.pdf" % vs, confidenceLevel=95, verbosity=2)
+        self.results.create_presentation_pdf(filename="../temp_test_files/slidesB%s.pdf" % vs, confidenceLevel=95,
                                            debugAidsAppendix=True, pixelPlotAppendix=True, whackamoleAppendix=True,
                                            verbosity=2)
         if self.have_python_pptx:
-            self.results.create_presentation_ppt(filename="../temp_test_files/slidesB.ppt", confidenceLevel=95,
+            self.results.create_presentation_ppt(filename="../temp_test_files/slidesB%s.ppt" % vs, confidenceLevel=95,
                                                  debugAidsAppendix=True, pixelPlotAppendix=True, whackamoleAppendix=True,
                                                  verbosity=2)
 
         #Compare the text files, assume if these match the PDFs are equivalent
-        self.checkFile("full_reportB.tex")
-        self.checkFile("full_reportB_appendices.tex")
-        self.checkFile("brief_reportB.tex")
-        self.checkFile("slidesB.tex")
+        self.checkFile("full_reportB%s.tex" % vs)
+        self.checkFile("full_reportB%s_appendices.tex" % vs)
+        self.checkFile("brief_reportB%s.tex" % vs)
+        self.checkFile("slidesB%s.tex" % vs)
 
 
     def test_reports_chi2_nonMarkCIs(self):
+        vs = self.versionsuffix
+
         #Non-markovian error bars (negative confidenceLevel) & tooltips
-        self.results.create_full_report_pdf(filename="../temp_test_files/full_reportE.pdf", confidenceLevel=-95,
+        self.results.create_full_report_pdf(filename="../temp_test_files/full_reportE%s.pdf" % vs, confidenceLevel=-95,
                                          debugAidsAppendix=True, gaugeOptAppendix=True,
                                          pixelPlotAppendix=True, whackamoleAppendix=True,
                                          verbosity=2, tips=True)
-        self.results.create_brief_report_pdf(filename="../temp_test_files/brief_reportE.pdf", confidenceLevel=-95,
+        self.results.create_brief_report_pdf(filename="../temp_test_files/brief_reportE%s.pdf" % vs, confidenceLevel=-95,
                                              verbosity=2, tips=True)
 
         #Compare the text files, assume if these match the PDFs are equivalent
-        self.checkFile("full_reportE.tex")
-        self.checkFile("full_reportE_appendices.tex")
+        self.checkFile("full_reportE%s.tex" % vs)
+        self.checkFile("full_reportE%s_appendices.tex" % vs)
 
 
     def test_reports_logL_TP_noCIs(self):
 
-        self.results_logL.create_full_report_pdf(filename="../temp_test_files/full_reportC.pdf", confidenceLevel=None,
+        vs = self.versionsuffix
+        self.results_logL.create_full_report_pdf(filename="../temp_test_files/full_reportC%s.pdf" % vs, confidenceLevel=None,
                                                  debugAidsAppendix=False, gaugeOptAppendix=False,
                                                  pixelPlotAppendix=False, whackamoleAppendix=False,
                                                  verbosity=2)
-        self.results_logL.create_brief_report_pdf(filename="../temp_test_files/brief_reportC.pdf", confidenceLevel=None, verbosity=2)
-        self.results_logL.create_presentation_pdf(filename="../temp_test_files/slidesC.pdf", confidenceLevel=None,
+        self.results_logL.create_brief_report_pdf(filename="../temp_test_files/brief_reportC%s.pdf" % vs, confidenceLevel=None, verbosity=2)
+        self.results_logL.create_presentation_pdf(filename="../temp_test_files/slidesC%s.pdf" % vs, confidenceLevel=None,
                                                   debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False,
                                                   verbosity=2)
-        self.results_logL.create_general_report_pdf(filename="../temp_test_files/general_reportC.pdf", confidenceLevel=None,
+        self.results_logL.create_general_report_pdf(filename="../temp_test_files/general_reportC%s.pdf" % vs, confidenceLevel=None,
                                                     verbosity=2)
 
         if self.have_python_pptx:
-            self.results_logL.create_presentation_ppt(filename="../temp_test_files/slidesC.ppt", confidenceLevel=None,
+            self.results_logL.create_presentation_ppt(filename="../temp_test_files/slidesC%s.ppt" % vs, confidenceLevel=None,
                                                       debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False,
                                                       verbosity=2)
 
         ##Compare the text files, assume if these match the PDFs are equivalent
-        self.checkFile("full_reportC.tex")
-        self.checkFile("brief_reportC.tex")
-        self.checkFile("slidesC.tex")
-        #self.checkFile("general_reportC.tex")
+        self.checkFile("full_reportC%s.tex" % vs)
+        self.checkFile("brief_reportC%s.tex" % vs)
+        self.checkFile("slidesC%s.tex" % vs)
+        #self.checkFile("general_reportC%s.tex" % vs)
 
 
     def test_reports_logL_TP_wCIs(self):
 
-        self.results_logL.create_full_report_pdf(filename="../temp_test_files/full_reportD.pdf", confidenceLevel=95,
+        vs = self.versionsuffix
+        self.results_logL.create_full_report_pdf(filename="../temp_test_files/full_reportD%s.pdf" % vs, confidenceLevel=95,
                                                  debugAidsAppendix=True, gaugeOptAppendix=True,
                                                  pixelPlotAppendix=True, whackamoleAppendix=True,
                                                  verbosity=2)
-        self.results_logL.create_brief_report_pdf(filename="../temp_test_files/brief_reportD.pdf", confidenceLevel=95, verbosity=2)
-        self.results_logL.create_presentation_pdf(filename="../temp_test_files/slidesD.pdf", confidenceLevel=95,
+        self.results_logL.create_brief_report_pdf(filename="../temp_test_files/brief_reportD%s.pdf" % vs, confidenceLevel=95, verbosity=2)
+        self.results_logL.create_presentation_pdf(filename="../temp_test_files/slidesD%s.pdf" % vs, confidenceLevel=95,
                                                   debugAidsAppendix=True, pixelPlotAppendix=True, whackamoleAppendix=True,
                                                   verbosity=2)
-        self.results_logL.create_general_report_pdf(filename="../temp_test_files/general_reportD.pdf", confidenceLevel=95,
+        self.results_logL.create_general_report_pdf(filename="../temp_test_files/general_reportD%s.pdf" % vs, confidenceLevel=95,
                                                     verbosity=2, tips=True) #test tips here too
 
         if self.have_python_pptx:
-            self.results_logL.create_presentation_ppt(filename="../temp_test_files/slidesD.ppt", confidenceLevel=95,
+            self.results_logL.create_presentation_ppt(filename="../temp_test_files/slidesD%s.ppt" % vs, confidenceLevel=95,
                                                       debugAidsAppendix=True, pixelPlotAppendix=True, whackamoleAppendix=True,
                                                       verbosity=2)
 
         ##Compare the text files, assume if these match the PDFs are equivalent
-        self.checkFile("full_reportD.tex")
-        self.checkFile("full_reportD_appendices.tex")
-        self.checkFile("brief_reportD.tex")
-        self.checkFile("slidesD.tex")
-        #self.checkFile("general_reportD.tex")
+        self.checkFile("full_reportD%s.tex" % vs)
+        self.checkFile("full_reportD%s_appendices.tex" % vs)
+        self.checkFile("brief_reportD%s.tex" % vs)
+        self.checkFile("slidesD%s.tex" % vs)
+        #self.checkFile("general_reportD%s.tex" % vs)
 
 
 

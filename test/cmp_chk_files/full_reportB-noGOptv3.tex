@@ -54,7 +54,7 @@
 \toggletrue{confidences}
 \toggletrue{LsAndGermsSet}
 \toggletrue{debuggingaidsappendix}
-\toggletrue{gaugeoptappendix}
+\togglefalse{gaugeoptappendix}
 \toggletrue{pixelplotsappendix}
 \toggletrue{whackamoleappendix}
 
@@ -171,7 +171,7 @@ $E_{0}$ & $ \begin{array}{c}
  \\ \hline
 \end{tabular}
 
-\caption{\pdftooltip{{\color{blue}\texttt{.tables['targetSpamTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['targetSpamTable']}\textbf{Target gate set: SPAM (state preparation and measurement) gates}.  These are the \emph{ideal} input state ($\rho_0$) and `plus' POVM effect $E_0$ for the device on which we report.  SPAM gates are given here both as $d\times d$ matrices, and in ``vectorized'' form as $d^2$-dimensional vectors in $\mathcal{B}(\mathcal{H})$.  See Table \ref{bestGatesetSpamTable} for GST estimates of the actual $\rho_0$ and $E_0$ implemented in this experiment.\label{targetSpamTable}}
+\caption{\textbf{Target gate set: SPAM (state preparation and measurement) gates}.  These are the \emph{ideal} input state ($\rho_0$) and `plus' POVM effect $E_0$ for the device on which we report.  SPAM gates are given here both as $d\times d$ matrices, and in ``vectorized'' form as $d^2$-dimensional vectors in $\mathcal{B}(\mathcal{H})$.  See Table \ref{bestGatesetSpamTable} for GST estimates of the actual $\rho_0$ and $E_0$ implemented in this experiment.\label{targetSpamTable}}
 \end{center}
 \end{table}
 
@@ -225,7 +225,7 @@ Gy & $ \left(\!\!\begin{array}{cccc}
  & 0.5$\pi$ \\ \hline
 \end{tabular}
 
-\caption{\pdftooltip{{\color{blue}\texttt{.tables['targetGatesTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['targetGatesTable']}\textbf{Target gate set: logic gates}.  These are the \emph{ideal} (generally unitary) logic gates.  Each has a name starting with ``G'', and is represented as a $d^2\times d^2$ \emph{superoperator} that acts by matrix multiplication on vectors in $\mathcal{B}(\mathcal{H})$.  For each gate, its axis of rotation (in $\mathcal{B}(\mathcal{H})$) and angle of rotation are also given.  See Table \ref{bestGatesetGatesTable} for GST estimates of the actual logic gates implemented in this experiment.\label{targetGatesTable}}
+\caption{\textbf{Target gate set: logic gates}.  These are the \emph{ideal} (generally unitary) logic gates.  Each has a name starting with ``G'', and is represented as a $d^2\times d^2$ \emph{superoperator} that acts by matrix multiplication on vectors in $\mathcal{B}(\mathcal{H})$.  For each gate, its axis of rotation (in $\mathcal{B}(\mathcal{H})$) and angle of rotation are also given.  See Table \ref{bestGatesetGatesTable} for GST estimates of the actual logic gates implemented in this experiment.\label{targetGatesTable}}
 \end{center}
 \end{table}
 
@@ -289,7 +289,7 @@ This table also contains one derived quantity, the spectrum of the largest \emph
 
 }
 \end{minipage}
-\caption{\pdftooltip{{\color{blue}\texttt{.tables['fiducialListTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['fiducialListTable']}\pdftooltip{{\color{blue}\texttt{.tables['germListTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['germListTable']}\textbf{Fiducial sequences and germs.}  See discussion in text.\label{fiducialAndGermListTables}}
+\caption{\textbf{Fiducial sequences and germs.}  See discussion in text.\label{fiducialAndGermListTables}}
 \end{center}
 \end{table}
 
@@ -315,7 +315,7 @@ Counts per string & 1000 \\ \hline
  \\ \hline
 \end{tabular}
 
-\caption{\pdftooltip{{\color{blue}\texttt{.tables['datasetOverviewTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['datasetOverviewTable']}\textbf{General dataset properties}.  See discussion in text.\label{datasetOverviewTable}}
+\caption{\textbf{General dataset properties}.  See discussion in text.\label{datasetOverviewTable}}
 \end{center}
 \end{table}
 
@@ -327,7 +327,7 @@ The primary output of GST is an estimated gate set.  This section presents the r
 
 Table \ref{bestGatesetSpamTable} reports the estimated SPAM operations, and Table \ref{bestGatesetGatesTable} reports the logic gate operations.  The estimated SPAM gates ($\rho_0$ and $E_0$) are vectors in $\mathcal{B}(\mathcal{H})$, and the estimated logic gates are superoperators represented as matrices acting on $\mathcal{B}(\mathcal{H})$, all in the Pauli basis.  By taking the dot product of state preparation and measurement vectors, estimated SPAM probabilites are computed in Table \ref{bestGatesetSpamParametersTable}.
 \iftoggle{confidences}{
-Tables \ref{bestGatesetSpamTable} and \ref{bestGatesetGatesTable} report -95\% confidence intervals for each of the gate matrix and SPAM vector elements.  A confidence region is obtained by approximating the $\chi^2$ function (see below) as being quadratic about its minimum, and determining the ellipsoid where this approximation equals a value, $C$, defined below.  For a given parameter (e.g. gate or SPAM vector element) $x$, a confidence interval is obtained by projecting the ellipsiodal region onto that $x$'s axis.  This computes a 1-dimensional -95\% confidence interval for the profile-$\chi^2$ for $x$, and for this reason the value of $C$ used above is chosen such that $\mathrm{CDF}[\chi^2_1](C) = -95\%$ (that is, at the value $C$ the cumulative density function of a $\chi^2_1$ distribution reaches -95\%).  If, instead, the interval corresponding to a projection of the -95\% multi-dimensional confidence region (defined by $C$ s.t.~$\mathrm{CDF}[\chi^2_n](C) = -95\%$, where $n=40$ is the number of non-gauge gate set parameters) is desired, then the all the interval widths reported here should be multiplied by 3.81.  The resulting confidence interval is always symmetric about the estimated value, and we report the half-width of the intervals in the tables.  In table \ref{bestGatesetSpamParametersTable} and those in the following section, we specify the -95\% confidence intervals of derived quantities in using \emph{value} $\pm$ \emph{half-width} notation.  The derived-quantity confidence intervals in section \ref{derivedQtySection} are computed by finding the minimum and maximum values of the linearization of the derived quantity (e.g.~fidelity).
+Tables \ref{bestGatesetSpamTable} and \ref{bestGatesetGatesTable} report 95\% confidence intervals for each of the gate matrix and SPAM vector elements.  A confidence region is obtained by approximating the $\chi^2$ function (see below) as being quadratic about its minimum, and determining the ellipsoid where this approximation equals a value, $C$, defined below.  For a given parameter (e.g. gate or SPAM vector element) $x$, a confidence interval is obtained by projecting the ellipsiodal region onto that $x$'s axis.  This computes a 1-dimensional 95\% confidence interval for the profile-$\chi^2$ for $x$, and for this reason the value of $C$ used above is chosen such that $\mathrm{CDF}[\chi^2_1](C) = 95\%$ (that is, at the value $C$ the cumulative density function of a $\chi^2_1$ distribution reaches 95\%).  If, instead, the interval corresponding to a projection of the 95\% multi-dimensional confidence region (defined by $C$ s.t.~$\mathrm{CDF}[\chi^2_n](C) = 95\%$, where $n=40$ is the number of non-gauge gate set parameters) is desired, then the all the interval widths reported here should be multiplied by 3.81.  The resulting confidence interval is always symmetric about the estimated value, and we report the half-width of the intervals in the tables.  In table \ref{bestGatesetSpamParametersTable} and those in the following section, we specify the 95\% confidence intervals of derived quantities in using \emph{value} $\pm$ \emph{half-width} notation.  The derived-quantity confidence intervals in section \ref{derivedQtySection} are computed by finding the minimum and maximum values of the linearization of the derived quantity (e.g.~fidelity).
 }{}
 
 
@@ -337,42 +337,42 @@ Tables \ref{bestGatesetSpamTable} and \ref{bestGatesetGatesTable} report -95\% c
 \hline
 Operator & Hilbert-Schmidt vector (Pauli basis) & 95\% C.I. $\nicefrac{1}{2}$-width & Matrix \\ \hline
 $\rho_{0}$ & $ \begin{array}{c}
-0.708 \\ 
-0.0016 \\ 
-0.0002 \\ 
-0.6551
+0.7072 \\ 
+0.0017 \\ 
+0.0003 \\ 
+0.7062
  \end{array} $
  & $ \begin{array}{c}
-0.0014 \\ 
-0.0017 \\ 
-0.0018 \\ 
-0.0015
+0.0034 \\ 
+0.0045 \\ 
+0.0048 \\ 
+0.0035
  \end{array} $
  & $ \left(\!\!\begin{array}{cc}
-0.9639 & 0.0011e^{-i0.155} \\ 
-0.0011e^{i0.155} & 0.0374
+0.9995 & 0.0012e^{-i0.154} \\ 
+0.0012e^{i0.154} & 0.0007
  \end{array}\!\!\right) $
  \\ \hline
 $E_{0}$ & $ \begin{array}{c}
-0.7071 \\ 
+0.7079 \\ 
 -0.0007 \\ 
--0.0025 \\ 
--0.625
+-0.0023 \\ 
+-0.5798
  \end{array} $
  & $ \begin{array}{c}
-0.0004 \\ 
-0.0014 \\ 
-0.0015 \\ 
-0.0015
+0.001 \\ 
+0.0031 \\ 
+0.0035 \\ 
+0.0039
  \end{array} $
  & $ \left(\!\!\begin{array}{cc}
-0.0581 & 0.0018e^{i1.847} \\ 
-0.0018e^{-i1.847} & 0.9419
+0.0906 & 0.0017e^{i1.845} \\ 
+0.0017e^{-i1.845} & 0.9105
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
 
-\caption{\pdftooltip{{\color{blue}\texttt{.tables['bestGatesetSpamTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['bestGatesetSpamTable']}\textbf{The GST estimate of the SPAM operations}.  Compare to Table \ref{targetSpamTable}.\label{bestGatesetSpamTable}}
+\caption{\textbf{The GST estimate of the SPAM operations}.  Compare to Table \ref{targetSpamTable}.\label{bestGatesetSpamTable}}
 \end{center}
 \end{table}
 
@@ -381,10 +381,10 @@ $E_{0}$ & $ \begin{array}{c}
 \begin{tabular}[l]{|c|c|c|}
 \hline
  & $E_{0}$ & $E_C$ \\ \hline
-$\rho_{0}$ & $ \begin{array}{c} 0.091176 \\ \pm 0.00176 \end{array} $ & $ \begin{array}{c} 0.909263 \\ \pm 0.002476 \end{array} $ \\ \hline
+$\rho_{0}$ & $ \begin{array}{c} 0.091176 \\ \pm 0.004427 \end{array} $ & $ \begin{array}{c} 0.909263 \\ \pm 0.006221 \end{array} $ \\ \hline
 \end{tabular}
 
-\caption{\pdftooltip{{\color{blue}\texttt{.tables['bestGatesetSpamParametersTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['bestGatesetSpamParametersTable']}\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestGatesetSpamTable}.  The symbol $E_C$, when it appears, refers to the ``complement'' effect given by subtracting each of the other effects from the identity.\label{bestGatesetSpamParametersTable}}
+\caption{\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestGatesetSpamTable}.  The symbol $E_C$, when it appears, refers to the ``complement'' effect given by subtracting each of the other effects from the identity.\label{bestGatesetSpamParametersTable}}
 \end{center}
 \end{table}
 
@@ -395,46 +395,46 @@ $\rho_{0}$ & $ \begin{array}{c} 0.091176 \\ \pm 0.00176 \end{array} $ & $ \begin
 Gate & Superoperator (Pauli basis) & 95\% C.I. $\nicefrac{1}{2}$-width \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
 1 & 0.0003 & 0.0003 & 0.0001 \\ 
--0.001 & 0.9447 & -0.0063 & -0.0088 \\ 
+-0.0011 & 0.9447 & -0.0063 & -0.0088 \\ 
 0.0005 & 0.0011 & 0.9471 & 0.0038 \\ 
-0.0011 & 2\e{-5} & 0.0007 & 0.9485
+0.0012 & 2\e{-5} & 0.0007 & 0.9485
  \end{array}\!\!\right) $
  & $ \left(\!\!\begin{array}{cccc}
-0.0004 & 0.0006 & 0.0007 & 0.0006 \\ 
-0.0007 & 0.0016 & 0.0016 & 0.0016 \\ 
-0.0006 & 0.0016 & 0.0016 & 0.0017 \\ 
-0.0006 & 0.0016 & 0.0017 & 0.0015
+0.0009 & 0.0015 & 0.0015 & 0.0014 \\ 
+0.0018 & 0.004 & 0.004 & 0.0041 \\ 
+0.0017 & 0.0041 & 0.004 & 0.0042 \\ 
+0.0017 & 0.004 & 0.0041 & 0.0037
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
-1 & 0.0001 & 5\e{-6} & 3\e{-5} \\ 
+1 & 0.0001 & 4\e{-5} & 3\e{-5} \\ 
 0.0004 & 0.9506 & -0.0048 & -0.0054 \\ 
 0.0002 & 0.0003 & 0.0001 & -0.9491 \\ 
 0.0002 & 0.0003 & 0.949 & -0.0022
  \end{array}\!\!\right) $
  & $ \left(\!\!\begin{array}{cccc}
-0.0003 & 0.0005 & 0.0018 & 0.0017 \\ 
-0.0006 & 0.0016 & 0.0005 & 0.0007 \\ 
-0.0003 & 0.0011 & 0.0012 & 0.0009 \\ 
-0.0003 & 0.001 & 0.0009 & 0.001
+0.0007 & 0.0012 & 0.0043 & 0.004 \\ 
+0.0017 & 0.004 & 0.0012 & 0.0017 \\ 
+0.0009 & 0.0028 & 0.003 & 0.0022 \\ 
+0.0009 & 0.0026 & 0.0022 & 0.0026
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-1 & -3\e{-5} & -2\e{-5} & 2\e{-5} \\ 
-0.0002 & 0.0001 & -0.004 & 0.9488 \\ 
+1 & -3\e{-5} & -2\e{-5} & -7\e{-6} \\ 
+0.0003 & 0.0001 & -0.004 & 0.9489 \\ 
 0.0003 & 0.0011 & 0.9514 & 0.0011 \\ 
 -0.0002 & -0.949 & -0.0062 & -0.0005
  \end{array}\!\!\right) $
  & $ \left(\!\!\begin{array}{cccc}
-0.0003 & 0.0005 & 0.0006 & 0.0004 \\ 
-0.0003 & 0.0011 & 0.0006 & 0.0009 \\ 
-0.0006 & 0.0011 & 0.0016 & 0.0011 \\ 
-0.0003 & 0.0009 & 0.0007 & 0.0009
+0.0007 & 0.0013 & 0.0014 & 0.0011 \\ 
+0.0009 & 0.0027 & 0.0013 & 0.0022 \\ 
+0.0017 & 0.0029 & 0.0041 & 0.0027 \\ 
+0.0009 & 0.0022 & 0.0018 & 0.0023
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
 
-\caption{\pdftooltip{{\color{blue}\texttt{.tables['bestGatesetGatesTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['bestGatesetGatesTable']}\textbf{The GST estimate of the logic gate operations}.  Compare to Table \ref{targetGatesTable}.\label{bestGatesetGatesTable}}
+\caption{\textbf{The GST estimate of the logic gate operations}.  Compare to Table \ref{targetGatesTable}.\label{bestGatesetGatesTable}}
 \end{center}
 \end{table}
 
@@ -458,9 +458,9 @@ It's also useful to know \emph{how} the real gates (or, more precisely, GST's es
 \begin{tabular}[l]{|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
-Gi & $ \begin{array}{c} 0.039909 \\ \pm 0.0008 \end{array} $ & $ \begin{array}{c} 0.04008 \\ \pm 0.000742 \end{array} $ & $ \begin{array}{c} 0.040088 \\ \pm 0.000742 \end{array} $ \\ \hline
-Gx & $ \begin{array}{c} 0.037849 \\ \pm 0.000668 \end{array} $ & $ \begin{array}{c} 0.037916 \\ \pm 0.000624 \end{array} $ & $ \begin{array}{c} 0.037917 \\ \pm 0.000624 \end{array} $ \\ \hline
-Gy & $ \begin{array}{c} 0.037688 \\ \pm 0.000685 \end{array} $ & $ \begin{array}{c} 0.037764 \\ \pm 0.00064 \end{array} $ & $ \begin{array}{c} 0.037765 \\ \pm 0.00064 \end{array} $ \\ \hline
+Gi & $ \begin{array}{c} 0.03991 \\ \pm 0.002013 \end{array} $ & $ \begin{array}{c} 0.040081 \\ \pm 0.001867 \end{array} $ & $ \begin{array}{c} 0.040089 \\ \pm 0.001867 \end{array} $ \\ \hline
+Gx & $ \begin{array}{c} 0.037848 \\ \pm 0.00168 \end{array} $ & $ \begin{array}{c} 0.037915 \\ \pm 0.001569 \end{array} $ & $ \begin{array}{c} 0.037916 \\ \pm 0.001569 \end{array} $ \\ \hline
+Gy & $ \begin{array}{c} 0.037688 \\ \pm 0.001723 \end{array} $ & $ \begin{array}{c} 0.037764 \\ \pm 0.001609 \end{array} $ & $ \begin{array}{c} 0.037765 \\ \pm 0.001609 \end{array} $ \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -469,28 +469,28 @@ Gy & $ \begin{array}{c} 0.037688 \\ \pm 0.000685 \end{array} $ & $ \begin{array}
 Gate & Error Generator \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
 1\e{-6} & 0.0003 & 0.0003 & 0.0001 \\ 
--0.001 & -0.0568 & -0.0067 & -0.0093 \\ 
+-0.0011 & -0.0568 & -0.0066 & -0.0093 \\ 
 0.0005 & 0.0011 & -0.0544 & 0.0041 \\ 
-0.0011 & 2\e{-5} & 0.0008 & -0.0528
+0.0012 & 2\e{-5} & 0.0008 & -0.0528
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
--7\e{-6} & 0.0001 & 5\e{-6} & 3\e{-5} \\ 
+-7\e{-6} & 0.0001 & 4\e{-5} & 4\e{-5} \\ 
 0.0004 & -0.0507 & -0.0051 & -0.0057 \\ 
 0.0002 & 0.0003 & -0.0524 & -0.0023 \\ 
 -0.0002 & -0.0003 & -0.0001 & -0.0523
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-2\e{-5} & -3\e{-5} & -3\e{-5} & 2\e{-5} \\ 
+2\e{-5} & -3\e{-5} & -2\e{-5} & -7\e{-6} \\ 
 0.0002 & -0.0523 & 0.0065 & 0.0005 \\ 
-0.0003 & 0.0011 & -0.0499 & 0.0012 \\ 
-0.0002 & 0.0001 & -0.0042 & -0.0525
+0.0004 & 0.0011 & -0.0499 & 0.0012 \\ 
+0.0003 & 0.0001 & -0.0042 & -0.0525
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
 
-\caption{\pdftooltip{{\color{blue}\texttt{.tables['bestGatesetVsTargetTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['bestGatesetVsTargetTable']}\pdftooltip{{\color{blue}\texttt{.tables['bestGatesetErrorGenTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['bestGatesetErrorGenTable']}\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The second table lists the ``Error Generator'' for each gate, which is the Lindbladian $\mathbb{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$. \label{bestGatesetVsTargetTable}}
+\caption{\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The second table lists the ``Error Generator'' for each gate, which is the Lindbladian $\mathbb{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$. \label{bestGatesetVsTargetTable}}
 \end{center}
 \end{table}
 
@@ -509,66 +509,66 @@ Gi & $ \begin{array}{c}
 0.9458e^{-i0.002}
  \end{array} $
  $\pm$ $ \begin{array}{c}
-0.0004 \\ 
-0.0052 \\ 
-0.0036e^{i0.677} \\ 
-0.0036e^{i0.677}
+0.0009 \\ 
+0.0131 \\ 
+0.009e^{i0.677} \\ 
+0.009e^{i0.677}
  \end{array} $
  & $ \begin{array}{c}
-0.9989 \\ 
--0.0223 \\ 
-0.0105 \\ 
-0.0219
+0.9987 \\ 
+-0.024 \\ 
+0.0113 \\ 
+0.0236
  \end{array} $
  & $ \begin{array}{c}
-0.0043 \\ 
--0.9338 \\ 
-0.1486 \\ 
-0.3255
+-0.004 \\ 
+0.9338 \\ 
+-0.1487 \\ 
+-0.3255
  \end{array} $
- & $ \begin{array}{c} 0.051182 \\ \pm 0.005228 \end{array} $ & $ \begin{array}{c} 0.054226 \\ \pm 0.002802 \end{array} $ \\ \hline
+ & $ \begin{array}{c} 0.051181 \\ \pm 0.013139 \end{array} $ & $ \begin{array}{c} 0.054227 \\ \pm 0.007046 \end{array} $ \\ \hline
 Gx & $ \begin{array}{c}
-0.949e^{i1.572} \\ 
-0.949e^{-i1.572} \\ 
 1 \\ 
-0.9506
+0.9506 \\ 
+0.949e^{i1.572} \\ 
+0.949e^{-i1.572}
  \end{array} $
  $\pm$ $ \begin{array}{c}
-0.0013e^{i0.721} \\ 
-0.0013e^{i0.721} \\ 
-0.0003 \\ 
-0.0016
+0.0007 \\ 
+0.004 \\ 
+0.0033e^{i0.722} \\ 
+0.0033e^{i0.722}
  \end{array} $
  & $ \begin{array}{c}
 0.9999 \\ 
-0.0072 \\ 
+0.0078 \\ 
 -1\e{-5} \\ 
 0.0002
  \end{array} $
  & $ \begin{array}{c}
-0.0014 \\ 
--1 \\ 
-6\e{-7} \\ 
--0.0003
+-0.0014 \\ 
+1 \\ 
+2\e{-6} \\ 
+0.0003
  \end{array} $
- & $ \begin{array}{c} 0.049448 \\ \pm 0.001608 \end{array} $ & $ \begin{array}{c} 0.050971 \\ \pm 0.000864 \end{array} $ \\ \hline
+ & $ \begin{array}{c} 0.049448 \\ \pm 0.004044 \end{array} $ & $ \begin{array}{c} 0.050968 \\ \pm 0.002173 \end{array} $ \\ \hline
 Gy & $ \begin{array}{c}
 1 \\ 
-0.9513 \\ 
+0.9514 \\ 
 0.9489e^{i1.571} \\ 
 0.9489e^{-i1.571}
  \end{array} $
  $\pm$ $ \begin{array}{c}
-0.0003 \\ 
-0.0016 \\ 
-0.0012e^{i0.794} \\ 
-0.0012e^{i0.794}
+0.0007 \\ 
+0.0041 \\ 
+0.0031e^{i0.794} \\ 
+0.0031e^{i0.794}
  \end{array} $
  & $ \begin{array}{c}
-1 \\ 
+0.9999 \\ 
 -5\e{-6} \\ 
-0.0066 \\ 
--0.0002
+0.0071 \\ 
+-0.0003
  \end{array} $
  & $ \begin{array}{c}
 -0.0005 \\ 
@@ -576,7 +576,7 @@ Gy & $ \begin{array}{c}
 -1 \\ 
 0.0012
  \end{array} $
- & $ \begin{array}{c} 0.048651 \\ \pm 0.00163 \end{array} $ & $ \begin{array}{c} 0.051062 \\ \pm 0.000891 \end{array} $ \\ \hline
+ & $ \begin{array}{c} 0.048648 \\ \pm 0.004099 \end{array} $ & $ \begin{array}{c} 0.051063 \\ \pm 0.002242 \end{array} $ \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -584,12 +584,12 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & $ \begin{array}{c}(0.000627 \\ \pm 0.000758)\pi \end{array} $ &  & $ \begin{array}{c}(0.11656 \\ \pm 0.133588)\pi \end{array} $ & $ \begin{array}{c}(0.548963 \\ \pm 0.16945)\pi \end{array} $ \\ \hline
-Gx & $ \begin{array}{c}(0.500353 \\ \pm 0.00033)\pi \end{array} $ & $ \begin{array}{c}(0.11656 \\ \pm 0.133588)\pi \end{array} $ &  & $ \begin{array}{c}(0.501708 \\ \pm 0.000369)\pi \end{array} $ \\ \hline
-Gy & $ \begin{array}{c}(0.500072 \\ \pm 0.000294)\pi \end{array} $ & $ \begin{array}{c}(0.548963 \\ \pm 0.16945)\pi \end{array} $ & $ \begin{array}{c}(0.501708 \\ \pm 0.000369)\pi \end{array} $ &  \\ \hline
+Gi & $ \begin{array}{c}(0.000627 \\ \pm 0.001906)\pi \end{array} $ &  & $ \begin{array}{c}(0.116574 \\ \pm 0.335911)\pi \end{array} $ & $ \begin{array}{c}(0.45099 \\ \pm 0.425747)\pi \end{array} $ \\ \hline
+Gx & $ \begin{array}{c}(0.500353 \\ \pm 0.000828)\pi \end{array} $ & $ \begin{array}{c}(0.116574 \\ \pm 0.335911)\pi \end{array} $ &  & $ \begin{array}{c}(0.498294 \\ \pm 0.000921)\pi \end{array} $ \\ \hline
+Gy & $ \begin{array}{c}(0.500073 \\ \pm 0.000739)\pi \end{array} $ & $ \begin{array}{c}(0.45099 \\ \pm 0.425747)\pi \end{array} $ & $ \begin{array}{c}(0.498294 \\ \pm 0.000921)\pi \end{array} $ &  \\ \hline
 \end{tabular}
 
-\caption{\pdftooltip{{\color{blue}\texttt{.tables['bestGatesetDecompTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['bestGatesetDecompTable']}\pdftooltip{{\color{blue}\texttt{.tables['bestGatesetRotnAxisTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['bestGatesetRotnAxisTable']}\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay''); and (7) the angle between each gate's rotation axis and the rotation axes of the other gates.  ``X'' indicates that the decomposition failed or couldn't be interpreted. \label{bestGatesetDecompTable}}
+\caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay''); and (7) the angle between each gate's rotation axis and the rotation axes of the other gates.  ``X'' indicates that the decomposition failed or couldn't be interpreted. \label{bestGatesetDecompTable}}
 \end{center}
 \end{table}
 
@@ -602,30 +602,30 @@ Table \ref{bestGatesetClosestUnitaryTable} lists, for each estimated gate, the p
 \begin{tabular}[l]{|c|c|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & \begin{tabular}{c}Rotation\\Axis\end{tabular} & \begin{tabular}{c}Rotation\\Angle\end{tabular} & Sanity \checkmark \\ \hline
-Gi & 0.0399 & 0.039903 & $ \begin{array}{c}
+Gi & 0.0399 & 0.039904 & $ \begin{array}{c}
 0 \\ 
--0.2613 \\ 
--0.7412 \\ 
-0.6184
+0.2613 \\ 
+0.7412 \\ 
+-0.6184
  \end{array} $
- & 0.002002$\pi$ & 0.000004 \\ \hline
-Gx & 0.037845 & 0.037842 & $ \begin{array}{c}
+ & 0.002001$\pi$ & 0.000005 \\ \hline
+Gx & 0.037844 & 0.037841 & $ \begin{array}{c}
 0 \\ 
--1 \\ 
-0.0027 \\ 
--7\e{-7}
+1 \\ 
+-0.0027 \\ 
+4\e{-7}
  \end{array} $
- & 0.500354$\pi$ & 5\e{-7} \\ \hline
+ & 0.500355$\pi$ & 0.000001 \\ \hline
 Gy & 0.037685 & 0.037695 & $ \begin{array}{c}
 0 \\ 
 -0.0027 \\ 
 1 \\ 
--6\e{-7}
+3\e{-6}
  \end{array} $
- & 0.500074$\pi$ & 3\e{-7} \\ \hline
+ & 0.500074$\pi$ & 4\e{-7} \\ \hline
 \end{tabular}
 
-\caption{\pdftooltip{{\color{blue}\texttt{.tables['bestGatesetClosestUnitaryTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['bestGatesetClosestUnitaryTable']}Information pertaining to the closest unitary gate to each of the estimated gates.\label{bestGatesetClosestUnitaryTable}}
+\caption{Information pertaining to the closest unitary gate to each of the estimated gates.\label{bestGatesetClosestUnitaryTable}}
 \end{center}
 \end{table}
 
@@ -642,29 +642,29 @@ Additionally, the condition of \emph{complete positivity} or CP (which all real 
 \hline
 Gate & Choi matrix (Pauli basis) & Eigenvalues \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
-0.9601 & 0.0008e^{i1.779} & 0.0022e^{-i1.663} & 0.0019e^{-i1.409} \\ 
-0.0008e^{-i1.779} & 0.0123 & 0.0013e^{-i0.196} & 0.0022e^{-i3.122} \\ 
-0.0022e^{i1.663} & 0.0013e^{i0.196} & 0.0135 & 0.0012e^{i2.867} \\ 
-0.0019e^{i1.409} & 0.0022e^{i3.122} & 0.0012e^{-i2.867} & 0.0142
+0.9601 & 0.0008e^{i1.810} & 0.0022e^{-i1.665} & 0.0019e^{-i1.398} \\ 
+0.0008e^{-i1.810} & 0.0123 & 0.0013e^{-i0.213} & 0.0022e^{-i3.115} \\ 
+0.0022e^{i1.665} & 0.0013e^{i0.213} & 0.0135 & 0.0012e^{i2.856} \\ 
+0.0019e^{i1.398} & 0.0022e^{i3.115} & 0.0012e^{-i2.856} & 0.0142
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
-0.0107 \\ 
+0.0106 \\ 
 0.0127 \\ 
 0.0165 \\ 
 0.9601
  \end{array} $
  $\pm$ $ \begin{array}{c}
-0.0007 \\ 
-0.0006 \\ 
-0.0007 \\ 
-0.0008
+0.0016 \\ 
+0.0016 \\ 
+0.0017 \\ 
+0.002
  \end{array} $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
-0.4871 & 0.4745e^{-i1.571} & 0.0014e^{-i1.605} & 0.0013e^{-i1.522} \\ 
-0.4745e^{i1.571} & 0.4882 & 0.0011e^{-i0.044} & 0.0013e^{-i3.105} \\ 
-0.0014e^{i1.605} & 0.0011e^{i0.044} & 0.0129 & 0.0001e^{-i1.185} \\ 
-0.0013e^{i1.522} & 0.0013e^{i3.105} & 0.0001e^{i1.185} & 0.0118
+0.4871 & 0.4745e^{-i1.571} & 0.0014e^{-i1.611} & 0.0013e^{-i1.519} \\ 
+0.4745e^{i1.571} & 0.4882 & 0.0011e^{-i0.044} & 0.0013e^{-i3.111} \\ 
+0.0014e^{i1.611} & 0.0011e^{i0.044} & 0.0129 & 0.0001e^{-i1.220} \\ 
+0.0013e^{i1.519} & 0.0013e^{i3.111} & 0.0001e^{i1.220} & 0.0118
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.0105 \\ 
@@ -673,17 +673,17 @@ Gx & $ \left(\!\!\begin{array}{cccc}
 0.9622
  \end{array} $
  $\pm$ $ \begin{array}{c}
-0.0004 \\ 
-0.0005 \\ 
-0.0004 \\ 
-0.0007
+0.0011 \\ 
+0.0011 \\ 
+0.0011 \\ 
+0.0017
  \end{array} $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-0.4877 & 0.0018e^{i1.543} & 0.4745e^{i1.571} & 0.0013e^{-i1.606} \\ 
-0.0018e^{-i1.543} & 0.0123 & 0.0007e^{i0.071} & 0.0001e^{-i2.092} \\ 
-0.4745e^{-i1.571} & 0.0007e^{-i0.071} & 0.488 & 0.0013e^{-i0.053} \\ 
-0.0013e^{i1.606} & 0.0001e^{i2.092} & 0.0013e^{i0.053} & 0.012
+0.4877 & 0.0018e^{i1.539} & 0.4745e^{i1.571} & 0.0013e^{-i1.614} \\ 
+0.0018e^{-i1.539} & 0.0123 & 0.0007e^{i0.070} & 0.0001e^{-i1.997} \\ 
+0.4745e^{-i1.571} & 0.0007e^{-i0.070} & 0.488 & 0.0013e^{-i0.057} \\ 
+0.0013e^{i1.614} & 0.0001e^{i1.997} & 0.0013e^{i0.057} & 0.012
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.0107 \\ 
@@ -692,15 +692,15 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 0.9623
  \end{array} $
  $\pm$ $ \begin{array}{c}
-0.0005 \\ 
-0.0004 \\ 
-0.0004 \\ 
-0.0007
+0.0012 \\ 
+0.0011 \\ 
+0.0011 \\ 
+0.0017
  \end{array} $
  \\ \hline
 \end{tabular}
 
-\caption{\pdftooltip{{\color{blue}\texttt{.tables['bestGatesetChoiTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['bestGatesetChoiTable']}\textbf{Choi matrix representation of the GST estimated gate set}.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestGatesetChoiTable}}
+\caption{\textbf{Choi matrix representation of the GST estimated gate set}.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.\label{bestGatesetChoiTable}}
 \end{center}
 \end{table}
 
@@ -764,12 +764,12 @@ As a rough rule of thumb, for GST experiments involving relatively long sequence
 L & $\chi^2$ & $k$ & $\chi^2-k$ & $\sqrt{2k}$ & $p$ & $N_s$ & $N_p$ & Rating \\ \hline
 0 & 53.24529 & 52 & 1.245291 & 10.19804 & 0.43 & 92 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
 1 & 53.24529 & 52 & 1.245291 & 10.19804 & 0.43 & 92 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-2 & 106.3637 & 128 & -21.63628 & 16 & 0.92 & 168 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+2 & 106.3637 & 128 & -21.63627 & 16 & 0.92 & 168 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
 4 & 353.8544 & 401 & -47.14556 & 28.3196 & 0.96 & 441 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-8 & 690.8224 & 777 & -86.17763 & 39.42081 & 0.99 & 817 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+8 & 690.8223 & 777 & -86.17767 & 39.42081 & 0.99 & 817 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
 \end{tabular}
 
-\caption{\pdftooltip{{\color{blue}\texttt{.tables['progressTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['progressTable']}\textbf{Comparison between the computed and expected $\chi^2$ for different values of $L$}.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively.  $\chi^2$ measures the goodness of fit of the GST model (small is better) and is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $p$ is the $p$-value derived from a $\chi^2_k$ distribution. (For example, if $p=0.05$, then the probability of observing a $\chi^{2}$ value as large as, or larger than, the one indicated in the table is 5\%, assuming the GST model is valid.) The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.\label{progressTable}}
+\caption{\textbf{Comparison between the computed and expected $\chi^2$ for different values of $L$}.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively.  $\chi^2$ measures the goodness of fit of the GST model (small is better) and is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $p$ is the $p$-value derived from a $\chi^2_k$ distribution. (For example, if $p=0.05$, then the probability of observing a $\chi^{2}$ value as large as, or larger than, the one indicated in the table is 5\%, assuming the GST model is valid.) The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.\label{progressTable}}
 \end{center}
 \end{table}
 
@@ -796,8 +796,8 @@ Similar pixel plots for the intermediate estimates whose total $\chi^2$ is liste
 
 \begin{figure}
 \begin{center}
-\includegraphics[width=6.50in,height=9.00in,keepaspectratio]{full_reportE_files/bestChi2Boxes.pdf}
-\caption{\pdftooltip{{\color{blue}\texttt{.figures['bestEstimateColorBoxPlot']}}\quad}{Access this information in pyGSTi via<ResultsObject>.figures['bestEstimateColorBoxPlot']}\textbf{$\chi^2$ values for every individual experiment in the dataset}.  Each pixel represents a single experiment (gate sequence), and its color indicates whether GST was able to fit the corresponding frequency well.  Shades of white/gray are typical. Red squares represent statistically significant evidence for model violation (non-Markovianity), and should appear with probability at most 5\% if the data really are Markovian. Square blocks of pixels correspond to base sequences (arranged vertically by germ and horizontally by length); each pixel within a block corresponds to a specific choice of pre- and post-fiducial sequences.  See text for further details.\label{bestEstimateColorBoxPlot}}
+\includegraphics[width=6.50in,height=9.00in,keepaspectratio]{full_reportB-noGOptv3_files/bestChi2Boxes.pdf}
+\caption{\textbf{$\chi^2$ values for every individual experiment in the dataset}.  Each pixel represents a single experiment (gate sequence), and its color indicates whether GST was able to fit the corresponding frequency well.  Shades of white/gray are typical. Red squares represent statistically significant evidence for model violation (non-Markovianity), and should appear with probability at most 5\% if the data really are Markovian. Square blocks of pixels correspond to base sequences (arranged vertically by germ and horizontally by length); each pixel within a block corresponds to a specific choice of pre- and post-fiducial sequences.  See text for further details.\label{bestEstimateColorBoxPlot}}
 \end{center}
 \end{figure}
 
@@ -805,13 +805,13 @@ Figure \ref{invertedBestEstimateColorBoxPlot} shows exactly the same $\chi^2$ an
 
 \begin{figure}
 \begin{center}
-\includegraphics[width=6.50in,height=9.00in,keepaspectratio]{full_reportE_files/bestChi2Boxes_inverted.pdf}
-\caption{\pdftooltip{{\color{blue}\texttt{.figures['invertedBestEstimateColorBoxPlot']}}\quad}{Access this information in pyGSTi via<ResultsObject>.figures['invertedBestEstimateColorBoxPlot']}\textbf{$\chi^2$ values for each experiment, arranged differently.}  This figure shows the same data as Figure \ref{bestEstimateColorBoxPlot}, but arranged differently.  Each block now corresponds to a particular pair of fiducial sequences, while pixels within the block correspond to different base sequences sandwiched between those fiducials.\label{invertedBestEstimateColorBoxPlot}}
+\includegraphics[width=6.50in,height=9.00in,keepaspectratio]{full_reportB-noGOptv3_files/bestChi2Boxes_inverted.pdf}
+\caption{\textbf{$\chi^2$ values for each experiment, arranged differently.}  This figure shows the same data as Figure \ref{bestEstimateColorBoxPlot}, but arranged differently.  Each block now corresponds to a particular pair of fiducial sequences, while pixels within the block correspond to different base sequences sandwiched between those fiducials.\label{invertedBestEstimateColorBoxPlot}}
 \end{center}
 \end{figure}
 
 }{}
 
-\input{full_reportE_appendices.tex}
+\input{full_reportB-noGOptv3_appendices.tex}
 
 \end{document}
