@@ -42,3 +42,6 @@ whitelisted-conventions:
   
 whitelisted-refactors:
   - redefined-variable-type
+
+desired-score:
+  9.5
