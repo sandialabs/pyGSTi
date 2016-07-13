@@ -694,9 +694,6 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
 
     with printer.progress_logging(1):
         for iIter in range(maxIter):
-            # List of weight tuples already computed
-            scoreD_keys = scoreD.keys()
-
             printer.show_progress(iIter + 1, maxIter,
                                   suffix="score=%g, nGerms=%d" % (score, L1))
 
@@ -707,7 +704,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                 #         continue
                 neighborScoreList = []
                 for gateset_num in range(len(gatesetList)):
-                    if (gateset_num, tuple(neighbor)) not in scoreD_keys:
+                    if (gateset_num, tuple(neighbor)) not in scoreD:
                         neighborL1 = sum(neighbor)
                         neighborScoreList.append(compute_score(neighbor,
                                                                gateset_num,
