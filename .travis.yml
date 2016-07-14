@@ -5,6 +5,7 @@ python:
 branches:
   only:
     - master
+    - beta
     - develop
 # command to install dependencies
 before_install:
