@@ -623,7 +623,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                                   suffix="score=%g, nGerms=%d" % (score, L1))
 
             bFoundBetterNeighbor = False
-            for neighborNum, neighbor in enumerate(get_neighbors(weights)):
+            for neighbor in get_neighbors(weights):
                 # if force_singletons:
                 #     if _np.count_nonzeros(neighbor[:numGates]) != numGates
                 #         continue

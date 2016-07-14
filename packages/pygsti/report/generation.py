@@ -306,7 +306,7 @@ def get_gateset_choi_table(gateset, confidenceRegionInfo=None):
     for gl in gateLabels:
         evals, evalsEB = qtys['%s choi eigenvalues' % gl].get_value_and_err_bar()
 
-        choiMx,choiEB = qtys['%s choi matrix' % gl].get_value_and_err_bar()
+        choiMx, _ = qtys['%s choi matrix' % gl].get_value_and_err_bar()
         if confidenceRegionInfo is None:
             table.addrow((gl, choiMx, evals), (None, 'Brackets', 'Normal'))
         else:
@@ -533,8 +533,8 @@ def get_gateset_closest_unitary_table(gateset, confidenceRegionInfo=None):
     formatters = [None, 'ErrorBars', 'ErrorBars', 'VecErrorBars', 'PiErrorBars', 'Normal' ] # Note len(decompNames)==2, 2nd el is rotn angle
 
     for gl in gateLabels:
-        fUB,fUB_EB = qtys['%s upper bound on fidelity with unitary' % gl].get_value_and_err_bar()
-        fLB,fLB_EB = qtys['%s max fidelity with unitary' % gl].get_value_and_err_bar()
+        fUB, _ = qtys['%s upper bound on fidelity with unitary' % gl].get_value_and_err_bar()
+        fLB, fLB_EB = qtys['%s max fidelity with unitary' % gl].get_value_and_err_bar()
         td, td_EB = qtys['%s max trace dist with unitary' % gl].get_value_and_err_bar()
         sanity = (1.0-fLB)/(1.0-fUB) - 1.0 #Robin's sanity check metric (0=good, >1=bad)
         decomp, decompEB = qtys['%s closest unitary decomposition' % gl].get_value_and_err_bar()
@@ -656,7 +656,7 @@ def get_gateset_rotn_axis_table(gateset, confidenceRegionInfo=None,
 
         angles_btwn_rotn_axes = []
         for j,gl_other in enumerate(gateLabels):
-            decomp_other, decompEB_other = qtys['%s decomposition' % gl_other].get_value_and_err_bar()
+            decomp_other, _ = qtys['%s decomposition' % gl_other].get_value_and_err_bar()
             rotnAngle_other = decomp_other.get('pi rotations','X')
 
             if gl_other == gl:
@@ -940,7 +940,7 @@ def get_dataset_overview_table(dataset, target, maxlen=10, fixedLists=None,
     """
     colHeadings = ('Quantity','Value')
     formatters = (None,None)
-    rank,svals,target_svals = _alg.max_gram_rank_and_evals( dataset, maxlen, target, fixedLists=fixedLists )
+    _, svals, target_svals = _alg.max_gram_rank_and_evals( dataset, maxlen, target, fixedLists=fixedLists )
     svals = _np.sort(_np.abs(svals)).reshape(-1,1)
     target_svals = _np.sort(_np.abs(target_svals)).reshape(-1,1)
     svals_2col = _np.concatenate( (svals,target_svals), axis=1 )
@@ -1283,7 +1283,7 @@ def get_gates_vs_target_err_gen_boxes_table(gateset, targetGateset,
 
     table = _ReportTable(colHeadings, (None,None,None))
     nRows = len(gateset.gates)
-    nCols = len(colHeadings)
+    #nCols = len(colHeadings)
 
     for gl in gateLabels:
         gate = gateset.gates[gl]
