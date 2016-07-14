@@ -8,9 +8,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import numpy.linalg as _nla
-import itertools as _itertools
-import math as _math
-import sys as _sys
 import warnings as _warnings
 from .. import objects as _objs
 

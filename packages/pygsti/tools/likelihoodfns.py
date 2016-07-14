@@ -8,7 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import warnings as _warnings
-import time as _time
+#import time as _time
 from . import basistools as _bt
 from . import jamiolkowski as _jam
 
