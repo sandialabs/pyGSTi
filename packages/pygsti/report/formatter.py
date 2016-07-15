@@ -25,9 +25,9 @@ class FormatSet():
     formatDict = {} # Static dictionary containing small formatter dictionaries
                     # Ex: { 'Rho' :  { 'html' : ... , 'text' : ... }, ... } (created below)
 
-    def __init__(self, scratchDir, precision):
-        self.scratchDir = scratchDir
-        self.precision  = precision
+    def __init__(self, specs):
+        # Specs is a dictionary of the form { 'setting'(kwarg) : value }
+        self.specs = specs
 
     def formatList(self, items, formatters, fmt):
         assert(len(items) == len(formatters))
@@ -35,13 +35,10 @@ class FormatSet():
         for item, formatter in zip(items, formatters):
             if formatter is not None:
                 formatter = FormatSet.formatDict[formatter]
-                # If the formatter requires a scratch directory  to do its job, give it.
-                if hasattr(formatter[fmt], 'scratchDir'):
-                    formatter[fmt].scratchDir = self.scratchDir 
-                # Likewise with precision
-                if hasattr(formatter[fmt], 'precision'):
-                    formatter[fmt].precision = self.precision
-
+                for spec in self.specs:
+                    # If the formatter requires a setting to do its job, give the setting
+                    if hasattr(formatter[fmt], spec):
+                        setattr(formatter[fmt], spec, self.specs[spec])
                 formatted_item = formatter[fmt](item)
                 if formatted_item is None:
                     raise ValueError("Formatter " + str(type(formatter[fmt]))
@@ -153,18 +150,23 @@ class PrecisionFormatter():
     def __init__(self, custom):
         self.custom    = custom
         self.precision = None
+        self.polarprecision = None
 
     def __call__(self, label):
         if self.precision is None:
             raise ValueError('Precision was not supplied to PrecisionFormatter')
         
-        if not callable(self.custom): # If some keyword arguments were supplied already
-            if has_argname('ROUND', self.custom[0]):
-                self.custom[1]['ROUND'] = self.precision 
-        else:
-            if has_argname('ROUND', self.custom):
-                self.custom = (self.custom, {'ROUND' : self.precision})
-        
+        precisionArgs = { 'ROUND' : self.precision, 'PHIROUND' : self.polarprecision } # Allow modular addition of arguments
+
+        # Supply arguments to the custom formatter (if it needs them)
+        for argname in precisionArgs:
+            if not callable(self.custom): # If some keyword arguments were supplied already
+                if has_argname(argname, self.custom[0]):             # 'if it needs them'
+                    self.custom[1][argname] = precisionArgs[argname] # update the argument in custom's existing keyword dictionary
+            else:
+                if has_argname(argname, self.custom): # If custom is a lone callable (not a tuple)
+                # Create keyword dictionary for custom, modifiying it to be a tuple (function, kwargs)
+                    self.custom = (self.custom, {argname : precisionArgs[argname]})         
         return self.custom[0](label, **self.custom[1])
     
 

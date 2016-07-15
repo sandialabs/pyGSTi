@@ -22,10 +22,11 @@ class ReportTable(object):
         pass #nothing to do currently
 
     def render(self, fmt, longtables=False, tableclass='pygstiTbl',
-               scratchDir=None, precision=6):
+               scratchDir=None, precision=6, polarprecision=3):
 
+        specs = {'scratchDir' : scratchDir, 'precision' : precision, 'polarprecision' : polarprecision}
         # Create a formatSet, which contains rules for rendering lists
-        formatSet =  _FormatSet(scratchDir, precision)
+        formatSet =  _FormatSet(specs)
 
         if fmt == "latex":
 
