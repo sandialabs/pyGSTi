@@ -178,7 +178,7 @@ class FigureFormatter():
     def __call__(self, figInfo):
         fig, name, W, H = figInfo
         if self.extension is not None:
-            if self.spec is None:
+            if self.specs is None:
                 raise ValueError("Must supply scratch " +
                                  "directory (spec) to FigureFormatter")
 
@@ -230,12 +230,13 @@ FormatSet.formatDict['Normal'] = {
     'text'  : no_format, 
     'ppt'   : ppt }
 
+#DEPRECATED?
 # 'normal' formatting but round to 2 decimal places
 FormatSet.formatDict['Rounded'] = { 
-    'html'  : Formatter(custom=(html_value,  {'ROUND' : 2})), # return custom(label, ROUND=2) (Since formatstring is just '%s')
-    'latex' : Formatter(custom=(latex_value, {'ROUND' : 2})), 
+    'html'  : Formatter(custom=(html_value,  {'precision' : 2})), # return custom(label, precision=2) (Since formatstring is just '%s')
+    'latex' : Formatter(custom=(latex_value, {'precision' : 2})), 
     'text'  : no_format, 
-    'ppt'   : Formatter(custom=(ppt_value,   {'ROUND' : 2}))}
+    'ppt'   : Formatter(custom=(ppt_value,   {'precision' : 2}))}
 
 # Similar to the above two formatdicts, but recieves precision during table.render(), which is sent as kwarg to html_value, for example
 FormatSet.formatDict['Precision'] = {
