@@ -1,15 +1,7 @@
 #!/usr/bin/python
 from __future__ import print_function
+from utilities  import get_branchname
 import subprocess, os, sys
-
-def get_branchname():
-    try:
-        branchname = subprocess.check_output(['bash', '.git/hooks/.get_branch'])
-    except subprocess.CalledProcessError:
-        branchname = 'unnamed_branch'
-    branchname = os.path.basename(branchname)
-    branchname = branchname.replace('\n', '')
-    return branchname
 
 requires_pylint_pass = ['master', 'beta']
 
