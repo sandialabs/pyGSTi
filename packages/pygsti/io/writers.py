@@ -7,7 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Functions for writing GST objects to text files."""
 
 import json as _json
-from . import stdinput as _stdinput
+# from . import stdinput as _stdinput
 from .. import tools as _tools
 from .. import objects as _objs
 

@@ -21,7 +21,7 @@ import numbers as _numbers
 import re      as _re
 import os      as _os
 
-class FormatSet(dict):
+class FormatSet():
     formatDict = {} # Static dictionary containing small formatter dictionaries
                     # Ex: { 'Rho' :  { 'html' : ... , 'text' : ... }, ... } (created below)
 

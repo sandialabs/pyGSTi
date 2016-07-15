@@ -8,9 +8,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import numpy.linalg as _nla
-import itertools as _itertools
-import math as _math
-import sys as _sys
 import warnings as _warnings
 from .. import objects as _objs
 
@@ -623,7 +620,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                                   suffix="score=%g, nGerms=%d" % (score, L1))
 
             bFoundBetterNeighbor = False
-            for neighborNum, neighbor in enumerate(get_neighbors(weights)):
+            for neighbor in get_neighbors(weights):
                 # if force_singletons:
                 #     if _np.count_nonzeros(neighbor[:numGates]) != numGates
                 #         continue

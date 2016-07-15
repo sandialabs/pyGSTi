@@ -678,7 +678,7 @@ def _get_B_params(invYjY0, Dj_params, D0_params, verbosity):
     L = len(Dj_params)-2 #starting index of final 2x2 block (if one *is* final)
     B0j_params = {} # a dictionary of lists, indexed by two "2x2 block" indices
     for i in range(0,len(Dj_params)-1,2): #loop over row-pairs
-        a1,b1 = Dj_params[i:i+2] #rows
+        _, b1 = Dj_params[i:i+2] #rows
         for j in range(0,len(D0_params)-1,2): #loop over col-pairs
             _, b2 = D0_params[j:j+2] #cols
 
@@ -745,7 +745,7 @@ def _get_B_params(invYjY0, Dj_params, D0_params, verbosity):
         M = len(Dj_params)//2 # index of unpaired block in B0j_params
         i = len(Dj_params)-1
         for j in range(0,len(D0_params)-1,2): #loop over col-pairs (final row)
-            a2,b2 = D0_params[j:j+2] #cols
+            _, b2 = D0_params[j:j+2] #cols
             # (note j can never equal L b/c unpaired col exists)
 
             if b2 <= 0:
@@ -767,7 +767,7 @@ def _get_B_params(invYjY0, Dj_params, D0_params, verbosity):
         j = len(D0_params)-1
         assert(j == i) #since D?_params are the same length
         for i in range(0,len(Dj_params)-1,2): #loop over row-pairs (final col)
-            a1,b1 = Dj_params[i:i+2] #cols
+            _, b1 = Dj_params[i:i+2] #cols
             # Note j is always the final column here - so the two parameters of
             # each block are set by 1.0-sum of the relevant column.  Thus, there
             # are *no* parameters to add for this final column.
@@ -864,9 +864,9 @@ def _deparameterize_real_gate_mx(Dj_params, D0_params, B0j_params,
     def anglesum(ar):
         return sum(_np.where( _np.absolute(ar) > SMALL, _np.angle(ar), 0) )
 
-    def rowsum(ar, ar_end):
-        full = list(ar) + list(ar_end)
-        return _rowsum(full, D0_params)
+    #def rowsum(ar, ar_end):
+     #   full = list(ar) + list(ar_end)
+      #  return _rowsum(full, D0_params)
 
     #Construct Dj
     Dj = _constructDj(Dj_params)
@@ -955,7 +955,7 @@ def _deparameterize_real_gate_mx(Dj_params, D0_params, B0j_params,
     if len(Dj_params) % 2 == 1: #then there's an un-paired eigenvalue row
         i = len(Dj_params)-1
         for j in range(0,len(D0_params)-1,2): #loop over col-pairs
-            a2,b2 = D0_params[j:j+2] #cols
+            _, b2 = D0_params[j:j+2] #cols
             params = B0j_params[k:k+2]; k += 2 #always length 2 (j != L always)
 
             if b2 <= 0:
@@ -977,7 +977,7 @@ def _deparameterize_real_gate_mx(Dj_params, D0_params, B0j_params,
         j = len(D0_params)-1
         assert(j == i) #since D?_params are the same length
         for i in range(0,len(Dj_params)-1,2): #loop over row-pairs (final col)
-            a1,b1 = Dj_params[i:i+2] #cols
+            _, b1 = Dj_params[i:i+2] #cols
             # No params (j == last col, always) - all determined by
             #  rows-wsum-to-one scaling
 
@@ -1026,7 +1026,7 @@ def _get_ETilde_vector( E_params, D0_params ):
     E_tilde = _np.empty( (len(E_params),1),'complex')
 
     for i in range(0,len(D0_params)-1,2):
-        a,b = D0_params[i:i+2]
+        _, b = D0_params[i:i+2]
         if b <= 0:
             # complex-conj pair at index i,i+1, so:
             Er,Ei = E_params[i:i+2]

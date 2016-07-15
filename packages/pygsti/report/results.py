@@ -736,7 +736,7 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
             plotFn = getPlotFn();  mpc = getMPC()
-            Ls,germs, gsBest, fidPairs, _, _, baseStr_dict, strs, st = plot_setup()
+            Ls,germs, _, fidPairs, _, _, baseStr_dict, strs, st = plot_setup()
             i = int(_re.match(expr1,key).group(1))
             return plotFn( Ls[st:i+1], germs, baseStr_dict,
                         self.dataset, self.gatesets['iteration estimates'][i],
@@ -755,7 +755,7 @@ class Results(object):
 
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
-            Ls,germs, gsBest, fidPairs, _, _, baseStr_dict, strs, st = plot_setup()
+            Ls,germs, _, _, _, _, baseStr_dict, strs, st = plot_setup()
             return _plotting.blank_boxplot(
                 Ls[st:], germs, baseStr_dict, strs, r"$L$", "germ",
                 scale=1.0, title="", sumUp=False, save_to="", ticSize=20)
@@ -763,7 +763,7 @@ class Results(object):
 
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
-            Ls,germs, gsBest, fidPairs, _, _, baseStr_dict, strs, st = plot_setup()
+            Ls, germs, _, _, _, _, baseStr_dict, strs, st = plot_setup()
             return _plotting.blank_boxplot(
                 Ls[st:], germs, baseStr_dict, strs, r"$L$", "germ",
                 scale=1.0, title="", sumUp=True, save_to="", ticSize=20)
@@ -773,7 +773,7 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
             directPlotFn = getDirectPlotFn(); mpc = getMPC()
-            Ls,germs, gsBest, fidPairs, _, _, baseStr_dict, strs, st = plot_setup()
+            Ls, germs, _, fidPairs, _, _, baseStr_dict, strs, st = plot_setup()
             directLGST = self._specials.get('direct_lgst_gatesets',verbosity=vb)
             return directPlotFn( Ls[st:], germs, baseStr_dict, self.dataset,
                                  directLGST, strs, r"$L$", "germ",
@@ -785,7 +785,7 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
             directPlotFn = getDirectPlotFn(); mpc = getMPC()
-            Ls,germs, gsBest, fidPairs, _, _, baseStr_dict, strs, st = plot_setup()
+            Ls, germs, _, fidPairs, _, _, baseStr_dict, strs, st = plot_setup()
             directLongSeqGST = self._specials.get('DirectLongSeqGatesets',
                                                   verbosity=vb)
             return directPlotFn( Ls[st:], germs, baseStr_dict, self.dataset,
@@ -797,7 +797,7 @@ class Results(object):
 
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
-            Ls,germs, gsBest, fidPairs, _, _, baseStr_dict, strs, st = plot_setup()
+            Ls, germs, gsBest, _, _, _, baseStr_dict, _, st = plot_setup()
             directLGST = self._specials.get('direct_lgst_gatesets',verbosity=vb)
             return _plotting.direct_deviation_boxplot(
                 Ls[st:], germs, baseStr_dict, self.dataset,
@@ -807,7 +807,7 @@ class Results(object):
 
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
-            Ls,germs, gsBest, fidPairs, _, _, baseStr_dict, strs, st = plot_setup()
+            Ls, germs, gsBest, _, _, _, baseStr_dict, _, st = plot_setup()
             directLongSeqGST = self._specials.get('DirectLongSeqGatesets',
                                                   verbosity=vb)
             return _plotting.direct_deviation_boxplot(
@@ -818,7 +818,7 @@ class Results(object):
 
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
-            Ls,germs, gsBest, fidPairs, _, _, baseStr_dict, strs, st = plot_setup()
+            Ls, germs, _, _, _, _, baseStr_dict, _, st = plot_setup()
             directLongSeqGST = self._specials.get('DirectLongSeqGatesets',
                                                   verbosity=vb)
             return _plotting.small_eigval_err_rate_boxplot(
@@ -1856,6 +1856,7 @@ class Results(object):
 
         mainTexFilename = _os.path.join(report_dir, report_base + ".tex")
         appendicesTexFilename = _os.path.join(report_dir, report_base + "_appendices.tex")
+        # TODO: pdffilename is never used
         pdfFilename = _os.path.join(report_dir, report_base + ".pdf")
 
         if self.parameters['objective'] == "chi2":

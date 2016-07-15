@@ -19,7 +19,7 @@ adjustables:
       max-returns=6
 
   too-many-statements:
-      max-statements=100 
+      max-statements=80 
 
 blacklisted-errors:
   - function-redefined           # This happens to be allowed in our repository! (Should it be?)
@@ -32,12 +32,9 @@ blacklisted-warnings:
   - protected-access             # Non-Breaking
   - bad-builtin                  # Non-Breaking
   - fixme                        # Used in genTODOs.sh, not warnings
-  - unused-argument              # Generated in genUnused.sh
-  - unused-variable              # ^
-  - unused-import                # ^
   
 whitelisted-refactors:
   - redefined-variable-type
 
 desired-score:
-  9.5
+  9.72 # Highest so far :)
