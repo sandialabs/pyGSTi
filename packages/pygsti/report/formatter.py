@@ -12,6 +12,9 @@ from .html  import html,  html_value
 from .latex import latex, latex_value
 from .ppt   import ppt,   ppt_value
 
+from inspect import getargspec as _getargspec
+
+
 import cgi     as _cgi
 import numpy   as _np
 import numbers as _numbers
@@ -22,9 +25,9 @@ class FormatSet():
     formatDict = {} # Static dictionary containing small formatter dictionaries
                     # Ex: { 'Rho' :  { 'html' : ... , 'text' : ... }, ... } (created below)
 
-    def __init__(self, scratchDir, precision):
-        self.scratchDir = scratchDir
-        self.precision  = precision
+    def __init__(self, specs):
+        # Specs is a dictionary of the form { 'setting'(kwarg) : value }
+        self.specs = specs
 
     def formatList(self, items, formatters, fmt):
         assert(len(items) == len(formatters))
@@ -32,13 +35,10 @@ class FormatSet():
         for item, formatter in zip(items, formatters):
             if formatter is not None:
                 formatter = FormatSet.formatDict[formatter]
-                # If the formatter requires a scratch directory  to do its job, give it.
-                if hasattr(formatter[fmt], 'scratchDir'):
-                    formatter[fmt].scratchDir = self.scratchDir 
-                # Likewise with precision
-                if hasattr(formatter[fmt], 'precision'):
-                    formatter[fmt].precision = self.precision
-
+                for spec in self.specs:
+                    # If the formatter requires a setting to do its job, give the setting
+                    if hasattr(formatter[fmt], 'specs') and spec in formatter[fmt].specs:
+                        formatter[fmt].specs[spec] = self.specs[spec] # Pass down relevant specs
                 formatted_item = formatter[fmt](item)
                 if formatted_item is None:
                     raise ValueError("Formatter " + str(type(formatter[fmt]))
@@ -142,23 +142,28 @@ class BranchingFormatter():
         else:
             return self.b(t)
 
+def has_argname(argname, function):
+    return argname in _getargspec(function).args
+
 # Gives precision arguments to formatters
 class PrecisionFormatter():
-
     def __init__(self, custom):
         self.custom    = custom
-        self.precision = None
+        self.specs     = {'precision' : None, 'polarprecision' : None}
 
     def __call__(self, label):
-        if self.precision is None:
-            raise ValueError('Precision was not supplied to PrecisionFormatter')
+        if self.specs is None:
+            raise ValueError('Spec was not supplied to PrecisionFormatter')
 
-        if self.custom is not None: # Precision is given as keyword argument to self.formatter's custom function
-            if not callable(self.custom): # If kwargs were supplied
-                self.custom[1]['ROUND'] = self.precision 
+        # Supply arguments to the custom formatter (if it needs them)
+        for argname in self.specs:
+            if not callable(self.custom): # If some keyword arguments were supplied already
+                if has_argname(argname, self.custom[0]):             # 'if it needs them'
+                    self.custom[1][argname] = self.specs[argname] # update the argument in custom's existing keyword dictionary
             else:
-                self.custom = (self.custom, {'ROUND' : self.precision})
-        
+                if has_argname(argname, self.custom): # If custom is a lone callable (not a tuple)
+                # Create keyword dictionary for custom, modifiying it to be a tuple (function, kwargs)
+                    self.custom = (self.custom, {argname : self.specs[argname]})         
         return self.custom[0](label, **self.custom[1])
     
 
@@ -168,23 +173,23 @@ class FigureFormatter():
         self.extension    = extension
         self.custom       = custom
         self.formatstring = formatstring
-        self.scratchDir   = None # Needs to be set to be callable
+        self.specs        = {'scratchDir' : None}
 
     def __call__(self, figInfo):
         fig, name, W, H = figInfo
         if self.extension is not None:
-            if self.scratchDir is None:
+            if self.specs is None:
                 raise ValueError("Must supply scratch " +
-                                 "directory to FigureFormatter")
+                                 "directory (spec) to FigureFormatter")
 
-            fig.save_to(_os.path.join(self.scratchDir, name + self.extension))
+            fig.save_to(_os.path.join(self.specs['scratchDir'], name + self.extension))
             if self.custom is not None:
                 return (self.formatstring
-                        % self.custom[0](W, H, self.scratchDir,
+                        % self.custom[0](W, H, self.specs['scratchDir'],
                                          name + self.extension,
                                          **self.custom[1]))
             else:
-                return self.formatstring % (W, H, self.scratchDir,
+                return self.formatstring % (W, H, self.specs['scratchDir'],
                                             name + self.extension)
 
         elif self.custom is not None:
@@ -225,12 +230,13 @@ FormatSet.formatDict['Normal'] = {
     'text'  : no_format, 
     'ppt'   : ppt }
 
+#DEPRECATED?
 # 'normal' formatting but round to 2 decimal places
 FormatSet.formatDict['Rounded'] = { 
-    'html'  : Formatter(custom=(html_value,  {'ROUND' : 2})), # return custom(label, ROUND=2) (Since formatstring is just '%s')
-    'latex' : Formatter(custom=(latex_value, {'ROUND' : 2})), 
+    'html'  : Formatter(custom=(html_value,  {'precision' : 2})), # return custom(label, precision=2) (Since formatstring is just '%s')
+    'latex' : Formatter(custom=(latex_value, {'precision' : 2})), 
     'text'  : no_format, 
-    'ppt'   : Formatter(custom=(ppt_value,   {'ROUND' : 2}))}
+    'ppt'   : Formatter(custom=(ppt_value,   {'precision' : 2}))}
 
 # Similar to the above two formatdicts, but recieves precision during table.render(), which is sent as kwarg to html_value, for example
 FormatSet.formatDict['Precision'] = {
