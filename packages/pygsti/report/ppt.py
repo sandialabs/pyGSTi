@@ -142,7 +142,7 @@ def ppt_matrix(m, fontsize=None, brackets=False):
     return "\n".join(lines)
 
 
-def ppt_value(el,ROUND=6,complexAsPolar=True):
+def ppt_value(el, precision=6, complexAsPolar=True):
     """
     Convert a floating point or complex value to powerpoint.
 
@@ -168,12 +168,12 @@ def ppt_value(el,ROUND=6,complexAsPolar=True):
     TOL = 1e-9  #tolerance for printing zero values
 
     def render(x):
-        if abs(x) < 5*10**(-(ROUND+1)):
+        if abs(x) < 5*10**(-(precision+1)):
             s = "%.0e" % x # one significant figure
         elif abs(x) < 1:
-            s = "%.*f" % (ROUND,x)
-        elif abs(x) <= 10**ROUND:
-            s = "%.*f" % (ROUND-int(_np.log10(abs(x))),x)  #round to get ROUND digits when x is < 1
+            s = "%.*f" % (precision, x)
+        elif abs(x) <= 10**precision:
+            s = "%.*f" % (precision-int(_np.log10(abs(x))),x)  #round to get ROUND digits when x is < 1
             #str(round(x,ROUND))  #OLD
         else:
             s = "%.0e" % x # one significant figure

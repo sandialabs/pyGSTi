@@ -149,7 +149,7 @@ def latex_matrix(m, fontsize=None, brackets=False):
 
 
 
-def latex_value(el, ROUND=6, complexAsPolar=True, PHIROUND=3):
+def latex_value(el, precision=6, complexAsPolar=True, polarprecision=3):
     """
     Convert a floating point or complex value to latex.
 
@@ -174,12 +174,12 @@ def latex_value(el, ROUND=6, complexAsPolar=True, PHIROUND=3):
     TOL = 1e-9  #tolerance for printing zero values
 
     def render(x):
-        if abs(x) < 5*10**(-(ROUND+1)):
+        if abs(x) < 5*10**(-(precision+1)):
             s = "%.0e" % x # one significant figure
         elif abs(x) < 1:
-            s = "%.*f" % (ROUND,x)
-        elif abs(x) <= 10**ROUND:
-            s = "%.*f" % (ROUND-int(_np.log10(abs(x))),x)  #round to get ROUND digits when x is > 1
+            s = "%.*f" % (precision,x)
+        elif abs(x) <= 10**precision:
+            s = "%.*f" % (precision-int(_np.log10(abs(x))),x)  #round to get ROUND digits when x is > 1
             #str(round(x,ROUND))  #OLD
         else:
             s = "%.0e" % x # one significant figure
@@ -207,8 +207,8 @@ def latex_value(el, ROUND=6, complexAsPolar=True, PHIROUND=3):
             if abs(el.imag) > TOL:
                 if complexAsPolar:
                     r,phi = cmath.polar(el)
-                    ex = ("i%.*f" % (PHIROUND,phi)) if phi >= 0 \
-                        else ("-i%.*f" % (PHIROUND,-phi))
+                    ex = ("i%.*f" % (polarprecision, phi)) if phi >= 0 \
+                        else ("-i%.*f" % (polarprecision, -phi))
                     s = "%se^{%s}" % (render(r),ex)
                 else:
                     s = "%s%s%si" % (render(el.real),'+' if el.imag > 0 else '-', render(abs(el.imag)))

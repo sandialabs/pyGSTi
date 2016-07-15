@@ -37,8 +37,8 @@ class FormatSet():
                 formatter = FormatSet.formatDict[formatter]
                 for spec in self.specs:
                     # If the formatter requires a setting to do its job, give the setting
-                    if hasattr(formatter[fmt], spec):
-                        setattr(formatter[fmt], spec, self.specs[spec])
+                    if hasattr(formatter[fmt], 'specs') and spec in formatter[fmt].specs:
+                        formatter[fmt].specs[spec] = self.specs[spec] # Pass down relevant specs
                 formatted_item = formatter[fmt](item)
                 if formatted_item is None:
                     raise ValueError("Formatter " + str(type(formatter[fmt]))
@@ -149,24 +149,21 @@ def has_argname(argname, function):
 class PrecisionFormatter():
     def __init__(self, custom):
         self.custom    = custom
-        self.precision = None
-        self.polarprecision = None
+        self.specs     = {'precision' : None, 'polarprecision' : None}
 
     def __call__(self, label):
-        if self.precision is None:
-            raise ValueError('Precision was not supplied to PrecisionFormatter')
-        
-        precisionArgs = { 'ROUND' : self.precision, 'PHIROUND' : self.polarprecision } # Allow modular addition of arguments
+        if self.specs is None:
+            raise ValueError('Spec was not supplied to PrecisionFormatter')
 
         # Supply arguments to the custom formatter (if it needs them)
-        for argname in precisionArgs:
+        for argname in self.specs:
             if not callable(self.custom): # If some keyword arguments were supplied already
                 if has_argname(argname, self.custom[0]):             # 'if it needs them'
-                    self.custom[1][argname] = precisionArgs[argname] # update the argument in custom's existing keyword dictionary
+                    self.custom[1][argname] = self.specs[argname] # update the argument in custom's existing keyword dictionary
             else:
                 if has_argname(argname, self.custom): # If custom is a lone callable (not a tuple)
                 # Create keyword dictionary for custom, modifiying it to be a tuple (function, kwargs)
-                    self.custom = (self.custom, {argname : precisionArgs[argname]})         
+                    self.custom = (self.custom, {argname : self.specs[argname]})         
         return self.custom[0](label, **self.custom[1])
     
 
@@ -176,14 +173,14 @@ class FigureFormatter():
         self.extension    = extension
         self.custom       = custom
         self.formatstring = formatstring
-        self.scratchDir   = None # Needs to be set to be callable
+        self.specs        = {'scratchDir' : None}
 
     def __call__(self, figInfo):
         fig, name, W, H = figInfo
         if self.extension is not None:
-            if self.scratchDir is None:
+            if self.spec is None:
                 raise ValueError("Must supply scratch " +
-                                 "directory to FigureFormatter")
+                                 "directory (spec) to FigureFormatter")
 
             fig.save_to(_os.path.join(self.scratchDir, name + self.extension))
             if self.custom is not None:
