@@ -8,6 +8,7 @@ from ._getCoverage  import get_single_coverage
 
 import subprocess
 import os, sys
+import math
 
 '''
 A set of functions/tools for timing tests
@@ -22,7 +23,8 @@ def benchmark_template(command, *args, **kwargs):
     def template():
         return command(*args, **kwargs)
     result, time = template()
-    time = '%s seconds | %s hours' % (time, (time/3600))
+    justify = lambda i : str(round(i, 3)).ljust(6)
+    time = '%s s | %s min | %s hr' % (justify(time), justify(time/60), justify(time/3600))
     return result, time
 
 # A default function for benchmarking a set of tests
@@ -49,7 +51,7 @@ def run_benchmarks(names, output=None):
     for name in names:
         if name in packageNames:
             benchDict[name] = benchmark_package(os.getcwd() + '/' + name)[1]
-        elif name in fileNames:
+        elif name in fileNames and name.startswith('test'):
             # send the full filepath to benchmark_file()
             benchDict[name] = benchmark_file(fileNames[name])[1]
         else:

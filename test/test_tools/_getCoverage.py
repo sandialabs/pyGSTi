@@ -59,7 +59,7 @@ def get_coverage(names, output=None, package=''):
     for name in names:
         if name in packageNames:
             coverageDict[name] = get_single_coverage(name, package)
-        elif name in fileNames:
+        elif name in fileNames and name.startswith('test'):
             # give the full pathname to read_coverage if name is a filename
             coverageDict[name] = get_single_coverage(fileNames[name], package)
         else:

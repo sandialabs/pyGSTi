@@ -1,7 +1,8 @@
 import pygsti
 import numpy as np
 from pygsti.construction import std1Q_XYI as std
-
+# DISABLED: out of date
+'''
 print("================================================================")
 print("================================================================")
 print("================================================================")
@@ -111,3 +112,4 @@ if True:
 assert(np.linalg.norm( ggi.to_vector() - ggi2.to_vector() ) < 1e-6 )
 
 print("DONE")
+'''
