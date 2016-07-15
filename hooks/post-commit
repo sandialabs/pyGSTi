@@ -1,18 +1,20 @@
 #!/usr/bin/python
-import subprocess
-import os
+from __future__   import print_function
+from utilities    import get_branchname, run_pylint
+from hooksettings import updates_git_pages, generates_pylint_report
+import subprocess, os, sys
 
-def get_branchname():
-    try:
-        branchname = subprocess.check_output(['bash', '.git/hooks/./.get_branch'])
-    except subprocess.CalledProcessError:
-        branchname = 'unnamed_branch'
-    branchname = os.path.basename(branchname)
-    branchname = branchname.replace('\n', '')
-    return branchname
+if __name__ == '__main__':
 
-updates_git_pages = ['master']
-branchname = get_branchname()
+    branchname = get_branchname()
 
-if branchname in updates_git_pages:
-    subprocess.call(['bash', '.git/hooks/create_git_html'])
+    if branchname in updates_git_pages:
+        subprocess.call(['bash', '.git/hooks/create_git_html']) # Create/update html on commit, push on push
+
+    if branchname in generates_pylint_report:
+        run_pylint(['./lintAll.py'])
+
+    sys.exit(0)
+
+
+

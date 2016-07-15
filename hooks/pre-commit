@@ -1,8 +1,14 @@
 #!/usr/bin/python
-from __future__ import print_function
-import sys
+from __future__   import print_function
+from utilities    import get_branchname, run_pylint
+from hooksettings import requires_pylint_pass
+import subprocess, os, sys
 
-#print("I've created a test to harass you about committing:")
-#print("However, I'll let you commit anyways")
+if __name__ == '__main__':
+    branchname = get_branchname()
+    if branchname in requires_pylint_pass:
+        passes = run_pylint(['./score.py']) # Compare current pylint score against that in pylint/config.yml
+        sys.exit(int(passes))
+    else:
+        sys.exit(0)
 
-sys.exit(0)
