@@ -182,14 +182,14 @@ class FigureFormatter():
                 raise ValueError("Must supply scratch " +
                                  "directory (spec) to FigureFormatter")
 
-            fig.save_to(_os.path.join(self.scratchDir, name + self.extension))
+            fig.save_to(_os.path.join(self.specs['scratchDir'], name + self.extension))
             if self.custom is not None:
                 return (self.formatstring
-                        % self.custom[0](W, H, self.scratchDir,
+                        % self.custom[0](W, H, self.specs['scratchDir'],
                                          name + self.extension,
                                          **self.custom[1]))
             else:
-                return self.formatstring % (W, H, self.scratchDir,
+                return self.formatstring % (W, H, self.specs['scratchDir'],
                                             name + self.extension)
 
         elif self.custom is not None:
