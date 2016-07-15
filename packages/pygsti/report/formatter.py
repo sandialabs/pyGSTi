@@ -12,6 +12,9 @@ from .html  import html,  html_value
 from .latex import latex, latex_value
 from .ppt   import ppt,   ppt_value
 
+from inspect import getargspec as _getargspec
+
+
 import cgi     as _cgi
 import numpy   as _np
 import numbers as _numbers
@@ -142,9 +145,11 @@ class BranchingFormatter():
         else:
             return self.b(t)
 
+def has_argname(argname, function):
+    return argname in _getargspec(function).args
+
 # Gives precision arguments to formatters
 class PrecisionFormatter():
-
     def __init__(self, custom):
         self.custom    = custom
         self.precision = None
@@ -152,11 +157,12 @@ class PrecisionFormatter():
     def __call__(self, label):
         if self.precision is None:
             raise ValueError('Precision was not supplied to PrecisionFormatter')
-
-        if self.custom is not None: # Precision is given as keyword argument to self.formatter's custom function
-            if not callable(self.custom): # If kwargs were supplied
+        
+        if not callable(self.custom): # If some keyword arguments were supplied already
+            if has_argname('ROUND', self.custom[0]):
                 self.custom[1]['ROUND'] = self.precision 
-            else:
+        else:
+            if has_argname('ROUND', self.custom):
                 self.custom = (self.custom, {'ROUND' : self.precision})
         
         return self.custom[0](label, **self.custom[1])

@@ -149,7 +149,7 @@ def latex_matrix(m, fontsize=None, brackets=False):
 
 
 
-def latex_value(el,ROUND=6,complexAsPolar=True):
+def latex_value(el, ROUND=6, complexAsPolar=True, PHIROUND=3):
     """
     Convert a floating point or complex value to latex.
 
@@ -172,7 +172,6 @@ def latex_value(el,ROUND=6,complexAsPolar=True):
     """
     # ROUND = digits to round values to
     TOL = 1e-9  #tolerance for printing zero values
-    PHIROUND = 3
 
     def render(x):
         if abs(x) < 5*10**(-(ROUND+1)):
