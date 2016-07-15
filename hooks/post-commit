@@ -1,11 +1,8 @@
 #!/usr/bin/python
-from __future__ import print_function
-from utilities  import get_branchname
+from __future__   import print_function
+from utilities    import get_branchname, run_pylint
+from hooksettings import updates_git_pages, generates_pylint_report
 import subprocess, os, sys
-
-updates_git_pages = ['master']
-
-generates_pylint_report = ['develop']
 
 if __name__ == '__main__':
 
@@ -14,12 +11,8 @@ if __name__ == '__main__':
     if branchname in updates_git_pages:
         subprocess.call(['bash', '.git/hooks/create_git_html']) # Create/update html on commit, push on push
 
-
     if branchname in generates_pylint_report:
-        old_wd = os.getcwd()
-        os.chdir('pylint/')
-        subprocess.call(['./lintAll.py'])
-        os.chdir(old_wd)
+        run_pylint(['./lintAll.py'])
 
     sys.exit(0)
 

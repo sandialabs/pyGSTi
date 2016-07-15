@@ -1,17 +1,13 @@
 #!/usr/bin/python
-from __future__ import print_function
-from utilities  import get_branchname
+from __future__   import print_function
+from utilities    import get_branchname, run_pylint
+from hooksettings import requires_pylint_pass
 import subprocess, os, sys
-
-requires_pylint_pass = ['master', 'beta']
 
 if __name__ == '__main__':
     branchname = get_branchname()
     if branchname in requires_pylint_pass:
-        old_wd = os.getcwd()
-        os.chdir('pylint/')
-        passes = subprocess.call(['./score.py'])
-        os.chdir(old_wd)
+        passes = run_pylint(['./score.py']) # Compare current pylint score against that in pylint/config.yml
         sys.exit(int(passes))
     else:
         sys.exit(0)

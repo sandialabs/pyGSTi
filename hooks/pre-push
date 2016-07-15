@@ -1,9 +1,8 @@
 #!/usr/bin/python
-from __future__ import print_function
-from utilities  import get_branchname
+from __future__   import print_function
+from utilities    import get_branchname
+from hooksettings import updates_git_pages
 import subprocess, os, sys
-
-updates_git_pages = ['master']
 
 if __name__ == "__main__":
 
