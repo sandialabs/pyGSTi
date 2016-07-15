@@ -6,6 +6,7 @@ def lint_all():
     config = read_yaml('config.yml')
 
     print('Linting all of pygsti. This might take a few minutes')
+    print('  (Report can be found in pylint/output/all.out)')
  
     blacklisted_warnings    = config['blacklisted-warnings']
     blacklisted_errors      = config['blacklisted-errors']

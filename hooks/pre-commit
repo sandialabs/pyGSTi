@@ -1,8 +1,26 @@
 #!/usr/bin/python
 from __future__ import print_function
-import sys
+import subprocess, os, sys
 
-#print("I've created a test to harass you about committing:")
-#print("However, I'll let you commit anyways")
+def get_branchname():
+    try:
+        branchname = subprocess.check_output(['bash', '.git/hooks/.get_branch'])
+    except subprocess.CalledProcessError:
+        branchname = 'unnamed_branch'
+    branchname = os.path.basename(branchname)
+    branchname = branchname.replace('\n', '')
+    return branchname
 
-sys.exit(0)
+requires_pylint_pass = ['master', 'beta']
+
+if __name__ == '__main__':
+    branchname = get_branchname()
+    if branchname in requires_pylint_pass:
+        old_wd = os.getcwd()
+        os.chdir('pylint/')
+        passes = subprocess.call(['./score.py'])
+        os.chdir(old_wd)
+        sys.exit(int(passes))
+    else:
+        sys.exit(0)
+

@@ -1,6 +1,6 @@
 #!/usr/bin/python
-import subprocess
-import os
+from __future__ import print_function
+import subprocess, os, sys
 
 def get_branchname():
     try:
@@ -12,7 +12,24 @@ def get_branchname():
     return branchname
 
 updates_git_pages = ['master']
-branchname = get_branchname()
 
-if branchname in updates_git_pages:
-    subprocess.call(['bash', '.git/hooks/create_git_html'])
+generates_pylint_report = ['develop']
+
+if __name__ == '__main__':
+
+    branchname = get_branchname()
+
+    if branchname in updates_git_pages:
+        subprocess.call(['bash', '.git/hooks/create_git_html']) # Create/update html on commit, push on push
+
+
+    if branchname in generates_pylint_report:
+        old_wd = os.getcwd()
+        os.chdir('pylint/')
+        subprocess.call(['./lintAll.py'])
+        os.chdir(old_wd)
+
+    sys.exit(0)
+
+
+
