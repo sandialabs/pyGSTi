@@ -50,15 +50,20 @@ def gen_individual_test_info(packageName):
     return testsInfo
 
                 
-gen_info_on = ['drivers']
+gen_info_on = ['tools']
 infoDict = {}
 for packageName in gen_info_on:
     infoDict[packageName] = gen_individual_test_info(packageName)
 
+infoString = ''
 for packageName in infoDict:
-    print('\n\n%s:\n\n' % packageName)
+    infoString += '\n\n%s:\n\n' % packageName
     for testfunction in infoDict[packageName]:
-        print('\n    %s:' % testfunction)
+        infoString += '\n    %s:\n' % testfunction
         time, coverage = infoDict[packageName][testfunction]
-        print('        %s seconds | %s%% coverage \n' % (str(round(time, 2)).ljust(5), coverage))
+        infoString += ('        - %s\n' % str(round(time, 2)).ljust(5))  
+        infoString += ('        - %s\n' % coverage)
 
+print(infoString)
+with open('individual_test_info.yml', 'w') as testInfo:
+    testInfo.write(infoString)
