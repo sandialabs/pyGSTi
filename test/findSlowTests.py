@@ -50,7 +50,7 @@ def gen_individual_test_info(packageName):
     return testsInfo
 
                 
-gen_info_on = ['report']
+gen_info_on = ['drivers']
 infoDict = {}
 for packageName in gen_info_on:
     infoDict[packageName] = gen_individual_test_info(packageName)
