@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from __future__         import print_function
 from contextlib         import contextmanager
 from test_tools.helpers import *
@@ -34,7 +35,9 @@ def gen_individual_test_info(packageName):
 
     directory = os.getcwd() + '/' + packageName + '/'
     for _, filename in get_test_files(directory):
-        i = importlib.import_module(packageName + '.' + filename[:-3])
+        moduleName = packageName + '.' + filename[:-3]
+        print('Finding slow tests in %s' % moduleName)
+        i = importlib.import_module(moduleName)
         testCases = inspect.getmembers(i, predicate=inspect.isclass)
         for testCaseName, testCase in testCases:
             tests = find_individual_tests(testCase)
@@ -47,7 +50,7 @@ def gen_individual_test_info(packageName):
     return testsInfo
 
                 
-gen_info_on = ['tools']
+gen_info_on = ['report']
 infoDict = {}
 for packageName in gen_info_on:
     infoDict[packageName] = gen_individual_test_info(packageName)

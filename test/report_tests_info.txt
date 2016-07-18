@@ -1,0 +1,686 @@
+Finding slow tests in report.testReport
+/home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+test_extra_logL_TP_figs_and_tables (testReport.TestReport) ... /home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:2758: RuntimeWarning: invalid value encountered in absolute
+  for iy in range(len(yvals)) ])
+ok
+
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+pygsti/report.py                   5      0   100%
+pygsti/report/figure.py           26     13    50%
+pygsti/report/formatter.py       175     91    48%
+pygsti/report/generation.py      575    498    13%
+pygsti/report/html.py             87     75    14%
+pygsti/report/latex.py            89     77    13%
+pygsti/report/plotting.py        914    510    44%
+pygsti/report/ppt.py              83     71    14%
+pygsti/report/reportables.py     412    325    21%
+pygsti/report/resultcache.py      68     20    71%
+pygsti/report/results.py        1681   1365    19%
+pygsti/report/table.py           160    131    18%
+--------------------------------------------------
+TOTAL                           4275   3176    26%
+----------------------------------------------------------------------
+Ran 1 test in 45.469s
+
+OK
+/home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+test_plotting (testReport.TestReport) ... /home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+ok
+
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+pygsti/report.py                   5      0   100%
+pygsti/report/figure.py           26     11    58%
+pygsti/report/formatter.py       175     91    48%
+pygsti/report/generation.py      575    539     6%
+pygsti/report/html.py             87     75    14%
+pygsti/report/latex.py            89     77    13%
+pygsti/report/plotting.py        914    748    18%
+pygsti/report/ppt.py              83     71    14%
+pygsti/report/reportables.py     412    386     6%
+pygsti/report/resultcache.py      68     41    40%
+pygsti/report/results.py        1681   1446    14%
+pygsti/report/table.py           160    140    12%
+--------------------------------------------------
+TOTAL                           4275   3625    15%
+----------------------------------------------------------------------
+Ran 1 test in 59.838s
+
+OK
+/home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+test_report_figure_object (testReport.TestReport) ... /home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+ok
+
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+pygsti/report.py                   5      0   100%
+pygsti/report/figure.py           26      8    69%
+pygsti/report/formatter.py       175     91    48%
+pygsti/report/generation.py      575    539     6%
+pygsti/report/html.py             87     75    14%
+pygsti/report/latex.py            89     77    13%
+pygsti/report/plotting.py        914    844     8%
+pygsti/report/ppt.py              83     71    14%
+pygsti/report/reportables.py     412    386     6%
+pygsti/report/resultcache.py      68     41    40%
+pygsti/report/results.py        1681   1446    14%
+pygsti/report/table.py           160    140    12%
+--------------------------------------------------
+TOTAL                           4275   3718    13%
+----------------------------------------------------------------------
+Ran 1 test in 34.759s
+
+OK
+/home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+test_reportables (testReport.TestReport) ... /home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+ok
+
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+pygsti/report.py                   5      0   100%
+pygsti/report/figure.py           26     17    35%
+pygsti/report/formatter.py       175     91    48%
+pygsti/report/generation.py      575    539     6%
+pygsti/report/html.py             87     75    14%
+pygsti/report/latex.py            89     77    13%
+pygsti/report/plotting.py        914    844     8%
+pygsti/report/ppt.py              83     71    14%
+pygsti/report/reportables.py     412    218    47%
+pygsti/report/resultcache.py      68     41    40%
+pygsti/report/results.py        1681   1446    14%
+pygsti/report/table.py           160    140    12%
+--------------------------------------------------
+TOTAL                           4275   3559    17%
+----------------------------------------------------------------------
+Ran 1 test in 35.807s
+
+OK
+/home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+test_reports_chi2_noCIs (testReport.TestReport) ... /home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+ok
+
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+pygsti/report.py                   5      0   100%
+pygsti/report/figure.py           26      6    77%
+pygsti/report/formatter.py       175     41    77%
+pygsti/report/generation.py      575    301    48%
+pygsti/report/html.py             87     75    14%
+pygsti/report/latex.py            89     16    82%
+pygsti/report/plotting.py        914    603    34%
+pygsti/report/ppt.py              83     71    14%
+pygsti/report/reportables.py     412    189    54%
+pygsti/report/resultcache.py      68     23    66%
+pygsti/report/results.py        1681    821    51%
+pygsti/report/table.py           160    115    28%
+--------------------------------------------------
+TOTAL                           4275   2261    47%
+----------------------------------------------------------------------
+Ran 1 test in 96.752s
+
+OK
+/home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+test_reports_chi2_nonMarkCIs (testReport.TestReport) ... /home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+/home/lsaldyt/pyGSTi/packages/pygsti/objects/confidenceregion.py:173: UserWarning: Non-Markovian error bars are experimental and cannot be interpreted as standard error bars. Proceed with caution!
+  " Proceed with caution!")
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:2758: RuntimeWarning: invalid value encountered in absolute
+  for iy in range(len(yvals)) ])
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:413: RuntimeWarning: invalid value encountered in greater
+  resdat[resdat>0] /= abs(vmax - midpoint)
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:414: RuntimeWarning: invalid value encountered in less
+  resdat[resdat<0] /= abs(vmin - midpoint)
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:1644: RuntimeWarning: invalid value encountered in absolute
+  for iy in range(len(yvals)) ])
+ok
+
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+pygsti/report.py                   5      0   100%
+pygsti/report/figure.py           26      6    77%
+pygsti/report/formatter.py       175     37    79%
+pygsti/report/generation.py      575    266    54%
+pygsti/report/html.py             87     75    14%
+pygsti/report/latex.py            89     16    82%
+pygsti/report/plotting.py        914    445    51%
+pygsti/report/ppt.py              83     71    14%
+pygsti/report/reportables.py     412    180    56%
+pygsti/report/resultcache.py      68     19    72%
+pygsti/report/results.py        1681    957    43%
+pygsti/report/table.py           160    115    28%
+--------------------------------------------------
+TOTAL                           4275   2187    49%
+----------------------------------------------------------------------
+Ran 1 test in 694.716s
+
+OK
+/home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+test_reports_chi2_wCIs (testReport.TestReport) ... /home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:2758: RuntimeWarning: invalid value encountered in absolute
+  for iy in range(len(yvals)) ])
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:413: RuntimeWarning: invalid value encountered in greater
+  resdat[resdat>0] /= abs(vmax - midpoint)
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:414: RuntimeWarning: invalid value encountered in less
+  resdat[resdat<0] /= abs(vmin - midpoint)
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:1644: RuntimeWarning: invalid value encountered in absolute
+  for iy in range(len(yvals)) ])
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:413: RuntimeWarning: invalid value encountered in greater
+  resdat[resdat>0] /= abs(vmax - midpoint)
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:414: RuntimeWarning: invalid value encountered in less
+  resdat[resdat<0] /= abs(vmin - midpoint)
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:413: RuntimeWarning: invalid value encountered in greater
+  resdat[resdat>0] /= abs(vmax - midpoint)
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:414: RuntimeWarning: invalid value encountered in less
+  resdat[resdat<0] /= abs(vmin - midpoint)
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:413: RuntimeWarning: invalid value encountered in greater
+  resdat[resdat>0] /= abs(vmax - midpoint)
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:414: RuntimeWarning: invalid value encountered in less
+  resdat[resdat<0] /= abs(vmin - midpoint)
+ok
+
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+pygsti/report.py                   5      0   100%
+pygsti/report/figure.py           26      6    77%
+pygsti/report/formatter.py       175     37    79%
+pygsti/report/generation.py      575    268    53%
+pygsti/report/html.py             87     75    14%
+pygsti/report/latex.py            89     16    82%
+pygsti/report/plotting.py        914    445    51%
+pygsti/report/ppt.py              83     71    14%
+pygsti/report/reportables.py     412    180    56%
+pygsti/report/resultcache.py      68     19    72%
+pygsti/report/results.py        1681    542    68%
+pygsti/report/table.py           160    115    28%
+--------------------------------------------------
+TOTAL                           4275   1774    59%
+----------------------------------------------------------------------
+Ran 1 test in 732.902s
+
+OK
+/home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+test_reports_logL_TP_noCIs (testReport.TestReport) ... /home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+ok
+
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+pygsti/report.py                   5      0   100%
+pygsti/report/figure.py           26      6    77%
+pygsti/report/formatter.py       175     34    81%
+pygsti/report/generation.py      575    147    74%
+pygsti/report/html.py             87     75    14%
+pygsti/report/latex.py            89     16    82%
+pygsti/report/plotting.py        914    372    59%
+pygsti/report/ppt.py              83     71    14%
+pygsti/report/reportables.py     412    155    62%
+pygsti/report/resultcache.py      68     23    66%
+pygsti/report/results.py        1681    662    61%
+pygsti/report/table.py           160    115    28%
+--------------------------------------------------
+TOTAL                           4275   1676    61%
+----------------------------------------------------------------------
+Ran 1 test in 97.345s
+
+OK
+/home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+test_reports_logL_TP_wCIs (testReport.TestReport) ... /home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:2758: RuntimeWarning: invalid value encountered in absolute
+  for iy in range(len(yvals)) ])
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:413: RuntimeWarning: invalid value encountered in greater
+  resdat[resdat>0] /= abs(vmax - midpoint)
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:414: RuntimeWarning: invalid value encountered in less
+  resdat[resdat<0] /= abs(vmin - midpoint)
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:1644: RuntimeWarning: invalid value encountered in absolute
+  for iy in range(len(yvals)) ])
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:413: RuntimeWarning: invalid value encountered in greater
+  resdat[resdat>0] /= abs(vmax - midpoint)
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:414: RuntimeWarning: invalid value encountered in less
+  resdat[resdat<0] /= abs(vmin - midpoint)
+/usr/lib/python3/dist-packages/matplotlib/pyplot.py:516: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`).
+  max_open_warning, RuntimeWarning)
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:413: RuntimeWarning: invalid value encountered in greater
+  resdat[resdat>0] /= abs(vmax - midpoint)
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:414: RuntimeWarning: invalid value encountered in less
+  resdat[resdat<0] /= abs(vmin - midpoint)
+ok
+
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+pygsti/report.py                   5      0   100%
+pygsti/report/figure.py           26      6    77%
+pygsti/report/formatter.py       175     30    83%
+pygsti/report/generation.py      575    112    81%
+pygsti/report/html.py             87     75    14%
+pygsti/report/latex.py            89     16    82%
+pygsti/report/plotting.py        914    262    71%
+pygsti/report/ppt.py              83     71    14%
+pygsti/report/reportables.py     412    142    66%
+pygsti/report/resultcache.py      68     19    72%
+pygsti/report/results.py        1681    383    77%
+pygsti/report/table.py           160    115    28%
+--------------------------------------------------
+TOTAL                           4275   1231    71%
+----------------------------------------------------------------------
+Ran 1 test in 369.638s
+
+OK
+/home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+test_results_object (testReport.TestReport) ... /home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+ok
+
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+pygsti/report.py                   5      0   100%
+pygsti/report/figure.py           26     17    35%
+pygsti/report/formatter.py       175     37    79%
+pygsti/report/generation.py      575    273    53%
+pygsti/report/html.py             87     75    14%
+pygsti/report/latex.py            89     14    84%
+pygsti/report/plotting.py        914    844     8%
+pygsti/report/ppt.py              83     18    78%
+pygsti/report/reportables.py     412    180    56%
+pygsti/report/resultcache.py      68      5    93%
+pygsti/report/results.py        1681    793    53%
+pygsti/report/table.py           160    105    34%
+--------------------------------------------------
+TOTAL                           4275   2361    45%
+----------------------------------------------------------------------
+Ran 1 test in 73.296s
+
+OK
+/home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+test_table_formatting (testReport.TestReport) ... /home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+ok
+
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+pygsti/report.py                   5      0   100%
+pygsti/report/figure.py           26     17    35%
+pygsti/report/formatter.py       175     91    48%
+pygsti/report/generation.py      575    539     6%
+pygsti/report/html.py             87      6    93%
+pygsti/report/latex.py            89      7    92%
+pygsti/report/plotting.py        914    844     8%
+pygsti/report/ppt.py              83      5    94%
+pygsti/report/reportables.py     412    386     6%
+pygsti/report/resultcache.py      68     41    40%
+pygsti/report/results.py        1681   1446    14%
+pygsti/report/table.py           160    140    12%
+--------------------------------------------------
+TOTAL                           4275   3522    18%
+----------------------------------------------------------------------
+Ran 1 test in 40.756s
+
+OK
+/home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+test_table_generation (testReport.TestReport) ... /home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+ok
+
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+pygsti/report.py                   5      0   100%
+pygsti/report/figure.py           26     17    35%
+pygsti/report/formatter.py       175     68    61%
+pygsti/report/generation.py      575    341    41%
+pygsti/report/html.py             87     75    14%
+pygsti/report/latex.py            89     77    13%
+pygsti/report/plotting.py        914    844     8%
+pygsti/report/ppt.py              83     71    14%
+pygsti/report/reportables.py     412    246    40%
+pygsti/report/resultcache.py      68     41    40%
+pygsti/report/results.py        1681   1446    14%
+pygsti/report/table.py           160     42    74%
+--------------------------------------------------
+TOTAL                           4275   3268    24%
+----------------------------------------------------------------------
+Ran 1 test in 223.696s
+
+OK
+Finding slow tests in report.testMetrics
+test_dataset_qtys (testMetrics.TestMetrics) ... ok
+
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+pygsti/report.py                   5      0   100%
+pygsti/report/figure.py           26     17    35%
+pygsti/report/formatter.py       175     91    48%
+pygsti/report/generation.py      575    539     6%
+pygsti/report/html.py             87     75    14%
+pygsti/report/latex.py            89     77    13%
+pygsti/report/plotting.py        914    844     8%
+pygsti/report/ppt.py              83     71    14%
+pygsti/report/reportables.py     412    345    16%
+pygsti/report/resultcache.py      68     45    34%
+pygsti/report/results.py        1681   1639     2%
+pygsti/report/table.py           160    140    12%
+--------------------------------------------------
+TOTAL                           4275   3883     9%
+----------------------------------------------------------------------
+Ran 1 test in 0.012s
+
+OK
+test_gateset_dataset_qtys (testMetrics.TestMetrics) ... ok
+
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+pygsti/report.py                   5      0   100%
+pygsti/report/figure.py           26     17    35%
+pygsti/report/formatter.py       175     91    48%
+pygsti/report/generation.py      575    539     6%
+pygsti/report/html.py             87     75    14%
+pygsti/report/latex.py            89     77    13%
+pygsti/report/plotting.py        914    844     8%
+pygsti/report/ppt.py              83     71    14%
+pygsti/report/reportables.py     412    338    18%
+pygsti/report/resultcache.py      68     45    34%
+pygsti/report/results.py        1681   1639     2%
+pygsti/report/table.py           160    140    12%
+--------------------------------------------------
+TOTAL                           4275   3876     9%
+----------------------------------------------------------------------
+Ran 1 test in 0.015s
+
+OK
+test_gateset_gateset_qtys (testMetrics.TestMetrics) ... ok
+
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+pygsti/report.py                   5      0   100%
+pygsti/report/figure.py           26     17    35%
+pygsti/report/formatter.py       175     91    48%
+pygsti/report/generation.py      575    539     6%
+pygsti/report/html.py             87     75    14%
+pygsti/report/latex.py            89     77    13%
+pygsti/report/plotting.py        914    844     8%
+pygsti/report/ppt.py              83     71    14%
+pygsti/report/reportables.py     412    258    37%
+pygsti/report/resultcache.py      68     45    34%
+pygsti/report/results.py        1681   1639     2%
+pygsti/report/table.py           160    140    12%
+--------------------------------------------------
+TOTAL                           4275   3796    11%
+----------------------------------------------------------------------
+Ran 1 test in 7.620s
+
+OK
+test_gateset_qtys (testMetrics.TestMetrics) ... ok
+
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+pygsti/report.py                   5      0   100%
+pygsti/report/figure.py           26     17    35%
+pygsti/report/formatter.py       175     91    48%
+pygsti/report/generation.py      575    539     6%
+pygsti/report/html.py             87     75    14%
+pygsti/report/latex.py            89     77    13%
+pygsti/report/plotting.py        914    844     8%
+pygsti/report/ppt.py              83     71    14%
+pygsti/report/reportables.py     412    245    41%
+pygsti/report/resultcache.py      68     45    34%
+pygsti/report/results.py        1681   1639     2%
+pygsti/report/table.py           160    140    12%
+--------------------------------------------------
+TOTAL                           4275   3783    12%
+----------------------------------------------------------------------
+Ran 1 test in 33.948s
+
+OK
+Finding slow tests in report.testAnalysis
+/home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+test_blank_boxes (testAnalysis.TestAnalysis) ... /home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+ok
+
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+pygsti/report.py                   5      0   100%
+pygsti/report/figure.py           26      7    73%
+pygsti/report/formatter.py       175     91    48%
+pygsti/report/generation.py      575    539     6%
+pygsti/report/html.py             87     75    14%
+pygsti/report/latex.py            89     77    13%
+pygsti/report/plotting.py        914    740    19%
+pygsti/report/ppt.py              83     71    14%
+pygsti/report/reportables.py     412    386     6%
+pygsti/report/resultcache.py      68     45    34%
+pygsti/report/results.py        1681   1639     2%
+pygsti/report/table.py           160    140    12%
+--------------------------------------------------
+TOTAL                           4275   3810    11%
+----------------------------------------------------------------------
+Ran 1 test in 1.105s
+
+OK
+/home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+test_chi2_boxes (testAnalysis.TestAnalysis) ... /home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+ok
+
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+pygsti/report.py                   5      0   100%
+pygsti/report/figure.py           26      7    73%
+pygsti/report/formatter.py       175     91    48%
+pygsti/report/generation.py      575    539     6%
+pygsti/report/html.py             87     75    14%
+pygsti/report/latex.py            89     77    13%
+pygsti/report/plotting.py        914    574    37%
+pygsti/report/ppt.py              83     71    14%
+pygsti/report/reportables.py     412    386     6%
+pygsti/report/resultcache.py      68     45    34%
+pygsti/report/results.py        1681   1639     2%
+pygsti/report/table.py           160    140    12%
+--------------------------------------------------
+TOTAL                           4275   3644    15%
+----------------------------------------------------------------------
+Ran 1 test in 8.518s
+
+OK
+/home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+test_direct_boxes (testAnalysis.TestAnalysis) ... /home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:2758: RuntimeWarning: invalid value encountered in absolute
+  for iy in range(len(yvals)) ])
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:413: RuntimeWarning: invalid value encountered in greater
+  resdat[resdat>0] /= abs(vmax - midpoint)
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:414: RuntimeWarning: invalid value encountered in less
+  resdat[resdat<0] /= abs(vmin - midpoint)
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:1644: RuntimeWarning: invalid value encountered in absolute
+  for iy in range(len(yvals)) ])
+ok
+
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+pygsti/report.py                   5      0   100%
+pygsti/report/figure.py           26      7    73%
+pygsti/report/formatter.py       175     91    48%
+pygsti/report/generation.py      575    539     6%
+pygsti/report/html.py             87     75    14%
+pygsti/report/latex.py            89     77    13%
+pygsti/report/plotting.py        914    487    47%
+pygsti/report/ppt.py              83     71    14%
+pygsti/report/reportables.py     412    386     6%
+pygsti/report/resultcache.py      68     45    34%
+pygsti/report/results.py        1681   1639     2%
+pygsti/report/table.py           160    140    12%
+--------------------------------------------------
+TOTAL                           4275   3557    17%
+----------------------------------------------------------------------
+Ran 1 test in 14.010s
+
+OK
+/home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+test_total_chi2 (testAnalysis.TestAnalysis) ... /home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+ok
+
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+pygsti/report.py                   5      0   100%
+pygsti/report/figure.py           26     17    35%
+pygsti/report/formatter.py       175     91    48%
+pygsti/report/generation.py      575    539     6%
+pygsti/report/html.py             87     75    14%
+pygsti/report/latex.py            89     77    13%
+pygsti/report/plotting.py        914    844     8%
+pygsti/report/ppt.py              83     71    14%
+pygsti/report/reportables.py     412    386     6%
+pygsti/report/resultcache.py      68     45    34%
+pygsti/report/results.py        1681   1639     2%
+pygsti/report/table.py           160    140    12%
+--------------------------------------------------
+TOTAL                           4275   3924     8%
+----------------------------------------------------------------------
+Ran 1 test in 0.103s
+
+OK
+/home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+test_whack_a_mole (testAnalysis.TestAnalysis) ... /home/lsaldyt/pyGSTi/packages/pygsti/objects/dataset.py:616: UserWarning: Deprecated dataset format.  Please re-save this dataset soon to avoid future incompatibility.
+  "this dataset soon to avoid future incompatibility.")
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:413: RuntimeWarning: invalid value encountered in greater
+  resdat[resdat>0] /= abs(vmax - midpoint)
+/home/lsaldyt/pyGSTi/packages/pygsti/report/plotting.py:414: RuntimeWarning: invalid value encountered in less
+  resdat[resdat<0] /= abs(vmin - midpoint)
+ok
+
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+pygsti/report.py                   5      0   100%
+pygsti/report/figure.py           26      7    73%
+pygsti/report/formatter.py       175     91    48%
+pygsti/report/generation.py      575    539     6%
+pygsti/report/html.py             87     75    14%
+pygsti/report/latex.py            89     77    13%
+pygsti/report/plotting.py        914    663    27%
+pygsti/report/ppt.py              83     71    14%
+pygsti/report/reportables.py     412    386     6%
+pygsti/report/resultcache.py      68     45    34%
+pygsti/report/results.py        1681   1639     2%
+pygsti/report/table.py           160    140    12%
+--------------------------------------------------
+TOTAL                           4275   3733    13%
+----------------------------------------------------------------------
+Ran 1 test in 3.692s
+
+OK
+
+report:
+
+
+
+    testReport.TestReport.test_table_generation:
+        225.44 seconds | 24% coverage 
+
+
+    testAnalysis.TestAnalysis.test_total_chi2:
+        1.13  seconds | 8% coverage 
+
+
+    testReport.TestReport.test_extra_logL_TP_figs_and_tables:
+        46.92 seconds | 26% coverage 
+
+
+    testMetrics.TestMetrics.test_gateset_dataset_qtys:
+        1.13  seconds | 9% coverage 
+
+
+    testReport.TestReport.test_reports_chi2_nonMarkCIs:
+        696.91 seconds | 49% coverage 
+
+
+    testReport.TestReport.test_reports_logL_TP_noCIs:
+        99.09 seconds | 61% coverage 
+
+
+    testReport.TestReport.test_results_object:
+        75.07 seconds | 45% coverage 
+
+
+    testMetrics.TestMetrics.test_gateset_gateset_qtys:
+        8.88  seconds | 11% coverage 
+
+
+    testReport.TestReport.test_reports_chi2_noCIs:
+        98.25 seconds | 47% coverage 
+
+
+    testReport.TestReport.test_reports_logL_TP_wCIs:
+        371.47 seconds | 71% coverage 
+
+
+    testReport.TestReport.test_reports_chi2_wCIs:
+        734.81 seconds | 59% coverage 
+
+
+    testReport.TestReport.test_plotting:
+        61.62 seconds | 15% coverage 
+
+
+    testReport.TestReport.test_reportables:
+        37.11 seconds | 17% coverage 
+
+
+    testAnalysis.TestAnalysis.test_chi2_boxes:
+        9.9   seconds | 15% coverage 
+
+
+    testPrecisionFormatting.PrecisionTest.test_precision_formatting:
+        0.27  seconds | 0% coverage 
+
+
+    testReport.TestReport.test_table_formatting:
+        42.64 seconds | 18% coverage 
+
+
+    testMetrics.TestMetrics.test_gateset_qtys:
+        35.32 seconds | 12% coverage 
+
+
+    testAnalysis.TestAnalysis.test_whack_a_mole:
+        4.96  seconds | 13% coverage 
+
+
+    testReport.TestReport.test_report_figure_object:
+        36.29 seconds | 13% coverage 
+
+
+    testAnalysis.TestAnalysis.test_blank_boxes:
+        2.43  seconds | 11% coverage 
+
+
+    testAnalysis.TestAnalysis.test_direct_boxes:
+        15.32 seconds | 17% coverage 
+
+
+    testMetrics.TestMetrics.test_dataset_qtys:
+        1.11  seconds | 9% coverage
