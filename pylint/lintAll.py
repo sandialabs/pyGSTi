@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-from helpers  import get_output, write_output
-from readyaml import read_yaml
+from helpers     import get_output, write_output
+from yamlwrapper import read_yaml
 
 def lint_all():
     config = read_yaml('config.yml')

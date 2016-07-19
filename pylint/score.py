@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 import sys
-from lintAll import lint_all
-from readyaml import read_yaml
+from lintAll     import lint_all
+from yamlwrapper import read_yaml, write_yaml
+
+yamlFile = 'config.yml'
 
 def get_score():
     lintResult = lint_all()
@@ -18,13 +20,16 @@ def get_score():
 
 if __name__ == "__main__":
 
-    config       = read_yaml('config.yml')
+    config       = read_yaml(yamlFile)
     desiredScore = config['desired-score']
     print('Score should be: %s' % desiredScore)
     score        = get_score()
     print('Score was: %s' % score)
+
     
     if float(score) >= float(desiredScore):
+        config['desired-score'] = score # Update the score if it is higher than the last one
+        write_yaml(config, yamlFile)
         sys.exit(0)
     else:
         sys.exit(1)

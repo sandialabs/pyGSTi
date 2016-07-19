@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-from readyaml   import read_yaml
-from helpers    import get_output, write_output
+from yamlwrapper   import read_yaml
+from helpers       import get_output, write_output
 import sys
 
 # A function that lets us adjust the value of the adjustable when linting
