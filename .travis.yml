@@ -15,7 +15,7 @@ before_install:
   - "sh -e /etc/init.d/xvfb start" #some tests require a display
   - sleep 3 # give xvfb some time to start
 install:
-  - pip install -r requirements.txt
+  - travis_retry travis_wait pip install -r requirements.txt
   - pip install cvxpy python-pptx
   - pip install -e .
 # command to run tests
