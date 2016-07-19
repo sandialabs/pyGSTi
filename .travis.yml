@@ -22,3 +22,11 @@ install:
 script:
   - cd test
   - python travisTests.py 
+
+after-success:
+  - cd hooks/travis
+  - ./after-success
+
+after-failure:
+  - cd hooks/travis
+  - ./after-failure
