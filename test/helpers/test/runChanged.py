@@ -1,14 +1,11 @@
-#!/usr/bin/python
-from __future__ import print_function
-from .runPackage import run_package
-from .helpers    import *
+from __future__         import print_function
+from .runPackage        import run_package
+from .helpers           import *
 import subprocess
 import os
 import sys
 
 
-# the tool decorator makes a function act as if run from the test directory
-@tool
 def get_changed_files(cutoffDirs=['packages/pygsti/', 'ipython_notebooks/'],
                       exclude=['test'], preCommand='../', endings=['py', 'ipynb']):
     oldwd = os.getcwd()
@@ -46,7 +43,6 @@ def get_changed_packages(cutoffDirs=[], exclude=[], preCommand='../', endings=[]
 
     return changedPackages
 
-@tool
 def run_changed_packages(cutoffDirs=[], exclude=[], preCommand='../', endings=[], lastFailed=''):
     print('Trying to run changed packages...')
     changedPackages = get_changed_packages(cutoffDirs, exclude, preCommand, endings)
@@ -57,7 +53,3 @@ def run_changed_packages(cutoffDirs=[], exclude=[], preCommand='../', endings=[]
     for packageName in changedPackages:
          run_package(packageName, lastFailed=lastFailed)
 
-
-if __name__ == "__main__":
-    args, kwargs = get_args(sys.argv)
-    run_changed_packages(*args, **kwargs)

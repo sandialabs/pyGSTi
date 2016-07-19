@@ -1,10 +1,8 @@
-#!/usr/bin/python
-
-from __future__    import print_function
-from .runPackage    import run_package
-from .benchmarks    import benchmark
-from .helpers       import *
-from ._getCoverage  import get_single_coverage
+from __future__         import print_function
+from .runPackage        import run_package
+from .benchmarks        import benchmark
+from .helpers           import *
+from ._getCoverage      import get_single_coverage
 
 import subprocess
 import os, sys
@@ -39,8 +37,6 @@ def benchmark_file(filename):
 def benchmark_coverage(fullpath, package=''):
     return benchmark_template(get_single_coverage, fullpath, package)
 
-# the tool decorator makes a function act as if run from the test directory
-@tool
 def run_benchmarks(names, output=None):
     fileNames    = get_file_names()
     packageNames = get_package_names()
@@ -59,7 +55,3 @@ def run_benchmarks(names, output=None):
     if output != None:
         write_formatted_table(output, list(benchDict.items()))
     return benchDict
-
-if __name__ == "__main__":
-    args, kwargs = get_args(sys.argv)
-    run_benchmarks(*args, **kwargs)

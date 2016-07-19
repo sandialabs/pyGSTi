@@ -16,8 +16,6 @@ optionally, the argument --infoType='' can be sent as either:
 
 '''
 
-#the tool decorator makes the function act as if it were run from the test directory
-@tool
 def gen_package_info(packageNames, infoType='', changedOnly=''):
     packageDict = {}
 

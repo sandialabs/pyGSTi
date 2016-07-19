@@ -1,7 +1,7 @@
-#!/usr/bin/python
-from __future__ import print_function, absolute_import
-from .helpers    import *
-from contextlib import contextmanager
+from __future__         import print_function, absolute_import
+from .helpers           import *
+from contextlib         import contextmanager
+from ..automation_tools import directory
 import os, sys
 import subprocess
 import pickle
@@ -47,20 +47,13 @@ def get_test_names(failedtests):
     names = [(item, testname[1]) for testname in failedtests for item in testname[0]]
     return set(names)
 
-@contextmanager
-def package_dir(packageName):
-    os.chdir(packageName)
-    yield
-    os.chdir('..')
-
-#tool makes the function act as if run from the test directory
-@tool
 def run_package(packageName, precommands=None, postcommand=None, lastFailed=''):
     # determine what command will be used to run the tests (python/python3 by default)
     precommands = [pythonCommand] if precommands is None else precommands
 
+    print(os.getcwd())
     # enter the package directory to begin running tests and leave when done
-    with package_dir(packageName):
+    with directory(packageName):
         failedtests = []
 
         if lastFailed == 'True' and os.path.isfile(last_failed_file):
@@ -88,15 +81,3 @@ def run_package(packageName, precommands=None, postcommand=None, lastFailed=''):
             return (False, testnames)
         else:
             return (True, [])
-
-
-if __name__ == "__main__":
-    args, kwargs = get_args(sys.argv)
-    results = []
-    for name in args[0]:
-        result = run_package(name, **kwargs)
-        results.append(result[0])
-    if False not in results:
-        sys.exit(0)
-    else:
-        sys.exit(1)

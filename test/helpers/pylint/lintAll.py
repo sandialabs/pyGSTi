@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-from helpers     import get_output, write_output
-from yamlwrapper import read_yaml
+from helpers            import get_pylint_output, write_output
+from ..automation_tools import read_yaml
 
 def lint_all():
-    config = read_yaml('config.yml')
+    config = read_yaml('pylint_config.yml')
 
-    print('Linting all of pygsti. This might take a few minutes')
+    print('Linting all of pygsti. This takes around thirty seconds')
     print('  (Report can be found in pylint/output/all.out)')
  
     blacklisted_warnings    = config['blacklisted-warnings']
@@ -15,13 +15,12 @@ def lint_all():
     blacklist = blacklisted_warnings + blacklisted_errors
     whitelist = whitelisted_refactors 
 
-    commands  = ['pylint3', '--disable=R,%s' % ','.join(blacklist),
-                            '--enable=%s'  % ','.join(whitelist),
-                            '--rcfile=.lint.conf'] + config['packages']
+    commands  = [config['pylint-version'], 
+                '--disable=R,%s' % ','.join(blacklist),
+                '--enable=%s'  % ','.join(whitelist),
+                '--rcfile=.lint.conf'] + config['packages']
 
-    output = get_output(commands)
-    print('\n'.join(output))
-    write_output(output, 'output/all.out')
+    output = get_pylint_output(commands, 'all')
     return output
 
 if __name__ == "__main__":

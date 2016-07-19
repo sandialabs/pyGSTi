@@ -1,15 +1,15 @@
 #!/usr/bin/env python
-from __future__                import print_function, division, unicode_literals, absolute_import
-from test_tools.helpers        import *
-from test_tools.runChanged     import *
-from test_tools.runPackage     import run_package
-from automation_tools          import read_yaml
-from test_tools.genPackageInfo import gen_package_info
+from __future__                  import print_function, division, unicode_literals, absolute_import
+from helpers.test                import *
+from helpers.test.runChanged     import *
+from helpers.test.runPackage     import run_package
+from helpers.automation_tools    import read_yaml, get_args
+from helpers.test.genPackageInfo import gen_package_info
 import sys
 
     
 if __name__ == "__main__":
-    config = read_yaml('test_tools/testconfig.yml')
+    config = read_yaml('test_config.yml')
     slowTests = config['slow-tests']
 
     # Setup arguments and other variables:

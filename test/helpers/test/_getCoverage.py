@@ -1,6 +1,5 @@
-#!/usr/bin/python
-from __future__ import print_function
-from .helpers    import *
+from __future__         import print_function
+from .helpers           import *
 import os, sys
 import subprocess
 
@@ -31,8 +30,6 @@ def _read_coverage(command, filename):
     return percent
 
 # assumes name is either a package or an absolute path to a file
-# the tool decorator makes the function act as if it were in the test directory
-@tool
 def get_single_coverage(name, package=''):
     #nosetests -v --with-coverage --cover-package=pygsti --cover-erase */test*.py > coverage_tests_serial.out 2>&1
     # build the above command with some string formatting
@@ -48,8 +45,6 @@ def get_single_coverage(name, package=''):
 
     return _read_coverage(commands + name + tempfile, filename)
 
-# the tool decorator makes the function act as if it were in the test directory
-@tool
 def get_coverage(names, output=None, package=''):
     fileNames    = get_file_names()
     packageNames = get_package_names()
@@ -70,6 +65,3 @@ def get_coverage(names, output=None, package=''):
 
     return coverageDict
 
-if __name__ == "__main__":
-    args, kwargs = get_args(sys.argv)
-    get_coverage(*args, **kwargs)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-from helpers  import get_output, write_output
-from ..automation_tools import read_yaml, directory
+from helpers            import get_pylint_output, write_output
+from ..automation_tools import read_yaml
 import os, sys
 
 # https://docs.pylint.org/features.html#general-options
@@ -14,13 +14,7 @@ def look_for(items, filename):
                  '--enable=%s' % enabled,
                  '--rcfile=%s' % config['config-file'],
                  '--reports=n'] + config['packages']
-    
-    # pyGSTi directory
-    with directory('..'):
-        output = get_output(commands)
-    print('\n'.join(output))
-    with directory('output/pylint'):
-        write_output(output, '%s.out' % filename)
+    output = get_pylint_output(commands, filename) # implicitly puts to screen/saves to file
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:

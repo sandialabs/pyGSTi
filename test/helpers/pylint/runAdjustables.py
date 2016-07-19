@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-from yamlwrapper   import read_yaml
-from helpers       import get_output, write_output
+from ..automation_tools import read_yaml
+from helpers            import get_pylint_output
 import sys
 
 # A function that lets us adjust the value of the adjustable when linting
 def build_commands(adjustable, setting, value):
-    config    = read_yaml('config.yml')
+    config    = read_yaml('pylint_config.yml')
     commands  = [config['pylint-version'], 
 		 '--enable=%s' % adjustable,
                  '--disable=all',
@@ -13,11 +13,9 @@ def build_commands(adjustable, setting, value):
                  '--reports=n'] + config['packages']
     return commands
 
-if __name__ == "__main__":
-
+def run_adjustables(desiredLength=20):
     # The wanted size of an output file (ex: too-many-arguments.txt)
-    desiredLength= 20
-    adjustables = read_yaml('config.yml')['adjustables']
+    adjustables = read_yaml('pylint_config.yml')['adjustables']
 
     print('Beginning to lint for adjustable refactoring issues')
     print('Many adjustments indicate a more serious problem, while few/none indicate normal code')
@@ -33,18 +31,17 @@ if __name__ == "__main__":
         adjust_commands       = lambda value : build_commands(adjustable, setting, value)
 
         currentvalue          = defaultvalue
-        output                = get_output(adjust_commands(currentvalue))
+        output                = get_pylint_output(adjust_commands(currentvalue), adjustable)
          
         # Adjust the value (ex: max arguments/function) until a properly sized file is generated
         while(len(output) > desiredLength):
             print('      Adjusting the value of %s. Was %s, is now %s' % (setting, currentvalue, currentvalue + defaultvalue))
             currentvalue += defaultvalue 
-            output        = get_output(adjust_commands(currentvalue))
- 
+            output        = get_pylint_output(adjust_commands(currentvalue), adjustable) # implicit write
+
         print('    Finished linting for %s, the final value of %s was %s\n' % (adjustable, setting, currentvalue))
-        # Once the file is satisfactory, write the thing
-        write_output(output, 'output/%s.txt' % adjustable)
 
     print('Linting Complete')
+
     
     
