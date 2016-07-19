@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from helpers.pylint           import get_score
+from helpers.pylint           import get_score, look_for, find_warnings, find_errors, run_adjustables
 from helpers.automation_tools import read_yaml, write_yaml, get_args
 import sys
 
@@ -21,12 +21,16 @@ def check_score():
 
 if __name__ == "__main__":
     args, kwargs = get_args(sys.argv) 
+    print(args, kwargs)
     # No arguments specified
-    if len(args[0]) == 0 and len(kwargs) == 0:
+    if 'score' in kwargs:
         check_score() 
-    else:
-        print(args, kwargs)
-    '''
-    if 'kwarg' in kwargs:
-        action()
-    '''
+    if 'errors' in kwargs:
+        find_errors()
+    if 'warnings' in kwargs:
+        find_warnings()
+    if 'adjustables' in kwargs:
+        run_adjustables()
+    if len(args) > 0:
+        look_for(args)
+    

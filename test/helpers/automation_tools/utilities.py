@@ -52,7 +52,7 @@ def tool(function):
 
 # return args and kwargs from sys.argv
 def get_args(rawArgs):
-    args      = [[arg for arg in rawArgs[1:] if not arg.startswith('--')]] # create args
+    args      = [arg for arg in rawArgs[1:] if not arg.startswith('--')] # create args
     optionals = [arg for arg in rawArgs[1:] if arg.startswith('--')]
     kwargs    = {}
     # create kwargs

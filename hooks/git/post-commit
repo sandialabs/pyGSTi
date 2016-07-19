@@ -12,7 +12,7 @@ if __name__ == '__main__':
         subprocess.call(['bash', '.git/hooks/create_git_html']) # Create/update html on commit, push on push
 
     if branchname in generates_pylint_report:
-        run_pylint(['./lint.py'])
+        run_pylint(['./lint.py', '--score'])
 
     sys.exit(0)
 

@@ -26,13 +26,13 @@ if __name__ == "__main__":
         exclude += slowTests # Shave off ~3 hrs?
 
     # Since last commit to current branch
-    if len(args[0]) == 0:
+    if len(args) == 0:
         if 'changed' in kwargs:
             packageNames = [name for name in get_changed_test_packages() if name not in exclude]
         else:
             packageNames = [name for name in get_package_names() if name not in exclude]
     else:
-        packageNames = args[0]
+        packageNames = args
 
     print('Running packages %s' % (', '.join(packageNames)))
 
