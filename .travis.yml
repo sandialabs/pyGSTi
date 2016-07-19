@@ -25,8 +25,8 @@ script:
 
 after-success:
   - cd hooks/travis
-  - ./after-success
+  - ./after_success
 
 after-failure:
   - cd hooks/travis
-  - ./after-failure
+  - ./after_failure
