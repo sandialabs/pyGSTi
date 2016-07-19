@@ -28,12 +28,12 @@ blacklisted-warnings:
 whitelisted-refactors:
 - redefined-variable-type
 
-desired-score: '9.15'
+desired-score: '9.10' # Pylint now checks the pylint scripts, which lowers the overall score again :)
 
 # packages to be scores by pylint
 packages:
-- ../packages/pygsti
-- ../test
+- ../../packages/pygsti
+- ../../test
 
 pylint-version: pylint3
 

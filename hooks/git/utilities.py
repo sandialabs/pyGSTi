@@ -12,7 +12,7 @@ def get_branchname():
 
 def run_pylint(commands):
     old_wd = os.getcwd()
-    os.chdir('pylint/')
+    os.chdir('test/pylint/')
     result = subprocess.call(commands)
     os.chdir(old_wd)
     return result

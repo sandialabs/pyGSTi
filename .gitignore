@@ -3,6 +3,8 @@
 *.bak
 *.swp
 *.pkl
+*.out
+*.coverage
 .ipynb_checkpoints
 test/temp_test_files/*
 jupyter_notebooks/Tutorials/tutorial_files
