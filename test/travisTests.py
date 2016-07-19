@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from __future__ import print_function
-from test_tools.runPackage import run_package
+from helpers.test.runPackage import run_package
 import subprocess, sys
 travisPackages = ['tools', 'objects', 'construction', 'io', 'optimize', 'algorithms']
 
