@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
 from ..automation_tools import read_yaml
-from helpers            import get_pylint_output
+from .helpers           import get_pylint_output
 import sys
 
 # A function that lets us adjust the value of the adjustable when linting

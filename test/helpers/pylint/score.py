@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from lintAll            import lint_all
+from .lintAll           import lint_all
 from ..automation_tools import read_yaml, write_yaml
 
 

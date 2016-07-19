@@ -21,7 +21,6 @@ def check_score():
 
 if __name__ == "__main__":
     args, kwargs = get_args(sys.argv) 
-    print(args, kwargs)
     # No arguments specified
     if 'score' in kwargs:
         check_score() 

@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-from helpers            import get_pylint_output, write_output
+from .helpers           import get_pylint_output, write_output
 from ..automation_tools import read_yaml
 
 def lint_all():
@@ -22,6 +21,3 @@ def lint_all():
 
     output = get_pylint_output(commands, 'all')
     return output
-
-if __name__ == "__main__":
-    lint_all()

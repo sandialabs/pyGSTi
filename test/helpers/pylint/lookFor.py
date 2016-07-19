@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-from helpers            import get_pylint_output, write_output
+from .helpers           import get_pylint_output, write_output
 from ..automation_tools import read_yaml
 import os, sys
 
