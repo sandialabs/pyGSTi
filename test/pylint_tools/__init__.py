@@ -1,1 +1,1 @@
-from score import get_score
+from lookFor import look_for 
