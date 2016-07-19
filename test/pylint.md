@@ -1,46 +1,39 @@
 # Pylint
 
-### Standard scripts
+### By default, ./lint.py lints for items given by positional arguments:
 
-##### findErrors.py
+`./lint.py filename item` -> `./lint.py docs missing-docstring empty-docstring`
+  (generate a file `output/pylint/docs.out` that logs places that have empty or missing docstrings) 
 
-Used to find errors in the entire pygsti repository. Individual errors are blacklisted in `config.yml`
+A full list of items can be found [here](https://docs.pylint.org/features.html#general-options)  
+  (Or in `pylint_message.txt`)
 
-##### findWarnings.py
+For simplicity, a filename can be left off if only one item is being looked for:
 
-Used to find warnings. Blacklisting is also in `config.yml`
+`./lint.py unused-import` generates a file `unused-import` logging the occurances of `unused-import`  
 
-##### runAdjustables.py  
+Some examples:
+ `./lookFor.py duplicate-code`
+ `./lookFor.py todos fixme`
+ `./lookFor.py unused unused-variable unused-import unused-argument`
 
-Takes the list of adjustable refactors in `config.yml`, and generates a file for each.
-(Guarantees the filelength is < 20 lines, adjusting parameters where needed)
+### If no positional arguments are given, pylint lints for `all`:
+  - All warnings except those blacklisted in `pylint_config`
+  - All errors except those blacklisted in `pylint_config`
+  - No refactors except those whitelisted in `pylint_config`
+  - No conventions, ever.
+  
+  If --score is specific, lint.py exits with 1 if the code scores lower than the latest run
 
-##### lintAll.py  
+### Optional flags:
 
-Find Errors, Warnings, and whitelisted refactors and conventions throughout the repository
+| Flag            | Description                                           |
+|-----------------|:------------------------------------------------------|
+| `--score`       | compares repo score to latest score, exits 0 if lower |
+| `--errors`      | generate pylint report for errors                     |
+| `--warnings`    | generate pylint report for warnings                   |
+| `--adjustables` | generate pylint report for adjustable refactors       |
 
-### Specialized scripts
+(Multiple flags can be provided in a call to lint.py, as well as the positional arguments)
 
-#### Specialized scripts use `lookFor.py`, which allows linting of a specific item
 
-##### Usage:
-
-`./lookFor.py filename item` -> `./lookFor.py missingdocs missing-docstring`
-
-A full list of items can be found [here](https://docs.pylint.org/features.html#general-options)
-
-(Or in `pylint_message.txt`)
-
-#### Specializations:
-
-##### genDuplicateCode.sh  
- (`./lookFor.py duplicate-code duplicate-code`)
-
-##### genMissingDocs.sh
-(`./lookFor.py missingdocs missing-docstring empty-docstring`)
-
-##### genTODOS.sh
-(`./lookFor.py todos fixme`)
-
-##### genUnused.sh
- (`./lookFor.py unused unused-variable unused-import unused-argument`)
