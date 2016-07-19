@@ -62,10 +62,10 @@ for packageName in gen_info_on:
         infoString += ('        - %s\n' % coverage)
 
     print(infoString)
-    with open('%s_individual_test_info.yml' % packageName, 'w') as testInfo:
+    with open('output/%s_individual_test_info.yml' % packageName, 'w') as testInfo:
         testInfo.write(infoString)
     infoDict[packageName] = infoString
 
-with open('all_individual_test_info.yml', 'w') as testInfo:
+with open('output/all_individual_test_info.yml', 'w') as testInfo:
     info = '\n*3'.join([infoDict[packageName] for packageName in infoDict])
     testInfo.write(info)
