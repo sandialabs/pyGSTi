@@ -24,9 +24,9 @@ script:
   - python travisTests.py 
 
 after_success:
-  - cd hooks/travis
+  - cd ../hooks/travis
   - ./after_success
 
 after_failure:
-  - cd hooks/travis
+  - cd ../hooks/travis
   - ./after_failure
