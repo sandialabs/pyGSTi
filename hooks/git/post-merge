@@ -2,7 +2,7 @@
 from __future__ import print_function
 import subprocess, os, sys
 
-print('Runnning post-merge hook - updating git hooks (hopefully)')
+print('Runnning post-merge hook - updating git hooks')
 
 old_wd = os.getcwd()
 os.chdir('hooks/')

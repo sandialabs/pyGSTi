@@ -1,7 +1,7 @@
 #!/usr/bin/python
-from __future__   import print_function
-from utilities    import get_branchname, run_pylint
-from hooksettings import requires_pylint_pass
+from __future__       import print_function
+from automation_tools import get_branchname, run_pylint
+from hooksettings     import requires_pylint_pass
 import subprocess, os, sys
 
 if __name__ == '__main__':

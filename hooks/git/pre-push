@@ -1,7 +1,7 @@
 #!/usr/bin/python
-from __future__   import print_function
-from utilities    import get_branchname
-from hooksettings import updates_git_pages
+from __future__       import print_function
+from automation_tools import get_branchname
+from hooksettings     import updates_git_pages
 import subprocess, os, sys
 
 if __name__ == "__main__":
@@ -17,5 +17,6 @@ if __name__ == "__main__":
         subprocess.call(['git', 'commit', '-m', '"Updates html in tutorials"'])
         subprocess.call(['git', 'push'])
         subprocess.call(['git', 'checkout', branchname])
+        os.system('rm -rf temp_html') # yikes!
 
     sys.exit(0)

@@ -2,4 +2,5 @@
 # (Copies all hooks to .git/hooks (where they will actually be called))
 echo Setting up hooks
 cp git/* ../.git/hooks
+cp -a ../test/automation_tools ../.git/hooks
 echo Hook setup completed
