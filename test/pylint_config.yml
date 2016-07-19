@@ -32,8 +32,8 @@ desired-score: '9.10' # Pylint now checks the pylint scripts, which lowers the o
 
 # packages to be scores by pylint
 packages:
-- ../../packages/pygsti
-- ../../test
+- packages/pygsti
+- test
 
 pylint-version: pylint3
 

@@ -1,24 +1,26 @@
 #!/usr/bin/env python3
-from helpers            import get_output, write_output
-from ..automation_tools import read_yaml
-import sys
+from helpers  import get_output, write_output
+from ..automation_tools import read_yaml, directory
+import os, sys
 
 # https://docs.pylint.org/features.html#general-options
 
 def look_for(items, filename):
     enabled   = ','.join(items)
     print('Generating %s in all of pygsti. This should take less than a minute' % enabled)
-
-    config    = read_yaml('config.yml')
+    config    = read_yaml('pylint_config.yml')
     commands  = [config['pylint-version'], 
                  '--disable=all',
                  '--enable=%s' % enabled,
                  '--rcfile=%s' % config['config-file'],
                  '--reports=n'] + config['packages']
     
-    output = get_output(commands)
+    # pyGSTi directory
+    with directory('..'):
+        output = get_output(commands)
     print('\n'.join(output))
-    write_output(output, 'output/%s.out' % filename)
+    with directory('output/pylint'):
+        write_output(output, '%s.out' % filename)
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
