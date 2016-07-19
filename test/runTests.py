@@ -3,15 +3,15 @@ from __future__                import print_function, division, unicode_literals
 from test_tools.helpers        import *
 from test_tools.runChanged     import *
 from test_tools.runPackage     import run_package
-from test_tools.readyaml       import read_yaml
+from automation_tools          import read_yaml
 from test_tools.genPackageInfo import gen_package_info
 import sys
 
-config = read_yaml('test_tools/testconfig.yml')
-
-slowTests = config['slow-tests']
     
 if __name__ == "__main__":
+    config = read_yaml('test_tools/testconfig.yml')
+    slowTests = config['slow-tests']
+
     # Setup arguments and other variables:
     args, kwargs = get_args(sys.argv)
     exclude = ['benchmarks', 'output', 'cmp_chk_files', 'temp_test_files', 'test_tools']

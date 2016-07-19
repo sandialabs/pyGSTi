@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-from __future__         import print_function
-from test_tools.helpers import *
+from __future__              import print_function
+from test_tools.helpers      import *
 from test_tools._getCoverage import _read_coverage
 import importlib
 import inspect
@@ -48,24 +48,25 @@ def gen_individual_test_info(packageName):
     return testsInfo
 
                 
-gen_info_on = sys.argv[1:]
-infoDict = {}
-for packageName in gen_info_on:
-    infoDict[packageName] = gen_individual_test_info(packageName)
+if __name__ == '__main__':
+    gen_info_on = sys.argv[1:]
+    infoDict = {}
+    for packageName in gen_info_on:
+        infoDict[packageName] = gen_individual_test_info(packageName)
 
-    infoString = ''
-    infoString += '\n\n%s:\n\n' % packageName
-    for testfunction in infoDict[packageName]:
-        infoString += '\n    %s:\n' % testfunction
-        testTime, coverage = infoDict[packageName][testfunction]
-        infoString += ('        - %s\n' % str(round(testTime, 2)).ljust(5))  
-        infoString += ('        - %s\n' % coverage)
+        infoString = ''
+        infoString += '\n\n%s:\n\n' % packageName
+        for testfunction in infoDict[packageName]:
+            infoString += '\n    %s:\n' % testfunction
+            testTime, coverage = infoDict[packageName][testfunction]
+            infoString += ('        - %s\n' % str(round(testTime, 2)).ljust(5))  
+            infoString += ('        - %s\n' % coverage)
 
-    print(infoString)
-    with open('output/%s_individual_test_info.yml' % packageName, 'w') as testInfo:
-        testInfo.write(infoString)
-    infoDict[packageName] = infoString
+        print(infoString)
+        with open('output/%s_individual_test_info.yml' % packageName, 'w') as testInfo:
+            testInfo.write(infoString)
+        infoDict[packageName] = infoString
 
-with open('output/all_individual_test_info.yml', 'w') as testInfo:
-    info = '\n*3'.join([infoDict[packageName] for packageName in infoDict])
-    testInfo.write(info)
+    with open('output/all_individual_test_info.yml', 'w') as testInfo:
+        info = '\n*3'.join([infoDict[packageName] for packageName in infoDict])
+        testInfo.write(info)
