@@ -23,10 +23,10 @@ script:
   - cd test
   - python travisTests.py 
 
-after-success:
+after_success:
   - cd hooks/travis
   - ./after-success
 
-after-failure:
+after_failure:
   - cd hooks/travis
   - ./after-failure

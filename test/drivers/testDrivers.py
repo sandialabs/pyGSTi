@@ -2,7 +2,6 @@ import unittest
 import pygsti
 from pygsti.construction import std1Q_XYI as std
 
-import numpy as np
 import sys, os
 
 class DriversTestCase(unittest.TestCase):

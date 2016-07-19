@@ -1,7 +1,6 @@
 from __future__     import print_function
 from .helpers       import *
 from ._runBenchmark import *
-from .runChanged    import get_changed_test_packages
 import os, sys
 
 '''

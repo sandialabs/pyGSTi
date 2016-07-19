@@ -4,20 +4,19 @@ from helpers    import get_output, write_output
 import sys
 
 # A function that lets us adjust the value of the adjustable when linting
-def build_commands(adjustable, setting, value, package='packages/pygsti'):
-	return ['pylint3', '--disable=all',
-		           '--enable=%s' % adjustable,
-                           '--rcfile=.lint.conf',
-                           '--%s=%s'     % (setting, value),
-	                   '--reports=n',
-			   '../%s' % package]
+def build_commands(adjustable, setting, value):
+    config    = read_yaml('config.yml')
+    commands  = [config['pylint-version'], 
+		 '--enable=%s' % adjustable,
+                 '--disable=all',
+                 '--rcfile=%s' % config['config-file'],
+                 '--reports=n'] + config['packages']
+    return commands
 
 if __name__ == "__main__":
 
     # The wanted size of an output file (ex: too-many-arguments.txt)
     desiredLength= 20
-    package      = 'packages/pygsti' if len(sys.argv) == 1 else sys.argv[1]
-
     adjustables = read_yaml('config.yml')['adjustables']
 
     print('Beginning to lint for adjustable refactoring issues')
@@ -31,7 +30,7 @@ if __name__ == "__main__":
         setting, defaultvalue = default.rsplit('=')
         defaultvalue          = int(defaultvalue)
 
-        adjust_commands       = lambda value : build_commands(adjustable, setting, value, package)
+        adjust_commands       = lambda value : build_commands(adjustable, setting, value)
 
         currentvalue          = defaultvalue
         output                = get_output(adjust_commands(currentvalue))

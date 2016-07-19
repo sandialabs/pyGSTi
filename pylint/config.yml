@@ -38,3 +38,13 @@ whitelisted-refactors:
 
 desired-score:
   9.72 # Highest so far :)
+
+# packages to be scores by pylint
+packages:
+  - ../packages/pygsti
+  - ../test
+
+pylint-version: pylint3
+
+config-file: .lint.conf
+

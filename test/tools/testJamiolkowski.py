@@ -1,6 +1,6 @@
 import unittest
 import pygsti
-import os, sys
+import os
 import numpy as np
 
 class JamiolkowskiTestCase(unittest.TestCase):

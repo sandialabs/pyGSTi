@@ -5,7 +5,6 @@ import pygsti
 import numpy as np
 import warnings
 import os
-import sys
 
 class DataSetTestCase(unittest.TestCase):
 

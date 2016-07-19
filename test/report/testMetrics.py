@@ -1,8 +1,7 @@
 import unittest
 import pygsti
 from pygsti.construction import std1Q_XYI as std
-import numpy as np
-import os, sys
+import os
 
 class MetricsTestCase(unittest.TestCase):
 

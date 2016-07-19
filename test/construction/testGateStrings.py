@@ -1,8 +1,7 @@
 import unittest
 import copy
 import pygsti
-import numpy as np
-import os, sys
+import os
 
 class GateStringTestCase(unittest.TestCase):
 

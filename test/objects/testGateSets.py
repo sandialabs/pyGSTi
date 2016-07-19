@@ -3,7 +3,7 @@ import pygsti
 import numpy as np
 import warnings
 import pickle
-import os, sys
+import os
 
 class GateSetTestCase(unittest.TestCase):
 

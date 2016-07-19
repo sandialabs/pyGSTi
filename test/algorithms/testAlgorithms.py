@@ -3,7 +3,6 @@ import pygsti
 from pygsti.construction import std1Q_XYI as std
 
 import numpy as np
-from scipy import polyfit
 import sys, os
 
 class AlgorithmTestCase(unittest.TestCase):

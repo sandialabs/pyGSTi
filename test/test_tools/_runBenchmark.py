@@ -8,7 +8,6 @@ from ._getCoverage  import get_single_coverage
 
 import subprocess
 import os, sys
-import math
 
 '''
 A set of functions/tools for timing tests

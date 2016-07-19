@@ -1,5 +1,4 @@
 from pygsti.objects.verbosityprinter import *
-from contextlib                      import contextmanager
 import unittest, sys, os
 
 # The path for a temporary file to be generated in

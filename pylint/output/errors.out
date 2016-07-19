@@ -1,0 +1,43 @@
+************* Module test.travisTests
+E:  3, 0: Unable to import 'test_tools.runPackage' (import-error)
+************* Module test.findSlowTests
+E:  4, 0: Unable to import 'test_tools.helpers' (import-error)
+E:  5, 0: Unable to import 'test_tools._getCoverage' (import-error)
+E: 14,31: Undefined variable 'os' (undefined-variable)
+E: 16,32: Undefined variable 'os' (undefined-variable)
+E: 36,16: Undefined variable 'os' (undefined-variable)
+E: 53,14: Undefined variable 'sys' (undefined-variable)
+************* Module test.runTests
+E:  3, 0: Unable to import 'test_tools.helpers' (import-error)
+E:  4, 0: Unable to import 'test_tools.runChanged' (import-error)
+E:  5, 0: Unable to import 'test_tools.runPackage' (import-error)
+E:  6, 0: Unable to import 'test_tools.readyaml' (import-error)
+E:  7, 0: Unable to import 'test_tools.genPackageInfo' (import-error)
+E: 16,19: Undefined variable 'get_args' (undefined-variable)
+E: 31,45: Undefined variable 'get_changed_test_packages' (undefined-variable)
+E: 33,45: Undefined variable 'get_package_names' (undefined-variable)
+************* Module test.test_tools.findDependencies
+E: 31, 0: inconsistent use of tabs and spaces in indentation (syntax-error)
+************* Module test.algorithms.testAlgorithms
+E:  6, 0: No name 'polyfit' in module 'scipy' (no-name-in-module)
+************* Module test.algorithms.testTwoQubit
+E: 12, 8: Undefined variable 'pygsti' (undefined-variable)
+E: 31,20: Undefined variable 'pygsti' (undefined-variable)
+E: 39,28: Undefined variable 'pygsti' (undefined-variable)
+E: 45,18: Undefined variable 'pygsti' (undefined-variable)
+E: 49,17: Undefined variable 'pygsti' (undefined-variable)
+************* Module test.algorithms.testCore
+E:  6, 0: No name 'polyfit' in module 'scipy' (no-name-in-module)
+************* Module test.mpi.speedTest
+E:  4, 0: Unable to import 'mpinoseutils' (import-error)
+************* Module test.mpi.mpitestMain
+E:  5, 0: Unable to import 'mpinoseutils' (import-error)
+E: 29,66: Undefined variable 'comm' (undefined-variable)
+E:125, 1: Undefined variable 'mpitest' (undefined-variable)
+E:212, 1: Undefined variable 'mpitest' (undefined-variable)
+E:279, 1: Undefined variable 'mpitest' (undefined-variable)
+E:353, 1: Undefined variable 'mpitest' (undefined-variable)
+E:471, 1: Undefined variable 'mpitest' (undefined-variable)
+E:592, 1: Undefined variable 'mpitest' (undefined-variable)
+E:616, 1: Undefined variable 'mpitest' (undefined-variable)
+E:640, 1: Undefined variable 'mpitest' (undefined-variable)

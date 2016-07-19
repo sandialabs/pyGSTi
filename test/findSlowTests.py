@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 from __future__         import print_function
-from contextlib         import contextmanager
 from test_tools.helpers import *
 from test_tools._getCoverage import _read_coverage
-import subprocess
 import importlib
 import inspect
 import time

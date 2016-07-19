@@ -1,5 +1,5 @@
 from __future__ import print_function, absolute_import
-import os, sys
+import os
 
 # creates a message ~like so:
 #

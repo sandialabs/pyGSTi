@@ -1,11 +1,9 @@
-import unittest
-import pygsti
 from pygsti.construction import std1Q_XYI as std
 
-import numpy as np
-import os
-import sys
+import unittest
 import warnings
+import pygsti
+import os
 
 try:
     from PIL import Image, ImageChops # stackoverflow.com/questions/19230991/image-open-cannot-identify-image-file-python

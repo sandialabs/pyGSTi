@@ -4,7 +4,7 @@ import pickle
 import pygsti
 import numpy as np
 import warnings
-import os, sys
+import os
 
 class GateSetConstructionTestCase(unittest.TestCase):
 

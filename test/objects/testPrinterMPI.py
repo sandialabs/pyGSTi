@@ -1,8 +1,7 @@
 from pygsti.objects.verbosityprinter import *
 from mpi4py                          import MPI
 
-
-import unittest, os, sys
+import unittest, os
 
 
 class TestPrinterMPI(unittest.TestCase):

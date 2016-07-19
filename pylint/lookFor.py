@@ -13,12 +13,15 @@ if __name__ == "__main__":
         sys.argv.append(sys.argv[1])
 
     enabled   = ','.join(sys.argv[2:])
-    print('Generating %s in all of pygsti. This might take a few minutes' % enabled)
-    commands  = ['pylint3', '--disable=all',
-                            '--enable=%s' % enabled,
-                            '--rcfile=.lint.conf',
-                            '--reports=n',
-                            '../packages/pygsti']
+    print('Generating %s in all of pygsti. This should take less than a minute' % enabled)
+
+    config    = read_yaml('config.yml')
+    commands  = [config['pylint-version'], 
+                 '--disable=all',
+                 '--enable=%s' % enabled,
+                 '--rcfile=%s' % config['config-file'],
+                 '--reports=n'] + config['packages']
+    
     output = get_output(commands)
     print('\n'.join(output))
     write_output(output, 'output/%s.out' % sys.argv[1])

@@ -17,8 +17,7 @@ def lint_all():
 
     commands  = ['pylint3', '--disable=R,%s' % ','.join(blacklist),
                             '--enable=%s'  % ','.join(whitelist),
-                            '--rcfile=.lint.conf',
-                            '../packages/pygsti']
+                            '--rcfile=.lint.conf'] + config['packages']
 
     output = get_output(commands)
     print('\n'.join(output))

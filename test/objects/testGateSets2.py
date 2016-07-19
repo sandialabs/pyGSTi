@@ -2,7 +2,7 @@ import unittest
 import pygsti
 import numpy as np
 import warnings
-import os, sys
+import os
 
 class GateSetTestCase(unittest.TestCase):
 

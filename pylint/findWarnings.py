@@ -3,12 +3,13 @@ from helpers  import get_output, write_output
 from readyaml import read_yaml
 
 if __name__ == "__main__":
-    print('Generating warnings in all of pygsti. This might take a few minutes')
-    blacklist = read_yaml('config.yml')['blacklisted-warnings']
-    commands  = ['pylint3', '--disable=R,C,E,%s' % ','.join(blacklist),
-                            '--rcfile=.lint.conf',
-                            '--reports=n',
-                            '../packages/pygsti']
+    print('Generating warnings in all of pygsti. This takes around 30 seconds')
+    config    = read_yaml('config.yml')
+    blacklist = config['blacklisted-warnings']
+    commands  = [config['pylint-version'], 
+                 '--disable=R,C,E,%s' % ','.join(blacklist),
+                 '--rcfile=%s' % config['config-file'],
+                 '--reports=n'] + config['packages']
     output = get_output(commands)
     print('\n'.join(output))
     write_output(output, 'output/warnings.out')

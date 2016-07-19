@@ -1,5 +1,5 @@
 from __future__ import print_function
-import time, sys, os
+import time
 
 def benchmark(function):
     def wrapper(*args, **kwargs):
