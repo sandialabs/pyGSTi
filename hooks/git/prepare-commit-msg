@@ -3,7 +3,8 @@ from __future__   import print_function
 from hooksettings import no_ci_triggered # File extensions that don't trigger Travis CI
 import subprocess, sys, os
 
-output       = subprocess.check_output(['git', 'diff', '--name-only'])
+output       = subprocess.check_output(['git', 'diff', '--name-only',
+                                                       '--cached'])
 changedFiles = output.decode('utf-8').splitlines()
 
 # Determine if a filename should trigger CI
@@ -22,7 +23,7 @@ def triggers_CI(filename):
         return True # Do CI for files with no extension
 
 print('%s files changed:' % len(changedFiles))
-doCI = any([triggers_CI(filename) for filename in changedFile]) # If any of the changed files triggers CI
+doCI = any([triggers_CI(filename) for filename in changedFiles]) # If any of the changed files triggers CI
 
 # Load default commit into memory
 with open(sys.argv[1], 'r') as defaultcommit:

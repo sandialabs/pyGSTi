@@ -5,8 +5,9 @@
 *.pkl
 *.out
 *.coverage
+*.serial
 .ipynb_checkpoints
-test/temp_test_files/*
+test/test_packages/temp_test_files/*
 jupyter_notebooks/Tutorials/tutorial_files
 
 # Compiled source #
