@@ -1,0 +1,41 @@
+# Adjustable settings set to defaults
+adjustables:
+  too-many-arguments: max-args=10
+
+  too-many-boolean-expressions: max-bool-expr=5
+
+  too-many-branches: max-branches=10
+
+  too-many-instance-attributes: max-attributes=6
+
+  too-many-locals: max-locals=15
+
+  too-many-return-statements: max-returns=6
+
+  too-many-statements: max-statements=80
+
+blacklisted-errors:
+- function-redefined             # This happens to be allowed in our repository! (Should it be?)
+- no-member                      # You could also blacklist each affected module/class in .lint.conf
+
+blacklisted-warnings:
+- pointless-string-statement     # Documentation :)
+- wildcard-import                # Non-Breaking
+- unnecessary-semicolon          # Non-Breaking
+- protected-access               # Non-Breaking
+- bad-builtin                    # Non-Breaking
+- fixme                          # Used in genTODOs.sh, not warnings
+whitelisted-refactors:
+- redefined-variable-type
+
+desired-score: '9.11' # Pylint now checks the pylint scripts, which lowers the overall score again :)
+
+# packages to be scores by pylint
+packages:
+- packages/pygsti
+- test
+
+pylint-version: pylint3
+
+config-file: .lint.conf
+

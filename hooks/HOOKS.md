@@ -4,12 +4,16 @@
 #### Setup:  
 
 Go to `pyGSTi/hooks` directory, and run `./setup_hooks.sh`  
-This copies the contents of `pyGSTi/hooks` into `pyGSTi/.git/hooks`  
+This copies the contents of `pyGSTi/hooks/git` into `pyGSTi/.git/hooks`  
 After hooks have been configured, any pull or merge will update them again  
 (If the `post-merge` hook breaks, and stops automatically updating hooks, they will need to be re-updated by another call to `setup_hooks.sh`, after a fix is made)
 
 #### Hook operations, by branch:
 (See hooks/hooksettings.py for succinct settings)
+
+##### all
+
+`prepare-commit-msg` - Adds `[ci skip]` to commit message if only `.md` and `.txt` files have changed
 
 ##### master
 

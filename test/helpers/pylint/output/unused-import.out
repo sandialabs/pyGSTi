@@ -1,0 +1,59 @@
+************* Module test.findSlowTests
+W:  3, 0: Unused contextmanager imported from contextlib (unused-import)
+W:  6, 0: Unused import subprocess (unused-import)
+************* Module test.report.testReport
+W:  5, 0: Unused import sys (unused-import)
+************* Module test.report.testMetrics
+W:  4, 0: Unused numpy imported as np (unused-import)
+W:  5, 0: Unused import sys (unused-import)
+************* Module test.report.testAnalysis
+W:  5, 0: Unused numpy imported as np (unused-import)
+W:  7, 0: Unused import sys (unused-import)
+************* Module test.test_tools._runBenchmark
+W: 11, 0: Unused import math (unused-import)
+************* Module test.test_tools.genPackageInfo
+W:  4, 0: Unused get_changed_test_packages imported from runChanged (unused-import)
+************* Module test.test_tools.helpers
+W:  2, 0: Unused import sys (unused-import)
+************* Module test.test_tools.benchmarks.benchmark
+W:  2, 0: Unused import os (unused-import)
+W:  2, 0: Unused import sys (unused-import)
+************* Module test.drivers.testDrivers
+W:  5, 0: Unused numpy imported as np (unused-import)
+************* Module test.io.testWriteAndLoad
+W:  6, 0: Unused import sys (unused-import)
+************* Module test.io.testStdInputParser
+W:  3, 0: Unused import pyparsing (unused-import)
+W:  7, 0: Unused import sys (unused-import)
+************* Module test.algorithms.testAlgorithms
+W:  6, 0: Unused polyfit imported from scipy (unused-import)
+************* Module test.construction.testGateStrings
+W:  4, 0: Unused numpy imported as np (unused-import)
+W:  5, 0: Unused import sys (unused-import)
+************* Module test.construction.testGateSetConstruction
+W:  7, 0: Unused import sys (unused-import)
+************* Module test.tools.testTools
+W:  5, 0: Unused import sys (unused-import)
+************* Module test.tools.testJamiolkowski
+W:  3, 0: Unused import sys (unused-import)
+************* Module test.objects.testPrinter
+W:  2, 0: Unused contextmanager imported from contextlib (unused-import)
+************* Module test.objects.testDataSets
+W:  8, 0: Unused import sys (unused-import)
+************* Module test.objects.testPrinterMPI
+W:  5, 0: Unused import sys (unused-import)
+************* Module test.objects.testGateSets2
+W:  5, 0: Unused import sys (unused-import)
+************* Module test.objects.testGateSets
+W:  6, 0: Unused import sys (unused-import)
+************* Module test.objects.gigateset_test
+W:  1, 0: Unused import pygsti (unused-import)
+W:  2, 0: Unused numpy imported as np (unused-import)
+W:  3, 0: Unused std1Q_XYI imported from pygsti.construction as std (unused-import)
+************* Module test.mpi.runtests
+W: 36, 4: Unused import os (unused-import)
+************* Module test.mpi.speedTest
+W:  1, 0: Unused import unittest (unused-import)
+W:  3, 0: Unused import sys (unused-import)
+************* Module test.mpi.mpitestMain
+W:  3, 0: Unused import sys (unused-import)
