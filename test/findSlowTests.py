@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-from __future__              import print_function
-from test_tools.helpers      import *
-from test_tools._getCoverage import _read_coverage
+from __future__                import print_function
+from helpers.test.helpers      import *
+from helpers.test._getCoverage import _read_coverage
+from helpers.automation_tools  import directory
 import importlib
 import inspect
 import time
+import sys
+import os
 
 
-def get_test_files(directory, extension='.py'):
+def get_test_files(dirname, extension='.py'):
     testFiles = []
-    for subdir, dirs, files in os.walk(directory):
+    for subdir, dirs, files in os.walk(dirname):
         for filename in files:
             filepath = subdir + os.sep + filename
             if filename.endswith(extension) and filename.startswith('test'):
@@ -31,9 +34,9 @@ def get_test_info(filename, packageName, testCaseName, test):
 def gen_individual_test_info(packageName):
     testsInfo = {}
 
-    directory = os.getcwd() + '/' + packageName + '/'
-    for _, filename in get_test_files(directory):
-        moduleName = packageName + '.' + filename[:-3]
+    dirname = os.getcwd() + '/test_packages/' + packageName + '/'
+    for _, filename in get_test_files(dirname):
+        moduleName = 'test_packages.' + packageName + '.' + filename[:-3]
         print('Finding slow tests in %s' % moduleName)
         i = importlib.import_module(moduleName)
         testCases = inspect.getmembers(i, predicate=inspect.isclass)
