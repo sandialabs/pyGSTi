@@ -17,7 +17,7 @@ After hooks have been configured, any pull or merge will update them again
 
 ##### master
 
-`pre-commit`   -  requires pylint score to be higher than that in `pyGSTi/pylint/config.yml` (currently `9.72`) - creates report
+`pre-commit`   -  requires pylint score to be higher than that in `pyGSTi/test/pylint_config.yml` (currently `9.10`) - creates report
 
 `post-commit`  -  generates html **locally** for `gh-pages`
 
@@ -25,8 +25,12 @@ After hooks have been configured, any pull or merge will update them again
 
 ##### beta
 
-`pre-commit`   -  requires pylint score to be higher than that in `pyGSTi/pylint/config.yml` (currently `9.72`) - creates report
+`pre-commit`   -  requires pylint score to be higher than that in `pyGSTi/test/pylint_config.yml` (currently `9.10`) - creates report
 
 ##### develop
 
-`post-commit`  -  generates pylint report `pyGSTi/pylint/output/all.out` - doesn't check score
+`post-commit`  -  generates pylint report `pyGSTi/test/output/pylint/all.out` - doesn't check score
+
+### Important note:
+
+git hooks can be bypassed with the flag `--no-verify`, for example, in the case that something needs to be pushed to `develop` as a hotfix, but lowers the pylint score. (The latest pylint score in `pyGSTi/test/pylint_config.yml` can also be lowered to something more reasonable, if required(It would be nice to have it above `9.0`?))
