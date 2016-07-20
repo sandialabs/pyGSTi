@@ -26,11 +26,14 @@ cache:
 script:
   - cd test
   - python travisTests.py 
+  - cd ..
 
 after_success:
-  - cd ../hooks/travis
+  - cd hooks/travis
   - ./after_success
+  - cd ../..
 
 after_failure:
-  - cd ../hooks/travis
+  - cd hooks/travis
   - ./after_failure
+  - cd ../..

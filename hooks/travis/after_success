@@ -1,2 +1,29 @@
-#!/bin/bash
-echo Travis CI passed
+#!/usr/bin/env python
+from __future__ import print_function
+import subprocess, sys, os
+
+print('Travis CI Passed')
+print(os.getcwd())
+
+branchname = 'unspecified'
+output     = subprocess.check_output(['git', 'branch'])
+for line in output.decode('utf-8').splitlines():
+    if '*' in line:
+        branchname = line.replace('*', '').replace(' ', '')
+        break
+
+# Relevant:
+# http://stackoverflow.com/questions/501407/is-there-a-git-merge-dry-run-option
+
+# Attempt to auto-merge develop into beta if travis tests pass, aborting if there are any conflicts.
+# This code is currently unactive, but should work :)
+
+if branchname == 'develop':
+    output = subprocess.check_output(['git', 'merge', 
+                                      '--no-commit', 
+                                      '--no-ff', 
+                                      'origin/beta'])
+    output = output.decode('utf-8')
+    print(output)
+    print('CONFLICT' in output)
+
