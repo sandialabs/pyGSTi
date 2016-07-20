@@ -5,4 +5,6 @@ import subprocess, sys, os
 output = subprocess.check_output(['git', 'diff', '--name-only'])
 print(os.getcwd())
 print('-' + output.decode('utf-8') + '-')
-print(sys.argv)
+
+with open(sys.argv[2]) as commit-msg:
+    print(commit-msg.read())
