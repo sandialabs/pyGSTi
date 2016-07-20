@@ -1,6 +1,7 @@
 from __future__         import print_function
 from .runPackage        import run_package
 from .helpers           import *
+from ..automation_tools import directory
 import subprocess
 import os
 import sys
@@ -8,9 +9,8 @@ import sys
 
 def get_changed_files(cutoffDirs=['packages/pygsti/', 'ipython_notebooks/'],
                       exclude=['test'], preCommand='../', endings=['py', 'ipynb']):
-    oldwd = os.getcwd()
-    os.chdir(preCommand)
-    output = subprocess.check_output(['git', 'diff', '--name-only'])
+    with directory(preCommand):
+        output = subprocess.check_output(['git', 'diff', '--name-only'])
 
     changedFilePaths = []
 
