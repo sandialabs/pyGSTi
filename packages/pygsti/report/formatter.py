@@ -14,7 +14,6 @@ from .ppt   import ppt,   ppt_value
 
 from inspect import getargspec as _getargspec
 
-
 import cgi     as _cgi
 import numpy   as _np
 import numbers as _numbers
@@ -145,15 +144,20 @@ class BranchingFormatter():
 def has_argname(argname, function):
     return argname in _getargspec(function).args
 
-# Gives precision arguments to formatters
-class PrecisionFormatter():
-    def __init__(self, custom):
-        self.custom    = custom
-        self.specs     = {'precision' : None, 'polarprecision' : None}
+# Gives arguments to formatters
+class ParameterizedFormatter():
+    def __init__(self, custom, neededSpecs):
+        self.custom        = custom
+        self.specs         = { neededSpec : None for neededSpec in neededSpecs }
+        self.suppliedSpecs = False
 
     def __call__(self, label):
-        if self.specs is None:
-            raise ValueError('Spec was not supplied to PrecisionFormatter')
+        # Fail on call if specs have not been supplied
+        if not self.suppliedSpecs:
+            for key in self.specs:
+                if self.specs[key] is None:
+                    raise ValueError('The spec %s was not provided to a parameterized formatter' % key)
+            self.suppliedSpecs = True # Every key in self.specs corresponds to a valid value (not None)
 
         # Supply arguments to the custom formatter (if it needs them)
         for argname in self.specs:
@@ -165,6 +169,14 @@ class PrecisionFormatter():
                 # Create keyword dictionary for custom, modifiying it to be a tuple (function, kwargs)
                     self.custom = (self.custom, {argname : self.specs[argname]})         
         return self.custom[0](label, **self.custom[1])
+
+# Gives precision arguments to formatters
+class PrecisionFormatter():
+    def __init__(self, custom):
+        self.parameterized = ParameterizedFormatter(custom, ['precision', 'polarprecision'])
+
+    def __call__(self, label):
+        return self.parameterized(label)
     
 
 # Formatter class that requires a scratchDirectory from an instance of FormatSet for saving figures to
@@ -178,9 +190,9 @@ class FigureFormatter():
     def __call__(self, figInfo):
         fig, name, W, H = figInfo
         if self.extension is not None:
-            if self.specs is None:
+            if self.specs['scratchDir'] is None:
                 raise ValueError("Must supply scratch " +
-                                 "directory (spec) to FigureFormatter")
+                                 "directory (spec) to FigureFormatter before call")
 
             fig.save_to(_os.path.join(self.specs['scratchDir'], name + self.extension))
             if self.custom is not None:
