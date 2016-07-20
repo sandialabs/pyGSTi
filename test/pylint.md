@@ -23,7 +23,7 @@ Some examples:
   - No refactors except those whitelisted in `pylint_config`
   - No conventions, ever.
   
-  If --score is specific, lint.py exits with 1 if the code scores lower than the latest run
+  If `--score` is specified, `lint.py` exits with `1` if the code scores lower than the latest run (visible in pylint_config)
 
 ### Optional flags:
 
