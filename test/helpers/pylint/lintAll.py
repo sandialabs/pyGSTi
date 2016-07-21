@@ -6,15 +6,15 @@ def lint_all():
 
     print('Linting all of pygsti. This takes around thirty seconds')
     print('  (Report can be found in pylint/output/all.out)')
- 
+
     blacklisted_warnings    = config['blacklisted-warnings']
     blacklisted_errors      = config['blacklisted-errors']
     whitelisted_refactors   = config['whitelisted-refactors']
 
     blacklist = blacklisted_warnings + blacklisted_errors
-    whitelist = whitelisted_refactors 
+    whitelist = whitelisted_refactors
 
-    commands  = [config['pylint-version'], 
+    commands  = [config['pylint-version'],
                 '--disable=R,%s' % ','.join(blacklist),
                 '--enable=%s'  % ','.join(whitelist),
                 '--rcfile=.lint.conf'] + config['packages']

@@ -8,7 +8,7 @@ import pygsti
 
 bUseMPI = True
 
-if bUseMPI: 
+if bUseMPI:
     from mpi4py import MPI
     g_comm = MPI.COMM_WORLD
     g_rank = g_comm.Get_rank()
@@ -33,11 +33,11 @@ def runMC2GSTAnalysis(myspecs, mygerms, gsTarget, seed,
     print(len(mygerms), " germs")
     print(len(lgstStrings), " total LGST gate strings")
     print(len(lsgstStrings[-1]), " LSGST strings before thinning")
-    
+
     lsgstStringsToUse = lsgstStrings
     allRequiredStrs = pygsti.remove_duplicates(lgstStrings + lsgstStrings[-1])
-     
-    
+
+
     gs_dataGen = gsTarget.depolarize(gate_noise=0.1)
     dsFake = pygsti.construction.generate_fake_data(
         gs_dataGen, allRequiredStrs, nSamples, sampleError="multinomial",
@@ -48,21 +48,21 @@ def runMC2GSTAnalysis(myspecs, mygerms, gsTarget, seed,
                              svdTruncateTo=gsTarget.dim, verbosity=3)
     gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",
                                        targetGateset=gs_dataGen)
-    
+
     #Run full iterative LSGST
     tStart = time.time()
     all_gs_lsgst = pygsti.do_iterative_mc2gst(
         dsFake, gs_lgst_go, lsgstStringsToUse,
         minProbClipForWeighting=minProbClipForWeighting,
         probClipInterval=(-1e5,1e5),
-        verbosity=1, memLimit=3*(1024)**3, returnAll=True, 
+        verbosity=1, memLimit=3*(1024)**3, returnAll=True,
         useFreqWeightedChiSq=useFreqWeightedChiSq, comm=comm)
     tEnd = time.time()
     print("Time = ",(tEnd-tStart)/3600.0,"hours ( =",(tEnd-tStart)," secs)")
-    
+
     return all_gs_lsgst, gs_dataGen
-    
-    
+
+
 def runOneQubit(comm=None):
     from pygsti.construction import std1Q_XYI as std
 
@@ -101,4 +101,3 @@ if __name__ == "__main__":
     #oneQubitTest_Tutorial()
     #twoQubitTest()
     test_MPI(g_comm)
-

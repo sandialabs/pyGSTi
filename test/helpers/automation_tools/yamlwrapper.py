@@ -13,4 +13,4 @@ def read_yaml(filename):
 
 def write_yaml(yamldata, filename):
     with open(filename, 'w') as outfile:
-            outfile.write( yaml.dump(yamldata, default_flow_style=False, Dumper=yaml.RoundTripDumper) )
+        outfile.write( yaml.dump(yamldata, default_flow_style=False, Dumper=yaml.RoundTripDumper) )

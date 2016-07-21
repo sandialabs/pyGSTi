@@ -1267,13 +1267,13 @@ class GateSet(object):
         Returns
         -------
         derivs : numpy array
-          
+
           * if `flat` is ``False``, an array of shape S x M x G x G, where:
 
             - S = len(gatestring_list)
             - M = the length of the vectorized gateset
             - G = the linear dimension of a gate matrix (G x G gate matrices)
-            
+
             and ``derivs[i,j,k,l]`` holds the derivative of the (k,l)-th entry
             of the i-th gate string product with respect to the j-th gateset
             parameter.
@@ -1283,13 +1283,13 @@ class GateSet(object):
             - N = the number of entries in a single flattened gate (ordering
               same as numpy.flatten),
             - S,M = as above,
-              
+
             and ``deriv[i,j]`` holds the derivative of the ``(i % G^2)``-th
             entry of the ``(i / G^2)``-th flattened gate string product  with
             respect to the j-th gateset parameter.
 
         products : numpy array
-          Only returned when `bReturnProds` is ``True``.  An array of shape  
+          Only returned when `bReturnProds` is ``True``.  An array of shape
           S x G x G; ``products[i]`` is the i-th gate string product.
 
         scaleVals : numpy array
@@ -2009,7 +2009,7 @@ class GateSet(object):
         float
         """
         return self._calc().frobeniusdist(otherGateSet._calc(), transformMx,
-                                          gateWeight, spamWeight, itemWeights, 
+                                          gateWeight, spamWeight, itemWeights,
                                           normalize)
 
 
@@ -2210,7 +2210,7 @@ class GateSet(object):
           the gateset. (Multiplies each assumed-Pauli-basis gate matrix by the
           diagonal matrix with ``(1.0-gate_noise)`` along all the diagonal
           elements except the first (the identity).
-    
+
         spam_noise : float, optional
           apply depolarizing noise of strength ``1-spam_noise`` to all SPAM
           vectors in the gateset. (Multiplies the non-identity part of each
@@ -2222,12 +2222,12 @@ class GateSet(object):
           specified instead of `gate_noise`; apply a random depolarization
           with maximum strength ``1-max_gate_noise`` to each gate in the
           gateset.
-    
+
         max_spam_noise : float, optional
           specified instead of `spam_noise`; apply a random depolarization
           with maximum strength ``1-max_spam_noise`` to SPAM vector in the
           gateset.
-    
+
         seed : int, optional
           if not ``None``, seed numpy's random number generator with this value
           before generating random depolarizations.

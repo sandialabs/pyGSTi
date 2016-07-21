@@ -18,22 +18,21 @@ imprecise = {
     'html'  : htmlString  % roundedNum,
     'latex' : latexString % roundedNum}
 
-class PrecisionTest(unittest.TestCase): 
+class PrecisionTest(unittest.TestCase):
 
     def test_precision_formatting(self):
         headings   = [arbitraryNum]
         formatters = ['Precision']
-        table      = pygsti.report.table.ReportTable(headings, formatters) 
+        table      = pygsti.report.table.ReportTable(headings, formatters)
 
         # Precise first
         for fmt in ['html', 'latex']: # text format ommitted - it doesn't care about precision :)
-            self.assertEqual(precise[fmt], table.render(fmt, precision=6)) 
+            self.assertEqual(precise[fmt], table.render(fmt, precision=6))
 
         # Imprecise second
         for fmt in ['html', 'latex']:
-            self.assertEqual(imprecise[fmt], table.render(fmt, precision=2)) 
+            self.assertEqual(imprecise[fmt], table.render(fmt, precision=2))
 
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
-

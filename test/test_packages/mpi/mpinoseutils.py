@@ -9,8 +9,8 @@ import numpy as np
 
 __all__ = ['wait_for_turn', 'mprint', 'meq_', 'assert_eq_across_ranks',
            'mpitest']
-           
-        
+
+
 
 #
 # Printing routines
@@ -132,7 +132,7 @@ def _mpi_worker(addr):
         zctx = zmq.Context()
         socket = zctx.socket(zmq.REP)
         socket.connect(addr)
-        
+
     while True:
         if rank == 0:
             pickled_msg = socket.recv()
@@ -147,13 +147,13 @@ def _mpi_worker(addr):
         else:
             module_name, func_name = msg
             mod = importlib.import_module(module_name)
-            func = getattr(mod, func_name)    
+            func = getattr(mod, func_name)
             status = func(_return_status=True)
             if rank == 0:
                 socket.send_pyobj(status)
     # All processes wait until they can terminate
     MPI.COMM_WORLD.barrier()
-        
+
 def _raise_condition(first_non_success_status, failing_rank, msg):
     fmt = '%s in MPI rank %d:\n\n"""\n%s"""\n'
     if first_non_success_status == 'ERROR':
@@ -191,7 +191,7 @@ def mpitest(nprocs):
         @functools.wraps(func)
         def replacement_func(_return_status=False):
             from pickle import dumps
-            
+
             n = MPI.COMM_WORLD.Get_size()
             rank = MPI.COMM_WORLD.Get_rank()
             import os
@@ -208,7 +208,7 @@ def mpitest(nprocs):
                         del mod.mpi_workers
                         mpi_workers.stop()
                 return
-            
+
             if n < nprocs:
                 raise RuntimeError('Number of available MPI processes (%d) '
                                    'too small' % n)
@@ -253,5 +253,3 @@ def mpitest(nprocs):
 
         return replacement_func
     return dec
-
-

@@ -22,7 +22,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                          prepStrsListOrFilename, effectStrsListOrFilename,
                          germsListOrFilename, maxLengths, gateLabels=None,
                          weightsDict=None, fidPairs=None, constrainToTP=True,
-                         gaugeOptToCPTP=False, gaugeOptRatio=0.001, 
+                         gaugeOptToCPTP=False, gaugeOptRatio=0.001,
                          gaugeOptItemWeights=None, objective="logl",
                          advancedOptions={}, lsgstLists=None,
                          truncScheme="whole germ powers", comm=None):
@@ -104,7 +104,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         If ``True``, resulting gate sets are first optimized to CPTP and then
         to the target.  If ``False``, gate sets are only optimized to the
         target gate set.
-        
+
     gaugeOptRatio : float, optional
         The ratio spamWeight/gateWeight used for gauge optimizing to the target
         gate set.
@@ -114,7 +114,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
        used during gauge optimization.   Keys can be gate, state preparation,
        POVM effect, or spam labels.  Values are floating point numbers.  By
        default, gate weights are set to 1.0 and spam weights to gaugeOptRatio.
-    
+
     objective : {'chi2', 'logl'}, optional
         Specifies which final objective function is used: the chi-squared or
         the log-likelihood.
@@ -133,8 +133,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     truncScheme : str, optional
         Truncation scheme used to interpret what the list of maximum lengths
         means. If unsure, leave as default. Allowed values are:
-        
-        - ``'whole germ powers'`` -- germs are repeated an integer number of 
+
+        - ``'whole germ powers'`` -- germs are repeated an integer number of
           times such that the length is less than or equal to the max.
         - ``'truncated germ powers'`` -- repeated germ string is truncated
           to be exactly equal to the max (partial germ at end is ok).
@@ -230,7 +230,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
 
     else: # no TP constraint
         gs_after_gauge_opt = _alg.optimize_gauge(
-            gs_lgst, "target", targetGateset=gs_target, 
+            gs_lgst, "target", targetGateset=gs_target,
             spamWeight=1.0, gateWeight=1.0)
             #Note: no  itemWeights=gaugeOptItemWeights here (LGST)
 

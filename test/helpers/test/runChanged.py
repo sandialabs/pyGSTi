@@ -18,17 +18,17 @@ def get_changed_files(cutoffDirs=['packages/pygsti/', 'ipython_notebooks/'],
         if line.split('/', 1)[0] not in exclude:
             for cutoffDir in cutoffDirs:
                 if cutoffDir in line:
-                   line = line.replace(cutoffDir, '')
+                    line = line.replace(cutoffDir, '')
             if line.count('.') == 1:
                 _, ending = line.split('.')
                 if ending in endings:
-    	            changedFilePaths.append(line)
+                    changedFilePaths.append(line)
     os.chdir(oldwd)
     return changedFilePaths
 
 def get_changed_test_packages():
     return get_changed_packages(cutoffDirs=['test/'],
-                                exclude=['doc', 'ipython_notebooks', 'packages', 'test_tools', 'benchmarks'], 
+                                exclude=['doc', 'ipython_notebooks', 'packages', 'test_tools', 'benchmarks'],
                                 endings=['py'])
 
 def get_changed_packages(cutoffDirs=[], exclude=[], preCommand='../', endings=[]):
@@ -51,5 +51,4 @@ def run_changed_packages(cutoffDirs=[], exclude=[], preCommand='../', endings=[]
         print('No packages have changed since the last commit')
 
     for packageName in changedPackages:
-         run_package(packageName, lastFailed=lastFailed)
-
+        run_package(packageName, lastFailed=lastFailed)

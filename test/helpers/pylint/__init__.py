@@ -1,4 +1,4 @@
-from .lookFor        import look_for 
+from .lookFor        import look_for
 from .lintAll        import lint_all
 from .findWarnings   import find_warnings
 from .findErrors     import find_errors

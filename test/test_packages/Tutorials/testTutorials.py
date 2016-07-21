@@ -24,7 +24,7 @@ class TutorialsTestCase(unittest.TestCase):
         self.old = os.getcwd()
         os.chdir(os.path.abspath(os.path.dirname(__file__)))
 
-        #Set GateSet objects to non-"strict" mode, as this would be the 
+        #Set GateSet objects to non-"strict" mode, as this would be the
         # tutorial environment
         pygsti.objects.GateSet._strict = False
 
@@ -49,7 +49,7 @@ class TutorialsTestCase(unittest.TestCase):
 
             #do comparison with accepted tutorial output?
             os.remove(tutorialModuleName + ".out") #only remove if all is OK
-            
+
         finally:
             sys.stdout.close()
             sys.stdout = orig_stdout
@@ -75,7 +75,7 @@ class TutorialsTestCase(unittest.TestCase):
                       '--ExecutePreprocessor.timeout=3600 --inplace ' +
                       '"%s"' % tutorialFile)
             outName = tutorialFile # executed notebook (side benefit of updating notebook)
-            if containsErrors(outName): 
+            if containsErrors(outName):
                 os.chdir(cwd)
                 raise ValueError("Error(s) occurred when running tutorial '%s'." % tutorialFile +
                                  "  open notebook to see error details.")
@@ -83,7 +83,7 @@ class TutorialsTestCase(unittest.TestCase):
         else:
             os.system('jupyter nbconvert --to notebook --execute "%s"' % tutorialFile)
             outName = tutorialName + ".nbconvert." + Ext # executed notebook
-            if containsErrors(outName): 
+            if containsErrors(outName):
                 os.chdir(cwd)
                 raise ValueError("Error(s) occurred when running tutorial '%s'." % tutorialFile +
                                  "  Open output notebook '%s' for details." % outName)
@@ -103,10 +103,10 @@ class TutorialsMethods(TutorialsTestCase):
 
     def test_tutorial_02(self):
         self.runTutorial_jupyter("02 Gatestring lists.ipynb")
-    
+
     def test_tutorial_03(self):
         self.runTutorial_jupyter("03 DataSets.ipynb")
-    
+
     def test_tutorial_04(self):
         self.runTutorial_jupyter("04 Algorithms.ipynb")
 
@@ -115,10 +115,10 @@ class TutorialsMethods(TutorialsTestCase):
 
     def test_tutorial_06(self):
         self.runTutorial_jupyter("06 Advanced Algorithms.ipynb")
-    
+
     def test_tutorial_07(self):
         self.runTutorial_jupyter("07 Report Generation.ipynb")
-    
+
     def test_tutorial_08(self):
         self.runTutorial_jupyter("08 Fiducial Reduction.ipynb")
 
@@ -141,6 +141,6 @@ class TutorialsMethods(TutorialsTestCase):
         self.runTutorial_jupyter("14 GST on 2 qubits - custom 2Q gate.ipynb")
 
 
-      
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

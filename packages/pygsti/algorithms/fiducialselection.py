@@ -238,7 +238,7 @@ def build_bitvec_mx(n, k):
             Loop depth
         counter : int
             tracks which fields of mx have been already set
-        
+
         Returns
         ----------
         counter : int

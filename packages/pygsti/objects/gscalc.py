@@ -1243,7 +1243,7 @@ class GateSetCalculator(object):
                     #  all of them or none of them)
                     #trees_to_use = evalTree.get_sub_trees()
                     raise NotImplementedError("Need to finish implementing this case!")
-                     
+
                     # Commented out until implementation
                     '''
                     subtrees = evalTree.get_sub_trees()

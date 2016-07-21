@@ -31,14 +31,14 @@ if False:
     pygsti.print_mx(g0.rhoVecs[0])
     print("vs")
     pygsti.print_mx(g1.rhoVecs[0])
-    
-    
+
+
     print("E:")
     pygsti.print_mx(g0.EVecs[0])
     print("vs")
     pygsti.print_mx(g1.EVecs[0])
-    
-    
+
+
     for gl in g0:
         print("Gate %s:" % gl)
         pygsti.print_mx(g0[gl])
@@ -84,27 +84,27 @@ print("|g2-g3| = ",g2.frobeniusdist(g3))
 assert(g2.frobeniusdist(g3) < 1e-6)
 print("OK")
 
-print("Dist between ggi and ggi2 = ", np.linalg.norm( ggi.to_vector() - ggi2.to_vector() )) 
+print("Dist between ggi and ggi2 = ", np.linalg.norm( ggi.to_vector() - ggi2.to_vector() ))
 
 if True:
     print("EParams:")
     print(ggi.E_params)
-    
+
     print("\nDParams:")
     for i,(D1,D2) in enumerate(zip(ggi.D_params,ggi2.D_params)):
         print("%d: " % i, D1)
-    
+
     print("\nBParams:")
     for i,(B1,B2) in enumerate(zip(ggi.B0_params[1:],ggi2.B0_params[1:]), start=1):
         print("%d: " % i, B1)
 
     print("diff(EParams):")
     print(ggi.E_params - ggi2.E_params)
-    
+
     print("\ndiff(DParams):")
     for i,(D1,D2) in enumerate(zip(ggi.D_params,ggi2.D_params)):
         print("%d: " % i, D1-D2)
-    
+
     print("\ndiff(BParams):")
     for i,(B1,B2) in enumerate(zip(ggi.B0_params[1:],ggi2.B0_params[1:]), start=1):
         print("%d: " % i, B1-B2)

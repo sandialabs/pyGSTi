@@ -27,7 +27,7 @@ def parse_coverage_output(filename):
     with open(filename) as content:
         specific = content.read().split('-----------------------------------------------')[1]
         specific = [line for line in specific.replace('-', '').splitlines() if line != '']
-    
+
     # At this point, specific looks like this:
     '''
     pygsti/objects.py                       21      0   100%
@@ -55,8 +55,8 @@ def parse_coverage_output(filename):
 
 def get_test_info(filename, packageName, testCaseName, test):
     coverageFile = '../../output/individual_coverage/%s.out' % (test)
-    commands = ['nosetests', '-v', '--with-coverage', '--cover-package=pygsti.%s' % packageName, 
-                '--cover-erase', '%s:%s.%s' % (filename, testCaseName, test), 
+    commands = ['nosetests', '-v', '--with-coverage', '--cover-package=pygsti.%s' % packageName,
+                '--cover-erase', '%s:%s.%s' % (filename, testCaseName, test),
                 '2>&1 | tee %s' % coverageFile]
     start   = time.time()
     percent = _read_coverage(' '.join(commands), coverageFile)
@@ -64,7 +64,7 @@ def get_test_info(filename, packageName, testCaseName, test):
 
     coverageDict = parse_coverage_output(coverageFile)
     write_yaml(coverageDict, coverageFile)
-    
+
     return ((end - start), percent)
 
 def gen_individual_test_info(packageName):
@@ -86,14 +86,14 @@ def gen_individual_test_info(packageName):
                 testcase.tearDown()
 
     return testsInfo
-                
+
 if __name__ == '__main__':
 
     genInfoOn, kwargs = get_args(sys.argv)
     infoDict          = read_yaml('output/all_individual_test_info.yml')
 
     if len(kwargs) == 0 or 'update' in kwargs:
-        # Update info for the packages given 
+        # Update info for the packages given
         for packageName in genInfoOn:
             print('Updating info for %s' % packageName)
             infoDict[packageName] = gen_individual_test_info(packageName)
@@ -102,7 +102,7 @@ if __name__ == '__main__':
         if packageName not in infoDict:
             raise ValueError('%s does not have generated info!\n' % packageName+
                             'Generate with: ./genIndividualTestInfo.py %s' % packageName)
-    
+
     def set_if_higher(dictionary, key, value):
         if key not in dictionary or dictionary[key][0] < value[0]:
             dictionary[key] = value
@@ -118,8 +118,8 @@ if __name__ == '__main__':
                 coverageDict = read_yaml('output/individual_coverage/%s.out' % (testname))
                 totalTime    = infoDict[packageName][filename][0]
                 for key in coverageDict:
-                    coveragePerSec = coverageDict[key] / totalTime 
-                    set_if_higher(specificBest[packageName], key, 
+                    coveragePerSec = coverageDict[key] / totalTime
+                    set_if_higher(specificBest[packageName], key,
                                   (coveragePerSec, coverageDict[key], testname))
             print(packageName, specificBest[packageName])
         write_yaml(specificBest, 'output/specific-best.yml')
@@ -132,5 +132,5 @@ if __name__ == '__main__':
                 set_if_higher(bestDict, packageName, (coveragePerSec, coverage, filename))
             print(packageName, bestDict[packageName])
         write_yaml(bestDict, 'output/best.yml')
-    
+
     write_yaml(infoDict, 'output/all_individual_test_info.yml')

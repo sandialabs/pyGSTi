@@ -63,7 +63,7 @@ def fmax_cg(f, x0, maxiters=100, tol=1e-8, dfdx_and_bdflag = None, xopt=None):
     x = x0; last_fx = f(x0); last_x = x0
     lastchange = 0
     lastgradnorm = 0.0 # Safer than relying on uninitialized variables
-    lastgrad     = 0.0 
+    lastgrad     = 0.0
     if last_fx is None: raise ValueError("fmax_cg was started out of bounds!")
     while( step < maxiters and ((stepsize>MIN_STEPSIZE) or (step%RESET !=1 and RESET>1))):
 

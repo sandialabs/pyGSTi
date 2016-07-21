@@ -19,7 +19,6 @@ def get_output(commands):
     except subprocess.CalledProcessError as e:
         return e.output.decode('utf-8').splitlines()
 
-def write_output(output, filename): 
-    with open(filename, 'w') as outputfile: 
-        outputfile.write("\n".join(output)) 
-
+def write_output(output, filename):
+    with open(filename, 'w') as outputfile:
+        outputfile.write("\n".join(output))

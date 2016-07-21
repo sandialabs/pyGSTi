@@ -7,7 +7,7 @@ from helpers.automation_tools    import read_yaml, directory, get_args
 from helpers.test.genPackageInfo import gen_package_info
 import sys
 
-    
+
 if __name__ == "__main__":
     config = read_yaml('test_config.yml')
     slowTests = config['slow-tests']
@@ -22,7 +22,7 @@ if __name__ == "__main__":
             pythonCommands = ['python%s.%s' % (sys.version_info[0], sys.version_info[1])]
         else:
             pythonCommands = ['python%s' % kwargs['version']]
-        
+
         if 'fast-only' in kwargs:
             exclude += slowTests # Shave off ~3 hrs?
 
@@ -49,4 +49,3 @@ if __name__ == "__main__":
             lastFailed = 'True' if 'lastFailed' in kwargs else None
             for package in packageNames:
                 run_package(package, precommands=pythonCommands, postcommand=None, lastFailed=lastFailed)
-

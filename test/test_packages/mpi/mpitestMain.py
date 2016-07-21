@@ -16,7 +16,7 @@ def runOneQubit_Tutorial():
     fiducials = std1Q_XYI.fiducials
     germs = std1Q_XYI.germs
     maxLengths = [0,1,2,4,8,16,32,64,128,256,512,1024,2048]
-    
+
     gs_datagen = gs_target.depolarize(gate_noise=0.1, spam_noise=0.001)
     listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
         list(gs_target.gates.keys()), fiducials, fiducials, germs, maxLengths)
@@ -61,7 +61,7 @@ def runAnalysis(obj, ds, myspecs, gsTarget, lsgstStringsToUse,
             ds, gs_lgst_go, lsgstStringsToUse,
             minProbClipForWeighting=minProbClipForWeighting,
             probClipInterval=(-1e5,1e5),
-            verbosity=1, memLimit=3*(1024)**3, returnAll=True, 
+            verbosity=1, memLimit=3*(1024)**3, returnAll=True,
             useFreqWeightedChiSq=useFreqWeightedChiSq, comm=comm,
             distributeMethod=distributeMethod)
     elif obj == "logl":
@@ -69,23 +69,23 @@ def runAnalysis(obj, ds, myspecs, gsTarget, lsgstStringsToUse,
             ds, gs_lgst_go, lsgstStringsToUse,
             minProbClip=minProbClipForWeighting,
             probClipInterval=(-1e5,1e5),
-            verbosity=1, memLimit=3*(1024)**3, returnAll=True, 
+            verbosity=1, memLimit=3*(1024)**3, returnAll=True,
             useFreqWeightedChiSq=useFreqWeightedChiSq, comm=comm,
             distributeMethod=distributeMethod)
 
     tEnd = time.time()
     print("Time = ",(tEnd-tStart)/3600.0,"hours")
-    
+
     return all_gs_lsgst
-    
-    
+
+
 def runOneQubit(obj, ds, lsgstStrings, comm=None, distributeMethod="gatestrings"):
     specs = pygsti.construction.build_spam_specs(
         std.fiducials, prep_labels=std.gs_target.get_prep_labels(),
         effect_labels=std.gs_target.get_effect_labels())
 
     return runAnalysis(obj, ds, specs, std.gs_target,
-                        lsgstStrings, comm=comm, 
+                        lsgstStrings, comm=comm,
                         distributeMethod=distributeMethod)
 
 
@@ -106,7 +106,7 @@ def create_fake_dataset(comm):
 
     lsgstStringsToUse = lsgstStrings
     allRequiredStrs = pygsti.remove_duplicates(lgstStrings + lsgstStrings[-1])
-    
+
     if comm is None or comm.Get_rank() == 0:
         gs_dataGen = std.gs_target.depolarize(gate_noise=0.1)
         dsFake = pygsti.construction.generate_fake_data(
@@ -118,7 +118,7 @@ def create_fake_dataset(comm):
 
     #for gs in dsFake:
     #    if abs(dsFake[gs]['plus']-dsFake_cmp[gs]['plus']) > 0.5:
-    #        print("DS DIFF: ",gs, dsFake[gs]['plus'], "vs", dsFake_cmp[gs]['plus'] )                
+    #        print("DS DIFF: ",gs, dsFake[gs]['plus'], "vs", dsFake_cmp[gs]['plus'] )
     return dsFake, lsgstStrings
 
 
@@ -155,21 +155,21 @@ def test_MPI_products(comm):
     serial = gs.bulk_product(tree, bScale=False)
     parallel = gs.bulk_product(tree, bScale=False, comm=comm)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
-    
+
     serial_scl, sscale = gs.bulk_product(tree, bScale=True)
     parallel, pscale = gs.bulk_product(tree, bScale=True, comm=comm)
-    assert(np.linalg.norm(serial_scl*sscale[:,None,None] - 
+    assert(np.linalg.norm(serial_scl*sscale[:,None,None] -
                           parallel*pscale[:,None,None]) < 1e-6)
-    
+
       # will use a split tree to parallelize
     parallel = gs.bulk_product(split_tree, bScale=False, comm=comm)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
     parallel, pscale = gs.bulk_product(split_tree, bScale=True, comm=comm)
-    assert(np.linalg.norm(serial_scl*sscale[:,None,None] - 
+    assert(np.linalg.norm(serial_scl*sscale[:,None,None] -
                           parallel*pscale[:,None,None]) < 1e-6)
 
-    
+
       #bulk_dproduct - no split tree => parallel by col
     serial = gs.bulk_dproduct(tree, bScale=False)
     parallel = gs.bulk_dproduct(tree, bScale=False, comm=comm)
@@ -177,7 +177,7 @@ def test_MPI_products(comm):
 
     serial_scl, sscale = gs.bulk_dproduct(tree, bScale=True)
     parallel, pscale = gs.bulk_dproduct(tree, bScale=True, comm=comm)
-    assert(np.linalg.norm(serial_scl*sscale[:,None,None,None] - 
+    assert(np.linalg.norm(serial_scl*sscale[:,None,None,None] -
                           parallel*pscale[:,None,None,None]) < 1e-6)
 
       # will just ignore a split tree for now (just parallel by col)
@@ -185,7 +185,7 @@ def test_MPI_products(comm):
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
     parallel, pscale = gs.bulk_dproduct(split_tree, bScale=True, comm=comm)
-    assert(np.linalg.norm(serial_scl*sscale[:,None,None,None] - 
+    assert(np.linalg.norm(serial_scl*sscale[:,None,None,None] -
                           parallel*pscale[:,None,None,None]) < 1e-6)
 
 
@@ -193,18 +193,18 @@ def test_MPI_products(comm):
     serial = gs.bulk_hproduct(tree, bScale=False)
     parallel = gs.bulk_hproduct(tree, bScale=False, comm=comm)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
-    
+
     serial_scl, sscale = gs.bulk_hproduct(tree, bScale=True)
     parallel, pscale = gs.bulk_hproduct(tree, bScale=True, comm=comm)
-    assert(np.linalg.norm(serial_scl*sscale[:,None,None,None,None] - 
+    assert(np.linalg.norm(serial_scl*sscale[:,None,None,None,None] -
                           parallel*pscale[:,None,None,None,None]) < 1e-6)
-    
+
       # will just ignore a split tree for now (just parallel by col)
     parallel = gs.bulk_hproduct(split_tree, bScale=False, comm=comm)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
-    
+
     parallel, pscale = gs.bulk_hproduct(split_tree, bScale=True, comm=comm)
-    assert(np.linalg.norm(serial_scl*sscale[:,None,None,None,None] - 
+    assert(np.linalg.norm(serial_scl*sscale[:,None,None,None,None] -
                           parallel*pscale[:,None,None,None,None]) < 1e-6)
 
 
@@ -390,7 +390,7 @@ def test_MPI_fills(comm):
                         vp_serial2, (-1e6,1e6), comm=None,
                         wrtBlockSize=None)
     assert(np.linalg.norm(vp_serial2-vp_serial) < 1e-6)
-    
+
     gs.bulk_fill_hprobs(vhp_serial, spam_label_rows, tree,
                         vp_serial2, vdp_serial2, (-1e6,1e6), comm=None,
                         wrtBlockSize=None)
@@ -408,7 +408,7 @@ def test_MPI_fills(comm):
                         wrtBlockSize=None)
     assert(np.linalg.norm(vp_serial2-vp_serial) < 1e-6)
     assert(np.linalg.norm(vdp_serial2-vdp_serial) < 1e-6)
-    
+
     gs.bulk_fill_hprobs(vhp_serial2, spam_label_rows, split_tree,
                         vp_serial2, vdp_serial2, (-1e6,1e6), comm=None,
                         wrtBlockSize=None)
@@ -433,7 +433,7 @@ def test_MPI_fills(comm):
                                 vp_parallel, (-1e6,1e6), comm=comm,
                                 wrtBlockSize=blkSize)
             assert(np.linalg.norm(vp_parallel-vp_serial) < 1e-6)
-            assert(np.linalg.norm(vdp_parallel-vdp_serial) < 1e-6)    
+            assert(np.linalg.norm(vdp_parallel-vdp_serial) < 1e-6)
 
             gs.bulk_fill_hprobs(vhp_parallel, spam_label_rows, tstTree,
                                 vp_parallel, vdp_parallel, (-1e6,1e6), comm=comm,
@@ -474,7 +474,7 @@ def test_MPI_by_columns(comm):
     #Create some gateset
     if comm is None or comm.Get_rank() == 0:
         gs = std.gs_target.copy()
-        gs.kick(0.1,seed=1234)        
+        gs.kick(0.1,seed=1234)
         gs = comm.bcast(gs, root=0)
     else:
         gs = comm.bcast(None, root=0)
@@ -514,7 +514,7 @@ def test_MPI_by_columns(comm):
 
         all_hcols = np.concatenate( hcols, axis=3 )
         all_d12cols = np.concatenate( d12cols, axis=3 )
-        
+
 
         #print "SHAPES:"
         #print "hcols[0] = ",hcols[0].shape
@@ -538,8 +538,8 @@ def test_MPI_by_columns(comm):
         #        for j in range(all_d12cols.shape[3]):
         #            print "Diff(%d,%d) = " % (i,j), np.linalg.norm(all_d12cols[0,:,8:,i]-dprobs12_serial[0,:,8:,j])
         assert(np.linalg.norm(all_d12cols-dprobs12_serial) < 1e-6)
-        
-        
+
+
 
 
 
@@ -593,7 +593,7 @@ def test_MPI_by_columns(comm):
 def test_MPI_gatestrings_chi2(comm):
     #Create dataset for serial and parallel runs
     ds,lsgstStrings = create_fake_dataset(comm)
-    
+
     #Individual processors
     my1ProcResults = runOneQubit("chi2",ds,lsgstStrings)
 
@@ -617,7 +617,7 @@ def test_MPI_gatestrings_chi2(comm):
 def test_MPI_gatestrings_logl(comm):
     #Create dataset for serial and parallel runs
     ds,lsgstStrings = create_fake_dataset(comm)
-    
+
     #Individual processors
     my1ProcResults = runOneQubit("logl",ds,lsgstStrings)
 
@@ -641,7 +641,7 @@ def test_MPI_gatestrings_logl(comm):
 def test_MPI_derivcols(comm):
     #Create dataset for serial and parallel runs
     ds,lsgstStrings = create_fake_dataset(comm)
-    
+
     #Individual processors
     my1ProcResults = runOneQubit("chi2",ds,lsgstStrings)
 

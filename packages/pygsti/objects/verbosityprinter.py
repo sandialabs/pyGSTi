@@ -61,12 +61,12 @@ class VerbosityPrinter():
       Optionally, printer.log() can also prepend 'Status_n' to the message, where n is the message level.
 
       Logging of progress bars/iterations:
-     
+
       with printer_instance.progress_logging(verbosity):
         for i, item in enumerate(data):
           printer.show_progress(i, len(data))
           printer.log(...)
-      
+
       Will output either a progress bar or iteration statuses depending on the printer's verbosity
     '''
 

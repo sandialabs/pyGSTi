@@ -38,4 +38,3 @@ def gen_package_info(packageNames, infoType='', changedOnly=''):
     write_formatted_table('output/package%sinfo.out' % \
                            (('_%s_' % infoType) if infoType != '' else ''),
                           list(packageDict.items()))
-

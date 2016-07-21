@@ -5,8 +5,8 @@ import sys
 # A function that lets us adjust the value of the adjustable when linting
 def build_commands(adjustable, setting, value):
     config    = read_yaml('pylint_config.yml')
-    commands  = [config['pylint-version'], 
-		 '--enable=%s' % adjustable,
+    commands  = [config['pylint-version'],
+                 '--enable=%s' % adjustable,
                  '--disable=all',
                  '--rcfile=%s' % config['config-file'],
                  '--reports=n'] + config['packages']
@@ -31,16 +31,13 @@ def run_adjustables(desiredLength=20):
 
         currentvalue          = defaultvalue
         output                = get_pylint_output(adjust_commands(currentvalue), adjustable)
-         
+
         # Adjust the value (ex: max arguments/function) until a properly sized file is generated
         while(len(output) > desiredLength):
             print('      Adjusting the value of %s. Was %s, is now %s' % (setting, currentvalue, currentvalue + defaultvalue))
-            currentvalue += defaultvalue 
+            currentvalue += defaultvalue
             output        = get_pylint_output(adjust_commands(currentvalue), adjustable) # implicit write
 
         print('    Finished linting for %s, the final value of %s was %s\n' % (adjustable, setting, currentvalue))
 
     print('Linting Complete')
-
-    
-    

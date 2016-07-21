@@ -8,7 +8,7 @@ is_root = MPI.COMM_WORLD.Get_rank() == 0
 class NoopStream(object):
     def write(self, *args):
         pass
-    
+
     def writeln(self, *args):
         pass
 
@@ -23,7 +23,7 @@ class MpiOutput(Plugin):
     process then that is reported, otherwise it's a success.
     """
     # Required attributes:
-    
+
     name = 'mpi'
     enabled = True
 

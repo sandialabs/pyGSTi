@@ -11,7 +11,7 @@ def check_score():
     print('Score should be: %s' % desiredScore)
     score        = get_score()
     print('Score was: %s' % score)
-    
+
     if float(score) >= float(desiredScore):
         config['desired-score'] = score # Update the score if it is higher than the last one
         write_yaml(config, yamlFile)
@@ -20,10 +20,10 @@ def check_score():
         sys.exit(1)
 
 if __name__ == "__main__":
-    args, kwargs = get_args(sys.argv) 
+    args, kwargs = get_args(sys.argv)
     # No arguments specified
     if 'score' in kwargs:
-        check_score() 
+        check_score()
     if 'errors' in kwargs:
         find_errors()
     if 'warnings' in kwargs:
@@ -32,4 +32,3 @@ if __name__ == "__main__":
         run_adjustables()
     if len(args) > 0:
         look_for(args)
-    

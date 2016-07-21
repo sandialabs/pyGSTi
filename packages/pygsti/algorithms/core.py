@@ -117,7 +117,7 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
     printer.log('', 2)
-    printer.log("--- LGST ---", 1, indentOffset=-1) 
+    printer.log("--- LGST ---", 1, indentOffset=-1)
 
     #Process input parameters
     prepSpecs, effectSpecs = specs
@@ -249,7 +249,7 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
         lgstGateset.povm_identity = padded_identityVec
 
     # Add SPAM label info to gateset
-    #  Note: this must be done in a *deterministic* order, which it is 
+    #  Note: this must be done in a *deterministic* order, which it is
     #    here because spamDict is an OrderedDict (cf. get_reverse_spam_defs())
     for (prepLabel, ELabel) in spamDict.keys():
         lgstGateset.spamdefs[spamDict[(prepLabel,ELabel)]] = (prepLabel, ELabel)
@@ -954,7 +954,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
     if comm is not None:
         gs_cmp = comm.bcast(gs if (comm.Get_rank() == 0) else None, root=0)
-        if gs.frobeniusdist(gs_cmp) > 1e-6: 
+        if gs.frobeniusdist(gs_cmp) > 1e-6:
             raise ValueError("MPI ERROR: *different* MC2GST start gatesets" +
                              " given to different processors!")
 
@@ -1938,7 +1938,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
 
     if comm is not None:
         gs_cmp = comm.bcast(gs if (comm.Get_rank() == 0) else None, root=0)
-        if gs.frobeniusdist(gs_cmp) > 1e-6: 
+        if gs.frobeniusdist(gs_cmp) > 1e-6:
             raise ValueError("MPI ERROR: *different* MLGST start gatesets" +
                              " given to different processors!")
 
@@ -2532,7 +2532,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
     itemWeights : dict, optional
        Dictionary of weighting factors for individual gates and spam operators.
        Keys can be gate, state preparation, POVM effect, or spam labels.  Values
-       are floating point numbers.  By default, weights are set by gateWeight 
+       are floating point numbers.  By default, weights are set by gateWeight
        and spamWeight.  All values *present* in itemWeights override gateWeight
        and spamWeight.
 
@@ -2629,7 +2629,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
             else: raise ValueError("Invalid targetGatesMetric: %s" % targetGatesMetric)
 
             if targetSpamMetric == "frobenius":
-                diff += gs.frobeniusdist(targetGateset, None, 0.0, 
+                diff += gs.frobeniusdist(targetGateset, None, 0.0,
                                          spamWeight, itemWeights)
 
             elif targetSpamMetric == "fidelity":
@@ -2742,7 +2742,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
             for rhoVec in list(gs.preps.values()):
                 tpPenalty += (rhoVecFirstEl - rhoVec[0])**2
 
-            return tpPenalty + gs.frobeniusdist(targetGateset, None, 
+            return tpPenalty + gs.frobeniusdist(targetGateset, None,
                                                 gateWeight, spamWeight,
                                                 itemWeights) * targetFactor
 
@@ -2775,7 +2775,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
             spamPenalty += sum( [ _tools.effect_penalty(EVec)     for EVec   in list(gs.effects.values()) ] )
 
             targetPenalty = targetFactor * gs.frobeniusdist(
-                targetGateset, None, gateWeight, spamWeight, itemWeights) 
+                targetGateset, None, gateWeight, spamWeight, itemWeights)
 
             penalty = cpPenalty + spamPenalty + targetPenalty
             if penalty > 1e-100: return _np.log10(penalty)

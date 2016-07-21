@@ -31,10 +31,10 @@ def find_failed(output):
     failedlines = [line for line in output.splitlines() if '... ERROR' in line or '... FAIL' in line]
     failedtests = []
     for line in failedlines:
-       line      = line.split(' ')
-       testname  = line[0]                         # use the first token as the test name
-       testclass = line[1][len('__main__.('):-1] # remove parentheses and modulename from the second token
-       failedtests.append(testclass + '.' + testname)
+        line      = line.split(' ')
+        testname  = line[0]                         # use the first token as the test name
+        testclass = line[1][len('__main__.('):-1] # remove parentheses and modulename from the second token
+        failedtests.append(testclass + '.' + testname)
     return failedtests
 
 def run_test(commands, filepath, failedtests):

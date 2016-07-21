@@ -39,5 +39,3 @@ drivers = run_specific(['python', 'test_packages/drivers/testDrivers.py', 'TestD
 if not drivers:
     sys.exit(1)
 sys.exit(0)
-
-

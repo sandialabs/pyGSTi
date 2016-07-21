@@ -64,4 +64,3 @@ def get_coverage(names, output=None, package=''):
         write_formatted_table(output, list(coverageDict.items()))
 
     return coverageDict
-

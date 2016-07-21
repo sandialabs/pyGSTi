@@ -188,7 +188,7 @@ class TestDriversMethods(DriversTestCase):
                                 trunc_ds, std.gs_target, std.fiducials, std.fiducials,
                                 std.germs, maxLens, truncScheme=ts, fidPairs=None,
                                 lsgstLists = reducedLists)
-        
+
         #create a report...
         result.create_full_report_pdf(filename="../temp_test_files/full_report_RFPR.pdf",
                                       debugAidsAppendix=False, gaugeOptAppendix=False,
