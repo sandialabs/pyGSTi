@@ -27,11 +27,11 @@ class PrecisionTest(unittest.TestCase):
 
         # Precise first
         for fmt in ['html', 'latex']: # text format ommitted - it doesn't care about precision :)
-            self.assertEqual(precise[fmt], table.render(fmt, precision=6)) 
+            self.assertEqual(precise[fmt], table.render(fmt, precision=6, polarprecision=3)) 
 
         # Imprecise second
         for fmt in ['html', 'latex']:
-            self.assertEqual(imprecise[fmt], table.render(fmt, precision=2)) 
+            self.assertEqual(imprecise[fmt], table.render(fmt, precision=2, polarprecision=3)) 
 
 
 

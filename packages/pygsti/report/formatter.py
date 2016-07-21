@@ -26,18 +26,30 @@ class FormatSet():
 
     def __init__(self, specs):
         # Specs is a dictionary of the form { 'setting'(kwarg) : value }
+        # Ex: { 'precision' : 6, 'polarprecision' : 3 } -> given to ParameterizedFormatters that need them 
         self.specs = specs
 
-    def formatList(self, items, formatters, fmt):
-        assert(len(items) == len(formatters))
+    def formatList(self, items, formatterNames, fmt):
+        assert(len(items) == len(formatterNames))
         formatted_items = []
-        for item, formatter in zip(items, formatters):
-            if formatter is not None:
-                formatter = FormatSet.formatDict[formatter]
-                for spec in self.specs:
-                    # If the formatter requires a setting to do its job, give the setting
-                    if hasattr(formatter[fmt], 'specs') and spec in formatter[fmt].specs:
-                        formatter[fmt].specs[spec] = self.specs[spec] # Pass down relevant specs
+
+        for item, formatterName in zip(items, formatterNames):
+            if formatterName is not None:
+                formatter = FormatSet.formatDict[formatterName]
+
+                # If the formatter requires a setting to do its job, give the setting
+                if hasattr(formatter[fmt], 'specs'):
+                    print('Giving specs to %s' % formatterName)
+                    for spec in formatter[fmt].specs:
+                        if spec not in self.specs:
+                            raise ValueError('The spec %s was not supplied to FormatSet, but is needed by %s' % (spec, formatterName))
+                        FormatSet.formatDict[formatterName][fmt].specs[spec] = self.specs[spec]
+                        print('The spec %s was given to the formatter %s' % (spec, formatterName))
+                else:
+                    pass
+                    #print('%s in format %s seems to require no specs. Is this true?' % (formatterName, fmt))
+
+                # Format the item once the formatter has been completely built
                 formatted_item = formatter[fmt](item)
                 if formatted_item is None:
                     raise ValueError("Formatter " + str(type(formatter[fmt]))
@@ -156,7 +168,8 @@ class ParameterizedFormatter():
         if not self.suppliedSpecs:
             for key in self.specs:
                 if self.specs[key] is None:
-                    raise ValueError('The spec %s was not provided to a parameterized formatter' % key)
+                    raise ValueError('The spec %s was not provided to a parameterized formatter.\n' % key +
+                                     'Specs were: %s' % self.specs)
             self.suppliedSpecs = True # Every key in self.specs corresponds to a valid value (not None)
 
         # Supply arguments to the custom formatter (if it needs them)
@@ -171,22 +184,18 @@ class ParameterizedFormatter():
         return self.custom[0](label, **self.custom[1])
 
 # Gives precision arguments to formatters
-class PrecisionFormatter():
+class PrecisionFormatter(ParameterizedFormatter):
     def __init__(self, custom):
-        self.parameterized = ParameterizedFormatter(custom, ['precision', 'polarprecision'])
-
-    def __call__(self, label):
-        return self.parameterized(label)
-    
+        super(PrecisionFormatter, self).__init__(custom, ['precision', 'polarprecision'])
 
 # Formatter class that requires a scratchDirectory from an instance of FormatSet for saving figures to
-class FigureFormatter():
+class FigureFormatter(ParameterizedFormatter):
     def __init__(self, extension=None, formatstring='%s%s%s%s', custom=None):
+        super(FigureFormatter, self).__init__(custom, ['scratchDir'])
         self.extension    = extension
-        self.custom       = custom
         self.formatstring = formatstring
-        self.specs        = {'scratchDir' : None}
 
+    # Override call method of Parameterized formatter
     def __call__(self, figInfo):
         fig, name, W, H = figInfo
         if self.extension is not None:
