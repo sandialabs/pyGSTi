@@ -17,7 +17,16 @@ def this_directory():
     with directory(get_file_directory()):
         yield
 
-# Works from anywhere
+def get_branchname():
+    branchname = 'unspecified'
+    output     = subprocess.check_output(['git', 'branch'])
+    branches   = output.decode('utf-8').splitlines()
+    for branch in branches:
+        if '*' in branch:
+            branchname = branch.replace('*', '').replace(' ', '')
+            break
+    return branchname
+'''
 def get_branchname():
     try:
         with this_directory():
@@ -27,6 +36,24 @@ def get_branchname():
     branchname = os.path.basename(branchname)
     branchname = branchname.replace('\n', '')
     return branchname
+'''
+def get_author(SHA=None):
+    if SHA is None:
+        output = subprocess.check_output(['git', 'log', 'HEAD', '-1'])
+    else:
+        output = subprocess.check_output(['git', 'show', SHA])
+    authorline = output.decode('utf-8').splitlines()[1]
+    _, author, email = authorline.split()
+    return author, email
+
+'''
+lsaldyt@s1000706:~/pyGSTi/test$ git log HEAD -1
+commit 51930d0a7d6be7c60ab7070479e69ed619ac73ab
+Author: LSaldyt <lucassaldyt@yahoo.com>
+Date:   Thu Jul 21 11:30:24 2016 -0600
+
+    Change (Inactive) after_success hook to switch to develop branch
+'''
 
 # Used by git hooks, (called from top level pyGSTi directory)
 def run_pylint(commands):

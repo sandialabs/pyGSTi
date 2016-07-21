@@ -1,14 +1,30 @@
 #!/usr/bin/python
 from __future__       import print_function
-from automation_tools import get_branchname, run_pylint
+from automation_tools import get_branchname, run_pylint, read_yaml, get_author
 from hooksettings     import requires_pylint_pass
 import subprocess, os, sys
 
 if __name__ == '__main__':
     branchname = get_branchname()
     if branchname in requires_pylint_pass:
-        passes = run_pylint(['./score.py']) # Compare current pylint score against that in pylint/config.yml
+        # Compare current pylint score against that in pylint/config.yml
+        passes = run_pylint(['./score.py']) 
         sys.exit(int(passes))
+
+    # Check branch permissions
+    permissions = read_yaml('hooks/etc/permissions.yml')
+    allowed     = permissions[branchname]
+    if allowed != 'all' and 'all' not in allowed:
+        print('(%s) are allowed to commit to current branch %s' % (', '.join(allowed), branchname))
+        author, _   = get_author()
+        print('You are: %s' % author)
+        if author in allowed:
+            print('Please continue..')
+        else:
+            print('You don\'t have correct permissions on %s' % branchname)
+            sys.exit(1)
     else:
-        sys.exit(0)
+        print('No permissions restrictions on %s' % branchname)
+
+    sys.exit(0)
 
