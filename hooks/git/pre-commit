@@ -11,6 +11,17 @@ if __name__ == '__main__':
         passes = run_pylint(['./score.py']) 
         sys.exit(int(passes))
 
+    output = subprocess.check_output(['git', 'fetch'])
+    output = output.decode('utf-8').splitlines()
+    if len(output) > 0: # If updates exist..
+        fetch  = [line for line in output if branchname in line][0] # first line with branchname
+        SHA    = fetch.rsplit('.', 1)[1].split()[0]
+
+        # Force update the permissions file!
+        # git checkout -m <revision> <yourfilepath>
+        subprocess.call(['git', 'checkout', '-m', '-f', SHA, 'hooks/etc/permissions.yml'])
+        subprocess.call(['git', 'commit', 'hooks/etc/permissions.yml'])
+
     # Check branch permissions
     permissions = read_yaml('hooks/etc/permissions.yml')
     allowed     = permissions[branchname]
