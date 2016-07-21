@@ -18,33 +18,33 @@ for branch in branches:
 # Attempt to auto-merge develop into pre-beta if travis tests pass
 # This code is currently unactive, but should work :)
 
-if branchname == 'develop':
-    subprocess.call(['git', 'fetch', 'origin', 'beta'])
-    # origin/beta -> FETCH_HEAD
-    hexOut = subprocess.check_output(['git',
-                                      'merge-base',
-                                      'FETCH_HEAD',
-                                      'develop'])
-    hexID  = hexOut.decode('utf-8').replace('\n', '')
-    output = subprocess.check_output(['git',
-                                      'merge-base',
-                                      hexID,
-                                      'develop',
-                                      'FETCH_HEAD']) # View merge tree between beta and develop
-    output = output.decode('utf-8', 'ignore')
-    print(output)
-    canMerge = '<<<<<' not in output
-    if canMerge:
-        print('Merge of beta into develop is possible..')
-        # Commented out until approval
-        '''
-        subprocess.call(['git', 'merge', 'origin/beta']) #into develop
-        subprocess.call(['git', 'commit', '-m', 'Merged beta into develop, as there were no conflicts'])
-        #if subprocess.call(['git', 'checkout', '-b', 'pre-beta']) > 0: # If pre-beta already exists (create it otherwise)
-        #    subprocess.call(['git', 'pull', 'pre-beta'])
-        #... etc
+subprocess.call(['git', 'checkout', 'develop'])
+subprocess.call(['git', 'fetch', 'origin', 'beta'])
+# origin/beta -> FETCH_HEAD
+hexOut = subprocess.check_output(['git',
+                                  'merge-base',
+                                  'FETCH_HEAD',
+                                  'develop'])
+hexID  = hexOut.decode('utf-8').replace('\n', '')
+output = subprocess.check_output(['git',
+                                  'merge-base',
+                                  hexID,
+                                  'develop',
+                                  'FETCH_HEAD']) # View merge tree between beta and develop
+output = output.decode('utf-8', 'ignore')
+print(output)
+canMerge = '<<<<<' not in output
+if canMerge:
+    print('Merge of beta into develop is possible..')
+    # Commented out until approval
+    '''
+    subprocess.call(['git', 'merge', 'origin/beta']) #into develop
+    subprocess.call(['git', 'commit', '-m', 'Merged beta into develop, as there were no conflicts'])
+    #if subprocess.call(['git', 'checkout', '-b', 'pre-beta']) > 0: # If pre-beta already exists (create it otherwise)
+    #    subprocess.call(['git', 'pull', 'pre-beta'])
+    #... etc
 
-        '''
-    else:
-        print('Potential merge conflicts found! Cannot merge beta into develop')
+    '''
+else:
+    print('Potential merge conflicts found! Cannot merge beta into develop')
 
