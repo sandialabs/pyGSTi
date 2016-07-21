@@ -11,19 +11,20 @@ if __name__ == '__main__':
         passes = run_pylint(['./score.py']) 
         sys.exit(int(passes))
 
-    output = subprocess.check_output(['git', 'fetch'])
-    output = output.decode('utf-8')
-    print(output)
-    output = output.splitlines()
-    if len(output) > 0: # If updates exist..
-        fetch  = [line for line in output if branchname in line][0] # first line with branchname
-        SHA    = fetch.rsplit('.', 1)[1].split()[0]
+    subprocess.call(['git', 'checkout', 'HEAD', '--', 'hooks/etc/permissions.yml'])
+    subprocess.call(['git', 'reset', 'HEAD', 'hooks/etc/permissions.yml'])
 
-        # Force update the permissions file!
-        # git checkout -m <revision> <yourfilepath>
-        subprocess.call(['git', 'checkout' 'HEAD', '--', 'hooks/etc/permissions.yml'])
-        subprocess.call(['git', 'checkout', '-m', '-f', SHA, 'hooks/etc/permissions.yml'])
-        subprocess.call(['git', 'commit', 'hooks/etc/permissions.yml'])
+    subprocess.call(['git', 'fetch'])
+    SHA = subprocess.check_output(['git', 'rev-parse', 'origin/%s' % branchname]).decode('utf-8')
+    SHA = SHA.replace('\n', '')
+    print('Getting update permissions file from SHA:(%s)' % SHA)
+
+    # Force update the permissions file!
+    # git checkout -m <revision> <yourfilepath>
+    subprocess.call(['git', 'checkout', '--theirs', SHA, 'hooks/etc/permissions.yml'])
+    subprocess.call(['git', 'add', 'hooks/etc/permissions.yml'])
+    subprocess.call(['git', 'commit', '--no-verify', 'hooks/etc/permissions.yml', 
+                                      '-m', '"Update permissions"'])
 
     # Check branch permissions
     permissions = read_yaml('hooks/etc/permissions.yml')
