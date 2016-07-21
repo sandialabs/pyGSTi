@@ -1,12 +1,15 @@
+# To edit the permissions file, change it on github :)
+
 master:
     - enielse
 
-develop: all
-<<<<<<< ours
+beta: all
 
-formatter: # This isn't needed, but I want to test updating the permissions file, etc
+develop: all
+
+formatter:
     - LSaldyt
-    - all
-    # LOCAL CHANGEEEEEEEEEEEEEE
-=======
->>>>>>> theirs
+
+jon-germ-sel:
+    - jarthurgross
+    
