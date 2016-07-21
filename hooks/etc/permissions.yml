@@ -2,7 +2,3 @@ master:
     - enielse
 
 develop: all
-
-formatter: # This isn't needed, but I want to test updating the permissions file, etc
-    - LSaldyt
-    - all
