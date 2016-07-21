@@ -2,7 +2,7 @@
 from __future__                import print_function
 from helpers.test.helpers      import *
 from helpers.test._getCoverage import _read_coverage
-from helpers.automation_tools  import read_yaml, write_yaml, directory
+from helpers.automation_tools  import read_yaml, write_yaml, directory, get_args
 import importlib
 import inspect
 import time
@@ -48,7 +48,7 @@ def parse_coverage_output(filename):
     '''
     coverageDict = {}
     for line in specific:
-        filename, _, _, percentage = line.split()
+        filename, _, _, percentage = line.split()     # Seperate on whitespace
         coverageDict[filename] = int(percentage[:-1]) # Cut off percent symbol
     return coverageDict
 
@@ -89,14 +89,58 @@ def gen_individual_test_info(packageName):
                 
 if __name__ == '__main__':
 
-    gen_info_on = sys.argv[1:]
-    infoDict    = read_yaml('output/all_individual_test_info.yml')
+    genInfoOn, kwargs = get_args(sys.argv)
+    infoDict          = read_yaml('output/all_individual_test_info.yml')
+
     if infoDict is None: # if the file is empty
         infoDict = {}
 
-    # Update info for the packages given 
-    for packageName in gen_info_on:
-        print('Updating info for %s' % packageName)
-        infoDict[packageName] = gen_individual_test_info(packageName)
+    if len(kwargs) == 0 or 'update' in kwargs:
+        # Update info for the packages given 
+        for packageName in genInfoOn:
+            print('Updating info for %s' % packageName)
+            infoDict[packageName] = gen_individual_test_info(packageName)
 
+    
+    def set_if_higher(dictionary, key, value):
+        if key not in dictionary or dictionary[key][0] < value[0]:
+            dictionary[key] = value
+
+    def send_output(dictionary, filename):
+        if 'output' in kwargs:
+            print('Writing to %s' % filename)
+            write_yaml(dictionary, filename)
+        else:
+            print('output flag not specified')
+
+    get_testname = lambda filename : filename.rsplit('.')[-1]
+    if 'specific-best' in kwargs:
+        specificBest = {}
+        for packageName in genInfoOn:
+            specificBest[packageName] = {}
+
+            for filename in infoDict[packageName]:
+                testname     = get_testname(filename)
+                coverageDict = read_yaml('output/individual_coverage/%s.out' % (testname))
+                if coverageDict is None:
+                    coverageDict = {}
+                totalTime    = infoDict[packageName][filename][0]
+                for key in coverageDict:
+                    coveragePerSec = coverageDict[key] / totalTime 
+                    set_if_higher(specificBest[packageName], key, 
+                                  (coveragePerSec, coverageDict[key], testname))
+            print(packageName, specificBest[packageName])
+        send_output(specificBest, 'output/specific-best.yml')
+    if 'best' in kwargs:
+        bestDict = {}
+        for packageName in genInfoOn:
+            for filename in infoDict[packageName]:
+                timeTaken, coverage = infoDict[packageName][filename]
+                coveragePerSec = coverage/timeTaken
+                set_if_higher(bestDict, packageName, (coveragePerSec, coverage, filename))
+            print(packageName, bestDict[packageName])
+        send_output(bestDict, 'output/best.yml')
+
+
+    
     write_yaml(infoDict, 'output/all_individual_test_info.yml')
