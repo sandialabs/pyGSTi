@@ -92,26 +92,20 @@ if __name__ == '__main__':
     genInfoOn, kwargs = get_args(sys.argv)
     infoDict          = read_yaml('output/all_individual_test_info.yml')
 
-    if infoDict is None: # if the file is empty
-        infoDict = {}
-
     if len(kwargs) == 0 or 'update' in kwargs:
         # Update info for the packages given 
         for packageName in genInfoOn:
             print('Updating info for %s' % packageName)
             infoDict[packageName] = gen_individual_test_info(packageName)
 
+    for packageName in genInfoOn:
+        if packageName not in infoDict:
+            raise ValueError('%s does not have generated info!\n' % packageName+
+                            'Generate with: ./genIndividualTestInfo.py %s' % packageName)
     
     def set_if_higher(dictionary, key, value):
         if key not in dictionary or dictionary[key][0] < value[0]:
             dictionary[key] = value
-
-    def send_output(dictionary, filename):
-        if 'output' in kwargs:
-            print('Writing to %s' % filename)
-            write_yaml(dictionary, filename)
-        else:
-            print('output flag not specified')
 
     get_testname = lambda filename : filename.rsplit('.')[-1]
     if 'specific-best' in kwargs:
@@ -122,15 +116,13 @@ if __name__ == '__main__':
             for filename in infoDict[packageName]:
                 testname     = get_testname(filename)
                 coverageDict = read_yaml('output/individual_coverage/%s.out' % (testname))
-                if coverageDict is None:
-                    coverageDict = {}
                 totalTime    = infoDict[packageName][filename][0]
                 for key in coverageDict:
                     coveragePerSec = coverageDict[key] / totalTime 
                     set_if_higher(specificBest[packageName], key, 
                                   (coveragePerSec, coverageDict[key], testname))
             print(packageName, specificBest[packageName])
-        send_output(specificBest, 'output/specific-best.yml')
+        write_yaml(specificBest, 'output/specific-best.yml')
     if 'best' in kwargs:
         bestDict = {}
         for packageName in genInfoOn:
@@ -139,8 +131,6 @@ if __name__ == '__main__':
                 coveragePerSec = coverage/timeTaken
                 set_if_higher(bestDict, packageName, (coveragePerSec, coverage, filename))
             print(packageName, bestDict[packageName])
-        send_output(bestDict, 'output/best.yml')
-
-
+        write_yaml(bestDict, 'output/best.yml')
     
     write_yaml(infoDict, 'output/all_individual_test_info.yml')

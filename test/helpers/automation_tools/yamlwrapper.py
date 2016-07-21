@@ -4,7 +4,10 @@ import ruamel.yaml as yaml
 def read_yaml(filename):
     with open(filename, 'r') as yamlfile:
         try:
-            return yaml.load(yamlfile, yaml.RoundTripLoader)
+            dictionary = yaml.load(yamlfile, yaml.RoundTripLoader)
+            if dictionary is None: # if file is empty
+                dictionary = {}
+            return dictionary
         except yaml.YAMLError as exc:
             print(exc)
 

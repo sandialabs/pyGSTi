@@ -9,7 +9,7 @@ def get_package_names():
 # return a dict of filenames that correspond to full paths
 def get_file_names():
     fileNames = {}
-    for subdir, dirs, files in os.walk(os.getcwd()):
+    for subdir, _, files in os.walk(os.getcwd()):
         for filename in files:
             if filename.endswith('.py') and filename.startswith('test'):
                 fileNames[filename] = subdir + os.sep + filename

@@ -64,16 +64,15 @@ def run_package(packageName, precommands=None, postcommand=None, lastFailed=''):
                 run_test(precommands + [testname[1], testname[0]], testname[1], failedtests)
         else:
             print('Running all tests in %s' % packageName)
-            for subdir, dirs, files in os.walk(os.getcwd()):
-                for filename in files:
-                    filepath = subdir + os.sep + filename
 
-                    if filename.endswith('.py') and filename.startswith('test'):
-                        # run ALL test files, even those that passed previously
-                        print('Running %s' % filename)
-                        commands = precommands + [filepath]
-                        if postcommand is not None: commands.append(postcommand)
-                        run_test(commands, filepath, failedtests)
+            filenames = get_file_names()
+            for filename in filenames:
+                filepath = filenames[filename]
+                # run ALL test files, even those that passed previously
+                print('Running %s' % filename)
+                commands = precommands + [filepath]
+                if postcommand is not None: commands.append(postcommand)
+                run_test(commands, filepath, failedtests)
 
         testnames = get_test_names(failedtests)
         create_last_failed(testnames, packageName)
