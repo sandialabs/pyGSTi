@@ -2,3 +2,11 @@ master:
     - enielse
 
 develop: all
+<<<<<<< ours
+
+formatter: # This isn't needed, but I want to test updating the permissions file, etc
+    - LSaldyt
+    - all
+    # LOCAL CHANGEEEEEEEEEEEEEE
+=======
+>>>>>>> theirs
