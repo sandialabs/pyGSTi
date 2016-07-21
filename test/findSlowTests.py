@@ -2,7 +2,7 @@
 from __future__                import print_function
 from helpers.test.helpers      import *
 from helpers.test._getCoverage import _read_coverage
-from helpers.automation_tools  import directory
+from helpers.automation_tools  import read_yaml, write_yaml, directory
 import importlib
 import inspect
 import time
@@ -24,10 +24,12 @@ def find_individual_tests(testCase):
     return [attr for attr in dir(testCase) if istest(attr, testCase)]
 
 def get_test_info(filename, packageName, testCaseName, test):
+    coverageFile = '../../output/individual_coverage/%s.out' % (test)
     commands = ['nosetests', '-v', '--with-coverage', '--cover-package=pygsti.%s' % packageName, 
-                '--cover-erase', '%s:%s.%s' % (filename, testCaseName, test), '2>&1 | tee temp.out']
+                '--cover-erase', '%s:%s.%s' % (filename, testCaseName, test), 
+                '2>&1 | tee %s' % coverageFile]
     start   = time.time()
-    percent = _read_coverage(' '.join(commands), 'temp.out')
+    percent = _read_coverage(' '.join(commands), coverageFile)
     end     = time.time()
     return ((end - start), percent)
 
@@ -49,27 +51,14 @@ def gen_individual_test_info(packageName):
                 testsInfo[filename[:-3] + '.' + testCaseName + '.' + testName] = info
                 testcase.tearDown()
     return testsInfo
-
                 
 if __name__ == '__main__':
+
     gen_info_on = sys.argv[1:]
-    infoDict = {}
+    infoDict    = read_yaml('output/all_individual_test_info.yml')
+
+    # Update info for the packages given 
     for packageName in gen_info_on:
         infoDict[packageName] = gen_individual_test_info(packageName)
 
-        infoString = ''
-        infoString += '\n\n%s:\n\n' % packageName
-        for testfunction in infoDict[packageName]:
-            infoString += '\n    %s:\n' % testfunction
-            testTime, coverage = infoDict[packageName][testfunction]
-            infoString += ('        - %s\n' % str(round(testTime, 2)).ljust(5))  
-            infoString += ('        - %s\n' % coverage)
-
-        print(infoString)
-        with open('output/%s_individual_test_info.yml' % packageName, 'w') as testInfo:
-            testInfo.write(infoString)
-        infoDict[packageName] = infoString
-
-    with open('output/all_individual_test_info.yml', 'w') as testInfo:
-        info = '\n*3'.join([infoDict[packageName] for packageName in infoDict])
-        testInfo.write(info)
+    write_yaml(infoDict, 'output/all_individual_test_info.yml')

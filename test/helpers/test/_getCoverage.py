@@ -26,7 +26,7 @@ def _read_coverage(command, filename):
                 percent = int(percent)
             except:
                 percent = 0 # if the percent is invalid/cannot be parsed
-    subprocess.call(['mv', '.coverage', (filename.split('.', 1)[0] + '.coverage')])
+    #subprocess.call(['mv', '.coverage', (filename.split('.', 1)[0] + '.coverage')])
     return percent
 
 # assumes name is either a package or an absolute path to a file
