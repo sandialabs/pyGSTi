@@ -85,7 +85,7 @@ def checkGermsListCompleteness(gatesetList, germsList, scoreFunc, threshold):
     for which it is not AC or `-1` if it is AC for all GateSets
 
     """
-    for gatesetnum, gateset in enumerate(gatesetList):
+    for gatesetNum, gateset in enumerate(gatesetList):
         initial_test = test_germ_list_infl(gateset, germsList,
                                            scoreFunc=scoreFunc,
                                            threshold=threshold)
