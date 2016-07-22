@@ -379,7 +379,7 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
     # shape (nGerms, flattened_gate_dim, vec_gateset_dim
     dprods = _np.reshape(dprods, (nGerms, gate_dim**2, dprods.shape[1]))
 
-    germLengths = _np.array(list(map(len, germsToTest)), 'd')
+    germLengths = _np.array([len(germ) for germ in germsToTest], 'd')
 
     normalizedDeriv = dprods / (L * germLengths[:,None,None])
 
@@ -449,7 +449,7 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
     gateset = removeSPAMVectors(gateset)
 
 
-    germLengths = _np.array( list(map(len,germsToTest)), 'i')
+    germLengths = _np.array([len(germ) for germ in germsToTest], 'i')
     twirledDerivDaggerDeriv = calc_twirled_DDD(gateset, germsToTest,
                                                1./threshold, check,
                                                germLengths)
@@ -673,7 +673,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     scoreD = {}
     numGates = len(gateset0.gates.keys())
 
-    germLengths = _np.array(list(map(len, germsList)), 'i')
+    germLengths = _np.array([len(germ) for germ in germsList], 'i')
 
     twirledDerivDaggerDerivList = [calc_twirled_DDD(gateset, germsList, tol,
                                                     check, germLengths)
