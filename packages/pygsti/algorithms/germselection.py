@@ -15,6 +15,27 @@ import warnings as _warnings
 from .. import objects as _objs
 
 
+def calc_twirled_DDD(gateset, germsList, eps=None, check=False,
+                     germLengths=None):
+    """Calculate the positive squares of the germ Jacobians.
+
+    twirledDerivDaggerDeriv == array J.H*J contributions from each germ
+    (J=Jacobian) indexed by (iGerm, iGatesetParam1, iGatesetParam2)
+    size (nGerms, vec_gateset_dim, vec_gateset_dim)
+
+    """
+    if germLengths is None:
+        germLengths = _np.array([len(germ) for germ in germsList])
+    btd_kwargs = {'gateset': gateset, 'gatestrings': germsList, 'check': check}
+    if eps is not None:
+        btd_kwargs['eps'] = eps
+    twirledDeriv = bulk_twirled_deriv(**btd_kwargs)/germLengths[:,None,None]
+    twirledDerivDaggerDeriv = _np.einsum('ijk,ijl->ikl',
+                                         _np.conjugate(twirledDeriv),
+                                         twirledDeriv)
+    return twirledDerivDaggerDeriv
+
+
 def compute_score(weights, gateset_num, scoreFunc, derivDaggerDerivList,
                   forceSingletons, forceSingletonsScore, numGates,
                   nGaugeParams, gatePenalty, germLengths, l1Penalty=1e-2,
@@ -429,13 +450,9 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
 
 
     germLengths = _np.array( list(map(len,germsToTest)), 'i')
-    twirledDeriv = (bulk_twirled_deriv(gateset, germsToTest, 1./threshold, check)
-                    / germLengths[:,None,None])
-
-    # Is conjugate needed? -- all should be real
-    twirledDerivDaggerDeriv = _np.einsum('ijk,ijl->ikl',
-                                         _np.conjugate(twirledDeriv),
-                                         twirledDeriv)
+    twirledDerivDaggerDeriv = calc_twirled_DDD(gateset, germsToTest,
+                                               1./threshold, check,
+                                               germLengths)
        # result[i] = _np.dot( twirledDeriv[i].H, twirledDeriv[i] ) i.e. matrix
        # product
        # result[i,k,l] = sum_j twirledDerivH[i,k,j] * twirledDeriv(i,j,l)
@@ -658,16 +675,9 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
 
     germLengths = _np.array(list(map(len, germsList)), 'i')
 
-    # twirledDerivDaggerDeriv == array J.H*J contributions from each germ
-    # (J=Jacobian) indexed by (iGerm, iGatesetParam1, iGatesetParam2)
-    # size (nGerms, vec_gateset_dim, vec_gateset_dim)
-    twirledDerivDaggerDerivList = []
-    for gateset in gatesetList:
-        twirledDeriv = (bulk_twirled_deriv(gateset, germsList, tol, check)
-                        / germLengths[:,None,None])
-        twirledDerivDaggerDerivList.append(_np.einsum('ijk,ijl->ikl',
-                                                _np.conjugate(twirledDeriv),
-                                                twirledDeriv))
+    twirledDerivDaggerDerivList = [calc_twirled_DDD(gateset, germsList, tol,
+                                                    check, germLengths)
+                                   for gateset in gatesetList]
 
     # Dict of keyword arguments passed to compute_score that don't change from
     # call to call
