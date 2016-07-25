@@ -15,11 +15,11 @@ After hooks have been configured, any pull or merge will update them again
 
 `prepare-commit-msg` - Adds `[ci skip]` to commit message if only `.md` and `.txt` files have changed
 
+`pre-commit` reindents pygsti, but doesn't add changes to the commit (whil unlikely, they are potentially breaking)
+
 ##### master
 
 `pre-commit`   -  requires pylint score to be higher than that in `pyGSTi/test/pylint_config.yml` (currently `9.10`) - creates report
-
-`post-commit`  -  generates html **locally** for `gh-pages`
 
 `pre-push`     -  updates `gh-pages`
 
@@ -30,6 +30,10 @@ After hooks have been configured, any pull or merge will update them again
 ##### develop
 
 `post-commit`  -  generates pylint report `pyGSTi/test/output/pylint/all.out` - doesn't check score
+
+##### travis
+
+`after_success` - outputs a message if develop can cleanly merge into beta. (Commented-out section would update beta automatically)
 
 ### Important note:
 
