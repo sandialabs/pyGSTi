@@ -2,6 +2,8 @@
 from helpers.pylint           import get_score, look_for, find_warnings, find_errors, run_adjustables
 from helpers.automation_tools import read_yaml, write_yaml, get_args
 import sys
+import argparse
+
 
 def check_score():
     yamlFile = 'config/pylint_config.yml'
@@ -20,15 +22,27 @@ def check_score():
         sys.exit(1)
 
 if __name__ == "__main__":
-    args, kwargs = get_args(sys.argv)
-    # No arguments specified
-    if 'score' in kwargs:
+    parser = argparse.ArgumentParser(description='Lint pygsti')
+    parser.add_argument('specific', nargs='*', default=None,
+                        help='lint for specific items')
+    parser.add_argument('--score', '-s', type=bool,
+                        help='check the current repo\'s score against the last-highest score')
+    parser.add_argument('--errors', '-e', type=bool,
+                        help='check for errors in the repo')
+    parser.add_argument('--warnings', '-w', type=bool,
+                        help='check for warnings in the repo')
+    parser.add_argument('--adjustables', '-a', type=bool,
+                        help='check for refactors in the repo')
+
+    parsed = parser.parse_args(sys.argv[1:])
+
+    if parsed.score:
         check_score()
-    if 'errors' in kwargs:
+    if parsed.errors:
         find_errors()
-    if 'warnings' in kwargs:
+    if parsed.warnings:
         find_warnings()
-    if 'adjustables' in kwargs:
+    if parsed.adjustables:
         run_adjustables()
-    if len(args) > 0:
-        look_for(args)
+    if parsed.specific is not None:
+        look_for(parsed.specific)

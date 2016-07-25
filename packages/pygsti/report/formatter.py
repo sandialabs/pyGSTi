@@ -169,7 +169,7 @@ def has_argname(argname, function):
     return argname in _getargspec(function).args
 
 # Gives arguments to formatters
-class ParameterizedFormatter():
+class ParameterizedFormatter(object):
     def __init__(self, custom, neededSpecs):
         self.custom        = custom
         self.specs         = { neededSpec : None for neededSpec in neededSpecs }

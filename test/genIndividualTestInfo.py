@@ -4,6 +4,7 @@ from helpers.test.helpers      import *
 from helpers.test._getCoverage import _read_coverage
 from helpers.automation_tools  import read_yaml, write_yaml, directory, get_args
 import importlib
+import argparse
 import inspect
 import time
 import sys
@@ -89,10 +90,21 @@ def gen_individual_test_info(packageName):
 
 if __name__ == '__main__':
 
-    genInfoOn, kwargs = get_args(sys.argv)
-    infoDict          = read_yaml('output/all_individual_test_info.yml')
+    parser = argparse.ArgumentParser(description='Generate meta-data on tests')
+    parser.add_argument('genInfoOn', nargs='+', help='lint for specific items')
+    parser.add_argument('--update', '-u', type=bool,
+                        help='update the current information on individual tests')
+    parser.add_argument('--specificbest', '-s', type=bool,
+                        help='search for the specific best test in each package supplied')
+    parser.add_argument('--best', '-b', type=bool,
+                        help='search for the best test in each package supplied')
 
-    if len(kwargs) == 0 or 'update' in kwargs:
+    parsed = parser.parse_args(sys.argv[1:])
+
+    genInfoOn = parsed.genInfoOn
+    infoDict  = read_yaml('output/all_individual_test_info.yml')
+
+    if parsed.update:
         # Update info for the packages given
         for packageName in genInfoOn:
             print('Updating info for %s' % packageName)
@@ -108,7 +120,7 @@ if __name__ == '__main__':
             dictionary[key] = value
 
     get_testname = lambda filename : filename.rsplit('.')[-1]
-    if 'specific-best' in kwargs:
+    if parsed.specificbest:
         specificBest = {}
         for packageName in genInfoOn:
             specificBest[packageName] = {}
@@ -123,7 +135,7 @@ if __name__ == '__main__':
                                   (coveragePerSec, coverageDict[key], testname))
             print(packageName, specificBest[packageName])
         write_yaml(specificBest, 'output/specific-best.yml')
-    if 'best' in kwargs:
+    if parsed.best:
         bestDict = {}
         for packageName in genInfoOn:
             for filename in infoDict[packageName]:
