@@ -73,7 +73,7 @@ class FormatSet():
 
         return formatted_items
 
-class Formatter():
+class Formatter(object):
     '''
     Class for formatting strings to html, latex, powerpoint, or text
 
@@ -152,7 +152,7 @@ def no_format(label):
 
 # Takes two formatters (a and b), and determines which to use based on a predicate
 # (Used in building formatter templates)
-class BranchingFormatter():
+class BranchingFormatter(object):
     def __init__(self, predicate, a, b):
         self.predicate = predicate
         self.a = a
@@ -169,7 +169,7 @@ def has_argname(argname, function):
     return argname in _getargspec(function).args
 
 # Gives arguments to formatters
-class ParameterizedFormatter():
+class ParameterizedFormatter(object):
     def __init__(self, custom, neededSpecs):
         self.custom        = custom
         self.specs         = { neededSpec : None for neededSpec in neededSpecs }
