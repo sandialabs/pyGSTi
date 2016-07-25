@@ -4,7 +4,7 @@ import sys
 
 # A function that lets us adjust the value of the adjustable when linting
 def build_commands(adjustable, setting, value):
-    config    = read_yaml('pylint_config.yml')
+    config    = read_yaml('config/pylint_config.yml')
     commands  = [config['pylint-version'],
                  '--enable=%s' % adjustable,
                  '--disable=all',
@@ -14,7 +14,7 @@ def build_commands(adjustable, setting, value):
 
 def run_adjustables(desiredLength=20):
     # The wanted size of an output file (ex: too-many-arguments.txt)
-    adjustables = read_yaml('pylint_config.yml')['adjustables']
+    adjustables = read_yaml('config/pylint_config.yml')['adjustables']
 
     print('Beginning to lint for adjustable refactoring issues')
     print('Many adjustments indicate a more serious problem, while few/none indicate normal code')

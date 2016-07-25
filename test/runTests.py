@@ -9,7 +9,7 @@ import sys
 
 
 if __name__ == "__main__":
-    config = read_yaml('test_config.yml')
+    config = read_yaml('config/test_config.yml')
     slowTests = config['slow-tests']
 
     with directory('test_packages'):

@@ -3,7 +3,7 @@ from ..automation_tools import read_yaml
 
 def find_warnings():
     print('Generating warnings in all of pygsti. This takes around 30 seconds')
-    config    = read_yaml('pylint_config.yml')
+    config    = read_yaml('config/pylint_config.yml')
     blacklist = config['blacklisted-warnings']
     commands  = [config['pylint-version'],
                  '--disable=R,C,E,%s' % ','.join(blacklist),

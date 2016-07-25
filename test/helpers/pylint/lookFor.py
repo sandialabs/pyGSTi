@@ -7,7 +7,7 @@ import os, sys
 def find(items, filename):
     enabled   = ','.join(items)
     print('Generating %s in all of pygsti. This should take less than a minute' % enabled)
-    config    = read_yaml('pylint_config.yml')
+    config    = read_yaml('config/pylint_config.yml')
     commands  = [config['pylint-version'],
                  '--disable=all',
                  '--enable=%s' % enabled,

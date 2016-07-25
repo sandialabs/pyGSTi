@@ -4,7 +4,7 @@ from helpers.automation_tools import read_yaml, write_yaml, get_args
 import sys
 
 def check_score():
-    yamlFile = 'pylint_config.yml'
+    yamlFile = 'config/pylint_config.yml'
 
     config       = read_yaml(yamlFile)
     desiredScore = config['desired-score']
