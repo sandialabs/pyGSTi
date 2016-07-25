@@ -24,7 +24,11 @@ class ReportTable(object):
     def render(self, fmt, longtables=False, tableclass='pygstiTbl',
                scratchDir=None, precision=6, polarprecision=3):
 
-        specs = {'scratchDir' : scratchDir, 'precision' : precision, 'polarprecision' : polarprecision}
+        specs = {
+            'scratchDir'     : scratchDir, 
+            'precision'      : precision, 
+            'polarprecision' : polarprecision
+            }
         # Create a formatSet, which contains rules for rendering lists
         formatSet =  _FormatSet(specs)
 
@@ -36,9 +40,9 @@ class ReportTable(object):
                 latex = self._customHeadings['latex']
             else:
                 if self._headingFormatters is not None:
-                    colHeadings_formatted = \
-                        formatSet.formatList(self._headings,
-                                              self._headingFormatters, "latex")
+                    colHeadings_formatted = formatSet.formatList(
+                                             self._headings,
+                                             self._headingFormatters, "latex")
                 else: #headingFormatters is None => headings is dict w/formats
                     colHeadings_formatted = self._headings['latex']
 
