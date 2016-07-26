@@ -3,7 +3,7 @@ from __future__                  import print_function, division, unicode_litera
 from helpers.test                import *
 from helpers.test.runChanged     import *
 from helpers.test.runPackage     import run_package
-from helpers.automation_tools    import read_yaml, directory 
+from helpers.automation_tools    import read_yaml, directory
 import sys
 import argparse
 
@@ -11,14 +11,14 @@ import argparse
 if __name__ == "__main__":
     config = read_yaml('config/test_config.yml')
     slowTests = config['slow-tests']
-    
+
     with directory('test_packages'):
 
         exclude = ['__pycache__', 'cmp_chk_files', 'temp_test_files']
         defaultpackages = [name for name in get_package_names() if name not in exclude]
 
         parser = argparse.ArgumentParser(description='Run tests for pygsti')
-        parser.add_argument('packages', nargs='*', default=defaultpackages, type=str, 
+        parser.add_argument('packages', nargs='*', default=defaultpackages, type=str,
                             help='list of packages to run tests for')
         parser.add_argument('--version', '-v', type=float,
                             help='version of python to run the tests under')
@@ -58,5 +58,5 @@ if __name__ == "__main__":
 
         lastFailed = parsed.lastFailed
         for package in packageNames:
-            run_package(package, precommands=pythonCommands, 
+            run_package(package, precommands=pythonCommands,
                         postcommand=None, lastFailed=lastFailed)
