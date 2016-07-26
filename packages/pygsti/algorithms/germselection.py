@@ -710,11 +710,10 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
 
 
 def build_up(gatesetList, germsList, randomize=True,
-             randomizationStrength=1e-3, numCopies=None,
-             seed=0, l1Penalty=0, gatePenalty=0,
-             scoreFunc='all', returnAll=False, tol=1e-6,
-             threshold=1e6, check=False, forceSingletons=True,
-             forceSingletonsScore=1e100, verbosity=1):
+             randomizationStrength=1e-3, numCopies=None, seed=0, l1Penalty=0,
+             gatePenalty=0, scoreFunc='all', tol=1e-6, threshold=1e6,
+             check=False, forceSingletons=True, forceSingletonsScore=1e100,
+             verbosity=0):
     """Greedy algorithm starting with 0 germs.
 
     Tries to minimize the number of germs needed to achieve amplificational
@@ -745,7 +744,7 @@ def build_up(gatesetList, germsList, randomize=True,
         printer.log("Complete initial germ set FAILS on gateset "
                     + str(undercompleteGatesetNum) + ".")
         printer.log("Aborting search.")
-        return (None, None, None) if returnAll else None
+        return None
 
     printer.log("Complete initial germ set succeeds on all input gatesets.")
     printer.log("Now searching for best germ set.")
@@ -802,11 +801,10 @@ def build_up(gatesetList, germsList, randomize=True,
 
 
 def build_up_breadth(gatesetList, germsList, randomize=True,
-                     randomizationStrength=1e-3, numCopies=None,
-                     seed=0, l1Penalty=0, gatePenalty=0,
-                     scoreFunc='all', returnAll=False, tol=1e-6,
+                     randomizationStrength=1e-3, numCopies=None, seed=0,
+                     l1Penalty=0, gatePenalty=0, scoreFunc='all', tol=1e-6,
                      threshold=1e6, check=False, forceSingletons=True,
-                     forceSingletonsScore=1e100, verbosity=1):
+                     forceSingletonsScore=1e100, verbosity=0):
     """Greedy algorithm starting with 0 germs.
 
     Tries to minimize the number of germs needed to achieve amplificational
@@ -852,7 +850,7 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
         printer.log("Complete initial germ set FAILS on gateset "
                     + str(undercompleteGatesetNum) + ".")
         printer.log("Aborting search.")
-        return (None, None, None) if returnAll else None
+        return None
 
     printer.log("Complete initial germ set succeeds on all input gatesets.")
     printer.log("Now searching for best germ set.")
