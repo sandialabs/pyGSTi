@@ -347,7 +347,7 @@ FormatSet.formatDict['Conversion'] = {
 
 _eb_exists = lambda t : t[1] is not None
 
-class _EBFormatter():
+class _EBFormatter(object):
     def __init__(self, f, formatstringA='%s +/- %s', formatstringB='%s'):
         self.f = f
         if hasattr(f, 'specs'):
