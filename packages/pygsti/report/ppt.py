@@ -170,7 +170,7 @@ def ppt_value(el, precision=6, complexAsPolar=True, polarprecision=3):
     complexAsPolar : bool, optional
         Whether to output complex values in polar form.  If False, usual
         a+ib form is used.
-  
+
     precision : int, optional
         rounding for normal numbers
 

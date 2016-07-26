@@ -20,6 +20,24 @@ import numbers as _numbers
 import re      as _re
 import os      as _os
 
+def _give_specs(formatter, specs):
+    # If the formatter requires a setting to do its job, give the setting
+    if hasattr(formatter, 'specs'):
+        print('Giving specs to %s' % formatterName)
+        for spec in formatter.specs:
+            if spec not in specs or specs[spec] is None:
+                # This should make the ValueError thrown by
+                #   ParameterizedFormatter redundant
+                # This also means that even though specs will be set after
+                # the first call to table.render(),
+                # they will need to be provided again in subsequent calls
+                raise ValueError(
+                        ('The spec %s was not supplied to ' % spec) +
+                        ('FormatSet, but is needed by %s' % formatterName))
+            formatter.specs[spec] = specs[spec]
+            print('The spec %s was given to the formatter %s' %
+                                         (spec, formatterName))
+
 class FormatSet():
     formatDict = {} # Static dictionary containing small formatter dictionaries
                     # Ex: { 'Rho' :  { 'html' : ... , 'text' : ... }, ... }
@@ -38,28 +56,7 @@ class FormatSet():
         for item, formatterName in zip(items, formatterNames):
             if formatterName is not None:
                 formatter = FormatSet.formatDict[formatterName]
-
-                # If the formatter requires a setting to do its job, give the setting
-                if hasattr(formatter[fmt], 'specs'):
-                    print('Giving specs to %s' % formatterName)
-                    for spec in formatter[fmt].specs:
-                        if spec not in self.specs or self.specs[spec] is None:
-                            # This should make the ValueError thrown by
-                            #   ParameterizedFormatter redundant
-                            # This also means that even though specs will be set after
-                            # the first call to table.render(),
-                            # they will need to be provided again in subsequent calls
-                            raise ValueError(
-                                    ('The spec %s was not supplied to ' % spec) +
-                                    ('FormatSet, but is needed by %s' % formatterName))
-                        formatter[fmt].specs[spec] = self.specs[spec]
-                        print('The spec %s was given to the formatter %s' %
-                                                     (spec, formatterName))
-                else:
-                    pass
-                    #print('%s in format %s seems to require no specs. Is this true?' %
-                                                                #(formatterName, fmt))
-
+                _give_specs(formatter[fmt], self.specs)
                 # Format the item once the formatter has been completely built
                 formatted_item = formatter[fmt](item)
                 if formatted_item is None:
@@ -150,19 +147,6 @@ class Formatter(object):
 def no_format(label):
     return label
 
-# Takes two formatters (a and b), and determines which to use based on a predicate
-# (Used in building formatter templates)
-class BranchingFormatter(object):
-    def __init__(self, predicate, a, b):
-        self.predicate = predicate
-        self.a = a
-        self.b = b
-
-    def __call__(self, label):
-        if self.predicate(label):
-            return self.a(label)
-        else:
-            return self.b(label)
 
 # Helper function to ParameterizedFormatter
 def has_argname(argname, function):
@@ -170,28 +154,32 @@ def has_argname(argname, function):
 
 # Gives arguments to formatters
 class ParameterizedFormatter(object):
-    def __init__(self, custom, neededSpecs):
-        self.custom        = custom
-        self.specs         = { neededSpec : None for neededSpec in neededSpecs }
+    def __init__(self, custom, neededSpecs, defaults={}, formatstring='%s'):
+        self.custom       = custom
+        self.specs        = { neededSpec : None for neededSpec in neededSpecs }
+        self.defaults     = defaults
+        self.formatstring = formatstring
 
     def __call__(self, label):
+        self.defaults.update(self.specs)
         # Supply arguments to the custom formatter (if it needs them)
-        for argname in self.specs:
+        for argname in self.defaults:
             if not callable(self.custom): # If some keyword arguments were supplied already
                 if has_argname(argname, self.custom[0]):             # 'if it needs them'
                     # update the argument in custom's existing keyword dictionary
-                    self.custom[1][argname] = self.specs[argname]
+                    self.custom[1][argname] = self.defaults[argname]
             else:
                 if has_argname(argname, self.custom): # If custom is a lone callable (not a tuple)
                 # Create keyword dictionary for custom, modifiying it to be a tuple
                 #   (function, kwargs)
-                    self.custom = (self.custom, {argname : self.specs[argname]})
-        return self.custom[0](label, **self.custom[1])
+                    self.custom = (self.custom, {argname : self.defaults[argname]})
+        return self.formatstring % self.custom[0](label, **self.custom[1])
 
 # Gives precision arguments to formatters
 class PrecisionFormatter(ParameterizedFormatter):
-    def __init__(self, custom):
-        super(PrecisionFormatter, self).__init__(custom, ['precision', 'polarprecision'])
+    def __init__(self, custom, defaults={}, formatstring='%s'):
+        super(PrecisionFormatter, self).__init__(custom, ['precision', 'polarprecision'], 
+                                                 defaults, formatstring)
 
 # Formatter class that requires a scratchDirectory from an instance of FormatSet for saving figures to
 class FigureFormatter(ParameterizedFormatter):
@@ -219,6 +207,29 @@ class FigureFormatter(ParameterizedFormatter):
             return self.custom[0](figInfo, **self.custom[1])
         else:
             return 'Figure generation for this Formatter is not implemented.'
+
+# Takes two formatters (a and b), and determines which to use based on a predicate
+# (Used in building formatter templates)
+class BranchingFormatter(object):
+    def __init__(self, predicate, a, b):
+        self.predicate = predicate
+        self.a = a
+        self.b = b
+
+        # So that a branching formatter can hold parameterized formatters
+        self.specs = {}
+        if hasattr(a, 'specs'):
+            self.specs.update(a.specs)
+        if hasattr(b, 'specs'):
+            self.specs.update(b.specs)
+
+    def __call__(self, label):
+        if self.predicate(label):
+            _give_specs(self.a, self.specs)
+            return self.a(label)
+        else:
+            _give_specs(self.a, self.specs)
+            return self.b(label)
 
 ##############################################################################
 #                          Formatting functions                              #
@@ -248,18 +259,18 @@ FormatSet.formatDict['Effect'] = {
 
 # Normal replacements
 FormatSet.formatDict['Normal'] = {
-    'html'  : html,
-    'latex' : latex,
+    'html'  : PrecisionFormatter(html),
+    'latex' : PrecisionFormatter(latex),
     'text'  : no_format,
-    'ppt'   : ppt }
+    'ppt'   : PrecisionFormatter(ppt) }
 
 #DEPRECATED?
 # 'normal' formatting but round to 2 decimal places
 FormatSet.formatDict['Rounded'] = {
-    'html'  : Formatter(custom=(html_value,  {'precision' : 2})),
-    'latex' : Formatter(custom=(latex_value, {'precision' : 2})),
+    'html'  : ParameterizedFormatter(html_value,  ['polarprecision'], {'precision' : 2}),
+    'latex' : ParameterizedFormatter(latex_value, ['polarprecision'], {'precision' : 2}),
     'text'  : no_format,
-    'ppt'   : Formatter(custom=(ppt_value,   {'precision' : 2}))}
+    'ppt'   : ParameterizedFormatter(ppt_value,   ['polarprecision'], {'precision' : 2})}
 
 # Similar to the above two formatdicts,
 # but recieves precision during table.render(), which is sent as kwarg to html_value, for example
@@ -271,10 +282,10 @@ FormatSet.formatDict['Precision'] = {
 
 # 'small' formating - make text smaller
 FormatSet.formatDict['Small'] = {
-    'html'  : html,
-    'latex' : Formatter(formatstring='\\small%s', custom=latex),
+    'html'  : PrecisionFormatter(html),
+    'latex' : PrecisionFormatter(latex, formatstring='\\small%s'),
     'text'  : no_format,
-    'ppt'   : ppt }
+    'ppt'   : PrecisionFormatter(ppt)}
 
 #############################################
 # Helper functions for formatting pi-labels #
@@ -297,17 +308,17 @@ def _pi_text(label):
 
 # Pi formatters
 FormatSet.formatDict['Pi'] = {
-    'html'  : pi_fmt_template(Formatter(custom=html,  formatstring='%s&pi;')),
-    'latex' : pi_fmt_template(Formatter(custom=latex, formatstring='%s$\\pi$')),
+    'html'  : pi_fmt_template(PrecisionFormatter(html,  formatstring='%s&pi;')),
+    'latex' : pi_fmt_template(PrecisionFormatter(latex, formatstring='%s$\\pi$')),
     'text'  : _pi_text,
-    'ppt'   : pi_fmt_template(Formatter(custom=ppt,   formatstring='%spi'))}
+    'ppt'   : pi_fmt_template(PrecisionFormatter(ppt,   formatstring='%spi'))}
 
 # Bracket Formatters
 FormatSet.formatDict['Brackets'] = {
-    'html'  : Formatter(custom=(html,  {'brackets' : True})),
-    'latex' : Formatter(custom=(latex, {'brackets' : True})),
+    'html'  : PrecisionFormatter(html,  defaults={'brackets' : True}),
+    'latex' : PrecisionFormatter(latex, defaults={'brackets' : True}),
     'text'  : no_format,
-    'ppt'   : Formatter(custom=(ppt,   {'brackets' : True}))}
+    'ppt'   : PrecisionFormatter(ppt,   defaults={'brackets' : True})}
 
 ##################################################################################
 # 'conversion' formatting: catch all for find/replacing specially formatted text #
@@ -342,93 +353,62 @@ FormatSet.formatDict['Conversion'] = {
     'text'  : Formatter(stringreplacers=[('<STAR>', '*'), ('|', ' ')]),
     'ppt'   : Formatter(stringreplacers=[('<STAR>', '*'), ('|', '\n')])}
 
-# Predicate for eb_template
-def eb_exists(t):
-    return t[1] is not None
+_eb_exists = lambda t : t[1] is not None
 
-# Takes two formatters and decides which to use,
-# based on if the second tuple element (error bar) exists
-def eb_template(a, b):
-    return BranchingFormatter(eb_exists, a, b)
+class EBFormatter():
+    def __init__(self, f, formatstringA='%s +/- %s', formatstringB='%s'):
+        self.f = f
+        if hasattr(f, 'specs'):
+            self.specs = f.specs
+        self.formatstringA = formatstringA
+        self.formatstringB = formatstringB
 
-# Some helper functions for error bar formatters
+    def __call__(t):
+        if hasattr(self.f, 'specs'):
+            _give_specs(self.f, self.specs)
+        if _eb_exists(t):
+            return self.formatstringA % (f(t[0]), f(t[1]))
+        else:
+            return self.formatstringB % f(t[0])
 
-# Used when the errorbar exists
-def _plus_or_minus(t, f=no_format):
-    return '%s +/- %s' % (f(t[0]), f(t[1]))
+EB_html  = EBFormatter(PrecisionFormatter(html))
+EB_latex = EBFormatter(PrecisionFormatter(latex_value), 
+                       '$ \\begin{array}{c} %s \\\\ \pm %s \\end{array} $')
+EB_text  = lambda t : {'value' : t[0], 'errbar' : t[1]}
+EB_ppt   = EBFormatter(PrecisionFormatter(ppt))
 
-# Used otherwise
-def _first_tuple_elem(t, f=no_format):
-    return f(t[0])
+FormatSet.formatDict['ErrorBars'] = { 
+    'html'  : EB_html, 
+    'latex' : EB_latex, 
+    'text'  : EB_text, 
+    'ppt'   : EB_ppt }
 
-# Pre-builds formatters that use the above two helper functions, relying on a single formatter f
-def eb_fmt_template(f=no_format):
-    # If EB exists, return _plus_or_minus of label formatted with f
-    #   ('%s +/- %s' % (f(label[0]), f(label[1])))
-    # Otherwise, return label[0] formatted with f
-    return eb_template(Formatter(custom=(_plus_or_minus,    {'f' : f})),
-                       Formatter(custom=(_first_tuple_elem, {'f' : f})))
-
-# These are the same for both ErrorBars and VecErrorBars
-# (If eb exists, show plus/minus formatted with html,
-# otherwise show first tuple elem formatted with html)
-_html_error_bar = eb_fmt_template(html)
-# (If eb exists, show plus/minus formatted with ppt,
-# otherwise show first tuple elem formatted with ppt)
-_ppt_error_bar =  eb_fmt_template(ppt)
-
-# See _latex_vec_error_bar (this formatter is simpler as a function)
-def _latex_error_bar(t):
-    return ('$ \\begin{array}{c} %s \\\\ \pm %s \\end{array} $' %
-                          (latex_value(t[0]), latex_value(t[1])))
-
-def _text_error_bar(t):
-    return {'value' : t[0], 'errbar' : t[1]}
-
-FormatSet.formatDict['ErrorBars'] = {
-    'html'  : _html_error_bar,
-    'latex' : eb_template(_latex_error_bar,
-                         Formatter(custom=(_first_tuple_elem,
-                                          {'f' : latex_value}))),
-    'text'  : _text_error_bar,
-    'ppt'   : _ppt_error_bar}
-
-# _latex_vec_error_bar is better understood as a function, since its class equivalent would be:
-# Formatter(formatstring='%s $\pm$ %s', custom=lambda label : tuple(map(latex, label)))
-#  (With a full function instead of a lambda)
-def _latex_vec_error_bar(t):
-    return '%s $\pm$ %s' % (latex(t[0]), latex(t[1]))
+VEB_latex = EBFormatter(PrecisionFormatter(latex), '%s $\pm$ %s')
 
 FormatSet.formatDict['VecErrorBars'] = {
-    'html'  : _html_error_bar,
-    'latex' : eb_template(_latex_vec_error_bar,
-                          Formatter(custom=(_first_tuple_elem, {'f' : latex}))),
-    'text'  : _text_error_bar,
-    'ppt'   : _ppt_error_bar}
+    'html'  : EB_html,
+    'latex' : VEB_latex,
+    'text'  : EB_text,
+    'ppt'   : EB_ppt}
 
+class PiEBFormatter(EBFormatter):
+    def __call__(self, t):
+        if str(t[0]) == '--' or str(t[0]) == '':  return t[0]
+        else:
+            return super(PiEBFormatter, self).__call__(t)
 
-# See _latex_vec_error_bar (This formatter is simpler as a function)
-def _latex_pi_error_bar(t):
-    if str(t[0]) == '--' or str(t[0]) == '':  return t[0]
-    if eb_exists(t):
-        return ('$ \\begin{array}{c}(%s \\\\ \\pm %s)\\pi \\end{array} $'
-                % (latex(t[0]), latex(t[1])))
-    else:
-        return '%s$\\pi$' % latex(t[0])
-
-
-# See eb_fmt_template. The only addition is the formatstring '(%s)&pi;'
-def pi_eb_fmt_template(f):
-    return eb_template(Formatter(custom=(_plus_or_minus,    {'f' : f}),
-                                 formatstring ='(%s)&pi;'),
-                       Formatter(custom=(_first_tuple_elem, {'f' : f})))
+PiEB_latex = PiEBFormatter(PrecisionFormatter(latex), 
+                           '$ \\begin{array}{c}(%s \\\\ \\pm %s)\\pi \\end{array} $',
+                           '%s$\\pi$')
+def pi_eb_template(f):
+    return EBFormatter(PrecisionFormatter(html), '(%s +/- %s)&pi')
 
 # 'errorbars with pi' formatting: display (scalar_value +/- error bar) * pi
 FormatSet.formatDict['PiErrorBars'] = {
-    'html'  : pi_eb_fmt_template(html),
-    'latex' : _latex_pi_error_bar,
-    'text'  : _text_error_bar,
-    'ppt'   : pi_eb_fmt_template(ppt)}
+    'html'  : pi_eb_template(html),
+    'latex' : PiEB_latex,
+    'text'  : EB_text,
+    'ppt'   : pi_eb_template(ppt)}
 
 # These could be written with BranchingFormatter,
 # but the only thing in common is (mostly) the predicate: 'if s is not None'
@@ -476,7 +456,7 @@ FormatSet.formatDict['Figure'] = {
 
 # Bold formatting
 FormatSet.formatDict['Bold'] = {
-    'html'  : Formatter(formatstring='<b>%s</b>', custom=html),
-    'latex' : Formatter(formatstring='\\textbf{%s}', custom=latex),
+    'html'  : PrecisionFormatter(html, formatstring='<b>%s</b>'),
+    'latex' : PrecisionFormatter(latex, formatstring='\\textbf{%s}'),
     'text'  : Formatter(formatstring='**%s**'),
-    'ppt'   : ppt} # No bold in ppt?
+    'ppt'   : PrecisionFormatter(ppt)} # No bold in ppt?

@@ -36,7 +36,7 @@ def html(x, brackets=False, precision=6, polarprecision=3):
 
     precision : int, optional
         Precision with which to round el.
-        
+
     polarprecision : int, optional
         Precision with which to round polars.
 
@@ -81,7 +81,7 @@ def html_list(l, brackets=False, precision=6, polarprecision=3):
 
     precision : int, optional
         Precision with which to round el.
-        
+
     polarprecision : int, optional
         Precision with which to round polars.
 
@@ -113,7 +113,7 @@ def html_vector(v, brackets=False, precision=6, polarprecision=3):
 
     precision : int, optional
         Precision with which to round el.
-        
+
     polarprecision : int, optional
         Precision with which to round polars.
 
@@ -153,7 +153,7 @@ def html_matrix(m, fontsize=None, brackets=False, precision=6, polarprecision=3)
 
     precision : int, optional
         Precision with which to round el.
-        
+
     polarprecision : int, optional
         Precision with which to round polars.
 
@@ -190,7 +190,7 @@ def html_value(el, precision=6, complexAsPolar=True, polarprecision=3):
 
     precision : int, optional
         Precision with which to round el.
-        
+
     polarprecision : int, optional
         Precision with which to round polars.
 
