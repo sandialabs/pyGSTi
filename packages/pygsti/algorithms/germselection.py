@@ -712,8 +712,7 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
 def build_up(gatesetList, germsList, randomize=True,
              randomizationStrength=1e-3, numCopies=None, seed=0, l1Penalty=0,
              gatePenalty=0, scoreFunc='all', tol=1e-6, threshold=1e6,
-             check=False, forceSingletons=True, forceSingletonsScore=1e100,
-             verbosity=0):
+             check=False, forceSingletons=True, verbosity=0):
     """Greedy algorithm starting with 0 germs.
 
     Tries to minimize the number of germs needed to achieve amplificational
@@ -804,7 +803,7 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
                      randomizationStrength=1e-3, numCopies=None, seed=0,
                      l1Penalty=0, gatePenalty=0, scoreFunc='all', tol=1e-6,
                      threshold=1e6, check=False, forceSingletons=True,
-                     forceSingletonsScore=1e100, verbosity=0):
+                     verbosity=0):
     """Greedy algorithm starting with 0 germs.
 
     Tries to minimize the number of germs needed to achieve amplificational
