@@ -6,10 +6,248 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Functions for selecting a complete set of germs for a GST analysis."""
 
+from functools import total_ordering
+
 import numpy as _np
 import numpy.linalg as _nla
 import warnings as _warnings
 from .. import objects as _objs
+
+
+def get_gateset_params(gatesetList):
+    """Get the number of gates and gauge parameters of the gatesets in a list.
+
+    Also verify all gatesets have the same number of gates and gauge parameters.
+
+    Parameters
+    ----------
+    gatesetList : list of GateSet
+        A list of gatesets for which you want an AC germ set.
+
+    Returns
+    -------
+    reducedGatesetList : list of GateSet
+        The original list of gatesets with SPAM removed
+    numGaugeParams : int
+        The number of non-SPAM gauge parameters for all gatesets.
+    numNonGaugeParams : int
+        The number of non-SPAM non-gauge parameters for all gatesets.
+    numGates : int
+        The number of gates for all gatesets.
+
+    Raises
+    ------
+    ValueError
+        If the number of gauge parameters or gates varies among the gatesets.
+
+    """
+    # We don't care about SPAM, since it can't be amplified.
+    reducedGatesetList = [removeSPAMVectors(gateset)
+                          for gateset in gatesetList]
+
+    # All the gatesets should have the same number of parameters and gates, but
+    # let's be paranoid here for the time being and make sure.
+    numGaugeParamsList = [reducedGateset.num_gauge_params()
+                          for reducedGateset in reducedGatesetList]
+    numGaugeParams = numGaugeParamsList[0]
+    if not all([numGaugeParams == otherNumGaugeParams
+                for otherNumGaugeParams in numGaugeParamsList[1:]]):
+        raise ValueError("All gatesets must have the same number of gauge "
+                         "parameters!")
+
+    numNonGaugeParamsList = [reducedGateset.num_nongauge_params()
+                             for reducedGateset in reducedGatesetList]
+    numNonGaugeParams = numNonGaugeParamsList[0]
+    if not all([numNonGaugeParams == otherNumNonGaugeParams
+                for otherNumNonGaugeParams in numNonGaugeParamsList[1:]]):
+        raise ValueError("All gatesets must have the same number of non-gauge "
+                         "parameters!")
+
+    numGatesList = [len(reducedGateset.gates)
+                    for reducedGateset in reducedGatesetList]
+    numGates = numGatesList[0]
+    if not all([numGates == otherNumGates
+                for otherNumGates in numGatesList[1:]]):
+        raise ValueError("All gatesets must have the same number of gates!")
+
+    return reducedGatesetList, numGaugeParams, numNonGaugeParams, numGates
+
+
+def setup_gateset_list(gatesetList, randomize, randomizationStrength,
+                       numCopies, seed):
+    if not isinstance(gatesetList, (list, tuple)):
+        gatesetList = [gatesetList]
+
+    if len(gatesetList) > 1 and numCopies is not None:
+        raise ValueError("Input multiple gate sets XOR request multiple "
+                         "copies only!")
+
+    if randomize:
+        gatesetList = randomizeGatesetList(gatesetList,
+                                              randomizationStrength, numCopies,
+                                              seed)
+
+    return gatesetList
+
+
+@total_ordering
+class ScoreNonAC():
+    """Class for storing and comparing scores of non-AC germ sets.
+
+    The comparison functions operate according to the logic that a lower score
+    is better. Therefore, a score that amplifies more parameters (higher `N`)
+    will always compare as less than a score that amplifies fewer parameters
+    (lower `N`), with ties for `N` being resolved by comparing `score` in the
+    straightforward manner (since `score` is assumed to be better for lower
+    values).
+
+    Parameters
+    ----------
+    N : int
+        The number of parameters the germ set amplifies
+    score : float
+        The score of the germ set restricted to the parameters it amplifies
+        (lower values corresponding to higher quality germ sets)
+
+    """
+    def __init__(self, score, N):
+        self.score = score
+        self.N = N
+
+    def __lt__(self, other):
+        if self.N > other.N:
+            return True
+        elif self.N < other.N:
+            return False
+        else:
+            return self.score < other.score
+
+    def __eq__(self, other):
+        return self.N==other.N and self.score==other.score
+
+    def __repr__(self):
+        return 'Score: {}, N: {}'.format(self.score, self.N)
+
+
+def compute_non_AC_score(scoreFn, thresholdAC=1e6, initN=1,
+                         partialDerivDaggerDeriv=None, gateset=None,
+                         partialGermsList=None, eps=None, numGaugeParams=None,
+                         gatePenalty=0.0, germLengths=None, l1Penalty=0.0):
+    """Compute the score for a germ set when it is not AC against a gateset.
+
+    Normally scores computed for germ sets against gatesets for which they are
+    not AC will simply be astronomically large. This is fine if AC is all you
+    care about, but not so useful if you want to compare partial germ sets
+    against one another to see which is closer to being AC. This function
+    will see if the germ set is AC for the parameters corresponding to the
+    largest `N` eigenvalues for increasing `N` until it finds a value of `N`
+    for which the germ set is not AC or all the non gauge parameters are
+    accounted for and report the value of `N` as well as the score.
+
+    This allows partial germ set scores to be compared against one-another
+    sensibly, where a larger value of `N` always beats a smaller value of `N`,
+    and ties in the value of `N` are broken by the score for that value of `N`.
+
+    Parameters
+    ----------
+    scoreFn : callable
+        A function that takes as input a list of sorted eigenvalues and returns
+        a score for the partial germ set based on those eigenvalues, with lower
+        scores indicating better germ sets. Usually some flavor of
+        :function:`germselection.list_score`.
+    thresholdAC : float, optional
+        Value which the score (before penalties are applied) must be lower than
+        for the germ set to be considered AC.
+    initN : int
+        The number of largest eigenvalues to begin with checking.
+    partialDerivDaggerDeriv : numpy.array, optional
+        Array with three axes, where the first axis indexes individual germs
+        within the partial germ set and the remaining axes index entries in the
+        positive square of the Jacobian of each individual germ's parameters
+        with respect to the gateset parameters.
+
+        If this array is not supplied it will need to be computed from
+        `germsList` and `gateset`, which will take longer, so it is recommended
+        to precompute this array if this routine will be called multiple times.
+    gateset : GateSet, optional
+        The gateset against which the germ set is to be scored. Not needed if
+        `partialDerivDaggerDeriv` is provided.
+    partialGermsList : list of GateString, optional
+        The list of germs in the partial germ set to be evaluated. Not needed
+        if `partialDerivDaggerDeriv` (and `germLengths` when
+        ``gatePenalty > 0``) are provided.
+    eps : float, optional
+        Used when calculating `partialDerivDaggerDeriv` to determine if two
+        eigenvalues are equal (see :function:`germselection.bulk_twirled_deriv`
+        for details). Not used if `partialDerivDaggerDeriv` is provided.
+    numGaugeParams : int
+        The number of gauge parameters of the gateset. Not needed if `gateset`
+        is provided.
+    gatePenalty : float, optional
+        Coefficient for a penalty linear in the sum of the germ lengths.
+    germLengths : numpy.array, optional
+        The length of each germ. Not needed if `gatePenalty` is ``0.0`` or
+        `partialGermsList` is provided.
+    l1Penalty : float, optional
+        Coefficient for a penalty linear in the number of germs.
+
+    Returns
+    -------
+    ScoreNonAC
+        The score for the germ set indicating how many parameters it amplifies
+        and its numerical score restricted to those parameters.
+
+    """
+    if partialDerivDaggerDeriv is None:
+        if gateset is None or partialGermsList is None:
+            raise ValueError("Must provide either partialDerivDaggerDeriv or "
+                             "(gateset, partialGermsList)!")
+        else:
+            pDDD_kwargs = {'gateset': gateset, 'germsList': partialGermsList}
+            if eps is not None:
+                pDDD_kwargs['eps'] = eps
+            if germLengths is not None:
+                pDDD_kwargs['germLengths'] = germLengths
+            partialDerivDaggerDeriv = calc_twirled_DDD(**pDDD_kwargs)
+
+    if numGaugeParams is None:
+        if gateset is None:
+            raise ValueError("Must provide either numGaugeParams or gateset!")
+        else:
+            numGaugeParams = removeSPAMVectors(gateset).num_gauge_params()
+
+    # Calculate penalty scores
+    numGerms = partialDerivDaggerDeriv.shape[0]
+    l1Score = l1Penalty*numGerms
+    gateScore = 0.0
+    if gatePenalty != 0.0:
+        if germLengths is None:
+            if partialGermsList is None:
+                raise ValueError("Must provide either germLengths or "
+                                 "partialGermsList when gatePenalty != 0.0!")
+            else:
+                germLengths = _np.array([len(germ)
+                                         for germ in partialGermsList])
+        gateScore = gatePenalty*_np.sum(germLengths)
+
+    combinedDDD = _np.sum(partialDerivDaggerDeriv, axis=0)
+    sortedEigenvals = _np.sort(_np.real(_nla.eigvalsh(combinedDDD)))
+    observableEigenvals = sortedEigenvals[numGaugeParams:]
+    N_AC = 0
+    AC_score = _np.inf
+    for N in range(initN, len(observableEigenvals) + 1):
+        scoredEigenvals = observableEigenvals[-N:]
+        candidate_AC_score = scoreFn(scoredEigenvals)
+        if candidate_AC_score > thresholdAC:
+            break   # We've found a set of parameters for which the germ set
+                    # is not AC.
+        else:
+            AC_score = candidate_AC_score
+            N_AC = N
+    # Apply penalties
+    score = AC_score + l1Score + gateScore
+
+    return ScoreNonAC(score, N_AC)
 
 
 def calc_twirled_DDD(gateset, germsList, eps=None, check=False,
@@ -469,6 +707,204 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
     bSuccess = bool(list_score(observableEigenvals, scoreFunc) < threshold)
 
     return (bSuccess, sortedEigenvals) if returnSpectrum else bSuccess
+
+
+def build_up(gatesetList, germsList, randomize=True,
+             randomizationStrength=1e-3, numCopies=None,
+             seed=0, l1Penalty=0, gatePenalty=0,
+             scoreFunc='all', returnAll=False, tol=1e-6,
+             threshold=1e6, check=False, forceSingletons=True,
+             forceSingletonsScore=1e100, verbosity=1):
+    """Greedy algorithm starting with 0 germs.
+
+    Tries to minimize the number of germs needed to achieve amplificational
+    completeness (AC). Begins with 0 germs and adds the germ that increases the
+    score used to check for AC by the largest amount at each step, stopping when
+    the threshold for AC is achieved.
+
+    """
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+
+    gatesetList = setup_gateset_list(gatesetList, randomize,
+                                     randomizationStrength, numCopies, seed)
+
+    (reducedGatesetList,
+     numGaugeParams,
+     numNonGaugeParams, numGates) = get_gateset_params(gatesetList)
+
+    germLengths = _np.array(list(map(len, germsList)), 'i')
+    numGerms = len(germsList)
+
+    weights = _np.zeros(numGerms, 'i')
+
+    undercompleteGatesetNum = checkGermsListCompleteness(gatesetList,
+                                                         germsList,
+                                                         scoreFunc,
+                                                         threshold)
+    if undercompleteGatesetNum > -1:
+        printer.log("Complete initial germ set FAILS on gateset "
+                    + str(undercompleteGatesetNum) + ".")
+        printer.log("Aborting search.")
+        return (None, None, None) if returnAll else None
+
+    printer.log("Complete initial germ set succeeds on all input gatesets.")
+    printer.log("Now searching for best germ set.")
+
+    printer.log("Starting germ set optimization. Lower score is better.", 1)
+
+    twirledDerivDaggerDerivList = [calc_twirled_DDD(gateset, germsList, tol,
+                                                    check, germLengths)
+                                   for gateset in gatesetList]
+
+    # Dict of keyword arguments passed to compute_score_non_AC that don't
+    # change from call to call
+    nonAC_kwargs = {
+                    'scoreFn': lambda x: list_score(x, scoreFunc=scoreFunc),
+                    'thresholdAC': threshold,
+                    'numGaugeParams': numGaugeParams,
+                   }
+
+    goodGermsList = []
+    for gatesetNum, reducedGateset in enumerate(reducedGatesetList):
+        derivDaggerDeriv = twirledDerivDaggerDerivList[gatesetNum]
+        # Make sure the set of germs you come up with is AC for all
+        # gatesets.
+        # Remove any SPAM vectors from gateset since we only want
+        # to consider the set of *gate* parameters for amplification
+        # and this makes sure our parameter counting is correct
+        while _np.any(weights==0):
+            # As long as there are some unused germs, see if you need to add
+            # another one.
+            if test_germ_list_infl(reducedGateset, goodGermsList,
+                                      scoreFunc=scoreFunc,
+                                      threshold=threshold):
+                # The germs are sufficient for the current gateset
+                break
+            candidateGerms = _np.where(weights==0)[0]
+            candidateGermScores = []
+            for candidateGermIdx in _np.where(weights==0)[0]:
+                # If the germs aren't sufficient, try adding a single germ
+                candidateWeights = weights.copy()
+                candidateWeights[candidateGermIdx] = 1
+                partialDDD = derivDaggerDeriv[
+                                _np.where(candidateWeights==1)[0],:,:]
+                candidateGermScore = compute_non_AC_score(
+                                            partialDerivDaggerDeriv=partialDDD,
+                                            **nonAC_kwargs)
+                candidateGermScores.append(candidateGermScore)
+            # Add the germ that give the best score
+            bestCandidateGerm = candidateGerms[_np.array(
+                                                candidateGermScores).argmin()]
+            weights[bestCandidateGerm] = 1
+            goodGermsList.append(germsList[bestCandidateGerm])
+
+    return goodGermsList
+
+
+def build_up_breadth(gatesetList, germsList, randomize=True,
+                     randomizationStrength=1e-3, numCopies=None,
+                     seed=0, l1Penalty=0, gatePenalty=0,
+                     scoreFunc='all', returnAll=False, tol=1e-6,
+                     threshold=1e6, check=False, forceSingletons=True,
+                     forceSingletonsScore=1e100, verbosity=1):
+    """Greedy algorithm starting with 0 germs.
+
+    Tries to minimize the number of germs needed to achieve amplificational
+    completeness (AC). Begins with 0 germs and adds the germ that increases the
+    score used to check for AC by the largest amount (for the gateset that
+    currently has the lowest score) at each step, stopping when the threshold
+    for AC is achieved. This strategy is something of a "breadth-first"
+    approach, in contrast to :function:`build_up`, which only looks at the
+    scores for one gateset at a time until that gateset achieves AC, then
+    turning it's attention to the remaining gatesets.
+
+    Parameters
+    ----------
+    germsList : list of GateString
+        The list of germs to contruct a germ set from.
+
+    """
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+
+    gatesetList = setup_gateset_list(gatesetList, randomize,
+                                     randomizationStrength, numCopies, seed)
+
+    (reducedGatesetList,
+     numGaugeParams,
+     numNonGaugeParams, numGates) = get_gateset_params(gatesetList)
+
+    germLengths = _np.array([len(germ) for germ in germsList], 'i')
+
+    numGerms = len(germsList)
+
+    goodGerms = []
+    weights = _np.zeros(numGerms, 'i')
+    if forceSingletons:
+        weights[_np.where(germLengths==1)] = 1
+        goodGerms = [germ for germ
+                     in _np.array(germsList)[_np.where(germLengths==1)]]
+
+    undercompleteGatesetNum = checkGermsListCompleteness(gatesetList,
+                                                         germsList,
+                                                         scoreFunc,
+                                                         threshold)
+    if undercompleteGatesetNum > -1:
+        printer.log("Complete initial germ set FAILS on gateset "
+                    + str(undercompleteGatesetNum) + ".")
+        printer.log("Aborting search.")
+        return (None, None, None) if returnAll else None
+
+    printer.log("Complete initial germ set succeeds on all input gatesets.")
+    printer.log("Now searching for best germ set.")
+
+    printer.log("Starting germ set optimization. Lower score is better.", 1)
+
+    twirledDerivDaggerDerivList = [calc_twirled_DDD(gateset, germsList, tol,
+                                                       check, germLengths)
+                                   for gateset in gatesetList]
+
+    # Dict of keyword arguments passed to compute_score_non_AC that don't
+    # change from call to call
+    nonAC_kwargs = {
+                    'scoreFn': lambda x: list_score(x, scoreFunc=scoreFunc),
+                    'thresholdAC': threshold,
+                    'numGaugeParams': numGaugeParams,
+                   }
+
+
+    initN = 1
+    while _np.any(weights==0):
+        # As long as there are some unused germs, see if you need to add
+        # another one.
+        if initN == numNonGaugeParams:
+            break   # We are AC for all gatesets, so we can stop adding germs.
+
+        candidateGerms = _np.where(weights==0)[0]
+        candidateGermScores = []
+        for candidateGermIdx in _np.where(weights==0)[0]:
+            # If the germs aren't sufficient, try adding a single germ
+            candidateWeights = weights.copy()
+            candidateWeights[candidateGermIdx] = 1
+            germVsGatesetScores = []
+            for derivDaggerDeriv in twirledDerivDaggerDerivList:
+                # Loop over all gatesets
+                partialDDD = derivDaggerDeriv[
+                                _np.where(candidateWeights==1)[0],:,:]
+                germVsGatesetScores.append(compute_non_AC_score(
+                                            partialDerivDaggerDeriv=partialDDD,
+                                            initN=initN, **nonAC_kwargs))
+            # Take the score for the current germ to be it's worst score over
+            # all gatesets.
+            candidateGermScores.append(max(germVsGatesetScores))
+        # Add the germ that gives the best worst score
+        bestCandidateGerm = candidateGerms[_np.array(
+                                            candidateGermScores).argmin()]
+        weights[bestCandidateGerm] = 1
+        goodGerms.append(germsList[bestCandidateGerm])
+        initN = min(candidateGermScores).N
+
+    return goodGerms
+
 
 #@profile
 def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
