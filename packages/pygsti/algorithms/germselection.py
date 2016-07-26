@@ -1218,3 +1218,134 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         return goodGermsList, weights, scoreD
     else:
         return goodGermsList
+
+
+def grasp_greedy_construction(elements, scoreFn, alpha, feasibleThreshold=None,
+                              feasibleFn=None, initialElements=None,
+                              seed=None):
+    if initialElements is None:
+        weights = _np.zeros(len(elements))
+    else:
+        if len(initialElements) != len(elements):
+            raise ValueError('initialElements must have the same length as '
+                             'elements ({}), not {}!'.format(len(elements),
+                                                        len(initialElements)))
+        weights = _np.array(initialElements)
+
+    soln = [elements[idx] for idx in _np.nonzero(weights)[0]]
+
+    if feasibleThreshold is not None:
+        feasibleTest = 'threshold'
+    elif feasibleFn is not None:
+        feasibleTest = 'function'
+    else:
+        raise ValueError('Must provide either feasibleFn or '
+                         'feasibleThreshold!')
+
+    feasible = False
+
+    while _np.any(weights==0) and not feasible:
+        candidateIdxs = _np.where(weights==0)[0]
+        candidateSolns = [soln + [elements[idx]] for idx in candidateIdxs]
+        candidateScores = _np.array([scoreFn(candidateSoln)
+                                     for candidateSoln in candidateSolns])
+        minScore = min(candidateScores)
+        maxScore = max(candidateScores)
+        thresholdScore = (1 - alpha)*minScore + alpha*maxScore
+        restrictedCandidateList = _np.where(candidateScores
+                                            <= thresholdScore)[0]
+        RCLIdx = _np.random.randint(len(restrictedCandidateList))
+        chosenIdx = candidateIdxs[restrictedCandidateList[RCLIdx]]
+        soln.append(candidateSolns[chosenIdx])
+        weights[candidateIdxs[chosenIdx]] = 1
+        if feasibleTest == 'threshold':
+            feasible = candidateScores[chosenIdx] <= feasibleThreshold
+        elif feasibleTest == 'function':
+            feasible = feasibleFn(soln)
+
+    if not feasible:
+        raise ValueError('No feasible solution found!')
+
+    return soln
+
+
+def grasp_local_search(initialSoln, scoreFn, elements, getNeighborsFn,
+                       feasibleThreshold=None, feasibleFn=None):
+
+    if feasibleThreshold is not None:
+        feasibleTest = 'threshold'
+    elif feasibleFn is not None:
+        feasibleTest = 'function'
+    else:
+        raise ValueError('Must provide either feasibleFn or '
+                         'feasibleThreshold!')
+
+    currentSoln = initialSoln
+    currentWeights = _np.zeros(len(elements))
+    for element in initialSoln:
+        currentWeights[elements.index(element)] = 1
+    currentScore = scoreFn(currentSoln)
+
+    betterSolnFound = True
+
+    while betterSolnFound:
+        betterSolnFound = False
+        weightsNeighbors = getNeighborsFn(currentWeights)
+        neighborSolns = [[element for element
+                          in _np.array(elements)[_np.nonzero(weightsNeighbor)]]
+                         for weightsNeighbor in weightsNeighbors]
+        if feasibleTest == 'function':
+            feasibleNeighborSolns = [(idx, soln) for idx, soln
+                                     in enumerate(neighborSolns)
+                                     if feasibleFn(soln)]
+            for idx, soln in feasibleNeighborSolns:
+                solnScore = scoreFn(soln)
+                if solnScore < currentScore:
+                    betterSolnFound = True
+                    currentScore = solnScore
+                    currentSoln = soln
+                    currentWeights = weightsNeighbors[idx]
+                    break
+
+        elif feasibleTest == 'threshold':
+            for idx, soln in enumerate(neighborSolns):
+                solnScore = scoreFn(soln)
+                # The current score is by construction below the threshold,
+                # so we don't need to check that.
+                if solnScore < currentScore:
+                    betterSolnFound = True
+                    currentScore = solnScore
+                    currentSoln = soln
+                    currentWeights = weightsNeighbors[idx]
+                    break
+
+    return currentSoln
+
+
+def grasp(elements, greedyConstructionFn, alpha, localSearchFn, getNeighborsFn,
+          finalScoreFn, feasibleFn, iterations, greedyFeasibleThreshold=None,
+          greedyFeasibleFn=None, localFeasibleThreshold=None,
+          localFeasibleFn=None, initialElements=None, seed=None):
+    bestSoln = None
+    for iteration in range(iterations):
+        initialSoln = greedyConstructionFn(elements, greedyScoreFn, alpha,
+                                           feasibleFn, initialElements, seed)
+        localSoln = localSearchFn(initialSoln, localScoreFn, elements,
+                                  getNeighborsFn, localFeasibleThreshold,
+                                  localFeasibleFn)
+        if bestSoln is None:
+            bestSoln = localSoln
+        elif finalScoreFn(localSoln) < finalScoreFn(bestSoln):
+            bestSoln = localSoln
+
+    return bestSoln
+
+
+def grasp_germ_set_optimization(gatesetList, germsList, randomize=True,
+                                randomizationStrength=1e-3, numCopies=None,
+                                seed=0, l1Penalty=0, gatePenalty=0,
+                                scoreFunc='all', returnAll=False, tol=1e-6,
+                                threshold=1e6, check=False,
+                                forceSingletons=True,
+                                forceSingletonsScore=1e100, verbosity=0):
+    pass
