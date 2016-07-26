@@ -916,8 +916,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                                  check=False, forceSingletons=True,
                                  forceSingletonsScore=1e100, threshold=1e6,
                                  verbosity=1):
-    """
-    Find a locally optimal subset of the germs in germsList.
+    """Find a locally optimal subset of the germs in germsList.
 
     Locally optimal here means that no single germ can be excluded
     without making the smallest non-gauge eigenvalue of the
@@ -1049,15 +1048,11 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
-    if not isinstance(gatesetList, list):
-        gatesetList = [gatesetList]
+    gatesetList = setup_gateset_list(gatesetList, randomize,
+                                     randomizationStrength, numCopies, seed)
 
     if (fixedSlack and slackFrac) or (not fixedSlack and not slackFrac):
         raise ValueError("Either fixedSlack *or* slackFrac should be specified")
-
-    if len(gatesetList) > 1 and numCopies is not None:
-        raise ValueError("Input multiple gate sets XOR request multiple "
-                         "copies only!")
 
     if initialWeights is not None:
         if len(germsList) != len(initialWeights):
@@ -1070,10 +1065,6 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     else:
         weights = _np.ones(len(germsList), 'i') # default: start with all germs
 #        lessWeightOnly = True # we're starting at the max-weight vector
-
-    if randomize:
-        gatesetList = randomizeGatesetList(gatesetList, randomizationStrength,
-                                           numCopies, seed)
 
     undercompleteGatesetNum = checkGermsListCompleteness(gatesetList,
                                                          germsList, scoreFunc,
