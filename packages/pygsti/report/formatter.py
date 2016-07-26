@@ -23,7 +23,6 @@ import os      as _os
 def _give_specs(formatter, specs):
     # If the formatter requires a setting to do its job, give the setting
     if hasattr(formatter, 'specs'):
-        print('Giving specs to %s' % formatterName)
         for spec in formatter.specs:
             if spec not in specs or specs[spec] is None:
                 # This should make the ValueError thrown by
@@ -33,10 +32,8 @@ def _give_specs(formatter, specs):
                 # they will need to be provided again in subsequent calls
                 raise ValueError(
                         ('The spec %s was not supplied to ' % spec) +
-                        ('FormatSet, but is needed by %s' % formatterName))
+                        ('FormatSet, but is needed by an active formatter'))
             formatter.specs[spec] = specs[spec]
-            print('The spec %s was given to the formatter %s' %
-                                         (spec, formatterName))
 
 class FormatSet():
     formatDict = {} # Static dictionary containing small formatter dictionaries
@@ -358,13 +355,13 @@ class _EBFormatter():
         self.formatstringA = formatstringA
         self.formatstringB = formatstringB
 
-    def __call__(t):
+    def __call__(self, t):
         if hasattr(self.f, 'specs'):
             _give_specs(self.f, self.specs)
         if _eb_exists(t):
-            return self.formatstringA % (f(t[0]), f(t[1]))
+            return self.formatstringA % (self.f(t[0]), self.f(t[1]))
         else:
-            return self.formatstringB % f(t[0])
+            return self.formatstringB % self.f(t[0])
 
 _EB_html  = _EBFormatter(_PrecisionFormatter(html))
 _EB_latex = _EBFormatter(_PrecisionFormatter(latex_value),

@@ -54,14 +54,14 @@ def html(x, brackets=False, precision=6, polarprecision=3):
         x = _np.squeeze(x)
         if d == 0: return html_value(x, precision=precision, polarprecision=polarprecision)
         if d == 1: return html_vector(x, brackets=brackets, precision=precision, polarprecision=polarprecision)
-        if d == 2: return html_matrix(x, brackets=brackets, precision=precision, poalrprecision=polarprecision)
+        if d == 2: return html_matrix(x, brackets=brackets, precision=precision, polarprecision=polarprecision)
         raise ValueError("I don't know how to render a rank %d numpy array as html" % d)
     elif type(x) in (float,int,complex,_np.float64,_np.int64):
         return html_value(x, precision=precision, polarprecision=polarprecision)
     elif type(x) in (list,tuple):
         return html_list(x, precision=precision, polarprecision=polarprecision)
     elif isinstance(x,basestring):
-        return html_escaped(x, precision=precision, polarprecision=polarprecision)
+        return html_escaped(x)
     else:
         print("Warning: %s not specifically converted to html" % str(type(x)))
         return str(x)
