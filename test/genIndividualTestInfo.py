@@ -68,6 +68,17 @@ def get_test_info(filename, packageName, testCaseName, test):
 
     return ((end - start), percent)
 
+def get_coverage_only(filename, packageName, testCasename, test):
+    coverageFile = '../../output/individual_coverage/%s.out' % (test)
+    commands = ['nosetests', '-v', '--with-coverage', '--cover-package=pygsti.%s' % packageName,
+                '--cover-erase', '--collect-only', '%s:%s.%s' % (filename, testCaseName, test),
+                '2>&1 | tee %s' % coverageFile]
+    percent      = _read_coverage(' '.join(commands), coverageFile)
+    coverageDict = parse_coverage_output(coverageFile)
+    write_yaml(coverageDict, coverageFile)
+
+    return percent
+
 def gen_individual_test_info(packageName):
     testsInfo = {}
 
