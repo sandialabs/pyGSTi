@@ -18,6 +18,7 @@ for branch in branches:
 # Attempt to auto-merge develop into pre-beta if travis tests pass
 # This code is currently unactive, but should work :)
 
+subprocess.call(['git', 'fetch', 'origin', 'beta'])
 subprocess.call(['git', 'checkout', 'beta'])
 subprocess.call(['git', 'fetch', 'origin', 'develop'])
 # origin/beta -> FETCH_HEAD

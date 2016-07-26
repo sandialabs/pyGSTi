@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from __future__                import print_function
 from helpers.test.helpers      import *
-from helpers.automation_tools  import read_yaml, write_yaml, directory, get_args
+from helpers.automation_tools  import read_yaml, write_yaml, directory, get_output
 from importlib import import_module
 from inspect   import isclass
 import unittest
@@ -39,14 +39,9 @@ def get_info(filename, packageName, testCaseName, test):
                 'test_packages/%s/%s:%s.%s' % (packageName, filename, testCaseName, test)]
 
     start = time.time()
-    try:
-        output = subprocess.check_output(commands, stderr=subprocess.STDOUT)
-    except subprocess.CalledProcessError as e:
-        print(e)
-        output = e.output
+    output = get_output(commands)
     end = time.time()
 
-    output = output.decode('utf-8')
     print(output)
     coverageDict = make_coverage_output(output, end-start)
     write_yaml(coverageDict, coverageFile)
