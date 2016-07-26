@@ -3,6 +3,7 @@ from __future__                import print_function
 from helpers.test.helpers      import *
 from helpers.test._getCoverage import _read_coverage
 from helpers.automation_tools  import read_yaml, write_yaml, directory, get_args
+import subprocess
 import importlib
 import argparse
 import inspect
@@ -24,10 +25,11 @@ def find_individual_tests(testCase):
     istest = lambda a, case : callable(getattr(case, a)) and a.startswith('test')
     return [attr for attr in dir(testCase) if istest(attr, testCase)]
 
-def parse_coverage_output(filename):
-    with open(filename) as content:
-        specific = content.read().split('-----------------------------------------------')[1]
-        specific = [line for line in specific.replace('-', '').splitlines() if line != '']
+
+
+def parse_coverage_output(output):
+    specific = output.split('-----------------------------------------------')[1]
+    specific = [line for line in specific.replace('-', '').splitlines() if line != '']
 
     # At this point, specific looks like this:
     '''
@@ -62,19 +64,25 @@ def get_test_info(filename, packageName, testCaseName, test):
     start   = time.time()
     percent = _read_coverage(' '.join(commands), coverageFile)
     end     = time.time()
-
-    coverageDict = parse_coverage_output(coverageFile)
+    
+    with open(coverageFile, 'r') as coverageOutput:
+        coverageDict = parse_coverage_output(coverageOutput.read())
     write_yaml(coverageDict, coverageFile)
 
     return ((end - start), percent)
 
-def get_coverage_only(filename, packageName, testCasename, test):
+def get_coverage_only(filename, packageName, testCaseName, test):
     coverageFile = '../../output/individual_coverage/%s.out' % (test)
     commands = ['nosetests', '-v', '--with-coverage', '--cover-package=pygsti.%s' % packageName,
-                '--cover-erase', '--collect-only', '%s:%s.%s' % (filename, testCaseName, test),
-                '2>&1 | tee %s' % coverageFile]
-    percent      = _read_coverage(' '.join(commands), coverageFile)
-    coverageDict = parse_coverage_output(coverageFile)
+                '--cover-erase', '--collect-only', '%s:%s.%s' % (filename, testCaseName, test)]
+    try:
+        output = subprocess.check_output(commands)
+    except subprocess.CalledProcessError as e:
+        print(e)
+        output = e.output
+    print(output.decode('utf-8'))
+
+    coverageDict = parse_coverage_output(output.decode('utf-8'))
     write_yaml(coverageDict, coverageFile)
 
     return percent
@@ -100,7 +108,8 @@ def gen_individual_test_info(packageName):
     return testsInfo
 
 if __name__ == '__main__':
-
+    get_coverage_only('testReport', 'report', 'TestReport', 'test_reports_logL_TP_wCIs')
+    '''
     parser = argparse.ArgumentParser(description='Generate meta-data on tests')
     parser.add_argument('genInfoOn', nargs='+', help='lint for specific items')
     parser.add_argument('--update', '-u', type=bool,
@@ -157,3 +166,4 @@ if __name__ == '__main__':
         write_yaml(bestDict, 'output/best.yml')
 
     write_yaml(infoDict, 'output/all_individual_test_info.yml')
+    '''
