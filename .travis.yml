@@ -5,6 +5,7 @@ python:
 branches:
   only:
     - master
+    - beta
     - develop
 # command to install dependencies
 before_install:
@@ -14,10 +15,25 @@ before_install:
   - "sh -e /etc/init.d/xvfb start" #some tests require a display
   - sleep 3 # give xvfb some time to start
 install:
-  - pip install -r requirements.txt
-  - pip install cvxpy python-pptx
+  - travis_retry travis_wait pip install -r requirements.txt
+  - pip install cvxpy python-pptx ruamel.yaml
   - pip install -e .
+  
+cache: 
+  pip: true
+  timeout: 1000
 # command to run tests
 script:
   - cd test
   - python travisTests.py 
+  - cd ..
+
+after_success:
+  - cd hooks/travis
+  - ./after_success
+  - cd ../..
+
+after_failure:
+  - cd hooks/travis
+  - ./after_failure
+  - cd ../..

@@ -92,7 +92,7 @@ class StdInputParser(object):
         string  = _pp.Forward()
         expable = (gate | slcref | lpar + string + rpar | nop)
         expdstr = expable + _pp.ZeroOrMore( (expop + integer).setParseAction(push_first) )
-        string << expdstr + _pp.ZeroOrMore( (_pp.Optional("*") + expdstr).setParseAction(push_mult))
+        string << expdstr + _pp.ZeroOrMore( (_pp.Optional("*") + expdstr).setParseAction(push_mult)) #pylint: disable=expression-not-assigned
 
         #count = real.copy().setParseAction(push_count)
         #dataline = string + _pp.OneOrMore( count )

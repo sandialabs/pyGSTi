@@ -27,7 +27,7 @@ class MultiDataSet_KeyValIterator(object):
         datasetName = next(self.countsDictIter)
         return datasetName, _DataSet(self.multidataset.countsDict[datasetName], gateStringIndices=self.multidataset.gsIndex,
                                     spamLabelIndices=self.multidataset.slIndex, bStatic=True)
- 
+
     next = __next__
 
 

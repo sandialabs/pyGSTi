@@ -28,7 +28,7 @@ class DataSet_KeyValIterator(object):
 
     def __next__(self): # Python 3: def __next__(self)
         return next(self.gsIter), DataSetRow(self.dataset, next(self.countIter))
-   
+
     next = __next__
 
 

@@ -264,7 +264,7 @@ class Gate(object):
         else:
             try:
                 dim = len(M)
-                d2 = len(M[0]) #pylint : disable=unused-variable
+                d2  = len(M[0]) #pylint : disable=unused-variable
             except:
                 raise ValueError("%s doesn't look like a 2D array/list" % M)
             if any([len(row) != dim for row in M]):

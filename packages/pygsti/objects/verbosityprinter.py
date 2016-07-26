@@ -4,33 +4,6 @@ from contextlib    import contextmanager as _contextmanager
 import sys         as _sys
 import math        as _math # used for digit formatting
 
-'''
-verbosityprinter module:
-
-VerbosityPrinter: Class responsible for logging things to stdout or a file. Controls verbosity and can print progress bars
-  ex: VerbosityPrinter(1) would construct a printer that printed out messages of level one or higher to the screen
-      VerbosityPrinter(3, 'output.txt') would construct a printer that sends verbose output to a text file
-
-        the static function 'build_printer' will construct a printer from either an integer or an already existing printer.
-        it is a staticmethod of the VerbosityPrinter class, so it is called like so:
-            VerbosityPrinter.build_printer(2) or VerbostityPrinter.build_printer(VerbosityPrinter(3, 'output.txt'))
-
-      printer.log('status')     would log 'status' if the printers verbosity was one or higher
-      printer.log('status2', 2) would log 'status2' if the printer's verbosity was two or higher
-
-      printer.error('something terrible happened') would ALWAYS log 'something terrible happened'
-      printer.warning('something worrisome happened') would log if verbosity was one or higher - the same as a normal status
-
-      Both printer.error and printer.warning will prepend 'ERROR: ' or 'WARNING: ' to the message they are given.
-      Optionally, printer.log() can also prepend 'Status_n' to the message, where n is the message level.
-
-show_progress: function that prints a progress bar to the screen.
-  VerbosityPrinter provides a wrapper to this function that queues output during the time the progress bar is active
-  progress bars don't yet work perfectly with ipython notebook, since they might not replace the last printed line
-  the arguments to show_progress are documented below
-
-'''
-
 def _num_digits(n):
     return int(_math.log10(n)) + 1 if n > 0 else 1
 
@@ -69,9 +42,35 @@ def _build_verbose_iteration(iteration, total, prefix, suffix, end):
 
 # The class responsible for optionally logging output
 class VerbosityPrinter():
+    '''
+    Class responsible for logging things to stdout or a file. Controls verbosity and can print progress bars
+    ex: VerbosityPrinter(1) would construct a printer that printed out messages of level one or higher to the screen
+        VerbosityPrinter(3, 'output.txt') would construct a printer that sends verbose output to a text file
+
+        the static function 'build_printer' will construct a printer from either an integer or an already existing printer.
+        it is a staticmethod of the VerbosityPrinter class, so it is called like so:
+            VerbosityPrinter.build_printer(2) or VerbostityPrinter.build_printer(VerbosityPrinter(3, 'output.txt'))
+
+      printer.log('status')     would log 'status' if the printers verbosity was one or higher
+      printer.log('status2', 2) would log 'status2' if the printer's verbosity was two or higher
+
+      printer.error('something terrible happened') would ALWAYS log 'something terrible happened'
+      printer.warning('something worrisome happened') would log if verbosity was one or higher - the same as a normal status
+
+      Both printer.error and printer.warning will prepend 'ERROR: ' or 'WARNING: ' to the message they are given.
+      Optionally, printer.log() can also prepend 'Status_n' to the message, where n is the message level.
+
+      Logging of progress bars/iterations:
+
+      with printer_instance.progress_logging(verbosity):
+        for i, item in enumerate(data):
+          printer.show_progress(i, len(data))
+          printer.log(...)
+
+      Will output either a progress bar or iteration statuses depending on the printer's verbosity
+    '''
 
     # Rules for handling comm --This is a global variable-- (technically) it should probably only be set once, at the beginning of the program
-    # VerbosityPrinter.setup_comm_output will handle setup - and also raises an exception if called more than once
     _commPath     = ''
     _commFileName = 'comm_output' # The name of the generated files. Must also be set
     _commFileExt  = '.txt'
@@ -98,6 +97,7 @@ class VerbosityPrinter():
         self._delayQueue      = []
         self._progressStack   = []
 
+    # Alias deepcopy, convert it to a method
     def clone(self):
         return _dc(self)
 

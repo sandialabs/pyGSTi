@@ -50,10 +50,10 @@ def build_vector(stateSpaceDims, stateSpaceLabels, vecExpr, basis="gm"):
         matrix space.
 
     basis : {'gm','pp','std'}, optional
-       the basis of the returned vector. 
+       the basis of the returned vector.
 
         - 'std' == Standard (matrix units)
-        - 'gm' == Gell-Mann 
+        - 'gm' == Gell-Mann
         - 'pp' == Pauli-product
 
     Returns
@@ -99,10 +99,10 @@ def build_identity_vec(stateSpaceDims, basis="gm"):
         linear spaces of dimension block-dimension^2.
 
     basis : {'gm','pp','std'}, optional
-        the basis of the returned vector. 
+        the basis of the returned vector.
 
         - 'std' == Standard (matrix units)
-        - 'gm' == Gell-Mann 
+        - 'gm' == Gell-Mann
         - 'pp' == Pauli-product
 
     Returns
@@ -388,8 +388,8 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
         (single level) or "Q" (two-level; qubit) which interpret the
         d-dimensional state space corresponding to a d x d block as a tensor
         product between qubit and single level systems.
-        
-    gateExpr : string 
+
+    gateExpr : string
         expression for the gate to build.  String is first split into parts
         delimited by the colon (:) character, which are composed together to
         create the final gate.  Each part takes on of the allowed forms:
@@ -574,7 +574,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
         tensorBlkEls_noop = list(_itertools.product(*basisInds_noop)) #dm-space basis for noop-indices only
         parameterToBaseIndicesMap = {}
 
-        def decomp_gate_index(indx): 
+        def decomp_gate_index(indx):
             """ Decompose index of a Pauli-product matrix into indices of each
             Pauli in the product """
             ret = []; divisor = 1; divisors = []
@@ -589,14 +589,14 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
             #print " => %s (div = %s)" % (str(ret), str(divisors))
             return ret
 
-        def merge_gate_and_noop_bases(gate_b, noop_b): 
-            """ 
+        def merge_gate_and_noop_bases(gate_b, noop_b):
+            """
             Merge the Pauli basis indices for the "gate"-parts of the total
             basis contained in gate_b (i.e. of the components of the tensor
             product space that are operated on) and the "noop"-parts contained
             in noop_b.  Thus, len(gate_b) + len(noop_b) == len(basisInds), and
             this function merges together basis indices for the operated-on and
-            not-operated-on tensor product components.  
+            not-operated-on tensor product components.
             Note: return value always have length == len(basisInds) == number
             of componens
             """
@@ -877,7 +877,7 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
         conform with text file parsing conventions these names should begin
         with a capital G and can be followed by any number of lowercase
         characters, numbers, or the underscore character.
-        
+
     gateExpressions : list of strings
         A list of gate expressions, each corresponding to a gate label in
         gateLabels, which determine what operation each gate performs (see

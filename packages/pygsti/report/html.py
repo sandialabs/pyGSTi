@@ -22,7 +22,7 @@ try:  basestring
 except NameError: basestring = str
 
 
-def html(x, brackets=False):
+def html(x, brackets=False, precision=6, polarprecision=3):
     """
     Convert a numpy array, number, or string to html.
 
@@ -33,6 +33,12 @@ def html(x, brackets=False):
 
     brackets : bool, optional
         Whether to include brackets in the output for array-type variables.
+
+    precision : int, optional
+        Precision with which to round el.
+
+    polarprecision : int, optional
+        Precision with which to round polars.
 
     Returns
     -------
@@ -46,14 +52,14 @@ def html(x, brackets=False):
         for l in x.shape:
             if l > 1: d += 1
         x = _np.squeeze(x)
-        if d == 0: return html_value(x)
-        if d == 1: return html_vector(x, brackets=brackets)
-        if d == 2: return html_matrix(x, brackets=brackets)
+        if d == 0: return html_value(x, precision=precision, polarprecision=polarprecision)
+        if d == 1: return html_vector(x, brackets=brackets, precision=precision, polarprecision=polarprecision)
+        if d == 2: return html_matrix(x, brackets=brackets, precision=precision, polarprecision=polarprecision)
         raise ValueError("I don't know how to render a rank %d numpy array as html" % d)
     elif type(x) in (float,int,complex,_np.float64,_np.int64):
-        return html_value(x)
+        return html_value(x, precision=precision, polarprecision=polarprecision)
     elif type(x) in (list,tuple):
-        return html_list(x)
+        return html_list(x, precision=precision, polarprecision=polarprecision)
     elif isinstance(x,basestring):
         return html_escaped(x)
     else:
@@ -61,7 +67,7 @@ def html(x, brackets=False):
         return str(x)
 
 
-def html_list(l, brackets=False):
+def html_list(l, brackets=False, precision=6, polarprecision=3):
     """
     Convert a list to html.
 
@@ -73,6 +79,12 @@ def html_list(l, brackets=False):
     brackets : bool, optional
         Whether to include brackets in the output html.
 
+    precision : int, optional
+        Precision with which to round el.
+
+    polarprecision : int, optional
+        Precision with which to round polars.
+
     Returns
     -------
     string
@@ -81,13 +93,13 @@ def html_list(l, brackets=False):
 
     lines = [ ]
     for el in l:
-        lines.append( html(el, brackets) )
+        lines.append( html(el, brackets, precision=precision, polarprecision=polarprecision) )
     return '<div class=math><table cellpadding="0" cellspacing="0" class=matrixbrak> <tr><td>' \
         + '<table cellpadding="0" cellspacing="0" class="matrix"><tr><td>' \
         + "</td></t><tr><td>".join(lines) + "</td></tr></table></td>" + '</tr></table></div>\n'
 
 
-def html_vector(v, brackets=False):
+def html_vector(v, brackets=False, precision=6, polarprecision=3):
     """
     Convert a 1D numpy array to html.
 
@@ -99,16 +111,21 @@ def html_vector(v, brackets=False):
     brackets : bool, optional
         Whether to include brackets in the output html.
 
+    precision : int, optional
+        Precision with which to round el.
+
+    polarprecision : int, optional
+        Precision with which to round polars.
+
     Returns
     -------
     string
         html string for v.
     """
 
-    ROUND = 4
     lines = [ ]
     for el in v:
-        lines.append( html_value(el, ROUND) )
+        lines.append( html_value(el, precision=precision, polarprecision=polarprecision) )
     if brackets:
         return '<div class=math><table cellpadding="0" cellspacing="0" class=matrixbrak> <tr><td class="lbrak">&nbsp;</td><td>' \
                + '<table cellpadding="0" cellspacing="0" class="matrix"><tr><td>' + "</td></t><tr><td>".join(lines) + "</td></tr></table></td>" \
@@ -119,7 +136,7 @@ def html_vector(v, brackets=False):
                + '</tr></table></div>\n'
 
 
-def html_matrix(m, fontsize=None, brackets=False):
+def html_matrix(m, fontsize=None, brackets=False, precision=6, polarprecision=3):
     """
     Convert a 2D numpy array to html.
 
@@ -134,18 +151,23 @@ def html_matrix(m, fontsize=None, brackets=False):
     brackets : bool, optional
         Whether to include brackets in the output html.
 
+    precision : int, optional
+        Precision with which to round el.
+
+    polarprecision : int, optional
+        Precision with which to round polars.
+
     Returns
     -------
     string
         html string for m.
     """
-    ROUND = 4
     lines = [ ]; prefix = ""
     if fontsize is not None:
         prefix += "" #unsupported currently
 
     for r in range(m.shape[0]):
-        lines.append( "<tr><td>" + " </td><td> ".join( [html_value(el,ROUND) for el in m[r,:] ] ) + "</td></tr>" )
+        lines.append( "<tr><td>" + " </td><td> ".join( [html_value(el, precision=precision, polarprecision=polarprecision) for el in m[r,:] ] ) + "</td></tr>" )
 
     if brackets:
         return '<div class=math><table cellpadding="0" cellspacing="0" class=matrixbrak> <tr><td class="lbrak">&nbsp;</td><td>' \
@@ -157,7 +179,7 @@ def html_matrix(m, fontsize=None, brackets=False):
                + '</tr></table></div>\n'
 
 
-def html_value(el,ROUND=6,complexAsPolar=True):
+def html_value(el, precision=6, complexAsPolar=True, polarprecision=3):
     """
     Convert a floating point or complex value to html.
 
@@ -166,8 +188,11 @@ def html_value(el,ROUND=6,complexAsPolar=True):
     el : float or complex
         Value to convert into HTML.
 
-    ROUND : int, optional
+    precision : int, optional
         Precision with which to round el.
+
+    polarprecision : int, optional
+        Precision with which to round polars.
 
     complexAsPolar : bool, optional
         Whether to output complex values in polar form.  If False, usual
@@ -183,12 +208,12 @@ def html_value(el,ROUND=6,complexAsPolar=True):
     TOL = 1e-9  #tolerance for printing zero values
 
     def render(x):
-        if abs(x) < 5*10**(-(ROUND+1)):
+        if abs(x) < 5*10**(-(precision+1)):
             s = "%.0e" % x # one significant figure
         elif abs(x) < 1:
-            s = "%.*f" % (ROUND,x)
-        elif abs(x) <= 10**ROUND:
-            s = "%.*f" % (ROUND-int(_np.log10(abs(x))),x)  #round to get ROUND digits when x is < 1
+            s = "%.*f" % (precision, x)
+        elif abs(x) <= 10**precision:
+            s = "%.*f" % (precision-int(_np.log10(abs(x))),x)  #round to get ROUND digits when x is < 1
             #str(round(x,ROUND))  #OLD
         else:
             s = "%.0e" % x # one significant figure

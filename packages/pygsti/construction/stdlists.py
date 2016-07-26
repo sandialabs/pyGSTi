@@ -94,7 +94,7 @@ def make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
         for each germ-power the selected pairs are *different* random
         sets of all possible pairs (unlike fidPairs, which specifies the
         *same* fiduicial pairs for *all* germ-power base strings).  If
-        fidPairs is used in conjuction with keepFraction, the pairs 
+        fidPairs is used in conjuction with keepFraction, the pairs
         specified by fidPairs are always selected, and any additional
         pairs are randomly selected.
 
@@ -149,14 +149,14 @@ def make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
             # FUTURE: issue warnings when clipping nPairsToChoose?
 
             fiducialPairsThisIter = fiducialPairs + \
-                [ remainingPairs[k] for k in 
+                [ remainingPairs[k] for k in
                   sorted(rndm.choice(nPairsRemaining,nPairsToChoose,
                                      replace=False))]
 
         else: # rndm is not None and fidPairs is None
             assert(nPairsToKeep <= nPairs) # keepFraction must be <= 1.0
             fiducialPairsThisIter = \
-                [ fiducialPairs[k] for k in 
+                [ fiducialPairs[k] for k in
                   sorted(rndm.choice(nPairs,nPairsToKeep,replace=False))]
 
 
@@ -235,7 +235,7 @@ def make_lsgst_experiment_list(gateLabels, prepStrs, effectStrs, germList, maxLe
         for each germ-power the selected pairs are *different* random
         sets of all possible pairs (unlike fidPairs, which specifies the
         *same* fiduicial pairs for *all* germ-power base strings).  If
-        fidPairs is used in conjuction with keepFraction, the pairs 
+        fidPairs is used in conjuction with keepFraction, the pairs
         specified by fidPairs are always selected, and any additional
         pairs are randomly selected.
 
