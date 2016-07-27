@@ -16,7 +16,7 @@ import pygsti
 #    #sys.path.pop()
 #    exit()
 
-tutorialDir = os.path.join("../..","jupyter_notebooks","Tutorials")
+tutorialDir = os.path.join("../../..","jupyter_notebooks","Tutorials")
 
 class TutorialsTestCase(unittest.TestCase):
 
