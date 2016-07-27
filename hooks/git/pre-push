@@ -24,8 +24,8 @@ if __name__ == "__main__":
     if int(passes) > 0:
         sys.exit(1)
 
-    output = get_output(['git', 'log', '--merges', '|', 'grep', '"into %s"' % branchname])
-    output = [line for line in output.splitlines() if line.count(branchname) < 2]
-    with open('docs/%s_merge_log.txt' % branchname, 'w') as merge_log:
+    output = get_output(['git', 'log', '--merges'])
+    output = [line for line in output.splitlines() if line.count(branchname) < 2 and 'into %s' % branchname in line]
+    with open('doc/%s_merge_log.txt' % branchname, 'w') as merge_log:
         merge_log.write('\n'.join(output))
 
