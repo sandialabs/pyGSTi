@@ -8,7 +8,7 @@ class ToolsTestCase(unittest.TestCase):
         # move working directories
         self.old = os.getcwd()
         # This will result in the same directory, even though when another module calls this, file points to toolsBaseCase.py
-        os.chdir(os.path.abspath(os.path.dirname(__file__))) 
+        os.chdir(os.path.abspath(os.path.dirname(__file__)))
 
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = True

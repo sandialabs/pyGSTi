@@ -30,5 +30,6 @@ if __name__ == '__main__':
 
     if parsed.process:
         for packageName in parsed.packages:
+            pprint(find_uncovered(infoDict[packageName]))
             # interpret it, if asked
             annotate_uncovered(packageName, infoDict)

@@ -41,7 +41,6 @@ def annotate_uncovered(packageName, infoDict):
     uncoveredLineDict = find_uncovered_lines(infoDict[packageName])
     with directory('../packages/pygsti/%s' % packageName):
         files = [filename for filename in get_files(os.getcwd()) if filename in uncoveredLineDict]
-        print(files)
         for filename in files:
             copyfile(filename, filename + '.bak')
             with open(filename, 'r') as source:
@@ -49,8 +48,8 @@ def annotate_uncovered(packageName, infoDict):
 
             uncoveredLines = uncoveredLineDict[filename]
             for i, line in enumerate(content):
-                content[i].replace('#!*uncovered*!', '') # Remove old annotations
-                if (i+1) in uncoveredLines:
+                content[i] = content[i].replace('#!*uncovered*!', '') # Remove old annotations
+                if (i+1) in uncoveredLines and '\\' not in content[i]:
                     content[i] += '#!*uncovered*!'
             print('Annotating %s' % filename)
             with open(filename, 'w') as source:
