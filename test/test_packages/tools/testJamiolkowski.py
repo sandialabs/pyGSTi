@@ -74,5 +74,76 @@ class TestJamiolkowskiMethods(JamiolkowskiTestCase):
         cmb = 'gm' #choi matrix basis
         self.checkBasis(cmb)
 
+
+    def test_jamiolkowski_ops(self):
+        mxGM  = np.array([[1, 0, 0, 0],
+                          [0, 0, 1, 0],
+                          [0,-1, 0, 0],
+                          [0, 0, 0, 1]], 'complex')
+
+        mxStd = pygsti.gm_to_std(mxGM)
+        mxPP  = pygsti.gm_to_pp(mxGM)
+
+        choiStd = pygsti.jamiolkowski_iso(mxStd, "std","std")
+        choiStd2 = pygsti.jamiolkowski_iso(mxGM, "gm","std")
+        choiStd3 = pygsti.jamiolkowski_iso(mxPP, "pp","std")
+
+        choiGM = pygsti.jamiolkowski_iso(mxStd, "std","gm")
+        choiGM2 = pygsti.jamiolkowski_iso(mxGM, "gm","gm")
+        choiGM3 = pygsti.jamiolkowski_iso(mxPP, "pp","gm")
+
+        choiPP = pygsti.jamiolkowski_iso(mxStd, "std","pp")
+        choiPP2 = pygsti.jamiolkowski_iso(mxGM, "gm","pp")
+        choiPP3 = pygsti.jamiolkowski_iso(mxPP, "pp","pp")
+
+        self.assertArraysAlmostEqual( choiStd, choiStd2)
+        self.assertArraysAlmostEqual( choiStd, choiStd3)
+        self.assertArraysAlmostEqual( choiGM, choiGM2)
+        self.assertArraysAlmostEqual( choiGM, choiGM3)
+        self.assertArraysAlmostEqual( choiPP, choiPP2)
+        self.assertArraysAlmostEqual( choiPP, choiPP3)
+
+        gateStd = pygsti.jamiolkowski_iso_inv(choiStd, "std","std")
+        gateStd2 = pygsti.jamiolkowski_iso_inv(choiGM, "gm","std")
+        gateStd3 = pygsti.jamiolkowski_iso_inv(choiPP, "pp","std")
+
+        gateGM = pygsti.jamiolkowski_iso_inv(choiStd, "std","gm")
+        gateGM2 = pygsti.jamiolkowski_iso_inv(choiGM, "gm","gm")
+        gateGM3 = pygsti.jamiolkowski_iso_inv(choiPP, "pp","gm")
+
+        gatePP = pygsti.jamiolkowski_iso_inv(choiStd, "std","pp")
+        gatePP2 = pygsti.jamiolkowski_iso_inv(choiGM, "gm","pp")
+        gatePP3 = pygsti.jamiolkowski_iso_inv(choiPP, "pp","pp")
+
+        self.assertArraysAlmostEqual( gateStd, mxStd)
+        self.assertArraysAlmostEqual( gateStd2, mxStd)
+        self.assertArraysAlmostEqual( gateStd3, mxStd)
+
+        self.assertArraysAlmostEqual( gateGM,  mxGM)
+        self.assertArraysAlmostEqual( gateGM2, mxGM)
+        self.assertArraysAlmostEqual( gateGM3, mxGM)
+
+        self.assertArraysAlmostEqual( gatePP,  mxPP)
+        self.assertArraysAlmostEqual( gatePP2, mxPP)
+        self.assertArraysAlmostEqual( gatePP3, mxPP)
+
+
+        with self.assertRaises(ValueError):
+            pygsti.jamiolkowski_iso(mxStd, "foobar","gm") #invalid gate basis
+        with self.assertRaises(ValueError):
+            pygsti.jamiolkowski_iso(mxStd, "std","foobar") #invalid choi basis
+        with self.assertRaises(ValueError):
+            pygsti.jamiolkowski_iso_inv(choiStd, "foobar","gm") #invalid choi basis
+        with self.assertRaises(ValueError):
+            pygsti.jamiolkowski_iso_inv(choiStd, "std","foobar") #invalid gate basis
+
+
+        sumOfNeg  = pygsti.sum_of_negative_choi_evals(std.gs_target)
+        sumsOfNeg = pygsti.sums_of_negative_choi_evals(std.gs_target)
+        magsOfNeg = pygsti.mags_of_negative_choi_evals(std.gs_target)
+        self.assertAlmostEqual(sumOfNeg, 0.0)
+        self.assertArraysAlmostEqual(sumsOfNeg, np.zeros(3,'d')) # 3 gates in std.gs_target
+        self.assertArraysAlmostEqual(magsOfNeg, np.zeros(12,'d')) # 3 gates * 4 evals each = 12
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
