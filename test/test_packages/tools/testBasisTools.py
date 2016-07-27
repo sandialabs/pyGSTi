@@ -227,6 +227,7 @@ class BasisToolsTestCase(ToolsTestCase):
     def test_basistools_misc(self):
         with self.assertRaises(ValueError):
             basistools._processBlockDims("FooBar") #arg should be a list,tuple,or int
+        basistools.pp_matrices([1])
 
     def test_basis_longname(self):
         longnames = {basistools.basis_longname(basis) for basis in {'gm', 'std', 'pp'}}
@@ -264,9 +265,53 @@ class BasisToolsTestCase(ToolsTestCase):
         self.assertEqual(expectedLabels, labels)
 
     def test_hamiltonian_to_lindbladian(self):
-        expectedLindbladian = np.zeros(shape=(2,2))
-        self.assertEqual(basistools.hamiltonian_to_lindbladian(np.zeros(shape=(2,2))),
-                         expectedLindbladian)
+        expectedLindbladian = np.array([[ 0,  0,  0,  0],
+                                        [ 0,  0,  0,  0,],
+                                        [ 0,  0,  0,  0,],
+                                        [ 0,  0,  0,  0]]
+                                       )
+
+        self.assertArraysAlmostEqual(basistools.hamiltonian_to_lindbladian(np.zeros(shape=(2,2))),
+                                     expectedLindbladian)
+
+    def test_vec_to_stdmx(self):
+        vec = np.zeros(shape=(2,))
+        for basis in {'gm', 'pp', 'std'}:
+            basistools.vec_to_stdmx(vec, basis)
+        with self.assertRaises(ValueError):
+            basistools.vec_to_stdmx(vec, 'akdfj;ladskf')
+
+    def test_single_qubit_gate_matrix(self):
+        expected = np.array([[1.00000000e+00, 2.77555756e-16, -2.28983499e-16, 0.00000000e+00],
+                            [ -3.53885261e-16, -8.09667193e-01, 5.22395269e-01, -2.67473774e-01],
+                            [ -3.92523115e-17, 5.22395269e-01, 8.49200550e-01, 7.72114534e-02],
+                            [ 1.66533454e-16, 2.67473774e-01, -7.72114534e-02, -9.60466643e-01]]
+                            )
+        mx = basistools.single_qubit_gate(24.0, 83.140134, 0.0000)
+        self.assertArraysAlmostEqual(expected, mx)
+
+    def test_two_qubit_gate_mx(self):
+        gate = basistools.two_qubit_gate()
+        expected = np.array([
+         [ 1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,],
+         [ 0,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,],
+         [ 0,  0,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,],
+         [ 0,  0,  0,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,],
+         [ 0,  0,  0,  0,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,],
+         [ 0,  0,  0,  0,  0,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,],
+         [ 0,  0,  0,  0,  0,  0,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0,],
+         [ 0,  0,  0,  0,  0,  0,  0,  1,  0,  0,  0,  0,  0,  0,  0,  0,],
+         [ 0,  0,  0,  0,  0,  0,  0,  0,  1,  0,  0,  0,  0,  0,  0,  0,],
+         [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  0,  0,  0,  0,  0,  0,],
+         [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  0,  0,  0,  0,  0,],
+         [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  0,  0,  0,  0,],
+         [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  0,  0,  0,],
+         [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  0,  0,],
+         [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  0,],
+         [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,]])
+        self.assertArraysAlmostEqual(gate,expected)
+
+
 
 
 

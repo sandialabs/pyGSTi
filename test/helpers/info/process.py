@@ -2,26 +2,6 @@ from ..automation_tools import directory, get_files
 from shutil import copyfile
 import os
 
-
-def update_if_higher(dictionary, key, value):
-    if key in dictionary:
-        if dictionary[key] < value:
-            dictionary[key] = value
-    else:
-        dictionary[key] = value
-
-# Generate dict of form: { modulename : percentage } for percentages below threshold
-def find_uncovered(packageDict, threshold=90):
-    uncoveredDict = {}
-    for filename, fileDict in packageDict.items():
-        for caseDict in fileDict.values():
-            for testinfo, _ in caseDict.values():
-                for modulename, moduleinfo in testinfo.items():
-                    update_if_higher(uncoveredDict, modulename, moduleinfo[0])
-    uncoveredDict = { key : value for (key, value) in uncoveredDict.items() if value < threshold }
-    return uncoveredDict
-
-
 # Generate dict of form: { modulename : percentage } for percentages below threshold
 def find_uncovered_lines(packageDict):
     uncoveredLineDict = {}
@@ -35,11 +15,12 @@ def find_uncovered_lines(packageDict):
                         uncoveredLineDict[modulename] = uncoveredLineDict[modulename].intersection(set(moduleinfo[1]))
     return uncoveredLineDict
 
-
 def annotate_uncovered(packageName, infoDict):
 
     def do_annotate(line):
-        return '\\' not in line and line.replace(' ', '') != ''
+        return ('\\' not in line and 
+                line.replace(' ', '') != '' and
+                'pylint' not in line)
 
     uncoveredLineDict = find_uncovered_lines(infoDict[packageName])
     with directory('../packages/pygsti/%s' % packageName):
