@@ -9,7 +9,7 @@ if __name__ == '__main__':
     branchname = get_branchname()
 
     if branchname in generates_pylint_report:
-        run_pylint(['./lint.py', '--score'])
+        run_pylint(['./lint.py', '--score=True'])
 
     sys.exit(0)
 

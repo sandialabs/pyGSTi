@@ -1,19 +1,17 @@
 from __future__         import print_function
 from .runPackage        import run_package
 from .helpers           import *
-from ..automation_tools import directory
+from ..automation_tools import directory, get_output
 import subprocess
 import os
 import sys
 
-
-def get_changed_files(cutoffDirs=['packages/pygsti/', 'ipython_notebooks/'],
-                      exclude=['test'], preCommand='../', endings=['py', 'ipynb']):
+def get_changed_files(cutoffDirs=['packages/pygsti/', 'jupyter_notebooks/'],
+                      exclude=['test'], preCommand='../', endings=['py', 'ipynb', '']):
     with directory(preCommand):
-        output = subprocess.check_output(['git', 'diff', '--name-only'])
+        output = get_output(['git', 'diff', '--name-only'])
 
     changedFilePaths = []
-
     for line in output.splitlines():
         if line.split('/', 1)[0] not in exclude:
             for cutoffDir in cutoffDirs:
@@ -23,15 +21,16 @@ def get_changed_files(cutoffDirs=['packages/pygsti/', 'ipython_notebooks/'],
                 _, ending = line.split('.')
                 if ending in endings:
                     changedFilePaths.append(line)
-    os.chdir(oldwd)
+            elif '' in endings:
+                changedFilePaths.append(line)
     return changedFilePaths
 
 def get_changed_test_packages():
-    return get_changed_packages(cutoffDirs=['test/'],
-                                exclude=['doc', 'ipython_notebooks', 'packages', 'test_tools', 'benchmarks'],
-                                endings=['py'])
+    return get_changed_packages(cutoffDirs=['test/', 'hooks/git/'],
+                                exclude=['doc', 'jupyter_notebooks', 'test'],
+                                endings=['py', ''])
 
-def get_changed_packages(cutoffDirs=[], exclude=[], preCommand='../', endings=[]):
+def get_changed_packages(cutoffDirs=[], exclude=[], preCommand='../', endings=['py', '']):
     # Get the packageNames that have changed
     changedPackages = set()
 
