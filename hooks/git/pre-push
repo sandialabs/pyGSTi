@@ -1,6 +1,6 @@
 #!/usr/bin/python
 from __future__       import print_function
-from automation_tools import get_branchname
+from automation_tools import get_branchname, run_pylint
 from hooksettings     import updates_git_pages
 import subprocess, os, sys
 
@@ -20,4 +20,5 @@ if __name__ == "__main__":
         subprocess.call(['git', 'checkout', branchname])
         os.system('rm -rf temp_html') # yikes!
 
-    sys.exit(0)
+    passes = run_pylint(['./lint.py', '--noerrors=True']) # Can't push to origin if pylint finds any errors!
+    sys.exit(int(passes))
