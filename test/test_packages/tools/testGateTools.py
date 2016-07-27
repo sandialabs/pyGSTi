@@ -1,7 +1,18 @@
 from .toolsBaseCase import ToolsTestCase
 import pygsti
+import pygsti.tools.gatetools as gatetools
 import numpy as np
 import unittest
+
+A = np.array( [[0.9, 0, 0.1j, 0],
+               [ 0,  0, 0,    0],
+               [ -0.1j, 0, 0, 0],
+               [ 0,  0,  0,  0.1]], 'complex')
+
+B = np.array( [[0.5, 0, 0, -0.2j],
+               [ 0,  0.25, 0,  0],
+               [ 0, 0, 0.25,   0],
+               [ 0.2j,  0,  0,  0.1]], 'complex')
 
 class GateToolsTestCase(ToolsTestCase):
 
@@ -33,16 +44,6 @@ class GateToolsTestCase(ToolsTestCase):
         decomp = pygsti.decompose_gate_matrix(largeMx) #can only handle 1Q mxs
         self.assertFalse(decomp['isValid'])
 
-        A = np.array( [[0.9, 0, 0.1j, 0],
-                       [ 0,  0, 0,    0],
-                       [ -0.1j, 0, 0, 0],
-                       [ 0,  0,  0,  0.1]], 'complex')
-
-        B = np.array( [[0.5, 0, 0, -0.2j],
-                       [ 0,  0.25, 0,  0],
-                       [ 0, 0, 0.25,   0],
-                       [ 0.2j,  0,  0,  0.1]], 'complex')
-
         self.assertAlmostEqual( pygsti.frobeniusdist(A,A), 0.0 )
         self.assertAlmostEqual( pygsti.jtracedist(A,A,mxBasis="std"), 0.0 )
         self.assertAlmostEqual( pygsti.diamonddist(A,A,mxBasis="std"), 0.0 )
@@ -52,6 +53,40 @@ class GateToolsTestCase(ToolsTestCase):
 
         self.assertAlmostEqual( pygsti.frobeniusdist(A,B), pygsti.frobeniusnorm(A-B) )
         self.assertAlmostEqual( pygsti.frobeniusdist(A,B), np.sqrt( pygsti.frobeniusnorm2(A-B) ) )
+
+    def test_hack_sqrt_m(self):
+        expected = np.array([[ 0.55368857+0.46439416j,  0.80696073-0.21242648j],
+             [ 1.21044109-0.31863972j,  1.76412966+0.14575444j]]
+             )
+        sqrt = gatetools._hack_sqrtm(np.array([[1, 2], [3, 4]]))
+        self.assertArraysAlmostEqual(sqrt, expected)
+
+    def test_frobenius_distance(self):
+        self.assertAlmostEqual( pygsti.frobeniusdist(A,A), 0.0 )
+
+    # Tests fidelity as well
+    def test_process_fidelity(self):
+        fidelity = gatetools.process_fidelity(A, B)
+        self.assertAlmostEqual(fidelity, 0.42686642003)
+
+    def test_fidelity_upper_bound(self):
+        upperBound = gatetools.fidelity_upper_bound(A)
+        expected   = (np.array([[ 0.25]]), 
+                      np.array([[  1.00000000e+00,  -8.27013523e-16,   8.57305616e-33, 1.95140273e-15],
+                                [ -8.27013523e-16,   1.00000000e+00,   6.28036983e-16, -8.74760501e-31],
+                                [  5.68444574e-33,  -6.28036983e-16,   1.00000000e+00, -2.84689309e-16],
+                                [  1.95140273e-15,  -9.27538795e-31,   2.84689309e-16, 1.00000000e+00]]))
+        self.assertArraysAlmostEqual(upperBound[0], expected[0])
+        self.assertArraysAlmostEqual(upperBound[1], expected[1])
+
+    def test_unitary_to_process_mx(self):
+        identity  = np.identity(2)
+        processMx = gatetools.unitary_to_process_mx(identity)
+        self.assertArraysAlmostEqual(processMx, np.identity(4))
+
+
+
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

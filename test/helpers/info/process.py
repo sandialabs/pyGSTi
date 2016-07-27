@@ -18,7 +18,7 @@ def find_uncovered_lines(packageDict):
 def annotate_uncovered(packageName, infoDict):
 
     def do_annotate(line):
-        return ('\\' not in line and 
+        return ('\\' not in line and
                 line.replace(' ', '') != '' and
                 'pylint' not in line)
 

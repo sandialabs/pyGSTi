@@ -22,7 +22,7 @@ class Chi2LogLTestCase(ToolsTestCase):
 
         with self.assertRaises(ValueError):
             pygsti.chi2(ds, std.gs_target, useFreqWeightedChiSq=True) #no impl yet
-        
+
         # Memory tests
 
         with self.assertRaises(MemoryError):
