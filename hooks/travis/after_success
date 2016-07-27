@@ -9,8 +9,15 @@ output     = subprocess.check_output(['git', 'branch'])
 branches   = output.decode('utf-8').splitlines()
 for branch in branches:
     if '*' in branch:
-        branchname = branch.replace('*', '').replace(' ', '')
+        branchname = branch.replace('*', '')
+        if branchname.count(' ') > 0:
+            branchname = branchname.split()[-1]
         break
+
+try:
+    print(subprocess.check_output(['git' ,'rev-parse', '--abbrev-ref', 'HEAD']).decode('utf-8')) # check if this is a better alternative to the above
+except:
+    pass
 
 # Relevant:
 # http://stackoverflow.com/questions/501407/is-there-a-git-merge-dry-run-option
