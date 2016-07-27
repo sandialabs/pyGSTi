@@ -92,7 +92,7 @@ $E_{0}$ & $ \begin{array}{c}
 \begin{tabular}[l]{|c|c|c|}
 \hline
  & $E_{0}$ & $E_C$ \\ \hline
-$\rho_{0}$ & 0.090701 & 0.9092 \\ \hline
+$\rho_{0}$ & 0.0907 & 0.9092 \\ \hline
 \end{tabular}
 
 \caption{\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestTargetGatesetSpamTable}.\label{bestTargetGatesetSpamParametersTable}}
@@ -136,9 +136,9 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 \begin{tabular}[l]{|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
-Gi & 0.039929 & 0.040101 & 0.040111 \\ \hline
-Gx & 0.037847 & 0.038186 & 0.038965 \\ \hline
-Gy & 0.037739 & 0.038059 & 0.038835 \\ \hline
+Gi & 0.0399 & 0.0401 & 0.0401 \\ \hline
+Gx & 0.0378 & 0.0382 & 0.039 \\ \hline
+Gy & 0.0377 & 0.0381 & 0.0388 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -195,7 +195,7 @@ Gi & $ \begin{array}{c}
 -0.1471 \\ 
 -0.3232
  \end{array} $
- & 0.05127 & 0.054222 \\ \hline
+ & 0.0513 & 0.0542 \\ \hline
 Gx & $ \begin{array}{c}
 0.9491e^{i1.572} \\ 
 0.9491e^{-i1.572} \\ 
@@ -214,7 +214,7 @@ Gx & $ \begin{array}{c}
 6\e{-6} \\ 
 -0.0005
  \end{array} $
- & 0.049514 & 0.050938 \\ \hline
+ & 0.0495 & 0.0509 \\ \hline
 Gy & $ \begin{array}{c}
 0.9489e^{i1.571} \\ 
 0.9489e^{-i1.571} \\ 
@@ -233,7 +233,7 @@ Gy & $ \begin{array}{c}
 1 \\ 
 -0.0005
  \end{array} $
- & 0.048788 & 0.051084 \\ \hline
+ & 0.0488 & 0.0511 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -241,9 +241,9 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & 0.000625$\pi$ &  & 0.8843$\pi$ & 0.548566$\pi$ \\ \hline
-Gx & 0.500356$\pi$ & 0.8843$\pi$ &  & 0.498289$\pi$ \\ \hline
-Gy & 0.50007$\pi$ & 0.548566$\pi$ & 0.498289$\pi$ &  \\ \hline
+Gi & 0.0006$\pi$ &  & 0.8843$\pi$ & 0.5486$\pi$ \\ \hline
+Gx & 0.5004$\pi$ & 0.8843$\pi$ &  & 0.4983$\pi$ \\ \hline
+Gy & 0.5001$\pi$ & 0.5486$\pi$ & 0.4983$\pi$ &  \\ \hline
 \end{tabular}
 
 \caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); and (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay'').  ``--'' indicates that the decomposition failed or couldn't be interpreted. \label{bestTargetGatesetDecompTable}}
@@ -256,27 +256,27 @@ Gy & 0.50007$\pi$ & 0.548566$\pi$ & 0.498289$\pi$ &  \\ \hline
 \begin{tabular}[l]{|c|c|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & \begin{tabular}{c}Rotation\\Axis\end{tabular} & \begin{tabular}{c}Rotation\\Angle\end{tabular} & Sanity \checkmark \\ \hline
-Gi & 0.03992 & 0.039924 & $ \begin{array}{c}
+Gi & 0.0399 & 0.0399 & $ \begin{array}{c}
 0 \\ 
 0.2623 \\ 
 0.7415 \\ 
 -0.6175
  \end{array} $
- & 0.002002$\pi$ & 0.000006 \\ \hline
-Gx & 0.037843 & 0.038112 & $ \begin{array}{c}
+ & 0.002$\pi$ & 6\e{-6} \\ \hline
+Gx & 0.0378 & 0.0381 & $ \begin{array}{c}
 0 \\ 
 1 \\ 
 -0.0027 \\ 
 0.0002
  \end{array} $
- & 0.500357$\pi$ & 0.000383 \\ \hline
-Gy & 0.037735 & 0.037988 & $ \begin{array}{c}
+ & 0.5004$\pi$ & 0.0004 \\ \hline
+Gy & 0.0377 & 0.038 & $ \begin{array}{c}
 0 \\ 
 0.0027 \\ 
 -1 \\ 
 -0.0005
  \end{array} $
- & 0.500071$\pi$ & 0.000355 \\ \hline
+ & 0.5001$\pi$ & 0.0004 \\ \hline
 \end{tabular}
 
 \caption{Information pertaining to the closest unitary gate to each of the estimated gates.\label{bestTargetGatesetClosestUnitaryTable}}
@@ -378,7 +378,7 @@ $E_{0}$ & $ \begin{array}{c}
 \begin{tabular}[l]{|c|c|c|}
 \hline
  & $E_{0}$ & $E_C$ \\ \hline
-$\rho_{0}$ & 0.090701 & 0.9092 \\ \hline
+$\rho_{0}$ & 0.0907 & 0.9092 \\ \hline
 \end{tabular}
 
 \caption{\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestTargetSpamGatesetSpamTable}.\label{bestTargetSpamGatesetSpamParametersTable}}
@@ -422,9 +422,9 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 \begin{tabular}[l]{|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
-Gi & 0.039929 & 0.040118 & 0.040177 \\ \hline
-Gx & 0.037844 & 0.056484 & 0.068511 \\ \hline
-Gy & 0.037743 & 0.055553 & 0.069803 \\ \hline
+Gi & 0.0399 & 0.0401 & 0.0402 \\ \hline
+Gx & 0.0378 & 0.0565 & 0.0685 \\ \hline
+Gy & 0.0377 & 0.0556 & 0.0698 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -481,7 +481,7 @@ Gi & $ \begin{array}{c}
 -0.1464 \\ 
 -0.3242
  \end{array} $
- & 0.05127 & 0.054222 \\ \hline
+ & 0.0513 & 0.0542 \\ \hline
 Gx & $ \begin{array}{c}
 0.9491e^{i1.572} \\ 
 0.9491e^{-i1.572} \\ 
@@ -500,7 +500,7 @@ Gx & $ \begin{array}{c}
 3\e{-5} \\ 
 -0.0007
  \end{array} $
- & 0.049514 & 0.050938 \\ \hline
+ & 0.0495 & 0.0509 \\ \hline
 Gy & $ \begin{array}{c}
 0.9489e^{i1.571} \\ 
 0.9489e^{-i1.571} \\ 
@@ -519,7 +519,7 @@ Gy & $ \begin{array}{c}
 1 \\ 
 0.0033
  \end{array} $
- & 0.048788 & 0.051084 \\ \hline
+ & 0.0488 & 0.0511 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -527,9 +527,9 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & 0.000625$\pi$ &  & 0.88402$\pi$ & 0.548742$\pi$ \\ \hline
-Gx & 0.500356$\pi$ & 0.88402$\pi$ &  & 0.498277$\pi$ \\ \hline
-Gy & 0.50007$\pi$ & 0.548742$\pi$ & 0.498277$\pi$ &  \\ \hline
+Gi & 0.0006$\pi$ &  & 0.884$\pi$ & 0.5487$\pi$ \\ \hline
+Gx & 0.5004$\pi$ & 0.884$\pi$ &  & 0.4983$\pi$ \\ \hline
+Gy & 0.5001$\pi$ & 0.5487$\pi$ & 0.4983$\pi$ &  \\ \hline
 \end{tabular}
 
 \caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); and (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay'').  ``--'' indicates that the decomposition failed or couldn't be interpreted. \label{bestTargetSpamGatesetDecompTable}}
@@ -542,27 +542,27 @@ Gy & 0.50007$\pi$ & 0.548742$\pi$ & 0.498277$\pi$ &  \\ \hline
 \begin{tabular}[l]{|c|c|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & \begin{tabular}{c}Rotation\\Axis\end{tabular} & \begin{tabular}{c}Rotation\\Angle\end{tabular} & Sanity \checkmark \\ \hline
-Gi & 0.03992 & 0.039942 & $ \begin{array}{c}
+Gi & 0.0399 & 0.0399 & $ \begin{array}{c}
 0 \\ 
 0.2623 \\ 
 0.7429 \\ 
 -0.6159
  \end{array} $
- & 0.001997$\pi$ & 0.000031 \\ \hline
-Gx & 0.037841 & 0.056424 & $ \begin{array}{c}
+ & 0.002$\pi$ & 3\e{-5} \\ \hline
+Gx & 0.0378 & 0.0564 & $ \begin{array}{c}
 0 \\ 
 1 \\ 
 -0.0027 \\ 
 0.0003
  \end{array} $
- & 0.500357$\pi$ & 0.013946 \\ \hline
-Gy & 0.037734 & 0.055449 & $ \begin{array}{c}
+ & 0.5004$\pi$ & 0.0139 \\ \hline
+Gy & 0.0377 & 0.0554 & $ \begin{array}{c}
 0 \\ 
 -0.0027 \\ 
 1 \\ 
 0.0035
  \end{array} $
- & 0.500071$\pi$ & 0.013727 \\ \hline
+ & 0.5001$\pi$ & 0.0137 \\ \hline
 \end{tabular}
 
 \caption{Information pertaining to the closest unitary gate to each of the estimated gates.\label{bestTargetSpamGatesetClosestUnitaryTable}}
@@ -664,7 +664,7 @@ $E_{0}$ & $ \begin{array}{c}
 \begin{tabular}[l]{|c|c|c|}
 \hline
  & $E_{0}$ & $E_C$ \\ \hline
-$\rho_{0}$ & 0.090701 & 0.9092 \\ \hline
+$\rho_{0}$ & 0.0907 & 0.9092 \\ \hline
 \end{tabular}
 
 \caption{\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestTargetGatesGatesetSpamTable}.\label{bestTargetGatesGatesetSpamParametersTable}}
@@ -708,9 +708,9 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 \begin{tabular}[l]{|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
-Gi & 0.039929 & 0.0401 & 0.040106 \\ \hline
-Gx & 0.037847 & 0.037918 & 0.03792 \\ \hline
-Gy & 0.037738 & 0.037805 & 0.037805 \\ \hline
+Gi & 0.0399 & 0.0401 & 0.0401 \\ \hline
+Gx & 0.0378 & 0.0379 & 0.0379 \\ \hline
+Gy & 0.0377 & 0.0378 & 0.0378 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -767,7 +767,7 @@ Gi & $ \begin{array}{c}
 -0.1473 \\ 
 -0.3233
  \end{array} $
- & 0.05127 & 0.054222 \\ \hline
+ & 0.0513 & 0.0542 \\ \hline
 Gx & $ \begin{array}{c}
 0.9491e^{i1.572} \\ 
 0.9491e^{-i1.572} \\ 
@@ -786,7 +786,7 @@ Gx & $ \begin{array}{c}
 7\e{-6} \\ 
 -0.0003
  \end{array} $
- & 0.049514 & 0.050938 \\ \hline
+ & 0.0495 & 0.0509 \\ \hline
 Gy & $ \begin{array}{c}
 0.9489e^{i1.571} \\ 
 0.9489e^{-i1.571} \\ 
@@ -805,7 +805,7 @@ Gy & $ \begin{array}{c}
 1 \\ 
 -0.0012
  \end{array} $
- & 0.048788 & 0.051084 \\ \hline
+ & 0.0488 & 0.0511 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -813,9 +813,9 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & 0.000625$\pi$ &  & 0.884313$\pi$ & 0.548541$\pi$ \\ \hline
-Gx & 0.500356$\pi$ & 0.884313$\pi$ &  & 0.498288$\pi$ \\ \hline
-Gy & 0.50007$\pi$ & 0.548541$\pi$ & 0.498288$\pi$ &  \\ \hline
+Gi & 0.0006$\pi$ &  & 0.8843$\pi$ & 0.5485$\pi$ \\ \hline
+Gx & 0.5004$\pi$ & 0.8843$\pi$ &  & 0.4983$\pi$ \\ \hline
+Gy & 0.5001$\pi$ & 0.5485$\pi$ & 0.4983$\pi$ &  \\ \hline
 \end{tabular}
 
 \caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); and (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay'').  ``--'' indicates that the decomposition failed or couldn't be interpreted. \label{bestTargetGatesGatesetDecompTable}}
@@ -828,27 +828,27 @@ Gy & 0.50007$\pi$ & 0.548541$\pi$ & 0.498288$\pi$ &  \\ \hline
 \begin{tabular}[l]{|c|c|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & \begin{tabular}{c}Rotation\\Axis\end{tabular} & \begin{tabular}{c}Rotation\\Angle\end{tabular} & Sanity \checkmark \\ \hline
-Gi & 0.03992 & 0.039923 & $ \begin{array}{c}
+Gi & 0.0399 & 0.0399 & $ \begin{array}{c}
 0 \\ 
 0.2621 \\ 
 0.7412 \\ 
 -0.618
  \end{array} $
- & 0.002002$\pi$ & 0.000004 \\ \hline
-Gx & 0.037844 & 0.037844 & $ \begin{array}{c}
+ & 0.002$\pi$ & 4\e{-6} \\ \hline
+Gx & 0.0378 & 0.0378 & $ \begin{array}{c}
 0 \\ 
 -1 \\ 
 0.0027 \\ 
 -1\e{-6}
  \end{array} $
- & 0.500357$\pi$ & 0.000001 \\ \hline
-Gy & 0.037735 & 0.037735 & $ \begin{array}{c}
+ & 0.5004$\pi$ & 5\e{-7} \\ \hline
+Gy & 0.0377 & 0.0377 & $ \begin{array}{c}
 0 \\ 
 -0.0027 \\ 
 1 \\ 
 4\e{-6}
  \end{array} $
- & 0.500071$\pi$ & 2\e{-7} \\ \hline
+ & 0.5001$\pi$ & 2\e{-7} \\ \hline
 \end{tabular}
 
 \caption{Information pertaining to the closest unitary gate to each of the estimated gates.\label{bestTargetGatesGatesetClosestUnitaryTable}}
@@ -949,7 +949,7 @@ $E_{0}$ & $ \begin{array}{c}
 \begin{tabular}[l]{|c|c|c|}
 \hline
  & $E_{0}$ & $E_C$ \\ \hline
-$\rho_{0}$ & 0.090701 & 0.9092 \\ \hline
+$\rho_{0}$ & 0.0907 & 0.9092 \\ \hline
 \end{tabular}
 
 \caption{\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestTPGatesetSpamTable}.\label{bestTPGatesetSpamParametersTable}}
@@ -993,9 +993,9 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 \begin{tabular}[l]{|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
-Gi & 0.039929 & 0.040101 & 0.040111 \\ \hline
-Gx & 0.037847 & 0.038186 & 0.038965 \\ \hline
-Gy & 0.037739 & 0.038059 & 0.038835 \\ \hline
+Gi & 0.0399 & 0.0401 & 0.0401 \\ \hline
+Gx & 0.0378 & 0.0382 & 0.039 \\ \hline
+Gy & 0.0377 & 0.0381 & 0.0388 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -1052,7 +1052,7 @@ Gi & $ \begin{array}{c}
 -0.1471 \\ 
 -0.3232
  \end{array} $
- & 0.05127 & 0.054222 \\ \hline
+ & 0.0513 & 0.0542 \\ \hline
 Gx & $ \begin{array}{c}
 0.9491e^{i1.572} \\ 
 0.9491e^{-i1.572} \\ 
@@ -1071,7 +1071,7 @@ Gx & $ \begin{array}{c}
 6\e{-6} \\ 
 -0.0005
  \end{array} $
- & 0.049514 & 0.050938 \\ \hline
+ & 0.0495 & 0.0509 \\ \hline
 Gy & $ \begin{array}{c}
 0.9489e^{i1.571} \\ 
 0.9489e^{-i1.571} \\ 
@@ -1090,7 +1090,7 @@ Gy & $ \begin{array}{c}
 1 \\ 
 -0.0005
  \end{array} $
- & 0.048788 & 0.051084 \\ \hline
+ & 0.0488 & 0.0511 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -1098,9 +1098,9 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & 0.000625$\pi$ &  & 0.8843$\pi$ & 0.548566$\pi$ \\ \hline
-Gx & 0.500356$\pi$ & 0.8843$\pi$ &  & 0.498289$\pi$ \\ \hline
-Gy & 0.50007$\pi$ & 0.548566$\pi$ & 0.498289$\pi$ &  \\ \hline
+Gi & 0.0006$\pi$ &  & 0.8843$\pi$ & 0.5486$\pi$ \\ \hline
+Gx & 0.5004$\pi$ & 0.8843$\pi$ &  & 0.4983$\pi$ \\ \hline
+Gy & 0.5001$\pi$ & 0.5486$\pi$ & 0.4983$\pi$ &  \\ \hline
 \end{tabular}
 
 \caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); and (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay'').  ``--'' indicates that the decomposition failed or couldn't be interpreted. \label{bestTPGatesetDecompTable}}
@@ -1113,27 +1113,27 @@ Gy & 0.50007$\pi$ & 0.548566$\pi$ & 0.498289$\pi$ &  \\ \hline
 \begin{tabular}[l]{|c|c|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & \begin{tabular}{c}Rotation\\Axis\end{tabular} & \begin{tabular}{c}Rotation\\Angle\end{tabular} & Sanity \checkmark \\ \hline
-Gi & 0.03992 & 0.039924 & $ \begin{array}{c}
+Gi & 0.0399 & 0.0399 & $ \begin{array}{c}
 0 \\ 
 0.2623 \\ 
 0.7415 \\ 
 -0.6175
  \end{array} $
- & 0.002002$\pi$ & 0.000006 \\ \hline
-Gx & 0.037843 & 0.038112 & $ \begin{array}{c}
+ & 0.002$\pi$ & 6\e{-6} \\ \hline
+Gx & 0.0378 & 0.0381 & $ \begin{array}{c}
 0 \\ 
 1 \\ 
 -0.0027 \\ 
 0.0002
  \end{array} $
- & 0.500357$\pi$ & 0.000383 \\ \hline
-Gy & 0.037735 & 0.037988 & $ \begin{array}{c}
+ & 0.5004$\pi$ & 0.0004 \\ \hline
+Gy & 0.0377 & 0.038 & $ \begin{array}{c}
 0 \\ 
 0.0027 \\ 
 -1 \\ 
 -0.0005
  \end{array} $
- & 0.500071$\pi$ & 0.000355 \\ \hline
+ & 0.5001$\pi$ & 0.0004 \\ \hline
 \end{tabular}
 
 \caption{Information pertaining to the closest unitary gate to each of the estimated gates.\label{bestTPGatesetClosestUnitaryTable}}
@@ -1241,7 +1241,7 @@ $E_{0}$ & $ \begin{array}{c}
 \begin{tabular}[l]{|c|c|c|}
 \hline
  & $E_{0}$ & $E_C$ \\ \hline
-$\rho_{0}$ & 0.090701 & 0.9092 \\ \hline
+$\rho_{0}$ & 0.0907 & 0.9092 \\ \hline
 \end{tabular}
 
 \caption{\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestCPTPGatesetSpamTable}.\label{bestCPTPGatesetSpamParametersTable}}
@@ -1285,9 +1285,9 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 \begin{tabular}[l]{|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
-Gi & 0.039929 & 0.040101 & 0.040111 \\ \hline
-Gx & 0.037847 & 0.038186 & 0.038965 \\ \hline
-Gy & 0.037739 & 0.038059 & 0.038835 \\ \hline
+Gi & 0.0399 & 0.0401 & 0.0401 \\ \hline
+Gx & 0.0378 & 0.0382 & 0.039 \\ \hline
+Gy & 0.0377 & 0.0381 & 0.0388 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -1344,7 +1344,7 @@ Gi & $ \begin{array}{c}
 -0.1471 \\ 
 -0.3232
  \end{array} $
- & 0.05127 & 0.054222 \\ \hline
+ & 0.0513 & 0.0542 \\ \hline
 Gx & $ \begin{array}{c}
 0.9491e^{i1.572} \\ 
 0.9491e^{-i1.572} \\ 
@@ -1363,7 +1363,7 @@ Gx & $ \begin{array}{c}
 6\e{-6} \\ 
 -0.0005
  \end{array} $
- & 0.049514 & 0.050938 \\ \hline
+ & 0.0495 & 0.0509 \\ \hline
 Gy & $ \begin{array}{c}
 0.9489e^{i1.571} \\ 
 0.9489e^{-i1.571} \\ 
@@ -1382,7 +1382,7 @@ Gy & $ \begin{array}{c}
 1 \\ 
 -0.0005
  \end{array} $
- & 0.048788 & 0.051084 \\ \hline
+ & 0.0488 & 0.0511 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -1390,9 +1390,9 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & 0.000625$\pi$ &  & 0.884299$\pi$ & 0.548566$\pi$ \\ \hline
-Gx & 0.500356$\pi$ & 0.884299$\pi$ &  & 0.498289$\pi$ \\ \hline
-Gy & 0.50007$\pi$ & 0.548566$\pi$ & 0.498289$\pi$ &  \\ \hline
+Gi & 0.0006$\pi$ &  & 0.8843$\pi$ & 0.5486$\pi$ \\ \hline
+Gx & 0.5004$\pi$ & 0.8843$\pi$ &  & 0.4983$\pi$ \\ \hline
+Gy & 0.5001$\pi$ & 0.5486$\pi$ & 0.4983$\pi$ &  \\ \hline
 \end{tabular}
 
 \caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); and (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay'').  ``--'' indicates that the decomposition failed or couldn't be interpreted. \label{bestCPTPGatesetDecompTable}}
@@ -1405,27 +1405,27 @@ Gy & 0.50007$\pi$ & 0.548566$\pi$ & 0.498289$\pi$ &  \\ \hline
 \begin{tabular}[l]{|c|c|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & \begin{tabular}{c}Rotation\\Axis\end{tabular} & \begin{tabular}{c}Rotation\\Angle\end{tabular} & Sanity \checkmark \\ \hline
-Gi & 0.03992 & 0.039924 & $ \begin{array}{c}
+Gi & 0.0399 & 0.0399 & $ \begin{array}{c}
 0 \\ 
 -0.2622 \\ 
 -0.7415 \\ 
 0.6175
  \end{array} $
- & 0.002002$\pi$ & 0.000006 \\ \hline
-Gx & 0.037843 & 0.038112 & $ \begin{array}{c}
+ & 0.002$\pi$ & 6\e{-6} \\ \hline
+Gx & 0.0378 & 0.0381 & $ \begin{array}{c}
 0 \\ 
 1 \\ 
 -0.0027 \\ 
 0.0002
  \end{array} $
- & 0.500357$\pi$ & 0.000383 \\ \hline
-Gy & 0.037735 & 0.037988 & $ \begin{array}{c}
+ & 0.5004$\pi$ & 0.0004 \\ \hline
+Gy & 0.0377 & 0.038 & $ \begin{array}{c}
 0 \\ 
 -0.0027 \\ 
 1 \\ 
 0.0005
  \end{array} $
- & 0.500071$\pi$ & 0.000355 \\ \hline
+ & 0.5001$\pi$ & 0.0004 \\ \hline
 \end{tabular}
 
 \caption{Information pertaining to the closest unitary gate to each of the estimated gates.\label{bestCPTPGatesetClosestUnitaryTable}}

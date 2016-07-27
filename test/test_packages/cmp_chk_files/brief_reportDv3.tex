@@ -103,11 +103,11 @@ Table \ref{progressTable} shows how well GST was able to fit you data through it
 \begin{tabular}[l]{|c|c|c|c|c|c|c|c|c|}
 \hline
 L & $2\Delta\log(\mathcal{L})$ & $k$ & $2\Delta\log(\mathcal{L})-k$ & $\sqrt{2k}$ & $p$ & $N_s$ & $N_p$ & Rating \\ \hline
-0 & 53.74371 & 61 & -7.256288 & 11.04536 & 0.73 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-1 & 53.74377 & 61 & -7.256232 & 11.04536 & 0.73 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-2 & 106.7092 & 137 & -30.29084 & 16.55295 & 0.97 & 168 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-4 & 354.3257 & 410 & -55.6743 & 28.63564 & 0.98 & 441 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-8 & 691.064 & 786 & -94.93602 & 39.64846 & 0.99 & 817 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+0 & 53.744 & 61 & -7.2563 & 11.045 & 0.73 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+1 & 53.744 & 61 & -7.2562 & 11.045 & 0.73 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+2 & 106.71 & 137 & -30.291 & 16.553 & 0.97 & 168 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+4 & 354.33 & 410 & -55.674 & 28.636 & 0.98 & 441 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+8 & 691.06 & 786 & -94.936 & 39.648 & 0.99 & 817 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
 \end{tabular}
 
 \caption{\textbf{Comparison between the computed and expected $2\Delta\log{\mathcal{L}}$ for different values of $L$}.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively.  $2\Delta\log{\mathcal{L}}$ is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $P$ is the p-value derived from a $\chi^2_k$ distribution (i.e.~when $P <$ some threshold like $0.05$ there is grounds for rejecting the GST fit). The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.\label{progressTable}}
@@ -136,9 +136,9 @@ Below is a collection of GST's primary result tables, ordered in what we think i
 \begin{tabular}[l]{|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
-Gi & $ \begin{array}{c} 0.03993 \\ \pm 0.00257 \end{array} $ & $ \begin{array}{c} 0.0401 \\ \pm 0.002571 \end{array} $ & $ \begin{array}{c} 0.040106 \\ \pm 0.002571 \end{array} $ \\ \hline
-Gx & $ \begin{array}{c} 0.037847 \\ \pm 0.002167 \end{array} $ & $ \begin{array}{c} 0.037918 \\ \pm 0.002167 \end{array} $ & $ \begin{array}{c} 0.037919 \\ \pm 0.002167 \end{array} $ \\ \hline
-Gy & $ \begin{array}{c} 0.037739 \\ \pm 0.002227 \end{array} $ & $ \begin{array}{c} 0.037806 \\ \pm 0.002228 \end{array} $ & $ \begin{array}{c} 0.037806 \\ \pm 0.002228 \end{array} $ \\ \hline
+Gi & $ \begin{array}{c} 0.0399 \\ \pm 0.0026 \end{array} $ & $ \begin{array}{c} 0.0401 \\ \pm 0.0026 \end{array} $ & $ \begin{array}{c} 0.0401 \\ \pm 0.0026 \end{array} $ \\ \hline
+Gx & $ \begin{array}{c} 0.0378 \\ \pm 0.0022 \end{array} $ & $ \begin{array}{c} 0.0379 \\ \pm 0.0022 \end{array} $ & $ \begin{array}{c} 0.0379 \\ \pm 0.0022 \end{array} $ \\ \hline
+Gy & $ \begin{array}{c} 0.0377 \\ \pm 0.0022 \end{array} $ & $ \begin{array}{c} 0.0378 \\ \pm 0.0022 \end{array} $ & $ \begin{array}{c} 0.0378 \\ \pm 0.0022 \end{array} $ \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -202,7 +202,7 @@ Gi & $ \begin{array}{c}
 -0.1468 \\ 
 -0.3233
  \end{array} $
- & $ \begin{array}{c} 0.051273 \\ \pm 0.019026 \end{array} $ & $ \begin{array}{c} 0.054221 \\ \pm 0.010139 \end{array} $ \\ \hline
+ & $ \begin{array}{c} 0.0513 \\ \pm 0.019 \end{array} $ & $ \begin{array}{c} 0.0542 \\ \pm 0.0101 \end{array} $ \\ \hline
 Gx & $ \begin{array}{c}
 0.9491e^{i1.572} \\ 
 0.9491e^{-i1.572} \\ 
@@ -227,7 +227,7 @@ Gx & $ \begin{array}{c}
 8\e{-6} \\ 
 -0.0003
  \end{array} $
- & $ \begin{array}{c} 0.049514 \\ \pm 0.005638 \end{array} $ & $ \begin{array}{c} 0.050938 \\ \pm 0.002912 \end{array} $ \\ \hline
+ & $ \begin{array}{c} 0.0495 \\ \pm 0.0056 \end{array} $ & $ \begin{array}{c} 0.0509 \\ \pm 0.0029 \end{array} $ \\ \hline
 Gy & $ \begin{array}{c}
 0.9489e^{i1.571} \\ 
 0.9489e^{-i1.571} \\ 
@@ -252,7 +252,7 @@ Gy & $ \begin{array}{c}
 1 \\ 
 -0.0012
  \end{array} $
- & $ \begin{array}{c} 0.048789 \\ \pm 0.005692 \end{array} $ & $ \begin{array}{c} 0.051085 \\ \pm 0.00302 \end{array} $ \\ \hline
+ & $ \begin{array}{c} 0.0488 \\ \pm 0.0057 \end{array} $ & $ \begin{array}{c} 0.0511 \\ \pm 0.003 \end{array} $ \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -260,9 +260,9 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & $ \begin{array}{c}(0.000626 \\ \pm 0.002733)\pi \end{array} $ &  & $ \begin{array}{c}(0.884367 \\ \pm 0.485792)\pi \end{array} $ & $ \begin{array}{c}(0.548403 \\ \pm 0.631713)\pi \end{array} $ \\ \hline
-Gx & $ \begin{array}{c}(0.500356 \\ \pm 0.001226)\pi \end{array} $ & $ \begin{array}{c}(0.884367 \\ \pm 0.485792)\pi \end{array} $ &  & $ \begin{array}{c}(0.498288 \\ \pm 0.001851)\pi \end{array} $ \\ \hline
-Gy & $ \begin{array}{c}(0.50007 \\ \pm 0.001144)\pi \end{array} $ & $ \begin{array}{c}(0.548403 \\ \pm 0.631713)\pi \end{array} $ & $ \begin{array}{c}(0.498288 \\ \pm 0.001851)\pi \end{array} $ &  \\ \hline
+Gi & $ \begin{array}{c}(0.0006 \\ \pm 0.0027)\pi \end{array} $ &  & $ \begin{array}{c}(0.8844 \\ \pm 0.4858)\pi \end{array} $ & $ \begin{array}{c}(0.5484 \\ \pm 0.6317)\pi \end{array} $ \\ \hline
+Gx & $ \begin{array}{c}(0.5004 \\ \pm 0.0012)\pi \end{array} $ & $ \begin{array}{c}(0.8844 \\ \pm 0.4858)\pi \end{array} $ &  & $ \begin{array}{c}(0.4983 \\ \pm 0.0019)\pi \end{array} $ \\ \hline
+Gy & $ \begin{array}{c}(0.5001 \\ \pm 0.0011)\pi \end{array} $ & $ \begin{array}{c}(0.5484 \\ \pm 0.6317)\pi \end{array} $ & $ \begin{array}{c}(0.4983 \\ \pm 0.0019)\pi \end{array} $ &  \\ \hline
 \end{tabular}
 
 \caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay''); and (7) the angle between each gate's rotation axis and the rotation axes of the other gates.  ``X'' indicates that the decomposition failed or couldn't be interpreted. \label{bestGatesetDecompTable}}
@@ -323,7 +323,7 @@ $E_{0}$ & $ \begin{array}{c}
 \begin{tabular}[l]{|c|c|c|}
 \hline
  & $E_{0}$ & $E_C$ \\ \hline
-$\rho_{0}$ & $ \begin{array}{c} 0.090768 \\ \pm 0.00618 \end{array} $ & $ \begin{array}{c} 0.909305 \\ \pm 0.00618 \end{array} $ \\ \hline
+$\rho_{0}$ & $ \begin{array}{c} 0.0908 \\ \pm 0.0062 \end{array} $ & $ \begin{array}{c} 0.9093 \\ \pm 0.0062 \end{array} $ \\ \hline
 \end{tabular}
 
 \caption{\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestGatesetSpamTable}.\label{bestGatesetSpamParametersTable}}
