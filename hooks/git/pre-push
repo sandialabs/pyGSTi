@@ -1,0 +1,23 @@
+#!/usr/bin/python
+from __future__       import print_function
+from automation_tools import get_branchname
+from hooksettings     import updates_git_pages
+import subprocess, os, sys
+
+if __name__ == "__main__":
+
+    branchname = get_branchname()
+
+    if branchname in updates_git_pages:
+        subprocess.call(['bash', '.git/hooks/create_git_html']) # Create/update html on commit, push on push
+        print('Updating github pages!')
+        subprocess.call(['git', 'checkout', 'gh-pages'])
+        print(subprocess.check_output(['pwd']))
+        os.system('cp temp_html/*.html tutorials/')
+        subprocess.call(['git', 'add', 'tutorials/*.html'])
+        subprocess.call(['git', 'commit', '-m', '"Updates html in tutorials"'])
+        subprocess.call(['git', 'push'])
+        subprocess.call(['git', 'checkout', branchname])
+        os.system('rm -rf temp_html') # yikes!
+
+    sys.exit(0)

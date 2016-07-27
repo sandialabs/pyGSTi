@@ -238,7 +238,7 @@ def build_bitvec_mx(n, k):
             Loop depth
         counter : int
             tracks which fields of mx have been already set
-        
+
         Returns
         ----------
         counter : int
@@ -474,7 +474,7 @@ def optimize_integer_fiducials_slack(gateset, fidList,
                 bestLen = sum(len(i) for i in bestFidList)
 #                print tempLen, bestLen
 #                print temp_score, best_score
-                if  tempLen < bestLen:
+                if tempLen < bestLen:
                     best_score = temp_score
                     best_weights = weights
                     printer.log("Switching!")
@@ -513,52 +513,52 @@ def optimize_integer_fiducials_slack(gateset, fidList,
 
     with printer.progress_logging(1):
 
-      for iIter in range(maxIter):
-          scoreD_keys = scoreD.keys() #list of weight tuples already computed
+        for iIter in range(maxIter):
+            scoreD_keys = scoreD.keys() #list of weight tuples already computed
 
-          printer.show_progress(iIter, maxIter-1, suffix="score=%g, nFids=%d" % (score, L1))
+            printer.show_progress(iIter, maxIter-1, suffix="score=%g, nFids=%d" % (score, L1))
 
-          bFoundBetterNeighbor = False
-          for neighbor in get_neighbors(weights):
-              if tuple(neighbor) not in scoreD_keys:
-                  neighborL1 = sum(neighbor)
-                  neighborScore = compute_score(neighbor)
-              else:
-                  neighborL1 = sum(neighbor)
-                  neighborScore = scoreD[tuple(neighbor)]
+            bFoundBetterNeighbor = False
+            for neighbor in get_neighbors(weights):
+                if tuple(neighbor) not in scoreD_keys:
+                    neighborL1 = sum(neighbor)
+                    neighborScore = compute_score(neighbor)
+                else:
+                    neighborL1 = sum(neighbor)
+                    neighborScore = scoreD[tuple(neighbor)]
 
-              #Move if we've found better position; if we've relaxed, we only move when L1 is improved.
-              if neighborScore <= score and (neighborL1 < L1 or lessWeightOnly == False):
-                  weights, score, L1 = neighbor, neighborScore, neighborL1
-                  bFoundBetterNeighbor = True
-                  printer.log("Found better neighbor: nFids = %d score = %g" % (L1,score), 2)
+                #Move if we've found better position; if we've relaxed, we only move when L1 is improved.
+                if neighborScore <= score and (neighborL1 < L1 or lessWeightOnly == False):
+                    weights, score, L1 = neighbor, neighborScore, neighborL1
+                    bFoundBetterNeighbor = True
+                    printer.log("Found better neighbor: nFids = %d score = %g" % (L1,score), 2)
 
 
-          if not bFoundBetterNeighbor: # Time to relax our search.
-              lessWeightOnly=True #from now on, don't allow increasing weight L1
+            if not bFoundBetterNeighbor: # Time to relax our search.
+                lessWeightOnly=True #from now on, don't allow increasing weight L1
 
-              if fixedSlack:
-                  slack = score + fixedSlack #Note score is positive (for sum of 1/lambda)
-              elif slackFrac:
-                  slack = score * slackFrac
-              assert(slack > 0)
+                if fixedSlack:
+                    slack = score + fixedSlack #Note score is positive (for sum of 1/lambda)
+                elif slackFrac:
+                    slack = score * slackFrac
+                assert(slack > 0)
 
-              printer.log("No better neighbor. Relaxing score w/slack: %g => %g" % (score, score+slack), 2)
-              score += slack #artificially increase score and see if any neighbor is better now...
+                printer.log("No better neighbor. Relaxing score w/slack: %g => %g" % (score, score+slack), 2)
+                score += slack #artificially increase score and see if any neighbor is better now...
 
-              for neighbor in get_neighbors(weights):
-                  if sum(neighbor) < L1 and scoreD[tuple(neighbor)] < score:
-                      weights, score, L1 = neighbor, scoreD[tuple(neighbor)], sum(neighbor)
-                      bFoundBetterNeighbor = True
-                      printer.log("Found better neighbor: nFids = %d score = %g" % (L1,score), 2)
+                for neighbor in get_neighbors(weights):
+                    if sum(neighbor) < L1 and scoreD[tuple(neighbor)] < score:
+                        weights, score, L1 = neighbor, scoreD[tuple(neighbor)], sum(neighbor)
+                        bFoundBetterNeighbor = True
+                        printer.log("Found better neighbor: nFids = %d score = %g" % (L1,score), 2)
 
-              if not bFoundBetterNeighbor: #Relaxing didn't help!
-                  printer.log("Stationary point found!");
-                  break #end main for loop
+                if not bFoundBetterNeighbor: #Relaxing didn't help!
+                    printer.log("Stationary point found!");
+                    break #end main for loop
 
-          printer.log("Moving to better neighbor")
-      else:
-          printer.log("Hit max. iterations")
+            printer.log("Moving to better neighbor")
+        else:
+            printer.log("Hit max. iterations")
 
     printer.log("score = %s"       % score)
     printer.log("weights = %s"     % weights)

@@ -1,0 +1,46 @@
+#!/usr/bin/env python
+from __future__ import print_function
+import subprocess, sys, os
+
+print('Travis CI Passed')
+
+branchname = 'unspecified'
+output     = subprocess.check_output(['git', 'branch'])
+branches   = output.decode('utf-8').splitlines()
+for branch in branches:
+    if '*' in branch:
+        branchname = branch.replace('*', '').replace(' ', '')
+        break
+
+# Relevant:
+# http://stackoverflow.com/questions/501407/is-there-a-git-merge-dry-run-option
+
+# Attempt to auto-merge develop into pre-beta if travis tests pass
+# This code is currently unactive, but should work :)
+
+subprocess.call(['git', 'checkout', 'beta'])
+subprocess.call(['git', 'fetch', 'origin', 'develop'])
+# origin/beta -> FETCH_HEAD
+hexOut = subprocess.check_output(['git',
+                                  'merge-base',
+                                  'FETCH_HEAD',
+                                  'beta'])
+hexID  = hexOut.decode('utf-8').replace('\n', '')
+output = subprocess.check_output(['git',
+                                  'merge-base',
+                                  hexID,
+                                  'beta',
+                                  'FETCH_HEAD']) # View merge tree between beta and develop
+output = output.decode('utf-8', 'ignore')
+print(output)
+canMerge = '<<<<<' not in output
+if canMerge:
+    print('Merge of develop into beta is possible..')
+    # Commented out until approval
+    '''
+    subprocess.call(['git', 'merge', 'origin/develop']) #into beta
+    subprocess.call(['git', 'commit', '-m', 'Merged develop into beta, as there were no conflicts and travis tests passed'])
+    '''
+else:
+    print('Potential merge conflicts found! Cannot merge beta into develop')
+

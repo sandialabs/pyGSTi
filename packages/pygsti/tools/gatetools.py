@@ -546,7 +546,7 @@ def decompose_gate_matrix(gateMx):
             A = _np.take(gate_evecs, unit_eval_indices, axis=1)
             b = _np.array( [[1],[0],[0],[0]], 'd') #identity density mx
             x = _np.dot( _np.linalg.pinv( _np.dot(A.T,A) ), _np.dot(A.T, b))
-            fixedPtVec = _np.dot(A,x); fixedPtVec / _np.linalg.norm(fixedPtVec)
+            fixedPtVec = _np.dot(A,x); #fixedPtVec / _np.linalg.norm(fixedPtVec)
             fixedPtVec = fixedPtVec[:,0]
 
             iLargestContrib = _np.argmax(_np.abs(x)) #index of gate eigenvector which contributed the most

@@ -1,5 +1,5 @@
-from __future__ import division, print_function, absolute_import, unicode_literals
-from . import formatter as _formatter
+from __future__  import division, print_function, absolute_import, unicode_literals
+from .formatter  import FormatSet   as _FormatSet
 from collections import OrderedDict as _OrderedDict
 
 class ReportTable(object):
@@ -22,7 +22,15 @@ class ReportTable(object):
         pass #nothing to do currently
 
     def render(self, fmt, longtables=False, tableclass='pygstiTbl',
-               scratchDir=None):
+               scratchDir=None, precision=6, polarprecision=3):
+
+        specs = {
+            'scratchDir'     : scratchDir,
+            'precision'      : precision,
+            'polarprecision' : polarprecision
+            }
+        # Create a formatSet, which contains rules for rendering lists
+        formatSet =  _FormatSet(specs)
 
         if fmt == "latex":
 
@@ -32,10 +40,9 @@ class ReportTable(object):
                 latex = self._customHeadings['latex']
             else:
                 if self._headingFormatters is not None:
-                    colHeadings_formatted = \
-                        _formatter.formatList(self._headings,
-                                              self._headingFormatters, "latex",
-                                              scratchDir)
+                    colHeadings_formatted = formatSet.formatList(
+                                             self._headings,
+                                             self._headingFormatters, "latex")
                 else: #headingFormatters is None => headings is dict w/formats
                     colHeadings_formatted = self._headings['latex']
 
@@ -45,8 +52,8 @@ class ReportTable(object):
                           % (" & ".join(colHeadings_formatted)))
 
             for rowData, formatters in self._rows:
-                formatted_rowData = _formatter.formatList(rowData, formatters,
-                                                          "latex", scratchDir)
+                formatted_rowData = formatSet.formatList(rowData, formatters,
+                                                          "latex")
                 if len(formatted_rowData) > 0:
                     latex += " & ".join(formatted_rowData) + " \\\\ \hline\n"
 
@@ -62,8 +69,8 @@ class ReportTable(object):
             else:
                 if self._headingFormatters is not None:
                     colHeadings_formatted = \
-                        _formatter.formatList(self._headings,
-                                       self._headingFormatters, "html", scratchDir)
+                        formatSet.formatList(self._headings,
+                                       self._headingFormatters, "html")
                 else: #headingFormatters is None => headings is dict w/formats
                     colHeadings_formatted = self._headings['html']
 
@@ -73,7 +80,7 @@ class ReportTable(object):
                 html += "</thead><tbody>"
 
             for rowData,formatters in self._rows:
-                formatted_rowData = _formatter.formatList(rowData, formatters, "html", scratchDir)
+                formatted_rowData = formatSet.formatList(rowData, formatters, "html")
                 if len(formatted_rowData) > 0:
                     html += "<tr><td>" + \
                         "</td><td>".join(formatted_rowData) + "</td></tr>\n"
@@ -90,8 +97,8 @@ class ReportTable(object):
 
             if self._headingFormatters is not None:
                 colHeadings_formatted = \
-                    _formatter.formatList(self._headings,
-                                   self._headingFormatters, 'text', scratchDir)
+                    formatSet.formatList(self._headings,
+                                   self._headingFormatters, 'text')
             else: #headingFormatters is None => headings is dict w/formats
                 colHeadings_formatted = self._headings['text']
 
@@ -100,9 +107,9 @@ class ReportTable(object):
 
             for rowData,formatters in self._rows:
                 print(rowData)
-                formatted_rowData = _formatter.formatList(rowData, formatters, 'text', scratchDir)
+                formatted_rowData = formatSet.formatList(rowData, formatters, 'text')
                 if len(formatted_rowData) > 0:
-                   text['row data'].append( formatted_rowData )
+                    text['row data'].append( formatted_rowData )
 
             return text
 
@@ -116,8 +123,8 @@ class ReportTable(object):
 
             if self._headingFormatters is not None:
                 colHeadings_formatted = \
-                    _formatter.formatList(self._headings,
-                                   self._headingFormatters, "ppt", scratchDir)
+                    formatSet.formatList(self._headings,
+                                   self._headingFormatters, "ppt")
             else: #headingFormatters is None => headings is dict w/formats
                 colHeadings_formatted = self._headings['ppt']
 
@@ -125,7 +132,7 @@ class ReportTable(object):
                     'row data' : [] }
 
             for rowData,formatters in self._rows:
-                formatted_rowData = _formatter.formatList(rowData, formatters, "ppt", scratchDir)
+                formatted_rowData = formatSet.formatList(rowData, formatters, "ppt")
                 if len(formatted_rowData) > 0:
                     ppt['row data'].append( formatted_rowData )
 

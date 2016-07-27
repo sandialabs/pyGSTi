@@ -8,9 +8,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import numpy.linalg as _nla
-import itertools as _itertools
-import math as _math
-import sys as _sys
 import warnings as _warnings
 from .. import objects as _objs
 
@@ -400,11 +397,11 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     l1Penalty : float, optional
         How strong the penalty should be for increasing the germ set list by a
         single germ.  Default is 1e-2.
-    
+
     gatePenalty : float, optional
         How strong the penalty should be for increasing a germ in the germ set
-        list by a single gate.  Default is 0. 
-    
+        list by a single gate.  Default is 0.
+
     initialWeights : list-like
         List or array of either booleans or (0 or 1) integers
         specifying which germs in `germList` comprise the initial
@@ -623,7 +620,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                                   suffix="score=%g, nGerms=%d" % (score, L1))
 
             bFoundBetterNeighbor = False
-            for neighborNum, neighbor in enumerate(get_neighbors(weights)):
+            for neighbor in get_neighbors(weights):
                 # if force_singletons:
                 #     if _np.count_nonzeros(neighbor[:numGates]) != numGates
                 #         continue
@@ -657,7 +654,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
 
                 if fixedSlack==False:
                     # Note score is positive (for sum of 1/lambda)
-                    slack = score*slackFrac 
+                    slack = score*slackFrac
                     # print "slack =", slack
                 else:
                     slack = fixedSlack
@@ -667,7 +664,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                             + "%g => %g" % (score, score+slack), 2)
                 # Artificially increase score and see if any neighbor is better
                 # now...
-                score += slack 
+                score += slack
 
                 for neighborNum, neighbor in enumerate(get_neighbors(weights)):
                     scoreList = [scoreD[gateset_num,tuple(neighbor)]

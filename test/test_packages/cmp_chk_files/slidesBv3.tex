@@ -1,0 +1,825 @@
+\documentclass{beamer}
+\usetheme{Boadilla}
+
+\usepackage{adjustbox}
+\usepackage{longtable}
+\usepackage{fix-cm}
+%\usepackage[section]{placeins}
+%\usepackage{flafter}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{etoolbox}
+\usepackage{units}
+\usepackage{multirow}
+\usepackage{hyperref}
+\usepackage{pdfcomment}
+
+\newcommand{\rrangle}{\rangle\!\rangle} \newcommand{\llangle}{\langle\!\langle}
+\newcommand{\ket}[1]{\ensuremath{\left|#1\right\rangle}}
+\newcommand{\bra}[1]{\ensuremath{\left\langle#1\right|}}
+\newcommand{\braket}[2]{\ensuremath{\left\langle#1|#2\right\rangle}}
+\newcommand{\expec}[1]{\ensuremath{\left\langle#1\right\rangle}}
+\newcommand{\ketbra}[2]{\ket{#1}\!\!\bra{#2}}
+\newcommand{\braopket}[3]{\ensuremath{\bra{#1}#2\ket{#3}}}
+\newcommand{\proj}[1]{\ketbra{#1}{#1}}
+\newcommand{\sket}[1]{\ensuremath{\left|#1\right\rrangle}}
+\newcommand{\sbra}[1]{\ensuremath{\left\llangle#1\right|}}
+\newcommand{\sbraket}[2]{\ensuremath{\left\llangle#1|#2\right\rrangle}}
+\newcommand{\sketbra}[2]{\sket{#1}\!\!\sbra{#2}}
+\newcommand{\sbraopket}[3]{\ensuremath{\sbra{#1}#2\sket{#3}}}
+\newcommand{\sproj}[1]{\sketbra{#1}{#1}}
+\newcommand{\norm}[1]{\left\lVert#1\right\rVert}
+\def\Id{1\!\mathrm{l}}
+\newcommand{\Tr}[0]{\mathrm{Tr}}
+\providecommand{\e}[1]{\ensuremath{\times 10^{#1}}}
+
+%Command used for python automatic substitution
+\newcommand{\putfield}[2]{#2}
+
+\newtoggle{confidences}
+\newtoggle{LsAndGermsSet}
+\newtoggle{debuggingaidsappendix}
+\newtoggle{pixelplotsappendix}
+\newtoggle{whackamoleappendix}
+\toggletrue{confidences}
+\toggletrue{LsAndGermsSet}
+\toggletrue{debuggingaidsappendix}
+\toggletrue{pixelplotsappendix}
+\toggletrue{whackamoleappendix}
+
+
+\hypersetup{
+  pdfinfo={ Author={pyGSTi},
+Title={GST on MyDefaultReportName},
+Keywords={GST},
+pyGSTi_Version={0.9.1-beta},
+opt_long_tables={False},
+opt_table_class={pygstiTbl},
+opt_template_path={None},
+opt_latex_cmd={pdflatex},
+L_germ_tuple_base_string_dict={Dict[[0, Gx]: {}, [0, Gy]: {}, [0, Gi]: {}, [0, GxGy]: {}, [0, GxGyGi]: {}, [0, GxGiGy]: {}, [0, GxGiGi]: {}, [0, GyGiGi]: {}, [0, GxGxGiGy]: {}, [0, GxGyGyGi]: {}, [0, GxGxGyGxGyGy]: {}, [1, Gx]: [Gx], [1, Gy]: [Gy], [1, Gi]: [Gi], [1, GxGy]: {}, [1, GxGyGi]: {}, [1, GxGiGy]: {}, [1, GxGiGi]: {}, [1, GyGiGi]: {}, [1, GxGxGiGy]: {}, [1, GxGyGyGi]: {}, [1, GxGxGyGxGyGy]: {}, [2, Gx]: [Gx]2, [2, Gy]: [Gy]2, [2, Gi]: [Gi]2, [2, GxGy]: [GxGy], [2, GxGyGi]: {}, [2, GxGiGy]: {}, [2, GxGiGi]: {}, [2, GyGiGi]: {}, [2, GxGxGiGy]: {}, [2, GxGyGyGi]: {}, [2, GxGxGyGxGyGy]: {}, [4, Gx]: [Gx]4, [4, Gy]: [Gy]4, [4, Gi]: [Gi]4, [4, GxGy]: [GxGy]2, [4, GxGyGi]: [GxGyGi], [4, GxGiGy]: [GxGiGy], [4, GxGiGi]: [GxGiGi], [4, GyGiGi]: [GyGiGi], [4, GxGxGiGy]: [GxGxGiGy], [4, GxGyGyGi]: [GxGyGyGi], [4, GxGxGyGxGyGy]: {}, [8, Gx]: [Gx]8, [8, Gy]: [Gy]8, [8, Gi]: [Gi]8, [8, GxGy]: [GxGy]4, [8, GxGyGi]: [GxGyGi]2, [8, GxGiGy]: [GxGiGy]2, [8, GxGiGi]: [GxGiGi]2, [8, GyGiGi]: [GyGiGi]2, [8, GxGxGiGy]: [GxGxGiGy]2, [8, GxGyGyGi]: [GxGyGyGi]2, [8, GxGxGyGxGyGy]: [GxGxGyGxGyGy]]},
+constrainToTP={False},
+defaultBasename={MyDefaultReportName},
+defaultDirectory={../temp_test_files},
+fiducial_pairs={None},
+gaugeOptParams={Dict[]},
+hessianProjection={optimal gate CIs},
+linlogPercentile={5},
+max_length_list={[0, 1, 2, 4, 8]},
+memLimit={None},
+minProbClip={1e-06},
+minProbClipForWeighting={0.0001},
+objective={chi2},
+probClipInterval={[-1000000.0, 1000000.0]},
+radius={0.0001},
+weights={None}  }
+}
+
+
+\title{GST on MyDefaultReportName}
+\subtitle{A projector-friendly look at your GST results}
+\author{PyGSTi}
+\institute{Sandia National Labs}
+\date{\today}
+
+\begin{document}
+
+\section{Title}
+\begin{frame}
+\titlepage
+\end{frame}
+
+\section{Contents}
+\begin{frame}
+\frametitle{Outline}
+\tableofcontents
+\end{frame}
+
+
+\iftoggle{LsAndGermsSet}{
+\section{Goodness-of-model}
+
+\subsection{$\chi^2$ progress}
+\begin{frame}
+\frametitle{$\chi^2$ vs.~GST iteration}
+
+\begin{itemize}
+\item $N_S$ is the number of gate strings
+\item $N_p$ is the number of parameters
+\end{itemize}
+
+\begin{table}[h]
+\begin{center}
+\adjustbox{max height=\dimexpr\textheight-5.5cm\relax, max width=\textwidth}{
+\begin{tabular}[l]{|c|c|c|c|c|c|c|c|c|}
+\hline
+L & $\chi^2$ & $k$ & $\chi^2-k$ & $\sqrt{2k}$ & $p$ & $N_s$ & $N_p$ & Rating \\ \hline
+0 & 53.245 & 52 & 1.2453 & 10.198 & 0.43 & 92 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+1 & 53.245 & 52 & 1.2453 & 10.198 & 0.43 & 92 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+2 & 106.36 & 128 & -21.636 & 16 & 0.92 & 168 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+4 & 353.85 & 401 & -47.146 & 28.32 & 0.96 & 441 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+8 & 690.82 & 777 & -86.178 & 39.421 & 0.99 & 817 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+\end{tabular}
+}
+\caption{Comparison between the computed and expected $\chi^2$ for different values of $L$}
+\end{center}
+\end{table}
+\end{frame}
+
+
+\subsection{Color box plot}
+\begin{frame}
+\frametitle{Detailed $\chi^2$ analysis}
+
+\begin{figure}
+\begin{center}
+\includegraphics[width=4.00in,height=3.00in,keepaspectratio]{slidesBv3_files/bestChi2Boxes.pdf}
+\end{center}
+\end{figure}
+\end{frame}
+
+}{}
+
+\section{Best gate set estimate}
+
+\subsection{Estimate vs.~target}
+\begin{frame}
+\frametitle{GST Estimate vs.~target}
+
+%\begin{itemize}
+%\item Error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$.
+%\end{itemize} 
+
+\begin{table}[h]
+\begin{center}
+
+\adjustbox{max height=\dimexpr\textheight-5.5cm\relax, max width=\textwidth}{
+\begin{tabular}{c}
+\begin{tabular}[l]{|c|c|c|c|}
+\hline
+Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
+Gi & $ \begin{array}{c} 0.0399 \\ \pm 0.002 \end{array} $ & $ \begin{array}{c} 0.0401 \\ \pm 0.0019 \end{array} $ & $ \begin{array}{c} 0.0401 \\ \pm 0.0019 \end{array} $ \\ \hline
+Gx & $ \begin{array}{c} 0.0378 \\ \pm 0.0017 \end{array} $ & $ \begin{array}{c} 0.0379 \\ \pm 0.0016 \end{array} $ & $ \begin{array}{c} 0.0379 \\ \pm 0.0016 \end{array} $ \\ \hline
+Gy & $ \begin{array}{c} 0.0377 \\ \pm 0.0017 \end{array} $ & $ \begin{array}{c} 0.0378 \\ \pm 0.0016 \end{array} $ & $ \begin{array}{c} 0.0378 \\ \pm 0.0016 \end{array} $ \\ \hline
+\end{tabular}
+
+\\
+\vspace{2em}
+\\
+\begin{tabular}[l]{|c|c|}
+\hline
+Gate & Error Generator \\ \hline
+Gi & $ \left(\!\!\begin{array}{cccc}
+1\e{-6} & 0.0003 & 0.0003 & 0.0001 \\ 
+-0.0011 & -0.0568 & -0.0066 & -0.0093 \\ 
+0.0005 & 0.0011 & -0.0544 & 0.0041 \\ 
+0.0012 & 2\e{-5} & 0.0008 & -0.0528
+ \end{array}\!\!\right) $
+ \\ \hline
+Gx & $ \left(\!\!\begin{array}{cccc}
+-7\e{-6} & 0.0001 & 4\e{-5} & 4\e{-5} \\ 
+0.0004 & -0.0507 & -0.0051 & -0.0057 \\ 
+0.0002 & 0.0003 & -0.0524 & -0.0023 \\ 
+-0.0002 & -0.0003 & -0.0001 & -0.0523
+ \end{array}\!\!\right) $
+ \\ \hline
+Gy & $ \left(\!\!\begin{array}{cccc}
+2\e{-5} & -3\e{-5} & -2\e{-5} & -7\e{-6} \\ 
+0.0002 & -0.0523 & 0.0065 & 0.0005 \\ 
+0.0004 & 0.0011 & -0.0499 & 0.0012 \\ 
+0.0003 & 0.0001 & -0.0042 & -0.0525
+ \end{array}\!\!\right) $
+ \\ \hline
+\end{tabular}
+
+\end{tabular}
+}
+\end{center}
+\end{table}
+
+\end{frame}
+
+
+\subsection{Gate decomposition}
+\begin{frame}
+\frametitle{GST Estimate decomposition}
+
+\begin{table}[h]
+\begin{center}
+
+\adjustbox{max height=\dimexpr\textheight-5.5cm\relax, max width=\textwidth}{
+\begin{tabular}{c}
+\begin{tabular}[l]{|c|c|c|c|c|c|}
+\hline
+Gate & Eigenvalues & Fixed pt & Rotn. axis & Diag. decay & Off-diag. decay \\ \hline
+Gi & $ \begin{array}{c}
+1 \\ 
+0.9488 \\ 
+0.9458e^{i0.002} \\ 
+0.9458e^{-i0.002}
+ \end{array} $
+ $\pm$ $ \begin{array}{c}
+0.0009 \\ 
+0.0131 \\ 
+0.009e^{i0.677} \\ 
+0.009e^{i0.677}
+ \end{array} $
+ & $ \begin{array}{c}
+0.9987 \\ 
+-0.024 \\ 
+0.0113 \\ 
+0.0236
+ \end{array} $
+ & $ \begin{array}{c}
+-0.004 \\ 
+0.9338 \\ 
+-0.1487 \\ 
+-0.3255
+ \end{array} $
+ & $ \begin{array}{c} 0.0512 \\ \pm 0.0131 \end{array} $ & $ \begin{array}{c} 0.0542 \\ \pm 0.007 \end{array} $ \\ \hline
+Gx & $ \begin{array}{c}
+1 \\ 
+0.9506 \\ 
+0.949e^{i1.572} \\ 
+0.949e^{-i1.572}
+ \end{array} $
+ $\pm$ $ \begin{array}{c}
+0.0007 \\ 
+0.004 \\ 
+0.0033e^{i0.722} \\ 
+0.0033e^{i0.722}
+ \end{array} $
+ & $ \begin{array}{c}
+0.9999 \\ 
+0.0078 \\ 
+-1\e{-5} \\ 
+0.0002
+ \end{array} $
+ & $ \begin{array}{c}
+-0.0014 \\ 
+1 \\ 
+2\e{-6} \\ 
+0.0003
+ \end{array} $
+ & $ \begin{array}{c} 0.0494 \\ \pm 0.004 \end{array} $ & $ \begin{array}{c} 0.051 \\ \pm 0.0022 \end{array} $ \\ \hline
+Gy & $ \begin{array}{c}
+1 \\ 
+0.9514 \\ 
+0.9489e^{i1.571} \\ 
+0.9489e^{-i1.571}
+ \end{array} $
+ $\pm$ $ \begin{array}{c}
+0.0007 \\ 
+0.0041 \\ 
+0.0031e^{i0.794} \\ 
+0.0031e^{i0.794}
+ \end{array} $
+ & $ \begin{array}{c}
+0.9999 \\ 
+-5\e{-6} \\ 
+0.0071 \\ 
+-0.0003
+ \end{array} $
+ & $ \begin{array}{c}
+-0.0005 \\ 
+0.0054 \\ 
+-1 \\ 
+0.0012
+ \end{array} $
+ & $ \begin{array}{c} 0.0486 \\ \pm 0.0041 \end{array} $ & $ \begin{array}{c} 0.0511 \\ \pm 0.0022 \end{array} $ \\ \hline
+\end{tabular}
+
+\\
+\vspace{2em}
+\\
+\begin{tabular}[l]{|c|c|c|c|c|}
+\hline
+\multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
+ & & Gi & Gx & Gy \\ \hline
+Gi & $ \begin{array}{c}(0.0006 \\ \pm 0.0019)\pi \end{array} $ &  & $ \begin{array}{c}(0.1166 \\ \pm 0.3359)\pi \end{array} $ & $ \begin{array}{c}(0.451 \\ \pm 0.4257)\pi \end{array} $ \\ \hline
+Gx & $ \begin{array}{c}(0.5004 \\ \pm 0.0008)\pi \end{array} $ & $ \begin{array}{c}(0.1166 \\ \pm 0.3359)\pi \end{array} $ &  & $ \begin{array}{c}(0.4983 \\ \pm 0.0009)\pi \end{array} $ \\ \hline
+Gy & $ \begin{array}{c}(0.5001 \\ \pm 0.0007)\pi \end{array} $ & $ \begin{array}{c}(0.451 \\ \pm 0.4257)\pi \end{array} $ & $ \begin{array}{c}(0.4983 \\ \pm 0.0009)\pi \end{array} $ &  \\ \hline
+\end{tabular}
+
+\end{tabular}
+}
+\caption{Eigen-decomposition of estimated gates}
+\end{center}
+\end{table}
+
+\end{frame}
+
+
+\subsection{Raw Gates}
+\begin{frame}
+\frametitle{Raw GST Estimate: Gates}
+
+\begin{table}[h]
+\begin{center}
+\adjustbox{max height=\dimexpr\textheight-5.5cm\relax, max width=\textwidth}{
+\begin{tabular}[l]{|c|c|c|}
+\hline
+Gate & Superoperator (Pauli basis) & 95\% C.I. $\nicefrac{1}{2}$-width \\ \hline
+Gi & $ \left(\!\!\begin{array}{cccc}
+1 & 0.0003 & 0.0003 & 0.0001 \\ 
+-0.0011 & 0.9447 & -0.0063 & -0.0088 \\ 
+0.0005 & 0.0011 & 0.9471 & 0.0038 \\ 
+0.0012 & 2\e{-5} & 0.0007 & 0.9485
+ \end{array}\!\!\right) $
+ & $ \left(\!\!\begin{array}{cccc}
+0.0009 & 0.0015 & 0.0015 & 0.0014 \\ 
+0.0018 & 0.004 & 0.004 & 0.0041 \\ 
+0.0017 & 0.0041 & 0.004 & 0.0042 \\ 
+0.0017 & 0.004 & 0.0041 & 0.0037
+ \end{array}\!\!\right) $
+ \\ \hline
+Gx & $ \left(\!\!\begin{array}{cccc}
+1 & 0.0001 & 4\e{-5} & 3\e{-5} \\ 
+0.0004 & 0.9506 & -0.0048 & -0.0054 \\ 
+0.0002 & 0.0003 & 0.0001 & -0.9491 \\ 
+0.0002 & 0.0003 & 0.949 & -0.0022
+ \end{array}\!\!\right) $
+ & $ \left(\!\!\begin{array}{cccc}
+0.0007 & 0.0012 & 0.0043 & 0.004 \\ 
+0.0017 & 0.004 & 0.0012 & 0.0017 \\ 
+0.0009 & 0.0028 & 0.003 & 0.0022 \\ 
+0.0009 & 0.0026 & 0.0022 & 0.0026
+ \end{array}\!\!\right) $
+ \\ \hline
+Gy & $ \left(\!\!\begin{array}{cccc}
+1 & -3\e{-5} & -2\e{-5} & -7\e{-6} \\ 
+0.0003 & 0.0001 & -0.004 & 0.9489 \\ 
+0.0003 & 0.0011 & 0.9514 & 0.0011 \\ 
+-0.0002 & -0.949 & -0.0062 & -0.0005
+ \end{array}\!\!\right) $
+ & $ \left(\!\!\begin{array}{cccc}
+0.0007 & 0.0013 & 0.0014 & 0.0011 \\ 
+0.0009 & 0.0027 & 0.0013 & 0.0022 \\ 
+0.0017 & 0.0029 & 0.0041 & 0.0027 \\ 
+0.0009 & 0.0022 & 0.0018 & 0.0023
+ \end{array}\!\!\right) $
+ \\ \hline
+\end{tabular}
+}
+\caption{GST estimate of the logic gate operations}
+\end{center}
+\end{table}
+
+\end{frame}
+
+
+\subsection{Raw SPAM}
+\begin{frame}
+\frametitle{Raw GST Estimate: SPAM}
+
+\begin{table}[h]
+\begin{center}
+\adjustbox{max height=\dimexpr\textheight-5.5cm\relax, max width=\textwidth}{
+\begin{tabular}{c}
+\begin{tabular}[l]{|c|c|c|c|}
+\hline
+Operator & Hilbert-Schmidt vector (Pauli basis) & 95\% C.I. $\nicefrac{1}{2}$-width & Matrix \\ \hline
+$\rho_{0}$ & $ \begin{array}{c}
+0.7072 \\ 
+0.0017 \\ 
+0.0003 \\ 
+0.7062
+ \end{array} $
+ & $ \begin{array}{c}
+0.0034 \\ 
+0.0045 \\ 
+0.0048 \\ 
+0.0035
+ \end{array} $
+ & $ \left(\!\!\begin{array}{cc}
+0.9995 & 0.0012e^{-i0.154} \\ 
+0.0012e^{i0.154} & 0.0007
+ \end{array}\!\!\right) $
+ \\ \hline
+$E_{0}$ & $ \begin{array}{c}
+0.7079 \\ 
+-0.0007 \\ 
+-0.0023 \\ 
+-0.5798
+ \end{array} $
+ & $ \begin{array}{c}
+0.001 \\ 
+0.0031 \\ 
+0.0035 \\ 
+0.0039
+ \end{array} $
+ & $ \left(\!\!\begin{array}{cc}
+0.0906 & 0.0017e^{i1.845} \\ 
+0.0017e^{-i1.845} & 0.9105
+ \end{array}\!\!\right) $
+ \\ \hline
+\end{tabular}
+
+\\
+\vspace{2em}
+\\
+\begin{tabular}[l]{|c|c|c|}
+\hline
+ & $E_{0}$ & $E_C$ \\ \hline
+$\rho_{0}$ & $ \begin{array}{c} 0.0912 \\ \pm 0.0044 \end{array} $ & $ \begin{array}{c} 0.9093 \\ \pm 0.0062 \end{array} $ \\ \hline
+\end{tabular}
+
+\end{tabular}
+}
+\caption{The GST estimate of the SPAM operations and dot-product probabilities}
+\end{center}
+\end{table}
+
+\end{frame}
+
+
+\subsection{Choi Matrices}
+\begin{frame}
+\frametitle{Raw GST Choi Matrices}
+\begin{table}[h]
+\begin{center}
+\adjustbox{max height=\dimexpr\textheight-5.5cm\relax, max width=\textwidth}{
+\begin{tabular}[l]{|c|c|c|}
+\hline
+Gate & Choi matrix (Pauli basis) & Eigenvalues \\ \hline
+Gi & $ \left(\!\!\begin{array}{cccc}
+0.9601 & 0.0008e^{i1.810} & 0.0022e^{-i1.665} & 0.0019e^{-i1.398} \\ 
+0.0008e^{-i1.810} & 0.0123 & 0.0013e^{-i0.213} & 0.0022e^{-i3.115} \\ 
+0.0022e^{i1.665} & 0.0013e^{i0.213} & 0.0135 & 0.0012e^{i2.856} \\ 
+0.0019e^{i1.398} & 0.0022e^{i3.115} & 0.0012e^{-i2.856} & 0.0142
+ \end{array}\!\!\right) $
+ & $ \begin{array}{c}
+0.0106 \\ 
+0.0127 \\ 
+0.0165 \\ 
+0.9601
+ \end{array} $
+ $\pm$ $ \begin{array}{c}
+0.0016 \\ 
+0.0016 \\ 
+0.0017 \\ 
+0.002
+ \end{array} $
+ \\ \hline
+Gx & $ \left(\!\!\begin{array}{cccc}
+0.4871 & 0.4745e^{-i1.571} & 0.0014e^{-i1.611} & 0.0013e^{-i1.519} \\ 
+0.4745e^{i1.571} & 0.4882 & 0.0011e^{-i0.044} & 0.0013e^{-i3.111} \\ 
+0.0014e^{i1.611} & 0.0011e^{i0.044} & 0.0129 & 0.0001e^{-i1.220} \\ 
+0.0013e^{i1.519} & 0.0013e^{i3.111} & 0.0001e^{i1.220} & 0.0118
+ \end{array}\!\!\right) $
+ & $ \begin{array}{c}
+0.0105 \\ 
+0.0129 \\ 
+0.0144 \\ 
+0.9622
+ \end{array} $
+ $\pm$ $ \begin{array}{c}
+0.0011 \\ 
+0.0011 \\ 
+0.0011 \\ 
+0.0017
+ \end{array} $
+ \\ \hline
+Gy & $ \left(\!\!\begin{array}{cccc}
+0.4877 & 0.0018e^{i1.539} & 0.4745e^{i1.571} & 0.0013e^{-i1.614} \\ 
+0.0018e^{-i1.539} & 0.0123 & 0.0007e^{i0.070} & 0.0001e^{-i1.997} \\ 
+0.4745e^{-i1.571} & 0.0007e^{-i0.070} & 0.488 & 0.0013e^{-i0.057} \\ 
+0.0013e^{i1.614} & 0.0001e^{i1.997} & 0.0013e^{i0.057} & 0.012
+ \end{array}\!\!\right) $
+ & $ \begin{array}{c}
+0.0107 \\ 
+0.0122 \\ 
+0.0148 \\ 
+0.9623
+ \end{array} $
+ $\pm$ $ \begin{array}{c}
+0.0012 \\ 
+0.0011 \\ 
+0.0011 \\ 
+0.0017
+ \end{array} $
+ \\ \hline
+\end{tabular}
+}
+\caption{Choi matrix representation of the GST estimated gateset.}
+\end{center}
+\end{table}
+\end{frame}
+
+
+
+\section{Inputs to GST}
+
+\subsection{Target gate set}
+\begin{frame}
+\frametitle{Target SPAM}
+
+\begin{table}[h]
+\begin{center}
+\adjustbox{max height=\dimexpr\textheight-5.5cm\relax, max width=\textwidth}{
+\begin{tabular}[l]{|c|c|c|}
+\hline
+Operator & Hilbert-Schmidt vector (Pauli basis) & Matrix \\ \hline
+$\rho_{0}$ & $ \begin{array}{c}
+0.7071 \\ 
+0 \\ 
+0 \\ 
+0.7071
+ \end{array} $
+ & $ \left(\!\!\begin{array}{cc}
+1 & 0 \\ 
+0 & 0
+ \end{array}\!\!\right) $
+ \\ \hline
+$E_{0}$ & $ \begin{array}{c}
+0.7071 \\ 
+0 \\ 
+0 \\ 
+-0.7071
+ \end{array} $
+ & $ \left(\!\!\begin{array}{cc}
+0 & 0 \\ 
+0 & 1
+ \end{array}\!\!\right) $
+ \\ \hline
+\end{tabular}
+}
+\caption{State preparation and measurement targets}
+\end{center}
+\end{table}
+
+\end{frame}
+
+
+\begin{frame}
+\frametitle{Target Gates}
+
+\begin{table}[h]
+\begin{center}
+\adjustbox{max height=\dimexpr\textheight-5.5cm\relax, max width=\textwidth}{
+\begin{tabular}[l]{|c|c|c|c|}
+\hline
+Gate & Superoperator (Pauli basis) & Rotation axis & Angle \\ \hline
+Gi & $ \left(\!\!\begin{array}{cccc}
+1 & 0 & 0 & 0 \\ 
+0 & 1 & 0 & 0 \\ 
+0 & 0 & 1 & 0 \\ 
+0 & 0 & 0 & 1
+ \end{array}\!\!\right) $
+ & $ \begin{array}{c}
+0 \\ 
+1 \\ 
+0 \\ 
+0
+ \end{array} $
+ & 0$\pi$ \\ \hline
+Gx & $ \left(\!\!\begin{array}{cccc}
+1 & 0 & 0 & 0 \\ 
+0 & 1 & 0 & 0 \\ 
+0 & 0 & 0 & -1 \\ 
+0 & 0 & 1 & 0
+ \end{array}\!\!\right) $
+ & $ \begin{array}{c}
+0 \\ 
+1 \\ 
+0 \\ 
+0
+ \end{array} $
+ & 0.5$\pi$ \\ \hline
+Gy & $ \left(\!\!\begin{array}{cccc}
+1 & 0 & 0 & 0 \\ 
+0 & 0 & 0 & 1 \\ 
+0 & 0 & 1 & 0 \\ 
+0 & -1 & 0 & 0
+ \end{array}\!\!\right) $
+ & $ \begin{array}{c}
+0 \\ 
+0 \\ 
+1 \\ 
+0
+ \end{array} $
+ & 0.5$\pi$ \\ \hline
+\end{tabular}
+}
+\caption{Summary of target gates}
+\end{center}
+\end{table}
+
+\end{frame}
+
+
+\iftoggle{LsAndGermsSet}{
+\subsection{Fiducials and Germs}
+\begin{frame}
+\frametitle{Fiducial and Germ Gate Strings}
+
+\begin{table}[h]
+\footnotesize
+\begin{center}
+\begin{minipage}[b]{0.40\linewidth}
+\centering
+\adjustbox{max width=\linewidth}{
+\begin{tabular}[l]{|c|c|c|}
+\hline
+ & \multicolumn{2}{c|}{Fiducials} \\ \hline
+\# & Prep. & Measure \\ \hline
+1 & $$ & $$ \\ \hline
+2 & $\mbox{Gx}$ & $\mbox{Gx}$ \\ \hline
+3 & $\mbox{Gy}$ & $\mbox{Gy}$ \\ \hline
+4 & $\mbox{Gx}\cdot\mbox{Gx}$ & $\mbox{Gx}\cdot\mbox{Gx}$ \\ \hline
+5 & $\mbox{Gx}\cdot\mbox{Gx}\cdot\mbox{Gx}$ & $\mbox{Gx}\cdot\mbox{Gx}\cdot\mbox{Gx}$ \\ \hline
+6 & $\mbox{Gy}\cdot\mbox{Gy}\cdot\mbox{Gy}$ & $\mbox{Gy}\cdot\mbox{Gy}\cdot\mbox{Gy}$ \\ \hline
+\end{tabular}
+
+}
+\end{minipage}
+\begin{minipage}[b]{0.40\linewidth}
+\adjustbox{max width=\linewidth}{
+\begin{tabular}[l]{|c|c|}
+\hline
+\# & Germ \\ \hline
+1 & $\mbox{Gx}$ \\ \hline
+2 & $\mbox{Gy}$ \\ \hline
+3 & $\mbox{Gi}$ \\ \hline
+4 & $\mbox{Gx}\cdot\mbox{Gy}$ \\ \hline
+5 & $\mbox{Gx}\cdot\mbox{Gy}\cdot\mbox{Gi}$ \\ \hline
+6 & $\mbox{Gx}\cdot\mbox{Gi}\cdot\mbox{Gy}$ \\ \hline
+7 & $\mbox{Gx}\cdot\mbox{Gi}\cdot\mbox{Gi}$ \\ \hline
+8 & $\mbox{Gy}\cdot\mbox{Gi}\cdot\mbox{Gi}$ \\ \hline
+9 & $\mbox{Gx}\cdot\mbox{Gx}\cdot\mbox{Gi}\cdot\mbox{Gy}$ \\ \hline
+10 & $\mbox{Gx}\cdot\mbox{Gy}\cdot\mbox{Gy}\cdot\mbox{Gi}$ \\ \hline
+11 & $\mbox{Gx}\cdot\mbox{Gx}\cdot\mbox{Gy}\cdot\mbox{Gx}\cdot\mbox{Gy}\cdot\mbox{Gy}$ \\ \hline
+\end{tabular}
+
+}
+\end{minipage}
+\end{center}
+\end{table}
+
+\end{frame}
+
+}{}
+
+
+\subsection{Dataset}
+\begin{frame}
+\frametitle{Dataset Overview}
+
+\begin{table}[h]
+\begin{center}
+\adjustbox{max height=\dimexpr\textheight-5.5cm\relax, max width=\textwidth}{
+\begin{tabular}[l]{|c|c|}
+\hline
+Quantity & Value \\ \hline
+Number of strings & 817 \\ \hline
+Gate labels & Gx, Gy, Gi \\ \hline
+SPAM labels & plus, minus \\ \hline
+Counts per string & 1000 \\ \hline
+\begin{tabular}{c}Gram singular values\\ (right column gives the values\\when using the target gate set)\end{tabular} & \small$ \begin{array}{cc}
+0.0029 & 0 \\ 
+0.0205 & 0 \\ 
+0.6626 & 1 \\ 
+0.6789 & 1 \\ 
+0.7472 & 1 \\ 
+3.0074 & 3
+ \end{array} $
+ \\ \hline
+\end{tabular}
+}
+\caption{General dataset properties}
+\end{center}
+\end{table}
+
+\end{frame}
+
+
+
+\iftoggle{debuggingaidsappendix}{
+\section{Debugging Aids}
+
+\begin{frame}
+\frametitle{Direct-GST}
+
+\begin{figure}
+\begin{center}
+\includegraphics[width=4.00in,height=2.50in,keepaspectratio]{slidesBv3_files/directLongSeqGSTChi2Boxes.pdf}
+\caption{How well direct GST analysis of each base sequence fits the observed data.}
+\end{center}
+\end{figure}
+
+\end{frame}
+
+
+\begin{frame}
+\frametitle{Direct-GST Deviation}
+
+\begin{figure}
+\begin{center}
+\includegraphics[width=4.00in,height=2.50in,keepaspectratio]{slidesBv3_files/directLongSeqGSTDeviationBoxes.pdf}
+\caption{For each base sequence, the increase in ``upper bound of fidelity with unitary'' when using the direct-GST result for a gate sequence instead of the process given by the best gateset.}
+\end{center}
+\end{figure}
+
+\end{frame}
+
+
+\begin{frame}
+\frametitle{Per-gate error rates}
+
+\begin{figure}
+\begin{center}
+\includegraphics[width=4.00in,height=2.50in,keepaspectratio]{slidesBv3_files/smallEigvalErrRateBoxes.pdf}
+\caption{Extrapolated from the smallest magnitude eigenvalue of the direct GST gate matrix.}
+\end{center}
+\end{figure}
+
+\end{frame}
+}{}
+
+\iftoggle{pixelplotsappendix}{
+\section{Pixel Plots}
+
+\begin{frame}
+\frametitle{Iteration 1 ($L=1$): $\chi^2$ values}
+\begin{figure}
+\begin{center}
+\includegraphics[width=1.60in,height=1.09in,keepaspectratio]{slidesBv3_files/L1_Chi2Boxes.pdf}
+\end{center}
+\end{figure}
+\end{frame}
+
+\begin{frame}
+\frametitle{Iteration 2 ($L=2$): $\chi^2$ values}
+\begin{figure}
+\begin{center}
+\includegraphics[width=2.40in,height=1.09in,keepaspectratio]{slidesBv3_files/L2_Chi2Boxes.pdf}
+\end{center}
+\end{figure}
+\end{frame}
+
+\begin{frame}
+\frametitle{Iteration 3 ($L=4$): $\chi^2$ values}
+\begin{figure}
+\begin{center}
+\includegraphics[width=3.20in,height=2.73in,keepaspectratio]{slidesBv3_files/L3_Chi2Boxes.pdf}
+\end{center}
+\end{figure}
+\end{frame}
+
+}{}
+
+
+\iftoggle{whackamoleappendix}{
+\section{Whack-a-mole}
+
+\begin{frame}
+\frametitle{Whack-a-$\chi^2$-mole plot for $\mathrm{Gx}^{8}$}\begin{figure}
+\begin{center}
+\includegraphics[width=4.00in,height=3.00in,keepaspectratio]{slidesBv3_files/whackGxMoleBoxes.pdf}
+\end{center}
+\end{figure}
+\end{frame}
+
+\begin{frame}
+\frametitle{Whack-a-$\chi^2$-mole plot for $\mathrm{Gy}^{8}$}\begin{figure}
+\begin{center}
+\includegraphics[width=4.00in,height=3.00in,keepaspectratio]{slidesBv3_files/whackGyMoleBoxes.pdf}
+\end{center}
+\end{figure}
+\end{frame}
+
+\begin{frame}
+\frametitle{Whack-a-$\chi^2$-mole plot for $\mathrm{Gi}^{8}$}\begin{figure}
+\begin{center}
+\includegraphics[width=4.00in,height=3.00in,keepaspectratio]{slidesBv3_files/whackGiMoleBoxes.pdf}
+\end{center}
+\end{figure}
+\end{frame}
+
+\begin{frame}
+\frametitle{Summed whack-a-$\chi^2$-mole plot for $\mathrm{Gx}^{8}$}\begin{figure}
+\begin{center}
+\includegraphics[width=4.00in,height=3.00in,keepaspectratio]{slidesBv3_files/whackGxMoleBoxesSummed.pdf}
+\end{center}
+\end{figure}
+\end{frame}
+
+\begin{frame}
+\frametitle{Summed whack-a-$\chi^2$-mole plot for $\mathrm{Gy}^{8}$}\begin{figure}
+\begin{center}
+\includegraphics[width=4.00in,height=3.00in,keepaspectratio]{slidesBv3_files/whackGyMoleBoxesSummed.pdf}
+\end{center}
+\end{figure}
+\end{frame}
+
+\begin{frame}
+\frametitle{Summed whack-a-$\chi^2$-mole plot for $\mathrm{Gi}^{8}$}\begin{figure}
+\begin{center}
+\includegraphics[width=4.00in,height=3.00in,keepaspectratio]{slidesBv3_files/whackGiMoleBoxesSummed.pdf}
+\end{center}
+\end{figure}
+\end{frame}
+
+}{}
+
+\end{document}

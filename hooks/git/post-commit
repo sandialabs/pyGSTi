@@ -1,0 +1,17 @@
+#!/usr/bin/python
+from __future__       import print_function
+from automation_tools import get_branchname, run_pylint
+from hooksettings     import generates_pylint_report
+import subprocess, os, sys
+
+if __name__ == '__main__':
+
+    branchname = get_branchname()
+
+    if branchname in generates_pylint_report:
+        run_pylint(['./lint.py', '--score'])
+
+    sys.exit(0)
+
+
+

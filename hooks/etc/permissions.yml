@@ -1,0 +1,15 @@
+# To edit the permissions file, change it on github :)
+
+master:
+    - enielse
+
+beta: all
+
+develop: all
+
+formatter:
+    - LSaldyt
+
+jon-germ-sel:
+    - jarthurgross
+    

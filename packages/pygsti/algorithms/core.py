@@ -117,7 +117,7 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
     printer.log('', 2)
-    printer.log("--- LGST ---", 1, indentOffset=-1) 
+    printer.log("--- LGST ---", 1, indentOffset=-1)
 
     #Process input parameters
     prepSpecs, effectSpecs = specs
@@ -249,7 +249,7 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
         lgstGateset.povm_identity = padded_identityVec
 
     # Add SPAM label info to gateset
-    #  Note: this must be done in a *deterministic* order, which it is 
+    #  Note: this must be done in a *deterministic* order, which it is
     #    here because spamDict is an OrderedDict (cf. get_reverse_spam_defs())
     for (prepLabel, ELabel) in spamDict.keys():
         lgstGateset.spamdefs[spamDict[(prepLabel,ELabel)]] = (prepLabel, ELabel)
@@ -954,7 +954,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
     if comm is not None:
         gs_cmp = comm.bcast(gs if (comm.Get_rank() == 0) else None, root=0)
-        if gs.frobeniusdist(gs_cmp) > 1e-6: 
+        if gs.frobeniusdist(gs_cmp) > 1e-6:
             raise ValueError("MPI ERROR: *different* MC2GST start gatesets" +
                              " given to different processors!")
 
@@ -1938,7 +1938,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
 
     if comm is not None:
         gs_cmp = comm.bcast(gs if (comm.Get_rank() == 0) else None, root=0)
-        if gs.frobeniusdist(gs_cmp) > 1e-6: 
+        if gs.frobeniusdist(gs_cmp) > 1e-6:
             raise ValueError("MPI ERROR: *different* MLGST start gatesets" +
                              " given to different processors!")
 
@@ -2375,64 +2375,64 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
     tRef = _time.time() #start time
 
     with printer.progress_logging(1):
-         for (i,stringsToEstimate) in enumerate(gateStringLists):
-             printer.log('', 2)
-             extraMessages = [("(%s) " % gateStringSetLabels[i])] if gateStringSetLabels else []
-             printer.show_progress(i, nIters-1, verboseMessages=extraMessages, prefix="--- Iterative MLGST:", suffix=" %d gate strings ---" % len(stringsToEstimate))
+        for (i,stringsToEstimate) in enumerate(gateStringLists):
+            printer.log('', 2)
+            extraMessages = [("(%s) " % gateStringSetLabels[i])] if gateStringSetLabels else []
+            printer.show_progress(i, nIters-1, verboseMessages=extraMessages, prefix="--- Iterative MLGST:", suffix=" %d gate strings ---" % len(stringsToEstimate))
 
-             if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
-
-
-             _, mleGateset = do_mc2gst( dataset, mleGateset, stringsToEstimate,
-                                                maxiter, maxfev, tol, 0, minProbClip,
-                                                probClipInterval, useFreqWeightedChiSq,
-                                                0, printer-2, check,
-                                                False, None, None, memLimit, comm,
-                                                distributeMethod)
-                                               # Note maxLogL is really chi2 number here
-             if times is not None:
-                 tNxt = _time.time();
-                 times.append(('MLGST Iteration %d: chi2-opt' % (i+1),tNxt-tRef))
-                 tRef=tNxt
-
-             logL_ub = _tools.logl_max(dataset, stringsToEstimate, None, poissonPicture, check)
-             maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval,
-                               radius, None, None, poissonPicture, check)  #get maxLogL from chi2 estimate
-
-             if times is not None:
-                 tNxt = _time.time();
-                 times.append(('MLGST Iteration %d: logl-comp' % (i+1),tNxt-tRef))
-                 tRef=tNxt
-                 printer.log("    2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL)),2)
-
-            #OLD: do MLGST for all iterations
-            #maxLogL, mleGateset = do_mlgst( dataset, mleGateset, stringsToEstimate,
-            #                                maxiter, maxfev, tol,
-            #                                minProbClip, probClipInterval, radius, poissonPicture,
-            #                                verbosity, check, None, memLimit, comm)
-
-             if i == len(gateStringLists)-1: #on the last iteration, do ML
-                 printer.log("--- Last Iteration: switching to ML objective ---",2)
-                 maxLogL_p, mleGateset_p = do_mlgst(
-                   dataset, mleGateset, stringsToEstimate, maxiter, maxfev, tol,
-                   minProbClip, probClipInterval, radius, poissonPicture, printer,
-                   check, None, memLimit, comm)
-
-                 printer.log("    2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL_p)),2)
+            if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
 
 
-                 if maxLogL_p > maxLogL: #if do_mlgst improved the maximum log-likelihood
-                   maxLogL = maxLogL_p
-                   mleGateset = mleGateset_p
-                 else:
-                   printer.warning("MLGST failed to improve logl: retaining chi2-objective estimate")
+            _, mleGateset = do_mc2gst( dataset, mleGateset, stringsToEstimate,
+                                               maxiter, maxfev, tol, 0, minProbClip,
+                                               probClipInterval, useFreqWeightedChiSq,
+                                               0, printer-2, check,
+                                               False, None, None, memLimit, comm,
+                                               distributeMethod)
+                                              # Note maxLogL is really chi2 number here
+            if times is not None:
+                tNxt = _time.time();
+                times.append(('MLGST Iteration %d: chi2-opt' % (i+1),tNxt-tRef))
+                tRef=tNxt
 
-                 if times is not None:
-                   tNxt = _time.time();
-                   times.append(('MLGST Iteration %d: logl-opt' % (i+1),tNxt-tRef))
-                   tRef=tNxt
+            logL_ub = _tools.logl_max(dataset, stringsToEstimate, None, poissonPicture, check)
+            maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval,
+                              radius, None, None, poissonPicture, check)  #get maxLogL from chi2 estimate
 
-             if returnAll:
+            if times is not None:
+                tNxt = _time.time();
+                times.append(('MLGST Iteration %d: logl-comp' % (i+1),tNxt-tRef))
+                tRef=tNxt
+                printer.log("    2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL)),2)
+
+           #OLD: do MLGST for all iterations
+           #maxLogL, mleGateset = do_mlgst( dataset, mleGateset, stringsToEstimate,
+           #                                maxiter, maxfev, tol,
+           #                                minProbClip, probClipInterval, radius, poissonPicture,
+           #                                verbosity, check, None, memLimit, comm)
+
+            if i == len(gateStringLists)-1: #on the last iteration, do ML
+                printer.log("--- Last Iteration: switching to ML objective ---",2)
+                maxLogL_p, mleGateset_p = do_mlgst(
+                  dataset, mleGateset, stringsToEstimate, maxiter, maxfev, tol,
+                  minProbClip, probClipInterval, radius, poissonPicture, printer,
+                  check, None, memLimit, comm)
+
+                printer.log("    2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL_p)),2)
+
+
+                if maxLogL_p > maxLogL: #if do_mlgst improved the maximum log-likelihood
+                    maxLogL = maxLogL_p
+                    mleGateset = mleGateset_p
+                else:
+                    printer.warning("MLGST failed to improve logl: retaining chi2-objective estimate")
+
+                if times is not None:
+                    tNxt = _time.time();
+                    times.append(('MLGST Iteration %d: logl-opt' % (i+1),tNxt-tRef))
+                    tRef=tNxt
+
+            if returnAll:
                 mleGatesets.append(mleGateset)
                 maxLogLs.append(maxLogL)
 
@@ -2532,7 +2532,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
     itemWeights : dict, optional
        Dictionary of weighting factors for individual gates and spam operators.
        Keys can be gate, state preparation, POVM effect, or spam labels.  Values
-       are floating point numbers.  By default, weights are set by gateWeight 
+       are floating point numbers.  By default, weights are set by gateWeight
        and spamWeight.  All values *present* in itemWeights override gateWeight
        and spamWeight.
 
@@ -2629,7 +2629,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
             else: raise ValueError("Invalid targetGatesMetric: %s" % targetGatesMetric)
 
             if targetSpamMetric == "frobenius":
-                diff += gs.frobeniusdist(targetGateset, None, 0.0, 
+                diff += gs.frobeniusdist(targetGateset, None, 0.0,
                                          spamWeight, itemWeights)
 
             elif targetSpamMetric == "fidelity":
@@ -2742,7 +2742,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
             for rhoVec in list(gs.preps.values()):
                 tpPenalty += (rhoVecFirstEl - rhoVec[0])**2
 
-            return tpPenalty + gs.frobeniusdist(targetGateset, None, 
+            return tpPenalty + gs.frobeniusdist(targetGateset, None,
                                                 gateWeight, spamWeight,
                                                 itemWeights) * targetFactor
 
@@ -2775,7 +2775,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
             spamPenalty += sum( [ _tools.effect_penalty(EVec)     for EVec   in list(gs.effects.values()) ] )
 
             targetPenalty = targetFactor * gs.frobeniusdist(
-                targetGateset, None, gateWeight, spamWeight, itemWeights) 
+                targetGateset, None, gateWeight, spamWeight, itemWeights)
 
             penalty = cpPenalty + spamPenalty + targetPenalty
             if penalty > 1e-100: return _np.log10(penalty)
@@ -3078,14 +3078,14 @@ def _contractToCP_direct(gateset,verbosity,TPalso=False,maxiter=100000,tol=1e-8)
             evals_left = len(sorted_evals_with_inds)
             ideal_shift = shift_left / evals_left
 
-            for (i,eval) in sorted_evals_with_inds: #loop over new_evals from smallest to largest (note all > 0)
+            for (i, sorted_eval) in sorted_evals_with_inds: #loop over new_evals from smallest to largest (note all > 0)
                 evals_left -= 1  #number of eigenvalue beyond current eval (in sorted order)
-                if eval+ideal_shift >= 0:
-                    new_evals[i] = eval + ideal_shift
+                if sorted_eval+ideal_shift >= 0:
+                    new_evals[i] = sorted_eval + ideal_shift
                     shift_left -= ideal_shift
                 elif evals_left > 0:
                     new_evals[i] = 0
-                    shift_left += eval
+                    shift_left += sorted_eval
                     ideal_shift = shift_left / evals_left #divide remaining shift evenly among remaining eigenvalues
                 else: #last eigenvalue would be < 0 with ideal shift and can't set == 0 b/c all others must be zero too
                     new_evals[i] = 1.0 # so set what was the largest eigenvalue == 1.0
