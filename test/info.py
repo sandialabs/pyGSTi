@@ -2,7 +2,7 @@
 from __future__                import print_function
 from helpers.automation_tools  import read_yaml, write_yaml
 from helpers.info.genInfo      import gen_package_info
-from helpers.info.process      import find_uncovered, find_uncovered_lines
+from helpers.info.process      import find_uncovered, find_uncovered_lines, annotate_uncovered
 from pprint import pprint
 import argparse
 import sys
@@ -31,5 +31,4 @@ if __name__ == '__main__':
     if parsed.process:
         for packageName in parsed.packages:
             # interpret it, if asked
-            pprint(find_uncovered_lines(infoDict[packageName]))
-
+            annotate_uncovered(packageName, infoDict)

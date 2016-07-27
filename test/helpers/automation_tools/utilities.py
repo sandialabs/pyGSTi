@@ -2,6 +2,10 @@ from __future__ import print_function
 from contextlib import contextmanager
 import subprocess, os, sys
 
+
+def get_files(directory):
+    return next(os.walk(directory))[2]
+
 def get_file_directory():
     return os.path.dirname(os.path.abspath(__file__))
 
