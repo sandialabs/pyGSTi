@@ -7,6 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Functions for selecting a complete set of germs for a GST analysis."""
 
 from functools import total_ordering
+import itertools
 
 import numpy as _np
 import numpy.linalg as _nla
@@ -1207,7 +1208,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         return goodGermsList
 
 
-def grasp_greedy_construction(elements, scoreFn, alpha, feasibleThreshold=None,
+def grasp_greedy_construction(elements, scoreFn, rclFn, feasibleThreshold=None,
                               feasibleFn=None, initialElements=None,
                               seed=None):
     if initialElements is None:
@@ -1236,12 +1237,8 @@ def grasp_greedy_construction(elements, scoreFn, alpha, feasibleThreshold=None,
         candidateSolns = [soln + [elements[idx]] for idx in candidateIdxs]
         candidateScores = _np.array([scoreFn(candidateSoln)
                                      for candidateSoln in candidateSolns])
-        minScore = min(candidateScores)
-        maxScore = max(candidateScores)
-        thresholdScore = (1 - alpha)*minScore + alpha*maxScore
-        restrictedCandidateList = _np.where(candidateScores
-                                            <= thresholdScore)[0]
-        RCLIdx = _np.random.randint(len(restrictedCandidateList))
+        rclIdxs = rclFunction(candidateScore)
+        RCLIdx = _np.random.randint(len(rclIdxs))
         chosenIdx = candidateIdxs[restrictedCandidateList[RCLIdx]]
         soln.append(candidateSolns[chosenIdx])
         weights[candidateIdxs[chosenIdx]] = 1
@@ -1309,17 +1306,17 @@ def grasp_local_search(initialSoln, scoreFn, elements, getNeighborsFn,
     return currentSoln
 
 
-def grasp(elements, greedyConstructionFn, alpha, localSearchFn, getNeighborsFn,
-          finalScoreFn, feasibleFn, iterations, greedyFeasibleThreshold=None,
-          greedyFeasibleFn=None, localFeasibleThreshold=None,
-          localFeasibleFn=None, initialElements=None, seed=None):
+def grasp(elements, greedyScoreFn, rclFn, localScoreFn, getNeighborsFn,
+          finalScoreFn, iterations, feasibleThreshold=None, feasibleFn=None,
+          initialElements=None, seed=None):
     bestSoln = None
     for iteration in range(iterations):
-        initialSoln = greedyConstructionFn(elements, greedyScoreFn, alpha,
-                                           feasibleFn, initialElements, seed)
-        localSoln = localSearchFn(initialSoln, localScoreFn, elements,
-                                  getNeighborsFn, localFeasibleThreshold,
-                                  localFeasibleFn)
+        initialSoln = grasp_greedy_construction(elements, greedyScoreFn, rclFn,
+                                                feasibleThreshold, feasibleFn,
+                                                initialElements, seed)
+        localSoln = grasp_local_search(initialSoln, localScoreFn, elements,
+                                       getNeighborsFn, feasibleThreshold,
+                                       feasibleFn)
         if bestSoln is None:
             bestSoln = localSoln
         elif finalScoreFn(localSoln) < finalScoreFn(bestSoln):
@@ -1328,11 +1325,102 @@ def grasp(elements, greedyConstructionFn, alpha, localSearchFn, getNeighborsFn,
     return bestSoln
 
 
-def grasp_germ_set_optimization(gatesetList, germsList, randomize=True,
+def germ_breadth_score_fn(germSet, germsList, twirledDerivDaggerDerivList,
+                          nonAC_kwargs, initN=1):
+    weights = _np.zeros(len(germsList))
+    for germ in germSet:
+        weights[germsList.index(germ)] = 1
+    germsVsGatesetScores = []
+    for derivDaggerDeriv in twirledDerivDaggerDerivList:
+        # Loop over all gatesets
+        partialDDD = derivDaggerDeriv[_np.where(weights==1)[0],:,:]
+        germsVsGatesetScores.append(compute_non_AC_score(
+                                        partialDerivDaggerDeriv=partialDDD,
+                                        initN=initN, **nonAC_kwargs))
+    # Take the score for the current germ set to be its worst score over all
+    # gatesets.
+    return max(germsVsGatesetScores)
+
+
+def get_swap_neighbors(weights):
+    included_idxs = _np.where(weights==1)[0]
+    excluded_idxs = _np.where(weights==0)[0]
+    neighbors = []
+    for swap_out, swap_in in itertools.product(included_idxs, excluded_idxs):
+        neighbor = weights.copy()
+        neighbor[swap_out] = 0
+        neighbor[swap_in] = 1
+        neightbors.append(neighbor)
+
+    return neighbors
+
+
+def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
                                 randomizationStrength=1e-3, numCopies=None,
-                                seed=0, l1Penalty=0, gatePenalty=0,
-                                scoreFunc='all', returnAll=False, tol=1e-6,
-                                threshold=1e6, check=False,
-                                forceSingletons=True,
-                                forceSingletonsScore=1e100, verbosity=0):
-    pass
+                                seed=None, gatePenalty=0.0, scoreFunc='all',
+                                tol=1e-6, threshold=1e6, check=False,
+                                forceSingletons=True, verbosity=0):
+
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+
+    gatesetList = setup_gateset_list(gatesetList, randomize,
+                                     randomizationStrength, numCopies, seed)
+
+    (reducedGatesetList,
+     numGaugeParams,
+     numNonGaugeParams, numGates) = get_gateset_params(gatesetList)
+
+    germLengths = _np.array([len(germ) for germ in germsList], 'i')
+
+    numGerms = len(germsList)
+
+    goodGerms = []
+    weights = _np.zeros(numGerms, 'i')
+    if forceSingletons:
+        weights[_np.where(germLengths==1)] = 1
+        goodGerms = [germ for germ
+                     in _np.array(germsList)[_np.where(germLengths==1)]]
+
+    undercompleteGatesetNum = checkGermsListCompleteness(gatesetList,
+                                                         germsList,
+                                                         scoreFunc,
+                                                         threshold)
+    if undercompleteGatesetNum > -1:
+        printer.log("Complete initial germ set FAILS on gateset "
+                    + str(undercompleteGatesetNum) + ".")
+        printer.log("Aborting search.")
+        return (None, None, None) if returnAll else None
+
+    printer.log("Complete initial germ set succeeds on all input gatesets.")
+    printer.log("Now searching for best germ set.")
+
+    printer.log("Starting germ set optimization. Lower score is better.", 1)
+
+    twirledDerivDaggerDerivList = [calc_twirled_DDD(gateset, germsList, tol,
+                                                       check, germLengths)
+                                   for gateset in gatesetList]
+
+    # Dict of keyword arguments passed to compute_score_non_AC that don't
+    # change from call to call
+    nonAC_kwargs = {
+                    'scoreFn': lambda x: list_score(x, scoreFunc=scoreFunc),
+                    'thresholdAC': threshold,
+                    'numGaugeParams': numGaugeParams,
+                    'gatePenalty': gatePenalty,
+                   }
+
+    scoreFn = lambda germSet: germ_breadth_score_fn(germSet, germsList,
+                                                    twirledDerivDaggerDerivList,
+                                                    nonAC_kwargs, initN=1)
+
+    # TODO: Define a sensible function for constructing the restricted
+    # candidate list.
+    rclFn = None
+
+    bestSoln = grasp(elements=germsList, greedyScoreFn=scoreFn, rclFn=rclFn,
+                     localScoreFn=scoreFn, getNeighborsFn=get_swap_neighbors,
+                     finalScoreFn=scoreFn, iterations=5,
+                     feasibleThreshold=threshold, initialElements=weights,
+                     seed=seed)
+
+    return bestSoln
