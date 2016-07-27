@@ -1237,10 +1237,9 @@ def grasp_greedy_construction(elements, scoreFn, rclFn, feasibleThreshold=None,
         candidateSolns = [soln + [elements[idx]] for idx in candidateIdxs]
         candidateScores = _np.array([scoreFn(candidateSoln)
                                      for candidateSoln in candidateSolns])
-        rclIdxs = rclFunction(candidateScore)
-        RCLIdx = _np.random.randint(len(rclIdxs))
-        chosenIdx = candidateIdxs[restrictedCandidateList[RCLIdx]]
-        soln.append(candidateSolns[chosenIdx])
+        rclIdxs = rclFn(candidateScores)
+        chosenIdx = _np.random.choice(rclIdxs)
+        soln = candidateSolns[chosenIdx]
         weights[candidateIdxs[chosenIdx]] = 1
         if feasibleTest == 'threshold':
             feasible = candidateScores[chosenIdx] <= feasibleThreshold
@@ -1308,15 +1307,25 @@ def grasp_local_search(initialSoln, scoreFn, elements, getNeighborsFn,
 
 def grasp(elements, greedyScoreFn, rclFn, localScoreFn, getNeighborsFn,
           finalScoreFn, iterations, feasibleThreshold=None, feasibleFn=None,
-          initialElements=None, seed=None):
+          initialElements=None, seed=None, verbosity=0):
+
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+
     bestSoln = None
     for iteration in range(iterations):
+        printer.log('Iteration {}'.format(iteration), 1)
         initialSoln = grasp_greedy_construction(elements, greedyScoreFn, rclFn,
                                                 feasibleThreshold, feasibleFn,
                                                 initialElements, seed)
+        printer.log('Initial construction:')
+        printer.log(str([str(element) for element in initialSoln]), 1)
+
         localSoln = grasp_local_search(initialSoln, localScoreFn, elements,
                                        getNeighborsFn, feasibleThreshold,
                                        feasibleFn)
+        printer.log('Local optimum:')
+        printer.log(str([str(element) for element in localSoln]), 1)
+
         if bestSoln is None:
             bestSoln = localSoln
         elif finalScoreFn(localSoln) < finalScoreFn(bestSoln):
@@ -1350,9 +1359,25 @@ def get_swap_neighbors(weights):
         neighbor = weights.copy()
         neighbor[swap_out] = 0
         neighbor[swap_in] = 1
-        neightbors.append(neighbor)
+        neighbors.append(neighbor)
 
     return neighbors
+
+
+def germ_rcl_fn(candidateScores, alpha):
+    max_nonACscore = max(candidateScores)
+    min_nonACscore = min(candidateScores)
+    N_threshold = alpha * min_nonACscore.N + (1 - alpha) * max_nonACscore.N
+    score_alpha = N_threshold - int(_np.ceil(N_threshold))
+    thresholdScores = [candidateScore.score
+                       for candidateScore in candidateScores
+                       if candidateScore.N == int(_np.ceil(N_threshold))]
+    max_threshold_score = max(thresholdScores)
+    min_threshold_score = min(thresholdScores)
+    score_threshold = ((1 - alpha) * min_threshold_score
+                       + alpha * max_threshold_score)
+    nonACscore_threshold = ScoreNonAC(score_threshold, N_threshold)
+    return _np.where(_np.array(candidateScores) <= nonACscore_threshold)[0]
 
 
 def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
@@ -1389,7 +1414,7 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
         printer.log("Complete initial germ set FAILS on gateset "
                     + str(undercompleteGatesetNum) + ".")
         printer.log("Aborting search.")
-        return (None, None, None) if returnAll else None
+        return None
 
     printer.log("Complete initial germ set succeeds on all input gatesets.")
     printer.log("Now searching for best germ set.")
@@ -1415,12 +1440,13 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
 
     # TODO: Define a sensible function for constructing the restricted
     # candidate list.
-    rclFn = None
+    rclFn = lambda x: germ_rcl_fn(x, alpha)
 
     bestSoln = grasp(elements=germsList, greedyScoreFn=scoreFn, rclFn=rclFn,
                      localScoreFn=scoreFn, getNeighborsFn=get_swap_neighbors,
                      finalScoreFn=scoreFn, iterations=5,
-                     feasibleThreshold=threshold, initialElements=weights,
-                     seed=seed)
+                     feasibleThreshold=ScoreNonAC(threshold, numNonGaugeParams),
+                     initialElements=weights, seed=seed,
+                     verbosity=verbosity)
 
     return bestSoln
