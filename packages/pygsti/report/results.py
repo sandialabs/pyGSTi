@@ -1629,7 +1629,9 @@ class Results(object):
             for i, key in enumerate(tables_to_compute):
                 printer.show_progress(i, len(tables_to_compute) - 1, prefix='', end='')
                 qtys[key] = self.tables.get(key, verbosity=printer - 1).render(
-                    'latex',longtables=self.options.long_tables, scratchDir=D)
+                    'latex',longtables=self.options.long_tables, scratchDir=D,
+                    precision=self.options.precision,
+                    polarprecision=self.options.polar_precision)
                 qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
 
         for key in tables_to_blank:
@@ -1641,7 +1643,10 @@ class Results(object):
         if gaugeOptAppendix:
             goaTables = self._specials.get('gaugeOptAppendixTables',verbosity=printer - 1)
             qtys.update( { key : goaTables[key].render(
-                        'latex', longtables=self.options.long_tables, scratchDir=D)
+                        'latex', longtables=self.options.long_tables,
+                        scratchDir=D,
+                        precision=self.options.precision,
+                        polarprecision=self.options.polar_precision)
                            for key in goaTables }  )
             #TODO: tables[ref] and then tooltips?
 
@@ -1649,7 +1654,9 @@ class Results(object):
             goaTables = self._specials.get('blankGaugeOptAppendixTables',
                               verbosity=printer - 1)   # fill keys with blank tables
             qtys.update( { key : goaTables[key].render(
-                        'latex',longtables=self.options.long_tables)
+                        'latex',longtables=self.options.long_tables,
+                        precision=self.options.precision,
+                        polarprecision=self.options.polar_precision)
                            for key in goaTables }  )  # for format substitution
             #TODO: tables[ref] and then tooltips?
 
@@ -2077,7 +2084,9 @@ class Results(object):
 
         for key in tables_to_compute:
             qtys[key] = self.tables.get(key, verbosity=printer - 1).render(
-                'latex',longtables=self.options.long_tables, scratchDir=D)
+                'latex',longtables=self.options.long_tables, scratchDir=D,
+                precision=self.options.precision,
+                polarprecision=self.options.polar_precision)
             qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
 
         for key in tables_to_blank:
@@ -2354,7 +2363,9 @@ class Results(object):
 
         for key in tables_to_compute:
             qtys[key] = self.tables.get(key, verbosity=printer - 1).render(
-                'latex',longtables=self.options.long_tables, scratchDir=D)
+                'latex',longtables=self.options.long_tables, scratchDir=D,
+                precision=self.options.precision,
+                polarprecision=self.options.polar_precision)
             qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
 
         for key in tables_to_blank:
@@ -3023,9 +3034,10 @@ class Results(object):
             return table
 
         def draw_table_latex(shapes, key, left, top, width, height, ptSize=10):
-            latexTabStr = qtys[key].render('latex',
-                                           longtables=self.options.long_tables,
-                                           scratchDir=D)
+            latexTabStr = qtys[key].render(
+                'latex', longtables=self.options.long_tables, scratchDir=D,
+                precision=self.options.precision,
+                polarprecision=self.options.polar_precision)
             d = {'toLatex': latexTabStr }
             printer.log("Latexing %s table..." % key)
             outputFilename = _os.path.join(fileDir, "%s.tex" % key)
@@ -3399,7 +3411,9 @@ class Results(object):
 
         for key in tables_to_compute:
             qtys[key] = self.tables.get(key, verbosity=printer - 1).render(
-                'latex',longtables=self.options.long_tables, scratchDir=D)
+                'latex',longtables=self.options.long_tables, scratchDir=D,
+                precision=self.options.precision,
+                polarprecision=self.options.polar_precision)
             qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
 
         _os.chdir(cwd) #change back to original directory
@@ -3776,6 +3790,8 @@ class ResultOptions(object):
     def __init__(self):
         self.long_tables = False
         self.table_class = "pygstiTbl"
+        self.precision = 4
+        self.polar_precision = 3
         self.template_path = "."
         self.latex_cmd = "pdflatex"
         # Don't allow LaTeX to try and recover from errors interactively.
@@ -3793,6 +3809,10 @@ class ResultOptions(object):
             % str(self.long_tables)
         s += prefix + ".table_class    -- HTML table class = %s\n" \
             % str(self.table_class)
+        s += prefix + ".precision      -- precision = %s\n" \
+            % str(self.precision)
+        s += prefix + ".polar_precision -- precision for polar exponent = %s\n" \
+            % str(self.polar_precision)
         s += prefix + ".template_path  -- pyGSTi templates path = '%s'\n" \
             % str(self.template_path)
         s += prefix + ".latex_cmd      -- latex compiling command = '%s'\n" \

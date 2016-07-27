@@ -2,7 +2,7 @@ import unittest
 import time
 import sys
 import numpy as np
-from mpinoseutils import *
+from .mpinoseutils import *
 
 import pygsti
 from pygsti.construction import std1Q_XYI as std
