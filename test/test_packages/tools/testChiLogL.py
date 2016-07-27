@@ -12,6 +12,7 @@ class Chi2LogLTestCase(ToolsTestCase):
     def test_chi2_fn(self):
         ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis.dataset")
         chi2, grad = pygsti.chi2(ds, std.gs_target, returnGradient=True)
+        pygsti.chi2(ds, std.gs_target, returnHessian=True)
 
         pygsti.gate_string_chi2( ('Gx',), ds, std.gs_target)
         pygsti.chi2fn_2outcome( N=100, p=0.5, f=0.6)
@@ -21,6 +22,13 @@ class Chi2LogLTestCase(ToolsTestCase):
 
         with self.assertRaises(ValueError):
             pygsti.chi2(ds, std.gs_target, useFreqWeightedChiSq=True) #no impl yet
+        
+        # Memory tests
+
+        with self.assertRaises(MemoryError):
+            pygsti.chi2(ds, std.gs_target, memLimit=0) # No memory for you
+        pygsti.chi2(ds, std.gs_target, memLimit=100000)
+
 
     def test_logl_fn(self):
         ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis.dataset")
