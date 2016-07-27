@@ -226,5 +226,10 @@ class BasisToolsTestCase(ToolsTestCase):
         with self.assertRaises(ValueError):
             pygsti.tools.basistools._processBlockDims("FooBar") #arg should be a list,tuple,or int
 
+    def test_basis_longname(self):
+        longnames = {pygsti.tools.basistools.basis_longname(basis) for basis in {'gm', 'std', 'pp'}}
+        self.assertEqual(longnames, {'Gell-Mann', 'Matrix-unit', 'Pauli-prod'})
+        self.assertEqual(pygsti.tools.basistools.basis_longname('not a basis'), '?Unknown?')
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -1,5 +1,6 @@
 import unittest
 import numpy as np
+import pygsti
 import os
 
 class ToolsTestCase(unittest.TestCase):
