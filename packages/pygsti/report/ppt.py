@@ -192,8 +192,7 @@ def ppt_value(el, precision=6, complexAsPolar=True, polarprecision=3):
         elif abs(x) < 1:
             s = "%.*f" % (precision, x)
         elif abs(x) <= 10**precision:
-            s = "%.*f" % (precision-int(_np.log10(abs(x))),x)  #round to get ROUND digits when x is < 1
-            #str(round(x,ROUND))  #OLD
+            s = "%.*f" % (precision-int(_np.log10(abs(x))),x)  #round to get precision+1 digits when x is > 1
         else:
             s = "%.0e" % x # one significant figure
 
