@@ -3,7 +3,7 @@ from __future__ import print_function
 from helpers.test.runPackage  import run_package
 from helpers.automation_tools import directory
 import subprocess, sys
-travisPackages = ['tools', 'objects', 'construction', 'io', 'optimize', 'algorithms']
+travisPackages = ['tools', 'objects', 'construction', 'iotest', 'optimize', 'algorithms']
 
 results = []
 with directory('test_packages'):
