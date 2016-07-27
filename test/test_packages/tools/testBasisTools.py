@@ -4,6 +4,8 @@ import numpy as np
 import scipy
 import pygsti
 
+import pygsti.tools.basistools as basistools
+
 class BasisToolsTestCase(ToolsTestCase):
 
     ###########################################################
@@ -224,12 +226,54 @@ class BasisToolsTestCase(ToolsTestCase):
 
     def test_basistools_misc(self):
         with self.assertRaises(ValueError):
-            pygsti.tools.basistools._processBlockDims("FooBar") #arg should be a list,tuple,or int
+            basistools._processBlockDims("FooBar") #arg should be a list,tuple,or int
 
     def test_basis_longname(self):
-        longnames = {pygsti.tools.basistools.basis_longname(basis) for basis in {'gm', 'std', 'pp'}}
+        longnames = {basistools.basis_longname(basis) for basis in {'gm', 'std', 'pp'}}
         self.assertEqual(longnames, {'Gell-Mann', 'Matrix-unit', 'Pauli-prod'})
-        self.assertEqual(pygsti.tools.basistools.basis_longname('not a basis'), '?Unknown?')
+        self.assertEqual(basistools.basis_longname('not a basis'), '?Unknown?')
+
+    def test_basis_element_labels(self):
+        basisnames = ['gm', 'std', 'pp', 'akdlfjalsdf']
+
+        # One dimensional gm
+        self.assertEqual([''], basistools.basis_element_labels('gm', 1))
+
+        # Two dimensional
+        expectedLabels = [
+        ['I', 'X', 'Y', 'Z'],
+        ['(0,0)', '(0,1)', '(1,0)', '(1,1)'],
+        ['I', 'X', 'Y', 'Z'],
+        []]
+        labels = [basistools.basis_element_labels(basisname, 2)  for basisname in basisnames]
+        self.assertEqual(labels, expectedLabels)
+
+        # Non power of two for pp labels:
+        with self.assertRaises(ValueError):
+            label = basistools.basis_element_labels('pp', 3)
+
+        with self.assertRaises(ValueError):
+            label = basistools.basis_element_labels('pp', [1, 2])
+
+        # Single list arg for pp labels
+        self.assertEqual(basistools.basis_element_labels('pp', [2]), ['I', 'X', 'Y', 'Z'])
+
+        # Four dimensional+
+        expectedLabels = [['I^{(0)}', 'X^{(0)}_{0,1}', 'X^{(0)}_{0,2}', 'X^{(0)}_{0,3}', 'X^{(0)}_{1,2}', 'X^{(0)}_{1,3}', 'X^{(0)}_{2,3}', 'Y^{(0)}_{0,1}', 'Y^{(0)}_{0,2}', 'Y^{(0)}_{0,3}', 'Y^{(0)}_{1,2}', 'Y^{(0)}_{1,3}', 'Y^{(0)}_{2,3}', 'Z^{(0)}_{1}', 'Z^{(0)}_{2}', 'Z^{(0)}_{3}'], ['(0,0)', '(0,1)', '(0,2)', '(0,3)', '(1,0)', '(1,1)', '(1,2)', '(1,3)', '(2,0)', '(2,1)', '(2,2)', '(2,3)', '(3,0)', '(3,1)', '(3,2)', '(3,3)'], ['II', 'IX', 'IY', 'IZ', 'XI', 'XX', 'XY', 'XZ', 'YI', 'YX', 'YY', 'YZ', 'ZI', 'ZX', 'ZY', 'ZZ'], []]
+        labels = [basistools.basis_element_labels(basisname, 4)  for basisname in basisnames]
+        self.assertEqual(expectedLabels, labels)
+
+    def test_hamiltonian_to_lindbladian(self):
+        expectedLindbladian = np.zeros(shape=(2,2))
+        self.assertEqual(basistools.hamiltonian_to_lindbladian(np.zeros(shape=(2,2))),
+                         expectedLindbladian)
+
+
+
+
+
+
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -2,6 +2,7 @@ import unittest
 import pygsti
 import os
 import numpy as np
+from pygsti.construction import std1Q_XYI as std
 
 class JamiolkowskiTestCase(unittest.TestCase):
 

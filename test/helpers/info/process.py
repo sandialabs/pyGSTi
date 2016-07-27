@@ -6,7 +6,6 @@ import os
 def update_if_higher(dictionary, key, value):
     if key in dictionary:
         if dictionary[key] < value:
-            print(dictionary[key], value)
             dictionary[key] = value
     else:
         dictionary[key] = value
@@ -38,6 +37,10 @@ def find_uncovered_lines(packageDict):
 
 
 def annotate_uncovered(packageName, infoDict):
+
+    def do_annotate(line):
+        return '\\' not in line and line.replace(' ', '') != ''
+
     uncoveredLineDict = find_uncovered_lines(infoDict[packageName])
     with directory('../packages/pygsti/%s' % packageName):
         files = [filename for filename in get_files(os.getcwd()) if filename in uncoveredLineDict]
@@ -48,9 +51,9 @@ def annotate_uncovered(packageName, infoDict):
 
             uncoveredLines = uncoveredLineDict[filename]
             for i, line in enumerate(content):
-                content[i] = content[i].replace('#!*uncovered*!', '') # Remove old annotations
-                if (i+1) in uncoveredLines and '\\' not in content[i]:
-                    content[i] += '#!*uncovered*!'
+                content[i] = content[i].replace('# uncovered!', '') # Remove old annotations
+                if (i+1) in uncoveredLines and do_annotate(content[i]):
+                    content[i] = content[i].ljust(100) + ' # uncovered!'
             print('Annotating %s' % filename)
             with open(filename, 'w') as source:
                 source.write('\n'.join(content))

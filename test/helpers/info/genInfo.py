@@ -20,6 +20,7 @@ def convert_uncovered(num):
     else:
         return [int(num)] # If a single line, ex 10
 
+# Currently only works when tests are passing...
 def parse_coverage_output(output):
     output   = output.split('-------------------------------------------------------------')
     specific = output[1]
@@ -32,7 +33,7 @@ def parse_coverage_output(output):
         line          = line.split()
         filename      = line[0]
         if filename.count('/') > 0:
-            filename = filename.rsplit('/')[1]
+            filename = filename.rsplit('/')[-1]
         modulepercent = int(line[3][:-1])
         missedlines   = [lineNum for item in line[4:] for lineNum in convert_uncovered(item)]
         coverageDict[filename] = (modulepercent, missedlines)
@@ -51,6 +52,7 @@ def get_info(filename, packageName, testCaseName, test):
     output = get_output(commands)
     end = time.time()
 
+    print('%s:%s.%s' % (filename, testCaseName, test))
     print(output)
     coverageDict = parse_coverage_output(output)
     write_yaml(coverageDict, coverageFile)
