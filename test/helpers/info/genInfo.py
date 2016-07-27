@@ -23,9 +23,9 @@ def convert_uncovered(num):
 # Currently only works when tests are passing...
 def parse_coverage_output(output):
     output   = output.split('-------------------------------------------------------------')
-    specific = output[1]
+    specific = output[-3]
     # Get last word of the line after the dashes, and remove the percent symbol
-    percent  = int(output[2].split()[-1][:-1])
+    percent  = int(output[-2].split()[-1][:-1])
     specific = [line for line in specific.splitlines() if line != '']
 
     coverageDict = {}
