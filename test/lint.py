@@ -41,7 +41,6 @@ if __name__ == "__main__":
                         help='check for refactors in the repo')
 
     parsed = parser.parse_args(sys.argv[1:])
-    print(parsed)
 
     if parsed.score:
         check_score()

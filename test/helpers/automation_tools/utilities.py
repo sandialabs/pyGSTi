@@ -51,4 +51,3 @@ def get_output(commands):
         print(e)
         output = e.output
     return output.decode('utf-8')
-
