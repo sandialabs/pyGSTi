@@ -121,8 +121,10 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
                           'randomize': False,
                           'seed': seed,
                           'verbosity': verbosity,
-                          'slackFrac': 0.1,
                          }
+        if ('slackFrac' not in algorithm_kwargs
+                and 'fixedSlack' not in algorithm_kwargs):
+            algorithm_kwargs['slackFrac'] = 0.1
         for key in default_kwargs:
             if key not in algorithm_kwargs:
                 algorithm_kwargs[key] = default_kwargs[key]
