@@ -1,18 +1,11 @@
 from pygsti.objects.verbosityprinter import *
 from mpi4py                          import MPI
+from ..testutils import BaseTestCase
 
 import unittest, os
 
 
-class TestPrinterMPI(unittest.TestCase):
-
-    def setUp(self):
-        # move working directories
-        self.old = os.getcwd()
-        os.chdir(os.path.abspath(os.path.dirname(__file__)))
-
-    def tearDown(self):
-        os.chdir(self.old)
+class TestPrinterMPI(BaseTestCase):
 
     def test_mpi(self):
         comm    = MPI.COMM_WORLD

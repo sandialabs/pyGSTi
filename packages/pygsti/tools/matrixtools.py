@@ -162,7 +162,7 @@ def print_mx(mx, width=9, prec=4):
         the precision (in characters) of each printed element
 
     """
-    print(mx_to_string(mx, width, prec))                                                             
+    print(mx_to_string(mx, width, prec))
 
 def mx_to_string(m, width=9, prec=4):
     """

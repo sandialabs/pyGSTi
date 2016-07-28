@@ -1,6 +1,8 @@
-import unittest
 import numpy as np
+import unittest
+import warnings
 import pygsti
+import sys
 import os
 
 class BaseTestCase(unittest.TestCase):
@@ -9,6 +11,7 @@ class BaseTestCase(unittest.TestCase):
         # move working directories
         self.old = os.getcwd()
         # This will result in the same directory, even though when another module calls this, file points to toolsBaseCase.py
+        # However, the result is the same..
         os.chdir(os.path.abspath(os.path.dirname(__file__)))
 
         #Set GateSet objects to "strict" mode for testing
@@ -19,3 +22,35 @@ class BaseTestCase(unittest.TestCase):
 
     def assertArraysAlmostEqual(self,a,b):
         self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
+
+
+    def assertWarns(self, callable, *args, **kwds):
+        with warnings.catch_warnings(record=True) as warning_list:
+            warnings.simplefilter('always')
+            result = callable(*args, **kwds)
+            self.assertTrue(len(warning_list) > 0)
+        return result
+
+    def isPython2(self):
+        return sys.version_info[0] == 2
+
+    def assertSingleElemArrayAlmostEqual(self, a, b):
+        # Ex given an array [[ 0.095 ]] and 0.095, call assertAlmostEqual(0.095, 0.095)
+        if a.size > 1:
+            raise ValueError('assertSingleElemArrayAlmostEqual should only be used on single element arrays')
+        self.assertAlmostEqual(float(a), b)
+
+    def assertNoWarnings(self, callable, *args, **kwds):
+        with warnings.catch_warnings(record=True) as warning_list:
+            warnings.simplefilter('always')
+            result = callable(*args, **kwds)
+            self.assertTrue(len(warning_list) == 0)
+        return result
+
+    def runSilent(self, callable, *args, **kwds):
+        orig_stdout = sys.stdout
+        sys.stdout = open("../temp_test_files/silent.txt","w")
+        result = callable(*args, **kwds)
+        sys.stdout.close()
+        sys.stdout = orig_stdout
+        return result

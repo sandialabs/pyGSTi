@@ -3,26 +3,9 @@ import pygsti
 from pygsti.construction import std1Q_XYI as std
 import numpy as np
 import os
+from ..testutils import BaseTestCase
 
-
-class WriteAndLoadTestCase(unittest.TestCase):
-
-    def setUp(self):
-        # move working directories
-        self.old = os.getcwd()
-        os.chdir(os.path.abspath(os.path.dirname(__file__)))
-
-        #Set GateSet objects to "strict" mode for testing
-        pygsti.objects.GateSet._strict = True
-
-    def tearDown(self):
-        os.chdir(self.old)
-
-    def assertArraysAlmostEqual(self,a,b):
-        self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
-
-
-class TestWriteAndLoad(WriteAndLoadTestCase):
+class TestWriteAndLoad(BaseTestCase):
 
     def test_paramfile(self):
         d = {'a': 1, 'b': 2 }

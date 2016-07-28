@@ -43,9 +43,9 @@ def fidelity(A, B):
     """
     evals,U = _np.linalg.eig(A)
     if len([ev for ev in evals if abs(ev) > 1e-8]) == 1: #special case when A is rank 1
-        ivec = _np.argmax(evals)                                                                     
-        vec  = U[:,ivec:(ivec+1)]                                                                    
-        F = _np.dot( _np.conjugate(_np.transpose(vec)), _np.dot(B, vec) ).real # vec^T * B * vec     
+        ivec = _np.argmax(evals)
+        vec  = U[:,ivec:(ivec+1)]
+        F = _np.dot( _np.conjugate(_np.transpose(vec)), _np.dot(B, vec) ).real # vec^T * B * vec
         return F
 
     evals,U = _np.linalg.eig(B)
@@ -424,7 +424,7 @@ def fidelity_upper_bound(gateMx):
         #    raise ValueError("ERROR: maxF - maxF_direct = %f" % (maxF -maxF_direct))
         assert(abs(maxF - maxF_direct) < 1e-6)
     else:
-        maxF = maxF_direct # case when maxF is nan, due to scipy sqrtm function being buggy - just use direct F 
+        maxF = maxF_direct # case when maxF is nan, due to scipy sqrtm function being buggy - just use direct F
 
     closestGateMx = _jam.jamiolkowski_iso_inv( closestJmx, choiMxBasis="std" )
     return maxF, closestGateMx
@@ -558,7 +558,7 @@ def decompose_gate_matrix(gateMx):
                     gate_evecs[:,i] = gate_evecs[:,i] - _np.vdot(fixedPtVec,gate_evecs[:,i])*fixedPtVec
                     for jj,j in enumerate(unit_eval_indices[:ii]):
                         if jj == iLargestContrib: continue
-                        gate_evecs[:,i] = gate_evecs[:,i] - _np.vdot(gate_evecs[:,j],gate_evecs[:,i])*gate_evecs[:,j] 
+                        gate_evecs[:,i] = gate_evecs[:,i] - _np.vdot(gate_evecs[:,j],gate_evecs[:,i])*gate_evecs[:,j]
                     gate_evecs[:,i] /= _np.linalg.norm(gate_evecs[:,i])
 
         elif len(real_eval_indices) > 0:
@@ -582,7 +582,7 @@ def decompose_gate_matrix(gateMx):
             iRotAxis = indsToConsider[ _np.argmax( [ gate_evals[i] for i in indsToConsider ] ) ]
         else:
             #No unit or real eigenvalues => an unpaired complex eval --> bail out
-            return { 'isValid': False, 'isUnitary': False, 'msg': "Unpaired complex eval." }         
+            return { 'isValid': False, 'isUnitary': False, 'msg': "Unpaired complex eval." }
 
         #There are only 2 eigenvalues left -- hopefully a conjugate pair giving rotation
         inds = list(range(4))
@@ -591,7 +591,7 @@ def decompose_gate_matrix(gateMx):
         if abs( gate_evals[inds[0]] - _np.conjugate(gate_evals[inds[1]])) < TOL:
             iConjPair1,iConjPair2 = inds
         else:
-            return { 'isValid': False, 'isUnitary': False, 'msg': "No conjugate pair for rotn." }    
+            return { 'isValid': False, 'isUnitary': False, 'msg': "No conjugate pair for rotn." }
 
         return { 'isValid': True,
                  'isUnitary': bool(len(unit_eval_indices) >= 2),
@@ -654,6 +654,6 @@ def error_generator(gate, target_gate):
     errgen : ndarray
       The error generator.
     """
-    target_gate_inv = _spl.inv(target_gate)                                                          
-    error_gen = _np.real_if_close(_spl.logm(_np.dot(target_gate_inv,gate)))                          
+    target_gate_inv = _spl.inv(target_gate)
+    error_gen = _np.real_if_close(_spl.logm(_np.dot(target_gate_inv,gate)))
     return error_gen

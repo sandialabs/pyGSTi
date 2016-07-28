@@ -3,31 +3,9 @@ import warnings
 import pygsti
 import numpy as np
 import os
+from ..testutils import BaseTestCase
 
-class StdInputParserTestCase(unittest.TestCase):
-
-    def setUp(self):
-        # move working directories
-        self.old = os.getcwd()
-        os.chdir(os.path.abspath(os.path.dirname(__file__)))
-        #Set GateSet objects to "strict" mode for testing
-        pygsti.objects.GateSet._strict = True
-
-    def tearDown(self):
-        os.chdir(self.old)
-
-    def assertArraysAlmostEqual(self,a,b):
-        self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
-
-    def assertWarns(self, callable, *args, **kwds):
-        with warnings.catch_warnings(record=True) as warning_list:
-            warnings.simplefilter('always')
-            result = callable(*args, **kwds)
-            self.assertTrue(len(warning_list) > 0)
-        return result
-
-
-class TestStdInputParser(StdInputParserTestCase):
+class TestStdInputParser(BaseTestCase):
 
     def test_strings(self):
         lkup = { '1': ('G1',),

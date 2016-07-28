@@ -6,42 +6,15 @@ import numpy as np
 import warnings
 import os
 
-class DataSetTestCase(unittest.TestCase):
+from ..testutils import BaseTestCase
 
-    def setUp(self):
-        # move working directories
-        self.old = os.getcwd()
-        os.chdir(os.path.abspath(os.path.dirname(__file__)))
-
-        #Set GateSet objects to "strict" mode for testing
-        pygsti.objects.GateSet._strict = True
-
-    def tearDown(self):
-        os.chdir(self.old)
+class DataSetTestCase(BaseTestCase):
 
     def assertEqualDatasets(self, ds1, ds2):
         self.assertEqual(len(ds1),len(ds2))
         for gatestring in ds1:
             self.assertAlmostEqual( ds1[gatestring]['plus'], ds2[gatestring]['plus'], places=3 )
             self.assertAlmostEqual( ds1[gatestring]['minus'], ds2[gatestring]['minus'], places=3 )
-
-    def assertWarns(self, callable, *args, **kwds):
-        with warnings.catch_warnings(record=True) as warning_list:
-            warnings.simplefilter('always')
-            result = callable(*args, **kwds)
-            self.assertTrue(len(warning_list) > 0)
-        return result
-
-    def isPython2(self):
-        #Check if interpreter is python2 by checking for basestring
-        #  (which is only defined in python2)
-        try:
-            basestring
-        except NameError:
-            return False
-        return True
-
-
 
 class TestDataSetMethods(DataSetTestCase):
 
