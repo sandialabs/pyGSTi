@@ -1,9 +1,9 @@
-from .toolsBaseCase import ToolsTestCase
+from ..testutils import BaseTestCase
 from pygsti.construction import std1Q_XYI as std
 import pygsti
 import unittest
 
-class RPETestCase(ToolsTestCase):
+class RPETestCase(BaseTestCase):
     def test_rpe_tools(self):
         from pygsti.tools import rpe
 

@@ -1,4 +1,4 @@
-from .toolsBaseCase import ToolsTestCase
+from ..testutils import BaseTestCase
 import unittest
 import numpy as np
 import scipy
@@ -6,7 +6,7 @@ import pygsti
 
 import pygsti.tools.basistools as basistools
 
-class BasisToolsTestCase(ToolsTestCase):
+class BasisBaseTestCase(BaseTestCase):
 
     ###########################################################
     ## BASIS TOOLS TESTS     ##################################

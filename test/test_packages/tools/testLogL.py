@@ -1,9 +1,9 @@
-from .toolsBaseCase import ToolsTestCase
+from ..testutils import BaseTestCase
 from pygsti.construction import std1Q_XYI as std
 import pygsti
 
 
-class LogLTestCase(ToolsTestCase):
+class LogLTestCase(BaseTestCase):
 
     def test_logl_fn(self):
         ds          = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis.dataset")

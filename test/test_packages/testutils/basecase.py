@@ -3,7 +3,7 @@ import numpy as np
 import pygsti
 import os
 
-class ToolsTestCase(unittest.TestCase):
+class BaseTestCase(unittest.TestCase):
 
     def setUp(self):
         # move working directories

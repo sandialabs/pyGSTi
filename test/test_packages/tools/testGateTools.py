@@ -1,4 +1,4 @@
-from .toolsBaseCase import ToolsTestCase
+from ..testutils import BaseTestCase
 import pygsti
 import pygsti.tools.gatetools as gatetools
 import numpy as np
@@ -14,7 +14,7 @@ B = np.array( [[0.5, 0, 0, -0.2j],
                [ 0, 0, 0.25,   0],
                [ 0.2j,  0,  0,  0.1]], 'complex')
 
-class GateToolsTestCase(ToolsTestCase):
+class GateBaseTestCase(BaseTestCase):
 
     def test_gate_tools(self):
         oneRealPair = np.array( [[1+1j, 0, 0, 0],

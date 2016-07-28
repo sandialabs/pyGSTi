@@ -1,10 +1,10 @@
-from .toolsBaseCase import ToolsTestCase
+from ..testutils import BaseTestCase
 from pygsti.construction import std1Q_XYI as std
 import pygsti
 import unittest
 
 
-class Chi2LogLTestCase(ToolsTestCase):
+class Chi2LogLTestCase(BaseTestCase):
     ###########################################################
     ## Chi2 TESTS   ##################################
     ###########################################################

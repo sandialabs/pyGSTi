@@ -1,10 +1,10 @@
-from .toolsBaseCase import ToolsTestCase
+from ..testutils import BaseTestCase
 import numpy as np
 import pygsti
 import unittest
 
 
-class MatrixToolsTestCase(ToolsTestCase):
+class MatrixBaseTestCase(BaseTestCase):
 
     def test_matrixtools(self):
         herm_mx = np.array( [[ 1, 1+2j],

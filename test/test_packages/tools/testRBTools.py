@@ -1,8 +1,8 @@
-from .toolsBaseCase import ToolsTestCase
+from ..testutils import BaseTestCase
 import pygsti
 import unittest
 
-class RBToolsTestCase(ToolsTestCase):
+class RBBaseTestCase(BaseTestCase):
     def test_rb_tools(self):
         ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis.dataset")
         val = pygsti.rb_decay(0.1,0.1,0.1)
