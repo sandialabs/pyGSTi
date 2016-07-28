@@ -5,7 +5,6 @@ import pygsti
 import os
 from pygsti.construction import std1Q_XYI as std
 
-
 class ToolsTestCase(unittest.TestCase):
 
     def setUp(self):

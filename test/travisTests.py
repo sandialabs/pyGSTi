@@ -1,9 +1,21 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 from __future__ import print_function
 from helpers.test.runPackage  import run_package
 from helpers.automation_tools import directory
-import subprocess, sys
-travisPackages = ['tools', 'objects', 'construction', 'io', 'optimize', 'algorithms']
+import subprocess, sys, os
+
+doReport  = os.environ.get('Report',  'False')
+doDrivers = os.environ.get('Drivers', 'False')
+
+# I'm doing string comparison rather than boolean comparison because, in python, bool('False') evaluates to true
+# Build the list of packages to test depending on which portion of the build matrix is running
+
+if doReport == 'True':
+    travisPackages = ['report']
+elif doDrivers == 'True':
+    travisPackages = ['drivers']
+else:
+    travisPackages = ['tools', 'objects', 'construction', 'iotest', 'optimize', 'algorithms']
 
 results = []
 with directory('test_packages'):

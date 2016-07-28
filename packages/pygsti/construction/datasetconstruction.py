@@ -13,8 +13,7 @@ from ..objects import gatestring as _gs
 from ..objects import dataset as _ds
 
 def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples, sampleError="none", seed=None):
-    """
-    Creates a DataSet using the probabilities obtained from a gateset.
+    """Creates a DataSet using the probabilities obtained from a gateset.
 
     Parameters
     ----------
@@ -25,8 +24,7 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples, sampleError=
     gatestring_list : list of (tuples or GateStrings) or None
         Each tuple or GateString contains gate labels and
         specifies a gate sequence whose counts are included
-        in the returned DataSet.
-       e.g. ``[ (), ('Gx',), ('Gx','Gy') ]``
+        in the returned DataSet. e.g. ``[ (), ('Gx',), ('Gx','Gy') ]``
 
     nSamples : int or list of ints or None
         The simulated number of samples for each gate string.  This only has
@@ -40,8 +38,8 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples, sampleError=
     sampleError : string, optional
         What type of sample error is included in the counts.  Can be:
 
-       - "none"  - no sample error: counts are floating point numbers such that
-          the exact probabilty can be found by the ratio of count / total.
+        - "none"  - no sample error: counts are floating point numbers such
+          that the exact probabilty can be found by the ratio of count / total.
         - "round" - same as "none", except counts are rounded to the nearest
           integer.
         - "binomial" - the number of counts is taken from a binomial

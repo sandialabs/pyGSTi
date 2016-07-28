@@ -2,7 +2,7 @@
   pyGSTi 0.9 
 ********************************************************************************
 
-[![Build Status](https://travis-ci.org/pyGSTio/pyGSTi.svg?branch=develop)](https://travis-ci.org/pyGSTio/pyGSTi)
+[![Build Status](https://travis-ci.org/pyGSTio/pyGSTi.svg?branch=beta)](https://travis-ci.org/pyGSTio/pyGSTi)
 
 Overview:
 --------

@@ -31,10 +31,10 @@ with open(sys.argv[1], 'r') as defaultcommit:
 
 # Overwrite it:
 with open(sys.argv[1], 'w') as commit:
+    commit.write(defaultMsg)
     if not doCI:
         commit.write(
             '# The line below will skip Travis CI.\n' + 
             '# If this is not what you want, delete it.\n' + 
             '[ci skip]\n')
-    commit.write(defaultMsg)
 
