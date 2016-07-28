@@ -2,8 +2,20 @@
 from __future__ import print_function
 from helpers.test.runPackage  import run_package
 from helpers.automation_tools import directory
-import subprocess, sys
-travisPackages = ['tools', 'objects', 'construction', 'iotest', 'optimize', 'algorithms']
+import subprocess, sys, os
+
+doReport  = os.environ.get('Report',  'False')
+doDrivers = os.environ.get('Drivers', 'False')
+
+# I'm doing string comparison rather than boolean comparison because, in python, bool('False') evaluates to true
+# Build the list of packages to test depending on which portion of the build matrix is running
+
+if doReport == 'True':
+    travisPackages = ['report']
+elif doDrivers == 'True':
+    travisPackages = ['drivers']
+else:
+    travisPackages = ['tools', 'objects', 'construction', 'iotest', 'optimize', 'algorithms']
 
 results = []
 with directory('test_packages'):
@@ -17,7 +29,7 @@ if len(failed) > 0:
     for failure in failed:
         print('%s Failed: %s' % (failure[0], failure[1]))
     sys.exit(1)
-
+'''
 def run_specific(commands):
     try:
         output = subprocess.check_output(commands)
@@ -39,3 +51,4 @@ drivers = run_specific(['python', 'test_packages/drivers/testDrivers.py', 'TestD
 if not drivers:
     sys.exit(1)
 sys.exit(0)
+'''

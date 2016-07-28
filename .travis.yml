@@ -2,11 +2,18 @@ language: python
 python:
   - "2.7"
   - "3.5"
+
 branches:
   only:
     - master
     - beta
     - develop
+
+env:
+    - Report=False Drivers=False
+    - Report=True  Drivers=False
+    - Report=False Drivers=True
+
 # command to install dependencies
 before_install:
   - sudo apt-get -qq update
