@@ -10,9 +10,8 @@ branches:
     - develop
 
 env:
-    - Report=False Drivers=False
-    - Report=True  Drivers=False
-    - Report=False Drivers=True
+    - Drivers=False
+    #- Drivers=True
 
 # command to install dependencies
 before_install:
