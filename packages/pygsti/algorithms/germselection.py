@@ -15,6 +15,126 @@ import warnings as _warnings
 from .. import objects as _objs
 
 
+def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
+                   numGSCopies=5, seed=None, maxGermLength=6,
+                   algorithm='greedy', algorithm_kwargs={}, verbosity=0):
+    """Generate a germ set for doing GST with a given target gateset.
+
+    This function provides a streamlined interface to a variety of germ
+    selection algorithms. It's goal is to provide a method that typical users
+    can run by simply providing a target gateset and leaving all other settings
+    at their default values, while providing flexibility for users desiring
+    more control to fine tune some of the general and algorithm-specific
+    details.
+
+    Currently, to break troublesome degeneracies and provide some confidence
+    that the chosen germ set is amplificationally complete (AC) for all
+    gatesets in a neighborhood of the target gateset (rather than only the
+    target gateset), an ensemble of gatesets with random unitary perturbations
+    to their gates must be provided or generated.
+
+    Parameters
+    ----------
+    gs_target : GateSet or list of GateSet
+        The gateset you are aiming to implement, or a list of gatesets that are
+        copies of the gateset you are trying to implement (either with or
+        without random unitary perturbations applied to the gatesets).
+
+    randomize : bool, optional
+        Whether or not to add random unitary perturbations to the gateset(s)
+        provided.
+
+    randomizationStrength : float, optional
+        The size of the random unitary perturbations applied to gates in the
+        gateset. See :meth:`~pygsti.objects.GateSet.randomize_with_unitary`
+        for more details.
+
+    numGSCopies : int, optional
+        The number of copies of the original gateset that should be used.
+
+    seed : int, optional
+        Seed for generating random unitary perturbations to gatesets. Also
+        passed along to stochastic germ-selection algorithms.
+
+    maxGermsLength : int, optional
+        The maximum length (in terms of gates) of any germ allowed in the germ
+        set. Currently will construct a list of all non-equivalent germs of
+        length up to `maxGermsLength` for the germ selection algorithms to play
+        around with.
+
+    algorithm : {'greedy', 'slack'}, optional
+        Specifies the algorithm to use to generate the germ set. Current
+        options are:
+
+        'greedy'
+            Add germs one-at-a-time until the set is AC, picking the germ that
+            improves the germ-set score by the largest amount at each step. See
+            :func:`build_up_breadth` for more details.
+        'slack'
+            From a initial set of germs, add or remove a germ at each step in
+            an attempt to improve the germ-set score. Will allow moves that
+            degrade the score in an attempt to escape local optima as long as
+            the degredation is within some specified amount of "slack". See
+            :func:`optimize_integer_germs_slack` for more details.
+
+    algorithm_kwargs : dict
+        Dictionary of ``{'keyword': keyword_arg}`` pairs providing keyword
+        arguments for the specified `algorithm` function. See the documentation
+        for functions referred to in the `algorithm` keyword documentation for
+        what options are available for each algorithm.
+
+    verbosity : int, optional
+        The verbosity level of the :class:`~pygsti.objects.VerbosityPrinter`
+        used to print log messages.
+
+    Returns
+    -------
+    list of GateString
+        A list containing the germs making up the germ set.
+
+    """
+    gatesetList = gs.setup_gateset_list(gs_target, randomize,
+                                        randomizationStrength, numGSCopies,
+                                        seed)
+    gates = gs_target.gates.keys()
+    availableGermsList = constr.list_all_gatestrings_without_powers_and_cycles(
+                                    gates, maxGermLength)
+    if algorithm == 'greedy':
+        # Define defaults for parameters that currently have no default or
+        # whose default we want to change.
+        default_kwargs = {
+                          'germsList': availableGermsList,
+                          'randomize': False,
+                          'seed': seed,
+                          'verbosity': verbosity,
+                         }
+        for key in default_kwargs:
+            if key not in algorithm_kwargs:
+                algorithm_kwargs[key] = default_kwargs[key]
+        germList = gs.build_up_breadth(gatesetList=gatesetList,
+                                       **algorithm_kwargs)
+    elif algorithm == 'slack':
+        # Define defaults for parameters that currently have no default or
+        # whose default we want to change.
+        default_kwargs = {
+                          'germsList': availableGermsList,
+                          'randomize': False,
+                          'seed': seed,
+                          'verbosity': verbosity,
+                          'slackFrac': 0.1,
+                         }
+        for key in default_kwargs:
+            if key not in algorithm_kwargs:
+                algorithm_kwargs[key] = default_kwargs[key]
+        germList = gs.optimize_integer_germs_slack(gatesetList,
+                                                   **algorithm_kwargs)
+    else:
+        raise ValueError("'{}' is not a valid algorithm "
+                         "identifier.".format(algorithm))
+
+    return germList
+
+
 def get_gateset_params(gatesetList):
     """Get the number of gates and gauge parameters of the gatesets in a list.
 
