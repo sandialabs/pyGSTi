@@ -1502,18 +1502,66 @@ def get_swap_neighbors(weights):
 
 
 def germ_rcl_fn(candidateScores, alpha):
+    """Create a restricted candidate list (RCL) based on ScoreNonAC objects.
+
+    Parameters
+    ----------
+    candidateScores : list of ScoreNonAC
+        List of scores to be sorted in RCL and not RCL.
+
+    alpha : float
+        A number between 0 and 1 that roughly specifies a score theshold
+        relative to the spread of scores that a germ must score better than in
+        order to be included in the RCL. A value of 0 for `alpha` corresponds
+        to a purely greedy algorithm (only the best-scoring germ set is
+        included in the RCL), while a value of 1 for `alpha` will include all
+        germs in the RCL.
+
+        Intermediate values of alpha attempt to mimic the behavior of alpha for
+        simple float scores. For those scores, the score that all elements must
+        beat is ``(1 - alpha)*best + alpha*worst``. For ScoreNonAC objects, the
+        most important part of the score is the integer `N`. The appropriate
+        threshold for `N` is ``(1 - alpha)*N_max + alpha*(N_min - 1)``. If
+        ``N <= floor(N_thresh)``, it is automatically rejected from the RCL,
+        and if ``N >= ceil(N_thresh + 1)``, it is automatically included in the
+        RCL.  If neither of those initial conditions is the case (i.e.
+        `N_thresh` is not an integer and ``N == ceil(N_thresh)``), then the
+        real-valued sub score is compared to the range of real valued sub
+        scores for the value of `N` in question as described for simple float
+        scores, using ``ceil(N_thresh) - N_thresh`` as the value for alpha in
+        that case. It may be that there are no scores at the value of `N` such
+        that ``N == ceil(N_thresh)``. In this case it doesn't matter what value
+        of real sub score the threshold score is given, since no germs will
+        need to compare against it.
+
+    Returns
+    -------
+    numpy.array
+        The indices of the scores sufficiently good to be in the RCL.
+
+    """
     max_nonACscore = max(candidateScores)
     min_nonACscore = min(candidateScores)
-    N_threshold = alpha * min_nonACscore.N + (1 - alpha) * max_nonACscore.N
-    score_alpha = N_threshold - int(_np.ceil(N_threshold))
+    N_threshold = (alpha * (min_nonACscore.N - 1)
+                   + (1 - alpha) * max_nonACscore.N)
+    score_alpha = _np.ceil(N_threshold) - N_threshold
     thresholdScores = [candidateScore.score
                        for candidateScore in candidateScores
                        if candidateScore.N == int(_np.ceil(N_threshold))]
-    max_threshold_score = max(thresholdScores)
-    min_threshold_score = min(thresholdScores)
-    score_threshold = ((1 - alpha) * min_threshold_score
-                       + alpha * max_threshold_score)
-    nonACscore_threshold = ScoreNonAC(score_threshold, N_threshold)
+    if len(thresholdScores) == 0:
+        # Don't care about sorting out scores with threshold N since there are
+        # no scores with this N.
+        nonACscore_threshold = ScoreNonAC(0, int(_np.ceil(N_threshold)))
+    else:
+        # If there are N that aren't clearly in or out of the RCL, we have to
+        # be a bit more careful.
+        max_threshold_score = max(thresholdScores)
+        min_threshold_score = min(thresholdScores)
+        score_threshold = ((1 - alpha) * min_threshold_score
+                           + alpha * max_threshold_score)
+        nonACscore_threshold = ScoreNonAC(score_threshold, N_threshold)
+    # Now that we've build a sensible threshold, compare all scores against
+    # this.
     return _np.where(_np.array(candidateScores) <= nonACscore_threshold)[0]
 
 
