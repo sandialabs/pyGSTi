@@ -11,7 +11,7 @@ branches:
 
 env:
     - Drivers=False
-    - Drivers=True
+    #- Drivers=True
 
 # command to install dependencies
 before_install:
