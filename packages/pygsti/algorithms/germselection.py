@@ -151,10 +151,13 @@ def get_gateset_params(gatesetList):
     -------
     reducedGatesetList : list of GateSet
         The original list of gatesets with SPAM removed
+
     numGaugeParams : int
         The number of non-SPAM gauge parameters for all gatesets.
+
     numNonGaugeParams : int
         The number of non-SPAM non-gauge parameters for all gatesets.
+
     numGates : int
         The number of gates for all gatesets.
 
@@ -277,11 +280,14 @@ def compute_non_AC_score(scoreFn, thresholdAC=1e6, initN=1,
         a score for the partial germ set based on those eigenvalues, with lower
         scores indicating better germ sets. Usually some flavor of
         :func:`germselection.list_score`.
+
     thresholdAC : float, optional
         Value which the score (before penalties are applied) must be lower than
         for the germ set to be considered AC.
+
     initN : int
         The number of largest eigenvalues to begin with checking.
+
     partialDerivDaggerDeriv : numpy.array, optional
         Array with three axes, where the first axis indexes individual germs
         within the partial germ set and the remaining axes index entries in the
@@ -291,25 +297,32 @@ def compute_non_AC_score(scoreFn, thresholdAC=1e6, initN=1,
         If this array is not supplied it will need to be computed from
         `germsList` and `gateset`, which will take longer, so it is recommended
         to precompute this array if this routine will be called multiple times.
+
     gateset : GateSet, optional
         The gateset against which the germ set is to be scored. Not needed if
         `partialDerivDaggerDeriv` is provided.
+
     partialGermsList : list of GateString, optional
         The list of germs in the partial germ set to be evaluated. Not needed
         if `partialDerivDaggerDeriv` (and `germLengths` when
         ``gatePenalty > 0``) are provided.
+
     eps : float, optional
         Used when calculating `partialDerivDaggerDeriv` to determine if two
         eigenvalues are equal (see :func:`germselection.bulk_twirled_deriv`
         for details). Not used if `partialDerivDaggerDeriv` is provided.
+
     numGaugeParams : int
         The number of gauge parameters of the gateset. Not needed if `gateset`
         is provided.
+
     gatePenalty : float, optional
         Coefficient for a penalty linear in the sum of the germ lengths.
+
     germLengths : numpy.array, optional
         The length of each germ. Not needed if `gatePenalty` is ``0.0`` or
         `partialGermsList` is provided.
+
     l1Penalty : float, optional
         Coefficient for a penalty linear in the number of germs.
 
@@ -440,9 +453,11 @@ def randomizeGatesetList(gatesetList, randomizationStrength, numCopies,
 
 
 def checkGermsListCompleteness(gatesetList, germsList, scoreFunc, threshold):
-    """Check to see if the germsList is amplificationally complete (AC) for
-    all the GateSets in `gatesetList, returning the index of the first GateSet
-    for which it is not AC or `-1` if it is AC for all GateSets
+    """Check to see if the germsList is amplificationally complete (AC)
+    
+    Checks for AC with respect to all the GateSets in `gatesetList`, returning
+    the index of the first GateSet for which it is not AC or `-1` if it is AC
+    for all GateSets.
 
     """
     for gatesetNum, gateset in enumerate(gatesetList):
@@ -516,8 +531,7 @@ def _SuperOpForPerfectTwirl(wrt, eps):
 
 
 def sq_sing_vals_from_deriv(deriv, weights=None):
-    """Calculate the squared singulare values of the combined Jacobian of the
-    germ set.
+    """Calculate the squared singulare values of the Jacobian of the germ set.
 
     Parameters
     ----------
@@ -552,8 +566,9 @@ def sq_sing_vals_from_deriv(deriv, weights=None):
 
 
 def list_score(input_array, scoreFunc='all'):
-    """
-    Score a set of germs based on the singular values of the Jacobian which
+    """Score a germ set based on the physical singular values of the Jacobian.
+    
+    The physical singular values of the Jacobian are the singular values which
     correspond to non-gauge degrees of freedom in the gate set. Smaller scores
     ought to correspond to better-performing germ sets.
 
@@ -591,27 +606,28 @@ def list_score(input_array, scoreFunc='all'):
 
 
 def twirled_deriv(gateset, gatestring, eps=1e-6):
-    """
-    Compute the "Twirled Derivative" of a gatestring, obtained
-    by acting on the standard derivative of a gate string with
-    the twirling superoperator.
+    """Compute the "Twirled Derivative" of a gatestring.
+    
+    The twirled derivative is obtained by acting on the standard derivative of
+    a gate string with the twirling superoperator.
 
     Parameters
     ----------
     gateset : Gateset object
-      The GateSet which associates gate labels with operators.
+        The GateSet which associates gate labels with operators.
 
     gatestring : GateString object
-      The gate string to take a twirled derivative of.
+        The gate string to take a twirled derivative of.
 
     eps : float, optional
-      Tolerance used for testing whether two eigenvectors
-      are degenerate (i.e. abs(eval1 - eval2) < eps ? )
+        Tolerance used for testing whether two eigenvectors are degenerate
+        (i.e. abs(eval1 - eval2) < eps ? )
 
     Returns
     -------
     numpy array
       An array of shape (gate_dim^2, num_gateset_params)
+
     """
     prod  = gateset.product(gatestring)
 
@@ -626,31 +642,32 @@ def twirled_deriv(gateset, gatestring, eps=1e-6):
 
 
 def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False):
-    """
-    Compute the "Twirled Derivative" of a gatestring, obtained
-    by acting on the standard derivative of a gate string with
-    the twirling superoperator.
+    """Compute the "Twirled Derivative" of a set of gatestrings.
+    
+    The twirled derivative is obtained by acting on the standard derivative of
+    a gate string with the twirling superoperator.
 
     Parameters
     ----------
     gateset : Gateset object
-      The GateSet which associates gate labels with operators.
+        The GateSet which associates gate labels with operators.
 
     gatestrings : list of GateString objects
-      The gate string to take a twirled derivative of.
+        The gate string to take a twirled derivative of.
 
     eps : float, optional
-      Tolerance used for testing whether two eigenvectors
-      are degenerate (i.e. abs(eval1 - eval2) < eps ? )
+        Tolerance used for testing whether two eigenvectors are degenerate
+        (i.e. abs(eval1 - eval2) < eps ? )
 
     check : bool, optional
-      Whether to perform internal consistency checks, at the
-      expense of making the function slower.
+        Whether to perform internal consistency checks, at the expense of
+        making the function slower.
 
     Returns
     -------
     numpy array
-      An array of shape (num_gate_strings, gate_dim^2, num_gateset_params)
+        An array of shape (num_gate_strings, gate_dim^2, num_gateset_params)
+
     """
     evalTree = gateset.bulk_evaltree(gatestrings)
     dProds, prods = gateset.bulk_dproduct(evalTree, flat=True, bReturnProds=True)#, memLimit=None)
@@ -681,9 +698,7 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False):
 
 def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
                          returnSpectrum=False, tol=1e-6):
-    """
-    Test whether a set of germs is able to amplify all of the GateSet's
-    non-gauge parameters.
+    """Test whether a set of germs is able to amplify all non-gauge parameters.
 
     Parameters
     ----------
@@ -720,8 +735,8 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
         Only returned when `returnSpectrum` is ``True``.  Sorted array of
         eigenvalues (from small to large) of the jacobian^T * jacobian
         matrix used to determine parameter amplification.
-    """
 
+    """
     # Remove any SPAM vectors from gateset since we only want
     # to consider the set of *gate* parameters for amplification
     # and this makes sure our parameter counting is correct
@@ -756,9 +771,7 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
 
 def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
                            returnSpectrum=False, threshold=1e6, check=False):
-    """
-    Test whether a set of germs is able to amplify all of the GateSet's
-    non-gauge parameters.
+    """Test whether a set of germs is able to amplify all non-gauge parameters.
 
     Parameters
     ----------
@@ -801,8 +814,8 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
         Only returned when `returnSpectrum` is ``True``.  Sorted array of
         eigenvalues (from small to large) of the jacobian^T * jacobian
         matrix used to determine parameter amplification.
-    """
 
+    """
     # Remove any SPAM vectors from gateset since we only want
     # to consider the set of *gate* parameters for amplification
     # and this makes sure our parameter counting is correct
@@ -1165,8 +1178,8 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     --------
     :class:`~pygsti.objects.GateSet`
     :class:`~pygsti.objects.GateString`
-    """
 
+    """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
     gatesetList = setup_gateset_list(gatesetList, randomize,
