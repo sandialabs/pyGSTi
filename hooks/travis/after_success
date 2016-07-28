@@ -10,14 +10,11 @@ branches   = output.decode('utf-8').splitlines()
 for branch in branches:
     if '*' in branch:
         branchname = branch.replace('*', '')
+        branchname = branchname.replace(')', '')
         if branchname.count(' ') > 0:
             branchname = branchname.split()[-1]
         break
 
-try:
-    print(subprocess.check_output(['git' ,'rev-parse', '--abbrev-ref', 'HEAD']).decode('utf-8')) # check if this is a better alternative to the above
-except:
-    pass
 
 # Relevant:
 # http://stackoverflow.com/questions/501407/is-there-a-git-merge-dry-run-option
@@ -26,17 +23,13 @@ except:
 # This code is currently unactive, but should work :)
 
 print(branchname)
-if branchname != 'develop':
-    raise ValueError('Non develop branch called after_success. Branchname was %s' % branchname)
 
 # Get the SHA of our local develop
 output = subprocess.check_output(['git', 'log', 'HEAD', '-1'])
-devSHA = output.decode('utf-8').replace('\n', '')
+devSHA = output.decode('utf-8').split()[1]
 
 subprocess.call(['git', 'fetch', 'origin', 'beta'])
 subprocess.call(['git', 'checkout', 'beta'])
-subprocess.call(['git', 'fetch', 'origin', 'develop'])
-# origin/develop -> FETCH_HEAD
 hexOut = subprocess.check_output(['git',
                                   'merge-base',
                                   devSHA,
