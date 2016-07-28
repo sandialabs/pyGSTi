@@ -29,7 +29,7 @@ if len(failed) > 0:
     for failure in failed:
         print('%s Failed: %s' % (failure[0], failure[1]))
     sys.exit(1)
-'''
+
 def run_specific(commands):
     try:
         output = subprocess.check_output(commands)
@@ -51,4 +51,3 @@ drivers = run_specific(['python', 'test_packages/drivers/testDrivers.py', 'TestD
 if not drivers:
     sys.exit(1)
 sys.exit(0)
-'''
