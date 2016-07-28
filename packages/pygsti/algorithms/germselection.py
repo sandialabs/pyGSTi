@@ -274,7 +274,7 @@ def compute_non_AC_score(scoreFn, thresholdAC=1e6, initN=1,
         A function that takes as input a list of sorted eigenvalues and returns
         a score for the partial germ set based on those eigenvalues, with lower
         scores indicating better germ sets. Usually some flavor of
-        :function:`germselection.list_score`.
+        :func:`germselection.list_score`.
     thresholdAC : float, optional
         Value which the score (before penalties are applied) must be lower than
         for the germ set to be considered AC.
@@ -298,7 +298,7 @@ def compute_non_AC_score(scoreFn, thresholdAC=1e6, initN=1,
         ``gatePenalty > 0``) are provided.
     eps : float, optional
         Used when calculating `partialDerivDaggerDeriv` to determine if two
-        eigenvalues are equal (see :function:`germselection.bulk_twirled_deriv`
+        eigenvalues are equal (see :func:`germselection.bulk_twirled_deriv`
         for details). Not used if `partialDerivDaggerDeriv` is provided.
     numGaugeParams : int
         The number of gauge parameters of the gateset. Not needed if `gateset`
@@ -933,7 +933,7 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
     score used to check for AC by the largest amount (for the gateset that
     currently has the lowest score) at each step, stopping when the threshold
     for AC is achieved. This strategy is something of a "breadth-first"
-    approach, in contrast to :function:`build_up`, which only looks at the
+    approach, in contrast to :func:`build_up`, which only looks at the
     scores for one gateset at a time until that gateset achieves AC, then
     turning it's attention to the remaining gatesets.
 
