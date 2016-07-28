@@ -1521,7 +1521,8 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
                                 randomizationStrength=1e-3, numCopies=None,
                                 seed=None, gatePenalty=0.0, scoreFunc='all',
                                 tol=1e-6, threshold=1e6, check=False,
-                                forceSingletons=True, verbosity=0):
+                                forceSingletons=True, iterations=5,
+                                verbosity=0):
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
@@ -1579,7 +1580,7 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
 
     bestSoln = grasp(elements=germsList, greedyScoreFn=scoreFn, rclFn=rclFn,
                      localScoreFn=scoreFn, getNeighborsFn=get_swap_neighbors,
-                     finalScoreFn=scoreFn, iterations=5,
+                     finalScoreFn=scoreFn, iterations=iterations,
                      feasibleThreshold=ScoreNonAC(threshold, numNonGaugeParams),
                      initialElements=weights, seed=seed,
                      verbosity=verbosity)
