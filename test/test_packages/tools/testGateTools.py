@@ -63,15 +63,15 @@ class GateToolsTestCase(ToolsTestCase):
 
     def test_frobenius_distance(self):
         self.assertAlmostEqual( pygsti.frobeniusdist(A,A), 0.0 )
+        self.assertAlmostEqual( pygsti.frobeniusdist2(A,A), 0.0 )
 
-    # Tests fidelity as well
     def test_process_fidelity(self):
         fidelity = gatetools.process_fidelity(A, B)
         self.assertAlmostEqual(fidelity, 0.42686642003)
 
     def test_fidelity_upper_bound(self):
         upperBound = gatetools.fidelity_upper_bound(A)
-        expected   = (np.array([[ 0.25]]), 
+        expected   = (np.array([[ 0.25]]),
                       np.array([[  1.00000000e+00,  -8.27013523e-16,   8.57305616e-33, 1.95140273e-15],
                                 [ -8.27013523e-16,   1.00000000e+00,   6.28036983e-16, -8.74760501e-31],
                                 [  5.68444574e-33,  -6.28036983e-16,   1.00000000e+00, -2.84689309e-16],
@@ -83,9 +83,6 @@ class GateToolsTestCase(ToolsTestCase):
         identity  = np.identity(2)
         processMx = gatetools.unitary_to_process_mx(identity)
         self.assertArraysAlmostEqual(processMx, np.identity(4))
-
-
-
 
 
 if __name__ == '__main__':

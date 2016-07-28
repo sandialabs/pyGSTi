@@ -1,37 +1,12 @@
 from .toolsBaseCase import ToolsTestCase
 from pygsti.construction import std1Q_XYI as std
 import pygsti
-import unittest
 
 
-class Chi2LogLTestCase(ToolsTestCase):
-    ###########################################################
-    ## Chi2 and logL TESTS   ##################################
-    ###########################################################
-
-    def test_chi2_fn(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis.dataset")
-        chi2, grad = pygsti.chi2(ds, std.gs_target, returnGradient=True)
-        pygsti.chi2(ds, std.gs_target, returnHessian=True)
-
-        pygsti.gate_string_chi2( ('Gx',), ds, std.gs_target)
-        pygsti.chi2fn_2outcome( N=100, p=0.5, f=0.6)
-        pygsti.chi2fn_2outcome_wfreqs( N=100, p=0.5, f=0.6)
-        pygsti.chi2fn( N=100, p=0.5, f=0.6)
-        pygsti.chi2fn_wfreqs( N=100, p=0.5, f=0.6)
-
-        with self.assertRaises(ValueError):
-            pygsti.chi2(ds, std.gs_target, useFreqWeightedChiSq=True) #no impl yet
-
-        # Memory tests
-
-        with self.assertRaises(MemoryError):
-            pygsti.chi2(ds, std.gs_target, memLimit=0) # No memory for you
-        pygsti.chi2(ds, std.gs_target, memLimit=100000)
-
+class LogLTestCase(ToolsTestCase):
 
     def test_logl_fn(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis.dataset")
+        ds          = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis.dataset")
         gatestrings = pygsti.construction.gatestring_list( [ ('Gx',), ('Gy',), ('Gx','Gx') ] )
         spam_labels = std.gs_target.get_spam_labels()
         pygsti.create_count_vec_dict( spam_labels, ds, gatestrings )
@@ -73,5 +48,44 @@ class Chi2LogLTestCase(ToolsTestCase):
         twoDelta1 = pygsti.two_delta_loglfn(N=100, p=0.5, f=0.6, minProbClip=1e-6, poissonPicture=True)
         twoDelta2 = pygsti.two_delta_loglfn(N=100, p=0.5, f=0.6, minProbClip=1e-6, poissonPicture=False)
 
-if __name__ == '__main__':
-    unittest.main(verbosity=2)
+    def test_no_gatestrings(self):
+        ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis.dataset")
+        L1 = pygsti.logl(std.gs_target, ds,
+                         probClipInterval=(-1e6,1e6), countVecMx=None,
+                         poissonPicture=True, check=False)
+        self.assertAlmostEqual(L1, -4531934.43735, 5)
+        L2 = pygsti.logl_max(ds)
+        self.assertAlmostEqual(L2, -1329179.7675, 5)
+
+    def test_memory(self):
+        ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis.dataset")
+        with self.assertRaises(MemoryError):
+            pygsti.logl_hessian(std.gs_target, ds,
+                                probClipInterval=(-1e6,1e6), countVecMx=None,
+                                poissonPicture=True, check=False, memLimit=0) # No memory for you
+
+        L = pygsti.logl_hessian(std.gs_target, ds,
+                            probClipInterval=(-1e6,1e6), countVecMx=None,
+                            poissonPicture=True, check=False, memLimit=370000000) # Limit memory a bit
+        pygsti.logl_hessian(std.gs_target, ds,
+                            probClipInterval=(-1e6,1e6), countVecMx=None,
+                            poissonPicture=True, check=False, memLimit=25000000) # Limit memory a bit more
+        with self.assertRaises(MemoryError):
+            pygsti.logl_hessian(std.gs_target, ds,
+                                probClipInterval=(-1e6,1e6), countVecMx=None,
+                                poissonPicture=True, check=False, memLimit=30000) # Until another error is thrown
+
+    def test_forbidden_probablity(self):
+        ds   = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis.dataset")
+        prob = pygsti.forbidden_prob(std.gs_target, ds)
+        self.assertAlmostEqual(prob, 1.276825378318927e-13)
+
+    def test_hessian_mpi(self):
+        from mpi4py import MPI
+        comm = MPI.COMM_WORLD
+        ds   = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis.dataset")
+        L = pygsti.logl_hessian(std.gs_target, ds,
+                                probClipInterval=(-1e6,1e6), countVecMx=None, memLimit=25000000,
+                                poissonPicture=True, check=False, comm=comm)
+
+        print(L)
