@@ -32,7 +32,7 @@ cache:
 # command to run tests
 script:
   - cd test
-  - travis_wait python travisTests.py # Tests may take some time!
+  - travis_wait 40 python travisTests.py # Tests may take some time!
   - cd ..
 
 after_success:
