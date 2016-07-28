@@ -688,7 +688,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
 
             nCols = gateset.num_params()
             if nprocs > nCols:
-                raise ValueError("Too many (>%d) processors!" % nCols)
+                raise ValueError("Too many (>%d) processors!" % nCols)                               
             loc_iCols = list(range(rank,nCols,nprocs))
 
             #  iterate over columns of hessian via bulk_hprobs_by_column

@@ -68,11 +68,11 @@ def extract_rotation_hat(xhat,yhat,k,Nx,Ny,angleName="epsilon",
         while not (angle_j > previousAngle - _np.pi/k and \
                    angle_j <= previousAngle + _np.pi/k):
             if angle_j <= previousAngle - _np.pi/k:
-                angle_j += 2 * _np.pi/k
+                angle_j += 2 * _np.pi/k                                                              
             elif angle_j > previousAngle + _np.pi/k:
                 angle_j -= 2 * _np.pi/k
             else:
-                raise Exception('What?!')
+                raise Exception('What?!')                                                            
         return angle_j
 
 def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon"):
@@ -266,9 +266,9 @@ def extract_theta(gateset):
     thetaVal =  _np.real_if_close( [ _np.arccos(
                 _np.dot(decomp['axis of rotation'], [0,1,0,0]))])[0]
     if thetaVal > _np.pi/2:
-        thetaVal = _np.pi - thetaVal
+        thetaVal = _np.pi - thetaVal                                                                 
     elif thetaVal < -_np.pi/2:
-        thetaVal = _np.pi + thetaVal
+        thetaVal = _np.pi + thetaVal                                                                 
     return thetaVal
 
 

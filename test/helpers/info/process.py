@@ -39,3 +39,21 @@ def annotate_uncovered(packageName, infoDict):
             print('Annotating %s' % filename)
             with open(filename, 'w') as source:
                 source.write('\n'.join(content))
+
+
+def unannotate(packageName):
+    with directory('../packages/pygsti/%s' % convert_packagename(packageName)):
+        print(os.getcwd())
+        files = [filename for filename in get_files(os.getcwd()) if filename.endswith('py')]
+        print(files)
+        for filename in files:
+            print('Unannotating %s' % filename)
+
+            with open(filename, 'r') as source:
+                content = source.read().splitlines()
+
+            for i, line in enumerate(content):
+                content[i] = content[i].replace('# uncovered!', '') # Remove old annotations
+
+            with open(filename, 'w') as source:
+                source.write('\n'.join(content))

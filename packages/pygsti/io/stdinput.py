@@ -346,14 +346,14 @@ class StdInputParser(object):
             return not hasattr(main, '__file__')
 
         if is_interactive():
-            try:
-                import time
-                from IPython.display import clear_output
-                def display_progress(i,N):
-                    time.sleep(0.001); clear_output()
-                    print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))
-                    _sys.stdout.flush()
-            except:
+            try:                                                                                     
+                import time                                                                          
+                from IPython.display import clear_output                                             
+                def display_progress(i,N):                                                           
+                    time.sleep(0.001); clear_output()                                                
+                    print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))                
+                    _sys.stdout.flush()                                                              
+            except:                                                                                  
                 def display_progress(i,N): pass
         else:
             def display_progress(i,N): pass
@@ -486,14 +486,14 @@ class StdInputParser(object):
             return not hasattr(main, '__file__')
 
         if is_interactive():
-            try:
-                import time
-                from IPython.display import clear_output
-                def display_progress(i,N):
-                    time.sleep(0.001); clear_output()
-                    print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))
-                    _sys.stdout.flush()
-            except:
+            try:                                                                                     
+                import time                                                                          
+                from IPython.display import clear_output                                             
+                def display_progress(i,N):                                                           
+                    time.sleep(0.001); clear_output()                                                
+                    print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))                
+                    _sys.stdout.flush()                                                              
+            except:                                                                                  
                 def display_progress(i,N): pass
         else:
             def display_progress(i,N): pass
@@ -547,7 +547,7 @@ class StdInputParser(object):
 
                 if dsLabel not in dsSpamLabels:
                     dsSpamLabels[dsLabel] = [ spamLabel ]
-                else: dsSpamLabels[dsLabel].append( spamLabel )
+                else: dsSpamLabels[dsLabel].append( spamLabel )                                      
                 freqCols.append( (dsLabel,spamLabel,i,iTotal) )
 
         for dsLabel,spamLabels in dsSpamLabels.items():
@@ -689,11 +689,11 @@ def read_gateset(filename):
                     if len(parts) > 1:
                         basis_dims = list(map(int, "".join(parts[1:]).split(",")))
                         if len(basis_dims) == 1: basis_dims = basis_dims[0]
-                    elif gs.get_dimension() is not None:
-                        basis_dims = int(round(_np.sqrt(gs.get_dimension())))
-                    elif len(spam_vecs) > 0:
-                        basis_dims = int(round(_np.sqrt(list(spam_vecs.values())[0].size)))
-                    else:
+                    elif gs.get_dimension() is not None:                                             
+                        basis_dims = int(round(_np.sqrt(gs.get_dimension())))                        
+                    elif len(spam_vecs) > 0:                                                         
+                        basis_dims = int(round(_np.sqrt(list(spam_vecs.values())[0].size)))          
+                    else:                                                                            
                         raise ValueError("BASIS directive without dimension, and cannot infer dimension!")
                 else:
                     cur_label = line
@@ -715,9 +715,9 @@ def read_gateset(filename):
     if basis_dims is None:
         if gs.get_dimension() is not None:
             basis_dims = int(round(_np.sqrt(gs.get_dimension())))
-        elif len(spam_vecs) > 0:
-            basis_dims = int(round(_np.sqrt(list(spam_vecs.values())[0].size)))
-        else:
+        elif len(spam_vecs) > 0:                                                                     
+            basis_dims = int(round(_np.sqrt(list(spam_vecs.values())[0].size)))                      
+        else:                                                                                        
             raise ValueError("Cannot infer basis dimension!")
 
     #Set basis

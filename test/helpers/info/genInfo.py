@@ -45,7 +45,7 @@ def convert_packagename(name):
     if name == 'iotest':
         return 'io'
     else:
-        return name 
+        return name
 
 def get_info(filename, packageName, testCaseName, test):
     coverageFile = 'output/individual_coverage/%s/%s%s.yml' % (packageName, testCaseName, test)

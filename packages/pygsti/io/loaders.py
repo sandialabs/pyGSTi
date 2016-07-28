@@ -66,7 +66,7 @@ def load_dataset(filename, cache=False):
                     print("Loading from cache file: ", cache_filename)
                     ds = _objs.DataSet(fileToLoadFrom=cache_filename)
                     return ds
-                except: print("Failed to load from cache file")
+                except: print("Failed to load from cache file")                                      
             else:
                 print("Cache file not found or is tool old -- one will be created after loading is completed")
 
@@ -118,7 +118,7 @@ def load_multidataset(filename, cache=False):
                     print("Loading from cache file: %s" % cache_filename)
                     mds = _objs.MultiDataSet(fileToLoadFrom=cache_filename)
                     return mds
-                except: print("Failed to load from cache file")
+                except: print("Failed to load from cache file")                                      
             else:
                 print("Cache file not found or is too old -- one will be created after loading is completed")
 

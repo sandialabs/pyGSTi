@@ -2,7 +2,7 @@
 from __future__                import print_function
 from helpers.automation_tools  import read_yaml, write_yaml
 from helpers.info.genInfo      import gen_package_info
-from helpers.info.process      import find_uncovered_lines, annotate_uncovered
+from helpers.info.process      import find_uncovered_lines, annotate_uncovered, unannotate
 from pprint import pprint
 import argparse
 import sys
@@ -17,6 +17,8 @@ if __name__ == '__main__':
                         help='update the packages given')
     parser.add_argument('--process', type=bool,
                         help='process the packages given')
+    parser.add_argument('--unannotate', type=bool,
+                        help='Clear coverage annotations')
 
     parsed = parser.parse_args(sys.argv[1:])
 
@@ -32,3 +34,7 @@ if __name__ == '__main__':
         for packageName in parsed.packages:
             # interpret it, if asked
             annotate_uncovered(packageName, infoDict)
+
+    if parsed.unannotate:
+        for packageName in parsed.packages:
+            unannotate(packageName)

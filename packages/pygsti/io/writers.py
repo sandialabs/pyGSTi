@@ -245,6 +245,6 @@ def write_gateset(gs,filename,title=None):
             output.write("BASIS %s\n" % gs.get_basis_name())
         else:
             if type(dims) != int:
-                dimStr = ",".join(map(str,dims))
+                dimStr = ",".join(map(str,dims))                                                     
             else: dimStr = str(dims)
             output.write("BASIS %s %s\n" % (gs.get_basis_name(), dimStr))
