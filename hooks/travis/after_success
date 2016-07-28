@@ -24,22 +24,19 @@ for branch in branches:
 
 print(branchname)
 
-# Get the SHA of our local develop
-output = subprocess.check_output(['git', 'log', 'HEAD', '-1'])
-devSHA = output.decode('utf-8').split()[1]
-
 subprocess.call(['git', 'fetch', 'origin', 'beta'])
-subprocess.call(['git', 'checkout', 'beta'])
+subprocess.call(['git', 'branch', 'beta', 'origin/beta']) # Switch to the latest version of beta
+
 hexOut = subprocess.check_output(['git',
                                   'merge-base',
-                                  devSHA,
-                                  'beta'])
+                                  branchname,   # OUR version of develop
+                                  'beta']    )
 hexID  = hexOut.decode('utf-8').replace('\n', '')
 output = subprocess.check_output(['git',
-                                  'merge-base',
+                                  'merge-tree',
                                   hexID,
                                   'beta',
-                                  devSHA]) # View merge tree between beta and develop
+                                  branchname]) # View merge tree between beta and (our) develop
 output = output.decode('utf-8', 'ignore')
 print(output)
 canMerge = '<<<<<' not in output
