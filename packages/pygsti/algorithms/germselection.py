@@ -13,6 +13,7 @@ import numpy as _np
 import numpy.linalg as _nla
 import warnings as _warnings
 from .. import objects as _objs
+from .. import construction as _constr
 
 
 def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
@@ -93,11 +94,10 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
         A list containing the germs making up the germ set.
 
     """
-    gatesetList = gs.setup_gateset_list(gs_target, randomize,
-                                        randomizationStrength, numGSCopies,
-                                        seed)
+    gatesetList = setup_gateset_list(gs_target, randomize,
+                                     randomizationStrength, numGSCopies, seed)
     gates = gs_target.gates.keys()
-    availableGermsList = constr.list_all_gatestrings_without_powers_and_cycles(
+    availableGermsList = _constr.list_all_gatestrings_without_powers_and_cycles(
                                     gates, maxGermLength)
     if algorithm == 'greedy':
         # Define defaults for parameters that currently have no default or
@@ -111,8 +111,8 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
         for key in default_kwargs:
             if key not in algorithm_kwargs:
                 algorithm_kwargs[key] = default_kwargs[key]
-        germList = gs.build_up_breadth(gatesetList=gatesetList,
-                                       **algorithm_kwargs)
+        germList = build_up_breadth(gatesetList=gatesetList,
+                                    **algorithm_kwargs)
     elif algorithm == 'slack':
         # Define defaults for parameters that currently have no default or
         # whose default we want to change.
@@ -128,8 +128,8 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
         for key in default_kwargs:
             if key not in algorithm_kwargs:
                 algorithm_kwargs[key] = default_kwargs[key]
-        germList = gs.optimize_integer_germs_slack(gatesetList,
-                                                   **algorithm_kwargs)
+        germList = optimize_integer_germs_slack(gatesetList,
+                                                **algorithm_kwargs)
     else:
         raise ValueError("'{}' is not a valid algorithm "
                          "identifier.".format(algorithm))
