@@ -200,13 +200,12 @@ def setup_gateset_list(gatesetList, randomize, randomizationStrength,
         gatesetList = [gatesetList]
 
     if len(gatesetList) > 1 and numCopies is not None:
-        raise ValueError("Input multiple gate sets XOR request multiple "
-                         "copies only!")
+        _warnings.warn("Ignoring numCopies={} since multiple gatesets were "
+                       "supplied.".format(numCopies))
 
     if randomize:
-        gatesetList = randomizeGatesetList(gatesetList,
-                                              randomizationStrength, numCopies,
-                                              seed)
+        gatesetList = randomizeGatesetList(gatesetList, randomizationStrength,
+                                           numCopies, seed)
 
     return gatesetList
 
