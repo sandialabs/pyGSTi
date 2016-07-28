@@ -30,8 +30,10 @@ subprocess.call(['git', 'remote', 'add', 'origin', 'https://github.com/pyGSTio/p
 output = subprocess.check_output(['git', 'log', 'HEAD', '-1'])
 devSHA = output.decode('utf-8').split()[1]
 
+subprocess.call(['git', 'stash'])
 subprocess.call(['git', 'fetch', 'origin', 'beta'])
-subprocess.call(['git', 'checkout', '-f', 'beta'])
+subprocess.call(['git', 'checkout', '-b', 'beta', 'origin/beta'])
+subprocess.call(['git', 'pull'])
 hexOut = subprocess.check_output(['git',
                                   'merge-base',
                                   branchname,   # OUR version of develop
