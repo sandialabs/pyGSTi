@@ -297,7 +297,8 @@ def compute_score(weights, gateset_num, scoreFunc, derivDaggerDerivList,
     return score
 
 
-def randomizeGatesetList(gatesetList, randomizationStrength, numCopies, seed):
+def randomizeGatesetList(gatesetList, randomizationStrength, numCopies,
+                         seed=None):
     if len(gatesetList) > 1 and numCopies is not None:
         raise ValueError("Input multiple gate sets XOR request multiple "
                          "copies only!")
@@ -306,12 +307,14 @@ def randomizeGatesetList(gatesetList, randomizationStrength, numCopies, seed):
         for gatesetnum, gateset in enumerate(gatesetList):
             newgatesetList.append(gateset.randomize_with_unitary(
                                     randomizationStrength,
-                                    seed=seed+gatesetnum))
+                                    seed=None if seed is None
+                                    else seed+gatesetnum))
     else:
         for gatesetnum in range(numCopies if numCopies is not None else 1):
             newgatesetList.append(gatesetList[0].randomize_with_unitary(
                                     randomizationStrength,
-                                    seed=seed+gatesetnum))
+                                    seed=None if seed is None
+                                    else seed+gatesetnum))
     return newgatesetList
 
 
@@ -1438,8 +1441,6 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
                                                     twirledDerivDaggerDerivList,
                                                     nonAC_kwargs, initN=1)
 
-    # TODO: Define a sensible function for constructing the restricted
-    # candidate list.
     rclFn = lambda x: germ_rcl_fn(x, alpha)
 
     bestSoln = grasp(elements=germsList, greedyScoreFn=scoreFn, rclFn=rclFn,
