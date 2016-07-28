@@ -24,12 +24,14 @@ for branch in branches:
 
 print(branchname)
 
+subprocess.call(['git', 'remote', 'add', 'origin', 'https://github.com/pyGSTio/pyGSTi.git']) # Can't get branches from origin if we don't know what origin is
+
 # Get the SHA of our local develop
 output = subprocess.check_output(['git', 'log', 'HEAD', '-1'])
 devSHA = output.decode('utf-8').split()[1]
 
 subprocess.call(['git', 'fetch', 'origin', 'beta'])
-subprocess.call(['git', 'checkout', 'beta'])
+subprocess.call(['git', 'checkout', '-f', 'beta'])
 hexOut = subprocess.check_output(['git',
                                   'merge-base',
                                   devSHA,
@@ -48,7 +50,18 @@ if canMerge:
     print('Merge of develop into beta is possible..')
     # The below code is active, but only for testing
     subprocess.call(['git', 'merge', 'develop']) #into beta
-    subprocess.call(['git', 'commit', '-m', 'Merged develop into beta, as there were no conflicts and travis tests passed'])
+    subprocess.call(['git', 'commit', '--no-verify', '-m', 'Merged develop into beta, as there were no conflicts and travis tests passed'])
+
+    PUSHKEY  = os.environ['PUSHKEY']
+    push_uri = 'https://%s@github.com/pyGSTio/pyGSTi.git' % PUSHKEY # yikes
+    try:
+        with open(os.devnull, 'w') as FNULL:
+            result = subprocess.call(['git', 'push', push_uri, 'beta'], stdout=FNULL, stderr=FNULL)
+            if result != 0:
+                print('Secure push failed')
+    except:
+        print('Secure push failed')
+
 else:
     print('Potential merge conflicts found! Cannot merge beta into develop')
 
