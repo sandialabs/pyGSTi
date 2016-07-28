@@ -1,5 +1,6 @@
 from ..automation_tools import directory, get_files
 from shutil import copyfile
+from .genInfo import convert_packagename
 import os
 
 # Generate dict of form: { modulename : percentage } for percentages below threshold
@@ -23,7 +24,7 @@ def annotate_uncovered(packageName, infoDict):
                 'pylint' not in line)
 
     uncoveredLineDict = find_uncovered_lines(infoDict[packageName])
-    with directory('../packages/pygsti/%s' % packageName):
+    with directory('../packages/pygsti/%s' % convert_packagename(packageName)):
         files = [filename for filename in get_files(os.getcwd()) if filename in uncoveredLineDict]
         for filename in files:
             copyfile(filename, filename + '.bak')
