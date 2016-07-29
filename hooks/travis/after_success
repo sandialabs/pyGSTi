@@ -7,7 +7,8 @@ print('Travis CI Passed')
 print('Getting current branchname/SHA')
 branchname = 'unspecified'
 output     = subprocess.check_output(['git', 'branch'])
-branches   = output.decode('utf-8').splitlines()
+ouput      = output.decode('utf-8')
+branches   = output.splitlines()
 for branch in branches:
     if '*' in branch:
         branchname = branch.replace('*', '')
@@ -16,14 +17,14 @@ for branch in branches:
             branchname = branchname.split()[-1]
         break
 
+print('Branches existing on Travis Server: %s' % output)
+print('Branchname (or SHA) is %s' % branchname)
 
 # Relevant:
+# (Explains the usage of merge-base and merge-tree commands to view if merge is valid
 # http://stackoverflow.com/questions/501407/is-there-a-git-merge-dry-run-option
 
 # Attempt to auto-merge develop into pre-beta if travis tests pass
-# This code is currently unactive, but should work :)
-
-print('Branchname (or SHA) is %s' % branchname)
 
 print('Getting the latest version of beta')
 print('Deleting local version, if it exists')
@@ -55,7 +56,7 @@ canMerge = ('<' * 5) not in output # '<' * 5 avoids git finding the expanded str
 if canMerge:
     print('Merge of develop into beta is possible, attempting...')
     # The below code is active, but only for testing
-    subprocess.call(['git', 'merge', '--no-ff', 'develop']) #into beta
+    subprocess.call(['git', 'merge', '--no-ff', '--no-commit', 'develop']) #into beta
     print('Merge command finished.')
     print('Staging files..')
     subprocess.call(['git', 'add', '-u'])
