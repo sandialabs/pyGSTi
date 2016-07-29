@@ -7,7 +7,7 @@ print('Travis CI Passed')
 print('Getting current branchname/SHA')
 branchname = 'unspecified'
 output     = subprocess.check_output(['git', 'branch'])
-ouput      = output.decode('utf-8')
+output     = output.decode('utf-8')
 branches   = output.splitlines()
 for branch in branches:
     if '*' in branch:
