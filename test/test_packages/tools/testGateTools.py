@@ -1,4 +1,4 @@
-from ..testutils import BaseTestCase
+from ..testutils import BaseTestCase, compare_files, temp_files
 import pygsti
 import pygsti.tools.gatetools as gatetools
 import numpy as np

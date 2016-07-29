@@ -4,7 +4,7 @@ import pickle
 import pygsti
 import os
 from pygsti.construction import std1Q_XYI as std
-from ..testutils import BaseTestCase
+from ..testutils import BaseTestCase, compare_files, temp_files
 
 import numpy as np
 
@@ -28,12 +28,12 @@ class ReportTestCase(BaseTestCase):
         self.lsgstStrings = pygsti.construction.make_lsgst_lists(
             self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLengthList)
 
-        self.ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/reportgen.dataset")
+        self.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/reportgen.dataset")
 
         # RUN BELOW LINES TO GENERATE ANALYSIS DATASET
         #ds = pygsti.construction.generate_fake_data(datagen_gateset, lsgstStrings[-1], nSamples=1000,
         #                                            sampleError='binomial', seed=100)
-        #ds.save("../cmp_chk_files/reportgen.dataset")
+        #ds.save(compare_files + "/reportgen.dataset")
 
         gs_lgst = pygsti.do_lgst(self.ds, self.specs, self.targetGateset, svdTruncateTo=4, verbosity=0)
         gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",targetGateset=self.targetGateset,gateWeight=1.0,spamWeight=0.0)
@@ -64,7 +64,7 @@ class ReportTestCase(BaseTestCase):
                                        pygsti.construction.repeat_with_max_length, False, None, lsgst_gatesets_prego)
         self.results.parameters.update({'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
                                         'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
-                                        'weights': None, 'defaultDirectory': "../temp_test_files",
+                                        'weights': None, 'defaultDirectory': temp_files + "",
                                         'defaultBasename': "MyDefaultReportName" } )
         self.results.options.precision = 4
         self.results.options.polar_precision = 3
@@ -96,9 +96,9 @@ class ReportTestCase(BaseTestCase):
         if 'PYGSTI_DEEP_TESTING' in os.environ and \
            os.environ['PYGSTI_DEEP_TESTING'].lower() in ("yes","1","true"):
             # Deep testing -- do latex comparison
-            cmpFilenm = "../cmp_chk_files/%s" % fn
+            cmpFilenm = compare_files + "/%s" % fn
             if os.path.exists(cmpFilenm):
-                linesToTest = open("../temp_test_files/%s" % fn).readlines()
+                linesToTest = open(temp_files + "/%s" % fn).readlines()
                 linesOK = open(cmpFilenm).readlines()
                 self.assertEqual(linesToTest,linesOK)
             else:
@@ -114,14 +114,14 @@ class TestReport(ReportTestCase):
     def test_reports_chi2_noCIs(self):
 
         vs = self.versionsuffix
-        self.results.create_full_report_pdf(filename="../temp_test_files/full_reportA%s.pdf" % vs, confidenceLevel=None,
+        self.results.create_full_report_pdf(filename=temp_files + "/full_reportA%s.pdf" % vs, confidenceLevel=None,
                                          debugAidsAppendix=False, gaugeOptAppendix=False,
                                          pixelPlotAppendix=False, whackamoleAppendix=False)
-        self.results.create_brief_report_pdf(filename="../temp_test_files/brief_reportA%s.pdf" % vs, confidenceLevel=None)
-        self.results.create_presentation_pdf(filename="../temp_test_files/slidesA%s.pdf" % vs, confidenceLevel=None,
+        self.results.create_brief_report_pdf(filename=temp_files + "/brief_reportA%s.pdf" % vs, confidenceLevel=None)
+        self.results.create_presentation_pdf(filename=temp_files + "/slidesA%s.pdf" % vs, confidenceLevel=None,
                                            debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False)
         if self.have_python_pptx:
-            self.results.create_presentation_ppt(filename="../temp_test_files/slidesA.ppt", confidenceLevel=None,
+            self.results.create_presentation_ppt(filename=temp_files + "/slidesA.ppt", confidenceLevel=None,
                                                  debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False)
 
         #Run again using default filenames
@@ -145,19 +145,19 @@ class TestReport(ReportTestCase):
     def test_reports_chi2_wCIs(self):
         vs = self.versionsuffix
 
-        self.results.create_full_report_pdf(filename="../temp_test_files/full_reportB%s.pdf" % vs, confidenceLevel=95,
+        self.results.create_full_report_pdf(filename=temp_files + "/full_reportB%s.pdf" % vs, confidenceLevel=95,
                                          debugAidsAppendix=True, gaugeOptAppendix=True,
                                          pixelPlotAppendix=True, whackamoleAppendix=True,
                                          verbosity=2)
-        self.results.create_full_report_pdf(filename="../temp_test_files/full_reportB-noGOpt%s.pdf" % vs, confidenceLevel=95,
+        self.results.create_full_report_pdf(filename=temp_files + "/full_reportB-noGOpt%s.pdf" % vs, confidenceLevel=95,
                                          debugAidsAppendix=True, gaugeOptAppendix=False,
                                          pixelPlotAppendix=True, whackamoleAppendix=True) # to test blank GOpt tables
-        self.results.create_brief_report_pdf(filename="../temp_test_files/brief_reportB%s.pdf" % vs, confidenceLevel=95, verbosity=2)
-        self.results.create_presentation_pdf(filename="../temp_test_files/slidesB%s.pdf" % vs, confidenceLevel=95,
+        self.results.create_brief_report_pdf(filename=temp_files + "/brief_reportB%s.pdf" % vs, confidenceLevel=95, verbosity=2)
+        self.results.create_presentation_pdf(filename=temp_files + "/slidesB%s.pdf" % vs, confidenceLevel=95,
                                            debugAidsAppendix=True, pixelPlotAppendix=True, whackamoleAppendix=True,
                                            verbosity=2)
         if self.have_python_pptx:
-            self.results.create_presentation_ppt(filename="../temp_test_files/slidesB%s.ppt" % vs, confidenceLevel=95,
+            self.results.create_presentation_ppt(filename=temp_files + "/slidesB%s.ppt" % vs, confidenceLevel=95,
                                                  debugAidsAppendix=True, pixelPlotAppendix=True, whackamoleAppendix=True,
                                                  verbosity=2)
 
@@ -172,11 +172,11 @@ class TestReport(ReportTestCase):
         vs = self.versionsuffix
 
         #Non-markovian error bars (negative confidenceLevel) & tooltips
-        self.results.create_full_report_pdf(filename="../temp_test_files/full_reportE%s.pdf" % vs, confidenceLevel=-95,
+        self.results.create_full_report_pdf(filename=temp_files + "/full_reportE%s.pdf" % vs, confidenceLevel=-95,
                                          debugAidsAppendix=True, gaugeOptAppendix=True,
                                          pixelPlotAppendix=True, whackamoleAppendix=True,
                                          verbosity=2, tips=True)
-        self.results.create_brief_report_pdf(filename="../temp_test_files/brief_reportE%s.pdf" % vs, confidenceLevel=-95,
+        self.results.create_brief_report_pdf(filename=temp_files + "/brief_reportE%s.pdf" % vs, confidenceLevel=-95,
                                              verbosity=2, tips=True)
 
         #Compare the text files, assume if these match the PDFs are equivalent
@@ -187,19 +187,19 @@ class TestReport(ReportTestCase):
     def test_reports_logL_TP_noCIs(self):
 
         vs = self.versionsuffix
-        self.results_logL.create_full_report_pdf(filename="../temp_test_files/full_reportC%s.pdf" % vs, confidenceLevel=None,
+        self.results_logL.create_full_report_pdf(filename=temp_files + "/full_reportC%s.pdf" % vs, confidenceLevel=None,
                                                  debugAidsAppendix=False, gaugeOptAppendix=False,
                                                  pixelPlotAppendix=False, whackamoleAppendix=False,
                                                  verbosity=2)
-        self.results_logL.create_brief_report_pdf(filename="../temp_test_files/brief_reportC%s.pdf" % vs, confidenceLevel=None, verbosity=2)
-        self.results_logL.create_presentation_pdf(filename="../temp_test_files/slidesC%s.pdf" % vs, confidenceLevel=None,
+        self.results_logL.create_brief_report_pdf(filename=temp_files + "/brief_reportC%s.pdf" % vs, confidenceLevel=None, verbosity=2)
+        self.results_logL.create_presentation_pdf(filename=temp_files + "/slidesC%s.pdf" % vs, confidenceLevel=None,
                                                   debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False,
                                                   verbosity=2)
-        self.results_logL.create_general_report_pdf(filename="../temp_test_files/general_reportC%s.pdf" % vs, confidenceLevel=None,
+        self.results_logL.create_general_report_pdf(filename=temp_files + "/general_reportC%s.pdf" % vs, confidenceLevel=None,
                                                     verbosity=2)
 
         if self.have_python_pptx:
-            self.results_logL.create_presentation_ppt(filename="../temp_test_files/slidesC%s.ppt" % vs, confidenceLevel=None,
+            self.results_logL.create_presentation_ppt(filename=temp_files + "/slidesC%s.ppt" % vs, confidenceLevel=None,
                                                       debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False,
                                                       verbosity=2)
 
@@ -213,19 +213,19 @@ class TestReport(ReportTestCase):
     def test_reports_logL_TP_wCIs(self):
 
         vs = self.versionsuffix
-        self.results_logL.create_full_report_pdf(filename="../temp_test_files/full_reportD%s.pdf" % vs, confidenceLevel=95,
+        self.results_logL.create_full_report_pdf(filename=temp_files + "/full_reportD%s.pdf" % vs, confidenceLevel=95,
                                                  debugAidsAppendix=True, gaugeOptAppendix=True,
                                                  pixelPlotAppendix=True, whackamoleAppendix=True,
                                                  verbosity=2)
-        self.results_logL.create_brief_report_pdf(filename="../temp_test_files/brief_reportD%s.pdf" % vs, confidenceLevel=95, verbosity=2)
-        self.results_logL.create_presentation_pdf(filename="../temp_test_files/slidesD%s.pdf" % vs, confidenceLevel=95,
+        self.results_logL.create_brief_report_pdf(filename=temp_files + "/brief_reportD%s.pdf" % vs, confidenceLevel=95, verbosity=2)
+        self.results_logL.create_presentation_pdf(filename=temp_files + "/slidesD%s.pdf" % vs, confidenceLevel=95,
                                                   debugAidsAppendix=True, pixelPlotAppendix=True, whackamoleAppendix=True,
                                                   verbosity=2)
-        self.results_logL.create_general_report_pdf(filename="../temp_test_files/general_reportD%s.pdf" % vs, confidenceLevel=95,
+        self.results_logL.create_general_report_pdf(filename=temp_files + "/general_reportD%s.pdf" % vs, confidenceLevel=95,
                                                     verbosity=2, tips=True) #test tips here too
 
         if self.have_python_pptx:
-            self.results_logL.create_presentation_ppt(filename="../temp_test_files/slidesD%s.ppt" % vs, confidenceLevel=95,
+            self.results_logL.create_presentation_ppt(filename=temp_files + "/slidesD%s.ppt" % vs, confidenceLevel=95,
                                                       debugAidsAppendix=True, pixelPlotAppendix=True, whackamoleAppendix=True,
                                                       verbosity=2)
 
@@ -265,8 +265,8 @@ class TestReport(ReportTestCase):
         longtable = False
         confidenceRegionInfo = None
 
-        gateset = pygsti.io.load_gateset("../cmp_chk_files/analysis.gateset")
-        ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis.dataset")
+        gateset = pygsti.io.load_gateset(compare_files + "/analysis.gateset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
 
         chi2, chi2Hessian = pygsti.chi2(ds, gateset, returnHessian=True)
         ci = pygsti.obj.ConfidenceRegion(gateset, chi2Hessian, 95.0,
@@ -443,7 +443,7 @@ class TestReport(ReportTestCase):
                                [1.0,10.0,100.0,1000.0],
                                [1.0e4,1.0e5,1.0e6,1.0e7]],'d' )
         cmap = pygsti.report.plotting.StdColormapFactory('seq', n_boxes=10, vmin=0, vmax=1, dof=1)
-        gstFig = pygsti.report.plotting.color_boxplot( test_data, cmap, size=(10,10), prec="compacthp",save_to="../temp_test_files/test.pdf")
+        gstFig = pygsti.report.plotting.color_boxplot( test_data, cmap, size=(10,10), prec="compacthp",save_to=temp_files + "/test.pdf")
         gstFig = pygsti.report.plotting.color_boxplot( test_data, cmap, size=(10,10), prec="compact",save_to="")
         gstFig = pygsti.report.plotting.color_boxplot( test_data, cmap, size=(10,10), prec=3,save_to="")
         gstFig = pygsti.report.plotting.color_boxplot( test_data, cmap, size=(10,10), prec=-3,save_to="")
@@ -494,28 +494,28 @@ class TestReport(ReportTestCase):
         results.parameters.update(
             {'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
              'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
-             'weights': None, 'defaultDirectory': "../temp_test_files",
+             'weights': None, 'defaultDirectory': temp_files + "",
              'defaultBasename': "MyDefaultReportName",
              'hessianProjection': 'std'} )
 
         results.create_full_report_pdf(
-            filename="../temp_test_files/singleReport.pdf")
+            filename=temp_files + "/singleReport.pdf")
         results.create_brief_report_pdf(
-            filename="../temp_test_files/singleBrief.pdf")
+            filename=temp_files + "/singleBrief.pdf")
         results.create_presentation_pdf(
-            filename="../temp_test_files/singleSlides.pdf")
+            filename=temp_files + "/singleSlides.pdf")
         if self.have_python_pptx:
             results.create_presentation_ppt(
-                filename="../temp_test_files/singleSlides.ppt", pptTables=True)
+                filename=temp_files + "/singleSlides.ppt", pptTables=True)
 
         #test tree splitting of hessian
         results.parameters['memLimit'] = 10*(1024)**2 #10MB
         results.create_brief_report_pdf(confidenceLevel=95,
-            filename="../temp_test_files/singleBriefMemLimit.pdf")
+            filename=temp_files + "/singleBriefMemLimit.pdf")
         results.parameters['memLimit'] = 10 #10 bytes => too small
         with self.assertRaises(MemoryError):
             results.create_brief_report_pdf(confidenceLevel=90,
-               filename="../temp_test_files/singleBriefMemLimit.pdf")
+               filename=temp_files + "/singleBriefMemLimit.pdf")
 
 
         #similar test for chi2 hessian
@@ -525,16 +525,16 @@ class TestReport(ReportTestCase):
         results2.parameters.update(
             {'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
              'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
-             'weights': None, 'defaultDirectory': "../temp_test_files",
+             'weights': None, 'defaultDirectory': temp_files + "",
              'defaultBasename': "MyDefaultReportName",
              'hessianProjection': "std"} )
         results2.parameters['memLimit'] = 10*(1024)**2 #10MB
         results2.create_brief_report_pdf(confidenceLevel=95,
-            filename="../temp_test_files/singleBriefMemLimit2.pdf")
+            filename=temp_files + "/singleBriefMemLimit2.pdf")
         results2.parameters['memLimit'] = 10 #10 bytes => too small
         with self.assertRaises(MemoryError):
             results2.create_brief_report_pdf(confidenceLevel=90,
-               filename="../temp_test_files/singleBriefMemLimit2.pdf")
+               filename=temp_files + "/singleBriefMemLimit2.pdf")
 
 
 
@@ -589,12 +589,12 @@ class TestReport(ReportTestCase):
         with self.assertRaises(ValueError):
             results_badObjective._specials['DirectLongSeqGatesets']
         with self.assertRaises(ValueError):
-            results_badObjective.create_full_report_pdf(filename="../temp_test_files/badReport.pdf")
+            results_badObjective.create_full_report_pdf(filename=temp_files + "/badReport.pdf")
         with self.assertRaises(ValueError):
-            results_badObjective.create_presentation_pdf(filename="../temp_test_files/badSlides.pdf")
+            results_badObjective.create_presentation_pdf(filename=temp_files + "/badSlides.pdf")
         if self.have_python_pptx:
             with self.assertRaises(ValueError):
-                results_badObjective.create_presentation_ppt(filename="../temp_test_files/badSlides.pptx")
+                results_badObjective.create_presentation_ppt(filename=temp_files + "/badSlides.pptx")
 
 
     def test_report_figure_object(self):
@@ -605,7 +605,7 @@ class TestReport(ReportTestCase):
 
         with self.assertRaises(ValueError):
             fig.pickledAxes = "not-a-pickle-string" #corrupt pickled string so get unpickling error
-            fig.save_to("../temp_test_files/test.figure")
+            fig.save_to(temp_files + "/test.figure")
 
 
 

@@ -1,9 +1,9 @@
 from pygsti.objects.verbosityprinter import *
-from ..testutils import BaseTestCase
+from ..testutils import BaseTestCase, compare_files, temp_files
 import unittest, sys, os
 
 # The path for a temporary file to be generated in
-filePath        = '../temp_test_files/printer_output.txt'
+filePath        = temp_files + '/printer_output.txt'
 # Some basic messages to make assertions easier
 warningMessage  = 'This might go badly'
 errorMessage    = 'Something terrible happened'

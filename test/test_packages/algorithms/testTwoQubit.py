@@ -1,7 +1,7 @@
 import unittest
 import os, sys
 
-from ..testutils import BaseTestCase
+from ..testutils import BaseTestCase, compare_files, temp_files
 
 class TwoQubitTestCase(BaseTestCase):
 

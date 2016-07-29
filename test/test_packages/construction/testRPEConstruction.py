@@ -1,4 +1,4 @@
-from ..testutils import BaseTestCase
+from ..testutils import BaseTestCase, compare_files, temp_files
 from pygsti.objects import GateString
 
 import pygsti.construction.rpeconstruction as rc
@@ -69,7 +69,7 @@ class RPEConstructionTestCase(BaseTestCase):
     def test_ensemble(self):
         # Just make sure no errors get thrown...
         rc.rpe_ensemble_test(1.57079632679, 1.57079632679, .78539816339, 0.001, 3, 1, 1)
-        rc.rpe_ensemble_test(1.57079632679, 1.57079632679, .78539816339, 0.001, 3, 1, 1, plot=True) 
+        rc.rpe_ensemble_test(1.57079632679, 1.57079632679, .78539816339, 0.001, 3, 1, 1, plot=True)
 
 
 
