@@ -38,16 +38,18 @@ Construction package:
     Name                                            Stmts   Miss  Cover   Missing
     -----------------------------------------------------------------------------
     pygsti/construction.py                              7      0   100%
-    pygsti/construction/datasetconstruction.py         71     63    11%   65-123, 148-164, 188-189
+    pygsti/construction/datasetconstruction.py         71      2    97%   91, 117
     pygsti/construction/gatesetconstruction.py        451      9    98%   585, 685, 744-745, 830, 834, 952-953, 966
     pygsti/construction/gatestringconstruction.py     147     47    68%   314-315, 329-330, 336-366, 469-491, 518
-    pygsti/construction/rpeconstruction.py            135    122    10%   54-93, 113-144, 165-185, 205-229, 263-278, 335, 346-488
+    pygsti/construction/rpeconstruction.py            135      0   100%
     pygsti/construction/spamspecconstruction.py        30      0   100%
     pygsti/construction/stdlists.py                    69      0   100%
     -----------------------------------------------------------------------------
-    TOTAL                                             910    241    74%
+    TOTAL                                             910     58    94%
+    ----------------------------------------------------------------------
 
-    Note that datasetconstruction and rpeconstruction are essentially uncovered.
+    Just created tests for rpeconstruction and datasetconstruction (Increase coverage 20%)
+
 
 Objects package:
 
