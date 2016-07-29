@@ -36,11 +36,10 @@ elif doDrivers == 'True':
     travisPackages = ['drivers']
 
 elif partA == 'True':
-    travisPackages = ['construction', 'objects', 'tools']
+    travisPackages = ['construction'] # Construction seems to take longer now
 
-# Default: run everything besides report and drivers, and then two individual tests that cover as much as they can
 else:
-    travisPackages = ['iotest', 'optimize', 'algorithms']
+    travisPackages = ['objects', 'tools', 'iotest', 'optimize', 'algorithms']
 
 # Begin by running all of the packages in the current test matrix
 results = []
