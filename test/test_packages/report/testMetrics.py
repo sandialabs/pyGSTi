@@ -3,16 +3,12 @@ import pygsti
 from pygsti.construction import std1Q_XYI as std
 import os
 
-class MetricsTestCase(unittest.TestCase):
+from ..testutils import BaseTestCase
+
+class MetricsTestCase(BaseTestCase):
 
     def setUp(self):
-
-        # move working directories
-        self.old = os.getcwd()
-        os.chdir(os.path.abspath(os.path.dirname(__file__)))
-
-        #Set GateSet objects to "strict" mode for testing
-        pygsti.objects.GateSet._strict = True
+        super(MetricsTestCase, self).setUp()
 
         self.gateset = std.gs_target
         self.gateset_dep = self.gateset.depolarize(gate_noise=0.05, spam_noise=0)
@@ -29,9 +25,6 @@ Gx^4 20 90
         with open("../temp_test_files/MetricsDataset.txt","w") as output:
             output.write(dataset_txt)
         self.ds = pygsti.io.load_dataset("../temp_test_files/MetricsDataset.txt")
-
-    def tearDown(self):
-        os.chdir(self.old)
 
 class TestMetrics(MetricsTestCase):
 

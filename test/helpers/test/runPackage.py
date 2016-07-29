@@ -6,8 +6,6 @@ import os, sys
 import subprocess
 import pickle
 
-pythonCommand = 'python3' if sys.version_info[0] == 3 else 'python'
-
 last_failed_file = 'last_failed.pkl'
 
 
@@ -49,10 +47,6 @@ def get_test_names(failedtests):
     return set(names)
 
 def run_package(packageName, precommands=None, postcommand=None, lastFailed=''):
-    # determine what command will be used to run the tests (python/python3 by default)
-    precommands = [pythonCommand] if precommands is None else precommands
-
-    print(os.getcwd())
     # enter the package directory to begin running tests and leave when done
     with directory(packageName):
         failedtests = []

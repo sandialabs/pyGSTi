@@ -1,4 +1,4 @@
-    Merge branch 'beta' into develop
+    Merge branch 'beta' of https://github.com/pyGSTio/pyGSTi into develop
     Merge branch 'coverage' into develop
     Merge branch 'formatter' into develop
     Merge branch 'unittests' into develop
@@ -21,5 +21,4 @@
     Merge branch 'master' into develop
     Merge branch 'master' into develop
     Merge branch 'master' into develop to fold in hotfixes.
-    Merge branch 'master' into develop
     Merge branch 'master' into develop

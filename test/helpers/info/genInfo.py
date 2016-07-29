@@ -1,6 +1,6 @@
 from __future__                import print_function
 from helpers.test.helpers      import *
-from helpers.automation_tools  import read_yaml, write_yaml, directory, get_output, get_files
+from helpers.automation_tools  import read_yaml, write_yaml, get_output, get_files
 from importlib import import_module
 from inspect   import isclass
 import unittest
@@ -20,30 +20,38 @@ def convert_uncovered(num):
     else:
         return [int(num)] # If a single line, ex 10
 
+# Currently only works when tests are passing...
 def parse_coverage_output(output):
-    output   = output.split('-------------------------------------------------------------')
-    specific = output[1]
+    output   = output.split('Missing')[1].split('Ran')[0]
+    output   = output.splitlines()
+    specific = output[3:-3]
     # Get last word of the line after the dashes, and remove the percent symbol
-    percent  = int(output[2].split()[-1][:-1])
-    specific = [line for line in specific.splitlines() if line != '']
+    percent  = int(output[-2].split()[-1][:-1])
+    specific = [line for line in specific if line != '']
 
     coverageDict = {}
     for line in specific:
         line          = line.split()
         filename      = line[0]
         if filename.count('/') > 0:
-            filename = filename.rsplit('/')[1]
+            filename = filename.rsplit('/')[-1]
         modulepercent = int(line[3][:-1])
         missedlines   = [lineNum for item in line[4:] for lineNum in convert_uncovered(item)]
         coverageDict[filename] = (modulepercent, missedlines)
     return coverageDict
 
+# PROBABLY NOT GOOD PRACTICE?
+def convert_packagename(name):
+    if name == 'iotest':
+        return 'io'
+    else:
+        return name
 
 def get_info(filename, packageName, testCaseName, test):
     coverageFile = 'output/individual_coverage/%s/%s%s.yml' % (packageName, testCaseName, test)
     commands = ['nosetests',
                 '--with-coverage',
-                '--cover-package=pygsti.%s' % packageName,
+                '--cover-package=pygsti.%s' % convert_packagename(packageName),
                 '--cover-erase',
                 'test_packages/%s/%s:%s.%s' % (packageName, filename, testCaseName, test)]
 
@@ -51,6 +59,7 @@ def get_info(filename, packageName, testCaseName, test):
     output = get_output(commands)
     end = time.time()
 
+    print('%s:%s.%s' % (filename, testCaseName, test))
     print(output)
     coverageDict = parse_coverage_output(output)
     write_yaml(coverageDict, coverageFile)

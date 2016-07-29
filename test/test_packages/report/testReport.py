@@ -4,19 +4,14 @@ import pickle
 import pygsti
 import os
 from pygsti.construction import std1Q_XYI as std
+from ..testutils import BaseTestCase
 
 import numpy as np
 
-class ReportTestCase(unittest.TestCase):
+class ReportTestCase(BaseTestCase):
 
     def setUp(self):
-
-        # move working directories
-        self.old = os.getcwd()
-        os.chdir(os.path.dirname(os.path.abspath(__file__)))
-
-        #Set GateSet objects to "strict" mode for testing
-        pygsti.objects.GateSet._strict = True
+        super(ReportTestCase, self).setUp()
 
         self.targetGateset = std.gs_target
         datagen_gateset = self.targetGateset.depolarize(gate_noise=0.05, spam_noise=0.1)
@@ -95,9 +90,6 @@ class ReportTestCase(unittest.TestCase):
             self.versionsuffix = "" #Python 2
         except NameError:
             self.versionsuffix = "v3" #Python 3
-
-    def tearDown(self):
-        os.chdir(self.old)
 
     def checkFile(self, fn):
 

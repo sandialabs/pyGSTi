@@ -4,16 +4,12 @@ from pygsti.construction import std1Q_XYI as std
 
 import sys, os
 
-class DriversTestCase(unittest.TestCase):
+from ..testutils import BaseTestCase
+
+class DriversTestCase(BaseTestCase):
 
     def setUp(self):
-
-        # move working directories
-        self.old = os.getcwd()
-        os.chdir(os.path.abspath(os.path.dirname(__file__)))
-
-        #Set GateSet objects to "strict" mode for testing
-        pygsti.objects.GateSet._strict = True
+        super(DriversTestCase, self).setUp()
 
         self.gateset = std.gs_target
 
@@ -53,18 +49,6 @@ class DriversTestCase(unittest.TestCase):
         #ds.save("../cmp_chk_files/drivers.dataset")
         #ds_tgp.save("../cmp_chk_files/drivers_tgp.dataset")
         #ds_lae.save("../cmp_chk_files/drivers_lae.dataset")
-
-    def tearDown(self):
-        os.chdir(self.old)
-
-    def runSilent(self, callable, *args, **kwds):
-        orig_stdout = sys.stdout
-        sys.stdout = open("../temp_test_files/silent.txt","w")
-        result = callable(*args, **kwds)
-        sys.stdout.close()
-        sys.stdout = orig_stdout
-        return result
-
 
 class TestDriversMethods(DriversTestCase):
 
