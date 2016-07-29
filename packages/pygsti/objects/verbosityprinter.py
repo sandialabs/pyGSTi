@@ -42,32 +42,51 @@ def _build_verbose_iteration(iteration, total, prefix, suffix, end):
 
 # The class responsible for optionally logging output
 class VerbosityPrinter():
-    '''
-    Class responsible for logging things to stdout or a file. Controls verbosity and can print progress bars
-    ex: VerbosityPrinter(1) would construct a printer that printed out messages of level one or higher to the screen
-        VerbosityPrinter(3, 'output.txt') would construct a printer that sends verbose output to a text file
+    '''Class responsible for logging things to stdout or a file.
 
-        the static function 'build_printer' will construct a printer from either an integer or an already existing printer.
-        it is a staticmethod of the VerbosityPrinter class, so it is called like so:
-            VerbosityPrinter.build_printer(2) or VerbostityPrinter.build_printer(VerbosityPrinter(3, 'output.txt'))
+    Controls verbosity and can print progress bars. ex:
 
-      printer.log('status')     would log 'status' if the printers verbosity was one or higher
-      printer.log('status2', 2) would log 'status2' if the printer's verbosity was two or higher
+    >>> VerbosityPrinter(1)
 
-      printer.error('something terrible happened') would ALWAYS log 'something terrible happened'
-      printer.warning('something worrisome happened') would log if verbosity was one or higher - the same as a normal status
+    would construct a printer that printed out messages of level one or higher
+    to the screen.
 
-      Both printer.error and printer.warning will prepend 'ERROR: ' or 'WARNING: ' to the message they are given.
-      Optionally, printer.log() can also prepend 'Status_n' to the message, where n is the message level.
+    >>> VerbosityPrinter(3, 'output.txt')
 
-      Logging of progress bars/iterations:
+    would construct a printer that sends verbose output to a text file
 
-      with printer_instance.progress_logging(verbosity):
-        for i, item in enumerate(data):
-          printer.show_progress(i, len(data))
-          printer.log(...)
+    The static function :meth:`build_printer` will construct a printer from
+    either an integer or an already existing printer.  it is a static method
+    of the VerbosityPrinter class, so it is called like so:
 
-      Will output either a progress bar or iteration statuses depending on the printer's verbosity
+    >>> VerbosityPrinter.build_printer(2)
+
+    or
+
+    >>> VerbostityPrinter.build_printer(VerbosityPrinter(3, 'output.txt'))
+
+    ``printer.log('status')`` would log 'status' if the printers verbosity was
+    one or higher. ``printer.log('status2', 2)`` would log 'status2' if the
+    printer's verbosity was two or higher
+
+    ``printer.error('something terrible happened')`` would ALWAYS log
+    'something terrible happened'. ``printer.warning('something worrisome
+    happened')`` would log if verbosity was one or higher - the same as a
+    normal status.
+
+    Both printer.error and printer.warning will prepend 'ERROR: ' or 'WARNING:
+    ' to the message they are given.  Optionally, printer.log() can also
+    prepend 'Status_n' to the message, where n is the message level.
+
+    Logging of progress bars/iterations:
+
+    >>> with printer_instance.progress_logging(verbosity):
+    >>>     for i, item in enumerate(data):
+    >>>         printer.show_progress(i, len(data))
+    >>>         printer.log(...)
+
+    will output either a progress bar or iteration statuses depending on the
+    printer's verbosity
     '''
 
     # Rules for handling comm --This is a global variable-- (technically) it should probably only be set once, at the beginning of the program
@@ -191,8 +210,8 @@ class VerbosityPrinter():
     def show_progress(self, iteration, total, messageLevel=1, barLength = 50, numDecimals=2, fillChar='#',
                     emptyChar='-', prefix='Progress:', suffix='', verboseMessages=[], indentChar='  ', end='\n'):
 
-        """
-        Used for building a progress bar as a string
+        """Used for building a progress bar as a string
+
         @params:
         iteration       - Required  : current iteration (Int)
         total           - Required  : total iterations (Int)
@@ -205,6 +224,7 @@ class VerbosityPrinter():
         suffix          - Optional  : message after the bar
         verboseMessages - Optional  : list of messages that are printed out at the same indentation as the progress bar
         indentChar      - Optional  : sets the level of indentation of the bar
+
         """
         indent = indentChar * self._progressStack[-1]
 

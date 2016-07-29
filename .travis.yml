@@ -2,11 +2,17 @@ language: python
 python:
   - "2.7"
   - "3.5"
+
 branches:
   only:
     - master
     - beta
     - develop
+
+env:
+    - Drivers=False
+    #- Drivers=True
+
 # command to install dependencies
 before_install:
   - sudo apt-get -qq update
@@ -25,7 +31,7 @@ cache:
 # command to run tests
 script:
   - cd test
-  - python travisTests.py 
+  - travis_wait 40 python travisTests.py # Tests may take some time!
   - cd ..
 
 after_success:
