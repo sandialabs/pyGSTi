@@ -6,15 +6,12 @@ import numpy as np
 from scipy import polyfit
 import sys, os
 
-class CoreTestCase(unittest.TestCase):
+from ..testutils import BaseTestCase
+
+class CoreTestCase(BaseTestCase):
 
     def setUp(self):
-        # move working directories
-        self.old = os.getcwd()
-        os.chdir(os.path.abspath(os.path.dirname(__file__)))
-
-        #Set GateSet objects to "strict" mode for testing
-        pygsti.objects.GateSet._strict = True
+        super(CoreTestCase, self).setUp()
 
         self.gateset = std.gs_target
         self.datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0.1)
@@ -42,18 +39,6 @@ class CoreTestCase(unittest.TestCase):
         #                                                 nSamples=10000,sampleError='binomial', seed=100)
         #ds_lgst.save("../cmp_chk_files/analysis_lgst.dataset")
         self.ds_lgst = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis_lgst.dataset")
-
-    def tearDown(self):
-        os.chdir(self.old)
-
-    def runSilent(self, callable, *args, **kwds):
-        orig_stdout = sys.stdout
-        sys.stdout = open("../temp_test_files/silent.txt","w")
-        result = callable(*args, **kwds)
-        sys.stdout.close()
-        sys.stdout = orig_stdout
-        return result
-
 
 class TestCoreMethods(CoreTestCase):
 
@@ -522,7 +507,6 @@ class TestCoreMethods(CoreTestCase):
         #with self.assertRaises(ValueError):
         #    self.runSilent(pygsti.contract,gs_bigkick, "CP", verbosity=10,
         #                   maxiter=1) # fail to contract to CP
-
 
 
 if __name__ == "__main__":
