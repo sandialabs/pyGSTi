@@ -54,3 +54,13 @@ class BaseTestCase(unittest.TestCase):
         sys.stdout.close()
         sys.stdout = orig_stdout
         return result
+
+    def assertEqualImages(self, fn1, fn2):
+        if haveImageLibs:
+            im1 = Image.open(fn1); im2 = Image.open(fn2)
+            return ImageChops.difference(im1, im2).getbbox() is None
+        else:
+            warnings.warn("**** IMPORT: Cannot import Image and/or ImageChops" +
+                          ", so Image comparisons in testAnalysis have been" +
+                          " disabled.")
+            return True

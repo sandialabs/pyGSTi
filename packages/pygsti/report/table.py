@@ -29,6 +29,7 @@ class ReportTable(object):
             'precision'      : precision,
             'polarprecision' : polarprecision
             }
+
         # Create a formatSet, which contains rules for rendering lists
         formatSet =  _FormatSet(specs)
 

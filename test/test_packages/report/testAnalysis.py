@@ -5,6 +5,8 @@ import warnings
 import pygsti
 import os
 
+from ..testutils import BaseTestCase
+
 try:
     from PIL import Image, ImageChops # stackoverflow.com/questions/19230991/image-open-cannot-identify-image-file-python
     haveImageLibs = True
@@ -12,17 +14,9 @@ except ImportError:
     haveImageLibs = False
 
 
-class AnalysisTestCase(unittest.TestCase):
+class AnalysisTestCase(BaseTestCase):
 
     def setUp(self):
-
-        # move working directories
-        self.old = os.getcwd()
-        os.chdir(os.path.abspath(os.path.dirname(__file__)))
-
-        #Set GateSet objects to "strict" mode for testing
-        pygsti.objects.GateSet._strict = True
-
         self.gateset = std.gs_target
         self.datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0.1)
 
@@ -68,20 +62,6 @@ class AnalysisTestCase(unittest.TestCase):
                 if self.gateStrDict[(x,y)] in runningList:
                     self.gateStrDict[(x,y)] = None
                 else: runningList.append( self.gateStrDict[(x,y)] )
-
-    def tearDown(self):
-        os.chdir(self.old)
-
-    def assertEqualImages(self, fn1, fn2):
-        if haveImageLibs:
-            im1 = Image.open(fn1); im2 = Image.open(fn2)
-            return ImageChops.difference(im1, im2).getbbox() is None
-        else:
-            warnings.warn("**** IMPORT: Cannot import Image and/or ImageChops" +
-                          ", so Image comparisons in testAnalysis have been" +
-                          " disabled.")
-            return True
-
 
 class TestAnalysis(AnalysisTestCase):
 
