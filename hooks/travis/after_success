@@ -29,7 +29,7 @@ print('Getting the latest version of beta')
 print('Deleting local version, if it exists')
 subprocess.call(['git', 'branch', '-D', 'beta'])    # So that we can verify beta doesn't exist locally
 print('Fetching from origin')
-subprocess.call(['git', 'fetch', 'origin', 'beta']) # Then grab it..
+subprocess.call(['git', 'fetch', 'origin']) # Then grab it..
 print('Recreating local branch')
 subprocess.call(['git', 'checkout', '-b', 'beta', 'origin/beta'])  # And switch to it
 print('Done.')
