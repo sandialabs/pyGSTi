@@ -26,6 +26,13 @@ print('Branchname (or SHA) is %s' % branchname)
 
 # Attempt to auto-merge develop into pre-beta if travis tests pass
 
+print('Resetting remote/origin')
+subprocess.call(['git', 'remote', 'remove', 'origin'])
+print('Done.')
+print('Re-adding origin..')
+subprocess.call(['git', 'remote', 'add', 'origin', 'https://github.com/pyGSTio/pyGSTi.git'])
+print('Done.')
+
 print('Getting the latest version of beta')
 print('Deleting local version, if it exists')
 subprocess.call(['git', 'branch', '-D', 'beta'])    # So that we can verify beta doesn't exist locally
