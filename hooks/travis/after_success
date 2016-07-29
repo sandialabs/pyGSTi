@@ -36,6 +36,12 @@ print('Updating remote')
 subprocess.call(['git', 'remote', 'update'])
 subprocess.call(['git', 'fetch'])
 
+print('Setting up user credentials')
+
+subprocess.call(['git', 'config', '--global', 'user.email', 'N/A'])
+subprocess.call(['git', 'config', '--global', 'user.name', 'Lucas auto-push script'])
+print('Done')
+
 print('Getting the latest version of beta')
 print('Deleting local version, if it exists')
 subprocess.call(['git', 'branch', '-D', 'beta'])    # So that we can verify beta doesn't exist locally
