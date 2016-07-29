@@ -10,8 +10,9 @@ branches:
     - develop
 
 env:
-    - Drivers=False
-    #- Drivers=True
+    - Drivers=False Report=False # Default tests (All but report and drivers, save two fast tests)
+    - Drivers=False Report=True  # Only testReport.py (none of the other reports tests)
+    - Drivers=True  Report=False # All of drivers only
 
 # command to install dependencies
 before_install:
