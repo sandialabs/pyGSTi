@@ -36,13 +36,13 @@ elif doDrivers == 'True':
 # Default: run everything besides report and drivers, and then two individual tests that cover as much as they can
 else:
     travisPackages = ['tools', 'objects', 'construction', 'iotest', 'optimize', 'algorithms']
-    individuals    = [['test_packages/drivers/testDrivers.py:TestDriversMethods.test_bootstrap'],
-                      ['test_packages/report/testReport.py:TestReport.test_reports_logL_TP_wCIs']]
+    individuals    = []
 
 # Begin by running all of the packages in the current test matrix
 results = []
 with directory('test_packages'):
     for package in travisPackages:
+        print('Running %s' % package)
         result = run_package(package)
         results.append((result, package))
 
@@ -55,6 +55,7 @@ if len(failed) > 0:
 
 # Now run all of the specific tests
 for individual in individuals:
+    print('Running %s' % individual)
     result = run_specific(['python', '-m', 'nose'] + individual)
     if not result:
         sys.exit(1)
