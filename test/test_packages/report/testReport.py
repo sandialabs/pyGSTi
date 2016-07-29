@@ -71,6 +71,9 @@ class ReportTestCase(unittest.TestCase):
                                         'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
                                         'weights': None, 'defaultDirectory': "../temp_test_files",
                                         'defaultBasename': "MyDefaultReportName" } )
+        self.results.options.precision = 4
+        self.results.options.polar_precision = 3
+
 
 
         #Compute results for MLGST with TP constraint
@@ -84,6 +87,9 @@ class ReportTestCase(unittest.TestCase):
         self.results_logL.init_Ls_and_germs("logl", self.targetGateset, self.ds, self.gs_clgst_tp, self.maxLengthList, self.germs,
                                      lsgst_gatesets_TP, self.lsgstStrings, self.fiducials, self.fiducials,
                                      pygsti.construction.repeat_with_max_length, True)
+        self.results_logL.options.precision = 4
+        self.results_logL.options.polar_precision = 3
+
         try:
             basestring #Only defined in Python 2
             self.versionsuffix = "" #Python 2

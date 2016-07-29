@@ -4,44 +4,79 @@ import subprocess, sys, os
 
 print('Travis CI Passed')
 
+print('Getting current branchname/SHA')
 branchname = 'unspecified'
 output     = subprocess.check_output(['git', 'branch'])
-branches   = output.decode('utf-8').splitlines()
+ouput      = output.decode('utf-8')
+branches   = output.splitlines()
 for branch in branches:
     if '*' in branch:
-        branchname = branch.replace('*', '').replace(' ', '')
+        branchname = branch.replace('*', '')
+        branchname = branchname.replace(')', '')
+        if branchname.count(' ') > 0:
+            branchname = branchname.split()[-1]
         break
 
+print('Branches existing on Travis Server: %s' % output)
+print('Branchname (or SHA) is %s' % branchname)
+
 # Relevant:
+# (Explains the usage of merge-base and merge-tree commands to view if merge is valid
 # http://stackoverflow.com/questions/501407/is-there-a-git-merge-dry-run-option
 
 # Attempt to auto-merge develop into pre-beta if travis tests pass
-# This code is currently unactive, but should work :)
 
-subprocess.call(['git', 'fetch', 'origin', 'beta'])
-subprocess.call(['git', 'checkout', 'beta'])
-subprocess.call(['git', 'fetch', 'origin', 'develop'])
-# origin/beta -> FETCH_HEAD
-hexOut = subprocess.check_output(['git',
+print('Getting the latest version of beta')
+print('Deleting local version, if it exists')
+subprocess.call(['git', 'branch', '-D', 'beta'])    # So that we can verify beta doesn't exist locally
+print('Fetching from origin')
+subprocess.call(['git', 'fetch', 'origin']) # Then grab it..
+print('Recreating local branch')
+subprocess.call(['git', 'checkout', '-b', 'beta', 'origin/beta'])  # And switch to it
+print('Done.')
+print('Getting SHA of merge-base (To view merge tree between %s and beta' % branchname)
+SHAOut = subprocess.check_output(['git',
                                   'merge-base',
-                                  'FETCH_HEAD',
-                                  'beta'])
-hexID  = hexOut.decode('utf-8').replace('\n', '')
+                                  branchname,   # OUR version of develop
+                                  'beta']    )
+SHA  = SHAOut.decode('utf-8').replace('\n', '')
+print('Done. SHA was %s' % SHA)
+print('Creating merge-tree')
 output = subprocess.check_output(['git',
-                                  'merge-base',
-                                  hexID,
+                                  'merge-tree',
+                                  SHA,
                                   'beta',
-                                  'FETCH_HEAD']) # View merge tree between beta and develop
+                                  branchname]) # View merge tree between beta and (our) develop
 output = output.decode('utf-8', 'ignore')
+print('Done:')
 print(output)
-canMerge = '<<<<<' not in output
+
+canMerge = ('<' * 5) not in output # '<' * 5 avoids git finding the expanded string in this file and thinking it is a merge conflict
+
 if canMerge:
-    print('Merge of develop into beta is possible..')
-    # Commented out until approval
-    '''
-    subprocess.call(['git', 'merge', 'origin/develop']) #into beta
-    subprocess.call(['git', 'commit', '-m', 'Merged develop into beta, as there were no conflicts and travis tests passed'])
-    '''
+    print('Merge of develop into beta is possible, attempting...')
+    # The below code is active, but only for testing
+    subprocess.call(['git', 'merge', '--no-ff', '--no-commit', 'develop']) #into beta
+    print('Merge command finished.')
+    print('Staging files..')
+    subprocess.call(['git', 'add', '-u'])
+    print('Committing..')
+    subprocess.call(['git', 'commit', '--no-verify', '-m', 'Merged develop into beta, as there were no conflicts and travis tests passed'])
+    print('Commit finished')
+
+    PUSHKEY  = os.environ['PUSHKEY']
+    push_uri = 'https://%s@github.com/pyGSTio/pyGSTi.git' % PUSHKEY # yikes
+    try:
+        print('Pushing to origin/beta. If this fails, there shouldn\'t be any useful output, since it would contain my access token')
+        with open(os.devnull, 'w') as FNULL:
+            result = subprocess.call(['git', 'push', push_uri, 'beta'], stdout=FNULL, stderr=FNULL)
+            if result != 0:
+                print('Secure push failed')
+            else:
+                print('Secure push worked')
+    except:
+        print('Secure push failed')
+
 else:
     print('Potential merge conflicts found! Cannot merge beta into develop')
 
