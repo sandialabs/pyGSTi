@@ -69,7 +69,7 @@ class RPEConstructionTestCase(BaseTestCase):
     def test_ensemble(self):
         # Just make sure no errors get thrown...
         rc.rpe_ensemble_test(1.57079632679, 1.57079632679, .78539816339, 0.001, 3, 1, 1)
-        rc.rpe_ensemble_test(1.57079632679, 1.57079632679, .78539816339, 0.001, 3, 1, 1, plot=True) 
+        rc.rpe_ensemble_test(1.57079632679, 1.57079632679, .78539816339, 0.001, 3, 1, 1, plot=True)
 
 
 
