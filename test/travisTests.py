@@ -19,24 +19,28 @@ def run_specific(commands):
 
 doReport  = os.environ.get('Report',  'False')
 doDrivers = os.environ.get('Drivers', 'False')
+partA     = os.environ.get('partA',   'False')
 
 # I'm doing string comparison rather than boolean comparison because, in python, bool('False') evaluates to true
 # Build the list of packages to test depending on which portion of the build matrix is running
 
+individuals    = []
+travisPackages = []
+
 # Report configuration: run specific report tests only
 if doReport == 'True':
-    travisPackages = []
     individuals    = [['test_packages/report/testReport.py']] # Maybe this single test wont time out? :)
 
 # Drivers configuration: run specific drivers tests only
 elif doDrivers == 'True':
     travisPackages = ['drivers']
-    individuals    = []
+
+elif partA == 'True':
+    travisPackages = ['construction', 'objects', 'tools']
 
 # Default: run everything besides report and drivers, and then two individual tests that cover as much as they can
 else:
-    travisPackages = ['tools', 'objects', 'construction', 'iotest', 'optimize', 'algorithms']
-    individuals    = []
+    travisPackages = ['iotest', 'optimize', 'algorithms']
 
 # Begin by running all of the packages in the current test matrix
 results = []

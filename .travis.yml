@@ -10,7 +10,8 @@ branches:
     - develop
 
 env:
-    - Drivers=False Report=False # Default tests (All but report and drivers, save two fast tests)
+    - partA=True  # Default tests 1 (All but report and drivers, save two fast tests)
+    - partA=False # Default tests 2 (All but report and drivers, save two fast tests)
     - Drivers=False Report=True  # Only testReport.py (none of the other reports tests)
     - Drivers=True  Report=False # All of drivers only
 
