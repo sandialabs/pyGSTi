@@ -70,7 +70,8 @@ print(output)
 canMerge = ('<' * 5) not in output # '<' * 5 avoids git finding the expanded string in this file and thinking it is a merge conflict
 
 if canMerge:
-    print('Merge of develop into beta is possible, attempting...')
+    print('Merge of develop into beta is possible')
+    '''
     # The below code is active, but only for testing
     subprocess.call(['git', 'merge', '--no-ff', '--no-commit', 'develop']) #into beta
     print('Merge command finished.')
@@ -92,6 +93,7 @@ if canMerge:
                 print('Secure push worked')
     except:
         print('Secure push failed')
+    '''
 
 else:
     print('Potential merge conflicts found! Cannot merge beta into develop')
