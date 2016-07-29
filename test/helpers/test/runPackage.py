@@ -46,7 +46,7 @@ def get_test_names(failedtests):
     names = [(item, testname[1]) for testname in failedtests for item in testname[0]]
     return set(names)
 
-def run_package(packageName, precommands=None, postcommand=None, lastFailed=''):
+def run_package(packageName, precommands=['python', '-m', 'nose'], postcommand=None, lastFailed=''):
     # enter the package directory to begin running tests and leave when done
     with directory(packageName):
         failedtests = []

@@ -7,7 +7,7 @@ print('Travis CI Passed')
 print('Getting current branchname/SHA')
 branchname = 'unspecified'
 output     = subprocess.check_output(['git', 'branch'])
-ouput      = output.decode('utf-8')
+output     = output.decode('utf-8')
 branches   = output.splitlines()
 for branch in branches:
     if '*' in branch:
@@ -25,6 +25,22 @@ print('Branchname (or SHA) is %s' % branchname)
 # http://stackoverflow.com/questions/501407/is-there-a-git-merge-dry-run-option
 
 # Attempt to auto-merge develop into pre-beta if travis tests pass
+
+print('Resetting remote/origin')
+subprocess.call(['git', 'remote', 'remove', 'origin'])
+print('Done.')
+print('Re-adding origin..')
+subprocess.call(['git', 'remote', 'add', 'origin', 'https://github.com/pyGSTio/pyGSTi.git'])
+print('Done.')
+print('Updating remote')
+subprocess.call(['git', 'remote', 'update'])
+subprocess.call(['git', 'fetch'])
+
+print('Setting up user credentials')
+
+subprocess.call(['git', 'config', '--global', 'user.email', 'N/A'])
+subprocess.call(['git', 'config', '--global', 'user.name', 'Lucas auto-push script'])
+print('Done')
 
 print('Getting the latest version of beta')
 print('Deleting local version, if it exists')
@@ -54,7 +70,8 @@ print(output)
 canMerge = ('<' * 5) not in output # '<' * 5 avoids git finding the expanded string in this file and thinking it is a merge conflict
 
 if canMerge:
-    print('Merge of develop into beta is possible, attempting...')
+    print('Merge of develop into beta is possible')
+    '''
     # The below code is active, but only for testing
     subprocess.call(['git', 'merge', '--no-ff', '--no-commit', 'develop']) #into beta
     print('Merge command finished.')
@@ -76,6 +93,7 @@ if canMerge:
                 print('Secure push worked')
     except:
         print('Secure push failed')
+    '''
 
 else:
     print('Potential merge conflicts found! Cannot merge beta into develop')
