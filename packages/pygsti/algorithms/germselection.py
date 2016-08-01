@@ -279,7 +279,7 @@ def compute_non_AC_score(scoreFn, thresholdAC=1e6, initN=1,
         A function that takes as input a list of sorted eigenvalues and returns
         a score for the partial germ set based on those eigenvalues, with lower
         scores indicating better germ sets. Usually some flavor of
-        :func:`germselection.list_score`.
+        :func:`list_score`.
 
     thresholdAC : float, optional
         Value which the score (before penalties are applied) must be lower than
@@ -309,8 +309,8 @@ def compute_non_AC_score(scoreFn, thresholdAC=1e6, initN=1,
 
     eps : float, optional
         Used when calculating `partialDerivDaggerDeriv` to determine if two
-        eigenvalues are equal (see :func:`germselection.bulk_twirled_deriv`
-        for details). Not used if `partialDerivDaggerDeriv` is provided.
+        eigenvalues are equal (see :func:`bulk_twirled_deriv` for details). Not
+        used if `partialDerivDaggerDeriv` is provided.
 
     numGaugeParams : int
         The number of gauge parameters of the gateset. Not needed if `gateset`
@@ -1065,21 +1065,22 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         set is amplficationally complete, it is a good idea to score potential
         germ sets against a collection (~5-10) of similar gate sets.  The user
         may specify a single GateSet and a number of unitarily close copies to
-        be made (set by the kwarg `numCopies`, or the user may specify their
+        be made (set by the kwarg `numCopies`), or the user may specify their
         own list of GateSets, each of which in turn may or may not be
         randomized (set by the kwarg `randomize`).
 
     germsList : list of GateString
         List of all germs gate sequences to consider.
+
         IMPORTANT:  If `forceSingletons` is ``True``, the first k elements of
         `germsList` must be all k gates in GateSet.
 
     randomize : Bool, optional
-        Whether or not the input GateSet(s) are subject first subject to
-        unitary randomization.  If ``False``, the user should perform the
-        unitary randomization themselves.  Note:  If the GateSet(s) are perfect
-        (e.g. ``std1Q_XYI.gs_target``), then the germ selection output should
-        not be trusted, due to accidental degeneracies in the GateSet.  If the
+        Whether or not the input GateSet(s) are first subject to unitary
+        randomization.  If ``False``, the user should perform the unitary
+        randomization themselves.  Note:  If the GateSet(s) are perfect (e.g.
+        ``std1Q_XYI.gs_target``), then the germ selection output should not be
+        trusted, due to accidental degeneracies in the GateSet.  If the
         GateSet(s) include stochastic (non-unitary) error, then germ selection
         will fail, as we score amplificational completeness in the limit of
         infinite sequence length (so any stochastic noise will completely
@@ -1087,7 +1088,8 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
 
     randomizationStrength : float, optional
         The strength of the unitary noise used to randomize input GateSet(s);
-        is passed to ``randomize_with_unitary``.  Default is ``1e-3``.
+        is passed to :func:`~pygsti.objects.GateSet.randomize_with_unitary`.
+        Default is ``1e-3``.
 
     numCopies : int, optional
         The number of GateSet copies to be made of the input GateSet (prior to
@@ -1115,7 +1117,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         germs.
 
     scoreFunc : string
-        Label to indicate how a germ set is scored. See :meth:`list_score` for
+        Label to indicate how a germ set is scored. See :func:`list_score` for
         details.
 
     maxIter : int, optional
@@ -1137,7 +1139,8 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         in addition to the optimal germ list (see below).
 
     tol : float, optional
-        Tolerance used for eigenvector degeneracy testing in twirling operation.
+        Tolerance used for eigenvector degeneracy testing in twirling
+        operation.
 
     check : bool, optional
         Whether to perform internal consistency checks, at the
@@ -1145,6 +1148,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
 
     forceSingletons : bool, optional (default is True)
         Whether or not to force all germ sets to contain each gate as a germ.
+
         IMPORTANT:  This only works if, for a gate set of k gates, the first k
         elements of germsList are the k gates.
 
@@ -1153,8 +1157,8 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         that does not contain each gate as a germ.
 
     threshold : float, optional (default is 1e6)
-        Specifies a maximum score for the score matrix, above which the germ set
-        is rejected as amplificationally incomplete.
+        Specifies a maximum score for the score matrix, above which the germ
+        set is rejected as amplificationally incomplete.
 
     verbosity : int, optional
         Integer >= 0 indicating the amount of detail to print.
@@ -1473,6 +1477,40 @@ def grasp(elements, greedyScoreFn, rclFn, localScoreFn, getNeighborsFn,
 
 def germ_breadth_score_fn(germSet, germsList, twirledDerivDaggerDerivList,
                           nonAC_kwargs, initN=1):
+    """Score a germ set against a collection of gatesets.
+
+    Calculate the score of the germ set with respect to each member of a
+    collection of gatesets and return the worst score among that collection.
+
+    Parameters
+    ----------
+    germSet : list of GateString
+        The set of germs to score.
+
+    germsList : list of GateString
+        The list of all germs whose Jacobians are provided in
+        `twirledDerivDaggerDerivList`.
+
+    twirledDerivDaggerDerivList : numpy.array
+        Jacobians for all the germs in `germsList` stored as a 3-dimensional
+        array, where the first index indexes the particular germ.
+
+    nonAC_kwargs : dict
+        Dictionary containing further arguments to pass to
+        :func:`compute_non_AC_score` for the scoring of the germ set against
+        individual gatesets.
+
+    initN : int
+        The number of eigenvalues to begin checking for amplificational
+        completeness with respect to. Passed as an argument to
+        :func:`compute_non_AC_score`.
+
+    Returns
+    -------
+    ScoreNonAC
+        The worst score over all gatesets of the germ set.
+
+    """
     weights = _np.zeros(len(germsList))
     for germ in germSet:
         weights[germsList.index(germ)] = 1
@@ -1489,6 +1527,12 @@ def germ_breadth_score_fn(germSet, germsList, twirledDerivDaggerDerivList,
 
 
 def get_swap_neighbors(weights):
+    """Return the list of weights in the neighborhood of a given weight vector.
+
+    A weight vector is in the neighborhood of a given weight vector if it is
+    only a single swap away from the given weight vector.
+
+    """
     included_idxs = _np.where(weights==1)[0]
     excluded_idxs = _np.where(weights==0)[0]
     neighbors = []
@@ -1571,7 +1615,94 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
                                 tol=1e-6, threshold=1e6, check=False,
                                 forceSingletons=True, iterations=5,
                                 verbosity=0):
+    """Use GRASP to find a high-performing germ set.
 
+    Parameters
+    ----------
+    gatesetList : GateSet or list of GateSet
+        The list of GateSets to be tested.  To ensure that the returned germ
+        set is amplficationally complete, it is a good idea to score potential
+        germ sets against a collection (~5-10) of similar gate sets.  The user
+        may specify a single GateSet and a number of unitarily close copies to
+        be made (set by the kwarg `numCopies`, or the user may specify their
+        own list of GateSets, each of which in turn may or may not be
+        randomized (set by the kwarg `randomize`).
+
+    germsList : list of GateString
+        List of all germs gate sequences to consider.
+
+    alpha : float
+        A number between 0 and 1 that roughly specifies a score theshold
+        relative to the spread of scores that a germ must score better than in
+        order to be included in the RCL. A value of 0 for `alpha` corresponds
+        to a purely greedy algorithm (only the best-scoring germ set is
+        included in the RCL), while a value of 1 for `alpha` will include all
+        germs in the RCL.
+
+        See :func:`germ_rcl_fn` for more details.
+
+    randomize : Bool, optional
+        Whether or not the input GateSet(s) are first subject to unitary
+        randomization.  If ``False``, the user should perform the unitary
+        randomization themselves.  Note:  If the GateSet(s) are perfect (e.g.
+        ``std1Q_XYI.gs_target``), then the germ selection output should not be
+        trusted, due to accidental degeneracies in the GateSet.  If the
+        GateSet(s) include stochastic (non-unitary) error, then germ selection
+        will fail, as we score amplificational completeness in the limit of
+        infinite sequence length (so any stochastic noise will completely
+        depolarize any sequence in that limit).
+
+    randomizationStrength : float, optional
+        The strength of the unitary noise used to randomize input GateSet(s);
+        is passed to :func:`~pygsti.objects.GateSet.randomize_with_unitary`.
+        Default is ``1e-3``.
+
+    numCopies : int, optional
+        The number of GateSet copies to be made of the input GateSet (prior to
+        unitary randomization).  If more than one GateSet is passed in,
+        `numCopies` should be ``None``.  If only one GateSet is passed in and
+        `numCopies` is ``None``, no extra copies are made.
+
+    seed : float, optional
+        The starting seed used for unitary randomization.  If multiple GateSets
+        are to be randomized, ``gatesetList[i]`` is randomized with ``seed +
+        i``.
+
+    gatePenalty : float, optional
+        How strong the penalty should be for increasing a germ in the germ set
+        list by a single gate.
+
+    scoreFunc : string
+        Label to indicate how a germ set is scored. See :func:`list_score` for
+        details.
+
+    tol : float, optional
+        Tolerance used for eigenvector degeneracy testing in twirling
+        operation.
+
+    threshold : float, optional (default is 1e6)
+        Specifies a maximum score for the score matrix, above which the germ
+        set is rejected as amplificationally incomplete.
+
+    check : bool, optional
+        Whether to perform internal consistency checks, at the
+        expense of making the function slower.
+
+    forceSingletons : bool, optional (default is True)
+        Whether or not to force all germ sets to contain each gate as a germ.
+
+    iterations : int, optional
+        The number of GRASP iterations to perform.
+
+    verbosity : int, optional
+        Integer >= 0 indicating the amount of detail to print.
+
+    Returns
+    -------
+    finalGermList : list of GateString
+        Sublist of `germsList` specifying the final, optimal set of germs.
+
+    """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
     gatesetList = setup_gateset_list(gatesetList, randomize,
