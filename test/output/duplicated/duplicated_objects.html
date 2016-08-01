@@ -1,0 +1,1552 @@
+
+<HTML>
+    <HEAD>
+        <TITLE> CloneDigger Report </TITLE>
+        <script type="text/javascript">
+        function unhide(divID) {
+            var item = document.getElementById(divID);
+            if (item) {
+                item.className=(item.className=='hidden')?'unhidden':'hidden';
+            }
+        }
+</script>
+
+<style type="text/css">
+.hidden { display: none; }
+.unhidden { display: block; }
+.preformatted {
+        border: 1px dashed #3c78b5;
+    font-size: 11px;
+        font-family: Courier;
+    margin: 10px;
+        line-height: 13px;
+}
+.preformattedHeader {
+    background-color: #f0f0f0;
+        border-bottom: 1px dashed #3c78b5;
+    padding: 3px;
+        text-align: center;
+}
+.preformattedContent {
+    background-color: #f0f0f0;
+    padding: 3px;
+}
+<!--
+<div class="preformatted"><div class="preformattedContent">
+<pre>Clone Digger
+</pre>
+</div></div>
+-->
+
+</style>
+
+    </HEAD>
+    <BODY>
+    
+    
+    <P>Source files: 16</P>
+        <a href = "javascript:unhide('files');">Click here to show/hide file names</a><div id="files" class="hidden"><P><B>Source files:</B><BR>objects/spamspec.py, <BR>objects/gateset.py, <BR>objects/dataset.py, <BR>objects/gate.py, <BR>objects/gigateset.py, <BR>objects/confidenceregion.py, <BR>objects/protectedarray.py, <BR>objects/__init__.py, <BR>objects/gatestring.py, <BR>objects/gscalc.py, <BR>objects/evaltree.py, <BR>objects/verbosityprinter.py, <BR>objects/multidataset.py, <BR>objects/spamvec.py, <BR>objects/exceptions.py, <BR>objects/labeldicts.py</P></div>
+        <P>Clones detected: 53</P>
+        <P>605 of 4513 lines are duplicates (13.41%) </P>
+<P>
+<B>Parameters<BR> </B>
+clustering_threshold = 10<BR>
+distance_threshold = 5<BR>
+size_threshold = 5<BR>
+hashing_depth = 1<BR>
+clusterize_using_hash = False<BR>
+clusterize_using_dcup = False<BR>
+</P> 
+        
+    <B>Time elapsed</B><BR>Construction of AST : 1.46 seconds<BR>
+Building statement hash : 0.01 seconds<BR>
+Building patterns : 3.56 seconds<BR>
+Marking similar statements : 5.47 seconds<BR>
+Finding similar sequences of statements : 0.51 seconds<BR>
+Refining candidates : 0.50 seconds<BR>
+ Total time: 11.51<BR>
+ Started at: Mon Aug  1 06:56:08 2016<BR>
+ Finished at: Mon Aug  1 06:56:20 2016
+    <P><B>Clone # 1</B><BR>Distance between two fragments = 1 <BR>Clone size = 23<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 3501</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 3453</TD></TR><TR>
+<TD>
+def <span style="color: rgb(255, 0, 0);">diamonddist</span>(self, otherCalc, transformMx=None):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;T = transformMx<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if T is not None:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Ti = _nla.inv(T)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dists = [_gt.<span style="color: rgb(255, 0, 0);">diamonddist</span>(_np.dot(Ti, _np.dot(self.gates[gateLabel], T)), otherCalc.gates[gateLabel]) for gateLabel in self.gates ]<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for spamLabel in self.spamdefs:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;spamGate = self._make_spamgate(spamLabel)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;spamGate2 = otherCalc._make_spamgate(spamLabel)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (spamGate is not None) and (spamGate2 is not None):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dists.append(_gt.<span style="color: rgb(255, 0, 0);">diamonddist</span>(_np.dot(Ti, _np.dot(spamGate, T)), spamGate2))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dists = [_gt.<span style="color: rgb(255, 0, 0);">diamonddist</span>(self.gates[gateLabel], otherCalc.gates[gateLabel]) for gateLabel in self.gates ]<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for spamLabel in self.spamdefs:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;spamGate = self._make_spamgate(spamLabel)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;spamGate2 = otherCalc._make_spamgate(spamLabel)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (spamGate is not None) and (spamGate2 is not None):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dists.append(_gt.<span style="color: rgb(255, 0, 0);">diamonddist</span>(spamGate, spamGate2))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return max(dists)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+def <span style="color: rgb(255, 0, 0);">jtracedist</span>(self, otherCalc, transformMx=None):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;T = transformMx<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if T is not None:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Ti = _nla.inv(T)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dists = [_gt.<span style="color: rgb(255, 0, 0);">jtracedist</span>(_np.dot(Ti, _np.dot(self.gates[gateLabel], T)), otherCalc.gates[gateLabel]) for gateLabel in self.gates ]<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for spamLabel in self.spamdefs:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;spamGate = self._make_spamgate(spamLabel)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;spamGate2 = otherCalc._make_spamgate(spamLabel)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (spamGate is not None) and (spamGate2 is not None):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dists.append(_gt.<span style="color: rgb(255, 0, 0);">jtracedist</span>(_np.dot(Ti, _np.dot(spamGate, T)), spamGate2))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dists = [_gt.<span style="color: rgb(255, 0, 0);">jtracedist</span>(self.gates[gateLabel], otherCalc.gates[gateLabel]) for gateLabel in self.gates ]<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for spamLabel in self.spamdefs:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;spamGate = self._make_spamgate(spamLabel)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;spamGate2 = otherCalc._make_spamgate(spamLabel)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (spamGate is not None) and (spamGate2 is not None):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dists.append(_gt.<span style="color: rgb(255, 0, 0);">jtracedist</span>(spamGate, spamGate2))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return max(dists)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 2</B><BR>Distance between two fragments = 0 <BR>Clone size = 19<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 2548</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 2339</TD></TR><TR>
+<TD>
+remainder_row_index = None</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+remainder_row_index = None</TD>
+</TR>
+<TR>
+<TD>
+for spamLabel, rowIndex in spam_label_rows.items():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if self._is_remainder_spamlabel(spamLabel):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert self.assumeSumToOne<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert remainder_row_index is None<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;remainder_row_index = rowIndex</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+for spamLabel, rowIndex in spam_label_rows.items():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if self._is_remainder_spamlabel(spamLabel):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert self.assumeSumToOne<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert remainder_row_index is None<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;remainder_row_index = rowIndex</TD>
+</TR>
+<TR>
+<TD>
+if wrtFilter is not None:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;assert wrtBlockSize is None<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;tot_rho = self.tot_rho_params<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;tot_spam = (self.tot_rho_params) + (self.tot_e_params)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;wrtFilters = {'preps': [x for x in wrtFilter if x < tot_rho], 'effects': [(x) - (tot_rho) for x in wrtFilter if tot_rho <= x < tot_spam], 'gates': [(x) - (tot_spam) for x in wrtFilter if x >= tot_spam]}<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;wrtFilters = None</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if wrtFilter is not None:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;assert wrtBlockSize is None<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;tot_rho = self.tot_rho_params<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;tot_spam = (self.tot_rho_params) + (self.tot_e_params)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;wrtFilters = {'preps': [x for x in wrtFilter if x < tot_rho], 'effects': [(x) - (tot_rho) for x in wrtFilter if tot_rho <= x < tot_spam], 'gates': [(x) - (tot_spam) for x in wrtFilter if x >= tot_spam]}<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;wrtFilters = None</TD>
+</TR>
+<TR>
+<TD>
+subtrees = evalTree.get_sub_trees()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+subtrees = evalTree.get_sub_trees()</TD>
+</TR>
+<TR>
+<TD>
+mySubTreeIndices, subTreeOwners, mySubComm = self._distribute_indices(list(range(len(subtrees))), comm)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+mySubTreeIndices, subTreeOwners, mySubComm = self._distribute_indices(list(range(len(subtrees))), comm)</TD>
+</TR>
+<TR>
+<TD>
+my_results = []</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+my_results = []</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 3</B><BR>Distance between two fragments = 3 <BR>Clone size = 18<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/spamvec.py"<BR>The first line is 71</TD><TD></TD><TD>Source file "objects/gate.py"<BR>The first line is 189</TD></TR><TR>
+<TD>
+def get_dimension(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return self.dim</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def get_dimension(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return self.dim</TD>
+</TR>
+<TR>
+<TD>
+def __setstate__(self, state):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;self.__dict__.update(state)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __setstate__(self, state):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;self.__dict__.update(state)</TD>
+</TR>
+<TR>
+<TD>
+def __getitem__(self, key):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return self.base.__getitem__(key)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __getitem__(self, key):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return self.base.__getitem__(key)</TD>
+</TR>
+<TR>
+<TD>
+def __getslice__(self, i, j):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return self.__getitem__(slice(i, j))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __getslice__(self, i, j):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return self.__getitem__(slice(i, j))</TD>
+</TR>
+<TR>
+<TD>
+def __setitem__(self, key, val):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return self.base.__setitem__(key, val)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __setitem__(self, key, val):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return self.base.__setitem__(key, val)</TD>
+</TR>
+<TR>
+<TD>
+def __getattr__(self, attr):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ret = getattr(self.__dict__['base'], attr)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if self.base.shape != (self.dim, <span style="color: rgb(255, 0, 0);">1</span>):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise ValueError(<span style="color: rgb(255, 0, 0);">'Cannot change dimension of Vector'</span>)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return ret</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+def __getattr__(self, attr):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ret = getattr(self.__dict__['base'], attr)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if self.base.shape != (self.dim, <span style="color: rgb(255, 0, 0);">self.dim</span>):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise ValueError(<span style="color: rgb(255, 0, 0);">'Cannot change shape of Gate'</span>)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return ret</TD>
+</TR>
+<TR>
+<TD>
+def __pos__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return self.base</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __pos__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return self.base</TD>
+</TR>
+<TR>
+<TD>
+def __neg__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return -self.base</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __neg__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return -self.base</TD>
+</TR>
+<TR>
+<TD>
+def __abs__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return abs(self.base)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __abs__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return abs(self.base)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 4</B><BR>Distance between two fragments = 4 <BR>Clone size = 13<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gate.py"<BR>The first line is 732</TD><TD></TD><TD>Source file "objects/gate.py"<BR>The first line is 391</TD></TR><TR>
+<TD>
+def copy(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return <span style="color: rgb(255, 0, 0);">TPParameterizedGate</span>(self.base)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+def copy(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return <span style="color: rgb(255, 0, 0);">StaticGate</span>(self.base)</TD>
+</TR>
+<TR>
+<TD>
+def transform(self, S, Si):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;self.set_matrix(_np.dot(Si, _np.dot(self.base, S)))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def transform(self, S, Si):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;self.set_matrix(_np.dot(Si, _np.dot(self.base, S)))</TD>
+</TR>
+<TR>
+<TD>
+def compose(self, otherGate):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;assert isinstance(otherGate, <span style="color: rgb(255, 0, 0);">TPParameterizedGate</span>)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return <span style="color: rgb(255, 0, 0);">TPParameterizedGate</span>(_np.dot(self.base, <span style="color: rgb(255, 0, 0);">otherGate</span>))</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+def compose(self, otherGate):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;assert isinstance(otherGate, <span style="color: rgb(255, 0, 0);">StaticGate</span>)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return <span style="color: rgb(255, 0, 0);">StaticGate</span>(_np.dot(self.base, <span style="color: rgb(255, 0, 0);">otherGate.base</span>))</TD>
+</TR>
+<TR>
+<TD>
+def __str__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;s = (<span style="color: rgb(255, 0, 0);">'TP Parameterized gate with shape %s\n'</span>) % (str(self.base.shape))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;s += _mt.mx_to_string(self.base, width=4, prec=2)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return s</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+def __str__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;s = (<span style="color: rgb(255, 0, 0);">'Static gate with shape %s\n'</span>) % (str(self.base.shape))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;s += _mt.mx_to_string(self.base, width=4, prec=2)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return s</TD>
+</TR>
+<TR>
+<TD>
+def __reduce__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return (<span style="color: rgb(255, 0, 0);">TPParameterizedGate</span>, (_np.identity(self.dim, 'd')), self.__dict__)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+def __reduce__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return (<span style="color: rgb(255, 0, 0);">StaticGate</span>, (_np.identity(self.dim, 'd')), self.__dict__)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 5</B><BR>Distance between two fragments = 4 <BR>Clone size = 11<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 1236</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 1372</TD></TR><TR>
+<TD>
+if comm.Get_size() > <span style="color: rgb(255, 0, 0);">nGateDerivCols</span>:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if evalTree.is_split():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise NotImplementedError('Need to finish implementing this case!')<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">'\n                    subtrees = evalTree.get_sub_trees()\n                    allSubTreeIndices = list(range(len(subtrees)))\n                    mySubTreeIndices, subTreeOwners, mySubComm =                         self._distribute_indices(allSubTreeIndices, comm)\n                        #split *many* procs among a smaller number of indices, assigning the\n                        # same index list to multiple procs and making a "myComm" group for them.\n\n                    assert(wrtFilter is None) # sub-tree division occurs *before* wrtFilter division\n                    my_results = [ self._compute_dproduct_cache(\n                            subtrees[iSubTree],prodCache,scaleCache, myComm)\n                                   for iSubTree in mySubTreeIndices ]\n\n                    psd = (1,nGateDerivCols,dim,dim) # per string dimension of dProdCache\n                    return self._gather_multiple_subtree_results(\n                        evalTree, subTreeOwners, mySubTreeIndices, my_results,\n                        None, psd, myComm, comm)  #this fn needs to gather tree results\n                        # only from the *root* processors of each myComm group... then broadcast?\n                    '</span><BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_warnings.warn(((('Increased speed could be obtained') + (<span style="color: rgb(255, 0, 0);">' by giving dproduct cache computation'</span>)) + (' a *split* tree, as there are more cpus')) + (' than derivative columns.'))</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+if comm.Get_size() > <span style="color: rgb(255, 0, 0);">nGateDerivCols2</span>:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if evalTree.is_split():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise NotImplementedError('Need to finish implementing this case!')<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">'\n\n                    subtrees = evalTree.get_sub_trees()\n                    allSubTreeIndices = list(range(len(subtrees)))\n                    mySubTreeIndices, subTreeOwners, mySubComm =                         self._distribute_indices_multiple(allSubTreeIndices, comm)\n                        #split *many* procs among a smaller number of indices, assigning the\n                        # same index list to multiple procs and making a "myComm" group for them.\n\n                    assert(wrtFilter is None) # sub-tree division occurs *before* wrtFilter division\n                    my_results = [ self._compute_hproduct_cache(\n                            subtrees[iSubTree],prodCache,dProdCache,scaleCache,myComm)\n                                   for iSubTree in mySubTreeIndices ]\n\n                    psd = (1,nGateDerivCols,dim,dim) # per string dimension of dProdCache\n                    return self._gather_multiple_subtree_results(\n                        evalTree, subTreeOwners, mySubTreeIndices, my_results,\n                        None, psd, myComm, comm)  #this fn needs to gather tree results\n                        # only from the *root* processors of each myComm group... then broadcast?\n\n                    '</span><BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_warnings.warn(((('Increased speed could be obtained') + (<span style="color: rgb(255, 0, 0);">' by giving hproduct cache computation'</span>)) + (' a *split* tree, as there are more cpus')) + (' than derivative columns.'))</TD>
+</TR>
+<TR>
+<TD>
+<span style="font-family: monospace;">allDeriv<span style="color:rgb(255,0,0);"></span>ColIndices&nbsp; =&nbsp; list(range(nGateDerivCols<span style="color:rgb(255,0,0);"></span>))&nbsp; if&nbsp; (wrtFilter&nbsp; is&nbsp; None)&nbsp; else&nbsp; wrtFilter<span style="color:rgb(255,0,0);"></span></span></TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="font-family: monospace;">allDeriv<span style="color:rgb(255,0,0);">2</span>ColIndices&nbsp; =&nbsp; list(range(nGateDerivCols<span style="color:rgb(255,0,0);">2</span>))&nbsp; if&nbsp; (wrtFilter&nbsp; is&nbsp; None)&nbsp; else&nbsp; wrtFilter<span style="color:rgb(255,0,0);"></span></span></TD>
+</TR>
+<TR>
+<TD>
+myDerivColIndices, _, mySubComm = self._distribute_indices(<span style="color: rgb(255, 0, 0);">allDerivColIndices</span>, comm)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+myDerivColIndices, _, mySubComm = self._distribute_indices(<span style="color: rgb(255, 0, 0);">allDeriv2ColIndices</span>, comm)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 6</B><BR>Distance between two fragments = 4 <BR>Clone size = 10<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/multidataset.py"<BR>The first line is 170</TD><TD></TD><TD>Source file "objects/dataset.py"<BR>The first line is 246</TD></TR><TR>
+<TD>
+def __contains__(self, <span style="color: rgb(255, 0, 0);">datasetName</span>):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return <span style="color: rgb(255, 0, 0);">datasetName</span> in self.<span style="color: rgb(255, 0, 0);">countsDict</span></TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+def __contains__(self, <span style="color: rgb(255, 0, 0);">gatestring</span>):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return <span style="color: rgb(255, 0, 0);">gatestring</span> in self.<span style="color: rgb(255, 0, 0);">gsIndex</span></TD>
+</TR>
+<TR>
+<TD>
+def keys(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return list(self.<span style="color: rgb(255, 0, 0);">countsDict</span>.keys())</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+def keys(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return list(self.<span style="color: rgb(255, 0, 0);">gsIndex</span>.keys())</TD>
+</TR>
+<TR>
+<TD>
+def has_key(self, <span style="color: rgb(255, 0, 0);">datasetName</span>):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return <span style="color: rgb(255, 0, 0);">datasetName</span> in self.<span style="color: rgb(255, 0, 0);">countsDict</span></TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+def has_key(self, <span style="color: rgb(255, 0, 0);">gatestring</span>):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return <span style="color: rgb(255, 0, 0);">gatestring</span> in self.<span style="color: rgb(255, 0, 0);">gsIndex</span></TD>
+</TR>
+<TR>
+<TD>
+def iteritems(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return <span style="color: rgb(255, 0, 0);">MultiDataSet_KeyValIterator</span>(self)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+def iteritems(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return <span style="color: rgb(255, 0, 0);">DataSet_KeyValIterator</span>(self)</TD>
+</TR>
+<TR>
+<TD>
+def itervalues(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return <span style="color: rgb(255, 0, 0);">MultiDataSet_ValIterator</span>(self)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+def itervalues(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return <span style="color: rgb(255, 0, 0);">DataSet_ValIterator</span>(self)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 7</B><BR>Distance between two fragments = 4 <BR>Clone size = 10<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/confidenceregion.py"<BR>The first line is 567</TD><TD></TD><TD>Source file "objects/confidenceregion.py"<BR>The first line is 555</TD></TR><TR>
+<TD>
+for <span style="color: rgb(255, 0, 0);">ELabel</span>, <span style="color: rgb(255, 0, 0);">EVec</span> in self.gateset.<span style="color: rgb(255, 0, 0);">effects</span>.items():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">nEParams</span> = <span style="color: rgb(255, 0, 0);">EVec</span>.num_params()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;off = self.gateset_offsets[<span style="color: rgb(255, 0, 0);">ELabel</span>][0]<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;vec = <span style="color: rgb(255, 0, 0);">EVec</span>.to_vector()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for i in range(<span style="color: rgb(255, 0, 0);">nEParams</span>):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vecEps = vec.copy()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vecEps[i] += eps<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gsEps.<span style="color: rgb(255, 0, 0);">effects</span>[<span style="color: rgb(255, 0, 0);">ELabel</span>].from_vector(vecEps)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gradF[(off) + (i)] = ((fnOfSpamVecs(gsEps.get_preps(), gsEps.get_effects())) - (f0)) / (eps)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gsEps.<span style="color: rgb(255, 0, 0);">effects</span>[<span style="color: rgb(255, 0, 0);">ELabel</span>] = <span style="color: rgb(255, 0, 0);">EVec</span>.copy()</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+for <span style="color: rgb(255, 0, 0);">prepLabel</span>, <span style="color: rgb(255, 0, 0);">rhoVec</span> in self.gateset.<span style="color: rgb(255, 0, 0);">preps</span>.items():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">nRhoParams</span> = <span style="color: rgb(255, 0, 0);">rhoVec</span>.num_params()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;off = self.gateset_offsets[<span style="color: rgb(255, 0, 0);">prepLabel</span>][0]<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;vec = <span style="color: rgb(255, 0, 0);">rhoVec</span>.to_vector()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for i in range(<span style="color: rgb(255, 0, 0);">nRhoParams</span>):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vecEps = vec.copy()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vecEps[i] += eps<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gsEps.<span style="color: rgb(255, 0, 0);">preps</span>[<span style="color: rgb(255, 0, 0);">prepLabel</span>].from_vector(vecEps)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gradF[(off) + (i)] = ((fnOfSpamVecs(gsEps.get_preps(), gsEps.get_effects())) - (f0)) / (eps)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gsEps.<span style="color: rgb(255, 0, 0);">preps</span>[<span style="color: rgb(255, 0, 0);">prepLabel</span>] = <span style="color: rgb(255, 0, 0);">rhoVec</span>.copy()</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 8</B><BR>Distance between two fragments = 2 <BR>Clone size = 9<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/spamvec.py"<BR>The first line is 174</TD><TD></TD><TD>Source file "objects/spamvec.py"<BR>The first line is 298</TD></TR><TR>
+<TD>
+def __init__(self, vec):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;SPAMVec.__init__(self, SPAMVec.convert_to_vector(vec))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __init__(self, vec):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;SPAMVec.__init__(self, SPAMVec.convert_to_vector(vec))</TD>
+</TR>
+<TR>
+<TD>
+def set_vector(self, vec):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;vec = SPAMVec.convert_to_vector(vec)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if vec.size != self.dim:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise ValueError(('Argument must be length %d') % (self.dim))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;self.base[None:None,None:None] = vec</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def set_vector(self, vec):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;vec = SPAMVec.convert_to_vector(vec)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if vec.size != self.dim:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise ValueError(('Argument must be length %d') % (self.dim))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;self.base[None:None,None:None] = vec</TD>
+</TR>
+<TR>
+<TD>
+def num_params(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return <span style="color: rgb(255, 0, 0);">0</span></TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+def num_params(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return <span style="color: rgb(255, 0, 0);">self.dim</span></TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 9</B><BR>Distance between two fragments = 0 <BR>Clone size = 9<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 729</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 603</TD></TR><TR>
+<TD>
+derivWrtAnyEvec = (scale) * (_np.transpose(_np.dot(prod, rho)))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+derivWrtAnyEvec = (scale) * (_np.transpose(_np.dot(prod, rho)))</TD>
+</TR>
+<TR>
+<TD>
+if elabel == self._remainderLabel:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;assert self._remainderLabel not in self.effects<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for ei, evec in enumerate(self.effects.values()):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dpr_dEs[0,e_offset[ei]:e_offset[(ei) + (1)]] = (-1.0) * (_np.dot(derivWrtAnyEvec, evec.deriv_wrt_params()))<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eIndex = list(self.effects.keys()).index(elabel)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;dpr_dEs[0,e_offset[eIndex]:e_offset[(eIndex) + (1)]] = _np.dot(derivWrtAnyEvec, self.effects[elabel].deriv_wrt_params())</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if elabel == self._remainderLabel:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;assert self._remainderLabel not in self.effects<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for ei, evec in enumerate(self.effects.values()):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dpr_dEs[0,e_offset[ei]:e_offset[(ei) + (1)]] = (-1.0) * (_np.dot(derivWrtAnyEvec, evec.deriv_wrt_params()))<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;eIndex = list(self.effects.keys()).index(elabel)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;dpr_dEs[0,e_offset[eIndex]:e_offset[(eIndex) + (1)]] = _np.dot(derivWrtAnyEvec, self.effects[elabel].deriv_wrt_params())</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 10</B><BR>Distance between two fragments = 2 <BR>Clone size = 9<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/spamvec.py"<BR>The first line is 387</TD><TD></TD><TD>Source file "objects/spamvec.py"<BR>The first line is 267</TD></TR><TR>
+<TD>
+def copy(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return <span style="color: rgb(255, 0, 0);">FullyParameterizedSPAMVec</span>(self.base)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+def copy(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return <span style="color: rgb(255, 0, 0);">StaticSPAMVec</span>(self.base)</TD>
+</TR>
+<TR>
+<TD>
+def __str__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;s = (<span style="color: rgb(255, 0, 0);">'Fully Parameterized spam vector with length %d\n'</span>) % (len(self.base))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;s += _mt.mx_to_string(self.base, width=4, prec=2)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return s</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+def __str__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;s = (<span style="color: rgb(255, 0, 0);">'Static spam vector with length %d\n'</span>) % (len(self.base))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;s += _mt.mx_to_string(self.base, width=4, prec=2)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return s</TD>
+</TR>
+<TR>
+<TD>
+def __reduce__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return (<span style="color: rgb(255, 0, 0);">FullyParameterizedSPAMVec</span>, (_np.empty((self.dim, 1), 'd')), self.__dict__)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+def __reduce__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return (<span style="color: rgb(255, 0, 0);">StaticSPAMVec</span>, (_np.empty((self.dim, 1), 'd')), self.__dict__)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 11</B><BR>Distance between two fragments = 3 <BR>Clone size = 8<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gate.py"<BR>The first line is 310</TD><TD></TD><TD>Source file "objects/gate.py"<BR>The first line is 472</TD></TR><TR>
+<TD>
+def set_matrix(self, M):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;mx = Gate.convert_to_matrix(M)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if mx.shape != (self.dim, self.dim):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise ValueError(('Argument must be a (%d,%d) matrix!') % ((self.dim, self.dim)))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;self.base[None:None,None:None] = _np.array(mx)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def set_matrix(self, M):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;mx = Gate.convert_to_matrix(M)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if mx.shape != (self.dim, self.dim):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise ValueError(('Argument must be a (%d,%d) matrix!') % ((self.dim, self.dim)))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;self.base[None:None,None:None] = _np.array(mx)</TD>
+</TR>
+<TR>
+<TD>
+def num_params(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return <span style="color: rgb(255, 0, 0);">0</span></TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+def num_params(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return <span style="color: rgb(255, 0, 0);">(self.dim) ** (2)</span></TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 12</B><BR>Distance between two fragments = 1 <BR>Clone size = 8<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gateset.py"<BR>The first line is 2489</TD><TD></TD><TD>Source file "objects/gateset.py"<BR>The first line is 2548</TD></TR><TR>
+<TD>
+curDim = self.get_dimension()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+curDim = self.get_dimension()</TD>
+</TR>
+<TR>
+<TD>
+assert newDimension <span style="color: rgb(255, 0, 0);">></span> curDim</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+assert newDimension <span style="color: rgb(255, 0, 0);"><</span> curDim</TD>
+</TR>
+<TR>
+<TD>
+new_gateset = GateSet('full', self.preps._prefix, self.effects._prefix, self.gates._prefix, self._remainderlabel, self._identitylabel)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+new_gateset = GateSet('full', self.preps._prefix, self.effects._prefix, self.gates._prefix, self._remainderlabel, self._identitylabel)</TD>
+</TR>
+<TR>
+<TD>
+new_gateset._dim = newDimension</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+new_gateset._dim = newDimension</TD>
+</TR>
+<TR>
+<TD>
+new_gateset.reset_basis()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+new_gateset.reset_basis()</TD>
+</TR>
+<TR>
+<TD>
+new_gateset.spamdefs.update(self.spamdefs)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+new_gateset.spamdefs.update(self.spamdefs)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 13</B><BR>Distance between two fragments = 0 <BR>Clone size = 8<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gigateset.py"<BR>The first line is 453</TD><TD></TD><TD>Source file "objects/gigateset.py"<BR>The first line is 386</TD></TR><TR>
+<TD>
+rho_tilde = rho_tilde.flatten()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+rho_tilde = rho_tilde.flatten()</TD>
+</TR>
+<TR>
+<TD>
+E_tilde = E_tilde.flatten()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+E_tilde = E_tilde.flatten()</TD>
+</TR>
+<TR>
+<TD>
+inv_delta0_diag = _np.empty(len(rho_tilde), 'complex')</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+inv_delta0_diag = _np.empty(len(rho_tilde), 'complex')</TD>
+</TR>
+<TR>
+<TD>
+printer = VerbosityPrinter.build_printer(verbosity)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer = VerbosityPrinter.build_printer(verbosity)</TD>
+</TR>
+<TR>
+<TD>
+printer.log('Finding delta0', 4)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer.log('Finding delta0', 4)</TD>
+</TR>
+<TR>
+<TD>
+printer.log((' rho-tilde = %s') % (_mt.mx_to_string(rho_tilde)), 4)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer.log((' rho-tilde = %s') % (_mt.mx_to_string(rho_tilde)), 4)</TD>
+</TR>
+<TR>
+<TD>
+printer.log((' E-tilde = %s') % (_mt.mx_to_string(E_tilde)), 4)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer.log((' E-tilde = %s') % (_mt.mx_to_string(E_tilde)), 4)</TD>
+</TR>
+<TR>
+<TD>
+printer.log((' D0-params = %s') % (_mt.mx_to_string(D0_params)), 4)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer.log((' D0-params = %s') % (_mt.mx_to_string(D0_params)), 4)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 14</B><BR>Distance between two fragments = 1 <BR>Clone size = 8<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 2665</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 2449</TD></TR><TR>
+<TD>
+all_blk_results = self._gather_blk_results(nBlks, blkOwners, myBlkIndices, blk_results, mySubComm)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+all_blk_results = self._gather_blk_results(nBlks, blkOwners, myBlkIndices, blk_results, mySubComm)</TD>
+</TR>
+<TR>
+<TD>
+for spamLabel in sub_results:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;to_concat = ([sub_results[spamLabel][<span style="color: rgb(255, 0, 0);">2</span>]]) + ([blk[spamLabel][<span style="color: rgb(255, 0, 0);">2</span>] for blk in all_blk_results ])<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;sub_results[spamLabel] = list(sub_results[spamLabel])<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;sub_results[spamLabel][<span style="color: rgb(255, 0, 0);">2</span>] = _np.concatenate(to_concat, axis=<span style="color: rgb(255, 0, 0);">2</span>)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;sub_results[spamLabel] = tuple(sub_results[spamLabel])</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+for spamLabel in sub_results:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;to_concat = ([sub_results[spamLabel][<span style="color: rgb(255, 0, 0);">1</span>]]) + ([blk[spamLabel][<span style="color: rgb(255, 0, 0);">1</span>] for blk in all_blk_results ])<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;sub_results[spamLabel] = list(sub_results[spamLabel])<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;sub_results[spamLabel][<span style="color: rgb(255, 0, 0);">1</span>] = _np.concatenate(to_concat, axis=<span style="color: rgb(255, 0, 0);">1</span>)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;sub_results[spamLabel] = tuple(sub_results[spamLabel])</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 15</B><BR>Distance between two fragments = 0 <BR>Clone size = 7<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 2409</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 2623</TD></TR><TR>
+<TD>
+assert wrtFilter is None</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+assert wrtFilter is None</TD>
+</TR>
+<TR>
+<TD>
+nBlks = (self.tot_gate_params) // (blkSize)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+nBlks = (self.tot_gate_params) // (blkSize)</TD>
+</TR>
+<TR>
+<TD>
+blocks = [list(range((blkSize) * (i), (blkSize) * ((i) + (1)))) for i in range(nBlks) ]</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+blocks = [list(range((blkSize) * (i), (blkSize) * ((i) + (1)))) for i in range(nBlks) ]</TD>
+</TR>
+<TR>
+<TD>
+if (blkSize) * (nBlks) < self.tot_gate_params:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;blocks.append(list(range((blkSize) * (nBlks), self.tot_gate_params)))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;nBlks += 1</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if (blkSize) * (nBlks) < self.tot_gate_params:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;blocks.append(list(range((blkSize) * (nBlks), self.tot_gate_params)))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;nBlks += 1</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 16</B><BR>Distance between two fragments = 0 <BR>Clone size = 7<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 2388</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 2602</TD></TR><TR>
+<TD>
+<span style="font-family: monospace;">if&nbsp; wrtFilter&nbsp; is&nbsp; None:<BR>
+&nbsp; blkSize&nbsp; =&nbsp; wrtBlockSize&nbsp; #could&nbsp; be&nbsp; None<BR>
+&nbsp; if&nbsp; (mySubComm&nbsp; is&nbsp; not&nbsp; None)&nbsp; and&nbsp; (mySubComm.Get_size()&nbsp; &gt;&nbsp; 1):<BR>
+&nbsp; &nbsp; comm_blkSize&nbsp; =&nbsp; self.tot_gate_params&nbsp; //&nbsp; mySubComm.Get_size()<BR>
+&nbsp; &nbsp; blkSize&nbsp; =&nbsp; comm_blkSize&nbsp; if&nbsp; (blkSize&nbsp; is&nbsp; None)&nbsp; \<BR>
+&nbsp; &nbsp; &nbsp; else&nbsp; min(comm_blkSize,&nbsp; blkSize)&nbsp; #override&nbsp; with&nbsp; smaller&nbsp; comm_blkSize<BR>
+else:<BR>
+&nbsp; blkSize&nbsp; =&nbsp; None&nbsp; #&nbsp; wrtFilter&nbsp; dictates&nbsp; block<span style="color:rgb(255,0,0);"></span></span></TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+<span style="font-family: monospace;">if&nbsp; wrtFilter&nbsp; is&nbsp; None:<BR>
+&nbsp; blkSize&nbsp; =&nbsp; wrtBlockSize&nbsp; #could&nbsp; be&nbsp; None<BR>
+&nbsp; if&nbsp; (mySubComm&nbsp; is&nbsp; not&nbsp; None)&nbsp; and&nbsp; (mySubComm.Get_size()&nbsp; &gt;&nbsp; 1):<BR>
+&nbsp; &nbsp; comm_blkSize&nbsp; =&nbsp; self.tot_gate_params&nbsp; //&nbsp; mySubComm.Get_size()<BR>
+&nbsp; &nbsp; blkSize&nbsp; =&nbsp; comm_blkSize&nbsp; if&nbsp; (blkSize&nbsp; is&nbsp; None)&nbsp; \<BR>
+&nbsp; &nbsp; &nbsp; else&nbsp; min(comm_blkSize,&nbsp; blkSize)&nbsp; #override&nbsp; with&nbsp; smaller&nbsp; comm_blkSize<BR>
+else:<BR>
+&nbsp; blkSize&nbsp; =&nbsp; None&nbsp; #&nbsp; wrtFilter&nbsp; dictates&nbsp; block<span style="color:rgb(255,0,0);"></span></span></TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 17</B><BR>Distance between two fragments = 4 <BR>Clone size = 7<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 1485</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 1335</TD></TR><TR>
+<TD>
+scale = (scaleCache[i]) - ((scaleCache[iLeft]) + (scaleCache[iRight]))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+scale = (scaleCache[i]) - ((scaleCache[iLeft]) + (scaleCache[iRight]))</TD>
+</TR>
+<TR>
+<TD>
+if not _np.isclose(scale, 0):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">hProdCache</span>[i] /= _np.exp(scale)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (<span style="color: rgb(255, 0, 0);">hProdCache</span>[i].max() < <span style="color: rgb(255, 0, 0);">HSMALL</span>) and (<span style="color: rgb(255, 0, 0);">hProdCache</span>[i].min() > -<span style="color: rgb(255, 0, 0);">HSMALL</span>):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_warnings.warn(<span style="color: rgb(255, 0, 0);">'Scaled hProd small in order to keep prod managable.'</span>)<BR>
+elif (_np.count_nonzero(<span style="color: rgb(255, 0, 0);">hProdCache</span>[i])) and (<span style="color: rgb(255, 0, 0);">hProdCache</span>[i].max() < <span style="color: rgb(255, 0, 0);">HSMALL</span>) and (<span style="color: rgb(255, 0, 0);">hProdCache</span>[i].min() > -<span style="color: rgb(255, 0, 0);">HSMALL</span>):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;_warnings.warn(<span style="color: rgb(255, 0, 0);">'hProd is small (oh well!).'</span>)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+if not _np.isclose(scale, 0):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">dProdCache</span>[i] /= _np.exp(scale)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (<span style="color: rgb(255, 0, 0);">dProdCache</span>[i].max() < <span style="color: rgb(255, 0, 0);">DSMALL</span>) and (<span style="color: rgb(255, 0, 0);">dProdCache</span>[i].min() > -<span style="color: rgb(255, 0, 0);">DSMALL</span>):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_warnings.warn(<span style="color: rgb(255, 0, 0);">'Scaled dProd small in order to keep prod managable.'</span>)<BR>
+elif (_np.count_nonzero(<span style="color: rgb(255, 0, 0);">dProdCache</span>[i])) and (<span style="color: rgb(255, 0, 0);">dProdCache</span>[i].max() < <span style="color: rgb(255, 0, 0);">DSMALL</span>) and (<span style="color: rgb(255, 0, 0);">dProdCache</span>[i].min() > -<span style="color: rgb(255, 0, 0);">DSMALL</span>):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;_warnings.warn(<span style="color: rgb(255, 0, 0);">'Would have scaled dProd but now will not alter scaleCache.'</span>)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 18</B><BR>Distance between two fragments = 2 <BR>Clone size = 7<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 2219</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 3192</TD></TR><TR>
+<TD>
+remainder_row_index = None</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+remainder_row_index = None</TD>
+</TR>
+<TR>
+<TD>
+for spamLabel, rowIndex in spam_label_rows.items():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if self._is_remainder_spamlabel(spamLabel):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert self.assumeSumToOne<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert remainder_row_index is None<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;remainder_row_index = rowIndex</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+for spamLabel, rowIndex in spam_label_rows.items():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if self._is_remainder_spamlabel(spamLabel):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert self.assumeSumToOne<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert remainder_row_index is None<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;remainder_row_index = rowIndex</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">subtrees</span> = evalTree.<span style="color: rgb(255, 0, 0);">get_sub_trees</span>()</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);">nGateStrings</span> = evalTree.<span style="color: rgb(255, 0, 0);">num_final_strings</span>()</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 19</B><BR>Distance between two fragments = 0 <BR>Clone size = 7<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/dataset.py"<BR>The first line is 601</TD><TD></TD><TD>Source file "objects/multidataset.py"<BR>The first line is 349</TD></TR><TR>
+<TD>
+bOpen = not hasattr(fileOrFilename, 'write')</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+bOpen = not hasattr(fileOrFilename, 'write')</TD>
+</TR>
+<TR>
+<TD>
+if bOpen:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if fileOrFilename.endswith('.gz'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;import gzip as _gzip<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f = _gzip.open(fileOrFilename, 'rb')<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f = open(fileOrFilename, 'rb')<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;f = fileOrFilename</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if bOpen:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if fileOrFilename.endswith('.gz'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;import gzip as _gzip<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f = _gzip.open(fileOrFilename, 'rb')<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f = open(fileOrFilename, 'rb')<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;f = fileOrFilename</TD>
+</TR>
+<TR>
+<TD>
+state_dict = _pickle.load(f)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+state_dict = _pickle.load(f)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 20</B><BR>Distance between two fragments = 0 <BR>Clone size = 7<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/dataset.py"<BR>The first line is 568</TD><TD></TD><TD>Source file "objects/multidataset.py"<BR>The first line is 322</TD></TR><TR>
+<TD>
+bOpen = not hasattr(fileOrFilename, 'write')</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+bOpen = not hasattr(fileOrFilename, 'write')</TD>
+</TR>
+<TR>
+<TD>
+if bOpen:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if fileOrFilename.endswith('.gz'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;import gzip as _gzip<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f = _gzip.open(fileOrFilename, 'wb')<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f = open(fileOrFilename, 'wb')<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;f = fileOrFilename</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if bOpen:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if fileOrFilename.endswith('.gz'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;import gzip as _gzip<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f = _gzip.open(fileOrFilename, 'wb')<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f = open(fileOrFilename, 'wb')<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;f = fileOrFilename</TD>
+</TR>
+<TR>
+<TD>
+_pickle.dump(toPickle, f)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+_pickle.dump(toPickle, f)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 21</B><BR>Distance between two fragments = 4 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 3020</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 3103</TD></TR><TR>
+<TD>
+<span style="font-family: monospace;">vdp&nbsp; =&nbsp; _np.empty(&nbsp; (<span style="color:rgb(255,0,0);">1</span>,nGateStrings,nDerivCols),&nbsp; 'd'&nbsp; )&nbsp; \<BR>
+&nbsp; if&nbsp; returnDeriv&nbsp; else&nbsp; None<span style="color:rgb(255,0,0);"></span></span></TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="font-family: monospace;">vdp&nbsp; =&nbsp; _np.empty(&nbsp; (<span style="color:rgb(255,0,0);">nSpamLabels</span>,nGateStrings,nDerivCols),&nbsp; 'd'&nbsp; )&nbsp; \<BR>
+&nbsp; if&nbsp; returnDeriv&nbsp; else&nbsp; None<span style="color:rgb(255,0,0);"></span></span></TD>
+</TR>
+<TR>
+<TD>
+<span style="font-family: monospace;">vp&nbsp; =&nbsp; _np.empty(&nbsp; (<span style="color:rgb(255,0,0);">1</span>,nGateStrings),&nbsp; 'd'&nbsp; )&nbsp; if&nbsp; returnPr&nbsp; else&nbsp; None<span style="color:rgb(255,0,0);"></span></span></TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="font-family: monospace;">vp&nbsp; =&nbsp; _np.empty(&nbsp; (<span style="color:rgb(255,0,0);">nSpamLabels</span>,nGateStrings),&nbsp; 'd'&nbsp; )&nbsp; if&nbsp; returnPr&nbsp; else&nbsp; None<span style="color:rgb(255,0,0);"></span></span></TD>
+</TR>
+<TR>
+<TD>
+self.bulk_fill_hprobs(vhp, <span style="color: rgb(255, 0, 0);">{spamLabel: 0}</span>, evalTree, vp, vdp, clipTo, check, comm, wrtFilter, wrtBlockSize)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+self.bulk_fill_hprobs(vhp, <span style="color: rgb(255, 0, 0);">spam_label_rows</span>, evalTree, vp, vdp, clipTo, check, comm, wrtFilter, wrtBlockSize)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 22</B><BR>Distance between two fragments = 3 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 1811</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 1659</TD></TR><TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">hGs</span> = <span style="color: rgb(255, 0, 0);">hProdCache</span>.take(finalIndxList, axis=0)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);">dGs</span> = <span style="color: rgb(255, 0, 0);">dProdCache</span>.take(finalIndxList, axis=0)</TD>
+</TR>
+<TR>
+<TD>
+if not bScale:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;old_err = _np.seterr(over='ignore', invalid='ignore')<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">hGs</span> = _np.swapaxes((_np.swapaxes(<span style="color: rgb(255, 0, 0);">hGs</span>, 0, <span style="color: rgb(255, 0, 0);">4</span>)) * (scaleVals), 0, <span style="color: rgb(255, 0, 0);">4</span>)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">hGs</span>[_np.isnan(<span style="color: rgb(255, 0, 0);">hGs</span>)] = 0<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;_np.seterr(, **old_err)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+if not bScale:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;old_err = _np.seterr(over='ignore', invalid='ignore')<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">dGs</span> = _np.swapaxes((_np.swapaxes(<span style="color: rgb(255, 0, 0);">dGs</span>, 0, <span style="color: rgb(255, 0, 0);">3</span>)) * (scaleVals), 0, <span style="color: rgb(255, 0, 0);">3</span>)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">dGs</span>[_np.isnan(<span style="color: rgb(255, 0, 0);">dGs</span>)] = 0<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;_np.seterr(, **old_err)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 23</B><BR>Distance between two fragments = 0 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gate.py"<BR>The first line is 332</TD><TD></TD><TD>Source file "objects/spamvec.py"<BR>The first line is 209</TD></TR><TR>
+<TD>
+def num_params(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return <span style="color: rgb(255, 0, 0);">0</span></TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def num_params(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return <span style="color: rgb(255, 0, 0);">0</span></TD>
+</TR>
+<TR>
+<TD>
+def to_vector(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return _np.array([], 'd')</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def to_vector(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return _np.array([], 'd')</TD>
+</TR>
+<TR>
+<TD>
+def from_vector(self, v):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;assert len(v) == 0</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def from_vector(self, v):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;assert len(v) == 0</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 24</B><BR>Distance between two fragments = 1 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/labeldicts.py"<BR>The first line is 126</TD><TD></TD><TD>Source file "objects/gate.py"<BR>The first line is 265</TD></TR><TR>
+<TD>
+try:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">d1</span> = len(M)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;d2 = len(M[0])<BR>
+except:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;raise ValueError(("%s doesn't look like a 2D array/list") % (M))</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+try:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">dim</span> = len(M)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;d2 = len(M[0])<BR>
+except:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;raise ValueError(("%s doesn't look like a 2D array/list") % (M))</TD>
+</TR>
+<TR>
+<TD>
+if any([len(row) != <span style="color: rgb(255, 0, 0);">d1</span> for row in M ]):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;raise ValueError(('%s is not a *square* 2D array') % (M))</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+if any([len(row) != <span style="color: rgb(255, 0, 0);">dim</span> for row in M ]):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;raise ValueError(('%s is not a *square* 2D array') % (M))</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 25</B><BR>Distance between two fragments = 0 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 2548</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 3192</TD></TR><TR>
+<TD>
+remainder_row_index = None</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+remainder_row_index = None</TD>
+</TR>
+<TR>
+<TD>
+for spamLabel, rowIndex in spam_label_rows.items():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if self._is_remainder_spamlabel(spamLabel):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert self.assumeSumToOne<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert remainder_row_index is None<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;remainder_row_index = rowIndex</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+for spamLabel, rowIndex in spam_label_rows.items():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if self._is_remainder_spamlabel(spamLabel):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert self.assumeSumToOne<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert remainder_row_index is None<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;remainder_row_index = rowIndex</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 26</B><BR>Distance between two fragments = 0 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 2548</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 2219</TD></TR><TR>
+<TD>
+remainder_row_index = None</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+remainder_row_index = None</TD>
+</TR>
+<TR>
+<TD>
+for spamLabel, rowIndex in spam_label_rows.items():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if self._is_remainder_spamlabel(spamLabel):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert self.assumeSumToOne<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert remainder_row_index is None<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;remainder_row_index = rowIndex</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+for spamLabel, rowIndex in spam_label_rows.items():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if self._is_remainder_spamlabel(spamLabel):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert self.assumeSumToOne<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert remainder_row_index is None<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;remainder_row_index = rowIndex</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 27</B><BR>Distance between two fragments = 0 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 2339</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 3192</TD></TR><TR>
+<TD>
+remainder_row_index = None</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+remainder_row_index = None</TD>
+</TR>
+<TR>
+<TD>
+for spamLabel, rowIndex in spam_label_rows.items():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if self._is_remainder_spamlabel(spamLabel):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert self.assumeSumToOne<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert remainder_row_index is None<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;remainder_row_index = rowIndex</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+for spamLabel, rowIndex in spam_label_rows.items():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if self._is_remainder_spamlabel(spamLabel):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert self.assumeSumToOne<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert remainder_row_index is None<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;remainder_row_index = rowIndex</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 28</B><BR>Distance between two fragments = 0 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 2339</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 2219</TD></TR><TR>
+<TD>
+remainder_row_index = None</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+remainder_row_index = None</TD>
+</TR>
+<TR>
+<TD>
+for spamLabel, rowIndex in spam_label_rows.items():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if self._is_remainder_spamlabel(spamLabel):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert self.assumeSumToOne<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert remainder_row_index is None<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;remainder_row_index = rowIndex</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+for spamLabel, rowIndex in spam_label_rows.items():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if self._is_remainder_spamlabel(spamLabel):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert self.assumeSumToOne<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert remainder_row_index is None<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;remainder_row_index = rowIndex</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 29</B><BR>Distance between two fragments = 3 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/confidenceregion.py"<BR>The first line is 367</TD><TD></TD><TD>Source file "objects/confidenceregion.py"<BR>The first line is 306</TD></TR><TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">nPrepParams</span> = <span style="color: rgb(255, 0, 0);">prepObj</span>.num_params()</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);">nGateParams</span> = <span style="color: rgb(255, 0, 0);">gateObj</span>.num_params()</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">prepVec0</span> = <span style="color: rgb(255, 0, 0);">prepObj</span>.to_vector()</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);">gateVec0</span> = <span style="color: rgb(255, 0, 0);">gateObj</span>.to_vector()</TD>
+</TR>
+<TR>
+<TD>
+if type(f0) == float:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gradF = _np.zeros(nParams, 'd')<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gradSize = ((nParams)) + (tuple(f0.shape))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gradF = _np.zeros(gradSize, f0.dtype)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if type(f0) == float:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gradF = _np.zeros(nParams, 'd')<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gradSize = ((nParams)) + (tuple(f0.shape))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gradF = _np.zeros(gradSize, f0.dtype)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 30</B><BR>Distance between two fragments = 3 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/confidenceregion.py"<BR>The first line is 433</TD><TD></TD><TD>Source file "objects/confidenceregion.py"<BR>The first line is 367</TD></TR><TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">nEffectParams</span> = <span style="color: rgb(255, 0, 0);">effectObj</span>.num_params()</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">nPrepParams</span></span> = <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">prepObj</span></span>.num_params()</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">effectVec0</span> = <span style="color: rgb(255, 0, 0);">effectObj</span>.to_vector()</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">prepVec0</span></span> = <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">prepObj</span></span>.to_vector()</TD>
+</TR>
+<TR>
+<TD>
+if type(f0) == float:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gradF = _np.zeros(nParams, 'd')<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gradSize = ((nParams)) + (tuple(f0.shape))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gradF = _np.zeros(gradSize, f0.dtype)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if type(f0) == float:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gradF = _np.zeros(nParams, 'd')<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gradSize = ((nParams)) + (tuple(f0.shape))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gradF = _np.zeros(gradSize, f0.dtype)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 31</B><BR>Distance between two fragments = 3 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/confidenceregion.py"<BR>The first line is 433</TD><TD></TD><TD>Source file "objects/confidenceregion.py"<BR>The first line is 306</TD></TR><TR>
+<TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">nEffectParams</span></span> = <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">effectObj</span></span>.num_params()</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">nGateParams</span></span> = <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">gateObj</span></span>.num_params()</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">effectVec0</span></span> = <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">effectObj</span></span>.to_vector()</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">gateVec0</span></span> = <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">gateObj</span></span>.to_vector()</TD>
+</TR>
+<TR>
+<TD>
+if type(f0) == float:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gradF = _np.zeros(nParams, 'd')<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gradSize = ((nParams)) + (tuple(f0.shape))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gradF = _np.zeros(gradSize, f0.dtype)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if type(f0) == float:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gradF = _np.zeros(nParams, 'd')<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gradSize = ((nParams)) + (tuple(f0.shape))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gradF = _np.zeros(gradSize, f0.dtype)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 32</B><BR>Distance between two fragments = 1 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/multidataset.py"<BR>The first line is 349</TD><TD></TD><TD>Source file "objects/multidataset.py"<BR>The first line is 322</TD></TR><TR>
+<TD>
+bOpen = not hasattr(fileOrFilename, 'write')</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+bOpen = not hasattr(fileOrFilename, 'write')</TD>
+</TR>
+<TR>
+<TD>
+if bOpen:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if fileOrFilename.endswith('.gz'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;import gzip as _gzip<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f = _gzip.open(fileOrFilename, <span style="color: rgb(255, 0, 0);">'rb'</span>)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f = open(fileOrFilename, <span style="color: rgb(255, 0, 0);">'rb'</span>)<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;f = fileOrFilename</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+if bOpen:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if fileOrFilename.endswith('.gz'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;import gzip as _gzip<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f = _gzip.open(fileOrFilename, <span style="color: rgb(255, 0, 0);">'wb'</span>)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f = open(fileOrFilename, <span style="color: rgb(255, 0, 0);">'wb'</span>)<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;f = fileOrFilename</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 33</B><BR>Distance between two fragments = 1 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/multidataset.py"<BR>The first line is 349</TD><TD></TD><TD>Source file "objects/dataset.py"<BR>The first line is 568</TD></TR><TR>
+<TD>
+bOpen = not hasattr(fileOrFilename, 'write')</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+bOpen = not hasattr(fileOrFilename, 'write')</TD>
+</TR>
+<TR>
+<TD>
+if bOpen:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if fileOrFilename.endswith('.gz'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;import gzip as _gzip<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f = _gzip.open(fileOrFilename, <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'rb'</span></span>)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f = open(fileOrFilename, <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'rb'</span></span>)<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;f = fileOrFilename</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+if bOpen:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if fileOrFilename.endswith('.gz'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;import gzip as _gzip<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f = _gzip.open(fileOrFilename, <span style="color: rgb(255, 0, 0);">'wb'</span>)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f = open(fileOrFilename, <span style="color: rgb(255, 0, 0);">'wb'</span>)<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;f = fileOrFilename</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 34</B><BR>Distance between two fragments = 1 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/dataset.py"<BR>The first line is 601</TD><TD></TD><TD>Source file "objects/multidataset.py"<BR>The first line is 322</TD></TR><TR>
+<TD>
+bOpen = not hasattr(fileOrFilename, 'write')</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+bOpen = not hasattr(fileOrFilename, 'write')</TD>
+</TR>
+<TR>
+<TD>
+if bOpen:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if fileOrFilename.endswith('.gz'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;import gzip as _gzip<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f = _gzip.open(fileOrFilename, <span style="color: rgb(255, 0, 0);">'rb'</span>)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f = open(fileOrFilename, <span style="color: rgb(255, 0, 0);">'rb'</span>)<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;f = fileOrFilename</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+if bOpen:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if fileOrFilename.endswith('.gz'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;import gzip as _gzip<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f = _gzip.open(fileOrFilename, <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'wb'</span></span>)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f = open(fileOrFilename, <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'wb'</span></span>)<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;f = fileOrFilename</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 35</B><BR>Distance between two fragments = 1 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/dataset.py"<BR>The first line is 601</TD><TD></TD><TD>Source file "objects/dataset.py"<BR>The first line is 568</TD></TR><TR>
+<TD>
+bOpen = not hasattr(fileOrFilename, 'write')</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+bOpen = not hasattr(fileOrFilename, 'write')</TD>
+</TR>
+<TR>
+<TD>
+if bOpen:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if fileOrFilename.endswith('.gz'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;import gzip as _gzip<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f = _gzip.open(fileOrFilename, <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'rb'</span></span>)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f = open(fileOrFilename, <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'rb'</span></span>)<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;f = fileOrFilename</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+if bOpen:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if fileOrFilename.endswith('.gz'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;import gzip as _gzip<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f = _gzip.open(fileOrFilename, <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'wb'</span></span>)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f = open(fileOrFilename, <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'wb'</span></span>)<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;f = fileOrFilename</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 36</B><BR>Distance between two fragments = 4 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 2921</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 2847</TD></TR><TR>
+<TD>
+vdp = _np.empty((<span style="color: rgb(255, 0, 0);">nSpamLabels</span>, nGateStrings, nDerivCols), 'd')</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+vdp = _np.empty((<span style="color: rgb(255, 0, 0);">1</span>, nGateStrings, nDerivCols), 'd')</TD>
+</TR>
+<TR>
+<TD>
+<span style="font-family: monospace;">vp&nbsp; =&nbsp; _np.empty(&nbsp; (<span style="color:rgb(255,0,0);">nSpamLabels</span>,nGateStrings),&nbsp; 'd'&nbsp; )&nbsp; if&nbsp; returnPr&nbsp; else&nbsp; None<span style="color:rgb(255,0,0);"></span></span></TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="font-family: monospace;">vp&nbsp; =&nbsp; _np.empty(&nbsp; (<span style="color:rgb(255,0,0);">1</span>,nGateStrings),&nbsp; 'd'&nbsp; )&nbsp; if&nbsp; returnPr&nbsp; else&nbsp; None<span style="color:rgb(255,0,0);"></span></span></TD>
+</TR>
+<TR>
+<TD>
+self.bulk_fill_dprobs(vdp, <span style="color: rgb(255, 0, 0);">spam_label_rows</span>, evalTree, vp, clipTo, check, comm, wrtFilter, wrtBlockSize)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+self.bulk_fill_dprobs(vdp, <span style="color: rgb(255, 0, 0);">{spamLabel: 0}</span>, evalTree, vp, clipTo, check, comm, wrtFilter, wrtBlockSize)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 37</B><BR>Distance between two fragments = 0 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 2423</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 2640</TD></TR><TR>
+<TD>
+sub_results = self._compute_sub_result(spam_label_rows, calc_from_spamlabel)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+sub_results = self._compute_sub_result(spam_label_rows, calc_from_spamlabel)</TD>
+</TR>
+<TR>
+<TD>
+myBlkIndices, blkOwners, blkComm = self._distribute_indices(list(range(nBlks)), mySubComm)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+myBlkIndices, blkOwners, blkComm = self._distribute_indices(list(range(nBlks)), mySubComm)</TD>
+</TR>
+<TR>
+<TD>
+if blkComm is not None:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;_warnings.warn('Note: more CPUs than derivative columns!')</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if blkComm is not None:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;_warnings.warn('Note: more CPUs than derivative columns!')</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 38</B><BR>Distance between two fragments = 2 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gatestring.py"<BR>The first line is 131</TD><TD></TD><TD>Source file "objects/gatestring.py"<BR>The first line is 99</TD></TR><TR>
+<TD>
+assert len(gateLabels) < 26</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+assert len(gateLabels) < 26</TD>
+</TR>
+<TR>
+<TD>
+translateDict = {}</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+translateDict = {}</TD>
+</TR>
+<TR>
+<TD>
+c = 'A'</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+c = 'A'</TD>
+</TR>
+<TR>
+<TD>
+for <span style="color: rgb(255, 0, 0);">gateLabel</span> in gateLabels:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;translateDict[<span style="color: rgb(255, 0, 0);">c</span>] = <span style="color: rgb(255, 0, 0);">gateLabel</span><BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">c</span> = chr((ord(<span style="color: rgb(255, 0, 0);">c</span>)) + (1))</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+for <span style="color: rgb(255, 0, 0);">gateLabel</span> in gateLabels:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;translateDict[<span style="color: rgb(255, 0, 0);">gateLabel</span>] = <span style="color: rgb(255, 0, 0);">c</span><BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">c</span> = chr((ord(<span style="color: rgb(255, 0, 0);">c</span>)) + (1))</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 39</B><BR>Distance between two fragments = 0 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/spamvec.py"<BR>The first line is 120</TD><TD></TD><TD>Source file "objects/gate.py"<BR>The first line is 239</TD></TR><TR>
+<TD>
+def __len__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return len(self.base)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __len__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return len(self.base)</TD>
+</TR>
+<TR>
+<TD>
+def __int__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return int(self.base)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __int__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return int(self.base)</TD>
+</TR>
+<TR>
+<TD>
+def __long__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return int(self.base)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __long__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return int(self.base)</TD>
+</TR>
+<TR>
+<TD>
+def __float__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return float(self.base)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __float__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return float(self.base)</TD>
+</TR>
+<TR>
+<TD>
+def __complex__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return complex(self.base)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __complex__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return complex(self.base)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 40</B><BR>Distance between two fragments = 0 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/spamvec.py"<BR>The first line is 120</TD><TD></TD><TD>Source file "objects/protectedarray.py"<BR>The first line is 55</TD></TR><TR>
+<TD>
+def __len__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return len(self.base)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __len__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return len(self.base)</TD>
+</TR>
+<TR>
+<TD>
+def __int__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return int(self.base)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __int__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return int(self.base)</TD>
+</TR>
+<TR>
+<TD>
+def __long__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return int(self.base)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __long__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return int(self.base)</TD>
+</TR>
+<TR>
+<TD>
+def __float__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return float(self.base)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __float__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return float(self.base)</TD>
+</TR>
+<TR>
+<TD>
+def __complex__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return complex(self.base)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __complex__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return complex(self.base)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 41</B><BR>Distance between two fragments = 0 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gate.py"<BR>The first line is 239</TD><TD></TD><TD>Source file "objects/protectedarray.py"<BR>The first line is 55</TD></TR><TR>
+<TD>
+def __len__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return len(self.base)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __len__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return len(self.base)</TD>
+</TR>
+<TR>
+<TD>
+def __int__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return int(self.base)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __int__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return int(self.base)</TD>
+</TR>
+<TR>
+<TD>
+def __long__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return int(self.base)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __long__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return int(self.base)</TD>
+</TR>
+<TR>
+<TD>
+def __float__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return float(self.base)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __float__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return float(self.base)</TD>
+</TR>
+<TR>
+<TD>
+def __complex__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return complex(self.base)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __complex__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return complex(self.base)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 42</B><BR>Distance between two fragments = 1 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 3118</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 2928</TD></TR><TR>
+<TD>
+<span style="font-family: monospace;">if&nbsp; returnPr:<BR>
+&nbsp; return&nbsp; {&nbsp; spamLabel:&nbsp; (v<span style="color:rgb(255,0,0);">h</span>p[i],vp[i])&nbsp; \<BR>
+&nbsp; &nbsp; for&nbsp; (i,spamLabel)&nbsp; in&nbsp; enumerate(self.spamdefs)&nbsp; }<BR>
+else:<BR>
+&nbsp; return&nbsp; {&nbsp; spamLabel:&nbsp; v<span style="color:rgb(255,0,0);">h</span>p[i]&nbsp; \<BR>
+&nbsp; &nbsp; for&nbsp; (i,spamLabel)&nbsp; in&nbsp; enumerate(self.spamdefs)&nbsp; }<span style="color:rgb(255,0,0);"></span></span></TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="font-family: monospace;">if&nbsp; returnPr:<BR>
+&nbsp; return&nbsp; {&nbsp; spamLabel:&nbsp; (v<span style="color:rgb(255,0,0);">d</span>p[i],vp[i])&nbsp; \<BR>
+&nbsp; &nbsp; for&nbsp; (i,spamLabel)&nbsp; in&nbsp; enumerate(self.spamdefs)&nbsp; }<BR>
+else:<BR>
+&nbsp; return&nbsp; {&nbsp; spamLabel:&nbsp; v<span style="color:rgb(255,0,0);">d</span>p[i]&nbsp; \<BR>
+&nbsp; &nbsp; for&nbsp; (i,spamLabel)&nbsp; in&nbsp; enumerate(self.spamdefs)&nbsp; }<span style="color:rgb(255,0,0);"></span></span></TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 43</B><BR>Distance between two fragments = 0 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 2915</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 3096</TD></TR><TR>
+<TD>
+<span style="font-family: monospace;">spam_label_rows&nbsp; =&nbsp; \<BR>
+&nbsp; {&nbsp; spamLabel:&nbsp; i&nbsp; for&nbsp; (i,spamLabel)&nbsp; in&nbsp; enumerate(self.spamdefs)&nbsp; }<span style="color:rgb(255,0,0);"></span></span></TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+<span style="font-family: monospace;">spam_label_rows&nbsp; =&nbsp; \<BR>
+&nbsp; {&nbsp; spamLabel:&nbsp; i&nbsp; for&nbsp; (i,spamLabel)&nbsp; in&nbsp; enumerate(self.spamdefs)&nbsp; }<span style="color:rgb(255,0,0);"></span></span></TD>
+</TR>
+<TR>
+<TD>
+nGateStrings = evalTree.num_final_strings()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+nGateStrings = evalTree.num_final_strings()</TD>
+</TR>
+<TR>
+<TD>
+nDerivCols = self.tot_params</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+nDerivCols = self.tot_params</TD>
+</TR>
+<TR>
+<TD>
+nSpamLabels = len(self.spamdefs)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+nSpamLabels = len(self.spamdefs)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 44</B><BR>Distance between two fragments = 0 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/multidataset.py"<BR>The first line is 19</TD><TD></TD><TD>Source file "objects/multidataset.py"<BR>The first line is 36</TD></TR><TR>
+<TD>
+def __init__(self, multidataset):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;self.multidataset = multidataset<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;self.countsDictIter = multidataset.countsDict.__iter__()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __init__(self, multidataset):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;self.multidataset = multidataset<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;self.countsDictIter = multidataset.countsDict.__iter__()</TD>
+</TR>
+<TR>
+<TD>
+def __iter__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return self</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __iter__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return self</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 45</B><BR>Distance between two fragments = 3 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/multidataset.py"<BR>The first line is 19</TD><TD></TD><TD>Source file "objects/dataset.py"<BR>The first line is 37</TD></TR><TR>
+<TD>
+def __init__(self, <span style="color: rgb(255, 0, 0);">multidataset</span>):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;self.<span style="color: rgb(255, 0, 0);">multidataset</span> = <span style="color: rgb(255, 0, 0);">multidataset</span><BR>
+&nbsp;&nbsp;&nbsp;&nbsp;self.<span style="color: rgb(255, 0, 0);">countsDictIter</span> = <span style="color: rgb(255, 0, 0);">multidataset</span>.<span style="color: rgb(255, 0, 0);">countsDict</span>.__iter__()</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+def __init__(self, <span style="color: rgb(255, 0, 0);">dataset</span>):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;self.<span style="color: rgb(255, 0, 0);">dataset</span> = <span style="color: rgb(255, 0, 0);">dataset</span><BR>
+&nbsp;&nbsp;&nbsp;&nbsp;self.<span style="color: rgb(255, 0, 0);">countIter</span> = <span style="color: rgb(255, 0, 0);">dataset</span>.<span style="color: rgb(255, 0, 0);">counts</span>.__iter__()</TD>
+</TR>
+<TR>
+<TD>
+def __iter__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return self</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __iter__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return self</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 46</B><BR>Distance between two fragments = 3 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/multidataset.py"<BR>The first line is 36</TD><TD></TD><TD>Source file "objects/dataset.py"<BR>The first line is 37</TD></TR><TR>
+<TD>
+def __init__(self, <span style="color: rgb(255, 0, 0);">multidataset</span>):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;self.<span style="color: rgb(255, 0, 0);">multidataset</span> = <span style="color: rgb(255, 0, 0);">multidataset</span><BR>
+&nbsp;&nbsp;&nbsp;&nbsp;self.<span style="color: rgb(255, 0, 0);">countsDictIter</span> = <span style="color: rgb(255, 0, 0);">multidataset</span>.<span style="color: rgb(255, 0, 0);">countsDict</span>.__iter__()</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+def __init__(self, <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">dataset</span></span>):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;self.<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">dataset</span></span> = <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">dataset</span></span><BR>
+&nbsp;&nbsp;&nbsp;&nbsp;self.<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">countIter</span></span> = <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">dataset</span></span>.<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">counts</span></span>.__iter__()</TD>
+</TR>
+<TR>
+<TD>
+def __iter__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return self</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def __iter__(self):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return self</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 47</B><BR>Distance between two fragments = 3 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 2095</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 2085</TD></TR><TR>
+<TD>
+if _nla.norm((<span style="color: rgb(255, 0, 0);">hprMxToFill</span>[rowIndex]) - (<span style="color: rgb(255, 0, 0);">check_vhp</span>)) > 1e-06:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;_warnings.warn((<span style="color: rgb(255, 0, 0);">'norm(vhp-check_vhp) = %g - %g = %g'</span>) % ((_nla.norm(<span style="color: rgb(255, 0, 0);">hprMxToFill</span>[rowIndex]), _nla.norm(<span style="color: rgb(255, 0, 0);">check_vhp</span>), _nla.norm((<span style="color: rgb(255, 0, 0);">hprMxToFill</span>[rowIndex]) - (<span style="color: rgb(255, 0, 0);">check_vhp</span>)))))</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+if _nla.norm((<span style="color: rgb(255, 0, 0);">dprMxToFill</span>[rowIndex]) - (<span style="color: rgb(255, 0, 0);">check_vdp</span>)) > 1e-06:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;_warnings.warn((<span style="color: rgb(255, 0, 0);">'norm(vdp-check_vdp) = %g - %g = %g'</span>) % ((_nla.norm(<span style="color: rgb(255, 0, 0);">dprMxToFill</span>[rowIndex]), _nla.norm(<span style="color: rgb(255, 0, 0);">check_vdp</span>), _nla.norm((<span style="color: rgb(255, 0, 0);">dprMxToFill</span>[rowIndex]) - (<span style="color: rgb(255, 0, 0);">check_vdp</span>)))))</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 48</B><BR>Distance between two fragments = 3 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 2095</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 2072</TD></TR><TR>
+<TD>
+if _nla.norm((<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">hprMxToFill</span></span>[rowIndex]) - (<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">check_vhp</span></span>)) > 1e-06:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;_warnings.warn((<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'norm(vhp-check_vhp) = %g - %g = %g'</span></span>) % ((_nla.norm(<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">hprMxToFill</span></span>[rowIndex]), _nla.norm(<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">check_vhp</span></span>), _nla.norm((<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">hprMxToFill</span></span>[rowIndex]) - (<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">check_vhp</span></span>)))))</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+if _nla.norm((<span style="color: rgb(255, 0, 0);">prMxToFill</span>[rowIndex]) - (<span style="color: rgb(255, 0, 0);">check_vp</span>)) > 1e-06:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;_warnings.warn((<span style="color: rgb(255, 0, 0);">'norm(vp-check_vp) = %g - %g = %g'</span>) % ((_nla.norm(<span style="color: rgb(255, 0, 0);">prMxToFill</span>[rowIndex]), _nla.norm(<span style="color: rgb(255, 0, 0);">check_vp</span>), _nla.norm((<span style="color: rgb(255, 0, 0);">prMxToFill</span>[rowIndex]) - (<span style="color: rgb(255, 0, 0);">check_vp</span>)))))</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 49</B><BR>Distance between two fragments = 3 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 2085</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 2072</TD></TR><TR>
+<TD>
+if _nla.norm((<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">dprMxToFill</span></span>[rowIndex]) - (<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">check_vdp</span></span>)) > 1e-06:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;_warnings.warn((<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'norm(vdp-check_vdp) = %g - %g = %g'</span></span>) % ((_nla.norm(<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">dprMxToFill</span></span>[rowIndex]), _nla.norm(<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">check_vdp</span></span>), _nla.norm((<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">dprMxToFill</span></span>[rowIndex]) - (<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">check_vdp</span></span>)))))</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+if _nla.norm((<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">prMxToFill</span></span>[rowIndex]) - (<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">check_vp</span></span>)) > 1e-06:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;_warnings.warn((<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'norm(vp-check_vp) = %g - %g = %g'</span></span>) % ((_nla.norm(<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">prMxToFill</span></span>[rowIndex]), _nla.norm(<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">check_vp</span></span>), _nla.norm((<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">prMxToFill</span></span>[rowIndex]) - (<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">check_vp</span></span>)))))</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 50</B><BR>Distance between two fragments = 0 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 1783</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 1628</TD></TR><TR>
+<TD>
+finalIndxList = evalTree.get_list_of_final_value_tree_indices()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+finalIndxList = evalTree.get_list_of_final_value_tree_indices()</TD>
+</TR>
+<TR>
+<TD>
+old_err = _np.seterr(over='ignore')</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+old_err = _np.seterr(over='ignore')</TD>
+</TR>
+<TR>
+<TD>
+scaleExps = scaleCache.take(finalIndxList)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+scaleExps = scaleCache.take(finalIndxList)</TD>
+</TR>
+<TR>
+<TD>
+scaleVals = _np.exp(scaleExps)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+scaleVals = _np.exp(scaleExps)</TD>
+</TR>
+<TR>
+<TD>
+_np.seterr(, **old_err)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+_np.seterr(, **old_err)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 51</B><BR>Distance between two fragments = 0 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 2366</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 2234</TD></TR><TR>
+<TD>
+evalSubTree = subtrees[iSubTree]</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+evalSubTree = subtrees[iSubTree]</TD>
+</TR>
+<TR>
+<TD>
+finalIndxList = evalSubTree.get_list_of_final_value_tree_indices()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+finalIndxList = evalSubTree.get_list_of_final_value_tree_indices()</TD>
+</TR>
+<TR>
+<TD>
+prodCache, scaleCache = self._compute_product_cache(evalSubTree, mySubComm)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+prodCache, scaleCache = self._compute_product_cache(evalSubTree, mySubComm)</TD>
+</TR>
+<TR>
+<TD>
+scaleVals = self._scaleExp(scaleCache.take(finalIndxList))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+scaleVals = self._scaleExp(scaleCache.take(finalIndxList))</TD>
+</TR>
+<TR>
+<TD>
+Gs = prodCache.take(finalIndxList, axis=0)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+Gs = prodCache.take(finalIndxList, axis=0)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 52</B><BR>Distance between two fragments = 1 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gateset.py"<BR>The first line is 2273</TD><TD></TD><TD>Source file "objects/gateset.py"<BR>The first line is 2267</TD></TR><TR>
+<TD>
+r = (max_spam_noise) * (rndm.random_sample(len(self.<span style="color: rgb(255, 0, 0);">effects</span>)))</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+r = (max_spam_noise) * (rndm.random_sample(len(self.<span style="color: rgb(255, 0, 0);">preps</span>)))</TD>
+</TR>
+<TR>
+<TD>
+for i, lbl in enumerate(self.<span style="color: rgb(255, 0, 0);">effects</span>):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;D = _np.diag(([1]) + (([(1) - (r[i])]) * ((gateDim) - (1))))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;newGateset.<span style="color: rgb(255, 0, 0);">effects</span>[lbl] = _sv.FullyParameterizedSPAMVec(_np.dot(D, self.<span style="color: rgb(255, 0, 0);">effects</span>[lbl]))</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+for i, lbl in enumerate(self.<span style="color: rgb(255, 0, 0);">preps</span>):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;D = _np.diag(([1]) + (([(1) - (r[i])]) * ((gateDim) - (1))))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;newGateset.<span style="color: rgb(255, 0, 0);">preps</span>[lbl] = _sv.FullyParameterizedSPAMVec(_np.dot(D, self.<span style="color: rgb(255, 0, 0);">preps</span>[lbl]))</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 53</B><BR>Distance between two fragments = 4 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "objects/gscalc.py"<BR>The first line is 2679</TD><TD></TD><TD>Source file "objects/gscalc.py"<BR>The first line is 2463</TD></TR><TR>
+<TD>
+self._gather_subtree_results(evalTree, spam_label_rows, subTreeOwners, mySubTreeIndices, <span style="color: rgb(255, 0, 0);">(prMxToFill, derivMxToFill, mxToFill)</span>, my_results, comm)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+self._gather_subtree_results(evalTree, spam_label_rows, subTreeOwners, mySubTreeIndices, <span style="color: rgb(255, 0, 0);">(prMxToFill, mxToFill)</span>, my_results, comm)</TD>
+</TR>
+<TR>
+<TD>
+if (clipTo is not None) and (prMxToFill is not None):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;_np.clip(prMxToFill, clipTo[0], clipTo[1], out=prMxToFill)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if (clipTo is not None) and (prMxToFill is not None):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;_np.clip(prMxToFill, clipTo[0], clipTo[1], out=prMxToFill)</TD>
+</TR>
+</TABLE> </P> <HR>
+    
+    
+    <HR>
+    Clone Digger is aimed to find software clones in Python and Java programs. It is provided under the GPL license and can be downloaded from the site <a href="http://clonedigger.sourceforge.net">http://clonedigger.sourceforge.net</a>
+    </BODY>
+</HTML>
