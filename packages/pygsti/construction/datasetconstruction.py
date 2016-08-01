@@ -12,7 +12,8 @@ import numpy.random as _rndm
 from ..objects import gatestring as _gs
 from ..objects import dataset as _ds
 
-def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples, sampleError="none", seed=None):
+def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
+                       sampleError="none", seed=None, randState=None):
     """Creates a DataSet using the probabilities obtained from a gateset.
 
     Parameters
@@ -54,6 +55,12 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples, sampleError=
         If not ``None``, a seed for numpy's random number generator, which
         is used to sample from the binomial or multinomial distribution.
 
+    randState : numpy.random.RandomState
+        A RandomState object to generate samples from. Can be useful to set
+        instead of `seed` if you want reproducible distribution samples across
+        multiple random function calls but you don't want to bother with
+        manually incrementing seeds between those calls.
+
     Returns
     -------
     DataSet
@@ -70,7 +77,10 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples, sampleError=
         dataset = _ds.DataSet( spamLabels=gsGen.get_spam_labels() )
 
     if sampleError in ("binomial","multinomial"):
-        rndm = _rndm.RandomState(seed) # ok if seed is None
+        if randState is None:
+            rndm = _rndm.RandomState(seed) # ok if seed is None
+        else:
+            rndm = randState
 
     for k,s in enumerate(gatestring_list):
         if gsGen:
