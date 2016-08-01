@@ -14,6 +14,8 @@ class BaseTestCase(unittest.TestCase):
         # However, the result is the same..
         os.chdir(os.path.abspath(os.path.dirname(__file__)))
 
+        print('Running tests from %s' % os.getcwd())
+
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = True
 

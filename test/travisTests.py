@@ -5,6 +5,7 @@ from helpers.automation_tools import directory
 import subprocess, sys, os
 
 def run_specific(commands):
+    print(commands)
     try:
         output = subprocess.check_output(commands)
     except subprocess.CalledProcessError as e:
@@ -17,9 +18,10 @@ def run_specific(commands):
         return False
     return True
 
-doReport  = os.environ.get('Report',  'False')
+doReportA = os.environ.get('ReportA',  'False')
+doReportB = os.environ.get('ReportB',  'False')
 doDrivers = os.environ.get('Drivers', 'False')
-partA     = os.environ.get('partA',   'False')
+doDefault = os.environ.get('Default',   'False')
 
 # I'm doing string comparison rather than boolean comparison because, in python, bool('False') evaluates to true
 # Build the list of packages to test depending on which portion of the build matrix is running
@@ -27,18 +29,23 @@ partA     = os.environ.get('partA',   'False')
 individuals    = []
 travisPackages = []
 
-# Report configuration: run specific report tests only
-if doReport == 'True':
+# Only testReport.py (barely finishes in time!)
+if doReportA == 'True':
     individuals    = [['test_packages/report/testReport.py']] # Maybe this single test wont time out? :)
+
+# All other reports tests
+elif doReportB == 'True':
+    individuals = [['test_packages/report/%s' % filename] for filename in (
+        'testAnalysis.py',
+        'testEBFormatters.py',
+        'testMetrics.py',
+        'testPrecisionFormatter.py')]
 
 # Drivers configuration: run specific drivers tests only
 elif doDrivers == 'True':
     travisPackages = ['drivers']
 
-elif partA == 'True':
-    travisPackages = ['construction'] # Construction seems to take longer now
-
-else:
+elif doDefault == 'True':
     travisPackages = ['objects', 'tools', 'iotest', 'optimize', 'algorithms']
 
 # Begin by running all of the packages in the current test matrix
@@ -62,3 +69,4 @@ for individual in individuals:
     result = run_specific(['python', '-m', 'nose'] + individual)
     if not result:
         sys.exit(1)
+
