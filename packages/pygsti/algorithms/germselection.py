@@ -1611,10 +1611,10 @@ def germ_rcl_fn(candidateScores, alpha):
 
 def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
                                 randomizationStrength=1e-3, numCopies=None,
-                                seed=None, gatePenalty=0.0, scoreFunc='all',
-                                tol=1e-6, threshold=1e6, check=False,
-                                forceSingletons=True, iterations=5,
-                                verbosity=0):
+                                seed=None, l1Penalty=1e-2, gatePenalty=0.0,
+                                scoreFunc='all', tol=1e-6, threshold=1e6,
+                                check=False, forceSingletons=True,
+                                iterations=5, verbosity=0):
     """Use GRASP to find a high-performing germ set.
 
     Parameters
@@ -1667,6 +1667,11 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
         The starting seed used for unitary randomization.  If multiple GateSets
         are to be randomized, ``gatesetList[i]`` is randomized with ``seed +
         i``.
+
+    l1Penalty : float, optional
+        How strong the penalty should be for increasing the germ set list by a
+        single germ. Used for choosing between outputs of various GRASP
+        iterations.
 
     gatePenalty : float, optional
         How strong the penalty should be for increasing a germ in the germ set
@@ -1751,15 +1756,23 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
                     'gatePenalty': gatePenalty,
                    }
 
-    scoreFn = lambda germSet: germ_breadth_score_fn(germSet, germsList,
-                                                    twirledDerivDaggerDerivList,
-                                                    nonAC_kwargs, initN=1)
+    final_nonAC_kwargs = nonAC_kwargs.copy()
+    final_nonAC_kwargs['l1Penalty'] = l1Penalty
+
+    scoreFn = (lambda germSet:
+                        germ_breadth_score_fn(germSet, germsList,
+                                              twirledDerivDaggerDerivList,
+                                              nonAC_kwargs, initN=1))
+    finalScoreFn = (lambda germSet:
+                            germ_breadth_score_fn(germSet, germsList,
+                                                  twirledDerivDaggerDerivList,
+                                                  nonAC_kwargs, initN=1))
 
     rclFn = lambda x: germ_rcl_fn(x, alpha)
 
     bestSoln = grasp(elements=germsList, greedyScoreFn=scoreFn, rclFn=rclFn,
                      localScoreFn=scoreFn, getNeighborsFn=get_swap_neighbors,
-                     finalScoreFn=scoreFn, iterations=iterations,
+                     finalScoreFn=finalScoreFn, iterations=iterations,
                      feasibleThreshold=ScoreNonAC(threshold, numNonGaugeParams),
                      initialElements=weights, seed=seed,
                      verbosity=verbosity)
