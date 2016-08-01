@@ -1,5 +1,4 @@
 from __future__         import print_function
-from .runPackage        import run_package
 from .helpers           import *
 from ..automation_tools import directory, get_output
 import subprocess
@@ -41,13 +40,3 @@ def get_changed_packages(cutoffDirs=[], exclude=[], preCommand='../', endings=['
                 changedPackages.add(packageName)
 
     return changedPackages
-
-def run_changed_packages(cutoffDirs=[], exclude=[], preCommand='../', endings=[], lastFailed=''):
-    print('Trying to run changed packages...')
-    changedPackages = get_changed_packages(cutoffDirs, exclude, preCommand, endings)
-
-    if len(changedPackages) == 0:
-        print('No packages have changed since the last commit')
-
-    for packageName in changedPackages:
-        run_package(packageName, lastFailed=lastFailed)
