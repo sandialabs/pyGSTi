@@ -68,7 +68,6 @@ class GateBaseTestCase(BaseTestCase):
     def test_process_fidelity(self):
         fidelity = gatetools.process_fidelity(A, B)
         self.assertAlmostEqual(fidelity, 0.42686642003)
-        raise ValueError
 
     def test_fidelity_upper_bound(self):
         upperBound = gatetools.fidelity_upper_bound(A)

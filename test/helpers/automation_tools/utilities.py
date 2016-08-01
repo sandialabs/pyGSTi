@@ -4,10 +4,10 @@ import subprocess, os, sys
 
 
 def get_files(directory):
+    print(directory)
     for _, _, files in os.walk(directory):
-        if files is None:
-            files = []
         return files # exit early
+    return []
 
 def get_file_directory():
     return os.path.dirname(os.path.abspath(__file__))

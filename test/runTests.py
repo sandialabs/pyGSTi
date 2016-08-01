@@ -4,14 +4,14 @@ from helpers.test                import *
 from helpers.test.runChanged     import *
 from helpers.test.runParallel    import run_parallel
 from helpers.automation_tools    import read_yaml, directory
-from helpers.info.genInfo        import get_tests
+from helpers.info.genInfo        import get_tests, get_test_files, get_file_tests
 import sys
 import argparse
 
 def get_excluded():
     return ['__pycache__', 'cmp_chk_files', 'temp_test_files', 'testutils']
 
-def expand(testname, packages):
+def expand(testname, packages, files):
     if testname in packages:
         expanded = get_tests(testname)
         expandedtests = []
@@ -19,6 +19,14 @@ def expand(testname, packages):
             for case, tests in testcases:
                 for test in tests:
                     expandedtests.append('%s/%s:%s.%s' % (testname, filename, case, test))
+        return expandedtests
+    elif testname.count('/') > 0 and testname.rsplit('/')[-1] in files:
+        with directory('..'):
+            expanded = get_file_tests(testname.replace('/', '.'))
+        expandedtests = []
+        for case, tests in expanded:
+            for test in tests:
+                expandedtests.append('%s:%s.%s' % (testname, case, test))
         return expandedtests
     else:
         return [testname]
@@ -28,11 +36,13 @@ def run_tests(testnames, version=None, fast=False, changed=False, parallel=False
     slowTests = config['slow-tests']
 
     with directory('test_packages'):
-
         packages = [name for name in get_package_names() if name not in get_excluded()]
+    files = [testfile for package in packages for testfile in get_test_files(package)]
 
-    testnames = [expand(name, packages) for name in testnames]
+    testnames = [expand(name, packages, files) for name in testnames]
     testnames = [name for subtests in testnames for name in subtests] # join lists
+
+    print('Testnames %s' % testnames)
 
     with directory('test_packages'):
 
@@ -50,7 +60,7 @@ def run_tests(testnames, version=None, fast=False, changed=False, parallel=False
         if changed:
             testnames = [name for name in get_changed_test_packages() if name in testnames] # Run only the changed packages we specify
 
-        print('Running tests %s' % (', '.join(testnames)))
+        print('Running tests %s' % ('    \n     '.join(testnames)))
 
         # Use the failure monitoring native to nose
         postcommands = ['--with-id']
