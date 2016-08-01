@@ -69,4 +69,3 @@ for individual in individuals:
     result = run_specific(['python', '-m', 'nose'] + individual)
     if not result:
         sys.exit(1)
-

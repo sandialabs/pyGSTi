@@ -17,6 +17,8 @@ except ImportError:
 class AnalysisTestCase(BaseTestCase):
 
     def setUp(self):
+        super(AnalysisTestCase, self).setUp()
+
         self.gateset = std.gs_target
         self.datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0.1)
 
