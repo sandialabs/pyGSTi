@@ -174,9 +174,10 @@ def make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
     return lsgst_listOfLists
 
 
-def make_lsgst_experiment_list(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
-                               fidPairs=None, truncScheme="whole germ powers",
-                               keepFraction=1, keepSeed=None):
+def make_lsgst_experiment_list(gateLabels, prepStrs, effectStrs, germList,
+                               maxLengthList, fidPairs=None,
+                               truncScheme="whole germ powers", keepFraction=1,
+                               keepSeed=None):
     """
     Create a list of all the gate strings (i.e. the experiments) required for
     long-sequence GST (LSGST) algorithms.
