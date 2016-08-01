@@ -38,7 +38,7 @@ class TestOptimizeMethods(OptimizeTestCase):
 
     def test_optimize(self):
         old_stdout = sys.stdout
-        sys.stdout = open("../temp_test_files/optimize.out","w")
+        sys.stdout = open(temp_files + "/optimize.out","w")
 
         for method in ("simplex","supersimplex","customcg","basinhopping","CG","BFGS","L-BFGS-B"): #"homebrew"
             result = pygsti.optimize.minimize(f, self.x0, method, maxiter=1000)

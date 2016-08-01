@@ -5,6 +5,9 @@ import pygsti
 import sys
 import os
 
+temp_files    = 'temp_test_files'
+compare_files = 'cmp_chk_files'
+
 class BaseTestCase(unittest.TestCase):
 
     def setUp(self):
@@ -13,6 +16,7 @@ class BaseTestCase(unittest.TestCase):
         # This will result in the same directory, even though when another module calls this, file points to toolsBaseCase.py
         # However, the result is the same..
         os.chdir(os.path.abspath(os.path.dirname(__file__)))
+        os.chdir('..') # The test_packages directory
 
         print('Running tests from %s' % os.getcwd())
 
@@ -51,7 +55,7 @@ class BaseTestCase(unittest.TestCase):
 
     def runSilent(self, callable, *args, **kwds):
         orig_stdout = sys.stdout
-        sys.stdout = open("../temp_test_files/silent.txt","w")
+        sys.stdout = open(temp_files + "/silent.txt","w")
         result = callable(*args, **kwds)
         sys.stdout.close()
         sys.stdout = orig_stdout

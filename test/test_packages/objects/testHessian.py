@@ -7,15 +7,15 @@ from pygsti.construction import std1Q_XY as stdxy
 import numpy as np
 import sys, os
 
-from ..testutils import BaseTestCase
+from ..testutils import BaseTestCase, compare_files, temp_files
 
 class HessianTestCase(BaseTestCase):
 
     def setUp(self):
         super(HessianTestCase, self).setUp()
 
-        self.gateset = pygsti.io.load_gateset("../cmp_chk_files/analysis.gateset")
-        self.ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis.dataset")
+        self.gateset = pygsti.io.load_gateset(compare_files + "/analysis.gateset")
+        self.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
 
 class TestHessianMethods(HessianTestCase):
 

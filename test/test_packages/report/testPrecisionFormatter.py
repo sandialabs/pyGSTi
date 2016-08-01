@@ -5,7 +5,7 @@ import pygsti
 #   -> if latex and html pass, it will likely pass as well
 # text formatting has also been ommitted, since providing it with a precision has no effect
 
-from ..testutils import BaseTestCase
+from ..testutils import BaseTestCase, compare_files, temp_files
 
 class FormatterBaseTestCase(BaseTestCase):
     def setUp(self):

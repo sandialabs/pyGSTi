@@ -3,7 +3,7 @@ import copy
 import pygsti
 import os
 
-from ..testutils import BaseTestCase
+from ..testutils import BaseTestCase, compare_files, temp_files
 
 class TestGateStringMethods(BaseTestCase):
     def test_simple(self):

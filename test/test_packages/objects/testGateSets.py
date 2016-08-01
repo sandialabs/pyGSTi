@@ -5,7 +5,7 @@ import warnings
 import pickle
 import os
 
-from ..testutils import BaseTestCase
+from ..testutils import BaseTestCase, compare_files, temp_files
 
 class GateSetTestCase(BaseTestCase):
 

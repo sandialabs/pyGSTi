@@ -3,7 +3,7 @@ import pygsti
 from pygsti.construction import std1Q_XYI as std
 import os
 
-from ..testutils import BaseTestCase
+from ..testutils import BaseTestCase, compare_files, temp_files
 
 class MetricsTestCase(BaseTestCase):
 
@@ -22,9 +22,9 @@ Gx 10 90
 GxGy 40 60
 Gx^4 20 90
 """
-        with open("../temp_test_files/MetricsDataset.txt","w") as output:
+        with open(temp_files + "/MetricsDataset.txt","w") as output:
             output.write(dataset_txt)
-        self.ds = pygsti.io.load_dataset("../temp_test_files/MetricsDataset.txt")
+        self.ds = pygsti.io.load_dataset(temp_files + "/MetricsDataset.txt")
 
 class TestMetrics(MetricsTestCase):
 

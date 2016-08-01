@@ -1,4 +1,4 @@
-from ..testutils import BaseTestCase
+from ..testutils import BaseTestCase, compare_files, temp_files
 import numpy as np
 import pygsti
 import unittest

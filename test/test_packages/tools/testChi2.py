@@ -1,4 +1,4 @@
-from ..testutils import BaseTestCase
+from ..testutils import BaseTestCase, compare_files, temp_files
 from pygsti.construction import std1Q_XYI as std
 import pygsti
 import unittest
@@ -10,7 +10,7 @@ class Chi2LogLTestCase(BaseTestCase):
     ###########################################################
 
     def test_chi2_fn(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
         chi2, grad = pygsti.chi2(ds, std.gs_target, returnGradient=True)
         pygsti.chi2(ds, std.gs_target, returnHessian=True)
 

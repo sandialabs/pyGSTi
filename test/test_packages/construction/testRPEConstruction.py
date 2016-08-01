@@ -1,4 +1,4 @@
-from ..testutils import BaseTestCase
+from ..testutils import BaseTestCase, compare_files, temp_files
 from pygsti.objects import GateString
 
 import pygsti.construction.rpeconstruction as rc
