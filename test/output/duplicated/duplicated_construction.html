@@ -1,0 +1,866 @@
+
+<HTML>
+    <HEAD>
+        <TITLE> CloneDigger Report </TITLE>
+        <script type="text/javascript">
+        function unhide(divID) {
+            var item = document.getElementById(divID);
+            if (item) {
+                item.className=(item.className=='hidden')?'unhidden':'hidden';
+            }
+        }
+</script>
+
+<style type="text/css">
+.hidden { display: none; }
+.unhidden { display: block; }
+.preformatted {
+        border: 1px dashed #3c78b5;
+    font-size: 11px;
+        font-family: Courier;
+    margin: 10px;
+        line-height: 13px;
+}
+.preformattedHeader {
+    background-color: #f0f0f0;
+        border-bottom: 1px dashed #3c78b5;
+    padding: 3px;
+        text-align: center;
+}
+.preformattedContent {
+    background-color: #f0f0f0;
+    padding: 3px;
+}
+<!--
+<div class="preformatted"><div class="preformattedContent">
+<pre>Clone Digger
+</pre>
+</div></div>
+-->
+
+</style>
+
+    </HEAD>
+    <BODY>
+    
+    
+    <P>Source files: 14</P>
+        <a href = "javascript:unhide('files');">Click here to show/hide file names</a><div id="files" class="hidden"><P><B>Source files:</B><BR>construction/qutrit.py, <BR>construction/spamspecconstruction.py, <BR>construction/gatestringconstruction.py, <BR>construction/std1Q_XYI.py, <BR>construction/rpeconstruction.py, <BR>construction/gatesetconstruction.py, <BR>construction/std1Q_XY.py, <BR>construction/std1Q_XZ.py, <BR>construction/__init__.py, <BR>construction/stdlists.py, <BR>construction/datasetconstruction.py, <BR>construction/std2Q_XYCNOT.py, <BR>construction/std1Q_pi4_pi2_XZ.py, <BR>construction/std1Q_ZN.py</P></div>
+        <P>Clones detected: 31</P>
+        <P>301 of 1283 lines are duplicates (23.46%) </P>
+<P>
+<B>Parameters<BR> </B>
+clustering_threshold = 10<BR>
+distance_threshold = 5<BR>
+size_threshold = 5<BR>
+hashing_depth = 1<BR>
+clusterize_using_hash = False<BR>
+clusterize_using_dcup = False<BR>
+</P> 
+        
+    <B>Time elapsed</B><BR>Construction of AST : 0.29 seconds<BR>
+Building statement hash : 0.00 seconds<BR>
+Building patterns : 0.48 seconds<BR>
+Marking similar statements : 0.46 seconds<BR>
+Finding similar sequences of statements : 0.16 seconds<BR>
+Refining candidates : 0.71 seconds<BR>
+ Total time: 2.10<BR>
+ Started at: Mon Aug  1 06:55:24 2016<BR>
+ Finished at: Mon Aug  1 06:55:26 2016
+    <P><B>Clone # 1</B><BR>Distance between two fragments = 1 <BR>Clone size = 13<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 171</TD><TD></TD><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 455</TD></TR><TR>
+<TD>
+tensorBlkIndices = {}</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+tensorBlkIndices = {}</TD>
+</TR>
+<TR>
+<TD>
+startIndex = []</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+startIndex = []</TD>
+</TR>
+<TR>
+<TD>
+M = 0</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+M = 0</TD>
+</TR>
+<TR>
+<TD>
+assert len(<span style="color: rgb(255, 0, 0);">stateSpaceDims</span>) == len(stateSpaceLabels)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+assert len(<span style="color: rgb(255, 0, 0);">blockDims</span>) == len(stateSpaceLabels)</TD>
+</TR>
+<TR>
+<TD>
+for k, blockDim in enumerate(<span style="color: rgb(255, 0, 0);">stateSpaceDims</span>):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;startIndex.append(M)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;M += blockDim<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;tensorBlkDim = 1<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for s in stateSpaceLabels[k]:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tensorBlkIndices[s] = k<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if s.startswith('Q'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tensorBlkDim *= 2<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif s.startswith('L'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tensorBlkDim *= 1<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise ValueError(('Invalid state space specifier: %s') % (s))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if tensorBlkDim != blockDim:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise ValueError(('State labels %s for tensor product block %d have dimension %d != given dimension %d') % ((stateSpaceLabels[k], k, tensorBlkDim, blockDim)))</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+for k, blockDim in enumerate(<span style="color: rgb(255, 0, 0);">blockDims</span>):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;startIndex.append(M)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;M += blockDim<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;tensorBlkDim = 1<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for s in stateSpaceLabels[k]:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tensorBlkIndices[s] = k<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if s.startswith('Q'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tensorBlkDim *= 2<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif s.startswith('L'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tensorBlkDim *= 1<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise ValueError(('Invalid state space specifier: %s') % (s))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if tensorBlkDim != blockDim:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise ValueError(('State labels %s for tensor product block %d have dimension %d != given dimension %d') % ((stateSpaceLabels[k], k, tensorBlkDim, blockDim)))</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 2</B><BR>Distance between two fragments = 1 <BR>Clone size = 13<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 301</TD><TD></TD><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 813</TD></TR><TR>
+<TD>
+assert len(args) == 3</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+assert len(args) == 3</TD>
+</TR>
+<TR>
+<TD>
+theta = eval(args[0], {'__builtins__': None}, {'pi': _np.pi})</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+theta = eval(args[0], {'__builtins__': None}, {'pi': _np.pi})</TD>
+</TR>
+<TR>
+<TD>
+i1 = int(args[1])</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+i1 = int(args[1])</TD>
+</TR>
+<TR>
+<TD>
+i2 = int(args[2])</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+i2 = int(args[2])</TD>
+</TR>
+<TR>
+<TD>
+ex = (((-1j) * (theta)) * (_bt.sigmax)) / (2)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+ex = (((-1j) * (theta)) * (_bt.sigmax)) / (2)</TD>
+</TR>
+<TR>
+<TD>
+Ugate = _spl.expm(ex)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+Ugate = _spl.expm(ex)</TD>
+</TR>
+<TR>
+<TD>
+Utot = _np.identity(dmDim, 'complex')</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+Utot = _np.identity(dmDim, 'complex')</TD>
+</TR>
+<TR>
+<TD>
+Utot[i1,i1] = Ugate[0,0]</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+Utot[i1,i1] = Ugate[0,0]</TD>
+</TR>
+<TR>
+<TD>
+Utot[i1,i2] = Ugate[0,1]</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+Utot[i1,i2] = Ugate[0,1]</TD>
+</TR>
+<TR>
+<TD>
+Utot[i2,i1] = Ugate[1,0]</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+Utot[i2,i1] = Ugate[1,0]</TD>
+</TR>
+<TR>
+<TD>
+Utot[i2,i2] = Ugate[1,1]</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+Utot[i2,i2] = Ugate[1,1]</TD>
+</TR>
+<TR>
+<TD>
+Utotc = Utot.conjugate()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+Utotc = Utot.conjugate()</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">gateBlk</span> = _np.kron(Utot, Utotc)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);">gateTermInStdBasis</span> = _np.kron(Utot, Utotc)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 3</B><BR>Distance between two fragments = 0 <BR>Clone size = 12<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 284</TD><TD></TD><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 233</TD></TR><TR>
+<TD>
+UcohBlkc = UcohBlk.conjugate()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+UcohBlkc = UcohBlk.conjugate()</TD>
+</TR>
+<TR>
+<TD>
+gateBlk = _np.kron(UcohBlk, UcohBlkc)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+gateBlk = _np.kron(UcohBlk, UcohBlkc)</TD>
+</TR>
+<TR>
+<TD>
+mapBlk = []</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+mapBlk = []</TD>
+</TR>
+<TR>
+<TD>
+s = startIndex[iTensorProdBlk]</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+s = startIndex[iTensorProdBlk]</TD>
+</TR>
+<TR>
+<TD>
+cohBlkSize = UcohBlk.shape[0]</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+cohBlkSize = UcohBlk.shape[0]</TD>
+</TR>
+<TR>
+<TD>
+for i in range(cohBlkSize):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for j in range(cohBlkSize):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vec_ij_index = (((s) + (i)) * (dmDim)) + ((s) + (j))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mapBlk.append(vec_ij_index)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+for i in range(cohBlkSize):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for j in range(cohBlkSize):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;vec_ij_index = (((s) + (i)) * (dmDim)) + ((s) + (j))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mapBlk.append(vec_ij_index)</TD>
+</TR>
+<TR>
+<TD>
+for i, fi in enumerate(mapBlk):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for j, fj in enumerate(mapBlk):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gateTermInStdBasis[fi,fj] = gateBlk[i,j]</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+for i, fi in enumerate(mapBlk):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for j, fj in enumerate(mapBlk):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gateTermInStdBasis[fi,fj] = gateBlk[i,j]</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 4</B><BR>Distance between two fragments = 4 <BR>Clone size = 10<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/rpeconstruction.py"<BR>The first line is 433</TD><TD></TD><TD>Source file "construction/rpeconstruction.py"<BR>The first line is 443</TD></TR><TR>
+<TD>
+_mpl.pyplot.loglog(kList, _np.median(<span style="color: rgb(255, 0, 0);">alphaErrorArray</span>, axis=0), label=('N=') + (str(N)))</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+_mpl.pyplot.loglog(kList, _np.median(<span style="color: rgb(255, 0, 0);">epsilonErrorArray</span>, axis=0), label=('N=') + (str(N)))</TD>
+</TR>
+<TR>
+<TD>
+_mpl.pyplot.loglog(kList, (_np.array(kList)) ** (-1.0), '-o', label='1/k')</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+_mpl.pyplot.loglog(kList, (_np.array(kList)) ** (-1.0), '-o', label='1/k')</TD>
+</TR>
+<TR>
+<TD>
+_mpl.pyplot.xlabel('k')</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+_mpl.pyplot.xlabel('k')</TD>
+</TR>
+<TR>
+<TD>
+_mpl.pyplot.ylabel(<span style="color: rgb(255, 0, 0);">'$\\alpha_z - \\widehat{\\alpha_z}$'</span>)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+_mpl.pyplot.ylabel(<span style="color: rgb(255, 0, 0);">'$\\epsilon_x - \\widehat{\\epsilon_x}$'</span>)</TD>
+</TR>
+<TR>
+<TD>
+_mpl.pyplot.title(((((((((((<span style="color: rgb(255, 0, 0);">'RPE error in Z angle\n% error in Z angle '</span>) + (str(percentAlphaError))) + ('%, % error in X angle ')) + (str(percentEpsilonError))) + ('%\n% error in SPAM, ')) + (str((100) * (SPAMerror)))) + ('%, X-Z axis error ')) + (str(Yrot))) + ('\nMedian of ')) + (str(jMax))) + (' Trials'))</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+_mpl.pyplot.title(((((((((((<span style="color: rgb(255, 0, 0);">'RPE error in X angle\n% error in Z angle '</span>) + (str(percentAlphaError))) + ('%, % error in X angle ')) + (str(percentEpsilonError))) + ('%\n% error in SPAM, ')) + (str((100) * (SPAMerror)))) + ('%, X-Z axis error ')) + (str(Yrot))) + ('\nMedian of ')) + (str(jMax))) + (' Trials'))</TD>
+</TR>
+<TR>
+<TD>
+_mpl.pyplot.legend()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+_mpl.pyplot.legend()</TD>
+</TR>
+<TR>
+<TD>
+_mpl.pyplot.show()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+_mpl.pyplot.show()</TD>
+</TR>
+<TR>
+<TD>
+_mpl.pyplot.loglog(kList, _np.median(<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">epsilonErrorArray</span></span>, axis=0), label=('N=') + (str(N)))</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+_mpl.pyplot.loglog(kList, _np.median(<span style="color: rgb(255, 0, 0);">thetaErrorArray</span>, axis=0), label=('N=') + (str(N)))</TD>
+</TR>
+<TR>
+<TD>
+_mpl.pyplot.loglog(kList, (_np.array(kList)) ** (-1.0), '-o', label='1/k')</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+_mpl.pyplot.loglog(kList, (_np.array(kList)) ** (-1.0), '-o', label='1/k')</TD>
+</TR>
+<TR>
+<TD>
+_mpl.pyplot.xlabel('k')</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+_mpl.pyplot.xlabel('k')</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 5</B><BR>Distance between two fragments = 2 <BR>Clone size = 8<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 217</TD><TD></TD><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 263</TD></TR><TR>
+<TD>
+cohBlk = stateSpaceLabels[iTensorProdBlk]</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+cohBlk = stateSpaceLabels[iTensorProdBlk]</TD>
+</TR>
+<TR>
+<TD>
+basisInds = []</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+basisInds = []</TD>
+</TR>
+<TR>
+<TD>
+for l in cohBlk:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;assert l[0] in ('L', 'Q')<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if l.startswith('L'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;basisInds.append([0])<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;elif l.startswith('Q'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;basisInds.append([0, 1])</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+for l in cohBlk:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;assert l[0] in ('L', 'Q')<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if l.startswith('L'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;basisInds.append([0])<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;elif l.startswith('Q'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;basisInds.append([0, 1])</TD>
+</TR>
+<TR>
+<TD>
+tensorBlkBasis = list(_itertools.product(, *basisInds))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+tensorBlkBasis = list(_itertools.product(, *basisInds))</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">K</span> = cohBlk.index(<span style="color: rgb(255, 0, 0);">label</span>)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);">K1</span> = cohBlk.index(<span style="color: rgb(255, 0, 0);">label1</span>)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 6</B><BR>Distance between two fragments = 3 <BR>Clone size = 8<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 487</TD><TD></TD><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 216</TD></TR><TR>
+<TD>
+iTensorProdBlk = <span style="color: rgb(255, 0, 0);">iTensorProdBlks</span>[<span style="color: rgb(255, 0, 0);">0</span>]</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+iTensorProdBlk = <span style="color: rgb(255, 0, 0);">tensorBlkIndices</span>[<span style="color: rgb(255, 0, 0);">label</span>]</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">tensorProdBlkLabels</span> = stateSpaceLabels[iTensorProdBlk]</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);">cohBlk</span> = stateSpaceLabels[iTensorProdBlk]</TD>
+</TR>
+<TR>
+<TD>
+basisInds = []</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+basisInds = []</TD>
+</TR>
+<TR>
+<TD>
+for l in <span style="color: rgb(255, 0, 0);">tensorProdBlkLabels</span>:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;assert l[0] in ('L', 'Q')<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if l.startswith('L'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;basisInds.append([0])<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;elif l.startswith('Q'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;basisInds.append([0, 1])</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+for l in <span style="color: rgb(255, 0, 0);">cohBlk</span>:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;assert l[0] in ('L', 'Q')<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if l.startswith('L'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;basisInds.append([0])<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;elif l.startswith('Q'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;basisInds.append([0, 1])</TD>
+</TR>
+<TR>
+<TD>
+tensorBlkBasis = list(_itertools.product(, *basisInds))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+tensorBlkBasis = list(_itertools.product(, *basisInds))</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 7</B><BR>Distance between two fragments = 4 <BR>Clone size = 8<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/rpeconstruction.py"<BR>The first line is 433</TD><TD></TD><TD>Source file "construction/rpeconstruction.py"<BR>The first line is 453</TD></TR><TR>
+<TD>
+_mpl.pyplot.loglog(kList, _np.median(<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">alphaErrorArray</span></span>, axis=0), label=('N=') + (str(N)))</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+_mpl.pyplot.loglog(kList, _np.median(<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">thetaErrorArray</span></span>, axis=0), label=('N=') + (str(N)))</TD>
+</TR>
+<TR>
+<TD>
+_mpl.pyplot.loglog(kList, (_np.array(kList)) ** (-1.0), '-o', label='1/k')</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+_mpl.pyplot.loglog(kList, (_np.array(kList)) ** (-1.0), '-o', label='1/k')</TD>
+</TR>
+<TR>
+<TD>
+_mpl.pyplot.xlabel('k')</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+_mpl.pyplot.xlabel('k')</TD>
+</TR>
+<TR>
+<TD>
+_mpl.pyplot.ylabel(<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'$\\alpha_z - \\widehat{\\alpha_z}$'</span></span>)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+_mpl.pyplot.ylabel(<span style="color: rgb(255, 0, 0);">'$\\theta_{xz} - \\widehat{\\theta_{xz}}$'</span>)</TD>
+</TR>
+<TR>
+<TD>
+_mpl.pyplot.title(((((((((((<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'RPE error in Z angle\n% error in Z angle '</span></span>) + (str(percentAlphaError))) + ('%, % error in X angle ')) + (str(percentEpsilonError))) + ('%\n% error in SPAM, ')) + (str((100) * (SPAMerror)))) + ('%, X-Z axis error ')) + (str(Yrot))) + ('\nMedian of ')) + (str(jMax))) + (' Trials'))</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+_mpl.pyplot.title(((((((((((<span style="color: rgb(255, 0, 0);">'RPE error in X axis angle\n% error in Z angle '</span>) + (str(percentAlphaError))) + ('%, % error in X angle ')) + (str(percentEpsilonError))) + ('%\n% error in SPAM, ')) + (str((100) * (SPAMerror)))) + ('%, X-Z axis error ')) + (str(Yrot))) + ('\nMedian of ')) + (str(jMax))) + (' Trials'))</TD>
+</TR>
+<TR>
+<TD>
+_mpl.pyplot.legend()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+_mpl.pyplot.legend()</TD>
+</TR>
+<TR>
+<TD>
+_mpl.pyplot.show()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+_mpl.pyplot.show()</TD>
+</TR>
+<TR>
+<TD>
+_mpl.pyplot.loglog(kList, _np.median(<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">epsilonErrorArray</span></span></span>, axis=0), label=('N=') + (str(N)))</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+_mpl.pyplot.loglog(kList, _np.median(<span style="color: rgb(255, 0, 0);">PhiFunErrorArray</span>, axis=0), label=('N=') + (str(N)))</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 8</B><BR>Distance between two fragments = 1 <BR>Clone size = 7<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 488</TD><TD></TD><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 263</TD></TR><TR>
+<TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">tensorProdBlkLabels</span></span> = stateSpaceLabels[iTensorProdBlk]</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);">cohBlk</span> = stateSpaceLabels[iTensorProdBlk]</TD>
+</TR>
+<TR>
+<TD>
+basisInds = []</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+basisInds = []</TD>
+</TR>
+<TR>
+<TD>
+for l in <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">tensorProdBlkLabels</span></span>:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;assert l[0] in ('L', 'Q')<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if l.startswith('L'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;basisInds.append([0])<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;elif l.startswith('Q'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;basisInds.append([0, 1])</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+for l in <span style="color: rgb(255, 0, 0);">cohBlk</span>:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;assert l[0] in ('L', 'Q')<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if l.startswith('L'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;basisInds.append([0])<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;elif l.startswith('Q'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;basisInds.append([0, 1])</TD>
+</TR>
+<TR>
+<TD>
+tensorBlkBasis = list(_itertools.product(, *basisInds))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+tensorBlkBasis = list(_itertools.product(, *basisInds))</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 9</B><BR>Distance between two fragments = 0 <BR>Clone size = 7<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 783</TD><TD></TD><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 765</TD></TR><TR>
+<TD>
+Ugate = _spl.expm(ex)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+Ugate = _spl.expm(ex)</TD>
+</TR>
+<TR>
+<TD>
+if unitaryEmbedding:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateTermInFinalBasis = embed_gate_unitary(Ugate, (label))<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Ugatec = Ugate.conjugate()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateMx = _np.kron(Ugate, Ugatec)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;pp_gateMx = _bt.std_to_pp(gateMx)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateTermInFinalBasis = embed_gate(pp_gateMx, (label))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if unitaryEmbedding:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateTermInFinalBasis = embed_gate_unitary(Ugate, (label))<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Ugatec = Ugate.conjugate()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateMx = _np.kron(Ugate, Ugatec)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;pp_gateMx = _bt.std_to_pp(gateMx)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateTermInFinalBasis = embed_gate(pp_gateMx, (label))</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 10</B><BR>Distance between two fragments = 3 <BR>Clone size = 8<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/std1Q_ZN.py"<BR>The first line is 35</TD><TD></TD><TD>Source file "construction/std1Q_XY.py"<BR>The first line is 20</TD></TR><TR>
+<TD>
+germs = _strc.gatestring_list(<span style="color: rgb(255, 0, 0);">[('Gz'), ('Gn'), ('Gn', 'Gn', 'Gz', 'Gn', 'Gz'), ('Gn', 'Gz', 'Gn', 'Gz', 'Gz'), ('Gn', 'Gz', 'Gn', 'Gn', 'Gz', 'Gz'), ('Gn', 'Gn', 'Gz', 'Gn', 'Gz', 'Gz'), ('Gn', 'Gn', 'Gn', 'Gz', 'Gz', 'Gz')]</span>)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+germs = _strc.gatestring_list(<span style="color: rgb(255, 0, 0);">[('Gy'), ('Gy', 'Gy', 'Gy', 'Gx'), ('Gy', 'Gx', 'Gy', 'Gx', 'Gx', 'Gx'), ('Gy', 'Gx', 'Gy', 'Gy', 'Gx', 'Gx'), ('Gy', 'Gy', 'Gy', 'Gx', 'Gy', 'Gx'), ('Gx'), ('Gx', 'Gy'), ('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy')]</span>)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 11</B><BR>Distance between two fragments = 0 <BR>Clone size = 7<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 207</TD><TD></TD><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 757</TD></TR><TR>
+<TD>
+assert len(args) == 2</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+assert len(args) == 2</TD>
+</TR>
+<TR>
+<TD>
+theta = eval(args[0], {'__builtins__': None}, {'pi': _np.pi})</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+theta = eval(args[0], {'__builtins__': None}, {'pi': _np.pi})</TD>
+</TR>
+<TR>
+<TD>
+label = args[1].strip()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+label = args[1].strip()</TD>
+</TR>
+<TR>
+<TD>
+assert label.startswith('Q')</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+assert label.startswith('Q')</TD>
+</TR>
+<TR>
+<TD>
+if gateName == 'X':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ex = (((-1j) * (theta)) * (_bt.sigmax)) / (2)<BR>
+elif gateName == 'Y':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ex = (((-1j) * (theta)) * (_bt.sigmay)) / (2)<BR>
+elif gateName == 'Z':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ex = (((-1j) * (theta)) * (_bt.sigmaz)) / (2)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if gateName == 'X':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ex = (((-1j) * (theta)) * (_bt.sigmax)) / (2)<BR>
+elif gateName == 'Y':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ex = (((-1j) * (theta)) * (_bt.sigmay)) / (2)<BR>
+elif gateName == 'Z':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ex = (((-1j) * (theta)) * (_bt.sigmaz)) / (2)</TD>
+</TR>
+<TR>
+<TD>
+Ugate = _spl.expm(ex)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+Ugate = _spl.expm(ex)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 12</B><BR>Distance between two fragments = 2 <BR>Clone size = 7<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 535</TD><TD></TD><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 358</TD></TR><TR>
+<TD>
+if basis == 'std':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return _gate.FullyParameterizedGate(<span style="color: rgb(255, 0, 0);">finalGateInStdBasis</span>)<BR>
+elif basis == 'gm':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return _gate.FullyParameterizedGate(_bt.std_to_gm(<span style="color: rgb(255, 0, 0);">finalGateInStdBasis</span>, <span style="color: rgb(255, 0, 0);">blockDims</span>))<BR>
+elif basis == 'pp':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return _gate.FullyParameterizedGate(_bt.std_to_pp(<span style="color: rgb(255, 0, 0);">finalGateInStdBasis</span>, <span style="color: rgb(255, 0, 0);">blockDims</span>))<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;raise ValueError(("Invalid 'basis' parameter: %s (must by 'std', 'gm', or 'pp')") % (basis))</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+if basis == 'std':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return _gate.FullyParameterizedGate(<span style="color: rgb(255, 0, 0);">gateInReducedStdBasis</span>)<BR>
+elif basis == 'gm':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return _gate.FullyParameterizedGate(_bt.std_to_gm(<span style="color: rgb(255, 0, 0);">gateInReducedStdBasis</span>, <span style="color: rgb(255, 0, 0);">stateSpaceDims</span>))<BR>
+elif basis == 'pp':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return _gate.FullyParameterizedGate(_bt.std_to_pp(<span style="color: rgb(255, 0, 0);">gateInReducedStdBasis</span>, <span style="color: rgb(255, 0, 0);">stateSpaceDims</span>))<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;raise ValueError(("Invalid 'basis' parameter: %s (must by 'std', 'gm', or 'pp')") % (basis))</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 13</B><BR>Distance between two fragments = 0 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 725</TD><TD></TD><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 740</TD></TR><TR>
+<TD>
+labels = args</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+labels = args</TD>
+</TR>
+<TR>
+<TD>
+stateSpaceDim = 1</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+stateSpaceDim = 1</TD>
+</TR>
+<TR>
+<TD>
+for l in labels:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if l.startswith('Q'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;stateSpaceDim *= 2<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;elif l.startswith('L'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;stateSpaceDim *= 1<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise ValueError(('Invalid state space label: %s') % (l))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+for l in labels:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if l.startswith('Q'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;stateSpaceDim *= 2<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;elif l.startswith('L'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;stateSpaceDim *= 1<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise ValueError(('Invalid state space label: %s') % (l))</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 14</B><BR>Distance between two fragments = 4 <BR>Clone size = 10<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/std1Q_pi4_pi2_XZ.py"<BR>The first line is 32</TD><TD></TD><TD>Source file "construction/std1Q_XZ.py"<BR>The first line is 31</TD></TR><TR>
+<TD>
+germs = _strc.gatestring_list(<span style="color: rgb(255, 0, 0);">[('Gx'), ('Gz'), ('Gz', 'Gz', 'Gx'), ('Gz', 'Gz', 'Gx', 'Gz', 'Gx', 'Gx', 'Gx'), ('Gz', 'Gx', 'Gz', 'Gz', 'Gx', 'Gx', 'Gx')]</span>)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+germs = _strc.gatestring_list(<span style="color: rgb(255, 0, 0);">[('Gx'), ('Gz'), ('Gz', 'Gx', 'Gx'), ('Gz', 'Gz', 'Gx')]</span>)</TD>
+</TR>
+<TR>
+<TD>
+gs_target = _setc.build_gateset([2], [('Q0')], ['Gx', 'Gz'], [<span style="color: rgb(255, 0, 0);">'X(pi/4,Q0)'</span>, 'Z(pi/2,Q0)'], prepLabels=['rho0'], prepExpressions=['0'], effectLabels=['E0'], effectExpressions=['1'], spamdefs={'plus': ('rho0', 'E0'), 'minus': ('rho0', 'remainder')})</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+gs_target = _setc.build_gateset([2], [('Q0')], ['Gx', 'Gz'], [<span style="color: rgb(255, 0, 0);">'X(pi/2,Q0)'</span>, 'Z(pi/2,Q0)'], prepLabels=['rho0'], prepExpressions=['0'], effectLabels=['E0'], effectExpressions=['1'], spamdefs={'plus': ('rho0', 'E0'), 'minus': ('rho0', 'remainder')})</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 15</B><BR>Distance between two fragments = 4 <BR>Clone size = 10<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/std1Q_XYI.py"<BR>The first line is 17</TD><TD></TD><TD>Source file "construction/std1Q_XY.py"<BR>The first line is 17</TD></TR><TR>
+<TD>
+fiducials = _strc.gatestring_list([(), ('Gx'), ('Gy'), ('Gx', 'Gx'), ('Gx', 'Gx', 'Gx'), ('Gy', 'Gy', 'Gy')])</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+fiducials = _strc.gatestring_list([(), ('Gx'), ('Gy'), ('Gx', 'Gx'), ('Gx', 'Gx', 'Gx'), ('Gy', 'Gy', 'Gy')])</TD>
+</TR>
+<TR>
+<TD>
+germs = _strc.gatestring_list(<span style="color: rgb(255, 0, 0);">[('Gx'), ('Gy'), ('Gi'), ('Gx', 'Gy'), ('Gx', 'Gy', 'Gi'), ('Gx', 'Gi', 'Gy'), ('Gx', 'Gi', 'Gi'), ('Gy', 'Gi', 'Gi'), ('Gx', 'Gx', 'Gi', 'Gy'), ('Gx', 'Gy', 'Gy', 'Gi'), ('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy')]</span>)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+germs = _strc.gatestring_list(<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">[('Gy'), ('Gy', 'Gy', 'Gy', 'Gx'), ('Gy', 'Gx', 'Gy', 'Gx', 'Gx', 'Gx'), ('Gy', 'Gx', 'Gy', 'Gy', 'Gx', 'Gx'), ('Gy', 'Gy', 'Gy', 'Gx', 'Gy', 'Gx'), ('Gx'), ('Gx', 'Gy'), ('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy')]</span></span>)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 16</B><BR>Distance between two fragments = 3 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/std1Q_pi4_pi2_XZ.py"<BR>The first line is 25</TD><TD></TD><TD>Source file "construction/std1Q_pi4_pi2_XZ.py"<BR>The first line is 17</TD></TR><TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">measFiducials</span> = _strc.gatestring_list([(), (<span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>), (<span style="color: rgb(255, 0, 0);">'Gz'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>), (<span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>), (<span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>), (<span style="color: rgb(255, 0, 0);">'Gz'</span>, <span style="color: rgb(255, 0, 0);">'Gz'</span>, <span style="color: rgb(255, 0, 0);">'Gz'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>)])</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);">prepFiducials</span> = _strc.gatestring_list([(), (<span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>), (<span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gz'</span>), (<span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>), (<span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>), (<span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gz'</span>, <span style="color: rgb(255, 0, 0);">'Gz'</span>, <span style="color: rgb(255, 0, 0);">'Gz'</span>)])</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 17</B><BR>Distance between two fragments = 3 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/std1Q_XZ.py"<BR>The first line is 24</TD><TD></TD><TD>Source file "construction/std1Q_XZ.py"<BR>The first line is 17</TD></TR><TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">measFiducials</span> = _strc.gatestring_list([(), (<span style="color: rgb(255, 0, 0);">'Gx'</span>), (<span style="color: rgb(255, 0, 0);">'Gz'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>), (<span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>), (<span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>), (<span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gz'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>)])</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);">prepFiducials</span> = _strc.gatestring_list([(), (<span style="color: rgb(255, 0, 0);">'Gx'</span>), (<span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gz'</span>), (<span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>), (<span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>), (<span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gz'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gx'</span>)])</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 18</B><BR>Distance between two fragments = 3 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/std1Q_ZN.py"<BR>The first line is 28</TD><TD></TD><TD>Source file "construction/std1Q_ZN.py"<BR>The first line is 21</TD></TR><TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">measFiducials</span> = _strc.gatestring_list([(), (<span style="color: rgb(255, 0, 0);">'Gn'</span>), (<span style="color: rgb(255, 0, 0);">'Gn'</span>, <span style="color: rgb(255, 0, 0);">'Gn'</span>), (<span style="color: rgb(255, 0, 0);">'Gn'</span>, <span style="color: rgb(255, 0, 0);">'Gz'</span>, <span style="color: rgb(255, 0, 0);">'Gn'</span>), (<span style="color: rgb(255, 0, 0);">'Gn'</span>, <span style="color: rgb(255, 0, 0);">'Gn'</span>, <span style="color: rgb(255, 0, 0);">'Gn'</span>), (<span style="color: rgb(255, 0, 0);">'Gn'</span>, <span style="color: rgb(255, 0, 0);">'Gn'</span>, <span style="color: rgb(255, 0, 0);">'Gn'</span>, <span style="color: rgb(255, 0, 0);">'Gz'</span>, <span style="color: rgb(255, 0, 0);">'Gn'</span>)])</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);">prepFiducials</span> = _strc.gatestring_list([(), (<span style="color: rgb(255, 0, 0);">'Gn'</span>), (<span style="color: rgb(255, 0, 0);">'Gn'</span>, <span style="color: rgb(255, 0, 0);">'Gn'</span>), (<span style="color: rgb(255, 0, 0);">'Gn'</span>, <span style="color: rgb(255, 0, 0);">'Gz'</span>, <span style="color: rgb(255, 0, 0);">'Gn'</span>), (<span style="color: rgb(255, 0, 0);">'Gn'</span>, <span style="color: rgb(255, 0, 0);">'Gn'</span>, <span style="color: rgb(255, 0, 0);">'Gn'</span>), (<span style="color: rgb(255, 0, 0);">'Gn'</span>, <span style="color: rgb(255, 0, 0);">'Gz'</span>, <span style="color: rgb(255, 0, 0);">'Gn'</span>, <span style="color: rgb(255, 0, 0);">'Gn'</span>, <span style="color: rgb(255, 0, 0);">'Gn'</span>)])</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 19</B><BR>Distance between two fragments = 1 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 253</TD><TD></TD><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 796</TD></TR><TR>
+<TD>
+assert label2.startswith('Q')</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+assert label2.startswith('Q')</TD>
+</TR>
+<TR>
+<TD>
+if gateName == 'CX':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ex = (((-1j) * (theta)) * (_bt.sigmax)) / (<span style="color: rgb(255, 0, 0);">2</span>)<BR>
+elif gateName == 'CY':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ex = (((-1j) * (theta)) * (_bt.sigmay)) / (<span style="color: rgb(255, 0, 0);">2</span>)<BR>
+elif gateName == 'CZ':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ex = (((-1j) * (theta)) * (_bt.sigmaz)) / (<span style="color: rgb(255, 0, 0);">2</span>)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+if gateName == 'CX':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ex = (((-1j) * (theta)) * (_bt.sigmax)) / (<span style="color: rgb(255, 0, 0);">2.0</span>)<BR>
+elif gateName == 'CY':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ex = (((-1j) * (theta)) * (_bt.sigmay)) / (<span style="color: rgb(255, 0, 0);">2.0</span>)<BR>
+elif gateName == 'CZ':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ex = (((-1j) * (theta)) * (_bt.sigmaz)) / (<span style="color: rgb(255, 0, 0);">2.0</span>)</TD>
+</TR>
+<TR>
+<TD>
+Utarget = _spl.expm(ex)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+Utarget = _spl.expm(ex)</TD>
+</TR>
+<TR>
+<TD>
+Ugate = _np.identity(4, 'complex')</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+Ugate = _np.identity(4, 'complex')</TD>
+</TR>
+<TR>
+<TD>
+Ugate[2:None,2:None] = Utarget</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+Ugate[2:None,2:None] = Utarget</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 20</B><BR>Distance between two fragments = 4 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 804</TD><TD></TD><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 784</TD></TR><TR>
+<TD>
+if unitaryEmbedding:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateTermInFinalBasis = embed_gate_unitary(Ugate, <span style="color: rgb(255, 0, 0);">(label1, label2)</span>)<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Ugatec = Ugate.conjugate()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateMx = _np.kron(Ugate, Ugatec)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;pp_gateMx = _bt.std_to_pp(gateMx)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateTermInFinalBasis = embed_gate(pp_gateMx, <span style="color: rgb(255, 0, 0);">(label1, label2)</span>)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+if unitaryEmbedding:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateTermInFinalBasis = embed_gate_unitary(Ugate, <span style="color: rgb(255, 0, 0);">(label)</span>)<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Ugatec = Ugate.conjugate()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateMx = _np.kron(Ugate, Ugatec)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;pp_gateMx = _bt.std_to_pp(gateMx)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateTermInFinalBasis = embed_gate(pp_gateMx, <span style="color: rgb(255, 0, 0);">(label)</span>)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 21</B><BR>Distance between two fragments = 4 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 804</TD><TD></TD><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 766</TD></TR><TR>
+<TD>
+if unitaryEmbedding:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateTermInFinalBasis = embed_gate_unitary(Ugate, <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">(label1, label2)</span></span>)<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Ugatec = Ugate.conjugate()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateMx = _np.kron(Ugate, Ugatec)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;pp_gateMx = _bt.std_to_pp(gateMx)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateTermInFinalBasis = embed_gate(pp_gateMx, <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">(label1, label2)</span></span>)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+if unitaryEmbedding:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateTermInFinalBasis = embed_gate_unitary(Ugate, <span style="color: rgb(255, 0, 0);">(label)</span>)<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;Ugatec = Ugate.conjugate()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateMx = _np.kron(Ugate, Ugatec)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;pp_gateMx = _bt.std_to_pp(gateMx)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateTermInFinalBasis = embed_gate(pp_gateMx, <span style="color: rgb(255, 0, 0);">(label)</span>)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 22</B><BR>Distance between two fragments = 2 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 674</TD><TD></TD><TD>Source file "construction/gatesetconstruction.py"<BR>The first line is 667</TD></TR><TR>
+<TD>
+<span style="font-family: monospace;">if&nbsp; parameterization&nbsp; ==&nbsp; "<span style="color:rgb(255,0,0);">static</span>":<BR>
+&nbsp; finalGateInFinalBasis&nbsp; =&nbsp; _np.dot(full_ppToFinal,<BR>
+&nbsp; &nbsp; &nbsp; _np.dot(&nbsp; finalGate,&nbsp; full_finalToPP))<BR>
+&nbsp; return&nbsp; _gate.<span style="color:rgb(255,0,0);">Static</span>Gate(<BR>
+&nbsp; &nbsp; _np.real(finalGateInFinalBasis)<BR>
+&nbsp; &nbsp; if&nbsp; realMx&nbsp; else&nbsp; finalGateInFinalBasis&nbsp; )<span style="color:rgb(255,0,0);"></span></span></TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="font-family: monospace;">if&nbsp; parameterization&nbsp; ==&nbsp; "<span style="color:rgb(255,0,0);">full</span>":<BR>
+&nbsp; finalGateInFinalBasis&nbsp; =&nbsp; _np.dot(full_ppToFinal,<BR>
+&nbsp; &nbsp; &nbsp; _np.dot(&nbsp; finalGate,&nbsp; full_finalToPP))<BR>
+&nbsp; return&nbsp; _gate.<span style="color:rgb(255,0,0);">FullyParameterized</span>Gate(<BR>
+&nbsp; &nbsp; _np.real(finalGateInFinalBasis)<BR>
+&nbsp; &nbsp; if&nbsp; realMx&nbsp; else&nbsp; finalGateInFinalBasis&nbsp; )<span style="color:rgb(255,0,0);"></span></span></TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 23</B><BR>Distance between two fragments = 2 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/stdlists.py"<BR>The first line is 329</TD><TD></TD><TD>Source file "construction/stdlists.py"<BR>The first line is 128</TD></TR><TR>
+<TD>
+if maxLengthList[0] == 0:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">elgst_listOfLists</span> = [<span style="color: rgb(255, 0, 0);">singleGates</span>]<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;maxLengthList = maxLengthList[1:]<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">elgst_listOfLists</span> = []</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+if maxLengthList[0] == 0:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">lsgst_listOfLists</span> = [<span style="color: rgb(255, 0, 0);">lgstStrings</span>]<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;maxLengthList = maxLengthList[1:]<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">lsgst_listOfLists</span> = []</TD>
+</TR>
+<TR>
+<TD>
+Rfn = _getTruncFunction(truncScheme)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+Rfn = _getTruncFunction(truncScheme)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 24</B><BR>Distance between two fragments = 4 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/std1Q_pi4_pi2_XZ.py"<BR>The first line is 39</TD><TD></TD><TD>Source file "construction/std1Q_ZN.py"<BR>The first line is 15</TD></TR><TR>
+<TD>
+gs_target = _setc.build_gateset([2], [('Q0')], [<span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gz'</span>], [<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'X(pi/4,Q0)'</span></span>, <span style="color: rgb(255, 0, 0);">'Z(pi/2,Q0)'</span>], prepLabels=['rho0'], prepExpressions=['0'], effectLabels=['E0'], effectExpressions=['1'], spamdefs={'plus': ('rho0', 'E0'), 'minus': ('rho0', 'remainder')})</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+gs_target = _setc.build_gateset([2], [('Q0')], [<span style="color: rgb(255, 0, 0);">'Gz'</span>, <span style="color: rgb(255, 0, 0);">'Gn'</span>], [<span style="color: rgb(255, 0, 0);">'Z(pi/2,Q0)'</span>, <span style="color: rgb(255, 0, 0);">'N(pi/2, sqrt(3)/2, 0, -0.5, Q0)'</span>], prepLabels=['rho0'], prepExpressions=['0'], effectLabels=['E0'], effectExpressions=['1'], spamdefs={'plus': ('rho0', 'E0'), 'minus': ('rho0', 'remainder')})</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 25</B><BR>Distance between two fragments = 4 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/std1Q_XZ.py"<BR>The first line is 34</TD><TD></TD><TD>Source file "construction/std1Q_ZN.py"<BR>The first line is 15</TD></TR><TR>
+<TD>
+gs_target = _setc.build_gateset([2], [('Q0')], [<span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gz'</span>], [<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'X(pi/2,Q0)'</span></span>, <span style="color: rgb(255, 0, 0);">'Z(pi/2,Q0)'</span>], prepLabels=['rho0'], prepExpressions=['0'], effectLabels=['E0'], effectExpressions=['1'], spamdefs={'plus': ('rho0', 'E0'), 'minus': ('rho0', 'remainder')})</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+gs_target = _setc.build_gateset([2], [('Q0')], [<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'Gz'</span></span>, <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'Gn'</span></span>], [<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'Z(pi/2,Q0)'</span></span>, <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'N(pi/2, sqrt(3)/2, 0, -0.5, Q0)'</span></span>], prepLabels=['rho0'], prepExpressions=['0'], effectLabels=['E0'], effectExpressions=['1'], spamdefs={'plus': ('rho0', 'E0'), 'minus': ('rho0', 'remainder')})</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 26</B><BR>Distance between two fragments = 4 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/std1Q_XY.py"<BR>The first line is 30</TD><TD></TD><TD>Source file "construction/std1Q_ZN.py"<BR>The first line is 15</TD></TR><TR>
+<TD>
+gs_target = _setc.build_gateset([2], [('Q0')], [<span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);">'Gy'</span>], [<span style="color: rgb(255, 0, 0);">'X(pi/2,Q0)'</span>, <span style="color: rgb(255, 0, 0);">'Y(pi/2,Q0)'</span>], prepLabels=['rho0'], prepExpressions=['0'], effectLabels=['E0'], effectExpressions=['1'], spamdefs={'plus': ('rho0', 'E0'), 'minus': ('rho0', 'remainder')})</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+gs_target = _setc.build_gateset([2], [('Q0')], [<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'Gz'</span></span></span>, <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'Gn'</span></span></span>], [<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'Z(pi/2,Q0)'</span></span></span>, <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'N(pi/2, sqrt(3)/2, 0, -0.5, Q0)'</span></span></span>], prepLabels=['rho0'], prepExpressions=['0'], effectLabels=['E0'], effectExpressions=['1'], spamdefs={'plus': ('rho0', 'E0'), 'minus': ('rho0', 'remainder')})</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 27</B><BR>Distance between two fragments = 3 <BR>Clone size = 8<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/std1Q_pi4_pi2_XZ.py"<BR>The first line is 32</TD><TD></TD><TD>Source file "construction/std1Q_XY.py"<BR>The first line is 20</TD></TR><TR>
+<TD>
+germs = _strc.gatestring_list(<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">[('Gx'), ('Gz'), ('Gz', 'Gz', 'Gx'), ('Gz', 'Gz', 'Gx', 'Gz', 'Gx', 'Gx', 'Gx'), ('Gz', 'Gx', 'Gz', 'Gz', 'Gx', 'Gx', 'Gx')]</span></span>)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+germs = _strc.gatestring_list(<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">[('Gy'), ('Gy', 'Gy', 'Gy', 'Gx'), ('Gy', 'Gx', 'Gy', 'Gx', 'Gx', 'Gx'), ('Gy', 'Gx', 'Gy', 'Gy', 'Gx', 'Gx'), ('Gy', 'Gy', 'Gy', 'Gx', 'Gy', 'Gx'), ('Gx'), ('Gx', 'Gy'), ('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy')]</span></span></span>)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 28</B><BR>Distance between two fragments = 3 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/std1Q_pi4_pi2_XZ.py"<BR>The first line is 39</TD><TD></TD><TD>Source file "construction/std1Q_XY.py"<BR>The first line is 30</TD></TR><TR>
+<TD>
+gs_target = _setc.build_gateset([2], [('Q0')], [<span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'Gz'</span></span>], [<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'X(pi/4,Q0)'</span></span></span>, <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'Z(pi/2,Q0)'</span></span>], prepLabels=['rho0'], prepExpressions=['0'], effectLabels=['E0'], effectExpressions=['1'], spamdefs={'plus': ('rho0', 'E0'), 'minus': ('rho0', 'remainder')})</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+gs_target = _setc.build_gateset([2], [('Q0')], [<span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'Gy'</span></span>], [<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'X(pi/2,Q0)'</span></span>, <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'Y(pi/2,Q0)'</span></span>], prepLabels=['rho0'], prepExpressions=['0'], effectLabels=['E0'], effectExpressions=['1'], spamdefs={'plus': ('rho0', 'E0'), 'minus': ('rho0', 'remainder')})</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 29</B><BR>Distance between two fragments = 2 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/std1Q_XZ.py"<BR>The first line is 34</TD><TD></TD><TD>Source file "construction/std1Q_XY.py"<BR>The first line is 30</TD></TR><TR>
+<TD>
+gs_target = _setc.build_gateset([2], [('Q0')], [<span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'Gz'</span></span>], [<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'X(pi/2,Q0)'</span></span>, <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'Z(pi/2,Q0)'</span></span>], prepLabels=['rho0'], prepExpressions=['0'], effectLabels=['E0'], effectExpressions=['1'], spamdefs={'plus': ('rho0', 'E0'), 'minus': ('rho0', 'remainder')})</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+gs_target = _setc.build_gateset([2], [('Q0')], [<span style="color: rgb(255, 0, 0);">'Gx'</span>, <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'Gy'</span></span></span>], [<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'X(pi/2,Q0)'</span></span>, <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'Y(pi/2,Q0)'</span></span></span>], prepLabels=['rho0'], prepExpressions=['0'], effectLabels=['E0'], effectExpressions=['1'], spamdefs={'plus': ('rho0', 'E0'), 'minus': ('rho0', 'remainder')})</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 30</B><BR>Distance between two fragments = 3 <BR>Clone size = 7<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/std1Q_ZN.py"<BR>The first line is 35</TD><TD></TD><TD>Source file "construction/std1Q_pi4_pi2_XZ.py"<BR>The first line is 32</TD></TR><TR>
+<TD>
+germs = _strc.gatestring_list(<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">[('Gz'), ('Gn'), ('Gn', 'Gn', 'Gz', 'Gn', 'Gz'), ('Gn', 'Gz', 'Gn', 'Gz', 'Gz'), ('Gn', 'Gz', 'Gn', 'Gn', 'Gz', 'Gz'), ('Gn', 'Gn', 'Gz', 'Gn', 'Gz', 'Gz'), ('Gn', 'Gn', 'Gn', 'Gz', 'Gz', 'Gz')]</span></span>)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+germs = _strc.gatestring_list(<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">[('Gx'), ('Gz'), ('Gz', 'Gz', 'Gx'), ('Gz', 'Gz', 'Gx', 'Gz', 'Gx', 'Gx', 'Gx'), ('Gz', 'Gx', 'Gz', 'Gz', 'Gx', 'Gx', 'Gx')]</span></span></span>)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 31</B><BR>Distance between two fragments = 3 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "construction/rpeconstruction.py"<BR>The first line is 447</TD><TD></TD><TD>Source file "construction/rpeconstruction.py"<BR>The first line is 457</TD></TR><TR>
+<TD>
+_mpl.pyplot.ylabel(<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'$\\epsilon_x - \\widehat{\\epsilon_x}$'</span></span>)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+_mpl.pyplot.ylabel(<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'$\\theta_{xz} - \\widehat{\\theta_{xz}}$'</span></span>)</TD>
+</TR>
+<TR>
+<TD>
+_mpl.pyplot.title(((((((((((<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'RPE error in X angle\n% error in Z angle '</span></span>) + (str(percentAlphaError))) + ('%, % error in X angle ')) + (str(percentEpsilonError))) + ('%\n% error in SPAM, ')) + (str((100) * (SPAMerror)))) + ('%, X-Z axis error ')) + (str(Yrot))) + ('\nMedian of ')) + (str(jMax))) + (' Trials'))</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+_mpl.pyplot.title(((((((((((<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'RPE error in X axis angle\n% error in Z angle '</span></span>) + (str(percentAlphaError))) + ('%, % error in X angle ')) + (str(percentEpsilonError))) + ('%\n% error in SPAM, ')) + (str((100) * (SPAMerror)))) + ('%, X-Z axis error ')) + (str(Yrot))) + ('\nMedian of ')) + (str(jMax))) + (' Trials'))</TD>
+</TR>
+<TR>
+<TD>
+_mpl.pyplot.legend()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+_mpl.pyplot.legend()</TD>
+</TR>
+<TR>
+<TD>
+_mpl.pyplot.show()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+_mpl.pyplot.show()</TD>
+</TR>
+<TR>
+<TD>
+_mpl.pyplot.loglog(kList, _np.median(<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">thetaErrorArray</span></span></span>, axis=0), label=('N=') + (str(N)))</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+_mpl.pyplot.loglog(kList, _np.median(<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">PhiFunErrorArray</span></span>, axis=0), label=('N=') + (str(N)))</TD>
+</TR>
+</TABLE> </P> <HR>
+    
+    
+    <HR>
+    Clone Digger is aimed to find software clones in Python and Java programs. It is provided under the GPL license and can be downloaded from the site <a href="http://clonedigger.sourceforge.net">http://clonedigger.sourceforge.net</a>
+    </BODY>
+</HTML>

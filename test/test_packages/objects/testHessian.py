@@ -7,37 +7,15 @@ from pygsti.construction import std1Q_XY as stdxy
 import numpy as np
 import sys, os
 
-class HessianTestCase(unittest.TestCase):
+from ..testutils import BaseTestCase, compare_files, temp_files
+
+class HessianTestCase(BaseTestCase):
 
     def setUp(self):
-        # move working directories
-        self.old = os.getcwd()
-        os.chdir(os.path.abspath(os.path.dirname(__file__)))
+        super(HessianTestCase, self).setUp()
 
-        #Set GateSet objects to "strict" mode for testing
-        pygsti.objects.GateSet._strict = True
-
-        self.gateset = pygsti.io.load_gateset("../cmp_chk_files/analysis.gateset")
-        self.ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/analysis.dataset")
-
-    def tearDown(self):
-        os.chdir(self.old)
-
-    def assertWarns(self, callable, *args, **kwds):
-        with warnings.catch_warnings(record=True) as warning_list:
-            warnings.simplefilter('always')
-            result = callable(*args, **kwds)
-            self.assertTrue(len(warning_list) > 0)
-        return result
-
-    def runSilent(self, callable, *args, **kwds):
-        orig_stdout = sys.stdout
-        sys.stdout = open("../temp_test_files/silent.txt","w")
-        result = callable(*args, **kwds)
-        sys.stdout.close()
-        sys.stdout = orig_stdout
-        return result
-
+        self.gateset = pygsti.io.load_gateset(compare_files + "/analysis.gateset")
+        self.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
 
 class TestHessianMethods(HessianTestCase):
 

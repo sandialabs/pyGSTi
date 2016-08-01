@@ -1,8 +1,9 @@
 from pygsti.objects.verbosityprinter import *
+from ..testutils import BaseTestCase, compare_files, temp_files
 import unittest, sys, os
 
 # The path for a temporary file to be generated in
-filePath        = '../temp_test_files/printer_output.txt'
+filePath        = temp_files + '/printer_output.txt'
 # Some basic messages to make assertions easier
 warningMessage  = 'This might go badly'
 errorMessage    = 'Something terrible happened'
@@ -109,13 +110,7 @@ def _test_output_with(testcase, method, printer):
 
     testcase.assertEqual(generated[0], 'ERROR: %s' % errorMessage)
 
-class TestVerbosePrinter(unittest.TestCase):
-    def setUp(self):
-        self.old = os.getcwd()
-        os.chdir(os.path.abspath(os.path.dirname(__file__)))
-
-    def tearDown(self):
-        os.chdir(self.old)
+class TestVerbosePrinter(BaseTestCase):
 
     def test_file_output(self):
         _test_output_with(self, _to_temp_file, VerbosityPrinter(2, filename=filePath))

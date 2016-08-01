@@ -6,42 +6,15 @@ import numpy as np
 import warnings
 import os
 
-class DataSetTestCase(unittest.TestCase):
+from ..testutils import BaseTestCase, compare_files, temp_files
 
-    def setUp(self):
-        # move working directories
-        self.old = os.getcwd()
-        os.chdir(os.path.abspath(os.path.dirname(__file__)))
-
-        #Set GateSet objects to "strict" mode for testing
-        pygsti.objects.GateSet._strict = True
-
-    def tearDown(self):
-        os.chdir(self.old)
+class DataSetTestCase(BaseTestCase):
 
     def assertEqualDatasets(self, ds1, ds2):
         self.assertEqual(len(ds1),len(ds2))
         for gatestring in ds1:
             self.assertAlmostEqual( ds1[gatestring]['plus'], ds2[gatestring]['plus'], places=3 )
             self.assertAlmostEqual( ds1[gatestring]['minus'], ds2[gatestring]['minus'], places=3 )
-
-    def assertWarns(self, callable, *args, **kwds):
-        with warnings.catch_warnings(record=True) as warning_list:
-            warnings.simplefilter('always')
-            result = callable(*args, **kwds)
-            self.assertTrue(len(warning_list) > 0)
-        return result
-
-    def isPython2(self):
-        #Check if interpreter is python2 by checking for basestring
-        #  (which is only defined in python2)
-        try:
-            basestring
-        except NameError:
-            return False
-        return True
-
-
 
 class TestDataSetMethods(DataSetTestCase):
 
@@ -77,10 +50,10 @@ class TestDataSetMethods(DataSetTestCase):
         self.assertAlmostEqual(ds[('Gx',)].fraction('plus'), 0.1)
 
         #Pickle and unpickle
-        with open('../temp_test_files/dataset.pickle', 'wb') as datasetfile:
+        with open(temp_files + '/dataset.pickle', 'wb') as datasetfile:
             pickle.dump(ds, datasetfile)
         ds_from_pkl = None
-        with open('../temp_test_files/dataset.pickle', 'rb') as datasetfile:
+        with open(temp_files + '/dataset.pickle', 'rb') as datasetfile:
             ds_from_pkl = pickle.load(datasetfile)
         self.assertEqual(ds_from_pkl[('Gx',)]['plus'], 10)
         self.assertAlmostEqual(ds_from_pkl[('Gx',)].fraction('plus'), 0.1)
@@ -154,24 +127,24 @@ class TestDataSetMethods(DataSetTestCase):
         ds4_copy = ds4.copy() #static
 
         #Loading and saving
-        ds2.save("../temp_test_files/nonstatic_dataset.saved")
-        ds2.save("../temp_test_files/nonstatic_dataset.saved.gz")
-        with open("../temp_test_files/nonstatic_dataset.stream","wb") as streamfile:
+        ds2.save(temp_files + "/nonstatic_dataset.saved")
+        ds2.save(temp_files + "/nonstatic_dataset.saved.gz")
+        with open(temp_files + "/nonstatic_dataset.stream","wb") as streamfile:
             ds2.save(streamfile)
 
-        ds4.save("../temp_test_files/static_dataset.saved")
-        ds4.save("../temp_test_files/static_dataset.saved.gz")
-        with open("../temp_test_files/static_dataset.stream","wb") as streamfile:
+        ds4.save(temp_files + "/static_dataset.saved")
+        ds4.save(temp_files + "/static_dataset.saved.gz")
+        with open(temp_files + "/static_dataset.stream","wb") as streamfile:
             ds4.save(streamfile)
 
-        ds2.load("../temp_test_files/nonstatic_dataset.saved")
-        ds2.load("../temp_test_files/nonstatic_dataset.saved.gz")
-        with open("../temp_test_files/nonstatic_dataset.stream","rb") as streamfile:
+        ds2.load(temp_files + "/nonstatic_dataset.saved")
+        ds2.load(temp_files + "/nonstatic_dataset.saved.gz")
+        with open(temp_files + "/nonstatic_dataset.stream","rb") as streamfile:
             ds2.load(streamfile)
 
-        ds4.load("../temp_test_files/static_dataset.saved")
-        ds4.load("../temp_test_files/static_dataset.saved.gz")
-        with open("../temp_test_files/static_dataset.stream","rb") as streamfile:
+        ds4.load(temp_files + "/static_dataset.saved")
+        ds4.load(temp_files + "/static_dataset.saved.gz")
+        with open(temp_files + "/static_dataset.stream","rb") as streamfile:
             ds2.load(streamfile)
 
         #Test various other methods
@@ -180,7 +153,7 @@ class TestDataSetMethods(DataSetTestCase):
         asStr = str(ds[('Gx',)])
 
         #Test loading a deprecated dataset file
-        dsDeprecated = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/deprecated.dataset")
+        dsDeprecated = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/deprecated.dataset")
 
 
 
@@ -193,9 +166,9 @@ Gx 10 90
 GxGy 40 60
 Gx^4 20 80
 """
-        with open("../temp_test_files/TinyDataset.txt","w") as output:
+        with open(temp_files + "/TinyDataset.txt","w") as output:
             output.write(dataset_txt)
-        ds = pygsti.io.load_dataset("../temp_test_files/TinyDataset.txt")
+        ds = pygsti.io.load_dataset(temp_files + "/TinyDataset.txt")
         self.assertEqual(ds[()]['plus'], 0)
         self.assertEqual(ds[('Gx','Gy')]['minus'], 60)
 
@@ -206,9 +179,9 @@ Gx 0.1 100
 GxGy 0.4 100
 Gx^4 0.2 100
 """
-        with open("../temp_test_files/TinyDataset2.txt","w") as output:
+        with open(temp_files + "/TinyDataset2.txt","w") as output:
             output.write(dataset_txt2)
-        ds2 = pygsti.io.load_dataset("../temp_test_files/TinyDataset2.txt")
+        ds2 = pygsti.io.load_dataset(temp_files + "/TinyDataset2.txt")
         self.assertEqualDatasets(ds, ds2)
 
 
@@ -253,10 +226,10 @@ Gx^4 0.2 100
 
 
         # TO SEED SAVED FILE, RUN THIS:
-        #pygsti.io.write_dataset("../cmp_chk_files/Fake_Dataset_none.txt", ds_none,  gateStrings)
-        #pygsti.io.write_dataset("../cmp_chk_files/Fake_Dataset_round.txt", ds_round, gateStrings)
-        #pygsti.io.write_dataset("../cmp_chk_files/Fake_Dataset_binom.txt", ds_binom, gateStrings)
-        #pygsti.io.write_dataset("../cmp_chk_files/Fake_Dataset_multi.txt", ds_multi, gateStrings)
+        #pygsti.io.write_dataset(compare_files + "/Fake_Dataset_none.txt", ds_none,  gateStrings)
+        #pygsti.io.write_dataset(compare_files + "/Fake_Dataset_round.txt", ds_round, gateStrings)
+        #pygsti.io.write_dataset(compare_files + "/Fake_Dataset_binom.txt", ds_binom, gateStrings)
+        #pygsti.io.write_dataset(compare_files + "/Fake_Dataset_multi.txt", ds_multi, gateStrings)
 
         bDeepTesting = bool( 'PYGSTI_DEEP_TESTING' in os.environ and
                              os.environ['PYGSTI_DEEP_TESTING'].lower() in ("yes","1","true") )
@@ -265,16 +238,16 @@ Gx^4 0.2 100
           # datasets will be equal.
 
 
-        saved_ds = pygsti.io.load_dataset("../cmp_chk_files/Fake_Dataset_none.txt", cache=True)
+        saved_ds = pygsti.io.load_dataset(compare_files + "/Fake_Dataset_none.txt", cache=True)
         self.assertEqualDatasets(ds_none, saved_ds)
 
-        saved_ds = pygsti.io.load_dataset("../cmp_chk_files/Fake_Dataset_round.txt")
+        saved_ds = pygsti.io.load_dataset(compare_files + "/Fake_Dataset_round.txt")
         self.assertEqualDatasets(ds_round, saved_ds)
 
-        saved_ds = pygsti.io.load_dataset("../cmp_chk_files/Fake_Dataset_binom.txt")
+        saved_ds = pygsti.io.load_dataset(compare_files + "/Fake_Dataset_binom.txt")
         if bDeepTesting and self.isPython2(): self.assertEqualDatasets(ds_binom, saved_ds)
 
-        saved_ds = pygsti.io.load_dataset("../cmp_chk_files/Fake_Dataset_multi.txt")
+        saved_ds = pygsti.io.load_dataset(compare_files + "/Fake_Dataset_multi.txt")
         if bDeepTesting and self.isPython2(): self.assertEqualDatasets(ds_multi, saved_ds)
 
         #Now test RB and RPE datasets
@@ -325,9 +298,9 @@ Gx 10 90 0.1 100
 GxGy 40 60 0.4 100
 Gx^4 20 80 0.2 100
 """
-        with open("../temp_test_files/TinyMultiDataset.txt","w") as output:
+        with open(temp_files + "/TinyMultiDataset.txt","w") as output:
             output.write(multi_dataset_txt)
-        multiDS = pygsti.io.load_multidataset("../temp_test_files/TinyMultiDataset.txt", cache=True)
+        multiDS = pygsti.io.load_multidataset(temp_files + "/TinyMultiDataset.txt", cache=True)
 
         bad_multi_dataset_txt = \
 """## Columns = DS0 plus count, DS0 minus count, DS1 plus frequency, DS1 count total
@@ -336,10 +309,10 @@ FooBar 10 90 0.1 100
 GxGy 40 60 0.4 100
 Gx^4 20 80 0.2 100
 """
-        with open("../temp_test_files/BadTinyMultiDataset.txt","w") as output:
+        with open(temp_files + "/BadTinyMultiDataset.txt","w") as output:
             output.write(bad_multi_dataset_txt)
         with self.assertRaises(ValueError):
-            pygsti.io.load_multidataset("../temp_test_files/BadTinyMultiDataset.txt")
+            pygsti.io.load_multidataset(temp_files + "/BadTinyMultiDataset.txt")
 
         gstrs = [ ('Gx',), ('Gx','Gy'), ('Gy',) ]
         gstrInds = collections.OrderedDict( [ (('Gx',),0),  (('Gx','Gy'),1), (('Gy',),2) ] )
@@ -412,24 +385,24 @@ Gx^4 20 80 0.2 100
 
 
         #Pickle and unpickle
-        with open('../temp_test_files/multidataset.pickle', 'wb') as picklefile:
+        with open(temp_files + '/multidataset.pickle', 'wb') as picklefile:
             pickle.dump(multiDS, picklefile)
         mds_from_pkl = None
-        with open('../temp_test_files/multidataset.pickle', 'rb') as picklefile:
+        with open(temp_files + '/multidataset.pickle', 'rb') as picklefile:
             mds_from_pkl = pickle.load(picklefile)
         self.assertEqual(mds_from_pkl['DS0'][('Gx',)]['plus'], 10)
 
         #Loading and saving
-        multiDS.save("../temp_test_files/multidataset.saved")
-        multiDS.save("../temp_test_files/multidataset.saved.gz")
-        with open("../temp_test_files/multidataset.stream","wb") as streamfile:
+        multiDS.save(temp_files + "/multidataset.saved")
+        multiDS.save(temp_files + "/multidataset.saved.gz")
+        with open(temp_files + "/multidataset.stream","wb") as streamfile:
             multiDS.save(streamfile)
 
-        multiDS.load("../temp_test_files/multidataset.saved")
-        multiDS.load("../temp_test_files/multidataset.saved.gz")
-        with open("../temp_test_files/multidataset.stream","rb") as streamfile:
+        multiDS.load(temp_files + "/multidataset.saved")
+        multiDS.load(temp_files + "/multidataset.saved.gz")
+        with open(temp_files + "/multidataset.stream","rb") as streamfile:
             multiDS.load(streamfile)
-        multiDS2 = pygsti.obj.MultiDataSet(fileToLoadFrom="../temp_test_files/multidataset.saved")
+        multiDS2 = pygsti.obj.MultiDataSet(fileToLoadFrom=temp_files + "/multidataset.saved")
 
 
 

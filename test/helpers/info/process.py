@@ -1,27 +1,7 @@
 from ..automation_tools import directory, get_files
 from shutil import copyfile
+from .genInfo import convert_packagename
 import os
-
-
-def update_if_higher(dictionary, key, value):
-    if key in dictionary:
-        if dictionary[key] < value:
-            print(dictionary[key], value)
-            dictionary[key] = value
-    else:
-        dictionary[key] = value
-
-# Generate dict of form: { modulename : percentage } for percentages below threshold
-def find_uncovered(packageDict, threshold=90):
-    uncoveredDict = {}
-    for filename, fileDict in packageDict.items():
-        for caseDict in fileDict.values():
-            for testinfo, _ in caseDict.values():
-                for modulename, moduleinfo in testinfo.items():
-                    update_if_higher(uncoveredDict, modulename, moduleinfo[0])
-    uncoveredDict = { key : value for (key, value) in uncoveredDict.items() if value < threshold }
-    return uncoveredDict
-
 
 # Generate dict of form: { modulename : percentage } for percentages below threshold
 def find_uncovered_lines(packageDict):
@@ -36,12 +16,16 @@ def find_uncovered_lines(packageDict):
                         uncoveredLineDict[modulename] = uncoveredLineDict[modulename].intersection(set(moduleinfo[1]))
     return uncoveredLineDict
 
-
 def annotate_uncovered(packageName, infoDict):
+
+    def do_annotate(line):
+        return ('\\' not in line and
+                line.replace(' ', '') != '' and
+                'pylint' not in line)
+
     uncoveredLineDict = find_uncovered_lines(infoDict[packageName])
-    with directory('../packages/pygsti/%s' % packageName):
+    with directory('../packages/pygsti/%s' % convert_packagename(packageName)):
         files = [filename for filename in get_files(os.getcwd()) if filename in uncoveredLineDict]
-        print(files)
         for filename in files:
             copyfile(filename, filename + '.bak')
             with open(filename, 'r') as source:
@@ -49,9 +33,27 @@ def annotate_uncovered(packageName, infoDict):
 
             uncoveredLines = uncoveredLineDict[filename]
             for i, line in enumerate(content):
-                content[i].replace('#!*uncovered*!', '') # Remove old annotations
-                if (i+1) in uncoveredLines:
-                    content[i] += '#!*uncovered*!'
+                content[i] = content[i].replace('# uncovered!', '') # Remove old annotations
+                if (i+1) in uncoveredLines and do_annotate(content[i]):
+                    content[i] = content[i].ljust(100) + ' # uncovered!'
             print('Annotating %s' % filename)
+            with open(filename, 'w') as source:
+                source.write('\n'.join(content))
+
+
+def unannotate(packageName):
+    with directory('../packages/pygsti/%s' % convert_packagename(packageName)):
+        print(os.getcwd())
+        files = [filename for filename in get_files(os.getcwd()) if filename.endswith('py')]
+        print(files)
+        for filename in files:
+            print('Unannotating %s' % filename)
+
+            with open(filename, 'r') as source:
+                content = source.read().splitlines()
+
+            for i, line in enumerate(content):
+                content[i] = content[i].replace('# uncovered!', '') # Remove old annotations
+
             with open(filename, 'w') as source:
                 source.write('\n'.join(content))

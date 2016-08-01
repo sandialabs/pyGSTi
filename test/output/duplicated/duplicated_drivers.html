@@ -1,0 +1,182 @@
+
+<HTML>
+    <HEAD>
+        <TITLE> CloneDigger Report </TITLE>
+        <script type="text/javascript">
+        function unhide(divID) {
+            var item = document.getElementById(divID);
+            if (item) {
+                item.className=(item.className=='hidden')?'unhidden':'hidden';
+            }
+        }
+</script>
+
+<style type="text/css">
+.hidden { display: none; }
+.unhidden { display: block; }
+.preformatted {
+        border: 1px dashed #3c78b5;
+    font-size: 11px;
+        font-family: Courier;
+    margin: 10px;
+        line-height: 13px;
+}
+.preformattedHeader {
+    background-color: #f0f0f0;
+        border-bottom: 1px dashed #3c78b5;
+    padding: 3px;
+        text-align: center;
+}
+.preformattedContent {
+    background-color: #f0f0f0;
+    padding: 3px;
+}
+<!--
+<div class="preformatted"><div class="preformattedContent">
+<pre>Clone Digger
+</pre>
+</div></div>
+-->
+
+</style>
+
+    </HEAD>
+    <BODY>
+    
+    
+    <P>Source files: 3</P>
+        <a href = "javascript:unhide('files');">Click here to show/hide file names</a><div id="files" class="hidden"><P><B>Source files:</B><BR>drivers/bootstrap.py, <BR>drivers/__init__.py, <BR>drivers/longsequence.py</P></div>
+        <P>Clones detected: 5</P>
+        <P>54 of 345 lines are duplicates (15.65%) </P>
+<P>
+<B>Parameters<BR> </B>
+clustering_threshold = 10<BR>
+distance_threshold = 5<BR>
+size_threshold = 5<BR>
+hashing_depth = 1<BR>
+clusterize_using_hash = False<BR>
+clusterize_using_dcup = False<BR>
+</P> 
+        
+    <B>Time elapsed</B><BR>Construction of AST : 0.06 seconds<BR>
+Building statement hash : 0.00 seconds<BR>
+Building patterns : 0.10 seconds<BR>
+Marking similar statements : 0.09 seconds<BR>
+Finding similar sequences of statements : 0.02 seconds<BR>
+Refining candidates : 0.03 seconds<BR>
+ Total time: 0.29<BR>
+ Started at: Mon Aug  1 06:55:47 2016<BR>
+ Finished at: Mon Aug  1 06:55:47 2016
+    <P><B>Clone # 1</B><BR>Distance between two fragments = 4 <BR>Clone size = 10<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "drivers/bootstrap.py"<BR>The first line is 399</TD><TD></TD><TD>Source file "drivers/bootstrap.py"<BR>The first line is 393</TD></TR><TR>
+<TD>
+def <span style="color: rgb(255, 0, 0);">gateset_decomp_decay_diag</span>(gs):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;output = _np.zeros(3, dtype=float)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for i, gate in enumerate(gs.gates.keys()):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;output[i] = _tools.decompose_gate_matrix(gs.gates[gate]).get(<span style="color: rgb(255, 0, 0);">'decay of diagonal rotation terms'</span>, 0)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return output</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+def <span style="color: rgb(255, 0, 0);">gateset_decomp_angle</span>(gs):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;output = _np.zeros(3, dtype=float)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for i, gate in enumerate(gs.gates.keys()):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;output[i] = _tools.decompose_gate_matrix(gs.gates[gate]).get(<span style="color: rgb(255, 0, 0);">'pi rotations'</span>, 0)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return output</TD>
+</TR>
+<TR>
+<TD>
+def <span style="color: rgb(255, 0, 0);">gateset_decomp_decay_offdiag</span>(gs):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;output = _np.zeros(3, dtype=float)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for i, gate in enumerate(gs.gates.keys()):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;output[i] = _tools.decompose_gate_matrix(gs.gates[gate]).get(<span style="color: rgb(255, 0, 0);">'decay of off diagonal rotation terms'</span>, 0)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return output</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+def <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">gateset_decomp_decay_diag</span></span>(gs):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;output = _np.zeros(3, dtype=float)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for i, gate in enumerate(gs.gates.keys()):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;output[i] = _tools.decompose_gate_matrix(gs.gates[gate]).get(<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'decay of diagonal rotation terms'</span></span>, 0)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return output</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 2</B><BR>Distance between two fragments = 4 <BR>Clone size = 10<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "drivers/bootstrap.py"<BR>The first line is 315</TD><TD></TD><TD>Source file "drivers/bootstrap.py"<BR>The first line is 266</TD></TR><TR>
+<TD>
+print((<span style="color: rgb(255, 0, 0);">'Best SPAM weight is %s'</span>) % (<span style="color: rgb(255, 0, 0);">bestSPAMWeight</span>))</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+print((<span style="color: rgb(255, 0, 0);">'Spam weight %s'</span>) % (<span style="color: rgb(255, 0, 0);">spWind</span>))</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">listOfBootStrapEstsG0toTargetSmallSpam</span> = []</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);">listOfBootStrapEstsNoOptG0toTargetVarSpam</span> = []</TD>
+</TR>
+<TR>
+<TD>
+for gs in listOfBootStrapEstsNoOpt:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">listOfBootStrapEstsG0toTargetSmallSpam</span>.append(_alg.optimize_gauge(gs, 'target', targetGateset=targetGateset, spamWeight=<span style="color: rgb(255, 0, 0);">bestSPAMWeight</span>, constrainToTP=constrainToTP, targetGatesMetric=gateMetric, targetSpamMetric=spamMetric))</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+for gs in listOfBootStrapEstsNoOpt:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">listOfBootStrapEstsNoOptG0toTargetVarSpam</span>.append(_alg.optimize_gauge(gs, 'target', targetGateset=targetGateset, spamWeight=<span style="color: rgb(255, 0, 0);">spW</span>, constrainToTP=constrainToTP, targetGatesMetric=gateMetric, targetSpamMetric=spamMetric))</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 3</B><BR>Distance between two fragments = 2 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "drivers/bootstrap.py"<BR>The first line is 380</TD><TD></TD><TD>Source file "drivers/bootstrap.py"<BR>The first line is 417</TD></TR><TR>
+<TD>
+def <span style="color: rgb(255, 0, 0);">gateset_jtracedist</span>(gs, gs_target, mxBasis='gm'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;output = _np.zeros(3, dtype=float)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for i, gate in enumerate(gs_target.gates.keys()):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;output[i] = _tools.<span style="color: rgb(255, 0, 0);">jtracedist</span>(gs.gates[gate], gs_target.gates[gate], mxBasis=mxBasis)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return output</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+def <span style="color: rgb(255, 0, 0);">gateset_diamonddist</span>(gs, gs_target, mxBasis='gm'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;output = _np.zeros(3, dtype=float)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for i, gate in enumerate(gs_target.gates.keys()):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;output[i] = _tools.<span style="color: rgb(255, 0, 0);">diamonddist</span>(gs.gates[gate], gs_target.gates[gate], mxBasis=mxBasis)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return output</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 4</B><BR>Distance between two fragments = 0 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "drivers/bootstrap.py"<BR>The first line is 363</TD><TD></TD><TD>Source file "drivers/bootstrap.py"<BR>The first line is 354</TD></TR><TR>
+<TD>
+numResamples = len(gsList)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+numResamples = len(gsList)</TD>
+</TR>
+<TR>
+<TD>
+gsVecArray = _np.zeros([numResamples], dtype='object')</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+gsVecArray = _np.zeros([numResamples], dtype='object')</TD>
+</TR>
+<TR>
+<TD>
+for i in range(numResamples):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gsVecArray[i] = gsList[i].to_vector()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+for i in range(numResamples):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gsVecArray[i] = gsList[i].to_vector()</TD>
+</TR>
+<TR>
+<TD>
+output_gs = target_gs.copy()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+output_gs = target_gs.copy()</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 5</B><BR>Distance between two fragments = 2 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "drivers/bootstrap.py"<BR>The first line is 405</TD><TD></TD><TD>Source file "drivers/bootstrap.py"<BR>The first line is 393</TD></TR><TR>
+<TD>
+def <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">gateset_decomp_decay_offdiag</span></span>(gs):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;output = _np.zeros(3, dtype=float)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for i, gate in enumerate(gs.gates.keys()):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;output[i] = _tools.decompose_gate_matrix(gs.gates[gate]).get(<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'decay of off diagonal rotation terms'</span></span>, 0)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return output</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+def <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">gateset_decomp_angle</span></span>(gs):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;output = _np.zeros(3, dtype=float)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for i, gate in enumerate(gs.gates.keys()):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;output[i] = _tools.decompose_gate_matrix(gs.gates[gate]).get(<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">'pi rotations'</span></span>, 0)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return output</TD>
+</TR>
+</TABLE> </P> <HR>
+    
+    
+    <HR>
+    Clone Digger is aimed to find software clones in Python and Java programs. It is provided under the GPL license and can be downloaded from the site <a href="http://clonedigger.sourceforge.net">http://clonedigger.sourceforge.net</a>
+    </BODY>
+</HTML>

@@ -5,13 +5,12 @@ import warnings
 import pickle
 import os
 
-class GateSetTestCase(unittest.TestCase):
+from ..testutils import BaseTestCase, compare_files, temp_files
+
+class GateSetTestCase(BaseTestCase):
 
     def setUp(self):
-
-        # move working directories
-        self.old = os.getcwd()
-        os.chdir(os.path.abspath(os.path.dirname(__file__)))
+        super(GateSetTestCase, self).setUp()
 
         #OK for these tests, since we test user interface?
         #Set GateSet objects to "strict" mode for testing
@@ -42,32 +41,6 @@ class GateSetTestCase(unittest.TestCase):
             spamdefs={'plus': ('rho0','E0'),
                            'minus': ('rho0','remainder') },
             parameterization="static")
-
-    def tearDown(self):
-        os.chdir(self.old)
-
-    def assertArraysAlmostEqual(self,a,b):
-        self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
-
-    def assertSingleElemArrayAlmostEqual(self, a, b):
-        # Ex given an array [[ 0.095 ]] and 0.095, call assertAlmostEqual(0.095, 0.095)
-        if a.size > 1:
-            raise ValueError('assertSingleElemArrayAlmostEqual should only be used on single element arrays')
-        self.assertAlmostEqual(float(a), b)
-
-    def assertNoWarnings(self, callable, *args, **kwds):
-        with warnings.catch_warnings(record=True) as warning_list:
-            warnings.simplefilter('always')
-            result = callable(*args, **kwds)
-            self.assertTrue(len(warning_list) == 0)
-        return result
-
-    def assertWarns(self, callable, *args, **kwds):
-        with warnings.catch_warnings(record=True) as warning_list:
-            warnings.simplefilter('always')
-            result = callable(*args, **kwds)
-            self.assertTrue(len(warning_list) > 0)
-        return result
 
 
 class TestGateSetMethods(GateSetTestCase):

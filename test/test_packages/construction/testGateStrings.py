@@ -3,19 +3,9 @@ import copy
 import pygsti
 import os
 
-class GateStringTestCase(unittest.TestCase):
+from ..testutils import BaseTestCase, compare_files, temp_files
 
-    def setUp(self):
-        # move working directories
-        self.old = os.getcwd()
-        os.chdir(os.path.abspath(os.path.dirname(__file__)))
-        #Set GateSet objects to "strict" mode for testing
-        pygsti.objects.GateSet._strict = True
-
-    def tearDown(self):
-        os.chdir(self.old)
-
-class TestGateStringMethods(GateStringTestCase):
+class TestGateStringMethods(BaseTestCase):
     def test_simple(self):
         #The workhorse function is pygsti.construction.create_gatestring_list, which executes its positional arguments within a nested
         # loop given by iterable keyword arguments.  That's a mouthful, so let's look at a few examples:

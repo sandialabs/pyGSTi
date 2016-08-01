@@ -4,33 +4,8 @@ from helpers.test.runPackage  import run_package
 from helpers.automation_tools import directory
 import subprocess, sys, os
 
-doReport  = os.environ.get('Report',  'False')
-doDrivers = os.environ.get('Drivers', 'False')
-
-# I'm doing string comparison rather than boolean comparison because, in python, bool('False') evaluates to true
-# Build the list of packages to test depending on which portion of the build matrix is running
-
-if doReport == 'True':
-    travisPackages = ['report']
-elif doDrivers == 'True':
-    travisPackages = ['drivers']
-else:
-    travisPackages = ['tools', 'objects', 'construction', 'iotest', 'optimize', 'algorithms']
-
-results = []
-with directory('test_packages'):
-    for package in travisPackages:
-        result = run_package(package)
-        results.append((result, package))
-
-failed = [(result[1], result[0][1]) for result in results if not result[0][0]]
-
-if len(failed) > 0:
-    for failure in failed:
-        print('%s Failed: %s' % (failure[0], failure[1]))
-    sys.exit(1)
-
 def run_specific(commands):
+    print(commands)
     try:
         output = subprocess.check_output(commands)
     except subprocess.CalledProcessError as e:
@@ -43,11 +18,54 @@ def run_specific(commands):
         return False
     return True
 
-# Run specific tests in report and drivers that get large coverage over a short time
-report = run_specific(['python', 'test_packages/report/testReport.py', 'TestReport.test_reports_logL_TP_wCIs'])
-if not report:
+doReportA = os.environ.get('ReportA',  'False')
+doReportB = os.environ.get('ReportB',  'False')
+doDrivers = os.environ.get('Drivers', 'False')
+doDefault = os.environ.get('Default',   'False')
+
+# I'm doing string comparison rather than boolean comparison because, in python, bool('False') evaluates to true
+# Build the list of packages to test depending on which portion of the build matrix is running
+
+individuals    = []
+travisPackages = []
+
+# Only testReport.py (barely finishes in time!)
+if doReportA == 'True':
+    individuals    = [['test_packages/report/testReport.py']] # Maybe this single test wont time out? :)
+
+# All other reports tests
+elif doReportB == 'True':
+    individuals = [['test_packages/report/%s' % filename] for filename in (
+        'testAnalysis.py',
+        'testEBFormatters.py',
+        'testMetrics.py',
+        'testPrecisionFormatter.py')]
+
+# Drivers configuration: run specific drivers tests only
+elif doDrivers == 'True':
+    travisPackages = ['drivers']
+
+elif doDefault == 'True':
+    travisPackages = ['objects', 'tools', 'iotest', 'optimize', 'algorithms']
+
+# Begin by running all of the packages in the current test matrix
+results = []
+with directory('test_packages'):
+    for package in travisPackages:
+        print('Running %s' % package)
+        result = run_package(package)
+        results.append((result, package))
+
+failed = [(result[1], result[0][1]) for result in results if not result[0][0]]
+
+if len(failed) > 0:
+    for failure in failed:
+        print('%s Failed: %s' % (failure[0], failure[1]))
     sys.exit(1)
-drivers = run_specific(['python', 'test_packages/drivers/testDrivers.py', 'TestDriversMethods.test_bootstrap'])
-if not drivers:
-    sys.exit(1)
-sys.exit(0)
+
+# Now run all of the specific tests
+for individual in individuals:
+    print('Running %s' % individual)
+    result = run_specific(['python', '-m', 'nose'] + individual)
+    if not result:
+        sys.exit(1)

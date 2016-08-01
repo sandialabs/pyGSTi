@@ -26,8 +26,6 @@ if __name__ == "__main__":
                             help='run only the changed packages')
         parser.add_argument('--fast', '-f', type=bool,
                             help='run only the faster packages')
-        parser.add_argument('--nose', '-n', type=bool,
-                            help='run tests with nosetests')
         parser.add_argument('--lastFailed', '-l', type=bool,
                             help='run last failed tests only')
 
@@ -40,6 +38,7 @@ if __name__ == "__main__":
             pythonCommands = ['python%s.%s' % (sys.version_info[0], sys.version_info[1])]
         else:
             pythonCommands = ['python%s' % parsed.version]
+        pythonCommands += ['-m', 'nose']
 
         if parsed.fast:
             exclude += slowTests # Shave off ~3 hrs?
@@ -49,10 +48,6 @@ if __name__ == "__main__":
             packageNames = [name for name in get_changed_test_packages() if name in parsed.packages]
         else:
             packageNames = parsed.packages
-
-        # Only running tests
-        if parsed.nose:
-            pythonCommands += ['-m', 'nose']
 
         print('Running packages %s' % (', '.join(packageNames)))
 
