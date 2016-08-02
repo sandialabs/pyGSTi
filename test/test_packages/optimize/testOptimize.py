@@ -5,6 +5,8 @@ import sys
 import warnings
 import os
 
+from ..testutils import BaseTestCase, temp_files, compare_files 
+
 def f(x):
     return np.dot(x,x)
 
@@ -14,25 +16,12 @@ def f_vec(x):
 def jac(x):
     return 2*x[None,:]
 
-class OptimizeTestCase(unittest.TestCase):
+class OptimizeTestCase(BaseTestCase):
 
     def setUp(self):
-        # move working directories
-        self.old = os.getcwd()
-        os.chdir(os.path.abspath(os.path.dirname(__file__)))
-
-        #Set GateSet objects to "strict" mode for testing
-        pygsti.objects.GateSet._strict = True
-
+        super(OptimizeTestCase, self).setUp()
         self.x0 = np.array( [10,5], 'd')
         self.answer = np.array( [0,0], 'd')
-
-    def tearDown(self):
-        os.chdir(self.old)
-
-    def assertArraysAlmostEqual(self,a,b):
-        self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
-
 
 class TestOptimizeMethods(OptimizeTestCase):
 
