@@ -134,36 +134,37 @@ def make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
 
     for maxLen in maxLengthList:
 
-        if rndm is None:
-            fiducialPairsThisIter = fiducialPairs
+        lst = []
+        for germ in germList:
+            if rndm is None:
+                fiducialPairsThisIter = fiducialPairs
+    
+            elif fidPairs is not None:
+                remainingPairs = [ (prepStrs[i],effectStrs[j])
+                                   for i in range(len(prepStrs))
+                                   for j in range(len(effectStrs))
+                                   if (i,j) not in fidPairs ]
+                nPairsRemaining = len(remainingPairs)
+                nPairsToChoose = nPairsToKeep-len(fidPairs)
+                nPairsToChoose = max(0,min(nPairsToChoose,nPairsRemaining))
+                assert(0 <= nPairsToChoose <= nPairsRemaining)
+                # FUTURE: issue warnings when clipping nPairsToChoose?
+    
+                fiducialPairsThisIter = fiducialPairs + \
+                    [ remainingPairs[k] for k in
+                      sorted(rndm.choice(nPairsRemaining,nPairsToChoose,
+                                         replace=False))]
+    
+            else: # rndm is not None and fidPairs is None
+                assert(nPairsToKeep <= nPairs) # keepFraction must be <= 1.0
+                fiducialPairsThisIter = \
+                    [ fiducialPairs[k] for k in
+                      sorted(rndm.choice(nPairs,nPairsToKeep,replace=False))]
 
-        elif fidPairs is not None:
-            remainingPairs = [ (prepStrs[i],effectStrs[j])
-                               for i in range(len(prepStrs))
-                               for j in range(len(effectStrs))
-                               if (i,j) not in fidPairs ]
-            nPairsRemaining = len(remainingPairs)
-            nPairsToChoose = nPairsToKeep-len(fidPairs)
-            nPairsToChoose = max(0,min(nPairsToChoose,nPairsRemaining))
-            assert(0 <= nPairsToChoose <= nPairsRemaining)
-            # FUTURE: issue warnings when clipping nPairsToChoose?
-
-            fiducialPairsThisIter = fiducialPairs + \
-                [ remainingPairs[k] for k in
-                  sorted(rndm.choice(nPairsRemaining,nPairsToChoose,
-                                     replace=False))]
-
-        else: # rndm is not None and fidPairs is None
-            assert(nPairsToKeep <= nPairs) # keepFraction must be <= 1.0
-            fiducialPairsThisIter = \
-                [ fiducialPairs[k] for k in
-                  sorted(rndm.choice(nPairs,nPairsToKeep,replace=False))]
-
-
-        lst = _gsc.create_gatestring_list("f[0]+R(germ,N)+f[1]",
-                                          f=fiducialPairsThisIter,
-                                          germ=germList, N=maxLen,
-                                          R=Rfn, order=('germ','f'))
+            lst += _gsc.create_gatestring_list("f[0]+R(germ,N)+f[1]",
+                                              f=fiducialPairsThisIter,
+                                              germ=germ, N=maxLen,
+                                              R=Rfn, order=('f',))
         if nest:
             lsgst_list += lst #add new strings to running list
             lsgst_listOfLists.append( _lt.remove_duplicates(lgstStrings + lsgst_list) )
