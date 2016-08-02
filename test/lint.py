@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 from helpers.pylint           import get_score, look_for, find_warnings, find_errors, run_adjustables, lint_all
-from helpers.automation_tools import read_yaml, write_yaml
+from helpers.automation_tools import read_json, write_json
 import sys
 import argparse
 
 
 def check_score(on=lint_all):
-    yamlFile = 'config/pylint_config.yml'
+    jsonFile = 'config/pylint_config.json'
 
-    config       = read_yaml(yamlFile)
+    config       = read_json(jsonFile)
     desiredScore = config['desired-score']
     print('Score should be: %s' % desiredScore)
     score        = get_score(on)
@@ -17,7 +17,7 @@ def check_score(on=lint_all):
     if on == lint_all:
         if float(score) >= float(desiredScore):
             config['desired-score'] = score # Update the score if it is higher than the last one
-            write_yaml(config, yamlFile)
+            write_json(config, jsonFile)
             sys.exit(0)
         else:
             sys.exit(1)
