@@ -84,13 +84,13 @@ if __name__ == "__main__":
                         help='list of packages to run tests for')
     parser.add_argument('--version', '-v', type=str,
                         help='version of python to run the tests under')
-    parser.add_argument('--changed', '-c', type=bool,
+    parser.add_argument('--changed', '-c', action='store_true',
                         help='run only the changed packages')
-    parser.add_argument('--fast', '-f', type=bool,
+    parser.add_argument('--fast', '-f', action='store_true',
                         help='run only the faster packages')
-    parser.add_argument('--failed', type=bool,
+    parser.add_argument('--failed', action='store_true',
                         help='run last failed tests only')
-    parser.add_argument('--parallel', '-p', type=bool,
+    parser.add_argument('--parallel', '-p', action='store_true',
                         help='run last failed tests only')
 
     parsed = parser.parse_args(sys.argv[1:])

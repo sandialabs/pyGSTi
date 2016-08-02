@@ -20,7 +20,7 @@ if __name__ == "__main__":
         subprocess.call(['git', 'checkout', branchname])
         os.system('rm -rf temp_html') # yikes!
 
-    passes = run_pylint(['./lint.py', '--noerrors=True']) # Can't push to origin if pylint finds any errors!
+    passes = run_pylint(['./lint.py', '--noerrors']) # Can't push to origin if pylint finds any errors!
     if int(passes) > 0:
         sys.exit(1)
     '''

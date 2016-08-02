@@ -8,7 +8,7 @@ if __name__ == '__main__':
     branchname = get_branchname()
     if branchname in requires_pylint_pass:
         # Compare current pylint score against that in pylint/config.yml
-        passes = run_pylint(['./lint.py', '--score=True']) 
+        passes = run_pylint(['./lint.py', '--score']) 
         sys.exit(int(passes))
 
     '''

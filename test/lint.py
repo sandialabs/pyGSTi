@@ -29,15 +29,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Lint pygsti')
     parser.add_argument('specific', nargs='*',
                         help='lint for specific items')
-    parser.add_argument('--score', '-s', type=bool,
+    parser.add_argument('--score', '-s', action='store_true',
                         help='check the current repo\'s score against the last-highest score')
-    parser.add_argument('--errors', '-e', type=bool,
+    parser.add_argument('--errors', '-e', action='store_true',
                         help='check for errors in the repo')
-    parser.add_argument('--noerrors', '-n', type=bool,
+    parser.add_argument('--noerrors', '-n', action='store_true',
                         help='fail if any errors are found in core pygsti repo (not tests)')
-    parser.add_argument('--warnings', '-w', type=bool,
+    parser.add_argument('--warnings', '-w', action='store_true',
                         help='check for warnings in the repo')
-    parser.add_argument('--adjustables', '-a', type=bool,
+    parser.add_argument('--adjustables', '-a', action='store_true',
                         help='check for refactors in the repo')
 
     parsed = parser.parse_args(sys.argv[1:])
