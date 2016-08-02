@@ -38,7 +38,9 @@ cache:
 # command to run tests
 script:
   - cd test
-  - travis_wait 40 python travisTests.py # Tests may take some time!
+  - cd test_packages/cmp_chk_files/
+  - pdflatex full_reportA.tex
+    #- travis_wait 40 python travisTests.py # Tests may take some time!
   - cd ..
 
 after_success:
