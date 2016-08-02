@@ -5,7 +5,7 @@ import sys
 import warnings
 import os
 
-from ..testutils import BaseTestCase, temp_files, compare_files 
+from ..testutils import BaseTestCase, temp_files, compare_files
 
 def f(x):
     return np.dot(x,x)

@@ -5,14 +5,7 @@ import warnings
 import pygsti
 import os
 
-from ..testutils import BaseTestCase, compare_files, temp_files
-
-try:
-    from PIL import Image, ImageChops # stackoverflow.com/questions/19230991/image-open-cannot-identify-image-file-python
-    haveImageLibs = True
-except ImportError:
-    haveImageLibs = False
-
+from ..testutils import BaseTestCase, compare_files, temp_files 
 
 class AnalysisTestCase(BaseTestCase):
 
