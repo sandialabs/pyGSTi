@@ -138,7 +138,7 @@ def make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
         for germ in germList:
             if rndm is None:
                 fiducialPairsThisIter = fiducialPairs
-    
+
             elif fidPairs is not None:
                 remainingPairs = [ (prepStrs[i],effectStrs[j])
                                    for i in range(len(prepStrs))
@@ -149,12 +149,12 @@ def make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
                 nPairsToChoose = max(0,min(nPairsToChoose,nPairsRemaining))
                 assert(0 <= nPairsToChoose <= nPairsRemaining)
                 # FUTURE: issue warnings when clipping nPairsToChoose?
-    
+
                 fiducialPairsThisIter = fiducialPairs + \
                     [ remainingPairs[k] for k in
                       sorted(rndm.choice(nPairsRemaining,nPairsToChoose,
                                          replace=False))]
-    
+
             else: # rndm is not None and fidPairs is None
                 assert(nPairsToKeep <= nPairs) # keepFraction must be <= 1.0
                 fiducialPairsThisIter = \

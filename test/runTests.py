@@ -3,7 +3,7 @@ from __future__                  import print_function, division, unicode_litera
 from helpers.test                import *
 from helpers.test.runChanged     import *
 from helpers.test.runParallel    import run_parallel
-from helpers.automation_tools    import read_yaml, directory
+from helpers.automation_tools    import directory
 from helpers.info.genInfo        import get_tests, get_test_files, get_file_tests
 import sys
 import argparse
@@ -32,8 +32,7 @@ def expand(testname, packages, files):
         return [testname]
 
 def run_tests(testnames, version=None, fast=False, changed=False, parallel=False, failed=False):
-    config = read_yaml('config/test_config.yml')
-    slowTests = config['slow-tests']
+    slowTests = ['report', 'drivers']
 
     with directory('test_packages'):
         packages = [name for name in get_package_names() if name not in get_excluded()]
