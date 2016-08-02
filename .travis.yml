@@ -22,6 +22,7 @@ before_install:
   # See here: http://lsi.ugr.es/~jmantas/pdp/ayuda/datos/instalaciones/Install_OpenMPI_en.pdf
   - sudo apt-get -qq install -y openmpi-bin openmpi-common openssh-client openssh-server libopenmpi1.3 libopenmpi-dbg libopenmpi-dev
   - sudo apt-get -qq install -y texlive-full 
+  - sudo apt-get -qq install texlive-latex-extra # Not in texlive full? We'll see!
   - "export DISPLAY=:99.0"
   - "sh -e /etc/init.d/xvfb start" #some tests require a display
   - sleep 3 # give xvfb some time to start
