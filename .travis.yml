@@ -19,13 +19,14 @@ env:
 before_install:
   - sudo apt-get -qq update
   - sudo apt-get install -y gfortran libblas-dev liblapack-dev
-  - sudo apt-get install python-mpi4py
+  # See here: http://lsi.ugr.es/~jmantas/pdp/ayuda/datos/instalaciones/Install_OpenMPI_en.pdf
+  - sudo apt-get install -y openmpi-bin openmpi-common openssh-client openssh-server libopenmpi1.3 libopenmpi-dbg libopenmpi-dev
   - "export DISPLAY=:99.0"
   - "sh -e /etc/init.d/xvfb start" #some tests require a display
   - sleep 3 # give xvfb some time to start
 install:
   - travis_retry travis_wait pip install -r requirements.txt
-  - pip install cvxpy python-pptx ruamel.yaml
+  - pip install cvxpy python-pptx ruamel.yaml mpi4py
   - pip install -e .
   
 cache: 
