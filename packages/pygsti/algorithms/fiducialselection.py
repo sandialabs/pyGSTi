@@ -9,6 +9,79 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy     as _np
 import scipy
 from .. import objects as _objs
+from .. import construction as _constr
+
+
+def generate_fiducials(gs_target, gatesToOmit, maxFidLength=2,
+                       algorithm='slack', algorithm_kwargs={}, verbosity=0):
+    """Generate prep and measurement fiducials for a given target gateset.
+
+    Parameters
+    ----------
+    gs_target : GateSet
+        The gateset you are aiming to implement.
+
+    gatesToOmit : list of string
+        List of strings identifying gates in the gateset that should not be
+        used in fiducials (a common example is the identity gate).
+
+    maxFidLength : int
+        The maximum number of gates to include in a fiducial.
+
+    algorithm : {'greedy', 'slack'}, optional
+        Specifies the algorithm to use to generate the fiducials. Current
+        options are:
+
+        'slack'
+            See :func:`optimize_integer_fiducials_slack` for more details.
+
+    algorithm_kwargs : dict
+        Dictionary of ``{'keyword': keyword_arg}`` pairs providing keyword
+        arguments for the specified `algorithm` function. See the documentation
+        for functions referred to in the `algorithm` keyword documentation for
+        what options are available for each algorithm.
+
+    Returns
+    -------
+    prepFidList : list of GateString
+        A list containing the gate sequences for the prep fiducials.
+
+    measFidList : list of GateString
+        A list containing the gate sequences for the measurement fiducials.
+
+    """
+    fidGates = [gate for gate in gs_target.gates if gate not in gatesToOmit]
+    availableFidList = _constr.list_all_gatestrings(fidGates, 0, maxFidLength)
+
+    if algorithm == 'slack':
+        default_kwargs = {
+                          'fidList': availableFidList,
+                          'verbosity': verbosity,
+                         }
+
+        if ('slackFrac' not in algorithm_kwargs
+                and 'fixedSlack' not in algorithm_kwargs):
+            algorithm_kwargs['slackFrac'] = 1.0
+        for key in default_kwargs:
+            if key not in algorithm_kwargs:
+                algorithm_kwargs[key] = default_kwargs[key]
+
+        prepAlg_kwargs = algorithm_kwargs.copy()
+        prepAlg_kwargs['prepOrMeas'] = 'prep'
+        prepFidList = optimize_integer_fiducials_slack(gateset=gs_target,
+                                                       **prepAlg_kwargs)
+
+        measAlg_kwargs = algorithm_kwargs.copy()
+        measAlg_kwargs['prepOrMeas'] = 'meas'
+        measFidList = optimize_integer_fiducials_slack(gateset=gs_target,
+                                                       **measAlg_kwargs)
+
+    else:
+        raise ValueError("'{}' is not a valid algorithm "
+                         "identifier.".format(algorithm))
+
+    return prepFidList, measFidList
+
 
 #def bool_list_to_ind_list(boolList):
 #    output = _np.array([])
