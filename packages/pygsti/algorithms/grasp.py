@@ -129,6 +129,90 @@ def grasp_local_search(initialSoln, scoreFn, elements, getNeighborsFn,
     return currentSoln
 
 
+def do_grasp_iteration(elements, greedyScoreFn, rclFn, localScoreFn,
+                       getNeighborsFn, feasibleThreshold=None, feasibleFn=None,
+                       initialElements=None, seed=None, verbosity=0):
+    """Perform one iteration of GRASP (greedy construction and local search).
+
+    Parameters
+    ----------
+    elements : list
+        A list containing some representation of the elements that can be used
+        by the verious score functions.
+
+    greedyScoreFn : callable
+        Function that takes a sublist of `elements` and returns a score to
+        minimize that is comparable with other scores. Used by the greedy
+        construction to construct the initial feasible subset.
+
+    rclFn : callable
+        Function that takes a list of sublists of `elements` (that is, a list
+        of candidate partial solutions) and returns the indices within that
+        list of partial solutions to be included in the restricted candidate
+        list.
+
+    localScoreFn : callable
+        Function that takes a sublist of `elements` and returns a score to
+        minimize that is comparable with other scores. Used by the local
+        search to find a locally optimal feasible subset.
+
+    getNeighborsFn : callable
+        Function that takes a binary vector indicating which members of
+        `elements` are included in the current solution and returns a list
+        of binary vectors indicating which potential solutions are in the
+        neighborhood of the current solution for the purposes of local
+        optimization.
+
+    feasibleThreshold : score
+        A value comparable with the return value of the various score functions
+        against which a score may be compared to test if the solution is
+        feasible (the solution is feasible iff
+        ``solnScore < feasibleThreshold``). Overrides `feasibleFn` if set to a
+        value other than ``None``.
+
+    feasibleFn : callable
+        Function that takes a sublist of `elements` defining a potential
+        solution and returns ``True`` if that solution is feasible (otherwise
+        should return ``False``). Not used if `feasibleThreshold` is not
+        ``None``.
+
+    initialElements : numpy.array
+        Binary vector with 1s at indices corresponding to elements in
+        `elements` that the greedy construction routine will include at the
+        start of its construction.
+
+    seed : int
+        Seed for the random number generator.
+
+    verbosity : int
+        Sets the level of logging messages the printer will display.
+
+    Returns
+    -------
+    initialSoln : list
+        The sublist of `elements` given by the greedy construction.
+
+    localSoln : list
+        The sublist of `elements` given by the local search.
+
+    """
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+
+    initialSoln = grasp_greedy_construction(elements, greedyScoreFn, rclFn,
+                                            feasibleThreshold, feasibleFn,
+                                            initialElements, seed)
+    printer.log('Initial construction:', 1)
+    printer.log(str([str(element) for element in initialSoln]), 1)
+
+    localSoln = grasp_local_search(initialSoln, localScoreFn, elements,
+                                   getNeighborsFn, feasibleThreshold,
+                                   feasibleFn)
+    printer.log('Local optimum:', 1)
+    printer.log(str([str(element) for element in localSoln]), 1)
+
+    return initialSoln, localSoln
+
+
 def grasp(elements, greedyScoreFn, rclFn, localScoreFn, getNeighborsFn,
           finalScoreFn, iterations, feasibleThreshold=None, feasibleFn=None,
           initialElements=None, seed=None, verbosity=0):
@@ -207,18 +291,13 @@ def grasp(elements, greedyScoreFn, rclFn, localScoreFn, getNeighborsFn,
     bestSoln = None
     for iteration in range(iterations):
         printer.log('Iteration {}'.format(iteration), 1)
-        initialSoln = grasp_greedy_construction(elements, greedyScoreFn, rclFn,
-                                                feasibleThreshold, feasibleFn,
-                                                initialElements, seed)
-        printer.log('Initial construction:')
-        printer.log(str([str(element) for element in initialSoln]), 1)
-
-        localSoln = grasp_local_search(initialSoln, localScoreFn, elements,
-                                       getNeighborsFn, feasibleThreshold,
-                                       feasibleFn)
-        printer.log('Local optimum:')
-        printer.log(str([str(element) for element in localSoln]), 1)
-
+        initialSoln, localSoln = do_grasp_iteration(elements, greedyScoreFn,
+                                                    rclFn, localScoreFn,
+                                                    getNeighborsFn,
+                                                    feasibleThreshold,
+                                                    feasibleFn,
+                                                    initialElements, seed,
+                                                    verbosity)
         if bestSoln is None:
             bestSoln = localSoln
         elif finalScoreFn(localSoln) < finalScoreFn(bestSoln):
