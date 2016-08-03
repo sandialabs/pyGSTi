@@ -13,9 +13,9 @@ For simplicity, a filename can be left off if only one item is being looked for:
 `./lint.py unused-import` generates a file `unused-import` logging the occurances of `unused-import`  
 
 Some examples:
- `./lookFor.py duplicate-code`
- `./lookFor.py todos fixme`
- `./lookFor.py unused unused-variable unused-import unused-argument`
+ `./lint.py duplicate-code`
+ `./lint.py todos fixme`
+ `./lint.py unused unused-variable unused-import unused-argument`
 
 ### If no positional arguments are given, pylint lints for `all`:
   - All warnings except those blacklisted in `pylint_config`
@@ -27,13 +27,18 @@ Some examples:
 
 ### Optional flags:
 
-| Flag            | Description                                           |
-|-----------------|:------------------------------------------------------|
-| `--score`       | compares repo score to latest score, exits 0 if lower |
-| `--errors`      | generate pylint report for errors                     |
-| `--warnings`    | generate pylint report for warnings                   |
-| `--adjustables` | generate pylint report for adjustable refactors       |
+| Flag            | Description                                            |
+|-----------------|:-------------------------------------------------------|
+| `--score`       | compares repo score to latest score, exits 0 if lower  |
+| `--errors`      | generate pylint report for errors                      |
+| `--warnings`    | generate pylint report for warnings                    |
+| `--adjustables` | generate pylint report for adjustable refactors        |
+| `--noerrors`    | return 1 if any errors are found in pygsti (not tests) |
 
 (Multiple flags can be provided in a call to lint.py, as well as the positional arguments)
+
+The command `./lint.py --noerrors` is called whenever a push is made to any branch. There aren't any 'errors' in the repository right now, so this will catch any missing parentheses or other syntax errors. It is definitely worth the time to run, but can be bypassed with `git push --no-verify`.
+
+The command `./lint.py --score` used to run after commits to develop. You should run this manually if you want to review code quality
 
 
