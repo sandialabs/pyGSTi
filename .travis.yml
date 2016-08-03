@@ -28,7 +28,7 @@ before_install:
 #  - sudo apt-file update
 #  - sudo apt-file search adjustbox.sty
 #  - sudo locate texmf
-  - cd /usr/share/texmf-texlive/tex/latex
+  - pushd /usr/share/texmf-texlive/tex/latex
   - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/etoolbox.tds.zip
   - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/adjustbox.tds.zip
   - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/collectbox.tds.zip
@@ -52,6 +52,7 @@ before_install:
   - sudo unzip ifxetex.tds.zip
   - sudo unzip standalone.tds.zip
   - sudo texhash 
+  - popd
 #  - sudo tlmgr install adjustbox
 #  - sudo tlmgr install collectbox
 #  - sudo tlmgr install ucs
