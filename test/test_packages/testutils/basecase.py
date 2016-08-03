@@ -8,6 +8,12 @@ import os
 temp_files    = 'temp_test_files'
 compare_files = 'cmp_chk_files'
 
+try:
+    from PIL import Image, ImageChops # stackoverflow.com/questions/19230991/image-open-cannot-identify-image-file-python
+    haveImageLibs = True
+except ImportError:
+    haveImageLibs = False
+
 class BaseTestCase(unittest.TestCase):
 
     def setUp(self):
