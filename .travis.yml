@@ -24,11 +24,7 @@ before_install:
   - sudo apt-get -qq install -y texlive-full 
   - sudo apt-get -qq install texlive-generic-extra # Not in texlive full? We'll see!
   - sudo apt-get -qq install texlive-latex-extra 
-#  - sudo apt-get install apt-file
-#  - sudo apt-file update
-#  - sudo apt-file search adjustbox.sty
-#  - sudo locate texmf
-  - pushd /usr/share/texmf-texlive/tex/latex
+  - pushd /usr/share/texmf-texlive/
   - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/etoolbox.tds.zip
   - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/adjustbox.tds.zip
   - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/collectbox.tds.zip
@@ -36,7 +32,7 @@ before_install:
   - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/datetime2.tds.zip
   - sudo wget http://mirrors.ctan.org/install/macros/generic/tracklang.tds.zip
   - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/bezos.tds.zip
-# - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/hyperref.tds.zip
+  - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/hyperref.tds.zip
   - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/oberdiek.tds.zip
   - sudo wget http://mirrors.ctan.org/install/macros/generic/ifxetex.tds.zip
   - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/standalone.tds.zip
@@ -47,18 +43,12 @@ before_install:
   - sudo unzip datetime2.tds.zip
   - sudo unzip tracklang.tds.zip
   - sudo unzip bezos.tds.zip
-# - sudo unzip hyperref.tds.zip
+  - sudo unzip hyperref.tds.zip
   - sudo unzip oberdiek.tds.zip
   - sudo unzip ifxetex.tds.zip
   - sudo unzip standalone.tds.zip
   - sudo texhash 
   - popd
-
-#  - sudo tlmgr install adjustbox
-#  - sudo tlmgr install collectbox
-#  - sudo tlmgr install ucs
-#  - sudo tlmgr install etoolbox
-#  - sudo tlmgr install standalone
   - "export DISPLAY=:99.0"
   - "sh -e /etc/init.d/xvfb start" #some tests require a display
   - sleep 3 # give xvfb some time to start
