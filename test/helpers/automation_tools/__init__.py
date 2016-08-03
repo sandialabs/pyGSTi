@@ -1,2 +1,2 @@
 from .utilities   import *
-from .yamlwrapper import read_yaml, write_yaml
+from .jsonwrapper import read_json, write_json

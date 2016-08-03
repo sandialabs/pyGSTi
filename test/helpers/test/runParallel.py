@@ -44,7 +44,7 @@ def run_parallel(testnames, pythoncommands, postcommands):
     start_processes(processes, nCores, testnames, pythoncommands, postcommands)
 
     while True:
-        for i in range(30):
+        for i in range(5):
             print('.', end='')
             sleep(.1)
             sys.stdout.flush()

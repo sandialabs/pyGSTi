@@ -53,7 +53,7 @@ class LogLTestCase(BaseTestCase):
         L1 = pygsti.logl(std.gs_target, ds,
                          probClipInterval=(-1e6,1e6), countVecMx=None,
                          poissonPicture=True, check=False)
-        self.assertAlmostEqual(L1, -4531934.43735, 5)
+        self.assertAlmostEqual(L1, -4531934.43735, 2)
         L2 = pygsti.logl_max(ds)
         self.assertAlmostEqual(L2, -1329179.7675, 5)
 

@@ -167,9 +167,8 @@ class TestDriversMethods(DriversTestCase):
         reducedLists = pygsti.construction.make_lsgst_lists(
             std.gs_target.gates.keys(), std.fiducials, std.fiducials, std.germs,
             maxLens, fidPairs, ts, keepFraction=0.5, keepSeed=1234)
-        trunc_ds = ds.truncate(reducedLists[-1]) # ok to use [-1] since nest=True
         result = self.runSilent(pygsti.do_long_sequence_gst,
-                                trunc_ds, std.gs_target, std.fiducials, std.fiducials,
+                                ds, std.gs_target, std.fiducials, std.fiducials,
                                 std.germs, maxLens, truncScheme=ts, fidPairs=None,
                                 lsgstLists = reducedLists)
 
@@ -186,9 +185,8 @@ class TestDriversMethods(DriversTestCase):
         reducedLists = pygsti.construction.make_lsgst_lists(
             std.gs_target.gates.keys(), std.fiducials, std.fiducials, std.germs,
             maxLens, fidPairs, ts, keepFraction=0.5, keepSeed=1234)
-        trunc_ds = ds.truncate(reducedLists[-1]) # ok to use [-1] since nest=True
         result2 = self.runSilent(pygsti.do_long_sequence_gst,
-                                 trunc_ds, std.gs_target, std.fiducials, std.fiducials,
+                                 ds, std.gs_target, std.fiducials, std.fiducials,
                                  std.germs, maxLens, truncScheme=ts, fidPairs=None,
                                  lsgstLists = reducedLists)
 
