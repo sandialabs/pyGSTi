@@ -3,6 +3,7 @@ from __future__ import print_function
 import subprocess, sys, os
 
 print('Travis CI Passed')
+'''
 
 print('Getting current branchname/SHA')
 branchname = 'unspecified'
@@ -97,4 +98,4 @@ if canMerge:
 
 else:
     print('Potential merge conflicts found! Cannot merge beta into develop')
-
+'''

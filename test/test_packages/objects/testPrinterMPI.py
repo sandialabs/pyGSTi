@@ -4,7 +4,6 @@ from ..testutils import BaseTestCase, compare_files, temp_files
 
 import unittest, os
 
-
 class TestPrinterMPI(BaseTestCase):
 
     def test_mpi(self):

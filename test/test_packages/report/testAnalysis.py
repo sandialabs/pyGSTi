@@ -7,10 +7,9 @@ import os
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
-class AnalysisTestCase(BaseTestCase):
-
+class TestAnalysis(BaseTestCase):
     def setUp(self):
-        super(AnalysisTestCase, self).setUp()
+        super(TestAnalysis, self).setUp()
 
         self.gateset = std.gs_target
         self.datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0.1)
@@ -58,7 +57,6 @@ class AnalysisTestCase(BaseTestCase):
                     self.gateStrDict[(x,y)] = None
                 else: runningList.append( self.gateStrDict[(x,y)] )
 
-class TestAnalysis(AnalysisTestCase):
 
     def test_blank_boxes(self):
         pygsti.report.blank_boxplot( self.Xs, self.Ys, self.gateStrDict, self.strs, self.xlbl, self.ylbl,

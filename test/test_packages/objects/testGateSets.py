@@ -7,6 +7,7 @@ import os
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
+# This class is for unifying some gatesets that get used in this file and in testGateSets2.py
 class GateSetTestCase(BaseTestCase):
 
     def setUp(self):

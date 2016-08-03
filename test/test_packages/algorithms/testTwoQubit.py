@@ -3,7 +3,7 @@ import os, sys
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
-class TwoQubitTestCase(BaseTestCase):
+class TestTwoQubitMethods(BaseTestCase):
 
     def setUp(self):
         super(TwoQubitTestCase, self).setUp()
@@ -11,7 +11,6 @@ class TwoQubitTestCase(BaseTestCase):
         #Set GateSet objects to "non-strict" mode for this testing
         pygsti.objects.GateSet._strict = False
 
-class TestTwoQubitMethods(TwoQubitTestCase):
 
     def runTwoQubit(self):
         #The two-qubit gateset

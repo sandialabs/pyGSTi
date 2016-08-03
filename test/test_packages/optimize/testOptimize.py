@@ -16,14 +16,13 @@ def f_vec(x):
 def jac(x):
     return 2*x[None,:]
 
-class OptimizeTestCase(BaseTestCase):
+class TestOptimizeMethods(BaseTestCase):
 
     def setUp(self):
-        super(OptimizeTestCase, self).setUp()
+        super(TestOptimizeMethods, self).setUp()
+
         self.x0 = np.array( [10,5], 'd')
         self.answer = np.array( [0,0], 'd')
-
-class TestOptimizeMethods(OptimizeTestCase):
 
     def test_optimize(self):
         old_stdout = sys.stdout
