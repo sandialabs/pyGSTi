@@ -25,6 +25,7 @@ before_install:
   - sudo apt-get -qq install texlive-generic-extra # Not in texlive full? We'll see!
   - sudo apt-get -qq install texlive-latex-extra 
   - sudo apt-get install apt-file
+  - sudo apt-file update
   - sudo apt-file search adjustbox.sty
 #  - sudo tlmgr install adjustbox
 #  - sudo tlmgr install collectbox
