@@ -19,15 +19,15 @@ env:
 before_install:
   - sudo apt-get -qq update
   - sudo apt-get -qq install -y gfortran libblas-dev liblapack-dev
-  # See here: http://lsi.ugr.es/~jmantas/pdp/ayuda/datos/instalaciones/Install_OpenMPI_en.pdf
+# See here: http://lsi.ugr.es/~jmantas/pdp/ayuda/datos/instalaciones/Install_OpenMPI_en.pdf
   - sudo apt-get -qq install -y openmpi-bin openmpi-common openssh-client openssh-server libopenmpi1.3 libopenmpi-dbg libopenmpi-dev
   - sudo apt-get -qq install -y texlive-full 
   - sudo apt-get -qq install texlive-generic-extra # Not in texlive full? We'll see!
   - sudo apt-get -qq install texlive-latex-extra 
-  - sudo apt-get install apt-file
-  - sudo apt-file update
-  - sudo apt-file search adjustbox.sty
-  - sudo locate texmf
+#  - sudo apt-get install apt-file
+#  - sudo apt-file update
+#  - sudo apt-file search adjustbox.sty
+#  - sudo locate texmf
   - pushd /usr/share/texmf-texlive/tex/latex
   - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/etoolbox.tds.zip
   - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/adjustbox.tds.zip
@@ -64,7 +64,8 @@ before_install:
 install:
   - travis_retry travis_wait pip install -r requirements.txt
   - pip install cvxpy python-pptx mpi4py
-  -  pip install -e .
+  - pip install -e .
+  - echo "HELLO"
   
 cache: 
   pip: true
