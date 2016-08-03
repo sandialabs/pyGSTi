@@ -24,11 +24,12 @@ before_install:
   - sudo apt-get -qq install -y texlive-full 
   - sudo apt-get -qq install texlive-generic-extra # Not in texlive full? We'll see!
   - sudo apt-get -qq install texlive-latex-extra 
-  - sudo tlmgr install adjustbox
-  - sudo tlmgr install collectbox
-  - sudo tlmgr install ucs
-  - sudo tlmgr install etoolbox
-  - sudo tlmgr install standalone
+  - sudo apt-file search adjustbox.sty
+#  - sudo tlmgr install adjustbox
+#  - sudo tlmgr install collectbox
+#  - sudo tlmgr install ucs
+#  - sudo tlmgr install etoolbox
+#  - sudo tlmgr install standalone
   - "export DISPLAY=:99.0"
   - "sh -e /etc/init.d/xvfb start" #some tests require a display
   - sleep 3 # give xvfb some time to start
