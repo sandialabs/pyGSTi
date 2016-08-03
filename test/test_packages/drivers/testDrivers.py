@@ -31,8 +31,7 @@ class DriversTestCase(BaseTestCase):
         self.lsgstStrings_lae = pygsti.construction.make_lsgst_lists(
             self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLens,
             truncScheme='length as exponent' )
-
-        # RUN BELOW LINES TO GENERATE SAVED DATASETS
+# RUN BELOW LINES TO GENERATE SAVED DATASETS
         #datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0.1)
         #ds = pygsti.construction.generate_fake_data(
         #    datagen_gateset, self.lsgstStrings[-1],

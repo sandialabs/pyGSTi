@@ -7,6 +7,7 @@ import pygsti
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
+# Imported by other modules that test formatters (reduces duplicate code)
 class FormatterBaseTestCase(BaseTestCase):
     def setUp(self):
         super(FormatterBaseTestCase, self).setUp()

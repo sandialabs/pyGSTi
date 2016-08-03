@@ -8,15 +8,7 @@ import os
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
-class DataSetTestCase(BaseTestCase):
-
-    def assertEqualDatasets(self, ds1, ds2):
-        self.assertEqual(len(ds1),len(ds2))
-        for gatestring in ds1:
-            self.assertAlmostEqual( ds1[gatestring]['plus'], ds2[gatestring]['plus'], places=3 )
-            self.assertAlmostEqual( ds1[gatestring]['minus'], ds2[gatestring]['minus'], places=3 )
-
-class TestDataSetMethods(DataSetTestCase):
+class TestDataSetMethods(BaseTestCase):
 
     def test_from_scratch(self):
         # Create a dataset from scratch

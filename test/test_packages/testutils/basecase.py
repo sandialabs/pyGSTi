@@ -8,6 +8,12 @@ import os
 temp_files    = 'temp_test_files'
 compare_files = 'cmp_chk_files'
 
+try:
+    from PIL import Image, ImageChops # stackoverflow.com/questions/19230991/image-open-cannot-identify-image-file-python
+    haveImageLibs = True
+except ImportError:
+    haveImageLibs = False
+
 class BaseTestCase(unittest.TestCase):
 
     def setUp(self):
@@ -68,3 +74,9 @@ class BaseTestCase(unittest.TestCase):
                           ", so Image comparisons in testAnalysis have been" +
                           " disabled.")
             return True
+
+    def assertEqualDatasets(self, ds1, ds2):
+        self.assertEqual(len(ds1),len(ds2))
+        for gatestring in ds1:
+            self.assertAlmostEqual( ds1[gatestring]['plus'], ds2[gatestring]['plus'], places=3 )
+            self.assertAlmostEqual( ds1[gatestring]['minus'], ds2[gatestring]['minus'], places=3 )

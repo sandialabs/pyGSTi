@@ -8,7 +8,7 @@ import sys, os
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
-class CoreTestCase(BaseTestCase):
+class TestCoreMethods(BaseTestCase):
 
     def setUp(self):
         super(CoreTestCase, self).setUp()
@@ -40,7 +40,6 @@ class CoreTestCase(BaseTestCase):
         #ds_lgst.save(compare_files + "/analysis_lgst.dataset")
         self.ds_lgst = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis_lgst.dataset")
 
-class TestCoreMethods(CoreTestCase):
 
     def test_gram(self):
         ds = self.ds

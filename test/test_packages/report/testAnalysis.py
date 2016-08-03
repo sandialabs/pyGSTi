@@ -7,16 +7,10 @@ import os
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
-try:
-    from PIL import Image, ImageChops # stackoverflow.com/questions/19230991/image-open-cannot-identify-image-file-python
-    haveImageLibs = True
-except ImportError:
-    haveImageLibs = False
-
-
-class AnalysisTestCase(BaseTestCase):
-
+class TestAnalysis(BaseTestCase):
     def setUp(self):
+        super(TestAnalysis, self).setUp()
+
         self.gateset = std.gs_target
         self.datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0.1)
 
@@ -63,7 +57,6 @@ class AnalysisTestCase(BaseTestCase):
                     self.gateStrDict[(x,y)] = None
                 else: runningList.append( self.gateStrDict[(x,y)] )
 
-class TestAnalysis(AnalysisTestCase):
 
     def test_blank_boxes(self):
         pygsti.report.blank_boxplot( self.Xs, self.Ys, self.gateStrDict, self.strs, self.xlbl, self.ylbl,
