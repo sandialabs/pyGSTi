@@ -9,7 +9,7 @@ from ..testutils import BaseTestCase, compare_files, temp_files
 import numpy as np
 
 class TestReport(BaseTestCase):
-    
+
     def setUp(self):
         super(TestReport, self).setUp()
 

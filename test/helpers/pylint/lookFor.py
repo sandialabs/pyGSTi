@@ -1,5 +1,5 @@
 from .helpers           import get_pylint_output, write_output
-from ..automation_tools import read_yaml
+from ..automation_tools import read_json
 import os, sys
 
 # https://docs.pylint.org/features.html#general-options
@@ -7,7 +7,7 @@ import os, sys
 def find(items, filename):
     enabled   = ','.join(items)
     print('Generating %s in all of pygsti. This should take less than a minute' % enabled)
-    config    = read_yaml('config/pylint_config.yml')
+    config    = read_json('config/pylint_config.json')
     commands  = [config['pylint-version'],
                  '--disable=all',
                  '--enable=%s' % enabled,

@@ -10,21 +10,38 @@ branches:
     - develop
 
 env:
-    - Drivers=False Report=False # Default tests (All but report and drivers, save two fast tests)
-    - Drivers=False Report=True  # Only testReport.py (none of the other reports tests)
-    - Drivers=True  Report=False # All of drivers only
+    - Default=True  # construction, io, objects, tools, optimize, algorithms
+    - ReportA=True  # Only testReport.py (none of the other reports tests)
+    - ReportB=True  # test the other reports tests
+    - Drivers=True  # All of drivers
 
 # command to install dependencies
 before_install:
   - sudo apt-get -qq update
-  - sudo apt-get install -y gfortran libblas-dev liblapack-dev
+  #- sudo apt-get -qq install -y gfortran libblas-dev liblapack-dev
+  # See here: http://lsi.ugr.es/~jmantas/pdp/ayuda/datos/instalaciones/Install_OpenMPI_en.pdf
+  #- sudo apt-get -qq install -y openmpi-bin openmpi-common openssh-client openssh-server libopenmpi1.3 libopenmpi-dbg libopenmpi-dev
+  - sudo apt-get -qq install -y texlive-full 
+  - sudo apt-get -qq install texlive-generic-extra # Not in texlive full? We'll see!
+  - sudo apt-get -qq install texlive-latex-extra 
+  - sudo apt-get install apt-file
+  - sudo apt-file update
+  - sudo apt-file search adjustbox.sty
+  - sudo locate texmf
+  - sudo ls /usr/share/texlive/texmf-dist/doc/latex
+  - sudo ls /usr/local/share/texlive/texmf-dist/doc/latex/
+#  - sudo tlmgr install adjustbox
+#  - sudo tlmgr install collectbox
+#  - sudo tlmgr install ucs
+#  - sudo tlmgr install etoolbox
+#  - sudo tlmgr install standalone
   - "export DISPLAY=:99.0"
   - "sh -e /etc/init.d/xvfb start" #some tests require a display
   - sleep 3 # give xvfb some time to start
 install:
-  - travis_retry travis_wait pip install -r requirements.txt
-  - pip install cvxpy python-pptx ruamel.yaml
-  - pip install -e .
+  #- travis_retry travis_wait pip install -r requirements.txt
+  #- pip install cvxpy python-pptx mpi4py
+  #- pip install -e .
   
 cache: 
   pip: true
@@ -32,7 +49,9 @@ cache:
 # command to run tests
 script:
   - cd test
-  - travis_wait 40 python travisTests.py # Tests may take some time!
+  - cd test_packages/cmp_chk_files/
+  - pdflatex full_reportA.tex
+    #- travis_wait 40 python travisTests.py # Tests may take some time!
   - cd ..
 
 after_success:

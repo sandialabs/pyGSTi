@@ -1,3 +1,4 @@
+from __future__      import print_function
 from multiprocessing import cpu_count # This is all that is used from this module. All parallellism is done with subprocess.Popen
 from subprocess      import Popen     # Does all the actual parallel speedups
 from time            import sleep     # Wait for processes
@@ -43,7 +44,7 @@ def run_parallel(testnames, pythoncommands, postcommands):
     start_processes(processes, nCores, testnames, pythoncommands, postcommands)
 
     while True:
-        for i in range(30):
+        for i in range(5):
             print('.', end='')
             sleep(.1)
             sys.stdout.flush()

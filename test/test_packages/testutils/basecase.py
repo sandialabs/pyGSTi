@@ -24,6 +24,8 @@ class BaseTestCase(unittest.TestCase):
         os.chdir(os.path.abspath(os.path.dirname(__file__)))
         os.chdir('..') # The test_packages directory
 
+        print('Running tests from %s' % os.getcwd())
+
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = True
 

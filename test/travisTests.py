@@ -15,7 +15,7 @@ tests = [] # Run nothing if no environment variables are set
 
 # Only testReport.py (barely finishes in time!)
 if doReportA == 'True':
-    tests = ['report/testReport.py'] # Maybe this single test wont time out? :)
+    tests = ['report/testReport.py:TestReport.test_reports_logL_TP_wCIs'] # Maybe this single test wont time out? :)
 
 # All other reports tests
 elif doReportB == 'True':
