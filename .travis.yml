@@ -36,7 +36,7 @@ before_install:
   - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/datetime2.tds.zip
   - sudo wget http://mirrors.ctan.org/install/macros/generic/tracklang.tds.zip
   - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/bezos.tds.zip
-  - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/hyperref.tds.zip
+# - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/hyperref.tds.zip
   - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/oberdiek.tds.zip
   - sudo wget http://mirrors.ctan.org/install/macros/generic/ifxetex.tds.zip
   - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/standalone.tds.zip
@@ -47,7 +47,7 @@ before_install:
   - sudo unzip datetime2.tds.zip
   - sudo unzip tracklang.tds.zip
   - sudo unzip bezos.tds.zip
-  - sudo unzip hyperref.tds.zip
+# - sudo unzip hyperref.tds.zip
   - sudo unzip oberdiek.tds.zip
   - sudo unzip ifxetex.tds.zip
   - sudo unzip standalone.tds.zip
