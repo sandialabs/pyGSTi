@@ -1470,7 +1470,7 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
                                 seed=None, l1Penalty=1e-2, gatePenalty=0.0,
                                 scoreFunc='all', tol=1e-6, threshold=1e6,
                                 check=False, forceSingletons=True,
-                                iterations=5, verbosity=0):
+                                iterations=5, returnAll=False, verbosity=0):
     """Use GRASP to find a high-performing germ set.
 
     Parameters
@@ -1555,6 +1555,12 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
     iterations : int, optional
         The number of GRASP iterations to perform.
 
+    returnAll : bool, optional
+        Flag set to tell the routine if it should return lists of all
+        initial constructions and local optimizations in addition to the
+        optimal solution (useful for diagnostic purposes or if you're not sure
+        what your `finalScoreFn` should really be).
+
     verbosity : int, optional
         Integer >= 0 indicating the amount of detail to print.
 
@@ -1626,12 +1632,23 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
 
     rclFn = lambda x: germ_rcl_fn(x, alpha)
 
-    bestSoln = _grasp.grasp(elements=germsList, greedyScoreFn=scoreFn,
-                            rclFn=rclFn, localScoreFn=scoreFn,
-                            getNeighborsFn=_grasp.get_swap_neighbors,
-                            finalScoreFn=finalScoreFn, iterations=iterations,
-                            feasibleThreshold=ScoreNonAC(threshold,
-                            numNonGaugeParams), initialElements=weights,
-                            seed=seed, verbosity=verbosity)
+    initialSolns = []
+    localSolns = []
 
-    return bestSoln
+    for iteration in range(iterations):
+        iterSolns = _grasp.do_grasp_iteration(
+                                elements=germsList, greedyScoreFn=scoreFn,
+                                rclFn=rclFn, localScoreFn=scoreFn,
+                                getNeighborsFn=_grasp.get_swap_neighbors,
+                                feasibleThreshold=ScoreNonAC(threshold,
+                                numNonGaugeParams), initialElements=weights,
+                                seed=seed, verbosity=verbosity)
+
+        initialSolns.append(iterSolns[0])
+        localSolns.append(iterSolns[1])
+
+    finalScores = _np.array([finalScoreFn(localSoln)
+                             for localSoln in localSolns])
+    bestSoln = localSolns[_np.argmin(finalScores)]
+
+    return bestSoln, initialSolns, localSolns if returnAll else bestSoln
