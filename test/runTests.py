@@ -45,7 +45,8 @@ def run_tests(testnames, version=None, fast=False, changed=False, parallel=False
             else:
                 sys.exit(1)
         else:
-            sys.exit(subprocess.call(pythoncommands + testnames + postcommands))
+            result = subprocess.call(pythoncommands + testnames + postcommands)
+            sys.exit(result)
 
 if __name__ == "__main__":
 
