@@ -27,6 +27,9 @@ before_install:
   - sudo apt-get install apt-file
   - sudo apt-file update
   - sudo apt-file search adjustbox.sty
+  - sudo locate texmf
+  - sudo ls /usr/share/texlive/texmf-dist/doc/latex
+  - sudo ls /usr/local/share/texlive/texmf-dist/doc/latex/
 #  - sudo tlmgr install adjustbox
 #  - sudo tlmgr install collectbox
 #  - sudo tlmgr install ucs
