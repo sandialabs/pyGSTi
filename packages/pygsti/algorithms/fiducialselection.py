@@ -276,18 +276,14 @@ def build_bitvec_mx(n, k):
 
     return bitVecMx
 
-def optimize_integer_fiducials_slack(gateset, fidList,
-                              prepOrMeas = None,
-                              initialWeights=None,
-                              scoreFunc = 'all',
-                              maxIter=100,
-                              fixedSlack=False, slackFrac=False,
-                              returnAll=False,
-                              forceEmpty = True, forceEmptyScore = 1e100,
-                              fixedNum = None,
-                              threshold=1e6,
-#                              forceMinScore = 1e100,
-                              verbosity=1):
+def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
+                                     initialWeights=None, scoreFunc='all',
+                                     maxIter=100, fixedSlack=None,
+                                     slackFrac=None, returnAll=False,
+                                     forceEmpty=True, forceEmptyScore=1e100,
+                                     fixedNum=None, threshold=1e6,
+                                     # forceMinScore=1e100,
+                                     verbosity=1):
     """Find a locally optimal subset of the fiducials in fidList.
 
     Locally optimal here means that no single fiducial can be excluded without
@@ -400,7 +396,9 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         def list_score(input_array):
             return 1./min(_np.abs(input_array))
 
-    initial_test = test_fiducial_list(gateset,fidList,prepOrMeas,scoreFunc=scoreFunc,returnAll=True,threshold=threshold)
+    initial_test = test_fiducial_list(gateset, fidList, prepOrMeas,
+                                      scoreFunc=scoreFunc, returnAll=True,
+                                      threshold=threshold)
     if initial_test[0]:
         print("Complete initial fiducial set succeeds.")
         print("Now searching for best fiducial set.")
@@ -409,7 +407,8 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         print("Aborting search.")
         return None
 
-    lessWeightOnly = False  #Initially allow adding to weight. -- maybe make this an argument??
+    #Initially allow adding to weight. -- maybe make this an argument??
+    lessWeightOnly = False
 
     nFids = len(fidList)
 
@@ -475,7 +474,9 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         best_weights = []
         for weights in bitVecMat:
             temp_score = compute_score(weights,cache_score = True)
-            if abs(temp_score - best_score) < 1e-8:#If scores are within machine precision, we want the fiducial set that requires fewer total button gate operations.
+            # If scores are within machine precision, we want the fiducial set
+            # that requires fewer total button gate operations.
+            if abs(temp_score - best_score) < 1e-8:
 #                print "Within machine precision!"
                 bestFidList = []
                 for index, val in enumerate(best_weights):
@@ -531,7 +532,8 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         for iIter in range(maxIter):
             scoreD_keys = scoreD.keys() #list of weight tuples already computed
 
-            printer.show_progress(iIter, maxIter-1, suffix="score=%g, nFids=%d" % (score, L1))
+            printer.show_progress(iIter, maxIter-1,
+                                  suffix="score=%g, nFids=%d" % (score, L1))
 
             bFoundBetterNeighbor = False
             for neighbor in get_neighbors(weights):
@@ -542,34 +544,46 @@ def optimize_integer_fiducials_slack(gateset, fidList,
                     neighborL1 = sum(neighbor)
                     neighborScore = scoreD[tuple(neighbor)]
 
-                #Move if we've found better position; if we've relaxed, we only move when L1 is improved.
-                if neighborScore <= score and (neighborL1 < L1 or lessWeightOnly == False):
+                # Move if we've found better position; if we've relaxed, we
+                # only move when L1 is improved.
+                if neighborScore <= score and (neighborL1 < L1
+                                               or lessWeightOnly == False):
                     weights, score, L1 = neighbor, neighborScore, neighborL1
                     bFoundBetterNeighbor = True
-                    printer.log("Found better neighbor: nFids = %d score = %g" % (L1,score), 2)
+                    printer.log("Found better neighbor: nFids = %d score = %g"
+                                % (L1,score), 2)
 
 
             if not bFoundBetterNeighbor: # Time to relax our search.
-                lessWeightOnly=True #from now on, don't allow increasing weight L1
+                # from now on, don't allow increasing weight L1
+                lessWeightOnly=True
 
                 if fixedSlack:
-                    slack = score + fixedSlack #Note score is positive (for sum of 1/lambda)
+                    # Note score is positive (for sum of 1/lambda)
+                    slack = score + fixedSlack
                 elif slackFrac:
                     slack = score * slackFrac
                 assert(slack > 0)
 
-                printer.log("No better neighbor. Relaxing score w/slack: %g => %g" % (score, score+slack), 2)
-                score += slack #artificially increase score and see if any neighbor is better now...
+                printer.log("No better neighbor. "
+                            "Relaxing score w/slack: %g => %g"
+                            % (score, score+slack), 2)
+                # artificially increase score and see if any neighbor is better
+                # now...
+                score += slack
 
                 for neighbor in get_neighbors(weights):
                     if sum(neighbor) < L1 and scoreD[tuple(neighbor)] < score:
-                        weights, score, L1 = neighbor, scoreD[tuple(neighbor)], sum(neighbor)
+                        weights, score, L1 = (neighbor,
+                                              scoreD[tuple(neighbor)],
+                                              sum(neighbor))
                         bFoundBetterNeighbor = True
-                        printer.log("Found better neighbor: nFids = %d score = %g" % (L1,score), 2)
+                        printer.log("Found better neighbor: nFids = %d "
+                                    "score = %g" % (L1, score), 2)
 
                 if not bFoundBetterNeighbor: #Relaxing didn't help!
-                    printer.log("Stationary point found!");
-                    break #end main for loop
+                    printer.log("Stationary point found!")
+                    break # end main for loop
 
             printer.log("Moving to better neighbor")
         else:
@@ -584,7 +598,9 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         if val==1:
             goodFidList.append(fidList[index])
 
-    #final_test = test_fiducial_list(gateset,goodFidList,prepOrMeas,scoreFunc=scoreFunc,returnAll=True,threshold=threshold)
+    # final_test = test_fiducial_list(gateset, goodFidList, prepOrMeas,
+    #                                 scoreFunc=scoreFunc, returnAll=True,
+    #                                 threshold=threshold)
     if initial_test[0]:
         print("Final fiducial set succeeds.")
     else:
