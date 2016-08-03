@@ -23,6 +23,7 @@ Some examples:
   - No refactors except those whitelisted in `pylint_config`
   - No conventions, ever.
   
+Branches `beta` and `master`
   If `--score` is specified, `lint.py` exits with `1` if the code scores lower than the latest run (visible in pylint_config)
 
 ### Optional flags:
@@ -41,4 +42,17 @@ The command `./lint.py --noerrors` is called whenever a push is made to any bran
 
 The command `./lint.py --score` used to run after commits to develop. You should run this manually if you want to review code quality
 
+### Config file:
 
+Found in `test/config/pylint_config.json`. Allows setting default values for refactoring issues (`i.e. max-statements=100` limits functions/methods to 100 lines when running `./lint.py --adjustables`). Also allows specifying pylint version (Set to pylint3 by default) and a threshold score for branches like beta and master (which require travis CI to pass, anyways..)
+
+#### `clonedigger`:
+While pylint has capability for finding duplicated code (`./lint.py duplicate-code`), I've found the tool `clonedigger` to be better.  
+
+Installation:
+`pip install clonedigger`
+
+Usage:
+`clonedigger tools/ -o duplicated_tools.html` would generate a file outlining duplicated code in a tools package. 
+
+ 
