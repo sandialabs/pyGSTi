@@ -53,6 +53,7 @@ before_install:
   - sudo unzip standalone.tds.zip
   - sudo texhash 
   - popd
+
 #  - sudo tlmgr install adjustbox
 #  - sudo tlmgr install collectbox
 #  - sudo tlmgr install ucs
@@ -65,7 +66,6 @@ install:
   - travis_retry travis_wait pip install -r requirements.txt
   - pip install cvxpy python-pptx mpi4py
   - pip install -e .
-  - echo "HELLO"
   
 cache: 
   pip: true
@@ -73,7 +73,6 @@ cache:
 # command to run tests
 script:
   - cd test
-  - cd test_packages/cmp_chk_files/
   - travis_wait 40 python travisTests.py # Tests may take some time!
   - cd ..
 
