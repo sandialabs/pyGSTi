@@ -18,29 +18,31 @@ from .. import objects as _objs
 #    return output
 
 def xor(*args):
-    """
-    Implements logical xor function for arbitrary number of inputs.
+    """Implements logical xor function for arbitrary number of inputs.
 
     Parameters
     ----------
     args : bool-likes
-        All the boolean (or boolean-like) objects to be checked for xor satisfaction.
+        All the boolean (or boolean-like) objects to be checked for xor
+        satisfaction.
 
     Returns
     ---------
     output : bool
-        True if and only if one and only one element of args is True and the rest are False.
-        False otherwise.
+        True if and only if one and only one element of args is True and the
+        rest are False.  False otherwise.
+
     """
 
     output = sum(bool(x) for x in args) == 1
     return output
 
 def make_prep_mxs(gs,prepFidList):
-    """
-    Makes a list of matrices, where each matrix corresponds to a single preparation
-    operation in the gate set, and the column of each matrix is a fiducial acting on
-    that state preparation.
+    """Make a list of matrices for the gate set preparation operations.
+
+    Makes a list of matrices, where each matrix corresponds to a single
+    preparation operation in the gate set, and the column of each matrix is a
+    fiducial acting on that state preparation.
 
     Parameters
     ----------
@@ -53,8 +55,8 @@ def make_prep_mxs(gs,prepFidList):
     Returns
     ----------
     outputMatList : list of arrays
-        List of arrays, where each array corresponds to one preparation in the gate set,
-        and each column therein corresponds to a single fiducial.
+        List of arrays, where each array corresponds to one preparation in the
+        gate set, and each column therein corresponds to a single fiducial.
 
     """
 
@@ -72,10 +74,11 @@ def make_prep_mxs(gs,prepFidList):
     return outputMatList
 
 def make_meas_mxs(gs,prepMeasList):
-    """
-    Makes a list of matrices, where each matrix corresponds to a single measurement
-    effect in the gate set, and the column of each matrix is the transpose of the
-    measurement effect acting on a fiducial.
+    """Make a list of matrices for the gate set measurement operations.
+
+    Makes a list of matrices, where each matrix corresponds to a single
+    measurement effect in the gate set, and the column of each matrix is the
+    transpose of the measurement effect acting on a fiducial.
 
     Parameters
     ----------
@@ -88,8 +91,9 @@ def make_meas_mxs(gs,prepMeasList):
     Returns
     ----------
     outputMatList : list of arrays
-        List of arrays, where each array corresponds to one measurement in the gate set,
-        and each column therein corresponds to a single fiducial.
+        List of arrays, where each array corresponds to one measurement in the
+        gate set, and each column therein corresponds to a single fiducial.
+
     """
 
     dimE = gs.get_dimension()
@@ -106,8 +110,7 @@ def make_meas_mxs(gs,prepMeasList):
     return outputMatList
 
 def test_fiducial_list(gateset,fidList,prepOrMeas,scoreFunc='all',returnAll=False,threshold=1e6):
-    """
-    Tests a prep or measure fiducial list for informational completeness.
+    """Tests a prep or measure fiducial list for informational completeness.
 
     Parameters
     ----------
@@ -121,39 +124,43 @@ def test_fiducial_list(gateset,fidList,prepOrMeas,scoreFunc='all',returnAll=Fals
         Are we testing preparation or measurement fiducials?
 
     scoreFunc : str ('all' or 'worst'), optional (default is 'all')
-        Sets the objective function for scoring a fiducial set.
-        If 'all', score is (number of fiducials) * sum(1/Eigenvalues of score matrix).
-        If 'worst', score is (number of fiducials) * 1/min(Eigenvalues of score matrix).
-        Note:  Choosing 'worst' corresponds to trying to make the optimizer make the
-        "worst" direction (the one we are least sensitive to in Hilbert-Schmidt space)
-        as minimally bad as possible.
-        Choosing 'all' corresponds to trying to make the optimizer make us as sensitive
-        as possible to all directions in Hilbert-Schmidt space.
-        (Also note- because we are using a simple integer program to choose fiducials,
-        it is possible to get stuck in a local minimum, and choosing one or the other
-        objective function can help avoid such minima in different circumstances.)
+        Sets the objective function for scoring a fiducial set.  If 'all',
+        score is (number of fiducials) * sum(1/Eigenvalues of score matrix).
+        If 'worst', score is (number of fiducials) * 1/min(Eigenvalues of score
+        matrix).  Note:  Choosing 'worst' corresponds to trying to make the
+        optimizer make the "worst" direction (the one we are least sensitive to
+        in Hilbert-Schmidt space) as minimally bad as possible.  Choosing 'all'
+        corresponds to trying to make the optimizer make us as sensitive as
+        possible to all directions in Hilbert-Schmidt space.  (Also note-
+        because we are using a simple integer program to choose fiducials, it
+        is possible to get stuck in a local minimum, and choosing one or the
+        other objective function can help avoid such minima in different
+        circumstances.)
 
     returnAll : bool, optional (default is False)
-        If true, function returns reciprocals of eigenvalues of fiducial score matrix,
-        and the score of the fiducial set as specified by scoreFunc, in addition to a
-        boolean specifying whether or not the fiducial set is informationally complete
+        If true, function returns reciprocals of eigenvalues of fiducial score
+        matrix, and the score of the fiducial set as specified by scoreFunc, in
+        addition to a boolean specifying whether or not the fiducial set is
+        informationally complete
 
     threshold : float, optional (default is 1e6)
-        Specifies a maximum score for the score matrix, above which the fiducial set
-        is rejected as informationally incomplete.
+        Specifies a maximum score for the score matrix, above which the
+        fiducial set is rejected as informationally incomplete.
 
     Returns
     -------
     testResult : bool
         Whether or not the specified fiducial list is informationally complete
-        for the provided gate set, to within the tolerance specified by threshold.
+        for the provided gate set, to within the tolerance specified by
+        threshold.
 
     spectrum : array, optional
-        The number of fiducials times the reciprocal of the spectrum of the score matrix.
-        Only returned if returnAll == True.
+        The number of fiducials times the reciprocal of the spectrum of the
+        score matrix.  Only returned if returnAll == True.
 
     score : float, optional
         The score for the fiducial set; only returned if returnAll == True.
+
     """
 
     if scoreFunc == 'all':
@@ -204,8 +211,7 @@ def test_fiducial_list(gateset,fidList,prepOrMeas,scoreFunc='all',returnAll=Fals
 
 
 def build_bitvec_mx(n, k):
-    '''
-    Creates an exhaustive array of binary vectors of fixed length and Hamming weight.
+    """Create an array of all fixed length and Hamming weight binary vectors.
 
     Parameters
     ----------
@@ -217,25 +223,29 @@ def build_bitvec_mx(n, k):
     Returns
     ----------
     bitVecMx : _np array
-        this is the array of binary vectors of a fixed length n and fixed Hamming weight k.
-    '''
+        this is the array of binary vectors of a fixed length n and fixed
+        Hamming weight k.
+
+    """
     bitVecMx = _np.zeros([int(scipy.special.binom(n, k)), n])
     diff = n - k
 
     # Recursive function for populating a matrix of arbitrary size
     def build_mx(previous_bit_locs, i, counter):
-        '''
-        Allows arbitrary nesting of for loops
+        """Allows arbitrary nesting of for loops
 
         Parameters
         ----------
         previous_bit_locs : tuple
             current loop contents, ex:
-            for i in range(10):
-                for j in range(10):
-                    (i, j)
+
+            >>> for i in range(10):
+            >>>    for j in range(10):
+            >>>        (i, j)
+
         i : int
             Loop depth
+
         counter : int
             tracks which fields of mx have been already set
 
@@ -243,7 +253,8 @@ def build_bitvec_mx(n, k):
         ----------
         counter : int
             for updating the counter one loop above the current one
-        '''
+
+        """
         if i == 0:
             bitVecMx[counter][[previous_bit_locs]] = 1
             counter += 1
@@ -277,15 +288,14 @@ def optimize_integer_fiducials_slack(gateset, fidList,
                               threshold=1e6,
 #                              forceMinScore = 1e100,
                               verbosity=1):
-    """
-    Find a locally optimal subset of the fiducials in fidList.
+    """Find a locally optimal subset of the fiducials in fidList.
 
-    Locally optimal here means that no single fiducial can be excluded
-    without increasing the sum of the reciprocals of the singular values of the
-    "score matrix" (the matrix whose columns are the fiducials acting on the
+    Locally optimal here means that no single fiducial can be excluded without
+    increasing the sum of the reciprocals of the singular values of the "score
+    matrix" (the matrix whose columns are the fiducials acting on the
     preparation, or the transpose of the measurement acting on the fiducials),
-    by more than a fixed or variable amount of "slack", as
-    specified by fixedSlack or slackFrac.
+    by more than a fixed or variable amount of "slack", as specified by
+    fixedSlack or slackFrac.
 
     Parameters
     ----------
@@ -296,65 +306,69 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         List of all fiducials gate sequences to consider.
 
     initialWeights : list-like
-        List or array of either booleans or (0 or 1) integers
-        specifying which fiducials in fidList comprise the initial
-        fiduial set.  If None, then starting point includes all
-        fiducials.
+        List or array of either booleans or (0 or 1) integers specifying which
+        fiducials in fidList comprise the initial fiduial set.  If None, then
+        starting point includes all fiducials.
 
     scoreFunc : str ('all' or 'worst'), optional (default is 'all')
-        Sets the objective function for scoring a fiducial set.
-        If 'all', score is (number of fiducials) * sum(1/Eigenvalues of score matrix).
-        If 'worst', score is (number of fiducials) * 1/min(Eigenvalues of score matrix).
-        Note:  Choosing 'worst' corresponds to trying to make the optimizer make the
-        "worst" direction (the one we are least sensitive to in Hilbert-Schmidt space)
-        as minimally bad as possible.
-        Choosing 'all' corresponds to trying to make the optimizer make us as sensitive
-        as possible to all directions in Hilbert-Schmidt space.
-        (Also note- because we are using a simple integer program to choose fiducials,
-        it is possible to get stuck in a local minimum, and choosing one or the other
-        objective function can help avoid such minima in different circumstances.)
+        Sets the objective function for scoring a fiducial set.  If 'all',
+        score is (number of fiducials) * sum(1/Eigenvalues of score matrix).
+        If 'worst', score is (number of fiducials) * 1/min(Eigenvalues of score
+        matrix).  Note:  Choosing 'worst' corresponds to trying to make the
+        optimizer make the "worst" direction (the one we are least sensitive to
+        in Hilbert-Schmidt space) as minimally bad as possible.  Choosing 'all'
+        corresponds to trying to make the optimizer make us as sensitive as
+        possible to all directions in Hilbert-Schmidt space.  (Also note-
+        because we are using a simple integer program to choose fiducials, it
+        is possible to get stuck in a local minimum, and choosing one or the
+        other objective function can help avoid such minima in different
+        circumstances.)
 
     maxIter : int, optional
         The maximum number of iterations before stopping.
 
     fixedSlack : float, optional
         If not None, a floating point number which specifies that excluding a
-        fiducial is allowed to increase the fiducial set score additively by fixedSlack.
-        You must specify *either* fixedSlack or slackFrac.
+        fiducial is allowed to increase the fiducial set score additively by
+        fixedSlack.  You must specify *either* fixedSlack or slackFrac.
 
     slackFrac : float, optional
         If not None, a floating point number which specifies that excluding a
-        fiducial is allowed to increase the fiducial set score multiplicatively by (1+slackFrac).
-        You must specify *either* fixedSlack or slackFrac.
+        fiducial is allowed to increase the fiducial set score multiplicatively
+        by (1+slackFrac).  You must specify *either* fixedSlack or slackFrac.
 
     returnAll : bool, optional
-        If True, return the final "weights" vector and score dictionary
-        in addition to the optimal fiducial list (see below).
+        If True, return the final "weights" vector and score dictionary in
+        addition to the optimal fiducial list (see below).
 
     forceEmpty : bool, optional (default is True)
-        Whether or not to force all fiducial sets to contain the empty gate string as a fiducial.
-        IMPORTANT:  This only works if the first element of fidList is the empty gate string.
+        Whether or not to force all fiducial sets to contain the empty gate
+        string as a fiducial.
+
+        IMPORTANT:  This only works if the first element of fidList is the
+        empty gate string.
 
     forceEmptyScore : float, optional (default is 1e100)
-        When forceEmpty is True, what score to assign any fiducial set
-        that does not contain the empty gate string as a fiducial.
+        When forceEmpty is True, what score to assign any fiducial set that
+        does not contain the empty gate string as a fiducial.
 
     forceMin : bool, optional (default is False)
-        If True, forces fiducial selection to choose a fiducial set that is *at least* as
-        large as forceMinNum.
+        If True, forces fiducial selection to choose a fiducial set that is *at
+        least* as large as forceMinNum.
 
     forceMinNum : int, optional (default is None)
-        If not None, and forceMin == True, the minimum size of the returned fiducial set.
+        If not None, and forceMin == True, the minimum size of the returned
+        fiducial set.
 
     forceMinScore : float, optional (default is 1e100)
-        When forceMin is True, what score to assign any fiducial set
-        that does not contain at least forceMinNum fiducials.
+        When forceMin is True, what score to assign any fiducial set that does
+        not contain at least forceMinNum fiducials.
 
     threshold : float, optional (default is 1e6)
-        Entire fiducial list is first scored before attempting to select fiducials; if score
-        is above threshold, then fiducial selection will auto-fail.  If final fiducial set
-        selected is above threshold, then fiducial selection will print a warning, but
-        return selected set.
+        Entire fiducial list is first scored before attempting to select
+        fiducials; if score is above threshold, then fiducial selection will
+        auto-fail.  If final fiducial set selected is above threshold, then
+        fiducial selection will print a warning, but return selected set.
 
     verbosity : int, optional
         Integer >= 0 indicating the amount of detail to print.
@@ -365,14 +379,15 @@ def optimize_integer_fiducials_slack(gateset, fidList,
         Sublist of fidList specifying the final, optimal, set of fiducials.
 
     weights : array
-        Integer array, of length len(fidList), containing 0s and 1s to
-        indicate which elements of fidList were chosen as finalFidList.
-        Only returned when returnAll == True.
+        Integer array, of length len(fidList), containing 0s and 1s to indicate
+        which elements of fidList were chosen as finalFidList.  Only returned
+        when returnAll == True.
 
     scoreDictionary : dict
         Dictionary with keys == tuples of 0s and 1s of length len(fidList),
         specifying a subset of fiducials, and values == 1.0/smallest-non-gauge-
         eigenvalue "scores".
+
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
