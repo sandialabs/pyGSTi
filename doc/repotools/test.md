@@ -15,9 +15,9 @@
 | `--cores=4`     | runs tests across n cores (max if left out)          |
 
 ##### Also, `runTests.py` can take individual packages/files/tests as arguments
-ex:  *`./runTests.py tools io`* Runs only the `tools` and `io` packages
-*`./runTests.py report/testReport.py`* runs only tests in `report`
-*`./runTests.py report/testReport.py:test_reports_logL_TP_wCIs`* runs the specific test `test_reports_logL_TP_wCIs`
+ex:  *`./runTests.py tools io`* Runs only the `tools` and `io` packages  
+*`./runTests.py report/testReport.py`* runs only tests in `testReport.py`  
+*`./runTests.py report/testReport.py:test_reports_logL_TP_wCIs`* runs the specific test `test_reports_logL_TP_wCIs`  
 
 `runTests.py` now uses nose by default
 (So, the above example of `./runTests.py report/testReport.py` would expand to:
