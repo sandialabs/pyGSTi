@@ -7,7 +7,7 @@ default   = ['tools', 'io', 'objects', 'construction', 'drivers', 'report', 'alg
 slowtests = ['report', 'drivers']
 
 def run_tests(testnames, version=None, fast=False, changed=False,
-              parallel=False, failed=False, cores=None):
+              parallel=False, failed=False, cores=None, coverdir=None):
 
     with directory('test_packages'):
 
@@ -60,7 +60,9 @@ def run_tests(testnames, version=None, fast=False, changed=False,
         for coverpackage in covering:
             pythoncommands.append('--cover-package=pygsti.%s' % coverpackage)
 
-        pythoncommands.append('--cover-html-dir=../output/coverage/%s' % '_'.join(covering))
+        if coverdir is None:
+            coverdir = '_'.join(covering)
+        pythoncommands.append('--cover-html-dir=../output/coverage/%s' % coverdir)
 
         # Make a single subprocess call
         result = subprocess.call(pythoncommands + testnames + postcommands)
@@ -83,7 +85,9 @@ if __name__ == "__main__":
                         help='run tests in parallel')
     parser.add_argument('--cores', type=int, default=None,
                         help='run tests with n cores')
+    parser.add_argument('--coverdir', type=str, default='all',
+                        help='put html coverage report here')
 
     parsed = parser.parse_args(sys.argv[1:])
 
-    run_tests(parsed.tests, parsed.version, parsed.fast, parsed.changed, parsed.parallel, parsed.failed, parsed.cores)
+    run_tests(parsed.tests, parsed.version, parsed.fast, parsed.changed, parsed.parallel, parsed.failed, parsed.cores, parsed.coverdir)
