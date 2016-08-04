@@ -111,7 +111,7 @@ def xor(*args):
     output = sum(bool(x) for x in args) == 1
     return output
 
-def make_prep_mxs(gs,prepFidList):
+def make_prep_mxs(gs, prepFidList):
     """Make a list of matrices for the gate set preparation operations.
 
     Makes a list of matrices, where each matrix corresponds to a single
@@ -139,15 +139,15 @@ def make_prep_mxs(gs,prepFidList):
     numFid = len(prepFidList)
     outputMatList = []
     for rho in list(gs.preps.values()):
-        outputMat = _np.zeros([dimRho, numFid],float)
+        outputMat = _np.zeros([dimRho, numFid], float)
         counter = 0
         for prepFid in prepFidList:
-            outputMat[:,counter] = _np.dot(gs.product(prepFid),rho).T[0]
+            outputMat[:,counter] = _np.dot(gs.product(prepFid), rho).T[0]
             counter += 1
         outputMatList.append(outputMat)
     return outputMatList
 
-def make_meas_mxs(gs,prepMeasList):
+def make_meas_mxs(gs, prepMeasList):
     """Make a list of matrices for the gate set measurement operations.
 
     Makes a list of matrices, where each matrix corresponds to a single
@@ -244,23 +244,23 @@ def test_fiducial_list(gateset, fidList, prepOrMeas, scoreFunc='all',
 
     # fidLengths = _np.array( list(map(len,fidList)), 'i')
     if prepOrMeas == 'prep':
-        fidArrayList = make_prep_mxs(gateset,fidList)
+        fidArrayList = make_prep_mxs(gateset, fidList)
     elif prepOrMeas == 'meas':
-        fidArrayList = make_meas_mxs(gateset,fidList)
+        fidArrayList = make_meas_mxs(gateset, fidList)
     else:
         raise ValueError('Invalid value "{}" for prepOrMeas (must be "prep" '
                          'or "meas")!'.format(prepOrMeas))
     numMxs = len(fidArrayList)
 
     numFids = len(fidList)
-    scoreMx = _np.zeros([dimRho,numFids *  numMxs],float)
+    scoreMx = _np.zeros([dimRho, numFids *  numMxs], float)
     colInd = 0
 #    wts = _np.array(wts)
 #    wtsLoc = _np.where(wts)[0]
     for fidArray in fidArrayList:
         scoreMx[:,colInd:colInd+numFids] = fidArray
         colInd += numFids
-    scoreSqMx = _np.dot(scoreMx,scoreMx.T)
+    scoreSqMx = _np.dot(scoreMx, scoreMx.T)
     spectrum = _np.linalg.eigvalsh(scoreSqMx)
     score = numFids * _scoring.list_score(_np.abs(spectrum), scoreFunc)
 
@@ -449,8 +449,9 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
-    if not xor(fixedSlack,slackFrac):
-        raise ValueError("One and only one of fixedSlack or slackFrac should be specified")
+    if not xor(fixedSlack, slackFrac):
+        raise ValueError("One and only one of fixedSlack or slackFrac should "
+                         "be specified!")
 
     initial_test = test_fiducial_list(gateset, fidList, prepOrMeas,
                                       scoreFunc=scoreFunc, returnAll=True,
@@ -476,14 +477,14 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
 
     #fidLengths = _np.array( list(map(len,fidList)), 'i')
     if prepOrMeas == 'prep':
-        fidArrayList = make_prep_mxs(gateset,fidList)
+        fidArrayList = make_prep_mxs(gateset, fidList)
     elif prepOrMeas == 'meas':
-        fidArrayList = make_meas_mxs(gateset,fidList)
+        fidArrayList = make_meas_mxs(gateset, fidList)
     else:
         raise Exception('prepOrMeas must be specified!')
     numMxs = len(fidArrayList)
 
-    def compute_score(wts,cache_score = True):
+    def compute_score(wts, cache_score=True):
         score = None
         if forceEmpty and _np.count_nonzero(wts[:1]) != 1:
             score = forceEmptyScore
@@ -491,7 +492,7 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
 #            score = forceMinScore
         if score is None:
             numFids = _np.sum(wts)
-            scoreMx = _np.zeros([dimRho,int(numFids) *  int(numMxs)], float)
+            scoreMx = _np.zeros([dimRho, int(numFids) *  int(numMxs)], float)
             colInd = 0
             wts = _np.array(wts)
             wtsLoc = _np.where(wts)[0]
@@ -605,7 +606,7 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
                 # Move if we've found better position; if we've relaxed, we
                 # only move when L1 is improved.
                 if neighborScore <= score and (neighborL1 < L1
-                                               or lessWeightOnly == False):
+                                               or not lessWeightOnly):
                     weights, score, L1 = neighbor, neighborScore, neighborL1
                     bFoundBetterNeighbor = True
                     printer.log("Found better neighbor: nFids = %d score = %g"
