@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 from __future__                  import print_function, division, unicode_literals, absolute_import
-from helpers.test                import *
-from helpers.test.runChanged     import *
-from helpers.automation_tools    import directory
+from helpers.automation_tools    import * 
 import sys
 import argparse
 
@@ -32,7 +30,8 @@ def run_tests(testnames, version=None, fast=False, changed=False,
 
         # Since last commit to current branch
         if changed:
-            testnames = [name for name in get_changed_test_packages() if name in testnames] # Run only the changed packages we specify
+            testnames = [name for name in testnames if name in get_changed_packages()]
+            #testnames = [name for name in get_changed_test_packages() if name in testnames] # Run only the changed packages we specify
 
         print('Running tests %s' % ('    \n     '.join(testnames)))
 
