@@ -2,7 +2,6 @@
 from __future__                  import print_function, division, unicode_literals, absolute_import
 from helpers.test                import *
 from helpers.test.runChanged     import *
-from helpers.test.runParallel    import run_parallel
 from helpers.automation_tools    import directory
 import sys
 import argparse
@@ -43,24 +42,25 @@ def run_tests(testnames, version=None, fast=False, changed=False,
             postcommands = ['--failed']
 
         if parallel:
-            if not run_parallel(testnames, pythoncommands, postcommands, cores):
-                sys.exit(0)
+            if cores is None:
+                pythoncommands.append('--processes=-1') # Let nose figure out how to parallelize things
             else:
-                sys.exit(1)
-        else:
-            pythoncommands += ['--with-coverage', '--cover-html']
-            covering = set()
-            for name in testnames:
-                if name.count('/') > 1:
-                    covering.add(name.split('/')[0])
-                else:
-                    covering.add(name)
-            for coverpackage in covering:
-                pythoncommands.append('--cover-package=pygsti.%s' % coverpackage)
-            pythoncommands.append('--cover-html-dir=../output/coverage/%s' % '_'.join(covering))
+                pythoncommands.append('--processes=%s' % cores)
+            pythoncommands.append('--process-timeout=3600') # Yikes!
 
-            result = subprocess.call(pythoncommands + testnames + postcommands)
-            sys.exit(result)
+        pythoncommands += ['--with-coverage', '--cover-html']
+        covering = set()
+        for name in testnames:
+            if name.count('/') > 1:
+                covering.add(name.split('/')[0])
+            else:
+                covering.add(name)
+        for coverpackage in covering:
+            pythoncommands.append('--cover-package=pygsti.%s' % coverpackage)
+        pythoncommands.append('--cover-html-dir=../output/coverage/%s' % '_'.join(covering))
+
+        result = subprocess.call(pythoncommands + testnames + postcommands)
+        sys.exit(result)
 
 if __name__ == "__main__":
 
