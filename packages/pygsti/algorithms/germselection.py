@@ -6,11 +6,11 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Functions for selecting a complete set of germs for a GST analysis."""
 
-import itertools
+import warnings as _warnings
 
 import numpy as _np
 import numpy.linalg as _nla
-import warnings as _warnings
+
 from .. import objects as _objs
 from .. import construction as _constr
 from . import grasp as _grasp
@@ -99,7 +99,7 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
                                      randomizationStrength, numGSCopies, seed)
     gates = gs_target.gates.keys()
     availableGermsList = _constr.list_all_gatestrings_without_powers_and_cycles(
-                                    gates, maxGermLength)
+        gates, maxGermLength)
 
     if algorithm_kwargs is None:
         # Avoid danger of using empty dict for default value.
@@ -109,11 +109,11 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
         # Define defaults for parameters that currently have no default or
         # whose default we want to change.
         default_kwargs = {
-                          'germsList': availableGermsList,
-                          'randomize': False,
-                          'seed': seed,
-                          'verbosity': verbosity,
-                         }
+            'germsList': availableGermsList,
+            'randomize': False,
+            'seed': seed,
+            'verbosity': verbosity,
+            }
         for key in default_kwargs:
             if key not in algorithm_kwargs:
                 algorithm_kwargs[key] = default_kwargs[key]
@@ -123,11 +123,11 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
         # Define defaults for parameters that currently have no default or
         # whose default we want to change.
         default_kwargs = {
-                          'germsList': availableGermsList,
-                          'randomize': False,
-                          'seed': seed,
-                          'verbosity': verbosity,
-                         }
+            'germsList': availableGermsList,
+            'randomize': False,
+            'seed': seed,
+            'verbosity': verbosity,
+            }
         if ('slackFrac' not in algorithm_kwargs
                 and 'fixedSlack' not in algorithm_kwargs):
             algorithm_kwargs['slackFrac'] = 0.1
@@ -366,7 +366,7 @@ def calc_twirled_DDD(gateset, germsList, eps=None, check=False,
     btd_kwargs = {'gateset': gateset, 'gatestrings': germsList, 'check': check}
     if eps is not None:
         btd_kwargs['eps'] = eps
-    twirledDeriv = bulk_twirled_deriv(**btd_kwargs)/germLengths[:,None,None]
+    twirledDeriv = bulk_twirled_deriv(**btd_kwargs)/germLengths[:, None, None]
     twirledDerivDaggerDeriv = _np.einsum('ijk,ijl->ikl',
                                          _np.conjugate(twirledDeriv),
                                          twirledDeriv)
@@ -386,7 +386,7 @@ def compute_score(weights, gateset_num, scoreFunc, derivDaggerDerivList,
         score = forceSingletonsScore
     else:
         combinedDDD = _np.einsum('i,ijk', weights,
-                                  derivDaggerDerivList[gateset_num])
+                                 derivDaggerDerivList[gateset_num])
         sortedEigenvals = _np.sort(_np.real(_nla.eigvalsh(combinedDDD)))
         observableEigenvals = sortedEigenvals[nGaugeParams:]
         score = (_scoring.list_score(observableEigenvals, scoreFunc)
@@ -407,21 +407,19 @@ def randomizeGatesetList(gatesetList, randomizationStrength, numCopies,
     if len(gatesetList) > 1:
         for gatesetnum, gateset in enumerate(gatesetList):
             newgatesetList.append(gateset.randomize_with_unitary(
-                                    randomizationStrength,
-                                    seed=None if seed is None
-                                    else seed+gatesetnum))
+                randomizationStrength,
+                seed=None if seed is None else seed+gatesetnum))
     else:
         for gatesetnum in range(numCopies if numCopies is not None else 1):
             newgatesetList.append(gatesetList[0].randomize_with_unitary(
-                                    randomizationStrength,
-                                    seed=None if seed is None
-                                    else seed+gatesetnum))
+                randomizationStrength,
+                seed=None if seed is None else seed+gatesetnum))
     return newgatesetList
 
 
 def checkGermsListCompleteness(gatesetList, germsList, scoreFunc, threshold):
     """Check to see if the germsList is amplificationally complete (AC)
-    
+
     Checks for AC with respect to all the GateSets in `gatesetList`, returning
     the index of the first GateSet for which it is not AC or `-1` if it is AC
     for all GateSets.
@@ -469,13 +467,13 @@ def _SuperOpForPerfectTwirl(wrt, eps):
     """Return super operator for doing a perfect twirl with respect to wrt.
 
     """
-    assert(wrt.shape[0] == wrt.shape[1])    # only square matrices allowed
+    assert wrt.shape[0] == wrt.shape[1] # only square matrices allowed
     dim = wrt.shape[0]
-    SuperOp = _np.zeros( (dim**2, dim**2), 'complex' )
+    SuperOp = _np.zeros((dim**2, dim**2), 'complex')
 
     # Get spectrum and eigenvectors of wrt
-    wrtEvals,wrtEvecs = _np.linalg.eig(wrt)
-    wrtEvecsInv = _np.linalg.inv( wrtEvecs )
+    wrtEvals, wrtEvecs = _np.linalg.eig(wrt)
+    wrtEvecsInv = _np.linalg.inv(wrtEvecs)
 
     # We want to project  X -> M * (Proj_i * (Minv * X * M) * Proj_i) * Minv,
     # where M = wrtEvecs. So A = B = M * Proj_i * Minv and so
@@ -485,9 +483,9 @@ def _SuperOpForPerfectTwirl(wrt, eps):
     for i in range(dim):
         # Create projector onto i-th eigenspace (spanned by i-th eigenvector
         # and other degenerate eigenvectors)
-        Proj_i = _np.diag( [ (1 if (abs(wrtEvals[i] - wrtEvals[j]) <= eps)
-                              else 0) for j in range(dim) ] )
-        A = _np.dot(wrtEvecs, _np.dot(Proj_i, wrtEvecsInv) )
+        Proj_i = _np.diag([(1 if (abs(wrtEvals[i] - wrtEvals[j]) <= eps)
+                            else 0) for j in range(dim)])
+        A = _np.dot(wrtEvecs, _np.dot(Proj_i, wrtEvecsInv))
         # Need to normalize, because we are overcounting projectors onto
         # subspaces of dimension d > 1, giving us d * Proj_i tensor Proj_i^T.
         # We can fix this with a division by tr(Proj_i) = d.
@@ -534,7 +532,7 @@ def sq_sing_vals_from_deriv(deriv, weights=None):
 
 def twirled_deriv(gateset, gatestring, eps=1e-6):
     """Compute the "Twirled Derivative" of a gatestring.
-    
+
     The twirled derivative is obtained by acting on the standard derivative of
     a gate string with the twirling superoperator.
 
@@ -556,7 +554,7 @@ def twirled_deriv(gateset, gatestring, eps=1e-6):
       An array of shape (gate_dim^2, num_gateset_params)
 
     """
-    prod  = gateset.product(gatestring)
+    prod = gateset.product(gatestring)
 
     # flattened_gate_dim x vec_gateset_dim
     dProd = gateset.dproduct(gatestring, flat=True)
@@ -565,12 +563,12 @@ def twirled_deriv(gateset, gatestring, eps=1e-6):
     twirler = _SuperOpForPerfectTwirl(prod, eps)
 
     # flattened_gate_dim x vec_gateset_dim
-    return _np.dot( twirler, dProd )
+    return _np.dot(twirler, dProd)
 
 
 def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False):
     """Compute the "Twirled Derivative" of a set of gatestrings.
-    
+
     The twirled derivative is obtained by acting on the standard derivative of
     a gate string with the twirling superoperator.
 
@@ -611,8 +609,8 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False):
         ret[i] = _np.dot(twirler, dProds[i*fd:(i+1)*fd])
 
     if check:
-        for i in range(len(gatestrings)):
-            chk_ret = twirled_deriv(gateset, gatestrings[i], eps)
+        for i, gatestring in enumerate(gatestrings):
+            chk_ret = twirled_deriv(gateset, gatestring, eps)
             if _nla.norm(ret[i] - chk_ret) > 1e-6:
                 _warnings.warn("bulk twirled derive norm mismatch = "
                                "%g - %g = %g"
@@ -624,7 +622,7 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False):
 
 
 def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
-                         returnSpectrum=False, tol=1e-6):
+                           returnSpectrum=False, tol=1e-6):
     """Test whether a set of germs is able to amplify all non-gauge parameters.
 
     Parameters
@@ -670,7 +668,7 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
     gateset = removeSPAMVectors(gateset)
 
     nGerms = len(germsToTest)
-    germToPowL = [ germ*L for germ in germsToTest ]
+    germToPowL = [germ*L for germ in germsToTest]
 
     gate_dim = gateset.get_dimension()
     evt = gateset.bulk_evaltree(germToPowL)
@@ -683,7 +681,7 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
 
     germLengths = _np.array([len(germ) for germ in germsToTest], 'd')
 
-    normalizedDeriv = dprods / (L * germLengths[:,None,None])
+    normalizedDeriv = dprods / (L * germLengths[:, None, None])
 
     sortedEigenvals = sq_sing_vals_from_deriv(normalizedDeriv, weights)
 
@@ -697,7 +695,7 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
 
 
 def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
-                           returnSpectrum=False, threshold=1e6, check=False):
+                        returnSpectrum=False, threshold=1e6, check=False):
     """Test whether a set of germs is able to amplify all non-gauge parameters.
 
     Parameters
@@ -761,7 +759,7 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
     if weights is None:
         nGerms = len(germsToTest)
         # weights = _np.array( [1.0/nGerms]*nGerms, 'd')
-        weights = _np.array( [1.0]*nGerms, 'd')
+        weights = _np.array([1.0]*nGerms, 'd')
 
     combinedTDDD = _np.einsum('i,ijk', weights, twirledDerivDaggerDeriv)
     sortedEigenvals = _np.sort(_np.real(_np.linalg.eigvalsh(combinedTDDD)))
@@ -796,10 +794,15 @@ def build_up(gatesetList, germsList, randomize=True,
      numGaugeParams,
      numNonGaugeParams, numGates) = get_gateset_params(gatesetList)
 
-    germLengths = _np.array(list(map(len, germsList)), 'i')
+    germLengths = _np.array([len(germ) for germ in germsList], 'i')
     numGerms = len(germsList)
 
     weights = _np.zeros(numGerms, 'i')
+    goodGermsList = []
+    if forceSingletons:
+        weights[_np.where(germLengths == 1)] = 1
+        goodGermsList = [germ for germ
+                         in _np.array(germsList)[_np.where(germLengths == 1)]]
 
     undercompleteGatesetNum = checkGermsListCompleteness(gatesetList,
                                                          germsList,
@@ -823,13 +826,12 @@ def build_up(gatesetList, germsList, randomize=True,
     # Dict of keyword arguments passed to compute_score_non_AC that don't
     # change from call to call
     nonAC_kwargs = {
-                    'scoreFn': lambda x: _scoring.list_score(
-                                                    x, scoreFunc=scoreFunc),
-                    'thresholdAC': threshold,
-                    'numGaugeParams': numGaugeParams,
-                   }
+        'scoreFn': lambda x: _scoring.list_score(x, scoreFunc=scoreFunc),
+        'thresholdAC': threshold,
+        'numGaugeParams': numGaugeParams,
+        'gatePenalty': gatePenalty,
+        }
 
-    goodGermsList = []
     for gatesetNum, reducedGateset in enumerate(reducedGatesetList):
         derivDaggerDeriv = twirledDerivDaggerDerivList[gatesetNum]
         # Make sure the set of germs you come up with is AC for all
@@ -837,29 +839,27 @@ def build_up(gatesetList, germsList, randomize=True,
         # Remove any SPAM vectors from gateset since we only want
         # to consider the set of *gate* parameters for amplification
         # and this makes sure our parameter counting is correct
-        while _np.any(weights==0):
+        while _np.any(weights == 0):
             # As long as there are some unused germs, see if you need to add
             # another one.
             if test_germ_list_infl(reducedGateset, goodGermsList,
-                                      scoreFunc=scoreFunc,
-                                      threshold=threshold):
+                                   scoreFunc=scoreFunc, threshold=threshold):
                 # The germs are sufficient for the current gateset
                 break
-            candidateGerms = _np.where(weights==0)[0]
+            candidateGerms = _np.where(weights == 0)[0]
             candidateGermScores = []
-            for candidateGermIdx in _np.where(weights==0)[0]:
+            for candidateGermIdx in _np.where(weights == 0)[0]:
                 # If the germs aren't sufficient, try adding a single germ
                 candidateWeights = weights.copy()
                 candidateWeights[candidateGermIdx] = 1
                 partialDDD = derivDaggerDeriv[
-                                _np.where(candidateWeights==1)[0],:,:]
+                    _np.where(candidateWeights == 1)[0], :, :]
                 candidateGermScore = compute_non_AC_score(
-                                            partialDerivDaggerDeriv=partialDDD,
-                                            **nonAC_kwargs)
+                    partialDerivDaggerDeriv=partialDDD, **nonAC_kwargs)
                 candidateGermScores.append(candidateGermScore)
             # Add the germ that give the best score
             bestCandidateGerm = candidateGerms[_np.array(
-                                                candidateGermScores).argmin()]
+                candidateGermScores).argmin()]
             weights[bestCandidateGerm] = 1
             goodGermsList.append(germsList[bestCandidateGerm])
 
@@ -903,9 +903,9 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
     goodGerms = []
     weights = _np.zeros(numGerms, 'i')
     if forceSingletons:
-        weights[_np.where(germLengths==1)] = 1
+        weights[_np.where(germLengths == 1)] = 1
         goodGerms = [germ for germ
-                     in _np.array(germsList)[_np.where(germLengths==1)]]
+                     in _np.array(germsList)[_np.where(germLengths == 1)]]
 
     undercompleteGatesetNum = checkGermsListCompleteness(gatesetList,
                                                          germsList,
@@ -923,29 +923,29 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
     printer.log("Starting germ set optimization. Lower score is better.", 1)
 
     twirledDerivDaggerDerivList = [calc_twirled_DDD(gateset, germsList, tol,
-                                                       check, germLengths)
+                                                    check, germLengths)
                                    for gateset in gatesetList]
 
     # Dict of keyword arguments passed to compute_score_non_AC that don't
     # change from call to call
     nonAC_kwargs = {
-                    'scoreFn': lambda x: _scoring.list_score(
-                                                    x, scoreFunc=scoreFunc),
-                    'thresholdAC': threshold,
-                    'numGaugeParams': numGaugeParams,
-                   }
+        'scoreFn': lambda x: _scoring.list_score(x, scoreFunc=scoreFunc),
+        'thresholdAC': threshold,
+        'numGaugeParams': numGaugeParams,
+        'gatePenalty': gatePenalty,
+        }
 
 
     initN = 1
-    while _np.any(weights==0):
+    while _np.any(weights == 0):
         # As long as there are some unused germs, see if you need to add
         # another one.
         if initN == numNonGaugeParams:
             break   # We are AC for all gatesets, so we can stop adding germs.
 
-        candidateGerms = _np.where(weights==0)[0]
+        candidateGerms = _np.where(weights == 0)[0]
         candidateGermScores = []
-        for candidateGermIdx in _np.where(weights==0)[0]:
+        for candidateGermIdx in _np.where(weights == 0)[0]:
             # If the germs aren't sufficient, try adding a single germ
             candidateWeights = weights.copy()
             candidateWeights[candidateGermIdx] = 1
@@ -953,16 +953,16 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
             for derivDaggerDeriv in twirledDerivDaggerDerivList:
                 # Loop over all gatesets
                 partialDDD = derivDaggerDeriv[
-                                _np.where(candidateWeights==1)[0],:,:]
+                    _np.where(candidateWeights == 1)[0], :, :]
                 germVsGatesetScores.append(compute_non_AC_score(
-                                            partialDerivDaggerDeriv=partialDDD,
-                                            initN=initN, **nonAC_kwargs))
+                    partialDerivDaggerDeriv=partialDDD, initN=initN,
+                    **nonAC_kwargs))
             # Take the score for the current germ to be it's worst score over
             # all gatesets.
             candidateGermScores.append(max(germVsGatesetScores))
         # Add the germ that gives the best worst score
         bestCandidateGerm = candidateGerms[_np.array(
-                                            candidateGermScores).argmin()]
+            candidateGermScores).argmin()]
         weights[bestCandidateGerm] = 1
         goodGerms.append(germsList[bestCandidateGerm])
         initN = min(candidateGermScores).N
@@ -1129,7 +1129,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                              % (len(germsList), len(initialWeights)))
         # Normalize the weights array to be 0s and 1s even if it is provided as
         # bools
-        weights = _np.array([1 if x else 0 for x in initialWeights ])
+        weights = _np.array([1 if x else 0 for x in initialWeights])
     else:
         weights = _np.ones(len(germsList), 'i') # default: start with all germs
 #        lessWeightOnly = True # we're starting at the max-weight vector
@@ -1157,7 +1157,6 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     lessWeightOnly = False
 
     nGaugeParams = gateset0.num_gauge_params()
-    nGerms = len(germsList)
 
     # score dictionary:
     #   keys = (gatesetNum, tuple-ized weight vector of 1's and 0's only)
@@ -1174,17 +1173,17 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     # Dict of keyword arguments passed to compute_score that don't change from
     # call to call
     cs_kwargs = {
-                    'scoreFunc': scoreFunc,
-                    'derivDaggerDerivList': twirledDerivDaggerDerivList,
-                    'forceSingletons': forceSingletons,
-                    'forceSingletonsScore': forceSingletonsScore,
-                    'numGates': numGates,
-                    'nGaugeParams': nGaugeParams,
-                    'gatePenalty': gatePenalty,
-                    'germLengths': germLengths,
-                    'l1Penalty': l1Penalty,
-                    'scoreDict': scoreD,
-                }
+        'scoreFunc': scoreFunc,
+        'derivDaggerDerivList': twirledDerivDaggerDerivList,
+        'forceSingletons': forceSingletons,
+        'forceSingletonsScore': forceSingletonsScore,
+        'numGates': numGates,
+        'nGaugeParams': nGaugeParams,
+        'gatePenalty': gatePenalty,
+        'germLengths': germLengths,
+        'l1Penalty': l1Penalty,
+        'scoreDict': scoreD,
+        }
 
     scoreList = [compute_score(weights, gateset_num, **cs_kwargs)
                  for gateset_num in range(num_gatesets)]
@@ -1220,24 +1219,24 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                 # Move if we've found better position; if we've relaxed, we
                 # only move when L1 is improved.
                 if neighborScore <= score and (neighborL1 < L1 or
-                                               lessWeightOnly == False):
+                                               not lessWeightOnly):
                     weights, score, L1 = neighbor, neighborScore, neighborL1
                     bFoundBetterNeighbor = True
 
                     printer.log("Found better neighbor: "
-                                "nGerms = %d score = %g" % (L1,score), 2)
+                                "nGerms = %d score = %g" % (L1, score), 2)
 
             if not bFoundBetterNeighbor: # Time to relax our search.
                 # From now on, don't allow increasing weight L1
-                lessWeightOnly=True
+                lessWeightOnly = True
 
-                if fixedSlack==False:
+                if fixedSlack is False:
                     # Note score is positive (for sum of 1/lambda)
                     slack = score*slackFrac
                     # print "slack =", slack
                 else:
                     slack = fixedSlack
-                assert(slack > 0)
+                assert slack > 0
 
                 printer.log("No better neighbor. Relaxing score w/slack: "
                             + "%g => %g" % (score, score+slack), 2)
@@ -1246,17 +1245,17 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                 score += slack
 
                 for neighbor in get_neighbors(weights):
-                    scoreList = [scoreD[gateset_num,tuple(neighbor)]
+                    scoreList = [scoreD[gateset_num, tuple(neighbor)]
                                  for gateset_num in range(len(gatesetList))]
                     maxScore = _np.max(scoreList)
                     if sum(neighbor) < L1 and maxScore < score:
                         weights, score, L1 = neighbor, maxScore, sum(neighbor)
                         bFoundBetterNeighbor = True
                         printer.log("Found better neighbor: "
-                                    + "nGerms = %d score = %g" % (L1,score), 2)
+                                    "nGerms = %d score = %g" % (L1, score), 2)
 
                 if not bFoundBetterNeighbor: # Relaxing didn't help!
-                    printer.log("Stationary point found!");
+                    printer.log("Stationary point found!")
                     break # end main for loop
 
             printer.log("Moving to better neighbor")
@@ -1269,8 +1268,8 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     printer.log("L1(weights) = %s" % sum(weights))
 
     goodGermsList = []
-    for index,val in enumerate(weights):
-        if val==1:
+    for index, val in enumerate(weights):
+        if val == 1:
             goodGermsList.append(germsList[index])
 
     if returnAll:
@@ -1321,10 +1320,9 @@ def germ_breadth_score_fn(germSet, germsList, twirledDerivDaggerDerivList,
     germsVsGatesetScores = []
     for derivDaggerDeriv in twirledDerivDaggerDerivList:
         # Loop over all gatesets
-        partialDDD = derivDaggerDeriv[_np.where(weights==1)[0],:,:]
+        partialDDD = derivDaggerDeriv[_np.where(weights == 1)[0], :, :]
         germsVsGatesetScores.append(compute_non_AC_score(
-                                        partialDerivDaggerDeriv=partialDDD,
-                                        initN=initN, **nonAC_kwargs))
+            partialDerivDaggerDeriv=partialDDD, initN=initN, **nonAC_kwargs))
     # Take the score for the current germ set to be its worst score over all
     # gatesets.
     return max(germsVsGatesetScores)
@@ -1381,7 +1379,7 @@ def germ_rcl_fn(candidateScores, alpha):
         # Don't care about sorting out scores with threshold N since there are
         # no scores with this N.
         nonACscore_threshold = _scoring.CompositeScore(
-                                                0, int(_np.ceil(N_threshold)))
+            0, int(_np.ceil(N_threshold)))
     else:
         # If there are N that aren't clearly in or out of the RCL, we have to
         # be a bit more careful.
@@ -1514,12 +1512,9 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
 
     numGerms = len(germsList)
 
-    goodGerms = []
     weights = _np.zeros(numGerms, 'i')
     if forceSingletons:
-        weights[_np.where(germLengths==1)] = 1
-        goodGerms = [germ for germ
-                     in _np.array(germsList)[_np.where(germLengths==1)]]
+        weights[_np.where(germLengths == 1)] = 1
 
     undercompleteGatesetNum = checkGermsListCompleteness(gatesetList,
                                                          germsList,
@@ -1537,30 +1532,29 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
     printer.log("Starting germ set optimization. Lower score is better.", 1)
 
     twirledDerivDaggerDerivList = [calc_twirled_DDD(gateset, germsList, tol,
-                                                       check, germLengths)
+                                                    check, germLengths)
                                    for gateset in gatesetList]
 
     # Dict of keyword arguments passed to compute_score_non_AC that don't
     # change from call to call
     nonAC_kwargs = {
-                    'scoreFn': lambda x: _scoring.list_score(
-                                                    x, scoreFunc=scoreFunc),
-                    'thresholdAC': threshold,
-                    'numGaugeParams': numGaugeParams,
-                    'gatePenalty': gatePenalty,
-                   }
+        'scoreFn': lambda x: _scoring.list_score(x, scoreFunc=scoreFunc),
+        'thresholdAC': threshold,
+        'numGaugeParams': numGaugeParams,
+        'gatePenalty': gatePenalty,
+        }
 
     final_nonAC_kwargs = nonAC_kwargs.copy()
     final_nonAC_kwargs['l1Penalty'] = l1Penalty
 
     scoreFn = (lambda germSet:
-                        germ_breadth_score_fn(germSet, germsList,
-                                              twirledDerivDaggerDerivList,
-                                              nonAC_kwargs, initN=1))
+               germ_breadth_score_fn(germSet, germsList,
+                                     twirledDerivDaggerDerivList, nonAC_kwargs,
+                                     initN=1))
     finalScoreFn = (lambda germSet:
-                            germ_breadth_score_fn(germSet, germsList,
-                                                  twirledDerivDaggerDerivList,
-                                                  nonAC_kwargs, initN=1))
+                    germ_breadth_score_fn(germSet, germsList,
+                                          twirledDerivDaggerDerivList,
+                                          nonAC_kwargs, initN=1))
 
     rclFn = lambda x: germ_rcl_fn(x, alpha)
 
@@ -1569,14 +1563,11 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
 
     for iteration in range(iterations):
         iterSolns = _grasp.do_grasp_iteration(
-                                elements=germsList, greedyScoreFn=scoreFn,
-                                rclFn=rclFn, localScoreFn=scoreFn,
-                                getNeighborsFn=_grasp.get_swap_neighbors,
-                                feasibleThreshold=_scoring.CompositeScore(
-                                                            threshold,
-                                                            numNonGaugeParams),
-                                initialElements=weights, seed=seed,
-                                verbosity=verbosity)
+            elements=germsList, greedyScoreFn=scoreFn, rclFn=rclFn,
+            localScoreFn=scoreFn, getNeighborsFn=_grasp.get_swap_neighbors,
+            feasibleThreshold=_scoring.CompositeScore(threshold,
+                                                      numNonGaugeParams),
+            initialElements=weights, seed=seed, verbosity=verbosity)
 
         initialSolns.append(iterSolns[0])
         localSolns.append(iterSolns[1])

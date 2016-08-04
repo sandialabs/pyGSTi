@@ -60,9 +60,9 @@ def generate_fiducials(gs_target, gatesToOmit, maxFidLength=2,
 
     if algorithm == 'slack':
         default_kwargs = {
-                          'fidList': availableFidList,
-                          'verbosity': verbosity,
-                         }
+            'fidList': availableFidList,
+            'verbosity': verbosity,
+            }
 
         if ('slackFrac' not in algorithm_kwargs
                 and 'fixedSlack' not in algorithm_kwargs):
@@ -146,7 +146,7 @@ def make_prep_mxs(gs, prepFidList):
         outputMat = _np.zeros([dimRho, numFid], float)
         counter = 0
         for prepFid in prepFidList:
-            outputMat[:,counter] = _np.dot(gs.product(prepFid), rho).T[0]
+            outputMat[:, counter] = _np.dot(gs.product(prepFid), rho).T[0]
             counter += 1
         outputMatList.append(outputMat)
     return outputMatList
@@ -182,7 +182,7 @@ def make_meas_mxs(gs, prepMeasList):
         outputMat = _np.zeros([dimE, numFid], float)
         counter = 0
         for measFid in prepMeasList:
-            outputMat[:,counter] = _np.dot(E.T, gs.product(measFid))[0]
+            outputMat[:, counter] = _np.dot(E.T, gs.product(measFid))[0]
             counter += 1
         outputMatList.append(outputMat)
     return outputMatList
@@ -300,7 +300,7 @@ def test_fiducial_list(gateset, fidList, prepOrMeas, scoreFunc='all',
 #    wts = _np.array(wts)
 #    wtsLoc = _np.where(wts)[0]
     for fidArray in fidArrayList:
-        scoreMx[:,colInd:colInd+numFids] = fidArray
+        scoreMx[:, colInd:colInd+numFids] = fidArray
         colInd += numFids
     scoreSqMx = _np.dot(scoreMx, scoreMx.T)
     spectrum = _np.linalg.eigvalsh(scoreSqMx)
@@ -539,27 +539,26 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
             wts = _np.array(wts)
             wtsLoc = _np.where(wts)[0]
             for fidArray in fidArrayList:
-                scoreMx[:,colInd:colInd+int(numFids)] = fidArray[:,wtsLoc]
+                scoreMx[:, colInd:colInd+int(numFids)] = fidArray[:, wtsLoc]
                 colInd += numFids
-            scoreSqMx = _np.dot(scoreMx,scoreMx.T)
+            scoreSqMx = _np.dot(scoreMx, scoreMx.T)
 #            score = numFids * _np.sum(1./_np.linalg.eigvalsh(scoreSqMx))
             score = numFids * _scoring.list_score(
-                                            _np.linalg.eigvalsh(scoreSqMx),
-                                            scoreFunc)
+                _np.linalg.eigvalsh(scoreSqMx), scoreFunc)
             if score <= 0 or _np.isinf(score):
                 score = 1e10
         if cache_score:
             scoreD[tuple(wts)] = score
         return score
 
-    if not (fixedNum is None):
+    if fixedNum is not None:
         if forceEmpty:
             hammingWeight = fixedNum - 1
             numBits = len(fidList) - 1
         else:
             hammingWeight = fixedNum
             numBits = len(fidList)
-        numFidLists = scipy.special.binom(numBits,hammingWeight)
+        numFidLists = scipy.special.binom(numBits, hammingWeight)
         printer.log("Output set is required to be of size%s" % fixedNum)
         printer.log("Total number of fiducial sets to be checked is%s" % numFidLists)
         printer.warning("If this is very large, you may wish to abort.")
@@ -569,19 +568,20 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
         bitVecMat = build_bitvec_mx(numBits, hammingWeight)
 
         if forceEmpty:
-            bitVecMat = _np.concatenate((_np.array([[1]*int(numFidLists)]).T,bitVecMat),axis=1)
+            bitVecMat = _np.concatenate((_np.array([[1]*int(numFidLists)]).T,
+                                         bitVecMat), axis=1)
         best_score = _np.inf
         # Explicitly declare best_weights, even if it will soon be replaced
         best_weights = []
         for weights in bitVecMat:
-            temp_score = compute_score(weights,cache_score = True)
+            temp_score = compute_score(weights, cache_score=True)
             # If scores are within machine precision, we want the fiducial set
             # that requires fewer total button gate operations.
             if abs(temp_score - best_score) < 1e-8:
 #                print "Within machine precision!"
                 bestFidList = []
                 for index, val in enumerate(best_weights):
-                    if val==1:
+                    if val == 1:
                         bestFidList.append(fidList[index])
                 tempFidList = []
                 for index, val in enumerate(weights):
@@ -602,7 +602,7 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
         goodFidList = []
         weights = best_weights
         for index, val in enumerate(weights):
-            if val==1:
+            if val == 1:
                 goodFidList.append(fidList[index])
 
         if returnAll:
@@ -620,9 +620,9 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
             yield v
 
     if initialWeights is not None:
-        weights = _np.array( [1 if x else 0 for x in initialWeights ] )
+        weights = _np.array([1 if x else 0 for x in initialWeights])
     else:
-        weights = _np.ones( nFids, 'i' ) #default: start with all germs
+        weights = _np.ones(nFids, 'i') #default: start with all germs
         lessWeightOnly = True #we're starting at the max-weight vector
 
     score = compute_score(weights)
@@ -652,19 +652,19 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
                     weights, score, L1 = neighbor, neighborScore, neighborL1
                     bFoundBetterNeighbor = True
                     printer.log("Found better neighbor: nFids = %d score = %g"
-                                % (L1,score), 2)
+                                % (L1, score), 2)
 
 
             if not bFoundBetterNeighbor: # Time to relax our search.
                 # from now on, don't allow increasing weight L1
-                lessWeightOnly=True
+                lessWeightOnly = True
 
                 if fixedSlack:
                     # Note score is positive (for sum of 1/lambda)
                     slack = score + fixedSlack
                 elif slackFrac:
                     slack = score * slackFrac
-                assert(slack > 0)
+                assert slack > 0
 
                 printer.log("No better neighbor. "
                             "Relaxing score w/slack: %g => %g"
@@ -695,8 +695,8 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
     printer.log("L1(weights) = %s" % sum(weights))
 
     goodFidList = []
-    for index,val in enumerate(weights):
-        if val==1:
+    for index, val in enumerate(weights):
+        if val == 1:
             goodFidList.append(fidList[index])
 
     # final_test = test_fiducial_list(gateset, goodFidList, prepOrMeas,
