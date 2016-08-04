@@ -576,17 +576,18 @@ def list_score(input_array, scoreFunc='all'):
     Parameters
     ----------
     input_array : numpy array
-        The singular values of the germ-set Jacobian corresponding to non-gauge
-        degrees of freedom.
+        The squares singular values of the germ-set Jacobian corresponding to
+        non-gauge degrees of freedom.
 
     scoreFunc : {'all', 'worst'}, optional (default is 'all')
         Sets the objective function for scoring a germ set.  If 'all', score is
-        `l1Penalty` * (number of germs) + sum(1/Eigenvalues of score matrix).
-        If 'worst', score is `l1Penalty` * (number of germs) +
-        1/min(Eigenvalues of score matrix).  (Also note: because we are using a
-        simple integer program to choose germs, it is possible to get stuck in
-        a local minimum, and choosing one or the other objective function can
-        help avoid such minima in different circumstances.)
+        sum(1/Eigenvalues of score matrix).
+
+        If 'worst', score is 1/min(Eigenvalues of score matrix).
+
+        Note: we use this function in various optimization routines, and
+        sometimes choosing one or the other objective function can help avoid
+        suboptimal local minima.
 
     Returns
     -------
