@@ -45,7 +45,7 @@ def run_tests(testnames, version=None, fast=False, changed=False,
             else:
                 pythoncommands.append('--processes=%s' % cores)
             # Some tests take up to an hour
-            pythoncommands.append('--process-timeout=3600') # Yikes!
+            pythoncommands.append('--process-timeout=14400') # Four hours
 
         # html coverage is prettiest
         pythoncommands += ['--with-coverage', '--cover-html']
