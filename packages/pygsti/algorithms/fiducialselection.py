@@ -12,6 +12,41 @@ from .. import objects as _objs
 from .. import construction as _constr
 
 
+def list_score(input_array, scoreFunc='all'):
+    """Score an array of eigenvalues. Smaller scores are better.
+
+    Parameters
+    ----------
+    input_array : numpy array
+        The eigenvalues to be scored.
+
+    scoreFunc : {'all', 'worst'}, optional
+        Sets the objective function for scoring the eigenvalues. If 'all',
+        score is ``sum(1/input_array)``. If 'worst', score is
+        ``1/min(input_array)``.
+
+        Note: we use this function in various optimization routines, and
+        sometimes choosing one or the other objective function can help avoid
+        suboptimal local minima.
+
+    Returns
+    -------
+    float
+        Score for the eigenvalues.
+
+    """
+    if scoreFunc == 'all':
+        score = sum(1. / _np.abs(input_array))
+    elif scoreFunc == 'worst':
+        score = 1. / min(_np.abs(input_array))
+    else:
+        raise ValueError("'%s' is not a valid value for scoreFunc.  "
+                         "Either 'all' or 'worst' must be specified!"
+                         % scoreFunc)
+
+    return score
+
+
 def generate_fiducials(gs_target, gatesToOmit, maxFidLength=2,
                        algorithm='slack', algorithm_kwargs={}, verbosity=0):
     """Generate prep and measurement fiducials for a given target gateset.
@@ -236,12 +271,6 @@ def test_fiducial_list(gateset, fidList, prepOrMeas, scoreFunc='all',
         The score for the fiducial set; only returned if returnAll == True.
 
     """
-    if scoreFunc == 'all':
-        def list_score(input_array):
-            return sum(1./input_array)
-    elif scoreFunc == 'worst':
-        def list_score(input_array):
-            return 1./min(input_array)
 
     # nFids = len(fidList)
 
@@ -267,7 +296,7 @@ def test_fiducial_list(gateset, fidList, prepOrMeas, scoreFunc='all',
         colInd += numFids
     scoreSqMx = _np.dot(scoreMx,scoreMx.T)
     spectrum = _np.linalg.eigvalsh(scoreSqMx)
-    score = numFids * list_score(_np.abs(spectrum))
+    score = numFids * list_score(_np.abs(spectrum), scoreFunc)
 
     if (score <= 0 or _np.isinf(score)) or score > threshold:
         testResult = False
@@ -511,7 +540,8 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
                 colInd += numFids
             scoreSqMx = _np.dot(scoreMx,scoreMx.T)
 #            score = numFids * _np.sum(1./_np.linalg.eigvalsh(scoreSqMx))
-            score = numFids * list_score(_np.linalg.eigvalsh(scoreSqMx))
+            score = numFids * list_score(_np.linalg.eigvalsh(scoreSqMx),
+                                         scoreFunc)
             if score <= 0 or _np.isinf(score):
                 score = 1e10
         if cache_score:
