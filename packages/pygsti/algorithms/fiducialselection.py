@@ -451,12 +451,6 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
 
     if not xor(fixedSlack,slackFrac):
         raise ValueError("One and only one of fixedSlack or slackFrac should be specified")
-    if scoreFunc == 'all':
-        def list_score(input_array):
-            return sum(1./_np.abs(input_array))
-    elif scoreFunc == 'worst':
-        def list_score(input_array):
-            return 1./min(_np.abs(input_array))
 
     initial_test = test_fiducial_list(gateset, fidList, prepOrMeas,
                                       scoreFunc=scoreFunc, returnAll=True,
