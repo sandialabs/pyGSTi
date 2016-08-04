@@ -9,7 +9,7 @@ from .helpers            import *
 import sys
 import os
 
-get_pfilename = lambda test : '../output/%s.pout' % test.replace('/', '.')
+get_pfilename = lambda test : '../output/pout/%s.pout' % test.replace('/', '.')
 
 def expand(testname, packages, files):
     with directory('..'):

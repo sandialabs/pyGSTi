@@ -10,11 +10,14 @@ import argparse
 def get_excluded():
     return ['__pycache__', 'cmp_chk_files', 'temp_test_files', 'testutils']
 
-def run_tests(testnames, version=None, fast=False, changed=False, parallel=False, failed=False, cores=None):
+def run_tests(testnames, version=None, fast=False, changed=False, 
+              parallel=False, failed=False, cores=None):
 
     slowTests = ['report', 'drivers']
 
     print('Testnames %s' % testnames)
+
+    packages = get_package_names()
 
     with directory('test_packages'):
 
@@ -45,6 +48,17 @@ def run_tests(testnames, version=None, fast=False, changed=False, parallel=False
             else:
                 sys.exit(1)
         else:
+            pythoncommands += ['--with-coverage', '--cover-html']
+            covering = set()
+            for name in testnames:
+                if name.count('/') > 1:
+                    covering.add(name.split('/')[0])
+                else:
+                    covering.add(name)
+            for coverpackage in covering:
+                pythoncommands.append('--cover-package=pygsti.%s' % coverpackage)
+            pythoncommands.append('--cover-html-dir=../output/coverage/%s' % '_'.join(covering))
+
             result = subprocess.call(pythoncommands + testnames + postcommands)
             sys.exit(result)
 
