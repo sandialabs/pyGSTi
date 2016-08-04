@@ -6,7 +6,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Functions for selecting a complete set of fiducials for a GST analysis."""
 
-import numpy     as _np
+import numpy as _np
 import scipy
 from .. import objects as _objs
 from .. import construction as _constr
@@ -182,7 +182,8 @@ def make_meas_mxs(gs,prepMeasList):
         outputMatList.append(outputMat)
     return outputMatList
 
-def test_fiducial_list(gateset,fidList,prepOrMeas,scoreFunc='all',returnAll=False,threshold=1e6):
+def test_fiducial_list(gateset, fidList, prepOrMeas, scoreFunc='all',
+                       returnAll=False, threshold=1e6):
     """Tests a prep or measure fiducial list for informational completeness.
 
     Parameters
