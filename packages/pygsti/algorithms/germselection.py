@@ -6,7 +6,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Functions for selecting a complete set of germs for a GST analysis."""
 
-from functools import total_ordering
 import itertools
 
 import numpy as _np
@@ -15,6 +14,7 @@ import warnings as _warnings
 from .. import objects as _objs
 from .. import construction as _constr
 from . import grasp as _grasp
+from . import scoring as _scoring
 
 
 def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
@@ -216,45 +216,6 @@ def setup_gateset_list(gatesetList, randomize, randomizationStrength,
     return gatesetList
 
 
-@total_ordering
-class ScoreNonAC():
-    """Class for storing and comparing scores of non-AC germ sets.
-
-    The comparison functions operate according to the logic that a lower score
-    is better. Therefore, a score that amplifies more parameters (higher `N`)
-    will always compare as less than a score that amplifies fewer parameters
-    (lower `N`), with ties for `N` being resolved by comparing `score` in the
-    straightforward manner (since `score` is assumed to be better for lower
-    values).
-
-    Parameters
-    ----------
-    N : int
-        The number of parameters the germ set amplifies
-    score : float
-        The score of the germ set restricted to the parameters it amplifies
-        (lower values corresponding to higher quality germ sets)
-
-    """
-    def __init__(self, score, N):
-        self.score = score
-        self.N = N
-
-    def __lt__(self, other):
-        if self.N > other.N:
-            return True
-        elif self.N < other.N:
-            return False
-        else:
-            return self.score < other.score
-
-    def __eq__(self, other):
-        return self.N==other.N and self.score==other.score
-
-    def __repr__(self):
-        return 'Score: {}, N: {}'.format(self.score, self.N)
-
-
 def compute_non_AC_score(scoreFn, thresholdAC=1e6, initN=1,
                          partialDerivDaggerDeriv=None, gateset=None,
                          partialGermsList=None, eps=None, numGaugeParams=None,
@@ -329,7 +290,7 @@ def compute_non_AC_score(scoreFn, thresholdAC=1e6, initN=1,
 
     Returns
     -------
-    ScoreNonAC
+    CompositeScore
         The score for the germ set indicating how many parameters it amplifies
         and its numerical score restricted to those parameters.
 
@@ -383,7 +344,7 @@ def compute_non_AC_score(scoreFn, thresholdAC=1e6, initN=1,
     # Apply penalties
     score = AC_score + l1Score + gateScore
 
-    return ScoreNonAC(score, N_AC)
+    return _scoring.CompositeScore(score, N_AC)
 
 
 def calc_twirled_DDD(gateset, germsList, eps=None, check=False,
@@ -1383,7 +1344,7 @@ def germ_breadth_score_fn(germSet, germsList, twirledDerivDaggerDerivList,
 
     Returns
     -------
-    ScoreNonAC
+    CompositeScore
         The worst score over all gatesets of the germ set.
 
     """
@@ -1403,11 +1364,11 @@ def germ_breadth_score_fn(germSet, germsList, twirledDerivDaggerDerivList,
 
 
 def germ_rcl_fn(candidateScores, alpha):
-    """Create a restricted candidate list (RCL) based on ScoreNonAC objects.
+    """Create a restricted candidate list (RCL) based on CompositeScore objects.
 
     Parameters
     ----------
-    candidateScores : list of ScoreNonAC
+    candidateScores : list of CompositScore
         List of scores to be sorted in RCL and not RCL.
 
     alpha : float
@@ -1420,20 +1381,20 @@ def germ_rcl_fn(candidateScores, alpha):
 
         Intermediate values of alpha attempt to mimic the behavior of alpha for
         simple float scores. For those scores, the score that all elements must
-        beat is ``(1 - alpha)*best + alpha*worst``. For ScoreNonAC objects, the
-        most important part of the score is the integer `N`. The appropriate
-        threshold for `N` is ``(1 - alpha)*N_max + alpha*(N_min - 1)``. If
-        ``N <= floor(N_thresh)``, it is automatically rejected from the RCL,
-        and if ``N >= ceil(N_thresh + 1)``, it is automatically included in the
-        RCL.  If neither of those initial conditions is the case (i.e.
-        `N_thresh` is not an integer and ``N == ceil(N_thresh)``), then the
-        real-valued sub score is compared to the range of real valued sub
-        scores for the value of `N` in question as described for simple float
-        scores, using ``ceil(N_thresh) - N_thresh`` as the value for alpha in
-        that case. It may be that there are no scores at the value of `N` such
-        that ``N == ceil(N_thresh)``. In this case it doesn't matter what value
-        of real sub score the threshold score is given, since no germs will
-        need to compare against it.
+        beat is ``(1 - alpha)*best + alpha*worst``. For CompositeScore objects,
+        the most important part of the score is the integer `N`. The
+        appropriate threshold for `N` is ``(1 - alpha)*N_max + alpha*(N_min -
+        1)``. If ``N <= floor(N_thresh)``, it is automatically rejected from
+        the RCL, and if ``N >= ceil(N_thresh + 1)``, it is automatically
+        included in the RCL.  If neither of those initial conditions is the
+        case (i.e.  `N_thresh` is not an integer and ``N == ceil(N_thresh)``),
+        then the real-valued sub score is compared to the range of real valued
+        sub scores for the value of `N` in question as described for simple
+        float scores, using ``ceil(N_thresh) - N_thresh`` as the value for
+        alpha in that case. It may be that there are no scores at the value of
+        `N` such that ``N == ceil(N_thresh)``. In this case it doesn't matter
+        what value of real sub score the threshold score is given, since no
+        germs will need to compare against it.
 
     Returns
     -------
@@ -1452,7 +1413,8 @@ def germ_rcl_fn(candidateScores, alpha):
     if len(thresholdScores) == 0:
         # Don't care about sorting out scores with threshold N since there are
         # no scores with this N.
-        nonACscore_threshold = ScoreNonAC(0, int(_np.ceil(N_threshold)))
+        nonACscore_threshold = _scoring.CompositeScore(
+                                                0, int(_np.ceil(N_threshold)))
     else:
         # If there are N that aren't clearly in or out of the RCL, we have to
         # be a bit more careful.
@@ -1460,7 +1422,8 @@ def germ_rcl_fn(candidateScores, alpha):
         min_threshold_score = min(thresholdScores)
         score_threshold = ((1 - alpha) * min_threshold_score
                            + alpha * max_threshold_score)
-        nonACscore_threshold = ScoreNonAC(score_threshold, N_threshold)
+        nonACscore_threshold = _scoring.CompositeScore(score_threshold,
+                                                       N_threshold)
     # Now that we've build a sensible threshold, compare all scores against
     # this.
     return _np.where(_np.array(candidateScores) <= nonACscore_threshold)[0]
@@ -1641,9 +1604,11 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
                                 elements=germsList, greedyScoreFn=scoreFn,
                                 rclFn=rclFn, localScoreFn=scoreFn,
                                 getNeighborsFn=_grasp.get_swap_neighbors,
-                                feasibleThreshold=ScoreNonAC(threshold,
-                                numNonGaugeParams), initialElements=weights,
-                                seed=seed, verbosity=verbosity)
+                                feasibleThreshold=_scoring.CompositeScore(
+                                                            threshold,
+                                                            numNonGaugeParams),
+                                initialElements=weights, seed=seed,
+                                verbosity=verbosity)
 
         initialSolns.append(iterSolns[0])
         localSolns.append(iterSolns[1])
