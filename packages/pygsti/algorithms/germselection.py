@@ -241,7 +241,7 @@ def compute_non_AC_score(scoreFn, thresholdAC=1e6, initN=1,
         A function that takes as input a list of sorted eigenvalues and returns
         a score for the partial germ set based on those eigenvalues, with lower
         scores indicating better germ sets. Usually some flavor of
-        :func:`list_score`.
+        :func:`~pygsti.algorithms.scoring.list_score`.
 
     thresholdAC : float, optional
         Value which the score (before penalties are applied) must be lower than
@@ -384,7 +384,7 @@ def compute_score(weights, gateset_num, scoreFunc, derivDaggerDerivList,
                                   derivDaggerDerivList[gateset_num])
         sortedEigenvals = _np.sort(_np.real(_nla.eigvalsh(combinedDDD)))
         observableEigenvals = sortedEigenvals[nGaugeParams:]
-        score = (list_score(observableEigenvals, scoreFunc)
+        score = (_scoring.list_score(observableEigenvals, scoreFunc)
                  + l1Penalty*_np.sum(weights)
                  + gatePenalty*_np.dot(germLengths, weights))
     if scoreDict is not None:
@@ -525,47 +525,6 @@ def sq_sing_vals_from_deriv(deriv, weights=None):
     sortedEigenvals = _np.sort(_np.real(_nla.eigvalsh(combinedDDD)))
 
     return sortedEigenvals
-
-
-def list_score(input_array, scoreFunc='all'):
-    """Score a germ set based on the physical singular values of the Jacobian.
-    
-    The physical singular values of the Jacobian are the singular values which
-    correspond to non-gauge degrees of freedom in the gate set. Smaller scores
-    ought to correspond to better-performing germ sets.
-
-    Parameters
-    ----------
-    input_array : numpy array
-        The squares singular values of the germ-set Jacobian corresponding to
-        non-gauge degrees of freedom.
-
-    scoreFunc : {'all', 'worst'}, optional (default is 'all')
-        Sets the objective function for scoring a germ set.  If 'all', score is
-        sum(1/Eigenvalues of score matrix).
-
-        If 'worst', score is 1/min(Eigenvalues of score matrix).
-
-        Note: we use this function in various optimization routines, and
-        sometimes choosing one or the other objective function can help avoid
-        suboptimal local minima.
-
-    Returns
-    -------
-    float
-        Score for the evaluated germ set.
-
-    """
-    if scoreFunc == 'all':
-        score = sum(1. / _np.abs(input_array))
-    elif scoreFunc == 'worst':
-        score = 1. / min(_np.abs(input_array))
-    else:
-        raise ValueError("'%s' is not a valid value for scoreFunc.  "
-                         "Either 'all' or 'worst' must be specified!"
-                         % scoreFunc)
-
-    return score
 
 
 def twirled_deriv(gateset, gatestring, eps=1e-6):
@@ -727,7 +686,7 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
 
     observableEigenvals = sortedEigenvals[nGaugeParams:]
 
-    bSuccess = bool(list_score(observableEigenvals, 'worst') < 1/tol)
+    bSuccess = bool(_scoring.list_score(observableEigenvals, 'worst') < 1/tol)
 
     return (bSuccess, sortedEigenvals) if returnSpectrum else bSuccess
 
@@ -745,8 +704,8 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
         List of germs gate sequences to test for completeness.
 
     scoreFunc : string
-        Label to indicate how a germ set is scored. See :meth:`list_score` for
-        details.
+        Label to indicate how a germ set is scored. See
+        :func:`~pygsti.algorithms.scoring.list_score` for details.
 
     weights : numpy array, optional
         A 1-D array of weights with length equal len(germsToTest),
@@ -805,7 +764,8 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
     nGaugeParams = gateset.num_gauge_params()
     observableEigenvals = sortedEigenvals[nGaugeParams:]
 
-    bSuccess = bool(list_score(observableEigenvals, scoreFunc) < threshold)
+    bSuccess = bool(_scoring.list_score(observableEigenvals, scoreFunc)
+                    < threshold)
 
     return (bSuccess, sortedEigenvals) if returnSpectrum else bSuccess
 
@@ -858,7 +818,8 @@ def build_up(gatesetList, germsList, randomize=True,
     # Dict of keyword arguments passed to compute_score_non_AC that don't
     # change from call to call
     nonAC_kwargs = {
-                    'scoreFn': lambda x: list_score(x, scoreFunc=scoreFunc),
+                    'scoreFn': lambda x: _scoring.list_score(
+                                                    x, scoreFunc=scoreFunc),
                     'thresholdAC': threshold,
                     'numGaugeParams': numGaugeParams,
                    }
@@ -963,7 +924,8 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
     # Dict of keyword arguments passed to compute_score_non_AC that don't
     # change from call to call
     nonAC_kwargs = {
-                    'scoreFn': lambda x: list_score(x, scoreFunc=scoreFunc),
+                    'scoreFn': lambda x: _scoring.list_score(
+                                                    x, scoreFunc=scoreFunc),
                     'thresholdAC': threshold,
                     'numGaugeParams': numGaugeParams,
                    }
@@ -1080,8 +1042,8 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         germs.
 
     scoreFunc : string
-        Label to indicate how a germ set is scored. See :func:`list_score` for
-        details.
+        Label to indicate how a germ set is scored. See
+        :func:`~pygsti.algorithms.scoring.list_score` for details.
 
     maxIter : int, optional
         The maximum number of iterations before giving up.
@@ -1498,8 +1460,8 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
         list by a single gate.
 
     scoreFunc : string
-        Label to indicate how a germ set is scored. See :func:`list_score` for
-        details.
+        Label to indicate how a germ set is scored. See
+        :func:`~pygsti.algorithms.scoring.list_score` for details.
 
     tol : float, optional
         Tolerance used for eigenvector degeneracy testing in twirling
@@ -1576,7 +1538,8 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
     # Dict of keyword arguments passed to compute_score_non_AC that don't
     # change from call to call
     nonAC_kwargs = {
-                    'scoreFn': lambda x: list_score(x, scoreFunc=scoreFunc),
+                    'scoreFn': lambda x: _scoring.list_score(
+                                                    x, scoreFunc=scoreFunc),
                     'thresholdAC': threshold,
                     'numGaugeParams': numGaugeParams,
                     'gatePenalty': gatePenalty,
