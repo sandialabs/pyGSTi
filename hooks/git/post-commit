@@ -35,6 +35,10 @@ if __name__ == '__main__':
             print('Generating pylint report in background process. Checkout test/output/ in about a minute')
             subprocess.Popen(['./lint.py', '--score'], stdout=FNULL, stderr=FNULL) # Generate score, hope it doesn't hang
 
+    with open(os.devnull, 'w') as FNULL:
+        with directory('test'):
+            subprocess.Popen(['./lint.py', '--score'], stdout=FNULL, stderr=FNULL) # Generate score, hope it doesn't hang
+
     sys.exit(0)
 
 
