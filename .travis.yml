@@ -36,17 +36,17 @@ before_install:
   - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/oberdiek.tds.zip
   - sudo wget http://mirrors.ctan.org/install/macros/generic/ifxetex.tds.zip
   - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/standalone.tds.zip
-  - sudo unzip etoolbox.tds.zip
-  - sudo unzip adjustbox.tds.zip
-  - sudo unzip collectbox.tds.zip
-  - sudo unzip pdfcomment.tds.zip
-  - sudo unzip datetime2.tds.zip
-  - sudo unzip tracklang.tds.zip
-  - sudo unzip bezos.tds.zip
-  - sudo unzip hyperref.tds.zip
-  - sudo unzip oberdiek.tds.zip
-  - sudo unzip ifxetex.tds.zip
-  - sudo unzip standalone.tds.zip
+  - sudo unzip -o etoolbox.tds.zip
+  - sudo unzip -o adjustbox.tds.zip
+  - sudo unzip -o collectbox.tds.zip
+  - sudo unzip -o pdfcomment.tds.zip
+  - sudo unzip -o datetime2.tds.zip
+  - sudo unzip -o tracklang.tds.zip
+  - sudo unzip -o bezos.tds.zip
+  - sudo unzip -o hyperref.tds.zip
+  - sudo unzip -o oberdiek.tds.zip
+  - sudo unzip -o ifxetex.tds.zip
+  - sudo unzip -o standalone.tds.zip
   - sudo texhash 
   - popd
   - "export DISPLAY=:99.0"
