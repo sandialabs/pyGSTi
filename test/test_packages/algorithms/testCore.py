@@ -11,7 +11,7 @@ from ..testutils import BaseTestCase, compare_files, temp_files
 class TestCoreMethods(BaseTestCase):
 
     def setUp(self):
-        super(CoreTestCase, self).setUp()
+        super(TestCoreMethods, self).setUp()
 
         self.gateset = std.gs_target
         self.datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0.1)

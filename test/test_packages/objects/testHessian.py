@@ -13,7 +13,7 @@ from ..testutils import BaseTestCase, compare_files, temp_files
 class TestHessianMethods(BaseTestCase):
 
     def setUp(self):
-        super(HessianTestCase, self).setUp()
+        super(TestHessianMethods, self).setUp()
 
         self.gateset = pygsti.io.load_gateset(compare_files + "/analysis.gateset")
         self.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
