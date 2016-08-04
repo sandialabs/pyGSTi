@@ -19,7 +19,7 @@ from . import scoring as _scoring
 
 def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
                    numGSCopies=5, seed=None, maxGermLength=6,
-                   algorithm='greedy', algorithm_kwargs={}, verbosity=0):
+                   algorithm='greedy', algorithm_kwargs=None, verbosity=0):
     """Generate a germ set for doing GST with a given target gateset.
 
     This function provides a streamlined interface to a variety of germ
@@ -100,6 +100,11 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
     gates = gs_target.gates.keys()
     availableGermsList = _constr.list_all_gatestrings_without_powers_and_cycles(
                                     gates, maxGermLength)
+
+    if algorithm_kwargs is None:
+        # Avoid danger of using empty dict for default value.
+        algorithm_kwargs = {}
+
     if algorithm == 'greedy':
         # Define defaults for parameters that currently have no default or
         # whose default we want to change.

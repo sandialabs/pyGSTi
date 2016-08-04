@@ -14,7 +14,7 @@ from . import scoring as _scoring
 
 
 def generate_fiducials(gs_target, gatesToOmit, maxFidLength=2,
-                       algorithm='slack', algorithm_kwargs={}, verbosity=0):
+                       algorithm='slack', algorithm_kwargs=None, verbosity=0):
     """Generate prep and measurement fiducials for a given target gateset.
 
     Parameters
@@ -53,6 +53,10 @@ def generate_fiducials(gs_target, gatesToOmit, maxFidLength=2,
     """
     fidGates = [gate for gate in gs_target.gates if gate not in gatesToOmit]
     availableFidList = _constr.list_all_gatestrings(fidGates, 0, maxFidLength)
+
+    if algorithm_kwargs is None:
+        # Avoid danger of using empty dict for default value.
+        algorithm_kwargs = {}
 
     if algorithm == 'slack':
         default_kwargs = {
@@ -210,7 +214,7 @@ def compute_composite_score(gateset, fidList, prepOrMeas, scoreFunc='all',
     specLen = len(spectrum)
     N_nonzero = 0
     nonzero_score = _np.inf
-    for N in range(1, speclen + 1)
+    for N in range(1, specLen + 1):
         score = numFids * _scoring.list_score(spectrum[-N:], scoreFunc)
         if score <= 0 or _np.isinf(score) or score > threshold:
             break   # We've found a zero eigenvalue.
