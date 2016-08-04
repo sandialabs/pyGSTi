@@ -175,13 +175,51 @@ def make_meas_mxs(gs, prepMeasList):
     numFid = len(prepMeasList)
     outputMatList = []
     for E in list(gs.effects.values()):
-        outputMat = _np.zeros([dimE,numFid],float)
+        outputMat = _np.zeros([dimE, numFid], float)
         counter = 0
         for measFid in prepMeasList:
-            outputMat[:,counter] = _np.dot(E.T,gs.product(measFid))[0]
+            outputMat[:,counter] = _np.dot(E.T, gs.product(measFid))[0]
             counter += 1
         outputMatList.append(outputMat)
     return outputMatList
+
+
+def compute_composite_score(gateset, fidList, prepOrMeas, scoreFunc='all',
+                            threshold=1e6):
+    """Compute a composite score for a fiducial list.
+
+    """
+    dimRho = gateset.get_dimension()
+    if prepOrMeas == 'prep':
+        fidArrayList = make_prep_mxs(gateset, fidList)
+    elif prepOrMeas == 'meas':
+        fidArrayList = make_meas_mxs(gateset, fidList)
+    else:
+        raise ValueError('Invalid value "{}" for prepOrMeas (must be "prep" '
+                         'or "meas")!'.format(prepOrMeas))
+    numMxs = len(fidArrayList)
+
+    numFids = len(fidList)
+    scoreMx = _np.zeros([dimRho, numFids *  numMxs], float)
+    colInd = 0
+    for fidArray in fidArrayList:
+        scoreMx[:, colInd:colInd+numFids] = fidArray
+        colInd += numFids
+    scoreSqMx = _np.dot(scoreMx, scoreMx.T)
+    spectrum = sorted(_np.abs(_np.linalg.eigvalsh(scoreSqMx)))
+    specLen = len(spectrum)
+    N_nonzero = 0
+    nonzero_score = _np.inf
+    for N in range(1, speclen + 1)
+        score = numFids * _scoring.list_score(spectrum[-N:], scoreFunc)
+        if score <= 0 or _np.isinf(score) or score > threshold:
+            break   # We've found a zero eigenvalue.
+        else:
+            nonzero_score = score
+            N_nonzero = N
+
+    return _scoring.CompositeScore(nonzero_score, N_nonzero)
+
 
 def test_fiducial_list(gateset, fidList, prepOrMeas, scoreFunc='all',
                        returnAll=False, threshold=1e6):
