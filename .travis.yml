@@ -20,7 +20,7 @@ before_install:
   - sudo apt-get -qq update
   - sudo apt-get -qq install -y gfortran libblas-dev liblapack-dev
 # See here: http://lsi.ugr.es/~jmantas/pdp/ayuda/datos/instalaciones/Install_OpenMPI_en.pdf
-# - sudo apt-get -qq install -y openmpi-bin openmpi-common openssh-client openssh-server libopenmpi1.3 libopenmpi-dbg libopenmpi-dev
+  - sudo apt-get -qq install -y openmpi-bin openmpi-common openssh-client openssh-server libopenmpi1.3 libopenmpi-dbg libopenmpi-dev
   - sudo apt-get -qq install -y texlive-full 
   - sudo apt-get -qq install texlive-generic-extra # Not in texlive full? We'll see!
   - sudo apt-get -qq install texlive-latex-extra 
