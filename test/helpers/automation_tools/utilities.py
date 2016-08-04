@@ -13,7 +13,7 @@ def get_output(commands):
     return output.decode('utf-8')
 
 # Immediate subdirectories
-def get_packages():
+def get_packages(directory):
     for _, packages, _ in os.walk(directory):
         return packages # exit early
     return []
