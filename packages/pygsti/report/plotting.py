@@ -213,7 +213,7 @@ def probability_matrix( gateString, gateset, spamlabel, strs, fidPairs=None,
         for j,effectStr in enumerate(effectStrs):
             for i,prepStr in enumerate(prepStrs):
                 s = prepStr + gateString + effectStr
-                if s in gatestring_filter:
+                if (gatestring_filter is None) or (s in gatestring_filter):
                     ret[j,i] = gateset.pr(spamlabel, s)
         return ret
     else:
@@ -396,9 +396,22 @@ class LinLogNorm(_matplotlib.colors.Normalize):
             return return_value.view(_np.ma.MaskedArray)
 
     def __call__(self, value, clip=None):
+
+        if isinstance(value, _np.ma.MaskedArray) and value.count() == 0:
+            # no unmasked elements, in which case a matplotlib bug causes the
+            # __call__ below to fail (numpy.bool_ has no attribute '_mask')
+            return_value = _np.ma.array( _np.zeros(value.shape),
+                                         mask=_np.ma.getmask(value))
+            # so just create a dummy return value with the correct size
+            # that has all it's entries masked (like value does)
+            if return_value.shape==(): return return_value.item()
+            else: return return_value.view(_np.ma.MaskedArray)
+            
         lin_norm_value = super(LinLogNorm, self).__call__(value)
+
         if self.trans is None:
             self.trans = (self.vmax - self.vmin)/10 + self.vmin
+
         norm_trans = super(LinLogNorm, self).__call__(self.trans)
         log10_norm_trans = _np.ma.log10(norm_trans)
         with _np.errstate(divide='ignore'):
@@ -1435,7 +1448,7 @@ def chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
     prepStrs, effectStrs = strs
     def mx_fn(gateStr,x,y):
         return chi2_matrix( gateStr, dataset, gateset, strs, minProbClipForWeighting, fidPairs,
-                            gatestring_filters[x])
+                            gatestring_filters[x] if gatestring_filters is not None else None)
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
     stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=linlg_pcntle, dof=dof)
 
@@ -1550,7 +1563,7 @@ def logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
     prepStrs, effectStrs = strs
     def mx_fn(gateStr,x,y):
         return logl_matrix( gateStr, dataset, gateset, strs, minProbClipForWeighting, fidPairs,
-                            gatestring_filters[x])
+                            gatestring_filters[x] if gatestring_filters is not None else None )
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
     stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=linlg_pcntle, dof=dof)
 
@@ -2314,7 +2327,7 @@ def direct_chi2_matrix(sigma, dataset, directGateset, strs,
     """
     chiSqMx = _np.zeros( (len(strs[1]),len(strs[0])), 'd')
     if sigma is None: return _np.nan*chiSqMx
-    cntMx  = total_count_matrix(  sigma, dataset, strs, fidPairs, gatestring_filter)
+    cntMx  = total_count_matrix(  sigma, dataset, strs, fidPairs, gatestring_filter )
     gs_direct = directGateset
     for sl in gs_direct.get_spam_labels():
         probMx = probability_matrix( _objs.GateString( ("GsigmaLbl",) ),
@@ -2433,7 +2446,8 @@ def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
     prepStrs, effectStrs = strs
     def mx_fn(gateStr,x,y):
         return direct_chi2_matrix( gateStr, dataset, directGatesets.get(gateStr,None),
-                                   strs, minProbClipForWeighting, fidPairs, gatestring_filters[x])
+                                   strs, minProbClipForWeighting, fidPairs, 
+                                   gatestring_filters[x] if (gatestring_filters is not None) else None)
 
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
     stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=linlg_pcntle, dof=dof)
@@ -2612,7 +2626,8 @@ def direct_logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
     prepStrs, effectStrs = strs
     def mx_fn(gateStr,x,y):
         return direct_logl_matrix( gateStr, dataset, directGatesets.get(gateStr,None),
-                                   strs, minProbClipForWeighting, fidPairs, gatestring_filters[x])
+                                   strs, minProbClipForWeighting, fidPairs,
+                                   gatestring_filters[x] if (gatestring_filters is not None) else None)
 
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
     stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=linlg_pcntle, dof=dof)
@@ -3048,7 +3063,7 @@ def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
         # LEXICOGRAPHICAL VS MATRIX ORDER
         if gateStr is None: return _np.nan * _np.zeros( (len(effectStrs),len(prepStrs)), 'd')
 
-        if gatestring_filters[x] is not None:
+        if gatestring_filters is not None:
             ret = _np.nan * _np.ones( (len(effectStrs),len(prepStrs)), 'd')
             for j,effectStr in enumerate(effectStrs):
                 for i,prepStr in enumerate(prepStrs):
@@ -3254,7 +3269,7 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
         # LEXICOGRAPHICAL VS MATRIX ORDER
         if gateStr is None: return _np.nan * _np.zeros( (len(effectStrs),len(prepStrs)), 'd')
 
-        if gatestring_filters[x] is not None:
+        if gatestring_filters is not None:
             ret = _np.nan * _np.ones( (len(effectStrs),len(prepStrs)), 'd')
             for j,effectStr in enumerate(effectStrs):
                 for i,prepStr in enumerate(prepStrs):
