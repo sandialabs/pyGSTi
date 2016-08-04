@@ -10,6 +10,6 @@ with directory('../packages/pygsti'):
     for package in get_packages(os.getcwd()):
         if package not in exclude:
             print('Finding duplicated code in %s' % package)
-            subprocess.call(['clonedigger', package, '-o', '../../test/output/dup_%s.html' % package])
+            subprocess.call(['clonedigger', package, '-o', '../../test/output/dup/dup_%s.html' % package])
 
 print('Done')
