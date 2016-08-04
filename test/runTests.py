@@ -1,53 +1,56 @@
 #!/usr/bin/env python3
 from __future__                  import print_function, division, unicode_literals, absolute_import
-from helpers.automation_tools    import * 
-import sys
-import argparse
+from helpers.automation_tools    import directory, get_changed_packages
+import subprocess, argparse, sys
 
-def get_excluded():
-    return ['__pycache__', 'cmp_chk_files', 'temp_test_files', 'testutils']
+default   = ['tools', 'io', 'objects', 'construction', 'drivers', 'report', 'algorithms', 'optimize']
+slowtests = ['report', 'drivers']
 
-def run_tests(testnames, version=None, fast=False, changed=False, 
+def run_tests(testnames, version=None, fast=False, changed=False,
               parallel=False, failed=False, cores=None):
-
-    slowTests = ['report', 'drivers']
-
-    print('Testnames %s' % testnames)
-
-    packages = get_package_names()
 
     with directory('test_packages'):
 
+        # Don't run report or drivers
         if fast:
-            exclude += slowTests # Shave off ~3 hrs?
+            for slowtest in slowtests:
+                testnames.remove(slowtest)
 
         # Specify the versions of your test :)
         if version is None:
+            # The version this file was run/imported with
             pythoncommands = ['python%s.%s' % (sys.version_info[0], sys.version_info[1])]
         else:
+            # The version specified
             pythoncommands = ['python%s' % version]
+        # Always use nose
         pythoncommands += ['-m', 'nose']
 
         # Since last commit to current branch
         if changed:
             testnames = [name for name in testnames if name in get_changed_packages()]
-            #testnames = [name for name in get_changed_test_packages() if name in testnames] # Run only the changed packages we specify
 
+        # testnames should be final at this point
         print('Running tests %s' % ('    \n     '.join(testnames)))
 
         # Use the failure monitoring native to nose
         postcommands = ['--with-id']
         if failed:
-            postcommands = ['--failed']
+            postcommands = ['--failed']# ~implies --with-id
 
         if parallel:
             if cores is None:
                 pythoncommands.append('--processes=-1') # Let nose figure out how to parallelize things
+                # (-1) will use all cores
             else:
                 pythoncommands.append('--processes=%s' % cores)
+            # Some tests take up to an hour
             pythoncommands.append('--process-timeout=3600') # Yikes!
 
+        # html coverage is prettiest
         pythoncommands += ['--with-coverage', '--cover-html']
+
+        # Build the set of covered packages automatically
         covering = set()
         for name in testnames:
             if name.count('/') > 1:
@@ -56,18 +59,17 @@ def run_tests(testnames, version=None, fast=False, changed=False,
                 covering.add(name)
         for coverpackage in covering:
             pythoncommands.append('--cover-package=pygsti.%s' % coverpackage)
+
         pythoncommands.append('--cover-html-dir=../output/coverage/%s' % '_'.join(covering))
 
+        # Make a single subprocess call
         result = subprocess.call(pythoncommands + testnames + postcommands)
         sys.exit(result)
 
 if __name__ == "__main__":
 
-    with directory('test_packages'):
-        defaultpackages = [name for name in get_package_names() if name not in get_excluded()]
-
     parser = argparse.ArgumentParser(description='Run tests for pygsti')
-    parser.add_argument('tests', nargs='*', default=defaultpackages, type=str,
+    parser.add_argument('tests', nargs='*', default=default, type=str,
                         help='list of packages to run tests for')
     parser.add_argument('--version', '-v', type=str,
                         help='version of python to run the tests under')

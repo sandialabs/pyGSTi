@@ -1,6 +1,6 @@
 #!/usr/bin/python
 from __future__       import print_function
-from automation_tools import get_branchname, run_pylint, get_output
+from automation_tools import get_branchname, run_pylint, get_output, directory
 from hooksettings     import generates_pylint_report
 import subprocess, os, sys
 
@@ -23,6 +23,10 @@ if __name__ == '__main__':
             print(e)
             print('Is reindent installed alongside python?\n' +
                   'On ubuntu/debian, try: apt-get install python-examples')
+
+    with open(os.devnull, 'w') as FNULL:
+        with directory('test'):
+            subprocess.Popen(['./lint.py', '--score'], stdout=FNULL, stderr=FNULL) # Generate score, hope it doesn't hang
 
     sys.exit(0)
 
