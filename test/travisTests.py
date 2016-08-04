@@ -39,4 +39,3 @@ elif doMPI == 'True':
 
 # Begin by running all of the packages in the current test matrix
 run_tests(tests, parallel=True)
-
