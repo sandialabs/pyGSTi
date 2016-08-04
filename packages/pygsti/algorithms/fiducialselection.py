@@ -274,7 +274,7 @@ def test_fiducial_list(gateset, fidList, prepOrMeas, scoreFunc='all',
     else:
         testResult = True
 
-    return testResult, spectrum, score if returnAll else testResult
+    return (testResult, spectrum, score) if returnAll else testResult
 
 
 def build_bitvec_mx(n, k):
