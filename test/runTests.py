@@ -3,6 +3,13 @@ from __future__                  import print_function, division, unicode_litera
 from helpers.automation_tools    import directory, get_changed_packages
 import subprocess, argparse, sys
 
+'''
+Script for running the test suite.
+
+see pyGSTi/doc/repotools/test.md, or try running ./runTests.py -h
+
+'''
+
 default   = ['tools', 'io', 'objects', 'construction', 'drivers', 'report', 'algorithms', 'optimize']
 slowtests = ['report', 'drivers']
 
@@ -31,16 +38,17 @@ def run_tests(testnames, version=None, fast=False, changed=False,
             testnames = [name for name in testnames if name in get_changed_packages()]
 
         # testnames should be final at this point
-        print('Running tests %s' % ('    \n     '.join(testnames)))
+        print('Running tests:\n%s' % ('\n'.join(testnames)))
 
         # Use the failure monitoring native to nose
         postcommands = ['--with-id']
         if failed:
             postcommands = ['--failed']# ~implies --with-id
 
+        # Use parallelism native to nose
         if parallel:
             if cores is None:
-                pythoncommands.append('--processes=-1') # Let nose figure out how to parallelize things
+                pythoncommands.append('--processes=-1')
                 # (-1) will use all cores
             else:
                 pythoncommands.append('--processes=%s' % cores)

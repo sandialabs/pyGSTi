@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import print_function
 from runTests   import run_tests
-import os
+import os, sys
 
 doReportA = os.environ.get('ReportA', 'False')
 doReportB = os.environ.get('ReportB', 'False')
@@ -12,7 +12,8 @@ doMPI     = os.environ.get('MPI',     'False')
 # I'm doing string comparison rather than boolean comparison because, in python, bool('False') evaluates to true
 # Build the list of packages to test depending on which portion of the build matrix is running
 
-tests = [] # Run nothing if no environment variables are set
+tests    = []   # Run nothing if no environment variables are set
+parallel = True # By default
 
 # Only testReport.py (barely finishes in time!)
 if doReportA == 'True':
@@ -26,7 +27,6 @@ elif doReportB == 'True':
     'testMetrics.py',
     'testPrecisionFormatter.py']]
 
-# Drivers
 elif doDrivers == 'True':
     tests = ['drivers']
 
@@ -35,7 +35,8 @@ elif doDefault == 'True':
 
 elif doMPI == 'True':
     tests = ['mpi']
-    run_tests(tests) # Don't run mpi tests in parallel
+    parallel = False # Not for mpi
 
+print('Running travis tests with python%s.%s' % (sys.version_info[0], sys.version_info[1]))
 # Begin by running all of the packages in the current test matrix
-run_tests(tests, parallel=True)
+run_tests(tests, parallel=parallel)
