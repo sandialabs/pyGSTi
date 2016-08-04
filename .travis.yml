@@ -18,12 +18,10 @@ env:
 # command to install dependencies
 before_install:
   - sudo apt-get -qq update
-  - sudo apt-get -qq install -y gfortran libblas-dev liblapack-dev
+  - sudo apt-get -qq install gfortran libblas-dev liblapack-dev &>/dev/null
 # See here: http://lsi.ugr.es/~jmantas/pdp/ayuda/datos/instalaciones/Install_OpenMPI_en.pdf
-  - sudo apt-get -qq install -y openmpi-bin openmpi-common openssh-client openssh-server libopenmpi1.3 libopenmpi-dbg libopenmpi-dev
-  - sudo apt-get -qq install -y texlive-full 
-  - sudo apt-get -qq install texlive-generic-extra # Not in texlive full? We'll see!
-  - sudo apt-get -qq install texlive-latex-extra 
+  - sudo apt-get -qq install openmpi-bin openmpi-common openssh-client openssh-server libopenmpi1.3 libopenmpi-dbg libopenmpi-dev &>/dev/null
+  - sudo apt-get -qq install texlive-full 
   - pushd /usr/share/texmf-texlive/
   - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/etoolbox.tds.zip
   - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/adjustbox.tds.zip
@@ -53,19 +51,17 @@ before_install:
   - "sh -e /etc/init.d/xvfb start" #some tests require a display
   - sleep 3 # give xvfb some time to start
 install:
- - travis_retry travis_wait pip install -r requirements.txt
- - pip install cvxpy python-pptx mpi4py
- - pip install -e .
+ - travis_retry travis_wait pip install -r requirements.txt &>/dev/null
+ - pip install cvxpy python-pptx mpi4py &>/dev/null 
+ - pip install -e . &>/dev/null
   
-#cache: 
-#  pip: true
-#  timeout: 1000
+cache: 
+  pip: true
+  timeout: 1000
 # command to run tests
 script:
   - cd test
   - travis_wait 40 python travisTests.py # Tests may take some time!
-  #- cd test_packages/cmp_chk_files
-  #- pdflatex full_reportA.tex
   - cd ..
 
 after_success:
