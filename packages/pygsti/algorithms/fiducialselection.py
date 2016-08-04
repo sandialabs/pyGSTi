@@ -236,7 +236,6 @@ def test_fiducial_list(gateset, fidList, prepOrMeas, scoreFunc='all',
         The score for the fiducial set; only returned if returnAll == True.
 
     """
-
     if scoreFunc == 'all':
         def list_score(input_array):
             return sum(1./input_array)
@@ -254,8 +253,8 @@ def test_fiducial_list(gateset, fidList, prepOrMeas, scoreFunc='all',
     elif prepOrMeas == 'meas':
         fidArrayList = make_meas_mxs(gateset,fidList)
     else:
-        raise Exception('Invalid value for prepOrMeas (must be "prep" or "meas")!')
-##        raise Exception('prepOrMeas must be specified!')
+        raise ValueError('Invalid value "{}" for prepOrMeas (must be "prep" '
+                         'or "meas")!'.format(prepOrMeas))
     numMxs = len(fidArrayList)
 
     numFids = len(fidList)
@@ -272,16 +271,10 @@ def test_fiducial_list(gateset, fidList, prepOrMeas, scoreFunc='all',
 
     if (score <= 0 or _np.isinf(score)) or score > threshold:
         testResult = False
-        if returnAll:
-            return testResult, spectrum, score
-        else:
-            return testResult
     else:
         testResult = True
-        if returnAll:
-            return testResult, spectrum, score
-        else:
-            return testResult
+
+    return testResult, spectrum, score if returnAll else testResult
 
 
 def build_bitvec_mx(n, k):
