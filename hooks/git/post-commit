@@ -17,9 +17,12 @@ if __name__ == '__main__':
         # Reindent
         try:
             subprocess.call(['reindent', '-r', 'packages', 'test'])
-            subprocess.call(['git', 'add', '-u'])
-            subprocess.call(['git', 'commit', '--no-verify', '--amend', '--no-edit'])
-            print('Reindentation finished')
+            # Check if anything changed during our reindent
+            numChanged = len(get_output(['git', 'diff', '--name-only']).splitlines())
+            if numChanged > 0:
+                subprocess.call(['git', 'add', '-u'])
+                subprocess.call(['git', 'commit', '--no-verify', '--amend', '--no-edit'])
+                print('Reindentation finished, commit amended')
         except Exception as e:
             print(e)
             print('Is reindent installed alongside python?\n' +
@@ -29,6 +32,7 @@ if __name__ == '__main__':
 
     with open(os.devnull, 'w') as FNULL:
         with directory('test'):
+            print('Generating pylint report in background process. Checkout test/output/ in about a minute')
             subprocess.Popen(['./lint.py', '--score'], stdout=FNULL, stderr=FNULL) # Generate score, hope it doesn't hang
 
     sys.exit(0)
