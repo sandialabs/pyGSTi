@@ -45,7 +45,7 @@ def total_count_matrix( gateString, dataset, strs, fidPairs=None,
         If not None, a list of GateString objects specifying which elements
         of the matrix should be computed.  Any matrix entry corresponding to
         an gate string *not* in this list is set to NaN.
-        
+
 
     Returns
     -------
@@ -1427,7 +1427,7 @@ def chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
     gatestring_filters : dict, optional
         If not None, a dictionary of lists whose keys are the x-values contained
         in the plot.  `gatestring_filters[x]` is a list of GateString objects
-        specifying which elements are allowed to be computed in the matrices of 
+        specifying which elements are allowed to be computed in the matrices of
         the column corresponding to x.  Other entries are not displayed.  Thus,
         this argument allows one to filter on a per-column basis which matrix
         elements are displayed.
@@ -1542,7 +1542,7 @@ def logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
     gatestring_filters : dict, optional
         If not None, a dictionary of lists whose keys are the x-values contained
         in the plot.  `gatestring_filters[x]` is a list of GateString objects
-        specifying which elements are allowed to be computed in the matrices of 
+        specifying which elements are allowed to be computed in the matrices of
         the column corresponding to x.  Other entries are not displayed.  Thus,
         this argument allows one to filter on a per-column basis which matrix
         elements are displayed.
@@ -2311,7 +2311,7 @@ def direct_chi2_matrix(sigma, dataset, directGateset, strs,
 
     fidPairs : list, optional
         A list of (iRhoStr,iEStr) tuples specifying a subset of all the prepStr,effectStr
-        pairs to include in the matrix.  
+        pairs to include in the matrix.
 
     gatestring_filter : list, optional
         If not None, a list of GateString objects specifying which elements
@@ -2424,7 +2424,7 @@ def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
     gatestring_filters : dict, optional
         If not None, a dictionary of lists whose keys are the x-values contained
         in the plot.  `gatestring_filters[x]` is a list of GateString objects
-        specifying which elements are allowed to be computed in the matrices of 
+        specifying which elements are allowed to be computed in the matrices of
         the column corresponding to x.  Other entries are not displayed.  Thus,
         this argument allows one to filter on a per-column basis which matrix
         elements are displayed.
@@ -2604,7 +2604,7 @@ def direct_logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
     gatestring_filters : dict, optional
         If not None, a dictionary of lists whose keys are the x-values contained
         in the plot.  `gatestring_filters[x]` is a list of GateString objects
-        specifying which elements are allowed to be computed in the matrices of 
+        specifying which elements are allowed to be computed in the matrices of
         the column corresponding to x.  Other entries are not displayed.  Thus,
         this argument allows one to filter on a per-column basis which matrix
         elements are displayed.
@@ -2995,7 +2995,7 @@ def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
     gatestring_filters : dict, optional
         If not None, a dictionary of lists whose keys are the x-values contained
         in the plot.  `gatestring_filters[x]` is a list of GateString objects
-        specifying which elements are allowed to be computed in the matrices of 
+        specifying which elements are allowed to be computed in the matrices of
         the column corresponding to x.  Other entries are not displayed.  Thus,
         this argument allows one to filter on a per-column basis which matrix
         elements are displayed.
@@ -3071,14 +3071,14 @@ def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
                     if s in gatestring_filters[x]:
                         ret[j,i] = delta[allGatestringsUsedInChi2Opt.index(s)]
             return ret
-                        
+
         elif fidPairs is not None:
             ret = _np.nan * _np.ones( (len(effectStrs),len(prepStrs)), 'd')
             for i,j in fidPairs:
                 ret[j,i] = delta[ allGatestringsUsedInChi2Opt.index(prepStrs[i] + gateStr + effectStrs[j]) ]
             return ret
         else:
-            return _np.array( [ [ delta[ allGatestringsUsedInChi2Opt.index(prepStr + gateStr + effectStr) ] 
+            return _np.array( [ [ delta[ allGatestringsUsedInChi2Opt.index(prepStr + gateStr + effectStr) ]
                                   for prepStr in prepStrs  ] for effectStr in effectStrs ] )
 
 
@@ -3202,7 +3202,7 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
     gatestring_filters : dict, optional
         If not None, a dictionary of lists whose keys are the x-values contained
         in the plot.  `gatestring_filters[x]` is a list of GateString objects
-        specifying which elements are allowed to be computed in the matrices of 
+        specifying which elements are allowed to be computed in the matrices of
         the column corresponding to x.  Other entries are not displayed.  Thus,
         this argument allows one to filter on a per-column basis which matrix
         elements are displayed.
@@ -3285,7 +3285,7 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
             return ret
 
         else:
-            return _np.array( [ [ delta[ allGatestringsUsedInLogLOpt.index(prepStr + gateStr + effectStr) ] 
+            return _np.array( [ [ delta[ allGatestringsUsedInLogLOpt.index(prepStr + gateStr + effectStr) ]
                                   for prepStr in prepStrs ] for effectStr in effectStrs ] )
 
 

@@ -5,10 +5,10 @@ import os
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
-class MetricsTestCase(BaseTestCase):
+class TestMetrics(BaseTestCase):
 
     def setUp(self):
-        super(MetricsTestCase, self).setUp()
+        super(TestMetrics, self).setUp()
 
         self.gateset = std.gs_target
         self.gateset_dep = self.gateset.depolarize(gate_noise=0.05, spam_noise=0)
@@ -26,7 +26,6 @@ Gx^4 20 90
             output.write(dataset_txt)
         self.ds = pygsti.io.load_dataset(temp_files + "/MetricsDataset.txt")
 
-class TestMetrics(MetricsTestCase):
 
     def test_dataset_qtys(self):
         names = ('gate string', 'gate string index', 'gate string length', 'count total',

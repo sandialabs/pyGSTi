@@ -1,6 +1,6 @@
 #!/usr/bin/python
 from __future__       import print_function
-from automation_tools import get_branchname, run_pylint
+from automation_tools import get_branchname, run_pylint, get_output
 from hooksettings     import generates_pylint_report
 import subprocess, os, sys
 
@@ -9,7 +9,20 @@ if __name__ == '__main__':
     branchname = get_branchname()
 
     if branchname in generates_pylint_report:
-        run_pylint(['./lint.py', '--score=True'])
+        run_pylint(['./lint.py', '--score'])
+
+    numChanged = len(get_output(['git', 'diff', '--name-only']).splitlines())
+    if numChanged > 0:
+        # Reindent
+        try:
+            subprocess.call(['reindent', '-r', 'packages', 'test'])
+            subprocess.call(['git', 'add', '-u'])
+            subprocess.call(['git', 'commit', '--no-verify', '--amend', '--no-edit'])
+            print('Reindentation finished')
+        except Exception as e:
+            print(e)
+            print('Is reindent installed alongside python?\n' +
+                  'On ubuntu/debian, try: apt-get install python-examples')
 
     sys.exit(0)
 

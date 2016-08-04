@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 from helpers.pylint           import get_score, look_for, find_warnings, find_errors, run_adjustables, lint_all
-from helpers.automation_tools import read_yaml, write_yaml
+from helpers.automation_tools import read_json, write_json
 import sys
 import argparse
 
 
 def check_score(on=lint_all):
-    yamlFile = 'config/pylint_config.yml'
+    jsonFile = 'config/pylint_config.json'
 
-    config       = read_yaml(yamlFile)
+    config       = read_json(jsonFile)
     desiredScore = config['desired-score']
     print('Score should be: %s' % desiredScore)
     score        = get_score(on)
@@ -17,7 +17,7 @@ def check_score(on=lint_all):
     if on == lint_all:
         if float(score) >= float(desiredScore):
             config['desired-score'] = score # Update the score if it is higher than the last one
-            write_yaml(config, yamlFile)
+            write_json(config, jsonFile)
             sys.exit(0)
         else:
             sys.exit(1)
@@ -29,15 +29,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Lint pygsti')
     parser.add_argument('specific', nargs='*',
                         help='lint for specific items')
-    parser.add_argument('--score', '-s', type=bool,
+    parser.add_argument('--score', '-s', action='store_true',
                         help='check the current repo\'s score against the last-highest score')
-    parser.add_argument('--errors', '-e', type=bool,
+    parser.add_argument('--errors', '-e', action='store_true',
                         help='check for errors in the repo')
-    parser.add_argument('--noerrors', '-n', type=bool,
+    parser.add_argument('--noerrors', '-n', action='store_true',
                         help='fail if any errors are found in core pygsti repo (not tests)')
-    parser.add_argument('--warnings', '-w', type=bool,
+    parser.add_argument('--warnings', '-w', action='store_true',
                         help='check for warnings in the repo')
-    parser.add_argument('--adjustables', '-a', type=bool,
+    parser.add_argument('--adjustables', '-a', action='store_true',
                         help='check for refactors in the repo')
 
     parsed = parser.parse_args(sys.argv[1:])

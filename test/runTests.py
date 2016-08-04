@@ -3,44 +3,16 @@ from __future__                  import print_function, division, unicode_litera
 from helpers.test                import *
 from helpers.test.runChanged     import *
 from helpers.test.runParallel    import run_parallel
-from helpers.automation_tools    import read_yaml, directory
-from helpers.info.genInfo        import get_tests, get_test_files, get_file_tests
+from helpers.automation_tools    import directory
 import sys
 import argparse
 
 def get_excluded():
     return ['__pycache__', 'cmp_chk_files', 'temp_test_files', 'testutils']
 
-def expand(testname, packages, files):
-    if testname in packages:
-        expanded = get_tests(testname)
-        expandedtests = []
-        for filename, testcases in expanded:
-            for case, tests in testcases:
-                for test in tests:
-                    expandedtests.append('%s/%s:%s.%s' % (testname, filename, case, test))
-        return expandedtests
-    elif testname.count('/') > 0 and testname.rsplit('/')[-1] in files:
-        with directory('..'):
-            expanded = get_file_tests(testname.replace('/', '.'))
-        expandedtests = []
-        for case, tests in expanded:
-            for test in tests:
-                expandedtests.append('%s:%s.%s' % (testname, case, test))
-        return expandedtests
-    else:
-        return [testname]
+def run_tests(testnames, version=None, fast=False, changed=False, parallel=False, failed=False, cores=None):
 
-def run_tests(testnames, version=None, fast=False, changed=False, parallel=False, failed=False):
-    config = read_yaml('config/test_config.yml')
-    slowTests = config['slow-tests']
-
-    with directory('test_packages'):
-        packages = [name for name in get_package_names() if name not in get_excluded()]
-    files = [testfile for package in packages for testfile in get_test_files(package)]
-
-    testnames = [expand(name, packages, files) for name in testnames]
-    testnames = [name for subtests in testnames for name in subtests] # join lists
+    slowTests = ['report', 'drivers']
 
     print('Testnames %s' % testnames)
 
@@ -68,7 +40,7 @@ def run_tests(testnames, version=None, fast=False, changed=False, parallel=False
             postcommands = ['--failed']
 
         if parallel:
-            if not run_parallel(testnames, pythoncommands, postcommands):
+            if not run_parallel(testnames, pythoncommands, postcommands, cores):
                 sys.exit(0)
             else:
                 sys.exit(1)
@@ -85,15 +57,17 @@ if __name__ == "__main__":
                         help='list of packages to run tests for')
     parser.add_argument('--version', '-v', type=str,
                         help='version of python to run the tests under')
-    parser.add_argument('--changed', '-c', type=bool,
+    parser.add_argument('--changed', '-c', action='store_true',
                         help='run only the changed packages')
-    parser.add_argument('--fast', '-f', type=bool,
+    parser.add_argument('--fast', '-f', action='store_true',
                         help='run only the faster packages')
-    parser.add_argument('--failed', type=bool,
+    parser.add_argument('--failed', action='store_true',
                         help='run last failed tests only')
-    parser.add_argument('--parallel', '-p', type=bool,
-                        help='run last failed tests only')
+    parser.add_argument('--parallel', '-p', action='store_true',
+                        help='run tests in parallel')
+    parser.add_argument('--cores', type=int, default=None,
+                        help='run tests with n cores')
 
     parsed = parser.parse_args(sys.argv[1:])
 
-    run_tests(parsed.tests, parsed.version, parsed.fast, parsed.changed, parsed.parallel, parsed.failed)
+    run_tests(parsed.tests, parsed.version, parsed.fast, parsed.changed, parsed.parallel, parsed.failed, parsed.cores)

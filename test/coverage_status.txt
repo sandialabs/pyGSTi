@@ -75,15 +75,19 @@ pygsti/tools.py                    10      0   100%
     TOTAL                                 3594    825    77%
     ---------------------------------------------------------------------- 
 
+    This still needs to be covered more, but maybe someone more familiar with the objects package should do it?
+
 Total coverage percentages (low to high level):
 
   Tools:        98% # Higher priority (More packages depend on this one)
   Optimize:     89%
-  Objects:      77%
-  Construction: 74% # Mid priority
+* Objects:      77%
+  Construction: 94% # Mid priority
   IO:           95% #
   Algorithms:   91%
   Report:       83%
   Drivers:      99% # Lower priority (Depends on all other packages)
 
-Total repository coverage is something like 94-96% 
+*: lowest
+
+Total repository coverage is something like 94-96%+

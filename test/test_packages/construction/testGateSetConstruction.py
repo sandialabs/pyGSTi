@@ -8,7 +8,8 @@ import os
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
-class GateSetConstructionTestCase(BaseTestCase):
+
+class TestGateSetConstructionMethods(BaseTestCase):
 
     def setUp(self):
         super(GateSetConstructionTestCase, self).setUp()
@@ -17,7 +18,6 @@ class GateSetConstructionTestCase(BaseTestCase):
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = False
 
-class TestGateSetConstructionMethods(GateSetConstructionTestCase):
 
     def test_constructGates(self):
         b = "gm" #basis -- "gm" (Gell-Mann) or "std" (Standard)
