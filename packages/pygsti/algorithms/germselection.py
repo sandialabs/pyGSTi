@@ -1385,8 +1385,8 @@ def germ_rcl_fn(candidateScores, alpha):
         # be a bit more careful.
         max_threshold_score = max(thresholdScores)
         min_threshold_score = min(thresholdScores)
-        score_threshold = ((1 - alpha) * min_threshold_score
-                           + alpha * max_threshold_score)
+        score_threshold = ((1 - score_alpha) * min_threshold_score
+                           + score_alpha * max_threshold_score)
         nonACscore_threshold = _scoring.CompositeScore(score_threshold,
                                                        N_threshold)
     # Now that we've build a sensible threshold, compare all scores against
