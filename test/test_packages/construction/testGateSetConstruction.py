@@ -12,7 +12,7 @@ from ..testutils import BaseTestCase, compare_files, temp_files
 class TestGateSetConstructionMethods(BaseTestCase):
 
     def setUp(self):
-        super(GateSetConstructionTestCase, self).setUp()
+        super(TestGateSetConstructionMethods, self).setUp()
 
         #OK for these tests, since we test user interface?
         #Set GateSet objects to "strict" mode for testing
