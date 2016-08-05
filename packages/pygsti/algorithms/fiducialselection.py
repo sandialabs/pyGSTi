@@ -10,6 +10,7 @@ import numpy as _np
 import scipy
 from .. import objects as _objs
 from .. import construction as _constr
+from . import grasp as _grasp
 from . import scoring as _scoring
 
 
@@ -757,3 +758,95 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
         return goodFidList, weights, scoreD
     else:
         return goodFidList
+
+
+def grasp_fiducial_optimization(gateset, fidsList, prepOrMeas, alpha,
+                                iterations=5, scoreFunc='all', gatePenalty=0.0,
+                                l1Penalty=0.0, returnAll=False,
+                                forceEmpty=True, threshold=1e6, seed=None,
+                                verbosity=0):
+    """Use GRASP to find a high-performing set of fiducials.
+
+    """
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+
+    if prepOrMeas not in ['prep', 'meas']:
+        raise ValueError("'{}' is an invalid value for prepOrMeas (must be "
+                         "'prep' or 'meas')!".format(prepOrMeas))
+
+    initial_test = test_fiducial_list(gateset, fidsList, prepOrMeas,
+                                      scoreFunc=scoreFunc, returnAll=False,
+                                      threshold=threshold)
+    if initial_test:
+        printer.log("Complete initial fiducial set succeeds.", 1)
+        printer.log("Now searching for best fiducial set.", 1)
+    else:
+        printer.warning("Complete initial fiducial set FAILS.")
+        printer.warning("Aborting search.")
+        return (None, None, None) if returnAll else None
+
+    weights = _np.zeros(len(fidsList), dtype='i')
+    if forceEmpty:
+        fidsLens = [len(fiducial) for fiducial in fidsList]
+        weights[fidsLens.index(0)] = 1
+
+    printer.log("Starting fiducial list optimization. Lower score is better.",
+                1)
+
+    # Dict of keyword arguments passed to compute_score_non_AC that don't
+    # change from call to call
+    compute_kwargs = {
+        'gateset': gateset,
+        'prepOrMeas': prepOrMeas,
+        'scoreFunc': scoreFunc,
+        'threshold': threshold,
+        'gatePenalty': gatePenalty,
+        'returnAll': False,
+        'l1Penalty': 0.0,
+        }
+
+    final_compute_kwargs = compute_kwargs.copy()
+    final_compute_kwargs['l1Penalty'] = l1Penalty
+
+    scoreFn = lambda fidList: compute_composite_score(fidList=fidList,
+                                                      **compute_kwargs)
+
+    finalScoreFn = lambda fidList: compute_composite_score(
+        fidList=fidList, **final_compute_kwargs)
+
+    dimRho = gateset.get_dimension()
+    feasibleThreshold=_scoring.CompositeScore(threshold, dimRho)
+
+    rclFn = lambda x: _scoring.composite_rcl_fn(x, alpha)
+
+    initialSolns = []
+    localSolns = []
+
+    for iteration in range(iterations):
+        success = False
+        failCount = 0
+        while not success and failCount < 10:
+            try:
+                iterSolns = _grasp.do_grasp_iteration(
+                    elements=fidsList, greedyScoreFn=scoreFn, rclFn=rclFn,
+                    localScoreFn=scoreFn,
+                    getNeighborsFn=_grasp.get_swap_neighbors,
+                    feasibleThreshold=feasibleThreshold,
+                    initialElements=weights, seed=seed, verbosity=verbosity)
+
+                initialSolns.append(iterSolns[0])
+                localSolns.append(iterSolns[1])
+
+                success = True
+            except Exception as e:
+                failCount += 1
+                if failCount == 10:
+                    raise e
+                else:
+                    printer.warning(e)
+
+    finalScores = _np.array([finalScoreFn(localSoln)
+                             for localSoln in localSolns])
+    bestSoln = localSolns[_np.argmin(finalScores)]
+
+    return (bestSoln, initialSolns, localSolns) if returnAll else bestSoln
