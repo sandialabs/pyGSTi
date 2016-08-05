@@ -192,6 +192,40 @@ def compute_composite_score(gateset, fidList, prepOrMeas, scoreFunc='all',
                             threshold=1e6):
     """Compute a composite score for a fiducial list.
 
+    Parameters
+    ----------
+    gateset : GateSet
+        The gate set (associates gate matrices with gate labels).
+
+    fidList : list of GateStrings
+        List of fiducial gate sequences to test.
+
+    prepOrMeas : string ("prep" or "meas")
+        Are we testing preparation or measurement fiducials?
+
+    scoreFunc : str ('all' or 'worst'), optional (default is 'all')
+        Sets the objective function for scoring a fiducial set.  If 'all',
+        score is (number of fiducials) * sum(1/Eigenvalues of score matrix).
+        If 'worst', score is (number of fiducials) * 1/min(Eigenvalues of score
+        matrix).  Note:  Choosing 'worst' corresponds to trying to make the
+        optimizer make the "worst" direction (the one we are least sensitive to
+        in Hilbert-Schmidt space) as minimally bad as possible.  Choosing 'all'
+        corresponds to trying to make the optimizer make us as sensitive as
+        possible to all directions in Hilbert-Schmidt space.  (Also note-
+        because we are using a simple integer program to choose fiducials, it
+        is possible to get stuck in a local minimum, and choosing one or the
+        other objective function can help avoid such minima in different
+        circumstances.)
+
+    threshold : float, optional (default is 1e6)
+        Specifies a maximum score for the score matrix, above which the
+        fiducial set is rejected as informationally incomplete.
+
+    Returns
+    -------
+    CompositeScore
+        The score of the fiducials.
+
     """
     dimRho = gateset.get_dimension()
     if prepOrMeas == 'prep':
