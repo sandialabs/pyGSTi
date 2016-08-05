@@ -189,7 +189,7 @@ def make_meas_mxs(gs, prepMeasList):
 
 
 def compute_composite_score(gateset, fidList, prepOrMeas, scoreFunc='all',
-                            threshold=1e6):
+                            threshold=1e6, returnAll=False):
     """Compute a composite score for a fiducial list.
 
     Parameters
@@ -221,10 +221,17 @@ def compute_composite_score(gateset, fidList, prepOrMeas, scoreFunc='all',
         Specifies a maximum score for the score matrix, above which the
         fiducial set is rejected as informationally incomplete.
 
+    returnAll : bool, optional (default is False)
+        Whether the spectrum should be returned along with the score.
+
     Returns
     -------
-    CompositeScore
+    score : CompositeScore
         The score of the fiducials.
+
+    spectrum : numpy.array, optional
+        The eigenvalues of the square of the absolute value of the score
+        matrix.
 
     """
     dimRho = gateset.get_dimension()
@@ -256,7 +263,9 @@ def compute_composite_score(gateset, fidList, prepOrMeas, scoreFunc='all',
             nonzero_score = score
             N_nonzero = N
 
-    return _scoring.CompositeScore(nonzero_score, N_nonzero)
+    score = _scoring.CompositeScore(nonzero_score, N_nonzero)
+
+    return (score, spectrum) if returnAll else score
 
 
 def test_fiducial_list(gateset, fidList, prepOrMeas, scoreFunc='all',
@@ -314,33 +323,12 @@ def test_fiducial_list(gateset, fidList, prepOrMeas, scoreFunc='all',
 
     """
 
-    # nFids = len(fidList)
+    score, spectrum = compute_composite_score(gateset, fidList, prepOrMeas,
+                                              scoreFunc=scoreFunc,
+                                              threshold=threshold,
+                                              returnAll=True)
 
-    dimRho = gateset.get_dimension()
-
-    # fidLengths = _np.array( list(map(len,fidList)), 'i')
-    if prepOrMeas == 'prep':
-        fidArrayList = make_prep_mxs(gateset, fidList)
-    elif prepOrMeas == 'meas':
-        fidArrayList = make_meas_mxs(gateset, fidList)
-    else:
-        raise ValueError('Invalid value "{}" for prepOrMeas (must be "prep" '
-                         'or "meas")!'.format(prepOrMeas))
-    numMxs = len(fidArrayList)
-
-    numFids = len(fidList)
-    scoreMx = _np.zeros([dimRho, numFids *  numMxs], float)
-    colInd = 0
-#    wts = _np.array(wts)
-#    wtsLoc = _np.where(wts)[0]
-    for fidArray in fidArrayList:
-        scoreMx[:, colInd:colInd+numFids] = fidArray
-        colInd += numFids
-    scoreSqMx = _np.dot(scoreMx, scoreMx.T)
-    spectrum = _np.linalg.eigvalsh(scoreSqMx)
-    score = numFids * _scoring.list_score(_np.abs(spectrum), scoreFunc)
-
-    if (score <= 0 or _np.isinf(score)) or score > threshold:
+    if score.N < len(spectrum):
         testResult = False
     else:
         testResult = True
