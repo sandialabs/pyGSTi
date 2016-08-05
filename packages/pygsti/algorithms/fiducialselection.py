@@ -189,7 +189,8 @@ def make_meas_mxs(gs, prepMeasList):
 
 
 def compute_composite_score(gateset, fidList, prepOrMeas, scoreFunc='all',
-                            threshold=1e6, returnAll=False):
+                            threshold=1e6, returnAll=False, gatePenalty=0.0,
+                            l1Penalty=0.0):
     """Compute a composite score for a fiducial list.
 
     Parameters
@@ -223,6 +224,14 @@ def compute_composite_score(gateset, fidList, prepOrMeas, scoreFunc='all',
 
     returnAll : bool, optional (default is False)
         Whether the spectrum should be returned along with the score.
+
+    l1Penalty : float, optional (defailt is 0.0)
+        Coefficient of a penalty linear in the number of fiducials that is
+        added to ``score.score``.
+
+    gatePenalty : float, optional (defailt is 0.0)
+        Coefficient of a penalty linear in the total number of gates in all
+        fiducials that is added to ``score.score``.
 
     Returns
     -------
@@ -263,13 +272,18 @@ def compute_composite_score(gateset, fidList, prepOrMeas, scoreFunc='all',
             nonzero_score = score
             N_nonzero = N
 
+    nonzero_score += l1Penalty * len(fidList)
+
+    nonzero_score += gatePenalty * sum([len(fiducial) for fiducial in fidList])
+
     score = _scoring.CompositeScore(nonzero_score, N_nonzero)
 
     return (score, spectrum) if returnAll else score
 
 
 def test_fiducial_list(gateset, fidList, prepOrMeas, scoreFunc='all',
-                       returnAll=False, threshold=1e6):
+                       returnAll=False, threshold=1e6, l1Penalty=0.0,
+                       gatePenalty=0.0):
     """Tests a prep or measure fiducial list for informational completeness.
 
     Parameters
@@ -307,6 +321,14 @@ def test_fiducial_list(gateset, fidList, prepOrMeas, scoreFunc='all',
         Specifies a maximum score for the score matrix, above which the
         fiducial set is rejected as informationally incomplete.
 
+    l1Penalty : float, optional (defailt is 0.0)
+        Coefficient of a penalty linear in the number of fiducials that is
+        added to ``score.score``.
+
+    gatePenalty : float, optional (defailt is 0.0)
+        Coefficient of a penalty linear in the total number of gates in all
+        fiducials that is added to ``score.score``.
+
     Returns
     -------
     testResult : bool
@@ -326,7 +348,9 @@ def test_fiducial_list(gateset, fidList, prepOrMeas, scoreFunc='all',
     score, spectrum = compute_composite_score(gateset, fidList, prepOrMeas,
                                               scoreFunc=scoreFunc,
                                               threshold=threshold,
-                                              returnAll=True)
+                                              returnAll=True,
+                                              l1Penalty=l1Penalty,
+                                              gatePenalty=gatePenalty)
 
     if score.N < len(spectrum):
         testResult = False
