@@ -224,8 +224,12 @@ class OrderedSPAMLabelDict(_collections.OrderedDict):
                             + "spam labels.")
 
         # if inserted *value* already exists, clobber so values are unique
+        iToDel = None
         for k,v in self.items():
-            if val == v: del self[k]
+            if val == v: 
+                iToDel = k; break
+        if iToDel is not None: 
+            del self[iToDel] #can't do within loop in Python3
 
         #TODO: perhaps add checks that value == (prepLabel,effectLabel) labels exist
         # (would need to add a "parent" member to access the GateSet)
