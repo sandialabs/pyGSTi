@@ -4,18 +4,12 @@ import numpy as np
 import warnings
 import os
 
-class GateSetTestCase(unittest.TestCase):
+from .testGateSets import GateSetTestCase
+
+class TestGateSetMethods(GateSetTestCase):
 
     def setUp(self):
-
-        # move working directories
-        self.old = os.getcwd()
-        os.chdir(os.path.abspath(os.path.dirname(__file__)))
-
-        #OK for these tests, since we test user interface?
-        #Set GateSet objects to "strict" mode for testing
-        pygsti.objects.GateSet._strict = False
-
+        super(TestGateSetMethods, self).setUp()
 
         self.gateset = pygsti.construction.build_gateset(
             [2], [('Q0',)],['Gi','Gx','Gy'],
@@ -23,47 +17,7 @@ class GateSetTestCase(unittest.TestCase):
             prepLabels=["rho0"], prepExpressions=["0"],
             effectLabels=["E0"], effectExpressions=["1"],
             spamdefs={'plus': ('rho0','E0'),
-                           'minus': ('remainder','remainder') } )
-
-        self.tp_gateset = pygsti.construction.build_gateset(
-            [2], [('Q0',)],['Gi','Gx','Gy'],
-            [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
-            prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0"], effectExpressions=["1"],
-            spamdefs={'plus': ('rho0','E0'),
-                           'minus': ('rho0','remainder') },
-            parameterization="TP")
-
-        self.static_gateset = pygsti.construction.build_gateset(
-            [2], [('Q0',)],['Gi','Gx','Gy'],
-            [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
-            prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0"], effectExpressions=["1"],
-            spamdefs={'plus': ('rho0','E0'),
-                           'minus': ('rho0','remainder') },
-            parameterization="static")
-
-    def tearDown(self):
-        os.chdir(self.old)
-
-    def assertArraysAlmostEqual(self,a,b):
-        self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
-
-    def assertSingleElemArrayAlmostEqual(self, a, b):
-        # Ex given an array [[ 0.095 ]] and 0.095, call assertAlmostEqual(0.095, 0.095)
-        if a.size > 1:
-            raise ValueError('assertSingleElemArrayAlmostEqual should only be used on single element arrays')
-        self.assertAlmostEqual(float(a), b)
-
-    def assertNoWarnings(self, callable, *args, **kwds):
-        with warnings.catch_warnings(record=True) as warning_list:
-            warnings.simplefilter('always')
-            result = callable(*args, **kwds)
-            self.assertTrue(len(warning_list) == 0)
-        return result
-
-
-class TestGateSetMethods(GateSetTestCase):
+            'minus': ('remainder','remainder') } )
 
     def test_creation(self):
         self.assertIsInstance(self.gateset, pygsti.objects.GateSet)

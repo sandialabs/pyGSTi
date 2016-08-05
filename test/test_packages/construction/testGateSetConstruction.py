@@ -6,39 +6,18 @@ import numpy as np
 import warnings
 import os
 
-class GateSetConstructionTestCase(unittest.TestCase):
+from ..testutils import BaseTestCase, compare_files, temp_files
+
+
+class TestGateSetConstructionMethods(BaseTestCase):
 
     def setUp(self):
-        # move working directories
-        self.old = os.getcwd()
-        os.chdir(os.path.abspath(os.path.dirname(__file__)))
+        super(TestGateSetConstructionMethods, self).setUp()
 
         #OK for these tests, since we test user interface?
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = False
 
-    def tearDown(self):
-        os.chdir(self.old)
-
-    def assertArraysAlmostEqual(self,a,b):
-        self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
-
-    def assertSingleElemArrayAlmostEqual(self, a, b):
-        # Ex given an array [[ 0.095 ]] and 0.095, call assertAlmostEqual(0.095, 0.095)
-        if a.size > 1:
-            raise ValueError('assertSingleElemArrayAlmostEqual should only be used on single element arrays')
-        self.assertAlmostEqual(float(a), b)
-
-    def assertWarns(self, callable, *args, **kwds):
-        with warnings.catch_warnings(record=True) as warning_list:
-            warnings.simplefilter('always')
-            result = callable(*args, **kwds)
-            self.assertTrue(len(warning_list) > 0)
-        return result
-
-
-
-class TestGateSetConstructionMethods(GateSetConstructionTestCase):
 
     def test_constructGates(self):
         b = "gm" #basis -- "gm" (Gell-Mann) or "std" (Standard)
@@ -451,9 +430,9 @@ IDENTITYVEC sqrt(2) 0 0 0
 SPAMLABEL plus = rho E
 SPAMLABEL minus = rho remainder
 """
-        with open("../temp_test_files/Test_Gateset.txt","w") as output:
+        with open(temp_files + "/Test_Gateset.txt","w") as output:
             output.write(gateset4_txt)
-        gateset4 = pygsti.io.load_gateset("../temp_test_files/Test_Gateset.txt")
+        gateset4 = pygsti.io.load_gateset(temp_files + "/Test_Gateset.txt")
 
         std_gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
                                                          [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
@@ -1066,10 +1045,6 @@ SPAMLABEL minus = rho remainder
 
         with self.assertRaises(ValueError):
             d['rho0'] = [0] # bad default parameter type
-
-
-
-
 
 
 if __name__ == "__main__":

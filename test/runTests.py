@@ -2,61 +2,72 @@
 from __future__                  import print_function, division, unicode_literals, absolute_import
 from helpers.test                import *
 from helpers.test.runChanged     import *
-from helpers.test.runPackage     import run_package
-from helpers.automation_tools    import read_yaml, directory
+from helpers.test.runParallel    import run_parallel
+from helpers.automation_tools    import directory
 import sys
 import argparse
 
+def get_excluded():
+    return ['__pycache__', 'cmp_chk_files', 'temp_test_files', 'testutils']
 
-if __name__ == "__main__":
-    config = read_yaml('config/test_config.yml')
-    slowTests = config['slow-tests']
+def run_tests(testnames, version=None, fast=False, changed=False, parallel=False, failed=False, cores=None):
+
+    slowTests = ['report', 'drivers']
+
+    print('Testnames %s' % testnames)
 
     with directory('test_packages'):
 
-        exclude = ['__pycache__', 'cmp_chk_files', 'temp_test_files']
-        defaultpackages = [name for name in get_package_names() if name not in exclude]
-
-        parser = argparse.ArgumentParser(description='Run tests for pygsti')
-        parser.add_argument('packages', nargs='*', default=defaultpackages, type=str,
-                            help='list of packages to run tests for')
-        parser.add_argument('--version', '-v', type=float,
-                            help='version of python to run the tests under')
-        parser.add_argument('--changed', '-c', type=bool,
-                            help='run only the changed packages')
-        parser.add_argument('--fast', '-f', type=bool,
-                            help='run only the faster packages')
-        parser.add_argument('--nose', '-n', type=bool,
-                            help='run tests with nosetests')
-        parser.add_argument('--lastFailed', '-l', type=bool,
-                            help='run last failed tests only')
-
-        parsed = parser.parse_args(sys.argv[1:])
-
-        # Setup arguments and other variables:
-
-        # Specify the versions of your test :)
-        if parsed.version is None:
-            pythonCommands = ['python%s.%s' % (sys.version_info[0], sys.version_info[1])]
-        else:
-            pythonCommands = ['python%s' % parsed.version]
-
-        if parsed.fast:
+        if fast:
             exclude += slowTests # Shave off ~3 hrs?
 
-        # Since last commit to current branch
-        if parsed.changed:
-            packageNames = [name for name in get_changed_test_packages() if name in parsed.packages]
+        # Specify the versions of your test :)
+        if version is None:
+            pythoncommands = ['python%s.%s' % (sys.version_info[0], sys.version_info[1])]
         else:
-            packageNames = parsed.packages
+            pythoncommands = ['python%s' % version]
+        pythoncommands += ['-m', 'nose']
 
-        # Only running tests
-        if parsed.nose:
-            pythonCommands += ['-m', 'nose']
+        # Since last commit to current branch
+        if changed:
+            testnames = [name for name in get_changed_test_packages() if name in testnames] # Run only the changed packages we specify
 
-        print('Running packages %s' % (', '.join(packageNames)))
+        print('Running tests %s' % ('    \n     '.join(testnames)))
 
-        lastFailed = parsed.lastFailed
-        for package in packageNames:
-            run_package(package, precommands=pythonCommands,
-                        postcommand=None, lastFailed=lastFailed)
+        # Use the failure monitoring native to nose
+        postcommands = ['--with-id']
+        if failed:
+            postcommands = ['--failed']
+
+        if parallel:
+            if not run_parallel(testnames, pythoncommands, postcommands, cores):
+                sys.exit(0)
+            else:
+                sys.exit(1)
+        else:
+            sys.exit(subprocess.call(pythoncommands + testnames + postcommands))
+
+if __name__ == "__main__":
+
+    with directory('test_packages'):
+        defaultpackages = [name for name in get_package_names() if name not in get_excluded()]
+
+    parser = argparse.ArgumentParser(description='Run tests for pygsti')
+    parser.add_argument('tests', nargs='*', default=defaultpackages, type=str,
+                        help='list of packages to run tests for')
+    parser.add_argument('--version', '-v', type=str,
+                        help='version of python to run the tests under')
+    parser.add_argument('--changed', '-c', action='store_true',
+                        help='run only the changed packages')
+    parser.add_argument('--fast', '-f', action='store_true',
+                        help='run only the faster packages')
+    parser.add_argument('--failed', action='store_true',
+                        help='run last failed tests only')
+    parser.add_argument('--parallel', '-p', action='store_true',
+                        help='run tests in parallel')
+    parser.add_argument('--cores', type=int, default=None,
+                        help='run tests with n cores')
+
+    parsed = parser.parse_args(sys.argv[1:])
+
+    run_tests(parsed.tests, parsed.version, parsed.fast, parsed.changed, parsed.parallel, parsed.failed, parsed.cores)

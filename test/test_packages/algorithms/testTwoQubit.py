@@ -1,29 +1,15 @@
 import unittest
 import os, sys
 
-class TwoQubitTestCase(unittest.TestCase):
+from ..testutils import BaseTestCase, compare_files, temp_files
+
+class TestTwoQubitMethods(BaseTestCase):
 
     def setUp(self):
-        # move working directories
-        self.old = os.getcwd()
-        os.chdir(os.path.abspath(os.path.dirname(__file__)))
+        super(TwoQubitTestCase, self).setUp()
 
         #Set GateSet objects to "non-strict" mode for this testing
         pygsti.objects.GateSet._strict = False
-
-    def tearDown(self):
-        os.chdir(self.old)
-
-    def runSilent(self, callable, *args, **kwds):
-        orig_stdout = sys.stdout
-        sys.stdout = open("../temp_test_files/silent.txt","w")
-        result = callable(*args, **kwds)
-        sys.stdout.close()
-        sys.stdout = orig_stdout
-        return result
-
-
-class TestTwoQubitMethods(TwoQubitTestCase):
 
 
     def runTwoQubit(self):
@@ -53,7 +39,6 @@ class TestTwoQubitMethods(TwoQubitTestCase):
         # To run for longer, add powers of 2 to maxLs (e.g. [1,2,4], [1,2,4,8], etc)
         gsets1, dsGen1 = self.runMC2GSTAnalysis(
             specs16, germs4, gs_target, 1234, maxLs = [1,2], nSamples=1000)
-
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

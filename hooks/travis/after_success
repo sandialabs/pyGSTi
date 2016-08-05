@@ -3,11 +3,13 @@ from __future__ import print_function
 import subprocess, sys, os
 
 print('Travis CI Passed')
+'''
 
 print('Getting current branchname/SHA')
 branchname = 'unspecified'
 output     = subprocess.check_output(['git', 'branch'])
-branches   = output.decode('utf-8').splitlines()
+output     = output.decode('utf-8')
+branches   = output.splitlines()
 for branch in branches:
     if '*' in branch:
         branchname = branch.replace('*', '')
@@ -16,20 +18,36 @@ for branch in branches:
             branchname = branchname.split()[-1]
         break
 
+print('Branches existing on Travis Server: %s' % output)
+print('Branchname (or SHA) is %s' % branchname)
 
 # Relevant:
+# (Explains the usage of merge-base and merge-tree commands to view if merge is valid
 # http://stackoverflow.com/questions/501407/is-there-a-git-merge-dry-run-option
 
 # Attempt to auto-merge develop into pre-beta if travis tests pass
-# This code is currently unactive, but should work :)
 
-print('Branchname (or SHA) is %s' % branchname)
+print('Resetting remote/origin')
+subprocess.call(['git', 'remote', 'remove', 'origin'])
+print('Done.')
+print('Re-adding origin..')
+subprocess.call(['git', 'remote', 'add', 'origin', 'https://github.com/pyGSTio/pyGSTi.git'])
+print('Done.')
+print('Updating remote')
+subprocess.call(['git', 'remote', 'update'])
+subprocess.call(['git', 'fetch'])
+
+print('Setting up user credentials')
+
+subprocess.call(['git', 'config', '--global', 'user.email', 'N/A'])
+subprocess.call(['git', 'config', '--global', 'user.name', 'Lucas auto-push script'])
+print('Done')
 
 print('Getting the latest version of beta')
 print('Deleting local version, if it exists')
 subprocess.call(['git', 'branch', '-D', 'beta'])    # So that we can verify beta doesn't exist locally
 print('Fetching from origin')
-subprocess.call(['git', 'fetch', 'origin', 'beta']) # Then grab it..
+subprocess.call(['git', 'fetch', 'origin']) # Then grab it..
 print('Recreating local branch')
 subprocess.call(['git', 'checkout', '-b', 'beta', 'origin/beta'])  # And switch to it
 print('Done.')
@@ -53,9 +71,10 @@ print(output)
 canMerge = ('<' * 5) not in output # '<' * 5 avoids git finding the expanded string in this file and thinking it is a merge conflict
 
 if canMerge:
-    print('Merge of develop into beta is possible, attempting...')
+    print('Merge of develop into beta is possible')
+    '''
     # The below code is active, but only for testing
-    subprocess.call(['git', 'merge', '--no-ff', 'develop']) #into beta
+    subprocess.call(['git', 'merge', '--no-ff', '--no-commit', 'develop']) #into beta
     print('Merge command finished.')
     print('Staging files..')
     subprocess.call(['git', 'add', '-u'])
@@ -75,7 +94,8 @@ if canMerge:
                 print('Secure push worked')
     except:
         print('Secure push failed')
+    '''
 
 else:
     print('Potential merge conflicts found! Cannot merge beta into develop')
-
+'''

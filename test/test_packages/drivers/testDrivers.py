@@ -4,16 +4,12 @@ from pygsti.construction import std1Q_XYI as std
 
 import sys, os
 
-class DriversTestCase(unittest.TestCase):
+from ..testutils import BaseTestCase, compare_files, temp_files
+
+class DriversTestCase(BaseTestCase):
 
     def setUp(self):
-
-        # move working directories
-        self.old = os.getcwd()
-        os.chdir(os.path.abspath(os.path.dirname(__file__)))
-
-        #Set GateSet objects to "strict" mode for testing
-        pygsti.objects.GateSet._strict = True
+        super(DriversTestCase, self).setUp()
 
         self.gateset = std.gs_target
 
@@ -35,8 +31,7 @@ class DriversTestCase(unittest.TestCase):
         self.lsgstStrings_lae = pygsti.construction.make_lsgst_lists(
             self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLens,
             truncScheme='length as exponent' )
-
-        # RUN BELOW LINES TO GENERATE SAVED DATASETS
+# RUN BELOW LINES TO GENERATE SAVED DATASETS
         #datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0.1)
         #ds = pygsti.construction.generate_fake_data(
         #    datagen_gateset, self.lsgstStrings[-1],
@@ -50,26 +45,14 @@ class DriversTestCase(unittest.TestCase):
         #    datagen_gateset, self.lsgstStrings_lae[-1],
         #    nSamples=1000,sampleError='binomial', seed=100)
         #
-        #ds.save("../cmp_chk_files/drivers.dataset")
-        #ds_tgp.save("../cmp_chk_files/drivers_tgp.dataset")
-        #ds_lae.save("../cmp_chk_files/drivers_lae.dataset")
-
-    def tearDown(self):
-        os.chdir(self.old)
-
-    def runSilent(self, callable, *args, **kwds):
-        orig_stdout = sys.stdout
-        sys.stdout = open("../temp_test_files/silent.txt","w")
-        result = callable(*args, **kwds)
-        sys.stdout.close()
-        sys.stdout = orig_stdout
-        return result
-
+        #ds.save(compare_files + "/drivers.dataset")
+        #ds_tgp.save(compare_files + "/drivers_tgp.dataset")
+        #ds_lae.save(compare_files + "/drivers_lae.dataset")
 
 class TestDriversMethods(DriversTestCase):
 
     def test_longSequenceGST_WholeGermPowers(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/drivers.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
         ts = "whole germ powers"
 
         maxLens = self.maxLens
@@ -87,18 +70,18 @@ class TestDriversMethods(DriversTestCase):
 
 
         #Try using files instead of objects
-        pygsti.io.write_gateset(std.gs_target, "../temp_test_files/driver.gateset")
-        pygsti.io.write_dataset("../temp_test_files/driver_test_dataset.txt",
+        pygsti.io.write_gateset(std.gs_target, temp_files + "/driver.gateset")
+        pygsti.io.write_dataset(temp_files + "/driver_test_dataset.txt",
                                 ds, self.lsgstStrings[-1])
-        pygsti.io.write_gatestring_list("../temp_test_files/driver_fiducials.txt", std.fiducials)
-        pygsti.io.write_gatestring_list("../temp_test_files/driver_germs.txt", std.germs)
+        pygsti.io.write_gatestring_list(temp_files + "/driver_fiducials.txt", std.fiducials)
+        pygsti.io.write_gatestring_list(temp_files + "/driver_germs.txt", std.germs)
 
         result = self.runSilent(pygsti.do_long_sequence_gst,
-                                "../temp_test_files/driver_test_dataset.txt",
-                                "../temp_test_files/driver.gateset",
-                                "../temp_test_files/driver_fiducials.txt",
-                                "../temp_test_files/driver_fiducials.txt",
-                                "../temp_test_files/driver_germs.txt",
+                                temp_files + "/driver_test_dataset.txt",
+                                temp_files + "/driver.gateset",
+                                temp_files + "/driver_fiducials.txt",
+                                temp_files + "/driver_fiducials.txt",
+                                temp_files + "/driver_germs.txt",
                                 maxLens, truncScheme=ts)
 
         #Try using effectStrs == None, gaugeOptToCPTP, and advanced options
@@ -119,7 +102,7 @@ class TestDriversMethods(DriversTestCase):
 
 
     def test_longSequenceGST_TruncGermPowers(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/drivers_tgp.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers_tgp.dataset")
         ts = "truncated germ powers"
 
         maxLens = self.maxLens
@@ -136,7 +119,7 @@ class TestDriversMethods(DriversTestCase):
             std.germs, maxLens, truncScheme=ts, constrainToTP=False)
 
     def test_longSequenceGST_LengthAsExponent(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/drivers_lae.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers_lae.dataset")
         ts = "length as exponent"
 
         maxLens = self.maxLens
@@ -155,7 +138,7 @@ class TestDriversMethods(DriversTestCase):
 
 
     def test_longSequenceGST_fiducialPairReduction(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/drivers.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
         ts = "whole germ powers"
 
         fidPairs = pygsti.alg.find_sufficient_fiducial_pairs(
@@ -167,14 +150,14 @@ class TestDriversMethods(DriversTestCase):
                                 std.germs, maxLens, truncScheme=ts, fidPairs=fidPairs)
 
         #create a report...
-        result.create_full_report_pdf(filename="../temp_test_files/full_report_FPR.pdf",
+        result.create_full_report_pdf(filename=temp_files + "/full_report_FPR.pdf",
                                       debugAidsAppendix=False, gaugeOptAppendix=False,
                                       pixelPlotAppendix=False, whackamoleAppendix=False,
                                       verbosity=2)
 
 
     def test_longSequenceGST_randomReduction(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/drivers.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
         ts = "whole germ powers"
         maxLens = self.maxLens
 
@@ -183,14 +166,13 @@ class TestDriversMethods(DriversTestCase):
         reducedLists = pygsti.construction.make_lsgst_lists(
             std.gs_target.gates.keys(), std.fiducials, std.fiducials, std.germs,
             maxLens, fidPairs, ts, keepFraction=0.5, keepSeed=1234)
-        trunc_ds = ds.truncate(reducedLists[-1]) # ok to use [-1] since nest=True
         result = self.runSilent(pygsti.do_long_sequence_gst,
-                                trunc_ds, std.gs_target, std.fiducials, std.fiducials,
+                                ds, std.gs_target, std.fiducials, std.fiducials,
                                 std.germs, maxLens, truncScheme=ts, fidPairs=None,
                                 lsgstLists = reducedLists)
 
         #create a report...
-        result.create_full_report_pdf(filename="../temp_test_files/full_report_RFPR.pdf",
+        result.create_full_report_pdf(filename=temp_files + "/full_report_RFPR.pdf",
                                       debugAidsAppendix=False, gaugeOptAppendix=False,
                                       pixelPlotAppendix=False, whackamoleAppendix=False,
                                       verbosity=2)
@@ -202,21 +184,20 @@ class TestDriversMethods(DriversTestCase):
         reducedLists = pygsti.construction.make_lsgst_lists(
             std.gs_target.gates.keys(), std.fiducials, std.fiducials, std.germs,
             maxLens, fidPairs, ts, keepFraction=0.5, keepSeed=1234)
-        trunc_ds = ds.truncate(reducedLists[-1]) # ok to use [-1] since nest=True
         result2 = self.runSilent(pygsti.do_long_sequence_gst,
-                                 trunc_ds, std.gs_target, std.fiducials, std.fiducials,
+                                 ds, std.gs_target, std.fiducials, std.fiducials,
                                  std.germs, maxLens, truncScheme=ts, fidPairs=None,
                                  lsgstLists = reducedLists)
 
         #create a report...
-        result2.create_full_report_pdf(filename="../temp_test_files/full_report_RFPR2.pdf",
+        result2.create_full_report_pdf(filename=temp_files + "/full_report_RFPR2.pdf",
                                       debugAidsAppendix=False, gaugeOptAppendix=False,
                                       pixelPlotAppendix=False, whackamoleAppendix=False,
                                       verbosity=2)
 
 
     def test_longSequenceGST_parameterizedGates(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/drivers.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
         ts = "whole germ powers"
 
         gs_target = pygsti.construction.build_gateset([2],[('Q0',)], ['Gi','Gx','Gy'],
@@ -233,7 +214,7 @@ class TestDriversMethods(DriversTestCase):
                                 std.germs, maxLens, truncScheme=ts, constrainToTP=False)
 
         #create a report...
-        result.create_full_report_pdf(filename="../temp_test_files/full_report_LPGates.pdf",
+        result.create_full_report_pdf(filename=temp_files + "/full_report_LPGates.pdf",
                                       debugAidsAppendix=False, gaugeOptAppendix=False,
                                       pixelPlotAppendix=False, whackamoleAppendix=False,
                                       verbosity=2)
@@ -248,7 +229,7 @@ class TestDriversMethods(DriversTestCase):
         #truncScheme="whole germ powers"):
 
     def test_bootstrap(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom="../cmp_chk_files/drivers.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
         specs = self.runSilent(pygsti.construction.build_spam_specs, std.fiducials)
         gs = pygsti.do_lgst(ds, specs, targetGateset=std.gs_target, svdTruncateTo=4, verbosity=0)
 

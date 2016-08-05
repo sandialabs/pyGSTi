@@ -1,0 +1,1277 @@
+
+<HTML>
+    <HEAD>
+        <TITLE> CloneDigger Report </TITLE>
+        <script type="text/javascript">
+        function unhide(divID) {
+            var item = document.getElementById(divID);
+            if (item) {
+                item.className=(item.className=='hidden')?'unhidden':'hidden';
+            }
+        }
+</script>
+
+<style type="text/css">
+.hidden { display: none; }
+.unhidden { display: block; }
+.preformatted {
+        border: 1px dashed #3c78b5;
+    font-size: 11px;
+        font-family: Courier;
+    margin: 10px;
+        line-height: 13px;
+}
+.preformattedHeader {
+    background-color: #f0f0f0;
+        border-bottom: 1px dashed #3c78b5;
+    padding: 3px;
+        text-align: center;
+}
+.preformattedContent {
+    background-color: #f0f0f0;
+    padding: 3px;
+}
+<!--
+<div class="preformatted"><div class="preformattedContent">
+<pre>Clone Digger
+</pre>
+</div></div>
+-->
+
+</style>
+
+    </HEAD>
+    <BODY>
+    
+    
+    <P>Source files: 6</P>
+        <a href = "javascript:unhide('files');">Click here to show/hide file names</a><div id="files" class="hidden"><P><B>Source files:</B><BR>algorithms/fiducialpairreduction.py, <BR>algorithms/__init__.py, <BR>algorithms/grammatrix.py, <BR>algorithms/fiducialselection.py, <BR>algorithms/core.py, <BR>algorithms/germselection.py</P></div>
+        <P>Clones detected: 36</P>
+        <P>442 of 1927 lines are duplicates (22.94%) </P>
+<P>
+<B>Parameters<BR> </B>
+clustering_threshold = 10<BR>
+distance_threshold = 5<BR>
+size_threshold = 5<BR>
+hashing_depth = 1<BR>
+clusterize_using_hash = False<BR>
+clusterize_using_dcup = False<BR>
+</P> 
+        
+    <B>Time elapsed</B><BR>Construction of AST : 0.41 seconds<BR>
+Building statement hash : 0.01 seconds<BR>
+Building patterns : 1.08 seconds<BR>
+Marking similar statements : 1.41 seconds<BR>
+Finding similar sequences of statements : 0.18 seconds<BR>
+Refining candidates : 0.39 seconds<BR>
+ Total time: 3.47<BR>
+ Started at: Mon Aug  1 06:55:02 2016<BR>
+ Finished at: Mon Aug  1 06:55:06 2016
+    <P><B>Clone # 1</B><BR>Distance between two fragments = 0 <BR>Clone size = 18<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 1026</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 1998</TD></TR><TR>
+<TD>
+if maxEvalSubTreeSize is not None:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;evTree.split(maxEvalSubTreeSize, None)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if maxEvalSubTreeSize is not None:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;evTree.split(maxEvalSubTreeSize, None)</TD>
+</TR>
+<TR>
+<TD>
+if comm is not None:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;nprocs = comm.Get_size()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if distributeMethod == 'gatestrings':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if not evTree.is_split():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;evTree.split(None, nprocs)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert maxEvalSubTreeSize is not None<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if len(evTree.get_sub_trees()) < nprocs:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;evTree.split(None, nprocs)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if any([len(sub) > maxEvalSubTreeSize for sub in evTree.get_sub_trees() ]):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;evTree.split(maxEvalSubTreeSize, None)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;elif distributeMethod == 'deriv':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise ValueError(('Invalid distribute method: %s') % (distributeMethod))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if comm is not None:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;nprocs = comm.Get_size()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if distributeMethod == 'gatestrings':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if not evTree.is_split():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;evTree.split(None, nprocs)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert maxEvalSubTreeSize is not None<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if len(evTree.get_sub_trees()) < nprocs:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;evTree.split(None, nprocs)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if any([len(sub) > maxEvalSubTreeSize for sub in evTree.get_sub_trees() ]):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;evTree.split(maxEvalSubTreeSize, None)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;elif distributeMethod == 'deriv':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise ValueError(('Invalid distribute method: %s') % (distributeMethod))</TD>
+</TR>
+<TR>
+<TD>
+if ((comm is None) or (comm.Get_rank() == 0)) and (evTree.is_split()):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;printer.log('Memory limit and/or MPI has imposed a division of the evaluation tree:', 2)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;evTree.print_analysis()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if ((comm is None) or (comm.Get_rank() == 0)) and (evTree.is_split()):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;printer.log('Memory limit and/or MPI has imposed a division of the evaluation tree:', 2)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;evTree.print_analysis()</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 2</B><BR>Distance between two fragments = 1 <BR>Clone size = 16<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 1456</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 1418</TD></TR><TR>
+<TD>
+minErr, gs = do_mc2gst(dataset, curStartGateset, gateStringsToUse, maxiter, maxfev, tol, cptp_penalty_factor, minProbClipForWeighting, probClipInterval, useFreqWeightedChiSq, regularizeFactor, (printer) - (1), check, check_jacobian, gatestringWeights, None, memLimit, comm)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+minErr, gs = do_mc2gst(dataset, curStartGateset, gateStringsToUse, maxiter, maxfev, tol, cptp_penalty_factor, minProbClipForWeighting, probClipInterval, useFreqWeightedChiSq, regularizeFactor, (printer) - (1), check, check_jacobian, gatestringWeights, None, memLimit, comm)</TD>
+</TR>
+<TR>
+<TD>
+chiSq = sum([(x) ** (2) for x in minErr ])</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+chiSq = sum([(x) ** (2) for x in minErr ])</TD>
+</TR>
+<TR>
+<TD>
+chi2diff = (chiSq) - (chiSqBest)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+chi2diff = (chiSq) - (chiSqBest)</TD>
+</TR>
+<TR>
+<TD>
+paramDiff = (nParams) - (nParamsBest)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+paramDiff = (nParams) - (nParamsBest)</TD>
+</TR>
+<TR>
+<TD>
+if (chiSqBest) - (chiSq) > (2) * ((nParams) - (nParamsBest)):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;bestGS, bestMinErr, chiSqBest, nParamsBest = (gs, minErr, chiSq, nParams)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;msResult = 'Selected'<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;msResult = 'Rejected'<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">tryIncreasedDim</span> = False</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+if (chiSqBest) - (chiSq) > (2) * ((nParams) - (nParamsBest)):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;bestGS, bestMinErr, chiSqBest, nParamsBest = (gs, minErr, chiSq, nParams)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;msResult = 'Selected'<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;msResult = 'Rejected'<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">tryDecreasedDim</span> = False</TD>
+</TR>
+<TR>
+<TD>
+printer.log(('%s dim %d: chi^2 = %g (%+g w.r.t. expected mean of %d strings - %d params = %d) (dChi^2=%d, 2*dParams=%d)') % ((msResult, curDim, chiSq, (chiSq) - ((nStrings) - (nParams)), nStrings, nParams, (nStrings) - (nParams), chi2diff, (2) * (paramDiff))))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer.log(('%s dim %d: chi^2 = %g (%+g w.r.t. expected mean of %d strings - %d params = %d) (dChi^2=%d, 2*dParams=%d)') % ((msResult, curDim, chiSq, (chiSq) - ((nStrings) - (nParams)), nStrings, nParams, (nStrings) - (nParams), chi2diff, (2) * (paramDiff))))</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 3</B><BR>Distance between two fragments = 0 <BR>Clone size = 13<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 971</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 1948</TD></TR><TR>
+<TD>
+if gateLabelAliases is not None:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;dsGateStringsToUse = []<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for s in gateStringsToUse:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for label, expandedStr in gateLabelAliases.items():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while label in tuple(s):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;i = tuple(s).index(label)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s = ((tuple(s)[:i]) + (tuple(expandedStr))) + (tuple(s)[(i) + (1):])<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dsGateStringsToUse.append(s)<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;dsGateStringsToUse = gateStringsToUse</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if gateLabelAliases is not None:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;dsGateStringsToUse = []<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for s in gateStringsToUse:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for label, expandedStr in gateLabelAliases.items():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while label in tuple(s):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;i = tuple(s).index(label)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s = ((tuple(s)[:i]) + (tuple(expandedStr))) + (tuple(s)[(i) + (1):])<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dsGateStringsToUse.append(s)<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;dsGateStringsToUse = gateStringsToUse</TD>
+</TR>
+<TR>
+<TD>
+evTree = gs.bulk_evaltree(gateStringsToUse)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+evTree = gs.bulk_evaltree(gateStringsToUse)</TD>
+</TR>
+<TR>
+<TD>
+ns = len(spamLabels)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+ns = len(spamLabels)</TD>
+</TR>
+<TR>
+<TD>
+ng = len(gateStringsToUse)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+ng = len(gateStringsToUse)</TD>
+</TR>
+<TR>
+<TD>
+ne = gs.num_params()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+ne = gs.num_params()</TD>
+</TR>
+<TR>
+<TD>
+gd = gs.get_dimension()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+gd = gs.get_dimension()</TD>
+</TR>
+<TR>
+<TD>
+C = (1.0) / ((1024.0) ** (3))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+C = (1.0) / ((1024.0) ** (3))</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 4</B><BR>Distance between two fragments = 2 <BR>Clone size = 11<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 3025</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 2992</TD></TR><TR>
+<TD>
+print_obj_func = _opt.create_obj_func_printer(objective_func)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+print_obj_func = _opt.create_obj_func_printer(objective_func)</TD>
+</TR>
+<TR>
+<TD>
+if objective_func(gs.to_vector()) < 1e-08:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;printer.log(<span style="color: rgb(255, 0, 0);">'Already in CP - no contraction necessary'</span>, 1)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return (0.0, gs)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+if objective_func(gs.to_vector()) < 1e-08:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;printer.log(<span style="color: rgb(255, 0, 0);">'Already in XP - no contraction necessary'</span>, 1)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return (0.0, gs)</TD>
+</TR>
+<TR>
+<TD>
+<span style="font-family: monospace;">optSol&nbsp; =&nbsp; _opt.minimize(objective_func,gs.to_vector(),<BR>
+&nbsp; method=method,&nbsp; tol=tol,&nbsp; maxiter=maxiter,<BR>
+&nbsp; callback&nbsp; =&nbsp; print_obj_func&nbsp; if&nbsp; printer.verbosity&nbsp; &gt;&nbsp; 2&nbsp; else&nbsp; None)<span style="color:rgb(255,0,0);"></span></span></TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+<span style="font-family: monospace;">optSol&nbsp; =&nbsp; _opt.minimize(objective_func,gs.to_vector(),<BR>
+&nbsp; method=method,&nbsp; tol=tol,&nbsp; maxiter=maxiter,<BR>
+&nbsp; callback&nbsp; =&nbsp; print_obj_func&nbsp; if&nbsp; printer.verbosity&nbsp; &gt;&nbsp; 2&nbsp; else&nbsp; None)<span style="color:rgb(255,0,0);"></span></span></TD>
+</TR>
+<TR>
+<TD>
+gs.from_vector(optSol.x)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+gs.from_vector(optSol.x)</TD>
+</TR>
+<TR>
+<TD>
+if optSol.fun >= CLIFF:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;_warnings.warn(<span style="color: rgb(255, 0, 0);">'Failed to contract gateset to CP'</span>)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+if optSol.fun >= CLIFF:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;_warnings.warn(<span style="color: rgb(255, 0, 0);">'Failed to contract gateset to XP'</span>)</TD>
+</TR>
+<TR>
+<TD>
+printer.log(('The closest legal point found was distance: ') + (str(optSol.fun)), 1)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer.log(('The closest legal point found was distance: ') + (str(optSol.fun)), 1)</TD>
+</TR>
+<TR>
+<TD>
+return (optSol.fun, gs)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+return (optSol.fun, gs)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 5</B><BR>Distance between two fragments = 2 <BR>Clone size = 11<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 2656</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 2753</TD></TR><TR>
+<TD>
+if constrainToTP:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;tpGateset = gateset<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;tpGaugeMx = _np.identity(gateDim, 'd')<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;_, tpGaugeMx, tpGateset = optimize_gauge(gateset, <span style="color: rgb(255, 0, 0);">'TP'</span>, maxiter, maxfev, tol, 'L-BFGS-B', targetGateset, targetFactor, constrainToTP, constrainToCP, constrainToValidSpam, True, gateWeight, spamWeight, itemWeights, (printer) - (1))</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+if constrainToTP:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;tpGateset = gateset<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;tpGaugeMx = _np.identity(gateDim, 'd')<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;_, tpGaugeMx, tpGateset = optimize_gauge(gateset, <span style="color: rgb(255, 0, 0);">'TP and target'</span>, maxiter, maxfev, tol, 'L-BFGS-B', targetGateset, targetFactor, constrainToTP, constrainToCP, constrainToValidSpam, True, gateWeight, spamWeight, itemWeights, (printer) - (1))</TD>
+</TR>
+<TR>
+<TD>
+printer.log('', 2)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer.log('', 2)</TD>
+</TR>
+<TR>
+<TD>
+printer.log((<span style="color: rgb(255, 0, 0);">'--- Gauge Optimization to CPTP w/valid SPAM (%s) ---'</span>) % (method), 1, indentOffset=-1)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+printer.log((<span style="color: rgb(255, 0, 0);">'--- Gauge Optimization to CPTP and target w/valid SPAM (%s) ---'</span>) % (method), 1, indentOffset=-1)</TD>
+</TR>
+<TR>
+<TD>
+constrainToTP = True</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+constrainToTP = True</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 6</B><BR>Distance between two fragments = 2 <BR>Clone size = 10<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 946</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 1931</TD></TR><TR>
+<TD>
+printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)</TD>
+</TR>
+<TR>
+<TD>
+gs = startGateset.copy()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+gs = startGateset.copy()</TD>
+</TR>
+<TR>
+<TD>
+if maxfev is None:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;maxfev = maxiter</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if maxfev is None:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;maxfev = maxiter</TD>
+</TR>
+<TR>
+<TD>
+printer.log('', 2)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer.log('', 2)</TD>
+</TR>
+<TR>
+<TD>
+printer.log(<span style="color: rgb(255, 0, 0);">'--- Minimum Chi^2 GST ---'</span>, 1, indentOffset=-1)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+printer.log(<span style="color: rgb(255, 0, 0);">'--- MLGST ---'</span>, 1, indentOffset=-1)</TD>
+</TR>
+<TR>
+<TD>
+<span style="font-family: monospace;">if&nbsp; comm&nbsp; is&nbsp; not&nbsp; None:<BR>
+&nbsp; gs_cmp&nbsp; =&nbsp; comm.bcast(gs&nbsp; if&nbsp; (comm.Get_rank()&nbsp; ==&nbsp; 0)&nbsp; else&nbsp; None,&nbsp; root=0)<BR>
+&nbsp; if&nbsp; gs.frobeniusdist(gs_cmp)&nbsp; &gt;&nbsp; 1e-6:<BR>
+&nbsp; &nbsp; raise&nbsp; ValueError("MPI&nbsp; ERROR:&nbsp; *different*&nbsp; M<span style="color:rgb(255,0,0);">C2</span>GST&nbsp; start&nbsp; gatesets"&nbsp; +<BR>
+&nbsp; &nbsp; &nbsp; "&nbsp; given&nbsp; to&nbsp; different&nbsp; processors!")<span style="color:rgb(255,0,0);"></span></span></TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="font-family: monospace;">if&nbsp; comm&nbsp; is&nbsp; not&nbsp; None:<BR>
+&nbsp; gs_cmp&nbsp; =&nbsp; comm.bcast(gs&nbsp; if&nbsp; (comm.Get_rank()&nbsp; ==&nbsp; 0)&nbsp; else&nbsp; None,&nbsp; root=0)<BR>
+&nbsp; if&nbsp; gs.frobeniusdist(gs_cmp)&nbsp; &gt;&nbsp; 1e-6:<BR>
+&nbsp; &nbsp; raise&nbsp; ValueError("MPI&nbsp; ERROR:&nbsp; *different*&nbsp; M<span style="color:rgb(255,0,0);">L</span>GST&nbsp; start&nbsp; gatesets"&nbsp; +<BR>
+&nbsp; &nbsp; &nbsp; "&nbsp; given&nbsp; to&nbsp; different&nbsp; processors!")<span style="color:rgb(255,0,0);"></span></span></TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 7</B><BR>Distance between two fragments = 3 <BR>Clone size = 9<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 2361</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 1602</TD></TR><TR>
+<TD>
+printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)</TD>
+</TR>
+<TR>
+<TD>
+if (len(gateStringSetsToUseInEstimation) > 0) and (len(gateStringSetsToUseInEstimation[0]) > 0) and (isinstance(gateStringSetsToUseInEstimation[0][0], _objs.GateString)):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringLists = [[gstr.tup for gstr in gsList ] for gsList in gateStringSetsToUseInEstimation ]<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringLists = gateStringSetsToUseInEstimation</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if (len(gateStringSetsToUseInEstimation) > 0) and (len(gateStringSetsToUseInEstimation[0]) > 0) and (isinstance(gateStringSetsToUseInEstimation[0][0], _objs.GateString)):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringLists = [[gstr.tup for gstr in gsList ] for gsList in gateStringSetsToUseInEstimation ]<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringLists = gateStringSetsToUseInEstimation</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">mleGatesets</span> = []</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);">lsgstGatesets</span> = []</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">maxLogLs</span> = []</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);">minErrs</span> = []</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">mleGateset</span> = startGateset.copy()</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);">lsgstGateset</span> = startGateset.copy()</TD>
+</TR>
+<TR>
+<TD>
+nIters = len(gateStringLists)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+nIters = len(gateStringLists)</TD>
+</TR>
+<TR>
+<TD>
+tRef = _time.time()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+tRef = _time.time()</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 8</B><BR>Distance between two fragments = 0 <BR>Clone size = 9<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 2733</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 2711</TD></TR><TR>
+<TD>
+matM = vectorM.reshape((gateDim, gateDim))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+matM = vectorM.reshape((gateDim, gateDim))</TD>
+</TR>
+<TR>
+<TD>
+gs = gateset.copy()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+gs = gateset.copy()</TD>
+</TR>
+<TR>
+<TD>
+gs.transform(matM)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+gs.transform(matM)</TD>
+</TR>
+<TR>
+<TD>
+tpPenalty = 0</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+tpPenalty = 0</TD>
+</TR>
+<TR>
+<TD>
+for gate in list(gs.gates.values()):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;tpPenalty += ((1.0) - (gate[0,0])) ** (2)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for k in range(1, gate.shape[1]):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tpPenalty += (gate[0,k]) ** (2)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+for gate in list(gs.gates.values()):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;tpPenalty += ((1.0) - (gate[0,0])) ** (2)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for k in range(1, gate.shape[1]):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tpPenalty += (gate[0,k]) ** (2)</TD>
+</TR>
+<TR>
+<TD>
+for rhoVec in list(gs.preps.values()):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;tpPenalty += ((rhoVecFirstEl) - (rhoVec[0])) ** (2)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+for rhoVec in list(gs.preps.values()):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;tpPenalty += ((rhoVecFirstEl) - (rhoVec[0])) ** (2)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 9</B><BR>Distance between two fragments = 2 <BR>Clone size = 8<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 791</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 1768</TD></TR><TR>
+<TD>
+printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)</TD>
+</TR>
+<TR>
+<TD>
+if (len(gateStringSetsToUseInEstimation) > 0) and (len(gateStringSetsToUseInEstimation[0]) > 0) and (isinstance(gateStringSetsToUseInEstimation[0][0], _objs.GateString)):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringLists = [[gstr.tup for gstr in gsList ] for gsList in gateStringSetsToUseInEstimation ]<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringLists = gateStringSetsToUseInEstimation</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if (len(gateStringSetsToUseInEstimation) > 0) and (len(gateStringSetsToUseInEstimation[0]) > 0) and (isinstance(gateStringSetsToUseInEstimation[0][0], _objs.GateString)):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringLists = [[gstr.tup for gstr in gsList ] for gsList in gateStringSetsToUseInEstimation ]<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringLists = gateStringSetsToUseInEstimation</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">elgstGatesets</span> = []</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);">lsgstGatesets</span> = []</TD>
+</TR>
+<TR>
+<TD>
+minErrs = []</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+minErrs = []</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">elgstGateset</span> = startGateset.copy()</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);">lsgstGateset</span> = startGateset.copy()</TD>
+</TR>
+<TR>
+<TD>
+nIters = len(gateStringLists)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+nIters = len(gateStringLists)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 10</B><BR>Distance between two fragments = 3 <BR>Clone size = 8<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 791</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 2361</TD></TR><TR>
+<TD>
+printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)</TD>
+</TR>
+<TR>
+<TD>
+if (len(gateStringSetsToUseInEstimation) > 0) and (len(gateStringSetsToUseInEstimation[0]) > 0) and (isinstance(gateStringSetsToUseInEstimation[0][0], _objs.GateString)):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringLists = [[gstr.tup for gstr in gsList ] for gsList in gateStringSetsToUseInEstimation ]<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringLists = gateStringSetsToUseInEstimation</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if (len(gateStringSetsToUseInEstimation) > 0) and (len(gateStringSetsToUseInEstimation[0]) > 0) and (isinstance(gateStringSetsToUseInEstimation[0][0], _objs.GateString)):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringLists = [[gstr.tup for gstr in gsList ] for gsList in gateStringSetsToUseInEstimation ]<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringLists = gateStringSetsToUseInEstimation</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">elgstGatesets</span></span> = []</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">mleGatesets</span></span> = []</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">minErrs</span> = []</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">maxLogLs</span></span> = []</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">elgstGateset</span></span> = startGateset.copy()</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">mleGateset</span></span> = startGateset.copy()</TD>
+</TR>
+<TR>
+<TD>
+nIters = len(gateStringLists)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+nIters = len(gateStringLists)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 11</B><BR>Distance between two fragments = 2 <BR>Clone size = 8<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 791</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 1602</TD></TR><TR>
+<TD>
+printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)</TD>
+</TR>
+<TR>
+<TD>
+if (len(gateStringSetsToUseInEstimation) > 0) and (len(gateStringSetsToUseInEstimation[0]) > 0) and (isinstance(gateStringSetsToUseInEstimation[0][0], _objs.GateString)):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringLists = [[gstr.tup for gstr in gsList ] for gsList in gateStringSetsToUseInEstimation ]<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringLists = gateStringSetsToUseInEstimation</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if (len(gateStringSetsToUseInEstimation) > 0) and (len(gateStringSetsToUseInEstimation[0]) > 0) and (isinstance(gateStringSetsToUseInEstimation[0][0], _objs.GateString)):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringLists = [[gstr.tup for gstr in gsList ] for gsList in gateStringSetsToUseInEstimation ]<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringLists = gateStringSetsToUseInEstimation</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">elgstGatesets</span></span></span> = []</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">lsgstGatesets</span></span> = []</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">minErrs</span> = []</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+<span style="color: rgb(255, 0, 0);">minErrs</span> = []</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">elgstGateset</span></span></span> = startGateset.copy()</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">lsgstGateset</span></span> = startGateset.copy()</TD>
+</TR>
+<TR>
+<TD>
+nIters = len(gateStringLists)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+nIters = len(gateStringLists)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 12</B><BR>Distance between two fragments = 3 <BR>Clone size = 8<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 1768</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 2361</TD></TR><TR>
+<TD>
+printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)</TD>
+</TR>
+<TR>
+<TD>
+if (len(gateStringSetsToUseInEstimation) > 0) and (len(gateStringSetsToUseInEstimation[0]) > 0) and (isinstance(gateStringSetsToUseInEstimation[0][0], _objs.GateString)):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringLists = [[gstr.tup for gstr in gsList ] for gsList in gateStringSetsToUseInEstimation ]<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringLists = gateStringSetsToUseInEstimation</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if (len(gateStringSetsToUseInEstimation) > 0) and (len(gateStringSetsToUseInEstimation[0]) > 0) and (isinstance(gateStringSetsToUseInEstimation[0][0], _objs.GateString)):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringLists = [[gstr.tup for gstr in gsList ] for gsList in gateStringSetsToUseInEstimation ]<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringLists = gateStringSetsToUseInEstimation</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">lsgstGatesets</span></span> = []</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">mleGatesets</span></span></span> = []</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">minErrs</span> = []</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">maxLogLs</span></span></span> = []</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">lsgstGateset</span></span> = startGateset.copy()</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">mleGateset</span></span></span> = startGateset.copy()</TD>
+</TR>
+<TR>
+<TD>
+nIters = len(gateStringLists)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+nIters = len(gateStringLists)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 13</B><BR>Distance between two fragments = 0 <BR>Clone size = 8<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 1768</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 1602</TD></TR><TR>
+<TD>
+printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)</TD>
+</TR>
+<TR>
+<TD>
+if (len(gateStringSetsToUseInEstimation) > 0) and (len(gateStringSetsToUseInEstimation[0]) > 0) and (isinstance(gateStringSetsToUseInEstimation[0][0], _objs.GateString)):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringLists = [[gstr.tup for gstr in gsList ] for gsList in gateStringSetsToUseInEstimation ]<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringLists = gateStringSetsToUseInEstimation</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if (len(gateStringSetsToUseInEstimation) > 0) and (len(gateStringSetsToUseInEstimation[0]) > 0) and (isinstance(gateStringSetsToUseInEstimation[0][0], _objs.GateString)):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringLists = [[gstr.tup for gstr in gsList ] for gsList in gateStringSetsToUseInEstimation ]<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringLists = gateStringSetsToUseInEstimation</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">lsgstGatesets</span></span> = []</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">lsgstGatesets</span></span> = []</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">minErrs</span> = []</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+<span style="color: rgb(255, 0, 0);">minErrs</span> = []</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">lsgstGateset</span></span> = startGateset.copy()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">lsgstGateset</span></span> = startGateset.copy()</TD>
+</TR>
+<TR>
+<TD>
+nIters = len(gateStringLists)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+nIters = len(gateStringLists)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 14</B><BR>Distance between two fragments = 0 <BR>Clone size = 8<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 2131</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 2153</TD></TR><TR>
+<TD>
+pos_probs = _np.where(probs < min_p, min_p, probs)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+pos_probs = _np.where(probs < min_p, min_p, probs)</TD>
+</TR>
+<TR>
+<TD>
+S = (minusCntVecMx) / (min_p)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+S = (minusCntVecMx) / (min_p)</TD>
+</TR>
+<TR>
+<TD>
+S2 = ((-0.5) * (minusCntVecMx)) / ((min_p) ** (2))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+S2 = ((-0.5) * (minusCntVecMx)) / ((min_p) ** (2))</TD>
+</TR>
+<TR>
+<TD>
+v = (freqTerm) + ((minusCntVecMx) * (_np.log(pos_probs)))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+v = (freqTerm) + ((minusCntVecMx) * (_np.log(pos_probs)))</TD>
+</TR>
+<TR>
+<TD>
+v = _np.maximum(v, 0)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+v = _np.maximum(v, 0)</TD>
+</TR>
+<TR>
+<TD>
+v = _np.where(probs < min_p, ((v) + ((S) * ((probs) - (min_p)))) + ((S2) * (((probs) - (min_p)) ** (2))), v)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+v = _np.where(probs < min_p, ((v) + ((S) * ((probs) - (min_p)))) + ((S2) * (((probs) - (min_p)) ** (2))), v)</TD>
+</TR>
+<TR>
+<TD>
+v = _np.where(minusCntVecMx == 0, 0.0, v)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+v = _np.where(minusCntVecMx == 0, 0.0, v)</TD>
+</TR>
+<TR>
+<TD>
+v = _np.sqrt(v)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+v = _np.sqrt(v)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 15</B><BR>Distance between two fragments = 0 <BR>Clone size = 8<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 2066</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 2089</TD></TR><TR>
+<TD>
+pos_probs = _np.where(probs < min_p, min_p, probs)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+pos_probs = _np.where(probs < min_p, min_p, probs)</TD>
+</TR>
+<TR>
+<TD>
+S = ((minusCntVecMx) / (min_p)) + (totalCntVec[None,None:None])</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+S = ((minusCntVecMx) / (min_p)) + (totalCntVec[None,None:None])</TD>
+</TR>
+<TR>
+<TD>
+S2 = ((-0.5) * (minusCntVecMx)) / ((min_p) ** (2))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+S2 = ((-0.5) * (minusCntVecMx)) / ((min_p) ** (2))</TD>
+</TR>
+<TR>
+<TD>
+v = ((freqTerm) + ((minusCntVecMx) * (_np.log(pos_probs)))) + ((totalCntVec[None,None:None]) * (pos_probs))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+v = ((freqTerm) + ((minusCntVecMx) * (_np.log(pos_probs)))) + ((totalCntVec[None,None:None]) * (pos_probs))</TD>
+</TR>
+<TR>
+<TD>
+v = _np.maximum(v, 0)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+v = _np.maximum(v, 0)</TD>
+</TR>
+<TR>
+<TD>
+v = _np.where(probs < min_p, ((v) + ((S) * ((probs) - (min_p)))) + ((S2) * (((probs) - (min_p)) ** (2))), v)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+v = _np.where(probs < min_p, ((v) + ((S) * ((probs) - (min_p)))) + ((S2) * (((probs) - (min_p)) ** (2))), v)</TD>
+</TR>
+<TR>
+<TD>
+v = _np.where(minusCntVecMx == 0, (totalCntVec[None,None:None]) * (_np.where(probs >= a, probs, ((((-1.0) / ((3) * ((a) ** (2)))) * ((probs) ** (3))) + (((probs) ** (2)) / (a))) + ((a) / (3.0)))), v)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+v = _np.where(minusCntVecMx == 0, (totalCntVec[None,None:None]) * (_np.where(probs >= a, probs, ((((-1.0) / ((3) * ((a) ** (2)))) * ((probs) ** (3))) + (((probs) ** (2)) / (a))) + ((a) / (3.0)))), v)</TD>
+</TR>
+<TR>
+<TD>
+v = _np.sqrt(v)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+v = _np.sqrt(v)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 16</B><BR>Distance between two fragments = 2 <BR>Clone size = 7<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 1456</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 1388</TD></TR><TR>
+<TD>
+minErr, gs = do_mc2gst(dataset, <span style="color: rgb(255, 0, 0);">curStartGateset</span>, gateStringsToUse, maxiter, maxfev, tol, cptp_penalty_factor, minProbClipForWeighting, probClipInterval, useFreqWeightedChiSq, regularizeFactor, (printer) - (1), check, check_jacobian, gatestringWeights, None, memLimit, comm)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+minErr, gs = do_mc2gst(dataset, <span style="color: rgb(255, 0, 0);">startGateset</span>, gateStringsToUse, maxiter, maxfev, tol, cptp_penalty_factor, minProbClipForWeighting, probClipInterval, useFreqWeightedChiSq, regularizeFactor, (printer) - (1), check, check_jacobian, gatestringWeights, None, memLimit, comm)</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">chiSq</span> = sum([(x) ** (2) for x in minErr ])</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);">chiSqBest</span> = sum([(x) ** (2) for x in minErr ])</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 17</B><BR>Distance between two fragments = 2 <BR>Clone size = 7<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 1418</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 1388</TD></TR><TR>
+<TD>
+minErr, gs = do_mc2gst(dataset, <span style="color: rgb(255, 0, 0);">curStartGateset</span>, gateStringsToUse, maxiter, maxfev, tol, cptp_penalty_factor, minProbClipForWeighting, probClipInterval, useFreqWeightedChiSq, regularizeFactor, (printer) - (1), check, check_jacobian, gatestringWeights, None, memLimit, comm)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+minErr, gs = do_mc2gst(dataset, <span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">startGateset</span></span>, gateStringsToUse, maxiter, maxfev, tol, cptp_penalty_factor, minProbClipForWeighting, probClipInterval, useFreqWeightedChiSq, regularizeFactor, (printer) - (1), check, check_jacobian, gatestringWeights, None, memLimit, comm)</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">chiSq</span> = sum([(x) ** (2) for x in minErr ])</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">chiSqBest</span></span> = sum([(x) ** (2) for x in minErr ])</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 18</B><BR>Distance between two fragments = 2 <BR>Clone size = 7<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/germselection.py"<BR>The first line is 296</TD><TD></TD><TD>Source file "algorithms/fiducialselection.py"<BR>The first line is 159</TD></TR><TR>
+<TD>
+if scoreFunc == 'all':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;def list_score(input_array):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return sum((1.0) / (input_array))<BR>
+elif scoreFunc == 'worst':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;def list_score(input_array):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return (1.0) / (min(input_array))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if scoreFunc == 'all':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;def list_score(input_array):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return sum((1.0) / (input_array))<BR>
+elif scoreFunc == 'worst':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;def list_score(input_array):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return (1.0) / (min(input_array))</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">gateset</span> = <span style="color: rgb(255, 0, 0);">gateset</span>.<span style="color: rgb(255, 0, 0);">copy</span>()</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);">dimRho</span> = <span style="color: rgb(255, 0, 0);">gateset</span>.<span style="color: rgb(255, 0, 0);">get_dimension</span>()</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 19</B><BR>Distance between two fragments = 2 <BR>Clone size = 7<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/fiducialselection.py"<BR>The first line is 563</TD><TD></TD><TD>Source file "algorithms/germselection.py"<BR>The first line is 688</TD></TR><TR>
+<TD>
+printer.log(('score = %s') % (score))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer.log(('score = %s') % (score))</TD>
+</TR>
+<TR>
+<TD>
+printer.log(('weights = %s') % (weights))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer.log(('weights = %s') % (weights))</TD>
+</TR>
+<TR>
+<TD>
+printer.log(('L1(weights) = %s') % (sum(weights)))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer.log(('L1(weights) = %s') % (sum(weights)))</TD>
+</TR>
+<TR>
+<TD>
+<span style="color: rgb(255, 0, 0);">goodFidList</span> = []</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+<span style="color: rgb(255, 0, 0);">goodGermsList</span> = []</TD>
+</TR>
+<TR>
+<TD>
+for index, val in enumerate(weights):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if val == 1:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">goodFidList</span>.append(<span style="color: rgb(255, 0, 0);">fidList</span>[index])</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+for index, val in enumerate(weights):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if val == 1:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">goodGermsList</span>.append(<span style="color: rgb(255, 0, 0);">germsList</span>[index])</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 20</B><BR>Distance between two fragments = 0 <BR>Clone size = 7<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 1787</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 1623</TD></TR><TR>
+<TD>
+if (stringsToEstimate is None) or (len(stringsToEstimate) == 0):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;continue</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if (stringsToEstimate is None) or (len(stringsToEstimate) == 0):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;continue</TD>
+</TR>
+<TR>
+<TD>
+if gatestringWeightsDict is not None:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gatestringWeights = _np.ones(len(stringsToEstimate), 'd')<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for gatestr, weight in gatestringWeightsDict.items():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if gatestr in stringsToEstimate:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gatestringWeights[stringsToEstimate.index(gatestr)] = weight<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gatestringWeights = None</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if gatestringWeightsDict is not None:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gatestringWeights = _np.ones(len(stringsToEstimate), 'd')<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for gatestr, weight in gatestringWeightsDict.items():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if gatestr in stringsToEstimate:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gatestringWeights[stringsToEstimate.index(gatestr)] = weight<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gatestringWeights = None</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 21</B><BR>Distance between two fragments = 0 <BR>Clone size = 7<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 2678</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 2767</TD></TR><TR>
+<TD>
+vectorM = _np.concatenate((firstRowForTP, vectorM))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+vectorM = _np.concatenate((firstRowForTP, vectorM))</TD>
+</TR>
+<TR>
+<TD>
+matM = vectorM.reshape((gateDim, gateDim))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+matM = vectorM.reshape((gateDim, gateDim))</TD>
+</TR>
+<TR>
+<TD>
+gs = tpGateset.copy()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+gs = tpGateset.copy()</TD>
+</TR>
+<TR>
+<TD>
+gs.transform(matM)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+gs.transform(matM)</TD>
+</TR>
+<TR>
+<TD>
+cpPenalties = _tools.sums_of_negative_choi_evals(gs)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+cpPenalties = _tools.sums_of_negative_choi_evals(gs)</TD>
+</TR>
+<TR>
+<TD>
+cpPenalty = sum(cpPenalties)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+cpPenalty = sum(cpPenalties)</TD>
+</TR>
+<TR>
+<TD>
+spamPenalty = sum([_tools.prep_penalty(rhoVec) for rhoVec in list(gs.preps.values()) ])</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+spamPenalty = sum([_tools.prep_penalty(rhoVec) for rhoVec in list(gs.preps.values()) ])</TD>
+</TR>
+<TR>
+<TD>
+spamPenalty += sum([_tools.effect_penalty(EVec) for EVec in list(gs.effects.values()) ])</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+spamPenalty += sum([_tools.effect_penalty(EVec) for EVec in list(gs.effects.values()) ])</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 22</B><BR>Distance between two fragments = 2 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/germselection.py"<BR>The first line is 693</TD><TD></TD><TD>Source file "algorithms/fiducialselection.py"<BR>The first line is 487</TD></TR><TR>
+<TD>
+for index, val in enumerate(weights):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if val == 1:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">goodGermsList</span></span>.append(<span style="color: rgb(255, 0, 0);"><span style="color: rgb(255, 0, 0);">germsList</span></span>[index])</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+for index, val in enumerate(weights):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if val == 1:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">goodFidList</span>.append(<span style="color: rgb(255, 0, 0);">fidList</span>[index])</TD>
+</TR>
+<TR>
+<TD>
+if returnAll:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return (<span style="color: rgb(255, 0, 0);">goodGermsList</span>, weights, scoreD)<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return <span style="color: rgb(255, 0, 0);">goodGermsList</span></TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+if returnAll:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return (<span style="color: rgb(255, 0, 0);">goodFidList</span>, weights, scoreD)<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return <span style="color: rgb(255, 0, 0);">goodFidList</span></TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 23</B><BR>Distance between two fragments = 1 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/fiducialselection.py"<BR>The first line is 171</TD><TD></TD><TD>Source file "algorithms/fiducialselection.py"<BR>The first line is 408</TD></TR><TR>
+<TD>
+if prepOrMeas == 'prep':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;fidArrayList = make_prep_mxs(gateset, fidList)<BR>
+elif prepOrMeas == 'meas':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;fidArrayList = make_meas_mxs(gateset, fidList)<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;raise Exception(<span style="color: rgb(255, 0, 0);">'Invalid value for prepOrMeas (must be "prep" or "meas")!'</span>)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+if prepOrMeas == 'prep':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;fidArrayList = make_prep_mxs(gateset, fidList)<BR>
+elif prepOrMeas == 'meas':<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;fidArrayList = make_meas_mxs(gateset, fidList)<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;raise Exception(<span style="color: rgb(255, 0, 0);">'prepOrMeas must be specified!'</span>)</TD>
+</TR>
+<TR>
+<TD>
+numMxs = len(fidArrayList)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+numMxs = len(fidArrayList)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 24</B><BR>Distance between two fragments = 0 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 2193</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 1256</TD></TR><TR>
+<TD>
+nGateStrings = len(gateStringsToUse)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+nGateStrings = len(gateStringsToUse)</TD>
+</TR>
+<TR>
+<TD>
+nDataParams = (nGateStrings) * ((len(dataset.get_spam_labels())) - (1))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+nDataParams = (nGateStrings) * ((len(dataset.get_spam_labels())) - (1))</TD>
+</TR>
+<TR>
+<TD>
+try:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;nModelParams = gs.num_nongauge_params()<BR>
+except:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;printer.warning('Could not obtain number of *non-gauge* parameters - using total params instead')<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;nModelParams = gs.num_params()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+try:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;nModelParams = gs.num_nongauge_params()<BR>
+except:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;printer.warning('Could not obtain number of *non-gauge* parameters - using total params instead')<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;nModelParams = gs.num_params()</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 25</B><BR>Distance between two fragments = 0 <BR>Clone size = 6<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 1240</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 662</TD></TR><TR>
+<TD>
+x0 = gs.to_vector()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+x0 = gs.to_vector()</TD>
+</TR>
+<TR>
+<TD>
+opt_x, _, _, _, _ = _spo.leastsq(objective_func, x0, xtol=tol, ftol=tol, gtol=tol, maxfev=(maxfev) * ((len(x0)) + (1)), full_output=True, Dfun=jacobian)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+opt_x, _, _, _, _ = _spo.leastsq(objective_func, x0, xtol=tol, ftol=tol, gtol=tol, maxfev=(maxfev) * ((len(x0)) + (1)), full_output=True, Dfun=jacobian)</TD>
+</TR>
+<TR>
+<TD>
+full_minErrVec = objective_func(opt_x)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+full_minErrVec = objective_func(opt_x)</TD>
+</TR>
+<TR>
+<TD>
+<span style="font-family: monospace;">minErrVec&nbsp; =&nbsp; full_minErrVec&nbsp; if&nbsp; regularizeFactor&nbsp; ==&nbsp; 0&nbsp; else&nbsp; full_minErrVec[0:-len(x0)]&nbsp; #don't&nbsp; include&nbsp; regularization&nbsp; terms<span style="color:rgb(255,0,0);"></span></span></TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+<span style="font-family: monospace;">minErrVec&nbsp; =&nbsp; full_minErrVec&nbsp; if&nbsp; regularizeFactor&nbsp; ==&nbsp; 0&nbsp; else&nbsp; full_minErrVec[0:-len(x0)]&nbsp; #don't&nbsp; include&nbsp; regularization&nbsp; terms<span style="color:rgb(255,0,0);"></span></span></TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 26</B><BR>Distance between two fragments = 0 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 1990</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 1018</TD></TR><TR>
+<TD>
+printer.log((('Memory estimates: (%d spam labels,') % (ns)) + (('%d gate strings, %d gateset params, %d gate dim)') % ((ng, ne, gd))), 2)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer.log((('Memory estimates: (%d spam labels,') % (ns)) + (('%d gate strings, %d gateset params, %d gate dim)') % ((ng, ne, gd))), 2)</TD>
+</TR>
+<TR>
+<TD>
+printer.log(('Peristent: %g GB ') % ((persistentMem) * (C)), 2)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer.log(('Peristent: %g GB ') % ((persistentMem) * (C)), 2)</TD>
+</TR>
+<TR>
+<TD>
+printer.log(('Intermediate: %g GB ') % ((intermedMem) * (C)), 2)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer.log(('Intermediate: %g GB ') % ((intermedMem) * (C)), 2)</TD>
+</TR>
+<TR>
+<TD>
+printer.log(('Limit: %g GB') % ((memLimit) * (C)), 2)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer.log(('Limit: %g GB') % ((memLimit) * (C)), 2)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 27</B><BR>Distance between two fragments = 0 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 1104</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 1115</TD></TR><TR>
+<TD>
+gs.from_vector(vectorGS)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+gs.from_vector(vectorGS)</TD>
+</TR>
+<TR>
+<TD>
+gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval, check, comm)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval, check, comm)</TD>
+</TR>
+<TR>
+<TD>
+weights = get_weights(probs)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+weights = get_weights(probs)</TD>
+</TR>
+<TR>
+<TD>
+v = ((probs) - (f)) * (weights)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+v = ((probs) - (f)) * (weights)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 28</B><BR>Distance between two fragments = 0 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 2084</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 2148</TD></TR><TR>
+<TD>
+gs.from_vector(vectorGS)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+gs.from_vector(vectorGS)</TD>
+</TR>
+<TR>
+<TD>
+gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree, prMxToFill=probs, clipTo=probClipInterval, check=check, comm=comm)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree, prMxToFill=probs, clipTo=probClipInterval, check=check, comm=comm)</TD>
+</TR>
+<TR>
+<TD>
+pos_probs = _np.where(probs < min_p, min_p, probs)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+pos_probs = _np.where(probs < min_p, min_p, probs)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 29</B><BR>Distance between two fragments = 0 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 1154</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 1170</TD></TR><TR>
+<TD>
+gs.from_vector(vectorGS)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+gs.from_vector(vectorGS)</TD>
+</TR>
+<TR>
+<TD>
+gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree, prMxToFill=probs, clipTo=probClipInterval, check=check, comm=comm)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree, prMxToFill=probs, clipTo=probClipInterval, check=check, comm=comm)</TD>
+</TR>
+<TR>
+<TD>
+weights = get_weights(probs)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+weights = get_weights(probs)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 30</B><BR>Distance between two fragments = 0 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 1154</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 1137</TD></TR><TR>
+<TD>
+gs.from_vector(vectorGS)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+gs.from_vector(vectorGS)</TD>
+</TR>
+<TR>
+<TD>
+gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree, prMxToFill=probs, clipTo=probClipInterval, check=check, comm=comm)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree, prMxToFill=probs, clipTo=probClipInterval, check=check, comm=comm)</TD>
+</TR>
+<TR>
+<TD>
+weights = get_weights(probs)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+weights = get_weights(probs)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 31</B><BR>Distance between two fragments = 0 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 1170</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 1137</TD></TR><TR>
+<TD>
+gs.from_vector(vectorGS)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+gs.from_vector(vectorGS)</TD>
+</TR>
+<TR>
+<TD>
+gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree, prMxToFill=probs, clipTo=probClipInterval, check=check, comm=comm)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree, prMxToFill=probs, clipTo=probClipInterval, check=check, comm=comm)</TD>
+</TR>
+<TR>
+<TD>
+weights = get_weights(probs)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+weights = get_weights(probs)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 32</B><BR>Distance between two fragments = 1 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 3013</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 2978</TD></TR><TR>
+<TD>
+CLIFF = 10000</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+CLIFF = 10000</TD>
+</TR>
+<TR>
+<TD>
+printer = _objs.VerbosityPrinter.build_printer(verbosity)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer = _objs.VerbosityPrinter.build_printer(verbosity)</TD>
+</TR>
+<TR>
+<TD>
+printer.log('', 2)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+printer.log('', 2)</TD>
+</TR>
+<TR>
+<TD>
+printer.log(<span style="color: rgb(255, 0, 0);">'--- Contract to CP ---'</span>, 1, indentOffset=-1)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+printer.log(<span style="color: rgb(255, 0, 0);">'--- Contract to XP ---'</span>, 1, indentOffset=-1)</TD>
+</TR>
+<TR>
+<TD>
+gs = gateset.copy()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+gs = gateset.copy()</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 33</B><BR>Distance between two fragments = 1 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/fiducialselection.py"<BR>The first line is 499</TD><TD></TD><TD>Source file "algorithms/germselection.py"<BR>The first line is 595</TD></TR><TR>
+<TD>
+def get_neighbors(boolVec):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for i in range(<span style="color: rgb(255, 0, 0);">nFids</span>):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v = boolVec.copy()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v[i] = ((v[i]) + (1)) % (2)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield v</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+def get_neighbors(boolVec):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for i in range(<span style="color: rgb(255, 0, 0);">nGerms</span>):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v = boolVec.copy()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v[i] = ((v[i]) + (1)) % (2)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield v</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 34</B><BR>Distance between two fragments = 0 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/fiducialpairreduction.py"<BR>The first line is 169</TD><TD></TD><TD>Source file "algorithms/fiducialpairreduction.py"<BR>The first line is 177</TD></TR><TR>
+<TD>
+ret = []</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+ret = []</TD>
+</TR>
+<TR>
+<TD>
+for i in pairIndicesToTest:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;iRhoStr = (i) // (nEStrs)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;iEStr = (i) - ((iRhoStr) * (nEStrs))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ret.append((iRhoStr, iEStr))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+for i in pairIndicesToTest:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;iRhoStr = (i) // (nEStrs)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;iEStr = (i) - ((iRhoStr) * (nEStrs))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;ret.append((iRhoStr, iEStr))</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 35</B><BR>Distance between two fragments = 0 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 1010</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 1982</TD></TR><TR>
+<TD>
+intermedMem = (8) * (((ng) + ((ng) * ((gd) ** (2)))) + (((ng) * ((gd) ** (2))) * (ne)))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+intermedMem = (8) * (((ng) + ((ng) * ((gd) ** (2)))) + (((ng) * ((gd) ** (2))) * (ne)))</TD>
+</TR>
+<TR>
+<TD>
+if (memLimit is not None) and (memLimit < intermedMem):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;reductionFactor = (float(intermedMem)) / (float(memLimit))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;maxEvalSubTreeSize = int((ng) / (reductionFactor))<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;maxEvalSubTreeSize = None</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if (memLimit is not None) and (memLimit < intermedMem):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;reductionFactor = (float(intermedMem)) / (float(memLimit))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;maxEvalSubTreeSize = int((ng) / (reductionFactor))<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;maxEvalSubTreeSize = None</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 36</B><BR>Distance between two fragments = 1 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "algorithms/core.py"<BR>The first line is 2165</TD><TD></TD><TD>Source file "algorithms/core.py"<BR>The first line is 2102</TD></TR><TR>
+<TD>
+dprobs_factor = _np.where(probs < min_p, dprobs_factor_neg, dprobs_factor_pos)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+dprobs_factor = _np.where(probs < min_p, dprobs_factor_neg, dprobs_factor_pos)</TD>
+</TR>
+<TR>
+<TD>
+dprobs_factor = _np.where(minusCntVecMx == 0, <span style="color: rgb(255, 0, 0);">0.0</span>, dprobs_factor)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+dprobs_factor = _np.where(minusCntVecMx == 0, <span style="color: rgb(255, 0, 0);">dprobs_factor_zerofreq</span>, dprobs_factor)</TD>
+</TR>
+<TR>
+<TD>
+jac = (dprobs) * (dprobs_factor[None:None,None:None,None])</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+jac = (dprobs) * (dprobs_factor[None:None,None:None,None])</TD>
+</TR>
+<TR>
+<TD>
+jac = jac.reshape([KM, vec_gs_len])</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+jac = jac.reshape([KM, vec_gs_len])</TD>
+</TR>
+<TR>
+<TD>
+return jac</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+return jac</TD>
+</TR>
+</TABLE> </P> <HR>
+    
+    
+    <HR>
+    Clone Digger is aimed to find software clones in Python and Java programs. It is provided under the GPL license and can be downloaded from the site <a href="http://clonedigger.sourceforge.net">http://clonedigger.sourceforge.net</a>
+    </BODY>
+</HTML>

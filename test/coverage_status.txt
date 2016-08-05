@@ -1,0 +1,93 @@
+Current test coverage, and what needs to be done to improve it:
+
+Tools package:
+
+    Name                            Stmts   Miss  Cover   Missing
+    -------------------------------------------------------------
+    pygsti/tools/basistools.py        398      0   100%
+    pygsti/tools/chi2fns.py            80      0   100%
+    pygsti/tools/gatetools.py         145     11    92%   46-49, 427, 561, 585, 594, 657-659
+    pygsti/tools/jamiolkowski.py       82      0   100%
+    pygsti/tools/likelihoodfns.py     274      4    99%   650-651, 691, 843
+    pygsti/tools/listtools.py          12      0   100%
+    pygsti/tools/matrixtools.py        44      1    98%   165
+    pygsti/tools/rbtools.py            34      1    97%   54
+    pygsti/tools/rpetools.py          107      4    96%   71, 75, 269, 271
+    -------------------------------------------------------------
+    TOTAL                            1186     21    98%
+
+    gatetools.py could have higher coverage, but someone else will have to write those tests, as their input is more specific
+
+IO package:
+
+    Name                    Stmts   Miss  Cover   Missing
+    -----------------------------------------------------
+    pygsti/io.py                4      0   100%
+    pygsti/io/loaders.py       64      2    97%   69, 121
+    pygsti/io/stdinput.py     424     27    94%   349-357, 489-497, 550, 692-697, 718-721
+    pygsti/io/writers.py       94      2    98%   245, 248
+    -----------------------------------------------------
+    TOTAL                     586     31    95%
+    ----------------------------------------------------------------------
+
+    To get 100% here, we would probably need to make a test for output in interactive mode
+      as well as some obscure features of MPI
+
+Construction package:
+
+    Name                                            Stmts   Miss  Cover   Missing
+    -----------------------------------------------------------------------------
+    pygsti/construction.py                              7      0   100%
+    pygsti/construction/datasetconstruction.py         71      2    97%   91, 117
+    pygsti/construction/gatesetconstruction.py        451      9    98%   585, 685, 744-745, 830, 834, 952-953, 966
+    pygsti/construction/gatestringconstruction.py     147     47    68%   314-315, 329-330, 336-366, 469-491, 518
+    pygsti/construction/rpeconstruction.py            135      0   100%
+    pygsti/construction/spamspecconstruction.py        30      0   100%
+    pygsti/construction/stdlists.py                    69      0   100%
+    -----------------------------------------------------------------------------
+    TOTAL                                             910     58    94%
+    ----------------------------------------------------------------------
+
+    Just created tests for rpeconstruction and datasetconstruction (Increase coverage 20%)
+
+
+Objects package:
+
+    Name                                 Stmts   Miss  Cover   Missing
+    ------------------------------------------------------------------
+    pygsti/objects.py                       21      0   100%
+    pygsti/objects/confidenceregion.py     213     70    67%   156-171, 234, 360-381, 421-447, 483-503, 610-626
+    pygsti/objects/dataset.py              262      3    99%   71, 271, 471
+    pygsti/objects/evaltree.py             255     39    85%   106, 281, 316-317, 345, 394, 436, 446-451, 455, 564-598
+    pygsti/objects/exceptions.py             5      0   100%
+    pygsti/objects/gate.py                 331    178    46%   41-59, 99-120, 147-148, 152, 158-164, 169, 174, 191, 210, 213, 219, 268-269, 271, 277, 281, 285, 327, 355, 372, 388, 417, 437-438, 442-444, 447, 489, 552, 585-587, 607-608, 638, 661, 664, 690, 707-708, 729, 758, 778-779, 783-785, 788, 794-795, 798, 848-871, 878-893, 911-914, 928, 940, 957-958, 974-986, 992-1001, 1018-1019, 1039-1108, 1112-1115, 1118
+    pygsti/objects/gateset.py              489    183    63%   121, 173, 197, 370, 389, 413, 529, 990, 2075-2086, 2105-2124, 2150-2159, 2169-2170, 2179-2180, 2189-2190, 2245-2252, 2263-2276, 2325-2412, 2438-2465, 2489-2526, 2548-2581, 2607-2613, 2629-2645
+    pygsti/objects/gatestring.py           151     71    53%   49, 57, 67, 99-104, 131-136, 146, 153, 163, 167, 174, 177, 183, 189-191, 194, 235, 238-240, 243-247, 250-251, 254, 260-262, 297, 315-319, 352-377, 399-402
+    pygsti/objects/gscalc.py              1189    194    84%   266-276, 439, 444, 511, 525, 566, 986-987, 994, 1003, 1019-1021, 1066, 1077-1094, 1110-1137, 1147-1163, 1166, 1171, 1236-1293, 1298, 1372-1429, 1434, 1636-1656, 1672, 1912, 2003-2012, 2073, 2086, 2096, 2156, 2260, 2347-2350, 2391-2395, 2409-2457, 2468, 2556-2559, 2605-2609, 2623-2674, 2685, 3185-3186, 3296-3297, 3329, 3341, 3450
+    pygsti/objects/labeldicts.py           113     15    87%   46, 74, 77-80, 129-130, 132, 160, 163-166, 207, 209, 214
+pygsti/tools.py                    10      0   100%
+    pygsti/objects/multidataset.py         159      2    99%   152, 1797
+    pygsti/objects/protectedarray.py       121     23    81%   18, 27, 29-31, 65, 68, 76, 81, 115, 123, 145-151, 180-186, 189
+    pygsti/objects/spamspec.py              14      6    57%   39, 42-46
+    pygsti/objects/spamvec.py              158     38    76%   39, 43, 50, 55, 73, 88, 91, 100, 146-147, 155, 204, 232, 249, 264, 280-283, 328, 399-401, 448, 469-476, 500, 517-518, 545, 548-550, 553
+    pygsti/objects/verbosityprinter.py     113      3    97%   83, 90, 180
+    ------------------------------------------------------------------
+    TOTAL                                 3594    825    77%
+    ---------------------------------------------------------------------- 
+
+    This still needs to be covered more, but maybe someone more familiar with the objects package should do it?
+
+Total coverage percentages (low to high level):
+
+  Tools:        98% # Higher priority (More packages depend on this one)
+  Optimize:     89%
+* Objects:      77%
+  Construction: 94% # Mid priority
+  IO:           95% #
+  Algorithms:   91%
+  Report:       83%
+  Drivers:      99% # Lower priority (Depends on all other packages)
+
+*: lowest
+
+Total repository coverage is something like 94-96%+
