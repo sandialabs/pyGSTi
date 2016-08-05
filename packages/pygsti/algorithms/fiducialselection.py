@@ -785,10 +785,12 @@ def grasp_fiducial_optimization(gateset, fidsList, prepOrMeas, alpha,
         printer.warning("Aborting search.")
         return (None, None, None) if returnAll else None
 
-    weights = _np.zeros(len(fidsList), dtype='i')
+    initialWeights = _np.zeros(len(fidsList), dtype='i')
     if forceEmpty:
         fidsLens = [len(fiducial) for fiducial in fidsList]
-        weights[fidsLens.index(0)] = 1
+        initialWeights[fidsLens.index(0)] = 1
+        getNeighborsFn = lambda weights: _grasp.get_swap_neighbors(
+            weights, forcedWeights=initialWeights)
 
     printer.log("Starting fiducial list optimization. Lower score is better.",
                 1)
@@ -830,9 +832,10 @@ def grasp_fiducial_optimization(gateset, fidsList, prepOrMeas, alpha,
                 iterSolns = _grasp.do_grasp_iteration(
                     elements=fidsList, greedyScoreFn=scoreFn, rclFn=rclFn,
                     localScoreFn=scoreFn,
-                    getNeighborsFn=_grasp.get_swap_neighbors,
+                    getNeighborsFn=getNeighborsFn,
                     feasibleThreshold=feasibleThreshold,
-                    initialElements=weights, seed=seed, verbosity=verbosity)
+                    initialElements=initialWeights, seed=seed,
+                    verbosity=verbosity)
 
                 initialSolns.append(iterSolns[0])
                 localSolns.append(iterSolns[1])
