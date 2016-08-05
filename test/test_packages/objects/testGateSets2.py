@@ -6,10 +6,10 @@ import os
 
 from .testGateSets import GateSetTestCase
 
-class GateSetTestCase(GateSetTestCase):
+class TestGateSetMethods(GateSetTestCase):
 
     def setUp(self):
-        super(GateSetTestCase, self).setUp()
+        super(TestGateSetMethods, self).setUp()
 
         self.gateset = pygsti.construction.build_gateset(
             [2], [('Q0',)],['Gi','Gx','Gy'],
@@ -17,10 +17,7 @@ class GateSetTestCase(GateSetTestCase):
             prepLabels=["rho0"], prepExpressions=["0"],
             effectLabels=["E0"], effectExpressions=["1"],
             spamdefs={'plus': ('rho0','E0'),
-                           'minus': ('remainder','remainder') } )
-
-
-class TestGateSetMethods(GateSetTestCase):
+            'minus': ('remainder','remainder') } )
 
     def test_creation(self):
         self.assertIsInstance(self.gateset, pygsti.objects.GateSet)

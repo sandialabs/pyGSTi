@@ -8,10 +8,10 @@ from ..testutils import BaseTestCase, compare_files, temp_files
 
 import numpy as np
 
-class ReportTestCase(BaseTestCase):
+class TestReport(BaseTestCase):
 
     def setUp(self):
-        super(ReportTestCase, self).setUp()
+        super(TestReport, self).setUp()
 
         self.targetGateset = std.gs_target
         datagen_gateset = self.targetGateset.depolarize(gate_noise=0.05, spam_noise=0.1)
@@ -106,10 +106,6 @@ class ReportTestCase(BaseTestCase):
         else:
             # Normal testing -- no latex comparison
             pass
-
-
-
-class TestReport(ReportTestCase):
 
     def test_reports_chi2_noCIs(self):
 
