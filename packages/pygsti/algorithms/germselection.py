@@ -1492,6 +1492,8 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
                                           twirledDerivDaggerDerivList,
                                           nonAC_kwargs, initN=1))
 
+    feasibleThreshold = _scoring.CompositeScore(threshold, numNonGaugeParams)
+
     rclFn = lambda x: _scoring.composite_rcl_fn(x, alpha)
 
     initialSolns = []
@@ -1505,9 +1507,9 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
                     elements=germsList, greedyScoreFn=scoreFn, rclFn=rclFn,
                     localScoreFn=scoreFn,
                     getNeighborsFn=getNeighborsFn,
-                    feasibleThreshold=_scoring.CompositeScore(threshold,
-                    numNonGaugeParams), initialElements=initialWeights,
-                    seed=seed, verbosity=verbosity)
+                    feasibleThreshold=feasibleThreshold,
+                    initialElements=initialWeights, seed=seed,
+                    verbosity=verbosity)
 
                 initialSolns.append(iterSolns[0])
                 localSolns.append(iterSolns[1])
