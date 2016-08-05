@@ -1562,15 +1562,23 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
     localSolns = []
 
     for iteration in range(iterations):
-        iterSolns = _grasp.do_grasp_iteration(
-            elements=germsList, greedyScoreFn=scoreFn, rclFn=rclFn,
-            localScoreFn=scoreFn, getNeighborsFn=_grasp.get_swap_neighbors,
-            feasibleThreshold=_scoring.CompositeScore(threshold,
-                                                      numNonGaugeParams),
-            initialElements=weights, seed=seed, verbosity=verbosity)
+        success = False
+        while not success:
+            try:
+                iterSolns = _grasp.do_grasp_iteration(
+                    elements=germsList, greedyScoreFn=scoreFn, rclFn=rclFn,
+                    localScoreFn=scoreFn,
+                    getNeighborsFn=_grasp.get_swap_neighbors,
+                    feasibleThreshold=_scoring.CompositeScore(threshold,
+                    numNonGaugeParams), initialElements=weights, seed=seed,
+                    verbosity=verbosity)
 
-        initialSolns.append(iterSolns[0])
-        localSolns.append(iterSolns[1])
+                initialSolns.append(iterSolns[0])
+                localSolns.append(iterSolns[1])
+
+                success = True
+            except Exception as e:
+                printer.warning(e)
 
     finalScores = _np.array([finalScoreFn(localSoln)
                              for localSoln in localSolns])
