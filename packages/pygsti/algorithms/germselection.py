@@ -1501,7 +1501,8 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
 
     for iteration in range(iterations):
         success = False
-        while not success:
+        failCount = 0
+        while not success and failCount < 10:
             try:
                 iterSolns = _grasp.do_grasp_iteration(
                     elements=germsList, greedyScoreFn=scoreFn, rclFn=rclFn,
@@ -1516,10 +1517,14 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
 
                 success = True
             except Exception as e:
-                printer.warning(e)
+                failCount += 1
+                if failCount == 10:
+                    raise e
+                else:
+                    printer.warning(e)
 
     finalScores = _np.array([finalScoreFn(localSoln)
                              for localSoln in localSolns])
     bestSoln = localSolns[_np.argmin(finalScores)]
 
-    return bestSoln, initialSolns, localSolns if returnAll else bestSoln
+    return (bestSoln, initialSolns, localSolns) if returnAll else bestSoln
