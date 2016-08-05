@@ -10,6 +10,7 @@ import numpy             as _np
 import matplotlib.pyplot as _plt
 import matplotlib        as _matplotlib
 import os                as _os
+import warnings          as _warnings
 
 from scipy.stats       import chi2             as _chi2
 
@@ -1015,14 +1016,17 @@ def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp):
         s = _np.shape(non_all_NaN)
         dof_each_box = [_num_non_nan(k) for k in non_all_NaN]
 
-        assert _all_same(dof_each_box), 'Number of degrees of freedom different for different boxes!'
+        # Don't assert this anymore -- just use average below
+        if not _all_same(dof_each_box):
+            _warnings.warn('Number of degrees of freedom different for different boxes!')
 
         # The number of boxes is equal to the number of rows in non_all_NaN
         n_boxes = s[0]
 
         if n_boxes > 0:
             # Each box is a chi2_(sum) random variable
-            dof_per_box = dof_each_box[0]
+            # dof_per_box = dof_each_box[0] #OLD
+            dof_per_box = _np.average(dof_each_box)
         else:
             dof_per_box = None #unknown, since there are no boxes
     else:
@@ -1171,7 +1175,7 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxs, cmapFactory, xlabe
     if sumUp:
         subMxSums = _np.array( [ [ sum_up_mx(subMxs[iy][ix]) for ix in range(nXs) ] for iy in range(nYs) ], 'd' )
         subMxSums = _np.flipud(subMxSums) #so [0,0] el of original subMxSums is at *top*-left (FLIP)
-        if invert: print("Warning: cannot invert a summed-up plot.  Ignoring invert=True.")
+        if invert: _warnings.warn("Cannot invert a summed-up plot.  Ignoring invert=True.")
 
         fig,ax = _plt.subplots( 1, 1, figsize=(nXs*scale, nYs*scale))
         rptFig = color_boxplot( subMxSums, cmapFactory, fig=fig, axes=ax, title=title,
