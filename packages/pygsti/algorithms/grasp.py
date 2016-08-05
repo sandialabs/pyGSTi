@@ -13,17 +13,37 @@ import numpy as _np
 from .. import objects as _objs
 
 
-def get_swap_neighbors(weights):
+def get_swap_neighbors(weights, forcedWeights=None):
     """Return the list of weights in the neighborhood of a given weight vector.
 
     A weight vector is in the neighborhood of a given weight vector if it is
-    only a single swap away from the given weight vector.
+    only a single swap away from the given weight vector. There is an option to
+    use `forcedWeights` to indicate elements you don't want to swap out.
+
+    Parameters
+    ----------
+    weights : numpy.array
+        Binary vector to find the neighborhood of.
+
+    forcedWeights : numpy.array
+        Binary vector indicating elements that must be included in all
+        neighboring vectors (these elements are assumed to already be present
+        in `weights`.
+
+    Returns
+    -------
+    list of numpy.array
+        List of binary vectors corresponding to all the neighbors of `weights`.
 
     """
-    included_idxs = _np.where(weights==1)[0]
-    excluded_idxs = _np.where(weights==0)[0]
+    if forcedWeights is None:
+        forcedWeights = _np.zeros(len(weights))
+
+    swap_out_idxs = _np.where(_np.logical_and(weights == 1,
+                                              forcedWeights == 0))[0]
+    swap_in_idxs = _np.where(weights == 0)[0]
     neighbors = []
-    for swap_out, swap_in in itertools.product(included_idxs, excluded_idxs):
+    for swap_out, swap_in in itertools.product(swap_out_idxs, swap_in_idxs):
         neighbor = weights.copy()
         neighbor[swap_out] = 0
         neighbor[swap_in] = 1
@@ -177,9 +197,9 @@ def do_grasp_iteration(elements, greedyScoreFn, rclFn, localScoreFn,
         ``None``.
 
     initialElements : numpy.array
-        Binary vector with 1s at indices corresponding to elements in
-        `elements` that the greedy construction routine will include at the
-        start of its construction.
+        Binary vector indicating whether the corresponding elements in
+        `elements` should be automatically included by the greedy construction
+        routine at the start of its construction.
 
     seed : int
         Seed for the random number generator.

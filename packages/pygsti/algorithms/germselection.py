@@ -1512,9 +1512,11 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
 
     numGerms = len(germsList)
 
-    weights = _np.zeros(numGerms, 'i')
+    initialWeights = _np.zeros(numGerms, dtype='i')
     if forceSingletons:
-        weights[_np.where(germLengths == 1)] = 1
+        initialWeights[_np.where(germLengths == 1)] = 1
+        getNeighborsFn = lambda weights: _grasp.get_swap_neighbors(
+            weights, forcedWeights=initialWeights)
 
     undercompleteGatesetNum = checkGermsListCompleteness(gatesetList,
                                                          germsList,
@@ -1568,10 +1570,10 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
                 iterSolns = _grasp.do_grasp_iteration(
                     elements=germsList, greedyScoreFn=scoreFn, rclFn=rclFn,
                     localScoreFn=scoreFn,
-                    getNeighborsFn=_grasp.get_swap_neighbors,
+                    getNeighborsFn=getNeighborsFn,
                     feasibleThreshold=_scoring.CompositeScore(threshold,
-                    numNonGaugeParams), initialElements=weights, seed=seed,
-                    verbosity=verbosity)
+                    numNonGaugeParams), initialElements=initialWeights,
+                    seed=seed, verbosity=verbosity)
 
                 initialSolns.append(iterSolns[0])
                 localSolns.append(iterSolns[1])
