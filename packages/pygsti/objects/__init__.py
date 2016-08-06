@@ -30,6 +30,8 @@ from .gatestring import WeightedGateString
 from .multidataset import MultiDataSet
 from .spamspec import SpamSpec
 
+from .germseteval import GermSetEval
+
 #Experimental only: don't import in production pyGSTi
 #from gigateset import GaugeInvGateSet
 
