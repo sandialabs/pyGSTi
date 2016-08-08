@@ -64,7 +64,7 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
         length up to `maxGermsLength` for the germ selection algorithms to play
         around with.
 
-    algorithm : {'greedy', 'slack'}, optional
+    algorithm : {'greedy', 'grasp', 'slack'}, optional
         Specifies the algorithm to use to generate the germ set. Current
         options are:
 
@@ -72,6 +72,10 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
             Add germs one-at-a-time until the set is AC, picking the germ that
             improves the germ-set score by the largest amount at each step. See
             :func:`build_up_breadth` for more details.
+        'grasp'
+            Use GRASP to generate random greedy germ sets and then locally
+            optimize them. See :func:`grasp_germ_set_optimization` for more
+            details.
         'slack'
             From a initial set of germs, add or remove a germ at each step in
             an attempt to improve the germ-set score. Will allow moves that
@@ -119,6 +123,21 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
                 algorithm_kwargs[key] = default_kwargs[key]
         germList = build_up_breadth(gatesetList=gatesetList,
                                     **algorithm_kwargs)
+    elif algorithm == 'grasp':
+        # Define defaults for parameters that currently have no default or
+        # whose default we want to change.
+        default_kwargs = {
+            'alpha': 0.1,   # No real reason for setting this value of alpha.
+            'germsList': availableGermsList,
+            'randomize': False,
+            'seed': seed,
+            'verbosity': verbosity,
+            }
+        for key in default_kwargs:
+            if key not in algorithm_kwargs:
+                algorithm_kwargs[key] = default_kwargs[key]
+        germList = grasp_germ_set_optimization(gatesetList=gatesetList,
+                                               **algorithm_kwargs)
     elif algorithm == 'slack':
         # Define defaults for parameters that currently have no default or
         # whose default we want to change.

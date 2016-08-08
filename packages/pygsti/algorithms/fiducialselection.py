@@ -30,12 +30,16 @@ def generate_fiducials(gs_target, gatesToOmit, maxFidLength=2,
     maxFidLength : int
         The maximum number of gates to include in a fiducial.
 
-    algorithm : {'greedy', 'slack'}, optional
+    algorithm : {'slack', 'grasp'}, optional
         Specifies the algorithm to use to generate the fiducials. Current
         options are:
 
         'slack'
             See :func:`optimize_integer_fiducials_slack` for more details.
+        'grasp'
+            Use GRASP to generate random greedy fiducial sets and then locally
+            optimize them. See :func:`grasp_fiducial_optimization` for more
+            details.
 
     algorithm_kwargs : dict
         Dictionary of ``{'keyword': keyword_arg}`` pairs providing keyword
@@ -72,15 +76,32 @@ def generate_fiducials(gs_target, gatesToOmit, maxFidLength=2,
             if key not in algorithm_kwargs:
                 algorithm_kwargs[key] = default_kwargs[key]
 
-        prepAlg_kwargs = algorithm_kwargs.copy()
-        prepAlg_kwargs['prepOrMeas'] = 'prep'
         prepFidList = optimize_integer_fiducials_slack(gateset=gs_target,
-                                                       **prepAlg_kwargs)
+                                                       prepOrMeas='prep',
+                                                       **algorithm_kwargs)
 
-        measAlg_kwargs = algorithm_kwargs.copy()
-        measAlg_kwargs['prepOrMeas'] = 'meas'
         measFidList = optimize_integer_fiducials_slack(gateset=gs_target,
-                                                       **measAlg_kwargs)
+                                                       prepOrMeas='meas',
+                                                       **algorithm_kwargs)
+
+    elif algorithm == 'grasp':
+        default_kwargs = {
+            'fidsList': availableFidList,
+            'alpha': 0.1,   # No real reason for setting this value of alpha.
+            'gatePenalty': 0.1,
+            'verbosity': verbosity,
+        }
+        for key in default_kwargs:
+            if key not in algorithm_kwargs:
+                algorithm_kwargs[key] = default_kwargs[key]
+
+        prepFidList = grasp_fiducial_optimization(gateset=gs_target,
+                                                  prepOrMeas='prep',
+                                                  **algorithm_kwargs)
+
+        measFidList = grasp_fiducial_optimization(gateset=gs_target,
+                                                  prepOrMeas='meas',
+                                                  **algorithm_kwargs)
 
     else:
         raise ValueError("'{}' is not a valid algorithm "
