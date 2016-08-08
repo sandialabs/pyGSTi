@@ -14,7 +14,7 @@ default   = ['tools', 'io', 'objects', 'construction', 'drivers', 'report', 'alg
 slowtests = ['report', 'drivers']
 
 def run_tests(testnames, version=None, fast=False, changed=False,
-              parallel=False, failed=False, cores=None, coverdir=None):
+              parallel=False, failed=False, cores=None, coverdir=None, html=False):
 
     with directory('test_packages'):
 
@@ -60,7 +60,10 @@ def run_tests(testnames, version=None, fast=False, changed=False,
             pythoncommands.append('--process-timeout=14400') # Four hours
 
         # html coverage is prettiest
-        pythoncommands += ['--with-coverage', '--cover-html']
+        pythoncommands += ['--with-coverage']
+
+        if html:
+            pythoncommands += ['--cover-html']
 
         # Build the set of covered packages automatically
         covering = set()
@@ -93,6 +96,8 @@ if __name__ == "__main__":
                         help='run only the faster packages')
     parser.add_argument('--failed', action='store_true',
                         help='run last failed tests only')
+    parser.add_argument('--html', action='store_true',
+                        help='generate html')
     parser.add_argument('--parallel', '-p', action='store_true',
                         help='run tests in parallel')
     parser.add_argument('--cores', type=int, default=None,
@@ -102,4 +107,4 @@ if __name__ == "__main__":
 
     parsed = parser.parse_args(sys.argv[1:])
 
-    run_tests(parsed.tests, parsed.version, parsed.fast, parsed.changed, parsed.parallel, parsed.failed, parsed.cores, parsed.coverdir)
+    run_tests(parsed.tests, parsed.version, parsed.fast, parsed.changed, parsed.parallel, parsed.failed, parsed.cores, parsed.coverdir, parsed.html)
