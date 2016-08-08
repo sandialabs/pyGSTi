@@ -63,7 +63,7 @@ install: true
 #  timeout: 1000
 # command to run tests
 script:
-   - echo "Testing"
+   - echo "Testing2"
 #  - cd test
 #  - travis_wait 40 python travisTests.py # Tests may take some time!
 #  - cd ..
