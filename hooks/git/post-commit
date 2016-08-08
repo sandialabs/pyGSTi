@@ -16,7 +16,7 @@ if __name__ == '__main__':
     if numChanged == 0:
         # Reindent
         try:
-            subprocess.call(['reindent', '-r', 'packages', 'test'])
+            subprocess.call(['reindent', '-r', '-n', 'packages', 'test'])
             # Check if anything changed during our reindent
             numChanged = len(get_output(['git', 'diff', '--name-only']).splitlines())
             if numChanged > 0:
