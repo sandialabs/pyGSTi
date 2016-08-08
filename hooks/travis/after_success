@@ -86,7 +86,7 @@ if canMerge:
     try:
         print('Pushing to origin/beta. If this fails, there shouldn\'t be any useful output, since it would contain my access token')
         with open(os.devnull, 'w') as FNULL:
-            result = subprocess.call(['git', 'push', '--no-verify', push_uri, 'beta'], stdout=FNULL, stderr=FNULL)
+            result = subprocess.call(['git', 'push', '--no-verify', push_uri, 'beta'])
             if result != 0:
                 print('Secure push failed')
             else:
