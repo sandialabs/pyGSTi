@@ -794,7 +794,7 @@ class Results(object):
                                  directLGST, strs, r"$L$", "germ",
                                  scale=1.0, sumUp=False, title="",
                                  minProbClipForWeighting=mpc, fidPairs=fidPairs,
-                                 gatestring_filters = filter_dict,
+                                 gatestring_filters = None, #don't use filter_dict for direct plots
                                  save_to="", ticSize=20, linlg_pcntle=float(self.parameters['linlogPercentile']) / 100)
         fns["directLGSTColorBoxPlot"] = (fn,validate_LsAndGerms)
 
@@ -808,7 +808,7 @@ class Results(object):
                                  directLongSeqGST, strs, r"$L$", "germ",
                                  scale=1.0, sumUp=False, title="",
                                  minProbClipForWeighting=mpc, fidPairs=fidPairs,
-                                 gatestring_filters = filter_dict,
+                                 gatestring_filters = None, #don't use filter_dict for direct plots
                                  save_to="", ticSize=20, linlg_pcntle=float(self.parameters['linlogPercentile']) / 100)
         fns["directLongSeqGSTColorBoxPlot"] = (fn,validate_LsAndGerms)
 

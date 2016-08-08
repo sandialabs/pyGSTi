@@ -201,7 +201,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     specs = _construction.build_spam_specs(prepStrs=prepStrs, effectStrs=effectStrs,
                                            prep_labels=gs_target.get_prep_labels(),
                                            effect_labels=gs_target.get_effect_labels())
-    gs_lgst = _alg.do_lgst(ds, specs, gs_target, svdTruncateTo=gate_dim, verbosity=3)
+    gs_lgst = _alg.do_lgst(ds, specs, gs_target, svdTruncateTo=gate_dim,
+                           verbosity=advancedOptions.get('verbosity',3))
 
     tNxt = _time.time()
     times_list.append( ('LGST',tNxt-tRef) ); tRef=tNxt
@@ -211,7 +212,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         gs_lgst.set_all_parameterizations("full") #make sure we can do gauge optimization
         minPenalty, _, gs_in_TP = _alg.optimize_gauge(
             gs_lgst, "TP",  returnAll=True, spamWeight=1.0,
-            gateWeight=1.0, verbosity=3)
+            gateWeight=1.0, verbosity=advancedOptions.get('verbosity',3))
             #Note: no  itemWeights=gaugeOptItemWeights here (LGST)
 
         if minPenalty > 0:
@@ -258,7 +259,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
             probClipInterval = advancedOptions.get(
                 'probClipInterval',(-1e6,1e6)),
             returnAll=True, gatestringWeightsDict=weightsDict,
-            verbosity=advancedOptions.get('verbosity',2),
+            verbosity=advancedOptions.get('verbosity',3),
             memLimit=advancedOptions.get('memoryLimitInBytes',None),
             useFreqWeightedChiSq=advancedOptions.get(
                 'useFreqWeightedChiSq',False), times=times_list,
@@ -270,7 +271,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
           minProbClip = advancedOptions.get('minProbClip',1e-4),
           probClipInterval = advancedOptions.get('probClipInterval',(-1e6,1e6)),
           radius=advancedOptions.get('radius',1e-4),
-          returnAll=True, verbosity=advancedOptions.get('verbosity',2),
+          returnAll=True, verbosity=advancedOptions.get('verbosity',3),
           memLimit=advancedOptions.get('memoryLimitInBytes',None),
           useFreqWeightedChiSq=advancedOptions.get(
                 'useFreqWeightedChiSq',False), times=times_list,
