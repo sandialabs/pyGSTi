@@ -17,6 +17,8 @@ After hooks have been configured, any pull or merge will update them again
 
 `pre-commit` reindents pygsti. DOES add changes to the commit but will abort if there are unchanged files (So that they aren't accidentally added!).
 
+`pre-push` lints for errors in pygsti and fails if any are found. This takes a bit of time, but it will prevent any syntax errors or other minor mistakes from being pushed to the repository
+
 ##### master
 
 `pre-commit`   -  requires pylint score to be higher than that in `pyGSTi/test/pylint_config.json` (currently `9.10`) - creates report
