@@ -13,8 +13,17 @@ see pyGSTi/doc/repotools/test.md, or try running ./runTests.py -h
 default   = ['tools', 'io', 'objects', 'construction', 'drivers', 'report', 'algorithms', 'optimize']
 slowtests = ['report', 'drivers']
 
+def parse_coverage_percent(output):
+    output   = output.split('Missing')[1].split('Ran')[0]
+    output   = output.splitlines()
+    specific = output[3:-3]
+    # Get last word of the line after the dashes, and remove the percent symbol
+    percent  = int(output[-2].split()[-1][:-1])
+    return percent
+
+
 def run_tests(testnames, version=None, fast=False, changed=False,
-              parallel=False, failed=False, cores=None, coverdir=None, html=False):
+              parallel=False, failed=False, cores=None, coverdir=None, html=False, threshold=90):
 
     with directory('test_packages'):
 
@@ -80,8 +89,24 @@ def run_tests(testnames, version=None, fast=False, changed=False,
         pythoncommands.append('--cover-html-dir=../output/coverage/%s' % coverdir)
 
         # Make a single subprocess call
-        result = subprocess.call(pythoncommands + testnames + postcommands)
-        sys.exit(result)
+
+        try:
+            output   = subprocess.check_output(pythoncommands + testnames + postcommands, stderr=subprocess.STDOUT)
+            returned = 0
+        except subprocess.CalledProcessError as e:
+            print(e)
+            output   = e.output
+            returned = 1
+
+        output  = output.decode('utf-8')
+        percent = parse_coverage_percent(output)
+
+        print('Coverage is at: %s, threshold is %s' % (percent, threshold))
+
+        if int(percent) < threshold:
+            returned = 1 # fail
+
+        sys.exit(returned)
 
 if __name__ == "__main__":
 
@@ -90,8 +115,7 @@ if __name__ == "__main__":
                         help='list of packages to run tests for')
     parser.add_argument('--version', '-v', type=str,
                         help='version of python to run the tests under')
-    parser.add_argument('--changed', '-c', action='store_true',
-                        help='run only the changed packages')
+    parser.add_argument('--changed', '-c', action='store_true', help='run only the changed packages')
     parser.add_argument('--fast', '-f', action='store_true',
                         help='run only the faster packages')
     parser.add_argument('--failed', action='store_true',
@@ -104,7 +128,11 @@ if __name__ == "__main__":
                         help='run tests with n cores')
     parser.add_argument('--coverdir', type=str, default='all',
                         help='put html coverage report here')
+    parser.add_argument('--threshold', type=int, default=90,
+                        help='coverage percentage to beat')
 
     parsed = parser.parse_args(sys.argv[1:])
 
-    run_tests(parsed.tests, parsed.version, parsed.fast, parsed.changed, parsed.parallel, parsed.failed, parsed.cores, parsed.coverdir, parsed.html)
+    run_tests(parsed.tests, parsed.version, parsed.fast, parsed.changed,
+              parsed.parallel, parsed.failed, parsed.cores, parsed.coverdir,
+              parsed.html, parsed.threshold)
