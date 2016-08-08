@@ -80,7 +80,8 @@ if canMerge:
     print('Staging files..')
     subprocess.call(['git', 'add', '-u'])
     print('Committing..')
-    subprocess.call(['git', 'commit', '--no-verify', '-m', 'Merged develop into beta, as there were no conflicts and travis tests passed'])
+    subprocess.call(['git', 'commit', '--no-verify', '-m', 
+                     'Auto-merged develop -> beta (No conflicts, CI passed)'])
     print('Commit finished')
 
     PUSHKEY  = os.environ['PUSHKEY']
