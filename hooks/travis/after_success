@@ -39,8 +39,10 @@ subprocess.call(['git', 'fetch'])
 
 print('Setting up user credentials')
 
-subprocess.call(['git', 'config', '--global', 'user.email', 'N/A'])
-subprocess.call(['git', 'config', '--global', 'user.name', 'LSaldyt'])
+EMAIL = os.environ['EMAIL']
+USER  = os.environ['USER']
+subprocess.call(['git', 'config', '--global', 'user.email', EMAIL])
+subprocess.call(['git', 'config', '--global', 'user.name',  USER])
 print('Done')
 
 print('Getting the latest version of beta')
