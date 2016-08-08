@@ -37,6 +37,10 @@ def run_tests(testnames, version=None, fast=False, changed=False,
         if changed:
             testnames = [name for name in testnames if name in get_changed_packages()]
 
+        if len(testnames) == 0:
+            print('No tests to run')
+            sys.exit(0)
+
         # testnames should be final at this point
         print('Running tests:\n%s' % ('\n'.join(testnames)))
 
