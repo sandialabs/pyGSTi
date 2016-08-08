@@ -2,16 +2,30 @@ from __future__ import print_function
 from contextlib import contextmanager
 import subprocess, os, sys
 
+# Get decoded output of a command, even if it fails!
+def get_output(commands):
+    try:
+        # We'll want error output, too
+        output = subprocess.check_output(commands, stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError as e:
+        print(e)
+        output = e.output
+    return output.decode('utf-8')
 
+# Immediate subdirectories
+def get_packages(directory):
+    for _, packages, _ in os.walk(directory):
+        return packages # exit early
+    return []
+
+# Immediate files
 def get_files(directory):
     print(directory)
     for _, _, files in os.walk(directory):
         return files # exit early
     return []
 
-def get_file_directory():
-    return os.path.dirname(os.path.abspath(__file__))
-
+# Use a directory for a task
 @contextmanager
 def directory(directoryName):
     oldwd = os.getcwd()
@@ -21,21 +35,24 @@ def directory(directoryName):
     finally:
         os.chdir(oldwd)
 
-@contextmanager
-def this_directory():
-    with directory(get_file_directory()):
-        yield
-
+# 'Parse' git branch output
 def get_branchname():
-    branchname = 'unspecified'
-    output     = subprocess.check_output(['git', 'branch'])
-    branches   = output.decode('utf-8').splitlines()
+    branches   = []
+    output     = get_output(['git', 'branch'])
+    branches   = output.splitlines()
     for branch in branches:
-        if '*' in branch:
-            branchname = branch.replace('*', '').replace(' ', '')
-            break
-    return branchname
+        if '*' in branch: # current branch is starred
+            return branch.replace('*', '').replace(' ', '') # Get rid of * and whitespace
 
+# Get all LOCAL branches
+def get_branches():
+    branches   = []
+    output     = get_output(['git', 'branch'])
+    # Remove whitespace and *
+    branches   = output.replace('*', '').replace(' ', '').splitlines()
+    return branches
+
+# Finds the author of a commit
 def get_author(SHA=None):
     if SHA is None:
         output = subprocess.check_output(['git', 'log', 'HEAD', '-1'])
@@ -51,10 +68,24 @@ def run_pylint(commands):
         result = subprocess.call(commands)
     return result
 
-def get_output(commands):
-    try:
-        output = subprocess.check_output(commands, stderr=subprocess.STDOUT)
-    except subprocess.CalledProcessError as e:
-        print(e)
-        output = e.output
-    return output.decode('utf-8')
+# return a dict of filenames that correspond to full paths
+def get_file_names():
+    fileNames = {}
+    for subdir, _, files in os.walk(os.getcwd()):
+        for filename in files:
+            if filename.endswith('.py') and filename.startswith('test'):
+                fileNames[filename] = subdir + os.sep + filename
+    return fileNames
+
+# Wrapper for git diff
+def get_changed_files():
+    output = get_output(['git', 'diff', '--name-only'])
+    return output.splitlines()
+
+# Changed files in packages/pygsti (not tests/repotools)
+def get_changed_core_files(core='pygsti'):
+    return (filename.split(core, 1)[1] for filename in get_changed_files() if core in filename)
+
+# Immediate packages under pygsti that have changed (i.e. tools, drivers..)
+def get_changed_packages():
+    return (corefile.split('/')[1] for corefile in get_changed_core_files())

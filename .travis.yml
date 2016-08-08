@@ -14,7 +14,8 @@ env:
     - ReportA=True  # Only testReport.py (none of the other reports tests)
     - ReportB=True  # test the other reports tests
     - Drivers=True  # All of drivers
-
+    - MPI=True  # All of MPI
+    
 # command to install dependencies
 before_install:
   - sudo apt-get -qq update
@@ -52,7 +53,7 @@ before_install:
   - sleep 3 # give xvfb some time to start
 install:
  - travis_retry travis_wait pip install -r requirements.txt
- - pip install cvxpy python-pptx mpi4py &>/dev/null 
+ - pip install cvxpy python-pptx mpi4py zmq &>/dev/null
  - pip install -e . &>/dev/null
   
 

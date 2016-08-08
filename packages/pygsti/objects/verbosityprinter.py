@@ -4,6 +4,7 @@ from contextlib    import contextmanager as _contextmanager
 import sys         as _sys
 import math        as _math # used for digit formatting
 
+
 def _num_digits(n):
     return int(_math.log10(n)) + 1 if n > 0 else 1
 
