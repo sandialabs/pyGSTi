@@ -39,8 +39,10 @@ subprocess.call(['git', 'fetch'])
 
 print('Setting up user credentials')
 
-subprocess.call(['git', 'config', '--global', 'user.email', 'N/A'])
-subprocess.call(['git', 'config', '--global', 'user.name', 'LSaldyt'])
+EMAIL = os.environ['EMAIL']
+USER  = os.environ['USER']
+subprocess.call(['git', 'config', '--global', 'user.email', EMAIL])
+subprocess.call(['git', 'config', '--global', 'user.name',  USER])
 print('Done')
 
 print('Getting the latest version of beta')
@@ -82,7 +84,7 @@ if canMerge:
     print('Commit finished')
 
     PUSHKEY  = os.environ['PUSHKEY']
-    push_uri = 'https://LSaldyt:%s@github.com/pyGSTio/pyGSTi.git' % PUSHKEY # yikes
+    push_uri = 'https://%s:%s@github.com/pyGSTio/pyGSTi.git' % (USER, PUSHKEY) # yikes
     try:
         print('Pushing to origin/beta. If this fails, there shouldn\'t be any useful output, since it would contain my access token')
         with open(os.devnull, 'w') as FNULL:
