@@ -4,6 +4,7 @@ from contextlib    import contextmanager as _contextmanager
 import sys         as _sys
 import math        as _math # used for digit formatting
 
+
 def _num_digits(n):
     return int(_math.log10(n)) + 1 if n > 0 else 1
 
@@ -18,17 +19,17 @@ def _build_progress_bar (iteration, total, barLength = 100, numDecimals=2, fillC
           current iteration
         total       : int, required
           total iterations
-        barLength   : int, optional  
-          character length of bar 
-        numDecimals : int, optional  
-          precision of progress percent 
-        fillChar    : str, optional  
+        barLength   : int, optional
+          character length of bar
+        numDecimals : int, optional
+          precision of progress percent
+        fillChar    : str, optional
           replaces '#' as the bar-filling character. Note that longer fillChars get repeated indentSize times
-        emptyChar   : str, optional  
+        emptyChar   : str, optional
           replaces '-' as the empty-bar character (Str)
-        prefix      : str, optional  
+        prefix      : str, optional
           - message in front of the bar
-        suffix      : str, optional  
+        suffix      : str, optional
           message after the bar
     Returns
     ------
@@ -53,9 +54,9 @@ def _build_verbose_iteration(iteration, total, prefix, suffix, end):
           current iteration
         total       : int, required
           total iterations
-        prefix      : str, optional  
+        prefix      : str, optional
           - message in front of the bar
-        suffix      : str, optional  
+        suffix      : str, optional
           message after the bar
         end         : str
           message after suffix?
@@ -235,7 +236,7 @@ class VerbosityPrinter():
     def __str__(self):
         return 'Printer Object: Progress Level: %s Verbosity %s' % (self.progressLevel, self.verbosity)
 
-    # A single function call that cleans up for us no matter what happens 
+    # A single function call that cleans up for us no matter what happens
     @_contextmanager
     def progress_logging(self, messageLevel):
         try:
@@ -258,19 +259,19 @@ class VerbosityPrinter():
               current iteration
             total       : int, required
               total iterations
-            barLength   : int, optional   
-              character length of progress bar 
-            numDecimals : int, optional  
-              precision of progress percent 
-            fillChar    : str, optional  
+            barLength   : int, optional
+              character length of progress bar
+            numDecimals : int, optional
+              precision of progress percent
+            fillChar    : str, optional
               replaces '#' as the bar-filling character. Note that longer fillChars get repeated indentSize times
-            emptyChar   : str, optional  
+            emptyChar   : str, optional
               replaces '-' as the empty-bar character (Str)
-            prefix      : str, optional  
+            prefix      : str, optional
               message in front of the status log
-            suffix      : str, optional  
+            suffix      : str, optional
               message after the status log
-            verboseMessages : list(str), optional  
+            verboseMessages : list(str), optional
               list of messages that are printed out at the same indentation as the progress bar
         Returns
         ------
@@ -301,7 +302,7 @@ class VerbosityPrinter():
                     print(item)
                 del self._delayQueue[:]
                 self.progressLevel -= 1
-        #self.log('', 1) 
+        #self.log('', 1)
 
 
 ########################################################################################################################################
