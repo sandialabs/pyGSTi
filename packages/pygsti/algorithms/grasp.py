@@ -56,7 +56,10 @@ def get_swap_neighbors(weights, forcedWeights=None, shuffle=False):
         neighbor[swap_in] = 1
         neighbors.append(neighbor)
 
-    return random.shuffle(neighbors) if shuffle else neighbors
+    if shuffle:
+        random.shuffle(neighbors)
+
+    return neighbors
 
 
 def grasp_greedy_construction(elements, scoreFn, rclFn, feasibleThreshold=None,
