@@ -122,17 +122,19 @@ class VerbosityPrinter():
     printer's verbosity
     '''
 
-    # Rules for handling comm --This is a global variable-- (technically) it should probably only be set once, at the beginning of the program
+    # Rules for handling comm --These are static variables, and should probably only be set once (at the beginning of the program)
     _commPath     = ''
     _commFileName = 'comm_output' # The name of the generated files. Must also be set
     _commFileExt  = '.txt'
 
+    # This will create/empty an existing file so that we can append output to it as needed
     def _create_file(self, filename):
         with open(filename, 'w') as newFile:
             pass
 
     def _get_comm_file(self, comm_id):
-        return '%s%s%s%s' % (VerbosityPrinter._commPath, VerbosityPrinter._commFileName, comm_id, VerbosityPrinter._commFileExt)
+        return '%s%s%s%s' % (VerbosityPrinter._commPath, VerbosityPrinter._commFileName,
+                             comm_id, VerbosityPrinter._commFileExt)
 
     # The printer is initialized with a set verbosity, and an optional filename.
     # If a filename is not provided, VerbosityPrinter writes to stdout
