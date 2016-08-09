@@ -7,13 +7,14 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """Functions to facilitate using GRASP."""
 
 import itertools
+import random
 
 import numpy as _np
 
 from .. import objects as _objs
 
 
-def get_swap_neighbors(weights, forcedWeights=None):
+def get_swap_neighbors(weights, forcedWeights=None, shuffle=False):
     """Return the list of weights in the neighborhood of a given weight vector.
 
     A weight vector is in the neighborhood of a given weight vector if it is
@@ -25,10 +26,16 @@ def get_swap_neighbors(weights, forcedWeights=None):
     weights : numpy.array
         Binary vector to find the neighborhood of.
 
-    forcedWeights : numpy.array
+    forcedWeights : numpy.array, optional
         Binary vector indicating elements that must be included in all
         neighboring vectors (these elements are assumed to already be present
         in `weights`.
+
+    shuffle : bool, optional
+        Whether the neighborhood should be presented to the optimizer in a
+        random order (important if the local optimizer updates the solution to
+        the first better solution it finds in the neighborhood instead of
+        exhaustively searching the neighborhood for the best solution).
 
     Returns
     -------
@@ -49,7 +56,7 @@ def get_swap_neighbors(weights, forcedWeights=None):
         neighbor[swap_in] = 1
         neighbors.append(neighbor)
 
-    return neighbors
+    return random.shuffle(neighbors) if shuffle else neighbors
 
 
 def grasp_greedy_construction(elements, scoreFn, rclFn, feasibleThreshold=None,

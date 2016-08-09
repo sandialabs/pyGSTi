@@ -810,8 +810,9 @@ def grasp_fiducial_optimization(gateset, fidsList, prepOrMeas, alpha,
     if forceEmpty:
         fidsLens = [len(fiducial) for fiducial in fidsList]
         initialWeights[fidsLens.index(0)] = 1
-        getNeighborsFn = lambda weights: _grasp.get_swap_neighbors(
-            weights, forcedWeights=initialWeights)
+
+    getNeighborsFn = lambda weights: _grasp.get_swap_neighbors(
+        weights, forcedWeights=initialWeights)
 
     printer.log("Starting fiducial list optimization. Lower score is better.",
                 1)
@@ -846,6 +847,8 @@ def grasp_fiducial_optimization(gateset, fidsList, prepOrMeas, alpha,
     localSolns = []
 
     for iteration in range(iterations):
+        printer.log('Starting iteration {} of {}.'.format(iteration + 1,
+                                                          iterations), 1)
         success = False
         failCount = 0
         while not success and failCount < 10:
@@ -862,6 +865,8 @@ def grasp_fiducial_optimization(gateset, fidsList, prepOrMeas, alpha,
                 localSolns.append(iterSolns[1])
 
                 success = True
+                printer.log('Finished iteration {} of {}.'.format(
+                    iteration + 1, iterations), 1)
             except Exception as e:
                 failCount += 1
                 if failCount == 10:

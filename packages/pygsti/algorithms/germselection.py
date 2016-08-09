@@ -1352,7 +1352,8 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
                                 seed=None, l1Penalty=1e-2, gatePenalty=0.0,
                                 scoreFunc='all', tol=1e-6, threshold=1e6,
                                 check=False, forceSingletons=True,
-                                iterations=5, returnAll=False, verbosity=0):
+                                iterations=5, returnAll=False, shuffle=False,
+                                verbosity=0):
     """Use GRASP to find a high-performing germ set.
 
     Parameters
@@ -1443,6 +1444,11 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
         optimal solution (useful for diagnostic purposes or if you're not sure
         what your `finalScoreFn` should really be).
 
+    shuffle : bool, optional
+        Whether the neighborhood should be presented to the optimizer in a
+        random order (important since currently the local optimizer updates the
+        solution to the first better solution it finds in the neighborhood).
+
     verbosity : int, optional
         Integer >= 0 indicating the amount of detail to print.
 
@@ -1468,8 +1474,9 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
     initialWeights = _np.zeros(numGerms, dtype='i')
     if forceSingletons:
         initialWeights[_np.where(germLengths == 1)] = 1
-        getNeighborsFn = lambda weights: _grasp.get_swap_neighbors(
-            weights, forcedWeights=initialWeights)
+
+    getNeighborsFn = lambda weights: _grasp.get_swap_neighbors(
+        weights, forcedWeights=initialWeights, shuffle=shuffle)
 
     undercompleteGatesetNum = checkGermsListCompleteness(gatesetList,
                                                          germsList,
@@ -1497,6 +1504,7 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
         'thresholdAC': threshold,
         'numGaugeParams': numGaugeParams,
         'gatePenalty': gatePenalty,
+        'germLengths': germLengths,
         }
 
     final_nonAC_kwargs = nonAC_kwargs.copy()
@@ -1519,6 +1527,8 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
     localSolns = []
 
     for iteration in range(iterations):
+        printer.log('Starting iteration {} of {}.'.format(iteration + 1,
+                                                          iterations), 1)
         success = False
         failCount = 0
         while not success and failCount < 10:
@@ -1535,6 +1545,8 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
                 localSolns.append(iterSolns[1])
 
                 success = True
+                printer.log('Finished iteration {} of {}.'.format(
+                    iteration + 1, iterations), 1)
             except Exception as e:
                 failCount += 1
                 if failCount == 10:
