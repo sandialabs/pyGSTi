@@ -23,7 +23,7 @@ After hooks have been configured, any pull or merge will update them again
 
 `pre-commit`   -  requires pylint score to be higher than that in `pyGSTi/test/pylint_config.json` (currently `9.10`) - creates report
 
-`pre-push`     -  updates `gh-pages`
+`post-commit`  -  updates `gh-pages`
 
 ##### beta
 

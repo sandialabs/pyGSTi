@@ -21,29 +21,59 @@ import re      as _re
 import os      as _os
 
 def _give_specs(formatter, specs):
+    '''
+    Pass parameters down to a formatter
+
+    Parameters
+    --------
+    formatter : callable, takes arguments
+
+    specs : dictionary of argnames : values
+
+    Returns
+    ------
+    None
+
+    Raises
+    ------
+    ValueError : If a needed spec is not supplied.
+    '''
     # If the formatter requires a setting to do its job, give the setting
     if hasattr(formatter, 'specs'):
         for spec in formatter.specs:
             if spec not in specs or specs[spec] is None:
-                # This should make the ValueError thrown by
-                #   _ParameterizedFormatter redundant
-                # This also means that even though specs will be set after
-                # the first call to table.render(),
-                # they will need to be provided again in subsequent calls
+                '''
+                This should make the ValueError thrown by
+                  _ParameterizedFormatter redundant
+                This also means that even though specs will be set after
+                the first call to table.render(),
+                they will need to be provided again in subsequent calls
+                '''
                 raise ValueError(
                         ('The spec %s was not supplied to ' % spec) +
                         ('FormatSet, but is needed by an active formatter'))
             formatter.specs[spec] = specs[spec]
 
 class FormatSet():
-    formatDict = {} # Static dictionary containing small formatter dictionaries
-                    # Ex: { 'Rho' :  { 'html' : ... , 'text' : ... }, ... }
-                    # (created below)
+    '''
+    Attributes
+    ---------
+    formatDict: Static dictionary containing small formatter dictionaries
+                Ex: { 'Rho' :  { 'html' : ... , 'text' : ... }, ... }
+                (created below)
+
+    Methods
+    -------
+
+    __init__: (specs): Specs is a dictionary of the form { 'setting'(kwarg) : value }
+                       Ex: { 'precision' : 6, 'polarprecision' : 3 }
+                       given to _ParameterizedFormatters that need them
+
+    formatList : Given a list of items and formatters and a target format, returns formatted items
+    '''
+    formatDict = {}
 
     def __init__(self, specs):
-        # Specs is a dictionary of the form { 'setting'(kwarg) : value }
-        # Ex: { 'precision' : 6, 'polarprecision' : 3 }
-        # -> given to _ParameterizedFormatters that need them
         self.specs = specs
 
     def formatList(self, items, formatterNames, fmt):
@@ -53,7 +83,7 @@ class FormatSet():
         for item, formatterName in zip(items, formatterNames):
             if formatterName is not None:
                 formatter = FormatSet.formatDict[formatterName]
-                _give_specs(formatter[fmt], self.specs)
+                _give_specs(formatter[fmt], self.specs) # Parameters aren't sent until render call
                 # Format the item once the formatter has been completely built
                 formatted_item = formatter[fmt](item)
                 if formatted_item is None:
