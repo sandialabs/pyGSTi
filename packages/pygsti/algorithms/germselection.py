@@ -1517,7 +1517,7 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
     finalScoreFn = (lambda germSet:
                     germ_breadth_score_fn(germSet, germsList,
                                           twirledDerivDaggerDerivList,
-                                          nonAC_kwargs, initN=1))
+                                          final_nonAC_kwargs, initN=1))
 
     feasibleThreshold = _scoring.CompositeScore(threshold, numNonGaugeParams)
 
