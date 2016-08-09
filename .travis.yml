@@ -11,11 +11,11 @@ branches:
     - develop
 
 env:
-    - Default=True  # construction, io, objects, tools, optimize, algorithms
-    - ReportA=True  # Only testReport.py (none of the other reports tests)
-    - ReportB=True  # test the other reports tests
-    - Drivers=True  # All of drivers
-    - MPI=True  # All of MPI
+  - Default=True  # construction, io, objects, tools, optimize, algorithms
+  - ReportA=True  # Only testReport.py (none of the other reports tests)
+  - ReportB=True  # test the other reports tests
+  - Drivers=True  # All of drivers
+  - MPI=True  # All of MPI
    
 before_install:
   - sudo apt-get -qq update
