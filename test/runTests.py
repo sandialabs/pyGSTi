@@ -88,24 +88,11 @@ def run_tests(testnames, version=None, fast=False, changed=False,
             coverdir = '_'.join(covering)
         pythoncommands.append('--cover-html-dir=../output/coverage/%s' % coverdir)
 
+        pythoncommands.append('--cover-min-percentage=%s' % threshold)
+
         # Make a single subprocess call
 
-        try:
-            output   = subprocess.check_output(pythoncommands + testnames + postcommands, stderr=subprocess.STDOUT)
-            returned = 0
-        except subprocess.CalledProcessError as e:
-            print(e)
-            output   = e.output
-            returned = 1
-
-        output  = output.decode('utf-8')
-        print(output)
-        #percent = parse_coverage_percent(output)
-
-        #print('Coverage is at: %s, threshold is %s' % (percent, threshold))
-
-        #if int(percent) < threshold:
-            #returned = 1 # fail
+        returned = subprocess.call(pythoncommands + testnames + postcommands, stderr=subprocess.STDOUT)
 
         sys.exit(returned)
 
