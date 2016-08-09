@@ -50,17 +50,8 @@ before_install:
   - "export DISPLAY=:99.0"
   - "sh -e /etc/init.d/xvfb start" #some tests require a display
   - sleep 3 # give xvfb some time to start
-    #- wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
-    #- chmod +x miniconda.sh
-    #- ./miniconda.sh -b
-    #- export PATH=/home/travis/miniconda/bin:$PATH
-    #- whereis conda
-    #- conda update --yes conda
 
 install:
-    #- conda install --yes python=$TRAVIS_PYTHON_VERSION numpy scipy matplotlib
-    #- conda install --yes -c dan_blanchard python-coveralls nose-cov
-    #- python setup.py install
   - travis_retry travis_wait pip install -r requirements.txt
   - pip install cvxpy python-pptx mpi4py zmq &>/dev/null
   - pip install -e . &>/dev/null
