@@ -603,8 +603,8 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
         printer.log("Complete initial fiducial set succeeds.", 1)
         printer.log("Now searching for best fiducial set.", 1)
     else:
-        printer.log("Complete initial fiducial set FAILS.", 1)
-        printer.log("Aborting search.", 1)
+        printer.warning("Complete initial fiducial set FAILS.")
+        printer.warning("Aborting search.")
         return None
 
     #Initially allow adding to weight. -- maybe make this an argument??

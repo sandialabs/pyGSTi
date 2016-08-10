@@ -828,9 +828,9 @@ def build_up(gatesetList, germsList, randomize=True,
                                                          scoreFunc,
                                                          threshold)
     if undercompleteGatesetNum > -1:
-        printer.log("Complete initial germ set FAILS on gateset "
-                    + str(undercompleteGatesetNum) + ".", 1)
-        printer.log("Aborting search.", 1)
+        printer.warning("Complete initial germ set FAILS on gateset "
+                        + str(undercompleteGatesetNum) + ".")
+        printer.warning("Aborting search.")
         return None
 
     printer.log("Complete initial germ set succeeds on all input gatesets.", 1)
@@ -931,9 +931,9 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
                                                          scoreFunc,
                                                          threshold)
     if undercompleteGatesetNum > -1:
-        printer.log("Complete initial germ set FAILS on gateset "
-                    + str(undercompleteGatesetNum) + ".", 1)
-        printer.log("Aborting search.", 1)
+        printer.warning("Complete initial germ set FAILS on gateset "
+                        + str(undercompleteGatesetNum) + ".")
+        printer.warning("Aborting search.")
         return None
 
     printer.log("Complete initial germ set succeeds on all input gatesets.", 1)
@@ -1483,9 +1483,9 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
                                                          scoreFunc,
                                                          threshold)
     if undercompleteGatesetNum > -1:
-        printer.log("Complete initial germ set FAILS on gateset "
-                    + str(undercompleteGatesetNum) + ".", 1)
-        printer.log("Aborting search.", 1)
+        printer.warning("Complete initial germ set FAILS on gateset "
+                        + str(undercompleteGatesetNum) + ".")
+        printer.warning("Aborting search.")
         return None
 
     printer.log("Complete initial germ set succeeds on all input gatesets.", 1)
