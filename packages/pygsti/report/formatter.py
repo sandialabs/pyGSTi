@@ -221,7 +221,7 @@ class _FigureFormatter(_ParameterizedFormatter):
         extension : string, optional. extension of the figure's image
         formatstring : string, optional. Normally formatted with W, H, scratchDir, filename
         '''
-        super(_FigureFormatter, self).__init__(custom, ['scratchDir'])
+        super(_FigureFormatter, self).__init__(_no_format, ['scratchDir'])
         self.extension    = extension
         self.formatstring = formatstring
 
