@@ -8,14 +8,16 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import scipy
+from ..tools import frobeniusdist2
 from .. import objects as _objs
 from .. import construction as _constr
 from . import grasp as _grasp
 from . import scoring as _scoring
 
 
-def generate_fiducials(gs_target, gatesToOmit, maxFidLength=2,
-                       algorithm='slack', algorithm_kwargs=None, verbosity=0):
+def generate_fiducials(gs_target, omitIdentity=True, eqThresh=1e-6,
+                       gatesToOmit=None, maxFidLength=2, algorithm='grasp',
+                       algorithm_kwargs=None, verbosity=0):
     """Generate prep and measurement fiducials for a given target gateset.
 
     Parameters
@@ -23,12 +25,28 @@ def generate_fiducials(gs_target, gatesToOmit, maxFidLength=2,
     gs_target : GateSet
         The gateset you are aiming to implement.
 
-    gatesToOmit : list of string
-        List of strings identifying gates in the gateset that should not be
-        used in fiducials (a common example is the identity gate).
+    omitIdentity : bool, optional
+        Whether to remove the identity gate from the set of gates with which
+        fiducials are constructed. Identity gates do nothing to alter
+        fiducials, and so should almost always be left out.
 
-    maxFidLength : int
-        The maximum number of gates to include in a fiducial.
+    eqThresh : float, optional
+        Threshold for determining if a gate is the identity gate. If the square
+        Frobenius distance between a given gate and the identity gate is less
+        than this threshold, the gate is considered to be an identity gate and
+        will be removed from the list of gates from which to construct
+        fiducials if `omitIdentity` is ``True``.
+
+    gatesToOmit : list of string, optional
+        List of strings identifying gates in the gateset that should not be
+        used in fiducials. Oftentimes this will include the identity gate, and
+        may also include entangling gates if their fidelity is anticipated to
+        be much worse than that of single-system gates.
+
+    maxFidLength : int, optional
+        The maximum number of gates to include in a fiducial. The default is
+        not guaranteed to work for arbitrary gatesets (particularly for quantum
+        systems larger than a single qubit).
 
     algorithm : {'slack', 'grasp'}, optional
         Specifies the algorithm to use to generate the fiducials. Current
@@ -56,7 +74,22 @@ def generate_fiducials(gs_target, gatesToOmit, maxFidLength=2,
         A list containing the gate sequences for the measurement fiducials.
 
     """
+    if gatesToOmit is None:
+        gatesToOmit = []
+
     fidGates = [gate for gate in gs_target.gates if gate not in gatesToOmit]
+
+    if omitIdentity:
+        stateSpaceDims = _np.repeat(1, gs_target.get_dimension())
+        stateSpaceLabels = [('L{}'.format(n),)
+                            for n in range(gs_target.get_dimension())]
+        Identity = _constr.build_gate(stateSpaceDims, stateSpaceLabels,
+                                      'I(L0)',
+                                      basis=gs_target.get_basis_name())
+        for gate in fidGates:
+            if frobeniusdist2(gs_target.gates[gate], Identity) < eqThresh:
+                fidGates.remove(gate)
+
     availableFidList = _constr.list_all_gatestrings(fidGates, 0, maxFidLength)
 
     if algorithm_kwargs is None:
