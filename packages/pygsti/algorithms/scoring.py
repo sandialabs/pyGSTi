@@ -34,14 +34,18 @@ def list_score(input_array, scoreFunc='all'):
         Score for the eigenvalues.
 
     """
-    if scoreFunc == 'all':
-        score = sum(1. / _np.abs(input_array))
-    elif scoreFunc == 'worst':
-        score = 1. / min(_np.abs(input_array))
-    else:
-        raise ValueError("'%s' is not a valid value for scoreFunc.  "
-                         "Either 'all' or 'worst' must be specified!"
-                         % scoreFunc)
+    # We're expecting division by zero in many instances when we call this
+    # function, and the inf can be handled appropriately, so we suppress
+    # division warnings printed to stderr.
+    with _np.errstate(divide='ignore'):
+        if scoreFunc == 'all':
+            score = sum(1. / _np.abs(input_array))
+        elif scoreFunc == 'worst':
+            score = 1. / min(_np.abs(input_array))
+        else:
+            raise ValueError("'%s' is not a valid value for scoreFunc.  "
+                             "Either 'all' or 'worst' must be specified!"
+                             % scoreFunc)
 
     return score
 
