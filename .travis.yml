@@ -20,7 +20,7 @@ env:
 before_install:
   - sudo apt-get -qq update
   - sudo apt-get -qq install gfortran libblas-dev liblapack-dev >/dev/null
-  - sudo apt-get -qq install openmpi-bin openmpi-common openssh-cli#ent openssh-server libopenmpi1.3 libopenmpi-dbg libopenmpi-dev >/dev/null
+  - sudo apt-get -qq install openmpi-bin openmpi-common openssh-client openssh-server libopenmpi1.3 libopenmpi-dbg libopenmpi-dev >/dev/null
   - sudo apt-get -qq install texlive-full >/dev/null
   - pushd /usr/share/texmf-texlive/
   - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/etoolbox.tds.zip
