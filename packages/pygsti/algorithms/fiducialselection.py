@@ -600,11 +600,11 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
                                       scoreFunc=scoreFunc, returnAll=True,
                                       threshold=threshold)
     if initial_test[0]:
-        print("Complete initial fiducial set succeeds.")
-        print("Now searching for best fiducial set.")
+        printer.log("Complete initial fiducial set succeeds.", 1)
+        printer.log("Now searching for best fiducial set.", 1)
     else:
-        print("Complete initial fiducial set FAILS.")
-        print("Aborting search.")
+        printer.log("Complete initial fiducial set FAILS.", 1)
+        printer.log("Aborting search.", 1)
         return None
 
     #Initially allow adding to weight. -- maybe make this an argument??
@@ -614,7 +614,8 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
 
     dimRho = gateset.get_dimension()
 
-    printer.log("Starting fiducial set optimization. Lower score is better.")
+    printer.log("Starting fiducial set optimization. Lower score is better.",
+                1)
 
     scoreD = {}
 
@@ -660,8 +661,9 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
             hammingWeight = fixedNum
             numBits = len(fidList)
         numFidLists = scipy.special.binom(numBits, hammingWeight)
-        printer.log("Output set is required to be of size%s" % fixedNum)
-        printer.log("Total number of fiducial sets to be checked is%s" % numFidLists)
+        printer.log("Output set is required to be of size%s" % fixedNum, 1)
+        printer.log("Total number of fiducial sets to be checked is%s"
+                    % numFidLists, 1)
         printer.warning("If this is very large, you may wish to abort.")
 #        print "Num bits:", numBits
 #        print "Num Fid Options:", hammingWeight
@@ -695,7 +697,7 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
                 if tempLen < bestLen:
                     best_score = temp_score
                     best_weights = weights
-                    printer.log("Switching!")
+                    printer.log("Switching!", 1)
             elif temp_score < best_score:
                 best_score = temp_score
                 best_weights = weights
@@ -784,16 +786,16 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
                                     "score = %g" % (L1, score), 2)
 
                 if not bFoundBetterNeighbor: #Relaxing didn't help!
-                    printer.log("Stationary point found!")
+                    printer.log("Stationary point found!", 1)
                     break # end main for loop
 
-            printer.log("Moving to better neighbor")
+            printer.log("Moving to better neighbor", 1)
         else:
-            printer.log("Hit max. iterations")
+            printer.log("Hit max. iterations", 1)
 
-    printer.log("score = %s"       % score)
-    printer.log("weights = %s"     % weights)
-    printer.log("L1(weights) = %s" % sum(weights))
+    printer.log("score = %s" % score, 1)
+    printer.log("weights = %s" % weights, 1)
+    printer.log("L1(weights) = %s" % sum(weights), 1)
 
     goodFidList = []
     for index, val in enumerate(weights):
@@ -804,9 +806,9 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
     #                                 scoreFunc=scoreFunc, returnAll=True,
     #                                 threshold=threshold)
     if initial_test[0]:
-        print("Final fiducial set succeeds.")
+        printer.log("Final fiducial set succeeds.", 1)
     else:
-        print("WARNING: Final fiducial set FAILS.")
+        printer.log("WARNING: Final fiducial set FAILS.", 1)
 
     if returnAll:
         return goodFidList, weights, scoreD

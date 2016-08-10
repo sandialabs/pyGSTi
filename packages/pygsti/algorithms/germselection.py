@@ -829,12 +829,12 @@ def build_up(gatesetList, germsList, randomize=True,
                                                          threshold)
     if undercompleteGatesetNum > -1:
         printer.log("Complete initial germ set FAILS on gateset "
-                    + str(undercompleteGatesetNum) + ".")
-        printer.log("Aborting search.")
+                    + str(undercompleteGatesetNum) + ".", 1)
+        printer.log("Aborting search.", 1)
         return None
 
-    printer.log("Complete initial germ set succeeds on all input gatesets.")
-    printer.log("Now searching for best germ set.")
+    printer.log("Complete initial germ set succeeds on all input gatesets.", 1)
+    printer.log("Now searching for best germ set.", 1)
 
     printer.log("Starting germ set optimization. Lower score is better.", 1)
 
@@ -932,12 +932,12 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
                                                          threshold)
     if undercompleteGatesetNum > -1:
         printer.log("Complete initial germ set FAILS on gateset "
-                    + str(undercompleteGatesetNum) + ".")
-        printer.log("Aborting search.")
+                    + str(undercompleteGatesetNum) + ".", 1)
+        printer.log("Aborting search.", 1)
         return None
 
-    printer.log("Complete initial germ set succeeds on all input gatesets.")
-    printer.log("Now searching for best germ set.")
+    printer.log("Complete initial germ set succeeds on all input gatesets.", 1)
+    printer.log("Now searching for best germ set.", 1)
 
     printer.log("Starting germ set optimization. Lower score is better.", 1)
 
@@ -1158,12 +1158,12 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                                                          threshold)
     if undercompleteGatesetNum > -1:
         printer.log("Complete initial germ set FAILS on gateset "
-                    + str(undercompleteGatesetNum) + ".")
-        printer.log("Aborting search.")
+                    + str(undercompleteGatesetNum) + ".", 1)
+        printer.log("Aborting search.", 1)
         return (None, None, None) if returnAll else None
 
-    printer.log("Complete initial germ set succeeds on all input gatesets.")
-    printer.log("Now searching for best germ set.")
+    printer.log("Complete initial germ set succeeds on all input gatesets.", 1)
+    printer.log("Now searching for best germ set.", 1)
 
     num_gatesets = len(gatesetList)
 
@@ -1274,17 +1274,17 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                                     "nGerms = %d score = %g" % (L1, score), 2)
 
                 if not bFoundBetterNeighbor: # Relaxing didn't help!
-                    printer.log("Stationary point found!")
+                    printer.log("Stationary point found!", 1)
                     break # end main for loop
 
-            printer.log("Moving to better neighbor")
+            printer.log("Moving to better neighbor", 1)
             # print score
         else:
-            printer.log("Hit max. iterations")
+            printer.log("Hit max. iterations", 1)
 
-    printer.log("score = %s" % score)
-    printer.log("weights = %s" % weights)
-    printer.log("L1(weights) = %s" % sum(weights))
+    printer.log("score = %s" % score, 1)
+    printer.log("weights = %s" % weights, 1)
+    printer.log("L1(weights) = %s" % sum(weights), 1)
 
     goodGermsList = []
     for index, val in enumerate(weights):
@@ -1484,12 +1484,12 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
                                                          threshold)
     if undercompleteGatesetNum > -1:
         printer.log("Complete initial germ set FAILS on gateset "
-                    + str(undercompleteGatesetNum) + ".")
-        printer.log("Aborting search.")
+                    + str(undercompleteGatesetNum) + ".", 1)
+        printer.log("Aborting search.", 1)
         return None
 
-    printer.log("Complete initial germ set succeeds on all input gatesets.")
-    printer.log("Now searching for best germ set.")
+    printer.log("Complete initial germ set succeeds on all input gatesets.", 1)
+    printer.log("Now searching for best germ set.", 1)
 
     printer.log("Starting germ set optimization. Lower score is better.", 1)
 
