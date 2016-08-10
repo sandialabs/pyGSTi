@@ -63,9 +63,26 @@ So, any function with the signature `label, *args -> formattedlabel` can be para
 To define a precision formatter that always rounds polars to the second place:  
 `precision_formatter = _ParameterizedFormatter(f, ['precision'], {'polarprecision' : 2})`
 
+##### Figure Formatters
 
+All of the figure formatters:
+```python
+FormatSet.formatDict['Figure'] = {
+    'html'  : _FigureFormatter(formatstring="<img width='%.2f' height='%.2f' src='%s/%s'>",
+                               extension='.png'),
+    'latex' : _FigureFormatter(formatstring="\\vcenteredhbox{\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/%s}}",
+                               extension='.pdf'),
+    'text'  : lambda t : t[0], # String of figinfo
+    'ppt'   : lambda t : 'ppt does not support figure formatting'} # Not Implemented
+```
 
+All of these formatters have the signature `figInfo -> formattedString (that loads an image)`
 
+A couple of things happen here when `table.render(scratchDir='myDir')` is called:
+  - `FormatSet.formatList` finds a label corresponding to the formatter `'Figure'`
+  - `fig` is extracted from `figInfo`, and saved to `scratchDir` with the provided extension (default `.png`)
+  - A format string (default `'%s%s%s%s'`) is provided `W, H, scratchDir, filename+extension` (W, H are extracted from figInfo as well)
+  - The formatstring is returned (ex `formatstring="<img width='10.0' height='10.0' src='myDir/myFig.png'>"`)
 
 
  

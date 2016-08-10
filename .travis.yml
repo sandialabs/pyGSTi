@@ -67,7 +67,25 @@ script:
   - cd ..
 
 deploy:
-    provider: script
+  - provider: script
     script: hooks/travis/deploy
     on:
         branch: develop
+  - provider: pypi
+    user: enielse
+    password:
+      secure: CefzPGiJxOMN6jJPBj1/ORir+qWQsVdF6pVS/kzyT+XzCGAfOyRwq93Nxw+zXuFTZ49ycDEq3QFSpicVswVoZsyX6JUV2tn2ggblwJ/+pPYiYGSjDoEAaxih1FQ265zUTOgKWFjNt9ZN3V359dhOVKP1KdRQPYTJpDZlmKQrdCOiLp4sFuonAdfuKxlYQWt/P4N/THDS71l+muG0e0h7mfb8L9mdrQrgDXUGBqpf0PUdoaH13qsIyeatzPCYXfyzxiw/jPAxloM48BluDLS6xuNvUiuN09ry5Ie5iJ/Sc8Sen6U3MmxYDURUHWtjvr0q2BkJcQ3X2DODjCirdiMBILI3tY+oOolOphN6eiKc+ntOvuB0Vf/w5Z+VEpGOQAWYMOJX772Pv83r07BBBTJoh8q7XU5fOLyFk2hD0s7/3ASmzkNYqUHCGL5tACUT8nMVIaNfCX9gKhxX+oFpDfBhps23dTZnz1hDK3odmXp1t+UNpVOqfpgIfoBIsvfBRbyVfoYGxp3dMaSo6MOXEOzdw506UfjblzAw7+dy/vueOTQdFIBH9Z+UZmUwJ+F6uDkiJf4KBPdx+Ex8jzcmBzh6vsG95FBbOhHmbqOknCHJO2MZvBxY0uI+EaxjoTFVnXgeW99v/pca9vsLmEON5Mg1XgDC4T2F7od2XmUTebGIbhk=
+    on:
+        branch: master
+
+
+notifications:
+    email:
+        #recipients:
+        #    - lucassaldyt@gmail.com # This would override sending only to commit author
+        on_success: change
+        on_failure: always
+
+# This comment shouldn't end up in beta branch, since it is new
+# Actually, the following command is required first...
+# git config --global merge.ours.driver true
