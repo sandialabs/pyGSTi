@@ -214,14 +214,12 @@ class _FigureFormatter(_ParameterizedFormatter):
     '''
     Helper class that utilizes a scratchDir variable to render figures
     '''
-    def __init__(self, extension=None, formatstring='%s%s%s%s', custom=None):
+    def __init__(self, extension='.png', formatstring='%s%s%s%s'):
         '''
         Parameters
         ---------
         extension : string, optional. extension of the figure's image
         formatstring : string, optional. Normally formatted with W, H, scratchDir, filename
-        custom: function with signature W, H, scratchDir, filename, **kwargs -> W, H, scratchDir, filename
-          (But, if overridden with formatstring, can return as many values as the format string needs)
         '''
         super(_FigureFormatter, self).__init__(custom, ['scratchDir'])
         self.extension    = extension
@@ -230,22 +228,9 @@ class _FigureFormatter(_ParameterizedFormatter):
     # Override call method of Parameterized formatter
     def __call__(self, figInfo):
         fig, name, W, H = figInfo
-        if self.extension is not None:
-
-            fig.save_to(_os.path.join(self.specs['scratchDir'], name + self.extension))
-            if self.custom is not None:
-                return (self.formatstring
-                        % self.custom[0](W, H, self.specs['scratchDir'],
-                                         name + self.extension,
-                                         **self.custom[1]))
-            else:
-                return self.formatstring % (W, H, self.specs['scratchDir'],
-                                            name + self.extension)
-
-        elif self.custom is not None:
-            return self.custom[0](figInfo, **self.custom[1])
-        else:
-            return 'Figure generation for this Formatter is not implemented.'
+        fig.save_to(_os.path.join(self.specs['scratchDir'], name + self.extension))
+        return self.formatstring % (W, H, self.specs['scratchDir'],
+                                    name + self.extension)
 
 # Takes two formatters (a and b), and determines which to use based on a predicate
 # (Used in building formatter templates)
@@ -467,8 +452,8 @@ FormatSet.formatDict['Figure'] = {
                                extension='.png'),
     'latex' : _FigureFormatter(formatstring="\\vcenteredhbox{\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/%s}}",
                                extension='.pdf'),
-    'text'  : _FigureFormatter(custom=lambda t : t[0]),
-    'ppt'   : _FigureFormatter()} # Not Implemented
+    'text'  : lambda t : t[0],
+    'ppt'   : lambda figInfo : 'Figure formatting not implemented for ppt'} # Not Implemented
 
 # Bold formatting
 FormatSet.formatDict['Bold'] = {
