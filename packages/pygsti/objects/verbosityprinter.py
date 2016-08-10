@@ -118,6 +118,21 @@ class VerbosityPrinter():
     # The printer is initialized with a set verbosity, and an optional filename.
     # If a filename is not provided, VerbosityPrinter writes to stdout
     def __init__(self, verbosity, filename=None, comm=None, warnings=True):
+        '''
+        Customize a verbosity printer object
+
+        Parameters
+        ----------
+        verbosity - int, required:
+          How verbose the printer should be
+        filename - string, optional:
+          Where to put output (If none, output goes to screen)
+        comm - mpi4py.MPI.Comm object, optional:
+          Restricts output if the program is running in parallel
+            ( By default, if the core is 0, output is sent to screen, and otherwise sent to commfiles 1, 2, and 3 (assuming 4 cores))
+        warnings - bool, optional:
+          don't print warnings
+        '''
         if comm != None:
             if comm.Get_rank() != 0 and filename == None: # A filename will override the default comm behavior
                 filename = self._get_comm_file(comm.Get_rank())
@@ -295,9 +310,15 @@ class VerbosityPrinter():
         return 'Printer Object: Progress Level: %s Verbosity %s' % (self.progressLevel, self.verbosity)
 
     @_contextmanager
-    def progress_logging(self, messageLevel):
+    def progress_logging(self, messageLevel=1):
         '''
         Context manager for logging progress bars/iterations
+        (The printer will return to its normal, unrestricted state when the progress logging has finished)
+
+        Parameters
+        ----------
+        messageLevel - int, optional:
+          the verbosity level of the progressbar/set of iterations
         '''
         self._progressStack.append(messageLevel)
         if self.verbosity == messageLevel:
@@ -328,12 +349,12 @@ class VerbosityPrinter():
           message in front of the bar
         suffix      - str, optional  :
           message after the bar
-
-
-        Returns
-        -------
-        formattedString - str:
-          python string representing a progress bar
+        verboseMessages - list(str), optional:
+          list of messages to output alongside the iteration
+        end - str, optional:
+          String terminating the progress bar
+        indentChar - str, optional:
+          number of spaces to indent the progress bar
         """
         indent = indentChar * self._progressStack[-1]
 
