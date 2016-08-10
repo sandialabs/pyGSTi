@@ -226,9 +226,9 @@ class OrderedSPAMLabelDict(_collections.OrderedDict):
         # if inserted *value* already exists, clobber so values are unique
         iToDel = None
         for k,v in self.items():
-            if val == v: 
+            if val == v:
                 iToDel = k; break
-        if iToDel is not None: 
+        if iToDel is not None:
             del self[iToDel] #can't do within loop in Python3
 
         #TODO: perhaps add checks that value == (prepLabel,effectLabel) labels exist

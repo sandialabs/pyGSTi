@@ -4,7 +4,9 @@ from helpers.automation_tools import read_json, write_json
 import sys
 import argparse
 
+# See pyGSTi/doc/pylint.md!
 
+# Fail if the score is below a threshold
 def check_score(on=lint_all):
     jsonFile = 'config/pylint_config.json'
 

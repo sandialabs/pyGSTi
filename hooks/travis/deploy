@@ -3,7 +3,9 @@ from __future__ import print_function
 import subprocess, sys, os
 
 print('Travis CI Passed')
-'''
+
+# Prevents merging certain files, i.e. .travis.yml
+subprocess.call(['git', 'config', '--global', 'merge.ours.driver', 'true'])
 
 print('Getting current branchname/SHA')
 branchname = 'unspecified'
@@ -27,6 +29,7 @@ print('Branchname (or SHA) is %s' % branchname)
 
 # Attempt to auto-merge develop into pre-beta if travis tests pass
 
+
 print('Resetting remote/origin')
 subprocess.call(['git', 'remote', 'remove', 'origin'])
 print('Done.')
@@ -39,8 +42,10 @@ subprocess.call(['git', 'fetch'])
 
 print('Setting up user credentials')
 
-subprocess.call(['git', 'config', '--global', 'user.email', 'N/A'])
-subprocess.call(['git', 'config', '--global', 'user.name', 'Lucas auto-push script'])
+EMAIL = os.environ['EMAIL']
+USER  = os.environ['USER']
+subprocess.call(['git', 'config', '--global', 'user.email', EMAIL])
+subprocess.call(['git', 'config', '--global', 'user.name',  USER])
 print('Done')
 
 print('Getting the latest version of beta')
@@ -66,36 +71,34 @@ output = subprocess.check_output(['git',
                                   branchname]) # View merge tree between beta and (our) develop
 output = output.decode('utf-8', 'ignore')
 print('Done:')
-print(output)
+# print(output)
 
 canMerge = ('<' * 5) not in output # '<' * 5 avoids git finding the expanded string in this file and thinking it is a merge conflict
 
 if canMerge:
     print('Merge of develop into beta is possible')
-    '''
     # The below code is active, but only for testing
     subprocess.call(['git', 'merge', '--no-ff', '--no-commit', 'develop']) #into beta
     print('Merge command finished.')
     print('Staging files..')
     subprocess.call(['git', 'add', '-u'])
     print('Committing..')
-    subprocess.call(['git', 'commit', '--no-verify', '-m', 'Merged develop into beta, as there were no conflicts and travis tests passed'])
+    subprocess.call(['git', 'commit', '--no-verify', '-m', 
+                     'Auto-merged develop -> beta (No conflicts, CI passed)'])
     print('Commit finished')
 
     PUSHKEY  = os.environ['PUSHKEY']
-    push_uri = 'https://%s@github.com/pyGSTio/pyGSTi.git' % PUSHKEY # yikes
+    push_uri = 'https://%s:%s@github.com/pyGSTio/pyGSTi.git' % (USER, PUSHKEY) # yikes
     try:
         print('Pushing to origin/beta. If this fails, there shouldn\'t be any useful output, since it would contain my access token')
         with open(os.devnull, 'w') as FNULL:
-            result = subprocess.call(['git', 'push', push_uri, 'beta'], stdout=FNULL, stderr=FNULL)
+            result = subprocess.call(['git', 'push', '--no-verify', push_uri, 'beta'], stdout=FNULL, stderr=FNULL)
             if result != 0:
                 print('Secure push failed')
             else:
                 print('Secure push worked')
     except:
         print('Secure push failed')
-    '''
 
 else:
     print('Potential merge conflicts found! Cannot merge beta into develop')
-'''

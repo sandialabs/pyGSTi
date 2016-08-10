@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+from email.mime.text import MIMEText
+import smtplib
+import os
+
+def send_email(message, sender, recievers):
+    message = MIMEText(message)
+
+    message['Subject'] = 'A friendly message'
+    message['From']    = sender
+    message['To']      = ','.join(recievers)
+
+    # Send the message via our own SMTP server, but don't include the
+    # envelope header.
+    s = smtplib.SMTP('localhost')
+    s.sendmail(sender, recievers, message.as_string())
+    s.quit()
+
+if __name__ == '__main__':
+    me  = os.environ['SENDER']
+    you = os.environ['RECIEVER']
+    send_email('Hello', me, [you]) 
+

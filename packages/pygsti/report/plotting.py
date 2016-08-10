@@ -407,7 +407,7 @@ class LinLogNorm(_matplotlib.colors.Normalize):
             # that has all it's entries masked (like value does)
             if return_value.shape==(): return return_value.item()
             else: return return_value.view(_np.ma.MaskedArray)
-            
+
         lin_norm_value = super(LinLogNorm, self).__call__(value)
 
         if self.trans is None:
@@ -2450,7 +2450,7 @@ def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
     prepStrs, effectStrs = strs
     def mx_fn(gateStr,x,y):
         return direct_chi2_matrix( gateStr, dataset, directGatesets.get(gateStr,None),
-                                   strs, minProbClipForWeighting, fidPairs, 
+                                   strs, minProbClipForWeighting, fidPairs,
                                    gatestring_filters[x] if (gatestring_filters is not None) else None)
 
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
