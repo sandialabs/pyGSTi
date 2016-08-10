@@ -79,3 +79,7 @@ notifications:
         #    - lucassaldyt@gmail.com # This would override sending only to commit author
         on_success: change
         on_failure: always
+
+# This comment shouldn't end up in beta branch, since it is new
+# Actually, the following command is required first...
+# git config --global merge.ours.driver true
