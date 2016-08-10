@@ -39,14 +39,13 @@ elif doMPI == 'True':
     parallel = False # Not for mpi
 
 print('Running travis tests with python%s.%s' % (sys.version_info[0], sys.version_info[1]))
-# Begin by running all of the packages in the current test matrix
 
 threshold = 80
+coverage = True
 
 branchname = get_branchname()
 if branchname == 'beta':
     threshold = 90
-    coverage = True
 elif branchname == 'develop':
     coverage = False
 
