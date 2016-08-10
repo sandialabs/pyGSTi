@@ -16,8 +16,8 @@ from . import scoring as _scoring
 
 
 def generate_fiducials(gs_target, omitIdentity=True, eqThresh=1e-6,
-                       gatesToOmit=None, maxFidLength=2, algorithm='grasp',
-                       algorithm_kwargs=None, verbosity=0):
+                       gatesToOmit=None, forceEmpty=True, maxFidLength=2,
+                       algorithm='grasp', algorithm_kwargs=None, verbosity=0):
     """Generate prep and measurement fiducials for a given target gateset.
 
     Parameters
@@ -42,6 +42,10 @@ def generate_fiducials(gs_target, omitIdentity=True, eqThresh=1e-6,
         used in fiducials. Oftentimes this will include the identity gate, and
         may also include entangling gates if their fidelity is anticipated to
         be much worse than that of single-system gates.
+
+    forceEmpty : bool, optional (default is True)
+        Whether or not to force all fiducial sets to contain the empty gate
+        string as a fiducial.
 
     maxFidLength : int, optional
         The maximum number of gates to include in a fiducial. The default is
@@ -100,6 +104,7 @@ def generate_fiducials(gs_target, omitIdentity=True, eqThresh=1e-6,
         default_kwargs = {
             'fidList': availableFidList,
             'verbosity': verbosity,
+            'forceEmpty': forceEmpty,
             }
 
         if ('slackFrac' not in algorithm_kwargs
@@ -123,6 +128,7 @@ def generate_fiducials(gs_target, omitIdentity=True, eqThresh=1e-6,
             'alpha': 0.1,   # No real reason for setting this value of alpha.
             'gatePenalty': 0.1,
             'verbosity': verbosity,
+            'forceEmpty': forceEmpty,
         }
         for key in default_kwargs:
             if key not in algorithm_kwargs:
