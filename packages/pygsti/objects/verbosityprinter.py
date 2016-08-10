@@ -1,4 +1,5 @@
 from __future__ import division, print_function, absolute_import, unicode_literals
+import numbers as _numbers
 from contextlib import contextmanager as _contextmanager
 from copy       import deepcopy as _dc
 import sys         as _sys
@@ -177,7 +178,7 @@ class VerbosityPrinter():
           The printer object, constructed from either an integer or another printer
 
         '''
-        if isinstance(verbosity, int):
+        if isinstance(verbosity, _numbers.Integral):
             return VerbosityPrinter(verbosity, comm=comm)
         else:
             printer = verbosity.clone() # deepcopy the printer object if it has been passed as a verbosity
