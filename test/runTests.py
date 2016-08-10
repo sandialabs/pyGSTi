@@ -23,7 +23,7 @@ def parse_coverage_percent(output):
 
 
 def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
-              parallel=False, failed=False, cores=None, coverdir=None, html=False, 
+              parallel=False, failed=False, cores=None, coverdir=None, html=False,
               threshold=90, outputfile=None):
 
     with directory('test_packages'):
