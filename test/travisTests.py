@@ -54,4 +54,4 @@ elif branchname == 'develop':
 if coverage:
     print('Coverage threshold is set to %s%%' % threshold)
 
-run_tests(tests, parallel=parallel, coverage=coverage, threshold=threshold)
+run_tests(tests, parallel=parallel, coverage=coverage, threshold=threshold, output='output/test.out')

@@ -23,7 +23,8 @@ def parse_coverage_percent(output):
 
 
 def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
-              parallel=False, failed=False, cores=None, coverdir=None, html=False, threshold=90):
+              parallel=False, failed=False, cores=None, coverdir=None, html=False, 
+              threshold=90, outputfile=None):
 
     with directory('test_packages'):
 
@@ -91,10 +92,19 @@ def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
 
             pythoncommands.append('--cover-min-percentage=%s' % threshold)
 
-        # Make a single subprocess call
-        returned = subprocess.call(pythoncommands + testnames + postcommands)
+        if outputfile is None:
+            # Make a single subprocess call
+            returned = subprocess.call(pythoncommands + testnames + postcommands)
 
-        sys.exit(returned)
+            sys.exit(returned)
+
+        else:
+            with open(outputfile, 'w') as testoutput:
+                returned = subprocess.call(pythoncommands + testnames + postcommands, stdout=testoutput, stderr=testoutput)
+            with open(outputfile, 'r') as testoutput:
+                print(testoutput.read())
+            sys.exit(returned)
+
 
 if __name__ == "__main__":
 
@@ -120,9 +130,11 @@ if __name__ == "__main__":
                         help='put html coverage report here')
     parser.add_argument('--threshold', type=int, default=90,
                         help='coverage percentage to beat')
+    parser.add_argument('--output', type=str, default=None,
+                        help='outputfile')
 
     parsed = parser.parse_args(sys.argv[1:])
 
     run_tests(parsed.tests, parsed.version, parsed.fast, parsed.changed, bool(not parsed.nocover),
               parsed.parallel, parsed.failed, parsed.cores, parsed.coverdir,
-              parsed.html, parsed.threshold)
+              parsed.html, parsed.threshold, parsed.output)

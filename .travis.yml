@@ -66,6 +66,11 @@ script:
   - travis_wait 40 python travisTests.py # Tests may take some time!
   - cd ..
 
+after_script:
+    cd test/output
+    cat test.out
+    cd ../..
+
 deploy:
   - provider: script
     script: hooks/travis/deploy
@@ -86,6 +91,4 @@ notifications:
         on_success: change
         on_failure: always
 
-# This comment shouldn't end up in beta branch, since it is new
-# Actually, the following command is required first...
-# git config --global merge.ours.driver true
+
