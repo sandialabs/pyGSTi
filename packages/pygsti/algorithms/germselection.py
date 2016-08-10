@@ -19,7 +19,8 @@ from . import scoring as _scoring
 
 def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
                    numGSCopies=5, seed=None, maxGermLength=6,
-                   algorithm='greedy', algorithm_kwargs=None, verbosity=0):
+                   forceSingletons=True, algorithm='greedy',
+                   algorithm_kwargs=None, verbosity=0):
     """Generate a germ set for doing GST with a given target gateset.
 
     This function provides a streamlined interface to a variety of germ
@@ -63,6 +64,9 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
         set. Currently will construct a list of all non-equivalent germs of
         length up to `maxGermsLength` for the germ selection algorithms to play
         around with.
+
+    forceSingletons : bool, optional
+        Whether or not to force all germ sets to contain each gate as a germ.
 
     algorithm : {'greedy', 'grasp', 'slack'}, optional
         Specifies the algorithm to use to generate the germ set. Current
@@ -117,6 +121,7 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
             'randomize': False,
             'seed': seed,
             'verbosity': verbosity,
+            'forceSingletons': forceSingletons,
             }
         for key in default_kwargs:
             if key not in algorithm_kwargs:
@@ -132,6 +137,7 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
             'randomize': False,
             'seed': seed,
             'verbosity': verbosity,
+            'forceSingletons': forceSingletons,
             }
         for key in default_kwargs:
             if key not in algorithm_kwargs:
@@ -146,6 +152,7 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
             'randomize': False,
             'seed': seed,
             'verbosity': verbosity,
+            'forceSingletons': forceSingletons,
             }
         if ('slackFrac' not in algorithm_kwargs
                 and 'fixedSlack' not in algorithm_kwargs):
