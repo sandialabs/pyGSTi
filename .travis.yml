@@ -71,3 +71,11 @@ deploy:
     script: hooks/travis/deploy
     on:
         branch: develop
+
+
+notifications:
+    email:
+        #recipients:
+        #    - lucassaldyt@gmail.com # This would override sending only to commit author
+        on_success: change
+        on_failure: always
