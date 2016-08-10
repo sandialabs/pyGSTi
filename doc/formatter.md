@@ -28,7 +28,7 @@ A couple of helper classes exist to make this process easier, but a formatter ca
 
 For example, the following is the definition for the 'Normal' formatters
 
-```
+```python
 FormatSet.formatDict['Normal'] = {
     'html'  : _PrecisionFormatter(html),
     'latex' : _PrecisionFormatter(latex),
@@ -42,6 +42,29 @@ Any function that takes these arguments can be provided to a `_PrecisionFormatte
 Here, `_no_format` is a function with the signature `l -> l` (id)
 
 Other somewhat helpful classes are `ParameterizedFormatter` (PrecisionFormatter's parent class), and `_FigureFormatter` (A child of `ParameterizedFormatter` that utilizes a scratchDir) 
+
+So, for example, to define any precision formatter, I could do:
+
+`precision_formatter = _PrecisionFormatter(f)` where f is a function with the signature `label, precision, polarprecision -> formatted label`
+
+Since `_PrecisionFormatter` is just a helper class with `__init__` defined as:
+
+``` python
+def __init__(custom, defaults={}, formatstring='%s'):
+    super(_PrecisionFormatter, self).__init__(custom, ['precision', 'polarprecision'], defaults, formatstring)
+```
+
+A precision formatter could be defined as:  
+`precision_formatter = _ParameterizedFormatter(f, ['precision', 'polarprecision'])`
+
+So, any function with the signature `label, *args -> formattedlabel` can be parameterized:  
+`_ParameterizedFormatter(f, [args])`
+
+To define a precision formatter that always rounds polars to the second place:  
+`precision_formatter = _ParameterizedFormatter(f, ['precision'], {'polarprecision' : 2})`
+
+
+
 
 
 
