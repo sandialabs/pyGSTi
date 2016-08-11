@@ -888,6 +888,8 @@ def grasp_fiducial_optimization(gateset, fidsList, prepOrMeas, alpha,
     localSolns = []
 
     for iteration in range(iterations):
+        # This loop is parallelizable (each iteration is independent of all
+        # other iterations).
         printer.log('Starting iteration {} of {}.'.format(iteration + 1,
                                                           iterations), 1)
         success = False

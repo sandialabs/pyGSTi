@@ -1534,6 +1534,8 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
     localSolns = []
 
     for iteration in range(iterations):
+        # This loop is parallelizable (each iteration is independent of all
+        # other iterations).
         printer.log('Starting iteration {} of {}.'.format(iteration + 1,
                                                           iterations), 1)
         success = False
