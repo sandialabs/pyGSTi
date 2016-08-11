@@ -6,25 +6,7 @@ import pygsti
 # text formatting has also been ommitted, since providing it with a precision has no effect
 
 from ..testutils import BaseTestCase, compare_files, temp_files
-
-# Imported by other modules that test formatters (reduces duplicate code)
-class FormatterBaseTestCase(BaseTestCase):
-    def setUp(self):
-        super(FormatterBaseTestCase, self).setUp()
-
-        self.arbitraryNum = 1.819743 # Six digits after decimal
-        self.roundedNum   = 1.82     # Two digits after decimal
-
-        latexString = '\\begin{tabular}[l]{|c|}\n\hline\n%s \\\\ \hline\n\end{tabular}\n'
-        htmlString  = '<table class=pygstiTbl><thead><tr><th> %s </th></tr></thead><tbody></tbody></table>'
-
-        self.precise   = {
-            'html'  : htmlString  % self.arbitraryNum,
-            'latex' : latexString % self.arbitraryNum}
-
-        self.imprecise = {
-            'html'  : htmlString  % self.roundedNum,
-            'latex' : latexString % self.roundedNum}
+from .testFormatter import FormatterBaseTestCase
 
 class PrecisionTest(FormatterBaseTestCase):
 
