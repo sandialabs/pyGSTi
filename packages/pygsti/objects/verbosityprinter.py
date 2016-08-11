@@ -179,11 +179,11 @@ class VerbosityPrinter():
 
         '''
         if isinstance(verbosity, _numbers.Integral):
-            return VerbosityPrinter(verbosity, comm=comm)
+            printer = VerbosityPrinter(verbosity, comm=comm)
         else:
             printer = verbosity.clone() # deepcopy the printer object if it has been passed as a verbosity
             printer._comm = comm # override happens here
-            return printer
+        return printer
 
     def __add__(self, other):
         '''
@@ -208,7 +208,7 @@ class VerbosityPrinter():
 
     # Hidden function for deciding what to do with our output
     def _put(self, message, flush=True, stderr=False):
-        if self.filename == None and (self._comm is None or self._comm.Get_rank() == 0):
+        if self.filename == None: # Handles the case where comm is None or comm is rank 0
             if stderr:
                 print(message, end='', file=_sys.stderr)
             else:
