@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from __future__                  import print_function, division, unicode_literals, absolute_import
 from helpers.automation_tools    import directory, get_changed_packages
-import subprocess, argparse, sys
+import subprocess, argparse, shutil, sys, os
 
 '''
 Script for running the test suite.
@@ -9,18 +9,41 @@ Script for running the test suite.
 see pyGSTi/doc/repotools/test.md, or try running ./runTests.py -h
 
 '''
+'''
+echo "Parallel tests started..."
+cp mpi/setup.cfg.mpi setup.cfg #stage setup.cfg
+mv .coverage output/coverage.mpi
+rm setup.cfg #unstage setup.cfg
+echo "MPI Output written to coverage_tests_mpi.out"
 
-default   = ['tools', 'io', 'objects', 'construction', 'drivers', 'report', 'algorithms', 'optimize']
+cp output/coverage.serial .coverage.serial
+cp output/coverage.mpi    .coverage.mpi
+coverage combine
+coverage report -m --include="*/pyGSTi/packages/pygsti/*" > output/coverage_tests.out 2>&1
+echo "Combined Output written to coverage_tests.out"
+'''
+
+def run_mpi_tests(nproc=4, version=None):
+    print('Running MPI')
+    shutil.copy('mpi/setup.cfg.mpi', 'setup.cfg')
+
+    mpicommands = ('time mpiexec -np %s python%s mpi/runtests.py -v ' % (str(nproc), '' if version is None else version)+
+                   '--with-coverage --cover-package=pygsti --cover-erase mpi/testmpi*.py  ' +
+                   '> ../output/coverage_tests_mpi.out 2>&1')
+
+    with open('../output/mpi_output.txt', 'w') as output:
+        returned = subprocess.call(mpicommands, shell=True, stdout=output, stderr=output)
+    with open('../output/mpi_output.txt', 'r') as output:
+        print(output.read())
+    shutil.move('.coverage', '../output/mpi_coverage')
+    os.remove('setup.cfg')
+    return returned
+
+def create_html(dirname):
+    subprocess.call(['coverage', 'html', '--directory=%s' % dirname])
+
+default   = ['tools', 'io', 'objects', 'construction', 'drivers', 'report', 'algorithms', 'optimize', 'mpi']
 slowtests = ['report', 'drivers']
-
-def parse_coverage_percent(output):
-    output   = output.split('Missing')[1].split('Ran')[0]
-    output   = output.splitlines()
-    specific = output[3:-3]
-    # Get last word of the line after the dashes, and remove the percent symbol
-    percent  = int(output[-2].split()[-1][:-1])
-    return percent
-
 
 def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
               parallel=False, failed=False, cores=None, coverdir=None, html=False,
@@ -54,10 +77,9 @@ def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
         # testnames should be final at this point
         print('Running tests:\n%s' % ('\n'.join(testnames)))
 
-        # Use the failure monitoring native to nose
-        postcommands = ['--with-id']
-        if failed:
-            postcommands = ['--failed']# ~implies --with-id
+        runmpi = 'mpi' in testnames # Run mpi tests differently
+        if runmpi:
+            testnames.remove('mpi')
 
         # Use parallelism native to nose
         if parallel:
@@ -68,42 +90,44 @@ def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
                 pythoncommands.append('--processes=%s' % cores)
             # Some tests take up to an hour
             pythoncommands.append('--process-timeout=14400') # Four hours
+        else:
+            # Use the failure monitoring native to nose
+            postcommands = ['--with-id']
+            if failed:
+                postcommands = ['--failed']# ~implies --with-id
 
         if coverage:
             # html coverage is prettiest
-            pythoncommands += ['--with-coverage']
+            pythoncommands += ['--with-coverage',
+                               '--cover-erase',
+                               '--cover-package=pygsti',
+                               '--cover-min-percentage=%s' % threshold]
 
-            if html:
-                pythoncommands += ['--cover-html']
-
-            # Build the set of covered packages automatically
-            covering = set()
-            for name in testnames:
-                if name.count('/') > 1:
-                    covering.add(name.split('/')[0])
-                else:
-                    covering.add(name)
-            for coverpackage in covering:
-                pythoncommands.append('--cover-package=pygsti.%s' % coverpackage)
-
-            if coverdir is None:
-                coverdir = '_'.join(covering)
-            pythoncommands.append('--cover-html-dir=../output/coverage/%s' % coverdir)
-
-            pythoncommands.append('--cover-min-percentage=%s' % threshold)
+        commands = pythoncommands + testnames + postcommands
+        print(commands)
 
         if outputfile is None:
-            # Make a single subprocess call
-            returned = subprocess.call(pythoncommands + testnames + postcommands)
-
-            sys.exit(returned)
+            returned = subprocess.call(commands)
 
         else:
             with open(outputfile, 'w') as testoutput:
-                returned = subprocess.call(pythoncommands + testnames + postcommands, stdout=testoutput, stderr=testoutput)
+                returned = subprocess.call(commands, stdout=testoutput, stderr=testoutput)
             with open(outputfile, 'r') as testoutput:
                 print(testoutput.read())
-            sys.exit(returned)
+
+        subprocess.call(['coverage', 'combine'])
+        if runmpi:
+            print('Running mpi')
+            # Combine serial/parallel coverage
+            shutil.copy2('.coverage', '../output/temp_coverage')
+            run_mpi_tests(version=version)
+            shutil.copy2('../output/temp_coverage', '.coverage.serial')
+            shutil.copy2('../output/mpi_coverage', '.coverage.parallel')
+            subprocess.call(['coverage', 'combine'])
+
+        create_html(coverdir)
+
+        sys.exit(returned)
 
 
 if __name__ == "__main__":
@@ -122,11 +146,11 @@ if __name__ == "__main__":
                         help='generate html')
     parser.add_argument('--parallel', '-p', action='store_true',
                         help='run tests in parallel')
-    parser.add_argument('--nocover', action='store_true',
+    parser.add_argument('--cover', action='store_true',
                         help='skip coverage')
     parser.add_argument('--cores', type=int, default=None,
                         help='run tests with n cores')
-    parser.add_argument('--coverdir', type=str, default='all',
+    parser.add_argument('--coverdir', type=str, default='../output/coverage',
                         help='put html coverage report here')
     parser.add_argument('--threshold', type=int, default=90,
                         help='coverage percentage to beat')
@@ -135,6 +159,6 @@ if __name__ == "__main__":
 
     parsed = parser.parse_args(sys.argv[1:])
 
-    run_tests(parsed.tests, parsed.version, parsed.fast, parsed.changed, bool(not parsed.nocover),
+    run_tests(parsed.tests, parsed.version, parsed.fast, parsed.changed, parsed.cover,
               parsed.parallel, parsed.failed, parsed.cores, parsed.coverdir,
               parsed.html, parsed.threshold, parsed.output)
