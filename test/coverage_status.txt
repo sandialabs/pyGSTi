@@ -56,32 +56,33 @@ Objects package:
     Name                                 Stmts   Miss  Cover   Missing
     ------------------------------------------------------------------
     pygsti/objects.py                       21      0   100%
-    pygsti/objects/confidenceregion.py     213     70    67%   156-171, 234, 360-381, 421-447, 483-503, 610-626
+    pygsti/objects/confidenceregion.py     213      4    98%   372, 438, 493, 626
     pygsti/objects/dataset.py              262      3    99%   71, 271, 471
-    pygsti/objects/evaltree.py             255     39    85%   106, 281, 316-317, 345, 394, 436, 446-451, 455, 564-598
+    pygsti/objects/evaltree.py             255      4    98%   106, 345, 394, 436
     pygsti/objects/exceptions.py             5      0   100%
-    pygsti/objects/gate.py                 331    178    46%   41-59, 99-120, 147-148, 152, 158-164, 169, 174, 191, 210, 213, 219, 268-269, 271, 277, 281, 285, 327, 355, 372, 388, 417, 437-438, 442-444, 447, 489, 552, 585-587, 607-608, 638, 661, 664, 690, 707-708, 729, 758, 778-779, 783-785, 788, 794-795, 798, 848-871, 878-893, 911-914, 928, 940, 957-958, 974-986, 992-1001, 1018-1019, 1039-1108, 1112-1115, 1118
-    pygsti/objects/gateset.py              489    183    63%   121, 173, 197, 370, 389, 413, 529, 990, 2075-2086, 2105-2124, 2150-2159, 2169-2170, 2179-2180, 2189-2190, 2245-2252, 2263-2276, 2325-2412, 2438-2465, 2489-2526, 2548-2581, 2607-2613, 2629-2645
-    pygsti/objects/gatestring.py           151     71    53%   49, 57, 67, 99-104, 131-136, 146, 153, 163, 167, 174, 177, 183, 189-191, 194, 235, 238-240, 243-247, 250-251, 254, 260-262, 297, 315-319, 352-377, 399-402
-    pygsti/objects/gscalc.py              1189    194    84%   266-276, 439, 444, 511, 525, 566, 986-987, 994, 1003, 1019-1021, 1066, 1077-1094, 1110-1137, 1147-1163, 1166, 1171, 1236-1293, 1298, 1372-1429, 1434, 1636-1656, 1672, 1912, 2003-2012, 2073, 2086, 2096, 2156, 2260, 2347-2350, 2391-2395, 2409-2457, 2468, 2556-2559, 2605-2609, 2623-2674, 2685, 3185-3186, 3296-3297, 3329, 3341, 3450
-    pygsti/objects/labeldicts.py           113     15    87%   46, 74, 77-80, 129-130, 132, 160, 163-166, 207, 209, 214
-pygsti/tools.py                    10      0   100%
-    pygsti/objects/multidataset.py         159      2    99%   152, 1797
-    pygsti/objects/protectedarray.py       121     23    81%   18, 27, 29-31, 65, 68, 76, 81, 115, 123, 145-151, 180-186, 189
-    pygsti/objects/spamspec.py              14      6    57%   39, 42-46
-    pygsti/objects/spamvec.py              158     38    76%   39, 43, 50, 55, 73, 88, 91, 100, 146-147, 155, 204, 232, 249, 264, 280-283, 328, 399-401, 448, 469-476, 500, 517-518, 545, 548-550, 553
-    pygsti/objects/verbosityprinter.py     113      3    97%   83, 90, 180
+    pygsti/objects/gate.py                 331     13    96%   43, 210, 219, 268-269, 271, 281, 285, 552, 638, 664, 729, 986
+    pygsti/objects/gateset.py              489     27    94%   990, 2075-2086, 2105-2124, 2335, 2444, 2459
+    pygsti/objects/gatestring.py           151      1    99%   372
+    pygsti/objects/gscalc.py              1189    171    86%   266-276, 439, 444, 511, 566, 994, 1019-1021, 1077-1094, 1110-1137, 1147-1163, 1171, 1236-1293, 1298, 1372-1429, 1434, 1912, 2003-2012, 2073, 2086, 2096, 2156, 2347-2350, 2391-2395, 2409-2457, 2556-2559, 2605-2609, 2623-2674, 3296-3297, 3329, 3341, 3450
+    pygsti/objects/labeldicts.py           117      1    99%   207
+    pygsti/objects/multidataset.py         159      1    99%   179
+    pygsti/objects/protectedarray.py       121      3    98%   81, 115, 123
+    pygsti/objects/spamspec.py              14      0   100%
+    pygsti/objects/spamvec.py              158      8    95%   39, 43, 50, 55, 91, 100, 146-147
+    pygsti/objects/verbosityprinter.py     117      2    98%   102, 109
     ------------------------------------------------------------------
-    TOTAL                                 3594    825    77%
-    ---------------------------------------------------------------------- 
+    TOTAL                                 3602    238    93%
+    ----------------------------------------------------------------------
+    Ran 50 tests in 31.748s
+
 
     This still needs to be covered more, but maybe someone more familiar with the objects package should do it?
 
 Total coverage percentages (low to high level):
 
-  Tools:        98% # Higher priority (More packages depend on this one)
+  Tools:        99% # Higher priority (More packages depend on this one)
   Optimize:     89%
-* Objects:      77%
+* Objects:      93%
   Construction: 94% # Mid priority
   IO:           95% #
   Algorithms:   91%
@@ -91,72 +92,84 @@ Total coverage percentages (low to high level):
 *: lowest
 
 Total repository coverage:
-Name                                         Stmts   Miss  Cover   Missing
---------------------------------------------------------------------------
-pygsti.algorithms                                6      0   100%   
-pygsti.algorithms.core                        1127     56    95%   147, 641-644, 956-958, 1032-1045, 1261-1263, 1431-1432, 1453-1454, 1469-1470, 1940-1942, 2004-2017, 2198-2200, 2211, 2428, 2782, 3091, 3160, 3244-3246, 3316
-pygsti.algorithms.fiducialpairreduction        127     14    89%   52-66, 79-80
-pygsti.algorithms.fiducialselection            230     16    93%   193-197, 393-395, 413, 445-446, 478-480, 492, 497, 576
-pygsti.algorithms.germselection                197     24    88%   17-22, 152, 299-301, 495, 501-505, 513-514, 604, 645-648, 660, 686, 700
-pygsti.algorithms.grammatrix                    35      0   100%   
-pygsti.construction                              7      0   100%   
-pygsti.construction.datasetconstruction         71      0   100%   
-pygsti.construction.gatesetconstruction        451    228    49%   71-72, 87, 128, 166-365, 466, 468, 477-480, 483-542, 585, 648-651, 665, 685, 703, 729-730, 733-734, 744-745, 748, 767, 775-790, 799-800, 805, 831-838, 952-953, 966
-pygsti.construction.gatestringconstruction     147      2    99%   314-315
-pygsti.construction.rpeconstruction            135     27    80%   432-469
-pygsti.construction.spamspecconstruction        30      8    73%   58-59, 63, 67, 71-72, 76, 80
-pygsti.construction.std1Q_XY                     8      0   100%   
-pygsti.construction.std1Q_XYI                    8      0   100%   
-pygsti.construction.stdlists                    71      0   100%   
-pygsti.drivers                                   3      0   100%   
-pygsti.drivers.bootstrap                       178      0   100%   
-pygsti.drivers.longsequence                    102      1    99%   220
-pygsti.io                                        4      0   100%   
-pygsti.io.loaders                               64     22    66%   29-30, 69-78, 117-121, 171-172, 193-199
-pygsti.io.stdinput                             424     93    78%   55, 119-122, 133-134, 210, 214, 216, 241-248, 286-293, 326, 330, 349-357, 370-371, 375-376, 392, 413, 419, 461, 465, 489-497, 544, 550, 570, 576, 612-615, 618-621, 627-634, 637-644, 668, 678, 692-697, 705, 712, 718-721, 728-729, 738, 758
-pygsti.io.writers                               94     42    55%   26-27, 59-72, 97-99, 103-106, 138-162, 183, 187, 214, 238, 245, 248
-pygsti.objects                                  21      0   100%   
-pygsti.objects.confidenceregion                213     34    84%   360-381, 421-447, 493, 626
-pygsti.objects.dataset                         262      3    99%   71, 271, 471
-pygsti.objects.evaltree                        255      4    98%   106, 345, 394, 436
-pygsti.objects.exceptions                        5      0   100%   
-pygsti.objects.gate                            331     96    71%   43, 102-113, 147-148, 152, 158-164, 169, 174, 191, 210, 219, 268-269, 271, 277, 281, 285, 327, 355, 372, 388, 417, 437-438, 442-444, 447, 489, 552, 585-587, 638, 661, 664, 729, 778-779, 783-785, 788, 887, 911-914, 986, 1039-1108, 1112-1115, 1118
-pygsti.objects.gateset                         489     95    81%   121, 990, 2075-2086, 2105-2124, 2169-2170, 2179-2180, 2189-2190, 2245-2252, 2263-2276, 2325-2412, 2443-2444, 2457-2459
-pygsti.objects.gatestring                      151      2    99%   191, 372
-pygsti.objects.gscalc                         1189    171    86%   266-276, 439, 444, 511, 566, 994, 1019-1021, 1077-1094, 1110-1137, 1147-1163, 1171, 1236-1293, 1298, 1372-1429, 1434, 1912, 2003-2012, 2073, 2086, 2096, 2156, 2347-2350, 2391-2395, 2409-2457, 2556-2559, 2605-2609, 2623-2674, 3296-3297, 3329, 3341, 3450
-pygsti.objects.labeldicts                      113     14    88%   46, 74, 77-80, 129-130, 132, 160, 163-166, 209, 214
-pygsti.objects.multidataset                    159      2    99%   152, 179
-pygsti.objects.protectedarray                  121     18    85%   18, 27, 29-31, 65, 68, 81, 115, 123, 145-151, 183, 186, 189
-pygsti.objects.spamspec                         14      6    57%   39, 42-46
-pygsti.objects.spamvec                         158     23    85%   39, 43, 50, 55, 73, 91, 100, 146-147, 155, 204, 264, 280-283, 328, 448, 472, 474, 548-550, 553
-pygsti.objects.verbosityprinter                114      3    97%   135, 142, 237
-pygsti.optimize                                  2      0   100%   
-pygsti.optimize.customcg                       131     27    79%   82-83, 86-89, 130-131, 151-153, 164-168, 175-176, 181-185, 215-220
-pygsti.optimize.optimize                       261     13    95%   97-100, 116, 202, 225-226, 329-332, 736
-pygsti.report                                    5      0   100%   
-pygsti.report.figure                            26      0   100%   
-pygsti.report.formatter                        179     20    89%   60, 65, 117-121, 194, 202-205, 218, 224-225, 296-299, 322-326
-pygsti.report.generation                       575     57    90%   74-76, 202, 262, 400, 411, 471-493, 673, 753-755, 835-837, 901-904, 961, 1059, 1219-1221, 1279, 1338, 1340, 1342, 1344, 1346, 1348, 1350, 1352, 1354, 1356, 1447-1459, 1470, 1565, 1576
-pygsti.report.html                              85      5    94%   22, 173, 236, 255-262
-pygsti.report.latex                             86      1    99%   22
-pygsti.report.plotting                         938    199    79%   353-356, 388-396, 401, 447, 449, 451, 456-457, 478, 489-493, 522, 532, 558-574, 655-657, 672, 675, 745-746, 1143, 1153, 1171-1181, 1229, 1276, 1298, 1318-1320, 1711-1721, 2727-2753, 2853-2870, 3036, 3052-3066, 3071-3077, 3216-3284, 3364, 3370, 3430, 3603, 3668-3669, 3706-3711, 3766, 3781-3793, 3802-3804, 3812-3814
-pygsti.report.ppt                               81      4    95%   21, 63, 214, 258
-pygsti.report.reportables                      412     19    95%   65, 98-105, 115-121, 132, 225, 399, 480, 571, 689, 725, 758-759, 777
-pygsti.report.resultcache                       68      2    97%   84, 126
-pygsti.report.results                         1692    338    80%   327, 329, 406, 523-525, 554-556, 658-661, 768, 816-819, 826-830, 837-841, 850-856, 867-873, 879-885, 896-902, 909-916, 925-926, 933-936, 945-946, 952-956, 964-965, 972-978, 986-987, 1098-1121, 1205-1206, 1389, 1676-1678, 1690-1691, 1720, 1809-1817, 1830-1875, 1880, 1898, 1903-1905, 1920-1921, 1997-1998, 2086, 2124-2125, 2164, 2185-2186, 2337-2339, 2362, 2403-2404, 2436, 2454-2484, 2493-2505, 2519-2568, 2574, 2596-2597, 2707-2708, 2712-2713, 2757-2759, 2769, 2808-2809, 2839, 2857-2876, 2887-2900, 2913-2944, 2950, 3016-3018, 3079, 3084-3090, 3119, 3198-3205, 3208-3211, 3214-3223, 3294, 3299-3300, 3319-3323, 3327, 3349-3351, 3374-3377, 3400, 3428, 3444-3446, 3467-3468, 3531, 3535, 3567-3574, 3610-3612, 3752, 3792-3793, 3825
-pygsti.report.table                            161     10    94%   69, 76, 84-86, 97, 104, 122, 130, 218
-pygsti.tools                                    10      0   100%   
-pygsti.tools.basistools                        398      0   100%   
-pygsti.tools.chi2fns                            80      0   100%   
-pygsti.tools.gatetools                         145      2    99%   427, 585
-pygsti.tools.jamiolkowski                       82      0   100%   
-pygsti.tools.likelihoodfns                     274      4    99%   650-651, 691, 843
-pygsti.tools.listtools                          12      0   100%   
-pygsti.tools.matrixtools                        44      0   100%   
-pygsti.tools.rbtools                            34      1    97%   54
-pygsti.tools.rpetools                          107      2    98%   75, 271
---------------------------------------------------------------------------
-TOTAL                                        13002   1708    87%   
-----------------------------------------------------------------------
 
+    Name                                            Stmts   Miss  Cover   Missing
+    -----------------------------------------------------------------------------
+    pygsti/algorithms.py                                6      0   100%
+    pygsti/algorithms/core.py                        1127     56    95%   147, 641-644, 956-958, 1032-1045, 1261-1263, 1431-1432, 1453-1454, 1469-1470, 1940-1942, 2004-2017, 2198-2200, 2211, 2428, 2782, 3091, 3160, 3244-3246, 3316
+    pygsti/algorithms/fiducialpairreduction.py        127     14    89%   52-66, 79-80
+    pygsti/algorithms/fiducialselection.py            230     16    93%   193-197, 393-395, 413, 445-446, 478-480, 492, 497, 576
+    pygsti/algorithms/germselection.py                197     24    88%   17-22, 152, 299-301, 495, 501-505, 513-514, 604, 645-648, 660, 686, 700
+    pygsti/algorithms/grammatrix.py                    35      0   100%
+    pygsti/construction.py                              7      0   100%
+    pygsti/construction/datasetconstruction.py         71      0   100%
+    pygsti/construction/gatesetconstruction.py        451      8    98%   585, 685, 744-745, 834, 952-953, 966
+    pygsti/construction/gatestringconstruction.py     147      2    99%   314-315
+    pygsti/construction/rpeconstruction.py            135     27    80%   432-469
+    pygsti/construction/spamspecconstruction.py        30      0   100%
+    pygsti/construction/std1Q_XY.py                     8      0   100%
+    pygsti/construction/std1Q_XYI.py                    8      0   100%
+    pygsti/construction/stdlists.py                    71      0   100%
+    pygsti/drivers.py                                   3      0   100%
+    pygsti/drivers/bootstrap.py                       178      0   100%
+    pygsti/drivers/longsequence.py                    102      1    99%   221
+    pygsti/io.py                                        4      0   100%
+    pygsti/io/loaders.py                               64      2    97%   69, 121
+    pygsti/io/stdinput.py                             424     27    94%   349-357, 489-497, 550, 692-697, 718-721
+    pygsti/io/writers.py                               94      2    98%   245, 248
+    pygsti/objects.py                                  21      0   100%
+    pygsti/objects/confidenceregion.py                213      4    98%   372, 438, 493, 626
+    pygsti/objects/dataset.py                         262      3    99%   71, 271, 471
+    pygsti/objects/evaltree.py                        255      4    98%   106, 345, 394, 436
+    pygsti/objects/exceptions.py                        5      0   100%
+    pygsti/objects/gate.py                            331     13    96%   43, 210, 219, 268-269, 271, 281, 285, 552, 638, 664, 729, 986
+    pygsti/objects/gateset.py                         489     27    94%   990, 2075-2086, 2105-2124, 2335, 2444, 2459
+    pygsti/objects/gatestring.py                      151      1    99%   372
+    pygsti/objects/gscalc.py                         1189    171    86%   266-276, 439, 444, 511, 566, 994, 1019-1021, 1077-1094, 1110-1137, 1147-1163, 1171, 1236-1293, 1298, 1372-1429, 1434, 1912, 2003-2012, 2073, 2086, 2096, 2156, 2347-2350, 2391-2395, 2409-2457, 2556-2559, 2605-2609, 2623-2674, 3296-3297, 3329, 3341, 3450
+    pygsti/objects/labeldicts.py                      117      1    99%   207
+    pygsti/objects/multidataset.py                    159      1    99%   179
+    pygsti/objects/protectedarray.py                  121      3    98%   81, 115, 123
+    pygsti/objects/spamspec.py                         14      6   100%   # Just changed this
+    pygsti/objects/spamvec.py                         158      8    95%   39, 43, 50, 55, 91, 100, 146-147
+    pygsti/objects/verbosityprinter.py                117      2    98%   102, 109
+    pygsti/optimize.py                                  2      0   100%
+    pygsti/optimize/customcg.py                       131     27    79%   82-83, 86-89, 130-131, 151-153, 164-168, 175-176, 181-185, 215-220
+    pygsti/optimize/optimize.py                       261     13    95%   97-100, 116, 202, 225-226, 329-332, 736
+    pygsti/report.py                                    5      0   100%
+    pygsti/report/figure.py                            26      0   100%
+    pygsti/report/formatter.py                        179     20    89%   60, 65, 117-121, 194, 202-205, 218, 224-225, 296-299, 322-326
+    pygsti/report/generation.py                       575     35    94%   202, 262, 489, 673, 753-755, 835-837, 961, 1059, 1219-1221, 1279, 1338, 1340, 1342, 1344, 1346, 1348, 1350, 1352, 1354, 1356, 1447-1459, 1470, 1565, 1576
+    pygsti/report/html.py                              85      4    95%   173, 236, 255-262
+    pygsti/report/latex.py                             86      0   100%
+    pygsti/report/plotting.py                         944     91    90%   389-397, 404-409, 414, 461, 463, 465, 470-471, 492, 503-507, 536, 546, 572-588, 669-671, 686, 689, 760, 1021, 1170, 1188-1198, 1293, 1317, 1335-1337, 2761, 3055, 3080-3083, 3261, 3285-3289, 3383, 3389, 3449, 3622, 3687-3688, 3725-3730, 3785, 3805-3806, 3821-3823, 3833
+    pygsti/report/ppt.py                               81      3    96%   63, 214, 258
+    pygsti/report/reportables.py                      412     13    97%   65, 99, 116, 132, 225, 399, 480, 571, 689, 725, 758-759, 777
+    pygsti/report/resultcache.py                       68      1    99%   126
+    pygsti/report/results.py                         1692    111    93%   327, 329, 406, 523-525, 768, 902, 909-916, 925-926, 933-936, 945-946, 952-956, 964-965, 972-978, 986-987, 1205-1206, 1389, 1624, 1690-1691, 1720, 1880, 1898, 1920-1921, 2086, 2124-2125, 2164, 2185-2186, 2362, 2403-2404, 2436, 2574, 2596-2597, 2707-2708, 2712-2713, 2769, 2808-2809, 2839, 2950, 3016-3018, 3079, 3084-3090, 3119, 3294, 3319-3323, 3327, 3349-3351, 3400, 3428, 3444-3446, 3467-3468, 3531, 3535, 3567-3574, 3610-3612, 3752, 3792-3793, 3825
+    pygsti/report/table.py                            161     10    94%   69, 76, 84-86, 97, 104, 122, 130, 218
+    pygsti/tools.py                                    10      0   100%
+    pygsti/tools/basistools.py                        398      0   100%
+    pygsti/tools/chi2fns.py                            80      0   100%
+    pygsti/tools/gatetools.py                         145      2    99%   427, 585
+    pygsti/tools/jamiolkowski.py                       82      0   100%
+    pygsti/tools/likelihoodfns.py                     274      4    99%   650-651, 691, 843
+    pygsti/tools/listtools.py                          12      0   100%
+    pygsti/tools/matrixtools.py                        44      0   100%
+    pygsti/tools/rbtools.py                            34      1    97%   54
+    pygsti/tools/rpetools.py                          107      3    97%   75, 269, 271
+    -----------------------------------------------------------------------------
+    TOTAL                                           13015    761    94%
+    ----------------------------------------------------------------------
+    Ran 128 tests in 3272.367s
 
+    OK
+    
+    Modules with less than 90% coverage:
+
+      pygsti/optimize/customcg.py                       131     27    79%   82-83, 86-89, 130-131, 151-153, 164-168, 175-176, 181-185, 215-220
+      pygsti/objects/gscalc.py                         1189    171    86%   266-276, 439, 444, 511, 566, 994, 1019-1021, 1077-1094, 1110-1137, 1147-1163, 1171, 1236-1293, 1298, 1372-1429, 1434, 1912, 2003-2012, 2073, 2086, 2096, 2156, 2347-2350, 2391-2395, 2409-2457, 2556-2559, 2605-2609, 2623-2674, 3296-3297, 3329, 3341, 3450
+      pygsti/construction/rpeconstruction.py            135     27    80%   432-469
+      pygsti/algorithms/fiducialpairreduction.py        127     14    89%   52-66, 79-80
+      pygsti/algorithms/germselection.py                197     24    88%   17-22, 152, 299-301, 495, 501-505, 513-514, 604, 645-648, 660, 686, 700
+      pygsti/report/formatter.py                        179     20    89%   60, 65, 117-121, 194, 202-205, 218, 224-225, 296-299, 322-326
+       

@@ -1,5 +1,12 @@
 # Python 3
 
+### Changes
+
+  - Utilize `from __future__` imports to make code compatible with multiple python versions
+  - Find/change old dependencies -> use dependencies that are backwards compatible
+  - Improve tests to catch changes made using the `2to3` script
+  - Run 2to3 script, fix failing tests, remove deprecated code
+
 ### Notes on changes I've made and what to be aware of:
 
 Currently, the repository is compatible with both python `2.7` and `3.5+` through the use of `from __future__` statements, which brings python 3 style printing, importing, unicode literals, and division into python `2.7`

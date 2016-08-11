@@ -22,8 +22,9 @@ def parse_coverage_percent(output):
     return percent
 
 
-def run_tests(testnames, version=None, fast=False, changed=False,
-              parallel=False, failed=False, cores=None, coverdir=None, html=False, threshold=90):
+def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
+              parallel=False, failed=False, cores=None, coverdir=None, html=False,
+              threshold=90, outputfile=None):
 
     with directory('test_packages'):
 
@@ -68,33 +69,42 @@ def run_tests(testnames, version=None, fast=False, changed=False,
             # Some tests take up to an hour
             pythoncommands.append('--process-timeout=14400') # Four hours
 
-        # html coverage is prettiest
-        pythoncommands += ['--with-coverage']
+        if coverage:
+            # html coverage is prettiest
+            pythoncommands += ['--with-coverage']
 
-        if html:
-            pythoncommands += ['--cover-html']
+            if html:
+                pythoncommands += ['--cover-html']
 
-        # Build the set of covered packages automatically
-        covering = set()
-        for name in testnames:
-            if name.count('/') > 1:
-                covering.add(name.split('/')[0])
-            else:
-                covering.add(name)
-        for coverpackage in covering:
-            pythoncommands.append('--cover-package=pygsti.%s' % coverpackage)
+            # Build the set of covered packages automatically
+            covering = set()
+            for name in testnames:
+                if name.count('/') > 1:
+                    covering.add(name.split('/')[0])
+                else:
+                    covering.add(name)
+            for coverpackage in covering:
+                pythoncommands.append('--cover-package=pygsti.%s' % coverpackage)
 
-        if coverdir is None:
-            coverdir = '_'.join(covering)
-        pythoncommands.append('--cover-html-dir=../output/coverage/%s' % coverdir)
+            if coverdir is None:
+                coverdir = '_'.join(covering)
+            pythoncommands.append('--cover-html-dir=../output/coverage/%s' % coverdir)
 
-        pythoncommands.append('--cover-min-percentage=%s' % threshold)
+            pythoncommands.append('--cover-min-percentage=%s' % threshold)
 
-        # Make a single subprocess call
+        if outputfile is None:
+            # Make a single subprocess call
+            returned = subprocess.call(pythoncommands + testnames + postcommands)
 
-        returned = subprocess.call(pythoncommands + testnames + postcommands, stderr=subprocess.STDOUT)
+            sys.exit(returned)
 
-        sys.exit(returned)
+        else:
+            with open(outputfile, 'w') as testoutput:
+                returned = subprocess.call(pythoncommands + testnames + postcommands, stdout=testoutput, stderr=testoutput)
+            with open(outputfile, 'r') as testoutput:
+                print(testoutput.read())
+            sys.exit(returned)
+
 
 if __name__ == "__main__":
 
@@ -112,15 +122,19 @@ if __name__ == "__main__":
                         help='generate html')
     parser.add_argument('--parallel', '-p', action='store_true',
                         help='run tests in parallel')
+    parser.add_argument('--nocover', action='store_true',
+                        help='skip coverage')
     parser.add_argument('--cores', type=int, default=None,
                         help='run tests with n cores')
     parser.add_argument('--coverdir', type=str, default='all',
                         help='put html coverage report here')
     parser.add_argument('--threshold', type=int, default=90,
                         help='coverage percentage to beat')
+    parser.add_argument('--output', type=str, default=None,
+                        help='outputfile')
 
     parsed = parser.parse_args(sys.argv[1:])
 
-    run_tests(parsed.tests, parsed.version, parsed.fast, parsed.changed,
+    run_tests(parsed.tests, parsed.version, parsed.fast, parsed.changed, bool(not parsed.nocover),
               parsed.parallel, parsed.failed, parsed.cores, parsed.coverdir,
-              parsed.html, parsed.threshold)
+              parsed.html, parsed.threshold, parsed.output)

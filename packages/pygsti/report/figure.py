@@ -38,7 +38,8 @@ class ReportFigure(object):
                 curFig.callbacks.callbacks = {}
                   # initialize fig's CallbackRegistry, which doesn't
                   # unpickle properly in matplotlib 1.5.1 (bug?)
-            except:
+            except Exception as e:
+                print(e)
                 raise ValueError("ReportFigure unpickling error!  This " +
                                  "could be caused by using matplotlib or " +
                                  "pylab magic functions ('%pylab inline' or " +

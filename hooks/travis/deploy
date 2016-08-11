@@ -4,6 +4,9 @@ import subprocess, sys, os
 
 print('Travis CI Passed')
 
+# Prevents merging certain files, i.e. .travis.yml
+subprocess.call(['git', 'config', '--global', 'merge.ours.driver', 'true'])
+
 print('Getting current branchname/SHA')
 branchname = 'unspecified'
 output     = subprocess.check_output(['git', 'branch'])

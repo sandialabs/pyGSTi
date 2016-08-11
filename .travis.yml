@@ -10,52 +10,52 @@ branches:
     - beta
     - develop
 
-#env:
-    #- Default=True  # construction, io, objects, tools, optimize, algorithms
-    # - ReportA=True  # Only testReport.py (none of the other reports tests)
-    #- ReportB=True  # test the other reports tests
-    #- Drivers=True  # All of drivers
-    #- MPI=True  # All of MPI
+env:
+    - Default=True  # construction, io, objects, tools, optimize, algorithms
+    - ReportA=True  # Only testReport.py (none of the other reports tests)
+    - ReportB=True  # test the other reports tests
+    - Drivers=True  # All of drivers
+    - MPI=True  # All of MPI
    
 before_install:
   - sudo apt-get -qq update
-    # - sudo apt-get -qq install gfortran libblas-dev liblapack-dev &>/dev/null
-    # - sudo apt-get -qq install openmpi-bin openmpi-common openssh-cli#ent openssh-server libopenmpi1.3 libopenmpi-dbg libopenmpi-dev &>/dev/null
-    #- sudo apt-get -qq install texlive-full &>/dev/null
-    # - pushd /usr/share/texmf-texlive/
-  #- sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/etoolbox.tds.zip
-  #- sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/adjustbox.tds.zip
-  #- sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/collectbox.tds.zip
-  #- sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/pdfcomment.tds.zip
-  #- sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/datetime2.tds.zip
-  #- sudo wget http://mirrors.ctan.org/install/macros/generic/tracklang.tds.zip
-  #- sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/bezos.tds.zip
-  #- sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/hyperref.tds.zip
-  #- sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/oberdiek.tds.zip
-  #- sudo wget http://mirrors.ctan.org/install/macros/generic/ifxetex.tds.zip
-  #- sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/standalone.tds.zip
-  #- sudo unzip -o etoolbox.tds.zip &>/dev/null
-  #- sudo unzip -o adjustbox.tds.zip &>/dev/null
-  #- sudo unzip -o collectbox.tds.zip &>/dev/null
- # - sudo unzip -o pdfcomment.tds.zip &>/dev/null
- # - sudo unzip -o datetime2.tds.zip &>/dev/null
- ## - sudo unzip -o tracklang.tds.zip &>/dev/null
-  #- sudo unzip -o bezos.tds.zip &>/dev/null
-  #- sudo unzip -o hyperref.tds.zip &>/dev/null
-  #- sudo unzip -o oberdiek.tds.zip &>/dev/null
-  #- sudo unzip -o ifxetex.tds.zip &>/dev/null
-  #- sudo unzip -o standalone.tds.zip &>/dev/null
-  #- sudo texhash  &>/dev/null
-  #- popd
-  #- "export DISPLAY=:99.0"
-  #- "sh -e /etc/init.d/xvfb start" #some tests require a display
-  #- sleep 3 # give xvfb some time to start
+  - sudo apt-get -qq install gfortran libblas-dev liblapack-dev >/dev/null
+  - sudo apt-get -qq install openmpi-bin openmpi-common openssh-client openssh-server libopenmpi1.3 libopenmpi-dbg libopenmpi-dev >/dev/null
+  - sudo apt-get -qq install texlive-full >/dev/null
+  - pushd /usr/share/texmf-texlive/
+  - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/etoolbox.tds.zip
+  - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/adjustbox.tds.zip
+  - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/collectbox.tds.zip
+  - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/pdfcomment.tds.zip
+  - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/datetime2.tds.zip
+  - sudo wget http://mirrors.ctan.org/install/macros/generic/tracklang.tds.zip
+  - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/bezos.tds.zip
+  - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/hyperref.tds.zip
+  - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/oberdiek.tds.zip
+  - sudo wget http://mirrors.ctan.org/install/macros/generic/ifxetex.tds.zip
+  - sudo wget http://mirrors.ctan.org/install/macros/latex/contrib/standalone.tds.zip
+  - sudo unzip -o etoolbox.tds.zip >/dev/null
+  - sudo unzip -o adjustbox.tds.zip >/dev/null
+  - sudo unzip -o collectbox.tds.zip >/dev/null
+  - sudo unzip -o pdfcomment.tds.zip >/dev/null
+  - sudo unzip -o datetime2.tds.zip >/dev/null
+  - sudo unzip -o tracklang.tds.zip >/dev/null
+  - sudo unzip -o bezos.tds.zip >/dev/null
+  - sudo unzip -o hyperref.tds.zip >/dev/null
+  - sudo unzip -o oberdiek.tds.zip >/dev/null
+  - sudo unzip -o ifxetex.tds.zip >/dev/null
+  - sudo unzip -o standalone.tds.zip >/dev/null
+  - sudo texhash  >/dev/null
+  - popd
+  - "export DISPLAY=:99.0"
+  - "sh -e /etc/init.d/xvfb start" #some tests require a display
+  - sleep 3 # give xvfb some time to start
 
 install:
-    - echo Hello
-    #- travis_retry travis_wait pip install -r requirements.txt
-  #- pip install cvxpy cvxopt python-pptx mpi4py zmq &>/dev/null
-  #- pip install -e . &>/dev/null
+  - echo Hello
+  - travis_retry travis_wait pip install -r requirements.txt
+  - pip install cvxpy cvxopt python-pptx mpi4py zmq >/dev/null
+  - pip install -e . >/dev/null
   
 cache:
   pip: true
@@ -63,16 +63,32 @@ cache:
 
 script:
   - cd test
-    #- travis_wait 40 python travisTests.py # Tests may take some time!
+  - travis_wait 40 python travisTests.py # Tests may take some time!
   - cd ..
 
+after_script:
+    cd test/output
+    cat test.out
+    cd ../..
+
 deploy:
-    provider: script
-    script: hooks/travis/after_success
+  - provider: script
+    script: hooks/travis/deploy
     on:
         branch: develop
+  - provider: pypi
+    user: enielse
+    password:
+      secure: CefzPGiJxOMN6jJPBj1/ORir+qWQsVdF6pVS/kzyT+XzCGAfOyRwq93Nxw+zXuFTZ49ycDEq3QFSpicVswVoZsyX6JUV2tn2ggblwJ/+pPYiYGSjDoEAaxih1FQ265zUTOgKWFjNt9ZN3V359dhOVKP1KdRQPYTJpDZlmKQrdCOiLp4sFuonAdfuKxlYQWt/P4N/THDS71l+muG0e0h7mfb8L9mdrQrgDXUGBqpf0PUdoaH13qsIyeatzPCYXfyzxiw/jPAxloM48BluDLS6xuNvUiuN09ry5Ie5iJ/Sc8Sen6U3MmxYDURUHWtjvr0q2BkJcQ3X2DODjCirdiMBILI3tY+oOolOphN6eiKc+ntOvuB0Vf/w5Z+VEpGOQAWYMOJX772Pv83r07BBBTJoh8q7XU5fOLyFk2hD0s7/3ASmzkNYqUHCGL5tACUT8nMVIaNfCX9gKhxX+oFpDfBhps23dTZnz1hDK3odmXp1t+UNpVOqfpgIfoBIsvfBRbyVfoYGxp3dMaSo6MOXEOzdw506UfjblzAw7+dy/vueOTQdFIBH9Z+UZmUwJ+F6uDkiJf4KBPdx+Ex8jzcmBzh6vsG95FBbOhHmbqOknCHJO2MZvBxY0uI+EaxjoTFVnXgeW99v/pca9vsLmEON5Mg1XgDC4T2F7od2XmUTebGIbhk=
+    on:
+        branch: master
 
-after_failure:
-  - cd hooks/travis
-  - ./after_failure
-  - cd ../..
+
+notifications:
+    email:
+        #recipients:
+        #    - lucassaldyt@gmail.com # This would override sending only to commit author
+        on_success: change
+        on_failure: always
+
+

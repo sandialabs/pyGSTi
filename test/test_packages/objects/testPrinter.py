@@ -45,10 +45,12 @@ class ListStream:
     def flush(self):
         pass
     def __enter__(self):
+        sys.stderr = self
         sys.stdout = self
         return self
     def __exit__(self, ext_type, exc_value, traceback):
         sys.stdout = sys.__stdout__
+        sys.stderr = sys.__stderr__
 
 
 def _to_redirected_stream(printer):
@@ -108,7 +110,8 @@ def _test_output_with(testcase, method, printer):
     tersest   = terse - 1
     generated = method(tersest)
 
-    testcase.assertEqual(generated[0], 'ERROR: %s' % errorMessage)
+    testcase.assertEqual(generated[0], 'WARNING: %s' % warningMessage)
+    testcase.assertEqual(generated[1], 'ERROR: %s'   % errorMessage)
 
 class TestVerbosePrinter(BaseTestCase):
 
