@@ -81,6 +81,7 @@ def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
         if runmpi:
             testnames.remove('mpi')
 
+        postcommands = []
         # Use parallelism native to nose
         if parallel:
             if cores is None:
