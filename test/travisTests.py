@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import print_function
 from runTests   import run_tests
+from helpers.automation_tools import get_branchname
 import os, sys
 
 doReportA = os.environ.get('ReportA', 'False')
@@ -38,5 +39,18 @@ elif doMPI == 'True':
     parallel = False # Not for mpi
 
 print('Running travis tests with python%s.%s' % (sys.version_info[0], sys.version_info[1]))
-# Begin by running all of the packages in the current test matrix
-run_tests(tests, parallel=parallel)
+
+threshold = 80
+coverage = True
+
+branchname = get_branchname()
+if branchname == 'beta':
+    threshold = 90
+elif branchname == 'develop':
+    coverage = False
+
+# Coverage threshold doesn't matter if we don't run coverage
+if coverage:
+    print('Coverage threshold is set to %s%%' % threshold)
+
+run_tests(tests, parallel=parallel, coverage=coverage, threshold=threshold, outputfile='../output/test.out')

@@ -4,6 +4,9 @@ import subprocess, sys, os
 
 print('Travis CI Passed')
 
+# Prevents merging certain files, i.e. .travis.yml
+subprocess.call(['git', 'config', '--global', 'merge.ours.driver', 'true'])
+
 print('Getting current branchname/SHA')
 branchname = 'unspecified'
 output     = subprocess.check_output(['git', 'branch'])
@@ -39,8 +42,10 @@ subprocess.call(['git', 'fetch'])
 
 print('Setting up user credentials')
 
-subprocess.call(['git', 'config', '--global', 'user.email', 'N/A'])
-subprocess.call(['git', 'config', '--global', 'user.name', 'Lucas auto-push script'])
+EMAIL = os.environ['EMAIL']
+USER  = os.environ['USER']
+subprocess.call(['git', 'config', '--global', 'user.email', EMAIL])
+subprocess.call(['git', 'config', '--global', 'user.name',  USER])
 print('Done')
 
 print('Getting the latest version of beta')
@@ -78,11 +83,12 @@ if canMerge:
     print('Staging files..')
     subprocess.call(['git', 'add', '-u'])
     print('Committing..')
-    subprocess.call(['git', 'commit', '--no-verify', '-m', 'Merged develop into beta, as there were no conflicts and travis tests passed'])
+    subprocess.call(['git', 'commit', '--no-verify', '-m', 
+                     'Auto-merged develop -> beta (No conflicts, CI passed)'])
     print('Commit finished')
 
     PUSHKEY  = os.environ['PUSHKEY']
-    push_uri = 'https://%s@github.com/pyGSTio/pyGSTi.git' % PUSHKEY # yikes
+    push_uri = 'https://%s:%s@github.com/pyGSTio/pyGSTi.git' % (USER, PUSHKEY) # yikes
     try:
         print('Pushing to origin/beta. If this fails, there shouldn\'t be any useful output, since it would contain my access token')
         with open(os.devnull, 'w') as FNULL:

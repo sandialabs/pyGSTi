@@ -13,8 +13,18 @@ see pyGSTi/doc/repotools/test.md, or try running ./runTests.py -h
 default   = ['tools', 'io', 'objects', 'construction', 'drivers', 'report', 'algorithms', 'optimize']
 slowtests = ['report', 'drivers']
 
-def run_tests(testnames, version=None, fast=False, changed=False,
-              parallel=False, failed=False, cores=None, coverdir=None):
+def parse_coverage_percent(output):
+    output   = output.split('Missing')[1].split('Ran')[0]
+    output   = output.splitlines()
+    specific = output[3:-3]
+    # Get last word of the line after the dashes, and remove the percent symbol
+    percent  = int(output[-2].split()[-1][:-1])
+    return percent
+
+
+def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
+              parallel=False, failed=False, cores=None, coverdir=None, html=False,
+              threshold=90, outputfile=None):
 
     with directory('test_packages'):
 
@@ -59,26 +69,42 @@ def run_tests(testnames, version=None, fast=False, changed=False,
             # Some tests take up to an hour
             pythoncommands.append('--process-timeout=14400') # Four hours
 
-        # html coverage is prettiest
-        pythoncommands += ['--with-coverage', '--cover-html']
+        if coverage:
+            # html coverage is prettiest
+            pythoncommands += ['--with-coverage']
 
-        # Build the set of covered packages automatically
-        covering = set()
-        for name in testnames:
-            if name.count('/') > 1:
-                covering.add(name.split('/')[0])
-            else:
-                covering.add(name)
-        for coverpackage in covering:
-            pythoncommands.append('--cover-package=pygsti.%s' % coverpackage)
+            if html:
+                pythoncommands += ['--cover-html']
 
-        if coverdir is None:
-            coverdir = '_'.join(covering)
-        pythoncommands.append('--cover-html-dir=../output/coverage/%s' % coverdir)
+            # Build the set of covered packages automatically
+            covering = set()
+            for name in testnames:
+                if name.count('/') > 1:
+                    covering.add(name.split('/')[0])
+                else:
+                    covering.add(name)
+            for coverpackage in covering:
+                pythoncommands.append('--cover-package=pygsti.%s' % coverpackage)
 
-        # Make a single subprocess call
-        result = subprocess.call(pythoncommands + testnames + postcommands)
-        sys.exit(result)
+            if coverdir is None:
+                coverdir = '_'.join(covering)
+            pythoncommands.append('--cover-html-dir=../output/coverage/%s' % coverdir)
+
+            pythoncommands.append('--cover-min-percentage=%s' % threshold)
+
+        if outputfile is None:
+            # Make a single subprocess call
+            returned = subprocess.call(pythoncommands + testnames + postcommands)
+
+            sys.exit(returned)
+
+        else:
+            with open(outputfile, 'w') as testoutput:
+                returned = subprocess.call(pythoncommands + testnames + postcommands, stdout=testoutput, stderr=testoutput)
+            with open(outputfile, 'r') as testoutput:
+                print(testoutput.read())
+            sys.exit(returned)
+
 
 if __name__ == "__main__":
 
@@ -87,19 +113,28 @@ if __name__ == "__main__":
                         help='list of packages to run tests for')
     parser.add_argument('--version', '-v', type=str,
                         help='version of python to run the tests under')
-    parser.add_argument('--changed', '-c', action='store_true',
-                        help='run only the changed packages')
+    parser.add_argument('--changed', '-c', action='store_true', help='run only the changed packages')
     parser.add_argument('--fast', '-f', action='store_true',
                         help='run only the faster packages')
     parser.add_argument('--failed', action='store_true',
                         help='run last failed tests only')
+    parser.add_argument('--html', action='store_true',
+                        help='generate html')
     parser.add_argument('--parallel', '-p', action='store_true',
                         help='run tests in parallel')
+    parser.add_argument('--nocover', action='store_true',
+                        help='skip coverage')
     parser.add_argument('--cores', type=int, default=None,
                         help='run tests with n cores')
     parser.add_argument('--coverdir', type=str, default='all',
                         help='put html coverage report here')
+    parser.add_argument('--threshold', type=int, default=90,
+                        help='coverage percentage to beat')
+    parser.add_argument('--output', type=str, default=None,
+                        help='outputfile')
 
     parsed = parser.parse_args(sys.argv[1:])
 
-    run_tests(parsed.tests, parsed.version, parsed.fast, parsed.changed, parsed.parallel, parsed.failed, parsed.cores, parsed.coverdir)
+    run_tests(parsed.tests, parsed.version, parsed.fast, parsed.changed, bool(not parsed.nocover),
+              parsed.parallel, parsed.failed, parsed.cores, parsed.coverdir,
+              parsed.html, parsed.threshold, parsed.output)

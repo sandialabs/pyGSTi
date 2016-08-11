@@ -1,9 +1,8 @@
 from __future__ import division, print_function, absolute_import, unicode_literals
-from   copy        import deepcopy as _dc
-from contextlib    import contextmanager as _contextmanager
+from contextlib import contextmanager as _contextmanager
+from copy       import deepcopy as _dc
 import sys         as _sys
 import math        as _math # used for digit formatting
-
 
 def _num_digits(n):
     return int(_math.log10(n)) + 1 if n > 0 else 1
@@ -12,29 +11,30 @@ def _num_digits(n):
 def _build_progress_bar (iteration, total, barLength = 100, numDecimals=2, fillChar='#',
                     emptyChar='-', prefix='Progress:', suffix='Complete', end='\n'):
     """
-    Used for building a progress bar as a string
     Parameters
     ----------
-        iteration   : int, required
-          current iteration
-        total       : int, required
-          total iterations
-        barLength   : int, optional
-          character length of bar
-        numDecimals : int, optional
-          precision of progress percent
-        fillChar    : str, optional
-          replaces '#' as the bar-filling character. Note that longer fillChars get repeated indentSize times
-        emptyChar   : str, optional
-          replaces '-' as the empty-bar character (Str)
-        prefix      : str, optional
-          - message in front of the bar
-        suffix      : str, optional
-          message after the bar
+    iteration   - int, required
+      current iteration
+    total       - int, required  :
+      total iterations
+    barLength   - int, optional  :
+      character length of bar
+    numDecimals - int, optional  :
+      precision of progress percent
+    fillChar    - str, optional  :
+      replaces '#' as the bar-filling character
+    emptyChar   - str, optional  :
+      replaces '-' as the empty-bar character
+    prefix      - str, optional  :
+      message in front of the bar
+    suffix      - str, optional  :
+      message after the bar
+
+
     Returns
-    ------
-    formattedString : str
-      The string representation of a progress bar
+    -------
+    formattedString - str:
+      python string representing a progress bar
     """
     filledLength    = int(round(barLength * iteration / float(total)))
     percents        = round(100.00 * (iteration / float(total)), numDecimals)
@@ -46,25 +46,6 @@ def _build_progress_bar (iteration, total, barLength = 100, numDecimals=2, fillC
 
 # Another hidden function for providing verbose progress output
 def _build_verbose_iteration(iteration, total, prefix, suffix, end):
-    '''
-    Used for building a progress bar as a string
-    Parameters
-    ----------
-        iteration   : int, required
-          current iteration
-        total       : int, required
-          total iterations
-        prefix      : str, optional
-          - message in front of the bar
-        suffix      : str, optional
-          message after the bar
-        end         : str
-          message after suffix?
-    Returns
-    ------
-    formattedString : str
-      The string representation of an iteration
-    '''
     digits = _num_digits(total)
     return '%s Iter %s of %s %s: %s' % (prefix, str(iteration).zfill(digits), total, suffix, end)
 
@@ -129,95 +110,188 @@ class VerbosityPrinter():
 
     def _create_file(self, filename):
         with open(filename, 'w') as newFile:
-            pass
+            newFile.close()
 
     def _get_comm_file(self, comm_id):
         return '%s%s%s%s' % (VerbosityPrinter._commPath, VerbosityPrinter._commFileName, comm_id, VerbosityPrinter._commFileExt)
 
     # The printer is initialized with a set verbosity, and an optional filename.
     # If a filename is not provided, VerbosityPrinter writes to stdout
-    def __init__(self, verbosity, filename=None, comm=None):
+    def __init__(self, verbosity, filename=None, comm=None, warnings=True):
+        '''
+        Customize a verbosity printer object
+
+        Parameters
+        ----------
+        verbosity - int, required:
+          How verbose the printer should be
+        filename - string, optional:
+          Where to put output (If none, output goes to screen)
+        comm - mpi4py.MPI.Comm object, optional:
+          Restricts output if the program is running in parallel
+            ( By default, if the core is 0, output is sent to screen, and otherwise sent to commfiles 1, 2, and 3 (assuming 4 cores))
+        warnings - bool, optional:
+          don't print warnings
+        '''
         if comm != None:
             if comm.Get_rank() != 0 and filename == None: # A filename will override the default comm behavior
                 filename = self._get_comm_file(comm.Get_rank())
         self.verbosity = verbosity
         self.filename  = filename
         if filename != None:
-            self._create_file(filename) # Will empty the file
+            self._create_file(filename)
         self._comm            = comm
         self.progressLevel    = 0 # Used for queuing output while a progress bar is being shown
         self._delayQueue      = []
         self._progressStack   = []
+        self.warnings         = warnings
 
-    # Alias deepcopy, convert it to a method
     def clone(self):
-        return _dc(self)
+        '''
+        Instead of deepcopy, initialize a new printer object and feed it some select deepcopied members
+        '''
+        p = VerbosityPrinter(self.verbosity, self.filename, self._comm, self.warnings)
+        p.progressLevel  = self.progressLevel
+        p._delayQueue    = _dc(self._delayQueue) # deepcopy
+        p._progressStack = _dc(self._progressStack)
+        return p
 
     # Function for converting between interfaces:
     # Accepts either a verbosity level (integer) or a pre-constructed VerbosityPrinter
     @staticmethod
     def build_printer(verbosity, comm=None):
-        if type(verbosity) == int:  #isinstance(verbosity,int)
+        '''
+        Function for converting between interfaces
+
+        Parameters
+        ----------
+        verbosity : int or VerbosityPrinter object, required:
+          object to build a printer from
+
+        comm : mpi4py.MPI.Comm object, optional
+          Comm object to build printers with. !Will override!
+
+        Returns
+        -------
+        VerbosityPrinter:
+          The printer object, constructed from either an integer or another printer
+
+        '''
+        if isinstance(verbosity, int):
             return VerbosityPrinter(verbosity, comm=comm)
         else:
-            return verbosity.clone() # deepcopy the printer object if it has been passed as a verbosity
+            printer = verbosity.clone() # deepcopy the printer object if it has been passed as a verbosity
+            printer._comm = comm # override happens here
+            return printer
 
-    # Basic rules for increasing or decreasing verbosity with arithmetic operators
-    # Note that this makes printer objects somewhat immutable!
     def __add__(self, other):
+        '''
+        Increase the verbosity of a VerbosityPrinter
+        '''
         p = self.clone()
         p.verbosity += other
         return p
 
     def __sub__(self, other):
+        '''
+        Decrease the verbosity of a VerbosityPrinter
+        '''
         p = self.clone()
         p.verbosity -= other
         return p
 
-    # Helper Function for safely appending a message to a file
+    # Used once a file has been created - open the file whenever a message needs to be sent (rather than opening it for the entire program)
     def _append_to(self, filename, message):
         with open(filename, 'a') as output:
             output.write(message + '\n')
 
     # Hidden function for deciding what to do with our output
-    def _put(self, message, flush=True):
-        if self.filename == None: # handles the case where comm exists, as comm will create a filename
-            if self._comm == None or self._comm.Get_rank() == 0:
+    def _put(self, message, flush=True, stderr=False):
+        if self.filename == None and (self._comm is None or self._comm.Get_rank() == 0):
+            if stderr:
+                print(message, end='', file=_sys.stderr)
+            else:
                 print(message, end='')
-                if flush:
-                    _sys.stdout.flush()
+            if flush:
+                _sys.stdout.flush()
         else:
             self._append_to(self.filename, message)
 
     # special function reserved for logging errors
     def error(self, message):
-        self._put('\nERROR: %s\n' % message)
+        '''
+        Log an error to the screen/file
+
+        Parameters
+        ----------
+        message : str
+          the error message
+
+        Returns
+        -------
+        None
+        '''
+        self._put('\nERROR: %s\n' % message, stderr=True)
 
     # special function reserved for logging warnings
     def warning(self, message):
-        if self.verbosity > 0:
-            self._put('\nWARNING: %s\n' % message)
+        '''
+        Log a warning to the screen/file if verbosity > 1
 
-    # Function for sending messages to the desired output
-    # Determines whether the message should be printed based on current verbosity setting,
-    # then sends the message to the appropriate output
+        Parameters
+        ----------
+        message : str
+          the warning message
+
+        Returns
+        -------
+        None
+        '''
+        if self.warnings:
+            self._put('\nWARNING: %s\n' % message, stderr=True)
+
     def log(self, message, messageLevel=1, indentChar='  ', showStatustype=False, doIndent=True, indentOffset=0, end='\n', flush=True):
+        '''
+        Log a status message to screen/file
+        Determines whether the message should be printed based on current verbosity setting,
+        then sends the message to the appropriate output
+
+        Parameters
+        ----------
+        message - str:
+          Status message to be printed
+        messageLevel - int, optional:
+          Verbosity level required for the message to be shown
+        indentChar - str, optional:
+          Number of spaces to indent relative to verbosity
+        showStatustype - bool, optional:
+          output the status level of the message
+        doIndent - bool, optional:
+          do/dont indent the message
+        indentOffset - int, optional:
+          change indent based on verbosity
+        end - str, optional:
+          allows printing with no newlines etc
+        flush - bool, optional:
+          option to flush output
+
+        Returns
+        -------
+        None
+        '''
         if messageLevel <= self.verbosity:
             indent = (indentChar * (messageLevel+indentOffset)) if doIndent else ''
             statusType = 'Status Level %s:' % messageLevel if showStatustype else ''
             formattedMessage = '%s%s%s%s' % (indent, statusType, message, end)
 
             if self.progressLevel > 0 and self.filename == None:
-                # Printing during a progress bar should be more verbose than the bar itself
                 self._delayQueue.append(indentChar + 'INVALID LEVEL: ' + formattedMessage)
             else:
-                # But we don't care if we're using a file (progress bars aren't output to files)
                 self._put(formattedMessage, flush=flush)
 
-    # Member wrapper of a helper function
     def _progress_bar(self, iteration, total, barLength, numDecimals, fillChar, emptyChar, prefix, suffix, indent):
         progressBar = ''
-        #disallows nested progress bars (A single bar should be used instead)
+        # 'self.progressLevel == 1' disallows nested progress bars !!!
         unnested = self.progressLevel == 1
         if unnested:
             progressBar =  _build_progress_bar(iteration, total, barLength, numDecimals,
@@ -225,7 +299,6 @@ class VerbosityPrinter():
             progressBar = indent + progressBar
         return progressBar
 
-    # Member wrapper of helper
     def _verbose_iteration(self, iteration, total, prefix, suffix, verboseMessages, indent, end):
         iteration =  _build_verbose_iteration(iteration, total, prefix, suffix, end)
         iteration = indent + iteration
@@ -236,49 +309,53 @@ class VerbosityPrinter():
     def __str__(self):
         return 'Printer Object: Progress Level: %s Verbosity %s' % (self.progressLevel, self.verbosity)
 
-    # A single function call that cleans up for us no matter what happens
     @_contextmanager
-    def progress_logging(self, messageLevel):
-        try:
-            self._progressStack.append(messageLevel)
-            if self.verbosity == messageLevel:
-                self.progressLevel += 1
-            yield # Progress logging stuff gets put here
-        finally:
-            self._end_progress()
+    def progress_logging(self, messageLevel=1):
+        '''
+        Context manager for logging progress bars/iterations
+        (The printer will return to its normal, unrestricted state when the progress logging has finished)
+
+        Parameters
+        ----------
+        messageLevel - int, optional:
+          the verbosity level of the progressbar/set of iterations
+        '''
+        self._progressStack.append(messageLevel)
+        if self.verbosity == messageLevel:
+            self.progressLevel += 1
+        yield
+        self._end_progress()
 
     # A wrapper for show_progress that only works if verbosity is above a certain value (Status by default)
     def show_progress(self, iteration, total, messageLevel=1, barLength = 50, numDecimals=2, fillChar='#',
                     emptyChar='-', prefix='Progress:', suffix='', verboseMessages=[], indentChar='  ', end='\n'):
 
         """
-        Used for building a progress bar as a string
         Parameters
         ----------
-            iteration   : int, required
-              current iteration
-            total       : int, required
-              total iterations
-            barLength   : int, optional
-              character length of progress bar
-            numDecimals : int, optional
-              precision of progress percent
-            fillChar    : str, optional
-              replaces '#' as the bar-filling character. Note that longer fillChars get repeated indentSize times
-            emptyChar   : str, optional
-              replaces '-' as the empty-bar character (Str)
-            prefix      : str, optional
-              message in front of the status log
-            suffix      : str, optional
-              message after the status log
-            verboseMessages : list(str), optional
-              list of messages that are printed out at the same indentation as the progress bar
-        Returns
-        ------
-        formattedString : str
-          The string representation of a progress bar or iteration
+        iteration   - int, required
+          current iteration
+        total       - int, required  :
+          total iterations
+        barLength   - int, optional  :
+          character length of bar
+        numDecimals - int, optional  :
+          precision of progress percent
+        fillChar    - str, optional  :
+          replaces '#' as the bar-filling character
+        emptyChar   - str, optional  :
+          replaces '-' as the empty-bar character
+        prefix      - str, optional  :
+          message in front of the bar
+        suffix      - str, optional  :
+          message after the bar
+        verboseMessages - list(str), optional:
+          list of messages to output alongside the iteration
+        end - str, optional:
+          String terminating the progress bar
+        indentChar - str, optional:
+          number of spaces to indent the progress bar
         """
-
         indent = indentChar * self._progressStack[-1]
 
         # Print a standard progress bar if its verbosity matches ours,
@@ -302,16 +379,15 @@ class VerbosityPrinter():
                     print(item)
                 del self._delayQueue[:]
                 self.progressLevel -= 1
-        #self.log('', 1)
 
 
 ########################################################################################################################################
 #                                Demonstration of how the VerbosityPrinter class is used                                               #
 ########################################################################################################################################
 
+# Some basic demonstrations of how to use the printer class with an arbitrary function
 
 '''
-# Some basic demonstrations of how to use the printer class with an arbitrary function
 if __name__ == "__main__":
     import threading
     import time
@@ -333,7 +409,7 @@ if __name__ == "__main__":
         with printer.progress_logging(1):
             for i, item in enumerate(data):
                 printer.show_progress(i, len(data)-1, messageLevel=1,
-                verboseMessages=['%s gate strings' % i], prefix='-- IterativeGST (', suffix=') --')
+                      verboseMessages=['%s gate strings' % i], prefix='-- IterativeGST (', suffix=') --')
                 if i == 5:
                     printer.error('The iterator is five. This caused an error, apparently')
                 demo(printer - 1)

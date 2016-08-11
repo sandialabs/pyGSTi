@@ -15,13 +15,15 @@ After hooks have been configured, any pull or merge will update them again
 
 `prepare-commit-msg` - Adds `[ci skip]` to commit message if only `.md` and `.txt` files have changed
 
-`pre-commit` reindents pygsti. DOES add changes to the commit and will potentially add files that were meant to be unstaged
+`pre-commit` reindents pygsti. DOES add changes to the commit but will abort if there are unchanged files (So that they aren't accidentally added!).
+
+`pre-push` lints for errors in pygsti and fails if any are found. This takes a bit of time, but it will prevent any syntax errors or other minor mistakes from being pushed to the repository
 
 ##### master
 
 `pre-commit`   -  requires pylint score to be higher than that in `pyGSTi/test/pylint_config.json` (currently `9.10`) - creates report
 
-`pre-push`     -  updates `gh-pages`
+`post-commit`  -  updates `gh-pages`
 
 ##### beta
 
@@ -37,14 +39,14 @@ git hooks can be bypassed with the flag `--no-verify`, for example, in the case 
 
 ## How to maintain them:
 
-- The setup script outlined above is pretty important in keepings hooks updated. If something breaks, you might want to check that and potentially the post-merge script that calls it. This also means that you'll have to call the setup script manually when toying with the hooks.
+- The setup script outlined above is pretty important in keepings hooks updated. If something breaks, you might want to check that and potentially the post-merge script that calls it. This also means that you'll have to call the setup script **manually** when working on the hooks.
 
-- Some hooks rely on the automation_tools package. This gets copied from test/helpers whenever the setup script is called. (So, the setup script would have to be called to update the version that the hooks use)
+- Some hooks rely on the `automation_tools` package. This gets copied from `test/helpers` whenever the setup script is called. (So, the setup script would have to be called to update the version that the hooks use)
 
-- The hooks can be run manually (for testing) by first calling the setup script, and then moving the the top-level pygsti directory (pyGSTi), and issuing a command like `./.git/hooks/pre-commit` (if in the hooks/git directory, try the command `cd ..; ./setup_hooks.sh; cd ..; ./.git/hooks/hook; cd hooks/git`). Note that the travis hooks are run from the hooks/travis directory
+- The hooks can be run manually (for testing) by first calling the setup script, and then moving the the top-level pygsti directory (pyGSTi), and issuing a command like `./.git/hooks/pre-commit` (if in the hooks/git directory, try the command `cd ..; ./setup_hooks.sh; cd ..; ./.git/hooks/hook; cd hooks/git`). Note that the travis hooks are run from the hooks/travis directory, but the git hooks are run from `pyGSTi`
 
-- Use the no-verify flag whenever anything breaks
+- Use the `--no-verify` flag whenever anything breaks
 
-- Be careful with issuing git commands from the hooks (I did this with the post-commit hook, and even though I used --no-verify, I ended up with in infinite loop of hooks calling hooks, since the post-commit hook runs even when --no-verify is used)
+- Be careful with issuing git commands from the hooks (I did this with the `post-commit` hook, and even though I used `--no-verify`, I ended up with in infinite loop of hooks calling hooks, since the `post-commit` hook runs even when `--no-verify` is used)
 
 

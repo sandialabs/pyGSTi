@@ -80,9 +80,9 @@ Objects package:
 
 Total coverage percentages (low to high level):
 
-  Tools:        98% # Higher priority (More packages depend on this one)
+  Tools:        99% # Higher priority (More packages depend on this one)
   Optimize:     89%
-* Objects:      77%
+* Objects:      93%
   Construction: 94% # Mid priority
   IO:           95% #
   Algorithms:   91%
