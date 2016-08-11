@@ -41,7 +41,7 @@ def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
             # The version specified
             pythoncommands = ['python%s' % version]
         # Always use nose
-        pythoncommands += ['-m', 'nose']
+        pythoncommands += ['-m', 'nose', '-v']
 
         # Since last commit to current branch
         if changed:
