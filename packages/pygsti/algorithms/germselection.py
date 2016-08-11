@@ -20,7 +20,7 @@ from . import scoring as _scoring
 def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
                    numGSCopies=5, seed=None, maxGermLength=6,
                    forceSingletons=True, algorithm='greedy',
-                   algorithm_kwargs=None, verbosity=0):
+                   algorithm_kwargs=None, verbosity=1):
     """Generate a germ set for doing GST with a given target gateset.
 
     This function provides a streamlined interface to a variety of germ
@@ -103,6 +103,7 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
         A list containing the germs making up the germ set.
 
     """
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
     gatesetList = setup_gateset_list(gs_target, randomize,
                                      randomizationStrength, numGSCopies, seed)
     gates = gs_target.gates.keys()
@@ -114,21 +115,31 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
         algorithm_kwargs = {}
 
     if algorithm == 'greedy':
+        printer.log('Using greedy algorithm.', 1)
         # Define defaults for parameters that currently have no default or
         # whose default we want to change.
         default_kwargs = {
             'germsList': availableGermsList,
             'randomize': False,
             'seed': seed,
-            'verbosity': verbosity,
+            'verbosity': max(0, verbosity - 1),
             'forceSingletons': forceSingletons,
+            'scoreFunc': 'all',
             }
         for key in default_kwargs:
             if key not in algorithm_kwargs:
                 algorithm_kwargs[key] = default_kwargs[key]
         germList = build_up_breadth(gatesetList=gatesetList,
                                     **algorithm_kwargs)
+        if germList is not None:
+            germsetScore = calculate_germset_score(
+                germList, neighborhood=gatesetList,
+                scoreFunc=algorithm_kwargs['scoreFunc'])
+            printer.log('Constructed germ set:', 1)
+            printer.log(str([str(germ) for germ in germList]), 1)
+            printer.log('Score: {}'.format(germsetScore.score), 1)
     elif algorithm == 'grasp':
+        printer.log('Using GRASP algorithm.', 1)
         # Define defaults for parameters that currently have no default or
         # whose default we want to change.
         default_kwargs = {
@@ -136,23 +147,40 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
             'germsList': availableGermsList,
             'randomize': False,
             'seed': seed,
-            'verbosity': verbosity,
+            'verbosity': max(0, verbosity - 1),
             'forceSingletons': forceSingletons,
+            'returnAll': False,
+            'scoreFunc': 'all',
             }
         for key in default_kwargs:
             if key not in algorithm_kwargs:
                 algorithm_kwargs[key] = default_kwargs[key]
         germList = grasp_germ_set_optimization(gatesetList=gatesetList,
                                                **algorithm_kwargs)
+        printer.log('Constructed germ set:', 1)
+                                                 
+        if algorithm_kwargs['returnAll'] and germList[0] is not None:
+            germsetScore = calculate_germset_score(
+                germList[0], neighborhood=gatesetList,
+                scoreFunc=algorithm_kwargs['scoreFunc'])
+            printer.log(str([str(germ) for germ in germList[0]]), 1)
+            printer.log('Score: {}'.format(germsetScore.score))
+        elif not algorithm_kwargs['returnAll'] and germList is not None:
+            germsetScore = calculate_germset_score(germList,
+                                                   neighborhood=gatesetList)
+            printer.log(str([str(germ) for germ in germList]), 1)
+            printer.log('Score: {}'.format(germsetScore.score), 1)
     elif algorithm == 'slack':
+        printer.log('Using slack algorithm.', 1)
         # Define defaults for parameters that currently have no default or
         # whose default we want to change.
         default_kwargs = {
             'germsList': availableGermsList,
             'randomize': False,
             'seed': seed,
-            'verbosity': verbosity,
+            'verbosity': max(0, verbosity - 1),
             'forceSingletons': forceSingletons,
+            'scoreFunc': 'all',
             }
         if ('slackFrac' not in algorithm_kwargs
                 and 'fixedSlack' not in algorithm_kwargs):
@@ -162,11 +190,38 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
                 algorithm_kwargs[key] = default_kwargs[key]
         germList = optimize_integer_germs_slack(gatesetList,
                                                 **algorithm_kwargs)
+        if germList is not None:
+            germsetScore = calculate_germset_score(
+                germList, neighborhood=gatesetList,
+                scoreFunc=algorithm_kwargs['scoreFunc'])
+            printer.log('Constructed germ set:', 1)
+            printer.log(str([str(germ) for germ in germList]), 1)
+            printer.log('Score: {}'.format(germsetScore.score), 1)
     else:
         raise ValueError("'{}' is not a valid algorithm "
                          "identifier.".format(algorithm))
 
     return germList
+
+
+def calculate_germset_score(germs, gs_target=None, neighborhood=None,
+                            neighborhoodSize=5,
+                            randomizationStrength=1e-2, scoreFunc='all',
+                            gatePenalty=0.0, l1Penalty=0.0):
+    """Calculate the score of a germ set with respect to a gate set.
+
+    """
+    scoreFn = lambda x: _scoring.list_score(x, scoreFunc=scoreFunc)
+    if neighborhood is None:
+        neighborhood = [gs_target.randomize_with_unitary(randomizationStrength)
+                        for n in range(neighborhoodSize)]
+    scores = [compute_non_AC_score(scoreFn, gateset=gateset,
+                                   partialGermsList=germs,
+                                   gatePenalty=gatePenalty,
+                                   l1Penalty=l1Penalty)
+              for gateset in neighborhood]
+
+    return max(scores)
 
 
 def get_gateset_params(gatesetList):
@@ -406,6 +461,10 @@ def compute_score(weights, gateset_num, scoreFunc, derivDaggerDerivList,
     """Returns a germ set "score" in which smaller is better.  Also returns
     intentionally bad score if `weights` does not include all individual gates
     as individual germs when `forceSingletons` is ``True``.
+
+    This function is included for use by :func:`optimize_integer_germs_slack`,
+    but is not convenient for just computing the score of a germ set. For that,
+    use :func:`calculate_germset_score`.
 
     """
     if forceSingletons and _np.count_nonzero(weights[:numGates]) != numGates:

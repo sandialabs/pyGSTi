@@ -17,7 +17,7 @@ from . import scoring as _scoring
 
 def generate_fiducials(gs_target, omitIdentity=True, eqThresh=1e-6,
                        gatesToOmit=None, forceEmpty=True, maxFidLength=2,
-                       algorithm='grasp', algorithm_kwargs=None, verbosity=0):
+                       algorithm='grasp', algorithm_kwargs=None, verbosity=1):
     """Generate prep and measurement fiducials for a given target gateset.
 
     Parameters
@@ -78,6 +78,7 @@ def generate_fiducials(gs_target, omitIdentity=True, eqThresh=1e-6,
         A list containing the gate sequences for the measurement fiducials.
 
     """
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
     if gatesToOmit is None:
         gatesToOmit = []
 
@@ -101,10 +102,12 @@ def generate_fiducials(gs_target, omitIdentity=True, eqThresh=1e-6,
         algorithm_kwargs = {}
 
     if algorithm == 'slack':
+        printer.log('Using slack algorithm.', 1)
         default_kwargs = {
             'fidList': availableFidList,
-            'verbosity': verbosity,
+            'verbosity': max(0, verbosity - 1),
             'forceEmpty': forceEmpty,
+            'scoreFunc': 'all',
             }
 
         if ('slackFrac' not in algorithm_kwargs
@@ -118,17 +121,34 @@ def generate_fiducials(gs_target, omitIdentity=True, eqThresh=1e-6,
                                                        prepOrMeas='prep',
                                                        **algorithm_kwargs)
 
+        prepScore = compute_composite_score(
+            gs_target, prepFidList, 'prep',
+            scoreFunc=algorithm_kwargs['scoreFunc'])
+        printer.log('Preparation fiducials:', 1)
+        printer.log(str([str(fid) for fid in prepFidList]), 1)
+        printer.log('Score: {}'.format(prepScore.score), 1)
+
         measFidList = optimize_integer_fiducials_slack(gateset=gs_target,
                                                        prepOrMeas='meas',
                                                        **algorithm_kwargs)
 
+        measScore = compute_composite_score(
+            gs_target, measFidList, 'meas',
+            scoreFunc=algorithm_kwargs['scoreFunc'])
+        printer.log('Measurement fiducials:', 1)
+        printer.log(str([str(fid) for fid in measFidList]), 1)
+        printer.log('Score: {}'.format(measScore.score), 1)
+
     elif algorithm == 'grasp':
+        printer.log('Using GRASP algorithm.', 1)
         default_kwargs = {
             'fidsList': availableFidList,
             'alpha': 0.1,   # No real reason for setting this value of alpha.
             'gatePenalty': 0.1,
-            'verbosity': verbosity,
+            'verbosity': max(0, verbosity - 1),
             'forceEmpty': forceEmpty,
+            'scoreFunc': 'all',
+            'returnAll': False,
         }
         for key in default_kwargs:
             if key not in algorithm_kwargs:
@@ -138,9 +158,39 @@ def generate_fiducials(gs_target, omitIdentity=True, eqThresh=1e-6,
                                                   prepOrMeas='prep',
                                                   **algorithm_kwargs)
 
+        if algorithm_kwargs['returnAll'] and prepFidList[0] is not None:
+            prepScore = compute_composite_score(
+                gs_target, prepFidList[0], 'prep',
+                scoreFunc=algorithm_kwargs['scoreFunc'])
+            printer.log('Preparation fiducials:', 1)
+            printer.log(str([str(fid) for fid in prepFidList[0]]), 1)
+            printer.log('Score: {}'.format(prepScore.score), 1)
+        elif not algorithm_kwargs['returnAll'] and prepFidList is not None:
+            prepScore = compute_composite_score(
+                gs_target, prepFidList, 'prep',
+                scoreFunc=algorithm_kwargs['scoreFunc'])
+            printer.log('Preparation fiducials:', 1)
+            printer.log(str([str(fid) for fid in prepFidList]), 1)
+            printer.log('Score: {}'.format(prepScore.score), 1)
+
         measFidList = grasp_fiducial_optimization(gateset=gs_target,
                                                   prepOrMeas='meas',
                                                   **algorithm_kwargs)
+
+        if algorithm_kwargs['returnAll'] and measFidList[0] is not None:
+            measScore = compute_composite_score(
+                gs_target, measFidList[0], 'meas',
+                scoreFunc=algorithm_kwargs['scoreFunc'])
+            printer.log('Measurement fiducials:', 1)
+            printer.log(str([str(fid) for fid in measFidList[0]]), 1)
+            printer.log('Score: {}'.format(measScore.score), 1)
+        elif not algorithm_kwargs['returnAll'] and measFidList is not None:
+            measScore = compute_composite_score(
+                gs_target, measFidList, 'meas',
+                scoreFunc=algorithm_kwargs['scoreFunc'])
+            printer.log('Measurement fiducials:', 1)
+            printer.log(str([str(fid) for fid in measFidList]), 1)
+            printer.log('Score: {}'.format(measScore.score), 1)
 
     else:
         raise ValueError("'{}' is not a valid algorithm "
