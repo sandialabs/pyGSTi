@@ -75,9 +75,6 @@ Objects package:
     ----------------------------------------------------------------------
     Ran 50 tests in 31.748s
 
-
-    This still needs to be covered more, but maybe someone more familiar with the objects package should do it?
-
 Total coverage percentages (low to high level):
 
   Tools:        99% # Higher priority (More packages depend on this one)
@@ -137,7 +134,7 @@ Total repository coverage:
     pygsti/optimize/optimize.py                       261     13    95%   97-100, 116, 202, 225-226, 329-332, 736
     pygsti/report.py                                    5      0   100%
     pygsti/report/figure.py                            26      0   100%
-    pygsti/report/formatter.py                        179     20    89%   60, 65, 117-121, 194, 202-205, 218, 224-225, 296-299, 322-326
+    pygsti/report/formatter.py                        179     20    98%   230-232
     pygsti/report/generation.py                       575     35    94%   202, 262, 489, 673, 753-755, 835-837, 961, 1059, 1219-1221, 1279, 1338, 1340, 1342, 1344, 1346, 1348, 1350, 1352, 1354, 1356, 1447-1459, 1470, 1565, 1576
     pygsti/report/html.py                              85      4    95%   173, 236, 255-262
     pygsti/report/latex.py                             86      0   100%
@@ -171,5 +168,4 @@ Total repository coverage:
       pygsti/construction/rpeconstruction.py            135     27    80%   432-469
       pygsti/algorithms/fiducialpairreduction.py        127     14    89%   52-66, 79-80
       pygsti/algorithms/germselection.py                197     24    88%   17-22, 152, 299-301, 495, 501-505, 513-514, 604, 645-648, 660, 686, 700
-      pygsti/report/formatter.py                        179     20    89%   60, 65, 117-121, 194, 202-205, 218, 224-225, 296-299, 322-326
        

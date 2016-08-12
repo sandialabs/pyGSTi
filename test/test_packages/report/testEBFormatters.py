@@ -1,7 +1,7 @@
 import unittest
 import pygsti
 
-from .testPrecisionFormatter import FormatterBaseTestCase
+from .testFormatter import FormatterBaseTestCase
 
 class EBFormatterTest(FormatterBaseTestCase):
 
@@ -23,12 +23,8 @@ class EBFormatterTest(FormatterBaseTestCase):
         formatters)
 
     def test_EB_formatter(self):
-        print(self.arbitraryNum)
-        print(self.roundedNum)
         self.assertEqual(self.ebPrecise1,   self.ebtable1.render('latex', precision=6))
         self.assertEqual(self.ebPrecise2,   self.ebtable2.render('latex', precision=6))
-        print(self.ebImprecise1)
-        print(self.ebtable1.render('latex', precision=2))
         self.assertEqual(self.ebImprecise1, self.ebtable1.render('latex', precision=2))
         self.assertEqual(self.ebImprecise2, self.ebtable2.render('latex', precision=2))
 
