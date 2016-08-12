@@ -17,7 +17,9 @@ tests    = []   # Run nothing if no environment variables are set
 parallel = True # By default
 
 if doReportA == 'True':
-    tests = ['report/testReport.py:TestReport.test_reports_logL_TP_wCIs']
+    tests    = ['report/testReport.py:TestReport.test_reports_logL_TP_wCIs']
+    parallel = False # Not for mpi
+    # Parallel tests break individual tests !! (and will instead run everything in a package)
 
 # All other reports tests
 elif doReportB == 'True':
