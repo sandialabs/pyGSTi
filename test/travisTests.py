@@ -43,14 +43,11 @@ print('Running travis tests with python%s.%s' % (sys.version_info[0], sys.versio
 coverage = True
 
 branchname = get_branchname()
-if branchname == 'beta':
-    threshold = 0
-elif branchname == 'develop':
-    threshold = 0 # Isn't representative of full coverage anyways
-    coverage  = False
+print('Branchname is %s' % branchname)
 
-# Coverage threshold doesn't matter if we don't run coverage
-if coverage:
-    print('Coverage threshold is set to %s%%' % threshold)
+threshold = 0 # Isn't representative of full coverage anyways
+
+if branchname == 'develop':
+    coverage  = False
 
 run_tests(tests, parallel=parallel, coverage=coverage, threshold=threshold, outputfile='../output/test.out')
