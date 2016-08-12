@@ -16,9 +16,8 @@ doMPI     = os.environ.get('MPI',     'False')
 tests    = []   # Run nothing if no environment variables are set
 parallel = True # By default
 
-# Only testReport.py (barely finishes in time!)
 if doReportA == 'True':
-    tests = ['report/testReport.py:TestReport.test_reports_logL_TP_wCIs'] # Maybe this single test wont time out? :)
+    tests = ['report/testReport.py:TestReport.test_reports_logL_TP_wCIs']
 
 # All other reports tests
 elif doReportB == 'True':
@@ -26,7 +25,10 @@ elif doReportB == 'True':
     'testAnalysis.py',
     'testEBFormatters.py',
     'testMetrics.py',
-    'testPrecisionFormatter.py']]
+    'testPrecisionFormatter.py',
+    'testEBFormatters.py',
+    'testFormatter.py',
+    'testFigureFormatter.py']]
 
 elif doDrivers == 'True':
     tests = ['drivers']

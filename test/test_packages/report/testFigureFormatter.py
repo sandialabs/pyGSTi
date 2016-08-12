@@ -17,8 +17,8 @@ class FigureFormatterTest(FormatterBaseTestCase):
         stateSpace  = [2] # Hilbert space has dimension 2; density matrix is a 2x2 matrix
         spaceLabels = [('Q0',)] #interpret the 2x2 density matrix as a single qubit named 'Q0'
         gx          = pc.build_gate(stateSpace,spaceLabels,"X(pi/2,Q0)")
-        reportFig   = pplt.gate_matrix_boxplot(gx, mxBasis="pp", mxBasisDims=2, 
-                                               xlabel="testX", ylabel="testY", title="mytitle", 
+        reportFig   = pplt.gate_matrix_boxplot(gx, mxBasis="pp", mxBasisDims=2,
+                                               xlabel="testX", ylabel="testY", title="mytitle",
                                                boxLabels=True)
         figInfo     = (reportFig, 'test_figure', 100, 100) # Fig, Name, Size, Size
         headings    = [figInfo]

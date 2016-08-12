@@ -46,7 +46,7 @@ default   = ['tools', 'io', 'objects', 'construction', 'drivers', 'report', 'alg
 slowtests = ['report', 'drivers']
 
 def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
-              parallel=False, failed=False, cores=None, coverdir=None, html=False,
+              parallel=False, failed=False, cores=None, coverdir='../output/coverage', html=False,
               threshold=90, outputfile=None):
 
     with directory('test_packages'):
