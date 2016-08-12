@@ -41,7 +41,6 @@ class TestReport(BaseTestCase):
         self.gs_clgst_tp = pygsti.contract(self.gs_clgst, "vSPAM")
         self.gs_clgst_tp.set_all_parameterizations("TP")
 
-        table_wCI_as_str = str(tab_wCI)
 
         try:
             import pptx
@@ -293,6 +292,8 @@ class TestReport(BaseTestCase):
         #tests which fill in the cracks of the full-report tests
         tab = gen.get_gateset_spam_table(gateset, None)
         tab_wCI = gen.get_gateset_spam_table(gateset, ci)
+        table_wCI_as_str = str(tab_wCI)
+
         gen.get_gateset_spam_table(gateset, None)
         gen.get_gateset_gates_table(gateset_tp, ci_TP) #test zero-padding
         gen.get_unitary_gateset_gates_table(std.gs_target, ci_tgt) #unitary gates w/CIs
