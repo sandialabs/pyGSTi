@@ -2439,8 +2439,10 @@ class GateSet(object):
         rndm = _np.random.RandomState(seed)
 
         gate_dim = gs_pauli.get_dimension()
-        if gate_dim == 4: unitary_dim = 2
-        elif gate_dim == 16: unitary_dim = 4
+        if gate_dim == 4:
+            unitary_dim = 2
+        elif gate_dim == 16:
+            unitary_dim = 4
         else: raise ValueError("Gateset dimension must be either 4"
                                " (single-qubit) or 16 (two-qubit)")
 
@@ -2456,8 +2458,8 @@ class GateSet(object):
                 randUPP = _bt.unitary_to_pauligate_1q(randU)
             elif unitary_dim == 4:
                 randUPP = _bt.unitary_to_pauligate_2q(randU)
-            else: raise ValueError("Gateset dimension must be either 4 " +
-                                   "(single-qubit) or 16 (two-qubit)")
+            # No else case needed, unitary_dim MUST be at either 2 or 4 at this point
+            #   (Redundant exception)
 
             gs_pauli.gates[gateLabel] = _gate.FullyParameterizedGate(
                             _np.dot(randUPP,gs_pauli.gates[gateLabel]))
