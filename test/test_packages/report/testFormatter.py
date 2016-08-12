@@ -79,7 +79,7 @@ class GenericFormatterTests(FormatterBaseTestCase):
         self.assertAlmostEqual(formatter._pi_text(0.0022), 0.0069115038379, 3)
 
     def test_conversion_formatters(self):
-        self.assertEqual(formatter._fmtCnv_html('|<STAR>'), ' &#9733;')
+        self.assertEqual(formatter._fmtCnv_html('|<STAR>'), b' &#9733;')
         self.assertEqual(formatter._fmtCnv_latex('%% # half-width 1/2 Diamond Check <STAR>'),
                '$\%\% \# $\\nicefrac{1}{2}$-width $\\nicefrac{1}{2}$ $\Diamond$ \checkmark \\bigstar$')
         self.assertEqual(formatter._fmtCnv_latex('x|y'), '\\begin{tabular}{c}x\\\\y\end{tabular}')
