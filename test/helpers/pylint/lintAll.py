@@ -5,7 +5,7 @@ def lint_all():
     config = read_json('config/pylint_config.json')
 
     print('Linting all of pygsti. This takes around thirty seconds')
-    print('  (Report can be found in pylint/output/all.out)')
+    print('  (Report can be found in pylint/output/pylint/all.out)')
 
     blacklisted_warnings    = config['blacklisted-warnings']
     blacklisted_errors      = config['blacklisted-errors']

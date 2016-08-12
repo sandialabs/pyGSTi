@@ -5,6 +5,7 @@
 
 Go to `pyGSTi/hooks` directory, and run `./setup_hooks.sh`  
 This copies the contents of `pyGSTi/hooks/git` into `pyGSTi/.git/hooks`  
+It also copies `pyGSTi/test/helpers/automation_tools` into the hooks directory
 After hooks have been configured, any pull or merge will update them again  
 (If the `post-merge` hook breaks, and stops automatically updating hooks, they will need to be re-updated by another call to `setup_hooks.sh`, after a fix is made)
 
@@ -15,27 +16,23 @@ After hooks have been configured, any pull or merge will update them again
 
 `prepare-commit-msg` - Adds `[ci skip]` to commit message if only `.md` and `.txt` files have changed
 
-`pre-commit` reindents pygsti. DOES add changes to the commit but will abort if there are unchanged files (So that they aren't accidentally added!).
+`post-commit` reindents pygsti. DOES add changes to the commit but will abort if there are unchanged files (So that they aren't accidentally added!).
+
+`post-commit` starts linting in a background process - output will be generated in pyGSTi/test/output/pylint/all.out
 
 `pre-push` lints for errors in pygsti and fails if any are found. This takes a bit of time, but it will prevent any syntax errors or other minor mistakes from being pushed to the repository
 
 ##### master
 
-`pre-commit`   -  requires pylint score to be higher than that in `pyGSTi/test/pylint_config.json` (currently `9.10`) - creates report
-
 `post-commit`  -  updates `gh-pages`
-
-##### beta
-
-`pre-commit`   -  requires pylint score to be higher than that in `pyGSTi/test/pylint_config.json` (currently `9.10`) - creates report
 
 ##### travis
 
-`after_success` - (Commented-out section would update beta automatically)
+`deploy` - Merges develop into beta if there are no merge conflicts
 
 #### Important note:
 
-git hooks can be bypassed with the flag `--no-verify`, for example, in the case that something needs to be pushed to `develop` as a hotfix, but lowers the pylint score. (The latest pylint score in `pyGSTi/test/pylint_config.json` can also be lowered to something more reasonable, if required(It would be nice to have it above `9.0`?))
+restrictive git hooks (i.e. `pre-push`) can be bypassed with the flag `--no-verify`
 
 ## How to maintain them:
 
