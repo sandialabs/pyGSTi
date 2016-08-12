@@ -3,16 +3,7 @@
 
 echo "Checking if pdflatex install is needed"
 
-NEEDPDFLATEX=False
-
-if [ "$ReportA" == "True" ]; then
-    NEEDPDFLATEX=True
-fi
-if [ "$Drivers" == "True" ]; then
-    NEEDPDFLATEX=True
-fi
-
-if [ $"NEEDPDFLATEX" == "True" ]; then
+if [ "$ReportA" == "True" ] || [ "$Drivers" == "True" ]; then
     echo "Installing pdflatex requirements"
     apt-get -qq install texlive-full 
     pushd /usr/share/texmf-texlive/
