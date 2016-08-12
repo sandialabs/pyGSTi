@@ -16,7 +16,7 @@ hooks/etc/permissions.yml
 test/output/*
 test/output/pylint/*
 test/output/individual_coverage/*/*
-test/.noseids # Used in running failed tests
+test/test_packages/.noseids # Used in running failed tests
 
 # Compiled source #
 ###################

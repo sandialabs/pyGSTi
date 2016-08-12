@@ -41,6 +41,8 @@ class TestReport(BaseTestCase):
         self.gs_clgst_tp = pygsti.contract(self.gs_clgst, "vSPAM")
         self.gs_clgst_tp.set_all_parameterizations("TP")
 
+        table_wCI_as_str = str(tab_wCI)
+
         try:
             import pptx
             self.have_python_pptx = True
@@ -256,7 +258,7 @@ class TestReport(BaseTestCase):
 
     def test_table_generation(self):
         import pygsti.report.generation as gen
-        formats = ['latex','html','py','ppt'] #all the formats we know
+        formats = ['latex','html','test','ppt'] #all the formats we know
         tableclass = "cssClass"
         longtable = False
         confidenceRegionInfo = None
@@ -309,53 +311,6 @@ class TestReport(BaseTestCase):
         with self.assertRaises(ValueError):
             gen.get_gateset_spam_parameters_table(std.gs_target, ci) #gateset-CI mismatch
 
-        #Test ReportTable object
-        rowLabels = list(tab.keys())
-        row1Data = tab[rowLabels[0]]
-        colLabels = list(row1Data.keys())
-
-        self.assertTrue(rowLabels, tab.row_names)
-        self.assertTrue(colLabels, tab.col_names)
-        self.assertTrue(len(rowLabels), tab.num_rows)
-        self.assertTrue(len(colLabels), tab.num_cols)
-
-        el00 = tab[rowLabels[0]][colLabels[0]]
-        self.assertTrue( rowLabels[0] in tab )
-        self.assertTrue( rowLabels[0] in tab )
-
-        table_len = len(tab)
-        self.assertEqual(table_len, tab.num_rows)
-
-        table_as_str = str(tab)
-        table_wCI_as_str = str(tab_wCI)
-        row1a = tab.row(key=rowLabels[0])
-        col1a = tab.col(key=colLabels[0])
-        row1b = tab.row(index=0)
-        col1b = tab.col(index=0)
-        self.assertEqual(row1a,row1b)
-        self.assertEqual(col1a,col1b)
-
-        with self.assertRaises(KeyError):
-            tab['foobar']
-        with self.assertRaises(KeyError):
-            tab.row(key='foobar') #invalid key
-        with self.assertRaises(ValueError):
-            tab.row(index=100000) #out of bounds
-        with self.assertRaises(ValueError):
-            tab.row() #must specify key or index
-        with self.assertRaises(ValueError):
-            tab.row(key='foobar',index=1) #cannot specify key and index
-        with self.assertRaises(KeyError):
-            tab.col(key='foobar') #invalid key
-        with self.assertRaises(ValueError):
-            tab.col(index=100000) #out of bounds
-        with self.assertRaises(ValueError):
-            tab.col() #must specify key or index
-        with self.assertRaises(ValueError):
-            tab.col(key='foobar',index=1) #cannot specify key and index
-
-        with self.assertRaises(ValueError):
-            tab.render(fmt="foobar") #invalid format
 
 
 
