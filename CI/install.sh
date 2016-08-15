@@ -35,6 +35,3 @@ else
     echo "pdflatex is not required for these tests (ReportA is not set to \"True\")"
 fi
 
-if [ "$MPI" == "True" ]; then
-  sudo apt-get -qq install openmpi-bin openmpi-common openssh-client openssh-server libopenmpi1.3 libopenmpi-dbg libopenmpi-dev >/dev/null
-fi
