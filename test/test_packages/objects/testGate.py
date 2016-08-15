@@ -15,12 +15,6 @@ class GateTestCase(BaseTestCase):
     def test_slice(self):
         self.gate[:]
 
-    # I was hoping this would throw an error. It didn't
-    def test_bad_getattr(self):
-        gate = Gate(np.zeros(2))
-        gate.shape = 'adlksfja' # Probably not a valid shape
-        gate.dim = 'adlfjasl;d' # Probably not a valid dimension, either
-
     def test_bad_mx(self):
         bad_mxs = ['akdjsfaksdf',
                   [[], [1, 2]],
