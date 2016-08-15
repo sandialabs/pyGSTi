@@ -57,11 +57,12 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
                         (iGerm+1,len(germList),memEstimate/(1024.0**3),memLimit/(1024.0**3)))
                     if memEstimate/nParams < memLimit:
                         blkSz = int(nParams * memLimit / memEstimate)
-                        printer.log(" --> Setting max block size = ",blkSz)
+                        printer.log(" --> Setting max block size = %s" % blkSz)
                     else:
-                        #Tree splitting method
-                        maxTreeLength = len(evTree) * memLimit / memEstimate
-                        evTree.split(maxTreeLength)
+                        # Tree and deriv splitting method
+                        blkSz = 1
+                        maxTreeLength = len(evTree) * memLimit / (memEstimate / nParams)
+                        evTree.split(maxTreeLength) # Often fails because maxTreeLength is too small
                         printer.log(" --> Setting max subtree size = %s" % maxTreeLength)
                         evTree.print_analysis()
 
