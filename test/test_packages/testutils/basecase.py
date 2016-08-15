@@ -61,9 +61,8 @@ class BaseTestCase(unittest.TestCase):
 
     def runSilent(self, callable, *args, **kwds):
         orig_stdout = sys.stdout
-        sys.stdout = open(temp_files + "/silent.txt","w")
-        result = callable(*args, **kwds)
-        sys.stdout.close()
+        with open(temp_files + '/silent.txt', 'w') as sys.stdout:
+            result = callable(*args, **kwds)
         sys.stdout = orig_stdout
         return result
 

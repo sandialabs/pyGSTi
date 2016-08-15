@@ -2412,8 +2412,9 @@ class GateSet(object):
         return newGateset
 
 
-    def randomize_with_unitary(self, scale, seed=None):
-        """
+    def randomize_with_unitary(self, scale, seed=None, randState=None):
+        """Create a new gateset with random unitary perturbations.
+
         Apply a random unitary to each element of a gateset, and return the
         result, without modifying the original (this) gateset. This method
         currently only works on single- and two-qubit gatesets, and *assumes*
@@ -2430,17 +2431,28 @@ class GateSet(object):
           if not None, seed numpy's random number generator with this value
           before generating random depolarizations.
 
+        randState : numpy.random.RandomState
+            A RandomState object to generate samples from. Can be useful to set
+            instead of `seed` if you want reproducible distribution samples
+            across multiple random function calls but you don't want to bother
+            with manually incrementing seeds between those calls.
+
         Returns
         -------
         GateSet
             the randomized GateSet
         """
         gs_pauli = self.copy() # assumes self is in the pauli-product basis!!
-        rndm = _np.random.RandomState(seed)
+        if randState is None:
+            rndm = _np.random.RandomState(seed)
+        else:
+            rndm = randState
 
         gate_dim = gs_pauli.get_dimension()
-        if gate_dim == 4: unitary_dim = 2
-        elif gate_dim == 16: unitary_dim = 4
+        if gate_dim == 4:
+            unitary_dim = 2
+        elif gate_dim == 16:
+            unitary_dim = 4
         else: raise ValueError("Gateset dimension must be either 4"
                                " (single-qubit) or 16 (two-qubit)")
 
@@ -2456,8 +2468,8 @@ class GateSet(object):
                 randUPP = _bt.unitary_to_pauligate_1q(randU)
             elif unitary_dim == 4:
                 randUPP = _bt.unitary_to_pauligate_2q(randU)
-            else: raise ValueError("Gateset dimension must be either 4 " +
-                                   "(single-qubit) or 16 (two-qubit)")
+            # No else case needed, unitary_dim MUST be at either 2 or 4 at this point
+            #   (Redundant exception)
 
             gs_pauli.gates[gateLabel] = _gate.FullyParameterizedGate(
                             _np.dot(randUPP,gs_pauli.gates[gateLabel]))

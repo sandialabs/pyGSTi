@@ -32,5 +32,16 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
 
         self.assertEqual(suffPairs, [(0, 0), (0, 1), (1, 0)])
 
+    def test_memlimit(self):
+        # A very low memlimit
+        pygsti.alg.find_sufficient_fiducial_pairs(std.gs_target, std.fiducials, std.fiducials,
+                                                  std.germs, testPairList=[(0,0),(0,1),(1,0)],
+                                                  verbosity=0, memLimit=4096)
+        # A significantly higher one
+        pygsti.alg.find_sufficient_fiducial_pairs(std.gs_target, std.fiducials, std.fiducials,
+                                                  std.germs, testPairList=[(0,0),(0,1),(1,0)],
+                                                  verbosity=0, memLimit=128000)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

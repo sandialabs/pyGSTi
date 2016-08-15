@@ -349,8 +349,8 @@ FormatSet.formatDict['Brackets'] = {
 def _fmtCnv_html(x):
     x = x.replace("|"," ") #remove pipes=>newlines, since html wraps table text automatically
     x = x.replace("<STAR>","REPLACEWITHSTARCODE") #b/c cgi.escape would mangle <STAR> marker
-    x = _cgi.escape(x).encode("ascii","xmlcharrefreplace") #pylint: disable=deprecated-method
-    x = x.replace("REPLACEWITHSTARCODE","&#9733;") #replace new marker with HTML code
+    x = _cgi.escape(x).encode("ascii","xmlcharrefreplace")
+    x = x.replace(b"REPLACEWITHSTARCODE", b"&#9733;") #replace new marker with HTML code
     return x
 
 def _fmtCnv_latex(x):

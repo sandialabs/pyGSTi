@@ -4,92 +4,14 @@ import pickle
 import pygsti
 import os
 from pygsti.construction import std1Q_XYI as std
-from ..testutils import BaseTestCase, compare_files, temp_files
+from ..testutils import compare_files, temp_files
 
 import numpy as np
 
-class TestReport(BaseTestCase):
+# Inherit setup from here
+from .reportBaseCase import ReportBaseCase
 
-    def setUp(self):
-        super(TestReport, self).setUp()
-
-        self.targetGateset = std.gs_target
-        datagen_gateset = self.targetGateset.depolarize(gate_noise=0.05, spam_noise=0.1)
-
-        self.fiducials = std.fiducials
-        self.germs = std.germs
-        self.specs = pygsti.construction.build_spam_specs(self.fiducials, effect_labels=['E0']) #only use the first EVec
-
-        self.gateLabels = list(self.targetGateset.gates.keys()) # also == std.gates
-        self.lgstStrings = pygsti.construction.list_lgst_gatestrings(self.specs, self.gateLabels)
-
-        self.maxLengthList = [0,1,2,4,8]
-
-        self.lsgstStrings = pygsti.construction.make_lsgst_lists(
-            self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLengthList)
-
-        self.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/reportgen.dataset")
-
-        # RUN BELOW LINES TO GENERATE ANALYSIS DATASET
-        #ds = pygsti.construction.generate_fake_data(datagen_gateset, lsgstStrings[-1], nSamples=1000,
-        #                                            sampleError='binomial', seed=100)
-        #ds.save(compare_files + "/reportgen.dataset")
-
-        gs_lgst = pygsti.do_lgst(self.ds, self.specs, self.targetGateset, svdTruncateTo=4, verbosity=0)
-        gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",targetGateset=self.targetGateset,gateWeight=1.0,spamWeight=0.0)
-        self.gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
-        self.gs_clgst_tp = pygsti.contract(self.gs_clgst, "vSPAM")
-        self.gs_clgst_tp.set_all_parameterizations("TP")
-
-        try:
-            import pptx
-            self.have_python_pptx = True
-        except ImportError:
-            warnings.warn("**** IMPORT: Cannot import pptx (python-pptx), and so" +
-                         " Powerpoint slide generation tests have been disabled.")
-            self.have_python_pptx = False
-
-
-        #Compute results for MC2GST
-        lsgst_gatesets_prego = pygsti.do_iterative_mc2gst(self.ds, self.gs_clgst, self.lsgstStrings, verbosity=0,
-                                                          minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6),
-                                                          returnAll=True)
-        lsgst_gatesets = [ pygsti.optimize_gauge(gs, "target", targetGateset=self.targetGateset,
-                                                 gateWeight=1,spamWeight=0.001) for gs in lsgst_gatesets_prego]
-
-        self.results = pygsti.report.Results()
-        self.results.init_Ls_and_germs("chi2", self.targetGateset, self.ds, self.gs_clgst,
-                                       self.maxLengthList, self.germs,
-                                       lsgst_gatesets, self.lsgstStrings, self.fiducials, self.fiducials,
-                                       pygsti.construction.repeat_with_max_length, False, None, lsgst_gatesets_prego)
-        self.results.parameters.update({'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
-                                        'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
-                                        'weights': None, 'defaultDirectory': temp_files + "",
-                                        'defaultBasename': "MyDefaultReportName" } )
-        self.results.options.precision = 4
-        self.results.options.polar_precision = 3
-
-
-
-        #Compute results for MLGST with TP constraint
-        lsgst_gatesets_TP = pygsti.do_iterative_mlgst(self.ds, self.gs_clgst_tp, self.lsgstStrings, verbosity=0,
-                                                   minProbClip=1e-4, probClipInterval=(-1e6,1e6),
-                                                   returnAll=True)
-        lsgst_gatesets_TP = [ pygsti.optimize_gauge(gs, "target", targetGateset=self.targetGateset, constrainToTP=True,
-                                                 gateWeight=1,spamWeight=0.001) for gs in lsgst_gatesets_TP]
-
-        self.results_logL = pygsti.report.Results()
-        self.results_logL.init_Ls_and_germs("logl", self.targetGateset, self.ds, self.gs_clgst_tp, self.maxLengthList, self.germs,
-                                     lsgst_gatesets_TP, self.lsgstStrings, self.fiducials, self.fiducials,
-                                     pygsti.construction.repeat_with_max_length, True)
-        self.results_logL.options.precision = 4
-        self.results_logL.options.polar_precision = 3
-
-        try:
-            basestring #Only defined in Python 2
-            self.versionsuffix = "" #Python 2
-        except NameError:
-            self.versionsuffix = "v3" #Python 3
+class TestReport(ReportBaseCase):
 
     def checkFile(self, fn):
 
@@ -256,7 +178,7 @@ class TestReport(BaseTestCase):
 
     def test_table_generation(self):
         import pygsti.report.generation as gen
-        formats = ['latex','html','py','ppt'] #all the formats we know
+        formats = ['latex','html','test','ppt'] #all the formats we know
         tableclass = "cssClass"
         longtable = False
         confidenceRegionInfo = None
@@ -291,6 +213,8 @@ class TestReport(BaseTestCase):
         #tests which fill in the cracks of the full-report tests
         tab = gen.get_gateset_spam_table(gateset, None)
         tab_wCI = gen.get_gateset_spam_table(gateset, ci)
+        table_wCI_as_str = str(tab_wCI)
+
         gen.get_gateset_spam_table(gateset, None)
         gen.get_gateset_gates_table(gateset_tp, ci_TP) #test zero-padding
         gen.get_unitary_gateset_gates_table(std.gs_target, ci_tgt) #unitary gates w/CIs
@@ -309,53 +233,6 @@ class TestReport(BaseTestCase):
         with self.assertRaises(ValueError):
             gen.get_gateset_spam_parameters_table(std.gs_target, ci) #gateset-CI mismatch
 
-        #Test ReportTable object
-        rowLabels = list(tab.keys())
-        row1Data = tab[rowLabels[0]]
-        colLabels = list(row1Data.keys())
-
-        self.assertTrue(rowLabels, tab.row_names)
-        self.assertTrue(colLabels, tab.col_names)
-        self.assertTrue(len(rowLabels), tab.num_rows)
-        self.assertTrue(len(colLabels), tab.num_cols)
-
-        el00 = tab[rowLabels[0]][colLabels[0]]
-        self.assertTrue( rowLabels[0] in tab )
-        self.assertTrue( rowLabels[0] in tab )
-
-        table_len = len(tab)
-        self.assertEqual(table_len, tab.num_rows)
-
-        table_as_str = str(tab)
-        table_wCI_as_str = str(tab_wCI)
-        row1a = tab.row(key=rowLabels[0])
-        col1a = tab.col(key=colLabels[0])
-        row1b = tab.row(index=0)
-        col1b = tab.col(index=0)
-        self.assertEqual(row1a,row1b)
-        self.assertEqual(col1a,col1b)
-
-        with self.assertRaises(KeyError):
-            tab['foobar']
-        with self.assertRaises(KeyError):
-            tab.row(key='foobar') #invalid key
-        with self.assertRaises(ValueError):
-            tab.row(index=100000) #out of bounds
-        with self.assertRaises(ValueError):
-            tab.row() #must specify key or index
-        with self.assertRaises(ValueError):
-            tab.row(key='foobar',index=1) #cannot specify key and index
-        with self.assertRaises(KeyError):
-            tab.col(key='foobar') #invalid key
-        with self.assertRaises(ValueError):
-            tab.col(index=100000) #out of bounds
-        with self.assertRaises(ValueError):
-            tab.col() #must specify key or index
-        with self.assertRaises(ValueError):
-            tab.col(key='foobar',index=1) #cannot specify key and index
-
-        with self.assertRaises(ValueError):
-            tab.render(fmt="foobar") #invalid format
 
 
 
@@ -432,26 +309,6 @@ class TestReport(BaseTestCase):
         with self.assertRaises(ValueError):
             pygsti.report.ppt.ppt(rank3Tensor)
 
-
-    def test_plotting(self):
-        test_data = np.array( [[1e-8,1e-7,1e-6,1e-5],
-                               [1e-4,1e-3,1e-2,1e-1],
-                               [1.0,10.0,100.0,1000.0],
-                               [1.0e4,1.0e5,1.0e6,1.0e7]],'d' )
-        cmap = pygsti.report.plotting.StdColormapFactory('seq', n_boxes=10, vmin=0, vmax=1, dof=1)
-        gstFig = pygsti.report.plotting.color_boxplot( test_data, cmap, size=(10,10), prec="compacthp",save_to=temp_files + "/test.pdf")
-        gstFig = pygsti.report.plotting.color_boxplot( test_data, cmap, size=(10,10), prec="compact",save_to="")
-        gstFig = pygsti.report.plotting.color_boxplot( test_data, cmap, size=(10,10), prec=3,save_to="")
-        gstFig = pygsti.report.plotting.color_boxplot( test_data, cmap, size=(10,10), prec=-3,save_to="")
-        gstFig = pygsti.report.plotting.color_boxplot( test_data, cmap, size=(10,10), prec="foobar",colorbar=True,save_to="")
-        gstFig.check()
-
-        pygsti.report.plotting.gateset_with_lgst_gatestring_estimates( [('Gx','Gx')], self.ds, self.specs,
-                                                                       self.targetGateset,includeTargetGates=False,
-                                                                       gateStringLabels=None, svdTruncateTo=4, verbosity=0)
-
-        gsWithGxgx = pygsti.report.plotting.focused_mc2gst_gatesets(
-            pygsti.construction.gatestring_list([('Gx','Gx')]), self.ds, self.specs, self.gs_clgst)
 
     def test_reportables(self):
         #Test that None is returned when qty cannot be computed

@@ -11,10 +11,10 @@ branches:
     - develop
 
 env:
+    - Drivers=True  # All of drivers (Tends to take longer, put it first in the mx)
     - Default=True  # construction, io, objects, tools, optimize, algorithms
     - ReportA=True  # Only testReport.py (none of the other reports tests)
     - ReportB=True  # test the other reports tests
-    - Drivers=True  # All of drivers
     - MPI=True  # All of MPI
    
 before_install:
@@ -37,19 +37,25 @@ cache:
 
 script:
   - cd test
-  - travis_wait 40 python travisTests.py # Tests may take some time!
+  - travis_wait 50 python travisTests.py # Tests may take some time!
   - cd ..
 
 after_script:
-    cd test/output
-    cat test.out
-    cd ../..
+    - |
+        declare exitCode
+        
+        curl -sSL https://raw.githubusercontent.com/alrra/travis-after-all/1.4.4/lib/travis-after-all.js | node
+        exitCode=$?
+
+        if [ $exitCode -eq 0 ]; then
+            python CI/deploy
+        fi
+
+        if [ $exitCode -eq 1 ]; then
+            echo "Build failed - not deploying!!!!!!"
+        fi
 
 deploy:
-  - provider: script
-    script: CI/deploy
-    on:
-        branch: develop
   - provider: pypi
     user: enielse
     password:

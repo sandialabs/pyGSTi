@@ -1174,7 +1174,6 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxs, cmapFactory, xlabe
     #Setup and create plotting functions
     if sumUp:
         subMxSums = _np.array( [ [ sum_up_mx(subMxs[iy][ix]) for ix in range(nXs) ] for iy in range(nYs) ], 'd' )
-        subMxSums = _np.flipud(subMxSums) #so [0,0] el of original subMxSums is at *top*-left (FLIP)
         if invert: _warnings.warn("Cannot invert a summed-up plot.  Ignoring invert=True.")
 
         fig,ax = _plt.subplots( 1, 1, figsize=(nXs*scale, nYs*scale))

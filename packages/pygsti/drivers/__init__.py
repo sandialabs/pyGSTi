@@ -10,3 +10,4 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 # into the package namespace
 from .longsequence import *
 from .bootstrap import *
+from .germseteval import simulate_convergence

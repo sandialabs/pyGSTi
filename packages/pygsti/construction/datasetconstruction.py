@@ -12,7 +12,8 @@ import numpy.random as _rndm
 from ..objects import gatestring as _gs
 from ..objects import dataset as _ds
 
-def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples, sampleError="none", seed=None):
+def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
+                       sampleError="none", seed=None, randState=None):
     """Creates a DataSet using the probabilities obtained from a gateset.
 
     Parameters
@@ -54,6 +55,12 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples, sampleError=
         If not ``None``, a seed for numpy's random number generator, which
         is used to sample from the binomial or multinomial distribution.
 
+    randState : numpy.random.RandomState
+        A RandomState object to generate samples from. Can be useful to set
+        instead of `seed` if you want reproducible distribution samples across
+        multiple random function calls but you don't want to bother with
+        manually incrementing seeds between those calls.
+
     Returns
     -------
     DataSet
@@ -70,7 +77,10 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples, sampleError=
         dataset = _ds.DataSet( spamLabels=gsGen.get_spam_labels() )
 
     if sampleError in ("binomial","multinomial"):
-        rndm = _rndm.RandomState(seed) # ok if seed is None
+        if randState is None:
+            rndm = _rndm.RandomState(seed) # ok if seed is None
+        else:
+            rndm = randState
 
     for k,s in enumerate(gatestring_list):
         if gsGen:
@@ -95,7 +105,7 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples, sampleError=
         counts = { }
         if sampleError == "binomial":
             assert(len(list(ps.keys())) == 2)
-            spamLabel1, spamLabel2 = list(ps.keys()); p1 = ps[spamLabel1]
+            spamLabel1, spamLabel2 = sorted(list(ps.keys())); p1 = ps[spamLabel1]
             if p1 < 0 and abs(p1) < 1e-6: p1 = 0
             if p1 > 1 and abs(p1-1.0) < 1e-6: p1 = 1
             if p1 < 0 or p1 > 1: print("Warning: probability == %g clipped to generate fake data" % p1)
@@ -104,8 +114,10 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples, sampleError=
             counts[spamLabel2] = nWeightedSamples - counts[spamLabel1]
         elif sampleError == "multinomial":
             #nOutcomes = len(list(ps.keys()))
-            countsArray = rndm.multinomial(nWeightedSamples, list(ps.values()), size=1)
-            for i,spamLabel in enumerate(ps.keys()):
+            spamLabels = list(ps.keys())
+            countsArray = rndm.multinomial(nWeightedSamples,
+                    [ps[sl] for sl in spamLabels], size=1)
+            for i,spamLabel in enumerate(spamLabels):
                 counts[spamLabel] = countsArray[0,i]
         else:
             for (spamLabel,p) in ps.items():

@@ -30,13 +30,15 @@ elif doReportB == 'True':
     'testPrecisionFormatter.py',
     'testEBFormatters.py',
     'testFormatter.py',
-    'testFigureFormatter.py']]
+    'testFigureFormatter.py',
+    'testPlotting.py',
+    'testTable.py']]
 
 elif doDrivers == 'True':
     tests = ['drivers']
 
 elif doDefault == 'True':
-    tests = ['objects', 'tools', 'iotest', 'optimize', 'algorithms']
+    tests = ['objects', 'tools', 'iotest', 'optimize', 'algorithms', 'construction']
 
 elif doMPI == 'True':
     tests = ['mpi']

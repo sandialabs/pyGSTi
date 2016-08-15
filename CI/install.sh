@@ -5,7 +5,7 @@ echo "Checking if pdflatex install is needed"
 
 if [ "$ReportA" == "True" ] || [ "$Drivers" == "True" ]; then
     echo "Installing pdflatex requirements"
-    apt-get -qq install texlive-full 
+    apt-get -qq install texlive-latex-base # Hopefully all that we need 
     pushd /usr/share/texmf-texlive/
     wget http://mirrors.ctan.org/install/macros/latex/contrib/etoolbox.tds.zip
     wget http://mirrors.ctan.org/install/macros/latex/contrib/adjustbox.tds.zip
@@ -34,3 +34,4 @@ if [ "$ReportA" == "True" ] || [ "$Drivers" == "True" ]; then
 else
     echo "pdflatex is not required for these tests (ReportA is not set to \"True\")"
 fi
+

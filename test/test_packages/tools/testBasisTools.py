@@ -47,7 +47,7 @@ class BasisBaseTestCase(BaseTestCase):
         self.assertArraysAlmostEqual( GM2_mxs[1], sigmax )
         self.assertArraysAlmostEqual( GM2_mxs[2], sigmay )
         self.assertArraysAlmostEqual( GM2_mxs[3], sigmaz )
-        with self.assertRaises(ValueError):
+        with self.assertRaises(TypeError):
             pygsti.gm_matrices_unnormalized("FooBar") #arg must be tuple,list,or int
 
         # GM [1,1] matrices are the basis matrices for each block, concatenated together
@@ -225,7 +225,7 @@ class BasisBaseTestCase(BaseTestCase):
         self.assertArraysAlmostEqual( stdMx, stdMx2 )
 
     def test_basistools_misc(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(TypeError):
             basistools._processBlockDims("FooBar") #arg should be a list,tuple,or int
         basistools.pp_matrices([1])
 
