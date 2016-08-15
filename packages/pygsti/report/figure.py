@@ -1,6 +1,8 @@
 from __future__ import division, print_function, absolute_import, unicode_literals
-import pickle as _pickle
+import pickle            as _pickle
 import matplotlib.pyplot as _plt
+import tempfile          as _tempfile
+import shutil            as _shutil
 
 
 class ReportFigure(object):
@@ -13,7 +15,7 @@ class ReportFigure(object):
     cloud".
     """
 
-    def __init__(self, axes, extraInfo=None):
+    def __init__(self, axes, extraInfo=None, imageformat='jpg'):
         """
         Create a new ReportFigure.
 
@@ -26,30 +28,21 @@ class ReportFigure(object):
            Any extra information you want to
            associate with this figure.
         """
-        self.pickledAxes = _pickle.dumps(axes)
+        # This file will be implicitly closed when garbage collected
+        self.tempSave = _tempfile.NamedTemporaryFile()
+
+        curFig = _plt.gcf() # gcf == "get current figure"
+        curFig.callbacks.callbacks = {}
+        _plt.savefig(self.tempSave, format=imageformat, bbox_extra_artists=(axes,),
+                     bbox_inches='tight') #need extra artists otherwise
+                                          #axis labels get clipped
+        _plt.close(curFig) # closes the figure
+
         self.extraInfo = extraInfo
 
     def save_to(self, filename):
         if filename is not None and len(filename) > 0:
-            try:
-                axes = _pickle.loads(self.pickledAxes)
-                  #this creates a new (current) figure in matplotlib
-                curFig = _plt.gcf() # gcf == "get current figure"
-                curFig.callbacks.callbacks = {}
-                  # initialize fig's CallbackRegistry, which doesn't
-                  # unpickle properly in matplotlib 1.5.1 (bug?)
-            except Exception as e:
-                print(e)
-                raise ValueError("ReportFigure unpickling error!  This " +
-                                 "could be caused by using matplotlib or " +
-                                 "pylab magic functions ('%pylab inline' or " +
-                                 "'%matplotlib inline') within an iPython " +
-                                 "notebook, so if you used either of these " +
-                                 "please remove it and all should be well.")
-            _plt.savefig(filename, bbox_extra_artists=(axes,),
-                         bbox_inches='tight') #need extra artists otherwise
-                                              #axis labels get clipped
-            _plt.close(curFig) # closes the figure created by unpickling
+            _shutil.copy2(self.tempSave.name, filename)
 
     def set_extra_info(self, extraInfo):
         self.extraInfo = extraInfo
@@ -58,8 +51,9 @@ class ReportFigure(object):
         return self.extraInfo
 
     def check(self):
-        axes = _pickle.loads(self.pickledAxes) #pylint: disable=unused-variable
+        pass
+        #axes = _pickle.loads(self.pickledAxes) #pylint: disable=unused-variable
           #this creates a new (current) figure in matplotlib
-        curFig = _plt.gcf() # gcf == "get current figure"
-        curFig.callbacks.callbacks = {} # initialize fig's CallbackRegistry...
-        _plt.close(curFig) # closes the figure created by unpickling
+        #curFig = _plt.gcf() # gcf == "get current figure"
+        #curFig.callbacks.callbacks = {} # initialize fig's CallbackRegistry...
+        #_plt.close(curFig) # closes the figure created by unpickling
