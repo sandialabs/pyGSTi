@@ -121,6 +121,9 @@ class TestVerbosePrinter(BaseTestCase):
     def test_stream_output(self):
         _test_output_with(self, _to_redirected_stream, VerbosityPrinter.build_printer(2))
 
+    def test_str(self):
+        str(VerbosityPrinter.build_printer(2))
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
 
