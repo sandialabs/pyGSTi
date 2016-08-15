@@ -158,7 +158,7 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
         germList = grasp_germ_set_optimization(gatesetList=gatesetList,
                                                **algorithm_kwargs)
         printer.log('Constructed germ set:', 1)
-                                                 
+
         if algorithm_kwargs['returnAll'] and germList[0] is not None:
             germsetScore = calculate_germset_score(
                 germList[0], neighborhood=gatesetList,

@@ -24,7 +24,6 @@ echo "Combined Output written to coverage_tests.out"
 '''
 
 def run_mpi_tests(nproc=4, version=None):
-    print('Running MPI')
     shutil.copy('mpi/setup.cfg.mpi', 'setup.cfg')
 
     mpicommands = ('time mpiexec -np %s python%s mpi/runtests.py -v ' % (str(nproc), '' if version is None else version)+
@@ -104,17 +103,19 @@ def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
                                '--cover-package=pygsti',
                                '--cover-min-percentage=%s' % threshold]
 
-        commands = pythoncommands + testnames + postcommands
-        print(commands)
+        returned = 0
+        if len(testnames) > 0:
+            commands = pythoncommands + testnames + postcommands
+            print(commands)
 
-        if outputfile is None:
-            returned = subprocess.call(commands)
+            if outputfile is None:
+                returned = subprocess.call(commands)
 
-        else:
-            with open(outputfile, 'w') as testoutput:
-                returned = subprocess.call(commands, stdout=testoutput, stderr=testoutput)
-            with open(outputfile, 'r') as testoutput:
-                print(testoutput.read())
+            else:
+                with open(outputfile, 'w') as testoutput:
+                    returned = subprocess.call(commands, stdout=testoutput, stderr=testoutput)
+                with open(outputfile, 'r') as testoutput:
+                    print(testoutput.read())
 
         subprocess.call(['coverage', 'combine'])
         if runmpi:

@@ -15,7 +15,7 @@ env:
     - ReportA=True  # Only testReport.py (none of the other reports tests)
     - ReportB=True  # test the other reports tests
     - Drivers=True  # All of drivers
-    #- MPI=True  # All of MPI
+    - MPI=True  # All of MPI
    
 before_install:
   - sudo apt-get -qq update
@@ -41,15 +41,21 @@ script:
   - cd ..
 
 after_script:
-    cd test/output
-    cat test.out
-    cd ../..
+    - |
+        declare exitCode
+        
+        curl -sSL https://raw.githubusercontent.com/alrra/travis-after-all/1.4.4/lib/travis-after-all.js | node
+        exitCode=$?
+
+        if [ $exitCode -eq 0 ]; then
+            python CI/deploy
+        fi
+
+        if [ $exitCode -eq 1 ]; then
+            echo "Build failed - not deploying!!!!!!"
+        fi
 
 deploy:
-  - provider: script
-    script: CI/deploy
-    on:
-        branch: develop
   - provider: pypi
     user: enielse
     password:

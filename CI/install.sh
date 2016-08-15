@@ -34,3 +34,4 @@ if [ "$ReportA" == "True" ] || [ "$Drivers" == "True" ]; then
 else
     echo "pdflatex is not required for these tests (ReportA is not set to \"True\")"
 fi
+
