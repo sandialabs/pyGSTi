@@ -15,7 +15,7 @@ class ReportFigure(object):
     cloud".
     """
 
-    def __init__(self, axes, extraInfo=None):
+    def __init__(self, axes, extraInfo=None, imageformat='jpg'):
         """
         Create a new ReportFigure.
 
@@ -33,7 +33,7 @@ class ReportFigure(object):
 
         curFig = _plt.gcf() # gcf == "get current figure"
         curFig.callbacks.callbacks = {}
-        _plt.savefig(self.tempSave, bbox_extra_artists=(axes,),
+        _plt.savefig(self.tempSave, format=imageformat, bbox_extra_artists=(axes,),
                      bbox_inches='tight') #need extra artists otherwise
                                           #axis labels get clipped
         _plt.close(curFig) # closes the figure
