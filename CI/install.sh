@@ -3,9 +3,16 @@
 
 echo "Checking if pdflatex install is needed"
 
+if [ "$ReportA" == "True" ]; then
+    apt-get -qq install texlive-full
+fi
+
+if [ "$Drivers" == "True" ]; then
+    apt-get -qq install texlive-latex-base
+fi
+
 if [ "$ReportA" == "True" ] || [ "$Drivers" == "True" ]; then
     echo "Installing pdflatex requirements"
-    apt-get -qq install texlive-full 
     pushd /usr/share/texmf-texlive/
     wget http://mirrors.ctan.org/install/macros/latex/contrib/etoolbox.tds.zip
     wget http://mirrors.ctan.org/install/macros/latex/contrib/adjustbox.tds.zip

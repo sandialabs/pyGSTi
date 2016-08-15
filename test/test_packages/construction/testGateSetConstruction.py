@@ -390,7 +390,7 @@ class TestGateSetConstructionMethods(BaseTestCase):
         #                            effectLabels=['E0'], effectExpressions=["1"],
         #                            spamdefs={'plus': ('rho0','E0'),
         #                                      'minus': ('remainder','remainder') })
-        
+
         #Travis CI fails above assertWarning test because it's broken (??)
         gateset3 = pygsti.construction.build_gateset(
             [2], [('Q0',)],['Gi','Gx','Gy'],
@@ -399,7 +399,7 @@ class TestGateSetConstructionMethods(BaseTestCase):
             effectLabels=['E0'], effectExpressions=["1"],
             spamdefs={'plus': ('rho0','E0'),
                       'minus': ('remainder','remainder') })
-        
+
 
         gateset4_txt = \
 """
