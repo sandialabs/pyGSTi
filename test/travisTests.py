@@ -30,7 +30,9 @@ elif doReportB == 'True':
     'testPrecisionFormatter.py',
     'testEBFormatters.py',
     'testFormatter.py',
-    'testFigureFormatter.py']]
+    'testFigureFormatter.py',
+    'testPlotting.py',
+    'testTable.py']]
 
 elif doDrivers == 'True':
     tests = ['drivers']
