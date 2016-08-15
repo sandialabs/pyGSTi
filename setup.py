@@ -46,7 +46,8 @@ setup(name='pyGSTi',
       extras_require = {
            'diamond norm computation':  ['cvxpy', 'cvxopt'],
            'powerpoint file generation': ['python-pptx'],
-           'nose testing' : ['nose']
+           'nose testing' : ['nose'],
+           'image comparison' : ['Pillow']
       },
       platforms = ["any"],      
       url = 'http://www.pygsti.info',
