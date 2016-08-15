@@ -105,7 +105,7 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
         counts = { }
         if sampleError == "binomial":
             assert(len(list(ps.keys())) == 2)
-            spamLabel1, spamLabel2 = list(ps.keys()); p1 = ps[spamLabel1]
+            spamLabel1, spamLabel2 = sorted(list(ps.keys())); p1 = ps[spamLabel1]
             if p1 < 0 and abs(p1) < 1e-6: p1 = 0
             if p1 > 1 and abs(p1-1.0) < 1e-6: p1 = 1
             if p1 < 0 or p1 > 1: print("Warning: probability == %g clipped to generate fake data" % p1)
@@ -114,8 +114,10 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
             counts[spamLabel2] = nWeightedSamples - counts[spamLabel1]
         elif sampleError == "multinomial":
             #nOutcomes = len(list(ps.keys()))
-            countsArray = rndm.multinomial(nWeightedSamples, list(ps.values()), size=1)
-            for i,spamLabel in enumerate(ps.keys()):
+            spamLabels = list(ps.keys())
+            countsArray = rndm.multinomial(nWeightedSamples,
+                    [ps[sl] for sl in spamLabels], size=1)
+            for i,spamLabel in enumerate(spamLabels):
                 counts[spamLabel] = countsArray[0,i]
         else:
             for (spamLabel,p) in ps.items():

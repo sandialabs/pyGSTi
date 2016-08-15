@@ -35,9 +35,12 @@ Notes:
     constrained.  This makes gate matrix parameterization and optimization much more convenient
     in the "gm" or "pp" bases.
 """
+import itertools as _itertools
+import numbers as _numbers
+import collections as _collections
+
 import numpy as _np
 import scipy.linalg as _spl
-import itertools as _itertools
 from . import matrixtools as _mt
 
 
@@ -140,14 +143,19 @@ def _processBlockDims(dimOrBlockDims):
         [ dimOrBlockDims ] : if dimOrBlockDims is a single int
           dimOrBlockDims   : otherwise
     """
-    if type(dimOrBlockDims) in (list,tuple):  #treat as state space dimensions
-        dmDim  = sum( [ blockDim    for blockDim in dimOrBlockDims] )  # *full* density matrix is dmDim x dmDim
-        gateDim = sum( [ blockDim**2 for blockDim in dimOrBlockDims] )  # gate matrices will be vecDim x vecDim
+    # treat as state space dimensions
+    if isinstance(dimOrBlockDims, _collections.Container):
+        # *full* density matrix is dmDim x dmDim
+        dmDim = sum([blockDim for blockDim in dimOrBlockDims])
+
+        # gate matrices will be vecDim x vecDim
+        gateDim = sum([blockDim**2 for blockDim in dimOrBlockDims])
+
         blockDims = dimOrBlockDims
-    elif type(dimOrBlockDims) == int:
+    elif isinstance(dimOrBlockDims, _numbers.Integral):
         dmDim = dimOrBlockDims
         gateDim = dimOrBlockDims**2
-        blockDims = [ dimOrBlockDims ]
+        blockDims = [dimOrBlockDims]
     else:
         raise ValueError("Invalid dimOrBlockDims = %s" % str(dimOrBlockDims))
 
@@ -287,8 +295,9 @@ def basis_element_labels(basis, dimOrBlockDims):
             #Some extra checking, since list-of-dims not supported for pp matrices yet.
             def is_integer(x):
                 return bool( abs(x - round(x)) < 1e-6 )
-            if type(dimOrBlockDims) != int:
-                if type(dimOrBlockDims) in (list,tuple) and len(dimOrBlockDims) == 1:
+            if not isinstance(dimOrBlockDims, _numbers.Integral):
+                if (isinstance(dimOrBlockDims, _collections.Container)
+                        and len(dimOrBlockDims) == 1):
                     dimOrBlockDims = dimOrBlockDims[0]
                 else:
                     raise ValueError("Dimension for Pauli tensor product matrices must be an *integer* power of 2")
@@ -374,7 +383,7 @@ def expand_from_std_direct_sum_mx(mxInStdBasis, dimOrBlockDims):
     """
     if dimOrBlockDims is None:
         return mxInStdBasis
-    elif type(dimOrBlockDims) == int:
+    elif isinstance(dimOrBlockDims, _numbers.Integral):
         assert(mxInStdBasis.shape == (dimOrBlockDims,dimOrBlockDims) )
         return mxInStdBasis
     else:
@@ -424,7 +433,7 @@ def contract_to_std_direct_sum_mx(mxInStdBasis, dimOrBlockDims):
     # TODO: should we check if the dimensions being projected out are the identity?
     if dimOrBlockDims is None:
         return mxInStdBasis
-    elif type(dimOrBlockDims) == int:
+    elif isinstance(dimOrBlockDims, _numbers.Integral):
         assert(mxInStdBasis.shape == (dimOrBlockDims,dimOrBlockDims) )
         return mxInStdBasis
     else:
@@ -527,7 +536,7 @@ def gm_matrices_unnormalized(dimOrBlockDims):
         and N is the dimension of the density-matrix space,
         equal to sum( block_dim_i^2 ).
     """
-    if type(dimOrBlockDims) == int:
+    if isinstance(dimOrBlockDims, _numbers.Integral):
         d = dimOrBlockDims
 
         #Identity Mx
@@ -552,7 +561,7 @@ def gm_matrices_unnormalized(dimOrBlockDims):
         assert(len(listOfMxs) == d**2)
         return listOfMxs
 
-    elif type(dimOrBlockDims) in (list,tuple):
+    elif isinstance(dimOrBlockDims, _collections.Container):
         dmDim, gateDim, blockDims = _processBlockDims(dimOrBlockDims)
 
         listOfMxs = []; start = 0
@@ -778,8 +787,8 @@ def pp_matrices(dim):
     def is_integer(x):
         return bool( abs(x - round(x)) < 1e-6 )
 
-    if type(dim) != int:
-        if type(dim) in (list,tuple) and len(dim) == 1:
+    if not isinstance(dim, _numbers.Integral):
+        if isinstance(dim, _collections.Container) and len(dim) == 1:
             dim = dim[0]
         else:
             raise ValueError("Dimension for Pauli tensor product matrices must be an *integer* power of 2")
