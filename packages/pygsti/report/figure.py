@@ -1,7 +1,16 @@
 from __future__ import division, print_function, absolute_import, unicode_literals
 import pickle as _pickle
+import matplotlib
 import matplotlib.pyplot as _plt
 
+from contextlib import contextmanager
+
+@contextmanager
+def temp_backend(backend):
+    oldBackend = matplotlib.get_backend()
+    _plt.switch_backend(backend)
+    yield # User code goes here
+    _plt.switch_backend(oldBackend)
 
 class ReportFigure(object):
     """
@@ -39,13 +48,26 @@ class ReportFigure(object):
                   # initialize fig's CallbackRegistry, which doesn't
                   # unpickle properly in matplotlib 1.5.1 (bug?)
             except Exception as e:
-                print(e)
-                raise ValueError("ReportFigure unpickling error!  This " +
-                                 "could be caused by using matplotlib or " +
-                                 "pylab magic functions ('%pylab inline' or " +
-                                 "'%matplotlib inline') within an iPython " +
-                                 "notebook, so if you used either of these " +
-                                 "please remove it and all should be well.")
+                try:
+                    # Subprocess didn't work without auxillary file (cannot import parent module '') -> we weren't desperate enough to do the auxillary file, so no promises that works either
+                    # multiprocessing didn't work (it used the same matplotlib import/backend :( )
+                    # tempfile with jpeg didn't work (we needed diverse formats)
+
+                    with temp_backend('agg'):
+                        axes = _pickle.loads(self.pickledAxes)
+                          #this creates a new (current) figure in matplotlib
+                        curFig = _plt.gcf() # gcf == "get current figure"
+                        curFig.callbacks.callbacks = {}
+                          # initialize fig's CallbackRegistry, which doesn't
+                          # unpickle properly in matplotlib 1.5.1 (bug?)
+                except:
+                    print(e)
+                    raise ValueError("ReportFigure unpickling error!  This " +
+                                     "could be caused by using matplotlib or " +
+                                     "pylab magic functions ('%pylab inline' or " +
+                                     "'%matplotlib inline') within an iPython " +
+                                     "notebook, so if you used either of these " +
+                                     "please remove it and all should be well.")
             _plt.savefig(filename, bbox_extra_artists=(axes,),
                          bbox_inches='tight') #need extra artists otherwise
                                               #axis labels get clipped
