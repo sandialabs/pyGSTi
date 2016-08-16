@@ -45,12 +45,9 @@ class ReportFigure(object):
 
         self.tempFileDict = { fmt : _tempfile.NamedTemporaryFile() for fmt in imageformats }
 
-        curFig = _plt.gcf() # gcf == "get current figure"
-        curFig.callbacks.callbacks = {}
         for fmt in imageformats:
             _plt.savefig(self.tempFileDict[fmt], format=fmt, bbox_extra_artists=(axes,),
                          bbox_inches='tight') #need extra artists otherwise
-        _plt.close(curFig) # closes the figure
 
     def _save_axes(self, filename):
         axes = _pickle.loads(self.pickledAxes)
