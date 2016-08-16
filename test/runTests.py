@@ -117,7 +117,13 @@ def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
                 with open(outputfile, 'r') as testoutput:
                     print(testoutput.read())
 
-        subprocess.call(['coverage', 'combine'])
+        if parallel:
+            #Only combine when run in parallel mode, since this
+            # causes nose tests to create .coverage.<processid>
+            # files instead of just a single .coverage file, which
+            # "coverage combine" will overwrite with no-data (eek!).
+            subprocess.call(['coverage', 'combine'])
+
         if runmpi:
             print('Running mpi')
             # Combine serial/parallel coverage
