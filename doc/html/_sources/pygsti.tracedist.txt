@@ -1,6 +1,0 @@
-pygsti.tracedist
-================
-
-.. currentmodule:: pygsti
-
-.. autofunction:: tracedist

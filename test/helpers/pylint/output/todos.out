@@ -1,0 +1,83 @@
+************* Module pygsti.report.results
+W: 60, 0: TODO: allow this to be passed to __init__? (fixme)
+W:1071, 0: TODO: svdTruncateTo set elegantly? (fixme)
+W:1535, 0: TODO: add this (fixme)
+W:1589, 0: TODO: tables[ref] and then tooltips? (fixme)
+W:1597, 0: TODO: tables[ref] and then tooltips? (fixme)
+W:1689, 0: TODO: add conditional tooltip string to start of caption (fixme)
+W:1766, 0: TODO: add conditional tooltip string to start of caption (fixme)
+W:1784, 0: TODO: add conditional tooltip string to start of caption (fixme)
+W:3396, 0: TODO: tables[ref] and then tooltips? (fixme)
+W:3403, 0: TODO: tables[ref] and then tooltips? (fixme)
+W:3588, 0: TODO: add conditional tooltip string to start of caption (fixme)
+W:3665, 0: TODO: add conditional tooltip string to start of caption (fixme)
+W:3683, 0: TODO: add conditional tooltip string to start of caption (fixme)
+************* Module pygsti.optimize.optimize
+W:496, 0: TODO: stopping condition (fixme)
+************* Module pygsti.drivers.bootstrap
+W:333, 0: TODO: need to add docstrings and perhaps relocate the utility functions below # (fixme)
+************* Module pygsti.drivers.longsequence
+W:195, 0: TODO: instead contract to vSPAM? (this could do more than just alter the 1st element...) (fixme)
+W:216, 0: TODO: set identity vector, or leave as is, which assumes LGST had the right one and contraction doesn't change it ?? (fixme)
+************* Module pygsti.io.stdinput
+W:402, 0: TODO - add standard count completion for 2Qubit case? (fixme)
+W:425, 0: TODO - add standard count completion for 2Qubit case? (fixme)
+W:559, 0: TODO - add standard count completion for 2Qubit case? (fixme)
+W:582, 0: TODO - add standard count completion for 2Qubit case? (fixme)
+************* Module pygsti.io.writers
+W: 62, 0: TODO: cleaner way to extract number of columns from headerString? (fixme)
+W:142, 0: TODO: make access function for gatestrings? (fixme)
+************* Module pygsti.algorithms.core
+W:139, 0: TODO: allow user to specify remainderLabel as argument? (fixme)
+W:1213, 0: TODO: Upgrade from 'plus' restricted case (fixme)
+W:2582, 0: TODO: remove?  but note this is different from the separate cases summed b/c of normalization (fixme)
+W:3183, 0: TODO: make this function more robust (fixme)
+************* Module pygsti.construction.gatesetconstruction
+W:298, 0: TODO - better way to describe leakage? (fixme)
+W:810, 0: TODO - better way to describe leakage? (fixme)
+W:933, 0: TODO: tp/static parameterization (fixme)
+************* Module pygsti.tools.basistools
+W:424, 0: TODO: should we check if the dimensions being projected out are the identity? (fixme)
+W:469, 0: TODO: there's probably a fast & slick way to so this computation (fixme)
+W:999, 0: TODO: maybe make these more general than for 1 or 2 qubits?? (fixme)
+W:1386, 0: TODO: fix noise op to depolarizing (fixme)
+************* Module pygsti.tools.chi2fns
+W:164, 0: TODO: try to replace final N[...] multiplication with dot or einsum, or do summing sooner to reduce memory (fixme)
+************* Module pygsti.tools.gatetools
+W:322, 0: TODO -- need to extract ex matrix from target_U = _spl.expm(ex) and decompose ex in terms of pauli? (fixme)
+************* Module pygsti.tools.likelihoodfns
+W:660, 0: TODO: call GateSet routine directly (fixme)
+W:736, 0: TODO: update like above (fixme)
+W:996, 0: TODO: change this function to handle nan's in the inputs without warnings, since (fixme)
+************* Module pygsti.tools.listtools
+W: 35, 0: TODO: create a special duplicate removal function for use with (fixme)
+************* Module pygsti.objects.gateset
+W:2141, 0: TODO: how to handle these given possibility of different parameterizations... (fixme)
+W:2821, 0: TODO: filter using gateLabel? (fixme)
+************* Module pygsti.objects.gate
+W: 40, 0: TODO: cleanup this code: (fixme)
+************* Module pygsti.objects.gigateset
+W:187, 0: TODO: test length L against what it should be (fixme)
+W:544, 0: TODO: maybe we divide by abs(b) before setting E_params?? (fixme)
+W:550, 0: TODO: maybe we divide by abs(b) before setting E_params?? (fixme)
+W:700, 0: TODO: maybe we divide by abs(b) before setting?? (fixme)
+W:727, 0: TODO: maybe we divide by abs(b) before setting?? (fixme)
+W:742, 0: TODO: maybe we divide by abs(b) before setting?? (fixme)
+W:757, 0: TODO: maybe we divide by abs(b) before setting?? (fixme)
+W:765, 0: TODO: maybe we divide by abs(b) before setting?? (fixme)
+W:850, 0: TODO: maybe we divide by abs(b) before setting E_params?? (fixme)
+W:936, 0: TODO: maybe we divide by abs(b) before setting?? (fixme)
+W:953, 0: TODO: maybe we divide by abs(b) before setting?? (fixme)
+W:967, 0: TODO: maybe we divide by abs(b) before setting?? (fixme)
+W:975, 0: TODO: maybe we divide by abs(b) before setting?? (fixme)
+W:992, 0: TODO: maybe we divide by abs(b) before setting?? (fixme)
+W:1001, 0: TODO: maybe we divide by abs(b) before setting?? (fixme)
+W:1035, 0: TODO: maybe we divide by abs(b) before setting E_params?? (fixme)
+W:1041, 0: TODO: maybe we divide by abs(b) before setting E_params?? (fixme)
+************* Module pygsti.objects.confidenceregion
+W: 40, 0: TODO: add "type" argument to ConfidenceRegion constructor? (fixme)
+************* Module pygsti.objects.evaltree
+W:417, 0: TODO: how to split a tree intelligently -- for now, just do (fixme)
+W:459, 0: TODO: improve tree efficiency via better splitting? (fixme)
+************* Module pygsti.objects.labeldicts
+W:230, 0: TODO: perhaps add checks that value == (prepLabel,effectLabel) labels exist (fixme)

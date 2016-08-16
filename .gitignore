@@ -1,10 +1,23 @@
 *~
 *.tmp
 *.bak
+*.swp
+*.pkl
+*.out
+*.coverage*
+*.serial
 .ipynb_checkpoints
-test/temp_test_files/*
-ipython_notebooks/Tutorials/tutorial_files
-doc/build/*.rst
+test/test_packages/temp_test_files/*
+jupyter_notebooks/Tutorials/tutorial_files
+hooks/etc/permissions.yml
+*comm_output*.txt
+
+# Test Metadata #
+#################
+test/output/*
+test/output/pylint/*
+test/output/individual_coverage/*/*
+test/test_packages/.noseids # Used in running failed tests
 
 # Compiled source #
 ###################
@@ -40,9 +53,16 @@ doc/build/*.rst
 
 # OS generated files #
 ######################
+.DS_Store
 .DS_Store?
 ehthumbs.db
 Icon?
 Thumbs.db
 .idea/
 HighImpactPaper1/texFiles/.DS_Store
+
+# Generated documentation #
+###########################
+doc/html/*
+doc/build/*.rst
+doc/build/_build/*

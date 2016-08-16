@@ -1,6 +1,0 @@
-pygsti.objects.GateSet.rotate
-=============================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: GateSet.rotate

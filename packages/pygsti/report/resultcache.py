@@ -1,13 +1,14 @@
+from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 import collections as _collections
-import numpy as _np
-import re as _re
-import sys as _sys
-import itertools as _itertools
+import re          as _re
+import itertools   as _itertools
+
+from ..objects import VerbosityPrinter
 #import warnings as _warnings
 
 class ResultCache(object):
@@ -23,13 +24,14 @@ class ResultCache(object):
         """
         Set compute functions and parent.  These items
         are *not* pickled to avoid circular pickle references, so this
-        method should be called by a parent object's _setstate_ 
+        method should be called by a parent object's _setstate_
         function.
         """
         self._computeFns = computeFns
         self._parent = parent
 
     def get(self, key, confidence_level="current",verbosity=0):
+
         """
         Retrieve the data associated with a given key, optionally
         specifying the confidence level and verbosity.
@@ -37,14 +39,14 @@ class ResultCache(object):
         Note that access via square-bracket indexing always uses
         the "current" confidence level, which is taken from the
         parent Results object, and verbosity == 0.
-        
+
         Parameters
         ----------
         key : string
            The key to retrieve
 
         confidence_level : float or None or "current"
-           The confidence level for which the value should be retrieved.  The 
+           The confidence level for which the value should be retrieved.  The
            special (and default) value "current" uses the value of the parent
            Results object.
 
@@ -55,44 +57,40 @@ class ResultCache(object):
         -------
         stored_data_item
         """
+
+        printer = VerbosityPrinter.build_printer(verbosity)
+
         if confidence_level=="current":
             level = self._parent.confidence_level if self._parent else None
         else: level = confidence_level
 
-        if self._data.has_key(level) == False:
+        if (level in self._data) == False:
             if self._get_compute_fn(key):
                 self._data[level] = _collections.OrderedDict()
             else:
                 raise KeyError("Invalid key: %s" % key)
-        
-        if self._data[level].has_key(key) == False:
+
+        if (key in self._data[level]) == False:
             computeFn = self._get_compute_fn(key)
             if computeFn:
                 try:
-                    if verbosity > 0:
-                        print "Generating %s: %s%s" % \
-                            (self._typename,key," (w/%d%% CIs)" % round(level) 
-                             if (level is not None) else "")
-                        _sys.stdout.flush()
+                    printer.log("Generating %s: %s%s" % (self._typename, key, (" (w/%d%% CIs)" % round(level) if (level is not None) else "")))
 
-                    self._data[level][key] = computeFn(key, level, verbosity)
+                    self._data[level][key] = computeFn(key, level, printer)
                 except ResultCache.NoCRDependenceError:
                     assert(level is not None)
-                    self._data[level][key] = self.get(key,None,verbosity)
+                    self._data[level][key] = self.get(key, None, printer)
             else:
                 raise KeyError("Invalid key: %s" % key)
             return self._data[level][key]
-    
+
         else:
-            if verbosity > 0:
-                print "Retrieving cached %s: %s%s" % \
-                    (self._typename,key," (w/%d%% CIs)" % round(level) 
-                     if (level is not None) else "")
-                _sys.stdout.flush()
+            printer.log("Retrieving cached %s: %s%s" % (self._typename, key, (" (w/%d%% CIs)" % round(level) if (level is not None) else "")))
+
             return self._data[level][key]
 
     def _get_compute_fn(self, key):
-        for expr,(computeFn, validateFn) in self._computeFns.iteritems():
+        for expr,(computeFn, validateFn) in self._computeFns.items():
             if _re.match(expr, key) and len(validateFn(key)) > 0:
                 return computeFn
         return None
@@ -104,13 +102,13 @@ class ResultCache(object):
         raise ValueError("ResultCache objects are read-only")
 
     def _compute_keys(self):
-        #Passing the computeFn key "expr" to it's corresponding 
+        #Passing the computeFn key "expr" to it's corresponding
         # validation function returns a list of all the computable
         # keys matching that expression, which by definition are all
         # the keys possibly computed by the given compute function.
-        return list(_itertools.chain( 
-            *[ validateFn(expr) for expr,(computeFn, validateFn) 
-              in self._computeFns.iteritems() ] ))
+        return list(_itertools.chain(
+            *[ validateFn(expr) for expr,(computeFn, validateFn)
+              in self._computeFns.items() ] ))
 
     def __iter__(self):
         #return self.dataset.slIndex.__iter__() #iterator over spam labels
@@ -155,4 +153,3 @@ class ResultCache(object):
         confidence level changes
         """
         pass
-

@@ -1,0 +1,382 @@
+************* Module pygsti.objects.labeldicts
+R:  1, 0: Similar lines in 2 files
+==pygsti.objects.gate:331
+==pygsti.objects.spamvec:208
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this SPAM vector.
+        Zero in the case of StaticSPAMVec.
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return 0 #no parameters
+
+
+    def to_vector(self):
+        """
+        Get the SPAM vector parameters as an array of values.  An empty
+        array in the case of StaticSPAMVec.
+
+        Returns
+        -------
+        numpy array
+            The parameters as a 1D array with length num_params().
+        """
+        return _np.array([], 'd') #no parameters
+
+
+    def from_vector(self, v):
+        """
+        Initialize the SPAM vector using a 1D array of parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params()
+
+        Returns
+        -------
+        None
+        """
+        assert(len(v) == 0) #should be no parameters, and nothing to do
+
+ (duplicate-code)
+R:  1, 0: Similar lines in 2 files
+==pygsti.objects.protectedarray:39
+==pygsti.objects.spamvec:104
+    def __pos__(self):        return self.base
+    def __neg__(self):        return -self.base
+    def __abs__(self):        return abs(self.base)
+    def __add__(self,x):      return self.base + x
+    def __radd__(self,x):     return x + self.base
+    def __sub__(self,x):      return self.base - x
+    def __rsub__(self,x):     return x - self.base
+    def __mul__(self,x):      return self.base * x
+    def __rmul__(self,x):     return x * self.base
+    def __truediv__(self, x):  return self.base / x
+    def __rtruediv__(self, x): return x / self.base
+    def __floordiv__(self,x):  return self.base // x
+    def __rfloordiv__(self,x): return x // self.base
+    def __pow__(self,x):      return self.base ** x
+    def __eq__(self,x):       return self.base == x
+    def __len__(self):        return len(self.base)
+    def __int__(self):        return int(self.base)
+    def __long__(self):       return int(self.base)
+    def __float__(self):      return float(self.base)
+    def __complex__(self):    return complex(self.base)
+
+ (duplicate-code)
+R:  1, 0: Similar lines in 2 files
+==pygsti.report.latex:202
+==pygsti.report.ppt:194
+                    s = "%se^{%s}" % (render(r),ex)
+                else:
+                    s = "%s%s%si" % (render(el.real),'+' if el.imag > 0 else '-', render(abs(el.imag)))
+            else:
+                s = "%s" % render(el.real)
+        else:
+            if abs(el.imag) > TOL:
+                s = "%si" % render(el.imag)
+            else:
+                s = "0"
+    except:
+        #try:
+        #    if abs(el) > TOL: #throws error if el is not a number
+        #        s = "%s" % render(el.real)
+        #    else:
+        #        s = "0"
+        #except:
+        s = str(el)
+
+    return s
+
+ (duplicate-code)
+R:  1, 0: Similar lines in 3 files
+==pygsti.report.html:212
+==pygsti.report.latex:203
+==pygsti.report.ppt:195
+                else:
+                    s = "%s%s%si" % (render(el.real),'+' if el.imag > 0 else '-', render(abs(el.imag)))
+            else:
+                s = "%s" % render(el.real)
+        else:
+            if abs(el.imag) > TOL:
+                s = "%si" % render(el.imag)
+            else:
+                s = "0"
+    except:
+        #try:
+        #    if abs(el) > TOL: #throw exception if el is not a number
+        #        s = "%s" % render(el.real)
+        #    else:
+        #        s = "0"
+        #except:
+        s = str(el)
+
+    return s
+
+ (duplicate-code)
+R:  1, 0: Similar lines in 2 files
+==pygsti.report.html:174
+==pygsti.report.ppt:158
+    TOL = 1e-9  #tolerance for printing zero values
+
+    def render(x):
+        if abs(x) < 5*10**(-(ROUND+1)):
+            s = "%.0e" % x # one significant figure
+        elif abs(x) < 1:
+            s = "%.*f" % (ROUND,x)
+        elif abs(x) <= 10**ROUND:
+            s = "%.*f" % (ROUND-int(_np.log10(abs(x))),x)  #round to get ROUND digits when x is < 1
+            #str(round(x,ROUND))  #OLD
+        else:
+            s = "%.0e" % x # one significant figure
+
+        #Fix scientific notition
+        p = s.split('e')
+        if len(p) == 2:
+            ex = str(int(p[1])) #exponent without extras (e.g. +04 => 4) (duplicate-code)
+R:  1, 0: Similar lines in 2 files
+==pygsti.report.latex:185
+==pygsti.report.ppt:178
+        if "." in s:
+            while s.endswith("0"): s = s[:-1]
+            if s.endswith("."): s = s[:-1]
+        return s
+
+    if type(el) == str: return el
+    if type(el) in (int,_np.int64):
+        return "%d" % el
+    if el is None or _np.isnan(el): return "--"
+
+    try:
+        if abs(el.real) > TOL:
+            if abs(el.imag) > TOL:
+                if complexAsPolar:
+                    r,phi = cmath.polar(el) (duplicate-code)
+R:  1, 0: Similar lines in 3 files
+==pygsti.report.html:176
+==pygsti.report.latex:167
+==pygsti.report.ppt:160
+    def render(x):
+        if abs(x) < 5*10**(-(ROUND+1)):
+            s = "%.0e" % x # one significant figure
+        elif abs(x) < 1:
+            s = "%.*f" % (ROUND,x)
+        elif abs(x) <= 10**ROUND:
+            s = "%.*f" % (ROUND-int(_np.log10(abs(x))),x)  #round to get ROUND digits when x is > 1
+            #str(round(x,ROUND))  #OLD
+        else:
+            s = "%.0e" % x # one significant figure
+
+        #Fix scientific notition
+        p = s.split('e')
+        if len(p) == 2:
+            ex = str(int(p[1])) #exponent without extras (e.g. +04 => 4) (duplicate-code)
+R:  1, 0: Similar lines in 2 files
+==pygsti.algorithms.fiducialselection:514
+==pygsti.algorithms.germselection:405
+          bFoundBetterNeighbor = False
+          for neighborNum, neighbor in enumerate(get_neighbors(weights)):
+              if tuple(neighbor) not in scoreD_keys:
+                  neighborL1 = sum(neighbor)
+                  neighborScore = compute_score(neighbor)
+              else:
+                  neighborL1 = sum(neighbor)
+                  neighborScore = scoreD[tuple(neighbor)]
+
+              #Move if we've found better position; if we've relaxed, we only move when L1 is improved.
+              if neighborScore <= score and (neighborL1 < L1 or lessWeightOnly == False):
+                  weights, score, L1 = neighbor, neighborScore, neighborL1
+                  bFoundBetterNeighbor = True (duplicate-code)
+R:  1, 0: Similar lines in 2 files
+==pygsti.objects.gate:205
+==pygsti.objects.spamvec:86
+    def __getitem__( self, key ):
+        return self.base.__getitem__(key)
+
+    def __getslice__(self, i,j):
+        return self.__getitem__(slice(i,j)) #Called for A[:]
+
+    def __setitem__(self, key, val):
+        return self.base.__setitem__(key,val)
+
+    def __getattr__(self, attr):
+        #use __dict__ so no chance for recursive __getattr__
+        ret = getattr(self.__dict__['base'],attr) (duplicate-code)
+R:  1, 0: Similar lines in 2 files
+==pygsti.objects.dataset:600
+==pygsti.objects.multidataset:348
+        bOpen = not (hasattr(fileOrFilename, 'write'))
+        if bOpen:
+            if fileOrFilename.endswith(".gz"):
+                import gzip as _gzip
+                f = _gzip.open(fileOrFilename,"rb")
+            else:
+                f = open(fileOrFilename,"rb")
+        else:
+            f = fileOrFilename
+
+        state_dict = _pickle.load(f)
+        def expand(x): #to be backward compatible (duplicate-code)
+R:  1, 0: Similar lines in 2 files
+==pygsti.objects.dataset:567
+==pygsti.objects.multidataset:321
+        bOpen = not (hasattr(fileOrFilename, 'write'))
+        if bOpen:
+            if fileOrFilename.endswith(".gz"):
+                import gzip as _gzip
+                f = _gzip.open(fileOrFilename,"wb")
+            else:
+                f = open(fileOrFilename,"wb")
+        else:
+            f = fileOrFilename
+
+        _pickle.dump(toPickle,f) (duplicate-code)
+R:  1, 0: Similar lines in 2 files
+==pygsti.report.html:200
+==pygsti.report.ppt:183
+    if type(el) == str: return el
+    if type(el) in (int,_np.int64):
+        return "%d" % el
+    if el is None or _np.isnan(el): return "--"
+
+    try:
+        if abs(el.real) > TOL:
+            if abs(el.imag) > TOL:
+                if complexAsPolar:
+                    r,phi = cmath.polar(el)
+                    ex = ("i%.1f" % phi) if phi >= 0 else ("-i%.1f" % -phi) (duplicate-code)
+R:  1, 0: Similar lines in 2 files
+==pygsti.objects.dataset:179
+==pygsti.objects.multidataset:101
+            self.load(fileToLoadFrom)
+            return
+
+        # self.gsIndex  :  Ordered dictionary where keys = gate strings (tuples), values = integer indices into counts
+        if gateStringIndices is not None:
+            self.gsIndex = gateStringIndices
+        elif gateStrings is not None:
+            dictData = [ (gs if isinstance(gs,_gs.GateString) else _gs.GateString(gs),i) \
+                           for (i,gs) in enumerate(gateStrings) ] #convert to GateStrings if necessary
+            self.gsIndex = _OrderedDict( dictData ) (duplicate-code)
+R:  1, 0: Similar lines in 2 files
+==pygsti.report.html:200
+==pygsti.report.latex:190
+    if type(el) == str: return el
+    if type(el) in (int,_np.int64):
+        return "%d" % el
+    if el is None or _np.isnan(el): return "--"
+
+    try:
+        if abs(el.real) > TOL:
+            if abs(el.imag) > TOL:
+                if complexAsPolar:
+                    r,phi = cmath.polar(el) (duplicate-code)
+R:  1, 0: Similar lines in 2 files
+==pygsti.algorithms.fiducialselection:537
+==pygsti.algorithms.germselection:428
+              assert(slack > 0)
+
+              printer.log("No better neighbor. Relaxing score w/slack: %g => %g" % (score, score+slack), 2)
+              score += slack #artificially increase score and see if any neighbor is better now...
+
+              for neighborNum, neighbor in enumerate(get_neighbors(weights)):
+                  if sum(neighbor) < L1 and scoreD[tuple(neighbor)] < score:
+                      weights, score, L1 = neighbor, scoreD[tuple(neighbor)], sum(neighbor)
+                      bFoundBetterNeighbor = True (duplicate-code)
+R:  1, 0: Similar lines in 2 files
+==pygsti.construction.rpeconstruction:403
+==pygsti.tools.rpetools:341
+                                                  returnPhiFunList=True)
+    for alphaTemp1 in alphaHatList:
+        alphaErrorList.append(abs(alphaTrue - alphaTemp1))
+    for epsilonTemp1 in epsilonHatList:
+        epsilonErrorList.append(abs(epsilonTrue - epsilonTemp1))
+#        print abs(_np.pi/2-abs(alphaTemp1))
+    for thetaTemp1 in thetaHatList:
+        thetaErrorList.append(abs(thetaTrue - thetaTemp1)) (duplicate-code)
+R:  1, 0: Similar lines in 2 files
+==pygsti.algorithms.fiducialselection:548
+==pygsti.algorithms.germselection:439
+              if not bFoundBetterNeighbor: #Relaxing didn't help!
+                  printer.log("Stationary point found!");
+                  break #end main for loop
+
+          printer.log("Moving to better neighbor")
+      else:
+          printer.log("Hit max. iterations")
+ (duplicate-code)
+R:  1, 0: Similar lines in 2 files
+==pygsti.optimize.customcg:127
+==pygsti.optimize.optimize:222
+        solution.success = True
+    else:
+        solution.success = False
+        solution.message = "Maximum iterations exceeded"
+    return solution
+
+
+# Minimize g(s), given (s1,g1=g(s1)) as a starting point and guess, s2 for minimum (duplicate-code)
+R:  1, 0: Similar lines in 2 files
+==pygsti.algorithms.fiducialselection:494
+==pygsti.algorithms.germselection:386
+            v = boolVec.copy()
+            v[i] = (v[i] + 1) % 2 #toggle v[i] btwn 0 and 1
+            yield v
+
+    if initialWeights is not None:
+        weights = _np.array( [1 if x else 0 for x in initialWeights ] )
+    else: (duplicate-code)
+R:  1, 0: Similar lines in 3 files
+==pygsti.report.html:33
+==pygsti.report.latex:32
+==pygsti.report.ppt:31
+    if isinstance(x,_np.ndarray) or \
+       isinstance(x,_objs.Gate) or \
+       isinstance(x,_objs.SPAMVec):
+        d = 0
+        for l in x.shape:
+            if l > 1: d += 1
+        x = _np.squeeze(x) (duplicate-code)
+R:  1, 0: Similar lines in 2 files
+==pygsti.objects.gscalc:978
+==pygsti.tools.likelihoodfns:682
+        if comm is None:
+            nprocs, rank = 1, 0
+        else:
+            nprocs = comm.Get_size()
+            rank = comm.Get_rank()
+ (duplicate-code)
+R:  1, 0: Similar lines in 3 files
+==pygsti.algorithms.core:1001
+==pygsti.algorithms.core:1966
+==pygsti.tools.chi2fns:121
+    if memLimit is not None and memLimit < intermedMem:
+        reductionFactor = float(intermedMem) / float(memLimit)
+        maxEvalSubTreeSize = int(ng / reductionFactor)
+    else:
+        maxEvalSubTreeSize = None
+ (duplicate-code)
+R:  1, 0: Similar lines in 2 files
+==pygsti.optimize.customcg:127
+==pygsti.optimize.optimize:292
+                solution.success = True
+            else:
+                solution.success = False
+                solution.message = "Maximum iterations exceeded"
+            return solution
+ (duplicate-code)
+R:  1, 0: Similar lines in 2 files
+==pygsti.report.html:133
+==pygsti.report.ppt:123
+    ROUND = 4
+    lines = [ ]; prefix = ""
+    if fontsize is not None:
+        prefix += "" #unsupported currently
+
+    for r in range(m.shape[0]): (duplicate-code)

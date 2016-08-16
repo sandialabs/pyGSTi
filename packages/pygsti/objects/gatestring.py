@@ -1,7 +1,8 @@
+from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ Defines the GateString class and derived classes which represent gate strings."""
 
@@ -12,9 +13,9 @@ def _gateSeqToStr(seq):
     return ''.join(seq)
 
 class GateString(object):
-    """ 
+    """
     Encapsulates a gate string as a tuple of gate labels associated
-    with a string representation for that tuple.  
+    with a string representation for that tuple.
 
     Typically there are multiple string representations for the same tuple (for
     example "GxGx" and "Gx^2" both correspond to the tuple ("Gx","Gx") ) and it
@@ -26,8 +27,8 @@ class GateString(object):
     """
 
     def __init__(self, tupleOfGateLabels, stringRepresentation=None, bCheck=True):
-        """ 
-        Create a new GateString object 
+        """
+        Create a new GateString object
 
         Parameters
         ----------
@@ -35,7 +36,7 @@ class GateString(object):
             A tuple of gate labels specifying the gate sequence, or None if the
             sequence should be obtained by evaluating stringRepresentation as
             a standard-text-format gate string (e.g. "GxGy", "Gx(Gy)^2, or "{}").
-            
+
         stringRepresentation : string, optional
             A string representation of this GateString.
 
@@ -43,7 +44,7 @@ class GateString(object):
             If true, raise ValueEror if stringRepresentation does not evaluate
             to tupleOfGateLabels.
         """
-        
+
         if tupleOfGateLabels is None and stringRepresentation is None:
             raise ValueError("tupleOfGateLabels and stringRepresentation cannot both be None");
 
@@ -58,13 +59,13 @@ class GateString(object):
                              % (tuple(tupleOfGateLabels),stringRepresentation))
 
         # if tupleOfGateLabels is a GateString, then copy it
-        if isinstance(tupleOfGateLabels, GateString): 
+        if isinstance(tupleOfGateLabels, GateString):
             self.tup = tupleOfGateLabels.tup
             if stringRepresentation is None:
                 self.str = tupleOfGateLabels.str
             else:
                 self.str = stringRepresentation
-            
+
         else:
             if stringRepresentation is None:
                 stringRepresentation = _gateSeqToStr( tupleOfGateLabels )
@@ -77,20 +78,20 @@ class GateString(object):
         """
         Convert this gate string into a python string, where each gate label is
         represented as a **single** character, starting with 'A' and contining
-        down the alphabet.  This can be useful for processing gate strings 
+        down the alphabet.  This can be useful for processing gate strings
         using python's string tools (regex in particular).
-    
+
         Parameters
         ----------
         gateLabels : tuple
            tuple containing all the gate labels that will be mapped to alphabet
            characters, beginning with 'A'.
-    
+
         Returns
         -------
         string
             The converted gate string.
-        
+
         Examples
         --------
             ('Gx','Gx','Gy','Gx') => "AABA"
@@ -101,28 +102,28 @@ class GateString(object):
             translateDict[gateLabel] = c
             c = chr(ord(c) + 1)
         return "".join([ translateDict[gateLabel] for gateLabel in self.tup ])
-    
+
     @classmethod
     def from_pythonstr(cls,pythonString,gateLabels):
         """
         Create a GateString from a python string where each gate label is
         represented as a **single** character, starting with 'A' and contining
         down the alphabet.  This performs the inverse of to_pythonstr(...).
-    
+
         Parameters
         ----------
         pythonString : string
             string whose individual characters correspond to the gate labels of a
             gate string.
-    
+
         gateLabels : tuple
            tuple containing all the gate labels that will be mapped to alphabet
            characters, beginning with 'A'.
-    
+
         Returns
         -------
         GateString
-    
+
         Examples
         --------
             "AABA" => ('Gx','Gx','Gy','Gx')
@@ -192,23 +193,23 @@ class GateString(object):
     def __setitem__(self, key, value):
         raise ValueError("Cannot set elements of GateString tuple (they're read-only)")
 
-    
+
 
 class WeightedGateString(GateString):
-    """ 
+    """
     A GateString that contains an additional "weight" member used for
-    building up weighted lists of gate strings.  
+    building up weighted lists of gate strings.
 
     When two WeightedGateString objects are added together their weights
     add, and when a WeightedGateString object is multiplied by an integer
-    (equivalent to being raised to a power) the weight is unchanged. When 
-    added to plain GateString objects, the plain GateString object is 
+    (equivalent to being raised to a power) the weight is unchanged. When
+    added to plain GateString objects, the plain GateString object is
     treated as having zero weight and the result is another WeightedGateString.
     """
 
     def __init__(self,tupleOfGateLabels, stringRepresentation=None, weight=1.0, bCheck=True):
-        """ 
-        Create a new WeightedGateString object 
+        """
+        Create a new WeightedGateString object
 
         Parameters
         ----------
@@ -216,7 +217,7 @@ class WeightedGateString(GateString):
             A tuple of gate labels specifying the gate sequence, or None if the
             sequence should be obtained by evaluating stringRepresentation as
             a standard-text-format gate string (e.g. "GxGy", "Gx(Gy)^2, or "{}").
-            
+
         stringRepresentation : string, optional
             A string representation of this WeightedGateString.
 
@@ -262,20 +263,20 @@ class WeightedGateString(GateString):
 
 
 class CompressedGateString(object):
-    """ 
+    """
     A "compressed" GateString class which reduces the memory or disk space
-    required to hold the tuple part of a GateString by compressing it. 
+    required to hold the tuple part of a GateString by compressing it.
 
     One place where CompressedGateString objects can be useful is when saving
     large lists of long gate sequences in some non-human-readable format (e.g.
-    pickle).  CompressedGateString objects *cannot* be used in place of 
+    pickle).  CompressedGateString objects *cannot* be used in place of
     GateString objects within pyGSTi, and so are *not* useful when manipulating
     and running algorithms which use gate sequences.
     """
 
     def __init__(self, gatestring, minLenToCompress=20, maxPeriodToLookFor=20):
-        """ 
-        Create a new CompressedGateString object 
+        """
+        Create a new CompressedGateString object
 
         Parameters
         ----------
@@ -286,7 +287,7 @@ class CompressedGateString(object):
         minLenToCompress : int, optional
             The minimum length string to compress.  If len(gatestring)
             is less than this amount its tuple is returned.
-            
+
         maxPeriodToLookFor : int, optional
             The maximum period length to use when searching for periodic
             structure within gatestring.  Larger values mean the method
@@ -313,11 +314,11 @@ class CompressedGateString(object):
     def _getNumPeriods(gateString, periodLen):
         n = 0
         if len(gateString) < periodLen: return 0
-        while gateString[0:periodLen] == gateString[n*periodLen:(n+1)*periodLen]: 
+        while gateString[0:periodLen] == gateString[n*periodLen:(n+1)*periodLen]:
             n += 1
         return n
-        
-        
+
+
     @staticmethod
     def compress_gate_label_tuple(gateString, minLenToCompress=20, maxPeriodToLookFor=20):
         """
@@ -325,21 +326,21 @@ class CompressedGateString(object):
         gate-string form form that is not useable by other GST methods but is
         typically shorter (especially for long gate strings with a repetative
         structure) than the original gate string tuple.
-    
+
         Parameters
         ----------
         gateString : tuple of gate labels or GateString
             The gate string to compress.
-    
+
         minLenToCompress : int, optional
             The minimum length string to compress.  If len(gateString)
             is less than this amount its tuple is returned.
-            
+
         maxPeriodToLookFor : int, optional
             The maximum period length to use when searching for periodic
             structure within gateString.  Larger values mean the method
             takes more time but could result in better compressing.
-    
+
         Returns
         -------
         tuple
@@ -372,7 +373,7 @@ class CompressedGateString(object):
             else:
                 compressed.append( (bestPeriod, n) )
             start = start+bestPeriodLen*n
-                
+
         return tuple(compressed)
 
     @staticmethod
@@ -380,25 +381,25 @@ class CompressedGateString(object):
         """
         Expand a compressed tuple created with compress_gate_label_tuple(...)
         into a tuple of gate labels.
-    
+
         Parameters
         ----------
         compressedGateString : tuple
             a tuple in the compressed form created by
             compress_gate_label_tuple(...).
-    
+
         Returns
         -------
         tuple
             A tuple of gate labels specifying the uncompressed gate string.
         """
-        
+
         if len(compressedGateString) == 0: return ()
         if compressedGateString[0] != "CCC": return compressedGateString
         expandedString = []
         for (period,n) in compressedGateString[1:]:
             expandedString += period*n
-        return tuple(expandedString)    
+        return tuple(expandedString)
 
 
 
@@ -408,4 +409,3 @@ class CompressedGateString(object):
 #    gs = GateString(('Gx',) )
 #    print ((gs + wgs)*2).weight
 #    print (wgs + gs).weight
-

@@ -1,26 +1,27 @@
+from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """Functions related to computation of the log-likelihood."""
 
 import numpy as _np
 import warnings as _warnings
-import time as _time
-import basistools as _bt
-import jamiolkowski as _jam
+#import time as _time
+from . import basistools as _bt
+from . import jamiolkowski as _jam
 
 TOL = 1e-20
 
-import sys #DEBUG TIMER
+#import sys #DEBUG TIMER
 
 # Functions for computing the log liklihood function and its derivatives
 
 def create_count_vec_dict(spamLabels, dataset, gatestring_list):
     """
     Create a count-vector dictionary that is useful for speeding up multiple
-    evaluations of logl(...).   The returned dictionary has keys that are 
+    evaluations of logl(...).   The returned dictionary has keys that are
     spam labels and values that are numpy vectors containing the dataset counts
     for that spam label for each gate string in gatestring_list.
 
@@ -63,7 +64,7 @@ def fill_count_vecs(mxToFill, spam_label_rows, dataset, gatestring_list):
         to the number of gate strings (lenght of gatestring_list).
 
     spam_label_rows : dictionary
-        a dictionary with keys == spam labels and values which 
+        a dictionary with keys == spam labels and values which
         are integer row indices into mxToFill, specifying the
         correspondence between rows of mxToFill and spam labels.
 
@@ -79,7 +80,7 @@ def fill_count_vecs(mxToFill, spam_label_rows, dataset, gatestring_list):
     -------
     None
     """
-    for spamLabel,iRow in spam_label_rows.iteritems():
+    for spamLabel,iRow in spam_label_rows.items():
         mxToFill[iRow,:] = [ dataset[gs][spamLabel] for gs in gatestring_list ]
 
 
@@ -88,8 +89,8 @@ def fill_count_vecs(mxToFill, spam_label_rows, dataset, gatestring_list):
  # The log(Likelihood) within the standard (non-Poisson) picture is:
  #
  # L = prod_{i,sl} p_{i,sl}^N_{i,sl}
- # 
- # Where i indexes the gate string, and sl indexes the spam label.  N[i] is the total counts 
+ #
+ # Where i indexes the gate string, and sl indexes the spam label.  N[i] is the total counts
  #  for the i-th gatestring, and so sum_{sl} N_{i,sl} == N[i]. We can take the log:
  #
  # log L = sum_{i,sl} N_{i,sl} log(p_{i,sl})
@@ -119,19 +120,19 @@ def fill_count_vecs(mxToFill, spam_label_rows, dataset, gatestring_list):
  # description when the probabilities (for a given gate string) may not sum to one, by
  # interpreting them each as rates.  In the standard picture, large gatestring probabilities
  # are not penalized (each standard logL term increases monotonically with each probability,
- # and the reason this is ok when the probabilities sum to one is that for a probabilility 
+ # and the reason this is ok when the probabilities sum to one is that for a probabilility
  # that gets close to 1, there's another that is close to zero, and logL is very negative
  # near zero.
 
  # The log(Likelihood) within the Poisson picture is:
  #
  # L = prod_{i,sl} lambda_{i,sl}^N_{i,sl} e^{-lambda_{i,sl}} / N_{i,sl}!
- # 
+ #
  # Where lamba_{i,sl} := p_{i,sl}/N[i] is a rate, i indexes the gate string,
  #  and sl indexes the spam label.  N[i] is the total counts for the i-th gatestring, and
  #  so sum_{sl} N_{i,sl} == N[i]. We can ignore the p-independent N_j! and take the log:
  #
- # log L = sum_{i,sl} N_{i,sl} log(N[i]*p_{i,sl}) - N[i]*p_{i,sl} 
+ # log L = sum_{i,sl} N_{i,sl} log(N[i]*p_{i,sl}) - N[i]*p_{i,sl}
  #       = sum_{i,sl} N_{i,sl} log(p_{i,sl}) - N[i]*p_{i,sl}   (where we ignore the p-independent log(N[i]) terms)
  #
  #   after patching (linear extrapolation below min_p and "softening" f == 0 terms w/cubit below radius "a"):
@@ -149,7 +150,7 @@ def fill_count_vecs(mxToFill, spam_label_rows, dataset, gatestring_list):
  # hlogL = sum_{i,sl} -N_{i,sl} / p_{i,sl}**2 * dp1 * dp2 + [ N_{i,sl} / p_{i,sl} - N[i] ]*hp      if p_{i,sl} >= min_p and N_{i,sl} > 0
  #                    2*S2* dp1 * dp2 + (S + 2*S2*(p_{i,sl} - min_p)) * hp                         if p_{i,sl} < p_min and N_{i,sl} > 0
  #                    -N[i] * hp                                                                   if N_{i,sl} == 0 and p_{i,sl} >= a
- #                    -N[i]*( (-2/a**2)p_{i,sl} + 2/a ) * dp1 * dp2 
+ #                    -N[i]*( (-2/a**2)p_{i,sl} + 2/a ) * dp1 * dp2
  #                        - N[i]*( (-1/a**2)p_{i,sl}**2 + 2*p_{i,sl}/a ) * hp                      if N_{i,sl} == 0 and p_{i,sl} < a
  #
  #  where S = N_{i,sl} / min_p - N[i] is the slope of the line tangent to logl at min_p
@@ -166,8 +167,8 @@ def fill_count_vecs(mxToFill, spam_label_rows, dataset, gatestring_list):
 
 
 
-def logl(gateset, dataset, gatestring_list=None, 
-         minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4, 
+def logl(gateset, dataset, gatestring_list=None,
+         minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
          evalTree=None, countVecMx=None, poissonPicture=True, check=False):
     """
     The log-likelihood function.
@@ -176,7 +177,7 @@ def logl(gateset, dataset, gatestring_list=None,
     ----------
     gateset : GateSet
         Gateset of parameterized gates
-    
+
     dataset : DataSet
         Probability data
 
@@ -184,7 +185,7 @@ def logl(gateset, dataset, gatestring_list=None,
         Each element specifies a gate string to include in the log-likelihood
         sum.  Default value of None implies all the gate strings in dataset
         should be used.
-  
+
     minProbClip : float, optional
         The minimum probability treated normally in the evaluation of the log-likelihood.
         A penalty function replaces the true log-likelihood for probabilities that lie
@@ -226,7 +227,7 @@ def logl(gateset, dataset, gatestring_list=None,
     """
 
     if gatestring_list is None:
-        gatestring_list = dataset.keys()
+        gatestring_list = list(dataset.keys())
 
     spamLabels = gateset.get_spam_labels() #this list fixes the ordering of the spam labels
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
@@ -240,10 +241,10 @@ def logl(gateset, dataset, gatestring_list=None,
 
     #freqs = countVecMx / totalCntVec[None,:]
     #freqs_nozeros = _np.where(countVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
-    #freqTerm = countVecMx * ( _np.log(freqs_nozeros) - 1.0 ) 
+    #freqTerm = countVecMx * ( _np.log(freqs_nozeros) - 1.0 )
     #freqTerm[ countVecMx == 0 ] = 0.0 # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
 
-    a = radius # parameterizes "roundness" of f == 0 terms 
+    a = radius # parameterizes "roundness" of f == 0 terms
     min_p = minProbClip
 
     if evalTree is None:
@@ -251,7 +252,7 @@ def logl(gateset, dataset, gatestring_list=None,
 
     gateset.bulk_fill_probs(probs, spam_lbl_rows, evalTree, probClipInterval, check)
     pos_probs = _np.where(probs < min_p, min_p, probs)
-    
+
     if poissonPicture:
         S = countVecMx / min_p - totalCntVec[None,:] # slope term that is derivative of logl at min_p
         S2 = -0.5 * countVecMx / (min_p**2)          # 2nd derivative of logl term at min_p
@@ -260,7 +261,7 @@ def logl(gateset, dataset, gatestring_list=None,
         v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
         v = _np.where( countVecMx == 0, -totalCntVec[None,:] * _np.where(probs >= a, probs, (-1.0/(3*a**2))*probs**3 + probs**2/a + a/3.0), v)
            #special handling for f == 0 poissonPicture terms using quadratic rounding of function with minimum: max(0,(a-p))^2/(2a) + p
-        
+
     else: #(the non-poisson picture requires that the probabilities of the spam labels for a given string are constrained to sum to 1)
         S = countVecMx / min_p               # slope term that is derivative of logl at min_p
         S2 = -0.5 * countVecMx / (min_p**2)  # 2nd derivative of logl term at min_p
@@ -280,9 +281,9 @@ def logl(gateset, dataset, gatestring_list=None,
 
 
 
-    
-def logl_jacobian(gateset, dataset, gatestring_list=None, 
-                  minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4, 
+
+def logl_jacobian(gateset, dataset, gatestring_list=None,
+                  minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
                   evalTree=None, countVecMx=None, poissonPicture=True, check=False):
     """
     The jacobian of the log-likelihood function.
@@ -291,9 +292,9 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
     ----------
     gateset : GateSet
         Gateset of parameterized gates (including SPAM)
-    
+
     dataset : DataSet
-        Probability data 
+        Probability data
 
     gatestring_list : list of (tuples or GateStrings), optional
         Each element specifies a gate string to include in the log-likelihood
@@ -318,17 +319,17 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
         given by a prior call to bulk_evaltree for the same gatestring_list.
         Significantly speeds up evaluation of log-likelihood derivatives, even
         more so when accompanied by countVecMx (see below).  Defaults to None.
-    
+
     countVecMx : numpy array, optional
       Two-dimensional numpy array whose rows correspond to the gate's spam
       labels (i.e. gateset.get_spam_labels()).  Each row is  contains the
       dataset counts for that spam label for each gate string in gatestring_list.
       Use fill_count_vecs(...) to generate this quantity once for multiple
       evaluations of the log-likelihood function which use the same dataset.
-        
+
     poissonPicture : boolean, optional
         Whether the Poisson-picutre log-likelihood should be differentiated.
-    
+
     check : boolean, optional
         If True, perform extra checks within code to verify correctness.  Used
         for testing, and runs much slower when True.
@@ -343,7 +344,7 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
     jac = _np.zeros([1,nP])
 
     if gatestring_list is None:
-        gatestring_list = dataset.keys()
+        gatestring_list = list(dataset.keys())
 
     spamLabels = gateset.get_spam_labels() #this list fixes the ordering of the spam labels
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
@@ -351,24 +352,24 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
     if countVecMx is None:
         countVecMx = _np.empty( (len(spamLabels),len(gatestring_list)), 'd' )
         fill_count_vecs(countVecMx, spam_lbl_rows, dataset, gatestring_list)
-        
+
     probs = _np.empty( (len(spamLabels),len(gatestring_list)), 'd' )
     dprobs = _np.empty( (len(spamLabels),len(gatestring_list),nP), 'd' )
     totalCntVec = _np.sum(countVecMx, axis=0)
 
     #freqs = cntVecMx / totalCntVec[None,:]
     #freqs_nozeros = _np.where(cntVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
-    #freqTerm = cntVecMx * ( _np.log(freqs_nozeros) - 1.0 ) 
+    #freqTerm = cntVecMx * ( _np.log(freqs_nozeros) - 1.0 )
     #freqTerm[ cntVecMx == 0 ] = 0.0 # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
     #minusCntVecMx = -1.0 * cntVecMx
 
-    a = radius # parameterizes "roundness" of f == 0 terms 
+    a = radius # parameterizes "roundness" of f == 0 terms
     min_p = minProbClip
 
     if evalTree is None:
         evalTree = gateset.bulk_evaltree(gatestring_list)
 
-    gateset.bulk_fill_dprobs(dprobs, spam_lbl_rows, evalTree, 
+    gateset.bulk_fill_dprobs(dprobs, spam_lbl_rows, evalTree,
                             prMxToFill=probs, clipTo=probClipInterval, check=check)
 
     pos_probs = _np.where(probs < min_p, min_p, probs)
@@ -389,7 +390,7 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
         dprobs_factor = _np.where( countVecMx == 0, dprobs_factor_zerofreq, dprobs_factor )
         jac = dprobs * dprobs_factor[:,:,None] # (K,M,N) * (K,M,1)   (N = dim of vectorized gateset)
 
-        
+
     else: #(the non-poisson picture requires that the probabilities of the spam labels for a given string are constrained to sum to 1)
         S = countVecMx / min_p              # slope term that is derivative of logl at min_p
         S2 = -0.5 * countVecMx / (min_p**2) # 2nd derivative of logl term at min_p
@@ -408,8 +409,8 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
     return _np.sum(jac, axis=(0,1)) # sum over spam label and gate string dimensions
 
 
-def logl_hessian(gateset, dataset, gatestring_list=None, 
-                 minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4, 
+def logl_hessian(gateset, dataset, gatestring_list=None,
+                 minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
                  evalTree=None, countVecMx=None, poissonPicture=True,
                  check=False, comm=None, memLimit=None):
     """
@@ -419,9 +420,9 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
     ----------
     gateset : GateSet
         Gateset of parameterized gates (including SPAM)
-    
+
     dataset : DataSet
-        Probability data 
+        Probability data
 
     gatestring_list : list of (tuples or GateStrings), optional
         Each element specifies a gate string to include in the log-likelihood
@@ -435,7 +436,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
         optimizer performance).
 
     probClipInterval : 2-tuple or None, optional
-        (min,max) values used to clip the probabilities predicted by 
+        (min,max) values used to clip the probabilities predicted by
         gatesets during MLEGST's search for an optimal gateset (if not None).
         if None, no clipping is performed.
 
@@ -447,17 +448,17 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
         given by a prior call to bulk_evaltree for the same gatestring_list.
         Significantly speeds up evaluation of log-likelihood derivatives, even
         more so when accompanied by countVecMx (see below).  Defaults to None.
-    
+
     countVecMx : numpy array, optional
       Two-dimensional numpy array whose rows correspond to the gate's spam
       labels (i.e. gateset.get_spam_labels()).  Each row is  contains the
       dataset counts for that spam label for each gate string in gatestring_list.
       Use fill_count_vecs(...) to generate this quantity once for multiple
       evaluations of the log-likelihood function which use the same dataset.
-        
+
     poissonPicture : boolean, optional
         Whether the Poisson-picutre log-likelihood should be differentiated.
-    
+
     check : boolean, optional
         If True, perform extra checks within code to verify correctness.  Used
         for testing, and runs much slower when True.
@@ -480,7 +481,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
     nP = gateset.num_params()
 
     if gatestring_list is None:
-        gatestring_list = dataset.keys()
+        gatestring_list = list(dataset.keys())
 
     spamLabels = gateset.get_spam_labels() #fixes the ordering of the spam labels
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
@@ -504,7 +505,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
     # Not needed yet: final_hessian = _np.zeros( (nP,nP), 'd')
 
     #  Estimate & check intermediate memory
-    #  - check if we can fit entire hessian computation in memory; if so 
+    #  - check if we can fit entire hessian computation in memory; if so
     #      run in "all at once" mode
     #  - otherwise, work with a single column of the hessian at a time,
     #      which we call "by column" mode
@@ -514,8 +515,8 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
     intermedMem += 8*ng*gd**2*(ne**2 + ne + 1) # ~ bulk_hproduct
     if memLimit is not None and memLimit < intermedMem:
         mode = "by column"
-        ne_spam = sum([v.num_params() for v in gateset.preps.values()] + 
-                      [v.num_params() for v in gateset.effects.values()])
+        ne_spam = sum([v.num_params() for v in list(gateset.preps.values())] +
+                      [v.num_params() for v in list(gateset.effects.values())])
         intermedMem  = 8* (ng*(2*ns)) # ~ local: for bulk_hprods_by_column
         intermedMem += 8*ns*ng*ne*(2*ne_spam+2) # ~ bulk_hprods_by_column internal - immediate
         intermedMem += 8*ng*gd**2*(ne + ne + 1) # ~ bulk_hprods_by_column internal - caches
@@ -530,7 +531,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
     else:
         mode = "all at once"
         maxEvalSubTreeSize = ng
-                    
+
     #  Allocate memory (alloc max required & take views)
     maxNumGatestrings = maxEvalSubTreeSize
     cntVecMx_mem = _np.empty( (len(spamLabels),maxNumGatestrings),'d')
@@ -547,19 +548,19 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
 
     #DEBUG - no verbosity passed in to just leave commented out
     if memLimit is not None:
-        print "HLogL Memory estimates: (%d spam labels," % ns + \
-            "%d gate strings, %d gateset params, %d gate dim)" % (ng,ne,gd)
-        print "Mode = ",mode
-        print "Peristent: %g GB " % (persistentMem*C)
-        print "Intermediate: %g GB " % (intermedMem*C)
-        print "Limit: %g GB" % (memLimit*C)
+        print("HLogL Memory estimates: (%d spam labels," % ns + \
+            "%d gate strings, %d gateset params, %d gate dim)" % (ng,ne,gd))
+        print("Mode = %s" % mode)
+        print("Peristent: %g GB " % (persistentMem*C))
+        print("Intermediate: %g GB " % (intermedMem*C))
+        print("Limit: %g GB" % (memLimit*C))
         if maxEvalSubTreeSize < ng:
-            print "Maximum sub-tree size = %d" % maxEvalSubTreeSize
-            print "HLogL mem limit has imposed a division of evaluation tree."
-            print "Original tree length %d split into %d sub-trees of total length %d" % \
-                (len(evalTree), len(evalTree.get_sub_trees()), sum(map(len,evalTree.get_sub_trees())))
+            print("Maximum sub-tree size = %d" % maxEvalSubTreeSize)
+            print("HLogL mem limit has imposed a division of evaluation tree.")
+            print("Original tree length %d split into %d sub-trees of total length %d" % \
+                (len(evalTree), len(evalTree.get_sub_trees()), sum(map(len,evalTree.get_sub_trees()))))
 
-    a = radius # parameterizes "roundness" of f == 0 terms 
+    a = radius # parameterizes "roundness" of f == 0 terms
     min_p = minProbClip
 
 
@@ -570,8 +571,8 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
     #    probs  =  probs_mem[:,0:sub_nGateStrings]
     #    dprobs = dprobs_mem[:,0:sub_nGateStrings,:]
     #
-    #    gateset._calc().bulk_fill_dprobs(dprobs, spam_lbl_rows, evalSubTree, 
-    #                                     prMxToFill=probs, 
+    #    gateset._calc().bulk_fill_dprobs(dprobs, spam_lbl_rows, evalSubTree,
+    #                                     prMxToFill=probs,
     #                                     clipTo=probClipInterval, check=check)
     #    print "DEBUG: %gs: sub-tree %d/%d, sub-tree-len = %d" \
     #        % (_time.time()-t1,iTree, len(evalTree.get_sub_trees()), len(evalSubTree))
@@ -583,45 +584,45 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
             # Notation:  (K=#spam, M=#strings, N=#wrtParams1, N'=#wrtParams2 )
             S = cntVecMx / min_p - totalCntVec[None,:] # slope term that is derivative of logl at min_p
             S2 = -0.5 * cntVecMx / (min_p**2)          # 2nd derivative of logl term at min_p
-                    
+
             hprobs_pos  = (-cntVecMx / pos_probs**2)[:,:,None,None] * dprobs12   # (K,M,1,1) * (K,M,N,N')
             hprobs_pos += (cntVecMx / pos_probs - totalCntVec[None,:])[:,:,None,None] * hprobs  # (K,M,1,1) * (K,M,N,N')
             hprobs_neg  = (2*S2)[:,:,None,None] * dprobs12 + (S + 2*S2*(probs - min_p))[:,:,None,None] * hprobs # (K,M,1,1) * (K,M,N,N')
-                                              
-            hprobs_zerofreq = _np.where( (probs >= a)[:,:,None,None], 
-                                         -totalCntVec[None,:,None,None] * hprobs, 
-                                         (-totalCntVec[None,:] * ( (-2.0/a**2)*probs + 2.0/a))[:,:,None,None] * dprobs12 
+
+            hprobs_zerofreq = _np.where( (probs >= a)[:,:,None,None],
+                                         -totalCntVec[None,:,None,None] * hprobs,
+                                         (-totalCntVec[None,:] * ( (-2.0/a**2)*probs + 2.0/a))[:,:,None,None] * dprobs12
                                          - (totalCntVec[None,:] * ((-1.0/a**2)*probs**2 + 2*probs/a))[:,:,None,None] * hprobs )
-        
+
             hessian = _np.where( (probs < min_p)[:,:,None,None], hprobs_neg, hprobs_pos)
             hessian = _np.where( (cntVecMx == 0)[:,:,None,None], hprobs_zerofreq, hessian) # (K,M,N,N)
 
-            # hessian[iSpamLabel,iGateString,iGateSetParam1,iGateSetParams2] contains all 
-            #  d2(logl)/d(gatesetParam1)d(gatesetParam2) contributions            
+            # hessian[iSpamLabel,iGateString,iGateSetParam1,iGateSetParams2] contains all
+            #  d2(logl)/d(gatesetParam1)d(gatesetParam2) contributions
             return _np.sum(hessian, axis=(0,1))
               # sum over spam label and gate string dimensions (gate strings in evalSubTree)
               # adds current subtree contribution for (N,N')-sized block of Hessian
 
-                
-    else: 
+
+    else:
 
         #(the non-poisson picture requires that the probabilities of the spam labels for a given string are constrained to sum to 1)
         def hessian_from_hprobs(hprobs, dprobs12, cntVecMx, totalCntVec, pos_probs):
             S = cntVecMx / min_p # slope term that is derivative of logl at min_p
             S2 = -0.5 * cntVecMx / (min_p**2) # 2nd derivative of logl term at min_p
-        
+
             hprobs_pos  = (-cntVecMx / pos_probs**2)[:,:,None,None] * dprobs12   # (K,M,1,1) * (K,M,N,N')
             hprobs_pos += (cntVecMx / pos_probs)[:,:,None,None] * hprobs  # (K,M,1,1) * (K,M,N,N')
             hprobs_neg  = (2*S2)[:,:,None,None] * dprobs12 + (S + 2*S2*(probs - min_p))[:,:,None,None] * hprobs # (K,M,1,1) * (K,M,N,N')
-        
+
             hessian = _np.where( (probs < min_p)[:,:,None,None], hprobs_neg, hprobs_pos)
             hessian = _np.where( (cntVecMx == 0)[:,:,None,None], 0.0, hessian) # (K,M,N,N')
-    
+
             return _np.sum(hessian, axis=(0,1)) #see comments as above
 
-    
 
-    tStart = _time.time() #TIMER
+
+    # tStart = _time.time() #TIMER
 
     final_hessian = None #final computed quantity
 
@@ -629,11 +630,11 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
     # subtrees here.  We currently don't because we parallelize
     # over columns and it seems that in almost all cases of
     # interest there will be more hessian columns than processors,
-    # so adding the additional ability to parallelize over 
+    # so adding the additional ability to parallelize over
     # subtrees would just add unnecessary complication.
-    
+
     #Loop over subtrees
-    for iTree,evalSubTree in enumerate(evalTree.get_sub_trees()):
+    for evalSubTree in evalTree.get_sub_trees():
         sub_nGateStrings = evalSubTree.num_final_strings()
 
         #  Create views into pre-allocated memory
@@ -645,8 +646,9 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
             fill_count_vecs(cntVecMx,spam_lbl_rows,dataset,
                             evalSubTree.generate_gatestring_list())
         else:
-            for i in myFinalToParentFinalMap:
-                cntVecMx[:,ii] = countVecMx[:,i] #fill w/supplied countVecMx
+            # This local doesn't seem to exist, but the affected tests pass. However, pylint does not
+            for i in myFinalToParentFinalMap:    #pylint: disable=undefined-variable
+                cntVecMx[:,i] = countVecMx[:,i] #fill w/supplied countVecMx
         totalCntVec = _np.sum(cntVecMx, axis=0)
 
         if mode == "all at once":
@@ -656,15 +658,15 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
             hprobs = hprobs_mem[:,0:sub_nGateStrings,:,:]
 
             #TODO: call GateSet routine directly
-            gateset.bulk_fill_hprobs(hprobs, spam_lbl_rows, evalSubTree, 
-                                     prMxToFill=probs, derivMxToFill=dprobs, 
+            gateset.bulk_fill_hprobs(hprobs, spam_lbl_rows, evalSubTree,
+                                     prMxToFill=probs, derivMxToFill=dprobs,
                                      clipTo=probClipInterval, check=check,
                                      comm=comm)
 
             pos_probs = _np.where(probs < min_p, min_p, probs)
             dprobs12 = dprobs[:,:,:,None] * dprobs[:,:,None,:] # (K,M,N,1) * (K,M,1,N) = (K,M,N,N)
             subtree_hessian = hessian_from_hprobs(hprobs, dprobs12, cntVecMx,
-                                                  totalCntVec, pos_probs)    
+                                                  totalCntVec, pos_probs)
 
         elif mode == "by column":
 
@@ -674,7 +676,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
                                     comm=comm)
             pos_probs = _np.where(probs < min_p, min_p, probs)
 
-            k = 0 #DEBUG
+            # k = 0 #DEBUG
 
 
             #perform parallelization over columns
@@ -687,8 +689,8 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
             nCols = gateset.num_params()
             if nprocs > nCols:
                 raise ValueError("Too many (>%d) processors!" % nCols)
-            loc_iCols = range(rank,nCols,nprocs)
-            
+            loc_iCols = list(range(rank,nCols,nprocs))
+
             #  iterate over columns of hessian via bulk_hprobs_by_column
             assert(not evalSubTree.is_split()) #sub trees should not be split further
             loc_hessian_cols = [] # holds columns for this subtree (for this processor)
@@ -701,7 +703,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
                 #       len(evalTree.get_sub_trees()), len(evalSubTree))
                 #sys.stdout.flush(); k += 1
 
-                hessian_col = hessian_from_hprobs(hprobs, dprobs12, cntVecMx, totalCntVec, pos_probs)    
+                hessian_col = hessian_from_hprobs(hprobs, dprobs12, cntVecMx, totalCntVec, pos_probs)
                 loc_hessian_cols.append(hessian_col)
                   #add current hessian column to list of columns on this proc
 
@@ -710,7 +712,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
                 proc_hessian_cols = [ loc_hessian_cols ]
             else:
                 proc_hessian_cols = comm.allgather(loc_hessian_cols)
-            proc_nCols = map(len,proc_hessian_cols) # num cols on each proc
+            proc_nCols = list(map(len,proc_hessian_cols)) # num cols on each proc
 
             #Untangle interleaved column ordering and concatenate
             max_loc_cols = max(proc_nCols) #max. cols computed on a single proc
@@ -739,7 +741,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
 #        np = d.nPlus; nm = d.nMinus
 #        if p < TOL and round(np) == 0: continue #contributes zero to the sum
 #        if 1-p < TOL and round(nm) == 0: continue #contributes zero to the sum
-#        if p < TOL or 1-p < TOL: 
+#        if p < TOL or 1-p < TOL:
 #            print "LogL out of bounds p = %g for %s" % (p,d.gateString)
 #            return out_of_bounds_val #logl is undefined
 #        L += logL_term(np,nm,p)
@@ -758,7 +760,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
 #        if 1-p < TOL and round(nm) == 0: continue #contributes zero to the sum
 #        L += np*log(p)   if p > EPS else np*(log(EPS) - (EPS-p)/(S*EPS))
 #        L += nm*log(1-p) if p < 1-EPS else np*(log(EPS) - (p-(1-EPS))/(S*EPS))
-#        
+#
 #        #DEBUG
 #        #pre = ((1-p)*d.nPlus - p*d.nMinus) / (p*(1-p))
 #        #print "Pre(%s) = " % (d.gateString), pre, "  (p = %g, np = %g)" % (p, d.nPlus)
@@ -772,7 +774,7 @@ def logl_max(dataset, gatestring_list=None, countVecMx=None, poissonPicture=True
     The maximum log-likelihood possible for a DataSet.  That is, the
     log-likelihood obtained by a maximal model that can fit perfectly
     the probability of each gate string.
-    
+
     Parameters
     ----------
     dataset : DataSet
@@ -794,16 +796,16 @@ def logl_max(dataset, gatestring_list=None, countVecMx=None, poissonPicture=True
         Whether the Poisson-picture maximum log-likelihood should be returned.
 
     check : boolean, optional
-        Whether additional check is performed which computes the max logl another 
+        Whether additional check is performed which computes the max logl another
         way an compares to the faster method.
 
     Returns
     -------
     float
     """
-    
+
     if gatestring_list is None:
-        gatestring_list = dataset.keys()
+        gatestring_list = list(dataset.keys())
 
     if countVecMx is None:
         spamLabels = dataset.get_spam_labels()
@@ -816,10 +818,10 @@ def logl_max(dataset, gatestring_list=None, countVecMx=None, poissonPicture=True
     freqs_nozeros = _np.where(countVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
 
     if poissonPicture:
-        maxLogLTerms = countVecMx * ( _np.log(freqs_nozeros) - 1.0 ) 
+        maxLogLTerms = countVecMx * ( _np.log(freqs_nozeros) - 1.0 )
     else:
         maxLogLTerms = countVecMx * _np.log(freqs_nozeros)
-        
+
     maxLogLTerms[ countVecMx == 0 ] = 0.0 # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
 
     # maxLogLTerms[iSpamLabel,iGateString] contains all logl-upper-bound contributions
@@ -830,7 +832,7 @@ def logl_max(dataset, gatestring_list=None, countVecMx=None, poissonPicture=True
         for gateString in gatestring_list:
             dsRow = dataset[gateString]
             N = dsRow.total() #sum of counts for all outcomes (all spam labels)
-            for n in dsRow.values():
+            for n in list(dsRow.values()):
                 f = n / N
                 if f < TOL and n == 0: continue # 0 * log(0) == 0
                 if poissonPicture:
@@ -871,7 +873,7 @@ def forbidden_prob(gateset, dataset):
 
     for gs,dsRow in dataset.iteritems():
         probs = gateset.probs(gs)
-        for (spamLabel,p) in probs.iteritems():
+        for (spamLabel,p) in probs.items():
             if p < TOL:
                 if round(dsRow[spamLabel]) == 0: continue #contributes zero to the sum
                 else: forbidden_prob += abs(TOL-p) + TOL
@@ -885,8 +887,8 @@ def forbidden_prob(gateset, dataset):
 def prep_penalty(rhoVec):
     """
     Penalty assigned to a state preparation (rho) vector rhoVec.  State
-      preparation density matrices must be positive semidefinite 
-      and trace == 1.  A positive return value indicates an 
+      preparation density matrices must be positive semidefinite
+      and trace == 1.  A positive return value indicates an
       these criteria are not met and the rho-vector is invalid.
 
     Parameters
@@ -907,7 +909,7 @@ def prep_penalty(rhoVec):
     #print "Sum of neg = ",sumOfNeg  #DEBUG
     #print "Trace Penalty = ",tracePenalty  #DEBUG
     return sumOfNeg +  tracePenalty
-    
+
 def effect_penalty(EVec):
     """
     Penalty assigned to a POVM effect vector EVec. Effects
@@ -932,11 +934,11 @@ def effect_penalty(EVec):
         if ev.real < 0: sumOfPen += -ev.real
         if ev.real > 1: sumOfPen += ev.real-1.0
     return sumOfPen
-    
+
 def cptp_penalty(gateset, include_spam_penalty=True):
     """
     The sum of all negative Choi matrix eigenvalues, and
-      if include_spam_penalty is True, the rho-vector and 
+      if include_spam_penalty is True, the rho-vector and
       E-vector penalties of gateset.  A non-zero value
       indicates that the gateset is not CPTP.
 
@@ -958,12 +960,12 @@ def cptp_penalty(gateset, include_spam_penalty=True):
     """
     ret = _jam.sum_of_negative_choi_evals(gateset)
     if include_spam_penalty:
-        ret += sum([ prep_penalty(r) for r in gateset.preps.values() ])
-        ret += sum([ effect_penalty(e) for e in gateset.effects.values() ])
+        ret += sum([ prep_penalty(r) for r in list(gateset.preps.values()) ])
+        ret += sum([ effect_penalty(e) for e in list(gateset.effects.values()) ])
     return ret
 
-            
-def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True): 
+
+def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
     """
     Term of the 2*[log(L)-upper-bound - log(L)] sum corresponding
      to a single gate string and spam label.
@@ -986,7 +988,7 @@ def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
     poissonPicture : boolean, optional
         Whether the log-likelihood-in-the-Poisson-picture terms should be included
         in the returned logl value.
-        
+
     Returns
     -------
     float or numpy array
@@ -994,16 +996,16 @@ def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
     #TODO: change this function to handle nan's in the inputs without warnings, since
     # fiducial pair reduction may pass inputs with nan's legitimately and the desired
     # behavior is to just let the nan's pass through to nan's in the output.
-    cp = _np.clip(p,minProbClip,1e10) #effectively no upper bound
-    zf = _np.where(f < 1e-10, 0.0, f) #set zero-freqs to zero
+    cp  = _np.clip(p,minProbClip,1e10) #effectively no upper bound
+    zf  = _np.where(f < 1e-10, 0.0, f) #set zero-freqs to zero
     nzf = _np.where(f < 1e-10, 1.0, f) #set zero-freqs to one -- together w/above line makes 0 * log(0) == 0
     if poissonPicture:
         return 2 * (N * zf * _np.log(nzf/cp) - N * (f-cp))
     else:
         return 2 * N * zf * _np.log(nzf/cp)
-    
-    
-    
+
+
+
 
 
 
@@ -1016,19 +1018,19 @@ def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
 #    nP = gateset.num_params()
 #    result = _np.zeros([1,nP])
 #    dPmx = dpr_plus(gateset, [gateString for gateString in dataset])
-#    
+#
 #    for (k,d) in enumerate(dataset.values()):
 #        p = gateset.PrPlus(d.gateString)
 #        if _np.fabs(p) < TOL and round(d.nPlus) == 0: continue
 #        if _np.fabs(p - 1) < TOL and round(d.nMinus) == 0: continue
-#        
+#
 #        for i in range(nP):
 #            #pre = ((1-p)*d.nPlus - p*d.nMinus) / (p*(1-p))
 #            #print "%d: Pre(%s) = " % (i,d.gateString), pre, "  (p = %g, np = %g)" % (p, d.nPlus)
-#            result[0,i] += ((1-p)*d.nPlus - p*d.nMinus) / (p*(1-p)) * dPmx[i,k]      
+#            result[0,i] += ((1-p)*d.nPlus - p*d.nMinus) / (p*(1-p)) * dPmx[i,k]
 #
 #    return result
-#      
+#
 #
 #def dlogl_finite_diff(gateset, dataset):
 #    return numerical_deriv(logl, gateset, dataset, 1)
@@ -1042,7 +1044,7 @@ def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
 #def logl_hessian_at_ML_per_sample(gateset, gatestrings):
 #    nP = gateset.num_params()
 #    result = _np.zeros([nP,nP])
-#    
+#
 #    dPmx = dpr_plus(gateset, gatestrings)
 #
 #    for (k,s) in enumerate(gatestrings):
@@ -1073,9 +1075,9 @@ def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
 #            gs.add_to_param(i,-2*DELTA)
 #            fLeft = gs.PrPlus(s)
 #
-#            if fRight is None and fLeft is None: 
-#                raise ValueError("Cannot take derivative - both sides are out of bounds!")        
-#            if fRight is None: 
+#            if fRight is None and fLeft is None:
+#                raise ValueError("Cannot take derivative - both sides are out of bounds!")
+#            if fRight is None:
 #                dP = (fMid - fLeft) / DELTA
 #            elif fLeft is None:
 #                dP = (fRight - fMid) / DELTA
@@ -1105,10 +1107,10 @@ def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
 #        fLeft = fnToDifferentiate(gs, dataset)
 #
 #        #print "DEBUG: %d: l,m,r = " % i,(fLeft,fMid,fRight)
-#        if fRight is None and fLeft is None: 
-#            raise ValueError("numerical_deriv cannot take derivative - both sides are out of bounds!")        
+#        if fRight is None and fLeft is None:
+#            raise ValueError("numerical_deriv cannot take derivative - both sides are out of bounds!")
 #
-#        if fRight is None: 
+#        if fRight is None:
 #            df = (fMid - fLeft) / DELTA
 #        elif fLeft is None:
 #            df = (fRight - fMid) / DELTA
@@ -1117,5 +1119,5 @@ def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
 #
 #        #print "DEBUG: df(%d) = " % i,df
 #        result[:,i] = _np.transpose(df)
-#      
+#
 #    return result

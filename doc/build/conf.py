@@ -293,3 +293,13 @@ texinfo_documents = [
 
 # If true, do not generate a @detailmenu in the "Top" node's menu.
 #texinfo_no_detailmenu = False
+
+# Make the primary domain python since that's the only language we're using.
+primary_domain = 'py'
+
+# Define some default imports so that we don't have to include them in doctests.
+doctest_global_setup = '''
+from __future__ import division, print_function
+import numpy as np
+import pygsti
+'''

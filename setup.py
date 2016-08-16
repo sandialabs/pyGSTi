@@ -1,8 +1,13 @@
 """A python implementation of Gate Set Tomography"""
 
 from distutils.core import setup
+	
+#execfile("packages/pygsti/_version.py")
 
-execfile("packages/pygsti/_version.py")
+# 3.0 changes the way exec has to be called
+with open("packages/pygsti/_version.py") as f:
+    code = compile(f.read(), "packages/pygsti/_version.py", 'exec')
+    exec(code)
 
 
 classifiers = """\
@@ -37,10 +42,16 @@ setup(name='pyGSTi',
       packages=['pygsti', 'pygsti.algorithms', 'pygsti.construction', 'pygsti.drivers', 'pygsti.io', 'pygsti.objects', 'pygsti.optimize', 'pygsti.report', 'pygsti.tools'],
       package_dir={'': 'packages'},
       package_data={'pygsti.report': ['templates/*.tex', 'templates/*.pptx']},
-      requires=['numpy','scipy','matplotlib'],
+      requires=['numpy','scipy','matplotlib','pyparsing'],
+      extras_require = {
+           'diamond norm computation':  ['cvxpy', 'cvxopt'],
+           'powerpoint file generation': ['python-pptx'],
+           'nose testing' : ['nose'],
+           'image comparison' : ['Pillow']
+      },
       platforms = ["any"],      
       url = 'http://www.pygsti.info',
-      download_url = 'https://github.com/pyGSTio/pyGSTi/archive/v0.9.1-alpha.tar.gz',
+      download_url = 'https://github.com/pyGSTio/pyGSTi/tarball/master',
       keywords = ['pygsti', 'tomography', 'gate set', 'pigsty', 'pig', 'quantum', 'qubit'],
       classifiers = filter(None, classifiers.split("\n")),
      )

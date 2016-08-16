@@ -1,7 +1,8 @@
+from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ Matrix related utility functions """
 
@@ -10,11 +11,11 @@ import numpy as _np
 
 
 def trace(M): #memory leak in numpy causes repeated trace calls to eat up all memory --TODO: Cython this
-    """ 
+    """
     The trace of a matrix, sum_i M[i,i].
 
     A memory leak in some version of numpy can cause repeated calls to numpy's
-    trace function to eat up all available system memory, and this function 
+    trace function to eat up all available system memory, and this function
     does not have this problem.
 
     Parameters
@@ -31,7 +32,7 @@ def trace(M): #memory leak in numpy causes repeated trace calls to eat up all me
 #    with warnings.catch_warnings():
 #        warnings.filterwarnings('error')
 #        try:
-#            ret = 
+#            ret =
 #        except Warning:
 #            print "BAD trace from:\n"
 #            for i in range(M.shape[0]):
@@ -115,7 +116,7 @@ def frobeniusnorm(ar):
     ar : numpy array
         What to compute the frobenius norm of.  Note that ar can be any shape
         or number of dimenions.
-        
+
     Returns
     -------
     float or complex
@@ -134,7 +135,7 @@ def frobeniusnorm2(ar):
     ar : numpy array
         What to compute the squared frobenius norm of.  Note that ar can be any
         shape or number of dimenions.
-        
+
     Returns
     -------
     float or complex
@@ -143,7 +144,7 @@ def frobeniusnorm2(ar):
     return _np.sum(ar**2)
 
 def print_mx(mx, width=9, prec=4):
-    """ 
+    """
     Print matrix in pretty format.
 
     Will print real or complex matrices with a desired precision and
@@ -161,10 +162,10 @@ def print_mx(mx, width=9, prec=4):
         the precision (in characters) of each printed element
 
     """
-    print mx_to_string(mx, width, prec)
+    print(mx_to_string(mx, width, prec))
 
 def mx_to_string(m, width=9, prec=4):
-    """ 
+    """
     Generate a "pretty-format" string for a matrix.
 
     Will generate strings for real or complex matrices with a desired
@@ -187,7 +188,7 @@ def mx_to_string(m, width=9, prec=4):
         matrix m as a pretty formated string.
     """
     s = ""; tol = 10**(-prec)
-    if _np.max(abs(_np.imag(m))) > tol: 
+    if _np.max(abs(_np.imag(m))) > tol:
         return mx_to_string_complex(m, width, width, prec)
 
     if len(m.shape) == 1: m = m[None,:] # so it works w/vectors too
@@ -199,7 +200,7 @@ def mx_to_string(m, width=9, prec=4):
     return s
 
 def mx_to_string_complex(m, real_width=9, im_width=9, prec=4):
-    """ 
+    """
     Generate a "pretty-format" string for a complex-valued matrix.
 
     Parameters
@@ -231,4 +232,3 @@ def mx_to_string_complex(m, real_width=9, im_width=9, prec=4):
             else: s += "{0: >+{w}.{p}f}j".format(m[i,j].imag,w=im_width,p=prec)
         s += "\n"
     return s
-

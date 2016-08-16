@@ -1,6 +1,0 @@
-pygsti.construction.make_lsgst_lists
-====================================
-
-.. currentmodule:: pygsti.construction
-
-.. autofunction:: make_lsgst_lists

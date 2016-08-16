@@ -1,6 +1,0 @@
-pygsti.objects.GateSet.hproduct
-===============================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: GateSet.hproduct

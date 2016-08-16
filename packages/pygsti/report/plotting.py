@@ -1,28 +1,29 @@
+from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ Functions for generating plots """
 
-from __future__ import division
-import numpy as _np
+import numpy             as _np
 import matplotlib.pyplot as _plt
-import matplotlib as _matplotlib
-import os as _os
-from matplotlib.ticker import AutoMinorLocator as _AutoMinorLocator
-from matplotlib.ticker import FixedLocator as _FixedLocator
-from scipy.stats import chi2 as _chi2
+import matplotlib        as _matplotlib
+import os                as _os
+import warnings          as _warnings
 
-from .. import algorithms as _alg
-from .. import tools as _tools
+from scipy.stats       import chi2             as _chi2
+
+from .. import algorithms   as _alg
+from .. import tools        as _tools
 from .. import construction as _construction
-from .. import objects as _objs
+from .. import objects      as _objs
 
-from figure import ReportFigure as _ReportFigure
+from .figure import ReportFigure as _ReportFigure
 
 
-def total_count_matrix( gateString, dataset, strs, fidPairs=None):
+def total_count_matrix( gateString, dataset, strs, fidPairs=None,
+                        gatestring_filter=None):
     """
     Computes the total count matrix for a base gatestring.
 
@@ -41,11 +42,17 @@ def total_count_matrix( gateString, dataset, strs, fidPairs=None):
         A list of (iRhoStr,iEStr) tuples specifying a subset of all the prepStr,effectStr
         pairs to include in the matrix.  Other values are set to NaN.
 
+    gatestring_filter : list, optional
+        If not None, a list of GateString objects specifying which elements
+        of the matrix should be computed.  Any matrix entry corresponding to
+        an gate string *not* in this list is set to NaN.
+
+
     Returns
     -------
     numpy array of shape (M,N)
         total count values (sum of count values for each SPAM label)
-        corresponding to gate sequences where gateString is sandwiched 
+        corresponding to gate sequences where gateString is sandwiched
         between the specified set of N prepSpec and M effectSpec gate strings.
     """
     prepStrs, effectStrs = strs # LEXICOGRAPHICAL VS MATRIX ORDER
@@ -55,7 +62,9 @@ def total_count_matrix( gateString, dataset, strs, fidPairs=None):
             rowLst = []
             for prepStr in prepStrs:
                 gstr = prepStr + gateString + effectStr
-                if gstr in dataset: rowLst.append( dataset[gstr].total() )
+                if gstr in dataset and (gatestring_filter is None
+                                        or gstr in gatestring_filter):
+                    rowLst.append( dataset[gstr].total() )
                 else: rowLst.append( _np.nan )
             mxlst.append(rowLst)
         return _np.array( mxlst )
@@ -67,7 +76,8 @@ def total_count_matrix( gateString, dataset, strs, fidPairs=None):
         return ret
 
 
-def count_matrix( gateString, dataset, spamlabel, strs, fidPairs=None ):
+def count_matrix( gateString, dataset, spamlabel, strs, fidPairs=None,
+                  gatestring_filter=None):
     """
     Computes spamLabel's count matrix for a base gatestring.
 
@@ -89,10 +99,16 @@ def count_matrix( gateString, dataset, spamlabel, strs, fidPairs=None ):
         A list of (iRhoStr,iEStr) tuples specifying a subset of all the prepStr,effectStr
         pairs to include in the matrix.  Other values are set to NaN.
 
+    gatestring_filter : list, optional
+        If not None, a list of GateString objects specifying which elements
+        of the matrix should be computed.  Any matrix entry corresponding to
+        an gate string *not* in this list is set to NaN.
+
+
     Returns
     -------
     numpy array of shape ( len(effectStrs), len(prepStrs) )
-        count values corresponding to spamLabel and gate sequences 
+        count values corresponding to spamLabel and gate sequences
         where gateString is sandwiched between the each (effectStr,prepStr) pair.
     """
     prepStrs, effectStrs = strs # LEXICOGRAPHICAL VS MATRIX ORDER
@@ -102,7 +118,9 @@ def count_matrix( gateString, dataset, spamlabel, strs, fidPairs=None ):
             rowLst = []
             for prepStr in prepStrs:
                 gstr = prepStr + gateString + effectStr
-                if gstr in dataset: rowLst.append( dataset[gstr][spamlabel] )
+                if gstr in dataset and (gatestring_filter is None
+                                        or gstr in gatestring_filter):
+                    rowLst.append( dataset[gstr][spamlabel] )
                 else: rowLst.append( _np.nan )
             mxlst.append(rowLst)
         return _np.array( mxlst )
@@ -116,7 +134,8 @@ def count_matrix( gateString, dataset, spamlabel, strs, fidPairs=None ):
 
 
 
-def frequency_matrix( gateString, dataset, spamlabel, strs, fidPairs=None):
+def frequency_matrix( gateString, dataset, spamlabel, strs, fidPairs=None,
+                      gatestring_filter=None):
     """
     Computes spamLabel's frequency matrix for a base gatestring.
 
@@ -138,16 +157,24 @@ def frequency_matrix( gateString, dataset, spamlabel, strs, fidPairs=None):
         A list of (iRhoStr,iEStr) tuples specifying a subset of all the prepStr,effectStr
         pairs to include in the matrix.  Other values are set to NaN.
 
+    gatestring_filter : list, optional
+        If not None, a list of GateString objects specifying which elements
+        of the matrix should be computed.  Any matrix entry corresponding to
+        an gate string *not* in this list is set to NaN.
+
+
     Returns
     -------
     numpy array of shape ( len(effectStrs), len(prepStrs) )
-        frequency values corresponding to spamLabel and gate sequences 
+        frequency values corresponding to spamLabel and gate sequences
         where gateString is sandwiched between the each (effectStr,prepStr) pair.
     """
-    return count_matrix( gateString, dataset, spamlabel, strs, fidPairs) / total_count_matrix( gateString, dataset, strs, fidPairs)
+    return count_matrix( gateString, dataset, spamlabel, strs, fidPairs, gatestring_filter) \
+        / total_count_matrix( gateString, dataset, strs, fidPairs, gatestring_filter)
 
 
-def probability_matrix( gateString, gateset, spamlabel, strs, fidPairs=None):
+def probability_matrix( gateString, gateset, spamlabel, strs, fidPairs=None,
+                        gatestring_filter=None):
     """
     Computes spamLabel's probability matrix for a base gatestring.
 
@@ -169,15 +196,27 @@ def probability_matrix( gateString, gateset, spamlabel, strs, fidPairs=None):
         A list of (iRhoStr,iEStr) tuples specifying a subset of all the prepStr,effectStr
         pairs to include in the matrix.  Other values are set to NaN.
 
+    gatestring_filter : list, optional
+        If not None, a list of GateString objects specifying which elements
+        of the matrix should be computed.  Any matrix entry corresponding to
+        an gate string *not* in this list is set to NaN.
+
+
     Returns
     -------
     numpy array of shape ( len(effectStrs), len(prepStrs) )
-        probability values corresponding to spamLabel and gate sequences 
+        probability values corresponding to spamLabel and gate sequences
         where gateString is sandwiched between the each (effectStr,prepStr) pair.
     """
     prepStrs, effectStrs = strs # LEXICOGRAPHICAL VS MATRIX ORDER
     if fidPairs is None:
-        return _np.array( [ [ gateset.pr( spamlabel, prepStr + gateString + effectStr ) for prepStr in prepStrs ] for effectStr in effectStrs ] )
+        ret = _np.nan * _np.ones( (len(effectStrs),len(prepStrs)), 'd')
+        for j,effectStr in enumerate(effectStrs):
+            for i,prepStr in enumerate(prepStrs):
+                s = prepStr + gateString + effectStr
+                if (gatestring_filter is None) or (s in gatestring_filter):
+                    ret[j,i] = gateset.pr(spamlabel, s)
+        return ret
     else:
         ret = _np.nan * _np.ones( (len(effectStrs),len(prepStrs)), 'd')
         for i,j in fidPairs:
@@ -187,7 +226,8 @@ def probability_matrix( gateString, gateset, spamlabel, strs, fidPairs=None):
 
 
 
-def chi2_matrix( gateString, dataset, gateset, strs, minProbClipForWeighting=1e-4, fidPairs=None):
+def chi2_matrix( gateString, dataset, gateset, strs, minProbClipForWeighting=1e-4,
+                 fidPairs=None, gatestring_filter=None):
     """
     Computes the chi^2 matrix for a base gatestring.
 
@@ -212,28 +252,35 @@ def chi2_matrix( gateString, dataset, gateset, strs, minProbClipForWeighting=1e-
         A list of (iRhoStr,iEStr) tuples specifying a subset of all the prepStr,effectStr
         pairs to include in the matrix.  Other values are set to NaN.
 
+    gatestring_filter : list, optional
+        If not None, a list of GateString objects specifying which elements
+        of the matrix should be computed.  Any matrix entry corresponding to
+        an gate string *not* in this list is set to NaN.
+
+
     Returns
     -------
     numpy array of shape ( len(effectStrs), len(prepStrs) )
-        chi^2 values corresponding to gate sequences where 
+        chi^2 values corresponding to gate sequences where
         gateString is sandwiched between the each (effectStr,prepStr) pair.
         (i.e. element_ij = gate_string_chi2( prepStrs[j] + gateString + effectStrs[i])
     """
     prepStrs, effectStrs = strs
     chiSqMx = _np.zeros( (len(effectStrs),len(prepStrs)), 'd')
     if gateString is None: return _np.nan*chiSqMx
-    cntMx  = total_count_matrix(  gateString, dataset, strs, fidPairs)
+    cntMx  = total_count_matrix(  gateString, dataset, strs, fidPairs, gatestring_filter)
     for sl in gateset.get_spam_labels():
-        probMx = probability_matrix( gateString, gateset, sl, strs, fidPairs)
-        freqMx = frequency_matrix(   gateString, dataset, sl, strs, fidPairs)
+        probMx = probability_matrix( gateString, gateset, sl, strs, fidPairs, gatestring_filter)
+        freqMx = frequency_matrix(   gateString, dataset, sl, strs, fidPairs, gatestring_filter)
         chiSqMx += _tools.chi2fn( cntMx, probMx, freqMx,
                                      minProbClipForWeighting)
     return chiSqMx
 
 
-def logl_matrix( gateString, dataset, gateset, strs, minProbClip=1e-6, fidPairs=None):
+def logl_matrix( gateString, dataset, gateset, strs, minProbClip=1e-6,
+                 fidPairs=None, gatestring_filter=None):
     """
-    Computes the log-likelihood matrix of 2*( log(L)_upperbound - log(L) ) 
+    Computes the log-likelihood matrix of 2*( log(L)_upperbound - log(L) )
     values for a base gatestring.
 
     Parameters
@@ -257,29 +304,34 @@ def logl_matrix( gateString, dataset, gateset, strs, minProbClip=1e-6, fidPairs=
         A list of (iRhoStr,iEStr) tuples specifying a subset of all the prepStr,effectStr
         pairs to include in the matrix.  Other values are set to NaN.
 
+    gatestring_filter : list, optional
+        If not None, a list of GateString objects specifying which elements
+        of the matrix should be computed.  Any matrix entry corresponding to
+        an gate string *not* in this list is set to NaN.
+
+
     Returns
     -------
     numpy array of shape ( len(effectStrs), len(prepStrs) )
-        logl values corresponding to gate sequences where 
+        logl values corresponding to gate sequences where
         gateString is sandwiched between the each (effectStr,prepStr) pair.
     """
     prepStrs, effectStrs = strs
     logLMx = _np.zeros( (len(effectStrs),len(prepStrs)), 'd')
     if gateString is None: return _np.nan*logLMx
-    cntMx  = total_count_matrix(  gateString, dataset, strs, fidPairs)
+    cntMx  = total_count_matrix(  gateString, dataset, strs, fidPairs, gatestring_filter)
     for sl in gateset.get_spam_labels():
-        probMx = probability_matrix( gateString, gateset, sl, strs, fidPairs)
-        freqMx = frequency_matrix(   gateString, dataset, sl, strs, fidPairs)
+        probMx = probability_matrix( gateString, gateset, sl, strs, fidPairs, gatestring_filter)
+        freqMx = frequency_matrix(   gateString, dataset, sl, strs, fidPairs, gatestring_filter)
         logLMx += _tools.two_delta_loglfn( cntMx, probMx, freqMx, minProbClip)
     return logLMx
-
 
 
 def small_eigval_err_rate(sigma, dataset, directGSTgatesets):
     """
     Compute per-gate error rate.
 
-    The per-gate error rate, extrapolated from the smallest eigvalue 
+    The per-gate error rate, extrapolated from the smallest eigvalue
     of the Direct GST estimate of the given gate string sigma.
 
     Parameters
@@ -305,7 +357,7 @@ def small_eigval_err_rate(sigma, dataset, directGSTgatesets):
     return 1.0 - minEigval**(1.0/max(len(sigma),1)) # (approximate) per-gate error rate; max averts divide by zero error
 
 def besttxtcolor( x, cmap, norm ):
-    """ 
+    """
     Determinining function for whether text should be white or black
 
     Parameters
@@ -327,12 +379,12 @@ def besttxtcolor( x, cmap, norm ):
     # Perceived brightness calculation from http://alienryderflex.com/hsp.html
     P = _np.sqrt(0.299*R**2 + 0.587*G**2 + 0.114*B**2)
     return "black" if 0.5 <= P else "white"
-    
+
 class LinLogNorm(_matplotlib.colors.Normalize):
     def __init__(self, trans=None, vmin=None, vmax=None, clip=False):
         super(LinLogNorm, self).__init__(vmin=vmin, vmax=vmax, clip=clip)
         self.trans = trans
-            
+
     def inverse(self, value):
         norm_trans = super(LinLogNorm, self).__call__(self.trans)
         deltav = self.vmax - self.vmin
@@ -343,11 +395,24 @@ class LinLogNorm(_matplotlib.colors.Normalize):
             return return_value.item()
         else:
             return return_value.view(_np.ma.MaskedArray)
-        
+
     def __call__(self, value, clip=None):
+
+        if isinstance(value, _np.ma.MaskedArray) and value.count() == 0:
+            # no unmasked elements, in which case a matplotlib bug causes the
+            # __call__ below to fail (numpy.bool_ has no attribute '_mask')
+            return_value = _np.ma.array( _np.zeros(value.shape),
+                                         mask=_np.ma.getmask(value))
+            # so just create a dummy return value with the correct size
+            # that has all it's entries masked (like value does)
+            if return_value.shape==(): return return_value.item()
+            else: return return_value.view(_np.ma.MaskedArray)
+
         lin_norm_value = super(LinLogNorm, self).__call__(value)
+
         if self.trans is None:
             self.trans = (self.vmax - self.vmin)/10 + self.vmin
+
         norm_trans = super(LinLogNorm, self).__call__(self.trans)
         log10_norm_trans = _np.ma.log10(norm_trans)
         with _np.errstate(divide='ignore'):
@@ -430,8 +495,8 @@ class MidPointNorm(_matplotlib.colors.Normalize):
         if _matplotlib.cbook.iterable(value):
             val = _np.ma.asarray(value)
             val = 2 * (val-0.5)
-            val[val>0]  *= abs(vmax - midpoint)
-            val[val<0] *= abs(vmin - midpoint)
+            val[val>0] *= abs(vmax - midpoint) #pylint: disable=unsubscriptable-object
+            val[val<0] *= abs(vmin - midpoint) #pylint: disable=unsubscriptable-object
             val += midpoint
             return val
         else:
@@ -448,13 +513,13 @@ def splice_cmaps(cmaps, name=None, splice_points=None):
 
     Parameters
     ----------
-    cmaps : list of matplotlib cmaps
+    cmaps : list of matplotlib.colors.Colormap
         The colormaps ordered according to how they should appear in the final
         colormap
 
-    name : string
+    name : string, optional
         The name for the colormap. If no name is given, the name
-        "spliced_cmap1name_cmap2name_..." is assigned to the colormap.
+        ``"spliced_cmap1name_cmap2name_..."`` is assigned to the colormap.
 
     splice_points : ordered list of floats in (0, 1), optional
         The transition points when one colormap should end and the next should
@@ -464,7 +529,8 @@ def splice_cmaps(cmaps, name=None, splice_points=None):
 
     Returns
     -------
-    A cmap combining the provided cmaps
+    matplotlib.colors.LinearSegmentedColormap
+        A cmap combining the provided cmaps
     """
     if name is None:
         name = '_'.join(['spliced'] + [cmap.name for cmap in cmaps])
@@ -574,7 +640,7 @@ def make_linear_cmap(start_color, final_color, name=None):
     labels = ['red', 'green', 'blue', 'alpha']
     cdict = {label: [(0, start_color[idx], start_color[idx]),
                      (1, final_color[idx], final_color[idx])]
-             for label, idx in zip(labels, range(len(start_color)))}
+             for label, idx in zip(labels, list(range(len(start_color))))}
 
     if name is None:
         name = 'linear_' + str(start_color) + '-' + str(final_color)
@@ -662,12 +728,12 @@ class StdColormapFactory(object):
 
 
 def _eformat(f, prec):
-    """ 
+    """
     Formatting routine for writing compact representations of
     numbers in plot boxes
     """
     if prec == 'compact' or prec == 'compacthp':
-        if f < 0: 
+        if f < 0:
             return "-" + _eformat(-f,prec)
 
         if prec == 'compacthp':
@@ -679,9 +745,9 @@ def _eformat(f, prec):
             if f < 10:
                 return "%.1f" % f # print whole number and tenths
 
-        if f < 100: 
+        if f < 100:
             return "%.0f" % f # print nearest whole number if only 1 or 2 digits
-        
+
         #if f >= 100, minimal scientific notation, such as "4e7", not "4e+07"
         s = "%.0e" % f
         try:
@@ -696,7 +762,7 @@ def _eformat(f, prec):
     elif type(prec) == int:
         if prec >= 0:
             return "%.*f" % (prec,f)
-        else: 
+        else:
             return "%.*g" % (-prec,f)
     else:
         return "%g" % f #fallback to general format
@@ -725,7 +791,7 @@ def color_boxplot(plt_data, cmapFactory, title=None, xlabels=None, ylabels=None,
         Tic labels for x and y axes.  If both are None, then tics are not drawn.
 
     xtics, ytics : list or array of floats, optional
-        Values of x and y axis tics.  If None, then half-integers from 0.5 to 
+        Values of x and y axis tics.  If None, then half-integers from 0.5 to
         0.5 + (nCols-1) or 0.5 + (nRows-1) are used, respectively.
 
     colorbar : bool, optional
@@ -746,7 +812,7 @@ def color_boxplot(plt_data, cmapFactory, title=None, xlabels=None, ylabels=None,
           int <  0 = number of significant figures given by -int
 
     boxLabels : bool, optional
-        Whether box labels are displayed.  It takes much longer to 
+        Whether box labels are displayed.  It takes much longer to
         generate the figure when this is set to True.
 
     xlabel, ylabel : str, optional
@@ -760,7 +826,7 @@ def color_boxplot(plt_data, cmapFactory, title=None, xlabels=None, ylabels=None,
 
     grid : bool, optional
         Whether or not grid lines should be displayed.
-    
+
     Returns
     -------
     ReportFigure
@@ -786,7 +852,7 @@ def color_boxplot(plt_data, cmapFactory, title=None, xlabels=None, ylabels=None,
         axes.set_xticks(xtics, minor=False)
         axes.set_xticklabels( xlabels,rotation=0, fontsize=ticSize )
     if ylabels is not None:
-        if ytics is None: 
+        if ytics is None:
             ytics = _np.arange(plt_data.shape[0])+0.5
         axes.set_yticks(ytics, minor=False)
         axes.set_yticklabels( ylabels, fontsize=ticSize )
@@ -837,7 +903,7 @@ def color_boxplot(plt_data, cmapFactory, title=None, xlabels=None, ylabels=None,
 
 
 def nested_color_boxplot(plt_data_list_of_lists, cmapFactory, title=None, xlabels=None, ylabels=None, xtics=None, ytics=None,
-                       colorbar=True, fig=None, axes=None, size=None, prec=0, 
+                       colorbar=True, fig=None, axes=None, size=None, prec=0,
                        boxLabels=True, xlabel=None, ylabel=None, save_to=None, ticSize=14, grid=False):
     """
     Create a color box plot.
@@ -859,7 +925,7 @@ def nested_color_boxplot(plt_data_list_of_lists, cmapFactory, title=None, xlabel
         Tic labels for x and y axes.  If both are None, then tics are not drawn.
 
     xtics, ytics : list or array of floats, optional
-        Values of x and y axis tics.  If None, then half-integers from 0.5 to 
+        Values of x and y axis tics.  If None, then half-integers from 0.5 to
         0.5 + (nCols-1) or 0.5 + (nRows-1) are used, respectively.
 
     colorbar : bool, optional
@@ -880,7 +946,7 @@ def nested_color_boxplot(plt_data_list_of_lists, cmapFactory, title=None, xlabel
           int <  0 = number of significant figures given by -int
 
     boxLabels : bool, optional
-        Whether box labels are displayed.  It takes much longer to 
+        Whether box labels are displayed.  It takes much longer to
         generate the figure when this is set to True.
 
     xlabel, ylabel : str, optional
@@ -894,7 +960,7 @@ def nested_color_boxplot(plt_data_list_of_lists, cmapFactory, title=None, xlabel
 
     grid : bool, optional
         Whether or not grid lines should be displayed.
-    
+
     Returns
     -------
     ReportFigure
@@ -948,16 +1014,19 @@ def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp):
         #Get all the boxes where the entries are not all NaN
         non_all_NaN = reshape_subMxs[_np.where(_np.array([_np.isnan(k).all() for k in reshape_subMxs]) == False)]
         s = _np.shape(non_all_NaN)
-        dof_each_box = map(lambda k: _num_non_nan(k), non_all_NaN)
+        dof_each_box = [_num_non_nan(k) for k in non_all_NaN]
 
-        assert _all_same(dof_each_box), 'Number of degrees of freedom different for different boxes!'
+        # Don't assert this anymore -- just use average below
+        if not _all_same(dof_each_box):
+            _warnings.warn('Number of degrees of freedom different for different boxes!')
 
         # The number of boxes is equal to the number of rows in non_all_NaN
         n_boxes = s[0]
 
         if n_boxes > 0:
             # Each box is a chi2_(sum) random variable
-            dof_per_box = dof_each_box[0]
+            # dof_per_box = dof_each_box[0] #OLD
+            dof_per_box = _np.average(dof_each_box)
         else:
             dof_per_box = None #unknown, since there are no boxes
     else:
@@ -973,7 +1042,7 @@ def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp):
 def _computeSubMxs(xvals, yvals, xyGateStringDict, subMxCreationFn, sumUp):
     used_xvals = [ x for x in xvals if any([ (xyGateStringDict[(x,y)] is not None) for y in yvals]) ]
     used_yvals = [ y for y in yvals if any([ (xyGateStringDict[(x,y)] is not None) for x in xvals]) ]
-    subMxs = [ [ subMxCreationFn( xyGateStringDict[(x,y)] ) for x in used_xvals ] for y in used_yvals]
+    subMxs = [ [ subMxCreationFn(xyGateStringDict[(x,y)],x,y) for x in used_xvals ] for y in used_yvals]
     #Note: subMxs[y-index][x-index] is proper usage
     n_boxes, dof_per_box = _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp)
 
@@ -996,7 +1065,7 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxs, cmapFactory, xlabe
        the (x,y) box.
 
     A histogram of the values can also be computed and displayed.
-    
+
     Parameters
     ----------
     xvals, yvals : list
@@ -1007,9 +1076,9 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxs, cmapFactory, xlabe
     xyGateStringDict : dict
         Dictionary with keys == (x_value,y_value) tuples and values == gate strings, where
         a gate string can either be a GateString object or a tuple of gate labels.  Provides
-        the mapping between x,y pairs and gate strings.  None values are allowed, and 
+        the mapping between x,y pairs and gate strings.  None values are allowed, and
         indicate that there is not data for that x,y pair and nothing should be plotted.
-    
+
     subMxs : list
         A list of lists of 2D numpy.ndarrays.  subMxs[iy][ix] specifies the matrix of values
         or sum (if sumUp == True) displayed in iy-th row and ix-th column of the plot.  NaNs
@@ -1039,7 +1108,7 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxs, cmapFactory, xlabe
         a single color box for the sum.
 
     boxLabels : bool, optional
-        Whether box labels are displayed.  It takes much longer to 
+        Whether box labels are displayed.  It takes much longer to
         generate the figure when this is set to True.
 
     histogram : bool, optional
@@ -1070,7 +1139,7 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxs, cmapFactory, xlabe
     Returns
     -------
     rptFig : ReportFigure
-        The encapsulated matplotlib figure that was generated.  Note that 
+        The encapsulated matplotlib figure that was generated.  Note that
         figure extra info is a dict with keys:
 
         nUsedXs : int
@@ -1092,11 +1161,11 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxs, cmapFactory, xlabe
             else:
                 formatted_vals.append(val)
         return formatted_vals
-                
+
     def sum_up_mx(mx):
         flat_mx = mx.flatten()
         if any([_np.isnan(x) for x in flat_mx]):
-            if all([_np.isnan(x) for x in flat_mx]): 
+            if all([_np.isnan(x) for x in flat_mx]):
                 return _np.nan
             return sum(_np.nan_to_num(flat_mx)) #replace NaNs with zeros for purpose of summing (when there's at least one non-NaN)
         else:
@@ -1105,8 +1174,7 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxs, cmapFactory, xlabe
     #Setup and create plotting functions
     if sumUp:
         subMxSums = _np.array( [ [ sum_up_mx(subMxs[iy][ix]) for ix in range(nXs) ] for iy in range(nYs) ], 'd' )
-        subMxSums = _np.flipud(subMxSums) #so [0,0] el of original subMxSums is at *top*-left (FLIP)
-        if invert: print "Warning: cannot invert a summed-up plot.  Ignoring invert=True."
+        if invert: _warnings.warn("Cannot invert a summed-up plot.  Ignoring invert=True.")
 
         fig,ax = _plt.subplots( 1, 1, figsize=(nXs*scale, nYs*scale))
         rptFig = color_boxplot( subMxSums, cmapFactory, fig=fig, axes=ax, title=title,
@@ -1126,7 +1194,7 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxs, cmapFactory, xlabe
             if save_to is not None:
                 if len(save_to) > 0:
                     _plt.savefig( _makeHistFilename(save_to) )
-                _plt.close(fig)                    
+                _plt.close(fig)
 
 
     else: #not summing up
@@ -1140,7 +1208,7 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxs, cmapFactory, xlabe
 
         # flip so [0,0] el of original subMxs is at *top*-left (FLIP)
         subMxs = [ [ _np.flipud(subMx) for subMx in row ] for row in subMxs]
-        
+
         if invert:
             invertedSubMxs = []  #will be indexed as invertedSubMxs[inner-y][inner-x]
             for iny in range(nIYs):
@@ -1159,7 +1227,7 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxs, cmapFactory, xlabe
             nXs, nYs, nIXs, nIYs = nIXs, nIYs, nXs, nYs #swap nXs <=> nIXs b/c of inversion
 
         fig,ax = _plt.subplots( 1, 1, figsize=(nXs*nIXs*scale*0.4, nYs*nIYs*scale*0.4))
-        rptFig = nested_color_boxplot(subMxs, cmapFactory, fig=fig, axes=ax, title=title, prec=prec, 
+        rptFig = nested_color_boxplot(subMxs, cmapFactory, fig=fig, axes=ax, title=title, prec=prec,
                                       ylabels=val_filter(yvals), xlabels=val_filter(xvals), boxLabels=boxLabels,
                                       colorbar=False, ylabel=ylabel, xlabel=xlabel, ticSize=ticSize, grid=grid)
         rptFig.save_to(save_to)
@@ -1179,8 +1247,8 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxs, cmapFactory, xlabe
 
     if rptFig:
         rptFig.set_extra_info( { 'nUsedXs': len(xvals),
-                                 'nUsedYs': len(yvals) } )                     
-    # rptFig.check() #DEBUG - test that figure can unpickle correctly -- 
+                                 'nUsedYs': len(yvals) } )
+    # rptFig.check() #DEBUG - test that figure can unpickle correctly --
     #                # if not, probably used magic matplotlib (don't do that)
     return rptFig
 
@@ -1202,7 +1270,7 @@ def gof_boxplot_keyplot(strs, xlabel="$\\rho_i$", ylabel="$E_i$",
         Plot title (latex can be used)
 
     size : tuple, optional
-      The (width,height) figure size in inches.  None 
+      The (width,height) figure size in inches.  None
       enables automatic calculation based on gateMatrix
       size.
 
@@ -1269,19 +1337,17 @@ def gof_boxplot_keyplot(strs, xlabel="$\\rho_i$", ylabel="$E_i$",
 
     return rptFig
 
-
-
-
-    return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel,ylabel,
-                            scale,prec,title,sumUp,boxLabels,histogram,histBins,save_to,ticSize,
-                            invert, prepStrs, effectStrs, r"$\rho_i$", r"$E_i$")
+    # OLD?
+    #return generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, xlabel,ylabel,
+     #                       scale,prec,title,sumUp,boxLabels,histogram,histBins,save_to,ticSize,
+      #                      invert, prepStrs, effectStrs, r"$\rho_i$", r"$E_i$")
 
 
 
 def chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
                   xlabel="", ylabel="",  scale=1.0, prec='compact', title='$\\chi^2$', linlg_pcntle=.05, sumUp=False,
                   boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
-                  save_to=None, ticSize=20, invert=False, fidPairs=None):
+                  save_to=None, ticSize=20, invert=False, fidPairs=None, gatestring_filters=None):
     """
     Create a color box plot of chi^2 values.
 
@@ -1295,7 +1361,7 @@ def chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
     xy_gatestring_dict : dict
         Dictionary with keys == (x_value,y_value) tuples and values == gate strings, where
         a gate string can either be a GateString object or a tuple of gate labels.  Provides
-        the mapping between x,y pairs and gate strings.  None values are allowed, and 
+        the mapping between x,y pairs and gate strings.  None values are allowed, and
         indicate that there is not data for that x,y pair and nothing should be plotted.
 
     dataset : DataSet
@@ -1332,7 +1398,7 @@ def chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
         a single color box for the sum.
 
     boxLabels : bool, optional
-        Whether box labels are displayed.  It takes much longer to 
+        Whether box labels are displayed.  It takes much longer to
         generate the figure when this is set to True.
 
     histogram : bool, optional
@@ -1361,6 +1427,15 @@ def chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
         A list of (iRhoStr,iEStr) tuples specifying a subset of all the prepStr,effectStr
         pairs to include in the plot.
 
+    gatestring_filters : dict, optional
+        If not None, a dictionary of lists whose keys are the x-values contained
+        in the plot.  `gatestring_filters[x]` is a list of GateString objects
+        specifying which elements are allowed to be computed in the matrices of
+        the column corresponding to x.  Other entries are not displayed.  Thus,
+        this argument allows one to filter on a per-column basis which matrix
+        elements are displayed.
+
+
     Returns
     -------
     rptFig : ReportFigure
@@ -1374,8 +1449,9 @@ def chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
     """
 
     prepStrs, effectStrs = strs
-    def mx_fn(gateStr):
-        return chi2_matrix( gateStr, dataset, gateset, strs, minProbClipForWeighting, fidPairs)
+    def mx_fn(gateStr,x,y):
+        return chi2_matrix( gateStr, dataset, gateset, strs, minProbClipForWeighting, fidPairs,
+                            gatestring_filters[x] if gatestring_filters is not None else None)
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
     stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=linlg_pcntle, dof=dof)
 
@@ -1386,7 +1462,7 @@ def chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
 def logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
                   xlabel="", ylabel="", scale=1.0, prec='compact', title='$\\log(\\mathcal{L})$', linlg_pcntle=.05, sumUp=False,
                   boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
-                  save_to=None, ticSize=20, invert=False, fidPairs=None):
+                  save_to=None, ticSize=20, invert=False, fidPairs=None, gatestring_filters=None):
     """
     Create a color box plot of log-likelihood values.
 
@@ -1400,7 +1476,7 @@ def logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
     xy_gatestring_dict : dict
         Dictionary with keys == (x_value,y_value) tuples and values == gate strings, where
         a gate string can either be a GateString object or a tuple of gate labels.  Provides
-        the mapping between x,y pairs and gate strings.  None values are allowed, and 
+        the mapping between x,y pairs and gate strings.  None values are allowed, and
         indicate that there is not data for that x,y pair and nothing should be plotted.
 
     dataset : DataSet
@@ -1437,7 +1513,7 @@ def logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
         a single color box for the sum.
 
     boxLabels : bool, optional
-        Whether box labels are displayed.  It takes much longer to 
+        Whether box labels are displayed.  It takes much longer to
         generate the figure when this is set to True.
 
     histogram : bool, optional
@@ -1466,6 +1542,15 @@ def logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
         A list of (iRhoStr,iEStr) tuples specifying a subset of all the prepStr,effectStr
         pairs to include in the plot.
 
+    gatestring_filters : dict, optional
+        If not None, a dictionary of lists whose keys are the x-values contained
+        in the plot.  `gatestring_filters[x]` is a list of GateString objects
+        specifying which elements are allowed to be computed in the matrices of
+        the column corresponding to x.  Other entries are not displayed.  Thus,
+        this argument allows one to filter on a per-column basis which matrix
+        elements are displayed.
+
+
     Returns
     -------
     rptFig : ReportFigure
@@ -1479,8 +1564,9 @@ def logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
     """
 
     prepStrs, effectStrs = strs
-    def mx_fn(gateStr):
-        return logl_matrix( gateStr, dataset, gateset, strs, minProbClipForWeighting, fidPairs)
+    def mx_fn(gateStr,x,y):
+        return logl_matrix( gateStr, dataset, gateset, strs, minProbClipForWeighting, fidPairs,
+                            gatestring_filters[x] if gatestring_filters is not None else None )
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
     stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=linlg_pcntle, dof=dof)
 
@@ -1509,7 +1595,7 @@ def blank_boxplot( xvals, yvals, xy_gatestring_dict, strs, xlabel="", ylabel="",
     xy_gatestring_dict : dict
         Dictionary with keys == (x_value,y_value) tuples and values == gate strings, where
         a gate string can either be a GateString object or a tuple of gate labels.  Provides
-        the mapping between x,y pairs and gate strings.  None values are allowed, and 
+        the mapping between x,y pairs and gate strings.  None values are allowed, and
         indicate that there is not data for that x,y pair and nothing should be plotted.
 
     strs : 2-tuple
@@ -1551,7 +1637,7 @@ def blank_boxplot( xvals, yvals, xy_gatestring_dict, strs, xlabel="", ylabel="",
             The number of used Y-values, proportional to the overall final figure height
     """
     prepStrs, effectStrs = strs
-    def mx_fn(gateStr):
+    def mx_fn(gateStr,x,y):
         return _np.nan * _np.zeros( (len(strs[1]),len(strs[0])), 'd')
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
     stdcmap = StdColormapFactory('seq', n_boxes=n_boxes, vmin=0, vmax=1, dof=dof)
@@ -1563,7 +1649,7 @@ def blank_boxplot( xvals, yvals, xy_gatestring_dict, strs, xlabel="", ylabel="",
 
 
 def small_eigval_err_rate_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGSTgatesets,
-                               xlabel="", ylabel="", m=None, M=None, scale=1.0, prec=-1, 
+                               xlabel="", ylabel="", m=None, M=None, scale=1.0, prec=-1,
                                title='Error rate, extrap. from small eigenvalue of Direct GST estimate',
                                boxLabels=True, histogram=False, histBins=50,
                                save_to=None, ticSize=14):
@@ -1580,7 +1666,7 @@ def small_eigval_err_rate_boxplot( xvals, yvals, xy_gatestring_dict, dataset, di
     xy_gatestring_dict : dict
         Dictionary with keys == (x_value,y_value) tuples and values == gate strings, where
         a gate string can either be a GateString object or a tuple of gate labels.  Provides
-        the mapping between x,y pairs and gate strings.  None values are allowed, and 
+        the mapping between x,y pairs and gate strings.  None values are allowed, and
         indicate that there is not data for that x,y pair and nothing should be plotted.
 
     dataset : DataSet
@@ -1610,7 +1696,7 @@ def small_eigval_err_rate_boxplot( xvals, yvals, xy_gatestring_dict, dataset, di
         Plot title (latex can be used)
 
     boxLabels : bool, optional
-        Whether box labels are displayed.  It takes much longer to 
+        Whether box labels are displayed.  It takes much longer to
         generate the figure when this is set to True.
 
     histogram : bool, optional
@@ -1638,11 +1724,11 @@ def small_eigval_err_rate_boxplot( xvals, yvals, xy_gatestring_dict, dataset, di
             The number of used Y-values, proportional to the overall final figure height
     """
 
-    def mx_fn(gateStr): #error rate as 1x1 matrix which we have plotting function sum up
+    def mx_fn(gateStr,x,y): #error rate as 1x1 matrix which we have plotting function sum up
         return _np.array( [[ small_eigval_err_rate(gateStr, dataset,  directGSTgatesets) ]] )
-    xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,True)
-    max_abs = max([ _np.max(_np.abs(subMxs[iy][ix])) 
-                    for ix in range(len(xvals)) 
+    xvals, yvals, subMxs, _, _ = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,True)
+    max_abs = max([ _np.max(_np.abs(subMxs[iy][ix]))
+                    for ix in range(len(xvals))
                     for iy in range(len(yvals)) ])
     m = 0 if m is None else m
     M = max_abs if M is None else M
@@ -1652,7 +1738,7 @@ def small_eigval_err_rate_boxplot( xvals, yvals, xy_gatestring_dict, dataset, di
                             scale,prec,title, True,boxLabels,histogram,histBins,save_to,ticSize)
 
 
-            
+
 def gateset_with_lgst_gatestring_estimates( gateStringsToEstimate, dataset, specs,
                                         targetGateset=None, includeTargetGates=True,
                                         spamDict=None, guessGatesetForGauge=None,
@@ -1661,7 +1747,7 @@ def gateset_with_lgst_gatestring_estimates( gateStringsToEstimate, dataset, spec
     Constructs a gateset that contains LGST estimates for gateStringsToEstimate.
 
     For each gate string s in gateStringsToEstimate, the constructed gateset
-    contains the LGST estimate for s as separate gate, labeled either by 
+    contains the LGST estimate for s as separate gate, labeled either by
     the corresponding element of gateStringLabels or by the tuple of s itself.
 
     Parameters
@@ -1671,7 +1757,7 @@ def gateset_with_lgst_gatestring_estimates( gateStringsToEstimate, dataset, spec
 
     dataset : DataSet
         The data to use for LGST
-        
+
     specs : 2-tuple
         A (prepSpecs,effectSpecs) tuple usually generated by calling build_spam_specs(...)
 
@@ -1689,12 +1775,12 @@ def gateset_with_lgst_gatestring_estimates( gateStringsToEstimate, dataset, spec
     guessGatesetForGauge : GateSet, optional
         A gateset used to compute a gauge transformation that is applied to
         the LGST estimates.  This gauge transformation is computed such that
-        if the estimated gates matched the gateset given, then the gate 
+        if the estimated gates matched the gateset given, then the gate
         matrices would match, i.e. the gauge would be the same as
         the gateset supplied. Defaults to the targetGateset.
 
     gateStringLabels : list of strings, optional
-        A list of labels in one-to-one correspondence with the 
+        A list of labels in one-to-one correspondence with the
         gate string in gateStringsToEstimate.  These labels are
         the keys to access the gate matrices in the returned
         GateSet, i.e. gate_matrix = returned_gateset[gate_label]
@@ -1710,14 +1796,14 @@ def gateset_with_lgst_gatestring_estimates( gateStringsToEstimate, dataset, spec
     Returns
     -------
     Gateset
-        A gateset containing LGST estimates for all the requested 
+        A gateset containing LGST estimates for all the requested
         gate strings and possibly the gates in targetGateset.
     """
     gateLabels = [] #list of gate labels for LGST to estimate
 
     #Add gate strings to estimate as aliases
     aliases = { }
-    if gateStringLabels is not None: 
+    if gateStringLabels is not None:
         assert(len(gateStringLabels) == len(gateStringsToEstimate))
         for gateLabel,gateStr in zip(gateStringLabels,gateStringsToEstimate):
             aliases[gateLabel] = tuple(gateStr)
@@ -1727,17 +1813,17 @@ def gateset_with_lgst_gatestring_estimates( gateStringsToEstimate, dataset, spec
             newLabel = 'G'+'.'.join(tuple(gateStr))
             aliases[newLabel] = tuple(gateStr) #use gatestring tuple as label
             gateLabels.append(newLabel)
-            
+
     #Add target gateset labels (not aliased) if requested
     if includeTargetGates and targetGateset is not None:
         for targetGateLabel in targetGateset.gates:
             if targetGateLabel not in gateLabels: #very unlikely that this is false
                 gateLabels.append(targetGateLabel)
-        
+
     return _alg.do_lgst( dataset, specs, targetGateset, gateLabels, aliases,
                spamDict, guessGatesetForGauge, svdTruncateTo, None, verbosity )
 
-def direct_lgst_gateset( gateStringToEstimate, gateStringLabel, dataset, 
+def direct_lgst_gateset( gateStringToEstimate, gateStringLabel, dataset,
                        specs, targetGateset, svdTruncateTo=0, verbosity=0 ):
     """
     Constructs a gateset of LGST estimates for target gates and gateStringToEstimate.
@@ -1753,7 +1839,7 @@ def direct_lgst_gateset( gateStringToEstimate, gateStringLabel, dataset,
 
     dataset : DataSet
         The data to use for LGST
-        
+
     specs : 2-tuple
         A (prepSpecs,effectSpecs) tuple usually generated by calling build_spam_specs(...)
 
@@ -1789,7 +1875,7 @@ def direct_lgst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncate
 
     dataset : DataSet
         The data to use for all LGST estimates.
-        
+
     specs : 2-tuple
         A (prepSpecs,effectSpecs) tuple usually generated by calling build_spam_specs(...)
 
@@ -1808,16 +1894,19 @@ def direct_lgst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncate
     -------
     dict
         A dictionary that relates each gate string of gateStrings to a
-        GateSet containing the LGST estimate of that gate string stored under 
+        GateSet containing the LGST estimate of that gate string stored under
         the gate label "GsigmaLbl", along with LGST estimates of the gates in
         targetGateset.
-    """    
+    """
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+
     directLGSTgatesets = {}
-    if verbosity > 0: print "--- Direct LGST precomputation ---"
-    for i,sigma in enumerate(gateStrings):
-        if verbosity > 0: print "--- Computing gateset for string %d of %d ---" % (i,len(gateStrings))
-        directLGSTgatesets[sigma] = direct_lgst_gateset( sigma, "GsigmaLbl", dataset, specs, targetGateset,
-                                                        svdTruncateTo, verbosity)
+    printer.log("--- Direct LGST precomputation ---")
+    with printer.progress_logging(1):
+        for i,sigma in enumerate(gateStrings):
+            printer.show_progress(i, len(gateStrings)-1, prefix="--- Computing gateset for string -", suffix='---' )
+            directLGSTgatesets[sigma] = direct_lgst_gateset( sigma, "GsigmaLbl", dataset, specs, targetGateset,
+                                                            svdTruncateTo, verbosity)
     return directLGSTgatesets
 
 
@@ -1829,7 +1918,7 @@ def direct_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs
 
     Starting with a Direct-LGST estimate for gateStringToEstimate, runs LSGST
     using the same strings that LGST would have used to estimate gateStringToEstimate
-    and each of the target gates.  That is, LSGST is run with strings of the form: 
+    and each of the target gates.  That is, LSGST is run with strings of the form:
 
     1. prepStr
     2. effectStr
@@ -1850,7 +1939,7 @@ def direct_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs
 
     dataset : DataSet
         The data to use for LGST
-        
+
     specs : 2-tuple
         A (prepSpecs,effectSpecs) tuple usually generated by calling build_spam_specs(...)
 
@@ -1887,18 +1976,18 @@ def direct_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs
     # LEXICOGRAPHICAL VS MATRIX ORDER
     gatestrings = prepStrs + effectStrs + [ prepStr + effectStr for prepStr in prepStrs for effectStr in effectStrs ]
     for gateLabel in direct_lgst.gates:
-        gatestrings.extend( [ prepStr + _objs.GateString( (gateLabel,), bCheck=False) + effectStr 
+        gatestrings.extend( [ prepStr + _objs.GateString( (gateLabel,), bCheck=False) + effectStr
                               for prepStr in prepStrs for effectStr in effectStrs ] )
 
-    errvec, direct_lsgst = _alg.do_mc2gst(
-        dataset, direct_lgst, gatestrings, 
+    _, direct_lsgst = _alg.do_mc2gst(
+        dataset, direct_lgst, gatestrings,
         minProbClipForWeighting=minProbClipForWeighting,
         probClipInterval=probClipInterval, verbosity=verbosity,
         gateLabelAliases={gateStringLabel: gateStringToEstimate} )
                                          #opt_gates=[gateStringLabel])
     return direct_lsgst
-    
-    
+
+
 def direct_mc2gst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncateTo=0,
                         minProbClipForWeighting=1e-4, probClipInterval=(-1e6,1e6), verbosity=0):
     """
@@ -1912,7 +2001,7 @@ def direct_mc2gst_gatesets(gateStrings, dataset, specs, targetGateset, svdTrunca
 
     dataset : DataSet
         The data to use for all LGST and LSGST estimates.
-        
+
     specs : 2-tuple
         A (prepSpecs,effectSpecs) tuple usually generated by calling build_spam_specs(...)
 
@@ -1939,17 +2028,19 @@ def direct_mc2gst_gatesets(gateStrings, dataset, specs, targetGateset, svdTrunca
     -------
     dict
         A dictionary that relates each gate string of gateStrings to a
-        GateSet containing the LSGST estimate of that gate string stored under 
+        GateSet containing the LSGST estimate of that gate string stored under
         the gate label "GsigmaLbl", along with LSGST estimates of the gates in
         targetGateset.
-    """    
+    """
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
     directLSGSTgatesets = {}
-    if verbosity > 0: print "--- Direct LSGST precomputation ---"
-    for i,sigma in enumerate(gateStrings):
-        if verbosity > 0: print "--- Computing gateset for string %d of %d ---" % (i,len(gateStrings))
-        directLSGSTgatesets[sigma] = direct_mc2gst_gateset( sigma, "GsigmaLbl", dataset, specs, targetGateset,
-                                                        svdTruncateTo, minProbClipForWeighting,
-                                                        probClipInterval, verbosity)
+    printer.log("--- Direct LSGST precomputation ---")
+    with printer.progress_logging(1):
+        for i,sigma in enumerate(gateStrings):
+            printer.show_progress(i, len(gateStrings) - 1, prefix="--- Computing gateset for string-", suffix='---')
+            directLSGSTgatesets[sigma] = direct_mc2gst_gateset( sigma, "GsigmaLbl", dataset, specs, targetGateset,
+                                                            svdTruncateTo, minProbClipForWeighting,
+                                                            probClipInterval, verbosity)
     return directLSGSTgatesets
 
 
@@ -1960,7 +2051,7 @@ def direct_mlgst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs,
 
     Starting with a Direct-LGST estimate for gateStringToEstimate, runs MLEGST
     using the same strings that LGST would have used to estimate gateStringToEstimate
-    and each of the target gates.  That is, MLEGST is run with strings of the form: 
+    and each of the target gates.  That is, MLEGST is run with strings of the form:
 
     1. prepStr
     2. effectStr
@@ -1981,7 +2072,7 @@ def direct_mlgst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs,
 
     dataset : DataSet
         The data to use for LGST
-        
+
     specs : 2-tuple
         A (prepSpecs,effectSpecs) tuple usually generated by calling build_spam_specs(...)
 
@@ -2018,10 +2109,10 @@ def direct_mlgst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs,
     # LEXICOGRAPHICAL VS MATRIX ORDER
     gatestrings = prepStrs + effectStrs + [ prepStr + effectStr for prepStr in prepStrs for effectStr in effectStrs ]
     for gateLabel in direct_lgst.gates:
-        gatestrings.extend( [ prepStr + _objs.GateString( (gateLabel,), bCheck=False) + effectStr 
+        gatestrings.extend( [ prepStr + _objs.GateString( (gateLabel,), bCheck=False) + effectStr
                               for prepStr in prepStrs for effectStr in effectStrs ] )
 
-    maxLogL, direct_mlegst = _alg.do_mlgst(
+    _, direct_mlegst = _alg.do_mlgst(
         dataset, direct_lgst, gatestrings, minProbClip=minProbClip,
         probClipInterval=probClipInterval, verbosity=verbosity,
         gateLabelAliases={gateStringLabel: gateStringToEstimate} )
@@ -2041,7 +2132,7 @@ def direct_mlgst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncat
 
     dataset : DataSet
         The data to use for all LGST and LSGST estimates.
-        
+
     specs : 2-tuple
         A (prepSpecs,effectSpecs) tuple usually generated by calling build_spam_specs(...)
 
@@ -2068,16 +2159,18 @@ def direct_mlgst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncat
     -------
     dict
         A dictionary that relates each gate string of gateStrings to a
-        GateSet containing the MLEGST estimate of that gate string stored under 
+        GateSet containing the MLEGST estimate of that gate string stored under
         the gate label "GsigmaLbl", along with MLEGST estimates of the gates in
         targetGateset.
-    """    
+    """
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
     directMLEGSTgatesets = {}
-    if verbosity > 0: print "--- Direct MLEGST precomputation ---"
-    for i,sigma in enumerate(gateStrings):
-        if verbosity > 0: print "--- Computing gateset for string %d of %d ---" % (i,len(gateStrings))
-        directMLEGSTgatesets[sigma] = direct_mlgst_gateset( sigma, "GsigmaLbl", dataset, specs, targetGateset,
-                                                        svdTruncateTo, minProbClip, probClipInterval, verbosity)
+    printer.log("--- Direct MLEGST precomputation ---")
+    with printer.progress_logging(1):
+        for i,sigma in enumerate(gateStrings):
+            printer.show_progress(i, len(gateStrings) - 1, prefix="--- Computing gateset for string ", suffix="---")
+            directMLEGSTgatesets[sigma] = direct_mlgst_gateset( sigma, "GsigmaLbl", dataset, specs, targetGateset,
+                                                            svdTruncateTo, minProbClip, probClipInterval, verbosity)
     return directMLEGSTgatesets
 
 
@@ -2086,7 +2179,7 @@ def focused_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, spec
     """
     Constructs a gateset containing a single LSGST estimate of gateStringToEstimate.
 
-    Starting with startGateset, run LSGST with the same gate strings that LGST 
+    Starting with startGateset, run LSGST with the same gate strings that LGST
     would use to estimate gateStringToEstimate.  That is, LSGST is run with
     strings of the form:  prepStr + gateStringToEstimate + effectStr
     and return the resulting Gateset.
@@ -2102,7 +2195,7 @@ def focused_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, spec
 
     dataset : DataSet
         The data to use for LGST
-        
+
     specs : 2-tuple
         A (prepSpecs,effectSpecs) tuple usually generated by calling build_spam_specs(...)
 
@@ -2128,8 +2221,8 @@ def focused_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, spec
     prepStrs, effectStrs = _construction.get_spam_strs(specs) # LEXICOGRAPHICAL VS MATRIX ORDER
     gatestrings = [ prepStr + gateStringToEstimate + effectStr for prepStr in prepStrs for effectStr in effectStrs ]
 
-    errvec, focused_lsgst = _alg.do_mc2gst(
-        dataset, startGateset, gatestrings, 
+    _, focused_lsgst = _alg.do_mc2gst(
+        dataset, startGateset, gatestrings,
         minProbClipForWeighting=minProbClipForWeighting,
         probClipInterval=probClipInterval, verbosity=verbosity)
 
@@ -2139,7 +2232,7 @@ def focused_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, spec
 
 
 def focused_mc2gst_gatesets(gateStrings, dataset, specs, startGateset,
-                            minProbClipForWeighting=1e-4, 
+                            minProbClipForWeighting=1e-4,
                             probClipInterval=(-1e6,1e6), verbosity=0):
     """
     Constructs a dictionary with keys == gate strings and values == Focused-LSGST GateSets.
@@ -2152,7 +2245,7 @@ def focused_mc2gst_gatesets(gateStrings, dataset, specs, startGateset,
 
     dataset : DataSet
         The data to use for all LGST and LSGST estimates.
-        
+
     specs : 2-tuple
         A (prepSpecs,effectSpecs) tuple usually generated by calling build_spam_specs(...)
 
@@ -2174,21 +2267,25 @@ def focused_mc2gst_gatesets(gateStrings, dataset, specs, startGateset,
     -------
     dict
         A dictionary that relates each gate string of gateStrings to a
-        GateSet containing the LSGST estimate of that gate string stored under 
+        GateSet containing the LSGST estimate of that gate string stored under
         the gate label "GsigmaLbl".
-    """    
+    """
+
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
     focusedLSGSTgatesets = {}
-    if verbosity > 0: print "--- Focused LSGST precomputation ---"
-    for i,sigma in enumerate(gateStrings):
-        if verbosity > 0: print "--- Computing gateset for string %d of %d ---" % (i,len(gateStrings))
-        focusedLSGSTgatesets[sigma] = focused_mc2gst_gateset( sigma, "GsigmaLbl", dataset, specs, startGateset,
-                                                           minProbClipForWeighting, probClipInterval, verbosity)
+    printer.log("--- Focused LSGST precomputation ---")
+    with printer.progress_logging(1):
+        for i,sigma in enumerate(gateStrings):
+            printer.show_progress(i, len(gateStrings) - 1, prefix="--- Computing gateset for string", suffix='---')
+            focusedLSGSTgatesets[sigma] = focused_mc2gst_gateset( sigma, "GsigmaLbl", dataset, specs, startGateset,
+                                                               minProbClipForWeighting, probClipInterval, verbosity)
     return focusedLSGSTgatesets
 
 
 
-def direct_chi2_matrix( sigma, dataset, directGateset, strs,
-                       minProbClipForWeighting=1e-4, fidPairs=None):
+def direct_chi2_matrix(sigma, dataset, directGateset, strs,
+                       minProbClipForWeighting=1e-4, fidPairs=None,
+                       gatestring_filter=None):
     """
     Computes the Direct-X chi^2 matrix for a base gatestring sigma.
 
@@ -2217,21 +2314,29 @@ def direct_chi2_matrix( sigma, dataset, directGateset, strs,
 
     fidPairs : list, optional
         A list of (iRhoStr,iEStr) tuples specifying a subset of all the prepStr,effectStr
-        pairs to include in the matrix.  Other elements are set to NaN.
+        pairs to include in the matrix.
+
+    gatestring_filter : list, optional
+        If not None, a list of GateString objects specifying which elements
+        of the matrix should be computed.  Any matrix entry corresponding to
+        an gate string *not* in this list is set to NaN.
+
 
     Returns
     -------
     numpy array of shape ( len(effectStrs), len(prepStrs) )
-        Direct-X chi^2 values corresponding to gate sequences where 
+        Direct-X chi^2 values corresponding to gate sequences where
         gateString is sandwiched between the each (effectStr,prepStr) pair.
     """
     chiSqMx = _np.zeros( (len(strs[1]),len(strs[0])), 'd')
     if sigma is None: return _np.nan*chiSqMx
-    cntMx  = total_count_matrix(  sigma, dataset, strs, fidPairs)
+    cntMx  = total_count_matrix(  sigma, dataset, strs, fidPairs, gatestring_filter )
     gs_direct = directGateset
     for sl in gs_direct.get_spam_labels():
-        probMx = probability_matrix( _objs.GateString( ("GsigmaLbl",) ), gs_direct, sl, strs, fidPairs)
-        freqMx = frequency_matrix( sigma, dataset, sl, strs, fidPairs)
+        probMx = probability_matrix( _objs.GateString( ("GsigmaLbl",) ),
+                                     gs_direct, sl, strs, fidPairs, gatestring_filter)
+        freqMx = frequency_matrix( sigma, dataset, sl, strs, fidPairs,
+                                   gatestring_filter)
         chiSqMx += _tools.chi2fn( cntMx, probMx, freqMx,
                                      minProbClipForWeighting)
     return chiSqMx
@@ -2239,7 +2344,8 @@ def direct_chi2_matrix( sigma, dataset, directGateset, strs,
 def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatesets, strs, xlabel="", ylabel="",
                         scale=1.0, prec='compact', title=r"Direct $\chi^2$", sumUp=False,
                         boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
-                        save_to=None, ticSize=20, invert=False, fidPairs=None, linlg_pcntle=.05):
+                        save_to=None, ticSize=20, invert=False, fidPairs=None, gatestring_filters=None,
+                        linlg_pcntle=.05):
     """
     Create a color box plot of Direct-X chi^2 values.
 
@@ -2253,14 +2359,14 @@ def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
     xy_gatestring_dict : dict
         Dictionary with keys == (x_value,y_value) tuples and values == gate strings, where
         a gate string can either be a GateString object or a tuple of gate labels.  Provides
-        the mapping between x,y pairs and gate strings.  None values are allowed, and 
+        the mapping between x,y pairs and gate strings.  None values are allowed, and
         indicate that there is not data for that x,y pair and nothing should be plotted.
 
     dataset : DataSet
         The data used to specify frequencies and counts
 
     directGatesets : dict
-        Dictionary with keys == gate strings and values == GateSets.  
+        Dictionary with keys == gate strings and values == GateSets.
         directGatesets[sigma] must be a GateSet which contains an estimate
         of sigma stored under the gate label "GsigmaLbl".
 
@@ -2289,7 +2395,7 @@ def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
         a single color box for the sum.
 
     boxLabels : bool, optional
-        Whether box labels are displayed.  It takes much longer to 
+        Whether box labels are displayed.  It takes much longer to
         generate the figure when this is set to True.
 
     histogram : bool, optional
@@ -2318,6 +2424,14 @@ def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
         A list of (iRhoStr,iEStr) tuples specifying a subset of all the prepStr,effectStr
         pairs to include in the plot.
 
+    gatestring_filters : dict, optional
+        If not None, a dictionary of lists whose keys are the x-values contained
+        in the plot.  `gatestring_filters[x]` is a list of GateString objects
+        specifying which elements are allowed to be computed in the matrices of
+        the column corresponding to x.  Other entries are not displayed.  Thus,
+        this argument allows one to filter on a per-column basis which matrix
+        elements are displayed.
+
     linlg_pcntle: float, optional
         Specifies the (1 - linlg_pcntle) percentile to compute for the boxplots
 
@@ -2333,9 +2447,10 @@ def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
             The number of used Y-values, proportional to the overall final figure height
     """
     prepStrs, effectStrs = strs
-    def mx_fn(gateStr):
+    def mx_fn(gateStr,x,y):
         return direct_chi2_matrix( gateStr, dataset, directGatesets.get(gateStr,None),
-                                   strs, minProbClipForWeighting, fidPairs)
+                                   strs, minProbClipForWeighting, fidPairs,
+                                   gatestring_filters[x] if (gatestring_filters is not None) else None)
 
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
     stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=linlg_pcntle, dof=dof)
@@ -2346,8 +2461,9 @@ def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
 
 
 
-def direct_logl_matrix( sigma, dataset, directGateset, strs,
-                       minProbClip=1e-6, fidPairs=None):
+def direct_logl_matrix(sigma, dataset, directGateset, strs,
+                       minProbClip=1e-6, fidPairs=None,
+                       gatestring_filter=None):
     """
     Computes the Direct-X log-likelihood matrix, containing the values
      of 2*( log(L)_upperbound - log(L) ) for a base gatestring sigma.
@@ -2379,20 +2495,28 @@ def direct_logl_matrix( sigma, dataset, directGateset, strs,
         A list of (iRhoStr,iEStr) tuples specifying a subset of all the prepStr,effectStr
         pairs to include in the matrix.  Other elements are set to NaN.
 
+    gatestring_filter : list, optional
+        If not None, a list of GateString objects specifying which elements
+        of the matrix should be computed.  Any matrix entry corresponding to
+        an gate string *not* in this list is set to NaN.
+
+
     Returns
     -------
     numpy array of shape ( len(effectStrs), len(prepStrs) )
-        Direct-X chi^2 values corresponding to gate sequences where 
+        Direct-X chi^2 values corresponding to gate sequences where
         gateString is sandwiched between the each (effectStr,prepStr) pair.
     """
     logLMx = _np.zeros( (len(strs[1]),len(strs[0])), 'd')
     if sigma is None: return _np.nan*logLMx
-    cntMx  = total_count_matrix(  sigma, dataset, strs, fidPairs)
+    cntMx  = total_count_matrix(sigma,dataset,strs,fidPairs,gatestring_filter)
     gs_direct = directGateset
     for sl in gs_direct.get_spam_labels():
         probMx = probability_matrix( _objs.GateString( ("GsigmaLbl",) ),
-                                    gs_direct, sl, strs, fidPairs)
-        freqMx = frequency_matrix( sigma, dataset, sl, strs, fidPairs)
+                                     gs_direct, sl, strs, fidPairs,
+                                     gatestring_filter)
+        freqMx = frequency_matrix( sigma, dataset, sl, strs, fidPairs,
+                                   gatestring_filter)
         logLMx += _tools.two_delta_loglfn( cntMx, probMx, freqMx, minProbClip)
     return logLMx
 
@@ -2400,7 +2524,8 @@ def direct_logl_matrix( sigma, dataset, directGateset, strs,
 def direct_logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatesets, strs, xlabel="", ylabel="",
                         scale=1.0, prec='compact', title=r"Direct $\log(\mathcal{L})$", sumUp=False,
                         boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
-                        save_to=None, ticSize=20, invert=False, fidPairs=None, linlg_pcntle=.05):
+                        save_to=None, ticSize=20, invert=False, fidPairs=None, gatestring_filters=None,
+                        linlg_pcntle=.05):
     """
     Create a color box plot of Direct-X log-likelihood values.
 
@@ -2414,14 +2539,14 @@ def direct_logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
     xy_gatestring_dict : dict
         Dictionary with keys == (x_value,y_value) tuples and values == gate strings, where
         a gate string can either be a GateString object or a tuple of gate labels.  Provides
-        the mapping between x,y pairs and gate strings.  None values are allowed, and 
+        the mapping between x,y pairs and gate strings.  None values are allowed, and
         indicate that there is not data for that x,y pair and nothing should be plotted.
 
     dataset : DataSet
         The data used to specify frequencies and counts
 
     directGatesets : dict
-        Dictionary with keys == gate strings and values == GateSets.  
+        Dictionary with keys == gate strings and values == GateSets.
         directGatesets[sigma] must be a GateSet which contains an estimate
         of sigma stored under the gate label "GsigmaLbl".
 
@@ -2450,7 +2575,7 @@ def direct_logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
         a single color box for the sum.
 
     boxLabels : bool, optional
-        Whether box labels are displayed.  It takes much longer to 
+        Whether box labels are displayed.  It takes much longer to
         generate the figure when this is set to True.
 
     histogram : bool, optional
@@ -2479,6 +2604,14 @@ def direct_logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
         A list of (iRhoStr,iEStr) tuples specifying a subset of all the prepStr,effectStr
         pairs to include in the plot.
 
+    gatestring_filters : dict, optional
+        If not None, a dictionary of lists whose keys are the x-values contained
+        in the plot.  `gatestring_filters[x]` is a list of GateString objects
+        specifying which elements are allowed to be computed in the matrices of
+        the column corresponding to x.  Other entries are not displayed.  Thus,
+        this argument allows one to filter on a per-column basis which matrix
+        elements are displayed.
+
     linlg_pcntle: float, optional
         Specifies the (1 - linlg_pcntle) percentile to compute for the boxplots
 
@@ -2494,9 +2627,10 @@ def direct_logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatese
             The number of used Y-values, proportional to the overall final figure height
     """
     prepStrs, effectStrs = strs
-    def mx_fn(gateStr):
+    def mx_fn(gateStr,x,y):
         return direct_logl_matrix( gateStr, dataset, directGatesets.get(gateStr,None),
-                                   strs, minProbClipForWeighting, fidPairs)
+                                   strs, minProbClipForWeighting, fidPairs,
+                                   gatestring_filters[x] if (gatestring_filters is not None) else None)
 
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
     stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=linlg_pcntle, dof=dof)
@@ -2511,11 +2645,11 @@ def direct2x_comp_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGate
                              boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
                              save_to=None, ticSize=20, invert=False):
     """
-    Create a box plot indicating how well the Direct-X estimates of string s 
+    Create a box plot indicating how well the Direct-X estimates of string s
     predict the data for 2s (the string repeated)
 
     Creates a color box plot whose boxes (or box, if sumUp == True) at
-    position (x,y) display the chi^2 for the (x,y) base gate string 
+    position (x,y) display the chi^2 for the (x,y) base gate string
     **repeated twice** (if this data is available), where the probabilities
     used in the chi^2 calculation are obtained using the Direct-X gateset
     for the un-repeated (x,y) base gate string.  That is, the box(es) at
@@ -2533,14 +2667,14 @@ def direct2x_comp_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGate
     xy_gatestring_dict : dict
         Dictionary with keys == (x_value,y_value) tuples and values == gate strings, where
         a gate string can either be a GateString object or a tuple of gate labels.  Provides
-        the mapping between x,y pairs and gate strings.  None values are allowed, and 
+        the mapping between x,y pairs and gate strings.  None values are allowed, and
         indicate that there is not data for that x,y pair and nothing should be plotted.
 
     dataset : DataSet
         The data used to specify frequencies and counts
 
     directGatesets : dict
-        Dictionary with keys == gate strings and values == GateSets.  
+        Dictionary with keys == gate strings and values == GateSets.
         directGatesets[sigma] must be a GateSet which contains an estimate
         of sigma stored under the gate label "GsigmaLbl".
 
@@ -2572,7 +2706,7 @@ def direct2x_comp_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGate
         a single color box for the sum.
 
     boxLabels : bool, optional
-        Whether box labels are displayed.  It takes much longer to 
+        Whether box labels are displayed.  It takes much longer to
         generate the figure when this is set to True.
 
     histogram : bool, optional
@@ -2609,12 +2743,12 @@ def direct2x_comp_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGate
             The number of used Y-values, proportional to the overall final figure height
     """
     prepStrs, effectStrs = strs
-    def mx_fn(gateStr):
+    def mx_fn(gateStr,x,y):
         chiSqMx = _np.zeros( (len(strs[1]),len(strs[0])), 'd')
         if gateStr is None: return _np.nan*chiSqMx
         gs_direct = directGatesets[ gateStr ] #contains "GsigmaLbl" gate <=> gateStr
         try:
-        #if gateStr*2 in directGatesets: 
+        #if gateStr*2 in directGatesets:
             cntMx  = total_count_matrix(  gateStr*2, dataset, strs)
             for sl in gs_direct.get_spam_labels():
                 probMx = probability_matrix( _objs.GateString( ("GsigmaLbl","GsigmaLbl") ), gs_direct, sl, strs)
@@ -2627,8 +2761,8 @@ def direct2x_comp_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGate
         return chiSqMx
 
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
-    max_abs = max([ _np.max(_np.abs(subMxs[iy][ix])) 
-                    for ix in range(len(xvals)) 
+    max_abs = max([ _np.max(_np.abs(subMxs[iy][ix]))
+                    for ix in range(len(xvals))
                     for iy in range(len(yvals)) ])
     m = -max_abs if m is None else m
     M = +max_abs if M is None else M
@@ -2646,19 +2780,19 @@ def direct_deviation_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset
     Create a box plot showing the difference in max-fidelity-with-unitary
     between gateset's estimate for each base gate string and the Direct-X estimate.
 
-    Creates a color box plot whose box at position (x,y) shows the 
+    Creates a color box plot whose box at position (x,y) shows the
     the difference between:
 
-    1. the upper bound of the fidelity between the map corresponding to 
+    1. the upper bound of the fidelity between the map corresponding to
        this base gate string using the Direct-X estimate of this map
        (i.e. by using only data relevant to this particular string) and
        a unitary map.
 
-    2. the upper bound of the fidelity between the map corresponding to 
+    2. the upper bound of the fidelity between the map corresponding to
        this base gate string using gateset (i.e. by multiplying together
        single gate estimates) and a unitary map.
 
-    The plotted quantity indicates how much more "unitary", i.e. how 
+    The plotted quantity indicates how much more "unitary", i.e. how
     much less "depolarized", the map corresponding to each base gate
     sequence is when considering only the data immediately relevant
     to predicting that map. Large absolute values indicate that
@@ -2676,14 +2810,14 @@ def direct_deviation_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset
     xy_gatestring_dict : dict
         Dictionary with keys == (x_value,y_value) tuples and values == gate strings, where
         a gate string can either be a GateString object or a tuple of gate labels.  Provides
-        the mapping between x,y pairs and gate strings.  None values are allowed, and 
+        the mapping between x,y pairs and gate strings.  None values are allowed, and
         indicate that there is not data for that x,y pair and nothing should be plotted.
 
     dataset : DataSet
         The data used to specify frequencies and counts
 
     directGatesets : dict
-        Dictionary with keys == gate strings and values == GateSets.  
+        Dictionary with keys == gate strings and values == GateSets.
         directGatesets[sigma] must be a GateSet which contains an estimate
         of sigma stored under the gate label "GsigmaLbl".
 
@@ -2707,7 +2841,7 @@ def direct_deviation_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset
         Plot title (latex can be used)
 
     boxLabels : bool, optional
-        Whether box labels are displayed.  It takes much longer to 
+        Whether box labels are displayed.  It takes much longer to
         generate the figure when this is set to True.
 
     histogram : bool, optional
@@ -2734,19 +2868,19 @@ def direct_deviation_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset
         nUsedYs : int
             The number of used Y-values, proportional to the overall final figure height
     """
-    def mx_fn(gateStr):
+    def mx_fn(gateStr,x,y):
         if gateStr is None: return _np.nan * _np.zeros( (1,1), 'd')
         gate = gateset.product( gateStr )
         gate_direct = directGatesets[ gateStr ].gates[ "GsigmaLbl" ]
         #evals = _np.linalg.eigvals(gate)
         #evals_direct = _np.linalg.eigvals(gate_direct)
-        ubF, ubGateMx = _tools.fidelity_upper_bound(gate)
-        ubF_direct, ubGateMx = _tools.fidelity_upper_bound(gate_direct)
+        ubF, _ = _tools.fidelity_upper_bound(gate)
+        ubF_direct, _ = _tools.fidelity_upper_bound(gate_direct)
         return _np.array( ubF_direct - ubF, dtype='float64' )
 
-    xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,True)
-    max_abs = max([ _np.max(_np.abs(subMxs[iy][ix])) 
-                    for ix in range(len(xvals)) 
+    xvals, yvals, subMxs, _, _ = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,True)
+    max_abs = max([ _np.max(_np.abs(subMxs[iy][ix]))
+                    for ix in range(len(xvals))
                     for iy in range(len(yvals)) ])
     m = -max_abs if m is None else m
     M = +max_abs if M is None else M
@@ -2756,11 +2890,12 @@ def direct_deviation_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset
 
 
 
-def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt, 
+def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
                            xvals, yvals, xy_gatestring_dict, dataset, gateset, strs, xlabel="", ylabel="",
                            m=None, M=None, scale=1.0, prec='compact', title="Whack a Chi^2 Mole", sumUp=False,
                            boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
-                           save_to=None, ticSize=20, whackWith=10.0, invert=False, fidPairs=None):
+                           save_to=None, ticSize=20, whackWith=10.0, invert=False, fidPairs=None,
+                           gatestring_filters=None):
     """
     Create a box plot indicating how the chi^2 would change if the chi^2 of one
       base gate string blocks were forced to be smaller ("whacked").
@@ -2777,7 +2912,7 @@ def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
     ----------
     gatestringToWhack : GateString or tuple
         The **base** gate sequence for which chi^2 will be decreased.
-        
+
     allGatestringsUsedInChi2Opt : list of GateStrings or tuples
         List of all the gate strings used to form the total chi^2 that is being decreased.
 
@@ -2789,7 +2924,7 @@ def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
     xy_gatestring_dict : dict
         Dictionary with keys == (x_value,y_value) tuples and values == gate strings, where
         a gate string can either be a GateString object or a tuple of gate labels.  Provides
-        the mapping between x,y pairs and gate strings.  None values are allowed, and 
+        the mapping between x,y pairs and gate strings.  None values are allowed, and
         indicate that there is not data for that x,y pair and nothing should be plotted.
 
     dataset : DataSet
@@ -2826,7 +2961,7 @@ def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
         a single color box for the sum.
 
     boxLabels : bool, optional
-        Whether box labels are displayed.  It takes much longer to 
+        Whether box labels are displayed.  It takes much longer to
         generate the figure when this is set to True.
 
     histogram : bool, optional
@@ -2856,6 +2991,19 @@ def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
         only when sumUp == False).  Use inner_x_labels and inner_y_labels to label
         the x and y axes.
 
+    fidPairs : list, optional
+        A list of (iRhoStr,iEStr) tuples specifying a subset of all the prepStr,effectStr
+        pairs to include in the plot.
+
+    gatestring_filters : dict, optional
+        If not None, a dictionary of lists whose keys are the x-values contained
+        in the plot.  `gatestring_filters[x]` is a list of GateString objects
+        specifying which elements are allowed to be computed in the matrices of
+        the column corresponding to x.  Other entries are not displayed.  Thus,
+        this argument allows one to filter on a per-column basis which matrix
+        elements are displayed.
+
+
     Returns
     -------
     rptFig : ReportFigure
@@ -2872,9 +3020,9 @@ def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
 
     #We want the derivative of chi^2 = sum_i N_i*(p_i-f_i)^2 / p_i  (i over gatestrings & spam labels)
     # and the ability to separate the chi^2 of just "gatestringToWhack" (sandwiched with strs, optionally)
-    # This latter derivative (w.r.t gateset params) gives the direction in gateset space to move to reduce 
+    # This latter derivative (w.r.t gateset params) gives the direction in gateset space to move to reduce
     #   the "whacked" string(s) chi2.  Applying this direction to the full chi^2 (or to other base strings
-    #   sandwiched with strs) will give the relative change in the chi^2 for these strings if the whacked 
+    #   sandwiched with strs) will give the relative change in the chi^2 for these strings if the whacked
     #   string(s) was in fact whacked.
     # D(chi^2) = sum_i N_i * [ 2(p_i-f_i)*dp_i / p_i - (p_i-f_i)^2 / p_i^2 * dp_i ]
     #          = sum_i N_i * (p_i-f_i) / p_i * [2 - (p_i-f_i)/p_i   ] * dp_i
@@ -2914,21 +3062,32 @@ def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
     delta = _np.sum( _np.dot(Dchi2,dx), axis=0 ) # sum{(K,M), axis=1} ==> (M); the change in chi2 for each gateString
                                                  #   as a result of a unit decrease in the chi2 of the base string
 
-    def mx_fn(gateStr):
+    def mx_fn(gateStr,x,y):
         # LEXICOGRAPHICAL VS MATRIX ORDER
         if gateStr is None: return _np.nan * _np.zeros( (len(effectStrs),len(prepStrs)), 'd')
 
-        if fidPairs is None:
-            return _np.array( [ [ delta[ allGatestringsUsedInChi2Opt.index(prepStr + gateStr + effectStr) ] for prepStr in prepStrs ] for effectStr in effectStrs ] )
-        else:
+        if gatestring_filters is not None:
+            ret = _np.nan * _np.ones( (len(effectStrs),len(prepStrs)), 'd')
+            for j,effectStr in enumerate(effectStrs):
+                for i,prepStr in enumerate(prepStrs):
+                    s = prepStr + gateStr + effectStr
+                    if s in gatestring_filters[x]:
+                        ret[j,i] = delta[allGatestringsUsedInChi2Opt.index(s)]
+            return ret
+
+        elif fidPairs is not None:
             ret = _np.nan * _np.ones( (len(effectStrs),len(prepStrs)), 'd')
             for i,j in fidPairs:
                 ret[j,i] = delta[ allGatestringsUsedInChi2Opt.index(prepStrs[i] + gateStr + effectStrs[j]) ]
             return ret
+        else:
+            return _np.array( [ [ delta[ allGatestringsUsedInChi2Opt.index(prepStr + gateStr + effectStr) ]
+                                  for prepStr in prepStrs  ] for effectStr in effectStrs ] )
+
 
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
-    max_abs = max([ _np.max(_np.abs(subMxs[iy][ix])) 
-                    for ix in range(len(xvals)) 
+    max_abs = max([ _np.max(_np.abs(subMxs[iy][ix]))
+                    for ix in range(len(xvals))
                     for iy in range(len(yvals)) ])
     m = -max_abs if m is None else m
     M = +max_abs if M is None else M
@@ -2939,11 +3098,12 @@ def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
 
 
 
-def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt, 
+def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
                            xvals, yvals, xy_gatestring_dict, dataset, gateset, strs, xlabel="", ylabel="",
                            m=None, M=None, scale=1.0, prec='compact', title="Whack a log(L) Mole", sumUp=False,
                            boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
-                           save_to=None, ticSize=20, whackWith=10.0, invert=False, fidPairs=None):
+                           save_to=None, ticSize=20, whackWith=10.0, invert=False, fidPairs=None,
+                           gatestring_filters=None):
     """
     Create a box plot indicating how the log-likelihood would change if the log(L)
       of one base gate string blocks were forced to be smaller ("whacked").
@@ -2960,7 +3120,7 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
     ----------
     gatestringToWhack : GateString or tuple
         The **base** gate sequence for which log(L) will be decreased.
-        
+
     allGatestringsUsedInLogLOpt : list of GateStrings or tuples
         List of all the gate strings used to form the total log(L) that is being decreased.
 
@@ -2972,7 +3132,7 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
     xy_gatestring_dict : dict
         Dictionary with keys == (x_value,y_value) tuples and values == gate strings, where
         a gate string can either be a GateString object or a tuple of gate labels.  Provides
-        the mapping between x,y pairs and gate strings.  None values are allowed, and 
+        the mapping between x,y pairs and gate strings.  None values are allowed, and
         indicate that there is not data for that x,y pair and nothing should be plotted.
 
     dataset : DataSet
@@ -3009,7 +3169,7 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
         a single color box for the sum.
 
     boxLabels : bool, optional
-        Whether box labels are displayed.  It takes much longer to 
+        Whether box labels are displayed.  It takes much longer to
         generate the figure when this is set to True.
 
     histogram : bool, optional
@@ -3038,6 +3198,19 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
         only when sumUp == False).  Use inner_x_labels and inner_y_labels to label
         the x and y axes.
 
+    fidPairs : list, optional
+        A list of (iRhoStr,iEStr) tuples specifying a subset of all the prepStr,effectStr
+        pairs to include in the plot.
+
+    gatestring_filters : dict, optional
+        If not None, a dictionary of lists whose keys are the x-values contained
+        in the plot.  `gatestring_filters[x]` is a list of GateString objects
+        specifying which elements are allowed to be computed in the matrices of
+        the column corresponding to x.  Other entries are not displayed.  Thus,
+        this argument allows one to filter on a per-column basis which matrix
+        elements are displayed.
+
+
     Returns
     -------
     rptFig : ReportFigure
@@ -3052,9 +3225,9 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
 
     #We want the derivative of 2*Delta_LogL = 2 * sum_i N_i*(f_i*log(f_i/p_i) + (p_i-f_i))  (i over gatestrings & spam labels)
     # and the ability to separate the 2*Delta_LogL of just "gatestringToWhack" (sandwiched with strs, optionally)
-    # This latter derivative (w.r.t gateset params) gives the direction in gateset space to move to reduce 
+    # This latter derivative (w.r.t gateset params) gives the direction in gateset space to move to reduce
     #   the "whacked" string(s) 2*Delta_LogL.  Applying this direction to the full 2*Delta_LogL (or to other base strings
-    #   sandwiched with strs) will give the relative change in the 2*Delta_LogL for these strings if the whacked 
+    #   sandwiched with strs) will give the relative change in the 2*Delta_LogL for these strings if the whacked
     #   string(s) was in fact whacked.
     # D(2*Delta_LogL) = sum_i 2* N_i * [ -f_i/p_i + 1.0 ] * dp_i
 
@@ -3095,21 +3268,33 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
     delta = _np.sum( _np.dot(DlogL,dx), axis=0 ) # sum{(K,M), axis=1} ==> (M); the change in 2*Delta_LogL for each gateString
                                                  #   as a result of a unit decrease in the 2*Delta_LogL of the base string
 
-    def mx_fn(gateStr):
+    def mx_fn(gateStr,x,y):
         # LEXICOGRAPHICAL VS MATRIX ORDER
         if gateStr is None: return _np.nan * _np.zeros( (len(effectStrs),len(prepStrs)), 'd')
 
-        if fidPairs is None:
-            return _np.array( [ [ delta[ allGatestringsUsedInLogLOpt.index(prepStr + gateStr + effectStr) ] for prepStr in prepStrs ] for effectStr in effectStrs ] )
-        else:
+        if gatestring_filters is not None:
+            ret = _np.nan * _np.ones( (len(effectStrs),len(prepStrs)), 'd')
+            for j,effectStr in enumerate(effectStrs):
+                for i,prepStr in enumerate(prepStrs):
+                    s = prepStr + gateStr + effectStr
+                    if s in gatestring_filters[x]:
+                        ret[j,i] = delta[allGatestringsUsedInLogLOpt.index(s)]
+            return ret
+
+        elif fidPairs is not None:
             ret = _np.nan * _np.ones( (len(effectStrs),len(prepStrs)), 'd')
             for i,j in fidPairs:
                 ret[j,i] = delta[ allGatestringsUsedInLogLOpt.index(prepStrs[i] + gateStr + effectStrs[j]) ]
             return ret
 
+        else:
+            return _np.array( [ [ delta[ allGatestringsUsedInLogLOpt.index(prepStr + gateStr + effectStr) ]
+                                  for prepStr in prepStrs ] for effectStr in effectStrs ] )
+
+
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
-    max_abs = max([ _np.max(_np.abs(subMxs[iy][ix])) 
-                    for ix in range(len(xvals)) 
+    max_abs = max([ _np.max(_np.abs(subMxs[iy][ix]))
+                    for ix in range(len(xvals))
                     for iy in range(len(yvals)) ])
     m = -max_abs if m is None else m
     M = +max_abs if M is None else M
@@ -3120,23 +3305,23 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
 
 
 
-def gate_matrix_boxplot(gateMatrix, size=None, m=-1.0, M=1.0, 
+def gate_matrix_boxplot(gateMatrix, size=None, m=-1.0, M=1.0,
                         save_to=None, fontSize=20, mxBasis=None,
                         mxBasisDims=None, xlabel=None, ylabel=None,
                         title=None, boxLabels=False, prec=0, mxBasisDimsY=None):
     """
     Creates a color box plot of a gate matrix using a diverging color map.
 
-    This can be a useful way to display large matrices which have so many 
+    This can be a useful way to display large matrices which have so many
     entries that their entries cannot easily fit within the width of a page.
 
     Parameters
     ----------
     gateMatrix : ndarray
       The gate matrix data to display.
-      
+
     size : tuple, optional
-      The (width,height) figure size in inches.  None 
+      The (width,height) figure size in inches.  None
       enables automatic calculation based on gateMatrix
       size.
 
@@ -3156,10 +3341,10 @@ def gate_matrix_boxplot(gateMatrix, size=None, m=-1.0, M=1.0,
 
     mxBasisDims : int or list, optional
       The dimension of the density matrix space this basis spans, or a
-      list specifying the dimensions of terms in a direct-sum 
-      decomposition of the density matrix space.  Used to label the 
+      list specifying the dimensions of terms in a direct-sum
+      decomposition of the density matrix space.  Used to label the
       rows & columns.  If you don't want labels, leave as None.
-        
+
     xlabel : str, optional
       An x-axis label for the plot.
 
@@ -3200,7 +3385,7 @@ def gate_matrix_boxplot(gateMatrix, size=None, m=-1.0, M=1.0,
                             gateMatrix.shape[0]*0.5)
 
     if title is not None:
-        axes.set_title( title, fontsize=fontSize, y=1.3) 
+        axes.set_title( title, fontsize=fontSize, y=1.3)
           # y argument specified b/c labels are *above* plot
 
     if xlabel is not None:
@@ -3249,12 +3434,12 @@ def gate_matrix_boxplot(gateMatrix, size=None, m=-1.0, M=1.0,
             for ix in range(gateMatrix.shape[1]):
                 axes.text(ix, iy, _eformat(gateMatrix[iy,ix],prec),
                           horizontalalignment='center',
-                          verticalalignment='center', 
+                          verticalalignment='center',
                           color=besttxtcolor(gateMatrix[iy,ix], cmap, norm))
-        
+
     else: #display a color bar
         tickVals = [one_sigfig(m), one_sigfig((m+M)/2), one_sigfig(M)]
-        cbar = _plt.colorbar(cax,shrink=.75, pad=.1, aspect=18, ticks=tickVals)
+        cbar = _plt.colorbar(cax,shrink=.75, pad=.1, aspect=18, ticks=tickVals) #pylint: disable=unused-variable
 
     rptFig = _ReportFigure(axes)
 
@@ -3274,7 +3459,7 @@ def gate_matrix_errgen_boxplot(gateMatrix, targetMatrix, size=None,
     Creates a color box plot of a the error generator of a gate matrix.
 
     The error generator is given by log( inv(targetMatrix) * gateMatrix ).
-    This can be a useful way to display large matrices which have so many 
+    This can be a useful way to display large matrices which have so many
     entries that their entries cannot easily fit within the width of a page.
 
     Parameters
@@ -3285,9 +3470,9 @@ def gate_matrix_errgen_boxplot(gateMatrix, targetMatrix, size=None,
     targetMatrix : ndarray
       The target gate matrix data to use when constructing the the
       generator.
-      
+
     size : tuple, optional
-      The (width,height) figure size in inches.  None 
+      The (width,height) figure size in inches.  None
       enables automatic calculation based on gateMatrix
       size.
 
@@ -3304,10 +3489,10 @@ def gate_matrix_errgen_boxplot(gateMatrix, targetMatrix, size=None,
 
     mxBasisDims : int or list, optional
       The dimension of the density matrix space this basis spans, or a
-      list specifying the dimensions of terms in a direct-sum 
-      decomposition of the density matrix space.  Used to label the 
+      list specifying the dimensions of terms in a direct-sum
+      decomposition of the density matrix space.  Used to label the
       rows & columns.  If you don't want labels, leave as None.
-        
+
     xlabel : str, optional
       An x-axis label for the plot.
 
@@ -3350,7 +3535,7 @@ def polar_eigenval_plot(gate, targetGate, size=(4,4), title=None,
     Creates a color box plot of a the error generator of a gate matrix.
 
     The error generator is given by log( inv(targetMatrix) * gateMatrix ).
-    This can be a useful way to display large matrices which have so many 
+    This can be a useful way to display large matrices which have so many
     entries that their entries cannot easily fit within the width of a page.
 
     Parameters
@@ -3361,7 +3546,7 @@ def polar_eigenval_plot(gate, targetGate, size=(4,4), title=None,
     targetGate : ndarray
       The target gate matrix data to use when constructing the the
       generator.
-      
+
     size : tuple, optional
       The (width,height) figure size in inches.
 
@@ -3390,7 +3575,7 @@ def polar_eigenval_plot(gate, targetGate, size=(4,4), title=None,
     target_evals = _np.linalg.eigvals(targetGate)
     rel_gate = _np.dot(_np.linalg.inv(targetGate), gate)
     rel_evals = _np.linalg.eigvals(rel_gate)
-    
+
     gatePow10 = _np.linalg.matrix_power(gate, 10)
     targetPow10 = _np.linalg.matrix_power(targetGate, 10)
     rel_gate10 = _np.dot(_np.linalg.inv(targetPow10), gatePow10)
@@ -3409,7 +3594,7 @@ def polar_eigenval_plot(gate, targetGate, size=(4,4), title=None,
         r = _np.absolute(target_evals)
         theta = _np.angle(target_evals)
         axes.plot(theta, r, linestyle='None', marker='o', color='k', markersize=8)
-    
+
         r = _np.absolute(evals)
         theta = _np.angle(evals)
         axes.plot(theta, r, linestyle='None', marker='o', color='c', markersize=8)
@@ -3418,7 +3603,7 @@ def polar_eigenval_plot(gate, targetGate, size=(4,4), title=None,
         r = _np.absolute(rel_evals10)
         theta = _np.angle(rel_evals10)
         axes.plot(theta, r, linestyle='None', marker='o', color='g', markersize=5)
-        
+
         r = _np.absolute(rel_evals)
         theta = _np.angle(rel_evals)
         axes.plot(theta, r, linestyle='None', marker='o', color='r', markersize=5)
@@ -3456,9 +3641,9 @@ def pauliprod_hamiltonian_boxplot(gate, targetGate, size=None, title=None,
     targetGate : ndarray
       The target gate matrix data to use when constructing the the
       generator.
-      
+
     size : tuple, optional
-      The (width,height) figure size in inches.  None 
+      The (width,height) figure size in inches.  None
       enables automatic calculation based on gateMatrix
       size.
 
@@ -3507,7 +3692,7 @@ def pauliprod_hamiltonian_boxplot(gate, targetGate, size=None, title=None,
 
     #Get a list of the d2 Pauli-product matrices
     # (in the standard basis)
-    hamMxs = _tools.pp_matrices(d) 
+    hamMxs = _tools.pp_matrices(d)
 
     assert(_np.isclose(d*d,d2)) #d2 must be a perfect square
     assert(_np.isclose(nQubits, round(nQubits))) # d must be a pow of 2
@@ -3542,7 +3727,7 @@ def pauliprod_hamiltonian_boxplot(gate, targetGate, size=None, title=None,
     else:
         hamProjections = hamProjections.reshape( (4,hamProjections.size/4) )
         xlabel = "Q*"; ylabel="Q1"
-    
+
     xd = int(round(_np.sqrt(hamProjections.shape[1]))) #x-basis-dim
     yd = int(round(_np.sqrt(hamProjections.shape[0]))) #y-basis-dim
     return gate_matrix_boxplot(hamProjections, size, m,M, save_to, fontSize,
@@ -3553,7 +3738,7 @@ def pauliprod_hamiltonian_boxplot(gate, targetGate, size=None, title=None,
 def choi_eigenvalue_barplot(evals, errbars=None, size=(8,5), barWidth=1,
                             save_to=None, fontSize=15, xlabel="index",
                             ylabel="Re[eigenvalue]", title=None):
-    """ 
+    """
     Creates a bar plot showing the real parts of each of the eigenvalues
     given.  This is useful for plotting the eigenvalues of Choi matrices,
     since all elements are positive for a CPTP map.
@@ -3596,7 +3781,7 @@ def choi_eigenvalue_barplot(evals, errbars=None, size=(8,5), barWidth=1,
     fig.set_size_inches(size[0],size[1])
 
     if title is not None:
-        axes.set_title( title, fontsize=fontSize) 
+        axes.set_title( title, fontsize=fontSize)
     if xlabel is not None:
         axes.set_xlabel( xlabel, fontsize=fontSize )
     if ylabel is not None:
@@ -3608,8 +3793,8 @@ def choi_eigenvalue_barplot(evals, errbars=None, size=(8,5), barWidth=1,
     if errbars is None:
         pos_evals = _np.maximum(evals.flatten().real,0.0)
         neg_evals = _np.abs(_np.minimum(evals.flatten().real,0.0))
-        rects = axes.bar(ind, pos_evals, barWidth, color=(0.5,0.5,0.5))
-        rects = axes.bar(ind, neg_evals, barWidth, color='r')
+        rects = axes.bar(ind, pos_evals, barWidth, color=(0.5,0.5,0.5)) #pylint: disable=unused-variable
+        rects = axes.bar(ind, neg_evals, barWidth, color='r') #pylint: disable=unused-variable
     else:
         evalsEB = _np.asarray(errbars)
         pos_evals = []; pos_err = []
@@ -3627,7 +3812,7 @@ def choi_eigenvalue_barplot(evals, errbars=None, size=(8,5), barWidth=1,
 
     axes.set_yscale("log")
     axes.set_xticks(ind + barWidth/2.0)
-    axes.set_xticklabels(map(str,range(len(ind))))
+    axes.set_xticklabels(list(map(str,list(range(len(ind))))))
 
     rptFig = _ReportFigure(axes)
 
@@ -3638,10 +3823,10 @@ def choi_eigenvalue_barplot(evals, errbars=None, size=(8,5), barWidth=1,
 
     return rptFig
 
-    
+
 
 def _makeHistFilename(mainFilename):
     #Insert "_hist" before extension, e.g. /one/two.txt ==> /one/two_hist.txt
     if len(mainFilename) > 0:
-        return "_hist".join(_os.path.splitext(mainFilename))    
+        return "_hist".join(_os.path.splitext(mainFilename))
     else: return "" #keep empty string empty, as this signals not actually saving any files

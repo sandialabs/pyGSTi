@@ -1,6 +1,0 @@
-pygsti.two_qubit_gate
-=====================
-
-.. currentmodule:: pygsti
-
-.. autofunction:: two_qubit_gate
