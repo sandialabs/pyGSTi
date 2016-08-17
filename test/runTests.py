@@ -23,23 +23,27 @@ coverage report -m --include="*/pyGSTi/packages/pygsti/*" > output/coverage_test
 echo "Combined Output written to coverage_tests.out"
 '''
 
-def run_mpi_tests(nproc=4, version=None):
+def run_mpi_coverage_tests(coverage_cmd, nproc=4):
     shutil.copy('mpi/setup.cfg.mpi', 'setup.cfg')
 
-    mpicommands = ('time mpiexec -np %s python%s mpi/runtests.py -v ' % (str(nproc), '' if version is None else version)+
-                   '--with-coverage --cover-package=pygsti --cover-erase mpi/testmpi*.py  ' +
+    #OLD: worked with python2.7, but not with 3 (where .coverage files turned to JSON)
+    #mpicommands = ('time mpiexec -np %s python%s mpi/runtests.py -v ' % (str(nproc), '' if version is None else version)+
+    #               '--with-coverage --cover-package=pygsti --cover-erase mpi/testmpi*.py  ' +
+    #               '> ../output/coverage_tests_mpi.out 2>&1')
+
+    mpicommands = ('time mpiexec -np %s %s run -p ' % (str(nproc), coverage_cmd) +
+                   '--source=pygsti mpi/runtests.py -v mpi/testmpi*.py ' +
                    '> ../output/coverage_tests_mpi.out 2>&1')
 
     with open('../output/mpi_output.txt', 'w') as output:
         returned = subprocess.call(mpicommands, shell=True, stdout=output, stderr=output)
     with open('../output/mpi_output.txt', 'r') as output:
         print(output.read())
-    shutil.move('.coverage', '../output/mpi_coverage')
     os.remove('setup.cfg')
     return returned
 
-def create_html(dirname):
-    subprocess.call(['coverage', 'html', '--directory=%s' % dirname])
+def create_html(dirname, coverage_cmd):
+    subprocess.call([coverage_cmd, 'html', '--directory=%s' % dirname])
 
 default   = ['tools', 'io', 'objects', 'construction', 'drivers', 'report', 'algorithms', 'optimize', 'mpi']
 slowtests = ['report', 'drivers']
@@ -62,6 +66,7 @@ def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
         else:
             # The version specified
             pythoncommands = ['python%s' % version]
+
         # Always use nose
         pythoncommands += ['-m', 'nose', '-v']
 
@@ -76,8 +81,15 @@ def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
         # testnames should be final at this point
         print('Running tests:\n%s' % ('\n'.join(testnames)))
 
-        runmpi = 'mpi' in testnames # Run mpi tests differently
-        if runmpi:
+        # Version-specific coverage cmds only sometimes have a dash
+        #  e.g.: coverage, coverage2, coverage3, coverage-2.7, coverage-3.5
+        if version is None: coverage_cmd = "coverage"
+        elif "." in version: coverage_cmd = 'coverage-%s' % version
+        else:                coverage_cmd = 'coverage%s' % version
+
+        # Run mpi coverage tests differently
+        covermpi = ('mpi' in testnames) and coverage 
+        if covermpi:
             testnames.remove('mpi')
 
         postcommands = []
@@ -122,18 +134,29 @@ def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
             # causes nose tests to create .coverage.<processid>
             # files instead of just a single .coverage file, which
             # "coverage combine" will overwrite with no-data (eek!).
-            subprocess.call(['coverage', 'combine'])
+            subprocess.call([coverage_cmd, 'combine'])
 
-        if runmpi:
-            print('Running mpi')
+        if covermpi:
+            print('Running mpi with coverage')
             # Combine serial/parallel coverage
-            shutil.copy2('.coverage', '../output/temp_coverage')
-            run_mpi_tests(version=version)
-            shutil.copy2('../output/temp_coverage', '.coverage.serial')
-            shutil.copy2('../output/mpi_coverage', '.coverage.parallel')
-            subprocess.call(['coverage', 'combine'])
+            serial_coverage_exists = bool(len(testnames) > 0)
 
-        create_html(coverdir)
+            if serial_coverage_exists: 
+                #In this case, nose tests have erased old coverage files
+                shutil.copy2('.coverage', '../output/temp_coverage')
+            else:
+                #If no serial tests have run, then we need to erase old files
+                subprocess.call([coverage_cmd, 'erase'])
+
+            run_mpi_coverage_tests(coverage_cmd) #creates .coverage.xxx files
+
+            if serial_coverage_exists: 
+                shutil.copy2('../output/temp_coverage', '.coverage.serial')
+
+            subprocess.call([coverage_cmd, 'combine']) #combine everything
+
+        if html:
+            create_html(coverdir, coverage_cmd)
 
         sys.exit(returned)
 
