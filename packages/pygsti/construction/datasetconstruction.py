@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import numpy.random as _rndm
+import warnings as _warnings
 
 from ..objects import gatestring as _gs
 from ..objects import dataset as _ds
@@ -85,6 +86,23 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
     for k,s in enumerate(gatestring_list):
         if gsGen:
             ps = gsGen.probs(s) # a dictionary of probabilities; keys = spam labels
+            
+            #Adjust to ps if needed (and warn if not close to in-bounds)
+            TOL = 1e-10
+            for sl in ps: 
+                if ps[sl] < 0:
+                    if ps[sl] < -TOL: _warnings.warn("Clipping probs < 0 to 0")
+                    ps[sl] = 0.0
+                elif ps[sl] > 1: 
+                    if ps[sl] > (1+TOL): _warnings.warn("Clipping probs > 1 to 1")
+                    ps[sl] = 1.0
+
+            psum = sum(ps.values())
+            if psum > 1:
+                if psum > 1+TOL: _warnings.warn("Adjusting sum(probs) > 1 to 1")
+                for sl in ps: ps[sl] -= (psum-1.0) / (len(ps)-1)
+
+            assert(0.0 <= sum(ps.values()) <= 1.0)
         else:
             ps = { sl: dsGen[s].fraction(sl) for sl in dsGen.get_spam_labels() }
 

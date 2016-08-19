@@ -445,7 +445,7 @@ class MidPointNorm(_matplotlib.colors.Normalize):
                                   mask=mask)
 
             # ma division is very slow; we can take a shortcut
-            resdat = result.data
+            resdat = result.filled(0) #masked entries to 0 to avoid nans
 
             #First scale to -1 to 1 range, than to from 0 to 1.
             resdat -= midpoint
@@ -676,7 +676,8 @@ class StdColormapFactory(object):
         elif self.kind == 'div':
             norm = MidPointNorm(midpoint=self.midpoint, vmin=self.vmin, vmax=self.vmax)
         else:
-            linlog_trans = _np.ceil(_chi2.ppf(1 - self.percentile / self.N, self.dof))
+            N = max(self.N,1) #don't divide by N == 0 (if there are no boxes)
+            linlog_trans = _np.ceil(_chi2.ppf(1 - self.percentile / N, self.dof))
             norm = LinLogNorm(trans=linlog_trans)
 
         return norm
@@ -1723,9 +1724,10 @@ def small_eigval_err_rate_boxplot( xvals, yvals, xy_gatestring_dict, dataset, di
     def mx_fn(gateStr,x,y): #error rate as 1x1 matrix which we have plotting function sum up
         return _np.array( [[ small_eigval_err_rate(gateStr, dataset,  directGSTgatesets) ]] )
     xvals, yvals, subMxs, _, _ = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,True)
-    max_abs = max([ _np.max(_np.abs(subMxs[iy][ix]))
+    max_abs = max([ _np.max(_np.abs(_np.nan_to_num(subMxs[iy][ix])))
                     for ix in range(len(xvals))
                     for iy in range(len(yvals)) ])
+    if max_abs == 0: max_abs = 1e-6 # pick a nonzero value if all entries are zero or nan
     m = 0 if m is None else m
     M = max_abs if M is None else M
     stdcmap = StdColormapFactory('seq', vmin=m, vmax=M)
@@ -2323,7 +2325,7 @@ def direct_chi2_matrix(sigma, dataset, directGateset, strs,
         Direct-X chi^2 values corresponding to gate sequences where
         gateString is sandwiched between the each (effectStr,prepStr) pair.
     """
-    spamlabels = directGateset.get_spam_labels()
+    spamlabels = dataset.get_spam_labels()
     gsmap = get_gatestring_map(sigma, dataset, strs, fidPairs, gatestring_filter)
     gsmap_pr = get_gatestring_map(_objs.GateString( ("GsigmaLbl",) ), dataset,
                                   strs, fidPairs, gatestring_filter)
@@ -2502,7 +2504,7 @@ def direct_logl_matrix(sigma, dataset, directGateset, strs,
         Direct-X chi^2 values corresponding to gate sequences where
         gateString is sandwiched between the each (effectStr,prepStr) pair.
     """
-    spamlabels = directGateset.get_spam_labels()
+    spamlabels = dataset.get_spam_labels()
     gsmap = get_gatestring_map(sigma, dataset, strs, fidPairs, gatestring_filter)
     gsmap_pr = get_gatestring_map(_objs.GateString( ("GsigmaLbl",) ), dataset,
                                   strs, fidPairs, gatestring_filter)
@@ -2735,9 +2737,11 @@ def direct2x_comp_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGate
             The number of used Y-values, proportional to the overall final figure height
     """
     prepStrs, effectStrs = strs
+    nanMx = _np.nan * _np.zeros( (len(strs[1]),len(strs[0])), 'd')
+
     def mx_fn(gateStr,x,y):
 
-        #if gateStr is None: return _np.nan*chiSqMx
+        if gateStr is None: return nanMx
         directGateset = directGatesets[ gateStr ] #contains "GsigmaLbl" gate <=> gateStr
         spamlabels = directGateset.get_spam_labels()
         try:
@@ -2755,15 +2759,15 @@ def direct2x_comp_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGate
         #else:
         #    print "Warning: didn't find len-%d str: " % len(gateStr*2), (gateStr*2)[0:20]
         except:
-            chiSqMx = _np.zeros( (len(strs[1]),len(strs[0])), 'd')
-            return _np.nan*chiSqMx #if something fails, just punt
+            return nanMx #if something fails, just punt
 
         return chiSqMxs.sum(axis=0) # sum over spam labels
 
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
-    max_abs = max([ _np.max(_np.abs(subMxs[iy][ix]))
+    max_abs = max([ _np.max(_np.abs(_np.nan_to_num(subMxs[iy][ix])))
                     for ix in range(len(xvals))
                     for iy in range(len(yvals)) ])
+    if max_abs == 0: max_abs = 1e-6 # pick a nonzero value if all entries are zero or nan
     m = -max_abs if m is None else m
     M = +max_abs if M is None else M
     stdcmap = StdColormapFactory('div', n_boxes=n_boxes, vmin=m, vmax=M, dof=dof)
@@ -2879,9 +2883,10 @@ def direct_deviation_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset
         return _np.array( ubF_direct - ubF, dtype='float64' )
 
     xvals, yvals, subMxs, _, _ = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,True)
-    max_abs = max([ _np.max(_np.abs(subMxs[iy][ix]))
+    max_abs = max([ _np.max(_np.abs(_np.nan_to_num(subMxs[iy][ix])))
                     for ix in range(len(xvals))
                     for iy in range(len(yvals)) ])
+    if max_abs == 0: max_abs = 1e-6 # pick a nonzero value if all entries are zero or nan
     m = -max_abs if m is None else m
     M = +max_abs if M is None else M
     stdcmap = StdColormapFactory('div', vmin=m, vmax=M, midpoint=0)
@@ -3086,9 +3091,10 @@ def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
 
 
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
-    max_abs = max([ _np.max(_np.abs(subMxs[iy][ix]))
+    max_abs = max([ _np.max(_np.abs(_np.nan_to_num(subMxs[iy][ix])))
                     for ix in range(len(xvals))
                     for iy in range(len(yvals)) ])
+    if max_abs == 0: max_abs = 1e-6 # pick a nonzero value if all entries are zero or nan
     m = -max_abs if m is None else m
     M = +max_abs if M is None else M
     stdcmap = StdColormapFactory('div', n_boxes=n_boxes, vmin=m, vmax=M, dof=dof, midpoint=0)
@@ -3293,9 +3299,10 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
 
 
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
-    max_abs = max([ _np.max(_np.abs(subMxs[iy][ix]))
+    max_abs = max([ _np.max(_np.abs(_np.nan_to_num(subMxs[iy][ix])))
                     for ix in range(len(xvals))
                     for iy in range(len(yvals)) ])
+    if max_abs == 0: max_abs = 1e-6 # pick a nonzero value if all entries are zero or nan
     m = -max_abs if m is None else m
     M = +max_abs if M is None else M
     stdcmap = StdColormapFactory('div', n_boxes=n_boxes, vmin=m, vmax=M, dof=dof, midpoint=0)

@@ -1642,6 +1642,7 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
             if times is not None:
                 tNxt = _time.time();
                 times.append(('MC2GST Iteration %d: chi2-opt' % (i+1),tNxt-tRef))
+                printer.log("    Iteration %d took %.1fs" % (i+1,tNxt-tRef),2)
                 tRef=tNxt
 
     printer.log('Iterative MC2GST Total Time: %.1fs' % (_time.time()-tStart))
@@ -2403,11 +2404,14 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
             maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval,
                               radius, None, None, poissonPicture, check)  #get maxLogL from chi2 estimate
 
+            printer.log("    2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL)),2)
+
             if times is not None:
                 tNxt = _time.time();
                 times.append(('MLGST Iteration %d: logl-comp' % (i+1),tNxt-tRef))
+                printer.log("    Iteration %d took %.1fs" % (i+1,tNxt-tRef),2)
                 tRef=tNxt
-                printer.log("    2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL)),2)
+
 
            #OLD: do MLGST for all iterations
            #maxLogL, mleGateset = do_mlgst( dataset, mleGateset, stringsToEstimate,
@@ -2424,7 +2428,6 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
 
                 printer.log("    2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL_p)),2)
 
-
                 if maxLogL_p > maxLogL: #if do_mlgst improved the maximum log-likelihood
                     maxLogL = maxLogL_p
                     mleGateset = mleGateset_p
@@ -2434,6 +2437,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                 if times is not None:
                     tNxt = _time.time();
                     times.append(('MLGST Iteration %d: logl-opt' % (i+1),tNxt-tRef))
+                    printer.log("    Final MLGST took %.1fs" % (tNxt-tRef),2)
                     tRef=tNxt
 
             if returnAll:
