@@ -1282,7 +1282,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
 
     with printer.progress_logging(1):
         for iIter in range(maxIter):
-            printer.show_progress(iIter + 1, maxIter,
+            printer.show_progress(iIter, maxIter,
                                   suffix="score=%g, nGerms=%d" % (score, L1))
 
             bFoundBetterNeighbor = False

@@ -37,18 +37,18 @@ def _build_progress_bar (iteration, total, barLength = 100, numDecimals=2, fillC
     formattedString - str:
       python string representing a progress bar
     """
-    filledLength    = int(round(barLength * iteration / float(total)))
-    percents        = round(100.00 * (iteration / float(total)), numDecimals)
+    filledLength    = int(round(barLength * (iteration+1) / float(total)))
+    percents        = round(100.00 * ((iteration+1) / float(total)), numDecimals)
     bar             = fillChar * filledLength + emptyChar * (barLength - filledLength)
     # Here, the \r (carriage return) is what replaces the last line that was printed
-    carriageReturn  = end if iteration == total else '\r'
+    carriageReturn  = end if (iteration+1) == total else '\r'
     formattedString = '%s [%s] %s%s %s%s' % (prefix, bar, percents, '%', suffix, carriageReturn)
     return formattedString
 
 # Another hidden function for providing verbose progress output
 def _build_verbose_iteration(iteration, total, prefix, suffix, end):
     digits = _num_digits(total)
-    return '%s Iter %s of %s %s: %s' % (prefix, str(iteration).zfill(digits), total, suffix, end)
+    return '%s Iter %s of %s %s: %s' % (prefix, str(iteration+1).zfill(digits), total, suffix, end)
 
 #############################################################################################################
 #                                    The VerbosityPrinter Class itself                                      #
@@ -146,6 +146,7 @@ class VerbosityPrinter():
         self._delayQueue      = []
         self._progressStack   = []
         self.warnings         = warnings
+        self.extra_indents    = 0 # Used for nested calls
 
     def clone(self):
         '''
@@ -153,6 +154,7 @@ class VerbosityPrinter():
         '''
         p = VerbosityPrinter(self.verbosity, self.filename, self._comm, self.warnings)
         p.progressLevel  = self.progressLevel
+        p.extra_indents = self.extra_indents
         p._delayQueue    = _dc(self._delayQueue) # deepcopy
         p._progressStack = _dc(self._progressStack)
         return p
@@ -191,6 +193,7 @@ class VerbosityPrinter():
         '''
         p = self.clone()
         p.verbosity += other
+        p.extra_indents -= other
         return p
 
     def __sub__(self, other):
@@ -199,6 +202,7 @@ class VerbosityPrinter():
         '''
         p = self.clone()
         p.verbosity -= other
+        p.extra_indents += other
         return p
 
     # Used once a file has been created - open the file whenever a message needs to be sent (rather than opening it for the entire program)
@@ -281,9 +285,16 @@ class VerbosityPrinter():
         None
         '''
         if messageLevel <= self.verbosity:
-            indent = (indentChar * (messageLevel+indentOffset)) if doIndent else ''
+            indent = (indentChar * (messageLevel-1+indentOffset 
+                                    + self.extra_indents)) if doIndent else ''
+               # messageLevel-1 so no indent at verbosity == 1
             statusType = 'Status Level %s:' % messageLevel if showStatustype else ''
-            formattedMessage = '%s%s%s%s' % (indent, statusType, message, end)
+            if end == '\n':
+                #Special case where we process a message containing newlines
+                formattedMessage = '\n'.join(['%s%s%s' % (indent, statusType, m) 
+                                              for m in str(message).split('\n')]) + end
+            else:
+                formattedMessage = '%s%s%s%s' % (indent, statusType, message, end)
 
             if self.progressLevel > 0 and self.filename == None:
                 self._delayQueue.append(indentChar + 'INVALID LEVEL: ' + formattedMessage)
@@ -308,7 +319,8 @@ class VerbosityPrinter():
         return iteration
 
     def __str__(self):
-        return 'Printer Object: Progress Level: %s Verbosity %s' % (self.progressLevel, self.verbosity)
+        return 'Printer Object: Progress Level: %s Verbosity %s Indents %s' \
+            % (self.progressLevel, self.verbosity, self.extra_indents)
 
     @_contextmanager
     def progress_logging(self, messageLevel=1):
@@ -357,7 +369,8 @@ class VerbosityPrinter():
         indentChar - str, optional:
           number of spaces to indent the progress bar
         """
-        indent = indentChar * self._progressStack[-1]
+        indent = indentChar * (self._progressStack[-1]-1 + self.extra_indents)
+          # -1 so no indent at verbosity == 1
 
         # Print a standard progress bar if its verbosity matches ours,
         # Otherwise, Print verbose iterations if our verbosity is higher

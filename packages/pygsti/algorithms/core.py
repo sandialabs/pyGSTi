@@ -116,8 +116,8 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
-    printer.log('', 2)
-    printer.log("--- LGST ---", 1, indentOffset=-1)
+    #printer.log('', 2)
+    printer.log("--- LGST ---", 1)
 
     #Process input parameters
     prepSpecs, effectSpecs = specs
@@ -181,7 +181,10 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
     ABMat = _constructAB(prepSpecs, effectSpecs, spamDict, dataset)  # shape = (nESpecs, nRhoSpecs)
 
     U,s,V = _np.linalg.svd(ABMat, full_matrices=False)
-    printer.log(("LGST: Singular values of I_tilde (truncating to first %d of %d) = \n" % (trunc,len(s)), s), 2)
+    printer.log("Singular values of I_tilde (truncating to first %d of %d) = " % (trunc,len(s)), 2)
+    for sval in s: printer.log(sval,2)
+    printer.log('',2)
+
     Ud,Vd = _np.transpose(_np.conjugate(U)), _np.transpose(_np.conjugate(V))  # Udagger, Vdagger
     ABMat_p = _np.dot(Pjt, _np.dot(_np.diag(s), Pj)) #truncate ABMat => ABMat' (note diag(s) = Ud*ABMat*Vd), shape = (trunc, trunc)
     # U shape = (nESpecs, K)
@@ -206,10 +209,10 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
         X = _constructXMatrix(prepSpecs, effectSpecs, spamDict, gateLabelTuple, dataset)  # shape (nESpecs, nRhoSpecs)
         X2 = _np.dot(Ud, _np.dot(X, Vd)) # shape (K,K) this should be close to rank "svdTruncateTo" (which is <= K) -- TODO: check this
 
-        if svdTruncateTo > 0:
-            printer.log("LGST DEBUG: %s before trunc to first %d row and cols = \n" % (gateLabel,svdTruncateTo), 3)
-            if printer.verbosity >= 3:
-                _tools.print_mx(X2)
+        #if svdTruncateTo > 0:
+        #    printer.log("LGST DEBUG: %s before trunc to first %d row and cols = \n" % (gateLabel,svdTruncateTo), 3)
+        #    if printer.verbosity >= 3:
+        #        _tools.print_mx(X2)
         X_p = _np.dot(Pjt, _np.dot(X2, Pj)) #truncate X => X', shape (trunc, trunc)
         lgstGateset.gates[gateLabel] = _objs.FullyParameterizedGate(_np.dot(invABMat_p,X_p)) # shape (trunc,trunc)
         #print "DEBUG: X(%s) = \n" % gateLabel,X
@@ -273,9 +276,10 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
         guess_ABMat = _np.dot(AMat,BMat)
         _, guess_s, _ = _np.linalg.svd(guess_ABMat, full_matrices=False)
 
-        printer.log("LGST: Singular values of target I_tilde (truncating to first %d of %d) = \n" % (guessTrunc,len(guess_s)), 2)
-        printer.log(guess_s, 2)
-
+        printer.log("Singular values of target I_tilde (truncating to first %d of %d) = " 
+                    % (guessTrunc,len(guess_s)), 2)
+        for sval in guess_s: printer.log(sval,2)
+        printer.log('',2)
 
         if guessTrunc < trunc:  # if the dimension of the gauge-guess gateset is smaller than the matrices being estimated, pad B with identity
             printer.log("LGST: Padding target B with sqrt of low singular values of I_tilde: \n", 2)
@@ -311,7 +315,9 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
     #lgstGateset.log("Created by LGST", {'prepSpecs': prepSpecs, 'effectSpecs': effectSpecs })
 
     printer.log("Resulting gate set:\n", 3)
-    printer.log(lgstGateset, 3)
+    printer.log(lgstGateset,3)
+#    for line in str(lgstGateset).split('\n'):
+ #       printer.log(line, 3)
 
     return lgstGateset
 
@@ -525,7 +531,7 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs,
     for effectLabel,eVec in gs.effects.items():
         gs.effects[effectLabel] = _objs.StaticSPAMVec(eVec)
 
-    printer.log("--- eLGST (least squares) ---", 1, indentOffset=-1)
+    printer.log("--- eLGST (least squares) ---", 1)
 
     #convert list of GateStrings to list of raw tuples since that's all we'll need
     if len(gateStringsToUseInEstimation) > 0 and isinstance(gateStringsToUseInEstimation[0],_objs.GateString):
@@ -814,9 +820,9 @@ def do_iterative_exlgst(
         for (i, stringsToEstimate) in enumerate(gateStringLists):
             if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
 
-        printer.log('', 2) #newline if we have more info to print
+        #printer.log('', 2) #newline if we have more info to print
         extraMessages = ["(%s)" % gateStringSetLabels[i]] if gateStringSetLabels else []
-        printer.show_progress(i, nIters-1, messageLevel=1, prefix='--- Iterative eLGST: ', suffix = '; %s gate strings ---' % len(stringsToEstimate),
+        printer.show_progress(i, nIters, messageLevel=1, prefix='--- Iterative eLGST: ', suffix = '; %s gate strings ---' % len(stringsToEstimate),
                   verboseMessages=extraMessages)
 
         minErr, elgstGateset = do_exlgst(
@@ -949,8 +955,8 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     gs = startGateset.copy()
     if maxfev is None: maxfev = maxiter
 
-    printer.log('', 2)
-    printer.log("--- Minimum Chi^2 GST ---", 1, indentOffset=-1)
+    #printer.log('', 2)
+    printer.log("--- Minimum Chi^2 GST ---", 1)
 
     if comm is not None:
         gs_cmp = comm.bcast(gs if (comm.Get_rank() == 0) else None, root=0)
@@ -1376,8 +1382,8 @@ def do_mc2gst_with_model_selection(
 
     #Run do_mc2gst multiple times - one for the starting Gateset and one for the starting gateset
     # with increased or decreased dimension as per dimDelta
-    printer.log('', 2)
-    printer.log("--- Minimum Chi^2 GST with model selection (starting dim = %d) ---" % dim, 1, indentOffset=-1)
+    #printer.log('', 2)
+    printer.log("--- Minimum Chi^2 GST with model selection (starting dim = %d) ---" % dim, 1)
 
     #convert list of GateStrings to list of raw tuples since that's all we'll need
     if len(gateStringsToUse) > 0 and isinstance(gateStringsToUse[0],_objs.GateString):
@@ -1615,9 +1621,9 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
 
     with printer.progress_logging(1):
         for (i, stringsToEstimate) in enumerate(gateStringLists):
-            printer.log('', 2)
+            #printer.log('', 2)
             extraMessages = ["(%s)" % gateStringSetLabels[i]] if gateStringSetLabels else []
-            printer.show_progress(i, nIters-1, verboseMessages=extraMessages, prefix= "--- Iterative MC2GST:", suffix=" %d gate strings ---" % len(stringsToEstimate))
+            printer.show_progress(i, nIters, verboseMessages=extraMessages, prefix= "--- Iterative MC2GST:", suffix=" %d gate strings ---" % len(stringsToEstimate))
 
             if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
 
@@ -1643,6 +1649,7 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
                 tNxt = _time.time();
                 times.append(('MC2GST Iteration %d: chi2-opt' % (i+1),tNxt-tRef))
                 printer.log("    Iteration %d took %.1fs" % (i+1,tNxt-tRef),2)
+                printer.log('',2) #extra newline
                 tRef=tNxt
 
     printer.log('Iterative MC2GST Total Time: %.1fs' % (_time.time()-tStart))
@@ -1782,9 +1789,9 @@ def do_iterative_mc2gst_with_model_selection(
     lsgstGateset = startGateset.copy(); nIters = len(gateStringLists)
     with printer.progress_logging(1):
         for (i,stringsToEstimate) in enumerate(gateStringLists):
-            printer.log('', 2)
+            #printer.log('', 2)
             extraMessages = (["(%s) "] % gateStringSetLabels[i]) if gateStringSetLabels else []
-            printer.show_progress(i, nIters-1, prefix="--- Iterative MC2GST:", suffix= "%d gate strings ---"  % (len(stringsToEstimate)), verboseMessages=extraMessages)
+            printer.show_progress(i, nIters, prefix="--- Iterative MC2GST:", suffix= "%d gate strings ---"  % (len(stringsToEstimate)), verboseMessages=extraMessages)
 
             if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
 
@@ -1936,8 +1943,8 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     gs = startGateset.copy()
     if maxfev is None: maxfev = maxiter
 
-    printer.log('', 2)
-    printer.log("--- MLGST ---", 1, indentOffset=-1)
+    #printer.log('', 2)
+    printer.log("--- MLGST ---", 1)
 
     if comm is not None:
         gs_cmp = comm.bcast(gs if (comm.Get_rank() == 0) else None, root=0)
@@ -2324,6 +2331,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
     returnAll : boolean, optional
         If True return a list of gatesets
                         gateStringSetLabels=None,
+
     verbosity : int, optional
         How much detail to send to stdout.
 
@@ -2381,9 +2389,11 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
 
     with printer.progress_logging(1):
         for (i,stringsToEstimate) in enumerate(gateStringLists):
-            printer.log('', 2)
+            #printer.log('', 2)
             extraMessages = [("(%s) " % gateStringSetLabels[i])] if gateStringSetLabels else []
-            printer.show_progress(i, nIters-1, verboseMessages=extraMessages, prefix="--- Iterative MLGST:", suffix=" %d gate strings ---" % len(stringsToEstimate))
+            printer.show_progress(i, nIters, verboseMessages=extraMessages,
+                                  prefix="--- Iterative MLGST:",
+                                  suffix=" %d gate strings ---" % len(stringsToEstimate))
 
             if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
 
@@ -2391,7 +2401,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
             _, mleGateset = do_mc2gst( dataset, mleGateset, stringsToEstimate,
                                                maxiter, maxfev, tol, 0, minProbClip,
                                                probClipInterval, useFreqWeightedChiSq,
-                                               0, printer-2, check,
+                                               0, printer-1, check,
                                                False, None, None, memLimit, comm,
                                                distributeMethod)
                                               # Note maxLogL is really chi2 number here
@@ -2404,12 +2414,13 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
             maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval,
                               radius, None, None, poissonPicture, check)  #get maxLogL from chi2 estimate
 
-            printer.log("    2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL)),2)
+            printer.log("2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL)),2)
 
             if times is not None:
                 tNxt = _time.time();
                 times.append(('MLGST Iteration %d: logl-comp' % (i+1),tNxt-tRef))
-                printer.log("    Iteration %d took %.1fs" % (i+1,tNxt-tRef),2)
+                printer.log("Iteration %d took %.1fs" % (i+1,tNxt-tRef),2)
+                printer.log('',2) #extra newline
                 tRef=tNxt
 
 
@@ -2420,13 +2431,13 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
            #                                verbosity, check, None, memLimit, comm)
 
             if i == len(gateStringLists)-1: #on the last iteration, do ML
-                printer.log("--- Last Iteration: switching to ML objective ---",2)
+                printer.log("Switching to ML objective (last iteration)",2)
                 maxLogL_p, mleGateset_p = do_mlgst(
                   dataset, mleGateset, stringsToEstimate, maxiter, maxfev, tol,
-                  minProbClip, probClipInterval, radius, poissonPicture, printer,
+                  minProbClip, probClipInterval, radius, poissonPicture, printer-1,
                   check, None, memLimit, comm)
 
-                printer.log("    2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL_p)),2)
+                printer.log("2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL_p)),2)
 
                 if maxLogL_p > maxLogL: #if do_mlgst improved the maximum log-likelihood
                     maxLogL = maxLogL_p
@@ -2437,7 +2448,8 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                 if times is not None:
                     tNxt = _time.time();
                     times.append(('MLGST Iteration %d: logl-opt' % (i+1),tNxt-tRef))
-                    printer.log("    Final MLGST took %.1fs" % (tNxt-tRef),2)
+                    printer.log("Final MLGST took %.1fs" % (tNxt-tRef),2)
+                    printer.log('',2) #extra newline
                     tRef=tNxt
 
             if returnAll:
@@ -2596,8 +2608,8 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
         spamPenalty = CLIFF if constrainToValidSpam else 0
         assert(method != "custom") #do not allow use of custom method yet (since it required a different obj func)
 
-        printer.log('', 2)
-        printer.log(("--- Gauge Optimization to a target (%s) ---" % method), 1, indentOffset=-1)
+        #printer.log('', 2)
+        printer.log(("--- Gauge Optimization to a target (%s) ---" % method), 1)
 
         def objective_func(vectorM):
             if constrainToTP: vectorM = _np.concatenate( (firstRowForTP,vectorM) )
@@ -2673,8 +2685,8 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
                 constrainToTP, constrainToCP, constrainToValidSpam, True,
                 gateWeight, spamWeight, itemWeights, printer-1)
 
-        printer.log('', 2)
-        printer.log(("--- Gauge Optimization to CPTP w/valid SPAM (%s) ---" % method), 1, indentOffset=-1)
+        #printer.log('', 2)
+        printer.log(("--- Gauge Optimization to CPTP w/valid SPAM (%s) ---" % method), 1)
         constrainToTP = True #always constrain next optimization to TP
 
         #DEBUG
@@ -2712,8 +2724,8 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
 
 
     elif toGetTo == "TP":
-        printer.log('', 2)
-        printer.log(("--- Gauge Optimization to TP (%s) ---" % method), 1, indentOffset=-1)
+        #printer.log('', 2)
+        printer.log(("--- Gauge Optimization to TP (%s) ---" % method), 1)
         if constrainToTP: raise ValueError("Cannot gauge optimize to TP and constrain to TP")
         rhoVecFirstEl = 1.0 / gateDim**0.25  # note: sqrt(gateDim) gives linear dim of density mx
 
@@ -2733,8 +2745,8 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
             return tpPenalty
 
     elif toGetTo == "TP and target":
-        printer.log('', 2)
-        printer.log(("--- Gauge Optimization to TP and target (%s) ---" % method), 1, indentOffset=-1)
+        #printer.log('', 2)
+        printer.log(("--- Gauge Optimization to TP and target (%s) ---" % method), 1)
         if targetGateset is None: raise ValueError("Must specify a targetGateset != None")
         if constrainToTP: raise ValueError("Cannot gauge optimize to TP and constrain to TP")
         rhoVecFirstEl = 1.0 / gateDim**0.25  # note: sqrt(gateDim) gives linear dim of density mx
@@ -2769,8 +2781,8 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
                                                      constrainToTP, constrainToCP, constrainToValidSpam, True,
                                                      gateWeight, spamWeight, itemWeights, printer-1)
 
-        printer.log('', 2)
-        printer.log(("--- Gauge Optimization to CPTP and target w/valid SPAM (%s) ---" % method), 1, indentOffset=-1)
+        #printer.log('', 2)
+        printer.log(("--- Gauge Optimization to CPTP and target w/valid SPAM (%s) ---" % method), 1)
         constrainToTP = True # always constrain next optimization to TP
 
         def objective_func(vectorM):
@@ -2793,8 +2805,8 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
 
 
     elif toGetTo == "Completely Depolarized":
-        printer.log('', 2)
-        printer.log(("--- Gauge Optimization to Completely Depolarized w/valid SPAM (%s) ---" % method), 1, indentOffset=-1)
+        #printer.log('', 2)
+        printer.log(("--- Gauge Optimization to Completely Depolarized w/valid SPAM (%s) ---" % method), 1)
         complDepolGate = _np.zeros( (gateDim,gateDim) )
         complDepolGate[0,0] = 1.0
 
@@ -2840,21 +2852,22 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
                              targetGateset.get_basis_dimension())
 
     if toGetTo == "target":
-        printer.log(('The resulting Frobenius-norm distance is: %g' % minSol.fun), 1)
+        printer.log(('The resulting Frobenius-norm distance is: %g' % minSol.fun), 2)
         for gateLabel in newGateset.gates:
             printer.log("  frobenius norm diff of %s = %g" % (gateLabel,
-              _tools.frobeniusdist(newGateset.gates[gateLabel],targetGateset.gates[gateLabel])), 1)
+              _tools.frobeniusdist(newGateset.gates[gateLabel],targetGateset.gates[gateLabel])), 2)
         for (rhoLbl,rhoV) in newGateset.preps.items():
             printer.log("  frobenius norm diff of %s = %g" % \
-              (rhoLbl, _tools.frobeniusdist(rhoV,targetGateset.preps[rhoLbl])), 1)
+              (rhoLbl, _tools.frobeniusdist(rhoV,targetGateset.preps[rhoLbl])), 2)
         for (ELbl,Evec) in newGateset.effects.items():
             printer.log("  frobenius norm diff of %s = %g" % \
-                (ELbl, _tools.frobeniusdist(Evec,targetGateset.effects[ELbl])), 1)
+                (ELbl, _tools.frobeniusdist(Evec,targetGateset.effects[ELbl])), 2)
     else:
-        printer.log('The resulting %s penalty is: %g' % (toGetTo, minSol.fun), 1)
+        printer.log('The resulting %s penalty is: %g' % (toGetTo, minSol.fun), 2)
 
-    printer.log('The gauge matrix found (B^-1) is:\n' + str(gaugeMat) + '\n', 2)
-    printer.log( 'The gauge-corrected gates are:\n' + str(newGateset), 2)
+    printer.log('The gauge matrix found (B^-1) is:\n' + str(gaugeMat) + '\n', 3)
+    printer.log( 'The gauge-corrected gates are:\n' + str(newGateset), 3)
+    printer.log('',2) #extra newline if we print messages at verbosity >= 2
 
     if returnAll:
         return minSol.fun, gaugeMat, newGateset
@@ -2989,8 +3002,8 @@ def _contractToXP(gateset,dataset,verbosity,method='Nelder-Mead',
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
-    printer.log('', 2)
-    printer.log("--- Contract to XP ---", 1, indentOffset=-1)
+    #printer.log('', 2)
+    printer.log("--- Contract to XP ---", 1)
     gs = gateset.copy() #working copy that we keep overwriting with vectorized data
 
     def objective_func(vectorGS):
@@ -3023,8 +3036,8 @@ def _contractToCP(gateset,verbosity,method='Nelder-Mead',
     CLIFF = 10000
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
-    printer.log('', 2)
-    printer.log("--- Contract to CP ---", 1, indentOffset=-1)
+    #printer.log('', 2)
+    printer.log("--- Contract to CP ---", 1)
     gs = gateset.copy() #working copy that we keep overwriting with vectorized data
 
     def objective_func(vectorGS):
@@ -3056,8 +3069,8 @@ def _contractToCP_direct(gateset,verbosity,TPalso=False,maxiter=100000,tol=1e-8)
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
     gs = gateset.copy() #working copy that we keep overwriting with vectorized data
-    printer.log('', 1)
-    printer.log(("--- Contract to %s (direct) ---" % ("CPTP" if TPalso else "CP")), 1, indentOffset=-1)
+    #printer.log('', 1)
+    printer.log(("--- Contract to %s (direct) ---" % ("CPTP" if TPalso else "CP")), 1)
 
     for (gateLabel,gate) in gateset.gates.items():
         new_gate = gate.copy()
@@ -3183,8 +3196,8 @@ def _contractToCP_direct(gateset,verbosity,TPalso=False,maxiter=100000,tol=1e-8)
 #modifies gates only (not rhoVecs or EVecs = SPAM)
 def _contractToTP(gateset,verbosity):
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
-    printer.log('', 2)
-    printer.log("--- Contract to TP ---", 1, indentOffset=-1)
+    #printer.log('', 2)
+    printer.log("--- Contract to TP ---", 1)
     gs = gateset.copy()
     for gate in list(gs.gates.values()):
         gate[0,0] = 1.0
@@ -3275,8 +3288,8 @@ def _contractToValidSPAM(gateset, verbosity=0):
             gs.effects[ELabel] = vec
 
     #gs.log("Contract to valid SPAM")
-    printer.log('', 2)
-    printer.log("--- Contract to valid SPAM ---", 1, indentOffset=-1)
+    #printer.log('', 2)
+    printer.log("--- Contract to valid SPAM ---", 1)
     printer.log(("Sum of norm(deltaE) and norm(deltaRho) = %g" % diff), 1)
     for (prepLabel,rhoVec) in gateset.preps.items():
         printer.log("  %s: %s ==> %s " % (prepLabel, str(_np.transpose(rhoVec)),

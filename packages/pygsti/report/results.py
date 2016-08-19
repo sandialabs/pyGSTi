@@ -1650,7 +1650,7 @@ class Results(object):
 
         with printer.progress_logging(1):
             for i, key in enumerate(tables_to_compute):
-                printer.show_progress(i, len(tables_to_compute) - 1, prefix='', end='')
+                printer.show_progress(i, len(tables_to_compute), prefix='', end='')
                 qtys[key] = self.tables.get(key, verbosity=printer - 1).render(
                     'latex',longtables=self.options.long_tables, scratchDir=D,
                     precision=self.options.precision,
@@ -1723,7 +1723,7 @@ class Results(object):
             printer.log("%s plots (%d): " % (plotFnName, nPlots))
 
             with printer.progress_logging(1):
-                printer.show_progress(0, 1, prefix='', end='')
+                printer.show_progress(0, 2, prefix='', end='')
                 fig = set_fig_qtys("bestEstimateColorBoxPlot",
                                    "best%sBoxes.pdf" % plotFnName, printer - 1)
                 maxX = fig.get_extra_info()['nUsedXs']
@@ -1734,7 +1734,7 @@ class Results(object):
                 #    #no tooltip for histogram... - probably should make it
                 #    # it's own element of .figures dict
 
-                printer.show_progress(1, 1, prefix='', end='')
+                printer.show_progress(1, 2, prefix='', end='')
                 fig = set_fig_qtys("invertedBestEstimateColorBoxPlot",
                                    "best%sBoxes_inverted.pdf" % plotFnName, printer - 1)
         else:
@@ -1749,7 +1749,7 @@ class Results(object):
             with printer.progress_logging(1):
                 for i in range(st,len(Ls)-1):
 
-                    printer.show_progress(i, len(Ls)-2, prefix='', end='') # -2 is intentional
+                    printer.show_progress(i, len(Ls)-1, prefix='', end='') # -2 is intentional
 
                     fig = self.figures.get("estimateForLIndex%dColorBoxPlot" % i,
                                            verbosity=printer)
@@ -1798,7 +1798,7 @@ class Results(object):
             #    print " ?",; _sys.stdout.flush()
             #fig = set_fig_qtys("directLGSTDeviationColorBoxPlot",
             #                   "directLGSTDeviationBoxes.pdf",W=4,H=5)
-                printer.show_progress(0, 1, prefix='', end='')
+                printer.show_progress(0, 2, prefix='', end='')
                 fig = set_fig_qtys("directLongSeqGSTColorBoxPlot",
                                "directLongSeqGST%sBoxes.pdf" % plotFnName, printer - 1)
 
@@ -1807,7 +1807,7 @@ class Results(object):
                 #fig = set_fig_qtys("directLGSTDeviationColorBoxPlot",
                 #                   "directLGSTDeviationBoxes.pdf",W=4,H=5)
 
-                printer.show_progress(1, 1, prefix='', end='')
+                printer.show_progress(1, 2, prefix='', end='')
                 fig = set_fig_qtys("directLongSeqGSTDeviationColorBoxPlot",
                                    "directLongSeqGSTDeviationBoxes.pdf", printer - 1, W=4,H=5)
 
@@ -1839,7 +1839,7 @@ class Results(object):
             with printer.progress_logging(1):
                 for i, germ in enumerate(len1Germs):
 
-                    printer.show_progress(i,  len(len1Germs) - 1, prefix='', end='')
+                    printer.show_progress(i,  len(len1Germs), prefix='', end='')
 
                     fig = self.figures.get("whack%sMoleBoxes" % germ[0],verbosity=printer - 1)
                     fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.pdf"
@@ -1857,7 +1857,7 @@ class Results(object):
 
             with printer.progress_logging(1):
                 for i,germ in enumerate(len1Germs):
-                    printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
+                    printer.show_progress(i, len(len1Germs), prefix='', end='')
 
                     fig = self.figures.get("whack%sMoleBoxesSummed" % germ[0],
                                            verbosity=printer - 1)
@@ -2439,7 +2439,7 @@ class Results(object):
 
             printer.log(" -- %s plots (%d): " % (plotFnName, nPlots), end='')
             with printer.progress_logging(1):
-                printer.show_progress(0, 0, prefix='', end='')
+                printer.show_progress(0, 1, prefix='', end='')
             fig = set_fig_qtys("bestEstimateColorBoxPlot",
                                "best%sBoxes.pdf" % plotFnName, printer - 1)
             maxX = fig.get_extra_info()['nUsedXs']
@@ -2456,7 +2456,7 @@ class Results(object):
 
             with printer.progress_logging(1):
                 for i in range(st, paramListLength):
-                    printer.show_progress(i, paramListLength-1, prefix='', end='')
+                    printer.show_progress(i, paramListLength, prefix='', end='')
                     #printer.log("%d " % (i-st+2), end='')
 
                     fig = self.figures.get("estimateForLIndex%dColorBoxPlot" % i,
@@ -2493,10 +2493,10 @@ class Results(object):
             #Direct-GST and deviation
             printer.log(" -- Direct-X plots (2)", end='')
             with printer.progress_logging(1):
-                printer.show_progress(0, 1, prefix='', end='')
+                printer.show_progress(0, 2, prefix='', end='')
                 fig = set_fig_qtys("directLongSeqGSTColorBoxPlot",
                                "directLongSeqGST%sBoxes.pdf" % plotFnName, printer - 1, H=maxHc)
-                printer.show_progress(1, 1, prefix='', end='')
+                printer.show_progress(1, 2, prefix='', end='')
                 fig = set_fig_qtys("directLongSeqGSTDeviationColorBoxPlot",
                                    "directLongSeqGSTDeviationBoxes.pdf", printer - 1, H=maxHc)
             printer.log('')
@@ -2527,7 +2527,7 @@ class Results(object):
 
             with printer.progress_logging(1):
                 for i,germ in enumerate(len1Germs):
-                    printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
+                    printer.show_progress(i, len(len1Germs), prefix='', end='')
 
                     fig = self.figures.get("whack%sMoleBoxes" % germ[0],verbosity=printer - 1)
                     fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.pdf"
@@ -2548,7 +2548,7 @@ class Results(object):
             with printer.progress_logging(1):
                 for i,germ in enumerate(len1Germs):
                     # printer.log("%d " % (len(len1Germs)+i+1), end='')
-                    printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
+                    printer.show_progress(i, len(len1Germs), prefix='', end='')
 
                     fig = self.figures.get("whack%sMoleBoxesSummed" % germ[0],
                                            verbosity=printer - 1)
@@ -2793,7 +2793,7 @@ class Results(object):
 
         with printer.progress_logging(1):
             for i, key in enumerate(tables_to_compute):
-                printer.show_progress(i, len(tables_to_compute) - 1, prefix='', end='')
+                printer.show_progress(i, len(tables_to_compute), prefix='', end='')
                 qtys[key] = self.tables.get(key, verbosity=printer)
                 qtys["tt_"+key] = tooltiptext(".tables['%s']" % key)
 
@@ -2842,7 +2842,7 @@ class Results(object):
 
             printer.log(" -- %s plots (%d): " % (plotFnName, nPlots), end='')
             with printer.progress_logging(1):
-                printer.show_progress(0, 0, prefix='', end='')
+                printer.show_progress(0, 1, prefix='', end='')
             fig = set_fig_qtys("bestEstimateColorBoxPlot",
                                "best%sBoxes.png" % plotFnName, printer - 1)
             maxX = fig.get_extra_info()['nUsedXs']
@@ -2859,7 +2859,7 @@ class Results(object):
             with printer.progress_logging(1):
                 for i in range(st,len(Ls)-1):
 
-                    printer.show_progress(i, len(Ls)-2, prefix='', end='')
+                    printer.show_progress(i, len(Ls)-1, prefix='', end='')
                     # printer.log("%d " % (i-st+2), end='')
 
                     fig = self.figures.get("estimateForLIndex%dColorBoxPlot" % i,
@@ -2887,11 +2887,11 @@ class Results(object):
             #Direct-GST and deviation
             printer.log(" -- Direct-X plots (2)", end="")
             with printer.progress_logging(1):
-                printer.show_progress(0, 1, prefix='', end='')
+                printer.show_progress(0, 2, prefix='', end='')
                 fig = set_fig_qtys("directLongSeqGSTColorBoxPlot",
                                "directLongSeqGST%sBoxes.png" % plotFnName, printer - 1)
 
-                printer.show_progress(1, 1, prefix='', end='')
+                printer.show_progress(1, 2, prefix='', end='')
                 fig = set_fig_qtys("directLongSeqGSTDeviationColorBoxPlot",
                                    "directLongSeqGSTDeviationBoxes.png", printer - 1)
 
@@ -2920,7 +2920,7 @@ class Results(object):
             printer.log(" -- Whack-a-mole plots (%d): " % (2*len(len1Germs)), end='')
             with printer.progress_logging(1):
                 for i,germ in enumerate(len1Germs):
-                    printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
+                    printer.show_progress(i, len(len1Germs), prefix='', end='')
 
                     fig = self.figures.get("whack%sMoleBoxes" % germ[0],verbosity=printer -1)
                     fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.png"
@@ -2931,7 +2931,7 @@ class Results(object):
 
             with printer.progress_logging(1):
                 for i,germ in enumerate(len1Germs):
-                    printer.show_progress(i, len(len1Germs) - 1, prefix='', end='')
+                    printer.show_progress(i, len(len1Germs), prefix='', end='')
                     # printer.log("%d " % (len(len1Germs)+i+1), end='')
 
                     fig = self.figures.get("whack%sMoleBoxesSummed" % germ[0],
@@ -3540,7 +3540,7 @@ class Results(object):
 
             printer.log(" -- %s plots: " % (plotFnName), end='')
             with printer.progress_logging(1):
-                printer.show_progress(0, 2, prefix='', end='')
+                printer.show_progress(0, 3, prefix='', end='')
 
                 w = min(len(self.gatestring_lists['prep fiducials']) * 0.3,maxW)
                 h = min(len(self.gatestring_lists['effect fiducials']) * 0.3,maxH)
@@ -3548,14 +3548,14 @@ class Results(object):
                 fig = set_fig_qtys("colorBoxPlotKeyPlot",
                                    "colorBoxPlotKey.png", printer - 1, w,h)
 
-                printer.show_progress(1, 2, prefix='', end='')
+                printer.show_progress(1, 3, prefix='', end='')
 
                 fig = set_fig_qtys("bestEstimateSummedColorBoxPlot",
                                    "best%sBoxesSummed.png" % plotFnName,
                                    printer - 1,
                                    maxW, maxH-1.0) # -1 for room for caption
 
-                printer.show_progress(2, 2, prefix='', end='')
+                printer.show_progress(2, 3, prefix='', end='')
 
             figkey = "bestEstimateColorBoxPlotPages"
             figs = self._specials.get(figkey, verbosity=printer - 1)
