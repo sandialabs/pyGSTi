@@ -154,6 +154,9 @@ class TestDriversMethods(DriversTestCase):
                                       debugAidsAppendix=False, gaugeOptAppendix=False,
                                       pixelPlotAppendix=False, whackamoleAppendix=False,
                                       verbosity=2)
+        import os
+        print("LOG DEBUG")
+        os.system("cat " + temp_files + "/full_report_FPR.log")
 
 
     def test_longSequenceGST_randomReduction(self):
