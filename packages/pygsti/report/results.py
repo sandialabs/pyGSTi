@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import os  as _os
 import re  as _re
+import time as _time
 import subprocess  as _subprocess
 import collections as _collections
 import matplotlib  as _matplotlib
@@ -3284,6 +3285,7 @@ class Results(object):
         """
 
         printer = VerbosityPrinter.build_printer(verbosity)
+        tStart = _time.time()
 
         assert(self._bEssentialResultsSet)
         self.confidence_level = confidenceLevel
@@ -3400,7 +3402,8 @@ class Results(object):
             _os.mkdir( _os.path.join(report_dir,D))
 
         # 1) get latex tables
-        printer.log("*** Generating tables ***")
+        printer.log("*** Generating tables *** (%.1fs elapsed)"
+                    % (_time.time()-tStart))
 
 
         std_tables = \
@@ -3461,7 +3464,8 @@ class Results(object):
 
 
         # 2) generate plots
-        printer.log("*** Generating plots ***")
+        printer.log("*** Generating plots *** (%.1fs elapsed)"
+                    % (_time.time()-tStart))
 
         if _matplotlib.is_interactive():
             _matplotlib.pyplot.ioff()
@@ -3525,7 +3529,6 @@ class Results(object):
         if self._LsAndGermInfoSet:
             Ls = self.parameters['max length list']
             st = 1 if Ls[0] == 0 else 0 #start index: skip LGST column in plots
-            nPlots = 4 #(len(Ls[st:])-1)+2 if pixelPlotAppendix else 2
 
             if self.parameters['objective'] == "chi2":
                 plotFnName,plotFnLatex = "Chi2", "$\chi^2$"
@@ -3535,12 +3538,13 @@ class Results(object):
                 raise ValueError("Invalid objective value: %s"
                                  % self.parameters['objective'])
 
-            printer.log(" -- %s plots (%d): " % (plotFnName, nPlots), end='')
+            printer.log(" -- %s plots: " % (plotFnName), end='')
             with printer.progress_logging(1):
                 printer.show_progress(0, 2, prefix='', end='')
 
                 w = min(len(self.gatestring_lists['prep fiducials']) * 0.3,maxW)
                 h = min(len(self.gatestring_lists['effect fiducials']) * 0.3,maxH)
+
                 fig = set_fig_qtys("colorBoxPlotKeyPlot",
                                    "colorBoxPlotKey.png", printer - 1, w,h)
 
@@ -3753,7 +3757,8 @@ class Results(object):
 
 
         # 3) populate template latex file => report latex file
-        printer.log("*** Merging into template file ***")
+        printer.log("*** Merging into template file *** (%.1fs elapsed)"
+                    % (_time.time()-tStart))
 
         mainTexFilename = _os.path.join(report_dir, report_base + ".tex")
         appendicesTexFilename = _os.path.join(report_dir, report_base + "_appendices.tex")

@@ -944,8 +944,8 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         GateSet containing the estimated gates.
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    tStart = _time.time()
 
-    #tBegin = _time.time() #TIMER!!!
     gs = startGateset.copy()
     if maxfev is None: maxfev = maxiter
 
@@ -1082,8 +1082,6 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
             dw = -0.5 * wts / cp   # nSpamLabels x nGateStrings array (K x M)
             dw[ _np.logical_or(p < minProbClipForWeighting, p>(1-minProbClipForWeighting)) ] = 0.0
             return dw
-
-    #tStart = 0 #TIMER!!!
 
     if cptp_penalty_factor == 0:
 
@@ -1236,7 +1234,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
 
     #Step 3: solve least squares minimization problem
-    #tStart = _time.time() #TIMER!!!
+    #tm = _time.time() #TIMER!!!
     x0 = gs.to_vector()
     opt_x, _, _, _, _ = \
         _spo.leastsq( objective_func, x0, xtol=tol, ftol=tol, gtol=tol,
@@ -1246,7 +1244,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     soln_gs = gs.copy();
 
     #soln_gs.log("MC2GST", { 'method': "leastsq", 'tol': tol,  'maxiter': maxiter } )
-    #print "*** leastSQ TIME = ",(_time.time()-tStart) #TIMER!!!
+    #print "*** leastSQ TIME = ",(_time.time()-tm) #TIMER!!!
 
     #opt_jac = _np.abs(jacobian(opt_x))
     #print "DEBUG: Jacobian (shape %s) at opt_x: min=%g, max=%g" % (str(opt_jac.shape),_np.min(opt_jac), _np.max(opt_jac))
@@ -1266,8 +1264,8 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         pvalue = 1.0 - _stats.chi2.cdf(totChi2,nDataParams-nModelParams) # reject GST model if p-value < threshold (~0.05?)
         printer.log("  Sum of Chi^2 = %g (%d data params - %d model params = expected mean of %g; p-value = %g)" % \
             (totChi2, nDataParams,  nModelParams, nDataParams-nModelParams, pvalue), 1)
+        printer.log("  Completed in %.1fs" % (_time.time()-tStart), 1)
 
-    #print "*** mc2gst TIME = ",(_time.time()-tBegin) #TIMER!!!
     #if targetGateset is not None:
     #  target_vec = targetGateset.to_vector()
     #  targetErrVec = objective_func(target_vec)
@@ -1611,8 +1609,9 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
 
     #Run MC2GST iteratively on given sets of estimatable strings
     lsgstGatesets = [ ]; minErrs = [ ] #for returnAll == True case
-    lsgstGateset = startGateset.copy(); nIters = len(gateStringLists)
-    tRef = _time.time() #start time
+    lsgstGateset = startGateset.copy(); nIters = len(gateStringLists)    
+    tStart = _time.time()
+    tRef = tStart
 
     with printer.progress_logging(1):
         for (i, stringsToEstimate) in enumerate(gateStringLists):
@@ -1644,6 +1643,8 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
                 tNxt = _time.time();
                 times.append(('MC2GST Iteration %d: chi2-opt' % (i+1),tNxt-tRef))
                 tRef=tNxt
+
+    printer.log('Iterative MC2GST Total Time: %.1fs' % (_time.time()-tStart))
 
     if returnErrorVec:
         return (minErrs, lsgstGatesets) if returnAll else (minErr, lsgstGateset)
@@ -1929,6 +1930,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     """
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    tStart = _time.time()
 
     gs = startGateset.copy()
     if maxfev is None: maxfev = maxiter
@@ -2204,6 +2206,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
             printer.log("  Maximum log(L) = %g below upper bound of %g" % (deltaLogL, logL_upperbound), 1)
             printer.log("    2*Delta(log(L)) = %g (%d data params - %d model params = expected mean of %g; p-value = %g)" % \
                 (2*deltaLogL, nDataParams,  nModelParams, nDataParams-nModelParams, pvalue), 1)
+            printer.log("  Completed in %.1fs" % (_time.time()-tStart), 1)
 
             #print " DEBUG LOGL = ", _tools.logl(gs, dataset, gateStringsToUse),
             #  " DELTA = ",(logL_upperbound-_tools.logl(gs, dataset, gateStringsToUse))
@@ -2372,7 +2375,8 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
     #Run extended MLGST iteratively on given sets of estimatable strings
     mleGatesets = [ ]; maxLogLs = [ ] #for returnAll == True case
     mleGateset = startGateset.copy(); nIters = len(gateStringLists)
-    tRef = _time.time() #start time
+    tStart = _time.time()
+    tRef = tStart
 
     with printer.progress_logging(1):
         for (i,stringsToEstimate) in enumerate(gateStringLists):
@@ -2435,6 +2439,8 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
             if returnAll:
                 mleGatesets.append(mleGateset)
                 maxLogLs.append(maxLogL)
+
+    printer.log('Iterative MLGST Total Time: %.1fs' % (_time.time()-tStart))
 
     if returnMaxLogL:
         return (maxLogL, mleGatesets) if returnAll else (maxLogL, mleGateset)
