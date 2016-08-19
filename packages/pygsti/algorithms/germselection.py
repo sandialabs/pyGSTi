@@ -915,6 +915,7 @@ def build_up(gatesetList, germsList, randomize=True,
         'thresholdAC': threshold,
         'numGaugeParams': numGaugeParams,
         'gatePenalty': gatePenalty,
+        'germLengths': germLengths,
         }
 
     for gatesetNum, reducedGateset in enumerate(reducedGatesetList):
@@ -1018,6 +1019,7 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
         'thresholdAC': threshold,
         'numGaugeParams': numGaugeParams,
         'gatePenalty': gatePenalty,
+        'germLengths': germLengths,
         }
 
 
