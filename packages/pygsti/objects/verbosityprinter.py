@@ -37,11 +37,11 @@ def _build_progress_bar (iteration, total, barLength = 100, numDecimals=2, fillC
     formattedString - str:
       python string representing a progress bar
     """
-    filledLength    = int(round(barLength * (iteration+1) / float(total)))
-    percents        = round(100.00 * ((iteration+1) / float(total)), numDecimals)
+    filledLength    = int(round(barLength * iteration / float(total)))
+    percents        = round(100.00 * (iteration / float(total)), numDecimals)
     bar             = fillChar * filledLength + emptyChar * (barLength - filledLength)
     # Here, the \r (carriage return) is what replaces the last line that was printed
-    carriageReturn  = end if (iteration+1) == total else '\r'
+    carriageReturn  = end if iteration == total else '\r'
     formattedString = '%s [%s] %s%s %s%s' % (prefix, bar, percents, '%', suffix, carriageReturn)
     return formattedString
 
@@ -145,6 +145,7 @@ class VerbosityPrinter():
         self.progressLevel    = 0 # Used for queuing output while a progress bar is being shown
         self._delayQueue      = []
         self._progressStack   = []
+        self._progressParamsStack   = []
         self.warnings         = warnings
         self.extra_indents    = 0 # Used for nested calls
 
@@ -157,6 +158,7 @@ class VerbosityPrinter():
         p.extra_indents = self.extra_indents
         p._delayQueue    = _dc(self._delayQueue) # deepcopy
         p._progressStack = _dc(self._progressStack)
+        p._progressParamsStack = _dc(self._progressParamsStack)
         return p
 
     # Function for converting between interfaces:
@@ -334,6 +336,7 @@ class VerbosityPrinter():
           the verbosity level of the progressbar/set of iterations
         '''
         self._progressStack.append(messageLevel)
+        self._progressParamsStack.append(None)
         if self.verbosity == messageLevel:
             self.progressLevel += 1
         yield
@@ -377,7 +380,11 @@ class VerbosityPrinter():
         # Build either the progress bar or the verbose iteration status
         progress = ''
         if self.verbosity == self._progressStack[-1] and self.filename == None:
-            progress = self._progress_bar(iteration, total, barLength, numDecimals, fillChar, emptyChar, prefix, suffix, indent)
+            progress = self._progress_bar(iteration, total, barLength, numDecimals,
+                                          fillChar, emptyChar, prefix, suffix, indent)
+            self._progressParamsStack[-1] = (iteration, total, barLength,
+                                             numDecimals, fillChar, emptyChar,
+                                             prefix, suffix, indent)
         elif self.verbosity >  self._progressStack[-1]:
             progress = self._verbose_iteration(iteration, total, prefix, suffix, verboseMessages, indent, end)
 
@@ -387,7 +394,17 @@ class VerbosityPrinter():
     #  This allows for early exits
     def _end_progress(self):
         if self.progressLevel > 0:
+            last_progress_params = self._progressParamsStack.pop()
             if self.verbosity == self._progressStack.pop():
+                if last_progress_params is not None:
+                    (iteration, total, barLength,
+                     numDecimals, fillChar, emptyChar,
+                     prefix, suffix, indent) = last_progress_params
+                    progress = self._progress_bar(iteration+1, total, barLength,
+                                                  numDecimals, fillChar, emptyChar,
+                                                  prefix, suffix, indent)
+                    self._put(progress) # send the progress logging to either file or stdout
+
                 # Show the statuses that were queued while the progressBar was active
                 for item in self._delayQueue:
                     print(item)
