@@ -6,6 +6,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 import collections as _collections
 import re          as _re
+import time        as _time
 import itertools   as _itertools
 
 from ..objects import VerbosityPrinter
@@ -70,13 +71,19 @@ class ResultCache(object):
             else:
                 raise KeyError("Invalid key: %s" % key)
 
+        CIsuffix=" (w/%d%% CIs)" % round(level) if (level is not None) else ""
+
         if (key in self._data[level]) == False:
             computeFn = self._get_compute_fn(key)
             if computeFn:
                 try:
-                    printer.log("Generating %s: %s%s" % (self._typename, key, (" (w/%d%% CIs)" % round(level) if (level is not None) else "")))
+                    tStart = _time.time()
+                    printer.log("Generating %s: %s%s" % 
+                                (self._typename, key, CIsuffix), end='')
 
                     self._data[level][key] = computeFn(key, level, printer)
+
+                    printer.log("[%.1fs]" % (_time.time()-tStart))
                 except ResultCache.NoCRDependenceError:
                     assert(level is not None)
                     self._data[level][key] = self.get(key, None, printer)
@@ -85,8 +92,8 @@ class ResultCache(object):
             return self._data[level][key]
 
         else:
-            printer.log("Retrieving cached %s: %s%s" % (self._typename, key, (" (w/%d%% CIs)" % round(level) if (level is not None) else "")))
-
+            printer.log("Retrieving cached %s: %s%s" %             
+                        (self._typename, key, CIsuffix))
             return self._data[level][key]
 
     def _get_compute_fn(self, key):

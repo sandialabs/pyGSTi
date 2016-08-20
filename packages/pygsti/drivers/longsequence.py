@@ -16,6 +16,7 @@ import collections as _collections
 from .. import report as _report
 from .. import algorithms as _alg
 from .. import construction as _construction
+from .. import objects as _objs
 from .. import io as _io
 
 def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
@@ -25,7 +26,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                          gaugeOptToCPTP=False, gaugeOptRatio=0.001,
                          gaugeOptItemWeights=None, objective="logl",
                          advancedOptions={}, lsgstLists=None,
-                         truncScheme="whole germ powers", comm=None):
+                         truncScheme="whole germ powers", comm=None,
+                         verbosity=2):
     """
     Perform end-to-end GST analysis using Ls and germs, with L as a maximum
     length.
@@ -121,9 +123,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
 
     advancedOptions : dict, optional
         Specifies advanced options most of which deal with numerical details of
-        the objective function.   The 'verbosity' option is an integer
-        specifying the level of detail printed to stdout during the GST
-        calculation.
+        the objective function.
 
     lsgstLists : list of gate string lists, optional
         Provides explicit list of gate string lists to be used in analysis; to
@@ -145,6 +145,10 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         When not ``None``, an MPI communicator for distributing the computation
         across multiple processors.
 
+    verbosity : int, optional
+       The 'verbosity' option is an integer specifying the level of 
+       detail printed to stdout during the calculation.
+
 
     Returns
     -------
@@ -152,6 +156,11 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     """
 
     tRef = _time.time(); times_list = []
+    if 'verbosity' in advancedOptions: #for backward compatibility
+        _warnings.warn("'verbosity' as an advanced option is deprecated." +
+                       " Please use the 'verbosity' argument directly.")
+        verbosity = advancedOptions['verbosity'] 
+    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
 
     #Get target gateset
     if isinstance(targetGateFilenameOrSet, str):
@@ -161,7 +170,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
 
     #Get dataset
     if isinstance(dataFilenameOrSet, str):
-        ds = _io.load_dataset(dataFilenameOrSet)
+        ds = _io.load_dataset(dataFilenameOrSet, True, verbosity) #can't take a printer...
         default_dir = _os.path.dirname(dataFilenameOrSet) #default directory for reports, etc
         default_base = _os.path.splitext( _os.path.basename(dataFilenameOrSet) )[0]
     else:
@@ -202,7 +211,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                                            prep_labels=gs_target.get_prep_labels(),
                                            effect_labels=gs_target.get_effect_labels())
     gs_lgst = _alg.do_lgst(ds, specs, gs_target, svdTruncateTo=gate_dim,
-                           verbosity=advancedOptions.get('verbosity',3))
+                           verbosity=printer)
 
     tNxt = _time.time()
     times_list.append( ('LGST',tNxt-tRef) ); tRef=tNxt
@@ -212,7 +221,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         gs_lgst.set_all_parameterizations("full") #make sure we can do gauge optimization
         minPenalty, _, gs_in_TP = _alg.optimize_gauge(
             gs_lgst, "TP",  returnAll=True, spamWeight=1.0,
-            gateWeight=1.0, verbosity=advancedOptions.get('verbosity',3))
+            gateWeight=1.0, verbosity=printer)
             #Note: no  itemWeights=gaugeOptItemWeights here (LGST)
 
         if minPenalty > 0:
@@ -259,7 +268,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
             probClipInterval = advancedOptions.get(
                 'probClipInterval',(-1e6,1e6)),
             returnAll=True, gatestringWeightsDict=weightsDict,
-            verbosity=advancedOptions.get('verbosity',3),
+            verbosity=printer,
             memLimit=advancedOptions.get('memoryLimitInBytes',None),
             useFreqWeightedChiSq=advancedOptions.get(
                 'useFreqWeightedChiSq',False), times=times_list,
@@ -271,7 +280,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
           minProbClip = advancedOptions.get('minProbClip',1e-4),
           probClipInterval = advancedOptions.get('probClipInterval',(-1e6,1e6)),
           radius=advancedOptions.get('radius',1e-4),
-          returnAll=True, verbosity=advancedOptions.get('verbosity',3),
+          returnAll=True, verbosity=printer,
           memLimit=advancedOptions.get('memoryLimitInBytes',None),
           useFreqWeightedChiSq=advancedOptions.get(
                 'useFreqWeightedChiSq',False), times=times_list,
@@ -286,7 +295,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     #Run the gatesets through gauge optimization, first to CPTP then to target
     #   so fidelity and frobenius distance w/targets is more meaningful
     if gaugeOptToCPTP:
-        print("\nGauge Optimizing to CPTP..."); _sys.stdout.flush()
+        printer.log("\nGauge Optimizing to CPTP...",2)
         go_gs_lsgst_list = [_alg.optimize_gauge(
                 gs,'CPTP',constrainToTP=constrainToTP) for gs in gs_lsgst_list]
         #Note: don't set itemWeights in optimize_gauge (doesn't apply to CPTP)

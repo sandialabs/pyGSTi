@@ -915,6 +915,7 @@ def build_up(gatesetList, germsList, randomize=True,
         'thresholdAC': threshold,
         'numGaugeParams': numGaugeParams,
         'gatePenalty': gatePenalty,
+        'germLengths': germLengths,
         }
 
     for gatesetNum, reducedGateset in enumerate(reducedGatesetList):
@@ -1018,6 +1019,7 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
         'thresholdAC': threshold,
         'numGaugeParams': numGaugeParams,
         'gatePenalty': gatePenalty,
+        'germLengths': germLengths,
         }
 
 
@@ -1280,7 +1282,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
 
     with printer.progress_logging(1):
         for iIter in range(maxIter):
-            printer.show_progress(iIter + 1, maxIter,
+            printer.show_progress(iIter, maxIter,
                                   suffix="score=%g, nGerms=%d" % (score, L1))
 
             bFoundBetterNeighbor = False

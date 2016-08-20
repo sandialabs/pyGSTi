@@ -7,7 +7,7 @@ filePath        = temp_files + '/printer_output.txt'
 # Some basic messages to make assertions easier
 warningMessage  = 'This might go badly'
 errorMessage    = 'Something terrible happened'
-logMessage      = 'Data recieved'
+logMessage      = 'Data received'
 
 def _generate_with(printer):
     data     = list(range(2))
@@ -15,13 +15,13 @@ def _generate_with(printer):
     printer.warning(warningMessage)
     with printer.progress_logging(1):
         for i, item in enumerate(data):
-            printer.show_progress(i, len(data)-1, verboseMessages=[('(%s data members remaining)' % (len(data) - (i + 1)))])
+            printer.show_progress(i, len(data), verboseMessages=[('(%s data members remaining)' % (len(data) - (i + 1)))])
             printer.log(logMessage)
             if i == 1:
                 printer.error(errorMessage)
             with printer.progress_logging(2):
                 for i, item in enumerate(data):
-                    printer.show_progress(i, len(data)-1, messageLevel=2)
+                    printer.show_progress(i, len(data), messageLevel=2)
 
 def _to_temp_file(printer):
     data     = list(range(2))
@@ -70,27 +70,45 @@ def _test_output_with(testcase, method, printer):
     generated = method(normal)
 
     testcase.assertEqual(generated[0], 'WARNING: %s' % warningMessage)
-    testcase.assertEqual(generated[1], '  Progress: Iter 0 of 1 : ')
-    testcase.assertEqual(generated[2], '  (1 data members remaining)')
-    testcase.assertEqual(generated[3], '  %s' % logMessage)
+    testcase.assertEqual(generated[1], 'Progress: Iter 1 of 2 : ')
+    testcase.assertEqual(generated[2], '(1 data members remaining)')
+    testcase.assertEqual(generated[3], '%s' % logMessage)
 
     # Verbose output testing (Warnings, Errors, Verbose Log Messages, Outer Iterations, Innner Iterations)
 
-    verbose   = VerbosityPrinter.build_printer(normal + 1)
+    verbose   = VerbosityPrinter.build_printer(normal + 0)
+    verbose.verbosity += 1  #increase verbosity to 3
     generated = method(verbose)
-
+    
     if printer.filename != None:
-
-        testcase.assertEqual(generated, ['      Data recieved', 'WARNING: This might go badly', '  Progress: Iter 0 of 1 : ',
-                         '  (1 data members remaining)', '  Data recieved', '    Progress: Iter 0 of 1 : ',
-                         '    Progress: Iter 1 of 1 : ', '    Progress: Iter 1 of 1 : ', '    (0 data members remaining)',
-                         '  Data recieved', 'ERROR: Something terrible happened', '    Progress: Iter 0 of 1 : ', '    Progress: Iter 1 of 1 : '])
+        testcase.assertEqual(generated, ['    Data received',
+                                         'WARNING: This might go badly',
+                                         'Progress: Iter 1 of 2 : ',
+                                         '(1 data members remaining)', 
+                                         'Data received', 
+                                         '  Progress: Iter 1 of 2 : ',
+                                         '  Progress: Iter 2 of 2 : ',
+                                         '  Progress: Iter 2 of 2 : ', 
+                                         '  (0 data members remaining)',
+                                         'Data received', 
+                                         'ERROR: Something terrible happened', 
+                                         '  Progress: Iter 1 of 2 : ', 
+                                         '  Progress: Iter 2 of 2 : '])
 
     else:
-        testcase.assertEqual(generated, ['      Data recieved', 'WARNING: This might go badly', '  Progress: Iter 0 of 1 : ', '  (1 data members remaining)',
-                                         '  Data recieved', '    Progress: Iter 0 of 1 : ', '    Progress: Iter 1 of 1 : ', '    Progress: Iter 1 of 1 : ',
-                                         '    (0 data members remaining)', '  Data recieved', 'ERROR: Something terrible happened', '    Progress: Iter 0 of 1 : ',
-                                         '    Progress: Iter 1 of 1 : '])
+        testcase.assertEqual(generated, ['    Data received',
+                                         'WARNING: This might go badly', 
+                                         'Progress: Iter 1 of 2 : ', 
+                                         '(1 data members remaining)',
+                                         'Data received', 
+                                         '  Progress: Iter 1 of 2 : ', 
+                                         '  Progress: Iter 2 of 2 : ', 
+                                         '  Progress: Iter 2 of 2 : ',
+                                         '  (0 data members remaining)', 
+                                         'Data received', 
+                                         'ERROR: Something terrible happened', 
+                                         '  Progress: Iter 1 of 2 : ',
+                                         '  Progress: Iter 2 of 2 : '])
 
     # Terse output testing (Warnings, Errors, and an unnested ProgressBar)
 
@@ -98,12 +116,19 @@ def _test_output_with(testcase, method, printer):
     generated = method(terse)
 
     if printer.filename != None:
-        testcase.assertEqual(generated, ['WARNING: This might go badly', '  Data recieved', '  Data recieved', 'ERROR: Something terrible happened'])
+        testcase.assertEqual(generated, ['WARNING: This might go badly',
+                                         '  Data received', 
+                                         '  Data received', 
+                                         'ERROR: Something terrible happened'])
 
     else:
-        testcase.assertEqual(generated, ['WARNING: This might go badly', '  Progress: [--------------------------------------------------] 0.0% ',
-                                         '  Progress: [##################################################] 100.0% ', 'ERROR: Something terrible happened',
-                                         '  INVALID LEVEL:   Data recieved', '  INVALID LEVEL:   Data recieved'])
+        testcase.assertEqual(generated, ['WARNING: This might go badly',
+                                         '  Progress: [--------------------------------------------------] 0.0% ',
+                                         '  Progress: [#########################-------------------------] 50.0% ',
+                                         'ERROR: Something terrible happened',
+                                         '  Progress: [##################################################] 100.0% ', 
+                                         '  INVALID LEVEL:   Data received', 
+                                         '  INVALID LEVEL:   Data received'])
 
     # Tersest output testing (Errors only)
 
@@ -132,10 +157,10 @@ if __name__ == '__main__':
 
 Sample output
 
-['      Data recieved', 'WARNING: This might go badly', '  Progress: Iter 0 of 1 : ', '  (1 data members remaining)', '  Data recieved', '    Progress: Iter 0 of 1 : ', '    Progress: Iter 1 of 1 : ', '    Progress: Iter 1 of 1 : ', '    (0 data members remaining)', '  Data recieved', 'ERROR: Something terrible happened', '    Progress: Iter 0 of 1 : ', '    Progress: Iter 1 of 1 : ']
-['WARNING: This might go badly', '  Data recieved', '  Data recieved', 'ERROR: Something terrible happened']
-.['      Data recieved', 'WARNING: This might go badly', '  Progress: Iter 0 of 1 : ', '  (1 data members remaining)', '  Data recieved', '    Progress: Iter 0 of 1 : ', '    Progress: Iter 1 of 1 : ', '    Progress: Iter 1 of 1 : ', '    (0 data members remaining)', '  Data recieved', 'ERROR: Something terrible happened', '    Progress: Iter 0 of 1 : ', '    Progress: Iter 1 of 1 : ']
-['WARNING: This might go badly', '  Progress: [--------------------------------------------------] 0.0% ', '  Progress: [##################################################] 100.0% ', 'ERROR: Something terrible happened', '  INVALID LEVEL:   Data recieved', '  INVALID LEVEL:   Data recieved']
+['      Data received', 'WARNING: This might go badly', '  Progress: Iter 0 of 1 : ', '  (1 data members remaining)', '  Data received', '    Progress: Iter 0 of 1 : ', '    Progress: Iter 1 of 1 : ', '    Progress: Iter 1 of 1 : ', '    (0 data members remaining)', '  Data received', 'ERROR: Something terrible happened', '    Progress: Iter 0 of 1 : ', '    Progress: Iter 1 of 1 : ']
+['WARNING: This might go badly', '  Data received', '  Data received', 'ERROR: Something terrible happened']
+.['      Data received', 'WARNING: This might go badly', '  Progress: Iter 0 of 1 : ', '  (1 data members remaining)', '  Data received', '    Progress: Iter 0 of 1 : ', '    Progress: Iter 1 of 1 : ', '    Progress: Iter 1 of 1 : ', '    (0 data members remaining)', '  Data received', 'ERROR: Something terrible happened', '    Progress: Iter 0 of 1 : ', '    Progress: Iter 1 of 1 : ']
+['WARNING: This might go badly', '  Progress: [--------------------------------------------------] 0.0% ', '  Progress: [##################################################] 100.0% ', 'ERROR: Something terrible happened', '  INVALID LEVEL:   Data received', '  INVALID LEVEL:   Data received']
 .
 ----------------------------------------------------------------------
 

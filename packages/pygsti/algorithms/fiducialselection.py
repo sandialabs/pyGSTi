@@ -792,7 +792,7 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
         for iIter in range(maxIter):
             scoreD_keys = scoreD.keys() #list of weight tuples already computed
 
-            printer.show_progress(iIter, maxIter-1,
+            printer.show_progress(iIter, maxIter,
                                   suffix="score=%g, nFids=%d" % (score, L1))
 
             bFoundBetterNeighbor = False

@@ -292,7 +292,7 @@ class StdInputParser(object):
                 lookupDict[ label ] = _objs.GateString(tup, s)
         return lookupDict
 
-    def parse_datafile(self, filename):
+    def parse_datafile(self, filename, showProgress=True):
         """
         Parse a data set file into a DataSet object.
 
@@ -300,6 +300,9 @@ class StdInputParser(object):
         ----------
         filename : string
             The file to parse.
+
+        showProgress : bool, optional
+            Whether or not progress should be displayed
 
         Returns
         -------
@@ -345,7 +348,7 @@ class StdInputParser(object):
             import __main__ as main
             return not hasattr(main, '__file__')
 
-        if is_interactive():
+        if is_interactive() and showProgress:
             try:
                 import time
                 from IPython.display import clear_output
@@ -426,7 +429,7 @@ class StdInputParser(object):
         return countDict
 
 
-    def parse_multidatafile(self, filename):
+    def parse_multidatafile(self, filename, showProgress=True):
         """
         Parse a multiple data set file into a MultiDataSet object.
 
@@ -434,6 +437,9 @@ class StdInputParser(object):
         ----------
         filename : string
             The file to parse.
+
+        showProgress : bool, optional
+            Whether or not progress should be displayed
 
         Returns
         -------
@@ -485,7 +491,7 @@ class StdInputParser(object):
             import __main__ as main
             return not hasattr(main, '__file__')
 
-        if is_interactive():
+        if is_interactive() and showProgress:
             try:
                 import time
                 from IPython.display import clear_output

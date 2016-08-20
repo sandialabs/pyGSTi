@@ -30,7 +30,7 @@ def load_parameter_file(filename):
         return _json.load(inputfile)
     # return _json.load( open(filename, "rb") )
 
-def load_dataset(filename, cache=False):
+def load_dataset(filename, cache=False, verbosity=1):
     """
     Load a DataSet from a file.  First tries to load file as a
     saved DataSet object, then as a standard text-formatted DataSet.
@@ -46,6 +46,10 @@ def load_dataset(filename, cache=False):
         and is newer than filename.  If no cache file exists or one
         exists but it is older than filename, a cache file will be
         written after loading from filename.
+
+    verbosity : int, optional
+        If zero, no output is shown.  If greater than zero,
+        loading progress is shown.
 
     Returns
     -------
@@ -63,27 +67,29 @@ def load_dataset(filename, cache=False):
             if _os.path.exists( cache_filename ) and \
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
                 try:
-                    print("Loading from cache file: ", cache_filename)
+                    if verbosity > 0: print("Loading from cache file: ", cache_filename)
                     ds = _objs.DataSet(fileToLoadFrom=cache_filename)
                     return ds
-                except: print("Failed to load from cache file")
+                except: print("WARNING: Failed to load from cache file")
             else:
-                print("Cache file not found or is tool old -- one will be created after loading is completed")
+                if verbosity > 0:
+                    print("Cache file not found or is tool old -- one will be created after loading is completed")
 
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
-            ds = parser.parse_datafile(filename)
+            ds = parser.parse_datafile(filename, verbosity > 0)
 
-            print("Writing cache file (to speed future loads): %s" % cache_filename)
+            if verbosity > 0:
+                print("Writing cache file (to speed future loads): %s" % cache_filename)
             ds.save(cache_filename)
         else:
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
-            ds = parser.parse_datafile(filename)
+            ds = parser.parse_datafile(filename, verbosity > 0)
         return ds
 
 
-def load_multidataset(filename, cache=False):
+def load_multidataset(filename, cache=False, verbosity=1):
     """
     Load a MultiDataSet from a file.  First tries to load file as a
     saved MultiDataSet object, then as a standard text-formatted MultiDataSet.
@@ -100,6 +106,11 @@ def load_multidataset(filename, cache=False):
         exists but it is older than filename, a cache file will be
         written after loading from filename.
 
+    verbosity : int, optional
+        If zero, no output is shown.  If greater than zero,
+        loading progress is shown.
+
+
     Returns
     -------
     MultiDataSet
@@ -115,24 +126,26 @@ def load_multidataset(filename, cache=False):
             if _os.path.exists( cache_filename ) and \
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
                 try:
-                    print("Loading from cache file: %s" % cache_filename)
+                    if verbosity > 0: print("Loading from cache file: %s" % cache_filename)
                     mds = _objs.MultiDataSet(fileToLoadFrom=cache_filename)
                     return mds
-                except: print("Failed to load from cache file")
+                except: print("WARNING: Failed to load from cache file")
             else:
-                print("Cache file not found or is too old -- one will be created after loading is completed")
+                if verbosity > 0:
+                    print("Cache file not found or is too old -- one will be created after loading is completed")
 
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
-            mds = parser.parse_multidatafile(filename)
+            mds = parser.parse_multidatafile(filename, verbosity > 0)
 
-            print("Writing cache file (to speed future loads): %s" % cache_filename)
+            if verbosity > 0:
+                print("Writing cache file (to speed future loads): %s" % cache_filename)
             mds.save(cache_filename)
 
         else:
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
-            mds = parser.parse_multidatafile(filename)
+            mds = parser.parse_multidatafile(filename, verbosity > 0)
     return mds
 
 
