@@ -43,6 +43,7 @@ for branch in branches:
 print('Branches existing on Travis Server: %s' % output)
 print('Branchname (or SHA) is %s' % branchname)
 
+HOME = os.environ['HOME']
 TRAVIS_BRANCH = os.environ['TRAVIS_BRANCH']
 TRAVIS_PULL_REQUEST = os.environ['TRAVIS_PULL_REQUEST']
 print("TRAVIS_BRANCH = ",TRAVIS_BRANCH)
@@ -135,7 +136,7 @@ if TRAVIS_BRANCH == "develop" and TRAVIS_PULL_REQUEST == "false":
 #if TRAVIS_BRANCH == "master" and TRAVIS_PULL_REQUEST == "false":
 if TRAVIS_BRANCH == "develop" and TRAVIS_PULL_REQUEST == "false":
     print("Attempting to deploy on pypi")
-    f = open("~/.pypirc","w")
+    f = open(os.path.join(HOME,".pypirc","w")
     f.write(pypirc_contents)
     f.close()
     print("Running setup.py...")
