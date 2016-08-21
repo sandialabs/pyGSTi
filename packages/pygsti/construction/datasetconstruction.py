@@ -101,8 +101,13 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                 psum = sum(ps.values())
                 if psum > 1:
                     if psum > 1+TOL: _warnings.warn("Adjusting sum(probs) > 1 to 1")
-                    for sl in ps: ps[sl] -= (psum-1.0) / len(ps)
-                
+                    extra_p = (psum-1.0) * (1.000000001) # to sum < 1+eps (numerical prec insurance)
+                    for sl in ps:
+                        if extra_p > 0:
+                            x = min(ps[sl],extra_p)
+                            ps[sl] -= x; extra_p -= x
+                        else: break
+                    
                 assert(0.0 <= sum(ps.values()) <= 1.0)
         else:
             ps = { sl: dsGen[s].fraction(sl) for sl in dsGen.get_spam_labels() }
