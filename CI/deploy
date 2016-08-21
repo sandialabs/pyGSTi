@@ -2,8 +2,6 @@
 from __future__ import print_function
 import subprocess, sys, os
 
-
-
 pypirc_contents = \
 """[distutils]
 index-servers =
@@ -132,13 +130,18 @@ if TRAVIS_BRANCH == "develop" and TRAVIS_PULL_REQUEST == "false":
     else:
         print('Potential merge conflicts found! Cannot merge beta into develop')
 
+#if TRAVIS_BRANCH == "develop" and TRAVIS_PULL_REQUEST == "false":
+#    print("Attempting to deploy on pypitest")
+#    f = open(os.path.join(HOME,".pypirc"),"w")
+#    f.write(pypirc_contents)
+#    f.close()
+#    print("Running setup.py...")
+#    os.system("python setup.py sdist upload -r pypitest")
 
-#if TRAVIS_BRANCH == "master" and TRAVIS_PULL_REQUEST == "false":
-if TRAVIS_BRANCH == "develop" and TRAVIS_PULL_REQUEST == "false":
+if TRAVIS_BRANCH == "master" and TRAVIS_PULL_REQUEST == "false":
     print("Attempting to deploy on pypi")
     f = open(os.path.join(HOME,".pypirc"),"w")
     f.write(pypirc_contents)
     f.close()
     print("Running setup.py...")
-    #os.system("python setup.py sdist upload -r pypi")
-    os.system("python setup.py sdist upload -r pypitest")
+    os.system("python setup.py sdist upload -r pypi")
