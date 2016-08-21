@@ -3800,6 +3800,8 @@ class Results(object):
         finally:
             _os.chdir(cwd)
 
+        printer.log("Report generation complete! [total time %.0fs]" \
+                        % (_time.time()-tStart))
         return
 
 
