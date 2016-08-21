@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import numpy.random as _rndm
+import warnings as _warnings
 
 from ..objects import gatestring as _gs
 from ..objects import dataset as _ds
@@ -85,6 +86,29 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
     for k,s in enumerate(gatestring_list):
         if gsGen:
             ps = gsGen.probs(s) # a dictionary of probabilities; keys = spam labels
+
+            if sampleError in ("binomial","multinomial"):
+                #Adjust to probabilities if needed (and warn if not close to in-bounds)
+                TOL = 1e-10
+                for sl in ps: 
+                    if ps[sl] < 0:
+                        if ps[sl] < -TOL: _warnings.warn("Clipping probs < 0 to 0")
+                        ps[sl] = 0.0
+                    elif ps[sl] > 1: 
+                        if ps[sl] > (1+TOL): _warnings.warn("Clipping probs > 1 to 1")
+                        ps[sl] = 1.0
+                
+                psum = sum(ps.values())
+                if psum > 1:
+                    if psum > 1+TOL: _warnings.warn("Adjusting sum(probs) > 1 to 1")
+                    extra_p = (psum-1.0) * (1.000000001) # to sum < 1+eps (numerical prec insurance)
+                    for sl in ps:
+                        if extra_p > 0:
+                            x = min(ps[sl],extra_p)
+                            ps[sl] -= x; extra_p -= x
+                        else: break
+                    
+                assert(0.0 <= sum(ps.values()) <= 1.0)
         else:
             ps = { sl: dsGen[s].fraction(sl) for sl in dsGen.get_spam_labels() }
 
@@ -106,10 +130,6 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
         if sampleError == "binomial":
             assert(len(list(ps.keys())) == 2)
             spamLabel1, spamLabel2 = sorted(list(ps.keys())); p1 = ps[spamLabel1]
-            if p1 < 0 and abs(p1) < 1e-6: p1 = 0
-            if p1 > 1 and abs(p1-1.0) < 1e-6: p1 = 1
-            if p1 < 0 or p1 > 1: print("Warning: probability == %g clipped to generate fake data" % p1)
-            p1 = _np.clip(p1,0,1)
             counts[spamLabel1] = rndm.binomial(nWeightedSamples, p1) #numpy.clip(p1,0,1) )
             counts[spamLabel2] = nWeightedSamples - counts[spamLabel1]
         elif sampleError == "multinomial":

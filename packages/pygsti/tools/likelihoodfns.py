@@ -997,8 +997,18 @@ def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
     # fiducial pair reduction may pass inputs with nan's legitimately and the desired
     # behavior is to just let the nan's pass through to nan's in the output.
     cp  = _np.clip(p,minProbClip,1e10) #effectively no upper bound
+    
+    nan_indices = _np.isnan(f) # get indices of invalid entries
+    if not _np.isscalar(f): f[nan_indices] = 0.0 
+      #set nan's to zero to avoid RuntimeWarnings (invalid value)
+
     zf  = _np.where(f < 1e-10, 0.0, f) #set zero-freqs to zero
-    nzf = _np.where(f < 1e-10, 1.0, f) #set zero-freqs to one -- together w/above line makes 0 * log(0) == 0
+    nzf = _np.where(f < 1e-10, 1.0, f) #set zero-freqs to one -- together
+                                       # w/above line makes 0 * log(0) == 0    
+    if not _np.isscalar(f): 
+        zf[nan_indices] = _np.nan  #set nan indices back to nan
+        nzf[nan_indices] = _np.nan #set nan indices back to nan
+
     if poissonPicture:
         return 2 * (N * zf * _np.log(nzf/cp) - N * (f-cp))
     else:
