@@ -1,6 +1,0 @@
-pygsti.algorithms.make_meas_mxs
-===============================
-
-.. currentmodule:: pygsti.algorithms
-
-.. autofunction:: make_meas_mxs

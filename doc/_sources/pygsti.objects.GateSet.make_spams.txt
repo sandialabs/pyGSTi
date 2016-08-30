@@ -1,6 +1,0 @@
-pygsti.objects.GateSet.make_spams
-=================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: GateSet.make_spams

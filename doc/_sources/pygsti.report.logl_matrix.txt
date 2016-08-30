@@ -1,6 +1,0 @@
-pygsti.report.logl_matrix
-=========================
-
-.. currentmodule:: pygsti.report
-
-.. autofunction:: logl_matrix

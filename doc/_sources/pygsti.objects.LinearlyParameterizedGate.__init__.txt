@@ -1,6 +1,0 @@
-pygsti.objects.LinearlyParameterizedGate.__init__
-=================================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: LinearlyParameterizedGate.__init__

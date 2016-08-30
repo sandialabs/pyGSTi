@@ -1,6 +1,0 @@
-pygsti.objects.GateSet.num_evecs
-================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: GateSet.num_evecs

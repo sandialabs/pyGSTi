@@ -1,6 +1,0 @@
-pygsti.algorithms.test_germ_list_finitel
-========================================
-
-.. currentmodule:: pygsti.algorithms
-
-.. autofunction:: test_germ_list_finitel

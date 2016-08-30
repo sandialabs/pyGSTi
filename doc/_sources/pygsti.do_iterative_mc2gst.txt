@@ -1,6 +1,0 @@
-pygsti.do_iterative_mc2gst
-==========================
-
-.. currentmodule:: pygsti
-
-.. autofunction:: do_iterative_mc2gst

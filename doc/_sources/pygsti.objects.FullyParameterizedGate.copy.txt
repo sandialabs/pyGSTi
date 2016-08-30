@@ -1,6 +1,0 @@
-pygsti.objects.FullyParameterizedGate.copy
-==========================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: FullyParameterizedGate.copy

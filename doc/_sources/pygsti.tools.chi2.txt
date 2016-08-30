@@ -1,6 +1,0 @@
-pygsti.tools.chi2
-=================
-
-.. currentmodule:: pygsti.tools
-
-.. autofunction:: chi2

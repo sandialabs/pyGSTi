@@ -1,6 +1,0 @@
-pygsti.objects.compose
-======================
-
-.. currentmodule:: pygsti.objects
-
-.. autofunction:: compose
