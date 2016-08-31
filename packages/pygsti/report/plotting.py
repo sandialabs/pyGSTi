@@ -1013,10 +1013,47 @@ def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp):
 
     return n_boxes, dof_per_box
 
+def _computeGateStringMaps(xvals, yvals, xyGateStringDict, dataset,
+                           strs, fidPairs, gatestring_filters):
+    """ 
+    Return a dictionary of all the gatestring maps,
+    indexed by base string. 
+    """
+    used_xvals = [ x for x in xvals if any([(xyGateStringDict[(x,y)] is not None) for y in yvals])]
+    used_yvals = [ y for y in yvals if any([(xyGateStringDict[(x,y)] is not None) for x in xvals])]
+    return { xyGateStringDict[(x,y)] :
+                 get_gatestring_map(xyGateStringDict[(x,y)], dataset, strs, fidPairs, 
+                     gatestring_filters[x] if gatestring_filters is not None else None)
+             for x in used_xvals for y in used_yvals }
+    
+def _computeProbabilities(maps, gateset, dataset):
+    """ 
+    Returns a dictionary of probabilities for each gate sequence in any of
+    the maps contained in `maps` (a dict of gatestring maps as returned by
+    _computeGateStringMaps).
+    """
+    #concatenate all gatestrings in maps
+    gatestringList = [] 
+    for m in maps.values():
+        gatestringList.extend( [tup[2] for tup in m[0]] )
+
+    #compute probabilities
+    spamLabels = dataset.get_spam_labels()
+    evt = gateset.bulk_evaltree(gatestringList)
+    bulk_probs = gateset.bulk_probs(evt) # LATER use comm?
+    probs_dict = \
+        { gatestringList[i]: {sl: bulk_probs[sl][i] for sl in spamLabels}
+          for i in range(len(gatestringList)) }
+    return probs_dict
+
+    
+
 def _computeSubMxs(xvals, yvals, xyGateStringDict, subMxCreationFn, sumUp):
+
     used_xvals = [ x for x in xvals if any([ (xyGateStringDict[(x,y)] is not None) for y in yvals]) ]
     used_yvals = [ y for y in yvals if any([ (xyGateStringDict[(x,y)] is not None) for x in xvals]) ]
-    subMxs = [ [ subMxCreationFn(xyGateStringDict[(x,y)],x,y) for x in used_xvals ] for y in used_yvals]
+    subMxs = [ [ subMxCreationFn(xyGateStringDict[(x,y)],x,y) for x in used_xvals ] 
+               for y in used_yvals]
     #Note: subMxs[y-index][x-index] is proper usage
     n_boxes, dof_per_box = _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp)
 
@@ -1425,17 +1462,12 @@ def chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
     prepStrs, effectStrs = strs
 
     #bulk-compute probabilities for performance
-    gatestringList = dataset.keys()
-    spamLabels = dataset.get_spam_labels()
-    bulk_probs = gateset.bulk_probs(gateset.bulk_evaltree(gatestringList)) # LATER use comm?
-    probs_precomp_dict = \
-        { gatestringList[i]: {sl: bulk_probs[sl][i] for sl in spamLabels}
-          for i in range(len(gatestringList)) }
+    maps = _computeGateStringMaps(xvals, yvals, xy_gatestring_dict, dataset,
+                                  strs, fidPairs, gatestring_filters)
+    probs_precomp_dict = _computeProbabilities(maps, gateset, dataset)
 
     def mx_fn(gateStr,x,y):
-        gsf = gatestring_filters[x] if gatestring_filters is not None else None
-        gsmap = get_gatestring_map(gateStr, dataset, strs, fidPairs, gsf)
-        return chi2_matrix( gsmap, dataset, gateset, minProbClipForWeighting,
+        return chi2_matrix( maps[gateStr], dataset, gateset, minProbClipForWeighting,
                             probs_precomp_dict)
 
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
@@ -1551,17 +1583,12 @@ def logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
     prepStrs, effectStrs = strs
     
     #bulk-compute probabilities for performance
-    gatestringList = dataset.keys()
-    spamLabels = dataset.get_spam_labels()
-    bulk_probs = gateset.bulk_probs(gateset.bulk_evaltree(gatestringList)) # LATER use comm?
-    probs_precomp_dict = \
-        { gatestringList[i]: {sl: bulk_probs[sl][i] for sl in spamLabels}
-          for i in range(len(gatestringList)) }
+    maps = _computeGateStringMaps(xvals, yvals, xy_gatestring_dict, dataset,
+                                  strs, fidPairs, gatestring_filters)
+    probs_precomp_dict = _computeProbabilities(maps, gateset, dataset)
 
     def mx_fn(gateStr,x,y):
-        gsf = gatestring_filters[x] if gatestring_filters is not None else None
-        gsmap = get_gatestring_map(gateStr, dataset, strs, fidPairs, gsf)        
-        return logl_matrix( gsmap, dataset, gateset, minProbClipForWeighting,
+        return logl_matrix( maps[gateStr], dataset, gateset, minProbClipForWeighting,
                             probs_precomp_dict)
 
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
