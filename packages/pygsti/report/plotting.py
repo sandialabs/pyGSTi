@@ -1425,16 +1425,26 @@ def chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
     prepStrs, effectStrs = strs
 
     #bulk-compute probabilities for performance
-    gatestringList = dataset.keys()
+    used_xvals = [ x for x in xvals if any([(xy_gatestring_dict[(x,y)] is not None) for y in yvals])]
+    used_yvals = [ y for y in yvals if any([(xy_gatestring_dict[(x,y)] is not None) for x in xvals])]
+    maps = { xy_gatestring_dict[(x,y)] :
+                 get_gatestring_map(xy_gatestring_dict[(x,y)], dataset, strs, fidPairs, 
+                     gatestring_filters[x] if gatestring_filters is not None else None)
+             for x in used_xvals for y in used_yvals }
+    gatestringList = []
+    for m in maps.values():
+        gatestringList.extend( [tup[2] for tup in m[0]] )
     spamLabels = dataset.get_spam_labels()
-    bulk_probs = gateset.bulk_probs(gateset.bulk_evaltree(gatestringList)) # LATER use comm?
+    evt = gateset.bulk_evaltree(gatestringList)
+    bulk_probs = gateset.bulk_probs(evt) # LATER use comm?
     probs_precomp_dict = \
         { gatestringList[i]: {sl: bulk_probs[sl][i] for sl in spamLabels}
           for i in range(len(gatestringList)) }
 
     def mx_fn(gateStr,x,y):
-        gsf = gatestring_filters[x] if gatestring_filters is not None else None
-        gsmap = get_gatestring_map(gateStr, dataset, strs, fidPairs, gsf)
+        gsmap = maps[gateStr]
+        #gsf = gatestring_filters[x] if gatestring_filters is not None else None
+        #gsmap = get_gatestring_map(gateStr, dataset, strs, fidPairs, gsf)
         return chi2_matrix( gsmap, dataset, gateset, minProbClipForWeighting,
                             probs_precomp_dict)
 
@@ -1551,16 +1561,26 @@ def logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
     prepStrs, effectStrs = strs
     
     #bulk-compute probabilities for performance
-    gatestringList = dataset.keys()
+    used_xvals = [ x for x in xvals if any([(xy_gatestring_dict[(x,y)] is not None) for y in yvals])]
+    used_yvals = [ y for y in yvals if any([(xy_gatestring_dict[(x,y)] is not None) for x in xvals])]
+    maps = { xy_gatestring_dict[(x,y)] :
+                 get_gatestring_map(xy_gatestring_dict[(x,y)], dataset, strs, fidPairs, 
+                     gatestring_filters[x] if gatestring_filters is not None else None)
+             for x in used_xvals for y in used_yvals }
+    gatestringList = [] #concatenate all gatesetrings in maps
+    for m in maps.values():
+        gatestringList.extend( [tup[2] for tup in m[0]] ) #messy...
     spamLabels = dataset.get_spam_labels()
-    bulk_probs = gateset.bulk_probs(gateset.bulk_evaltree(gatestringList)) # LATER use comm?
+    evt = gateset.bulk_evaltree(gatestringList)
+    bulk_probs = gateset.bulk_probs(evt) # LATER use comm?
     probs_precomp_dict = \
         { gatestringList[i]: {sl: bulk_probs[sl][i] for sl in spamLabels}
           for i in range(len(gatestringList)) }
 
     def mx_fn(gateStr,x,y):
-        gsf = gatestring_filters[x] if gatestring_filters is not None else None
-        gsmap = get_gatestring_map(gateStr, dataset, strs, fidPairs, gsf)        
+        gsmap = maps[gateStr]
+        #gsf = gatestring_filters[x] if gatestring_filters is not None else None
+        #gsmap = get_gatestring_map(gateStr, dataset, strs, fidPairs, gsf)
         return logl_matrix( gsmap, dataset, gateset, minProbClipForWeighting,
                             probs_precomp_dict)
 
