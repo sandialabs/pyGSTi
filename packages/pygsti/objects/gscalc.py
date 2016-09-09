@@ -16,6 +16,13 @@ from .verbosityprinter import VerbosityPrinter
 #import evaltree as _evaltree
 #import sys #DEBUG - for printing
 
+#TIMER FNS (TODO: move to own module within tools?)
+def add_time(timer_dict, timerName, val):
+    if timer_dict is not None:
+        if timerName in timer_dict:
+            timer_dict[timerName] += val
+        else:
+            timer_dict[timerName] = val
 
 
 
@@ -1213,7 +1220,7 @@ class GateSetCalculator(object):
 
 
     def _compute_dproduct_cache(self, evalTree, prodCache, scaleCache,
-                                comm=None, wrtFilter=None):
+                                comm=None, wrtFilter=None, timer_dict=None):
         """
         Computes a tree of product derivatives in a linear cache space. Will
         use derivative columns and then (and only when needed) a split tree
@@ -1221,7 +1228,7 @@ class GateSetCalculator(object):
         from using a split tree.
         """
 
-        #tStart = _time.time() #TIMER!!!
+        tStart = _time.time() #TIMER!!!
         dim = self.dim
         #nGateStrings = evalTree.num_final_strings()
         nGateDerivCols = self.tot_gate_params if (wrtFilter is None) else len(wrtFilter)
@@ -1284,12 +1291,12 @@ class GateSetCalculator(object):
                   #don't compute anything on "extra", i.e. rank != 0, cpus
 
             my_results = self._compute_dproduct_cache(
-                evalTree, prodCache, scaleCache, None, myDerivColIndices)
+                evalTree, prodCache, scaleCache, None, myDerivColIndices, timer_dict)
                 # pass None as comm, *not* mySubComm, since we can't do any further parallelization
 
-            #t1 = _time.time() #TIMER!!!
+            tm = _time.time() #TIMER!!!
             all_results = comm.allgather(my_results)
-            #t2 = _time.time() #TIMER!!!
+            add_time(timer_dict, "MPI IPC", _time.time()-tm) #TIMER!!!
             return _np.concatenate(all_results, axis=1)
 
         # ------------------------------------------------------------------
@@ -1315,13 +1322,12 @@ class GateSetCalculator(object):
         nZeroAndSingleStrs = len(evalTree.get_init_labels())
 
         #nScaleCnt = nNonScaleCnt = dScaleCnt = 0 #TIMER!!!
-        #dotTimes = [] #TIMER!!!
         times = []
         #DEBUG print "dprod time to main loop = ",(_time.time()-tStart)
 
         #evaluate gate strings using tree (skip over the zero and single-gate-strings)
         for (i,tup) in enumerate(evalTree[nZeroAndSingleStrs:],start=nZeroAndSingleStrs):
-            t1 = _time.time() #TIMER
+            tm = _time.time() #TIMER
             # combine iLeft + iRight => i
             # LEXICOGRAPHICAL VS MATRIX ORDER Note: we reverse iLeft <=> iRight from evalTree because
             # (iRight,iLeft,iFinal) = tup implies gatestring[i] = gatestring[iLeft] + gatestring[iRight], but we want:
@@ -1330,7 +1336,9 @@ class GateSetCalculator(object):
             dL,dR = dProdCache[iLeft], dProdCache[iRight]
             dProdCache[i] = _np.dot(dL, R) + \
                 _np.swapaxes(_np.dot(L, dR),0,1) #dot(dS, T) + dot(S, dT)
-            times.append(_time.time()-t1)
+            times.append(_time.time()-tm) #TIMER!!!
+            add_time(timer_dict, "dproduct_cache dots", _time.time()-tm) #TIMER!!!
+            add_time(timer_dict, "dproduct_cache dot count", 1) #TIMER!!!
 
             scale = scaleCache[i] - (scaleCache[iLeft] + scaleCache[iRight])
             if not _np.isclose(scale,0):
@@ -1340,7 +1348,7 @@ class GateSetCalculator(object):
             elif _np.count_nonzero(dProdCache[i]) and dProdCache[i].max() < DSMALL and dProdCache[i].min() > -DSMALL:
                 _warnings.warn("Would have scaled dProd but now will not alter scaleCache.")
 
-        #DEBUG print "AVG dprod cache avg time = ",_np.average(times), "times=",len(evalTree[nZeroAndSingleStrs:]), "total = ",(_time.time()-tStart)
+        #print("AVG dprod cache avg time = ",_np.average(times), "times=",len(evalTree[nZeroAndSingleStrs:]), "total = ",(_time.time()-tStart)) #TIMER
         return dProdCache
 
 
@@ -2265,7 +2273,8 @@ class GateSetCalculator(object):
 
     def bulk_fill_dprobs(self, mxToFill, spam_label_rows, evalTree,
                          prMxToFill=None,clipTo=None,check=False,
-                         comm=None, wrtFilter=None, wrtBlockSize=None):
+                         comm=None, wrtFilter=None, wrtBlockSize=None,
+                         timer_dict=None):
 
         """
         Identical to bulk_dprobs(...) except results are
@@ -2331,11 +2340,20 @@ class GateSetCalculator(object):
           This argument must be None if wrtFilter is not None.  Set this to
           non-None to reduce amount of intermediate memory required.
 
+        timer_dict : dict, optional
+          A dictionary used for keeping track of timing information across
+          multiple calls to this function.  This dictionary will be populated
+          with (key,value) pairs where keys are timer names and values are
+          times (in seconds).  If a timer name already exists in the dict,
+          that timer's value is added to the existing value.
+
         Returns
         -------
         None
         """
 
+        tStart = _time.time()
+        
         remainder_row_index = None
         for spamLabel,rowIndex in spam_label_rows.items():
             if self._is_remainder_spamlabel(spamLabel):
@@ -2399,7 +2417,7 @@ class GateSetCalculator(object):
                 #Fill derivative cache info
                 gatesFilter = wrtFilters['gates'] if (wrtFilters is not None) else None
                 dProdCache = self._compute_dproduct_cache(evalSubTree, prodCache, scaleCache,
-                                                          mySubComm, gatesFilter)
+                                                          mySubComm, gatesFilter, timer_dict)
                 dGs = dProdCache.take( finalIndxList, axis=0 ) #( nGateStrings, nDerivCols, dim, dim )
 
                 #Compute all requested derivative columns at once
@@ -2440,15 +2458,18 @@ class GateSetCalculator(object):
                 blk_results = []
                 for iBlk in myBlkIndices:
                     dProdCache = self._compute_dproduct_cache(evalSubTree, prodCache, scaleCache,
-                                                              blkComm, blocks[iBlk])
+                                                              blkComm, blocks[iBlk], timer_dict)
                     dGs = dProdCache.take( finalIndxList, axis=0 ) #( nGateStrings, nDerivCols, dim, dim )
                     dG_results = self._compute_sub_result(
                         spam_label_rows, lambda sl: calc_vdp_from_spamlabel(sl,blocks[iBlk]))
                     blk_results.append( dG_results )
 
+                #gather results
+                tm = _time.time()
                 all_blk_results = self._gather_blk_results(nBlks, blkOwners, myBlkIndices,
                                                            blk_results, mySubComm)
-                #gather results
+                add_time(timer_dict, "MPI IPC", _time.time()-tm)
+
                 for spamLabel in sub_results:
                     to_concat = [ sub_results[spamLabel][1] ] \
                         + [ blk[spamLabel][1] for blk in all_blk_results]
@@ -2460,9 +2481,11 @@ class GateSetCalculator(object):
 
 
         #collect/gather results
+        tm = _time.time()
         self._gather_subtree_results(evalTree, spam_label_rows, subTreeOwners,
                                      mySubTreeIndices, (prMxToFill, mxToFill),
                                      my_results, comm)
+        add_time(timer_dict, "MPI IPC", _time.time()-tm)
 
         if clipTo is not None and prMxToFill is not None:
             _np.clip( prMxToFill, clipTo[0], clipTo[1], out=prMxToFill ) # in-place clip
@@ -2470,6 +2493,8 @@ class GateSetCalculator(object):
         if check:
             self._check(evalTree, spam_label_rows, prMxToFill, mxToFill,
                         clipTo=clipTo)
+        add_time(timer_dict, "bulk_fill_dprobs", _time.time()-tStart)
+        add_time(timer_dict, "bulk_fill_dprobs count", 1)
 
 
 

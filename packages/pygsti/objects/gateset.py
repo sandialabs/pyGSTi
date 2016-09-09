@@ -1756,8 +1756,9 @@ class GateSet(object):
 
 
     def bulk_fill_dprobs(self, mxToFill, spam_label_rows,
-                        evalTree, prMxToFill=None,clipTo=None,
-                        check=False,comm=None, wrtBlockSize=None):
+                         evalTree, prMxToFill=None,clipTo=None,
+                         check=False,comm=None, wrtBlockSize=None,
+                         timer_dict=None):
 
         """
         Identical to bulk_dprobs(...) except results are
@@ -1815,13 +1816,21 @@ class GateSet(object):
           use of available processors is used as the final block size. Use
           this argument to reduce amount of intermediate memory required.
 
+        timer_dict : dict, optional
+          A dictionary used for keeping track of timing information across
+          multiple calls to this function.  This dictionary will be populated
+          with (key,value) pairs where keys are timer names and values are
+          times (in seconds).  If a timer name already exists in the dict,
+          that timer's value is added to the existing value.
+
         Returns
         -------
         None
         """
         return self._calc().bulk_fill_dprobs(mxToFill, spam_label_rows,
                                              evalTree, prMxToFill, clipTo,
-                                             check, comm, None, wrtBlockSize)
+                                             check, comm, None, wrtBlockSize,
+                                             timer_dict)
 
 
     def bulk_fill_hprobs(self, mxToFill, spam_label_rows,
