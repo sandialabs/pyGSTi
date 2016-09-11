@@ -12,7 +12,7 @@ def rb_decay(x,a,b):
     """
     return (1+(2*a-1)*_np.exp(-b * x))/2.
 
-def rb_decay_rate(dataset,showPlot=False,xlim=None,ylim=None,saveFigPath=None):
+def rb_decay_rate(dataset,showPlot=False,xlim=None,ylim=None,saveFigPath=None,printData=False):
     """
     Compute the Randomized Benchmarking (RB) decay rate given an data set
     containing counts for RB gate strings.  Note: currently this function
@@ -48,10 +48,14 @@ def rb_decay_rate(dataset,showPlot=False,xlim=None,ylim=None,saveFigPath=None):
         plus = dataLine['plus']
         minus = dataLine['minus']
         N = plus + minus
-        RBlengths.append(len(key))
-        RBsuccesses.append(1 - dataLine['plus']/float(N))
+        key_len = len(key)
+        RBlengths.append(key_len)
+        RBsuccessProb=1 - dataLine['plus']/float(N)
+        RBsuccesses.append(RBsuccessProb)
         if dataLine['plus']/float(N) > 1:
             print(key)
+        if printData:
+            print(key_len,RBsuccessProb)
     a,b = _curve_fit(rb_decay,RBlengths,RBsuccesses)[0]
     if saveFigPath or showPlot:
         newplot = _plt.figure()
