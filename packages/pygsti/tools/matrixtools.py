@@ -143,6 +143,28 @@ def frobeniusnorm2(ar):
     """
     return _np.sum(ar**2)
 
+
+def nullspace(m, tol=1e-7):
+    """
+    Compute the nullspace of a matrix.
+
+    Parameters
+    ----------
+    m : numpy array
+       An matrix of shape (M,N) whose nullspace to compute.
+
+    tol : float (optional)
+       Nullspace tolerance, used when comparing singular values with zero.
+
+    Returns
+    -------
+    An matrix of shape (M,K) whose columns contain nullspace basis vectors.
+    """
+    _,s,vh = _np.linalg.svd(m)
+    rank = (s > tol).sum()
+    return vh[rank:].T.copy()
+
+
 def print_mx(mx, width=9, prec=4):
     """
     Print matrix in pretty format.

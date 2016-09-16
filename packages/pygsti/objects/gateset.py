@@ -769,13 +769,7 @@ class GateSet(object):
         #                        # clear dG row corresponding to it.
 
         M = _np.concatenate( (dP,dG), axis=1 )
-
-        def nullspace(m, tol=1e-7): #get the nullspace of a matrix
-            _,s,vh = _np.linalg.svd(m)
-            rank = (s > tol).sum()
-            return vh[rank:].T.copy()
-
-        nullsp = nullspace(M) #columns are nullspace basis vectors
+        nullsp = _mt.nullspace(M) #columns are nullspace basis vectors
         gen_dG = nullsp[0:nParams,:] #take upper (gate-param-segment) of vectors for basis
                                      # of subspace intersection in gate-parameter space
         #Note: gen_dG == "generalized dG", and is (nParams)x(nullSpaceDim==gaugeSpaceDim), so P
@@ -803,7 +797,7 @@ class GateSet(object):
         # BEGIN GAUGE MIX ----------------------------------------
         if nonGaugeMixMx is not None:
             # nullspace of gen_dG^T (mx with gauge direction vecs as rows) gives non-gauge directions
-            nonGaugeDirections = nullspace(gen_dG.T) #columns are non-gauge directions
+            nonGaugeDirections = _mt.nullspace(gen_dG.T) #columns are non-gauge directions
 
             #for each column of gen_dG, which is a gauge direction in gateset parameter space,
             # we add some amount of non-gauge direction, given by coefficients of the

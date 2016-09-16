@@ -93,11 +93,13 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         multiplicative`` scaling factor for the corresponding gate string. The
         default is no weight scaling at all.
 
-    fidPairs : list of 2-tuples, optional
+    fidPairs : list of 2-tuples or dict, optional
         Specifies a subset of all prepStr,effectStr string pairs to be used in
-        this analysis.  Each element of `fidPairs` is a ``(iRhoStr, iEStr)``
-        2-tuple of integers, which index a string within the state preparation
-        and measurement fiducial strings respectively.
+        this analysis.  If `fidPairs` is a list, each element of `fidPairs` is a
+        ``(iRhoStr, iEStr)`` 2-tuple of integers, which index a string within
+        the state preparation and measurement fiducial strings respectively. If
+        `fidPairs` is a dict, then the keys must be germ strings and values are
+        lists of 2-tuples as in the previous case.
 
     constrainToTP : bool, optional
         Whether to constrain GST to trace-preserving gatesets.
