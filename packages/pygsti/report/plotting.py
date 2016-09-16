@@ -3103,7 +3103,7 @@ def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
 
     whacked_indices = []
     for s in gatestringsToWhack:
-        try:  gatestringsToWhack.append(allGatestringsUsedInChi2Opt.index(s))
+        try: whacked_indices.append( allGatestringsUsedInChi2Opt.index(s) )
         except ValueError: pass #just ignore gatestrings that aren't available
     whacked_Dchi2 = _np.take(Dchi2,whacked_indices,axis=1) # (K,m,N) where m == len(whacked_indices)
 
@@ -3319,7 +3319,7 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
 
     whacked_indices = []
     for s in gatestringsToWhack:
-        try:  gatestringsToWhack.append(allGatestringsUsedInChi2Opt.index(s))
+        try:  whacked_indices.append(allGatestringsUsedInLogLOpt.index(s))
         except ValueError: pass #just ignore gatestrings that aren't available
     whacked_DlogL = _np.take(DlogL,whacked_indices,axis=1) # (K,m,N) where m == len(whacked_indices)
 
@@ -3339,7 +3339,7 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
                 for i,prepStr in enumerate(prepStrs):
                     s = prepStr + gateStr + effectStr
                     if s in gatestring_filters[(x,y)] \
-                            and s in allGatestringsUsedInChi2Opt:
+                            and s in allGatestringsUsedInLogLOpt:
                         ret[j,i] = delta[allGatestringsUsedInLogLOpt.index(s)]
             return ret
 
@@ -3347,8 +3347,8 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
             ret = _np.nan * _np.ones( (len(effectStrs),len(prepStrs)), 'd')
             for i,j in fidpairs_filters[(x,y)]:
                 s = prepStrs[i] + gateStr + effectStrs[j]
-                if s in allGatestringsUsedInChi2Opt:
-                    ret[j,i] = delta[ allGatestringsUsedInChi2Opt.index(s) ]
+                if s in allGatestringsUsedInLogLOpt:
+                    ret[j,i] = delta[ allGatestringsUsedInLogLOpt.index(s) ]
             return ret
 
         else:

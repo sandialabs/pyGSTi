@@ -214,7 +214,7 @@ class Results(object):
             Whether or not the gatesetEstimate was constrained to lie
             within TP during the objective optimization.
 
-        fidPairs : list of 2-tuples, optional
+        fidPairs : list or dict, optional
             Specifies a subset of all prepStr,effectStr string pairs to be used in
             reports.  If `fidPairs` is a list, each element of `fidPairs` is a
             ``(iRhoStr, iEStr)`` 2-tuple of integers, which index a string within
@@ -1219,8 +1219,21 @@ class Results(object):
             fidPairs = self.parameters['fiducial pairs']
             Ls = self.parameters['max length list']
             st = 1 if Ls[0] == 0 else 0 #start index: skip LGST column in plots
-            filter_dict = { Ls[i]:self.gatestring_lists['iteration'][i]
-                            for i in range(st,len(Ls)) }
+
+            if fidPairs is None: fidpair_filters = None
+            elif isinstance(fidPairs,dict) or hasattr(fidPairs,"keys"):
+                #Assume fidPairs is a dict indexed by germ
+                fidpair_filters = { (x,y): fidPairs[germ] 
+                                    for x in Ls[st:] for y in germs }
+            else:
+                #Assume fidPairs is a list
+                fidpair_filters = { (x,y): fidPairs
+                                    for x in Ls[st:] for y in germs }
+
+            if fidPairs is None: fidpair_filters = None
+            gstr_filters = { (x,y) : self.gatestring_lists['iteration'][i]
+                             for i,x in enumerate(Ls[st:],start=st)
+                             for y in germs }
 
             obj = self.parameters['objective']
             assert(obj in ("chi2","logl"))
@@ -1242,8 +1255,9 @@ class Results(object):
                 fig = plotFn(Ls[st:], fig_germs, baseStr_dict,
                              self.dataset, gsBest, strs,
                              r"$L$", "germ", scale=1.0, sumUp=False,
-                             histogram=True, title="", fidPairs=fidPairs,
-                             gatestring_filters = filter_dict,
+                             histogram=True, title="", 
+                             fidpair_filters=fidpair_filters,
+                             gatestring_filters = gstr_filters,
                              linlg_pcntle=float(self.parameters['linlogPercentile']) / 100,
                              minProbClipForWeighting=mpc, save_to="", ticSize=20)
                 figs.append(fig); n += maxGermsPerFig
