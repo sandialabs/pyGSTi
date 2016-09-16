@@ -192,6 +192,169 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
 
 
 
+def find_sufficient_fiducial_pairs_per_germ(targetGateset, prepStrs, effectStrs,
+                                            germList, spamLabels="all",
+                                            searchMode="sequential", constrainToTP=True,
+                                            nRandom=100, seed=None, verbosity=0,
+                                            memLimit=None):
+
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+
+    """ Still in experimental stages.  TODO docstring. """
+
+    if spamLabels == "all":
+        spamLabels = targetGateset.get_spam_labels()
+
+    pairListDict = {} # dict of lists of 2-tuples: one pair list per germ
+
+    printer.log("------  Individual Fiducial Pair Reduction --------")
+    with printer.progress_logging(1):
+        for i,germ in enumerate(germList):
+
+            #Create a new gateset containing static target gates and a
+            # special "germ" gate that is parameterized only by it's 
+            # eigenvalues (and relevant off-diagonal elements)
+            gsGerm = targetGateset.copy()
+            gsGerm.set_all_parameterizations("static")
+            germMx = gsGerm.product(germ)
+            gsGerm.gates["Ggerm"] = _objs.EigenvalueParameterizedGate(
+                                                   germMx, True, constrainToTP)
+
+            printer.show_progress(i, len(germList), 
+                                  suffix='-- %s germ (%d params)' % 
+                                  (germ, gsGerm.num_params()))
+            #Debugging
+            #print(gsGerm.gates["Ggerm"].evals)
+            #print(gsGerm.gates["Ggerm"].params)
+
+            #Get dP-matrix for full set of fiducials, where
+            # P_ij = <E_i|germ^exp|rho_j>, i = composite EVec & fiducial index,
+            #   j is similar, and derivs are wrt the "eigenvalues" of the germ
+            #  (i.e. the parameters of the gsGerm gate set).
+            lst = _gsc.create_gatestring_list(
+                "f0+germ+f1", f0=prepStrs, f1=effectStrs,
+                germ=_objs.GateString(("Ggerm",)), order=('f0','f1'))
+
+            evTree = gsGerm.bulk_evaltree(lst)
+
+             #Memory limit stuff -- TODO: move this within evalTree given
+             # some kind of MemoryEstimator object to compute estimates?
+            blkSz = None
+            if memLimit is not None:
+                dim = gsGerm.get_dimension()
+                nParams = gsGerm.num_params()
+                memEstimate = 8.0*len(evTree)*dim**2*nParams #*nSPAM
+                if memEstimate > memLimit:
+                    printer.log("Germ %d/%d: Memory estimate = %.1fGB > %.1fGB" % \
+                        (i+1,len(germList),memEstimate/(1024.0**3),memLimit/(1024.0**3)))
+                    if memEstimate/nParams < memLimit:
+                        blkSz = int(nParams * memLimit / memEstimate)
+                        printer.log(" --> Setting max block size = %s" % blkSz)
+                    else:
+                        # Tree and deriv splitting method
+                        blkSz = 1
+                        maxTreeLength = len(evTree) * memLimit / (memEstimate / nParams)
+                        evTree.split(maxTreeLength) # Often fails because maxTreeLength is too small
+                        printer.log(" --> Setting max subtree size = %s" % maxTreeLength)
+                        evTree.print_analysis()
+            
+            dprobs = gsGerm.bulk_dprobs(evTree, wrtBlockSize=blkSz)
+            dP = _np.concatenate([dprobs[sl] for sl in spamLabels],axis=0)
+              #concat along spam labels (just seen as additional fiducials)
+
+            # Construct sum of projectors onto the directions (1D spaces)
+            # corresponding to varying each parameter (~eigenvalue) of the
+            # germ.  If the set of fiducials is sufficient, then the rank of
+            # the resulting operator will equal the number of parameters,
+            # indicating that the P matrix is (independently) sensitive to
+            # each of the germ parameters (~eigenvalues), which is *all* we
+            # want sensitivity to.
+            RANK_TOL = 1e-7
+            rank = _np.linalg.matrix_rank( _np.dot(dP, dP.T), RANK_TOL )
+            if rank < gsGerm.num_params(): # full fiducial set should work!
+                raise ValueError("Incomplete fiducial-pair set!")
+
+              #Below will take a *subset* of the rows in dprobs[spamLbl]
+              # depending on which (of all possible) fiducial pairs
+              # are being considered.
+
+            nRhoStrs, nEStrs = len(prepStrs), len(effectStrs)
+            nPossiblePairs = len(prepStrs)*len(effectStrs)
+            allPairIndices = list(range(nPossiblePairs))
+
+            #Determine which fiducial-pair indices to iterate over
+            goodPairList = None; maxRank = 0
+            for nNeededPairs in range(gsGerm.num_params(),nPossiblePairs):
+                printer.log("Beginning search for a good set of %d pairs (%d pair lists to test)" % \
+                                (nNeededPairs,_nCr(nPossiblePairs,nNeededPairs)),2)
+
+                if searchMode == "sequential":
+                    pairIndicesToIterateOver = _itertools.combinations(allPairIndices, nNeededPairs)
+
+                elif searchMode == "random":
+                    rand = _np.random.RandomState(seed)  # ok if seed is None
+                    nTotalPairCombos = _nCr(len(allPairIndices), nNeededPairs)
+                    if nRandom < nTotalPairCombos:
+                        randIndices = _remove_duplicates(sorted(rand.randint(0,nTotalPairCombos,size=nRandom)))
+                    else:
+                        randIndices = list(range(int(nTotalPairCombos)))
+
+                    def filterAll(it): #generator which filters iterator "it" using randIndices
+                        nxt = 0
+                        for i,val in enumerate(it):
+                            if i == randIndices[nxt]:
+                                yield val
+                                nxt += 1
+                                if nxt == len(randIndices): break
+                                
+                    pairIndicesToIterateOver = filterAll(_itertools.combinations(allPairIndices, nNeededPairs))
+
+
+                for pairIndicesToTest in pairIndicesToIterateOver:
+    
+                    #Get list of pairs as tuples for printing & returning
+                    pairList = []
+                    for i in pairIndicesToTest:
+                        iRhoStr = i // nEStrs; iEStr = i - iRhoStr*nEStrs
+                        pairList.append( (iRhoStr,iEStr) )
+    
+                    # Same computation of rank as above, but with only a 
+                    # subset of the total fiducial pairs.
+                    dps = { sl: _np.take(dprobs[sl],pairIndicesToTest, axis=0)
+                            for sl in spamLabels } 
+                    dP = _np.concatenate([dps[sl] for sl in spamLabels],axis=0)
+                    rank = _np.linalg.matrix_rank( _np.dot(dP, dP.T), RANK_TOL )
+                    maxRank = max(maxRank,rank)
+    
+                    printer.log("Pair list %s ==> %d of %d amplified parameters"
+                                % (" ".join(map(str,pairList)), rank,
+                                   gsGerm.num_params()), 3)
+    
+                    if rank == gsGerm.num_params():
+                        printer.log("Found a good set of %d pairs: %s" % \
+                                        (nNeededPairs," ".join(map(str,pairList))),2)
+                        goodPairList = pairList
+                        break
+
+                if goodPairList is not None:
+                    break #exit another loop level if a solution was found
+
+            if goodPairList is not None:
+                pairListDict[germ] = goodPairList # add to final list of per-germ pairs
+            else:
+                #we tried all the way to nPossiblePairs-1 and no success,
+                # just return all the pairs
+                printer.log(" --> Highest number amplified = %d of %d" %
+                            (maxRank, gsGerms.num_params()))
+                listOfAllPairs = [ (iRhoStr,iEStr)
+                                   for iRhoStr in range(nRhoStrs)
+                                   for iEStr in range(nEStrs) ]
+                pairListDict[germ] = listOfAllPairs
+
+    return pairListDict
+
+
+
 
 
 #def _old_TestPair(targetGateset, fiducialList, germList, L, testPairList, spamLabels="all"):

@@ -7,6 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Defines classes which represent gates, as well as supporting functions """
 
 import numpy as _np
+import functools as _functools
 from ..      import optimize as _opt
 from ..tools import matrixtools as _mt
 
@@ -46,7 +47,6 @@ def optimize_gate(gateToOptimize, targetGate):
 
     assert(targetGate.dim == gateToOptimize.dim) #gates must have the same overall dimension
     targetMatrix = _np.asarray(targetGate)
-    import sys
     def objective_func(param_vec):
         gateToOptimize.from_vector(param_vec)
         return _mt.frobeniusnorm(gateToOptimize-targetMatrix)
@@ -1017,6 +1017,7 @@ class LinearlyParameterizedGate(Gate):
         """
         self.leftTrans = _np.dot(Si,self.leftTrans)
         self.rightTrans = _np.dot(self.rightTrans,S)
+        self._construct_matrix()
 
 
     def compose(self, otherGate):
@@ -1118,6 +1119,430 @@ class LinearlyParameterizedGate(Gate):
         return (LinearlyParameterizedGate,
                 (self.baseMatrix, _np.array([]), {}, None, None, self.enforceReal),
                 self.__dict__)
+
+
+
+#Or CommutantParameterizedGate(Gate): ?
+class EigenvalueParameterizedGate(Gate):
+    """
+    Encapsulates a real gate matrix that is parameterized only by its
+    eigenvalues, which are assumed to be either real or to occur in
+    conjugate pairs.  Thus, the number of parameters is equal to the
+    number of eigenvalues.
+    """
+
+    def __init__(self, matrix, includeOffDiagsInDegen2Blocks=False,
+                 TPconstrainedAndUnital=False):
+        """
+        Initialize a LinearlyParameterizedGate object.
+
+        Parameters
+        ----------
+        matrix : numpy array
+            a square 2D numpy array that gives the raw gate matrix to
+            paramterize.  The shape of this array sets the dimension
+            of the gate.
+
+        includeOffDiagsInDegen2Blocks : bool
+            If True, include as parameters the (initially zero) 
+            off-diagonal elements in degenerate 2x2 blocks of the 
+            the diagonalized gate matrix (no off-diagonals are 
+            included in blocks larger than 2x2).  This is an option
+            specifically used in the intelligent fiducial pair
+            reduction (IFPR) algorithm.
+
+        TPconstrainedAndUnital : bool
+            If True, assume the top row of the gate matrix is fixed
+            to [1, 0, ... 0] and should not be parameterized, and verify
+            that the matrix is unital.  In this case, "1" is always a
+            fixed (not-paramterized0 eigenvalue with eigenvector
+            [1,0,...0] and if includeOffDiagsInDegen2Blocks is True
+            any off diagonal elements lying on the top row are *not*
+            parameterized as implied by the TP constraint.
+        """
+
+        def cmplx_compare(ia,ib):
+            """Helper for comparing complex numbers"""
+            a,b = evals[ia], evals[ib]
+            if a.real < b.real:   return -1
+            elif a.real > b.real: return  1
+            elif a.imag < b.imag: return -1
+            elif a.imag > b.imag: return  1
+            else: return 0
+        cmplx_compare_key = _functools.cmp_to_key(cmplx_compare)
+
+        def isreal(a): #b/c numpy's isreal test for equality w/0
+            return _np.isclose(_np.imag(a),0.0)
+
+        # Since matrix is real, eigenvalues must either be real or occur in
+        #  conjugate pairs.  Find and sort by conjugate pairs.
+
+        assert(_np.linalg.norm(_np.imag(matrix)) < 1e-8 ) #matrix should be real
+        evals, B = _np.linalg.eig(matrix) # matrix == B * diag(evals) * Bi
+        dim = len(evals)
+        
+        #Sort eigenvalues & eigenvectors by:
+        # 1) unit eigenvalues first (with TP eigenvalue first of all)
+        # 2) non-unit real eigenvalues in order of magnitude
+        # 3) complex eigenvalues in order of real then imaginary part
+
+        unitInds = []; realInds = []; complexInds = []
+        for i,ev in enumerate(evals):
+            if _np.isclose(ev,1.0): unitInds.append(i)
+            elif isreal(ev): realInds.append(i)
+            else: complexInds.append(i)
+
+        if TPconstrainedAndUnital:
+            #check matrix is TP and unital
+            unitRow = _np.zeros( (len(evals)), 'd'); unitRow[0] = 1.0
+            assert( _np.allclose(matrix[0,:],unitRow) )
+            assert( _np.allclose(matrix[:,0],unitRow) )
+
+            #find the eigenvector with largest first element and make sure
+            # this is the first index in unitInds
+            k = _np.argmax([B[0,i] for i in unitInds])
+            if k != 0:  #swap indices 0 <-> k in unitInds
+                t = unitInds[0]; unitInds[0] = unitInds[k]; unitInds[k] = t
+
+            #Assume we can recombine unit-eval eigenvectors so that the first
+            # one == unitRow and the rest do not have any 0th component.
+            B[:, unitInds[0] ] = unitRow
+            for ui in unitInds[1:]:
+                B[0, ui] = 0.0; B[:,ui] /= _np.linalg.norm(B[:,ui])
+
+        realInds = sorted(realInds, key=lambda i: -abs(evals[i]))
+        complexInds = sorted(complexInds, key=cmplx_compare_key)
+        new_ordering = unitInds + realInds + complexInds
+
+        #Re-order the eigenvalues & vectors
+        sorted_evals = _np.zeros(evals.shape,'complex')
+        sorted_B = _np.zeros(B.shape, 'complex')
+        for i,indx in enumerate(new_ordering):
+            sorted_evals[i] = evals[indx]
+            sorted_B[:,i] = B[:,indx]
+
+        #Save the final list of (sorted) eigenvalues & eigenvectors
+        self.evals = sorted_evals
+        self.B = sorted_B
+        self.Bi = _np.linalg.inv(sorted_B)
+
+        self.options = { 'includeOffDiags': includeOffDiagsInDegen2Blocks,
+                         'TPandUnital': TPconstrainedAndUnital }
+
+        #Check that nothing has gone horribly wrong
+        assert(_np.allclose(_np.dot(
+                    self.B,_np.dot(_np.diag(self.evals),self.Bi)), matrix))
+                
+        #Build a list of parameter descriptors.  Each element of self.params
+        # is a list of (prefactor, (i,j)) tuples.
+        self.params = []        
+        i = 0; N = len(self.evals); processed = [False]*N
+        while i < N:
+            if processed[i]:
+                i += 1; continue
+
+            # Find block (i -> j) of degenerate eigenvalues
+            j = i+1
+            while j < N and _np.isclose(self.evals[i],self.evals[j]): j += 1
+            blkSize = j-i
+
+            #Add eigenvalues as parameters
+            ev = self.evals[i] #current eigenvalue being processed
+            if isreal(ev):
+                
+                # Side task: for a *real* block of degenerate evals, we want
+                # to ensure the eigenvectors are real, which numpy doesn't
+                # always guarantee (could be conj. pairs for instance).
+
+                # Solve or Cmx: [v1,v2,v3,v4]Cmx = [v1',v2',v3',v4'] ,
+                # where ' qtys == real, so Im([v1,v2,v3,v4]Cmx) = 0
+                # Let Cmx = Cr + i*Ci, v1 = v1.r + i*v1.i, etc.,
+                #  then solve [v1.r, ...]Ci + [v1.i, ...]Cr = 0
+                #  which can be cast as [Vr,Vi]*[Ci] = 0
+                #                               [Cr]      (nullspace of V)
+                # Note: only involve complex evecs (don't disturb TP evec!)            
+                evecIndsToMakeReal = []
+                for k in range(i,j): 
+                    if _np.linalg.norm(self.B[:,k].imag) >= 1e-8:
+                        evecIndsToMakeReal.append(k)
+
+                nToReal = len(evecIndsToMakeReal)
+                if nToReal > 0:
+                    vecs = _np.empty( (dim,nToReal),'complex')
+                    for ik,k in enumerate(evecIndsToMakeReal): 
+                        vecs[:,ik] = self.B[:,k]
+                    V = _np.concatenate((vecs.real, vecs.imag), axis=1)
+                    nullsp = _mt.nullspace(V); assert(nullsp.shape[1] == nToReal)
+                      #assert we can find enough real linear combos!
+    
+                    Cmx = nullsp[nToReal:,:] + 1j*nullsp[0:nToReal,:] # Cr + i*Ci
+                    new_vecs = _np.dot(vecs,Cmx)
+                    assert(_np.linalg.norm(new_vecs.imag) < 1e-8)
+                    for ik,k in enumerate(evecIndsToMakeReal): 
+                        self.B[:,k] = new_vecs[:,ik]
+                    self.Bi = _np.linalg.inv(self.B)                
+
+                
+                #Now, back to constructing parameter descriptors...
+                for k in range(i,j):
+                    if TPconstrainedAndUnital and k == 0: continue
+                    prefactor = 1.0; mx_indx = (k,k)
+                    self.params.append( [(prefactor, mx_indx)] )
+                    processed[k] = True
+            else:
+                iConjugate = {}
+                for k in range(i,j):
+                    #Find conjugate eigenvalue to eval[k]
+                    conj = _np.conj(self.evals[k]) # == conj(ev), indep of k
+                    conjB = _np.conj(self.B[:,k])
+                    for l in range(j,N):
+                        if _np.isclose(conj,self.evals[l]) and \
+                                _np.allclose(conjB, self.B[:,l]):
+                            self.params.append( [  # real-part param
+                                    (1.0, (k,k)),  # (prefactor, index)
+                                    (1.0, (l,l)) ] ) 
+                            self.params.append( [  # imag-part param
+                                    (1j, (k,k)),  # (prefactor, index)
+                                    (-1j, (l,l)) ] ) 
+                            processed[k] = processed[l] = True
+                            iConjugate[k] = l #save conj. pair index for below
+                            break
+                    else:
+                        raise ValueError("Could not find conjugate pair " 
+                                         + " for %s" % self.evals[k])
+            
+            
+            if includeOffDiagsInDegen2Blocks and blkSize == 2:
+                #Note: could remove blkSize == 2 condition or make this a 
+                # separate option.  This is useful currently so that we don't
+                # add lots of off-diag elements in accidentally-degenerate 
+                # cases, but there's probabaly a better heuristic for this, such
+                # as only including off-diag els for unit-eigenvalue blocks
+                # of size 2 (?)
+                for k1 in range(i,j-1):
+                    for k2 in range(k1+1,j):
+                        if isreal(ev):
+                            # k1,k2 element
+                            if not TPconstrainedAndUnital or k1 != 0:
+                                self.params.append( [(1.0, (k1,k2))] )
+
+                            # k2,k1 element
+                            if not TPconstrainedAndUnital or k2 != 0:
+                                self.params.append( [(1.0, (k2,k1))] )
+                        else:
+                            k1c, k2c = iConjugate[k1],iConjugate[k2]
+
+                            # k1,k2 element
+                            self.params.append( [  # real-part param
+                                    (1.0, (k1,k2)),
+                                    (1.0, (k1c,k2c)) ] ) 
+                            self.params.append( [  # imag-part param
+                                    (1j, (k1,k2)),
+                                    (-1j, (k1c,k2c)) ] ) 
+
+                            # k2,k1 element
+                            self.params.append( [  # real-part param
+                                    (1.0, (k2,k1)),
+                                    (1.0, (k2c,k1c)) ] ) 
+                            self.params.append( [  # imag-part param
+                                    (1j, (k2,k1)),
+                                    (-1j, (k2c,k1c)) ] )
+
+            i = j #advance to next block
+
+        #Allocate array of parameter values (all zero initially)
+        self.paramvals = _np.zeros(len(self.params), 'd')
+
+        #Finish Gate construction
+        mx = _np.empty( matrix.shape, "d" )
+        mx.flags.writeable = False # only _construct_matrix can change array
+        Gate.__init__(self, mx)
+        self._construct_matrix() # construct base from the parameters
+
+
+    def _construct_matrix(self):
+        """
+        Build the internal gate matrix using the current parameters.
+        """
+        base_diag = _np.diag(self.evals)
+        for pdesc,pval in zip(self.params, self.paramvals):
+            for prefactor,(i,j) in pdesc:
+                base_diag[i,j] += prefactor * pval
+        matrix = _np.dot(self.B,_np.dot(base_diag,self.Bi))
+        assert(_np.linalg.norm(matrix.imag) < 1e-8)
+        assert(matrix.shape == (self.dim,self.dim))
+        self.base = matrix.real
+        self.base.flags.writeable = False
+
+    def set_matrix(self, M):
+        """
+        Attempts to modify gate parameters so that the specified raw
+        gate matrix becomes mx.  Will raise ValueError if this operation
+        is not possible.
+
+        Parameters
+        ----------
+        M : numpy array or Gate
+            A numpy array of shape (dim, dim) or Gate representing the gate action.
+
+        Returns
+        -------
+        None
+        """
+        mx = Gate.convert_to_matrix(M)
+        if(mx.shape != (self.dim, self.dim)):
+            raise ValueError("Argument must be a (%d,%d) matrix!" % (self.dim,self.dim))
+        raise ValueError("Currently, directly setting the matrix of an" +
+                         " EigenvalueParameterizedGate object is not" +
+                         " supported.  Please use the from_vector method.")
+
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this gate.
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return len(self.paramvals)
+
+
+    def to_vector(self):
+        """
+        Extract a vector of the underlying gate parameters from this gate.
+
+        Returns
+        -------
+        numpy array
+            a 1D numpy array with length == num_params().
+        """
+        return self.paramvals
+
+
+    def from_vector(self, v):
+        """
+        Initialize the gate using a vector of its parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params().
+
+        Returns
+        -------
+        None
+        """
+        assert(len(v) == self.num_params())
+        self.paramvals = v
+        self._construct_matrix()
+
+
+    def deriv_wrt_params(self, wrtFilter=None):
+        """
+        Construct a matrix whose columns are the vectorized
+        derivatives of the flattened gate matrix with respect to a
+        single gate parameter.  Thus, each column is of length
+        gate_dim^2 and there is one column per gate parameter.
+
+        Returns
+        -------
+        numpy array
+            Array of derivatives, shape == (dimension^2, num_params)
+        """
+        
+        # matrix = B * diag * Bi, and only diag depends on parameters
+        #  (and only linearly), so:
+        # d(matrix)/d(param) = B * d(diag)/d(param) * Bi
+
+        derivMx = _np.zeros( (self.dim**2, self.num_params()), 'd' )
+
+        # Compute d(diag)/d(param) for each params, then apply B & Bi
+        for k,(pdesc,pval) in enumerate(zip(self.params, self.paramvals)):
+            dMx = _np.zeros( (self.dim,self.dim), 'complex')
+            for prefactor,(i,j) in pdesc:
+                dMx[i,j] = prefactor
+            tmp = _np.dot(self.B, _np.dot(dMx, self.Bi))
+            assert(_np.linalg.norm(tmp.imag) < 1e-8)
+            derivMx[:,k] = tmp.real.flatten()
+
+        if wrtFilter is None:
+            return derivMx
+        else:
+            return _np.take( derivMx, wrtFilter, axis=1 )
+
+
+    def copy(self):
+
+        #Construct new gate with dummy identity mx
+        newGate = EigenvalueParameterizedGate(_np.identity(self.dim,'d'))
+        
+        #Deep copy data
+        newGate.evals = self.evals.copy()
+        newGate.B = self.B.copy()
+        newGate.Bi = self.Bi.copy()
+        newGate.params = self.params[:] #copies tuple elements
+        newGate.paramvals = self.paramvals.copy()
+        newGate.options = self.options.copy()
+        newGate._construct_matrix()
+
+        return newGate
+
+
+    def transform(self, S, Si):
+        """
+        Update gate matrix G with inv(S) * G * S,
+
+        Parameters
+        ----------
+        S : numpy array
+            Matrix to perform similarity transform.
+            Should be shape (dim, dim).
+
+        Si : numpy array
+            Inverse of S.  If None, inverse of S is computed.
+            Should be shape (dim, dim).
+        """
+        if Si is None: Si = _np.linalg.inv(S)
+        self.B = _np.dot(Si,self.B)
+        self.Bi = _np.dot(self.Bi,S)
+        self._construct_matrix()
+
+
+    def compose(self, otherGate):
+        """
+        Create and return a new gate that is the composition of this gate
+        followed by otherGate, which *must be another 
+        EigenvalueParameterizedGate*.  (For more general compositions between
+        different types of gates, use the module-level compose function.)  The
+        returned gate's matrix is equal to dot(this, otherGate).
+
+        Parameters
+        ----------
+        otherGate : EigenvalueParameterizedGate
+            The gate to compose to the right of this one.
+
+        Returns
+        -------
+        EigenvalueParameterizedGate
+        """
+        assert( isinstance(otherGate, EigenvalueParameterizedGate) )
+
+        composed_mx = _np.dot(self, otherGate)
+        return EigenvalueParameterizedGate(composed_mx,
+                                           self.options['includeOffDiags'],
+                                           self.options['TPandUnital'])
+
+    def __str__(self):
+        s = "Eigenvalue Parameterized gate with shape %s, num params = %d\n" % \
+            (str(self.base.shape), self.num_params())
+        s += _mt.mx_to_string(self.base, width=5, prec=1)
+        return s
+
+    def __reduce__(self):
+        return (EigenvalueParameterizedGate, 
+                (_np.identity(self.dim,'d'),), self.__dict__)
 
 
 

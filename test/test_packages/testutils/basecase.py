@@ -29,6 +29,13 @@ class BaseTestCase(unittest.TestCase):
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = True
 
+        try:
+            basestring #Only defined in Python 2
+            self.versionsuffix = "" #Python 2
+        except NameError:
+            self.versionsuffix = "v3" #Python 3
+
+
     def tearDown(self):
         os.chdir(self.old)
 
