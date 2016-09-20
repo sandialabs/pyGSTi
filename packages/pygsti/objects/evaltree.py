@@ -7,7 +7,11 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Defines the EvalTree class which implements an evaluation tree. """
 
 from . import gatestring as _gs
+from ..tools import mpitools as _mpit
+from .verbosityprinter import VerbosityPrinter
+
 import numpy as _np
+
 
 class EvalTree(list):
     """
@@ -24,13 +28,16 @@ class EvalTree(list):
     def __init__(self, items=[]):
         """ Create a new, empty, evaluation tree. """
         self.gateLabels = []
-        self.finalList = []
+        self.init_indices = []
+        self.eval_order = []
         self.myFinalToParentFinalMap = None
+        self.num_final_strs = 0
         self.subTrees = []
         self.parentIndexMap = None          # Was previously initialized elsewhere
+        self.distribution = {}
         super(EvalTree, self).__init__(items)
 
-    def initialize(self, gateLabels, gatestring_list):
+    def initialize(self, gateLabels, gatestring_list, numSubTreeComms=1):
         """
           Initialize an evaluation tree using a set of gate strings.
           This function must be called before using an EvalTree.
@@ -39,7 +46,7 @@ class EvalTree(list):
           ----------
           gateLabels : list of strings
               A list of all the single gate labels to
-              be stored at the beginnign of the tree.  This
+              be stored at the beginning of the tree.  This
               list must include all the gate labels contained
               in the elements of gatestring_list.
 
@@ -48,11 +55,152 @@ class EvalTree(list):
               objects, specifying the gate strings that
               should be present in the evaluation tree.
 
+          numSubTreeComms : int, optional
+              The number of processor groups (communicators)
+              to divide the subtrees of this EvalTree among
+              when calling `distribute`.  By default, the
+              communicator is not divided.
+
           Returns
           -------
           None
         """
         self.gateLabels = gateLabels
+        if numSubTreeComms is not None:
+            self.distribution['numSubtreeComms'] = numSubTreeComms
+
+        if len(gatestring_list ) > 0 and isinstance(gatestring_list[0],_gs.GateString):
+            gatestring_list = [gs.tup for gs in gatestring_list]
+
+        #Evaluation dictionary:
+        # keys == gate strings that have been evaluated so far
+        # values == index of gate string (key) within evalTree
+        evalDict = { }
+
+        #Evaluation tree:
+        # A list of tuples, where each element contains
+        #  information about evaluating a particular gate string:
+        #  (iLeft, iRight)
+        # and the order of the elements specifies the evaluation order.
+        # In particular, the gateString = evalTree[iLeft] + evalTree[iRight]
+        #   so that matrix(gateString) = matrixOf(evalTree[iRight]) * matrixOf(evalTree[iLeft])
+        del self[:] #clear self (a list)
+
+        #Final Indices
+        # The first len(gatestring_list) elements of the tree correspond
+        # to computing the gate strings requested in gatestring_list.  Doing
+        # this make later extraction much easier (views can be used), but
+        # requires a non-linear order of evaluation, held in the eval_order list.
+        self.eval_order = []
+
+        #initialize self as a list of Nones
+        self.num_final_strs = len(gatestring_list)
+        self[:] = [None]*self.num_final_strs
+
+        #Single gate (or zero-gate) computations are assumed to be atomic, and be computed independently.
+        #  These labels serve as the initial values, and each gate string is assumed to be a tuple of
+        #  gate labels.
+        self.init_indices = [] #indices to put initial zero & single gate results
+        for gateLabel in self.gateLabels:
+            tup = () if gateLabel == "" else (gateLabel,) #special case of empty label == no gate
+            if tup in gatestring_list:
+                indx = gatestring_list.index(tup) 
+                self[indx] = (None,None) #iLeft = iRight = None for always-evaluated zero string
+            else:
+                indx = len(self)
+                self.append( (None,None) ) #iLeft = iRight = None for always-evaluated zero string
+            self.init_indices.append( indx )
+            evalDict[ tup ] = indx
+
+        #avgBiteSize = 0
+        #useCounts = {}
+        for (k,gateString) in enumerate(gatestring_list):
+            L = len(gateString)
+            #if L == 0:
+            #    self[0] = (None,None,k) #set in-final-list index for zero-length string (special case)
+            #    finalIndxList[k] = 0
+
+            start = 0; bite = 1
+            #nBites = 0
+            #print "DB: string = ",gateString, " tree length = ",len(self)
+
+            while start < L:
+
+                #Take a bite out of gateString, starting at `start` that is in evalDict
+                for b in range(L-start,0,-1):
+                    if gateString[start:start+b] in evalDict:
+                        bite = b; break
+                else: assert(False) #Logic error - loop above should always exit when b == 1
+
+                #print "DB: start=", start, ": found ", gateString[start:start+bite], " in evalDict"
+                #iInFinal = k if bool(start + bite == L) else -1
+                bFinal = bool(start + bite == L)
+
+                if start == 0: #first in-evalDict bite - no need to add anything to self yet
+                    iCur = evalDict[ gateString[0:bite] ]
+                    if bFinal: assert(iCur == k) #make sure this bite is in the right place!
+                else:
+                    # add (iCur, iBite)
+                    assert(gateString[0:start+bite] not in evalDict)
+                    iBite = evalDict[ gateString[start:start+bite] ]
+                    if bFinal: #place (iCur, iBite) at location k
+                        iNew = k
+                        evalDict[ gateString[0:start+bite] ] = iNew
+                        assert(self[iNew] is None) #make sure we haven't put anything here yet
+                        self[k] = (iCur, iBite)
+                    else:
+                        iNew = len(self)
+                        evalDict[ gateString[0:start+bite] ] = iNew
+                        self.append( (iCur,iBite) )
+
+                    #print "DB: appending %s (index %d)" % (str(gateString[0:start+bite]),iNew)
+                    self.eval_order.append(iNew)
+                    iCur = iNew
+                start += bite
+                #nBites += 1
+
+            #if nBites > 0: avgBiteSize += L / float(nBites)
+
+        #avgBiteSize /= float(len(gatestring_list))
+        #print "DEBUG: Avg bite size = ",avgBiteSize
+
+        #see if there are superfluous tree nodes: those with iFinal == -1 and
+        self.myFinalToParentFinalMap = None #this tree has no "children",
+        self.parentIndexMap = None          # i.e. has not been created by a 'split'
+        self.subTrees = [] #no subtrees yet
+
+
+    def initialize_orig(self, gateLabels, gatestring_list, numSubTreeComms=1):
+        """
+          Initialize an evaluation tree using a set of gate strings.
+          This function must be called before using an EvalTree.
+
+          Parameters
+          ----------
+          gateLabels : list of strings
+              A list of all the single gate labels to
+              be stored at the beginning of the tree.  This
+              list must include all the gate labels contained
+              in the elements of gatestring_list.
+
+          gatestring_list : list of (tuples or GateStrings)
+              A list of tuples of gate labels or GateString
+              objects, specifying the gate strings that
+              should be present in the evaluation tree.
+
+          numSubTreeComms : int, optional
+              The number of processor groups (communicators)
+              to divide the subtrees of this EvalTree among
+              when calling `distribute`.  By default, the
+              communicator is not divided.
+
+          Returns
+          -------
+          None
+        """
+        self.gateLabels = gateLabels
+        if numSubTreeComms is not None:
+            self.distribution['numSubtreeComms'] = numSubTreeComms
 
         if len(gatestring_list ) > 0 and isinstance(gatestring_list[0],_gs.GateString):
             gatestring_list = [gs.tup for gs in gatestring_list]
@@ -133,15 +281,20 @@ class EvalTree(list):
 
         #see if there are superfluous tree nodes: those with iFinal == -1 and
         self.finalList = finalIndxList
+        self.inplaceCopyList = build_permute_copy_order(finalIndxList)
         self.myFinalToParentFinalMap = None #this tree has no "children",
         self.parentIndexMap = None          # i.e. has not been created by a 'split'
-        self.subTrees = [] #no subtrees yet
+        self.subTrees = [] #no subtrees yet        
+
 
     def copy(self):
         """ Create a copy of this evaluation tree. """
         newTree = EvalTree(self[:])
         newTree.gateLabels = self.gateLabels
-        newTree.finalList = self.finalList
+        newTree.init_indices = self.init_indices
+        newTree.eval_order = self.eval_order
+        #newTree.finalList = self.finalList
+        #newTree.inplaceCopyList = self.inplaceCopyList
         newTree.myFinalToParentFinalMap = self.myFinalToParentFinalMap
         newTree.parentIndexMap = self.parentIndexMap
         newTree.subTrees = [ st.copy() for st in self.subTrees ]
@@ -153,32 +306,88 @@ class EvalTree(list):
         """
         return tuple(self.gateLabels)
 
-    def get_tree_index_of_final_value(self, finalValueIndex):
+    def get_init_indices(self):
+        """ Return a tuple of the indices corresponding
+             to the initial gate labels (strings)
+             which form the beginning of the tree.
         """
-        Return the index within the tree list of the
-          gate string that had index finalValueIndex in
-          the gatestring_list passed to initialize.
-        """
-        return self.finalList[finalValueIndex]
+        return tuple(self.init_indices)
 
-    def get_list_of_final_value_tree_indices(self):
+    def get_evaluation_order(self):
+        """ Return a list of indices specifying the
+             order in which elements of this EvalTree
+             should be visited when doing a computation
+             (after computing the initial indices).
         """
-        Get a list of indices (ints) which specifying the
-          tree indices corresponding to each gate string
-          in the gatestring_list passed to initialize.
+        return self.eval_order
 
-        Returns
-        -------
-        list of integers
-            List of indices with length len(gatestring_list passed to initialize).
+    def final_view(self, a, axis=None):
+        #OLD (which *copies* instead of just returning a view)
+        #finalIndxList = self.get_list_of_final_value_tree_indices()
+        #return a.take(finalIndxList, axis=axis )
+        
+        if axis is None:
+            return a[0:self.num_final_strings()]
+        else:
+            sl = [slice(None)] * a.ndim
+            sl[axis] = slice(0,self.num_final_strings())
+            ret = a[sl]
+            assert(ret.base is a) #check that what is returned is a view
+            assert(_np.may_share_memory(ret,a))
+            return ret
 
-        Note
-        ----
-        A reference to the EvalTree's internal
-          list is returned, and so the caller should copy
-          this list before modifying it.
-        """
-        return self.finalList #Note: no copy, so caller could modify this!
+        
+
+
+
+    #def get_tree_index_of_final_value(self, finalValueIndex):
+    #    """
+    #    Return the index within the tree list of the
+    #      gate string that had index finalValueIndex in
+    #      the gatestring_list passed to initialize.
+    #    """
+    #    return self.finalList[finalValueIndex]
+
+    #def get_list_of_final_value_tree_indices(self, returnCopyList=False):
+    #    """
+    #    Get a list of indices (ints) which specifying the
+    #      tree indices corresponding to each gate string
+    #      in the gatestring_list passed to initialize.
+    #
+    #    Parameters
+    #    ----------
+    #    returnCopyList : bool, optional
+    #       When true, returns list of copy operations in addition to a
+    #       list of indices which give instructions for in-place "taking"
+    #       of the final indices from an array containing computed values
+    #       for all of this tree's indices.
+    #
+    #
+    #    Returns
+    #    -------
+    #    indexList : list
+    #        List of indices with length len(gatestring_list passed to initialize).
+    #
+    #    copyList : list
+    #        A list of (iDest,iSource) 2-tuples specifying an order for in-place
+    #        copying that will transform an array of computed tree values to one where
+    #        the leading len(indexList) values correspond to indexList.  `copyList`
+    #        is meant to be give as an argument to `inplace_take` to perform an
+    #        in-place numpy.take operation.
+    #
+    #    Note
+    #    ----
+    #    A reference to the EvalTree's internal
+    #      list is returned, and so the caller should copy
+    #      this list before modifying it.
+    #    """
+    #
+    #    #Note: no copy of returned lists, so caller could modify them!
+    #    if returnCopyList:
+    #        return self.finalList, self.inplaceCopyList
+    #    else:
+    #        return self.finalList
+
 
 #    def _initializeBETA(self, gateLabels, gatestring_list):
 #        """
@@ -252,7 +461,7 @@ class EvalTree(list):
         Returns the integer number of "final" gate strings, equal
           to the length of the gatestring_list passed to initialize.
         """
-        return len(self.finalList)
+        return self.num_final_strs
 
     def generate_gatestring_list(self):
         """
@@ -297,12 +506,37 @@ class EvalTree(list):
 #    # OR add "get_local_tree(...)" -- then calc routines always, only
 #    #  compute that single tree, then ask if they need to gather in the end?
 #
-#    def distribute(self, comm):
-#        # split tree into local subtrees, each which contains one/group of
-#        # processors (group could parallelize derivative calcs over
-#        # gate set parameters?  or maybe that partitioning is done first?)
-#        self.comm = comm
-#        return self.split(self, numSubTrees=comm.Get_size())
+
+    def distribute(self, comm, verbosity=0):
+        # split tree into local subtrees, each which contains one/group of
+        # processors (group can then parallelize derivative calcs over
+        # gate set parameters) 
+
+        rank = 0 if (comm is None) else comm.Get_rank()
+        nprocs = 1 if (comm is None) else comm.Get_size()
+        nSubtreeComms = self.distribution.get('numSubtreeComms',1)
+        nSubtrees = len(self.get_sub_trees())
+
+        assert(nSubtreeComms <= nprocs) # => len(mySubCommIndices) == 1
+        mySubCommIndices, subCommOwners, mySubComm = \
+            _mpit.distribute_indices(list(range(nSubtreeComms)), comm)
+        assert(len(mySubCommIndices) == 1)
+        mySubCommIndex = mySubCommIndices[0]
+
+        assert(nSubtreeComms <= nSubtrees) # don't allow more comms than trees
+        mySubtreeIndices, subTreeOwners = _mpit.distribute_indices_base(
+            list(range(nSubtrees)), nSubtreeComms, mySubCommIndex)
+
+        # subTreeOwners contains index of owner subComm, but we really want
+        #  the owning processor, i.e. the owner of the subComm
+        subTreeOwners = { iSubTree: subCommOwners[subTreeOwners[iSubTree]]
+                          for iSubTree in subTreeOwners }
+
+        printer = VerbosityPrinter.build_printer(verbosity, comm)
+        printer.log("*** Distributing %d subtrees into %d sub-comms (%s processors) ***"% \
+                        (nSubtrees, nSubtreeComms, nprocs))
+
+        return mySubtreeIndices, subTreeOwners, mySubComm
 
 
     def get_min_tree_size(self):
@@ -348,17 +582,8 @@ class EvalTree(list):
         if maxSubTreeSize is None or len(self) < maxSubTreeSize:
             if numSubTrees is None or numSubTrees == 1: return
 
-            ##Split into a *single* subtree: not needed anymore (used for "tier-ed" splitting)
-            #assert(numSubTrees == 1)
-            #self.subTrees = [self.copy()]
-            #self.subTrees[0].myFinalToParentFinalMap = \
-            #    range(len(self.finalList))
-            #self.subTrees[0].parentIndexMap = \
-            #    range(len(self))
-            #return
-
         self.subTrees = []
-        subTreesFinalList = [None]*len(self.finalList)
+        subTreesFinalList = [None]*self.num_final_strings()
 
         #First pass - identify which indices go in which subtree
         #   Part 1: create disjoint set of subtrees generated by single items
@@ -472,37 +697,47 @@ class EvalTree(list):
         #raise ValueError("STOP")
 
         #Second pass - create subtrees from index sets
-        need_to_compute = [False]*len(self)
-        for idx in self.finalList:
-            need_to_compute[idx] = True #could speed up using numpy arrays
+        need_to_compute = _np.zeros( len(self), 'bool' )
+        need_to_compute[0:self.num_final_strings()] = True
 
         for iSubTree,subTreeSet in enumerate(subTreeSetList):
             subTreeIndices = list(subTreeSet)
-            subTreeIndices.sort() # so that we can map order here directly as a subTree (no dependency issues)
-            mapIndxToSubTreeIndx = { k: ik for ik,k in enumerate(subTreeIndices) }
-            subTree = EvalTree()
-            subTree.myFinalToParentFinalMap = [] #prep for appends below
-            for ik,k in enumerate(subTreeIndices):
-                (oLeft,oRight,oFinal) = self[k] #original tree indices
+            subTreeIndices.sort() # order subtree gatestrings (really just their indices) so
+                                  # that all "final" strings come first.
 
-                if (oLeft is None) and (oRight is None): #then k-th index of original tree is an initial element <=> self.gateLabels[k]
+            #Compute # of "final" strings in this subtree (count # of indices < num_final_strs)
+            subTreeNumFinal = _np.sum(_np.array(subTreeIndices) < self.num_final_strings())
+            fullEvalOrder = self.init_indices + self.eval_order #list concatenation
+            subTreeEvalOrder = sorted(range(len(subTreeIndices)),
+                                      key=lambda j: fullEvalOrder.index(subTreeIndices[j]))
+            mapIndxToSubTreeIndx = { k: ik for ik,k in enumerate(subTreeIndices) }
+
+            subTree = EvalTree()
+            subTree.myFinalToParentFinalMap = [None]*subTreeNumFinal
+            subTree.num_final_strs = subTreeNumFinal
+            subTree[:] = [None]*len(subTreeIndices)
+
+            for ik in subTreeEvalOrder:
+                k = subTreeIndices[ik] #original tree index
+                (oLeft,oRight) = self[k] #original tree indices
+
+                if (oLeft is None) and (oRight is None):
                     iLeft = iRight = None
-                    assert(len(subTree.gateLabels) == len(subTree)) #make sure all gatelabel items come first
+                    #assert(len(subTree.gateLabels) == len(subTree)) #make sure all gatelabel items come first
                     subTree.gateLabels.append( self.gateLabels[k] )
+                    subTree.init_indices.append(ik)
                 else:
                     iLeft  = mapIndxToSubTreeIndx[ oLeft ]
                     iRight = mapIndxToSubTreeIndx[ oRight ]
+                    subTree.eval_order.append(ik)
 
-                if need_to_compute[k]:
-                    need_to_compute[k] = False #compute evalTree[k] == final index oFinal here (this really isn't necessary)
-                    iFinal = len(subTree.finalList) #the index within subTree.finalList where this item will go
-                    subTree.finalList.append(ik) #added in iFinal position
-                    subTree.myFinalToParentFinalMap.append(oFinal)
-                    subTreesFinalList[oFinal] = (iSubTree,iFinal) #tells which subtree and final list position to find final value
-                else:
-                    iFinal = -1
+                assert(subTree[ik] is None)
+                subTree[ik] = (iLeft,iRight)
 
-                subTree.append( (iLeft,iRight,iFinal) )
+                if ik < subTreeNumFinal:
+                    assert(k < self.num_final_strings()) # it should be a final element in parent too!
+                    subTree.myFinalToParentFinalMap[ik] = k
+
             subTree.parentIndexMap = subTreeIndices #parent index of each subtree index
             self.subTrees.append( subTree )
 
@@ -525,19 +760,18 @@ class EvalTree(list):
 
     def _walkSubTree(self,indx,out):
         if indx not in out: out.append(indx)
-        (iLeft,iRight,_) = self[indx]
+        (iLeft,iRight) = self[indx]
         if iLeft is not None: self._walkSubTree(iLeft,out)
         if iRight is not None: self._walkSubTree(iRight,out)
 
     def _createSingleItemTrees(self):
         #  Create disjoint set of subtrees generated by single items
-        need_to_compute = [False]*len(self)
-        for idx in self.finalList:
-            need_to_compute[idx] = True #could speed up using numpy arrays
+        need_to_compute = _np.zeros( len(self), 'bool' )
+        need_to_compute[0:self.num_final_strings()] = True
 
         singleItemTreeSetList = [] #each element represents a subtree, and
                             # is a set of the indices owned by that subtree
-        for i in reversed(list(range(len(self)))):
+        for i in range(self.num_final_strings(),0,-1):
             if not need_to_compute[i]: continue # move to the last element
               #of evalTree that needs to be computed (i.e. is not in a subTree)
 
@@ -563,34 +797,38 @@ class EvalTree(list):
         #Analyze tree
         if not self.is_split():
             print("Size of evalTree = %d" % len(self))
-            print("Size of gatestring_list = %d" % len(self.finalList))
+            print("Size of gatestring_list = %d" % self.num_final_strings())
 
-            lastOccurrance = [-1] * len(self)
-            nRefs = [-1] * len(self)
-            for i,tup in enumerate(self):
-                iLeft,iRight,_ = tup
-
-                if iLeft is not None:
-                    nRefs[iLeft] += 1
-                    lastOccurrance[iLeft] = i
-
-                if iRight is not None:
-                    nRefs[iRight] += 1
-                    lastOccurrance[iRight] = i
-
-            #print "iTree  nRefs lastOcc  iFinal  inUse"
-            maxInUse = nInUse = 0
-            for i,tup in enumerate(self):
-                nInUse += 1
-                for j in range(i):
-                    if lastOccurrance[j] == i and self[j][2] == -1: nInUse -= 1
-                maxInUse = max(maxInUse,nInUse)
-                #print "%d  %d  %d  %d  %d" % (i, nRefs[i], lastOccurrance[i], tup[2], nInUse)
-            print("Max in use at once = (smallest tree size for mem) = %d" % maxInUse)
+            #TODO: maybe revive this later if it ever becomes useful again.
+            # Currently left un-upgraded after evaltree was changed to hold
+            # all final indices at its beginning. (need to iterate in eval_order
+            #  not not just over enumerate(self) as is done below).
+            #lastOccurrance = [-1] * len(self)
+            #nRefs = [-1] * len(self)
+            #for i,tup in enumerate(self):
+            #    iLeft,iRight = tup
+            #
+            #    if iLeft is not None:
+            #        nRefs[iLeft] += 1
+            #        lastOccurrance[iLeft] = i
+            #
+            #    if iRight is not None:
+            #        nRefs[iRight] += 1
+            #        lastOccurrance[iRight] = i
+            #
+            ##print "iTree  nRefs lastOcc  iFinal  inUse"
+            #maxInUse = nInUse = 0
+            #for i,tup in enumerate(self):
+            #    nInUse += 1
+            #    for j in range(i):
+            #        if lastOccurrance[j] == i and self[j][2] == -1: nInUse -= 1
+            #    maxInUse = max(maxInUse,nInUse)
+            #    #print "%d  %d  %d  %d  %d" % (i, nRefs[i], lastOccurrance[i], tup[2], nInUse)
+            #print("Max in use at once = (smallest tree size for mem) = %d" % maxInUse)
 
         else: #tree is split
             print("Size of original tree = %d" % len(self))
-            print("Size of original gatestring_list = %d" % len(self.finalList))
+            print("Size of original gatestring_list = %d" % self.num_final_strings())
             print("Tree is split into %d sub-trees" % len(self.subTrees))
             print("Sub-tree lengths = ", list(map(len,self.subTrees)), " (Sum = %d)" % sum(map(len,self.subTrees)))
             for i,t in enumerate(self.subTrees):
@@ -601,7 +839,8 @@ class EvalTree(list):
     def get_analysis_plot_infos(self):
         """
         Returns debug plot information useful for
-        assessing the quality of a tree.
+        assessing the quality of a tree. This
+        function is not guaranteed to work.
         """
 
         analysis = {}

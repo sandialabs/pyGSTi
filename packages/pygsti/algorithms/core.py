@@ -16,6 +16,16 @@ from .. import optimize as _opt
 from .. import tools    as _tools
 from .. import objects  as _objs
 
+#DEBUG
+from .track_allocations import AllocationTracker
+import os as _os
+import psutil as _psutil
+BtoGB = 1.0/(1024.0**3)
+def get_mem_usage():
+    p = _psutil.Process(_os.getpid())
+    return p.memory_info()[0] * BtoGB
+
+
 #Note on where 4x4 or possibly other integral-qubit dimensions are needed:
 # 1) Need to use Jamiol. Isomorphism to contract to CPTP or even gauge optimize to CPTP
 #       since we need to know a Choi matrix basis to perform the Jamiol. isomorphism
@@ -965,6 +975,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     tStart = _time.time()
+    tracker = AllocationTracker(1000)
 
     gs = startGateset.copy()
     if maxfev is None: maxfev = maxiter
@@ -1001,9 +1012,6 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         dsGateStringsToUse = gateStringsToUse
             # no difference in the strings used by the alias
 
-    #Get evaluation tree (now so can use length in mem estimates)
-    evTree = gs.bulk_evaltree(gateStringsToUse)
-
     #Memory allocation
     ns = len(spamLabels); ng = len(gateStringsToUse)
     ne = gs.num_params(); gd = gs.get_dimension()
@@ -1025,48 +1033,61 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     fweights = _np.empty( (len(spamLabels),len(gateStringsToUse)) )
     z = _np.zeros( (len(spamLabels),len(gateStringsToUse)) ) # for deriv below
 
+    #Get evaluation tree (split into subtrees if needed)
+    tm = _time.time() #TIMER!!!
+    evTree, wrtBlkSize = gs.bulk_evaltree_from_resources(
+        gateStringsToUse, comm, memLimit-persistentMem,
+        distributeMethod, ["bulk_fill_probs","bulk_fill_dprobs"], printer)
+    add_time(timer_dict, "do_mc2gst evaltree",_time.time()-tm) #TIMER!!!
+
     #  Estimate & check intermediate memory
     #    - maybe make GateSet methods get intermediate estimates?
-    intermedMem   = 8*(ng + ng*gd**2 + ng*gd**2*ne) # ~ bulk_dproduct
-    if memLimit is not None and memLimit < intermedMem:
-        reductionFactor = float(intermedMem) / float(memLimit)
-        maxEvalSubTreeSize = int(ng / reductionFactor)
-    else:
-        maxEvalSubTreeSize = None
+        
+    ##Get evaluation tree (now so can use length in mem estimates)
+    #evTree = gs.bulk_evaltree(gateStringsToUse)
+    #
+    #intermedMem   = 8*(ng + ng*gd**2 + ng*gd**2*ne) # ~ bulk_dproduct
+    #if memLimit is not None and memLimit < intermedMem:
+    #    reductionFactor = float(intermedMem) / float(memLimit)
+    #    maxEvalSubTreeSize = int(ng / reductionFactor)
+    #else:
+    #    maxEvalSubTreeSize = None
+    #
+    #if memLimit != None:
+    #    printer.log("Memory estimates: (%d spam labels," % ns + \
+    #        "%d gate strings, %d gateset params, %d gate dim)" % (ng,ne,gd), 2)
+    #    printer.log("Peristent: %g GB " % (persistentMem*C), 2)
+    #    printer.log("Intermediate: %g GB " % (intermedMem*C), 2)
+    #    printer.log("Limit: %g GB" % (memLimit*C), 2)
+    #    if maxEvalSubTreeSize is not None:
+    #        printer.log("Maximum eval sub-tree size = %d" % maxEvalSubTreeSize)
+    #
+    #if maxEvalSubTreeSize is not None:
+    #    evTree.split(maxEvalSubTreeSize, None) # split for memory
+    #
+    ##FUTURE: could use distributeMethod for memory distribution also via
+    ##  wrtBlockSize (even when comm is None)
+    #if comm is not None:
+    #    nprocs = comm.Get_size()
+    #    if distributeMethod == "gatestrings":
+    #        if not evTree.is_split():
+    #            evTree.split(None,nprocs)
+    #        else:
+    #            assert(maxEvalSubTreeSize is not None)
+    #            if len(evTree.get_sub_trees()) < nprocs:
+    #                evTree.split(None,nprocs)
+    #                if any([ len(sub)>maxEvalSubTreeSize for sub in evTree.get_sub_trees()]):
+    #                    evTree.split(maxEvalSubTreeSize, None) # fall back to split for memory
+    #    elif distributeMethod == "deriv":
+    #        pass #nothing more to do in this case
+    #    else:
+    #        raise ValueError("Invalid distribute method: %s" % distributeMethod)
+    #
+    #if (comm is None or comm.Get_rank() == 0) and evTree.is_split():
+    #    printer.log("Memory limit and/or MPI has imposed a division of the evaluation tree:", 2)
+    #    evTree.print_analysis()
 
-    if memLimit != None:
-        printer.log("Memory estimates: (%d spam labels," % ns + \
-            "%d gate strings, %d gateset params, %d gate dim)" % (ng,ne,gd), 2)
-        printer.log("Peristent: %g GB " % (persistentMem*C), 2)
-        printer.log("Intermediate: %g GB " % (intermedMem*C), 2)
-        printer.log("Limit: %g GB" % (memLimit*C), 2)
-        if maxEvalSubTreeSize is not None:
-            printer.log("Maximum eval sub-tree size = %d" % maxEvalSubTreeSize)
 
-    if maxEvalSubTreeSize is not None:
-        evTree.split(maxEvalSubTreeSize, None) # split for memory
-
-    #FUTURE: could use distributeMethod for memory distribution also via
-    #  wrtBlockSize (even when comm is None)
-    if comm is not None:
-        nprocs = comm.Get_size()
-        if distributeMethod == "gatestrings":
-            if not evTree.is_split():
-                evTree.split(None,nprocs)
-            else:
-                assert(maxEvalSubTreeSize is not None)
-                if len(evTree.get_sub_trees()) < nprocs:
-                    evTree.split(None,nprocs)
-                    if any([ len(sub)>maxEvalSubTreeSize for sub in evTree.get_sub_trees()]):
-                        evTree.split(maxEvalSubTreeSize, None) # fall back to split for memory
-        elif distributeMethod == "deriv":
-            pass #nothing more to do in this case
-        else:
-            raise ValueError("Invalid distribute method: %s" % distributeMethod)
-
-    if (comm is None or comm.Get_rank() == 0) and evTree.is_split():
-        printer.log("Memory limit and/or MPI has imposed a division of the evaluation tree:", 2)
-        evTree.print_analysis()
 
     #NOTE on chi^2 expressions:
     #in general case:   chi^2 = sum (p_i-f_i)^2/p_i  (for i summed over outcomes)
@@ -1109,12 +1130,17 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         if printer.verbosity < 3:  # Fast versions of functions
             if regularizeFactor == 0:
                 def objective_func(vectorGS):
+                    #DEBUG!!! MEM USAGE
+                    objective_func.__dict__.setdefault('count',0)
+                    tracker.add_tag_now("Begin objective_func %d: %.2f GB" % (objective_func.count, get_mem_usage()))
+                    objective_func.count += 1
+
                     tm = _time.time() #TIMER!!!
                     gs.from_vector(vectorGS)
                     gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval,
                                        check, comm)
                     v = (probs-f)*get_weights(probs) # dims K x M (K = nSpamLabels, M = nGateStrings)
-                    add_time(timer_dict, "OBJECTIVE",_time.time()-tm) #TIMER!!!
+                    add_time(timer_dict, "MC2 OBJECTIVE",_time.time()-tm) #TIMER!!!
                     return v.reshape([KM])
 
             else:
@@ -1126,7 +1152,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                     weights = get_weights(probs)
                     v = (probs-f)*weights # dims K x M (K = nSpamLabels, M = nGateStrings)
                     gsVecNorm = regularizeFactor * _np.array( [ max(0,absx-1.0) for absx in map(abs,vectorGS) ], 'd')
-                    add_time(timer_dict, "OBJECTIVE",_time.time()-tm) #TIMER!!!
+                    add_time(timer_dict, "MC2 OBJECTIVE",_time.time()-tm) #TIMER!!!
                     return _np.concatenate( (v.reshape([KM]), gsVecNorm) )
 
         else:  # Verbose (DEBUG) version of objective_func
@@ -1146,10 +1172,10 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
                 if regularizeFactor > 0:
                     gsVecNorm = regularizeFactor * _np.array( [ max(0,absx-1.0) for absx in map(abs,vectorGS) ], 'd')
-                    add_time(timer_dict, "OBJECTIVE",_time.time()-tm) #TIMER!!!
+                    add_time(timer_dict, "MC2 OBJECTIVE",_time.time()-tm) #TIMER!!!
                     return _np.concatenate( (v.reshape([KM]), gsVecNorm) )
                 else:
-                    add_time(timer_dict, "OBJECTIVE",_time.time()-tm) #TIMER!!!
+                    add_time(timer_dict, "MC2 OBJECTIVE",_time.time()-tm) #TIMER!!!
                     return v.reshape([KM])
 
 
@@ -1157,11 +1183,27 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         if printer.verbosity < 3: # Fast versions of functions
             if regularizeFactor == 0: # Fast un-regularized version
                 def jacobian(vectorGS):
-                    tm = _time.time() #TIMER!!!
+                    #DEBUG!!!
+                    #jacobian.__dict__.setdefault('memusage',0)
+                    jacobian.__dict__.setdefault('count',0)
+                    #mem = get_mem_usage()
+                    #lastmem = jacobian.memusage
+                    tracker.add_tag_now("Begin jacobian %d: %.2f GB" % (jacobian.count, get_mem_usage()))
+
+                    #if mem > 2*lastmem:
+                    #    rnk = 0 if (comm is None) else comm.Get_rank()
+                    #    if rnk == 0:
+                    #        print("DEBUG: Jacobian mem usage is up!  Writing allocations%d.%d.html" % (rnk,jacobian.count))
+                    #        tracker.write_pickle("allocations%d.%d.pkl" % (rnk,jacobian.count))
+                    #jacobian.memusage = mem
+                    jacobian.count += 1
+
+                    tm = _time.time() #TIMER!!!                        
                     gs.from_vector(vectorGS)
                     gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree,
                                         prMxToFill=probs, clipTo=probClipInterval,
-                                        check=check, comm=comm, timer_dict=timer_dict)
+                                        check=check, comm=comm, wrtBlockSize=wrtBlkSize,
+                                        timer_dict=timer_dict)
                     weights  = get_weights( probs )
                     #jac = dpr * (weights+(pr-f)*get_dweights( pr, weights ))[:,None] #OLD  # (M,N) * (M,1) = (M,N)
                     jac = dprobs * (weights+(probs-f)*get_dweights(probs, weights ))[:,:,None]  # (K,M,N) * (K,M,1)   (N = dim of vectorized gateset)
@@ -1170,7 +1212,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
                     # dpr has shape == (nGateStrings, nDerivCols), weights has shape == (nGateStrings,)
                     # return shape == (nGateStrings, nDerivCols) where ret[i,j] = dP[i,j]*(weights+dweights*(p-f))[i]
-                    add_time(timer_dict, "JACOBIAN",_time.time()-tm) #TIMER!!!
+                    add_time(timer_dict, "MC2 JACOBIAN",_time.time()-tm) #TIMER!!!
                     return jac
 
             else:
@@ -1179,7 +1221,8 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                     gs.from_vector(vectorGS)
                     gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree,
                                         prMxToFill=probs, clipTo=probClipInterval,
-                                        check=check, comm=comm, timer_dict=timer_dict)
+                                        check=check, comm=comm, wrtBlockSize=wrtBlkSize,
+                                        timer_dict=timer_dict)
                     weights  = get_weights( probs )
                     gsVecGrad = _np.diag( [ (regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in vectorGS ] ) # (N,N)
                     jac = dprobs * (weights+(probs-f)*get_dweights( probs, weights ))[:,:,None]  # (K,M,N) * (K,M,1)   (N = dim of vectorized gateset)
@@ -1188,7 +1231,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
                     # dpr has shape == (nGateStrings, nDerivCols), gsVecGrad has shape == (nDerivCols, nDerivCols)
                     # return shape == (nGateStrings+nDerivCols, nDerivCols)
-                    add_time(timer_dict, "JACOBIAN",_time.time()-tm) #TIMER!!!
+                    add_time(timer_dict, "MC2 JACOBIAN",_time.time()-tm) #TIMER!!!
                     return jac
 
         else: # Verbose (DEBUG) version
@@ -1197,7 +1240,8 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                 gs.from_vector(vectorGS)
                 gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree,
                                     prMxToFill=probs, clipTo=probClipInterval,
-                                    check=check, comm=comm, timer_dict=timer_dict)
+                                    check=check, comm=comm, wrtBlockSize=wrtBlkSize,
+                                    timer_dict=timer_dict)
                 weights  = get_weights( probs )
 
                 #Attempt to control leastsq by zeroing clipped weights -- this doesn't seem to help (nor should it)
@@ -1237,7 +1281,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                         printer.log(" ==> max err = ", errs[0][2], 3)
                         printer.log(" ==> max err/max = ", max([ x[2]/maxabs for x in errs ]), 3)
 
-                add_time(timer_dict, "JACOBIAN",_time.time()-tm) #TIMER!!!
+                add_time(timer_dict, "MC2 JACOBIAN",_time.time()-tm) #TIMER!!!
                 return jac
 
             # OLD: return _np.concatenate( [ weights[i] * dPr_list[i] for i in range(len(gateStringsToUse)) ], axis=0 )
@@ -1262,16 +1306,24 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         #
         #jacobian = None
 
+    add_time(timer_dict, "do_mc2gst pre-opt",_time.time()-tStart) #TIMER!!!
 
-    #Step 3: solve least squares minimization problem
-    #tm = _time.time() #TIMER!!!
-    x0 = gs.to_vector()
-    opt_x, _, _, _, _ = \
-        _spo.leastsq( objective_func, x0, xtol=tol, ftol=tol, gtol=tol,
-                 maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=jacobian )
-    full_minErrVec = objective_func(opt_x)  #note: calls gs.from_vector(opt_x,...) so don't need to call this again
-    minErrVec = full_minErrVec if regularizeFactor == 0 else full_minErrVec[0:-len(x0)] #don't include regularization terms
-    soln_gs = gs.copy();
+    with tracker:
+
+        #Step 3: solve least squares minimization problem
+        tm = _time.time() #TIMER!!!
+        x0 = gs.to_vector()
+        opt_x, _, _, _, _ = \
+            _spo.leastsq( objective_func, x0, xtol=tol, ftol=tol, gtol=tol,
+                          maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=jacobian )
+        full_minErrVec = objective_func(opt_x)  #note: calls gs.from_vector(opt_x,...) so don't need to call this again
+        minErrVec = full_minErrVec if regularizeFactor == 0 else full_minErrVec[0:-len(x0)] #don't include regularization terms
+        soln_gs = gs.copy();
+        add_time(timer_dict, "do_mc2gst leastsq",_time.time()-tm) #TIMER!!!
+
+    rnk = 0 if (comm is None) else comm.Get_rank()
+    if rnk == 0: tracker.write_pickle("final_allocations%d.pkl" % rnk)
+
 
     #soln_gs.log("MC2GST", { 'method': "leastsq", 'tol': tol,  'maxiter': maxiter } )
     #print "*** leastSQ TIME = ",(_time.time()-tm) #TIMER!!!
@@ -1279,13 +1331,16 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     #opt_jac = _np.abs(jacobian(opt_x))
     #print "DEBUG: Jacobian (shape %s) at opt_x: min=%g, max=%g" % (str(opt_jac.shape),_np.min(opt_jac), _np.max(opt_jac))
     #print "DEBUG: leastsq finished with flag=%d: %s" % (flag,msg)
+    tm = _time.time() #TIMER!!!
 
     if printer.verbosity > 0:
         nGateStrings = len(gateStringsToUse)
         nDataParams  = nGateStrings*(len(dataset.get_spam_labels())-1) #number of independent parameters
                                                                      # in dataset (max. model # of params)
         try:
+            tm2 = _time.time() #TIMER!!!
             nModelParams = gs.num_nongauge_params() #len(x0)
+            add_time(timer_dict, "do_mc2gst num_nongauge_params",_time.time()-tm2) #TIMER!!!
         except: #numpy can throw a LinAlgError
             printer.warning("Could not obtain number of *non-gauge* parameters - using total params instead")
             nModelParams = gs.num_params() #just use total number of params
@@ -1300,6 +1355,8 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     #  target_vec = targetGateset.to_vector()
     #  targetErrVec = objective_func(target_vec)
     #  return minErrVec, soln_gs, targetErrVec
+    add_time(timer_dict, "do_mc2gst post-opt",_time.time()-tm) #TIMER!!!
+    add_time(timer_dict, "do_mc2gst",_time.time()-tStart) #TIMER!!!
     return minErrVec, soln_gs
 
 def do_mc2gst_with_model_selection(
@@ -2002,9 +2059,6 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
         dsGateStringsToUse = gateStringsToUse
            # no difference in the strings used by the alias
 
-    #Get evaluation tree (now so can use length in mem estimates)
-    evTree = gs.bulk_evaltree(gateStringsToUse)
-
     #Memory allocation
     ns = len(spamLabels); ng = len(gateStringsToUse)
     ne = gs.num_params(); gd = gs.get_dimension()
@@ -2021,48 +2075,58 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     probs = _np.empty( (len(spamLabels),len(gateStringsToUse)), 'd' )
     dprobs = _np.empty( (len(spamLabels),len(gateStringsToUse),vec_gs_len) )
 
-    #  Estimate & check intermediate memory
-    #    - maybe make GateSet methods get intermediate estimates?
-    intermedMem   = 8*(ng + ng*gd**2 + ng*gd**2*ne) # ~ bulk_dproduct
-    if memLimit is not None and memLimit < intermedMem:
-        reductionFactor = float(intermedMem) / float(memLimit)
-        maxEvalSubTreeSize = int(ng / reductionFactor)
-    else:
-        maxEvalSubTreeSize = None
+    #Get evaluation tree (split into subtrees if needed)
+    tm = _time.time() #TIMER!!!
+    evTree, wrtBlkSize = gs.bulk_evaltree_from_resources(
+        gateStringsToUse, comm, memLimit-persistentMem,
+        distributeMethod, ["bulk_fill_probs","bulk_fill_dprobs"], printer)
+    add_time(timer_dict, "do_mlgst evaltree",_time.time()-tm) #TIMER!!!
 
-    if memLimit is not None:
-        printer.log("Memory estimates: (%d spam labels," % ns + \
-            "%d gate strings, %d gateset params, %d gate dim)" % (ng,ne,gd), 2)
-        printer.log("Peristent: %g GB " % (persistentMem*C), 2)
-        printer.log("Intermediate: %g GB " % (intermedMem*C), 2)
-        printer.log("Limit: %g GB" % (memLimit*C), 2)
-        if maxEvalSubTreeSize is not None:
-            printer.log("Maximum eval sub-tree size = %d" % maxEvalSubTreeSize, 2)
-
-    if maxEvalSubTreeSize is not None:
-        evTree.split(maxEvalSubTreeSize, None)
-
-    #FUTURE: could use distributeMethod for memory distribution also via
-    #  wrtBlockSize (even when comm is None)
-    if comm is not None:
-        nprocs = comm.Get_size()
-        if distributeMethod == "gatestrings":
-            if not evTree.is_split():
-                evTree.split(None,nprocs)
-            else:
-                assert(maxEvalSubTreeSize is not None)
-                if len(evTree.get_sub_trees()) < nprocs:
-                    evTree.split(None,nprocs)
-                    if any([ len(sub)>maxEvalSubTreeSize for sub in evTree.get_sub_trees()]):
-                        evTree.split(maxEvalSubTreeSize, None) # fall back to split for memory
-        elif distributeMethod == "deriv":
-            pass #nothing more to do in this case
-        else:
-            raise ValueError("Invalid distribute method: %s" % distributeMethod)
-
-    if (comm is None or comm.Get_rank() == 0) and evTree.is_split():
-        printer.log("Memory limit and/or MPI has imposed a division of the evaluation tree:", 2)
-        evTree.print_analysis()
+    ##Get evaluation tree (now so can use length in mem estimates)
+    #evTree = gs.bulk_evaltree(gateStringsToUse)
+    #
+    ##  Estimate & check intermediate memory
+    ##    - maybe make GateSet methods get intermediate estimates?
+    #intermedMem   = 8*(ng + ng*gd**2 + ng*gd**2*ne) # ~ bulk_dproduct
+    #if memLimit is not None and memLimit < intermedMem:
+    #    reductionFactor = float(intermedMem) / float(memLimit)
+    #    maxEvalSubTreeSize = int(ng / reductionFactor)
+    #else:
+    #    maxEvalSubTreeSize = None
+    #
+    #if memLimit is not None:
+    #    printer.log("Memory estimates: (%d spam labels," % ns + \
+    #        "%d gate strings, %d gateset params, %d gate dim)" % (ng,ne,gd), 2)
+    #    printer.log("Peristent: %g GB " % (persistentMem*C), 2)
+    #    printer.log("Intermediate: %g GB " % (intermedMem*C), 2)
+    #    printer.log("Limit: %g GB" % (memLimit*C), 2)
+    #    if maxEvalSubTreeSize is not None:
+    #        printer.log("Maximum eval sub-tree size = %d" % maxEvalSubTreeSize, 2)
+    #
+    #if maxEvalSubTreeSize is not None:
+    #    evTree.split(maxEvalSubTreeSize, None)
+    #
+    ##FUTURE: could use distributeMethod for memory distribution also via
+    ##  wrtBlockSize (even when comm is None)
+    #if comm is not None:
+    #    nprocs = comm.Get_size()
+    #    if distributeMethod == "gatestrings":
+    #        if not evTree.is_split():
+    #            evTree.split(None,nprocs)
+    #        else:
+    #            assert(maxEvalSubTreeSize is not None)
+    #            if len(evTree.get_sub_trees()) < nprocs:
+    #                evTree.split(None,nprocs)
+    #                if any([ len(sub)>maxEvalSubTreeSize for sub in evTree.get_sub_trees()]):
+    #                    evTree.split(maxEvalSubTreeSize, None) # fall back to split for memory
+    #    elif distributeMethod == "deriv":
+    #        pass #nothing more to do in this case
+    #    else:
+    #        raise ValueError("Invalid distribute method: %s" % distributeMethod)
+    #
+    #if (comm is None or comm.Get_rank() == 0) and evTree.is_split():
+    #    printer.log("Memory limit and/or MPI has imposed a division of the evaluation tree:", 2)
+    #    evTree.print_analysis()
 
 
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
@@ -2117,7 +2181,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
             v = _np.where( minusCntVecMx == 0, totalCntVec[None,:] * _np.where(probs >= a, probs, (-1.0/(3*a**2))*probs**3 + probs**2/a + a/3.0), v)
                     #special handling for f == 0 terms using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
             v = _np.sqrt( v )
-            add_time(timer_dict, "OBJECTIVE",_time.time()-tm) #TIMER!!!
+            add_time(timer_dict, "ML OBJECTIVE",_time.time()-tm) #TIMER!!!
             return v.reshape([KM])  #Note: no test for whether probs is in [0,1] so no guarantee that
                                     #      sqrt is well defined unless probClipInterval is set within [0,1].
 
@@ -2131,7 +2195,8 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
             gs.from_vector(vectorGS)
             gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree,
                                 prMxToFill=probs, clipTo=probClipInterval,
-                                check=check, comm=comm, timer_dict=timer_dict)
+                                check=check, comm=comm, wrtBlockSize=wrtBlkSize,
+                                timer_dict=timer_dict)
 
             pos_probs = _np.where(probs < min_p, min_p, probs)
             S = minusCntVecMx / min_p + totalCntVec[None,:]
@@ -2152,7 +2217,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
 
             jac = jac.reshape( [KM,vec_gs_len] )
             #if check_jacobian: _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
-            add_time(timer_dict, "JACOBIAN",_time.time()-tm) #TIMER!!!
+            add_time(timer_dict, "ML JACOBIAN",_time.time()-tm) #TIMER!!!
             return jac
 
     else: # standard (non-Poisson-picture) logl
@@ -2185,7 +2250,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
             v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
             v = _np.where( minusCntVecMx == 0, 0.0, v)
             v = _np.sqrt( v )
-            add_time(timer_dict, "OBJECTIVE",_time.time()-tm) #TIMER!!!
+            add_time(timer_dict, "ML OBJECTIVE",_time.time()-tm) #TIMER!!!
             return v.reshape([KM])  #Note: no test for whether probs is in [0,1] so no guarantee that
                                     #      sqrt is well defined unless probClipInterval is set within [0,1].
 
@@ -2199,7 +2264,8 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
             gs.from_vector(vectorGS)
             gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree,
                                 prMxToFill=probs, clipTo=probClipInterval,
-                                check=check, comm=comm, timer_dict=timer_dict)
+                                check=check, comm=comm, wrtBlockSize=wrtBlkSize,
+                                timer_dict=timer_dict)
 
             pos_probs = _np.where(probs < min_p, min_p, probs)
             S = minusCntVecMx / min_p
@@ -2219,17 +2285,21 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
 
             jac = jac.reshape( [KM,vec_gs_len] )
             #if check_jacobian: _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
-            add_time(timer_dict, "JACOBIAN",_time.time()-tm) #TIMER!!!
+            add_time(timer_dict, "ML JACOBIAN",_time.time()-tm) #TIMER!!!
             return jac
 
+    add_time(timer_dict, "do_mlgst pre-opt",_time.time()-tStart) #TIMER!!!
 
     #Run optimization (use leastsq)
+    tm = _time.time() # TIMER!!!
     x0 = gs.to_vector()
     opt_x, _, _, msg, flag = \
         _spo.leastsq( objective_func, x0, xtol=tol, ftol=tol, gtol=0,
                       maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=jacobian )
     printer.log("Least squares msg = %s; flag =%s" % (msg, flag), 2)
+    add_time(timer_dict, "do_mlgst leastsq",_time.time()-tm) #TIMER!!!
 
+    tm = _time.time() # TIMER!!!
     gs.from_vector(opt_x)
     #gs.log("MLGST", { 'tol': tol,  'maxiter': maxiter } )
 
@@ -2263,6 +2333,8 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
         else:
             printer.log("  **Warning** upper_bound_logL - logl = " + str(deltaLogL), 1)
 
+    add_time(timer_dict, "do_mlgst post-opt",_time.time()-tm) #TIMER!!!
+    add_time(timer_dict, "do_mlgst",_time.time()-tStart) #TIMER!!!
     return (logL_upperbound - deltaLogL), gs
 
 #SCRATCH - used for debugging logl objective function
@@ -2451,7 +2523,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
             if times is not None:
                 tNxt = _time.time();
                 times.append(('MLGST Iteration %d: chi2-opt' % (i+1),tNxt-tRef))
-                tRef=tNxt
+                tRef2=tNxt
 
             logL_ub = _tools.logl_max(dataset, stringsToEstimate, None, poissonPicture, check)
             maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval,
@@ -2461,7 +2533,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
 
             if times is not None:
                 tNxt = _time.time();
-                times.append(('MLGST Iteration %d: logl-comp' % (i+1),tNxt-tRef))
+                times.append(('MLGST Iteration %d: logl-comp' % (i+1),tNxt-tRef2))
                 printer.log("Iteration %d took %.1fs" % (i+1,tNxt-tRef),2)
                 printer.log('',2) #extra newline
                 tRef=tNxt

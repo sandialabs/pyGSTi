@@ -12,9 +12,15 @@ import numpy.linalg as _nla
 import time as _time
 
 from ..tools import gatetools as _gt
+from ..tools import mpitools as _mpit
 from .verbosityprinter import VerbosityPrinter
 #import evaltree as _evaltree
 #import sys #DEBUG - for printing
+
+
+#######################################################
+#DEBUG 
+#######################################################
 
 #TIMER FNS (TODO: move to own module within tools?)
 def add_time(timer_dict, timerName, val):
@@ -24,6 +30,126 @@ def add_time(timer_dict, timerName, val):
         else:
             timer_dict[timerName] = val
 
+import objgraph #DEBUG - for memory profiling
+import os as _os
+import resource as _resource
+import psutil as _psutil
+BtoGB = 1.0/(1024.0**3)
+def print_mem_usage(prefix):
+    from mpi4py import MPI
+    if MPI.COMM_WORLD.Get_rank() == 0:
+        p = _psutil.Process(_os.getpid())
+        print("MEM USAGE [%s] = %.2f GB" % (prefix,p.memory_info()[0] * BtoGB))
+
+
+def build_permute_copy_order(indices):
+    #Construct a list of the operations needed to "take" indices
+    # out of an array.
+
+    nIndices = len(indices)
+    flgs = _np.zeros(nIndices,'bool') #flags indicating an index has been processed
+    shelved = {}
+    copyList = []
+
+    while True: #loop until we've processed everything
+
+        #The cycle has ended.  Now find an unprocessed
+        # destination to begin a new cycle
+        for i in range(nIndices):
+            if flgs[i] == False:
+                if indices[i] == i: # index i is already where it need to be!
+                    flgs[i] = True
+                else:
+                    cycleFirstIndex = iDest = i
+                    if cycleFirstIndex in indices:
+                        copyList.append( (-1,i) ) # iDest == -1 means copy to offline storage
+                    break;
+        else:
+            break #everything has been processed -- we're done!
+
+        while True: # loop over cycle
+            
+            # at this point, data for index iDest has been stored or copied
+            iSrc = indices[iDest] # get source index for current destination
+    
+            # record appropriate copy command
+            if iSrc == cycleFirstIndex:
+                copyList.append( (iDest, -1) ) # copy from offline storage
+                flgs[iDest] = True
+    
+                #end of this cycle since we've hit our starting point, 
+                # but no need to shelve first cycle element in this case.
+                break #(end of cycle)
+            else:
+                if iSrc in shelved: #original iSrc is now at index shelved[iSrc]
+                    iSrc = shelved[iSrc]
+    
+                copyList.append( (iDest,iSrc) ) # => copy src -> dest
+                flgs[iDest] = True
+    
+                if iSrc < nIndices:
+                    #Continue cycle (swapping within "active" (index < nIndices) region)
+                    iDest = iSrc # make src the new dest
+                else:
+                    #end of this cycle, and first cycle index hasn't been
+                    # used, so shelve it (store it for later use) if it 
+                    # will be needed in the future.
+                    if cycleFirstIndex in indices:
+                        copyList.append( (iSrc,-1) )
+                        shelved[cycleFirstIndex] = iSrc
+
+                    break #(end of cycle)
+            
+    return copyList
+
+# X  X     X
+# 0  1  2  3 (nIndices == 4)
+# 3, 0, 7, 4
+# store 0
+# 3 -> 0
+# 4 -> 3
+# stored[0] -> 4, shelved[0] = 4
+# store 1
+# shelved[0]==4 -> 1, NO((stored[1] -> 4, shelved[1] = 4)) B/C don't need index 1
+# store 2
+# 7 -> 2
+# NO((Stored[2] -> 7, istore[2] = 7))
+
+
+def inplace_take(a, indices, axis=None, copyList=None):
+    check = a.take(indices, axis=axis) #DEBUGGING
+    return check #FIX FOR NOW = COPY
+
+    if axis is None:
+        def mkindex(i):
+            return i
+    else:
+        def mkindex(i):
+            sl = [slice(None)] * a.ndim
+            sl[axis] = i
+            return sl
+
+    if copyList is None:
+        copyList = build_permute_copy_order(indices)
+
+    store = None
+    for iDest,iSrc in copyList:
+        if iDest == -1: store = a[mkindex(iSrc)].copy() #otherwise just get a view!
+        elif iSrc == -1: a[mkindex(iDest)] = store
+        else: a[mkindex(iDest)] = a[mkindex(iSrc)]
+        
+    ret = a[mkindex(slice(0,len(indices)))]
+    if _np.linalg.norm(ret-check) > 1e-8 :
+        print("ERROR CHECK FAILED")
+        print("ret = ",ret)
+        print("check = ",check)
+        print("diff = ",_np.linalg.norm(ret-check))
+        assert(False)
+    #check = None #free mem?
+    #return ret
+    return check
+    
+            
 
 
 # Smallness tolerances, used internally for conditional scaling required
@@ -443,6 +569,9 @@ class GateSetCalculator(object):
         flattened_d2prod = _np.concatenate( to_concat, axis=1 ) # concat along kl (nParams1)
 
         if wrtFilter is not None:
+            # could do this, but may be slow (no copyList precomputed) and
+            # it shouldn't be a mem bottleneck, so just use numpy.take
+            #flattened_d2prod = inplace_take(flattened_d2prod, wrtFilter, axis=2) 
             flattened_d2prod = flattened_d2prod.take(wrtFilter, axis=2)
               #take subset of 2nd derivatives w.r.t. gateset parameter
 
@@ -981,127 +1110,6 @@ class GateSetCalculator(object):
 #        return evalTree
 
 
-    def _distribute_indices(self, indices, comm, verbosity=0):
-        #Doesn't need to be a member function: TODO - move to
-        # an MPI helper class?
-
-        printer = VerbosityPrinter.build_printer(verbosity)
-
-        if comm is None:
-            nprocs, rank = 1, 0
-        else:
-            nprocs = comm.Get_size()
-            rank = comm.Get_rank()
-
-        nIndices = len(indices)
-        if nprocs >= nIndices:
-            nloc_std =  nprocs // nIndices
-            extra = nprocs - nloc_std*nIndices # extra procs
-            if rank < extra*(nloc_std+1):
-                loc_indices = [ indices[rank // (nloc_std+1)] ]
-            else:
-                loc_indices = [ indices[extra + (rank-extra*(nloc_std+1)) // nloc_std] ]
-
-            # owners dict gives rank of first (chief) processor for each index
-            owners = { indices[i]: i*(nloc_std+1) for i in range(extra) }
-            owners.update( { indices[i]: extra*(nloc_std+1) + (i-extra)*nloc_std
-                             for i in range(extra, nIndices) } )
-            if comm is not None:
-                loc_comm = comm.Split(color=loc_indices[0], key=rank)
-            else:
-                loc_comm = None
-
-            #OLD -- TODO: remove
-            #loc_indices = [ indices[rank] ] if rank < nIndices else []
-            #owners = { indices[r]: r for r in range(nIndices) }
-        else:
-            nloc_std =  nIndices // nprocs
-            nloc_last = nIndices - nloc_std*(nprocs-1)
-            nloc = nloc_last if rank == nprocs-1 else nloc_std
-            nstart = rank * nloc_std
-            loc_indices = [ indices[i] for i in range(nstart,nstart+nloc)]
-
-            owners = { } #which rank "owns" each index
-            for r in range(nprocs-1):
-                nstart = r * nloc_std
-                for i in range(nstart,nstart+nloc_std):
-                    owners[indices[i]] = r
-            nstart = (nprocs-1)*nloc_std
-            for i in range(nstart,nstart+nloc_last):
-                owners[indices[i]] = (nprocs-1)
-            loc_comm = None
-
-        if rank == 0:
-            printer.log("*** Distributing %d indices amongst %s processors ***"% \
-            (nIndices, nprocs), 3)
-        printer.log("    Rank %d (%d): %s" % (rank, len(loc_indices),
-                                        str(loc_indices)), 3)
-
-        return loc_indices, owners, loc_comm
-
-
-    def _gather_subtree_results(self, evt, spam_label_rows,
-                                gIndex_owners, my_gIndices,
-                                result_tup, my_results, comm):
-        #Doesn't need to be a member function: TODO - move to
-        # an MPI helper class?
-        S = evt.num_final_strings() # number of strings
-        result_range = list(range(len(result_tup)))
-
-        assert(result_tup[-1].shape[1] == S) #when this isn't true, (e.g. flat==True
-        #  # for bulk_dproduct), we need to copy blocks instead of single indices
-        #  # in the myFinalToParentFinalMap line below...
-
-        for i,subtree in enumerate(evt.get_sub_trees()):
-            li = my_gIndices.index(i) if (i in my_gIndices) else None
-
-            #Perform broadcasts for each spam label in definite order on all procs
-            #  (just iterating over spam_label_rows.items() does *not* ensure this)
-            spamLabels = sorted(list(spam_label_rows.keys()))
-            for spamLabel in spamLabels:
-                rowIndex = spam_label_rows[spamLabel]
-                for r in result_range:
-                    if result_tup[r] is None:
-                        continue #skip None result_tup elements
-
-                    sub_result = my_results[li][spamLabel][r] \
-                        if (li is not None) else None
-
-                    if comm is None: #No comm; rank 0 owns everything
-                        assert(gIndex_owners[i] == 0)
-                    else:
-                        sub_result = comm.bcast(sub_result, root=gIndex_owners[i])
-
-                    if evt.is_split():
-                        result_tup[r][rowIndex][ subtree.myFinalToParentFinalMap ] = sub_result
-                    else: #subtree is actually the entire tree (evt), so just "copy" all
-                        result_tup[r][rowIndex] = sub_result
-
-
-    def _gather_blk_results(self, nBlocks, blk_owners, my_blkIndices,
-                            my_blk_results, comm):
-
-        if comm is None:
-            assert(all([x == 0 for x in list(blk_owners.values())]))
-            assert(nBlocks == len(my_blk_results))
-            all_blk_results = [ my_blk_results ]
-            all_blk_indices = [ my_blkIndices ]
-        else:
-            # gather a list of each processor's list of computed "blocks"
-            all_blk_results = comm.allgather(my_blk_results)
-            all_blk_indices = comm.allgather(my_blkIndices)
-
-        # edit this list to put blocks in the correct order
-        blk_list = []
-        for iBlk in range(nBlocks):
-            owner_rank = blk_owners[iBlk]
-            loc_iBlk = all_blk_indices[owner_rank].index(iBlk)
-            blk_list.append( all_blk_results[owner_rank][loc_iBlk] )
-
-        return blk_list
-
-
-
     def _compute_product_cache(self, evalTree, comm=None):
         """
         Computes a tree of products in a linear cache space. Will use a split
@@ -1152,9 +1160,10 @@ class GateSetCalculator(object):
         if comm is not None and evalTree.is_split():
             #Parallelize using sub-trees
             subtrees = evalTree.get_sub_trees()
-            allSubTreeIndices = list(range(len(subtrees)))
-            mySubTreeIndices, subTreeOwners, mySubComm = \
-                self._distribute_indices(allSubTreeIndices, comm)
+            mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+            #allSubTreeIndices = list(range(len(subtrees)))
+            #mySubTreeIndices, subTreeOwners, mySubComm = \
+            #    self._distribute_indices(allSubTreeIndices, comm)
 
             #print "MPI: _compute_product_cache over %d subtrees (rank %d computing %s)" \
             #    % (len(subtrees), comm.Get_rank(), str(mySubTreeIndices))
@@ -1182,7 +1191,7 @@ class GateSetCalculator(object):
         scaleCache = _np.zeros( cacheSize, 'd' )
 
         #First element of cache are given by evalTree's initial single- or zero-gate labels
-        for i,gateLabel in enumerate(evalTree.get_init_labels()):
+        for i,gateLabel in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
             if gateLabel == "": #special case of empty label == no gate
                 prodCache[i] = _np.identity( dim )
                 # Note: scaleCache[i] = 0.0 from initialization
@@ -1192,16 +1201,13 @@ class GateSetCalculator(object):
                 prodCache[i] = gate / nG
                 scaleCache[i] = _np.log(nG)
 
-        nZeroAndSingleStrs = len(evalTree.get_init_labels())
-
         #evaluate gate strings using tree (skip over the zero and single-gate-strings)
         #cnt = 0
-        for (i, tup) in enumerate(evalTree[nZeroAndSingleStrs:],start=nZeroAndSingleStrs):
-
+        for i in evalTree.get_evaluation_order():
             # combine iLeft + iRight => i
             # LEXICOGRAPHICAL VS MATRIX ORDER Note: we reverse iLeft <=> iRight from evalTree because
             # (iRight,iLeft,iFinal) = tup implies gatestring[i] = gatestring[iLeft] + gatestring[iRight], but we want:
-            (iRight,iLeft,_) = tup   # since then matrixOf(gatestring[i]) = matrixOf(gatestring[iLeft]) * matrixOf(gatestring[iRight])
+            (iRight,iLeft) = evalTree[i]   # since then matrixOf(gatestring[i]) = matrixOf(gatestring[iLeft]) * matrixOf(gatestring[iRight])
             L,R = prodCache[iLeft], prodCache[iRight]
             prodCache[i] = _np.dot(L,R)
             scaleCache[i] = scaleCache[iLeft] + scaleCache[iRight]
@@ -1228,7 +1234,6 @@ class GateSetCalculator(object):
         from using a split tree.
         """
 
-        tStart = _time.time() #TIMER!!!
         dim = self.dim
         #nGateStrings = evalTree.num_final_strings()
         nGateDerivCols = self.tot_gate_params if (wrtFilter is None) else len(wrtFilter)
@@ -1237,7 +1242,9 @@ class GateSetCalculator(object):
 
         # ------------------------------------------------------------------
 
+        #print("MPI: _compute_dproduct_cache begin: %d deriv cols" % nGateDerivCols)
         if comm is not None and comm.Get_size() > 1:
+            #print("MPI: _compute_dproduct_cache called w/comm size %d" % comm.Get_size())
             # parallelize of deriv cols, then sub-trees (if available and necessary)
 
             if comm.Get_size() > nGateDerivCols:
@@ -1280,9 +1287,9 @@ class GateSetCalculator(object):
             # Use comm to distribute columns
             allDerivColIndices = list(range(nGateDerivCols)) if (wrtFilter is None) else wrtFilter
             myDerivColIndices, _, mySubComm = \
-                self._distribute_indices(allDerivColIndices, comm)
-            #print "MPI: _compute_dproduct_cache over %d cols (%s) (rank %d computing %s)" \
-            #    % (nGateDerivCols, str(allDerivColIndices), comm.Get_rank(), str(myDerivColIndices))
+                _mpit.distribute_indices(allDerivColIndices, comm)
+            #print("MPI: _compute_dproduct_cache over %d cols (%s) (rank %d computing %s)" \
+            #    % (nGateDerivCols, str(allDerivColIndices), comm.Get_rank(), str(myDerivColIndices)))
 
             if mySubComm is not None and mySubComm.Get_size() > 1:
                 _warnings.warn("Too many processors to make use of in " +
@@ -1300,6 +1307,7 @@ class GateSetCalculator(object):
             return _np.concatenate(all_results, axis=1)
 
         # ------------------------------------------------------------------
+        tSerialStart = _time.time() #TIMER!!!
 
         if evalTree.is_split():
             _warnings.warn("Ignoring tree splitting in dproduct cache calc.")
@@ -1309,7 +1317,7 @@ class GateSetCalculator(object):
 
         # This iteration **must** match that in bulk_evaltree
         #   in order to associate the right single-gate-strings w/indices
-        for i,gateLabel in enumerate(evalTree.get_init_labels()):
+        for i,gateLabel in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
             if gateLabel == "": #special case of empty label == no gate
                 assert(i == 0) #tree convention
                 dProdCache[i] = _np.zeros( deriv_shape )
@@ -1319,19 +1327,17 @@ class GateSetCalculator(object):
                 dProdCache[i] = dgate / _np.exp(scaleCache[i])
                 #nnzCache[i] = _np.count_nonzero(dProdCache[i])
 
-        nZeroAndSingleStrs = len(evalTree.get_init_labels())
-
         #nScaleCnt = nNonScaleCnt = dScaleCnt = 0 #TIMER!!!
         times = []
         #DEBUG print "dprod time to main loop = ",(_time.time()-tStart)
 
         #evaluate gate strings using tree (skip over the zero and single-gate-strings)
-        for (i,tup) in enumerate(evalTree[nZeroAndSingleStrs:],start=nZeroAndSingleStrs):
+        for i in evalTree.get_evaluation_order():
             tm = _time.time() #TIMER
             # combine iLeft + iRight => i
             # LEXICOGRAPHICAL VS MATRIX ORDER Note: we reverse iLeft <=> iRight from evalTree because
             # (iRight,iLeft,iFinal) = tup implies gatestring[i] = gatestring[iLeft] + gatestring[iRight], but we want:
-            (iRight,iLeft,_) = tup   # since then matrixOf(gatestring[i]) = matrixOf(gatestring[iLeft]) * matrixOf(gatestring[iRight])
+            (iRight,iLeft) = evalTree[i]   # since then matrixOf(gatestring[i]) = matrixOf(gatestring[iLeft]) * matrixOf(gatestring[iRight])
             L,R = prodCache[iLeft], prodCache[iRight]
             dL,dR = dProdCache[iLeft], dProdCache[iRight]
             dProdCache[i] = _np.dot(dL, R) + \
@@ -1349,6 +1355,9 @@ class GateSetCalculator(object):
                 _warnings.warn("Would have scaled dProd but now will not alter scaleCache.")
 
         #print("AVG dprod cache avg time = ",_np.average(times), "times=",len(evalTree[nZeroAndSingleStrs:]), "total = ",(_time.time()-tStart)) #TIMER
+        add_time(timer_dict,"dproduct_cache serial", _time.time()-tSerialStart)
+        add_time(timer_dict,"dproduct_cache col count", nGateDerivCols)
+
         return dProdCache
 
 
@@ -1419,7 +1428,7 @@ class GateSetCalculator(object):
             # Use comm to distribute columns
             allDeriv2ColIndices = list(range(nGateDerivCols2)) if (wrtFilter is None) else wrtFilter
             myDerivColIndices, _, mySubComm = \
-                self._distribute_indices(allDeriv2ColIndices, comm)
+                _mpit.distribute_indices(allDeriv2ColIndices, comm)
             #print "MPI: _compute_hproduct_cache over %d cols (rank %d computing %s)" \
             #    % (nGateDerivCols2, comm.Get_rank(), str(myDerivColIndices))
 
@@ -1444,7 +1453,7 @@ class GateSetCalculator(object):
         hProdCache = _np.zeros( (cacheSize,) + hessn_shape )
 
         #First element of cache are given by evalTree's initial single- or zero-gate labels
-        for i, _ in enumerate(evalTree.get_init_labels()):
+        for i,_ in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
             hProdCache[i] = _np.zeros( hessn_shape )
             #assume all gate elements are at most linear in params,
             # all hessiansl for single- or zero-gate strings are zero.
@@ -1455,8 +1464,6 @@ class GateSetCalculator(object):
             #else:
             #    hgate = self.hproduct( (gateLabel,), wrtFilter=wrtFilter)
             #    hProdCache[i] = hgate / _np.exp(scaleCache[i])
-
-        nZeroAndSingleStrs = len(evalTree.get_init_labels())
 
         #Function for "symmetric dLdR" ("dLdR + swapaxes(dLdR)") term for Hessian
         if wrtFilter is None:
@@ -1476,12 +1483,12 @@ class GateSetCalculator(object):
         #times = [] #TIMER
 
         #evaluate gate strings using tree (skip over the zero and single-gate-strings)
-        for (i,tup) in enumerate(evalTree[nZeroAndSingleStrs:],start=nZeroAndSingleStrs):
+        for i in evalTree.get_evaluation_order():
 
             # combine iLeft + iRight => i
             # LEXICOGRAPHICAL VS MATRIX ORDER Note: we reverse iLeft <=> iRight from evalTree because
             # (iRight,iLeft,iFinal) = tup implies gatestring[i] = gatestring[iLeft] + gatestring[iRight], but we want:
-            (iRight,iLeft,_) = tup   # since then matrixOf(gatestring[i]) = matrixOf(gatestring[iLeft]) * matrixOf(gatestring[iRight])
+            (iRight,iLeft,_) = evalTree[i]   # since then matrixOf(gatestring[i]) = matrixOf(gatestring[iLeft]) * matrixOf(gatestring[iRight])
             L,R = prodCache[iLeft], prodCache[iRight]
             dL,dR = dProdCache[iLeft], dProdCache[iRight]
             hL,hR = hProdCache[iLeft], hProdCache[iRight]
@@ -1537,9 +1544,11 @@ class GateSetCalculator(object):
         prodCache, scaleCache = self._compute_product_cache(evalTree,comm)
 
         #use cached data to construct return values
-        finalIndxList = evalTree.get_list_of_final_value_tree_indices()
-        Gs = prodCache.take(  finalIndxList, axis=0 ) #shape == ( len(gatestring_list), dim, dim ), Gs[i] is product for i-th gate string
-        scaleExps = scaleCache.take( finalIndxList )
+        Gs = evalTree.final_view(prodCache, axis=0)
+           #shape == ( len(gatestring_list), dim, dim ), Gs[i] is product for i-th gate string
+        #OLD: Gs = prodCache.take(  finalIndxList, axis=0 ) #shape == ( len(gatestring_list), dim, dim ), Gs[i] is product for i-th gate string
+        scaleExps = evalTree.final_view(scaleCache)
+        #OLD: scaleExps = scaleCache.take( finalIndxList )
 
         old_err = _np.seterr(over='ignore')
         scaleVals = _np.exp(scaleExps) #may overflow, but OK if infs occur here
@@ -1633,16 +1642,20 @@ class GateSetCalculator(object):
                                                   comm, wrtFilter)
 
         #use cached data to construct return values
-        finalIndxList = evalTree.get_list_of_final_value_tree_indices()
-
         old_err = _np.seterr(over='ignore')
-        scaleExps = scaleCache.take( finalIndxList )
+        scaleExps = evalTree.final_view( scaleCache )
+        #OLD: scaleExps = scaleCache.take( finalIndxList )
         scaleVals = _np.exp(scaleExps) #may overflow, but OK if infs occur here
         _np.seterr(**old_err)
 
         if bReturnProds:
-            Gs  = prodCache.take(  finalIndxList, axis=0 ) #shape == ( len(gatestring_list), dim, dim ), Gs[i] is product for i-th gate string
-            dGs = dProdCache.take( finalIndxList, axis=0 ) #shape == ( len(gatestring_list), nGateDerivCols, dim, dim ), dGs[i] is dprod_dGates for ith string
+            Gs  = evalTree.final_view(prodCache, axis=0)
+              #shape == ( len(gatestring_list), dim, dim ), 
+              # Gs[i] is product for i-th gate string
+
+            dGs = evalTree.final_view(dProdCache, axis=0) 
+              #shape == ( len(gatestring_list), nGateDerivCols, dim, dim ),
+              # dGs[i] is dprod_dGates for ith string
 
             if not bScale:
                 old_err = _np.seterr(over='ignore', invalid='ignore')
@@ -1664,7 +1677,9 @@ class GateSetCalculator(object):
             return (dGs, Gs, scaleVals) if bScale else (dGs, Gs)
 
         else:
-            dGs = dProdCache.take( finalIndxList, axis=0 ) #shape == ( len(gatestring_list), nGateDerivCols, dim, dim ), dGs[i] is dprod_dGates for ith string
+            dGs = evalTree.final_view(dProdCache, axis=0) 
+              #shape == ( len(gatestring_list), nGateDerivCols, dim, dim ),
+              # dGs[i] is dprod_dGates for ith string
 
             if not bScale:
                 old_err = _np.seterr(over='ignore', invalid='ignore')
@@ -1788,17 +1803,23 @@ class GateSetCalculator(object):
                                                   scaleCache, comm, wrtFilter)
 
         #use cached data to construct return values
-        finalIndxList = evalTree.get_list_of_final_value_tree_indices()
         old_err = _np.seterr(over='ignore')
-        scaleExps = scaleCache.take( finalIndxList )
+        scaleExps = evalTree.final_view(scaleCache)
         scaleVals = _np.exp(scaleExps) #may overflow, but OK if infs occur here
         _np.seterr(**old_err)
 
         if bReturnDProdsAndProds:
-            Gs  = prodCache.take(  finalIndxList, axis=0 ) #shape == ( len(gatestring_list), dim, dim ), Gs[i] is product for i-th gate string
-            dGs = dProdCache.take( finalIndxList, axis=0 ) #shape == ( len(gatestring_list), nGateDerivCols, dim, dim ), dGs[i] is dprod_dGates for ith string
-            hGs = hProdCache.take( finalIndxList, axis=0 ) #shape == ( len(gatestring_list), nGateDerivCols, nGateDerivCols, dim, dim ), hGs[i]
-                                                           # is hprod_dGates for ith string
+            Gs  = evalTree.final_view( prodCache, axis=0)
+              #shape == ( len(gatestring_list), dim, dim ), 
+              # Gs[i] is product for i-th gate string
+
+            dGs = evalTree.final_view(dProdCache, axis=0)
+              #shape == ( len(gatestring_list), nGateDerivCols, dim, dim ),
+              # dGs[i] is dprod_dGates for ith string
+
+            hGs = evalTree.final_view(hProdCache, axis=0)
+              #shape == ( len(gatestring_list), nGateDerivCols, nGateDerivCols, dim, dim ),
+              # hGs[i] is hprod_dGates for ith string
 
             if not bScale:
                 old_err = _np.seterr(over='ignore', invalid='ignore')
@@ -1816,7 +1837,8 @@ class GateSetCalculator(object):
             return (hGs, dGs, Gs, scaleVals) if bScale else (hGs, dGs, Gs)
 
         else:
-            hGs = hProdCache.take( finalIndxList, axis=0 ) #shape == ( len(gatestring_list), nGateDerivCols, nGateDerivCols, dim, dim )
+            hGs = evalTree.final_view(hProdCache, axis=0) 
+              #shape == ( len(gatestring_list), nGateDerivCols, nGateDerivCols, dim, dim )
 
             if not bScale:
                 old_err = _np.seterr(over='ignore', invalid='ignore')
@@ -2231,23 +2253,27 @@ class GateSetCalculator(object):
                 assert(remainder_row_index is None) # ensure there is at most one dummy spam label
                 remainder_row_index = rowIndex
 
-        #distribute procs across subtrees (groups if needed)
+        #get distribution across subtrees (groups if needed)
         subtrees = evalTree.get_sub_trees()
-        mySubTreeIndices, subTreeOwners, mySubComm = \
-            self._distribute_indices(list(range(len(subtrees))), comm)
+        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+        #mySubTreeIndices, subTreeOwners, mySubComm = \
+        #    self._distribute_indices(list(range(len(subtrees))), comm)
 
         #eval on each local subtree
         my_results = []
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
-            finalIndxList = evalSubTree.get_list_of_final_value_tree_indices()
+
+            #Free memory from previous subtree iteration before computing caches
+            scaleVals = Gs = None
 
             #Fill cache info
             prodCache, scaleCache = self._compute_product_cache(evalSubTree, mySubComm)
 
             #use cached data to final values
-            scaleVals = self._scaleExp( scaleCache.take( finalIndxList ) )
-            Gs  = prodCache.take(  finalIndxList, axis=0 ) #( nGateStrings, dim, dim )
+            scaleVals = self._scaleExp( evalSubTree.final_view(scaleCache) )
+            Gs  = evalSubTree.final_view( prodCache, axis=0)
+              # ( nGateStrings, dim, dim )
 
             def calc_from_spamlabel(spamLabel):
                 old_err = _np.seterr(over='ignore')
@@ -2260,7 +2286,7 @@ class GateSetCalculator(object):
             my_results.append(sub_results) #sub_results is a dict (keys = spam labels)
 
         #collect/gather results
-        self._gather_subtree_results(evalTree, spam_label_rows, subTreeOwners,
+        _mpit.gather_subtree_results(evalTree, spam_label_rows, subTreeOwners,
                                      mySubTreeIndices, (mxToFill,),
                                      my_results, comm)
 
@@ -2372,26 +2398,42 @@ class GateSetCalculator(object):
         else:
             wrtFilters = None
 
+        print_mem_usage("Begin bulk_fill_dprobs")
+        #if comm is None or comm.Get_rank() == 0:
+        #    objgraph.show_growth(limit=50) 
 
-        #distribute procs across subtrees (groups if needed)
+        #get distribution across subtrees (groups if needed)
         subtrees = evalTree.get_sub_trees()
-        mySubTreeIndices, subTreeOwners, mySubComm = \
-            self._distribute_indices(list(range(len(subtrees))), comm)
+        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+        #OLD
+        #mySubTreeIndices, subTreeOwners, mySubComm = \
+        #    self._distribute_indices(list(range(len(subtrees))), comm)
+        #print("DEBUG: %d subtrees, comm size=%d, subComm size = %d" % 
+        #      (len(subtrees), comm.Get_size() if (comm is not None) else 0,
+        #       mySubComm.Get_size() if (mySubComm is not None) else 0))
 
         #eval on each local subtree
         my_results = []
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
-            finalIndxList = evalSubTree.get_list_of_final_value_tree_indices()
+
+            #Free memory from previous subtree iteration before computing caches
+            scaleVals = Gs = dGs = None
 
             #Fill cache info (not requiring column distribution)
+            tm = _time.time()
             prodCache, scaleCache = self._compute_product_cache(evalSubTree, mySubComm)
+            add_time(timer_dict, "bulk_fill_dprobs compute_product_cache", _time.time()-tm)
+            print_mem_usage("Post _compute_product_cache")
 
             #use cached data to final values
-            scaleVals = self._scaleExp( scaleCache.take( finalIndxList ) )
-            Gs  = prodCache.take(  finalIndxList, axis=0 ) #( nGateStrings, dim, dim )
+            scaleVals = self._scaleExp( evalSubTree.final_view( scaleCache ))
+            Gs  = evalSubTree.final_view( prodCache, axis=0 )
+              #( nGateStrings, dim, dim )
+            print_mem_usage("Post product take")
 
             def calc_from_spamlabel(spamLabel):
+                tm = _time.time()
                 old_err = _np.seterr(over='ignore')
                 rho,E = self._rhoE_from_spamLabel(spamLabel)
 
@@ -2400,6 +2442,7 @@ class GateSetCalculator(object):
                 vdp = self._dprobs_from_rhoE(spamLabel, rho, E, Gs, dGs,
                                              scaleVals, wrtFilters)
                 _np.seterr(**old_err)
+                add_time(timer_dict, "bulk_fill_dprobs calc_from_spamlabel", _time.time()-tm)
                 return vp,vdp
 
             #Set wrtBlockSize to use available processors if it isn't specified
@@ -2412,16 +2455,19 @@ class GateSetCalculator(object):
             else:
                 blkSize = None # wrtFilter dictates block
 
-
             if blkSize is None:
                 #Fill derivative cache info
                 gatesFilter = wrtFilters['gates'] if (wrtFilters is not None) else None
                 dProdCache = self._compute_dproduct_cache(evalSubTree, prodCache, scaleCache,
                                                           mySubComm, gatesFilter, timer_dict)
-                dGs = dProdCache.take( finalIndxList, axis=0 ) #( nGateStrings, nDerivCols, dim, dim )
+                print_mem_usage("Post compute_dproduct_cache")
+                dGs = evalSubTree.final_view(dProdCache, axis=0)
+                  #( nGateStrings, nDerivCols, dim, dim )
+                print_mem_usage("Post compute_dproduct_cache take")
 
                 #Compute all requested derivative columns at once
                 sub_results = self._compute_sub_result(spam_label_rows, calc_from_spamlabel)
+                print_mem_usage("Post compute sub results")
 
             else: # Divide columns into blocks of at most blkSize
                 assert(wrtFilter is None) #cannot specify both wrtFilter and blkSize
@@ -2439,36 +2485,52 @@ class GateSetCalculator(object):
                 #Compute spam derivative columns and possibly probs
                 # (computation that is *not* divided into blocks)
                 sub_results = self._compute_sub_result(spam_label_rows, calc_from_spamlabel)
+                print_mem_usage("Post compute sub results B")
 
                 #distribute derivative computation across blocks
                 myBlkIndices, blkOwners, blkComm = \
-                    self._distribute_indices(list(range(nBlks)), mySubComm)
+                    _mpit.distribute_indices(list(range(nBlks)), mySubComm)
                 if blkComm is not None:
-                    _warnings.warn("Note: more CPUs than derivative columns!")
+                    _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
+                       +" than derivative columns(%d)!" % self.tot_gate_params 
+                       +" [blkSize = %d, nBlks=%d]" % (blkSize,nBlks))
+                #print("DEBUG: %d blks, subComm size=%d, blkComm size = %d" % 
+                #      (nBlks, mySubComm.Get_size() if (mySubComm is not None) else 0,
+                #       blkComm.Get_size() if (blkComm is not None) else 0))
+                #print("DEBUG: myBlkIndices = ",myBlkIndices)
+
 
                 def calc_vdp_from_spamlabel(spamLabel,wrt):
+                    tm = _time.time()
                     old_err = _np.seterr(over='ignore')
                     rho,E = self._rhoE_from_spamLabel(spamLabel)
                     vdp = self._dprobs_from_rhoE(spamLabel, rho, E, Gs, dGs,
                                                  scaleVals, {'preps':[],'effects':[],
                                                              'gates':wrt })
                     _np.seterr(**old_err)
+                    add_time(timer_dict, "bulk_fill_dprobs calc_vdp_from_spamlabel", _time.time()-tm)
                     return None,vdp # None in vp place so _compute_sub_result works
 
                 blk_results = []
                 for iBlk in myBlkIndices:
+                    dGs = None #free mem from previous dGs before allocating new dProdCache
                     dProdCache = self._compute_dproduct_cache(evalSubTree, prodCache, scaleCache,
                                                               blkComm, blocks[iBlk], timer_dict)
-                    dGs = dProdCache.take( finalIndxList, axis=0 ) #( nGateStrings, nDerivCols, dim, dim )
+                    print_mem_usage("Post compute_dproduct_cache B")
+                    dGs = evalSubTree.final_view(dProdCache, axis=0)
+                      #( nGateStrings, nDerivCols, dim, dim )
+                    print_mem_usage("Post compute_dproduct_cache take B")
                     dG_results = self._compute_sub_result(
                         spam_label_rows, lambda sl: calc_vdp_from_spamlabel(sl,blocks[iBlk]))
                     blk_results.append( dG_results )
+                    print_mem_usage("Post dG_results B")
 
                 #gather results
                 tm = _time.time()
-                all_blk_results = self._gather_blk_results(nBlks, blkOwners, myBlkIndices,
+                all_blk_results = _mpit.gather_blk_results(nBlks, blkOwners, myBlkIndices,
                                                            blk_results, mySubComm)
-                add_time(timer_dict, "MPI IPC", _time.time()-tm)
+                add_time(timer_dict, "MPI IPC1", _time.time()-tm)
+                print_mem_usage("Post gather blocks")
 
                 for spamLabel in sub_results:
                     to_concat = [ sub_results[spamLabel][1] ] \
@@ -2482,10 +2544,11 @@ class GateSetCalculator(object):
 
         #collect/gather results
         tm = _time.time()
-        self._gather_subtree_results(evalTree, spam_label_rows, subTreeOwners,
+        _mpit.gather_subtree_results(evalTree, spam_label_rows, subTreeOwners,
                                      mySubTreeIndices, (prMxToFill, mxToFill),
-                                     my_results, comm)
-        add_time(timer_dict, "MPI IPC", _time.time()-tm)
+                                     my_results, comm, timer_dict)
+        add_time(timer_dict, "MPI IPC2", _time.time()-tm)
+        print_mem_usage("Post gather subtrees")
 
         if clipTo is not None and prMxToFill is not None:
             _np.clip( prMxToFill, clipTo[0], clipTo[1], out=prMxToFill ) # in-place clip
@@ -2495,6 +2558,7 @@ class GateSetCalculator(object):
                         clipTo=clipTo)
         add_time(timer_dict, "bulk_fill_dprobs", _time.time()-tStart)
         add_time(timer_dict, "bulk_fill_dprobs count", 1)
+        print_mem_usage("Ending bulk_fill_dprobs")
 
 
 
@@ -2589,16 +2653,19 @@ class GateSetCalculator(object):
             wrtFilters = None
 
 
-        #distribute procs across subtrees (groups if needed)
+        #get distribution across subtrees (groups if needed)
         subtrees = evalTree.get_sub_trees()
-        mySubTreeIndices, subTreeOwners, mySubComm = \
-            self._distribute_indices(list(range(len(subtrees))), comm)
+        mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+        #mySubTreeIndices, subTreeOwners, mySubComm = \
+        #    self._distribute_indices(list(range(len(subtrees))), comm)
 
         #eval on each local subtree
         my_results = []
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
-            finalIndxList = evalSubTree.get_list_of_final_value_tree_indices()
+
+            #Free memory from previous subtree iteration before computing caches
+            scaleVals = Gs = dGs = hGs = None
 
             #Fill cache info (not requiring column distribution)
             prodCache, scaleCache = self._compute_product_cache(evalSubTree, mySubComm)
@@ -2606,9 +2673,11 @@ class GateSetCalculator(object):
                                                       mySubComm, None) #wrtFilter *not* for 1st derivs
 
             #use cached data to final values
-            scaleVals = self._scaleExp( scaleCache.take( finalIndxList ) )
-            Gs  = prodCache.take(  finalIndxList, axis=0 ) #( nGateStrings, dim, dim )
-            dGs = dProdCache.take( finalIndxList, axis=0 ) #( nGateStrings, nGateDerivCols, dim, dim )
+            scaleVals = self._scaleExp( evalSubTree.final_view(scaleCache))
+            Gs  = evalSubTree.final_view(prodCache, axis=0)
+              #( nGateStrings, dim, dim )
+            dGs = evalSubTree.final_view(dProdCache, axis=0) 
+              #( nGateStrings, nGateDerivCols, dim, dim )
 
             def calc_from_spamlabel(spamLabel):
                 old_err = _np.seterr(over='ignore')
@@ -2638,7 +2707,7 @@ class GateSetCalculator(object):
                 gatesFilter = wrtFilters['gates'] if (wrtFilters is not None) else None
                 hProdCache = self._compute_hproduct_cache(evalSubTree, prodCache, dProdCache,
                                                           scaleCache, mySubComm, gatesFilter)
-                hGs = hProdCache.take( finalIndxList, axis=0 )
+                hGs = evalSubTree.final_view(hProdCache, axis=0)
                    #( nGateStrings, nGateDerivCols, len(wrtFilter), dim, dim )
 
                 #Compute all requested derivative columns at once
@@ -2666,7 +2735,7 @@ class GateSetCalculator(object):
 
                 #distribute derivative computation across blocks
                 myBlkIndices, blkOwners, blkComm = \
-                    self._distribute_indices(list(range(nBlks)), mySubComm)
+                    _mpit.distribute_indices(list(range(nBlks)), mySubComm)
                 if blkComm is not None:
                     _warnings.warn("Note: more CPUs than derivative columns!")
 
@@ -2680,14 +2749,15 @@ class GateSetCalculator(object):
 
                 blk_results = []
                 for iBlk in myBlkIndices:
+                    hGs = None # free previous iteration mem before cache computation
                     hProdCache = self._compute_hproduct_cache(evalSubTree, prodCache, dProdCache,
                                                               scaleCache, blkComm, blocks[iBlk])
-                    hGs = hProdCache.take( finalIndxList, axis=0 )
+                    hGs = evalSubTree.final_view(hProdCache, axis=0)
                     hG_results = self._compute_sub_result(
                         spam_label_rows, lambda sl: calc_vhp_from_spamlabel(sl,blocks[iBlk]))
                     blk_results.append( hG_results )
 
-                all_blk_results = self._gather_blk_results(nBlks, blkOwners, myBlkIndices,
+                all_blk_results = _mpit.gather_blk_results(nBlks, blkOwners, myBlkIndices,
                                                            blk_results, mySubComm)
 
                 #gather results
@@ -2701,7 +2771,7 @@ class GateSetCalculator(object):
             my_results.append(sub_results) #sub_results is a dict (keys = spam labels)
 
         #collect/gather results
-        self._gather_subtree_results(evalTree, spam_label_rows,
+        _mpit.gather_subtree_results(evalTree, spam_label_rows,
                                      subTreeOwners, mySubTreeIndices,
                                      (prMxToFill, derivMxToFill, mxToFill),
                                      my_results, comm)
@@ -3237,7 +3307,6 @@ class GateSetCalculator(object):
         dGates_row1 = _np.zeros( (len(spam_label_rows), nGateStrings, self.tot_rho_params, nGateDerivCols) )
         dGates_row2 = _np.zeros( (len(spam_label_rows), nGateStrings, self.tot_e_params, nGateDerivCols) )
 
-        finalIndxList = evalTree.get_list_of_final_value_tree_indices()
 
         #print "TIME0 = ",(_time.time()-tS); sys.stdout.flush()
 
@@ -3247,9 +3316,11 @@ class GateSetCalculator(object):
             evalTree, prodCache, scaleCache, comm)
 
         #use cached data to final values
-        scaleVals = self._scaleExp( scaleCache.take( finalIndxList ) )
-        Gs  = prodCache.take(  finalIndxList, axis=0 ) #( nGateStrings, dim, dim )
-        dGs = dProdCache.take( finalIndxList, axis=0 ) #( nGateStrings, nGateDerivCols, dim, dim )
+        scaleVals = self._scaleExp( evalTree.final_view(scaleCache) )
+        Gs  = evalTree.final_view(prodCache, axis=0) 
+          #( nGateStrings, dim, dim )
+        dGs = evalTree.final_view(dProdCache, axis=0) 
+          #( nGateStrings, nGateDerivCols, dim, dim )
 
         def calc_from_spamlabel(spamLabel):
             old_err = _np.seterr(over='ignore')
@@ -3333,7 +3404,8 @@ class GateSetCalculator(object):
             hProdCache = self._compute_hproduct_cache(evalTree, prodCache, dProdCache,
                                                       scaleCache, comm, [i])
 
-            hGs = hProdCache.take( finalIndxList, axis=0 ) #( nGateStrings, nGateDerivCols, 1, dim, dim )
+            hGs = evalTree.final_view(hProdCache, axis=0) 
+              #( nGateStrings, nGateDerivCols, 1, dim, dim )
             #print "TIME0.75(%d)B = " % i,(_time.time()-tS), " shape ",hProdCache.shape; sys.stdout.flush()
 
             for spamLabel,rowIndex in spam_label_rows.items():
