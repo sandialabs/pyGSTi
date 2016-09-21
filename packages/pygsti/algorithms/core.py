@@ -17,7 +17,8 @@ from .. import tools    as _tools
 from .. import objects  as _objs
 
 #DEBUG
-from .track_allocations import AllocationTracker
+CUSTOMLM = True
+#from .track_allocations import AllocationTracker
 import os as _os
 import psutil as _psutil
 BtoGB = 1.0/(1024.0**3)
@@ -975,7 +976,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     tStart = _time.time()
-    tracker = AllocationTracker(1000)
+    #tracker = AllocationTracker(1000)
 
     gs = startGateset.copy()
     if maxfev is None: maxfev = maxiter
@@ -1035,8 +1036,9 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
     #Get evaluation tree (split into subtrees if needed)
     tm = _time.time() #TIMER!!!
+    mlim = memLimit-persistentMem if (memLimit is not None) else None
     evTree, wrtBlkSize = gs.bulk_evaltree_from_resources(
-        gateStringsToUse, comm, memLimit-persistentMem,
+        gateStringsToUse, comm, mlim,
         distributeMethod, ["bulk_fill_probs","bulk_fill_dprobs"], printer)
     add_time(timer_dict, "do_mc2gst evaltree",_time.time()-tm) #TIMER!!!
 
@@ -1132,7 +1134,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                 def objective_func(vectorGS):
                     #DEBUG!!! MEM USAGE
                     objective_func.__dict__.setdefault('count',0)
-                    tracker.add_tag_now("Begin objective_func %d: %.2f GB" % (objective_func.count, get_mem_usage()))
+                    #tracker.add_tag_now("Begin objective_func %d: %.2f GB" % (objective_func.count, get_mem_usage()))
                     objective_func.count += 1
 
                     tm = _time.time() #TIMER!!!
@@ -1188,7 +1190,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                     jacobian.__dict__.setdefault('count',0)
                     #mem = get_mem_usage()
                     #lastmem = jacobian.memusage
-                    tracker.add_tag_now("Begin jacobian %d: %.2f GB" % (jacobian.count, get_mem_usage()))
+                    #tracker.add_tag_now("Begin jacobian %d: %.2f GB" % (jacobian.count, get_mem_usage()))
 
                     #if mem > 2*lastmem:
                     #    rnk = 0 if (comm is None) else comm.Get_rank()
@@ -1308,21 +1310,30 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
     add_time(timer_dict, "do_mc2gst pre-opt",_time.time()-tStart) #TIMER!!!
 
-    with tracker:
+    #with tracker:
+    if 1:
 
         #Step 3: solve least squares minimization problem
         tm = _time.time() #TIMER!!!
         x0 = gs.to_vector()
-        opt_x, _, _, _, _ = \
-            _spo.leastsq( objective_func, x0, xtol=tol, ftol=tol, gtol=tol,
-                          maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=jacobian )
+        if CUSTOMLM:
+            opt_x,converged,msg = _opt.custom_leastsq(objective_func, jacobian, x0, f_norm_tol=tol, jac_norm_tol=tol,
+                                                      rel_tol=tol, max_iter=maxiter)
+            print("DEBUG CUSTOM MSG = ",msg)
+            assert(converged)
+        else:
+            opt_x, _, _, _, _ = \
+                _spo.leastsq( objective_func, x0, xtol=tol, ftol=tol, gtol=tol,
+                              maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=jacobian )
+    
+
         full_minErrVec = objective_func(opt_x)  #note: calls gs.from_vector(opt_x,...) so don't need to call this again
         minErrVec = full_minErrVec if regularizeFactor == 0 else full_minErrVec[0:-len(x0)] #don't include regularization terms
         soln_gs = gs.copy();
         add_time(timer_dict, "do_mc2gst leastsq",_time.time()-tm) #TIMER!!!
 
-    rnk = 0 if (comm is None) else comm.Get_rank()
-    if rnk == 0: tracker.write_pickle("final_allocations%d.pkl" % rnk)
+    #rnk = 0 if (comm is None) else comm.Get_rank()
+    #if rnk == 0: tracker.write_pickle("final_allocations%d.pkl" % rnk)
 
 
     #soln_gs.log("MC2GST", { 'method': "leastsq", 'tol': tol,  'maxiter': maxiter } )
@@ -2077,8 +2088,9 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
 
     #Get evaluation tree (split into subtrees if needed)
     tm = _time.time() #TIMER!!!
+    mlim = memLimit-persistentMem if (memLimit is not None) else None
     evTree, wrtBlkSize = gs.bulk_evaltree_from_resources(
-        gateStringsToUse, comm, memLimit-persistentMem,
+        gateStringsToUse, comm, mlim,
         distributeMethod, ["bulk_fill_probs","bulk_fill_dprobs"], printer)
     add_time(timer_dict, "do_mlgst evaltree",_time.time()-tm) #TIMER!!!
 
@@ -2293,10 +2305,16 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     #Run optimization (use leastsq)
     tm = _time.time() # TIMER!!!
     x0 = gs.to_vector()
-    opt_x, _, _, msg, flag = \
-        _spo.leastsq( objective_func, x0, xtol=tol, ftol=tol, gtol=0,
-                      maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=jacobian )
-    printer.log("Least squares msg = %s; flag =%s" % (msg, flag), 2)
+    if CUSTOMLM:
+        opt_x,converged,msg = _opt.custom_leastsq(objective_func, jacobian, x0, f_norm_tol=tol, jac_norm_tol=tol,
+                                                  rel_tol=tol, max_iter=maxiter)
+        print("DEBUG CUSTOM MSG = ",msg)
+        assert(converged)
+    else:
+        opt_x, _, _, msg, flag = \
+            _spo.leastsq( objective_func, x0, xtol=tol, ftol=tol, gtol=0,
+                          maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=jacobian )
+        printer.log("Least squares msg = %s; flag =%s" % (msg, flag), 2)
     add_time(timer_dict, "do_mlgst leastsq",_time.time()-tm) #TIMER!!!
 
     tm = _time.time() # TIMER!!!

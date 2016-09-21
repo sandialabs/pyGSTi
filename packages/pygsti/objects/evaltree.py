@@ -112,9 +112,17 @@ class EvalTree(list):
             self.init_indices.append( indx )
             evalDict[ tup ] = indx
 
+        #Process gatestrings in order of length, so that we always place short strings
+        # in the right place (otherwise assert stmt below can fail)
+        indices_sorted_by_gatestring_len = \
+            sorted(list(range(len(gatestring_list))),
+                   key=lambda i: len(gatestring_list[i]))
+
         #avgBiteSize = 0
         #useCounts = {}
-        for (k,gateString) in enumerate(gatestring_list):
+        #OLD (sequential): for (k,gateString) in enumerate(gatestring_list):
+        for k in indices_sorted_by_gatestring_len:
+            gateString = gatestring_list[k]
             L = len(gateString)
             #if L == 0:
             #    self[0] = (None,None,k) #set in-final-list index for zero-length string (special case)
