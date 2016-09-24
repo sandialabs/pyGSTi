@@ -11,6 +11,7 @@ import numpy as _np
 
 #TIMER FNS (TODO: move to own module within tools?)
 def add_time(timer_dict, timerName, val):
+    """ TODO: docstring """
     if timer_dict is not None:
         if timerName in timer_dict:
             timer_dict[timerName] += val
@@ -18,21 +19,22 @@ def add_time(timer_dict, timerName, val):
             timer_dict[timerName] = val
 
 
-def distribute_indices(indices, comm):
-
+def distribute_indices(indices, comm, allow_split_comm=True):
+    """ TODO: docstring """
     if comm is None:
         nprocs, rank = 1, 0
     else:
         nprocs = comm.Get_size()
         rank = comm.Get_rank()
 
-    loc_indices, owners = distribute_indices_base(indices, nprocs, rank)
+    loc_indices, owners = distribute_indices_base(indices, nprocs, rank,
+                                                  allow_split_comm)
 
     #Split comm into sub-comms when there are more procs than
     # indices, resulting in all procs getting only a 
     # single index and multiple procs getting the *same*
     # (single) index.
-    if nprocs > len(indices) and comm is not None:
+    if nprocs > len(indices) and (comm is not None) and allow_split_comm:
         loc_comm = comm.Split(color=loc_indices[0], key=rank)  
     else: 
         loc_comm = None
@@ -40,26 +42,37 @@ def distribute_indices(indices, comm):
     return loc_indices, owners, loc_comm
 
 
-def distribute_indices_base(indices, nprocs, rank):
+def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
     """ TODO: docstring """
     nIndices = len(indices)
     assert(nIndices > 0) #need a special case when == 0?
 
     if nprocs >= nIndices:
-        nloc_std =  nprocs // nIndices
-        extra = nprocs - nloc_std*nIndices # extra procs
-        if rank < extra*(nloc_std+1):
-            loc_indices = [ indices[rank // (nloc_std+1)] ]
+        if allow_split_comm:
+            nloc_std =  nprocs // nIndices
+            extra = nprocs - nloc_std*nIndices # extra procs
+            if rank < extra*(nloc_std+1):
+                loc_indices = [ indices[rank // (nloc_std+1)] ]
+            else:
+                loc_indices = [ indices[
+                        extra + (rank-extra*(nloc_std+1)) // nloc_std ] ]
+    
+            # owners dict gives rank of first (chief) processor for each index
+            # (the "owner" of a given index is responsible for communicating
+            #  results for that index to the other processors)
+            owners = { indices[i]: i*(nloc_std+1) for i in range(extra) }
+            owners.update( { indices[i]: extra*(nloc_std+1) + (i-extra)*nloc_std
+                             for i in range(extra, nIndices) } )
         else:
-            loc_indices = [ indices[
-                    extra + (rank-extra*(nloc_std+1)) // nloc_std ] ]
-
-        # owners dict gives rank of first (chief) processor for each index
-        # (the "owner" of a given index is responsible for communicating
-        #  results for that index to the other processors)
-        owners = { indices[i]: i*(nloc_std+1) for i in range(extra) }
-        owners.update( { indices[i]: extra*(nloc_std+1) + (i-extra)*nloc_std
-                         for i in range(extra, nIndices) } )
+            #Not allowed to assign multiple procs the same local index
+            # (presumably b/c there is no way to sub-divide the work 
+            #  performed for a single index among multiple procs)
+            if rank < nIndices:
+                loc_indices = [ indices[rank] ]
+            else:
+                loc_indices = [ ] #extra procs do nothing
+            owners = { indices[i]: i for i in range(nIndices) }
+            
     else:
         nloc_std =  nIndices // nprocs
         extra = nIndices - nloc_std*nprocs # extra indices
@@ -234,3 +247,31 @@ def gather_blk_results(nBlocks, blk_owners, my_blkIndices,
 
     return blk_list
 
+def distribute_for_dot(contracted_dim, comm):
+    loc_col_indices,_,_ = distribute_indices(
+        list(range(contracted_dim)), comm, False)
+
+    #Make sure local columns are contiguous
+    start,stop = loc_indices[0], loc_indices[-1]+1
+    assert(loc_indices == list(range(start,stop)))
+    return slice(start, stop) # local column range as a slice
+
+def mpidot(a,b,loc_slice,comm):
+    """ TODO: docstring """
+    if comm is None or comm.Get_size() == 1:
+        assert(loc_slice == slice(0,b.shape[1]))
+        return _np.dot(a,b)
+
+    loc_dot = _np.dot(a[:,loc_col_slice],b[loc_col_slice])
+    return comm.Allreduce(loc_dot, op=MPI.SUM)
+
+    #myNCols = loc_col_slice.stop - loc_col_slice.start
+    ## Gather pieces of coulomb tensor together
+    #nCols = comm.allgather(myNCols)  #gather column counts into an array
+    #displacements = _np.concatenate(([0],_np.cumsum(sizes))) #calc displacements
+    #
+    #result = np.empty(displacements[-1], a.dtype)
+    #comm.Allgatherv([CTelsLoc, size, MPI.F_DOUBLE_COMPLEX], \
+    #                [CTels, (sizes,displacements[:-1]), MPI.F_DOUBLE_COMPLEX])
+
+    

@@ -6,21 +6,36 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Custom implementation of the Levenberg-Marquardt Algorithm """
 
+import time as _time
 import numpy as _np
-try:
-    #for earlier scipy versions
-    from scipy.optimize import Result as _optResult 
-except:
-    #for later scipy versions
-    from scipy.optimize import OptimizeResult as _optResult 
+#from scipy.optimize import OptimizeResult as _optResult 
 
+from ..tools import mpitools as _mpit
 
 #constants
 MACH_PRECISION = 1e-16
 
+#TIMER FNS (TODO: move to own module within tools?)
+def add_time(timer_dict, timerName, val):
+    if timer_dict is not None:
+        if timerName in timer_dict:
+            timer_dict[timerName] += val
+        else:
+            timer_dict[timerName] = val
+
+import os as _os
+import psutil as _psutil
+BtoGB = 1.0/(1024.0**3)
+def print_mem_usage(prefix):
+    from mpi4py import MPI
+    if MPI.COMM_WORLD.Get_rank() == 0:
+        p = _psutil.Process(_os.getpid())
+        print("MEM USAGE [%s] = %.2f GB" % (prefix,p.memory_info()[0] * BtoGB))
+
+
 
 def custom_leastsq(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
-                   rel_tol=1e-6, max_iter=100, verbosity=0):
+                   rel_tol=1e-6, max_iter=100, comm=None, verbosity=0, timer_dict=None):
     msg = ""
     converged = False
     x = x0
@@ -29,6 +44,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
     half_max_nu = 2**62 #what should this be??
     tau = 1e-3
     nu = 2
+    my_cols_slice = None
+    
 
     if not _np.isfinite(norm_f):
         msg = "Infinite norm of objective function at initial point!"
@@ -45,11 +62,20 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
 
         if verbosity > 0:
             print("--- Outer Iter %d: norm_f = %g" % (k,norm_f))
+            
+        Jac = None; JTJ = None; JTf = None
 
+        print_mem_usage("Begin outer iter")
         Jac = jac_fn(x)
+        print_mem_usage("  After jacobian: shape=%s, GB=%.2f" % (str(Jac.shape), Jac.nbytes/(1024.0**3)) )
 
-        JTJ = _np.dot(Jac.T,Jac)
+        tm = _time.time() # TIMER!!!
+        if my_cols_slice is None:
+            my_cols_slice = _mpit.distribute_for_dot(Jac.shape[1], comm)
+        JTJ = _mpit.mpidot(Jac.T,Jac,my_cols_slice,comm)   #_np.dot(Jac.T,Jac)
         JTf = _np.dot(Jac.T,f)
+        add_time(timer_dict, "CUSTOMLM: dotprods",_time.time()-tm) #TIMER!!!
+        print_mem_usage("  Post dotprods")
 
         idiag = _np.diag_indices_from(JTJ)
         norm_JTf = _np.linalg.norm(JTf) #, ord='inf')
@@ -60,18 +86,24 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
             msg = "norm(jacobian) is small"
             converged = True; break
 
-        mu = tau * _np.max(undampled_JTJ_diag) # initial damping element
+        mu = tau #* _np.max(undampled_JTJ_diag) # initial damping element
 
         #determing increment using adaptive damping
         while True:  #inner loop
-            JTJ[idiag] += mu # augment normal equations
+            #JTJ[idiag] += mu # augment normal equations
+            print_mem_usage("  Begin inner iter")
+            JTJ[idiag] *= (1.0 + mu) # augment normal equations
 
             try:
+                print_mem_usage("    Before linsolve")
+                tm = _time.time() # TIMER!!!
                 success = True
                 dx = _np.linalg.solve(JTJ, -JTf) 
+                add_time(timer_dict, "CUSTOMLM: linsolve",_time.time()-tm) #TIMER!!!
             except LinAlgError:
                 success = False
             
+            print_mem_usage("    After linsolve")
             if success: #linear solve succeeded
                 new_x = x + dx
                 norm_dx = _np.linalg.norm(dx)
@@ -87,6 +119,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
                     msg = "(near-)singular linear system"; break
                 
                 new_f = obj_fn(new_x)
+                print_mem_usage("    After obj_fn")
                 norm_new_f = _np.linalg.norm(new_f)
                 if not _np.isfinite(norm_new_f): # avoid infinite loop...
                     msg = "Infinite norm of objective function!"; break
@@ -96,6 +129,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
 
                 #print("      (cont): norm_new_f=%g, dL=%g, dF=%g" % 
                 #      (norm_new_f,dL,dF))
+                print_mem_usage("    Before success")
 
                 if dL > 0 and dF > 0:
                     # reduction in error: increment accepted!

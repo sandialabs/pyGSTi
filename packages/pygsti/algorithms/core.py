@@ -1318,7 +1318,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         x0 = gs.to_vector()
         if CUSTOMLM:
             opt_x,converged,msg = _opt.custom_leastsq(objective_func, jacobian, x0, f_norm_tol=tol, jac_norm_tol=tol,
-                                                      rel_tol=tol, max_iter=maxiter)
+                                                      rel_tol=tol, max_iter=maxiter, comm=comm, timer_dict=timer_dict)
             print("DEBUG CUSTOM MSG = ",msg)
             assert(converged)
         else:
@@ -2307,7 +2307,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     x0 = gs.to_vector()
     if CUSTOMLM:
         opt_x,converged,msg = _opt.custom_leastsq(objective_func, jacobian, x0, f_norm_tol=tol, jac_norm_tol=tol,
-                                                  rel_tol=tol, max_iter=maxiter)
+                                                  rel_tol=tol, max_iter=maxiter, comm=comm, timer_dict=timer_dict)
         print("DEBUG CUSTOM MSG = ",msg)
         assert(converged)
     else:
