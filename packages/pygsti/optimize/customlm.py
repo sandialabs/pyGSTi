@@ -71,7 +71,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
 
         tm = _time.time() # TIMER!!!
         if my_cols_slice is None:
-            my_cols_slice = _mpit.distribute_for_dot(Jac.shape[1], comm)
+            my_cols_slice = _mpit.distribute_for_dot(Jac.shape[0], comm)
         JTJ = _mpit.mpidot(Jac.T,Jac,my_cols_slice,comm)   #_np.dot(Jac.T,Jac)
         JTf = _np.dot(Jac.T,f)
         add_time(timer_dict, "CUSTOMLM: dotprods",_time.time()-tm) #TIMER!!!

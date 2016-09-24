@@ -248,7 +248,7 @@ def gather_blk_results(nBlocks, blk_owners, my_blkIndices,
     return blk_list
 
 def distribute_for_dot(contracted_dim, comm):
-    loc_col_indices,_,_ = distribute_indices(
+    loc_indices,_,_ = distribute_indices(
         list(range(contracted_dim)), comm, False)
 
     #Make sure local columns are contiguous
@@ -258,12 +258,17 @@ def distribute_for_dot(contracted_dim, comm):
 
 def mpidot(a,b,loc_slice,comm):
     """ TODO: docstring """
+    from mpi4py import MPI #not at top so can import pygsti on cluster login nodes
     if comm is None or comm.Get_size() == 1:
         assert(loc_slice == slice(0,b.shape[1]))
         return _np.dot(a,b)
 
-    loc_dot = _np.dot(a[:,loc_col_slice],b[loc_col_slice])
-    return comm.Allreduce(loc_dot, op=MPI.SUM)
+    loc_dot = _np.dot(a[:,loc_slice],b[loc_slice,:])
+    result = _np.empty( loc_dot.shape, loc_dot.dtype )
+    comm.Allreduce(loc_dot, result, op=MPI.SUM)
+
+    #DEBUG: assert(_np.linalg.norm( _np.dot(a,b) - result ) < 1e-6)
+    return result
 
     #myNCols = loc_col_slice.stop - loc_col_slice.start
     ## Gather pieces of coulomb tensor together

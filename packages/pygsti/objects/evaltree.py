@@ -732,7 +732,8 @@ class EvalTree(list):
                 if (oLeft is None) and (oRight is None):
                     iLeft = iRight = None
                     #assert(len(subTree.gateLabels) == len(subTree)) #make sure all gatelabel items come first
-                    subTree.gateLabels.append( self.gateLabels[k] )
+                    subTree.gateLabels.append( self.gateLabels[ 
+                            self.init_indices.index(k)] )
                     subTree.init_indices.append(ik)
                 else:
                     iLeft  = mapIndxToSubTreeIndx[ oLeft ]
@@ -779,7 +780,7 @@ class EvalTree(list):
 
         singleItemTreeSetList = [] #each element represents a subtree, and
                             # is a set of the indices owned by that subtree
-        for i in range(self.num_final_strings(),0,-1):
+        for i in reversed(range(self.num_final_strings())):
             if not need_to_compute[i]: continue # move to the last element
               #of evalTree that needs to be computed (i.e. is not in a subTree)
 
