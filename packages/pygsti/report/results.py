@@ -214,11 +214,13 @@ class Results(object):
             Whether or not the gatesetEstimate was constrained to lie
             within TP during the objective optimization.
 
-        fidPairs : list of 2-tuples, optional
-            Specifies a subset of all prepStr,effectStr string pairs to be used in this
-            analysis.  Each element of fidPairs is a (iRhoStr, iEStr) 2-tuple of integers,
-            which index a string within the state preparation and measurement fiducial
-            strings respectively.
+        fidPairs : list or dict, optional
+            Specifies a subset of all prepStr,effectStr string pairs to be used in
+            reports.  If `fidPairs` is a list, each element of `fidPairs` is a
+            ``(iRhoStr, iEStr)`` 2-tuple of integers, which index a string within
+            the state preparation and measurement fiducial strings respectively. If
+            `fidPairs` is a dict, then the keys must be germ strings and values are
+            lists of 2-tuples as in the previous case.
 
         gatesetsByL_noGaugeOpt : list of GateSets, optional
             The value of the estimated gate sets *before* any gauge
@@ -680,9 +682,22 @@ class Results(object):
             fidPairs = self.parameters['fiducial pairs']
             Ls = self.parameters['max length list']
             st = 1 if Ls[0] == 0 else 0 #start index: skip LGST column in plots
-            filter_dict = { Ls[i]:self.gatestring_lists['iteration'][i]
-                            for i in range(st,len(Ls)) }
-            return Ls,germs,gsBest,fidPairs,filter_dict,m,M,baseStr_dict,strs,st
+
+            if fidPairs is None: fidpair_filters = None
+            elif isinstance(fidPairs,dict) or hasattr(fidPairs,"keys"):
+                #Assume fidPairs is a dict indexed by germ
+                fidpair_filters = { (x,y): fidPairs[germ] 
+                                    for x in Ls[st:] for y in germs }
+            else:
+                #Assume fidPairs is a list
+                fidpair_filters = { (x,y): fidPairs
+                                    for x in Ls[st:] for y in germs }
+
+            if fidPairs is None: fidpair_filters = None
+            gstr_filters = { (x,y) : self.gatestring_lists['iteration'][i]
+                             for i,x in enumerate(Ls[st:],start=st)
+                             for y in germs }
+            return Ls,germs,gsBest,fidpair_filters,gstr_filters,m,M,baseStr_dict,strs,st
 
         def noConfidenceLevelDependence(level):
             """ Designates a figure as independent of the confidence level"""
@@ -706,12 +721,13 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
             plotFn = getPlotFn();  mpc = getMPC()
-            Ls,germs, gsBest, fidPairs, filter_dict, _, _, baseStr_dict, strs, st = plot_setup()
+            Ls,germs, gsBest, fpr_filters, gstr_filters, _, _, baseStr_dict, strs, st = plot_setup()
             return plotFn(Ls[st:], germs, baseStr_dict,
                           self.dataset, gsBest, strs,
                           r"$L$", "germ", scale=1.0, sumUp=False,
-                          histogram=True, title="", fidPairs=fidPairs,
-                          gatestring_filters = filter_dict,
+                          histogram=True, title="", 
+                          fidpair_filters=fpr_filters,
+                          gatestring_filters = gstr_filters,
                           linlg_pcntle=float(self.parameters['linlogPercentile']) / 100,
                           minProbClipForWeighting=mpc, save_to="", ticSize=20)
         fns["bestEstimateColorBoxPlot"] = (fn,validate_LsAndGerms)
@@ -719,12 +735,13 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
             plotFn = getPlotFn(); mpc = getMPC()
-            Ls,germs, gsBest, fidPairs, filter_dict, _, _, baseStr_dict, strs, st = plot_setup()
+            Ls,germs, gsBest, fpr_filters, gstr_filters, _, _, baseStr_dict, strs, st = plot_setup()
             return plotFn( Ls[st:], germs, baseStr_dict,
                            self.dataset, gsBest, strs,
                            r"$L$", "germ", scale=1.0, sumUp=False,
-                           histogram=True, title="", fidPairs=fidPairs,
-                           gatestring_filters = filter_dict,
+                           histogram=True, title="",
+                           fidpair_filters=fpr_filters,
+                           gatestring_filters = gstr_filters,
                            linlg_pcntle=float(self.parameters['linlogPercentile']) / 100,
                            save_to="", ticSize=20, minProbClipForWeighting=mpc,
                            invert=True)
@@ -733,14 +750,15 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
             plotFn = getPlotFn();  mpc = getMPC()
-            Ls,germs, gsBest, fidPairs, filter_dict, _, _, baseStr_dict, strs, st = plot_setup()
+            Ls,germs, gsBest, fpr_filters, gstr_filters, _, _, baseStr_dict, strs, st = plot_setup()
             #sumScale = len(strs[0])*len(strs[1]) \
             #    if fidPairs is None else len(fidPairs)
             return plotFn( Ls[st:], germs, baseStr_dict,
                            self.dataset, gsBest, strs,
-                          r"$L$", "germ", scale=1.0,
+                           r"$L$", "germ", scale=1.0,
                            sumUp=True, histogram=False, title="",
-                           fidPairs=fidPairs, gatestring_filters = filter_dict,
+                           fidpair_filters=fpr_filters,
+                           gatestring_filters = gstr_filters,
                            minProbClipForWeighting=mpc,
                            save_to="", ticSize=14, linlg_pcntle=float(self.parameters['linlogPercentile']) / 100)
         fns["bestEstimateSummedColorBoxPlot"] = (fn,validate_LsAndGerms)
@@ -750,15 +768,16 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
             plotFn = getPlotFn();  mpc = getMPC()
-            Ls,germs, _, fidPairs, filter_dict, _, _, baseStr_dict, strs, st = plot_setup()
+            Ls,germs, _, fpr_filters, gstr_filters, _, _, baseStr_dict, strs, st = plot_setup()
             i = int(_re.match(expr1,key).group(1))
             return plotFn( Ls[st:i+1], germs, baseStr_dict,
-                        self.dataset, self.gatesets['iteration estimates'][i],
-                        strs, r"$L$", "germ", scale=1.0, sumUp=False,
-                        histogram=False, title="", fidPairs=fidPairs,
-                        gatestring_filters = filter_dict,
-                        linlg_pcntle=float(self.parameters['linlogPercentile']) / 100,
-                        save_to="", minProbClipForWeighting=mpc, ticSize=20)
+                           self.dataset, self.gatesets['iteration estimates'][i],
+                           strs, r"$L$", "germ", scale=1.0, sumUp=False,
+                           histogram=False, title="",
+                           fidpair_filters=fpr_filters,
+                           gatestring_filters = gstr_filters,
+                           linlg_pcntle=float(self.parameters['linlogPercentile']) / 100,
+                           save_to="", minProbClipForWeighting=mpc, ticSize=20)
         def fn_validate(key):
             if not self._LsAndGermInfoSet: return []
 
@@ -789,26 +808,28 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
             directPlotFn = getDirectPlotFn(); mpc = getMPC()
-            Ls, germs, _, fidPairs, filter_dict, _, _, baseStr_dict, strs, st = plot_setup()
+            Ls, germs, _, _, _, _, _, baseStr_dict, strs, st = plot_setup()
             directLGST = self._specials.get('direct_lgst_gatesets',verbosity=vb)
             return directPlotFn( Ls[st:], germs, baseStr_dict, self.dataset,
                                  directLGST, strs, r"$L$", "germ",
                                  scale=1.0, sumUp=False, title="",
-                                 minProbClipForWeighting=mpc, fidPairs=fidPairs,
-                                 gatestring_filters = None, #don't use filter_dict for direct plots
+                                 minProbClipForWeighting=mpc,
+                                 fidpair_filters= None,
+                                 gatestring_filters = None, #don't use filters for direct plots
                                  save_to="", ticSize=20, linlg_pcntle=float(self.parameters['linlogPercentile']) / 100)
         fns["directLGSTColorBoxPlot"] = (fn,validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
             directPlotFn = getDirectPlotFn(); mpc = getMPC()
-            Ls, germs, _, fidPairs, filter_dict, _, _, baseStr_dict, strs, st = plot_setup()
+            Ls, germs, _, _, _, _, _, baseStr_dict, strs, st = plot_setup()
             directLongSeqGST = self._specials.get('DirectLongSeqGatesets',
                                                   verbosity=vb)
             return directPlotFn( Ls[st:], germs, baseStr_dict, self.dataset,
                                  directLongSeqGST, strs, r"$L$", "germ",
                                  scale=1.0, sumUp=False, title="",
-                                 minProbClipForWeighting=mpc, fidPairs=fidPairs,
+                                 minProbClipForWeighting=mpc,
+                                 fidpair_filters = None,
                                  gatestring_filters = None, #don't use filter_dict for direct plots
                                  save_to="", ticSize=20, linlg_pcntle=float(self.parameters['linlogPercentile']) / 100)
         fns["directLongSeqGSTColorBoxPlot"] = (fn,validate_LsAndGerms)
@@ -849,7 +870,7 @@ class Results(object):
         expr2 = "whack(.+?)MoleBoxes"
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
-            Ls,germs, gsBest, fidPairs, filter_dict, _, _, baseStr_dict, strs, st = plot_setup()
+            Ls,germs, gsBest, fpr_filters, gstr_filters, _, _, baseStr_dict, strs, st = plot_setup()
             highestL = Ls[-1]; hammerWeight = 10.0; mpc = getMPC()
             gateLabel = _re.match(expr2,key).group(1)
             strToWhack = _gs.GateString( (gateLabel,)*highestL )
@@ -859,8 +880,8 @@ class Results(object):
                                     gsBest, strs, r"$L$", "germ", scale=1.0,
                                     sumUp=False,title="",whackWith=hammerWeight,
                                     save_to="", minProbClipForWeighting=mpc,
-                                    ticSize=20, fidPairs=fidPairs,
-                                    gatestring_filters = filter_dict)
+                                    ticSize=20, fidpair_filters=fpr_filters,
+                                    gatestring_filters = gstr_filters)
         def fn_validate(key):
             if not self._LsAndGermInfoSet: return []
 
@@ -878,7 +899,7 @@ class Results(object):
         expr3 = "whack(.+?)MoleBoxesSummed"
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
-            Ls,germs, gsBest, fidPairs, filter_dict, _, _, baseStr_dict, strs, st = plot_setup()
+            Ls,germs, gsBest, fpr_filters, gstr_filters, _, _, baseStr_dict, strs, st = plot_setup()
             highestL = Ls[-1]; hammerWeight = 10.0; mpc = getMPC()
             gateLabel = _re.match(expr3,key).group(1)
             strToWhack = _gs.GateString( (gateLabel,)*highestL )
@@ -888,8 +909,9 @@ class Results(object):
                                     gsBest, strs, r"$L$", "germ", scale=1.0,
                                     sumUp=True, title="",whackWith=hammerWeight,
                                     save_to="", minProbClipForWeighting=mpc,
-                                    ticSize=20, fidPairs=fidPairs,
-                                    gatestring_filters = filter_dict)
+                                    ticSize=20, fidpair_filters=fpr_filters,
+                                    gatestring_filters = gstr_filters)
+
         def fn_validate(key):
             if not self._LsAndGermInfoSet: return []
 
@@ -1197,8 +1219,21 @@ class Results(object):
             fidPairs = self.parameters['fiducial pairs']
             Ls = self.parameters['max length list']
             st = 1 if Ls[0] == 0 else 0 #start index: skip LGST column in plots
-            filter_dict = { Ls[i]:self.gatestring_lists['iteration'][i]
-                            for i in range(st,len(Ls)) }
+
+            if fidPairs is None: fidpair_filters = None
+            elif isinstance(fidPairs,dict) or hasattr(fidPairs,"keys"):
+                #Assume fidPairs is a dict indexed by germ
+                fidpair_filters = { (x,y): fidPairs[germ] 
+                                    for x in Ls[st:] for y in germs }
+            else:
+                #Assume fidPairs is a list
+                fidpair_filters = { (x,y): fidPairs
+                                    for x in Ls[st:] for y in germs }
+
+            if fidPairs is None: fidpair_filters = None
+            gstr_filters = { (x,y) : self.gatestring_lists['iteration'][i]
+                             for i,x in enumerate(Ls[st:],start=st)
+                             for y in germs }
 
             obj = self.parameters['objective']
             assert(obj in ("chi2","logl"))
@@ -1220,8 +1255,9 @@ class Results(object):
                 fig = plotFn(Ls[st:], fig_germs, baseStr_dict,
                              self.dataset, gsBest, strs,
                              r"$L$", "germ", scale=1.0, sumUp=False,
-                             histogram=True, title="", fidPairs=fidPairs,
-                             gatestring_filters = filter_dict,
+                             histogram=True, title="", 
+                             fidpair_filters=fidpair_filters,
+                             gatestring_filters = gstr_filters,
                              linlg_pcntle=float(self.parameters['linlogPercentile']) / 100,
                              minProbClipForWeighting=mpc, save_to="", ticSize=20)
                 figs.append(fig); n += maxGermsPerFig

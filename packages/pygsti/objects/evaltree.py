@@ -9,6 +9,9 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 from . import gatestring as _gs
 import numpy as _np
 
+import time as _time #DEBUG TIMERS
+import sys
+
 class EvalTree(list):
     """
     An Evaluation Tree.  Instances of this class specify how to
@@ -52,6 +55,7 @@ class EvalTree(list):
           -------
           None
         """
+        #tStart = _time.time() #DEBUG TIMER
         self.gateLabels = gateLabels
 
         if len(gatestring_list ) > 0 and isinstance(gatestring_list[0],_gs.GateString):
@@ -89,6 +93,8 @@ class EvalTree(list):
 
         #avgBiteSize = 0
         #useCounts = {}
+        #print("DEBUG: PRE = ",_time.time()-tStart) #DEBUG TIMER
+        #tLast = tStart; avgLen = 0; avgBites = 0 #DEBUG TIMER
         for (k,gateString) in enumerate(gatestring_list):
             L = len(gateString)
             if L == 0:
@@ -125,6 +131,15 @@ class EvalTree(list):
                     iCur = iNew
                 start += bite
                 #nBites += 1
+
+            #DEBUG
+            #avgLen += len(gateString)
+            #avgBites += nBites
+            #if k % 100 == 0:
+            #    print("DEBUG: Done %d of %d: %.2fs [avglen = %f, avgbites = %f]" % 
+            #          (k+1,len(gatestring_list),_time.time()-tLast, avgLen/100.0, avgBites/100.0))
+            #    sys.stdout.flush()
+            #    tLast = _time.time(); avgLen = 0; avgBites = 0
 
             #if nBites > 0: avgBiteSize += L / float(nBites)
 
