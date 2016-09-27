@@ -63,6 +63,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
         if verbosity > 0:
             print("--- Outer Iter %d: norm_f = %g" % (k,norm_f))
             
+        print_mem_usage("Begin outer iter *before de-alloc*")
         Jac = None; JTJ = None; JTf = None
 
         print_mem_usage("Begin outer iter")
