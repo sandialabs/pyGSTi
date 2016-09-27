@@ -33,7 +33,8 @@ class EvalTree(list):
         self.myFinalToParentFinalMap = None
         self.num_final_strs = 0
         self.subTrees = []
-        self.parentIndexMap = None          # Was previously initialized elsewhere
+        self.parentIndexMap = None
+        self.original_index_lookup = None
         self.distribution = {}
         super(EvalTree, self).__init__(items)
 
@@ -175,6 +176,7 @@ class EvalTree(list):
         #see if there are superfluous tree nodes: those with iFinal == -1 and
         self.myFinalToParentFinalMap = None #this tree has no "children",
         self.parentIndexMap = None          # i.e. has not been created by a 'split'
+        self.original_index_lookup = None
         self.subTrees = [] #no subtrees yet
 
 
@@ -298,14 +300,15 @@ class EvalTree(list):
     def copy(self):
         """ Create a copy of this evaluation tree. """
         newTree = EvalTree(self[:])
-        newTree.gateLabels = self.gateLabels
-        newTree.init_indices = self.init_indices
-        newTree.eval_order = self.eval_order
+        newTree.gateLabels = self.gateLabels[:]
+        newTree.init_indices = self.init_indices[:]
+        newTree.eval_order = self.eval_order[:]
         #newTree.finalList = self.finalList
         #newTree.inplaceCopyList = self.inplaceCopyList
         newTree.myFinalToParentFinalMap = self.myFinalToParentFinalMap
-        newTree.parentIndexMap = self.parentIndexMap
+        newTree.parentIndexMap = self.parentIndexMap[:]
         newTree.subTrees = [ st.copy() for st in self.subTrees ]
+        newTree.original_index_lookup = self.original_index_lookup[:]
         return newTree
 
     def get_init_labels(self):
@@ -487,24 +490,28 @@ class EvalTree(list):
             A list of the gate strings evaluated by this tree, each
             specified as a tuple of gate labels.
         """
-        finalGateStrings = [None]*self.num_final_strings()
-        gateStrings = []
+        gateStrings = [None]*len(self)
 
-        #Set initial single- or zero- gate strings at beginning of tree
-        for i,gateLabel in enumerate(self.gateLabels):
-            if gateLabel == "": gateStrings.append( () ) #special case of empty label
-            else: gateStrings.append( (gateLabel,) )
-            if self[i][2] >= 0: #if iFinal for an initial string is >= 0
-                finalGateStrings[self[i][2]] = gateStrings[-1]
-        n = len(self.gateLabels)
+        #Set "initial" (single- or zero- gate) strings
+        for i,gateLabel in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
+            if gateLabel == "": gateStrings[i] = () #special case of empty label
+            else: gateStrings[i] = (gateLabel,)
 
         #Build rest of strings
-        for i,tup in enumerate(self[n:],start=n):
-            iLeft, iRight, iFinal = tup
-            gateStrings.append( gateStrings[iLeft] + gateStrings[iRight] )
-            if iFinal >= 0: finalGateStrings[iFinal] = gateStrings[-1]
+        for i in evalTree.get_evaluation_order():
+            iLeft, iRight = self[i]
+            gateStrings[i] = gateStrings[iLeft] + gateStrings[iRight]
+            
+        #Permute to get final list:
+        nFinal = self.num_final_strings()
+        if self.original_index_lookup is not None:
+            finalGateStrings = [None]*nFinal
+            for key,val in original_index_lookup.items():
+                if val < nFinal: finalGateStrings[val] = gateStrings[key]
+            return finalGateStrings
+        else:
+            return gateStrings[0:nFinal]
 
-        return finalGateStrings
 
 #Future MPI API??
 #    def is_distributed(self):
@@ -708,20 +715,95 @@ class EvalTree(list):
         need_to_compute = _np.zeros( len(self), 'bool' )
         need_to_compute[0:self.num_final_strings()] = True
 
+          #First, reorder the parent tree's elements so that the final
+          # elements of the subtrees map to contiguous slices of the
+          # parent tree's final elements.
+        parentIndexRevPerm = [] # parentIndexRevPerm[newIndex] = currentIndex (i.e. oldIndex)
+        subTreeIndicesList = []
+        numFinalList = []
         for iSubTree,subTreeSet in enumerate(subTreeSetList):
             subTreeIndices = list(subTreeSet)
             subTreeIndices.sort() # order subtree gatestrings (really just their indices) so
                                   # that all "final" strings come first.
-
             #Compute # of "final" strings in this subtree (count # of indices < num_final_strs)
             subTreeNumFinal = _np.sum(_np.array(subTreeIndices) < self.num_final_strings())
+
+            #Swap the indices of "final" strings that have already been computed past the end
+            # of the "final strings" region of the subtree's list (i.e. the subtree itself).
+            already_computed = _np.logical_not( need_to_compute[ subTreeIndices[0:subTreeNumFinal] ] )
+            already_computed_inds = _np.nonzero(already_computed)[0] # (sorted ascending)
+
+            iFirstNonFinal = subTreeNumFinal
+            for k in already_computed_inds:
+                if k >= iFirstNonFinal: continue #already a non-final el
+                elif k == iFirstNonFinal-1: #index is last "final" el - just shift boundary
+                    iFirstNonFinal -= 1 #now index is "non-final"
+                else: # k < iFirstNonFinal-1, so find a desired "final" el at boundary to swap it with
+                    iLastFinal = iFirstNonFinal-1
+                    while iLastFinal >= 0 and (iLastFinal in already_computed_inds):
+                        iLastFinal -= 1 #the element at iLastFinal happens to be one that we wanted to be non-final, so remove it
+                    assert(iLastFinal >= 0) #Logic error!
+                    subTreeIndices[iLastFinal],subTreeIndices[k] = \
+                        subTreeIndices[k],subTreeIndices[iLastFinal] #Swap k <-> iLastFinal
+                    iFirstNonFinal = iLastFinal # move boundary to make k's new location non-final
+
+            subTreeNumFinal = iFirstNonFinal # the final <-> non-final boundary
+            parentIndexRevPerm.extend( subTreeIndices[0:subTreeNumFinal] )
+            subTreeIndicesList.append( subTreeIndices )
+            numFinalList.append( subTreeNumFinal )
+            need_to_compute[ subTreeIndices[0:subTreeNumFinal] ] = False
+                    
+        #Permute parent tree indices according to parentIndexPerm
+        assert(len(parentIndexRevPerm) == self.num_final_strings())
+        parentIndexRevPerm.extend( list(range(self.num_final_strings(), len(self))) ) 
+          #don't permute non-final indices (no need)
+        
+        #Create forward permutation map: currentIndex -> newIndex
+        parentIndexPerm = [ None ] * len(parentIndexRevPerm)
+        for inew,icur in enumerate(parentIndexRevPerm):
+            parentIndexPerm[icur] = inew
+        assert( None not in parentIndexPerm) #all indices should be mapped somewhere!
+        assert( self.original_index_lookup is None )
+        self.original_index_lookup = { icur: inew for inew,icur in enumerate(parentIndexRevPerm) }
+
+        #Permute parent indices
+        self.init_indices = [ parentIndexPerm[iCur] for iCur in self.init_indices ]
+        self.eval_order = [ parentIndexPerm[iCur] for iCur in self.eval_order ]
+        self[:] = [ (parentIndexPerm[self[iCur][0]],parentIndexPerm[self[iCur][1]])
+                    for iCur in parentIndexRevPerm ]
+        assert(self.myFinalToParentFinalMap is None)
+        assert(self.parentIndexMap is None)
+
+
+        #Update indices in subtree lists
+        newList = []; finalSlices = []; sStart = 0
+        for subTreeIndices,numFinal in zip(subTreeIndicesList,numFinalList):
+            newSubTreeIndices = [ parentIndexPerm[i] for i in subTreeIndices ] 
+            assert(newSubTreeIndices[0:numFinal] == list(range(sStart,sStart+numFinal)))
+              #final elements should be a sequential slice of parent indices
+            finalSlices.append( slice(sStart,sStart+numFinal) )
+            newList.append(newSubTreeIndices)
+            sStart += numFinal #increment slice start position
+        subTreeIndicesList = newList
+
+        #for iSubTree,subTreeSet in enumerate(subTreeSetList):
+            #subTreeIndices = list(subTreeSet)
+            #subTreeIndices.sort() # order subtree gatestrings (really just their indices) so
+            #                      # that all "final" strings come first.
+            #
+            ##Compute # of "final" strings in this subtree (count # of indices < num_final_strs)
+            #subTreeNumFinal = _np.sum(_np.array(subTreeIndices) < self.num_final_strings())
+
+        for iSubTree,(subTreeIndices,subTreeNumFinal,slc) \
+                in enumerate(zip(subTreeIndicesList,numFinalList,finalSlices)):
+
             fullEvalOrder = self.init_indices + self.eval_order #list concatenation
             subTreeEvalOrder = sorted(range(len(subTreeIndices)),
                                       key=lambda j: fullEvalOrder.index(subTreeIndices[j]))
             mapIndxToSubTreeIndx = { k: ik for ik,k in enumerate(subTreeIndices) }
 
             subTree = EvalTree()
-            subTree.myFinalToParentFinalMap = [None]*subTreeNumFinal
+            subTree.myFinalToParentFinalMap = slc
             subTree.num_final_strs = subTreeNumFinal
             subTree[:] = [None]*len(subTreeIndices)
 
@@ -743,9 +825,9 @@ class EvalTree(list):
                 assert(subTree[ik] is None)
                 subTree[ik] = (iLeft,iRight)
 
-                if ik < subTreeNumFinal:
-                    assert(k < self.num_final_strings()) # it should be a final element in parent too!
-                    subTree.myFinalToParentFinalMap[ik] = k
+                #if ik < subTreeNumFinal:
+                #    assert(k < self.num_final_strings()) # it should be a final element in parent too!
+                #    subTree.myFinalToParentFinalMap[ik] = k
 
             subTree.parentIndexMap = subTreeIndices #parent index of each subtree index
             self.subTrees.append( subTree )
