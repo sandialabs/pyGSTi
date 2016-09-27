@@ -149,14 +149,13 @@ def gather_subtree_results(evt, spam_label_rows,
                 if rnd < len(li_gi_tups):
                     li,gi = li_gi_tups[rnd]
                     sub_result = my_results[li][spamLabel][r]
-                    sz = sub_result.size
                 else:
                     gi, sub_result = -1, _np.empty(0, 'd')
 
                 if comm is None:
                     gInds = [gi]; shapes=[sub_result.shape];
                     sizes = [sub_result.size]; displacements=[0]
-                    scratch = sub_result.flat
+                    scratch = sub_result.flatten()
                 else:
                     tm = _time.time()
                     gInds = comm.allgather(gi)  #gather global subtree indices into an array
@@ -170,6 +169,7 @@ def gather_subtree_results(evt, spam_label_rows,
                     comm.Allgatherv([sub_result.flatten(), sub_result.size, MPI.F_DOUBLE],
                                     [scratch, sizes, displacements, MPI.F_DOUBLE])
                     add_time(timer_dict, "MPI IPC2 Allgatherv", _time.time()-tm)
+                sub_result = None #gathered into scratch
                 
                 #Place each of the communicated segments into place
                 tm = _time.time()
@@ -181,6 +181,8 @@ def gather_subtree_results(evt, spam_label_rows,
                         result_tup[r][rowIndex][ subtree.myFinalToParentFinalMap ] = sub_result
                     else: #subtree is actually the entire tree (evt), so just "copy" all
                         result_tup[r][rowIndex] = sub_result
+                    sub_result = None #explicity say we're done with sub_result (make sure mem get's freed)
+                scratch = None #Done with scratch
                 add_time(timer_dict, "MPI IPC2 copy", _time.time()-tm)
                 
     return
