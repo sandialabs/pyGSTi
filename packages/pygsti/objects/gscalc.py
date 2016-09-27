@@ -31,6 +31,9 @@ def add_time(timer_dict, timerName, val):
             timer_dict[timerName] = val
 
 import objgraph #DEBUG - for memory profiling
+import gc
+import sys
+#gc.set_debug(gc.DEBUG_LEAK)
 import os as _os
 import resource as _resource
 import psutil as _psutil
@@ -2398,9 +2401,9 @@ class GateSetCalculator(object):
         else:
             wrtFilters = None
 
-        print_mem_usage("Begin bulk_fill_dprobs")
-        #if comm is None or comm.Get_rank() == 0:
-        #    objgraph.show_growth(limit=50) 
+        print_mem_usage("Begin bulk_fill_dprobs (expect ~ %.2fGB)" % (mxToFill.nbytes/(1024.0**3)) )
+        if comm is None or comm.Get_rank() == 0:
+            objgraph.show_growth(limit=50) 
 
         #get distribution across subtrees (groups if needed)
         subtrees = evalTree.get_sub_trees()
@@ -2516,7 +2519,8 @@ class GateSetCalculator(object):
                     dGs = None #free mem from previous dGs before allocating new dProdCache
                     dProdCache = self._compute_dproduct_cache(evalSubTree, prodCache, scaleCache,
                                                               blkComm, blocks[iBlk], timer_dict)
-                    print_mem_usage("Post compute_dproduct_cache B")
+                    print_mem_usage("Post compute_dproduct_cache B (expect + %.2fGB, shape=%s)"
+                                    % (dProdCache.nbytes/(1024.0**3), str(dProdCache.shape)) )
                     dGs = evalSubTree.final_view(dProdCache, axis=0)
                       #( nGateStrings, nDerivCols, dim, dim )
                     print_mem_usage("Post compute_dproduct_cache take B")
@@ -2527,17 +2531,178 @@ class GateSetCalculator(object):
 
                 #gather results
                 tm = _time.time()
+                
+                #all_blk_results = _mpit.gather_blk_results(nBlks, blkOwners, myBlkIndices,
+                #                                           blk_results, mySubComm)
+                #print_mem_usage("Post gather blocks TEST1")
+                #
+                #def memsafe_concatenate1():
+                #    new_shape = [ 100*(1024**2) ] #list(ars[0].shape[:])
+                #    #new_shape[axis] = sum( [ a.shape[axis] for a in ars ] ); a = None
+                #    #ret = _np.ones( new_shape[:], 'd') #ars[0].dtype )
+                #    #slc = [ slice(None,None) ]*ret.ndim
+                #    #i = 0
+                #    #for a in ars:
+                #    #    d = a.shape[axis]
+                #    #    slc[axis] = slice(i,i+d)
+                #    #    #ret[slc] = a
+                #    #    i += d
+                #    return None #ret
+                #
+                #testAr = []
+                #for spamLabel in sub_results:
+                #    print_mem_usage("Begin TEST1 of %s-block" % spamLabel)
+                #    to_concat = [ sub_results[spamLabel][1] ] \
+                #        + [ blk[spamLabel][1] for blk in all_blk_results]
+                #    blk=None
+                #
+                #    sub_results[spamLabel] = list(sub_results[spamLabel])
+                #    print_mem_usage("Pre concat %s-block" % spamLabel)
+                #    #sub_results[spamLabel][1] = _np.concatenate( to_concat, axis=1 )
+                #    #testAr.append( _np.concatenate( to_concat, axis=1 ) )
+                #    #testAr.append( memsafe_concatenate( to_concat, axis=1 ) )
+                #    testRet = memsafe_concatenate1()
+                #    print_mem_usage("Post concat %s-block" % spamLabel)
+                #    testRet = None
+                #    sub_results[spamLabel] = tuple(sub_results[spamLabel])
+                #    #if comm is None or comm.Get_rank() == 0:
+                #    #    print("DB %s 3 all_blk_results refcounts = " % spamLabel, [ sys.getrefcount(x) for x in all_blk_results ])
+                #    #    x = None
+                #    to_concat = None
+                #    print_mem_usage("End TEST1 of %s-block" % spamLabel)
+                #
+                #
+                #all_blk_results = None #DEBUG MEM FREE!!!
+                #print_mem_usage("Post gather blocks TEST1 FREE")
+                #
+                #
+                ##gather results
+                #tm = _time.time()
+                #all_blk_results = _mpit.gather_blk_results(nBlks, blkOwners, myBlkIndices,
+                #                                           blk_results, mySubComm)
+                #if comm is None or comm.Get_rank() == 0:
+                #    print("DB1 all_blk_results refcounts = ", [ sys.getrefcount(x) for x in all_blk_results ])
+                #    x = None
+                #print_mem_usage("Post gather blocks TEST2")
+                #
+                #def memsafe_concatenate2(): # ars, axis=0 ):
+                #    new_shape = [ 100*(1024**2) ] #list(ars[0].shape[:])
+                #    #new_shape[axis] = sum( [ a.shape[axis] for a in ars ] ); a = None
+                #    ret = _np.ones( new_shape[:], 'd') #ars[0].dtype )
+                #    #slc = [ slice(None,None) ]*ret.ndim
+                #    #i = 0
+                #    #for a in ars:
+                #    #    d = a.shape[axis]
+                #    #    slc[axis] = slice(i,i+d)
+                #    #    #ret[slc] = a
+                #    #    i += d
+                #    return None
+                #
+                #testAr = []
+                #for spamLabel in sub_results:
+                #    print_mem_usage("Begin TEST2 of %s-block" % spamLabel)
+                #    to_concat = [ sub_results[spamLabel][1] ] \
+                #        + [ blk[spamLabel][1] for blk in all_blk_results]
+                #    blk=None
+                #
+                #    sub_results[spamLabel] = list(sub_results[spamLabel])
+                #    print_mem_usage("Pre concat %s-block" % spamLabel)
+                #    #sub_results[spamLabel][1] = _np.concatenate( to_concat, axis=1 )
+                #    #testAr.append( _np.concatenate( to_concat, axis=1 ) )
+                #    #testAr.append( memsafe_concatenate( to_concat, axis=1 ) )
+                #    testRet = memsafe_concatenate2() #( to_concat, axis=1 )
+                #    print_mem_usage("Post concat %s-block" % spamLabel)
+                #    testRet = None
+                #    sub_results[spamLabel] = tuple(sub_results[spamLabel])
+                #    #if comm is None or comm.Get_rank() == 0:
+                #    #    print("DB %s 3 all_blk_results refcounts = " % spamLabel, [ sys.getrefcount(x) for x in all_blk_results ])
+                #    #    x = None
+                #    to_concat = None
+                #    print_mem_usage("End TEST2 of %s-block" % spamLabel)
+                #
+                #
+                #all_blk_results = None #DEBUG MEM FREE!!!
+                #print_mem_usage("Post gather blocks TEST2 FREE")
+                #testAr = None
+                #print_mem_usage("Post gather blocks TEST2 FREE ARRAY")
+
                 all_blk_results = _mpit.gather_blk_results(nBlks, blkOwners, myBlkIndices,
                                                            blk_results, mySubComm)
+
+                #if comm is None or comm.Get_rank() == 0:
+                #    print("DB2 all_blk_results refcounts = ", [ sys.getrefcount(x) for x in all_blk_results ])
+                #    x = None
+
+                #if comm is None or comm.Get_rank() == 0:
+                #    print("DB2* all_blk_results refcounts = ", 
+                #          " + ".join( [
+                #            " : ".join( [
+                #                        (sl + ":" + ",".join( [ str(sys.getrefcount(x)) for x in tup if x is not None]))
+                #                        for sl,tup in d.items() ] ) for d in all_blk_results ] ))
+                #    x = None; sl=None; tup=None; d=None
+
+                blk_results = None #free this mem asap
+
                 add_time(timer_dict, "MPI IPC1", _time.time()-tm)
-                print_mem_usage("Post gather blocks")
+                print_mem_usage("Post gather blocks XXX") # (expect + %s, shapes=%s)"
+ #                               % (" + ".join(["%.2fGB" % (x.nbytes/(1024.0**3)) for d in all_blk_results for tup in d.values() for x in tup if x is not None]),
+  #                                 " + ".join([str(x.shape) for d in all_blk_results for tup in d.values() for x in tup if x is not None])))
 
                 for spamLabel in sub_results:
+                    print_mem_usage("Begin of %s-block" % spamLabel)
                     to_concat = [ sub_results[spamLabel][1] ] \
                         + [ blk[spamLabel][1] for blk in all_blk_results]
+                    #if comm is None or comm.Get_rank() == 0:
+                    #    print("DB %s 1 all_blk_results refcounts = " % spamLabel, [ sys.getrefcount(x) for x in all_blk_results ])
+                    #    x = None
+                    blk=None
+                    #if comm is None or comm.Get_rank() == 0:
+                    #    print("DB %s 2 all_blk_results refcounts = " % spamLabel, [ sys.getrefcount(x) for x in all_blk_results ])
+                    #    x = None
+
                     sub_results[spamLabel] = list(sub_results[spamLabel])
+                    print_mem_usage("Pre concat %s-block" % spamLabel)
                     sub_results[spamLabel][1] = _np.concatenate( to_concat, axis=1 )
+                    print_mem_usage("Post concat %s-block" % spamLabel)
                     sub_results[spamLabel] = tuple(sub_results[spamLabel])
+                    #if comm is None or comm.Get_rank() == 0:
+                    #    print("DB %s 3 all_blk_results refcounts = " % spamLabel, [ sys.getrefcount(x) for x in all_blk_results ])
+                    #    x = None
+                    to_concat = None
+                    print_mem_usage("End of %s-block" % spamLabel)
+
+                print_mem_usage("End of %s-block" % spamLabel)
+                #if comm is None or comm.Get_rank() == 0:
+                #    print("DB3 all_blk_results refcounts = ", [ sys.getrefcount(x) for x in all_blk_results ])
+                #    x = None
+
+                #if comm is None or comm.Get_rank() == 0:
+                #    print("DB3* all_blk_results refcounts = ", 
+                #          " + ".join( [
+                #            " : ".join( [
+                #                        (sl + ":" + ",".join( [ str(sys.getrefcount(x)) for x in tup if x is not None]))
+                #                        for sl,tup in d.items() ] ) for d in all_blk_results ] ))
+                #    x = None; sl=None; tup=None; d=None
+
+                #if comm is None or comm.Get_rank() == 0:
+                #    def namestr(obj,spc1,spc2):
+                #        name1 = [name for name in spc1 if spc1[name] is obj]
+                #        if len(name1) > 0: return name1
+                #        return [name for name in spc2 if spc2[name] is obj]
+                #        
+                #    gc.collect() #make sure all garbage cleared before collecting referrers.
+                #    referrers = gc.get_referrers(all_blk_results)
+                #    print("DEBUG %d REFERENCES:" % len(referrers))
+                #    for referrer in referrers:
+                #        print(namestr(referrer, locals(), globals()))
+                #
+                #    referrers = gc.get_referrers(all_blk_results[0])
+                #    print("DEBUG %d REFERENCES [0]:" % len(referrers))
+                #    for referrer in referrers:
+                #        print(namestr(referrer, locals(), globals()))
+
+                all_blk_results = None #free any memory held over - TODO: do this better so intermediate mem doesn't spike?
+                print_mem_usage("Post concat blocks (expect no additional?)")
 
             my_results.append(sub_results) #sub_results is a dict (keys = spam labels)
 
@@ -2548,7 +2713,7 @@ class GateSetCalculator(object):
                                      mySubTreeIndices, (prMxToFill, mxToFill),
                                      my_results, comm, timer_dict)
         add_time(timer_dict, "MPI IPC2", _time.time()-tm)
-        print_mem_usage("Post gather subtrees")
+        print_mem_usage("Post gather subtrees (no additional b/c filling already alloc'd mx?)")
 
         if clipTo is not None and prMxToFill is not None:
             _np.clip( prMxToFill, clipTo[0], clipTo[1], out=prMxToFill ) # in-place clip
