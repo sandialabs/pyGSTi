@@ -1311,6 +1311,15 @@ class GateSet(object):
                 printer.log("  wrtLen = %d" % wrtLen)
                 printer.log("  nSubtreesPerProc = %d" % nSubtreesPerProc)
                 printer.log("=> %.2f GB" % (mem*floatSize/(1024.0**3)))
+                if "bulk_fill_dprobs" in subcalls:
+                    printer.log(" DB Detail: dprobs cache = %.2fGB" % 
+                                (8*cacheSize * wrtLen * dim * dim / (1024.0**3)))
+                    printer.log(" DB Detail: probs cache = %.2fGB" % 
+                                (8*cacheSize * dim * dim / (1024.0**3)))
+                    printer.log(" DB Detail: subtree probs = %.2fGB" % 
+                                (8*nSubtreesPerProc * nspam * cacheSize / (1024.0**3)))
+                    printer.log(" DB Detail: subtree dprobs = %.2fGB" % 
+                                (8*nSubtreesPerProc * nspam * cacheSize * num_params / (1024.0**3)))
 
             #printer.log("DB: memEstimate(ng=%d, np=%d, Ng=%d) = %.2f GB" 
             #            % (ng,np,Ng,mem*floatSize/(1024.0**3)))
