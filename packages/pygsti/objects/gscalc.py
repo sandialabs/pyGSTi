@@ -60,7 +60,7 @@ def print_mem_usage(prefix):
     from mpi4py import MPI
     if MPI.COMM_WORLD.Get_rank() == 0:
         p = _psutil.Process(_os.getpid())
-        #print("MEM USAGE [%s] = %.2f GB" % (prefix,p.memory_info()[0] * BtoGB))
+        print("MEM USAGE [%s] = %.2f GB" % (prefix,p.memory_info()[0] * BtoGB))
 
 
 def build_permute_copy_order(indices):
@@ -2200,14 +2200,14 @@ class GateSetCalculator(object):
         for spamLabel,rowIndex in spam_label_rows.items():
             if self._is_remainder_spamlabel(spamLabel):
                 remainder_index = rowIndex; continue
+            print("Calc ",(spamLabel,rowIndex,fslc,pslc)) #DEBUG!!!
             calc_and_fill_fn(spamLabel,rowIndex,fslc,pslc,False)
 
         #compute remainder label
         if remainder_index is not None:
-
-            non_non_result_indices = [ i for i in range(len(result_tup)) \
+            non_none_result_indices = [ i for i in range(len(result_tup)) \
                                            if result_tup[i] is not None ]
-            for i in non_non_result_indices: #zero out for ensuing sum
+            for i in non_none_result_indices: #zero out for ensuing sum
                 if i == 0:
                     result_tup[i][remainder_index,fslc] = 0
                 else:
@@ -2222,17 +2222,17 @@ class GateSetCalculator(object):
                     for i in non_none_result_indices:
                         if i == 0:
                             result_tup[i][remainder_index,fslc] += \
-                                result_tup[i][rowIndex][fslc]
+                                result_tup[i][rowIndex,fslc]
                         else:
                             result_tup[i][remainder_index,fslc,pslc] += \
-                                result_tup[i][rowIndex][fslc,pslc]
+                                result_tup[i][rowIndex,fslc,pslc]
                 else:
                     calc_and_fill_fn(spamLabel,reaminder_index,fslc,
                                      pslc,sumInto=True)
 
             #At this point, result_tup[i][remainder_index][fslc] contains the 
             # sum of the results from all other spam labels.
-            for i in non_non_result_indices:
+            for i in non_none_result_indices:
                 if i == 0: # probs = 1.0 - sum, whereas dprobs, hprobs = -sum
                     result_tup[i][remainder_index,fslc] *= -1.0
                     result_tup[i][remainder_index,fslc] += 1.0
@@ -2560,6 +2560,31 @@ class GateSetCalculator(object):
                 add_time(timer_dict, "bulk_fill_dprobs calc_from_spamlabel", _time.time()-tm)
 
 
+            #DEBUG!!!
+            #prMxToFillDB = prMxToFill.copy()
+            #mxToFillDB = mxToFill.copy()
+            #def calc_and_fillDB(spamLabel, isp, fslc, pslc, sumInto):
+            #    tm = _time.time()
+            #    old_err = _np.seterr(over='ignore')
+            #    rho,E = self._rhoE_from_spamLabel(spamLabel)
+            #    
+            #    if sumInto:
+            #        if prMxToFillDB is not None:
+            #            prMxToFillDB[isp,fslc] += \
+            #                self._probs_from_rhoE(spamLabel, rho, E, Gs, scaleVals)
+            #            mxToFillDB[isp,fslc,pslc] += self._dprobs_from_rhoE( 
+            #                spamLabel, rho, E, Gs, dGs, scaleVals, wrtSlices)
+            #    else:
+            #        if prMxToFillDB is not None:
+            #            prMxToFillDB[isp,fslc] = \
+            #                self._probs_from_rhoE(spamLabel, rho, E, Gs, scaleVals)
+            #            mxToFillDB[isp,fslc,pslc] = self._dprobs_from_rhoE( 
+            #                spamLabel, rho, E, Gs, dGs, scaleVals, wrtSlices)
+            #
+            #    _np.seterr(**old_err)
+            #    add_time(timer_dict, "bulk_fill_dprobs calc_from_spamlabel", _time.time()-tm)
+
+
 
             #Set wrtBlockSize to use available processors if it isn't specified
             if wrtFilter is None:
@@ -2570,6 +2595,17 @@ class GateSetCalculator(object):
                         else min(comm_blkSize, blkSize) #override with smaller comm_blkSize
             else:
                 blkSize = None # wrtFilter dictates block
+
+
+            #if True: #DEBUG
+            #    #Fill derivative cache info
+            #    gatesSlice = wrtSlices['gates'] if (wrtSlices is not None) else None
+            #    dProdCache = self._compute_dproduct_cache(evalSubTree, prodCache, scaleCache,
+            #                                              mySubComm, gatesSlice, timer_dict)
+            #    dGs = evalSubTree.final_view(dProdCache, axis=0)
+            #    self._fill_result_tuple( (prMxToFillDB, mxToFillDB), spam_label_rows,
+            #                             fslc, slice(None,None), calc_and_fillDB )
+
 
             if blkSize is None:
                 #Fill derivative cache info
@@ -2595,6 +2631,7 @@ class GateSetCalculator(object):
                     blocks.append( sliceShift(
                             slice(blkSize*nBlks,self.tot_gate_params),
                             +self.tot_spam_params) ); nBlks += 1
+                print("nBlks = ",nBlks, ":", blocks)
 
                 # Create placeholder dGs for *no* gate params to compute
                 #  derivatives wrt all spam parameters
@@ -2619,16 +2656,16 @@ class GateSetCalculator(object):
                     tm = _time.time()
                     old_err = _np.seterr(over='ignore')
                     rho,E = self._rhoE_from_spamLabel(spamLabel)
-                    gateSlice = sliceShift(pslc,-self.tot_spam_params)
+                    gateSlc = sliceShift(pslc,-self.tot_spam_params)
                     
                     if sumInto:
-                        mxToFill[isp,fslc,pslc] = self._dprobs_from_rhoE(
-                            spamLabel, rho, E, Gs, dGs, scaleVals,
-                            {'preps':slice(0,0),'effects':slice(0,0),'gates':gateSlice })
-                    else:
                         mxToFill[isp,fslc,pslc] += self._dprobs_from_rhoE(
                             spamLabel, rho, E, Gs, dGs, scaleVals,
-                            {'preps':slice(0,0),'effects':slice(0,0),'gates':gateSlice })
+                            {'preps':slice(0,0),'effects':slice(0,0),'gates':gateSlc })
+                    else:
+                        mxToFill[isp,fslc,pslc] = self._dprobs_from_rhoE(
+                            spamLabel, rho, E, Gs, dGs, scaleVals,
+                            {'preps':slice(0,0),'effects':slice(0,0),'gates':gateSlc })
                     _np.seterr(**old_err)
                     add_time(timer_dict, "bulk_fill_dprobs calc_vdp_from_spamlabel", _time.time()-tm)
 
@@ -2750,8 +2787,34 @@ class GateSetCalculator(object):
                 ##testAr = None
                 ##print_mem_usage("Post gather blocks TEST2 FREE ARRAY")
 
-                _mpit.gather_slices(blocks, blkOwners, mxToFill[:,flc],
+                _mpit.gather_slices(blocks, blkOwners, mxToFill[:,fslc],
                                     2, mySubComm, timer_dict)
+
+                #DEBUG!!!
+                #rnk = mySubComm.Get_rank()
+                #print("%d: block indices = " % rnk,myBlkIndices)
+                #for spl,spi in spam_label_rows.items():
+                #    print("%d: DiffSP(%s) = %g" % 
+                #          (rnk,spl,_np.linalg.norm(mxToFillDB[spi,fslc,slice(0,7)]
+                #                                         -mxToFill[spi,fslc,slice(0,7)])))
+                #    for i,blk in enumerate(blocks):
+                #        print("%d: Diff%d(%s) = %g" % 
+                #              (rnk,i,spl,_np.linalg.norm(mxToFillDB[spi,fslc,blk]
+                #                                         -mxToFill[spi,fslc,blk])))
+                #        if _np.linalg.norm(mxToFillDB[spi,fslc,blk]
+                #                                         -mxToFill[spi,fslc,blk]) > 1e-6:
+                #            print("DB1 ",_np.linalg.norm(mxToFillDB[spi,fslc,blk]
+                #                                         -mxToFill[0,fslc,blk]))
+                #            print("DB2 ",_np.linalg.norm(mxToFillDB[spi,fslc,blk]
+                #                                         -mxToFill[1,fslc,blk]))
+                #
+                #            assert(False)
+                #
+                #        
+                #
+                #assert(_np.linalg.norm(mxToFillDB[:,fslc]-mxToFill[:,fslc]) < 1e-6)
+                #assert(_np.linalg.norm(prMxToFillDB[:,fslc]-prMxToFill[:,fslc]) < 1e-6)
+
                 #note: mxToFill (K,S,M) --> pass mxToFill[:,fslc] (K,s,M)
                 #  so mxToFill[:,fslc][:,:,blocks[i]] (axis=2) == mxToFill[:,fslc,blocks[i]]
 
