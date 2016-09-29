@@ -18,6 +18,25 @@ from .verbosityprinter import VerbosityPrinter
 #import sys #DEBUG - for printing
 
 
+#Slice Utility Functions (TODO: move to separate slicetools.py?)
+def sliceLen(s):
+    if s.step is None: return s.stop-s.start
+    else: return len(range(s.start,s.stop.s.step))
+
+def sliceShift(s,offset):
+    return slice(s.start+offset,s.stop+offset,s.step)
+
+def sliceIndices(s):
+    if s.step is None: 
+        return list(range(s.start,s.stop))
+    return list(range(s.start,s.stop,s.step))
+
+def convertToSlice(lst):
+    assert(lst == list(range(lst[0],lst[-1]+1)))
+    return slice(lst[0],lst[-1]+1)
+
+
+
 #######################################################
 #DEBUG 
 #######################################################
@@ -30,7 +49,6 @@ def add_time(timer_dict, timerName, val):
         else:
             timer_dict[timerName] = val
 
-import objgraph #DEBUG - for memory profiling
 import gc
 import sys
 #gc.set_debug(gc.DEBUG_LEAK)
@@ -42,7 +60,7 @@ def print_mem_usage(prefix):
     from mpi4py import MPI
     if MPI.COMM_WORLD.Get_rank() == 0:
         p = _psutil.Process(_os.getpid())
-        print("MEM USAGE [%s] = %.2f GB" % (prefix,p.memory_info()[0] * BtoGB))
+        #print("MEM USAGE [%s] = %.2f GB" % (prefix,p.memory_info()[0] * BtoGB))
 
 
 def build_permute_copy_order(indices):
@@ -230,8 +248,8 @@ class GateSetCalculator(object):
         self.tot_rho_params = sum(self.num_rho_params)
         self.tot_e_params = sum(self.num_e_params)
         self.tot_gate_params = sum(self.num_gate_params)
-        self.tot_params = self.tot_rho_params + self.tot_e_params + self.tot_gate_params
-
+        self.tot_spam_params = self.tot_rho_params + self.tot_e_params
+        self.tot_params = self.tot_spam_params + self.tot_gate_params
 
 
 
@@ -394,7 +412,7 @@ class GateSetCalculator(object):
         dim = self.dim
 
 
-        #Create per-gate with-respect-to paramter filters, used to
+        #Create per-gate with-respect-to parameter filters, used to
         # select a subset of all the derivative columns, essentially taking
         # a derivative of only a *subset* of all the gate's parameters
         fltr = {} #keys = gate labels, values = per-gate param indices
@@ -1229,7 +1247,7 @@ class GateSetCalculator(object):
 
 
     def _compute_dproduct_cache(self, evalTree, prodCache, scaleCache,
-                                comm=None, wrtFilter=None, timer_dict=None):
+                                comm=None, wrtSlice=None, timer_dict=None):
         """
         Computes a tree of product derivatives in a linear cache space. Will
         use derivative columns and then (and only when needed) a split tree
@@ -1239,7 +1257,7 @@ class GateSetCalculator(object):
 
         dim = self.dim
         #nGateStrings = evalTree.num_final_strings()
-        nGateDerivCols = self.tot_gate_params if (wrtFilter is None) else len(wrtFilter)
+        nGateDerivCols = self.tot_gate_params if (wrtSlice is None) else sliceLen(wrtSlice)
         deriv_shape = (nGateDerivCols, dim, dim)
         cacheSize = len(evalTree)
 
@@ -1270,7 +1288,7 @@ class GateSetCalculator(object):
                         #split *many* procs among a smaller number of indices, assigning the
                         # same index list to multiple procs and making a "myComm" group for them.
 
-                    assert(wrtFilter is None) # sub-tree division occurs *before* wrtFilter division
+                    assert(wrtSlice is None) # sub-tree division occurs *before* wrtSlice division
                     my_results = [ self._compute_dproduct_cache(
                             subtrees[iSubTree],prodCache,scaleCache, myComm)
                                    for iSubTree in mySubTreeIndices ]
@@ -1288,26 +1306,25 @@ class GateSetCalculator(object):
                                    " than derivative columns.")
 
             # Use comm to distribute columns
-            allDerivColIndices = list(range(nGateDerivCols)) if (wrtFilter is None) else wrtFilter
-            myDerivColIndices, _, mySubComm = \
-                _mpit.distribute_indices(allDerivColIndices, comm)
+            allDerivColSlice = slice(0,nGateDerivCols) if (wrtSlice is None) else wrtSlice
+            myDerivColSlice, _, mySubComm = \
+                _mpit.distribute_slice(allDerivColSlice, comm)
             #print("MPI: _compute_dproduct_cache over %d cols (%s) (rank %d computing %s)" \
             #    % (nGateDerivCols, str(allDerivColIndices), comm.Get_rank(), str(myDerivColIndices)))
-
             if mySubComm is not None and mySubComm.Get_size() > 1:
                 _warnings.warn("Too many processors to make use of in " +
                                " _compute_dproduct_cache.")
-                if mySubComm.Get_rank() > 0: myDerivColIndices = []
+                if mySubComm.Get_rank() > 0: myDerivColSlice = slice(0,0)
                   #don't compute anything on "extra", i.e. rank != 0, cpus
 
             my_results = self._compute_dproduct_cache(
-                evalTree, prodCache, scaleCache, None, myDerivColIndices, timer_dict)
+                evalTree, prodCache, scaleCache, None, myDerivColSlice, timer_dict)
                 # pass None as comm, *not* mySubComm, since we can't do any further parallelization
 
             tm = _time.time() #TIMER!!!
             all_results = comm.allgather(my_results)
             add_time(timer_dict, "MPI IPC", _time.time()-tm) #TIMER!!!
-            return _np.concatenate(all_results, axis=1)
+            return _np.concatenate(all_results, axis=1) #TODO: remove this concat w/better gather?
 
         # ------------------------------------------------------------------
         tSerialStart = _time.time() #TIMER!!!
@@ -1320,13 +1337,14 @@ class GateSetCalculator(object):
 
         # This iteration **must** match that in bulk_evaltree
         #   in order to associate the right single-gate-strings w/indices
+        wrtIndices = sliceIndices(wrtSlice) if (wrtSlice is not None) else None
         for i,gateLabel in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
             if gateLabel == "": #special case of empty label == no gate
                 assert(i == 0) #tree convention
                 dProdCache[i] = _np.zeros( deriv_shape )
                 #nnzCache[i] = 0
-            else:
-                dgate = self.dproduct( (gateLabel,) , wrtFilter=wrtFilter)
+            else:                
+                dgate = self.dproduct( (gateLabel,) , wrtFilter=wrtIndices)
                 dProdCache[i] = dgate / _np.exp(scaleCache[i])
                 #nnzCache[i] = _np.count_nonzero(dProdCache[i])
 
@@ -1365,7 +1383,7 @@ class GateSetCalculator(object):
 
 
     def _compute_hproduct_cache(self, evalTree, prodCache, dProdCache, scaleCache,
-                                comm=None, wrtFilter=None):
+                                comm=None, wrtSlice=None):
         """
         Computes a tree of product 2nd derivatives in a linear cache space. Will
         use derivative columns and then (and only when needed) a split tree
@@ -1379,7 +1397,7 @@ class GateSetCalculator(object):
 
         #nGateStrings = evalTree.num_final_strings() #len(gatestring_list)
         nGateDerivCols1 = self.tot_gate_params
-        nGateDerivCols2 = nGateDerivCols1 if (wrtFilter is None) else len(wrtFilter)
+        nGateDerivCols2 = nGateDerivCols1 if (wrtSlice is None) else sliceLen(wrtSlice)
         #deriv_shape = (nGateDerivCols1, dim, dim)
         hessn_shape = (nGateDerivCols1, nGateDerivCols2, dim, dim)
         cacheSize = len(evalTree)
@@ -1410,7 +1428,7 @@ class GateSetCalculator(object):
                         #split *many* procs among a smaller number of indices, assigning the
                         # same index list to multiple procs and making a "myComm" group for them.
 
-                    assert(wrtFilter is None) # sub-tree division occurs *before* wrtFilter division
+                    assert(wrtSlice is None) # sub-tree division occurs *before* wrtSlice division
                     my_results = [ self._compute_hproduct_cache(
                             subtrees[iSubTree],prodCache,dProdCache,scaleCache,myComm)
                                    for iSubTree in mySubTreeIndices ]
@@ -1429,24 +1447,24 @@ class GateSetCalculator(object):
                                    " than derivative columns.")
 
             # Use comm to distribute columns
-            allDeriv2ColIndices = list(range(nGateDerivCols2)) if (wrtFilter is None) else wrtFilter
-            myDerivColIndices, _, mySubComm = \
-                _mpit.distribute_indices(allDeriv2ColIndices, comm)
+            allDeriv2ColSlice = slice(0,nGateDerivCols2) if (wrtSlice is None) else wrtSlice
+            myDerivColSlice, _, mySubComm = \
+                _mpit.distribute_slice(allDeriv2ColSlice, comm)
             #print "MPI: _compute_hproduct_cache over %d cols (rank %d computing %s)" \
             #    % (nGateDerivCols2, comm.Get_rank(), str(myDerivColIndices))
 
             if mySubComm is not None and mySubComm.Get_size() > 1:
                 _warnings.warn("Too many processors to make use of in " +
                                " _compute_hproduct_cache.")
-                if mySubComm.Get_rank() > 0: myDerivColIndices = []
+                if mySubComm.Get_rank() > 0: myDerivColSlice = slice(0,0)
                   #don't compute anything on "extra", i.e. rank != 0, cpus
 
             my_results = self._compute_hproduct_cache(
-                evalTree, prodCache, dProdCache, scaleCache, None, myDerivColIndices)
+                evalTree, prodCache, dProdCache, scaleCache, None, myDerivColSlice)
                 # pass None as comm, *not* mySubComm, since we can't do any further parallelization
 
             all_results = comm.allgather(my_results)
-            return _np.concatenate(all_results, axis=2)
+            return _np.concatenate(all_results, axis=2) #TODO: replace concat w/better gather
 
         # ------------------------------------------------------------------
 
@@ -1465,19 +1483,19 @@ class GateSetCalculator(object):
             #if gateLabel == "": #special case of empty label == no gate
             #    hProdCache[i] = _np.zeros( hessn_shape )
             #else:
-            #    hgate = self.hproduct( (gateLabel,), wrtFilter=wrtFilter)
+            #    hgate = self.hproduct( (gateLabel,), wrtFilter=sliceIndices(wrtSlice))
             #    hProdCache[i] = hgate / _np.exp(scaleCache[i])
 
         #Function for "symmetric dLdR" ("dLdR + swapaxes(dLdR)") term for Hessian
-        if wrtFilter is None:
+        if wrtSlice is None:
             def compute_sym_dLdR(dL,dR):
                 dLdR = _np.swapaxes(_np.dot(dL,dR),1,2)
                 return dLdR + _np.swapaxes(dLdR,0,1)
                   #same as (but faster than) _np.einsum('ikm,jml->ijkl',dL,dR)
         else:
             def compute_sym_dLdR(dL,dR):
-                dL_filtered = dL.take(wrtFilter, axis=0)
-                dR_filtered = dR.take(wrtFilter, axis=0)
+                dL_filtered = dL[wrtSlice] #OLD: dL.take(wrtFilter, axis=0)
+                dR_filtered = dR[wrtSlice] #OLD: dR.take(wrtFilter, axis=0)
                 dLdR1 = _np.swapaxes(_np.dot(dL,dR_filtered),1,2)
                 dLdR2 = _np.swapaxes(_np.dot(dL_filtered,dR),1,2)
                 return dLdR1 + _np.swapaxes(dLdR2,0,1)
@@ -1567,7 +1585,6 @@ class GateSetCalculator(object):
 
 
 
-
     def bulk_dproduct(self, evalTree, flat=False, bReturnProds=False,
                       bScale=False, comm=None, wrtFilter=None):
         """
@@ -1642,7 +1659,7 @@ class GateSetCalculator(object):
 
         prodCache, scaleCache = self._compute_product_cache(evalTree, comm)
         dProdCache = self._compute_dproduct_cache(evalTree, prodCache, scaleCache,
-                                                  comm, wrtFilter)
+                                                  comm, convertToSlice(wrtFilter))
 
         #use cached data to construct return values
         old_err = _np.seterr(over='ignore')
@@ -1803,7 +1820,7 @@ class GateSetCalculator(object):
         dProdCache = self._compute_dproduct_cache(evalTree, prodCache, scaleCache,
                                                   comm, None) #wrtFilter *not* for 1st derivs
         hProdCache = self._compute_hproduct_cache(evalTree, prodCache, dProdCache,
-                                                  scaleCache, comm, wrtFilter)
+                                                  scaleCache, comm, convertToSlice(wrtFilter))
 
         #use cached data to construct return values
         old_err = _np.seterr(over='ignore')
@@ -1881,8 +1898,7 @@ class GateSetCalculator(object):
         return _np.squeeze( _np.dot(E, _np.dot(Gs, rho)), axis=(0,2) ) * scaleVals
           # shape == (len(gatestring_list),) ; may overflow but OK
 
-    def _dprobs_from_rhoE(self, spamLabel, rho, E, Gs, dGs, scaleVals, wrtFilters=None):
-
+    def _dprobs_from_rhoE(self, spamLabel, rho, E, Gs, dGs, scaleVals, wrtSlices=None):
         (rholabel,elabel) = self.spamdefs[spamLabel]
         nGateStrings = Gs.shape[0]
 
@@ -1939,18 +1955,21 @@ class GateSetCalculator(object):
             dp_dEs[:,self.e_offset[eIndex]:self.e_offset[eIndex+1]] = \
                 _np.dot(dp_dAnyE, self.effects[elabel].deriv_wrt_params())
 
-        if wrtFilters is None:
+        if wrtSlices is None:
             sub_vdp = _np.concatenate( (dp_drhos,dp_dEs,dp_dGates), axis=1 )
         else:
-            sub_vdp = _np.concatenate((dp_drhos.take(wrtFilters['preps'],axis=1),
-                                       dp_dEs.take(wrtFilters['effects'],axis=1),
+            sub_vdp = _np.concatenate((dp_drhos[:,wrtSlices['preps']],
+                                       dp_dEs[:,wrtSlices['effects']],
                                        dp_dGates), axis=1 )
+            #OLD (allowed arbitrary wrtFilter-ing, but slower and not needed)
+            #sub_vdp = _np.concatenate((dp_drhos.take(wrtFilters['preps'],axis=1),
+            #                           dp_dEs.take(wrtFilters['effects'],axis=1),
+            #                           dp_dGates), axis=1 )
         return sub_vdp
 
 
     def _hprobs_from_rhoE(self, spamLabel, rho, E, Gs, dGs, hGs, scaleVals,
-                          wrtFilters=None, spamColsOnly=False):
-
+                          wrtSlices=None, spamColsOnly=False):
         (rholabel,elabel) = self.spamdefs[spamLabel]
         nGateStrings = Gs.shape[0]
 
@@ -2022,7 +2041,7 @@ class GateSetCalculator(object):
         d2pr_d2Es   = _np.zeros( (nGateStrings, self.tot_e_params, self.tot_e_params) )
         #END SPAM -----------------------
 
-        if wrtFilters is None:
+        if wrtSlices is None:
             if not spamColsOnly:
                 ret_row1 = _np.concatenate( ( d2pr_d2rhos,_np.transpose(d2pr_dErhos,(0,2,1)), _np.transpose(d2pr_drhos,(0,2,1)) ), axis=2) # wrt rho
                 ret_row2 = _np.concatenate( ( d2pr_dErhos, d2pr_d2Es, _np.transpose(d2pr_dEs,(0,2,1)) ), axis=2 ) # wrt E
@@ -2035,17 +2054,31 @@ class GateSetCalculator(object):
         else:
             assert(not spamColsOnly) #easy to do, but not supported yet
             ret_row1 = _np.concatenate(
-                ( d2pr_d2rhos.take(wrtFilters['preps'],axis=2),
-                  _np.transpose(d2pr_dErhos,(0,2,1)).take(wrtFilters['effects'],axis=2),
-                  _np.transpose(d2pr_drhos, (0,2,1)).take(wrtFilters['gates'],axis=2) ), axis=2) #wrt rho
+                ( d2pr_d2rhos[:,:,wrtSlices['preps']],
+                  _np.transpose(d2pr_dErhos,(0,2,1))[:,:,wrtSlices['effects']],
+                  _np.transpose(d2pr_drhos, (0,2,1))[:,:,wrtSlices['gates']]), axis=2) #wrt rho
             ret_row2 = _np.concatenate(
-                ( d2pr_dErhos.take(wrtFilters['preps'],axis=2),
-                  d2pr_d2Es.take(wrtFilters['effects'],axis=2),
-                  _np.transpose(d2pr_dEs,(0,2,1)).take(wrtFilters['gates'],axis=2) ), axis=2) #wrt E
+                ( d2pr_dErhos[:,:,wrtSlices['preps']],
+                  d2pr_d2Es[:,:,wrtSlices['effects']],
+                  _np.transpose(d2pr_dEs,(0,2,1))[:,:,wrtSlices['gates']]), axis=2) #wrt E
             ret_row3 = _np.concatenate(
-                ( d2pr_drhos.take(wrtFilters['preps'],axis=2),
-                  d2pr_dEs.take(wrtFilters['effects'],axis=2),
+                ( d2pr_drhos[:,:,wrtSlices['preps']],
+                  d2pr_dEs[:,:,wrtSlices['effects']],
                   d2pr_dGates2), axis=2) #wrt gates
+            
+            #OLD (allowed arbitrary wrtFilter-ing, but slower and not needed)
+            #ret_row1 = _np.concatenate(
+            #    ( d2pr_d2rhos.take(wrtFilters['preps'],axis=2),
+            #      _np.transpose(d2pr_dErhos,(0,2,1)).take(wrtFilters['effects'],axis=2),
+            #      _np.transpose(d2pr_drhos, (0,2,1)).take(wrtFilters['gates'],axis=2) ), axis=2) #wrt rho
+            #ret_row2 = _np.concatenate(
+            #    ( d2pr_dErhos.take(wrtFilters['preps'],axis=2),
+            #      d2pr_d2Es.take(wrtFilters['effects'],axis=2),
+            #      _np.transpose(d2pr_dEs,(0,2,1)).take(wrtFilters['gates'],axis=2) ), axis=2) #wrt E
+            #ret_row3 = _np.concatenate(
+            #    ( d2pr_drhos.take(wrtFilters['preps'],axis=2),
+            #      d2pr_dEs.take(wrtFilters['effects'],axis=2),
+            #      d2pr_dGates2), axis=2) #wrt gates
 
         sub_vhp = _np.concatenate( (ret_row1, ret_row2, ret_row3), axis=1 )
 
@@ -2159,7 +2192,56 @@ class GateSetCalculator(object):
         return sub_results
 
 
-    def _fill_sub_result(self, result_tup, spam_label_rows, calc_from_spamlabel_fn):
+    def _fill_result_tuple(self, result_tup, spam_label_rows, tree_slice,
+                           param_slice, calc_and_fill_fn):
+        fslc = tree_slice
+        pslc = param_slice
+        remainder_index = None
+        for spamLabel,rowIndex in spam_label_rows.items():
+            if self._is_remainder_spamlabel(spamLabel):
+                remainder_index = rowIndex; continue
+            calc_and_fill_fn(spamLabel,rowIndex,fslc,pslc,False)
+
+        #compute remainder label
+        if remainder_index is not None:
+
+            non_non_result_indices = [ i for i in range(len(result_tup)) \
+                                           if result_tup[i] is not None ]
+            for i in non_non_result_indices: #zero out for ensuing sum
+                if i == 0:
+                    result_tup[i][remainder_index,fslc] = 0
+                else:
+                    result_tup[i][remainder_index,fslc,pslc] = 0
+
+            for spamLabel in self.spamdefs: #loop over ALL spam labels
+                if self._is_remainder_spamlabel(spamLabel): 
+                    continue # ...except remainder label
+
+                rowIndex = spam_label_rows.get(spamLabel,None)
+                if rowIndex is not None:
+                    for i in non_none_result_indices:
+                        if i == 0:
+                            result_tup[i][remainder_index,fslc] += \
+                                result_tup[i][rowIndex][fslc]
+                        else:
+                            result_tup[i][remainder_index,fslc,pslc] += \
+                                result_tup[i][rowIndex][fslc,pslc]
+                else:
+                    calc_and_fill_fn(spamLabel,reaminder_index,fslc,
+                                     pslc,sumInto=True)
+
+            #At this point, result_tup[i][remainder_index][fslc] contains the 
+            # sum of the results from all other spam labels.
+            for i in non_non_result_indices:
+                if i == 0: # probs = 1.0 - sum, whereas dprobs, hprobs = -sum
+                    result_tup[i][remainder_index,fslc] *= -1.0
+                    result_tup[i][remainder_index,fslc] += 1.0
+                else:
+                    result_tup[i][remainder_index,fslc,pslc] *= -1.0
+        return
+
+
+    def _OLDfill_sub_result(self, result_tup, spam_label_rows, calc_from_spamlabel_fn):
 
         remainder_index = None
         for spamLabel,rowIndex in spam_label_rows.items():
@@ -2394,16 +2476,23 @@ class GateSetCalculator(object):
             assert(wrtBlockSize is None) #Cannot specify both wrtFilter and wrtBlockSize
             tot_rho = self.tot_rho_params
             tot_spam = self.tot_rho_params + self.tot_e_params
-            wrtFilters = {
+            wrtSlices = {
                 'preps':    [ x for x in wrtFilter if x < tot_rho ],
                 'effects' : [ (x-tot_rho) for x in wrtFilter if tot_rho <= x < tot_spam ],
                 'gates' :   [ (x-tot_spam) for x in wrtFilter if x >= tot_spam ] }
+        
+            wrtSlices['preps'] = convertToSlice(wrtSlices['preps'])
+            wrtSlices['effects'] = convertToSlice(wrtSlices['effects'])
+            wrtSlices['gates'] = convertToSlice(wrtSlices['gates'])
         else:
-            wrtFilters = None
+            wrtSlices = None
 
         print_mem_usage("Begin bulk_fill_dprobs (expect ~ %.2fGB)" % (mxToFill.nbytes/(1024.0**3)) )
-        if comm is None or comm.Get_rank() == 0:
-            objgraph.show_growth(limit=50) 
+        ## memory profiling of python objects (never seemed very useful
+        ##  since numpy does all the major allocation/deallocation).
+        #if comm is None or comm.Get_rank() == 0:
+        #    import objgraph 
+        #    objgraph.show_growth(limit=50) 
 
         #get distribution across subtrees (groups if needed)
         subtrees = evalTree.get_sub_trees()
@@ -2416,9 +2505,10 @@ class GateSetCalculator(object):
         #       mySubComm.Get_size() if (mySubComm is not None) else 0))
 
         #eval on each local subtree
-        my_results = []
+        #my_results = []
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
+            fslc = evalSubTree.final_slice()
 
             #Free memory from previous subtree iteration before computing caches
             scaleVals = Gs = dGs = None
@@ -2435,18 +2525,41 @@ class GateSetCalculator(object):
               #( nGateStrings, dim, dim )
             print_mem_usage("Post product take")
 
-            def calc_from_spamlabel(spamLabel):
+            #def calc_from_spamlabel(spamLabel):
+            #    tm = _time.time()
+            #    old_err = _np.seterr(over='ignore')
+            #    rho,E = self._rhoE_from_spamLabel(spamLabel)
+            #
+            #    vp = self._probs_from_rhoE(spamLabel, rho, E, Gs, scaleVals) \
+            #        if (prMxToFill is not None) else None
+            #    vdp = self._dprobs_from_rhoE(spamLabel, rho, E, Gs, dGs,
+            #                                 scaleVals, wrtSlices)
+            #    _np.seterr(**old_err)
+            #    add_time(timer_dict, "bulk_fill_dprobs calc_from_spamlabel", _time.time()-tm)
+            #    return vp,vdp
+
+            def calc_and_fill(spamLabel, isp, fslc, pslc, sumInto):
                 tm = _time.time()
                 old_err = _np.seterr(over='ignore')
                 rho,E = self._rhoE_from_spamLabel(spamLabel)
+                
+                if sumInto:
+                    if prMxToFill is not None:
+                        prMxToFill[isp,fslc] += \
+                            self._probs_from_rhoE(spamLabel, rho, E, Gs, scaleVals)
+                        mxToFill[isp,fslc,pslc] += self._dprobs_from_rhoE( 
+                            spamLabel, rho, E, Gs, dGs, scaleVals, wrtSlices)
+                else:
+                    if prMxToFill is not None:
+                        prMxToFill[isp,fslc] = \
+                            self._probs_from_rhoE(spamLabel, rho, E, Gs, scaleVals)
+                        mxToFill[isp,fslc,pslc] = self._dprobs_from_rhoE( 
+                            spamLabel, rho, E, Gs, dGs, scaleVals, wrtSlices)
 
-                vp = self._probs_from_rhoE(spamLabel, rho, E, Gs, scaleVals) \
-                    if (prMxToFill is not None) else None
-                vdp = self._dprobs_from_rhoE(spamLabel, rho, E, Gs, dGs,
-                                             scaleVals, wrtFilters)
                 _np.seterr(**old_err)
                 add_time(timer_dict, "bulk_fill_dprobs calc_from_spamlabel", _time.time()-tm)
-                return vp,vdp
+
+
 
             #Set wrtBlockSize to use available processors if it isn't specified
             if wrtFilter is None:
@@ -2460,26 +2573,28 @@ class GateSetCalculator(object):
 
             if blkSize is None:
                 #Fill derivative cache info
-                gatesFilter = wrtFilters['gates'] if (wrtFilters is not None) else None
+                gatesSlice = wrtSlices['gates'] if (wrtSlices is not None) else None
                 dProdCache = self._compute_dproduct_cache(evalSubTree, prodCache, scaleCache,
-                                                          mySubComm, gatesFilter, timer_dict)
+                                                          mySubComm, gatesSlice, timer_dict)
                 print_mem_usage("Post compute_dproduct_cache")
                 dGs = evalSubTree.final_view(dProdCache, axis=0)
                   #( nGateStrings, nDerivCols, dim, dim )
                 print_mem_usage("Post compute_dproduct_cache take")
 
                 #Compute all requested derivative columns at once
-                sub_results = self._compute_sub_result(spam_label_rows, calc_from_spamlabel)
-                print_mem_usage("Post compute sub results")
+                self._fill_result_tuple( (prMxToFill, mxToFill), spam_label_rows,
+                                         fslc, slice(None,None), calc_and_fill )
+                print_mem_usage("Post fill sub results")
 
             else: # Divide columns into blocks of at most blkSize
                 assert(wrtFilter is None) #cannot specify both wrtFilter and blkSize
                 nBlks = self.tot_gate_params // blkSize
-                blocks = [ list(range(blkSize*i,blkSize*(i+1))) \
-                               for i in range(nBlks) ]
+                blocks = [sliceShift(slice(blkSize*i,blkSize*(i+1)),
+                                   +self.tot_spam_params) for i in range(nBlks)]
                 if blkSize*nBlks < self.tot_gate_params:
-                    blocks.append(list(range(blkSize*nBlks,self.tot_gate_params)))
-                    nBlks += 1
+                    blocks.append( sliceShift(
+                            slice(blkSize*nBlks,self.tot_gate_params),
+                            +self.tot_spam_params) ); nBlks += 1
 
                 # Create placeholder dGs for *no* gate params to compute
                 #  derivatives wrt all spam parameters
@@ -2487,7 +2602,9 @@ class GateSetCalculator(object):
 
                 #Compute spam derivative columns and possibly probs
                 # (computation that is *not* divided into blocks)
-                sub_results = self._compute_sub_result(spam_label_rows, calc_from_spamlabel)
+                self._fill_result_tuple( 
+                    (prMxToFill, mxToFill), spam_label_rows, fslc,
+                    slice(0,self.tot_spam_params), calc_and_fill )
                 print_mem_usage("Post compute sub results B")
 
                 #distribute derivative computation across blocks
@@ -2497,221 +2614,238 @@ class GateSetCalculator(object):
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
                        +" than derivative columns(%d)!" % self.tot_gate_params 
                        +" [blkSize = %d, nBlks=%d]" % (blkSize,nBlks))
-                #print("DEBUG: %d blks, subComm size=%d, blkComm size = %d" % 
-                #      (nBlks, mySubComm.Get_size() if (mySubComm is not None) else 0,
-                #       blkComm.Get_size() if (blkComm is not None) else 0))
-                #print("DEBUG: myBlkIndices = ",myBlkIndices)
 
-
-                def calc_vdp_from_spamlabel(spamLabel,wrt):
+                def calc_and_fill_blk(spamLabel, isp, fslc, pslc, sumInto):
                     tm = _time.time()
                     old_err = _np.seterr(over='ignore')
                     rho,E = self._rhoE_from_spamLabel(spamLabel)
-                    vdp = self._dprobs_from_rhoE(spamLabel, rho, E, Gs, dGs,
-                                                 scaleVals, {'preps':[],'effects':[],
-                                                             'gates':wrt })
+                    gateSlice = sliceShift(pslc,-self.tot_spam_params)
+                    
+                    if sumInto:
+                        mxToFill[isp,fslc,pslc] = self._dprobs_from_rhoE(
+                            spamLabel, rho, E, Gs, dGs, scaleVals,
+                            {'preps':slice(0,0),'effects':slice(0,0),'gates':gateSlice })
+                    else:
+                        mxToFill[isp,fslc,pslc] += self._dprobs_from_rhoE(
+                            spamLabel, rho, E, Gs, dGs, scaleVals,
+                            {'preps':slice(0,0),'effects':slice(0,0),'gates':gateSlice })
                     _np.seterr(**old_err)
                     add_time(timer_dict, "bulk_fill_dprobs calc_vdp_from_spamlabel", _time.time()-tm)
-                    return None,vdp # None in vp place so _compute_sub_result works
 
-                blk_results = []
+                #blk_results = []
                 for iBlk in myBlkIndices:
-                    dGs = None #free mem from previous dGs before allocating new dProdCache
+                    gateSlice = sliceShift(blocks[iBlk],-self.tot_spam_params)
+                    dProdCache = dGs = None #free mem from previous iter
                     dProdCache = self._compute_dproduct_cache(evalSubTree, prodCache, scaleCache,
-                                                              blkComm, blocks[iBlk], timer_dict)
+                                                              blkComm, gateSlice, timer_dict)
                     print_mem_usage("Post compute_dproduct_cache B (expect + %.2fGB, shape=%s)"
                                     % (dProdCache.nbytes/(1024.0**3), str(dProdCache.shape)) )
                     dGs = evalSubTree.final_view(dProdCache, axis=0)
                       #( nGateStrings, nDerivCols, dim, dim )
                     print_mem_usage("Post compute_dproduct_cache take B")
-                    dG_results = self._compute_sub_result(
-                        spam_label_rows, lambda sl: calc_vdp_from_spamlabel(sl,blocks[iBlk]))
-                    blk_results.append( dG_results )
+                    self._fill_result_tuple( 
+                        (None, mxToFill), spam_label_rows, fslc, 
+                        blocks[iBlk], calc_and_fill_blk )                    
+
+                    #OLD
+                    #dG_results = self._compute_sub_result(
+                    #    spam_label_rows, lambda sl: calc_vdp_from_spamlabel(sl,blocks[iBlk]))
+                    #blk_results.append( dG_results )
                     print_mem_usage("Post dG_results B")
 
                 #gather results
                 tm = _time.time()
                 
-                #all_blk_results = _mpit.gather_blk_results(nBlks, blkOwners, myBlkIndices,
-                #                                           blk_results, mySubComm)
-                #print_mem_usage("Post gather blocks TEST1")
-                #
-                #def memsafe_concatenate1():
-                #    new_shape = [ 100*(1024**2) ] #list(ars[0].shape[:])
-                #    #new_shape[axis] = sum( [ a.shape[axis] for a in ars ] ); a = None
-                #    #ret = _np.ones( new_shape[:], 'd') #ars[0].dtype )
-                #    #slc = [ slice(None,None) ]*ret.ndim
-                #    #i = 0
-                #    #for a in ars:
-                #    #    d = a.shape[axis]
-                #    #    slc[axis] = slice(i,i+d)
-                #    #    #ret[slc] = a
-                #    #    i += d
-                #    return None #ret
-                #
-                #testAr = []
-                #for spamLabel in sub_results:
-                #    print_mem_usage("Begin TEST1 of %s-block" % spamLabel)
-                #    to_concat = [ sub_results[spamLabel][1] ] \
-                #        + [ blk[spamLabel][1] for blk in all_blk_results]
-                #    blk=None
-                #
-                #    sub_results[spamLabel] = list(sub_results[spamLabel])
-                #    print_mem_usage("Pre concat %s-block" % spamLabel)
-                #    #sub_results[spamLabel][1] = _np.concatenate( to_concat, axis=1 )
-                #    #testAr.append( _np.concatenate( to_concat, axis=1 ) )
-                #    #testAr.append( memsafe_concatenate( to_concat, axis=1 ) )
-                #    testRet = memsafe_concatenate1()
-                #    print_mem_usage("Post concat %s-block" % spamLabel)
-                #    testRet = None
-                #    sub_results[spamLabel] = tuple(sub_results[spamLabel])
-                #    #if comm is None or comm.Get_rank() == 0:
-                #    #    print("DB %s 3 all_blk_results refcounts = " % spamLabel, [ sys.getrefcount(x) for x in all_blk_results ])
-                #    #    x = None
-                #    to_concat = None
-                #    print_mem_usage("End TEST1 of %s-block" % spamLabel)
-                #
-                #
-                #all_blk_results = None #DEBUG MEM FREE!!!
-                #print_mem_usage("Post gather blocks TEST1 FREE")
-                #
-                #
-                ##gather results
-                #tm = _time.time()
-                #all_blk_results = _mpit.gather_blk_results(nBlks, blkOwners, myBlkIndices,
-                #                                           blk_results, mySubComm)
-                #if comm is None or comm.Get_rank() == 0:
-                #    print("DB1 all_blk_results refcounts = ", [ sys.getrefcount(x) for x in all_blk_results ])
-                #    x = None
-                #print_mem_usage("Post gather blocks TEST2")
-                #
-                #def memsafe_concatenate2(): # ars, axis=0 ):
-                #    new_shape = [ 100*(1024**2) ] #list(ars[0].shape[:])
-                #    #new_shape[axis] = sum( [ a.shape[axis] for a in ars ] ); a = None
-                #    ret = _np.ones( new_shape[:], 'd') #ars[0].dtype )
-                #    #slc = [ slice(None,None) ]*ret.ndim
-                #    #i = 0
-                #    #for a in ars:
-                #    #    d = a.shape[axis]
-                #    #    slc[axis] = slice(i,i+d)
-                #    #    #ret[slc] = a
-                #    #    i += d
-                #    return None
-                #
-                #testAr = []
-                #for spamLabel in sub_results:
-                #    print_mem_usage("Begin TEST2 of %s-block" % spamLabel)
-                #    to_concat = [ sub_results[spamLabel][1] ] \
-                #        + [ blk[spamLabel][1] for blk in all_blk_results]
-                #    blk=None
-                #
-                #    sub_results[spamLabel] = list(sub_results[spamLabel])
-                #    print_mem_usage("Pre concat %s-block" % spamLabel)
-                #    #sub_results[spamLabel][1] = _np.concatenate( to_concat, axis=1 )
-                #    #testAr.append( _np.concatenate( to_concat, axis=1 ) )
-                #    #testAr.append( memsafe_concatenate( to_concat, axis=1 ) )
-                #    testRet = memsafe_concatenate2() #( to_concat, axis=1 )
-                #    print_mem_usage("Post concat %s-block" % spamLabel)
-                #    testRet = None
-                #    sub_results[spamLabel] = tuple(sub_results[spamLabel])
-                #    #if comm is None or comm.Get_rank() == 0:
-                #    #    print("DB %s 3 all_blk_results refcounts = " % spamLabel, [ sys.getrefcount(x) for x in all_blk_results ])
-                #    #    x = None
-                #    to_concat = None
-                #    print_mem_usage("End TEST2 of %s-block" % spamLabel)
-                #
-                #
-                #all_blk_results = None #DEBUG MEM FREE!!!
-                #print_mem_usage("Post gather blocks TEST2 FREE")
-                #testAr = None
-                #print_mem_usage("Post gather blocks TEST2 FREE ARRAY")
+                ##all_blk_results = _mpit.gather_blk_results(nBlks, blkOwners, myBlkIndices,
+                ##                                           blk_results, mySubComm)
+                ##print_mem_usage("Post gather blocks TEST1")
+                ##
+                ##def memsafe_concatenate1():
+                ##    new_shape = [ 100*(1024**2) ] #list(ars[0].shape[:])
+                ##    #new_shape[axis] = sum( [ a.shape[axis] for a in ars ] ); a = None
+                ##    #ret = _np.ones( new_shape[:], 'd') #ars[0].dtype )
+                ##    #slc = [ slice(None,None) ]*ret.ndim
+                ##    #i = 0
+                ##    #for a in ars:
+                ##    #    d = a.shape[axis]
+                ##    #    slc[axis] = slice(i,i+d)
+                ##    #    #ret[slc] = a
+                ##    #    i += d
+                ##    return None #ret
+                ##
+                ##testAr = []
+                ##for spamLabel in sub_results:
+                ##    print_mem_usage("Begin TEST1 of %s-block" % spamLabel)
+                ##    to_concat = [ sub_results[spamLabel][1] ] \
+                ##        + [ blk[spamLabel][1] for blk in all_blk_results]
+                ##    blk=None
+                ##
+                ##    sub_results[spamLabel] = list(sub_results[spamLabel])
+                ##    print_mem_usage("Pre concat %s-block" % spamLabel)
+                ##    #sub_results[spamLabel][1] = _np.concatenate( to_concat, axis=1 )
+                ##    #testAr.append( _np.concatenate( to_concat, axis=1 ) )
+                ##    #testAr.append( memsafe_concatenate( to_concat, axis=1 ) )
+                ##    testRet = memsafe_concatenate1()
+                ##    print_mem_usage("Post concat %s-block" % spamLabel)
+                ##    testRet = None
+                ##    sub_results[spamLabel] = tuple(sub_results[spamLabel])
+                ##    #if comm is None or comm.Get_rank() == 0:
+                ##    #    print("DB %s 3 all_blk_results refcounts = " % spamLabel, [ sys.getrefcount(x) for x in all_blk_results ])
+                ##    #    x = None
+                ##    to_concat = None
+                ##    print_mem_usage("End TEST1 of %s-block" % spamLabel)
+                ##
+                ##
+                ##all_blk_results = None #DEBUG MEM FREE!!!
+                ##print_mem_usage("Post gather blocks TEST1 FREE")
+                ##
+                ##
+                ###gather results
+                ##tm = _time.time()
+                ##all_blk_results = _mpit.gather_blk_results(nBlks, blkOwners, myBlkIndices,
+                ##                                           blk_results, mySubComm)
+                ##if comm is None or comm.Get_rank() == 0:
+                ##    print("DB1 all_blk_results refcounts = ", [ sys.getrefcount(x) for x in all_blk_results ])
+                ##    x = None
+                ##print_mem_usage("Post gather blocks TEST2")
+                ##
+                ##def memsafe_concatenate2(): # ars, axis=0 ):
+                ##    new_shape = [ 100*(1024**2) ] #list(ars[0].shape[:])
+                ##    #new_shape[axis] = sum( [ a.shape[axis] for a in ars ] ); a = None
+                ##    ret = _np.ones( new_shape[:], 'd') #ars[0].dtype )
+                ##    #slc = [ slice(None,None) ]*ret.ndim
+                ##    #i = 0
+                ##    #for a in ars:
+                ##    #    d = a.shape[axis]
+                ##    #    slc[axis] = slice(i,i+d)
+                ##    #    #ret[slc] = a
+                ##    #    i += d
+                ##    return None
+                ##
+                ##testAr = []
+                ##for spamLabel in sub_results:
+                ##    print_mem_usage("Begin TEST2 of %s-block" % spamLabel)
+                ##    to_concat = [ sub_results[spamLabel][1] ] \
+                ##        + [ blk[spamLabel][1] for blk in all_blk_results]
+                ##    blk=None
+                ##
+                ##    sub_results[spamLabel] = list(sub_results[spamLabel])
+                ##    print_mem_usage("Pre concat %s-block" % spamLabel)
+                ##    #sub_results[spamLabel][1] = _np.concatenate( to_concat, axis=1 )
+                ##    #testAr.append( _np.concatenate( to_concat, axis=1 ) )
+                ##    #testAr.append( memsafe_concatenate( to_concat, axis=1 ) )
+                ##    testRet = memsafe_concatenate2() #( to_concat, axis=1 )
+                ##    print_mem_usage("Post concat %s-block" % spamLabel)
+                ##    testRet = None
+                ##    sub_results[spamLabel] = tuple(sub_results[spamLabel])
+                ##    #if comm is None or comm.Get_rank() == 0:
+                ##    #    print("DB %s 3 all_blk_results refcounts = " % spamLabel, [ sys.getrefcount(x) for x in all_blk_results ])
+                ##    #    x = None
+                ##    to_concat = None
+                ##    print_mem_usage("End TEST2 of %s-block" % spamLabel)
+                ##
+                ##
+                ##all_blk_results = None #DEBUG MEM FREE!!!
+                ##print_mem_usage("Post gather blocks TEST2 FREE")
+                ##testAr = None
+                ##print_mem_usage("Post gather blocks TEST2 FREE ARRAY")
 
-                all_blk_results = _mpit.gather_blk_results(nBlks, blkOwners, myBlkIndices,
-                                                           blk_results, mySubComm)
+                _mpit.gather_slices(blocks, blkOwners, mxToFill[:,flc],
+                                    2, mySubComm, timer_dict)
+                #note: mxToFill (K,S,M) --> pass mxToFill[:,fslc] (K,s,M)
+                #  so mxToFill[:,fslc][:,:,blocks[i]] (axis=2) == mxToFill[:,fslc,blocks[i]]
 
-                #if comm is None or comm.Get_rank() == 0:
-                #    print("DB2 all_blk_results refcounts = ", [ sys.getrefcount(x) for x in all_blk_results ])
-                #    x = None
 
-                #if comm is None or comm.Get_rank() == 0:
-                #    print("DB2* all_blk_results refcounts = ", 
-                #          " + ".join( [
-                #            " : ".join( [
-                #                        (sl + ":" + ",".join( [ str(sys.getrefcount(x)) for x in tup if x is not None]))
-                #                        for sl,tup in d.items() ] ) for d in all_blk_results ] ))
-                #    x = None; sl=None; tup=None; d=None
+                ##all_blk_results = _mpit.gather_blk_results(nBlks, blkOwners, myBlkIndices,
+                ##                                           blk_results, mySubComm)
+                #
+                #
+                ##if comm is None or comm.Get_rank() == 0:
+                ##    print("DB2 all_blk_results refcounts = ", [ sys.getrefcount(x) for x in all_blk_results ])
+                ##    x = None
+                #
+                ##if comm is None or comm.Get_rank() == 0:
+                ##    print("DB2* all_blk_results refcounts = ", 
+                ##          " + ".join( [
+                ##            " : ".join( [
+                ##                        (sl + ":" + ",".join( [ str(sys.getrefcount(x)) for x in tup if x is not None]))
+                ##                        for sl,tup in d.items() ] ) for d in all_blk_results ] ))
+                ##    x = None; sl=None; tup=None; d=None
 
-                blk_results = None #free this mem asap
+                #blk_results = None #free this mem asap
 
                 add_time(timer_dict, "MPI IPC1", _time.time()-tm)
                 print_mem_usage("Post gather blocks XXX") # (expect + %s, shapes=%s)"
  #                               % (" + ".join(["%.2fGB" % (x.nbytes/(1024.0**3)) for d in all_blk_results for tup in d.values() for x in tup if x is not None]),
   #                                 " + ".join([str(x.shape) for d in all_blk_results for tup in d.values() for x in tup if x is not None])))
 
-                for spamLabel in sub_results:
-                    print_mem_usage("Begin of %s-block" % spamLabel)
-                    to_concat = [ sub_results[spamLabel][1] ] \
-                        + [ blk[spamLabel][1] for blk in all_blk_results]
-                    #if comm is None or comm.Get_rank() == 0:
-                    #    print("DB %s 1 all_blk_results refcounts = " % spamLabel, [ sys.getrefcount(x) for x in all_blk_results ])
-                    #    x = None
-                    blk=None
-                    #if comm is None or comm.Get_rank() == 0:
-                    #    print("DB %s 2 all_blk_results refcounts = " % spamLabel, [ sys.getrefcount(x) for x in all_blk_results ])
-                    #    x = None
-
-                    sub_results[spamLabel] = list(sub_results[spamLabel])
-                    print_mem_usage("Pre concat %s-block" % spamLabel)
-                    sub_results[spamLabel][1] = _np.concatenate( to_concat, axis=1 )
-                    print_mem_usage("Post concat %s-block" % spamLabel)
-                    sub_results[spamLabel] = tuple(sub_results[spamLabel])
-                    #if comm is None or comm.Get_rank() == 0:
-                    #    print("DB %s 3 all_blk_results refcounts = " % spamLabel, [ sys.getrefcount(x) for x in all_blk_results ])
-                    #    x = None
-                    to_concat = None
-                    print_mem_usage("End of %s-block" % spamLabel)
-
-                print_mem_usage("End of %s-block" % spamLabel)
-                #if comm is None or comm.Get_rank() == 0:
-                #    print("DB3 all_blk_results refcounts = ", [ sys.getrefcount(x) for x in all_blk_results ])
-                #    x = None
-
-                #if comm is None or comm.Get_rank() == 0:
-                #    print("DB3* all_blk_results refcounts = ", 
-                #          " + ".join( [
-                #            " : ".join( [
-                #                        (sl + ":" + ",".join( [ str(sys.getrefcount(x)) for x in tup if x is not None]))
-                #                        for sl,tup in d.items() ] ) for d in all_blk_results ] ))
-                #    x = None; sl=None; tup=None; d=None
-
-                #if comm is None or comm.Get_rank() == 0:
-                #    def namestr(obj,spc1,spc2):
-                #        name1 = [name for name in spc1 if spc1[name] is obj]
-                #        if len(name1) > 0: return name1
-                #        return [name for name in spc2 if spc2[name] is obj]
-                #        
-                #    gc.collect() #make sure all garbage cleared before collecting referrers.
-                #    referrers = gc.get_referrers(all_blk_results)
-                #    print("DEBUG %d REFERENCES:" % len(referrers))
-                #    for referrer in referrers:
-                #        print(namestr(referrer, locals(), globals()))
+                #for spamLabel in sub_results:
+                #    print_mem_usage("Begin of %s-block" % spamLabel)
+                #    to_concat = [ sub_results[spamLabel][1] ] \
+                #        + [ blk[spamLabel][1] for blk in all_blk_results]
+                #    #if comm is None or comm.Get_rank() == 0:
+                #    #    print("DB %s 1 all_blk_results refcounts = " % spamLabel, [ sys.getrefcount(x) for x in all_blk_results ])
+                #    #    x = None
+                #    blk=None
+                #    #if comm is None or comm.Get_rank() == 0:
+                #    #    print("DB %s 2 all_blk_results refcounts = " % spamLabel, [ sys.getrefcount(x) for x in all_blk_results ])
+                #    #    x = None
                 #
-                #    referrers = gc.get_referrers(all_blk_results[0])
-                #    print("DEBUG %d REFERENCES [0]:" % len(referrers))
-                #    for referrer in referrers:
-                #        print(namestr(referrer, locals(), globals()))
+                #    sub_results[spamLabel] = list(sub_results[spamLabel])
+                #    print_mem_usage("Pre concat %s-block" % spamLabel)
+                #    sub_results[spamLabel][1] = _np.concatenate( to_concat, axis=1 )
+                #    print_mem_usage("Post concat %s-block" % spamLabel)
+                #    sub_results[spamLabel] = tuple(sub_results[spamLabel])
+                #    #if comm is None or comm.Get_rank() == 0:
+                #    #    print("DB %s 3 all_blk_results refcounts = " % spamLabel, [ sys.getrefcount(x) for x in all_blk_results ])
+                #    #    x = None
+                #    to_concat = None
+                #    print_mem_usage("End of %s-block" % spamLabel)
+                #
+                ##if comm is None or comm.Get_rank() == 0:
+                ##    print("DB3 all_blk_results refcounts = ", [ sys.getrefcount(x) for x in all_blk_results ])
+                ##    x = None
+                #
+                ##if comm is None or comm.Get_rank() == 0:
+                ##    print("DB3* all_blk_results refcounts = ", 
+                ##          " + ".join( [
+                ##            " : ".join( [
+                ##                        (sl + ":" + ",".join( [ str(sys.getrefcount(x)) for x in tup if x is not None]))
+                ##                        for sl,tup in d.items() ] ) for d in all_blk_results ] ))
+                ##    x = None; sl=None; tup=None; d=None
+                #
+                ##if comm is None or comm.Get_rank() == 0:
+                ##    def namestr(obj,spc1,spc2):
+                ##        name1 = [name for name in spc1 if spc1[name] is obj]
+                ##        if len(name1) > 0: return name1
+                ##        return [name for name in spc2 if spc2[name] is obj]
+                ##        
+                ##    gc.collect() #make sure all garbage cleared before collecting referrers.
+                ##    referrers = gc.get_referrers(all_blk_results)
+                ##    print("DEBUG %d REFERENCES:" % len(referrers))
+                ##    for referrer in referrers:
+                ##        print(namestr(referrer, locals(), globals()))
+                ##
+                ##    referrers = gc.get_referrers(all_blk_results[0])
+                ##    print("DEBUG %d REFERENCES [0]:" % len(referrers))
+                ##    for referrer in referrers:
+                ##        print(namestr(referrer, locals(), globals()))
 
-                all_blk_results = None #free any memory held over - TODO: do this better so intermediate mem doesn't spike?
+                #all_blk_results = None #free any memory held over
                 print_mem_usage("Post concat blocks (expect no additional?)")
 
-            my_results.append(sub_results) #sub_results is a dict (keys = spam labels)
-
-
+            #my_results.append(sub_results) #sub_results is a dict (keys = spam labels)
+        
         #collect/gather results
         tm = _time.time()
-        _mpit.gather_subtree_results(evalTree, spam_label_rows, subTreeOwners,
-                                     mySubTreeIndices, (prMxToFill, mxToFill),
-                                     my_results, comm, timer_dict)
+        subtreeFinalSlices = [ t.final_slice() for t in subtrees]
+        _mpit.gather_slices(subtreeFinalSlices, subTreeOwners, mxToFill,
+                            1, comm, timer_dict) 
+        #note: pass mxToFill, dim=(K,S,M), so gather mxToFill[:,fslc] (axis=1)
+
+        #_mpit.gather_subtree_results(evalTree, spam_label_rows, subTreeOwners,
+        #                             mySubTreeIndices, (prMxToFill, mxToFill),
+        #                             my_results, comm, timer_dict)
         add_time(timer_dict, "MPI IPC2", _time.time()-tm)
         print_mem_usage("Post gather subtrees (no additional b/c filling already alloc'd mx?)")
 
@@ -2810,12 +2944,16 @@ class GateSetCalculator(object):
             assert(wrtBlockSize is None) #Cannot specify both wrtFilter and wrtBlockSize
             tot_rho = self.tot_rho_params
             tot_spam = self.tot_rho_params + self.tot_e_params
-            wrtFilters = {
+            wrtSlices = {
                 'preps':    [ x for x in wrtFilter if x < tot_rho ],
                 'effects' : [ (x-tot_rho) for x in wrtFilter if tot_rho <= x < tot_spam ],
                 'gates' :   [ (x-tot_spam) for x in wrtFilter if x >= tot_spam ] }
+
+            wrtSlices['preps'] = convertToSlice(wrtSlices['preps'])
+            wrtSlices['effects'] = convertToSlice(wrtSlices['effects'])
+            wrtSlices['gates'] = convertToSlice(wrtSlices['gates'])
         else:
-            wrtFilters = None
+            wrtSlices = None
 
 
         #get distribution across subtrees (groups if needed)
@@ -2853,7 +2991,7 @@ class GateSetCalculator(object):
                 vdp = self._dprobs_from_rhoE(spamLabel, rho, E, Gs, dGs, scaleVals) \
                     if (derivMxToFill is not None) else None
                 vhp = self._hprobs_from_rhoE(spamLabel, rho, E, Gs, dGs, hGs,
-                                                 scaleVals, wrtFilters)
+                                                 scaleVals, wrtSlices)
                 _np.seterr(**old_err)
                 return vp, vdp, vhp
 
@@ -2869,9 +3007,9 @@ class GateSetCalculator(object):
 
             if blkSize is None:
                 #Fill hessian cache info
-                gatesFilter = wrtFilters['gates'] if (wrtFilters is not None) else None
+                gatesSlice = wrtSlices['gates'] if (wrtSlices is not None) else None
                 hProdCache = self._compute_hproduct_cache(evalSubTree, prodCache, dProdCache,
-                                                          scaleCache, mySubComm, gatesFilter)
+                                                          scaleCache, mySubComm, gatesSlice)
                 hGs = evalSubTree.final_view(hProdCache, axis=0)
                    #( nGateStrings, nGateDerivCols, len(wrtFilter), dim, dim )
 
@@ -2890,9 +3028,10 @@ class GateSetCalculator(object):
                 # Create placeholder dGs for *no* gate params to compute
                 #  2nd derivatives wrt all spam parameters
                 hGs = _np.empty( (Gs.shape[0],self.tot_gate_params,0,self.dim,self.dim), 'd')
-                wrtFilters = { 'preps':    list(range(self.tot_rho_params)),
-                               'effects' : list(range(self.tot_e_params)), 'gates' :   [ ] }
-                   #needed b/c _hprobs_from_rhoE(...) uses wrtFilters['gates']
+                wrtSlices = { 'preps':    slice(0,self.tot_rho_params),
+                               'effects' : slice(0,self.tot_e_params), 
+                               'gates' :   slice(0,0) }
+                   #needed b/c _hprobs_from_rhoE(...) uses wrtSlices['gates']
 
                 #Compute spam derivative columns and possibly probs
                 # (computation that is *not* divided into blocks)
@@ -3443,11 +3582,14 @@ class GateSetCalculator(object):
 
         if wrtFilter is not None:
             tot_spam = self.tot_rho_params + self.tot_e_params
-            wrtFilters = {
+            wrtSlices = {
                 'spam':    [ x for x in wrtFilter if x < tot_spam ],
                 'gates' :   [ (x-tot_spam) for x in wrtFilter if x >= tot_spam ] }
+
+            wrtSlices['spam'] = convertToSlice(wrtSlices['spam'])
+            wrtSlices['gates'] = convertToSlice(wrtSlices['gates'])
         else:
-            wrtFilters = None
+            wrtSlices = None
 
         remainder_row_index = None
         for spamLabel,rowIndex in spam_label_rows.items():
@@ -3546,8 +3688,8 @@ class GateSetCalculator(object):
 
         #At this point, all spam columns have been computed, so yield them
         # (then we can de-allocate hessianSpamCols)
-        spam_cols_to_yield = wrtFilters['spam'] \
-            if (wrtFilters is not None) else list(range(nSpamDerivCols))
+        spam_cols_to_yield = sliceIndices(wrtSlices['spam']) \
+            if (wrtSlices is not None) else list(range(nSpamDerivCols))
 
         if bReturnDProbs12:
             for i in spam_cols_to_yield:
@@ -3561,8 +3703,8 @@ class GateSetCalculator(object):
         #print "TIME4 = ",(_time.time()-tS); sys.stdout.flush()
 
         #Now compute one by one the remaining (gate-deriv) hessian columns
-        gate_cols_to_yield = wrtFilters['gates'] \
-            if (wrtFilters is not None) else list(range(nGateDerivCols))
+        gate_cols_to_yield = sliceIndices(wrtSlices['gates']) \
+            if (wrtSlices is not None) else list(range(nGateDerivCols))
 
         for i in gate_cols_to_yield:
             #print "TIME0.75(%d/%d) = " % (i,len(gates_wrtFilter)),(_time.time()-tS); sys.stdout.flush()

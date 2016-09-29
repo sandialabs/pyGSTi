@@ -98,6 +98,34 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
 
     return loc_indices, owners
 
+def distribute_slice(s, comm, allow_split_comm=True):
+    """ TODO: docstring """
+    if comm is None:
+        nprocs, rank = 1, 0
+    else:
+        nprocs = comm.Get_size()
+        rank = comm.Get_rank()
+
+    assert(s.step is None) #currently, no support for step != None slices
+      # Though in principle this should be able to work
+    indices = list(range(s.start,s.stop))
+    loc_indices, owners = distribute_indices_base(indices, nprocs, rank,
+                                                  allow_split_comm)
+    assert(loc_indices == list(range(loc_indices[0],loc_indices[-1]+1)))
+    loc_slice = slice(loc_indices[0],loc_indices[-1]+1)
+
+    #Split comm into sub-comms when there are more procs than
+    # indices, resulting in all procs getting only a 
+    # single index and multiple procs getting the *same*
+    # (single) index.
+    if nprocs > len(indices) and (comm is not None) and allow_split_comm:
+        loc_comm = comm.Split(color=loc_indices[0], key=rank)  
+    else: 
+        loc_comm = None
+
+    return loc_slice, owners, loc_comm
+
+
 
 
 def gather_subtree_results(evt, spam_label_rows,
@@ -249,6 +277,26 @@ def gather_blk_results(nBlocks, blk_owners, my_blkIndices,
 
     return blk_list
 
+def gather_slices(slices, slice_owners,
+                  arToFill, axis, comm, timer_dict=None):
+    """ TODO: docstring """
+    if comm is None: return #no gathering needed!
+
+    #Perform broadcasts for each slice in order
+    tm = _time.time()
+    my_rank = comm.Get_rank()
+    arIndx = [ slice(None,None) ] * arToFill.ndim
+    for iSlice,slc in enumerate(slices):
+        owner = slice_owners[iSlice] #owner's rank
+        arIndx[axis] = slc
+        buf = arToFill[arIndx].copy() if (my_rank == owner) \
+            else _np.empty(arToFill[arIndx].shape, arToFill.dtype)
+        comm.Bcast(buf,
+                   root=slice_owners[iSlice]) # broadcast w/out pickling (fast)
+        if my_rank != owner: arToFill[arIndx] = buf
+    add_time(timer_dict, "MPI IPC2 bcast2", _time.time()-tm)
+
+
 def distribute_for_dot(contracted_dim, comm):
     loc_indices,_,_ = distribute_indices(
         list(range(contracted_dim)), comm, False)
@@ -262,7 +310,7 @@ def mpidot(a,b,loc_slice,comm):
     """ TODO: docstring """
     from mpi4py import MPI #not at top so can import pygsti on cluster login nodes
     if comm is None or comm.Get_size() == 1:
-        assert(loc_slice == slice(0,b.shape[1]))
+        assert(loc_slice == slice(0,b.shape[0]))
         return _np.dot(a,b)
 
     loc_dot = _np.dot(a[:,loc_slice],b[loc_slice,:])

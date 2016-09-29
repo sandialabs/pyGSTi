@@ -563,6 +563,9 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs,
     #   process_estimate_using_current_gateset = process mx you get from multiplying together the gate matrices of the current gateset
 
     #Step 1: get the lgst estimates for each of the "gate strings to use in estimation" list
+    evTree = gs.bulk_evaltree(gateStringsToUseInEstimation)
+    gateStringsToUseInEstimation = evTree.generate_gatestring_list(permute=False)
+
     gateLabelAliases = {}
     for (i,gateStrTuple) in enumerate(gateStringsToUseInEstimation):
         gateLabelAliases["Gestimator%d" % i] = gateStrTuple
@@ -575,7 +578,6 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs,
     for i in range(len(gateStringsToUseInEstimation)):
         estimates[i] = lgstEstimates.gates[ "Gestimator%d" % i ]
 
-    evTree = gs.bulk_evaltree(gateStringsToUseInEstimation)
     maxGateStringLength = max([len(x) for x in gateStringsToUseInEstimation])
 
 
@@ -712,6 +714,9 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs,
             #print "DEBUG : opt_jac diff = ", _np.linalg.norm( opt_jac - opt_jac_chk )
             #print "DEBUG : flags (1,2,3,4=OK) = %d, check = %d" % (flag, flag_chk)
 
+    #TODO: perhaps permute minErrVec using evTree to restore original gatestring ordering
+    #  but currently minErrVec isn't in such an intuitive format anyway (list of flattened gates)
+    #  so maybe just drop minErrVec from return value entirely?
     return minErrVec, gs
 
 
@@ -1000,19 +1005,6 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     vec_gs_len = gs.num_params()
     KM = len(spamLabels)*len(gateStringsToUse) #shorthand for combined dimension
 
-    if gateLabelAliases is not None:
-        #then find & replace aliased gate labels with their expanded form
-        dsGateStringsToUse = []
-        for s in gateStringsToUse:
-            for label,expandedStr in gateLabelAliases.items():
-                while label in tuple(s):
-                    i = tuple(s).index(label)
-                    s = tuple(s)[:i] + tuple(expandedStr) + tuple(s)[i+1:]
-            dsGateStringsToUse.append(s)
-    else:
-        dsGateStringsToUse = gateStringsToUse
-            # no difference in the strings used by the alias
-
     #Memory allocation
     ns = len(spamLabels); ng = len(gateStringsToUse)
     ne = gs.num_params(); gd = gs.get_dimension()
@@ -1025,7 +1017,39 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                           "< memory required to hold final results (%g GB)"
                           % (persistentMem*C))
 
-    #  Allocate peristent memory
+    #Create evaluation tree (split into subtrees if needed)
+    tm = _time.time() #TIMER!!!
+    mlim = memLimit-persistentMem if (memLimit is not None) else None
+    evTree, wrtBlkSize = gs.bulk_evaltree_from_resources(
+        gateStringsToUse, comm, mlim,
+        distributeMethod, ["bulk_fill_probs","bulk_fill_dprobs"], printer) 
+    add_time(timer_dict, "do_mc2gst evaltree",_time.time()-tm) #TIMER!!!
+
+    # permute (if needed) gate string list for efficient subtree division
+    # Note: cannot rely on order of gateStringsToUse above this point --
+    #   (using len(gateStringsToUse) is fine though).
+    gateStringsToUse = evTree.generate_gatestring_list(permute=False)
+    if gatestringWeights is not None:
+        gatestringWeights = \
+            evTree.permute_original_to_computation(gatestringWeights)
+
+    #Expand gate label aliases used in DataSet lookups
+    if gateLabelAliases is not None:
+        #find & replace aliased gate labels with their expanded form
+        dsGateStringsToUse = []
+        for s in gateStringsToUse:
+            for label,expandedStr in gateLabelAliases.items():
+                while label in tuple(s):
+                    i = tuple(s).index(label)
+                    s = tuple(s)[:i] + tuple(expandedStr) + tuple(s)[i+1:]
+            dsGateStringsToUse.append(s)
+    else:
+        dsGateStringsToUse = gateStringsToUse
+            # no difference in the strings used by the alias
+
+    #  Allocate peristent memory 
+    #  (must be AFTER possible gate string permutation by
+    #   tree and initializatin of dsGateStringsToUse)
     probs  = _np.empty( (len(spamLabels),len(gateStringsToUse)) )
     dprobs = _np.empty( (len(spamLabels),len(gateStringsToUse),vec_gs_len) )
 
@@ -1034,13 +1058,6 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     fweights = _np.empty( (len(spamLabels),len(gateStringsToUse)) )
     z = _np.zeros( (len(spamLabels),len(gateStringsToUse)) ) # for deriv below
 
-    #Get evaluation tree (split into subtrees if needed)
-    tm = _time.time() #TIMER!!!
-    mlim = memLimit-persistentMem if (memLimit is not None) else None
-    evTree, wrtBlkSize = gs.bulk_evaltree_from_resources(
-        gateStringsToUse, comm, mlim,
-        distributeMethod, ["bulk_fill_probs","bulk_fill_dprobs"], printer)
-    add_time(timer_dict, "do_mc2gst evaltree",_time.time()-tm) #TIMER!!!
 
     #  Estimate & check intermediate memory
     #    - maybe make GateSet methods get intermediate estimates?
@@ -1368,6 +1385,9 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     #  return minErrVec, soln_gs, targetErrVec
     add_time(timer_dict, "do_mc2gst post-opt",_time.time()-tm) #TIMER!!!
     add_time(timer_dict, "do_mc2gst",_time.time()-tStart) #TIMER!!!
+    #TODO: evTree.permute_computation_to_original(minErrVec) #Doesn't work b/c minErrVec is flattened
+    # but maybe best to just remove minErrVec from return value since this isn't very useful
+    # anyway?
     return minErrVec, soln_gs
 
 def do_mc2gst_with_model_selection(
@@ -2057,19 +2077,6 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     spamLabels = gs.get_spam_labels() #fixes the ordering of the spam labels
     vec_gs_len = gs.num_params()
 
-    if gateLabelAliases is not None:
-            #then find & replace aliased gate labels with their expanded form
-        dsGateStringsToUse = []
-        for s in gateStringsToUse:
-            for label,expandedStr in gateLabelAliases.items():
-                while label in tuple(s):
-                    i = tuple(s).index(label)
-                    s = tuple(s)[:i] + tuple(expandedStr) + tuple(s)[i+1:]
-            dsGateStringsToUse.append(s)
-    else:
-        dsGateStringsToUse = gateStringsToUse
-           # no difference in the strings used by the alias
-
     #Memory allocation
     ns = len(spamLabels); ng = len(gateStringsToUse)
     ne = gs.num_params(); gd = gs.get_dimension()
@@ -2082,10 +2089,6 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
                           "< memory required to hold final results (%g GB)"
                           % (persistentMem*C))
 
-    cntVecMx = _np.empty( (len(spamLabels),len(gateStringsToUse)), 'd' )
-    probs = _np.empty( (len(spamLabels),len(gateStringsToUse)), 'd' )
-    dprobs = _np.empty( (len(spamLabels),len(gateStringsToUse),vec_gs_len) )
-
     #Get evaluation tree (split into subtrees if needed)
     tm = _time.time() #TIMER!!!
     mlim = memLimit-persistentMem if (memLimit is not None) else None
@@ -2093,6 +2096,31 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
         gateStringsToUse, comm, mlim,
         distributeMethod, ["bulk_fill_probs","bulk_fill_dprobs"], printer)
     add_time(timer_dict, "do_mlgst evaltree",_time.time()-tm) #TIMER!!!
+
+    # permute (if needed) gate string list for efficient subtree division
+    # Note: cannot rely on order of gateStringsToUse above this point --
+    #   (using len(gateStringsToUse) is fine though).
+    gateStringsToUse = evTree.generate_gatestring_list(permute=False)
+
+    #Expand gate label aliases used in DataSet lookups
+    if gateLabelAliases is not None:
+        #find & replace aliased gate labels with their expanded form
+        dsGateStringsToUse = []
+        for s in gateStringsToUse:
+            for label,expandedStr in gateLabelAliases.items():
+                while label in tuple(s):
+                    i = tuple(s).index(label)
+                    s = tuple(s)[:i] + tuple(expandedStr) + tuple(s)[i+1:]
+            dsGateStringsToUse.append(s)
+    else:
+        dsGateStringsToUse = gateStringsToUse
+           # no difference in the strings used by the alias
+
+    #Allocate peristent memory
+    cntVecMx = _np.empty( (len(spamLabels),len(gateStringsToUse)), 'd' )
+    probs = _np.empty( (len(spamLabels),len(gateStringsToUse)), 'd' )
+    dprobs = _np.empty( (len(spamLabels),len(gateStringsToUse),vec_gs_len) )
+
 
     ##Get evaluation tree (now so can use length in mem estimates)
     #evTree = gs.bulk_evaltree(gateStringsToUse)

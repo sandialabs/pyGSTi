@@ -333,6 +333,7 @@ class EvalTree(list):
         return self.eval_order
 
     def final_view(self, a, axis=None):
+        """ TODO: docstring """
         #OLD (which *copies* instead of just returning a view)
         #finalIndxList = self.get_list_of_final_value_tree_indices()
         #return a.take(finalIndxList, axis=axis )
@@ -347,6 +348,12 @@ class EvalTree(list):
             assert(_np.may_share_memory(ret,a))
             return ret
 
+    def final_slice(self):
+        """ TODO: docstring """
+        if self.myFinalToParentFinalMap is not None:
+            return self.myFinalToParentFinalMap
+        else:
+            return slice(0,self.num_final_strings())
         
 
 
@@ -474,15 +481,27 @@ class EvalTree(list):
         """
         return self.num_final_strs
 
-    def generate_gatestring_list(self):
+    def generate_gatestring_list(self, permute=True):
         """
         Generate a list of the final gate strings this tree evaluates.
 
         This method essentially "runs" the tree and follows its
           prescription for sequentailly building up longer strings
-          from shorter ones.  The resulting list should always be
-          the same as the one passed to initialize(...), and so
-          this method may be used as a consistency check.
+          from shorter ones.  When permute == True, the resulting list
+          should be the same as the one passed to initialize(...), and
+          so this method may be used as a consistency check.
+
+        Parameters
+        ----------
+        permute : bool, optional
+           Whether to permute the returned list of strings into the 
+           same order as the original list passed to initialize(...).
+           When False, the computed order of the gate strings is 
+           given, which is matches the order of the results from calls
+           to `GateSet` bulk operations.  Non-trivial permutation
+           occurs only when the tree is split (in order to keep 
+           each sub-tree result a contiguous slice within the parent
+           result).
 
         Returns
         -------
@@ -493,24 +512,86 @@ class EvalTree(list):
         gateStrings = [None]*len(self)
 
         #Set "initial" (single- or zero- gate) strings
-        for i,gateLabel in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
+        for i,gateLabel in zip(self.get_init_indices(), self.get_init_labels()):
             if gateLabel == "": gateStrings[i] = () #special case of empty label
             else: gateStrings[i] = (gateLabel,)
 
         #Build rest of strings
-        for i in evalTree.get_evaluation_order():
+        for i in self.get_evaluation_order():
             iLeft, iRight = self[i]
             gateStrings[i] = gateStrings[iLeft] + gateStrings[iRight]
             
         #Permute to get final list:
         nFinal = self.num_final_strings()
-        if self.original_index_lookup is not None:
+        if self.original_index_lookup is not None and permute == True:
             finalGateStrings = [None]*nFinal
-            for key,val in original_index_lookup.items():
-                if val < nFinal: finalGateStrings[val] = gateStrings[key]
+            for iorig,icur in self.original_index_lookup.items():
+                if iorig < nFinal: finalGateStrings[iorig] = gateStrings[icur]
             return finalGateStrings
         else:
             return gateStrings[0:nFinal]
+
+    def permute_original_to_computation(self, a):
+        """
+        Permute an array's elements using mapping from the "original"
+        gate string ordering to the "computation" ordering.
+        
+        This function converts arrays with elements corresponding
+        to gate strings in the "original" ordering (i.e. the 
+        ordering in the list passed to `initialize(...)`) to the
+        ordering used in tree computation (i.e. by a `GateSet`'s
+        bulk computation routines).
+
+        Paramters
+        ---------
+        a : numpy array
+           The array whose permuted elements are returned.
+
+        Returns
+        -------
+        numpy array
+        """
+        assert(a.shape[0] == self.num_final_strings())
+        nFinal = self.num_final_strings()
+        ret = a.copy()
+
+        if self.original_index_lookup is not None:
+            for iorig,icur in self.original_index_lookup.items():
+                if iorig < nFinal: ret[icur] = a[iorig]
+
+        return ret
+
+
+    def permute_computation_to_original(self, a):
+        """
+        Permute an array's elements using mapping from the "computation"
+        gate string ordering to the "original" ordering.
+        
+        This function converts arrays with elements corresponding
+        to gate strings in the ordering used in tree computation 
+        (i.e. the ordering returned by `GateSet`'s bulk computation routines)
+        to the "original" ordering (i.e. the ordering of the gate string list
+        passed to `initialize(...)`).
+
+        Paramters
+        ---------
+        a : numpy array
+           The array whose permuted elements are returned.
+
+        Returns
+        -------
+        numpy array
+        """
+        assert(a.shape[0] == self.num_final_strings())
+        nFinal = self.num_final_strings()
+        ret = a.copy()
+
+        if self.original_index_lookup is not None:
+            for iorig,icur in self.original_index_lookup.items():
+                if iorig < nFinal: ret[iorig] = a[icur]
+
+        return ret
+        
 
 
 #Future MPI API??
@@ -587,6 +668,8 @@ class EvalTree(list):
         -------
         None
         """
+        dbList = self.generate_gatestring_list()
+
         if (maxSubTreeSize is None and numSubTrees is None) or \
            (maxSubTreeSize is not None and numSubTrees is not None):
             raise ValueError("Specify *either* maxSubTreeSize or numSubTrees")
@@ -710,6 +793,10 @@ class EvalTree(list):
         #for ii,(i,cnt) in enumerate(sorted_cnts):
         #    print ii,":", i,", ",cnt
         #raise ValueError("STOP")
+                    
+        from mpi4py import MPI
+        rank = -1 #MPI.COMM_WORLD.Get_rank()
+        if rank == 0: print("Parent nFinal = ",self.num_final_strings(), " len=",len(self))
 
         #Second pass - create subtrees from index sets
         need_to_compute = _np.zeros( len(self), 'bool' )
@@ -723,6 +810,8 @@ class EvalTree(list):
         numFinalList = []
         for iSubTree,subTreeSet in enumerate(subTreeSetList):
             subTreeIndices = list(subTreeSet)
+            if rank==0: print("SUBTREE0: %s (len=%d)" % (str(subTreeIndices),len(subTreeIndices)))
+            if rank==0: print("  NEED: %s" % ",".join([ "1" if b else "0" for b in need_to_compute]))
             subTreeIndices.sort() # order subtree gatestrings (really just their indices) so
                                   # that all "final" strings come first.
             #Compute # of "final" strings in this subtree (count # of indices < num_final_strs)
@@ -732,6 +821,9 @@ class EvalTree(list):
             # of the "final strings" region of the subtree's list (i.e. the subtree itself).
             already_computed = _np.logical_not( need_to_compute[ subTreeIndices[0:subTreeNumFinal] ] )
             already_computed_inds = _np.nonzero(already_computed)[0] # (sorted ascending)
+            if rank==0: print("SUBTREE1: %s (nFinal=%d - %d)" % (str(subTreeIndices),
+                                                     subTreeNumFinal, len(already_computed_inds)))
+            if rank==0: print("  - already computed = ", [subTreeIndices[i] for i in already_computed_inds])
 
             iFirstNonFinal = subTreeNumFinal
             for k in already_computed_inds:
@@ -752,6 +844,7 @@ class EvalTree(list):
             subTreeIndicesList.append( subTreeIndices )
             numFinalList.append( subTreeNumFinal )
             need_to_compute[ subTreeIndices[0:subTreeNumFinal] ] = False
+            if rank==0: print("FINAL SUBTREE: %s (nFinal=%d)" % (str(subTreeIndices),subTreeNumFinal))
                     
         #Permute parent tree indices according to parentIndexPerm
         assert(len(parentIndexRevPerm) == self.num_final_strings())
@@ -766,10 +859,14 @@ class EvalTree(list):
         assert( self.original_index_lookup is None )
         self.original_index_lookup = { icur: inew for inew,icur in enumerate(parentIndexRevPerm) }
 
+        if rank==0: print("PERM REV MAP = ", parentIndexRevPerm)
+        if rank==0: print("PERM MAP = ", parentIndexPerm)
+
         #Permute parent indices
         self.init_indices = [ parentIndexPerm[iCur] for iCur in self.init_indices ]
         self.eval_order = [ parentIndexPerm[iCur] for iCur in self.eval_order ]
-        self[:] = [ (parentIndexPerm[self[iCur][0]],parentIndexPerm[self[iCur][1]])
+        self[:] = [ (parentIndexPerm[self[iCur][0]] if (self[iCur][0] is not None) else None,
+                     parentIndexPerm[self[iCur][1]] if (self[iCur][1] is not None) else None)
                     for iCur in parentIndexRevPerm ]
         assert(self.myFinalToParentFinalMap is None)
         assert(self.parentIndexMap is None)
@@ -831,8 +928,17 @@ class EvalTree(list):
 
             subTree.parentIndexMap = subTreeIndices #parent index of each subtree index
             self.subTrees.append( subTree )
+            if rank==0: print("NEW SUBTREE: indices=%s, len=%d, nFinal=%d"  %
+                              (subTree.parentIndexMap, len(subTree), subTree.num_final_strings()))
+
+        dbList2 = self.generate_gatestring_list()
+        if rank==0: print("DBLIST = ",dbList)
+        if rank==0: print("DBLIST2 = ",dbList2)
+        assert(dbList == dbList2)
 
         return
+
+
 
     def is_split(self):
         """ Returns boolean indicating whether tree is split into sub-trees or not. """
