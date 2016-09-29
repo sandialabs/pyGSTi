@@ -101,7 +101,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
                 success = True
                 dx = _np.linalg.solve(JTJ, -JTf) 
                 add_time(timer_dict, "CUSTOMLM: linsolve",_time.time()-tm) #TIMER!!!
-            except LinAlgError:
+            except _np.linalg.LinAlgError:
                 success = False
             
             print_mem_usage("    After linsolve")
