@@ -146,8 +146,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
         msg = "Maximum iterations (%d) exceeded" % max_iter
 
     #JTJ[idiag] = undampled_JTJ_diag #restore diagonal
-    print("DONE: %s" % msg)
-
     return x, converged, msg
     #solution = _optResult()
     #solution.x = x; solution.fun = f
