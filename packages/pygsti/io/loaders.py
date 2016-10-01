@@ -56,6 +56,7 @@ def load_dataset(filename, cache=False, verbosity=1):
     DataSet
     """
 
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
     try:
         # a saved Dataset object is ok
         ds = _objs.DataSet(fileToLoadFrom=filename)
@@ -67,25 +68,29 @@ def load_dataset(filename, cache=False, verbosity=1):
             if _os.path.exists( cache_filename ) and \
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
                 try:
-                    if verbosity > 0: print("Loading from cache file: ", cache_filename)
+                    printer.log("Loading from cache file: %s" % cache_filename)
                     ds = _objs.DataSet(fileToLoadFrom=cache_filename)
                     return ds
                 except: print("WARNING: Failed to load from cache file")
             else:
-                if verbosity > 0:
-                    print("Cache file not found or is tool old -- one will be created after loading is completed")
+                printer.log("Cache file not found or is tool old -- one will"
+                            + "be created after loading is completed")
+
+            #Parser functions don't take a VerbosityPrinter yet, and so
+            # always output to stdout (TODO)
+            bToStdout = (printer.verbosity > 0 and printer.filename is None)
 
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
-            ds = parser.parse_datafile(filename, verbosity > 0)
+            ds = parser.parse_datafile(filename, bToStdout)
 
-            if verbosity > 0:
-                print("Writing cache file (to speed future loads): %s" % cache_filename)
+            printer.log("Writing cache file (to speed future loads): %s"
+                        % cache_filename)
             ds.save(cache_filename)
         else:
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
-            ds = parser.parse_datafile(filename, verbosity > 0)
+            ds = parser.parse_datafile(filename, bToStdout)
         return ds
 
 
@@ -116,6 +121,7 @@ def load_multidataset(filename, cache=False, verbosity=1):
     MultiDataSet
     """
 
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
     try:
         # a saved MultiDataset object is ok
         mds = _objs.MultiDataSet(fileToLoadFrom=filename)
@@ -126,26 +132,29 @@ def load_multidataset(filename, cache=False, verbosity=1):
             if _os.path.exists( cache_filename ) and \
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
                 try:
-                    if verbosity > 0: print("Loading from cache file: %s" % cache_filename)
+                    printer.log("Loading from cache file: %s" % cache_filename)
                     mds = _objs.MultiDataSet(fileToLoadFrom=cache_filename)
                     return mds
                 except: print("WARNING: Failed to load from cache file")
             else:
-                if verbosity > 0:
-                    print("Cache file not found or is too old -- one will be created after loading is completed")
+                printer.log("Cache file not found or is too old -- one will be"
+                            + "created after loading is completed")
+            #Parser functions don't take a VerbosityPrinter yet, and so
+            # always output to stdout (TODO)
+            bToStdout = (printer.verbosity > 0 and printer.filename is None)
 
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
-            mds = parser.parse_multidatafile(filename, verbosity > 0)
+            mds = parser.parse_multidatafile(filename, bToStdout)
 
-            if verbosity > 0:
-                print("Writing cache file (to speed future loads): %s" % cache_filename)
+            printer.log("Writing cache file (to speed future loads): %s" 
+                        % cache_filename)
             mds.save(cache_filename)
 
         else:
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
-            mds = parser.parse_multidatafile(filename, verbosity > 0)
+            mds = parser.parse_multidatafile(filename, bToStdout)
     return mds
 
 

@@ -998,12 +998,10 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                           % (persistentMem*C))
 
     #Create evaluation tree (split into subtrees if needed)
-    tm = _time.time()
     mlim = memLimit-persistentMem if (memLimit is not None) else None
     evTree, wrtBlkSize = gs.bulk_evaltree_from_resources(
         gateStringsToUse, comm, mlim,
         distributeMethod, ["bulk_fill_probs","bulk_fill_dprobs"], printer) 
-    profiler.add_time("do_mc2gst: evaltree",tm)
 
     # permute (if needed) gate string list for efficient subtree division
     # Note: cannot rely on order of gateStringsToUse above this point --
@@ -1294,12 +1292,13 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     if CUSTOMLM:
         opt_x,converged,msg = _opt.custom_leastsq(objective_func, jacobian, x0, f_norm_tol=tol, jac_norm_tol=tol,
                                                   rel_tol=tol, max_iter=maxiter, comm=comm, profiler=profiler)
-        print("DEBUG CUSTOM MSG = ",msg)
+        printer.log("Least squares message = %s" % msg,2)
         assert(converged)
     else:
-        opt_x, _, _, _, _ = \
+        opt_x, _, _, msg, flag = \
             _spo.leastsq( objective_func, x0, xtol=tol, ftol=tol, gtol=tol,
                           maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=jacobian )
+        printer.log("Least squares message = %s; flag =%s" % (msg, flag), 2)
 
 
     full_minErrVec = objective_func(opt_x)  #note: calls gs.from_vector(opt_x,...) so don't need to call this again
@@ -1320,9 +1319,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         nDataParams  = nGateStrings*(len(dataset.get_spam_labels())-1) #number of independent parameters
                                                                      # in dataset (max. model # of params)
         try:
-            tm2 = _time.time()
             nModelParams = gs.num_nongauge_params() #len(x0)
-            profiler.add_time("do_mc2gst: num_nongauge_params",tm2)
         except: #numpy can throw a LinAlgError
             printer.warning("Could not obtain number of *non-gauge* parameters - using total params instead")
             nModelParams = gs.num_params() #just use total number of params
@@ -1337,7 +1334,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     #  target_vec = targetGateset.to_vector()
     #  targetErrVec = objective_func(target_vec)
     #  return minErrVec, soln_gs, targetErrVec
-    profiler.add_time("do_mc2gst: post-opt", tm)
+    profiler.add_time("do_mc2gst: post-opt", tm) #all in num_nongauge_params
     profiler.add_time("do_mc2gst: total time", tStart)
     #TODO: evTree.permute_computation_to_original(minErrVec) #Doesn't work b/c minErrVec is flattened
     # but maybe best to just remove minErrVec from return value since this isn't very useful
@@ -2038,12 +2035,10 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
                           % (persistentMem*C))
 
     #Get evaluation tree (split into subtrees if needed)
-    tm = _time.time()
     mlim = memLimit-persistentMem if (memLimit is not None) else None
     evTree, wrtBlkSize = gs.bulk_evaltree_from_resources(
         gateStringsToUse, comm, mlim,
         distributeMethod, ["bulk_fill_probs","bulk_fill_dprobs"], printer)
-    profiler.add_time("do_mlgst: evaltree",tm)
 
     # permute (if needed) gate string list for efficient subtree division
     # Note: cannot rely on order of gateStringsToUse above this point --
@@ -2284,13 +2279,13 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     if CUSTOMLM:
         opt_x,converged,msg = _opt.custom_leastsq(objective_func, jacobian, x0, f_norm_tol=tol, jac_norm_tol=tol,
                                                   rel_tol=tol, max_iter=maxiter, comm=comm, profiler=profiler)
-        print("DEBUG CUSTOM MSG = ",msg)
+        printer.log("Least squares message = %s" % msg,2)
         assert(converged)
     else:
         opt_x, _, _, msg, flag = \
             _spo.leastsq( objective_func, x0, xtol=tol, ftol=tol, gtol=0,
                           maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=jacobian )
-        printer.log("Least squares msg = %s; flag =%s" % (msg, flag), 2)
+        printer.log("Least squares message = %s; flag =%s" % (msg, flag), 2)
     profiler.add_time("do_mlgst: leastsq",tm)
 
     tm = _time.time()
@@ -2934,11 +2929,12 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
     startM = _np.identity(gateDim)  #take identity as initial gauge matrix
 
     x0 = startM.flatten() if not constrainToTP else startM[1:,:].flatten()
-    print_obj_func = _opt.create_obj_func_printer(objective_func)
+    bToStdout = (printer.verbosity > 2 and printer.filename is None)
+    print_obj_func = _opt.create_obj_func_printer(objective_func) #only ever prints to stdout!
     minSol = _opt.minimize(objective_func, x0,
                           method=method, maxiter=maxiter, maxfev=maxfev, tol=tol,
                           stopval= -20 if toGetTo == "CPTP" else None,
-                          callback = print_obj_func if printer.verbosity > 2 else None) #stopval=1e-7 -- (before I added log10)
+                          callback = print_obj_func if bToStdout else None) #stopval=1e-7 -- (before I added log10)
 
     if constrainToTP:
         v = _np.concatenate( (firstRowForTP,minSol.x) )
@@ -3119,14 +3115,15 @@ def _contractToXP(gateset,dataset,verbosity,method='Nelder-Mead',
         return (CLIFF + forbiddenProbPenalty if forbiddenProbPenalty > 1e-10 else 0) \
             + gs.frobeniusdist(gateset)
 
-    print_obj_func = _opt.create_obj_func_printer(objective_func)
+    bToStdout = (printer.verbosity > 2 and printer.filename is None)
+    print_obj_func = _opt.create_obj_func_printer(objective_func) #only ever prints to stdout!
     if objective_func(gs.to_vector()) < 1e-8:
         printer.log('Already in XP - no contraction necessary', 1)
         return 0.0, gs
 
     optSol = _opt.minimize(objective_func,gs.to_vector(),
                           method=method, tol=tol, maxiter=maxiter,
-                          callback = print_obj_func if printer.verbosity > 2 else None)
+                          callback = print_obj_func if bToStdout else None)
 
     gs.from_vector(optSol.x)
     #gs.log("Contract to XP", { 'method': method, 'tol': tol, 'maxiter': maxiter } )
@@ -3152,14 +3149,15 @@ def _contractToCP(gateset,verbosity,method='Nelder-Mead',
         cpPenalty = _tools.sum_of_negative_choi_evals(gs) * 1000
         return (CLIFF + cpPenalty if cpPenalty > 1e-10 else 0) + gs.frobeniusdist(gateset)
 
-    print_obj_func = _opt.create_obj_func_printer(objective_func)
+    bToStdout = (printer.verbosity > 2 and printer.filename is None)
+    print_obj_func = _opt.create_obj_func_printer(objective_func) #only ever prints to stdout!
     if objective_func(gs.to_vector()) < 1e-8:
         printer.log('Already in CP - no contraction necessary', 1)
         return 0.0, gs
 
     optSol = _opt.minimize(objective_func,gs.to_vector(),
                           method=method, tol=tol, maxiter=maxiter,
-                          callback = print_obj_func if printer.verbosity > 2 else None)
+                          callback = print_obj_func if bToStdout else None)
 
     gs.from_vector(optSol.x)
     #gs.log("Contract to CP", { 'method': method, 'tol': tol, 'maxiter': maxiter } )

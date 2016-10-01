@@ -184,7 +184,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
 
     #Get dataset
     if isinstance(dataFilenameOrSet, str):
-        ds = _io.load_dataset(dataFilenameOrSet, True, verbosity) #can't take a printer...
+        ds = _io.load_dataset(dataFilenameOrSet, True, printer)
         default_dir = _os.path.dirname(dataFilenameOrSet) #default directory for reports, etc
         default_base = _os.path.splitext( _os.path.basename(dataFilenameOrSet) )[0]
     else:
@@ -217,7 +217,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
             truncScheme, nest)
 
     tNxt = _time.time()
-    profiler.add_time('Loading',tRef); tRef=tNxt
+    profiler.add_time('do_long_sequence_gst: loading',tRef); tRef=tNxt
 
     #Starting Point = LGST
     gate_dim = gs_target.get_dimension()
@@ -228,7 +228,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                            verbosity=printer)
 
     tNxt = _time.time()
-    profiler.add_time('LGST',tRef); tRef=tNxt
+    profiler.add_time('do_long_sequence_gst: LGST',tRef); tRef=tNxt
 
     if constrainToTP: #gauge optimize (and contract if needed) to TP, then lock down first basis element as the identity
         #TODO: instead contract to vSPAM? (this could do more than just alter the 1st element...)
@@ -271,7 +271,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         gs_after_gauge_opt.set_all_parameterizations("TP")
 
     tNxt = _time.time()
-    profiler.add_time('Prep LGST seed',tRef); tRef=tNxt
+    profiler.add_time('do_long_sequence_gst: Prep LGST seed',tRef); tRef=tNxt
 
     #Run LSGST on data
     if objective == "chi2":
@@ -304,7 +304,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         raise ValueError("Invalid longSequenceObjective: %s" % objective)
 
     tNxt = _time.time()
-    profiler.add_time('Total long-seq. opt.',tRef); tRef=tNxt
+    profiler.add_time('do_long_sequence_gst: total long-seq. opt.',tRef); tRef=tNxt
 
     #Run the gatesets through gauge optimization, first to CPTP then to target
     #   so fidelity and frobenius distance w/targets is more meaningful
@@ -315,7 +315,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         #Note: don't set itemWeights in optimize_gauge (doesn't apply to CPTP)
 
         tNxt = _time.time()
-        profiler.add_time('Gauge opt to CPTP',tRef); tRef=tNxt
+        profiler.add_time('do_long_sequence_gst: gauge opt to CPTP',tRef); tRef=tNxt
     else:
         go_gs_lsgst_list = gs_lsgst_list
 
@@ -341,7 +341,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         go_gs_lsgst_list[i] = _alg.optimize_gauge(**args)
 
     tNxt = _time.time()
-    profiler.add_time('Gauge opt to target',tRef); tRef=tNxt
+    profiler.add_time('do_long_sequence_gst: gauge opt to target',tRef); tRef=tNxt
 
     truncFn = _construction.stdlists._getTruncFunction(truncScheme)
 
@@ -363,7 +363,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     ret.parameters['memLimit'] = advancedOptions.get('memoryLimitInBytes',None)
     ret.parameters['gaugeOptParams'] = go_params
 
-    profiler.add_time('Results initialization',tRef)
+    profiler.add_time('do_long_sequence_gst: results initialization',tRef)
     ret.parameters['profiler'] = profiler
 
     assert( len(maxLengths) == len(lsgstLists) == len(go_gs_lsgst_list) )

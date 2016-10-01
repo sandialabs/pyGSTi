@@ -1356,11 +1356,14 @@ class GateSet(object):
                 while memEstimate(ng,np,Ng) > memLimit: ng += Ng #so ng % Ng == 0
 
         evt = self.bulk_evaltree(gatestring_list, minSubtrees=ng, numSubtreeComms=Ng)
-        paramBlkSize = num_params // np
+        paramBlkSize = num_params / np   #the *average* param block size
+          # (in general *not* an integer), which ensures that the intended # of
+          # param blocks is communicatd to gsCalc.py routines (taking ceiling or
+          # floor can lead to inefficient MPI distribution)
 
         printer.log("Created evaluation tree with %d subtrees.  " % ng
-                    + "Will divide %d procs into %d groups of " % (nprocs,Ng)
-                    + "~%d procs each, to distribute over " % (nprocs/Ng)
+                    + "Will divide %d procs into %d (subtree-processing) " % (nprocs,Ng)
+                    + "groups of ~%d procs each, to distribute over " % (nprocs/Ng)
                     + "%d params (taken as %d param groups of ~%d params)." 
                     % (num_params, np, paramBlkSize))
         if memLimit is not None:
@@ -1370,7 +1373,7 @@ class GateSet(object):
         if (comm is None or comm.Get_rank() == 0) and evt.is_split():
             if printer.verbosity >= 2: evt.print_analysis()
             
-        if paramBlkSize == num_params:
+        if np == 1: # (paramBlkSize == num_params)
             paramBlkSize = None # == all parameters, and may speed logic in dprobs, etc.
         return evt, paramBlkSize
 
@@ -1690,8 +1693,8 @@ class GateSet(object):
            of the parameters being differentiated with respect to (see
            wrtBlockSize).
 
-        wrtBlockSize : int, optional
-          The maximum number of derivative columns to compute *products*
+        wrtBlockSize : int or float, optional
+          The maximum average number of derivative columns to compute *products*
           for simultaneously.  None means compute all columns at once.
           The minimum of wrtBlockSize and the size that makes maximal
           use of available processors is used as the final block size. Use
@@ -1755,10 +1758,10 @@ class GateSet(object):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.
 
-        wrtBlockSize : int, optional
-          The maximum number of *2nd* derivative columns to compute *products*
-          for simultaneously.  None means compute all columns at once.
-          The minimum of wrtBlockSize and the size that makes maximal
+        wrtBlockSize : int or float, optional
+          The maximum average number of *2nd* derivative columns to compute
+          *products* for simultaneously.  None means compute all columns at
+          once. The minimum of wrtBlockSize and the size that makes maximal
           use of available processors is used as the final block size. Use
           this argument to reduce amount of intermediate memory required.
 
@@ -1858,8 +1861,8 @@ class GateSet(object):
            of the parameters being differentiated with respect to (see
            wrtBlockSize).
 
-        wrtBlockSize : int, optional
-          The maximum number of derivative columns to compute *products*
+        wrtBlockSize : int or float, optional
+          The maximum average number of derivative columns to compute *products*
           for simultaneously.  None means compute all columns at once.
           The minimum of wrtBlockSize and the size that makes maximal
           use of available processors is used as the final block size. Use
@@ -1911,10 +1914,10 @@ class GateSet(object):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.
 
-        wrtBlockSize : int, optional
-          The maximum number of *2nd* derivative columns to compute *products*
-          for simultaneously.  None means compute all columns at once.
-          The minimum of wrtBlockSize and the size that makes maximal
+        wrtBlockSize : int or float, optional
+          The maximum average number of *2nd* derivative columns to compute
+          *products* for simultaneously.  None means compute all columns at
+          once. The minimum of wrtBlockSize and the size that makes maximal
           use of available processors is used as the final block size. Use
           this argument to reduce amount of intermediate memory required.
 
@@ -2033,8 +2036,8 @@ class GateSet(object):
            of the parameters being differentiated with respect to (see
            wrtBlockSize).
 
-        wrtBlockSize : int, optional
-          The maximum number of derivative columns to compute *products*
+        wrtBlockSize : int or float, optional
+          The maximum average number of derivative columns to compute *products*
           for simultaneously.  None means compute all columns at once.
           The minimum of wrtBlockSize and the size that makes maximal
           use of available processors is used as the final block size. Use
@@ -2113,10 +2116,10 @@ class GateSet(object):
            of the parameters being second-differentiated with respect to (see
            wrtBlockSize).
 
-        wrtBlockSize : int, optional
-          The maximum number of *2nd* derivative columns to compute *products*
-          for simultaneously.  None means compute all columns at once.
-          The minimum of wrtBlockSize and the size that makes maximal
+        wrtBlockSize : int or float, optional
+          The maximum average number of *2nd* derivative columns to compute
+          *products* for simultaneously.  None means compute all columns at
+          once. The minimum of wrtBlockSize and the size that makes maximal
           use of available processors is used as the final block size. Use
           this argument to reduce amount of intermediate memory required.
 

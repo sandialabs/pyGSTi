@@ -1086,7 +1086,6 @@ class GateSetCalculator(object):
         wrtIndices = _slct.indices(wrtSlice) if (wrtSlice is not None) else None
         for i,gateLabel in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
             if gateLabel == "": #special case of empty label == no gate
-                assert(i == 0) #tree convention
                 dProdCache[i] = _np.zeros( deriv_shape )
             else:                
                 dgate = self.dproduct( (gateLabel,) , wrtFilter=wrtIndices)
@@ -1103,8 +1102,8 @@ class GateSetCalculator(object):
             dL,dR = dProdCache[iLeft], dProdCache[iRight]
             dProdCache[i] = _np.dot(dL, R) + \
                 _np.swapaxes(_np.dot(L, dR),0,1) #dot(dS, T) + dot(S, dT)
-            profiler.add_time("dproduct_cache dots", tm)
-            profiler.add_count("dproduct_cache dot count")
+            profiler.add_time("compute_dproduct_cache: dots", tm)
+            profiler.add_count("compute_dproduct_cache: dots")
 
             scale = scaleCache[i] - (scaleCache[iLeft] + scaleCache[iRight])
             if not _np.isclose(scale,0):
@@ -1114,8 +1113,8 @@ class GateSetCalculator(object):
             elif _np.count_nonzero(dProdCache[i]) and dProdCache[i].max() < DSMALL and dProdCache[i].min() > -DSMALL:
                 _warnings.warn("Would have scaled dProd but now will not alter scaleCache.")
 
-        profiler.add_time("dproduct_cache serial", tSerialStart)
-        profiler.add_count("dproduct_cache col count", nGateDerivCols)
+        profiler.add_time("compute_dproduct_cache: serial", tSerialStart)
+        profiler.add_count("compute_dproduct_cache: num columns", nGateDerivCols)
 
         return dProdCache
 
@@ -2096,7 +2095,7 @@ class GateSetCalculator(object):
           processors and to control memory usage.  Cannot be specified
           in conjuction with wrtBlockSize.
 
-        wrtBlockSize : int, optional
+        wrtBlockSize : int or float, optional
           The maximum number of derivative columns to compute *products*
           for simultaneously.  None means compute all requested columns
           at once.  The  minimum of wrtBlockSize and the size that makes
@@ -2149,6 +2148,10 @@ class GateSetCalculator(object):
         #get distribution across subtrees (groups if needed)
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+        #if comm is not None: 
+        #    print("MPI DEBUG: Rank%d subtee sizes = %s" % 
+        #          (comm.Get_rank(),",".join([str(len(subtrees[i]))
+        #                                     for i in mySubTreeIndices])))
 
         #eval on each local subtree
         #my_results = []
@@ -2190,13 +2193,13 @@ class GateSetCalculator(object):
                             spamLabel, rho, E, Gs, dGs, scaleVals, wrtSlices)
 
                 _np.seterr(**old_err)
-                profiler.add_time("bulk_fill_dprobs calc_and_fill", tm)
+                profiler.add_time("bulk_fill_dprobs: calc_and_fill", tm)
 
             #Set wrtBlockSize to use available processors if it isn't specified
             if wrtFilter is None:
                 blkSize = wrtBlockSize #could be None
                 if (mySubComm is not None) and (mySubComm.Get_size() > 1):
-                    comm_blkSize = self.tot_gate_params // mySubComm.Get_size()
+                    comm_blkSize = self.tot_gate_params / mySubComm.Get_size()
                     blkSize = comm_blkSize if (blkSize is None) \
                         else min(comm_blkSize, blkSize) #override with smaller comm_blkSize
             else:
@@ -2205,9 +2208,11 @@ class GateSetCalculator(object):
 
             if blkSize is None:
                 #Fill derivative cache info
+                tm = _time.time()
                 gatesSlice = wrtSlices['gates'] if (wrtSlices is not None) else None
                 dProdCache = self._compute_dproduct_cache(evalSubTree, prodCache, scaleCache,
                                                           mySubComm, gatesSlice, profiler)
+                profiler.add_time("bulk_fill_dprobs: compute_dproduct_cache", tm)
                 dGs = evalSubTree.final_view(dProdCache, axis=0)
                   #( nGateStrings, nDerivCols, dim, dim )
                 profiler.mem_check("bulk_fill_dprobs: post compute dproduct")
@@ -2219,13 +2224,10 @@ class GateSetCalculator(object):
 
             else: # Divide columns into blocks of at most blkSize
                 assert(wrtFilter is None) #cannot specify both wrtFilter and blkSize
-                nBlks = self.tot_gate_params // blkSize
-                blocks = [_slct.shift(slice(blkSize*i,blkSize*(i+1)),
-                                   +self.tot_spam_params) for i in range(nBlks)]
-                if blkSize*nBlks < self.tot_gate_params:
-                    blocks.append( _slct.shift(
-                            slice(blkSize*nBlks,self.tot_gate_params),
-                            +self.tot_spam_params) ); nBlks += 1
+                nBlks = int(_np.ceil(self.tot_gate_params / blkSize))
+                  # num blocks required to achieve desired average size == blkSize
+                blocks = _mpit.slice_up_range(self.tot_gate_params, nBlks,
+                                              start=self.tot_spam_params)
 
                 # Create placeholder dGs for *no* gate params to compute
                 #  derivatives wrt all spam parameters
@@ -2236,7 +2238,7 @@ class GateSetCalculator(object):
                 self._fill_result_tuple( 
                     (prMxToFill, mxToFill), spam_label_rows, fslc,
                     slice(0,self.tot_spam_params), calc_and_fill )
-                profiler.mem_check("Post compute sub results B")
+                profiler.mem_check("bulk_fill_dprobs: post fill spam")
 
                 #distribute derivative computation across blocks
                 myBlkIndices, blkOwners, blkComm = \
@@ -2244,7 +2246,11 @@ class GateSetCalculator(object):
                 if blkComm is not None:
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
                        +" than derivative columns(%d)!" % self.tot_gate_params 
-                       +" [blkSize = %d, nBlks=%d]" % (blkSize,nBlks))
+                       +" [blkSize = %.1f, nBlks=%d]" % (blkSize,nBlks))
+                #if comm is not None: #still use global comm for debugging rank
+                #    print("MPI DEBUG: Rank%d p-block sizes = %s" % 
+                #          (comm.Get_rank(),",".join([str(_slct.length(blocks[i]))
+                #                                     for i in myBlkIndices])))
 
                 def calc_and_fill_blk(spamLabel, isp, fslc, pslc, sumInto):
                     tm = _time.time()
@@ -2264,10 +2270,12 @@ class GateSetCalculator(object):
                     profiler.add_time("bulk_fill_dprobs: calc_and_fill_blk", tm)
 
                 for iBlk in myBlkIndices:
+                    tm = _time.time()
                     gateSlice = _slct.shift(blocks[iBlk],-self.tot_spam_params)
                     dProdCache = dGs = None #free mem from previous iter
                     dProdCache = self._compute_dproduct_cache(evalSubTree, prodCache, scaleCache,
                                                               blkComm, gateSlice, profiler)
+                    profiler.add_time("bulk_fill_dprobs: compute_dproduct_cache", tm)
                     profiler.mem_check(
                         "bulk_fill_dprobs: post compute dproduct blk (expect "+
                         " +%.2fGB, shape=%s)" % (dProdCache.nbytes/(1024.0**3),
@@ -2375,7 +2383,7 @@ class GateSetCalculator(object):
            of the parameters being differentiated with respect to (see
            wrtBlockSize).
 
-        wrtBlockSize : int, optional
+        wrtBlockSize : int or float, optional
           The maximum number of *2nd* derivative columns to compute *products*
           for simultaneously.  None means compute all requested columns
           at once.  The  minimum of wrtBlockSize and the size that makes
@@ -2468,7 +2476,7 @@ class GateSetCalculator(object):
             if wrtFilter is None:
                 blkSize = wrtBlockSize #could be None
                 if (mySubComm is not None) and (mySubComm.Get_size() > 1):
-                    comm_blkSize = self.tot_gate_params // mySubComm.Get_size()
+                    comm_blkSize = self.tot_gate_params / mySubComm.Get_size()
                     blkSize = comm_blkSize if (blkSize is None) \
                         else min(comm_blkSize, blkSize) #override with smaller comm_blkSize
             else:
@@ -2489,13 +2497,10 @@ class GateSetCalculator(object):
 
             else: # Divide columns into blocks of at most blkSize
                 assert(wrtFilter is None) #cannot specify both wrtFilter and blkSize
-                nBlks = self.tot_gate_params // blkSize
-                blocks = [_slct.shift(slice(blkSize*i,blkSize*(i+1)),
-                                   +self.tot_spam_params) for i in range(nBlks)]
-                if blkSize*nBlks < self.tot_gate_params:
-                    blocks.append( _slct.shift(
-                            slice(blkSize*nBlks,self.tot_gate_params),
-                            +self.tot_spam_params) ); nBlks += 1
+                nBlks = int(_np.ceil(self.tot_gate_params / blkSize))
+                  # num blocks required to achieve desired average size == blkSize
+                blocks = _mpit.slice_up_range(self.tot_gate_params, nBlks,
+                                              start=self.tot_spam_params)
 
                 # Create placeholder dGs for *no* gate params to compute
                 #  2nd derivatives wrt all spam parameters
@@ -2517,7 +2522,7 @@ class GateSetCalculator(object):
                 if blkComm is not None:
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
                        +" than derivative columns(%d)!" % self.tot_gate_params 
-                       +" [blkSize = %d, nBlks=%d]" % (blkSize,nBlks))
+                       +" [blkSize = %.1f, nBlks=%d]" % (blkSize,nBlks))
 
                 def calc_and_fill_blk(spamLabel, isp, fslc, pslc, sumInto):
                     tm = _time.time()
@@ -2699,8 +2704,8 @@ class GateSetCalculator(object):
           processors and to control memory usage.  Cannot be specified
           in conjuction with wrtBlockSize.
 
-        wrtBlockSize : int, optional
-          The maximum number of derivative columns to compute *products*
+        wrtBlockSize : int or float, optional
+          The maximum average number of derivative columns to compute *products*
           for simultaneously.  None means compute all requested columns
           at once.  The  minimum of wrtBlockSize and the size that makes
           maximal use of available processors is used as the final block size.
@@ -2777,8 +2782,8 @@ class GateSetCalculator(object):
           processors and to control memory usage.  Cannot be specified
           in conjuction with wrtBlockSize.
 
-        wrtBlockSize : int, optional
-          The maximum number of derivative columns to compute *products*
+        wrtBlockSize : int or float, optional
+          The maximum average number of derivative columns to compute *products*
           for simultaneously.  None means compute all requested columns
           at once.  The  minimum of wrtBlockSize and the size that makes
           maximal use of available processors is used as the final block size.
@@ -2865,10 +2870,10 @@ class GateSetCalculator(object):
           processors and to control memory usage.  Cannot be specified
           in conjuction with wrtBlockSize.
 
-        wrtBlockSize : int, optional
-          The maximum number of *2nd* derivative columns to compute *products*
-          for simultaneously.  None means compute all requested columns
-          at once.  The  minimum of wrtBlockSize and the size that makes
+        wrtBlockSize : int or float, optional
+          The maximum average number of *2nd* derivative columns to compute
+          *products* for simultaneously.  None means compute all requested
+          columns at once.  The  minimum of wrtBlockSize and the size that makes
           maximal use of available processors is used as the final block size.
           This argument must be None if wrtFilter is not None.  Set this to
           non-None to reduce amount of intermediate memory required.
@@ -2958,10 +2963,10 @@ class GateSetCalculator(object):
           processors and to control memory usage.  Cannot be specified
           in conjuction with wrtBlockSize.
 
-        wrtBlockSize : int, optional
-          The maximum number of *2nd* derivative columns to compute *products*
-          for simultaneously.  None means compute all requested columns
-          at once.  The  minimum of wrtBlockSize and the size that makes
+        wrtBlockSize : int or float, optional
+          The maximum average number of *2nd* derivative columns to compute
+          *products* for simultaneously.  None means compute all requested
+          columns at once.  The  minimum of wrtBlockSize and the size that makes
           maximal use of available processors is used as the final block size.
           This argument must be None if wrtFilter is not None.  Set this to
           non-None to reduce amount of intermediate memory required.
