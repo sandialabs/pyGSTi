@@ -30,7 +30,6 @@ def distribute_indices(indices, comm, allow_split_comm=True):
 
     return loc_indices, owners, loc_comm
 
-
 def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
     """ TODO: docstring """
     nIndices = len(indices)
@@ -86,6 +85,40 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
                 owners[indices[i]] = r
 
     return loc_indices, owners
+
+def slice_up_range(n, num_slices, start=0):
+    """ 
+    Divides up `range(start,start+n)` into `num_slices` slices.
+
+    Parameters
+    ----------
+    n : int
+       The number of (consecutive) indices in the range to be divided.
+
+    num_slices : int
+       The number of slices to divide the range into.
+
+    start : int, optional
+       The starting entry of the range, so that the range to be 
+       divided is `range(start,start+n)`.
+
+    Returns
+    -------
+    list of slices
+    """
+    base = n // num_slices # base slice size
+    m1 = n - base*num_slices # num base+1 size slices
+    m2 = num_slices - m1     # num base size slices
+    assert( ((base+1)*m1 + base*m2) == n )
+    
+    off = start
+    ret =  [slice(off+(base+1)*i,off+(base+1)*(i+1)) for i in range(m1)]
+    off += (base+1)*m1
+    ret += [slice(off+base*i,off+base*(i+1)) for i in range(m2)]
+    assert(len(ret) == num_slices)
+    return ret
+
+
 
 def distribute_slice(s, comm, allow_split_comm=True):
     """ TODO: docstring """
