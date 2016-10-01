@@ -8,6 +8,9 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import time as _time
 import os as _os
+import inspect as _inspect
+import itertools as _itertools
+import numpy as _np
 
 try:
     import psutil as _psutil
@@ -49,7 +52,7 @@ class Profiler(object):
         self.mem_checkpoints = {}
         self.print_memchecks = default_print_memcheck
 
-    def add_time(self, name, start_time):
+    def add_time(self, name, start_time, prefix=0):
         """
         Adds an elapsed time to a named "timer"-type accumulator.
         
@@ -63,10 +66,26 @@ class Profiler(object):
            The starting time used to compute the elapsed, i.e. the value 
            `time.time()-start_time`, which is added to the named timer.
 
+        prefix : int, optional
+           Prefix to the timer name the current stack depth and this number
+           of function names, starting with the current function and moving
+           the call stack.  When zero, no prefix is added. For example, 
+           with `prefix == 1`, "Total" might map to " 3: myFunc: Total".
+
         Returns
         -------
         None
         """
+        if prefix > 0:
+            stack = _inspect.stack()
+            try:
+                depth = len(stack)-1 # -1 to discount current fn (add_time)
+                functions = " : ".join(_inspect.getframeinfo(frm[0]).filename
+                                       for frm in reversed(stack[1:1+prefix]))
+                name = "%2d: %s: %s" % (depth,functions,name)
+            finally:
+                stack = None #make sure frames get cleaned up properly
+
         val = _time.time() - start_time
         if name in self.timers:
             self.timers[name] += val
@@ -74,7 +93,7 @@ class Profiler(object):
             self.timers[name] = val
 
 
-    def add_count(self, name, inc=1):
+    def add_count(self, name, inc=1, prefix=0):
         """
         Adds a given value to a named "counter"-type accumulator.
         
@@ -87,17 +106,33 @@ class Profiler(object):
         inc : int, optional
            The increment (the value to add to the counter).
 
+        prefix : int, optional
+           Prefix to the timer name the current stack depth and this number
+           of function names, starting with the current function and moving
+           the call stack.  When zero, no prefix is added. For example, 
+           with `prefix == 1`, "Total" might map to " 3: myFunc: Total".
+
         Returns
         -------
         None
         """
+        if prefix > 0:
+            stack = _inspect.stack()
+            try:
+                depth = len(stack)-1 # -1 to discount current fn (add_count)
+                functions = " : ".join(_inspect.getframeinfo(frm[0]).filename
+                                       for frm in reversed(stack[1:1+prefix]))
+                name = "%2d: %s: %s" % (depth,functions,name)
+            finally:
+                stack = None #make sure frames get cleaned up properly
+
         if name in self.counters:
-            self.timers[name] += inc
+            self.counters[name] += inc
         else:
-            self.timers[name] = inc
+            self.counters[name] = inc
 
 
-    def mem_check(self, name,printme=None):
+    def mem_check(self, name, printme=None, prefix=0):
         """
         Record the memory usage at this point and tag with a `name`.
         
@@ -112,10 +147,26 @@ class Profiler(object):
            (if None, the default, then the value of `default_print_memcheck`
            specified during Profiler construction is used).
 
+        prefix : int, optional
+           Prefix to the timer name the current stack depth and this number
+           of function names, starting with the current function and moving
+           the call stack.  When zero, no prefix is added. For example, 
+           with `prefix == 1`, "Total" might map to " 3: myFunc: Total".
+
         Returns
         -------
         None
         """
+        if prefix > 0:
+            stack = _inspect.stack()
+            try:
+                depth = len(stack)-1 # -1 to discount current fn (mem_check)
+                functions = " : ".join(_inspect.getframeinfo(frm[0]).filename
+                                       for frm in reversed(stack[1:1+prefix]))
+                name = "%2d: %s: %s" % (depth,functions,name)
+            finally:
+                stack = None #make sure frames get cleaned up properly
+
         usage = _get_mem_usage()
         timestamp = _time.time()
         if name in self.mem_checkpoints:
@@ -126,6 +177,124 @@ class Profiler(object):
         bPrint = self.print_memchecks if (printme is None) else printme
         if bPrint and (self.comm is None or self.comm.Get_rank() == 0):
             print("MEM USAGE [%s] = %.2f GB" % (name,usage*BtoGB))
+
+
+    def format_times(self, sortBy="name"):
+        """
+        Formats a string to report the timer values recorded in this Profiler.
+
+        Parameters
+        ----------
+        sortBy : {"name","time"}
+            What to sort list of timers by.
+
+        Returns
+        -------
+        str
+        """
+        s = "---> Times (by %s): \n" % sortBy
+        if sortBy == "name":
+            timerNames = sorted(list(self.timers.keys()))
+        elif sortBy == "time":
+            timerNames = sorted(list(self.timers.keys()),
+                                key=lambda x: self.timers[x])
+        else:
+            raise ValueError("Invalid 'sortBy' argument: %s" % sortBy)
+        
+        for nm in timerNames:
+            s += "  %s : %.1fs\n" % (nm,self.timers[nm])
+        s += "\n"
+        return s
+
+
+    def format_counts(self, sortBy="name"):
+        """
+        Formats a string to report the counter values recorded in this Profiler.
+
+        Parameters
+        ----------
+        sortBy : {"name","count"}
+           What to sort list of counts by.
+
+        Returns
+        -------
+        str
+        """
+        s = "---> Counters (by %s): \n" % sortBy
+        if sortBy == "name":
+            counterNames = sorted(list(self.counters.keys()))
+        elif sortBy == "count":
+            counterNames = sorted(list(self.counters.keys()),
+                                key=lambda x: self.counters[x])
+        else:
+            raise ValueError("Invalid 'sortBy' argument: %s" % sortBy)
+        
+        for nm in counterNames:
+            s += "  %s : %d\n" % (nm,self.counters[nm])
+        s += "\n"
+        return s
+
+
+    def format_memory(self, sortBy="name"):
+        """
+        Formats a string to report the memory usage checkpoints recorded
+        in this Profiler.
+
+        Parameters
+        ----------
+        sortBy : {"name","usage","timestamp"}
+           What to sort list of counts by.
+
+        Returns
+        -------
+        str
+        """
+        if len(self.mem_checkpoints) == 0:
+            return "No memory checkpoints"
+
+        #for key in self.mem_checkpoints:
+        #    print("ITEM:",self.mem_checkpoints[key])
+        #    assert(False)
+        #print("LIST: ",list(self.mem_checkpoints.values()))
+        max_memory = max([ usage for timestamp,usage in 
+                           _itertools.chain(*self.mem_checkpoints.values())])
+        s  = "---> Max Memory usage = %.2fGB\n" % (max_memory*BtoGB)
+        s += "---> Memory usage (by %s): \n" % sortBy
+
+        if sortBy == "timestamp": #special case in that we print each event,
+                                  # not just the average usage per checkpoint
+            raise NotImplementedError("TODO")
+
+        avg_usages = { k : _np.mean([u for t,u in infos]) for k,infos 
+                       in self.mem_checkpoints.items() }
+
+        if sortBy == "name":
+            chkptNames = sorted(list(self.mem_checkpoints.keys()))
+        elif sortBy == "usage":
+            chkptNames = sorted(list(avg_usages.keys()),
+                                key=lambda x: avg_usages[x])
+        else:
+            raise ValueError("Invalid 'sortBy' argument: %s" % sortBy)
+        
+        for nm in chkptNames:
+            usages = [u for t,u in self.mem_checkpoints[nm]]
+            s += "  %s : %.2fGB (min=%.2f,max=%.2f)\n" % \
+                (nm,avg_usages[nm]*BtoGB,min(usages)*BtoGB,max(usages)*BtoGB)
+        s += "\n"
+        return s
+
+        
+
+    def __getstate__(self):
+        #Return the state (for pickling) -- *don't* pickle Comm object
+        to_pickle = self.__dict__.copy()
+        del to_pickle['comm'] # one *cannot* pickle Comm objects
+        return  to_pickle
+
+    def __setstate__(self, stateDict):
+        self.__dict__.update(stateDict)
+        self.comm = None # initialize to None upon unpickling
+
         
 
 
@@ -151,8 +320,5 @@ class DummyProfiler(object):
     def mem_check(self, name,printme=None):
         """Stub function that does nothing"""
         pass
-
-#Create a global instance for use as a default profiler in functions elsewhere
-no_profiler = DummyProfiler()
 
     
