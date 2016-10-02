@@ -13,6 +13,56 @@ import numpy as _np
 from ..tools import matrixtools as _mt
 from .protectedarray import ProtectedArray as _ProtectedArray
 
+
+def optimize_spamvec(vecToOptimize, targetVec):
+    """
+    Optimize the parameters of vecToOptimize so that the
+      the resulting SPAM vector is as close as possible to
+      targetVec.
+
+    This is trivial for the case of FullyParameterizedSPAMVec
+      instances, but for other types of parameterization
+      this involves an iterative optimization over all the
+      parameters of vecToOptimize.
+
+    Parameters
+    ----------
+    vecToOptimize : SPAMVec
+      The vector to optimize. This object gets altered.
+
+    targetVec : SPAMVec
+      The SPAM vector used as the target.
+
+    Returns
+    -------
+    None
+    """
+
+    #TODO: cleanup this code:
+    if isinstance(vecToOptimize, StaticSPAMVec):
+        return #nothing to optimize
+
+    if isinstance(vecToOptimize, FullyParameterizedSPAMVec):
+        if(targetVec.dim != vecToOptimize.dim): #special case: gates can have different overall dimension
+            vecToOptimize.dim = targetVec.dim   #  this is a HACK to allow model selection code to work correctly
+        vecToOptimize.set_vector(targetVec)     #just copy entire overall matrix since fully parameterized
+        return
+
+    assert(targetVec.dim == vecToOptimize.dim) #vectors must have the same overall dimension
+    targetVector = _np.asarray(targetVec)
+    import sys
+    def objective_func(param_vec):
+        vecToOptimize.from_vector(param_vec)
+        return _mt.frobeniusnorm(vecToOptimize-targetVector)
+
+    x0 = vecToOptimize.to_vector()
+    minSol = _opt.minimize(objective_func, x0, method='BFGS', maxiter=10000, maxfev=10000,
+                           tol=1e-6, callback=None)
+
+    vecToOptimize.from_vector(minSol.x)
+    print("DEBUG: optimized vector to min frobenius distance %g" % _mt.frobeniusnorm(vecToOptimize-targetVector))
+
+
 def convert(spamvec, toType):
     """
     Convert SPAM vector to a new type of parameterization, potentially

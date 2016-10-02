@@ -163,9 +163,12 @@ def test_MPI_products(comm):
 
       # will use a split tree to parallelize
     parallel = gs.bulk_product(split_tree, bScale=False, comm=comm)
+    parallel = split_tree.permute_computation_to_original(parallel)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
     parallel, pscale = gs.bulk_product(split_tree, bScale=True, comm=comm)
+    parallel = split_tree.permute_computation_to_original(parallel)
+    pscale = split_tree.permute_computation_to_original(pscale)
     assert(np.linalg.norm(serial_scl*sscale[:,None,None] -
                           parallel*pscale[:,None,None]) < 1e-6)
 
@@ -182,9 +185,12 @@ def test_MPI_products(comm):
 
       # will just ignore a split tree for now (just parallel by col)
     parallel = gs.bulk_dproduct(split_tree, bScale=False, comm=comm)
+    parallel = split_tree.permute_computation_to_original(parallel)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
     parallel, pscale = gs.bulk_dproduct(split_tree, bScale=True, comm=comm)
+    parallel = split_tree.permute_computation_to_original(parallel)
+    pscale = split_tree.permute_computation_to_original(pscale)
     assert(np.linalg.norm(serial_scl*sscale[:,None,None,None] -
                           parallel*pscale[:,None,None,None]) < 1e-6)
 
@@ -201,9 +207,12 @@ def test_MPI_products(comm):
 
       # will just ignore a split tree for now (just parallel by col)
     parallel = gs.bulk_hproduct(split_tree, bScale=False, comm=comm)
+    parallel = split_tree.permute_computation_to_original(parallel)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
     parallel, pscale = gs.bulk_hproduct(split_tree, bScale=True, comm=comm)
+    parallel = split_tree.permute_computation_to_original(parallel)
+    pscale = split_tree.permute_computation_to_original(pscale)
     assert(np.linalg.norm(serial_scl*sscale[:,None,None,None,None] -
                           parallel*pscale[:,None,None,None,None]) < 1e-6)
 
@@ -255,14 +264,18 @@ def test_MPI_pr(comm):
     #                wrtBlockSize to accomodate remaining processors
     serial = gs.bulk_pr('plus', tree, clipTo=(-1e6,1e6))
     parallel = gs.bulk_pr('plus', split_tree, clipTo=(-1e6,1e6), comm=comm)
+    parallel = split_tree.permute_computation_to_original(parallel)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
     serial = gs.bulk_dpr('plus', tree, clipTo=(-1e6,1e6))
     parallel = gs.bulk_dpr('plus', split_tree, clipTo=(-1e6,1e6), comm=comm)
+    parallel = split_tree.permute_computation_to_original(parallel)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
     serial, sp = gs.bulk_dpr('plus', tree, returnPr=True, clipTo=(-1e6,1e6))
     parallel, pp = gs.bulk_dpr('plus', split_tree, returnPr=True, clipTo=(-1e6,1e6), comm=comm)
+    parallel = split_tree.permute_computation_to_original(parallel)
+    pp = split_tree.permute_computation_to_original(pp)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
     assert(np.linalg.norm(sp-pp) < 1e-6)
 
@@ -270,6 +283,9 @@ def test_MPI_pr(comm):
                              clipTo=(-1e6,1e6))
     parallel, pdp, pp = gs.bulk_hpr('plus', split_tree, returnPr=True,
                                  returnDeriv=True, clipTo=(-1e6,1e6), comm=comm)
+    parallel = split_tree.permute_computation_to_original(parallel)
+    pdp = split_tree.permute_computation_to_original(pdp)
+    pp = split_tree.permute_computation_to_original(pp)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
     assert(np.linalg.norm(sdp-pdp) < 1e-6)
     assert(np.linalg.norm(sp-pp) < 1e-6)
@@ -326,27 +342,34 @@ def test_MPI_probs(comm):
     serial = gs.bulk_probs(tree, clipTo=(-1e6,1e6))
     parallel = gs.bulk_probs(split_tree, clipTo=(-1e6,1e6), comm=comm)
     for sl in serial:
-        assert(np.linalg.norm(serial[sl]-parallel[sl]) < 1e-6)
+        p = split_tree.permute_computation_to_original(parallel[sl])
+        assert(np.linalg.norm(serial[sl]-p) < 1e-6)
 
     serial = gs.bulk_dprobs(tree, clipTo=(-1e6,1e6))
     parallel = gs.bulk_dprobs(split_tree, clipTo=(-1e6,1e6), comm=comm)
     for sl in serial:
-        assert(np.linalg.norm(serial[sl]-parallel[sl]) < 1e-6)
+        p = split_tree.permute_computation_to_original(parallel[sl])
+        assert(np.linalg.norm(serial[sl]-p) < 1e-6)
 
     serial = gs.bulk_dprobs(tree, returnPr=True, clipTo=(-1e6,1e6))
     parallel = gs.bulk_dprobs(split_tree, returnPr=True, clipTo=(-1e6,1e6), comm=comm)
     for sl in serial:
-        assert(np.linalg.norm(serial[sl][0]-parallel[sl][0]) < 1e-6)
-        assert(np.linalg.norm(serial[sl][1]-parallel[sl][1]) < 1e-6)
+        p0 = split_tree.permute_computation_to_original(parallel[sl][0])
+        p1 = split_tree.permute_computation_to_original(parallel[sl][1])
+        assert(np.linalg.norm(serial[sl][0]-p0) < 1e-6)
+        assert(np.linalg.norm(serial[sl][1]-p1) < 1e-6)
 
     serial = gs.bulk_hprobs(tree, returnPr=True, returnDeriv=True,
                             clipTo=(-1e6,1e6))
     parallel = gs.bulk_hprobs(split_tree, returnPr=True,
                               returnDeriv=True, clipTo=(-1e6,1e6), comm=comm)
     for sl in serial:
-        assert(np.linalg.norm(serial[sl][0]-parallel[sl][0]) < 1e-6)
-        assert(np.linalg.norm(serial[sl][1]-parallel[sl][1]) < 1e-6)
-        assert(np.linalg.norm(serial[sl][2]-parallel[sl][2]) < 1e-6)
+        p0 = split_tree.permute_computation_to_original(parallel[sl][0])
+        p1 = split_tree.permute_computation_to_original(parallel[sl][1])
+        p2 = split_tree.permute_computation_to_original(parallel[sl][2])
+        assert(np.linalg.norm(serial[sl][0]-p0) < 1e-6)
+        assert(np.linalg.norm(serial[sl][1]-p1) < 1e-6)
+        assert(np.linalg.norm(serial[sl][2]-p2) < 1e-6)
 
 
 
@@ -401,17 +424,23 @@ def test_MPI_fills(comm):
     #Check serial results with a split tree, just to be sure
     gs.bulk_fill_probs(vp_serial2, spam_label_rows, split_tree,
                        (-1e6,1e6), comm=None)
+    vp_serial2 = split_tree.permute_computation_to_original(vp_serial2,axis=1)
     assert(np.linalg.norm(vp_serial2-vp_serial) < 1e-6)
 
     gs.bulk_fill_dprobs(vdp_serial2, spam_label_rows, split_tree,
                         vp_serial2, (-1e6,1e6), comm=None,
                         wrtBlockSize=None)
+    vp_serial2 = split_tree.permute_computation_to_original(vp_serial2,axis=1)
+    vdp_serial2 = split_tree.permute_computation_to_original(vdp_serial2,axis=1)
     assert(np.linalg.norm(vp_serial2-vp_serial) < 1e-6)
     assert(np.linalg.norm(vdp_serial2-vdp_serial) < 1e-6)
 
     gs.bulk_fill_hprobs(vhp_serial2, spam_label_rows, split_tree,
                         vp_serial2, vdp_serial2, (-1e6,1e6), comm=None,
                         wrtBlockSize=None)
+    vp_serial2 = split_tree.permute_computation_to_original(vp_serial2,axis=1)
+    vdp_serial2 = split_tree.permute_computation_to_original(vdp_serial2,axis=1)
+    vhp_serial2 = split_tree.permute_computation_to_original(vhp_serial2,axis=1)
     assert(np.linalg.norm(vp_serial2-vp_serial) < 1e-6)
     assert(np.linalg.norm(vdp_serial2-vdp_serial) < 1e-6)
     assert(np.linalg.norm(vhp_serial2-vhp_serial) < 1e-6)
@@ -426,25 +455,31 @@ def test_MPI_fills(comm):
 
         gs.bulk_fill_probs(vp_parallel, spam_label_rows, tstTree,
                            (-1e6,1e6), comm=comm)
+        vp_parallel = tstTree.permute_computation_to_original(vp_parallel,axis=1)
         assert(np.linalg.norm(vp_parallel-vp_serial) < 1e-6)
 
         for blkSize in [None, 4]:
             gs.bulk_fill_dprobs(vdp_parallel, spam_label_rows, tstTree,
                                 vp_parallel, (-1e6,1e6), comm=comm,
                                 wrtBlockSize=blkSize)
+            vp_parallel = tstTree.permute_computation_to_original(vp_parallel,axis=1)
+            vdp_parallel = tstTree.permute_computation_to_original(vdp_parallel,axis=1)
             assert(np.linalg.norm(vp_parallel-vp_serial) < 1e-6)
             assert(np.linalg.norm(vdp_parallel-vdp_serial) < 1e-6)
 
             gs.bulk_fill_hprobs(vhp_parallel, spam_label_rows, tstTree,
                                 vp_parallel, vdp_parallel, (-1e6,1e6), comm=comm,
                                 wrtBlockSize=blkSize)
+            vp_parallel = tstTree.permute_computation_to_original(vp_parallel,axis=1)
+            vdp_parallel = tstTree.permute_computation_to_original(vdp_parallel,axis=1)
+            vhp_parallel = tstTree.permute_computation_to_original(vhp_parallel,axis=1)
             assert(np.linalg.norm(vp_parallel-vp_serial) < 1e-6)
             assert(np.linalg.norm(vdp_parallel-vdp_serial) < 1e-6)
             assert(np.linalg.norm(vhp_parallel-vhp_serial) < 1e-6)
 
 
     #Test Serial vs Parallel use of wrtFilter
-    some_wrtFilter = [0,2,3,5,10]
+    some_wrtFilter = [0,1,2,3,10,11,12,13,14] #must be contiguous now - not arbitraray
     vhp_parallelF = np.empty( (nSpamLabels,nGateStrings,nDerivCols,len(some_wrtFilter)),'d')
     vdp_parallelF = np.empty( (nSpamLabels,nGateStrings,len(some_wrtFilter)), 'd' )
 
@@ -453,6 +488,8 @@ def test_MPI_fills(comm):
         gs._calc().bulk_fill_dprobs(vdp_parallelF, spam_label_rows, tstTree,
                             None, (-1e6,1e6), comm=comm,
                             wrtFilter=some_wrtFilter, wrtBlockSize=None)
+        vdp_parallelF = tstTree.permute_computation_to_original(vdp_parallelF,axis=1)
+
         for ii,i in enumerate(some_wrtFilter):
             assert(np.linalg.norm(vdp_serial[:,:,i]-vdp_parallelF[:,:,ii]) < 1e-6)
         taken_result = vdp_serial.take( some_wrtFilter, axis=2 )
@@ -461,6 +498,7 @@ def test_MPI_fills(comm):
         gs._calc().bulk_fill_hprobs(vhp_parallelF, spam_label_rows, tstTree,
                         None, None, (-1e6,1e6), comm=comm,
                         wrtFilter=some_wrtFilter, wrtBlockSize=None)
+        vhp_parallelF = tstTree.permute_computation_to_original(vhp_parallelF,axis=1)
 
         for ii,i in enumerate(some_wrtFilter):
             assert(np.linalg.norm(vhp_serial[:,:,:,i]-vhp_parallelF[:,:,:,ii]) < 1e-6)
