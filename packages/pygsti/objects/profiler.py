@@ -24,7 +24,7 @@ except ImportError:
     def _get_mem_usage():
         mem = _resource.getrusage(_resource.RUSAGE_SELF).ru_maxrss
           # peak memory usage (bytes on OS X, kilobytes on Linux)
-        if sys.platform != 'darwin': mem *= 1024 #now always in bytes
+        if _sys.platform != 'darwin': mem *= 1024 #now always in bytes
         return mem
 
 #from mpi4py import MPI
