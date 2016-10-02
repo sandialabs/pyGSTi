@@ -26,11 +26,15 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
     half_max_nu = 2**62 #what should this be??
     tau = 1e-3
     nu = 2
+    mu = 0 #initialized on 1st iter
     my_cols_slice = None
-    
+
+    #verbosity = 10 #DEBUG!!!
+    #last_dx = None #DEBUG!!!
 
     if not _np.isfinite(norm_f):
         msg = "Infinite norm of objective function at initial point!"
+
 
     for k in range(max_iter): #outer loop
         # assume x, f, fnorm hold valid values
@@ -43,7 +47,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
             converged = True; break
 
         if verbosity > 0:
-            print("--- Outer Iter %d: norm_f = %g" % (k,norm_f))
+            print("--- Outer Iter %d: norm_f = %g, mu=%g" % (k,norm_f,mu))
             
         if profiler: profiler.mem_check("custom_leastsq: begin outer iter *before de-alloc*")
         Jac = None; JTJ = None; JTf = None
@@ -70,14 +74,16 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
             msg = "norm(jacobian) is small"
             converged = True; break
 
-        mu = tau #* _np.max(undampled_JTJ_diag) # initial damping element
+        if k == 0:
+            #mu = tau # initial damping element
+            mu = tau * _np.max(undampled_JTJ_diag) # initial damping element
 
         #determing increment using adaptive damping
         while True:  #inner loop
-            #JTJ[idiag] += mu # augment normal equations
 
             if profiler: profiler.mem_check("custom_leastsq: begin inner iter")
-            JTJ[idiag] *= (1.0 + mu) # augment normal equations
+            JTJ[idiag] += mu # augment normal equations
+            #JTJ[idiag] *= (1.0 + mu) # augment normal equations
 
             try:
                 if profiler: profiler.mem_check("custom_leastsq: before linsolve")
@@ -119,13 +125,17 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
                 if dL > 0 and dF > 0:
                     # reduction in error: increment accepted!
                     #print("      Accepted!")
+                    #if last_dx is not None: 
+                    #    print("dot = ",_np.dot(dx,last_dx)/(_np.linalg.norm(dx)*_np.linalg.norm(last_dx)))
+                    #last_dx = dx
                     t = 1.0 - (2*dF/dL-1.0)**3
                     mu *= max(t,1.0/3.0)
                     nu = 2
                     x,f, norm_f = new_x, new_f, norm_new_f
                     break # exit inner loop normally
+            #else:
+            #    print("LinSolve Failure!!")
 
-            
             # if this point is reached, either the linear solve failed
             # or the error did not reduce.  In either case, reject increment.
                 

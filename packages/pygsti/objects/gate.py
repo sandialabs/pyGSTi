@@ -38,6 +38,9 @@ def optimize_gate(gateToOptimize, targetGate):
     """
 
     #TODO: cleanup this code:
+    if isinstance(gateToOptimize, StaticGate):
+        return #nothing to optimize
+
     if isinstance(gateToOptimize, FullyParameterizedGate):
         if(targetGate.dim != gateToOptimize.dim): #special case: gates can have different overall dimension
             gateToOptimize.dim = targetGate.dim   #  this is a HACK to allow model selection code to work correctly

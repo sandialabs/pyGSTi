@@ -62,6 +62,10 @@ def load_dataset(filename, cache=False, verbosity=1):
         ds = _objs.DataSet(fileToLoadFrom=filename)
     except:
 
+        #Parser functions don't take a VerbosityPrinter yet, and so
+        # always output to stdout (TODO)
+        bToStdout = (printer.verbosity > 0 and printer.filename is None)
+
         if cache:
             #bReadCache = False
             cache_filename = filename + ".cache"
@@ -75,10 +79,6 @@ def load_dataset(filename, cache=False, verbosity=1):
             else:
                 printer.log("Cache file not found or is tool old -- one will"
                             + "be created after loading is completed")
-
-            #Parser functions don't take a VerbosityPrinter yet, and so
-            # always output to stdout (TODO)
-            bToStdout = (printer.verbosity > 0 and printer.filename is None)
 
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
@@ -126,6 +126,11 @@ def load_multidataset(filename, cache=False, verbosity=1):
         # a saved MultiDataset object is ok
         mds = _objs.MultiDataSet(fileToLoadFrom=filename)
     except:
+
+        #Parser functions don't take a VerbosityPrinter yet, and so
+        # always output to stdout (TODO)
+        bToStdout = (printer.verbosity > 0 and printer.filename is None)
+
         if cache:
             # bReadCache = False
             cache_filename = filename + ".cache"
@@ -139,9 +144,6 @@ def load_multidataset(filename, cache=False, verbosity=1):
             else:
                 printer.log("Cache file not found or is too old -- one will be"
                             + "created after loading is completed")
-            #Parser functions don't take a VerbosityPrinter yet, and so
-            # always output to stdout (TODO)
-            bToStdout = (printer.verbosity > 0 and printer.filename is None)
 
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()

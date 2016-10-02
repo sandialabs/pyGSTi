@@ -243,6 +243,7 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
         rhoVec_p = _np.dot(invABMat_p,rhoVec_p)
         lgstGateset.preps[prepLabel] = rhoVec_p
 
+
     # Add identity vector to gateset (needed before adding spam labels)
     #  Pad with zeros if needed (ROBIN - is this correct?)
     if identityVec is not None:
@@ -301,16 +302,29 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
         #   so that lgstGateset.spamdefs = ... doesn't fail.
         lgstGateset.povm_identity = padded_identityVec
 
-        # Force lgstGateset to have gates parameterized in the same way as those in guessGatesetForGauge,
-        # but we only know how to do this when the dimensions of the target and created gateset match.  If
-        # they don't, it doesn't make sense to increase the target gateset dimension, as this will generally
-        # not preserve its parameterization.
+        # Force lgstGateset to have gates, preps, & effects parameterized in the same way as those in
+        # guessGatesetForGauge, but we only know how to do this when the dimensions of the target and
+        # created gateset match.  If they don't, it doesn't make sense to increase the target gateset
+        # dimension, as this will generally not preserve its parameterization.
         if guessTrunc == trunc:
             for gateLabel in gateLabelsToEstimate:
                 if gateLabel in guessGatesetForGauge.gates:
                     new_gate = guessGatesetForGauge.gates[gateLabel].copy()
                     _objs.gate.optimize_gate( new_gate, lgstGateset.gates[gateLabel])
                     lgstGateset.gates[ gateLabel ] = new_gate
+
+            for prepLabel in rhoLabelsToEstimate:
+                if prepLabel in guessGatesetForGauge.preps:
+                    new_vec = guessGatesetForGauge.preps[prepLabel].copy()
+                    _objs.spamvec.optimize_spamvec( new_vec, lgstGateset.preps[prepLabel])
+                    lgstGateset.preps[ prepLabel ] = new_vec
+    
+            for effectLabel in eLabelsToEstimate:
+                if effectLabel in guessGatesetForGauge.effects:
+                    new_vec = guessGatesetForGauge.effects[effectLabel].copy()
+                    _objs.spamvec.optimize_spamvec( new_vec, lgstGateset.effects[effectLabel])
+                    lgstGateset.effects[ effectLabel ] = new_vec
+
 
         #inv_BMat_p = _np.dot(invABMat_p, AMat_p) # should be equal to inv(BMat_p) when trunc == gsDim ?? check??
         #lgstGateset.transform( S=_np.dot(invABMat_p, AMat_p), Si=BMat_p ) # lgstGateset had dim trunc, so after transform is has dim gsDim
@@ -1010,11 +1024,13 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     if gatestringWeights is not None:
         gatestringWeights = \
             evTree.permute_original_to_computation(gatestringWeights)
+    assert(None not in gateStringsToUse) #DEBUG
 
     #Expand gate label aliases used in DataSet lookups
     if gateLabelAliases is not None:
         #find & replace aliased gate labels with their expanded form
         dsGateStringsToUse = []
+        assert(None not in gateStringsToUse) #DEBUG
         for s in gateStringsToUse:
             for label,expandedStr in gateLabelAliases.items():
                 while label in tuple(s):

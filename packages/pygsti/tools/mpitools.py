@@ -33,7 +33,8 @@ def distribute_indices(indices, comm, allow_split_comm=True):
 def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
     """ TODO: docstring """
     nIndices = len(indices)
-    assert(nIndices > 0) #need a special case when == 0?
+    if nIndices == 0: # special case when == 0
+        return [], {}
 
     if nprocs >= nIndices:
         if allow_split_comm:
@@ -130,20 +131,27 @@ def distribute_slice(s, comm, allow_split_comm=True):
 
     assert(s.step is None) #currently, no support for step != None slices
       # Though in principle this should be able to work
-    indices = list(range(s.start,s.stop))
+    if s.start is None or s.stop is None: indices = []
+    else: indices = list(range(s.start,s.stop))
     loc_indices, owners = distribute_indices_base(indices, nprocs, rank,
                                                   allow_split_comm)
-    assert(loc_indices == list(range(loc_indices[0],loc_indices[-1]+1)))
-    loc_slice = slice(loc_indices[0],loc_indices[-1]+1)
+    if len(loc_indices) > 0:
+        assert(loc_indices == list(range(loc_indices[0],loc_indices[-1]+1)))
+        loc_slice = slice(loc_indices[0],loc_indices[-1]+1)
+    
+        #Split comm into sub-comms when there are more procs than
+        # indices, resulting in all procs getting only a 
+        # single index and multiple procs getting the *same*
+        # (single) index.
+        if nprocs > len(indices) and (comm is not None) and allow_split_comm:
+            loc_comm = comm.Split(color=loc_indices[0], key=rank)  
+        else: 
+            loc_comm = None
 
-    #Split comm into sub-comms when there are more procs than
-    # indices, resulting in all procs getting only a 
-    # single index and multiple procs getting the *same*
-    # (single) index.
-    if nprocs > len(indices) and (comm is not None) and allow_split_comm:
-        loc_comm = comm.Split(color=loc_indices[0], key=rank)  
     else: 
+        loc_slice = slice(None)
         loc_comm = None
+
 
     return loc_slice, owners, loc_comm
 

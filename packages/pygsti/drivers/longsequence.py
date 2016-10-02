@@ -253,10 +253,25 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         gs_after_gauge_opt.povm_identity = firstElIdentityVec # declare that this basis has the identity as its first element
 
     else: # no TP constraint
-        gs_after_gauge_opt = _alg.optimize_gauge(
-            gs_lgst, "target", targetGateset=gs_target,
-            spamWeight=1.0, gateWeight=1.0)
+        try:
+            printer.log("\nGauge Optimizing without constraints...",2)
+            gs_after_gauge_opt = _alg.optimize_gauge(
+                gs_lgst, "target", targetGateset=gs_target,
+                spamWeight=1.0, gateWeight=1.0)
+            printer.log("Success!",2)
             #Note: no  itemWeights=gaugeOptItemWeights here (LGST)
+        except:
+            try:
+                printer.log("Failed! Trying with TP constraint...",2)
+                gs_after_gauge_opt = _alg.optimize_gauge(
+                    gs_lgst, "target", targetGateset=gs_target, 
+                    constrainToTP=True, spamWeight=1.0, gateWeight=1.0)
+                printer.log("Success!",2)
+                #Note: no  itemWeights=gaugeOptItemWeights here (LGST)
+            except:
+                printer.log("Still Failed! No gauge optimization " +
+                            "performed on LGST estimate.",2)
+                gs_after_gauge_opt = gs_lgst.copy()
 
         #TODO: set identity vector, or leave as is, which assumes LGST had the right one and contraction doesn't change it ??
         # Really, should we even allow use of the identity vector when doing a non-TP-constrained optimization?
@@ -338,7 +353,15 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         args = go_params.copy()
         args['gateset'] = gs
         args['targetGateset'] = gs_target
-        go_gs_lsgst_list[i] = _alg.optimize_gauge(**args)
+        try:
+            go_gs_lsgst_list[i] = _alg.optimize_gauge(**args)
+        except:
+            if not go_params['constrainToTP']:
+                go_params['constrainToTP'] = True
+                try:
+                    go_gs_lsgst_list[i] = _alg.optimize_gauge(**args)
+                except:
+                    pass
 
     tNxt = _time.time()
     profiler.add_time('do_long_sequence_gst: gauge opt to target',tRef); tRef=tNxt

@@ -19,6 +19,7 @@ def length(s):
     -------
     int
     """
+    if s.start is None or s.stop is None: return 0
     if s.step is None: return s.stop-s.start
     else: return len(range(s.start,s.stop.s.step))
 
@@ -50,6 +51,8 @@ def indices(s):
     -------
     list of ints
     """
+    if s.start is None or s.stop is None:
+        return []
     if s.step is None: 
         return list(range(s.start,s.stop))
     return list(range(s.start,s.stop,s.step))
@@ -68,5 +71,6 @@ def list_to_slice(lst):
     -------
     slice
     """
+    if not lst: return slice(0,0)
     assert(lst == list(range(lst[0],lst[-1]+1)))
     return slice(lst[0],lst[-1]+1)

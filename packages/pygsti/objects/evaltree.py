@@ -113,6 +113,8 @@ class EvalTree(list):
             self.init_indices.append( indx )
             evalDict[ tup ] = indx
 
+        #print("DB: initial eval dict = ",evalDict)
+
         #Process gatestrings in order of length, so that we always place short strings
         # in the right place (otherwise assert stmt below can fail)
         indices_sorted_by_gatestring_len = \
@@ -125,13 +127,17 @@ class EvalTree(list):
         for k in indices_sorted_by_gatestring_len:
             gateString = gatestring_list[k]
             L = len(gateString)
-            #if L == 0:
-            #    self[0] = (None,None,k) #set in-final-list index for zero-length string (special case)
-            #    finalIndxList[k] = 0
+            if L == 0:
+                iEmptyStr = evalDict.get( (), None)
+                assert(iEmptyStr is not None) # duplicate () final strs require
+                if k != iEmptyStr:
+                    assert(self[k] is None)       # the empty string to be included in the tree too!
+                    self[k] = (iEmptyStr, iEmptyStr) # compute the duplicate () using by
+                    self.eval_order.append(k)        #  multiplying by the empty string.
 
             start = 0; bite = 1
             #nBites = 0
-            #print "DB: string = ",gateString, " tree length = ",len(self)
+            #print("\nDB: string = ",gateString, "(len=%d)" % len(gateString))
 
             while start < L:
 
@@ -141,13 +147,23 @@ class EvalTree(list):
                         bite = b; break
                 else: assert(False) #Logic error - loop above should always exit when b == 1
 
-                #print "DB: start=", start, ": found ", gateString[start:start+bite], " in evalDict"
                 #iInFinal = k if bool(start + bite == L) else -1
                 bFinal = bool(start + bite == L)
+                #print("DB: start=",start,": found ",gateString[start:start+bite],
+                #      " (len=%d) in evalDict" % bite, "(final=%s)" % bFinal)
 
                 if start == 0: #first in-evalDict bite - no need to add anything to self yet
                     iCur = evalDict[ gateString[0:bite] ]
-                    if bFinal: assert(iCur == k) #make sure this bite is in the right place!
+                    #print("DB: taking bite: ", gateString[0:bite], "indx = ",iCur)
+                    if bFinal:
+                        #OLD: assert(iCur == k) #make sure this bite is in the right place!
+                        if iCur != k:  #then we have a duplicate final gate string
+                            iEmptyStr = evalDict.get( (), None)
+                            assert(iEmptyStr is not None) # duplicate final strs require
+                                      # the empty string to be included in the tree too!
+                            assert(self[k] is None) #make sure we haven't put anything here yet
+                            self[k] = (iCur, iEmptyStr) # compute the duplicate using by                             
+                            self.eval_order.append(k)   #  multiplying by the empty string.
                 else:
                     # add (iCur, iBite)
                     assert(gateString[0:start+bite] not in evalDict)
@@ -162,14 +178,15 @@ class EvalTree(list):
                         evalDict[ gateString[0:start+bite] ] = iNew
                         self.append( (iCur,iBite) )
 
-                    #print "DB: appending %s (index %d)" % (str(gateString[0:start+bite]),iNew)
+                    #print("DB: add %s (index %d)" % (str(gateString[0:start+bite]),iNew))
                     self.eval_order.append(iNew)
                     iCur = iNew
                 start += bite
                 #nBites += 1
 
             #if nBites > 0: avgBiteSize += L / float(nBites)
-
+            assert(k in self.eval_order or k in self.init_indices)
+        
         #avgBiteSize /= float(len(gatestring_list))
         #print "DEBUG: Avg bite size = ",avgBiteSize
 
@@ -178,6 +195,8 @@ class EvalTree(list):
         self.parentIndexMap = None          # i.e. has not been created by a 'split'
         self.original_index_lookup = None
         self.subTrees = [] #no subtrees yet
+        assert(self.generate_gatestring_list() == gatestring_list)
+        assert(None not in gatestring_list)
 
 
     def initialize_orig(self, gateLabels, gatestring_list, numSubTreeComms=1):
@@ -303,12 +322,15 @@ class EvalTree(list):
         newTree.gateLabels = self.gateLabels[:]
         newTree.init_indices = self.init_indices[:]
         newTree.eval_order = self.eval_order[:]
+        newTree.num_final_strs = self.num_final_strs
         #newTree.finalList = self.finalList
         #newTree.inplaceCopyList = self.inplaceCopyList
         newTree.myFinalToParentFinalMap = self.myFinalToParentFinalMap
-        newTree.parentIndexMap = self.parentIndexMap[:]
+        newTree.parentIndexMap = self.parentIndexMap[:] \
+            if (self.parentIndexMap is not None) else None
         newTree.subTrees = [ st.copy() for st in self.subTrees ]
-        newTree.original_index_lookup = self.original_index_lookup[:]
+        newTree.original_index_lookup = self.original_index_lookup[:] \
+            if (self.original_index_lookup is not None) else None
         return newTree
 
     def get_init_labels(self):
@@ -345,12 +367,13 @@ class EvalTree(list):
             sl[axis] = slice(0,self.num_final_strings())
             ret = a[sl]
             assert(ret.base is a) #check that what is returned is a view
-            assert(_np.may_share_memory(ret,a))
+            assert(ret.size == 0 or _np.may_share_memory(ret,a))
             return ret
 
-    def final_slice(self):
+    def final_slice(self, parent_tree):
         """ TODO: docstring """
-        if self.myFinalToParentFinalMap is not None:
+        if (self.myFinalToParentFinalMap is not None) and \
+                parent_tree.is_split():
             return self.myFinalToParentFinalMap
         else:
             return slice(0,self.num_final_strings())
@@ -527,11 +550,13 @@ class EvalTree(list):
             finalGateStrings = [None]*nFinal
             for iorig,icur in self.original_index_lookup.items():
                 if iorig < nFinal: finalGateStrings[iorig] = gateStrings[icur]
+            assert(None not in finalGateStrings)
             return finalGateStrings
         else:
+            assert(None not in gateStrings[0:nFinal])
             return gateStrings[0:nFinal]
 
-    def permute_original_to_computation(self, a):
+    def permute_original_to_computation(self, a, axis=0):
         """
         Permute an array's elements using mapping from the "original"
         gate string ordering to the "computation" ordering.
@@ -547,22 +572,30 @@ class EvalTree(list):
         a : numpy array
            The array whose permuted elements are returned.
 
+        axis : int, optional
+           The axis to permute.  By default, the first dimension is used.
+
         Returns
         -------
         numpy array
         """
-        assert(a.shape[0] == self.num_final_strings())
+        assert(a.shape[axis] == self.num_final_strings())
         nFinal = self.num_final_strings()
         ret = a.copy()
 
+        def mkindx(i):
+            mi = [slice(None)]*a.ndim; mi[axis] = i
+            return mi
+
         if self.original_index_lookup is not None:
-            for iorig,icur in self.original_index_lookup.items():
-                if iorig < nFinal: ret[icur] = a[iorig]
+            for iorig,icur in self.original_index_lookup.items():                
+                if iorig < nFinal: 
+                    ret[mkindx(icur)] = a[mkindx(iorig)]
 
         return ret
 
 
-    def permute_computation_to_original(self, a):
+    def permute_computation_to_original(self, a, axis=0):
         """
         Permute an array's elements using mapping from the "computation"
         gate string ordering to the "original" ordering.
@@ -578,17 +611,25 @@ class EvalTree(list):
         a : numpy array
            The array whose permuted elements are returned.
 
+        axis : int, optional
+           The axis to permute.  By default, the first dimension is used.
+
         Returns
         -------
         numpy array
         """
-        assert(a.shape[0] == self.num_final_strings())
+        assert(a.shape[axis] == self.num_final_strings())
         nFinal = self.num_final_strings()
         ret = a.copy()
 
+        def mkindx(i):
+            mi = [slice(None)]*a.ndim; mi[axis] = i
+            return mi
+
         if self.original_index_lookup is not None:
-            for iorig,icur in self.original_index_lookup.items():
-                if iorig < nFinal: ret[iorig] = a[icur]
+            for iorig,icur in self.original_index_lookup.items():                
+                if iorig < nFinal: 
+                    ret[mkindx(iorig)] = a[mkindx(icur)]
 
         return ret
         
@@ -832,11 +873,11 @@ class EvalTree(list):
                     iFirstNonFinal -= 1 #now index is "non-final"
                 else: # k < iFirstNonFinal-1, so find a desired "final" el at boundary to swap it with
                     iLastFinal = iFirstNonFinal-1
-                    while iLastFinal >= 0 and (iLastFinal in already_computed_inds):
+                    while iLastFinal > k and (iLastFinal in already_computed_inds):
                         iLastFinal -= 1 #the element at iLastFinal happens to be one that we wanted to be non-final, so remove it
-                    assert(iLastFinal >= 0) #Logic error!
-                    subTreeIndices[iLastFinal],subTreeIndices[k] = \
-                        subTreeIndices[k],subTreeIndices[iLastFinal] #Swap k <-> iLastFinal
+                    if iLastFinal != k:
+                        subTreeIndices[iLastFinal],subTreeIndices[k] = \
+                            subTreeIndices[k],subTreeIndices[iLastFinal] #Swap k <-> iLastFinal
                     iFirstNonFinal = iLastFinal # move boundary to make k's new location non-final
 
             subTreeNumFinal = iFirstNonFinal # the final <-> non-final boundary
@@ -1054,7 +1095,7 @@ class EvalTree(list):
             xs.extend( list(sorted(subTree) + [None]) )
 
             for k,t in enumerate(self):
-                (iLeft,iRight,_) = t
+                iLeft,iRight = t
                 if i in (iLeft,iRight):
                     lastIndxSeen[i] = k
 

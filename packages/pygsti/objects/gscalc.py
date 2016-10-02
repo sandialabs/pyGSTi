@@ -1156,8 +1156,8 @@ class GateSetCalculator(object):
             allDeriv2ColSlice = slice(0,nGateDerivCols2) if (wrtSlice is None) else wrtSlice
             myDerivColSlice, _, mySubComm = \
                 _mpit.distribute_slice(allDeriv2ColSlice, comm)
-            #print "MPI: _compute_hproduct_cache over %d cols (rank %d computing %s)" \
-            #    % (nGateDerivCols2, comm.Get_rank(), str(myDerivColIndices))
+            #print("MPI: _compute_hproduct_cache over %d cols (rank %d computing %s)" \
+            #    % (nGateDerivCols2, comm.Get_rank(), str(myDerivColSlice)))
 
             if mySubComm is not None and mySubComm.Get_size() > 1:
                 _warnings.warn("Too many processors to make use of in " +
@@ -1213,7 +1213,7 @@ class GateSetCalculator(object):
             # combine iLeft + iRight => i
             # LEXICOGRAPHICAL VS MATRIX ORDER Note: we reverse iLeft <=> iRight from evalTree because
             # (iRight,iLeft,iFinal) = tup implies gatestring[i] = gatestring[iLeft] + gatestring[iRight], but we want:
-            (iRight,iLeft,_) = evalTree[i]   # since then matrixOf(gatestring[i]) = matrixOf(gatestring[iLeft]) * matrixOf(gatestring[iRight])
+            (iRight,iLeft) = evalTree[i]   # since then matrixOf(gatestring[i]) = matrixOf(gatestring[iLeft]) * matrixOf(gatestring[iRight])
             L,R = prodCache[iLeft], prodCache[iRight]
             dL,dR = dProdCache[iLeft], dProdCache[iRight]
             hL,hR = hProdCache[iLeft], hProdCache[iRight]
@@ -1360,9 +1360,11 @@ class GateSetCalculator(object):
         nGateDerivCols = self.tot_gate_params
         dim = self.dim
 
+        wrtSlice = _slct.list_to_slice(wrtFilter) if (wrtFilter is not None) else None
+          #TODO: just allow slices as argument: wrtFilter -> wrtSlice?
         prodCache, scaleCache = self._compute_product_cache(evalTree, comm)
         dProdCache = self._compute_dproduct_cache(evalTree, prodCache, scaleCache,
-                                                  comm, _slct.list_to_slice(wrtFilter))
+                                                  comm, wrtSlice)
 
         #use cached data to construct return values
         old_err = _np.seterr(over='ignore')
@@ -1512,12 +1514,14 @@ class GateSetCalculator(object):
         dim = self.dim
         nGateDerivCols = self.tot_gate_params
         nGateStrings = evalTree.num_final_strings() #len(gatestring_list)
+        wrtSlice = _slct.list_to_slice(wrtFilter) if (wrtFilter is not None) else None
+          #TODO: just allow slices as argument: wrtFilter -> wrtSlice?
 
         prodCache, scaleCache = self._compute_product_cache(evalTree, comm)
         dProdCache = self._compute_dproduct_cache(evalTree, prodCache, scaleCache,
                                                   comm, None) #wrtFilter *not* for 1st derivs
         hProdCache = self._compute_hproduct_cache(evalTree, prodCache, dProdCache,
-                                                  scaleCache, comm, _slct.list_to_slice(wrtFilter))
+                                                  scaleCache, comm, wrtSlice)
 
         #use cached data to construct return values
         old_err = _np.seterr(over='ignore')
@@ -1776,7 +1780,7 @@ class GateSetCalculator(object):
     def _check(self, evalTree, spam_label_rows, prMxToFill=None, dprMxToFill=None, hprMxToFill=None, clipTo=None):
         # compare with older slower version that should do the same thing (for debugging)
         for spamLabel,rowIndex in spam_label_rows.items():
-            gatestring_list = evalTree.generate_gatestring_list()
+            gatestring_list = evalTree.generate_gatestring_list(permute=False)
 
             if prMxToFill is not None:
                 check_vp = _np.array( [ self.pr(spamLabel, gateString, clipTo) for gateString in gatestring_list ] )
@@ -1853,7 +1857,7 @@ class GateSetCalculator(object):
             nps = { k: (el.ndim-2) 
                     for k,el in enumerate(result_tup) if el is not None }
                 
-            def mkindx(k,iSpam): 
+            def mkindx(iSpam,k): 
                 """ Constructs multi-index appropriate for result_tup[k]
                     (Note that pslc alwsys acts on *final* dimension)   """
                 addl = [slice(None)]*(nps[k]-1)+[pslc] if nps[k] > 0 else []
@@ -1875,7 +1879,7 @@ class GateSetCalculator(object):
                         result_tup[i][mkindx(remainder_index,i)] += \
                             result_tup[i][mkindx(rowIndex,i)]
                 else:
-                    calc_and_fill_fn(spamLabel,reaminder_index,fslc,
+                    calc_and_fill_fn(spamLabel,remainder_index,fslc,
                                      pslc,sumInto=True)
 
             #At this point, result_tup[i][remainder_index,fslc,...] contains the 
@@ -1993,7 +1997,7 @@ class GateSetCalculator(object):
         #eval on each local subtree
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
-            fslc = evalSubTree.final_slice()
+            fslc = evalSubTree.final_slice(evalTree)
 
             #Free memory from previous subtree iteration before computing caches
             scaleVals = Gs = prodCache = scaleCache = None
@@ -2022,7 +2026,7 @@ class GateSetCalculator(object):
                                      fslc, slice(None), calc_and_fill )
 
         #collect/gather results
-        subtreeFinalSlices = [ t.final_slice() for t in subtrees]
+        subtreeFinalSlices = [ t.final_slice(evalTree) for t in subtrees]
         _mpit.gather_slices(subtreeFinalSlices, subTreeOwners, mxToFill,
                             1, comm) 
         #note: pass mxToFill, dim=(K,S), so gather mxToFill[:,fslc] (axis=1)
@@ -2157,7 +2161,7 @@ class GateSetCalculator(object):
         #my_results = []
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
-            fslc = evalSubTree.final_slice()
+            fslc = evalSubTree.final_slice(evalTree)
 
             #Free memory from previous subtree iteration before computing caches
             scaleVals = Gs = dGs = None
@@ -2183,14 +2187,14 @@ class GateSetCalculator(object):
                     if prMxToFill is not None:
                         prMxToFill[isp,fslc] += \
                             self._probs_from_rhoE(spamLabel, rho, E, Gs, scaleVals)
-                        mxToFill[isp,fslc,pslc] += self._dprobs_from_rhoE( 
-                            spamLabel, rho, E, Gs, dGs, scaleVals, wrtSlices)
+                    mxToFill[isp,fslc,pslc] += self._dprobs_from_rhoE( 
+                        spamLabel, rho, E, Gs, dGs, scaleVals, wrtSlices)
                 else:
                     if prMxToFill is not None:
                         prMxToFill[isp,fslc] = \
                             self._probs_from_rhoE(spamLabel, rho, E, Gs, scaleVals)
-                        mxToFill[isp,fslc,pslc] = self._dprobs_from_rhoE( 
-                            spamLabel, rho, E, Gs, dGs, scaleVals, wrtSlices)
+                    mxToFill[isp,fslc,pslc] = self._dprobs_from_rhoE( 
+                        spamLabel, rho, E, Gs, dGs, scaleVals, wrtSlices)
 
                 _np.seterr(**old_err)
                 profiler.add_time("bulk_fill_dprobs: calc_and_fill", tm)
@@ -2299,7 +2303,7 @@ class GateSetCalculator(object):
 
         #collect/gather results
         tm = _time.time()
-        subtreeFinalSlices = [ t.final_slice() for t in subtrees]
+        subtreeFinalSlices = [ t.final_slice(evalTree) for t in subtrees]
         _mpit.gather_slices(subtreeFinalSlices, subTreeOwners, mxToFill,
                             1, comm) 
         #note: pass mxToFill, dim=(K,S,M), so gather mxToFill[:,fslc] (axis=1)
@@ -2427,6 +2431,7 @@ class GateSetCalculator(object):
         my_results = []
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
+            fslc = evalSubTree.final_slice(evalTree)
 
             #Free memory from previous subtree iteration before computing caches
             scaleVals = Gs = dGs = hGs = None
@@ -2556,7 +2561,7 @@ class GateSetCalculator(object):
                 #note: gathering axis 3 of mxToFill[:,fslc], dim=(K,s,M,M)
 
         #collect/gather results
-        subtreeFinalSlices = [ t.final_slice() for t in subtrees]
+        subtreeFinalSlices = [ t.final_slice(evalTree) for t in subtrees]
         _mpit.gather_slices(subtreeFinalSlices, subTreeOwners, 
                             mxToFill, 1, comm) 
         if derivMxToFill is not None:
@@ -3144,23 +3149,24 @@ class GateSetCalculator(object):
         def calc_and_fill_1col(spamLabel, isp, fslc, pslc, sumInto, iCol):
             #Compute d2(probability)/dGates2 (see below) for single param
             old_err2 = _np.seterr(invalid='ignore', over='ignore')
+            rho,E = self._rhoE_from_spamLabel(spamLabel)
             assert(fslc == slice(None) and pslc == slice(None))
 
             if sumInto:
-                hessianSingleCol[isp, 0:self.tot_rho_params, :, 0:1] += \
+                hessianSingleCol[isp,:, 0:self.tot_rho_params, 0:1] += \
                     dGates_row1[isp,:,:,iCol:iCol+1]
-                hessianSingleCol[isp, self.tot_rho_params:self.tot_spam_params, :, 0:1] += \
+                hessianSingleCol[isp,:, self.tot_rho_params:self.tot_spam_params, 0:1] += \
                     dGates_row2[isp,:,:,iCol:iCol+1]
-                hessianSingleCol[isp, self.tot_spam_params:, :, 0:1] += \
+                hessianSingleCol[isp, :, self.tot_spam_params:, 0:1] += \
                     _np.squeeze( _np.dot( E, _np.dot( hGs, rho ) ),
                                  axis=(0,4) ) * scaleVals[:,None,None]
                     # shape = (nGateStrings, nGateDerivCols, 1)
             else:
-                hessianSingleCol[isp, 0:self.tot_rho_params, :, 0:1] = \
+                hessianSingleCol[isp,:, 0:self.tot_rho_params, 0:1] = \
                     dGates_row1[isp,:,:,iCol:iCol+1]
-                hessianSingleCol[isp, self.tot_rho_params:self.tot_spam_params, :, 0:1] = \
+                hessianSingleCol[isp,:, self.tot_rho_params:self.tot_spam_params, 0:1] = \
                     dGates_row2[isp,:,:,iCol:iCol+1]
-                hessianSingleCol[isp, self.tot_spam_params:, :, 0:1] = \
+                hessianSingleCol[isp, :, self.tot_spam_params:, 0:1] = \
                     _np.squeeze( _np.dot( E, _np.dot( hGs, rho ) ),
                                  axis=(0,4) ) * scaleVals[:,None,None]
                     # shape = (nGateStrings, nGateDerivCols, 1)
