@@ -30,6 +30,8 @@ from .gatestring import GateString
 from .gatestring import WeightedGateString
 from .multidataset import MultiDataSet
 from .spamspec import SpamSpec
+from .profiler import Profiler
+from .profiler import DummyProfiler
 
 #Experimental only: don't import in production pyGSTi
 #from gigateset import GaugeInvGateSet

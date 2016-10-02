@@ -11,6 +11,7 @@ import numpy.linalg as _nla
 import scipy as _scipy
 import itertools as _itertools
 import collections as _collections
+import warnings as _warnings
 
 from ..tools import matrixtools as _mt
 from ..tools import basistools as _bt
@@ -22,6 +23,8 @@ from . import gate as _gate
 from . import spamvec as _sv
 from . import labeldicts as _ld
 from . import gscalc as _gscalc
+
+from .verbosityprinter import VerbosityPrinter
 
 # Tolerace for matrix_rank when finding rank of a *normalized* projection
 # matrix.  This is a legitimate tolerace since a normalized projection matrix
@@ -1172,7 +1175,206 @@ class GateSet(object):
         return self._calc().hprobs(gatestring, returnPr, returnDeriv, clipTo)
 
 
-    def bulk_evaltree(self, gatestring_list):
+    def bulk_evaltree_from_resources(self, gatestring_list, comm=None, memLimit=None,
+                                     distributeMethod="gatestrings", subcalls=[],
+                                     verbosity=0):
+        """
+        Create an evaluation tree based on available memory and CPUs.
+
+        This tree can be used by other Bulk_* functions, and is it's own
+        function so that for many calls to Bulk_* made with the same
+        gatestring_list, only a single call to bulk_evaltree is needed.
+
+        Parameters
+        ----------
+        gatestring_list : list of (tuples or GateStrings)
+            Each element specifies a gate string to include in the evaluation tree.
+
+        comm : mpi4py.MPI.Comm
+            When not None, an MPI communicator for distributing computations
+            across multiple processors.
+
+        memLimit : int, optional
+            A rough memory limit in bytes which is used to determine subtree 
+            number and size.
+
+        distributeMethod : {"gatestrings", "deriv"}
+            How to distribute calculation amongst processors (only has effect
+            when comm is not None).  "gatestrings" will divide the list of
+            gatestrings and thereby result in more subtrees; "deriv" will divide
+            the columns of any jacobian matrices, thereby resulting in fewer
+            (larger) subtrees.
+
+        subcalls : list, optional
+            A list of the names of the GateSet functions that will be called 
+            using the returned evaluation tree, which are necessary for 
+            estimating memory usage (for comparison to memLimit).  If 
+            memLimit is None, then there's no need to specify `subcalls`.
+
+        verbosity : int, optional
+            How much detail to send to stdout.
+
+        Returns
+        -------
+        evt : EvalTree
+            The evaluation tree object, split as necesary.
+        paramBlockSize : int or None
+            The maximum size of parameter blocks (i.e. the maximum
+            number of parameters to compute at once in calls to 
+            dprobs, etc., usually specified as wrtBlockSize).
+        """
+
+        # Let np = # param groups, so 1 <= np <= num_params, size of each param group = num_params/np
+        # Let ng = # gate string groups == # subtrees, so 1 <= ng <= max_split_num; size of each group = size of corresponding subtree
+        # With nprocs processors, split into Ng comms of ~nprocs/Ng procs each.  These comms are each assigned 
+        #  some number of gate string groups, where their ~nprocs/Ng processors are used to partition the np param
+        #  groups. Note that 1 <= Ng <= min(ng,nprocs).
+        # Notes:
+        #  - making np or ng > nprocs can be useful for saving memory.  Raising np saves *Jacobian* and *Hessian*
+        #     function memory without evaltree overhead, and I think will typically be preferred over raising
+        #     ng which will also save Product function memory but will incur evaltree overhead.
+        #  - any given CPU will be running a *single* (ng-index,np-index) pair at any given time, and so many
+        #     memory estimates only depend on ng and np, not on Ng.  (The exception is when a routine *gathers*
+        #     the end results from a divided computation.)
+        #  - "gatestrings" distributeMethod: never distribute num_params (np == 1, Ng == nprocs always).
+        #     Choose ng such that ng >= nprocs, memEstimate(ng,np=1) < memLimit, and ng % nprocs == 0 (ng % Ng == 0).
+        #  - "deriv" distributeMethod: if possible, set ng=1, nprocs <= np <= num_params, Ng = 1 (np % nprocs == 0?)
+        #     If memory constraints don't allow this, set np = num_params, Ng ~= nprocs/num_params (but Ng >= 1), 
+        #     and ng set by memEstimate and ng % Ng == 0 (so comms are kept busy)
+        #    
+        # find ng, np, Ng such that:
+        # - memEstimate(ng,np,Ng) < memLimit
+        # - full cpu usage: 
+        #       - np*ng >= nprocs (all procs used)
+        #       - ng % Ng == 0 (all subtree comms kept busy)
+        #     -nice, but not essential:
+        #       - num_params % np == 0 (each param group has same size)
+        #       - np % (nprocs/Ng) == 0 would be nice (all procs have same num of param groups to process)
+
+        printer = VerbosityPrinter.build_printer(verbosity, comm)
+
+        nspam = len(self.get_spam_labels())
+        nprocs = 1 if comm is None else comm.Get_size()
+        num_params = self.num_params()
+        dim = self._dim
+
+        def memEstimate(ng,np,Ng,verb=0):
+            #Slower (but more accurate way)
+            #tstTree = self.bulk_evaltree(gatestring_list, minSubtrees=ng)
+            #cacheSize = max([len(s) for s in tstTree.get_sub_trees()])
+            cacheSize = int( 1.1 * len(gatestring_list) / ng ) #heuristic (but fast)
+            wrtLen = (num_params+np-1) // np # ceiling(num_params / np)
+            nSubtreesPerProc = (ng+Ng-1) // Ng # ceiling(ng / Ng)
+
+            mem = 0
+            for fnName in subcalls:
+                if fnName == "bulk_fill_probs":
+                    mem += cacheSize * dim * dim # probs cache
+                    mem += cacheSize # scale cache (exps)
+                    mem += cacheSize # scale vals
+                    mem += nSubtreesPerProc * nspam * cacheSize #accum subtree prob results
+
+                elif fnName == "bulk_fill_dprobs":
+                    mem += cacheSize * wrtLen * dim * dim # dprobs cache
+                    mem += cacheSize * dim * dim # probs cache
+                    mem += cacheSize # scale cache
+                    mem += cacheSize # scale vals
+                    mem += nSubtreesPerProc * nspam * cacheSize #accum subtree prob results
+                    mem += nSubtreesPerProc * nspam * cacheSize * num_params #accum subtree dprob results
+
+                elif fnName == "bulk_fill_hprobs":
+                    mem += cacheSize * wrtLen * num_params * dim * dim # hprobs cache
+                    mem += cacheSize * wrtLen * dim * dim # dprobs cache
+                    mem += cacheSize * dim * dim # probs cache
+                    mem += cacheSize # scale cache
+                    mem += cacheSize # scale vals
+                    mem += nSubtreesPerProc * nspam * cacheSize #accum subtree prob results
+                    mem += nSubtreesPerProc * nspam * cacheSize * num_params #accum subtree dprob results
+                    mem += nSubtreesPerProc * nspam * cacheSize * num_params**2 #accum subtree hprob results
+
+                else:
+                    raise ValueError("Unknown subcall name: %s" % fnName)
+            
+            floatSize = 8 # in bytes: TODO: a better way
+
+            if verb > 0:
+                printer.log("Memory estimate (ng=%d, np=%d, Ng=%d):" 
+                            % (ng,np,Ng))
+                printer.log("  subcalls = %s" % str(subcalls))
+                printer.log("  cacheSize = %d" % cacheSize)
+                printer.log("  wrtLen = %d" % wrtLen)
+                printer.log("  nSubtreesPerProc = %d" % nSubtreesPerProc)
+                printer.log("=> %.2f GB" % (mem*floatSize/(1024.0**3)))
+                if "bulk_fill_dprobs" in subcalls:
+                    printer.log(" DB Detail: dprobs cache = %.2fGB" % 
+                                (8*cacheSize * wrtLen * dim * dim / (1024.0**3)))
+                    printer.log(" DB Detail: probs cache = %.2fGB" % 
+                                (8*cacheSize * dim * dim / (1024.0**3)))
+                    printer.log(" DB Detail: subtree probs = %.2fGB" % 
+                                (8*nSubtreesPerProc * nspam * cacheSize / (1024.0**3)))
+                    printer.log(" DB Detail: subtree dprobs = %.2fGB" % 
+                                (8*nSubtreesPerProc * nspam * cacheSize * num_params / (1024.0**3)))
+
+            #printer.log("DB: memEstimate(ng=%d, np=%d, Ng=%d) = %.2f GB" 
+            #            % (ng,np,Ng,mem*floatSize/(1024.0**3)))
+            return mem * floatSize
+
+
+        if distributeMethod == "gatestrings":
+            np = 1; Ng = nprocs
+            ng = nprocs
+            if memLimit is not None:
+                while memEstimate(ng,np,Ng) > memLimit: ng += Ng #so ng % Ng == 0
+                   #Note: could do these while loops smarter, e.g. binary search-like?
+                   #  or assume memEstimate scales linearly in ng? E.g:
+                   #     if memLimit < memEstimate:
+                   #         reductionFactor = float(memEstimate) / float(memLimit)
+                   #         maxTreeSize = int(nstrs / reductionFactor)
+
+        elif distributeMethod == "deriv":
+            ng = Ng = 1; np = nprocs
+            if memLimit is not None:
+                for n in range(nprocs, num_params+1):
+                    if memEstimate(ng,n,Ng) < memLimit:
+                        np = n; break
+                else:
+                    np = num_params; Ng = max(nprocs // np, 1)
+                    ng = Ng
+                    while memEstimate(ng,np,Ng) > memLimit: ng += Ng #so ng % Ng == 0
+
+        elif distributeMethod == "balanced":
+            # try to minimize "unbalanced" procs
+            np = gcf(num_params, nprocs)
+            ng = Ng = max(nprocs / np, 1)
+            if memLimit is not None:
+                while memEstimate(ng,np,Ng) > memLimit: ng += Ng #so ng % Ng == 0
+
+        evt = self.bulk_evaltree(gatestring_list, minSubtrees=ng, numSubtreeComms=Ng)
+        paramBlkSize = num_params / np   #the *average* param block size
+          # (in general *not* an integer), which ensures that the intended # of
+          # param blocks is communicatd to gsCalc.py routines (taking ceiling or
+          # floor can lead to inefficient MPI distribution)
+
+        printer.log("Created evaluation tree with %d subtrees.  " % ng
+                    + "Will divide %d procs into %d (subtree-processing) " % (nprocs,Ng)
+                    + "groups of ~%d procs each, to distribute over " % (nprocs/Ng)
+                    + "%d params (taken as %d param groups of ~%d params)." 
+                    % (num_params, np, paramBlkSize))
+        if memLimit is not None:
+            printer.log("Memlimit = %.2f GB" % (memLimit/(1024.0**3)))
+            memEstimate(ng,np,Ng,verb=1) #prints mem estimate details
+
+        if (comm is None or comm.Get_rank() == 0) and evt.is_split():
+            if printer.verbosity >= 2: evt.print_analysis()
+            
+        if np == 1: # (paramBlkSize == num_params)
+            paramBlkSize = None # == all parameters, and may speed logic in dprobs, etc.
+        return evt, paramBlkSize
+
+
+
+    def bulk_evaltree(self, gatestring_list, minSubtrees=None, maxTreeSize=None,
+                      numSubtreeComms=1):
         """
         Create an evaluation tree for all the gate strings in gatestring_list.
 
@@ -1185,13 +1387,38 @@ class GateSet(object):
         gatestring_list : list of (tuples or GateStrings)
             Each element specifies a gate string to include in the evaluation tree.
 
+        minSubtrees : int (optional)
+            The minimum number of subtrees the resulting EvalTree must have.
+
+        maxTreeSize : int (optional)
+            The maximum size allowed for the single un-split tree or any of
+            its subtrees.
+
+        numSubtreeComms : int, optional
+            The number of processor groups (communicators)
+            to divide the subtrees of the EvalTree among
+            when calling its `distribute` method.
+
         Returns
         -------
         EvalTree
             An evaluation tree object.
         """
         evalTree = _evaltree.EvalTree()
-        evalTree.initialize([""] + list(self.gates.keys()), gatestring_list)
+        evalTree.initialize([""] + list(self.gates.keys()), gatestring_list, numSubtreeComms)
+
+        if maxTreeSize is not None:
+            evalTree.split(maxTreeSize, None) # won't split if unnecessary
+        
+        if minSubtrees is not None:
+            if not evalTree.is_split() or len(evalTree.get_sub_trees()) < minSubtrees:
+                evalTree.split(None,minSubtrees)
+                if maxTreeSize is not None and \
+                        any([ len(sub)>maxTreeSize for sub in evalTree.get_sub_trees()]):
+                    _warnings.warn("Could not create a tree with minSubtrees=%d" % minSubtrees
+                                   + " and maxTreeSize=%d" % maxTreeSize)
+                    evalTree.split(maxTreeSize, None) # fall back to split for max size
+
         return evalTree
 
 
@@ -1460,8 +1687,8 @@ class GateSet(object):
            of the parameters being differentiated with respect to (see
            wrtBlockSize).
 
-        wrtBlockSize : int, optional
-          The maximum number of derivative columns to compute *products*
+        wrtBlockSize : int or float, optional
+          The maximum average number of derivative columns to compute *products*
           for simultaneously.  None means compute all columns at once.
           The minimum of wrtBlockSize and the size that makes maximal
           use of available processors is used as the final block size. Use
@@ -1525,10 +1752,10 @@ class GateSet(object):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.
 
-        wrtBlockSize : int, optional
-          The maximum number of *2nd* derivative columns to compute *products*
-          for simultaneously.  None means compute all columns at once.
-          The minimum of wrtBlockSize and the size that makes maximal
+        wrtBlockSize : int or float, optional
+          The maximum average number of *2nd* derivative columns to compute
+          *products* for simultaneously.  None means compute all columns at
+          once. The minimum of wrtBlockSize and the size that makes maximal
           use of available processors is used as the final block size. Use
           this argument to reduce amount of intermediate memory required.
 
@@ -1628,8 +1855,8 @@ class GateSet(object):
            of the parameters being differentiated with respect to (see
            wrtBlockSize).
 
-        wrtBlockSize : int, optional
-          The maximum number of derivative columns to compute *products*
+        wrtBlockSize : int or float, optional
+          The maximum average number of derivative columns to compute *products*
           for simultaneously.  None means compute all columns at once.
           The minimum of wrtBlockSize and the size that makes maximal
           use of available processors is used as the final block size. Use
@@ -1681,10 +1908,10 @@ class GateSet(object):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.
 
-        wrtBlockSize : int, optional
-          The maximum number of *2nd* derivative columns to compute *products*
-          for simultaneously.  None means compute all columns at once.
-          The minimum of wrtBlockSize and the size that makes maximal
+        wrtBlockSize : int or float, optional
+          The maximum average number of *2nd* derivative columns to compute
+          *products* for simultaneously.  None means compute all columns at
+          once. The minimum of wrtBlockSize and the size that makes maximal
           use of available processors is used as the final block size. Use
           this argument to reduce amount of intermediate memory required.
 
@@ -1750,8 +1977,9 @@ class GateSet(object):
 
 
     def bulk_fill_dprobs(self, mxToFill, spam_label_rows,
-                        evalTree, prMxToFill=None,clipTo=None,
-                        check=False,comm=None, wrtBlockSize=None):
+                         evalTree, prMxToFill=None,clipTo=None,
+                         check=False,comm=None, wrtBlockSize=None,
+                         profiler=None):
 
         """
         Identical to bulk_dprobs(...) except results are
@@ -1802,12 +2030,16 @@ class GateSet(object):
            of the parameters being differentiated with respect to (see
            wrtBlockSize).
 
-        wrtBlockSize : int, optional
-          The maximum number of derivative columns to compute *products*
+        wrtBlockSize : int or float, optional
+          The maximum average number of derivative columns to compute *products*
           for simultaneously.  None means compute all columns at once.
           The minimum of wrtBlockSize and the size that makes maximal
           use of available processors is used as the final block size. Use
           this argument to reduce amount of intermediate memory required.
+
+        profiler : Profiler, optional
+          A profiler object used for to track timing and memory usage.
+
 
         Returns
         -------
@@ -1815,7 +2047,8 @@ class GateSet(object):
         """
         return self._calc().bulk_fill_dprobs(mxToFill, spam_label_rows,
                                              evalTree, prMxToFill, clipTo,
-                                             check, comm, None, wrtBlockSize)
+                                             check, comm, None, wrtBlockSize,
+                                             profiler)
 
 
     def bulk_fill_hprobs(self, mxToFill, spam_label_rows,
@@ -1877,10 +2110,10 @@ class GateSet(object):
            of the parameters being second-differentiated with respect to (see
            wrtBlockSize).
 
-        wrtBlockSize : int, optional
-          The maximum number of *2nd* derivative columns to compute *products*
-          for simultaneously.  None means compute all columns at once.
-          The minimum of wrtBlockSize and the size that makes maximal
+        wrtBlockSize : int or float, optional
+          The maximum average number of *2nd* derivative columns to compute
+          *products* for simultaneously.  None means compute all columns at
+          once. The minimum of wrtBlockSize and the size that makes maximal
           use of available processors is used as the final block size. Use
           this argument to reduce amount of intermediate memory required.
 

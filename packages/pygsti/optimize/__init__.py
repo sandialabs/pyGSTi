@@ -9,3 +9,4 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #Import the most important/useful routines of each module into
 # the package namespace
 from .optimize import *
+from .customlm import *

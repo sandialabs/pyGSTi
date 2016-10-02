@@ -258,8 +258,8 @@ class TestCoreMethods(BaseTestCase):
         gs_lsgst_go = pygsti.optimize_gauge(gs_lsgst, 'target', targetGateset=gs_lsgst_compare, spamWeight=1.0)
         gs_lsgst_reg_go = pygsti.optimize_gauge(gs_lsgst_reg, 'target', targetGateset=gs_lsgst_reg_compare, spamWeight=1.0)
 
-        self.assertAlmostEqual( gs_lsgst_go.frobeniusdist(gs_lsgst_compare), 0, places=5)
-        self.assertAlmostEqual( gs_lsgst_reg_go.frobeniusdist(gs_lsgst_reg_compare), 0, places=5)
+        self.assertAlmostEqual( gs_lsgst_go.frobeniusdist(gs_lsgst_compare), 0, places=4)
+        self.assertAlmostEqual( gs_lsgst_reg_go.frobeniusdist(gs_lsgst_reg_compare), 0, places=4)
 
 
     def test_MLGST(self):
@@ -301,8 +301,9 @@ class TestCoreMethods(BaseTestCase):
 
         aliased_list = [ pygsti.obj.GateString( [ (x if x != "Gx" else "GA1") for x in gs]) for gs in self.lsgstStrings[0] ]
         gs_withA1 = gs_clgst.copy(); gs_withA1.gates["GA1"] = gs_clgst.gates["Gx"]
+        del gs_withA1.gates["Gx"] # otherwise gs_withA1 will have Gx params that we have no knowledge of!
         gs_mlegst_chk_opts2 = pygsti.do_mlgst(ds, gs_withA1, aliased_list, minProbClip=1e-6,
-                                              probClipInterval=(-1e2,1e2), verbosity=0,
+                                              probClipInterval=(-1e2,1e2), verbosity=10,
                                               gateLabelAliases={ 'GA1': ('Gx',) })
 
         #Other option variations - just make sure they run at this point
