@@ -489,6 +489,9 @@ class rb_results():
         or Clifford sequence length.
         """
         newplot = _plt.figure()
+        assert prim_or_cliff in ['prim', 'cliff'], 'Please provide a valid quantity to plot.'
+
+
         newplotgca = newplot.gca()
         if prim_or_cliff == 'prim':
             xdata = self.prim_len_list
@@ -499,8 +502,8 @@ class rb_results():
                 f = self.prim_f
             except:
                 print "Prim data not found."
-            newplotgca.set_xlabel('RB sequence length (primitives)')
-        elif prim_or_cliff == 'cliff':
+            xlabel = 'RB sequence length (primitives)'
+        else:
             xdata = self.cliff_len_list
             ydata = self.cliff_successes
             try:
@@ -509,11 +512,9 @@ class rb_results():
                 f = self.cliff_f
             except:
                 print "Clifford data not found."
-            newplotgca.set_xlabel('RB sequence length (Cliffords)')
-        else:
-            raise ValueError('"prim" or "cliff" must be provided.')
-        newplotgca.plot(xdata,ydata,'.')
-#        try:
+            xlabel = 'RB sequence length (Cliffords)'
+
+
         newplotgca.plot(_np.arange(max(xdata)),
                     rb_decay_WF(_np.arange(max(xdata)),A,B,f),'+')
 #        except:
