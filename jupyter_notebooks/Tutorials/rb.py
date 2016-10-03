@@ -513,12 +513,15 @@ class rb_results():
             except:
                 print "Clifford data not found."
             xlabel = 'RB sequence length (Cliffords)'
-
-
+        cmap = _plt.cm.get_cmap('Set1')
+        #        try:
         newplotgca.plot(_np.arange(max(xdata)),
-                    rb_decay_WF(_np.arange(max(xdata)),A,B,f),'+')
-#        except:
-#            print "Unable to plot fit.  Have you run the RB analysis?"
+                    rb_decay_WF(_np.arange(max(xdata)),A,B,f),'-', lw=2, color=cmap(110))
+        #        except:
+        #            print "Unable to plot fit.  Have you run the RB analysis?"
+        newplotgca.plot(xdata,ydata,'.', markersize=15, clip_on=False, color=cmap(30))
+
+
         newplotgca.set_ylabel('Success rate')
         newplotgca.set_title('RB success')
         if xlim:
