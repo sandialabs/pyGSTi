@@ -521,9 +521,15 @@ class rb_results():
         #            print "Unable to plot fit.  Have you run the RB analysis?"
         newplotgca.plot(xdata,ydata,'.', markersize=15, clip_on=False, color=cmap(30))
 
+        newplotgca.set_xlabel(xlabel, fontsize=15)
+        newplotgca.set_ylabel('Success Rate',fontsize=15)
+        newplotgca.set_title('RB Success Curve', fontsize=20)
 
-        newplotgca.set_ylabel('Success rate')
-        newplotgca.set_title('RB success')
+        newplotgca.set_frame_on(False)
+        newplotgca.yaxis.grid(True)
+        newplotgca.tick_params(axis='x', top='off', labelsize=12)
+        newplotgca.tick_params(axis='y', left='off', right='off', labelsize=12)
+
         if xlim:
             _plt.xlim(xlim)
         if ylim:
