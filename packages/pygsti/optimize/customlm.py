@@ -130,7 +130,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
                     nu = 2
                     x,f, norm_f = new_x, new_f, norm_new_f
 
-	            if verbosity > 1: 
+                    if verbosity > 1:
                         print("      Accepted! gain ratio=%g  mu * %g => %g"
                               % (dF/dL,max(t,1.0/3.0),mu))
 
