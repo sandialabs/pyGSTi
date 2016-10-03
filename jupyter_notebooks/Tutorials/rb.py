@@ -488,10 +488,9 @@ class rb_results():
         Plot RB decay curve, either as a function of primitive sequence length
         or Clifford sequence length.
         """
-        newplot = _plt.figure()
         assert prim_or_cliff in ['prim', 'cliff'], 'Please provide a valid quantity to plot.'
 
-
+        newplot = _plt.figure(figsize=(8, 4))
         newplotgca = newplot.gca()
         if prim_or_cliff == 'prim':
             xdata = self.prim_len_list
