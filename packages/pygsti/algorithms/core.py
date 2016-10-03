@@ -1140,7 +1140,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     if cptp_penalty_factor == 0:
 
         #Objective Function
-        if printer.verbosity < 3:  # Fast versions of functions
+        if printer.verbosity < 4:  # Fast versions of functions
             if regularizeFactor == 0:
                 def objective_func(vectorGS):
                     tm = _time.time()
@@ -1173,10 +1173,13 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                 weights = get_weights(probs)
 
                 v = (probs - f) * weights;  chisq = _np.sum(v*v)
-                nClipped = len((_np.logical_or(probs < minProbClipForWeighting, probs > (1-minProbClipForWeighting))).nonzero()[0])
-                printer.log("%g: p in (%g,%g),  weights in (%g,%g),  gs in (%g,%g), maxLen = %d, nClipped=%d" % \
-                    (chisq, _np.min(probs), _np.max(probs), _np.min(weights), _np.max(weights), _np.min(vectorGS),
-                     _np.max(vectorGS), maxGateStringLength, nClipped), 3)
+                nClipped = len((_np.logical_or(probs < minProbClipForWeighting,
+                                               probs > (1-minProbClipForWeighting))).nonzero()[0])
+                printer.log("MC2-OBJ: chi2=%g\n" % chisq +
+                            "         p in (%g,%g)\n" % (_np.min(probs), _np.max(probs)) +
+                            "         weights in (%g,%g)\n" % (_np.min(weights), _np.max(weights)) +
+                            "         gs in (%g,%g)\n" % (_np.min(vectorGS),_np.max(vectorGS)) +
+                            "         maxLen = %d, nClipped=%d" % (maxGateStringLength, nClipped), 4)
 
                 if regularizeFactor > 0:
                     gsVecNorm = regularizeFactor * _np.array( [ max(0,absx-1.0) for absx in map(abs,vectorGS) ], 'd')
@@ -1188,7 +1191,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
 
         # Jacobian function
-        if printer.verbosity < 3: # Fast versions of functions
+        if printer.verbosity < 4: # Fast versions of functions
             if regularizeFactor == 0: # Fast un-regularized version
                 def jacobian(vectorGS):
                     tm = _time.time()
@@ -1260,19 +1263,23 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                 #U,s,V = _np.linalg.svd(jac)
                 #print "DEBUG: s-vals of jac %s = " % (str(jac.shape)), s
 
-                nClipped = len((_np.logical_or(probs < minProbClipForWeighting, probs > (1-minProbClipForWeighting))).nonzero()[0])
-                printer.log( "jac in (%g,%g), pr in (%g,%g),  dpr in (%g,%g), prefactor in (%g,%g), gs in (%g,%g) maxLen = %d, nClipped = %d" % \
-                    (_np.min(jac), _np.max(jac), _np.min(probs), _np.max(probs), _np.min(dprobs), _np.max(dprobs), _np.min(dPr_prefactor), _np.max(dPr_prefactor),
-                     _np.min(vectorGS), _np.max(vectorGS), maxGateStringLength, nClipped), 3)
+                nClipped = len((_np.logical_or(probs < minProbClipForWeighting, 
+                                               probs > (1-minProbClipForWeighting))).nonzero()[0])
+                printer.log("MC2-JAC: jac in (%g,%g)\n" % (_np.min(jac), _np.max(jac)) +
+                            "         pr in (%g,%g)\n" % (_np.min(probs), _np.max(probs)) +
+                            "         dpr in (%g,%g)\n" % (_np.min(dprobs), _np.max(dprobs)) +
+                            "         prefactor in (%g,%g)\n" % (_np.min(dPr_prefactor), _np.max(dPr_prefactor)) +
+                            "         gs in (%g,%g)\n" % (_np.min(vectorGS), _np.max(vectorGS)) +
+                            "         maxLen = %d, nClipped = %d" % (maxGateStringLength, nClipped), 4)
 
                 if check_jacobian:
                     errSum, errs, fd_jac = _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
-                    printer.log("Jacobian has error %g and %d of %d indices with error > tol" % (errSum, len(errs), jac.shape[0]*jac.shape[1]), 3)
+                    printer.log("Jacobian has error %g and %d of %d indices with error > tol" % (errSum, len(errs), jac.shape[0]*jac.shape[1]), 4)
                     if len(errs) > 0:
                         i,j = errs[0][0:2]; maxabs = _np.max(_np.abs(jac))
-                        printer.log(" ==> Worst index = %d,%d. p=%g,  Analytic jac = %g, Fwd Diff = %g" % (i,j, (probs.reshape([KM]))[i], jac[i,j], fd_jac[i,j]), 3)
-                        printer.log(" ==> max err = ", errs[0][2], 3)
-                        printer.log(" ==> max err/max = ", max([ x[2]/maxabs for x in errs ]), 3)
+                        printer.log(" ==> Worst index = %d,%d. p=%g,  Analytic jac = %g, Fwd Diff = %g" % (i,j, (probs.reshape([KM]))[i], jac[i,j], fd_jac[i,j]), 4)
+                        printer.log(" ==> max err = ", errs[0][2], 4)
+                        printer.log(" ==> max err/max = ", max([ x[2]/maxabs for x in errs ]), 4)
 
                 profiler.add_time("do_mc2gst: JACOBIAN",tm)
                 return jac
@@ -1306,8 +1313,10 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     tm = _time.time()
     x0 = gs.to_vector()
     if CUSTOMLM:
-        opt_x,converged,msg = _opt.custom_leastsq(objective_func, jacobian, x0, f_norm_tol=tol, jac_norm_tol=tol,
-                                                  rel_tol=tol, max_iter=maxiter, comm=comm, profiler=profiler)
+        opt_x,converged,msg = _opt.custom_leastsq(
+            objective_func, jacobian, x0, f_norm_tol=_np.sqrt(tol),
+            jac_norm_tol=tol,rel_tol=tol, max_iter=maxiter, comm=comm,
+            verbosity=printer.verbosity-1, profiler=profiler)
         printer.log("Least squares message = %s" % msg,2)
         assert(converged)
     else:
@@ -2293,8 +2302,10 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     tm = _time.time()
     x0 = gs.to_vector()
     if CUSTOMLM:
-        opt_x,converged,msg = _opt.custom_leastsq(objective_func, jacobian, x0, f_norm_tol=tol, jac_norm_tol=tol,
-                                                  rel_tol=tol, max_iter=maxiter, comm=comm, profiler=profiler)
+        opt_x,converged,msg = _opt.custom_leastsq(
+            objective_func, jacobian, x0, f_norm_tol=_np.sqrt(tol),
+            jac_norm_tol=tol, rel_tol=tol, max_iter=maxiter, comm=comm,
+            verbosity=printer.verbosity-1, profiler=profiler)
         printer.log("Least squares message = %s" % msg,2)
         assert(converged)
     else:

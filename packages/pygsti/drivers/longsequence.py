@@ -159,6 +159,13 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
        The 'verbosity' option is an integer specifying the level of 
        detail printed to stdout during the calculation.
 
+       - 0 -- prints nothing
+       - 1 -- shows progress bar for entire iterative GST
+       - 2 -- show summary details about each individual iteration
+       - 3 -- also shows outer iterations of LM algorithm
+       - 4 -- also shows inner iterations of LM algorithm
+       - 5 -- also shows detailed info from within jacobian
+              and objective function calls.
 
     Returns
     -------
@@ -294,6 +301,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     if objective == "chi2":
         gs_lsgst_list = _alg.do_iterative_mc2gst(
             ds, gs_after_gauge_opt, lsgstLists,
+            tol = advancedOptions.get('tolerance',1e-6),
+            maxiter = advancedOptions.get('maxIterations',100000),
             minProbClipForWeighting=advancedOptions.get(
                 'minProbClipForWeighting',1e-4),
             probClipInterval = advancedOptions.get(
@@ -308,6 +317,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     elif objective == "logl":
         gs_lsgst_list = _alg.do_iterative_mlgst(
           ds, gs_after_gauge_opt, lsgstLists,
+          tol = advancedOptions.get('tolerance',1e-6),
+          maxiter = advancedOptions.get('maxIterations',100000),
           minProbClip = advancedOptions.get('minProbClip',1e-4),
           probClipInterval = advancedOptions.get('probClipInterval',(-1e6,1e6)),
           radius=advancedOptions.get('radius',1e-4),

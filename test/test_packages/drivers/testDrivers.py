@@ -212,9 +212,19 @@ class TestDriversMethods(DriversTestCase):
                                                       parameterization="linear")
 
         maxLens = self.maxLens
+        #DEBUG
+        #pygsti.do_long_sequence_gst(
+        #                        ds, gs_target, std.fiducials, std.fiducials,
+        #                        std.germs, maxLens, truncScheme=ts, constrainToTP=False,
+        #                        advancedOptions={'tolerance':1e-3})
+        #assert(False)
+        #END DEBUG
         result = self.runSilent(pygsti.do_long_sequence_gst,
                                 ds, gs_target, std.fiducials, std.fiducials,
-                                std.germs, maxLens, truncScheme=ts, constrainToTP=False)
+                                std.germs, maxLens, truncScheme=ts, constrainToTP=False,
+                                advancedOptions={'tolerance':1e-3} ) #decrease tolerance
+                                # b/c this problem seems hard to converge at the very end
+                                # very small changes (~0.0001) to the total chi^2.
 
         #create a report...
         result.create_full_report_pdf(filename=temp_files + "/full_report_LPGates.pdf",
