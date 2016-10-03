@@ -106,7 +106,7 @@ class VerbosityPrinter():
 
     # Rules for handling comm --This is a global variable-- (technically) it should probably only be set once, at the beginning of the program
     _commPath     = ''
-    _commFileName = 'comm_output' # The name of the generated files. Must also be set
+    _commFileName = ''  # The name of the generated files, e.g. 'comm_output'. '' means don't output to comm files.  Must also be set
     _commFileExt  = '.txt'
 
     def _create_file(self, filename):
@@ -114,6 +114,7 @@ class VerbosityPrinter():
             newFile.close()
 
     def _get_comm_file(self, comm_id):
+        if len(VerbosityPrinter._commFileName) == 0: return ''
         return '%s%s%s%s' % (VerbosityPrinter._commPath, VerbosityPrinter._commFileName, comm_id, VerbosityPrinter._commFileExt)
 
     # The printer is initialized with a set verbosity, and an optional filename.
@@ -139,7 +140,7 @@ class VerbosityPrinter():
                 filename = self._get_comm_file(comm.Get_rank())
         self.verbosity = verbosity
         self.filename  = filename
-        if filename != None:
+        if filename is not None and len(filename) > 0:
             self._create_file(filename)
         self._comm            = comm
         self.progressLevel    = 0 # Used for queuing output while a progress bar is being shown
@@ -214,14 +215,14 @@ class VerbosityPrinter():
 
     # Hidden function for deciding what to do with our output
     def _put(self, message, flush=True, stderr=False):
-        if self.filename == None: # Handles the case where comm is None or comm is rank 0
+        if self.filename is None: # Handles the case where comm is None or comm is rank 0
             if stderr:
                 print(message, end='', file=_sys.stderr)
             else:
                 print(message, end='')
             if flush:
                 _sys.stdout.flush()
-        else:
+        elif len(self.filename) > 0:
             self._append_to(self.filename, message)
 
     # special function reserved for logging errors
@@ -298,7 +299,7 @@ class VerbosityPrinter():
             else:
                 formattedMessage = '%s%s%s%s' % (indent, statusType, message, end)
 
-            if self.progressLevel > 0 and self.filename == None:
+            if self.progressLevel > 0 and self.filename is None:
                 self._delayQueue.append(indentChar + 'INVALID LEVEL: ' + formattedMessage)
             else:
                 self._put(formattedMessage, flush=flush)
@@ -379,7 +380,7 @@ class VerbosityPrinter():
         # Otherwise, Print verbose iterations if our verbosity is higher
         # Build either the progress bar or the verbose iteration status
         progress = ''
-        if self.verbosity == self._progressStack[-1] and self.filename == None:
+        if self.verbosity == self._progressStack[-1] and self.filename is None:
             progress = self._progress_bar(iteration, total, barLength, numDecimals,
                                           fillChar, emptyChar, prefix, suffix, indent)
             self._progressParamsStack[-1] = (iteration, total, barLength,

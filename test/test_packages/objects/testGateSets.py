@@ -230,7 +230,6 @@ class TestGateSetMethods(GateSetTestCase):
 
 
         #tag on a few extra EvalTree tests
-        iWithinTree = evt.get_tree_index_of_final_value(0)
         debug_stuff = evt.get_analysis_plot_infos()
 
 
@@ -308,8 +307,11 @@ class TestGateSetMethods(GateSetTestCase):
         evt_split = evt.copy(); evt_split.split(numSubTrees=2)
         bulk_probs_splt = self.assertNoWarnings(self.gateset.bulk_probs,
                                      evt_split, check=True)
-        self.assertArraysAlmostEqual(bulk_probs['plus'], bulk_probs_splt['plus'])
-        self.assertArraysAlmostEqual(bulk_probs['minus'], bulk_probs_splt['minus'])
+        evt_split.print_analysis()
+        self.assertArraysAlmostEqual(bulk_probs['plus'],
+                   evt_split.permute_computation_to_original(bulk_probs_splt['plus']))
+        self.assertArraysAlmostEqual(bulk_probs['minus'], 
+                   evt_split.permute_computation_to_original(bulk_probs_splt['minus']))
 
 
         nGateStrings = 2; nSpamLabels = 2
@@ -384,8 +386,10 @@ class TestGateSetMethods(GateSetTestCase):
         evt_split = evt.copy(); evt_split.split(numSubTrees=2)
         bulk_dProbs_splt = self.assertNoWarnings(self.gateset.bulk_dprobs,
                                      evt_split, returnPr=False, check=True)
-        self.assertArraysAlmostEqual(bulk_dProbs['plus'], bulk_dProbs_splt['plus'])
-        self.assertArraysAlmostEqual(bulk_dProbs['minus'], bulk_dProbs_splt['minus'])
+        self.assertArraysAlmostEqual(bulk_dProbs['plus'], 
+                 evt_split.permute_computation_to_original(bulk_dProbs_splt['plus']))
+        self.assertArraysAlmostEqual(bulk_dProbs['minus'], 
+                 evt_split.permute_computation_to_original(bulk_dProbs_splt['minus']))
 
 
         dProbs0b = self.gateset.dprobs(gatestring0, returnPr=True)
@@ -474,8 +478,10 @@ class TestGateSetMethods(GateSetTestCase):
         evt_split = evt.copy(); evt_split.split(maxSubTreeSize=4)
         bulk_hProbs_splt = self.assertNoWarnings(self.gateset.bulk_hprobs,
                                      evt_split, returnPr=False, check=True)
-        self.assertArraysAlmostEqual(bulk_hProbs['plus'], bulk_hProbs_splt['plus'])
-        self.assertArraysAlmostEqual(bulk_hProbs['minus'], bulk_hProbs_splt['minus'])
+        self.assertArraysAlmostEqual(bulk_hProbs['plus'], 
+                 evt_split.permute_computation_to_original(bulk_hProbs_splt['plus']))
+        self.assertArraysAlmostEqual(bulk_hProbs['minus'], 
+                 evt_split.permute_computation_to_original(bulk_hProbs_splt['minus']))
 
 
         #Vary keyword args
@@ -597,8 +603,10 @@ class TestGateSetMethods(GateSetTestCase):
         bulk_prB = self.gateset.bulk_pr('plus',evtB)
         bulk_prC = self.gateset.bulk_pr('plus',evtC)
 
-        self.assertArraysAlmostEqual(bulk_prA,bulk_prB)
-        self.assertArraysAlmostEqual(bulk_prA,bulk_prC)
+        self.assertArraysAlmostEqual(bulk_prA,
+             evtB.permute_computation_to_original(bulk_prB) )
+        self.assertArraysAlmostEqual(bulk_prA,
+             evtC.permute_computation_to_original(bulk_prC) )
 
 
 

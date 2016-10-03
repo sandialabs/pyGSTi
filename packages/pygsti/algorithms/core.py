@@ -15,13 +15,16 @@ import time           as _time
 from .. import optimize as _opt
 from .. import tools    as _tools
 from .. import objects  as _objs
+_dummy_profiler = _objs.profiler.DummyProfiler()
+
+CUSTOMLM = True
+#from .track_allocations import AllocationTracker
 
 #Note on where 4x4 or possibly other integral-qubit dimensions are needed:
 # 1) Need to use Jamiol. Isomorphism to contract to CPTP or even gauge optimize to CPTP
 #       since we need to know a Choi matrix basis to perform the Jamiol. isomorphism
 # 2) Need pauilVector <=> matrix in contractToValidSpam
 # 3) use Jamiol. Iso in print_gateset_info(...)
-
 
 ###################################################################################
 #                 Linear Inversion GST (LGST)
@@ -240,6 +243,7 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
         rhoVec_p = _np.dot(invABMat_p,rhoVec_p)
         lgstGateset.preps[prepLabel] = rhoVec_p
 
+
     # Add identity vector to gateset (needed before adding spam labels)
     #  Pad with zeros if needed (ROBIN - is this correct?)
     if identityVec is not None:
@@ -298,16 +302,29 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
         #   so that lgstGateset.spamdefs = ... doesn't fail.
         lgstGateset.povm_identity = padded_identityVec
 
-        # Force lgstGateset to have gates parameterized in the same way as those in guessGatesetForGauge,
-        # but we only know how to do this when the dimensions of the target and created gateset match.  If
-        # they don't, it doesn't make sense to increase the target gateset dimension, as this will generally
-        # not preserve its parameterization.
+        # Force lgstGateset to have gates, preps, & effects parameterized in the same way as those in
+        # guessGatesetForGauge, but we only know how to do this when the dimensions of the target and
+        # created gateset match.  If they don't, it doesn't make sense to increase the target gateset
+        # dimension, as this will generally not preserve its parameterization.
         if guessTrunc == trunc:
             for gateLabel in gateLabelsToEstimate:
                 if gateLabel in guessGatesetForGauge.gates:
                     new_gate = guessGatesetForGauge.gates[gateLabel].copy()
                     _objs.gate.optimize_gate( new_gate, lgstGateset.gates[gateLabel])
                     lgstGateset.gates[ gateLabel ] = new_gate
+
+            for prepLabel in rhoLabelsToEstimate:
+                if prepLabel in guessGatesetForGauge.preps:
+                    new_vec = guessGatesetForGauge.preps[prepLabel].copy()
+                    _objs.spamvec.optimize_spamvec( new_vec, lgstGateset.preps[prepLabel])
+                    lgstGateset.preps[ prepLabel ] = new_vec
+    
+            for effectLabel in eLabelsToEstimate:
+                if effectLabel in guessGatesetForGauge.effects:
+                    new_vec = guessGatesetForGauge.effects[effectLabel].copy()
+                    _objs.spamvec.optimize_spamvec( new_vec, lgstGateset.effects[effectLabel])
+                    lgstGateset.effects[ effectLabel ] = new_vec
+
 
         #inv_BMat_p = _np.dot(invABMat_p, AMat_p) # should be equal to inv(BMat_p) when trunc == gsDim ?? check??
         #lgstGateset.transform( S=_np.dot(invABMat_p, AMat_p), Si=BMat_p ) # lgstGateset had dim trunc, so after transform is has dim gsDim
@@ -544,6 +561,9 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs,
     #   process_estimate_using_current_gateset = process mx you get from multiplying together the gate matrices of the current gateset
 
     #Step 1: get the lgst estimates for each of the "gate strings to use in estimation" list
+    evTree = gs.bulk_evaltree(gateStringsToUseInEstimation)
+    gateStringsToUseInEstimation = evTree.generate_gatestring_list(permute=False)
+
     gateLabelAliases = {}
     for (i,gateStrTuple) in enumerate(gateStringsToUseInEstimation):
         gateLabelAliases["Gestimator%d" % i] = gateStrTuple
@@ -556,7 +576,6 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs,
     for i in range(len(gateStringsToUseInEstimation)):
         estimates[i] = lgstEstimates.gates[ "Gestimator%d" % i ]
 
-    evTree = gs.bulk_evaltree(gateStringsToUseInEstimation)
     maxGateStringLength = max([len(x) for x in gateStringsToUseInEstimation])
 
 
@@ -693,6 +712,9 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs,
             #print "DEBUG : opt_jac diff = ", _np.linalg.norm( opt_jac - opt_jac_chk )
             #print "DEBUG : flags (1,2,3,4=OK) = %d, check = %d" % (flag, flag_chk)
 
+    #TODO: perhaps permute minErrVec using evTree to restore original gatestring ordering
+    #  but currently minErrVec isn't in such an intuitive format anyway (list of flattened gates)
+    #  so maybe just drop minErrVec from return value entirely?
     return minErrVec, gs
 
 
@@ -853,7 +875,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
               regularizeFactor=0, verbosity=0, check=False,
               check_jacobian=False, gatestringWeights=None,
               gateLabelAliases=None, memLimit=None, comm=None,
-              distributeMethod = "gatestrings"):
+              distributeMethod = "gatestrings", profiler=None):
     """
     Performs Least-Squares Gate Set Tomography on the dataset.
 
@@ -941,6 +963,9 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         when comm is not None).  "gatestrings" will divide the list of
         gatestrings; "deriv" will divide the columns of the jacobian matrix.
 
+    profiler : Profiler, optional
+        A profiler object used for to track timing and memory usage.
+
 
     Returns
     -------
@@ -950,8 +975,8 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         GateSet containing the estimated gates.
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    if profiler is None: profiler = _dummy_profiler
     tStart = _time.time()
-
     gs = startGateset.copy()
     if maxfev is None: maxfev = maxiter
 
@@ -974,22 +999,6 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     vec_gs_len = gs.num_params()
     KM = len(spamLabels)*len(gateStringsToUse) #shorthand for combined dimension
 
-    if gateLabelAliases is not None:
-        #then find & replace aliased gate labels with their expanded form
-        dsGateStringsToUse = []
-        for s in gateStringsToUse:
-            for label,expandedStr in gateLabelAliases.items():
-                while label in tuple(s):
-                    i = tuple(s).index(label)
-                    s = tuple(s)[:i] + tuple(expandedStr) + tuple(s)[i+1:]
-            dsGateStringsToUse.append(s)
-    else:
-        dsGateStringsToUse = gateStringsToUse
-            # no difference in the strings used by the alias
-
-    #Get evaluation tree (now so can use length in mem estimates)
-    evTree = gs.bulk_evaltree(gateStringsToUse)
-
     #Memory allocation
     ns = len(spamLabels); ng = len(gateStringsToUse)
     ne = gs.num_params(); gd = gs.get_dimension()
@@ -1002,7 +1011,39 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                           "< memory required to hold final results (%g GB)"
                           % (persistentMem*C))
 
-    #  Allocate peristent memory
+    #Create evaluation tree (split into subtrees if needed)
+    mlim = memLimit-persistentMem if (memLimit is not None) else None
+    evTree, wrtBlkSize = gs.bulk_evaltree_from_resources(
+        gateStringsToUse, comm, mlim,
+        distributeMethod, ["bulk_fill_probs","bulk_fill_dprobs"], printer) 
+
+    # permute (if needed) gate string list for efficient subtree division
+    # Note: cannot rely on order of gateStringsToUse above this point --
+    #   (using len(gateStringsToUse) is fine though).
+    gateStringsToUse = evTree.generate_gatestring_list(permute=False)
+    if gatestringWeights is not None:
+        gatestringWeights = \
+            evTree.permute_original_to_computation(gatestringWeights)
+    assert(None not in gateStringsToUse) #DEBUG
+
+    #Expand gate label aliases used in DataSet lookups
+    if gateLabelAliases is not None:
+        #find & replace aliased gate labels with their expanded form
+        dsGateStringsToUse = []
+        assert(None not in gateStringsToUse) #DEBUG
+        for s in gateStringsToUse:
+            for label,expandedStr in gateLabelAliases.items():
+                while label in tuple(s):
+                    i = tuple(s).index(label)
+                    s = tuple(s)[:i] + tuple(expandedStr) + tuple(s)[i+1:]
+            dsGateStringsToUse.append(s)
+    else:
+        dsGateStringsToUse = gateStringsToUse
+            # no difference in the strings used by the alias
+
+    #  Allocate peristent memory 
+    #  (must be AFTER possible gate string permutation by
+    #   tree and initializatin of dsGateStringsToUse)
     probs  = _np.empty( (len(spamLabels),len(gateStringsToUse)) )
     dprobs = _np.empty( (len(spamLabels),len(gateStringsToUse),vec_gs_len) )
 
@@ -1011,48 +1052,55 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     fweights = _np.empty( (len(spamLabels),len(gateStringsToUse)) )
     z = _np.zeros( (len(spamLabels),len(gateStringsToUse)) ) # for deriv below
 
+
     #  Estimate & check intermediate memory
     #    - maybe make GateSet methods get intermediate estimates?
-    intermedMem   = 8*(ng + ng*gd**2 + ng*gd**2*ne) # ~ bulk_dproduct
-    if memLimit is not None and memLimit < intermedMem:
-        reductionFactor = float(intermedMem) / float(memLimit)
-        maxEvalSubTreeSize = int(ng / reductionFactor)
-    else:
-        maxEvalSubTreeSize = None
+        
+    ##Get evaluation tree (now so can use length in mem estimates)
+    #evTree = gs.bulk_evaltree(gateStringsToUse)
+    #
+    #intermedMem   = 8*(ng + ng*gd**2 + ng*gd**2*ne) # ~ bulk_dproduct
+    #if memLimit is not None and memLimit < intermedMem:
+    #    reductionFactor = float(intermedMem) / float(memLimit)
+    #    maxEvalSubTreeSize = int(ng / reductionFactor)
+    #else:
+    #    maxEvalSubTreeSize = None
+    #
+    #if memLimit != None:
+    #    printer.log("Memory estimates: (%d spam labels," % ns + \
+    #        "%d gate strings, %d gateset params, %d gate dim)" % (ng,ne,gd), 2)
+    #    printer.log("Peristent: %g GB " % (persistentMem*C), 2)
+    #    printer.log("Intermediate: %g GB " % (intermedMem*C), 2)
+    #    printer.log("Limit: %g GB" % (memLimit*C), 2)
+    #    if maxEvalSubTreeSize is not None:
+    #        printer.log("Maximum eval sub-tree size = %d" % maxEvalSubTreeSize)
+    #
+    #if maxEvalSubTreeSize is not None:
+    #    evTree.split(maxEvalSubTreeSize, None) # split for memory
+    #
+    ##FUTURE: could use distributeMethod for memory distribution also via
+    ##  wrtBlockSize (even when comm is None)
+    #if comm is not None:
+    #    nprocs = comm.Get_size()
+    #    if distributeMethod == "gatestrings":
+    #        if not evTree.is_split():
+    #            evTree.split(None,nprocs)
+    #        else:
+    #            assert(maxEvalSubTreeSize is not None)
+    #            if len(evTree.get_sub_trees()) < nprocs:
+    #                evTree.split(None,nprocs)
+    #                if any([ len(sub)>maxEvalSubTreeSize for sub in evTree.get_sub_trees()]):
+    #                    evTree.split(maxEvalSubTreeSize, None) # fall back to split for memory
+    #    elif distributeMethod == "deriv":
+    #        pass #nothing more to do in this case
+    #    else:
+    #        raise ValueError("Invalid distribute method: %s" % distributeMethod)
+    #
+    #if (comm is None or comm.Get_rank() == 0) and evTree.is_split():
+    #    printer.log("Memory limit and/or MPI has imposed a division of the evaluation tree:", 2)
+    #    evTree.print_analysis()
 
-    if memLimit != None:
-        printer.log("Memory estimates: (%d spam labels," % ns + \
-            "%d gate strings, %d gateset params, %d gate dim)" % (ng,ne,gd), 2)
-        printer.log("Peristent: %g GB " % (persistentMem*C), 2)
-        printer.log("Intermediate: %g GB " % (intermedMem*C), 2)
-        printer.log("Limit: %g GB" % (memLimit*C), 2)
-        if maxEvalSubTreeSize is not None:
-            printer.log("Maximum eval sub-tree size = %d" % maxEvalSubTreeSize)
 
-    if maxEvalSubTreeSize is not None:
-        evTree.split(maxEvalSubTreeSize, None) # split for memory
-
-    #FUTURE: could use distributeMethod for memory distribution also via
-    #  wrtBlockSize (even when comm is None)
-    if comm is not None:
-        nprocs = comm.Get_size()
-        if distributeMethod == "gatestrings":
-            if not evTree.is_split():
-                evTree.split(None,nprocs)
-            else:
-                assert(maxEvalSubTreeSize is not None)
-                if len(evTree.get_sub_trees()) < nprocs:
-                    evTree.split(None,nprocs)
-                    if any([ len(sub)>maxEvalSubTreeSize for sub in evTree.get_sub_trees()]):
-                        evTree.split(maxEvalSubTreeSize, None) # fall back to split for memory
-        elif distributeMethod == "deriv":
-            pass #nothing more to do in this case
-        else:
-            raise ValueError("Invalid distribute method: %s" % distributeMethod)
-
-    if (comm is None or comm.Get_rank() == 0) and evTree.is_split():
-        printer.log("Memory limit and/or MPI has imposed a division of the evaluation tree:", 2)
-        evTree.print_analysis()
 
     #NOTE on chi^2 expressions:
     #in general case:   chi^2 = sum (p_i-f_i)^2/p_i  (for i summed over outcomes)
@@ -1095,27 +1143,30 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         if printer.verbosity < 3:  # Fast versions of functions
             if regularizeFactor == 0:
                 def objective_func(vectorGS):
-                    #tm = _time.time() #TIMER!!!
+                    tm = _time.time()
                     gs.from_vector(vectorGS)
                     gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval,
                                        check, comm)
                     v = (probs-f)*get_weights(probs) # dims K x M (K = nSpamLabels, M = nGateStrings)
-                    #print "OBJECTIVE: ",(_time.time()-tm) #TIMER!!!
+                    profiler.add_time("do_mc2gst: OBJECTIVE",tm)
                     return v.reshape([KM])
 
             else:
                 def objective_func(vectorGS):
+                    tm = _time.time()
                     gs.from_vector(vectorGS)
                     gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval,
                                        check, comm)
                     weights = get_weights(probs)
                     v = (probs-f)*weights # dims K x M (K = nSpamLabels, M = nGateStrings)
                     gsVecNorm = regularizeFactor * _np.array( [ max(0,absx-1.0) for absx in map(abs,vectorGS) ], 'd')
+                    profiler.add_time("do_mc2gst: OBJECTIVE",tm)
                     return _np.concatenate( (v.reshape([KM]), gsVecNorm) )
 
         else:  # Verbose (DEBUG) version of objective_func
 
             def objective_func(vectorGS):
+                tm = _time.time()
                 gs.from_vector(vectorGS)
                 gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval,
                                    check, comm)
@@ -1129,19 +1180,23 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
                 if regularizeFactor > 0:
                     gsVecNorm = regularizeFactor * _np.array( [ max(0,absx-1.0) for absx in map(abs,vectorGS) ], 'd')
+                    profiler.add_time("do_mc2gst: OBJECTIVE",tm)
                     return _np.concatenate( (v.reshape([KM]), gsVecNorm) )
-                else: return v.reshape([KM])
+                else:
+                    profiler.add_time("do_mc2gst: OBJECTIVE",tm)
+                    return v.reshape([KM])
 
 
         # Jacobian function
         if printer.verbosity < 3: # Fast versions of functions
             if regularizeFactor == 0: # Fast un-regularized version
                 def jacobian(vectorGS):
-                    #tm = _time.time() #TIMER!!!
+                    tm = _time.time()
                     gs.from_vector(vectorGS)
                     gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree,
                                         prMxToFill=probs, clipTo=probClipInterval,
-                                        check=check, comm=comm)
+                                        check=check, comm=comm, wrtBlockSize=wrtBlkSize,
+                                        profiler=profiler)
                     weights  = get_weights( probs )
                     #jac = dpr * (weights+(pr-f)*get_dweights( pr, weights ))[:,None] #OLD  # (M,N) * (M,1) = (M,N)
                     jac = dprobs * (weights+(probs-f)*get_dweights(probs, weights ))[:,:,None]  # (K,M,N) * (K,M,1)   (N = dim of vectorized gateset)
@@ -1150,15 +1205,17 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
                     # dpr has shape == (nGateStrings, nDerivCols), weights has shape == (nGateStrings,)
                     # return shape == (nGateStrings, nDerivCols) where ret[i,j] = dP[i,j]*(weights+dweights*(p-f))[i]
-                    #print "JACOBIAN: ",(_time.time()-tm) #TIMER!!!
+                    profiler.add_time("do_mc2gst: JACOBIAN",tm)
                     return jac
 
             else:
                 def jacobian(vectorGS): # Fast regularized version
+                    tm = _time.time()
                     gs.from_vector(vectorGS)
                     gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree,
                                         prMxToFill=probs, clipTo=probClipInterval,
-                                        check=check, comm=comm)
+                                        check=check, comm=comm, wrtBlockSize=wrtBlkSize,
+                                        profiler=profiler)
                     weights  = get_weights( probs )
                     gsVecGrad = _np.diag( [ (regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in vectorGS ] ) # (N,N)
                     jac = dprobs * (weights+(probs-f)*get_dweights( probs, weights ))[:,:,None]  # (K,M,N) * (K,M,1)   (N = dim of vectorized gateset)
@@ -1167,14 +1224,17 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
                     # dpr has shape == (nGateStrings, nDerivCols), gsVecGrad has shape == (nDerivCols, nDerivCols)
                     # return shape == (nGateStrings+nDerivCols, nDerivCols)
+                    profiler.add_time("do_mc2gst: JACOBIAN",tm)
                     return jac
 
         else: # Verbose (DEBUG) version
             def jacobian(vectorGS):
+                tm = _time.time()
                 gs.from_vector(vectorGS)
                 gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree,
                                     prMxToFill=probs, clipTo=probClipInterval,
-                                    check=check, comm=comm)
+                                    check=check, comm=comm, wrtBlockSize=wrtBlkSize,
+                                    profiler=profiler)
                 weights  = get_weights( probs )
 
                 #Attempt to control leastsq by zeroing clipped weights -- this doesn't seem to help (nor should it)
@@ -1214,6 +1274,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                         printer.log(" ==> max err = ", errs[0][2], 3)
                         printer.log(" ==> max err/max = ", max([ x[2]/maxabs for x in errs ]), 3)
 
+                profiler.add_time("do_mc2gst: JACOBIAN",tm)
                 return jac
 
             # OLD: return _np.concatenate( [ weights[i] * dPr_list[i] for i in range(len(gateStringsToUse)) ], axis=0 )
@@ -1238,23 +1299,36 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         #
         #jacobian = None
 
+    profiler.add_time("do_mc2gst: pre-opt",tStart)
+
 
     #Step 3: solve least squares minimization problem
-    #tm = _time.time() #TIMER!!!
+    tm = _time.time()
     x0 = gs.to_vector()
-    opt_x, _, _, _, _ = \
-        _spo.leastsq( objective_func, x0, xtol=tol, ftol=tol, gtol=tol,
-                 maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=jacobian )
+    if CUSTOMLM:
+        opt_x,converged,msg = _opt.custom_leastsq(objective_func, jacobian, x0, f_norm_tol=tol, jac_norm_tol=tol,
+                                                  rel_tol=tol, max_iter=maxiter, comm=comm, profiler=profiler)
+        printer.log("Least squares message = %s" % msg,2)
+        assert(converged)
+    else:
+        opt_x, _, _, msg, flag = \
+            _spo.leastsq( objective_func, x0, xtol=tol, ftol=tol, gtol=tol,
+                          maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=jacobian )
+        printer.log("Least squares message = %s; flag =%s" % (msg, flag), 2)
+
+
     full_minErrVec = objective_func(opt_x)  #note: calls gs.from_vector(opt_x,...) so don't need to call this again
     minErrVec = full_minErrVec if regularizeFactor == 0 else full_minErrVec[0:-len(x0)] #don't include regularization terms
     soln_gs = gs.copy();
+    profiler.add_time("do_mc2gst: leastsq",tm)
 
     #soln_gs.log("MC2GST", { 'method': "leastsq", 'tol': tol,  'maxiter': maxiter } )
-    #print "*** leastSQ TIME = ",(_time.time()-tm) #TIMER!!!
+    #print "*** leastSQ TIME = ",(_time.time()-tm)
 
     #opt_jac = _np.abs(jacobian(opt_x))
     #print "DEBUG: Jacobian (shape %s) at opt_x: min=%g, max=%g" % (str(opt_jac.shape),_np.min(opt_jac), _np.max(opt_jac))
     #print "DEBUG: leastsq finished with flag=%d: %s" % (flag,msg)
+    tm = _time.time()
 
     if printer.verbosity > 0:
         nGateStrings = len(gateStringsToUse)
@@ -1276,6 +1350,11 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     #  target_vec = targetGateset.to_vector()
     #  targetErrVec = objective_func(target_vec)
     #  return minErrVec, soln_gs, targetErrVec
+    profiler.add_time("do_mc2gst: post-opt", tm) #all in num_nongauge_params
+    profiler.add_time("do_mc2gst: total time", tStart)
+    #TODO: evTree.permute_computation_to_original(minErrVec) #Doesn't work b/c minErrVec is flattened
+    # but maybe best to just remove minErrVec from return value since this isn't very useful
+    # anyway?
     return minErrVec, soln_gs
 
 def do_mc2gst_with_model_selection(
@@ -1491,8 +1570,9 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
                         regularizeFactor=0, returnErrorVec=False,
                         returnAll=False, gateStringSetLabels=None, verbosity=0,
                         check=False, check_jacobian=False,
-                        gatestringWeightsDict=None, memLimit=None, times=None,
-                        comm=None, distributeMethod = "gatestrings"):
+                        gatestringWeightsDict=None, memLimit=None,
+                        profiler=None, comm=None, 
+                        distributeMethod = "gatestrings"):
     """
     Performs Iterative Minimum Chi^2 Gate Set Tomography on the dataset.
 
@@ -1576,10 +1656,8 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
         A rough memory limit in bytes which restricts the amount of intermediate
         values that are computed and stored.
 
-    times : list, optional
-        A list to append timing values to.  Appended values are 2-tuples
-        comprised of a descriptive string and a duration in seconds.  Default
-        value of None means no timing information should be saved.
+    profiler : Profiler, optional
+         A profiler object used for to track timing and memory usage.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -1604,6 +1682,7 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
     """
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    if profiler is None: profiler = _dummy_profiler
 
     #convert lists of GateStrings to lists of raw tuples since that's all we'll need
     if len(gateStringSetsToUseInEstimation ) > 0 and \
@@ -1640,19 +1719,19 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
                               useFreqWeightedChiSq, regularizeFactor,
                               printer-1, check, check_jacobian,
                               gatestringWeights, None, memLimit, comm,
-                              distributeMethod)
+                              distributeMethod, profiler)
             if returnAll:
                 lsgstGatesets.append(lsgstGateset)
                 minErrs.append(minErr)
 
-            if times is not None:
-                tNxt = _time.time();
-                times.append(('MC2GST Iteration %d: chi2-opt' % (i+1),tNxt-tRef))
-                printer.log("    Iteration %d took %.1fs" % (i+1,tNxt-tRef),2)
-                printer.log('',2) #extra newline
-                tRef=tNxt
+            tNxt = _time.time();
+            profiler.add_time('do_iterative_mc2gst: iter %d chi2-opt'%(i+1),tRef)
+            printer.log("    Iteration %d took %.1fs" % (i+1,tNxt-tRef),2)
+            printer.log('',2) #extra newline
+            tRef=tNxt
 
     printer.log('Iterative MC2GST Total Time: %.1fs' % (_time.time()-tStart))
+    profiler.add_time('do_iterative_mc2gst: total time', tStart)
 
     if returnErrorVec:
         return (minErrs, lsgstGatesets) if returnAll else (minErr, lsgstGateset)
@@ -1865,7 +1944,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
              minProbClip=1e-4, probClipInterval=(-1e6,1e6), radius=1e-4,
              poissonPicture=True, verbosity=0, check=False,
              gateLabelAliases=None, memLimit=None, comm=None,
-             distributeMethod = "gatestrings"):
+             distributeMethod = "gatestrings", profiler=None):
 
     """
     Performs Maximum Likelihood Estimation Gate Set Tomography on the dataset.
@@ -1928,6 +2007,9 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
       when comm is not None).  "gatestrings" will divide the list of
       gatestrings; "deriv" will divide the columns of the jacobian matrix.
 
+    profiler : Profiler, optional
+        A profiler object used for to track timing and memory usage.
+
 
     Returns
     -------
@@ -1938,6 +2020,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     """
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    if profiler is None: profiler = _dummy_profiler
     tStart = _time.time()
 
     gs = startGateset.copy()
@@ -1955,22 +2038,6 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     spamLabels = gs.get_spam_labels() #fixes the ordering of the spam labels
     vec_gs_len = gs.num_params()
 
-    if gateLabelAliases is not None:
-            #then find & replace aliased gate labels with their expanded form
-        dsGateStringsToUse = []
-        for s in gateStringsToUse:
-            for label,expandedStr in gateLabelAliases.items():
-                while label in tuple(s):
-                    i = tuple(s).index(label)
-                    s = tuple(s)[:i] + tuple(expandedStr) + tuple(s)[i+1:]
-            dsGateStringsToUse.append(s)
-    else:
-        dsGateStringsToUse = gateStringsToUse
-           # no difference in the strings used by the alias
-
-    #Get evaluation tree (now so can use length in mem estimates)
-    evTree = gs.bulk_evaltree(gateStringsToUse)
-
     #Memory allocation
     ns = len(spamLabels); ng = len(gateStringsToUse)
     ne = gs.num_params(); gd = gs.get_dimension()
@@ -1983,52 +2050,82 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
                           "< memory required to hold final results (%g GB)"
                           % (persistentMem*C))
 
+    #Get evaluation tree (split into subtrees if needed)
+    mlim = memLimit-persistentMem if (memLimit is not None) else None
+    evTree, wrtBlkSize = gs.bulk_evaltree_from_resources(
+        gateStringsToUse, comm, mlim,
+        distributeMethod, ["bulk_fill_probs","bulk_fill_dprobs"], printer)
+
+    # permute (if needed) gate string list for efficient subtree division
+    # Note: cannot rely on order of gateStringsToUse above this point --
+    #   (using len(gateStringsToUse) is fine though).
+    gateStringsToUse = evTree.generate_gatestring_list(permute=False)
+
+    #Expand gate label aliases used in DataSet lookups
+    if gateLabelAliases is not None:
+        #find & replace aliased gate labels with their expanded form
+        dsGateStringsToUse = []
+        for s in gateStringsToUse:
+            for label,expandedStr in gateLabelAliases.items():
+                while label in tuple(s):
+                    i = tuple(s).index(label)
+                    s = tuple(s)[:i] + tuple(expandedStr) + tuple(s)[i+1:]
+            dsGateStringsToUse.append(s)
+    else:
+        dsGateStringsToUse = gateStringsToUse
+           # no difference in the strings used by the alias
+
+    #Allocate peristent memory
     cntVecMx = _np.empty( (len(spamLabels),len(gateStringsToUse)), 'd' )
     probs = _np.empty( (len(spamLabels),len(gateStringsToUse)), 'd' )
     dprobs = _np.empty( (len(spamLabels),len(gateStringsToUse),vec_gs_len) )
 
-    #  Estimate & check intermediate memory
-    #    - maybe make GateSet methods get intermediate estimates?
-    intermedMem   = 8*(ng + ng*gd**2 + ng*gd**2*ne) # ~ bulk_dproduct
-    if memLimit is not None and memLimit < intermedMem:
-        reductionFactor = float(intermedMem) / float(memLimit)
-        maxEvalSubTreeSize = int(ng / reductionFactor)
-    else:
-        maxEvalSubTreeSize = None
 
-    if memLimit is not None:
-        printer.log("Memory estimates: (%d spam labels," % ns + \
-            "%d gate strings, %d gateset params, %d gate dim)" % (ng,ne,gd), 2)
-        printer.log("Peristent: %g GB " % (persistentMem*C), 2)
-        printer.log("Intermediate: %g GB " % (intermedMem*C), 2)
-        printer.log("Limit: %g GB" % (memLimit*C), 2)
-        if maxEvalSubTreeSize is not None:
-            printer.log("Maximum eval sub-tree size = %d" % maxEvalSubTreeSize, 2)
-
-    if maxEvalSubTreeSize is not None:
-        evTree.split(maxEvalSubTreeSize, None)
-
-    #FUTURE: could use distributeMethod for memory distribution also via
-    #  wrtBlockSize (even when comm is None)
-    if comm is not None:
-        nprocs = comm.Get_size()
-        if distributeMethod == "gatestrings":
-            if not evTree.is_split():
-                evTree.split(None,nprocs)
-            else:
-                assert(maxEvalSubTreeSize is not None)
-                if len(evTree.get_sub_trees()) < nprocs:
-                    evTree.split(None,nprocs)
-                    if any([ len(sub)>maxEvalSubTreeSize for sub in evTree.get_sub_trees()]):
-                        evTree.split(maxEvalSubTreeSize, None) # fall back to split for memory
-        elif distributeMethod == "deriv":
-            pass #nothing more to do in this case
-        else:
-            raise ValueError("Invalid distribute method: %s" % distributeMethod)
-
-    if (comm is None or comm.Get_rank() == 0) and evTree.is_split():
-        printer.log("Memory limit and/or MPI has imposed a division of the evaluation tree:", 2)
-        evTree.print_analysis()
+    ##Get evaluation tree (now so can use length in mem estimates)
+    #evTree = gs.bulk_evaltree(gateStringsToUse)
+    #
+    ##  Estimate & check intermediate memory
+    ##    - maybe make GateSet methods get intermediate estimates?
+    #intermedMem   = 8*(ng + ng*gd**2 + ng*gd**2*ne) # ~ bulk_dproduct
+    #if memLimit is not None and memLimit < intermedMem:
+    #    reductionFactor = float(intermedMem) / float(memLimit)
+    #    maxEvalSubTreeSize = int(ng / reductionFactor)
+    #else:
+    #    maxEvalSubTreeSize = None
+    #
+    #if memLimit is not None:
+    #    printer.log("Memory estimates: (%d spam labels," % ns + \
+    #        "%d gate strings, %d gateset params, %d gate dim)" % (ng,ne,gd), 2)
+    #    printer.log("Peristent: %g GB " % (persistentMem*C), 2)
+    #    printer.log("Intermediate: %g GB " % (intermedMem*C), 2)
+    #    printer.log("Limit: %g GB" % (memLimit*C), 2)
+    #    if maxEvalSubTreeSize is not None:
+    #        printer.log("Maximum eval sub-tree size = %d" % maxEvalSubTreeSize, 2)
+    #
+    #if maxEvalSubTreeSize is not None:
+    #    evTree.split(maxEvalSubTreeSize, None)
+    #
+    ##FUTURE: could use distributeMethod for memory distribution also via
+    ##  wrtBlockSize (even when comm is None)
+    #if comm is not None:
+    #    nprocs = comm.Get_size()
+    #    if distributeMethod == "gatestrings":
+    #        if not evTree.is_split():
+    #            evTree.split(None,nprocs)
+    #        else:
+    #            assert(maxEvalSubTreeSize is not None)
+    #            if len(evTree.get_sub_trees()) < nprocs:
+    #                evTree.split(None,nprocs)
+    #                if any([ len(sub)>maxEvalSubTreeSize for sub in evTree.get_sub_trees()]):
+    #                    evTree.split(maxEvalSubTreeSize, None) # fall back to split for memory
+    #    elif distributeMethod == "deriv":
+    #        pass #nothing more to do in this case
+    #    else:
+    #        raise ValueError("Invalid distribute method: %s" % distributeMethod)
+    #
+    #if (comm is None or comm.Get_rank() == 0) and evTree.is_split():
+    #    printer.log("Memory limit and/or MPI has imposed a division of the evaluation tree:", 2)
+    #    evTree.print_analysis()
 
 
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
@@ -2070,6 +2167,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
         # See LikelihoodFunctions.py for details on patching
 
         def objective_func(vectorGS):
+            tm = _time.time()
             gs.from_vector(vectorGS)
             gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval,
                                check, comm)
@@ -2082,6 +2180,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
             v = _np.where( minusCntVecMx == 0, totalCntVec[None,:] * _np.where(probs >= a, probs, (-1.0/(3*a**2))*probs**3 + probs**2/a + a/3.0), v)
                     #special handling for f == 0 terms using quadratic rounding of function with minimum: max(0,(a-p)^2)/(2a) + p
             v = _np.sqrt( v )
+            profiler.add_time("do_mlgst: OBJECTIVE",tm)
             return v.reshape([KM])  #Note: no test for whether probs is in [0,1] so no guarantee that
                                     #      sqrt is well defined unless probClipInterval is set within [0,1].
 
@@ -2091,10 +2190,12 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
         #   and deriv == 0.5 / sqrt(...) * S * dp
 
         def jacobian(vectorGS):
+            tm = _time.time()
             gs.from_vector(vectorGS)
             gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree,
                                 prMxToFill=probs, clipTo=probClipInterval,
-                                check=check, comm=comm)
+                                check=check, comm=comm, wrtBlockSize=wrtBlkSize,
+                                profiler=profiler)
 
             pos_probs = _np.where(probs < min_p, min_p, probs)
             S = minusCntVecMx / min_p + totalCntVec[None,:]
@@ -2115,6 +2216,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
 
             jac = jac.reshape( [KM,vec_gs_len] )
             #if check_jacobian: _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
+            profiler.add_time("do_mlgst: JACOBIAN",tm)
             return jac
 
     else: # standard (non-Poisson-picture) logl
@@ -2135,6 +2237,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
         # See LikelihoodFunction.py for details on patching
 
         def objective_func(vectorGS):
+            tm = _time.time()
             gs.from_vector(vectorGS)
             gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval,
                                check, comm)
@@ -2146,6 +2249,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
             v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
             v = _np.where( minusCntVecMx == 0, 0.0, v)
             v = _np.sqrt( v )
+            profiler.add_time("do_mlgst: OBJECTIVE",tm)
             return v.reshape([KM])  #Note: no test for whether probs is in [0,1] so no guarantee that
                                     #      sqrt is well defined unless probClipInterval is set within [0,1].
 
@@ -2155,10 +2259,12 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
         #   and deriv == 0.5 / sqrt(...) * S * dp
 
         def jacobian(vectorGS):
+            tm = _time.time()
             gs.from_vector(vectorGS)
             gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree,
                                 prMxToFill=probs, clipTo=probClipInterval,
-                                check=check, comm=comm)
+                                check=check, comm=comm, wrtBlockSize=wrtBlkSize,
+                                profiler=profiler)
 
             pos_probs = _np.where(probs < min_p, min_p, probs)
             S = minusCntVecMx / min_p
@@ -2178,16 +2284,27 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
 
             jac = jac.reshape( [KM,vec_gs_len] )
             #if check_jacobian: _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
+            profiler.add_time("do_mlgst: JACOBIAN",tm)
             return jac
 
+    profiler.add_time("do_mlgst: pre-opt",tStart)
 
     #Run optimization (use leastsq)
+    tm = _time.time()
     x0 = gs.to_vector()
-    opt_x, _, _, msg, flag = \
-        _spo.leastsq( objective_func, x0, xtol=tol, ftol=tol, gtol=0,
-                      maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=jacobian )
-    printer.log("Least squares msg = %s; flag =%s" % (msg, flag), 2)
+    if CUSTOMLM:
+        opt_x,converged,msg = _opt.custom_leastsq(objective_func, jacobian, x0, f_norm_tol=tol, jac_norm_tol=tol,
+                                                  rel_tol=tol, max_iter=maxiter, comm=comm, profiler=profiler)
+        printer.log("Least squares message = %s" % msg,2)
+        assert(converged)
+    else:
+        opt_x, _, _, msg, flag = \
+            _spo.leastsq( objective_func, x0, xtol=tol, ftol=tol, gtol=0,
+                          maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=jacobian )
+        printer.log("Least squares message = %s; flag =%s" % (msg, flag), 2)
+    profiler.add_time("do_mlgst: leastsq",tm)
 
+    tm = _time.time()
     gs.from_vector(opt_x)
     #gs.log("MLGST", { 'tol': tol,  'maxiter': maxiter } )
 
@@ -2221,6 +2338,8 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
         else:
             printer.log("  **Warning** upper_bound_logL - logl = " + str(deltaLogL), 1)
 
+    profiler.add_time("do_mlgst: post-opt",tm)
+    profiler.add_time("do_mlgst: total time",tStart)
     return (logL_upperbound - deltaLogL), gs
 
 #SCRATCH - used for debugging logl objective function
@@ -2267,8 +2386,9 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                        minProbClip=1e-4, probClipInterval=(-1e6,1e6), radius=1e-4,
                        poissonPicture=True,returnMaxLogL=False,returnAll=False,
                        gateStringSetLabels=None, useFreqWeightedChiSq=False,
-                       verbosity=0, check=False, memLimit=None, times=None,
-                       comm=None, distributeMethod = "gatestrings"):
+                       verbosity=0, check=False, memLimit=None, 
+                       profiler=None, comm=None,
+                       distributeMethod = "gatestrings"):
     """
     Performs Iterative Maximum Liklihood Estimation Gate Set Tomography on the dataset.
 
@@ -2343,10 +2463,8 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
         A rough memory limit in bytes which restricts the amount of intermediate
         values that are computed and stored.
 
-    times : list, optional
-        A list to append timing values to.  Appended values are 2-tuples
-        comprised of a descriptive string and a duration in seconds.  Default
-        value of None means no timing information should be saved.
+    profiler : Profiler, optional
+         A profiler object used for to track timing and memory usage.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -2371,6 +2489,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
     """
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    if profiler is None: profiler = _dummy_profiler
 
     #convert lists of GateStrings to lists of raw tuples since that's all we'll need
     if len(gateStringSetsToUseInEstimation ) > 0 and \
@@ -2403,12 +2522,12 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                                                probClipInterval, useFreqWeightedChiSq,
                                                0, printer-1, check,
                                                False, None, None, memLimit, comm,
-                                               distributeMethod)
+                                               distributeMethod, profiler)
                                               # Note maxLogL is really chi2 number here
-            if times is not None:
-                tNxt = _time.time();
-                times.append(('MLGST Iteration %d: chi2-opt' % (i+1),tNxt-tRef))
-                tRef=tNxt
+
+            tNxt = _time.time();
+            profiler.add_time('do_iterative_mlgst: iter %d chi2-opt'%(i+1),tRef)
+            tRef2=tNxt
 
             logL_ub = _tools.logl_max(dataset, stringsToEstimate, None, poissonPicture, check)
             maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval,
@@ -2416,12 +2535,11 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
 
             printer.log("2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL)),2)
 
-            if times is not None:
-                tNxt = _time.time();
-                times.append(('MLGST Iteration %d: logl-comp' % (i+1),tNxt-tRef))
-                printer.log("Iteration %d took %.1fs" % (i+1,tNxt-tRef),2)
-                printer.log('',2) #extra newline
-                tRef=tNxt
+            tNxt = _time.time();
+            profiler.add_time('do_iterative_mlgst: iter %d logl-comp' % (i+1),tRef2)
+            printer.log("Iteration %d took %.1fs" % (i+1,tNxt-tRef),2)
+            printer.log('',2) #extra newline
+            tRef=tNxt
 
 
            #OLD: do MLGST for all iterations
@@ -2435,7 +2553,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                 maxLogL_p, mleGateset_p = do_mlgst(
                   dataset, mleGateset, stringsToEstimate, maxiter, maxfev, tol,
                   minProbClip, probClipInterval, radius, poissonPicture, printer-1,
-                  check, None, memLimit, comm)
+                  check, None, memLimit, comm, distributeMethod, profiler)
 
                 printer.log("2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL_p)),2)
 
@@ -2445,18 +2563,18 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                 else:
                     printer.warning("MLGST failed to improve logl: retaining chi2-objective estimate")
 
-                if times is not None:
-                    tNxt = _time.time();
-                    times.append(('MLGST Iteration %d: logl-opt' % (i+1),tNxt-tRef))
-                    printer.log("Final MLGST took %.1fs" % (tNxt-tRef),2)
-                    printer.log('',2) #extra newline
-                    tRef=tNxt
+                tNxt = _time.time();
+                profiler.add_time('do_iterative_mlgst: iter %d logl-opt' % (i+1),tRef)
+                printer.log("Final MLGST took %.1fs" % (tNxt-tRef),2)
+                printer.log('',2) #extra newline
+                tRef=tNxt
 
             if returnAll:
                 mleGatesets.append(mleGateset)
                 maxLogLs.append(maxLogL)
 
     printer.log('Iterative MLGST Total Time: %.1fs' % (_time.time()-tStart))
+    profiler.add_time('do_iterative_mlgst: total time', tStart)
 
     if returnMaxLogL:
         return (maxLogL, mleGatesets) if returnAll else (maxLogL, mleGateset)
@@ -2827,11 +2945,12 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
     startM = _np.identity(gateDim)  #take identity as initial gauge matrix
 
     x0 = startM.flatten() if not constrainToTP else startM[1:,:].flatten()
-    print_obj_func = _opt.create_obj_func_printer(objective_func)
+    bToStdout = (printer.verbosity > 2 and printer.filename is None)
+    print_obj_func = _opt.create_obj_func_printer(objective_func) #only ever prints to stdout!
     minSol = _opt.minimize(objective_func, x0,
                           method=method, maxiter=maxiter, maxfev=maxfev, tol=tol,
                           stopval= -20 if toGetTo == "CPTP" else None,
-                          callback = print_obj_func if printer.verbosity > 2 else None) #stopval=1e-7 -- (before I added log10)
+                          callback = print_obj_func if bToStdout else None) #stopval=1e-7 -- (before I added log10)
 
     if constrainToTP:
         v = _np.concatenate( (firstRowForTP,minSol.x) )
@@ -3012,14 +3131,15 @@ def _contractToXP(gateset,dataset,verbosity,method='Nelder-Mead',
         return (CLIFF + forbiddenProbPenalty if forbiddenProbPenalty > 1e-10 else 0) \
             + gs.frobeniusdist(gateset)
 
-    print_obj_func = _opt.create_obj_func_printer(objective_func)
+    bToStdout = (printer.verbosity > 2 and printer.filename is None)
+    print_obj_func = _opt.create_obj_func_printer(objective_func) #only ever prints to stdout!
     if objective_func(gs.to_vector()) < 1e-8:
         printer.log('Already in XP - no contraction necessary', 1)
         return 0.0, gs
 
     optSol = _opt.minimize(objective_func,gs.to_vector(),
                           method=method, tol=tol, maxiter=maxiter,
-                          callback = print_obj_func if printer.verbosity > 2 else None)
+                          callback = print_obj_func if bToStdout else None)
 
     gs.from_vector(optSol.x)
     #gs.log("Contract to XP", { 'method': method, 'tol': tol, 'maxiter': maxiter } )
@@ -3045,14 +3165,15 @@ def _contractToCP(gateset,verbosity,method='Nelder-Mead',
         cpPenalty = _tools.sum_of_negative_choi_evals(gs) * 1000
         return (CLIFF + cpPenalty if cpPenalty > 1e-10 else 0) + gs.frobeniusdist(gateset)
 
-    print_obj_func = _opt.create_obj_func_printer(objective_func)
+    bToStdout = (printer.verbosity > 2 and printer.filename is None)
+    print_obj_func = _opt.create_obj_func_printer(objective_func) #only ever prints to stdout!
     if objective_func(gs.to_vector()) < 1e-8:
         printer.log('Already in CP - no contraction necessary', 1)
         return 0.0, gs
 
     optSol = _opt.minimize(objective_func,gs.to_vector(),
                           method=method, tol=tol, maxiter=maxiter,
-                          callback = print_obj_func if printer.verbosity > 2 else None)
+                          callback = print_obj_func if bToStdout else None)
 
     gs.from_vector(optSol.x)
     #gs.log("Contract to CP", { 'method': method, 'tol': tol, 'maxiter': maxiter } )

@@ -27,7 +27,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                          gaugeOptItemWeights=None, objective="logl",
                          advancedOptions={}, lsgstLists=None,
                          truncScheme="whole germ powers", comm=None,
-                         verbosity=2):
+                         profile=True,verbosity=2):
     """
     Perform end-to-end GST analysis using Ls and germs, with L as a maximum
     length.
@@ -147,6 +147,14 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         When not ``None``, an MPI communicator for distributing the computation
         across multiple processors.
 
+    profile : int, optional
+        Whether or not to perform lightweight timing and memory profiling.
+        Allowed values are:
+        
+        - 0 -- no profiling is performed
+        - 1 -- profiling enabled, but don't print anything in-line
+        - 2 -- profiling enabled, and print memory usage at checkpoints
+
     verbosity : int, optional
        The 'verbosity' option is an integer specifying the level of 
        detail printed to stdout during the calculation.
@@ -157,7 +165,13 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     Results
     """
 
-    tRef = _time.time(); times_list = []
+    tRef = _time.time()
+
+    if profile == 0: profiler = _objs.DummyProfiler()
+    elif profile == 1: profiler = _objs.Profiler(comm,False)
+    elif profile == 2: profiler = _objs.Profiler(comm,True)
+    else: raise ValueError("Invalid value for 'profile' argument (%s)"%profile)
+
     if 'verbosity' in advancedOptions: #for backward compatibility
         _warnings.warn("'verbosity' as an advanced option is deprecated." +
                        " Please use the 'verbosity' argument directly.")
@@ -172,7 +186,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
 
     #Get dataset
     if isinstance(dataFilenameOrSet, str):
-        ds = _io.load_dataset(dataFilenameOrSet, True, verbosity) #can't take a printer...
+        ds = _io.load_dataset(dataFilenameOrSet, True, printer)
         default_dir = _os.path.dirname(dataFilenameOrSet) #default directory for reports, etc
         default_base = _os.path.splitext( _os.path.basename(dataFilenameOrSet) )[0]
     else:
@@ -205,7 +219,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
             truncScheme, nest)
 
     tNxt = _time.time()
-    times_list.append( ('Loading',tNxt-tRef) ); tRef=tNxt
+    profiler.add_time('do_long_sequence_gst: loading',tRef); tRef=tNxt
 
     #Starting Point = LGST
     gate_dim = gs_target.get_dimension()
@@ -216,7 +230,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                            verbosity=printer)
 
     tNxt = _time.time()
-    times_list.append( ('LGST',tNxt-tRef) ); tRef=tNxt
+    profiler.add_time('do_long_sequence_gst: LGST',tRef); tRef=tNxt
 
     if constrainToTP: #gauge optimize (and contract if needed) to TP, then lock down first basis element as the identity
         #TODO: instead contract to vSPAM? (this could do more than just alter the 1st element...)
@@ -241,10 +255,25 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         gs_after_gauge_opt.povm_identity = firstElIdentityVec # declare that this basis has the identity as its first element
 
     else: # no TP constraint
-        gs_after_gauge_opt = _alg.optimize_gauge(
-            gs_lgst, "target", targetGateset=gs_target,
-            spamWeight=1.0, gateWeight=1.0)
+        try:
+            printer.log("\nGauge Optimizing without constraints...",2)
+            gs_after_gauge_opt = _alg.optimize_gauge(
+                gs_lgst, "target", targetGateset=gs_target,
+                spamWeight=1.0, gateWeight=1.0)
+            printer.log("Success!",2)
             #Note: no  itemWeights=gaugeOptItemWeights here (LGST)
+        except:
+            try:
+                printer.log("Failed! Trying with TP constraint...",2)
+                gs_after_gauge_opt = _alg.optimize_gauge(
+                    gs_lgst, "target", targetGateset=gs_target, 
+                    constrainToTP=True, spamWeight=1.0, gateWeight=1.0)
+                printer.log("Success!",2)
+                #Note: no  itemWeights=gaugeOptItemWeights here (LGST)
+            except:
+                printer.log("Still Failed! No gauge optimization " +
+                            "performed on LGST estimate.",2)
+                gs_after_gauge_opt = gs_lgst.copy()
 
         #TODO: set identity vector, or leave as is, which assumes LGST had the right one and contraction doesn't change it ??
         # Really, should we even allow use of the identity vector when doing a non-TP-constrained optimization?
@@ -259,7 +288,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         gs_after_gauge_opt.set_all_parameterizations("TP")
 
     tNxt = _time.time()
-    times_list.append( ('Prep LGST seed',tNxt-tRef) ); tRef=tNxt
+    profiler.add_time('do_long_sequence_gst: Prep LGST seed',tRef); tRef=tNxt
 
     #Run LSGST on data
     if objective == "chi2":
@@ -273,7 +302,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
             verbosity=printer,
             memLimit=advancedOptions.get('memoryLimitInBytes',None),
             useFreqWeightedChiSq=advancedOptions.get(
-                'useFreqWeightedChiSq',False), times=times_list,
+                'useFreqWeightedChiSq',False), profiler=profiler,
             comm=comm, distributeMethod=advancedOptions.get(
                 'distributeMethod',"gatestrings") )
     elif objective == "logl":
@@ -285,14 +314,14 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
           returnAll=True, verbosity=printer,
           memLimit=advancedOptions.get('memoryLimitInBytes',None),
           useFreqWeightedChiSq=advancedOptions.get(
-                'useFreqWeightedChiSq',False), times=times_list,
+                'useFreqWeightedChiSq',False), profiler=profiler,
           comm=comm, distributeMethod=advancedOptions.get(
                 'distributeMethod',"gatestrings"))
     else:
         raise ValueError("Invalid longSequenceObjective: %s" % objective)
 
     tNxt = _time.time()
-    times_list.append( ('Total long-seq. opt.',tNxt-tRef) ); tRef=tNxt
+    profiler.add_time('do_long_sequence_gst: total long-seq. opt.',tRef); tRef=tNxt
 
     #Run the gatesets through gauge optimization, first to CPTP then to target
     #   so fidelity and frobenius distance w/targets is more meaningful
@@ -303,7 +332,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         #Note: don't set itemWeights in optimize_gauge (doesn't apply to CPTP)
 
         tNxt = _time.time()
-        times_list.append( ('Gauge opt to CPTP',tNxt-tRef) ); tRef=tNxt
+        profiler.add_time('do_long_sequence_gst: gauge opt to CPTP',tRef); tRef=tNxt
     else:
         go_gs_lsgst_list = gs_lsgst_list
 
@@ -326,10 +355,18 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         args = go_params.copy()
         args['gateset'] = gs
         args['targetGateset'] = gs_target
-        go_gs_lsgst_list[i] = _alg.optimize_gauge(**args)
+        try:
+            go_gs_lsgst_list[i] = _alg.optimize_gauge(**args)
+        except:
+            if not go_params['constrainToTP']:
+                go_params['constrainToTP'] = True
+                try:
+                    go_gs_lsgst_list[i] = _alg.optimize_gauge(**args)
+                except:
+                    pass
 
     tNxt = _time.time()
-    times_list.append( ('Gauge opt to target',tNxt-tRef) ); tRef=tNxt
+    profiler.add_time('do_long_sequence_gst: gauge opt to target',tRef); tRef=tNxt
 
     truncFn = _construction.stdlists._getTruncFunction(truncScheme)
 
@@ -351,8 +388,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     ret.parameters['memLimit'] = advancedOptions.get('memoryLimitInBytes',None)
     ret.parameters['gaugeOptParams'] = go_params
 
-    times_list.append( ('Results initialization',_time.time()-tRef) )
-    ret.parameters['times'] = times_list
+    profiler.add_time('do_long_sequence_gst: results initialization',tRef)
+    ret.parameters['profiler'] = profiler
 
     assert( len(maxLengths) == len(lsgstLists) == len(go_gs_lsgst_list) )
     return ret
