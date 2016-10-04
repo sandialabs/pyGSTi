@@ -287,13 +287,13 @@ Table \ref{bestGatesetSpamTable} reports 95\% confidence intervals for each of t
 \hline
 Operator & Matrix \\ \hline
 $\rho_{0}$ & $ \left(\!\!\begin{array}{cc}
-0.9503 & 0.0012e^{-i0.171} \\ 
-0.0012e^{i0.171} & 0.0497
+0.9022 & 0.0037e^{i2.117} \\ 
+0.0037e^{-i2.117} & 0.0978
  \end{array}\!\!\right) $
  \\ \hline
 $E_{0}$ & $ \left(\!\!\begin{array}{cc}
-0.0456 & 0.0022e^{i1.708} \\ 
-0.0022e^{-i1.708} & 0.9553
+-0.0203 & 0.0108e^{i2.219} \\ 
+0.0108e^{-i2.219} & 1.0253
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -307,7 +307,7 @@ $E_{0}$ & $ \left(\!\!\begin{array}{cc}
 \begin{tabular}[l]{|c|c|c|}
 \hline
  & $E_{0}$ & $E_C$ \\ \hline
-$\rho_{0}$ & $ \begin{array}{c} 0.0908 \\ \pm 0.0062 \end{array} $ & $ \begin{array}{c} 0.9093 \\ \pm 0.0062 \end{array} $ \\ \hline
+$\rho_{0}$ & $ \begin{array}{c} 0.0821 \\ \pm 0.0062 \end{array} $ & $ \begin{array}{c} 0.9182 \\ \pm 0.0062 \end{array} $ \\ \hline
 \end{tabular}
 
 \caption{\pdftooltip{{\color{blue}\texttt{.tables['bestGatesetSpamParametersTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['bestGatesetSpamParametersTable']}\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of \emph{vectorized} SPAM operations in Table \ref{bestGatesetSpamTable}.  The symbol $E_C$, when it appears, refers to the ``complement'' effect given by subtracting each of the other effects from the identity.\label{bestGatesetSpamParametersTable}}
@@ -345,9 +345,9 @@ It's also useful to know \emph{how} the real gates (or, more precisely, GST's es
 \begin{tabular}[l]{|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
-Gi & $ \begin{array}{c} 0.0399 \\ \pm 0.0026 \end{array} $ & $ \begin{array}{c} 0.0401 \\ \pm 0.0026 \end{array} $ & $ \begin{array}{c} 0.0401 \\ \pm 0.0026 \end{array} $ \\ \hline
-Gx & $ \begin{array}{c} 0.0378 \\ \pm 0.0022 \end{array} $ & $ \begin{array}{c} 0.0379 \\ \pm 0.0022 \end{array} $ & $ \begin{array}{c} 0.0379 \\ \pm 0.0022 \end{array} $ \\ \hline
-Gy & $ \begin{array}{c} 0.0377 \\ \pm 0.0022 \end{array} $ & $ \begin{array}{c} 0.0378 \\ \pm 0.0022 \end{array} $ & $ \begin{array}{c} 0.0378 \\ \pm 0.0022 \end{array} $ \\ \hline
+Gi & $ \begin{array}{c} 0.0456 \\ \pm 0.0028 \end{array} $ & $ \begin{array}{c} 0.0558 \\ \pm 0.0037 \end{array} $ & $ \begin{array}{c} 0.0601 \\ \pm 0.0039 \end{array} $ \\ \hline
+Gx & $ \begin{array}{c} 0.0458 \\ \pm 0.0023 \end{array} $ & $ \begin{array}{c} 0.0464 \\ \pm 0.0023 \end{array} $ & $ \begin{array}{c} 0.0464 \\ \pm 0.0023 \end{array} $ \\ \hline
+Gy & $ \begin{array}{c} 0.0414 \\ \pm 0.0023 \end{array} $ & $ \begin{array}{c} 0.0422 \\ \pm 0.0023 \end{array} $ & $ \begin{array}{c} 0.0422 \\ \pm 0.0023 \end{array} $ \\ \hline
 \end{tabular}
 
 \caption{\pdftooltip{{\color{blue}\texttt{.tables['bestGatesetVsTargetTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['bestGatesetVsTargetTable']}\textbf{Comparison of GST estimated gates to target gates}.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.\label{bestGatesetVsTargetTable}}
@@ -360,9 +360,9 @@ Gy & $ \begin{array}{c} 0.0377 \\ \pm 0.0022 \end{array} $ & $ \begin{array}{c} 
 \begin{tabular}[l]{|c|c|c|}
 \hline
 Prep/POVM & \begin{tabular}{c}State\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} \\ \hline
-$\rho_{0}$ & $ \begin{array}{c} 0.0497 \\ \pm 0.003 \end{array} $ & $ \begin{array}{c} 0.0497 \\ \pm 0.003 \end{array} $ \\ \hline
-$E_{0}$ & $ \begin{array}{c} 0.0447 \\ \pm 0.0039 \end{array} $ & $ \begin{array}{c} 0.0452 \\ \pm 0.0037 \end{array} $ \\ \hline
-$E_C$ & $ \begin{array}{c} 0.0455 \\ \pm 0 \end{array} $ & $ \begin{array}{c} 0.0451 \\ \pm 0 \end{array} $ \\ \hline
+$\rho_{0}$ & $ \begin{array}{c} 0.0978 \\ \pm 0.0121 \end{array} $ & $ \begin{array}{c} 0.0979 \\ \pm 0.012 \end{array} $ \\ \hline
+$E_{0}$ & $ \begin{array}{c} -0.0253 \\ \pm 0.0157 \end{array} $ & $ \begin{array}{c} 0.0252 \\ \pm 0.0145 \end{array} $ \\ \hline
+$E_C$ & $ \begin{array}{c} -0.0206 \\ \pm 0 \end{array} $ & $ \begin{array}{c} 0.0252 \\ \pm 0 \end{array} $ \\ \hline
 \end{tabular}
 
 \caption{\pdftooltip{{\color{blue}\texttt{.tables['bestGatesetSpamVsTargetTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['bestGatesetSpamVsTargetTable']}\textbf{Comparison of GST estimated SPAM to target SPAM}.  This table presents, for each state preparation and POVM effect, two different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.\label{bestGatesetSpamVsTargetTable}}
@@ -395,18 +395,18 @@ It's usually useful to understand \emph{how} gates fail.  The error generators i
 \hline
 Gate & Eigenvalues & Polar Plot \\ \hline
 Gi & $ \begin{array}{cc}
-0.9487 & 0.9458e^{i0.002} \\ 
-0.9458e^{-i0.002} & 1
+0.9899 & 0.8985 \\ 
+0.9292 & 1
  \end{array} $
  & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportDv3_files/bestEvalPolarPlt_Gi.pdf}} \\ \hline
 Gx & $ \begin{array}{cc}
-0.9491e^{i1.572} & 0.9491e^{-i1.572} \\ 
-0.9505 & 1
+0.9403e^{i1.571} & 0.9403e^{-i1.571} \\ 
+0.936 & 1
  \end{array} $
  & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportDv3_files/bestEvalPolarPlt_Gx.pdf}} \\ \hline
 Gy & $ \begin{array}{cc}
-0.9489e^{i1.571} & 0.9489e^{-i1.571} \\ 
-0.9512 & 1
+0.944e^{i1.575} & 0.944e^{-i1.575} \\ 
+0.9466 & 1
  \end{array} $
  & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportDv3_files/bestEvalPolarPlt_Gy.pdf}} \\ \hline
 \end{tabular}
@@ -422,18 +422,18 @@ Gy & $ \begin{array}{cc}
 \hline
 Gate & Relative Evals & Polar Plot \\ \hline
 Gi & $ \begin{array}{cc}
-0.9487 & 0.9458e^{i0.002} \\ 
-0.9458e^{-i0.002} & 1
+0.9899 & 0.8985 \\ 
+0.9292 & 1
  \end{array} $
  & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportDv3_files/bestRelEvalPolarPlt_Gi.pdf}} \\ \hline
 Gx & $ \begin{array}{cc}
-1 & 0.948 \\ 
-0.9503e^{i0.001} & 0.9503e^{-i0.001}
+1 & 0.9471 \\ 
+0.9348e^{i0.007} & 0.9348e^{-i0.007}
  \end{array} $
  & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportDv3_files/bestRelEvalPolarPlt_Gx.pdf}} \\ \hline
 Gy & $ \begin{array}{cc}
-1 & 0.9519 \\ 
-0.949 & 0.9481
+1 & 0.9351 \\ 
+0.9498e^{i0.011} & 0.9498e^{-i0.011}
  \end{array} $
  & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportDv3_files/bestRelEvalPolarPlt_Gy.pdf}} \\ \hline
 \end{tabular}
@@ -475,42 +475,42 @@ Additionally, the condition of \emph{complete positivity} or CP (which all real 
 \hline
 Gate & Eigenvalues & Eigenvalue Magnitudes \\ \hline
 Gi & $ \begin{array}{c}
-0.0107 \\ 
-0.0127 \\ 
-0.0165 \\ 
-0.9601
+-0.0093 \\ 
+0.0123 \\ 
+0.0424 \\ 
+0.9545
  \end{array} $
  $\pm$ $ \begin{array}{c}
-0.0024 \\ 
-0.0023 \\ 
-0.0025 \\ 
-0.0026
+0.0026 \\ 
+0.0026 \\ 
+0.0026 \\ 
+0.0028
  \end{array} $
  & \vcenteredhbox{\includegraphics[width=2.53in,height=2.53in,keepaspectratio]{general_reportDv3_files/bestChoiEvalBars_Gi.pdf}} \\ \hline
 Gx & $ \begin{array}{c}
-0.0105 \\ 
-0.0129 \\ 
-0.0144 \\ 
-0.9622
+0.0088 \\ 
+0.016 \\ 
+0.021 \\ 
+0.9542
  \end{array} $
  $\pm$ $ \begin{array}{c}
-0.0023 \\ 
-0.0022 \\ 
-0.0024 \\ 
-0.0022
+0.0016 \\ 
+0.002 \\ 
+0.0013 \\ 
+0.0023
  \end{array} $
  & \vcenteredhbox{\includegraphics[width=2.53in,height=2.53in,keepaspectratio]{general_reportDv3_files/bestChoiEvalBars_Gx.pdf}} \\ \hline
 Gy & $ \begin{array}{c}
-0.0107 \\ 
-0.0122 \\ 
-0.0148 \\ 
-0.9623
+0.0088 \\ 
+0.0127 \\ 
+0.0198 \\ 
+0.9587
  \end{array} $
  $\pm$ $ \begin{array}{c}
-0.0022 \\ 
-0.0019 \\ 
-0.0023 \\ 
-0.0022
+0.0017 \\ 
+0.0024 \\ 
+0.0017 \\ 
+0.0023
  \end{array} $
  & \vcenteredhbox{\includegraphics[width=2.53in,height=2.53in,keepaspectratio]{general_reportDv3_files/bestChoiEvalBars_Gy.pdf}} \\ \hline
 \end{tabular}
@@ -576,11 +576,11 @@ As a rough rule of thumb, for GST experiments involving relatively long sequence
 \begin{tabular}[l]{|c|c|c|c|c|c|c|c|c|}
 \hline
 L & $2\Delta\log(\mathcal{L})$ & $k$ & $2\Delta\log(\mathcal{L})-k$ & $\sqrt{2k}$ & $p$ & $N_s$ & $N_p$ & Rating \\ \hline
-0 & 53.744 & 61 & -7.2563 & 11.045 & 0.73 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-1 & 53.744 & 61 & -7.2562 & 11.045 & 0.73 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-2 & 106.71 & 137 & -30.291 & 16.553 & 0.97 & 168 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-4 & 354.33 & 410 & -55.674 & 28.636 & 0.98 & 441 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-8 & 691.06 & 786 & -94.936 & 39.648 & 0.99 & 817 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+0 & 53.733 & 61 & -7.2674 & 11.045 & 0.73 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+1 & 53.733 & 61 & -7.2674 & 11.045 & 0.73 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+2 & 156.61 & 137 & 19.615 & 16.553 & 0.12 & 168 & 31 & $\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+4 & 673.37 & 410 & 263.37 & 28.636 & 0 & 441 & 31 & $\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+8 & 1659.6 & 786 & 873.65 & 39.648 & 0 & 817 & 31 & $\bigstar\bigstar\bigstar\bigstar$ \\ \hline
 \end{tabular}
 
 \caption{\pdftooltip{{\color{blue}\texttt{.tables['progressTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['progressTable']}\textbf{Comparison between the computed and expected maximum $\log(\mathcal{L})$ for different values of $L$}.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively.  The quantity $2\Delta\log(\mathcal{L})$ measures the goodness of fit of the GST model (small is better) and is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $p$ is the p-value derived from a $\chi^2_k$ distribution.(For example, if $p=0.05$, then the probability of observing a $\chi^{2}$ value as large as, or larger than, the one indicated in the table is 5\%, assuming the GST model is valid.) The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.\label{progressTable}}
