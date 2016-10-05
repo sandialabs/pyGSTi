@@ -1,6 +1,7 @@
 import pygsti
 import numpy as _np
 from scipy.optimize import curve_fit as _curve_fit
+from scipy.optimize import minimize as _minimize
 from matplotlib import pyplot as _plt
 from collections import OrderedDict
 import pickle
@@ -428,30 +429,62 @@ class rb_results():
 #            self.parse_data()
 
 
-    def analyze_data(self,rb_decay_func = rb_decay_WF,process_prim = False,process_cliff = False, p0 = [0.5,0.5,0.98]):
+    def analyze_data(self,rb_decay_func = rb_decay_WF,process_prim = False,process_cliff = False, f0 = [0.98],AB0=[0.5,0.5]):#[0.5,0.5,0.98]):
         """
         Analyze RB data to compute fit parameters and in turn the RB error rate.
         """
 
         if process_prim:
-            results = _curve_fit(rb_decay_func,self.prim_len_list,self.prim_successes,p0 = p0)
-            A,B,f = results[0]
-            cov = results[1]
+            xdata = self.prim_len_list
+            ydata = self.prim_successes
+            def obj_func_full(params):
+                A,B,f = params
+                val = _np.sum((A+B*f**xdata-ydata)**2)
+                return val
+            def obj_func_1d(f):
+                A = 0.5
+                B = 0.5
+                val = obj_func_full([A,B,f])
+                return val
+            self.prim_initial_soln = _minimize(obj_func_1d,f0,method='L-BFGS-B',bounds=[(0.,1.)])
+            f1 = [self.prim_initial_soln.x[0]]
+            p0 = AB0 + f1
+            self.prim_end_soln = _minimize(obj_func_full,p0,method='L-BFGS-B',bounds=[(0.,1.),(0.,1.),(0.,1.)])
+            A,B,f = self.prim_end_soln.x
+#            results = _curve_fit(rb_decay_func,self.prim_len_list,self.prim_successes,p0 = p0)
+#            A,B,f = results[0]
+#            cov = results[1]
             self.prim_A = A
             self.prim_B = B
             self.prim_f = f
-            self.prim_cov = cov
+#            self.prim_cov = cov
             self.prim_F_avg = f_to_F_avg(self.prim_f)
             self.prim_r = f_to_r(self.prim_f)
             self.prim_analyzed = True
         if process_cliff:
-            results = _curve_fit(rb_decay_func,self.cliff_len_list,self.cliff_successes,p0 = p0)
-            A,B,f = results[0]
-            cov = results[1]
+            xdata = self.cliff_len_list
+            ydata = self.cliff_successes
+            def obj_func_full(params):
+                A,B,f = params
+                val = _np.sum((A+B*f**xdata-ydata)**2)
+                return val
+            def obj_func_1d(f):
+                A = 0.5
+                B = 0.5
+                val = obj_func_full([A,B,f])
+                return val
+            self.cliff_initial_soln = _minimize(obj_func_1d,f0,method='L-BFGS-B',bounds=[(0.,1.)])
+            f0 = self.cliff_initial_soln.x[0]
+            p0 = AB0 + [f0]
+            self.cliff_end_soln = _minimize(obj_func_full,p0,method='L-BFGS-B',bounds=[(0.,1.),(0.0,1.),(0.,1.)])
+            A,B,f = self.cliff_end_soln.x
+#            results = _curve_fit(rb_decay_func,self.cliff_len_list,self.cliff_successes,p0 = p0)
+#            A,B,f = results[0]
+#            cov = results[1]
             self.cliff_A = A
             self.cliff_B = B
             self.cliff_f = f
-            self.cliff_cov = cov
+#            self.cliff_cov = cov
             self.cliff_F_avg = f_to_F_avg(self.cliff_f)
             self.cliff_r = f_to_r(self.cliff_f)
             self.cliff_analyzed = True
@@ -514,11 +547,11 @@ class rb_results():
             xlabel = 'RB sequence length (Cliffords)'
         cmap = _plt.cm.get_cmap('Set1')
         #        try:
+        newplotgca.plot(xdata,ydata,'.', markersize=15, clip_on=False, color=cmap(30))
         newplotgca.plot(_np.arange(max(xdata)),
                     rb_decay_WF(_np.arange(max(xdata)),A,B,f),'-', lw=2, color=cmap(110))
         #        except:
         #            print "Unable to plot fit.  Have you run the RB analysis?"
-        newplotgca.plot(xdata,ydata,'.', markersize=15, clip_on=False, color=cmap(30))
 
         newplotgca.set_xlabel(xlabel, fontsize=15)
         newplotgca.set_ylabel('Success Rate',fontsize=15)
@@ -536,13 +569,15 @@ class rb_results():
         if save_fig_path:
             newplot.savefig(save_fig_path)
     
-    def error_bars(self,method,process_prim=False,process_cliff=False,bootstrap_resamples = 100,p0 = [0.5,0.5,0.98],seed=None):
+    def generate_error_bars(self,method,process_prim=False,process_cliff=False,bootstrap_resamples = 100,p0 = [0.5,0.5,0.98],seed=None):
         """
         Compute error bars on RB fit parameters, including the RB decay rate.
         Error bars can be computed either using a non-parametric bootstrap, or quasi-analytic
         methods provided in W&F.
         *At present, only the bootstrap method is fully supported.*
         """
+        assert method in ['bootstrap','analytic']
+
         if method=='bootstrap':
             if self.bootstrap == False:
                 if seed:
@@ -559,7 +594,7 @@ class rb_results():
                 for resample in xrange(bootstrap_resamples):
                     bootstrapped_dataset_list.append(pygsti.bootstrap.make_bootstrap_dataset(self.dataset,'nonparametric'))
                 for resample in xrange(bootstrap_resamples):
-                    temp_rb_results = process_rb_data(bootstrapped_dataset_list[resample],self.prim_seq_list_orig,self.cliff_len_list_orig,prim_dict = self.prim_dict,pre_avg=self.pre_avg,process_prim=process_prim,process_cliff=process_cliff,p0=[0.5,0.5,0.98])
+                    temp_rb_results = process_rb_data(bootstrapped_dataset_list[resample],self.prim_seq_list_orig,self.cliff_len_list_orig,prim_dict = self.prim_dict,pre_avg=self.pre_avg,process_prim=process_prim,process_cliff=process_cliff,f0 = [0.98],AB0=[0.5,0.5])
                     if process_prim:
                         prim_A_list.append(temp_rb_results.prim_A)
                         prim_B_list.append(temp_rb_results.prim_B)
@@ -580,11 +615,11 @@ class rb_results():
 #                print "prim A error =", self.prim_A_error_BS
 #                print "prim B error =", self.prim_B_error_BS
 #                print "prim f error =", self.prim_f_error_BS
-                print "prim A =", self.prim_A, "+/-", self.prim_A_error_BS
-                print "prim B =", self.prim_B, "+/-", self.prim_B_error_BS
-                print "prim f =", self.prim_f, "+/-", self.prim_f_error_BS
-                print "prim F_avg =", self.prim_F_avg, "+/-", self.prim_F_avg_error_BS
-                print "prim r =", self.prim_r, "+/-", self.prim_r_error_BS
+#                print "prim A =", self.prim_A, "+/-", self.prim_A_error_BS
+#                print "prim B =", self.prim_B, "+/-", self.prim_B_error_BS
+#                print "prim f =", self.prim_f, "+/-", self.prim_f_error_BS
+#                print "prim F_avg =", self.prim_F_avg, "+/-", self.prim_F_avg_error_BS
+#                print "prim r =", self.prim_r, "+/-", self.prim_r_error_BS
 
             if process_cliff:
                 if self.bootstrap == False:
@@ -598,16 +633,17 @@ class rb_results():
 #                print "cliff A error =", self.cliff_A_error_BS
 #                print "cliff B error =", self.cliff_B_error_BS
 #                print "cliff f error =", self.cliff_f_error_BS
-                print "Cliff A =", self.cliff_A, "+/-", self.cliff_A_error_BS
-                print "Cliff B =", self.cliff_B, "+/-", self.cliff_B_error_BS
-                print "Cliff f =", self.cliff_f, "+/-", self.cliff_f_error_BS
-                print "Cliff F_avg =", self.cliff_F_avg, "+/-", self.cliff_F_avg_error_BS
-                print "Cliff r =", self.cliff_r, "+/-", self.cliff_r_error_BS
+#                print "Cliff A =", self.cliff_A, "+/-", self.cliff_A_error_BS
+#                print "Cliff B =", self.cliff_B, "+/-", self.cliff_B_error_BS
+#                print "Cliff f =", self.cliff_f, "+/-", self.cliff_f_error_BS
+#                print "Cliff F_avg =", self.cliff_F_avg, "+/-", self.cliff_F_avg_error_BS
+#                print "Cliff r =", self.cliff_r, "+/-", self.cliff_r_error_BS
 
 
             self.bootstrap = True
 
         elif method=='analytic':
+            print "WARNING: ANALYTIC BOOSTRAP ERROR BAR METHOD NOT YET GUARANTEED TO BE STABLE."
             print 'Processesing analytic bootstrap, following Wallman and Flammia.'
             print 'The error bars are reliable if and only if the schedule for K_m'
             print 'has been chosen appropriately, given:'
@@ -618,7 +654,43 @@ class rb_results():
             self.sigma_list = _np.sqrt(self.epsilon**2 + 1./self.total_N_list)
             results = _curve_fit(rb_decay_WF,self.cliff_len_list,self.cliff_successes,p0 = p0,sigma = self.sigma_list)
             self.full_results = results
+            self.cliff_A_error_WF = _np.sqrt(results[1][0,0])
+            self.cliff_B_error_WF = _np.sqrt(results[1][1,1])
+            self.cliff_f_error_WF = _np.sqrt(results[1][2,2])
 
+            self.cliff_F_avg_error_WF = (self.d-1.)/self.d * self.cliff_f_error_WF
+            self.cliff_r_error_WF = self.cliff_F_avg_error_WF
+
+        print "Error bars computed.  Use error_bars method to access."
+
+    def error_bars(self,method,process_prim=False,process_cliff=False):
+        assert method in ['bootstrap', 'analytic']
+        if method == 'bootstrap':
+            if not self.bootstrap:
+                raise ValueError('Bootstrapped error bars requested but not yet generated; use generate_error_bars method first.')
+            print "Results with boostrapped-derived error bars (1 sigma):"
+            if process_prim:
+                print "prim A =", self.prim_A, "+/-", self.prim_A_error_BS
+                print "prim B =", self.prim_B, "+/-", self.prim_B_error_BS
+                print "prim f =", self.prim_f, "+/-", self.prim_f_error_BS
+                print "prim F_avg =", self.prim_F_avg, "+/-", self.prim_F_avg_error_BS
+                print "prim r =", self.prim_r, "+/-", self.prim_r_error_BS
+            if process_cliff:
+                print "Cliff A =", self.cliff_A, "+/-", self.cliff_A_error_BS
+                print "Cliff B =", self.cliff_B, "+/-", self.cliff_B_error_BS
+                print "Cliff f =", self.cliff_f, "+/-", self.cliff_f_error_BS
+                print "Cliff F_avg =", self.cliff_F_avg, "+/-", self.cliff_F_avg_error_BS
+                print "Cliff r =", self.cliff_r, "+/-", self.cliff_r_error_BS
+        elif method == 'analytic':
+                print "Results with Wallman and Flammia-derived error bars (1 sigma):"
+                print "Cliff A =", self.cliff_A, "+/-", self.cliff_A_error_WF
+                print "Cliff B =", self.cliff_B, "+/-", self.cliff_B_error_WF
+                print "Cliff f =", self.cliff_f, "+/-", self.cliff_f_error_WF
+                print "Cliff F_avg =", self.cliff_F_avg, "+/-", self.cliff_F_avg_error_WF
+                print "Cliff r =", self.cliff_r, "+/-", self.cliff_r_error_WF
+                if self.cliff_r - self.cliff_r_error_WF > self.r_0:
+                    print "r is bigger than r_0 + sigma_r, so above error bars should not be trusted."
+                    
 gs_cliff_canon = pygsti.construction.build_gateset([2],[('Q0',)], ['Gi','Gxp2','Gxp','Gxmp2','Gyp2','Gyp','Gymp2'], 
                                 [ "I(Q0)","X(pi/2,Q0)", "X(pi,Q0)", "X(-pi/2,Q0)",
                                           "Y(pi/2,Q0)", "Y(pi,Q0)", "Y(-pi/2,Q0)"],
@@ -672,18 +744,23 @@ for i in CliffMatD.keys():
     gate_lbl = 'Gc'+str(i)
     gs_cliff_generic_1q.gates[gate_lbl] = pygsti.objects.FullyParameterizedGate(CliffMatD[i])
 
-CliffGroupTable = _np.zeros([24,24])
-counter = 0
-for i in xrange(24):
-    for j in xrange(24):
-        test = _np.dot(CliffMatD[j],CliffMatD[i])#Want reverse order for multiplication here because gates are applied left to right.
-        for k in xrange(24):
-            diff = _np.linalg.norm(test-CliffMatD[k])
-            if diff < 10**-10:
-                CliffGroupTable[i,j]=k
-                counter += 1
-if counter!=24**2:
-    raise Exception('Error!')
+def makeCliffGroupTable():
+    CliffGroupTable = _np.zeros([24,24], dtype=int)
+    counter = 0
+    for i in xrange(24):
+        for j in xrange(24):
+            test = _np.dot(CliffMatD[j],CliffMatD[i])#Want reverse order for multiplication here because gates are applied left to right.
+            for k in xrange(24):
+                diff = _np.linalg.norm(test-CliffMatD[k])
+                if diff < 10**-10:
+                    CliffGroupTable[i,j]=k
+                    counter += 1
+                    break
+    if counter!=24**2:
+        raise Exception('Error!')
+    return CliffGroupTable
+
+CliffGroupTable = makeCliffGroupTable()
 
 CliffInvTable = {}
 for i in xrange(24):
@@ -832,14 +909,14 @@ def write_empty_rb_files(filename,m_min,m_max,Delta_m,K_m,generic_or_canonical_o
     return random_RB_cliff_string_lists, cliff_lens
 #Want to keep track of both Clifford sequences and primitive sequences.
 
-def process_rb_data(dataset,prim_seq_list,cliff_len_list,prim_dict=None,pre_avg=True,process_prim=False,process_cliff=False,p0=[0.5,0.5,0.98]):
+def process_rb_data(dataset,prim_seq_list,cliff_len_list,prim_dict=None,pre_avg=True,process_prim=False,process_cliff=False,f0 = [0.98],AB0 = [0.5,0.5]):
     """
     Process RB data, yielding an RB results object containing desired RB quantities.
     See docstring for rb_results for more details.
     """
     results_obj = rb_results(dataset,prim_seq_list,cliff_len_list,prim_dict=prim_dict,pre_avg=pre_avg)
     results_obj.parse_data()
-    results_obj.analyze_data(process_prim = process_prim,process_cliff = process_cliff,p0 = p0)
+    results_obj.analyze_data(process_prim = process_prim,process_cliff = process_cliff,f0 = f0, AB0 = AB0)
     return results_obj
     
 # def rb_decay_WF_rate(dataset,avg_gates_per_cliff=None,showPlot=False,xlim=None,ylim=None,saveFigPath=None,printData=False,p0=[0.5,0.5,0.98]):
