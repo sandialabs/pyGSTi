@@ -1,3 +1,4 @@
+from __future__ import division, print_function, absolute_import, unicode_literals
 import pygsti
 import numpy as _np
 from scipy.optimize import curve_fit as _curve_fit
@@ -6,7 +7,27 @@ from matplotlib import pyplot as _plt
 from collections import OrderedDict
 import pickle
 
-from rb_funcs import H_WF, sigma_m_squared_base_WF, K_WF
+from functools import reduce
+
+def _H_WF(epsilon,nu):
+    """
+    Implements Eq. 9 from Wallman and Flammia (http://iopscience.iop.org/article/10.1088/1367-2630/16/10/103032).
+    """
+    return (1./(1-epsilon))**((1.-epsilon)/(nu+1.)) * (float(nu)/(nu+epsilon))**((float(nu)+epsilon)/(nu+1.))
+
+def _sigma_m_squared_base_WF(m,r):
+    """
+    Implements Eq. 6 (ignoring higher order terms) from Wallman and Flammia (http://iopscience.iop.org/article/10.1088/1367-2630/16/10/103032).
+    """
+    return m**2 * r**2 + 7./4 * m * r**2
+
+def _K_WF(epsilon,delta,m,r,sigma_m_squared_func=_sigma_m_squared_base_WF):
+    """
+    Implements Eq. 10 (rounding up) from Wallman and Flammia (http://iopscience.iop.org/article/10.1088/1367-2630/16/10/103032).
+    """
+    sigma_m_squared = sigma_m_squared_func(m,r)
+    return int(_np.ceil(-_np.log(2./delta) / _np.log(_H_WF(epsilon,sigma_m_squared))))
+
 
 def rb_decay_WF(m,A,B,f):#Taken from Wallman and Flammia- Eq. 1
     """
@@ -32,7 +53,7 @@ def rb_decay_WF(m,A,B,f):#Taken from Wallman and Flammia- Eq. 1
 
 #def rb_decay_MGE(m,A,B,C,...)
 
-def make_K_m_sched(m_min,m_max,Delta_m,epsilon,delta,r_0,sigma_m_squared_func=sigma_m_squared_base_WF):
+def make_K_m_sched(m_min,m_max,Delta_m,epsilon,delta,r_0,sigma_m_squared_func=_sigma_m_squared_base_WF):
     """
     Computes a "K_m" schedule, that is, how many sequences of Clifford length m
     should be sampled over a range of m values, given certain precision specifications.
@@ -71,7 +92,7 @@ def make_K_m_sched(m_min,m_max,Delta_m,epsilon,delta,r_0,sigma_m_squared_func=si
     
     sigma_m_squared_func : function
         Function used to serve as the rough upper bound on the variance of \hat{F}_m.
-        Default is sigma_m_squared_base_WF, which implements Eq. 6 of W&F (ignoring 
+        Default is _sigma_m_squared_base_WF, which implements Eq. 6 of W&F (ignoring 
         higher order terms).
 
     Returns
@@ -79,11 +100,11 @@ def make_K_m_sched(m_min,m_max,Delta_m,epsilon,delta,r_0,sigma_m_squared_func=si
     K_m_sched : OrderedDict
         An ordered dictionary whose keys are Clifford sequence lengths m and whose values
         are number of Clifford sequences of length m to sample 
-        (determined by K_WF(m,epsilon,delta,r_0)).
+        (determined by _K_WF(m,epsilon,delta,r_0)).
     """
     K_m_sched = OrderedDict()
-    for m in xrange(m_min,m_max+1,Delta_m):
-        K_m_sched[m] = K_WF(epsilon,delta,m,r_0,sigma_m_squared_func=sigma_m_squared_func)
+    for m in range(m_min,m_max+1,Delta_m):
+        K_m_sched[m] = _K_WF(epsilon,delta,m,r_0,sigma_m_squared_func=sigma_m_squared_func)
     return K_m_sched
 
 def f_to_F_avg(f,d=2):
@@ -151,24 +172,24 @@ def cliff_twirl(M):
         The Clifford twirl of M.
     """
     if M.shape == (4,4):
-        M_twirl = 1./len(CliffMatD) * _np.sum(_np.dot(_np.dot(CliffMatInvD[i],M),CliffMatD[i]) for i in xrange(24))
+        M_twirl = 1./len(CliffMatD) * _np.sum(_np.dot(_np.dot(CliffMatInvD[i],M),CliffMatD[i]) for i in range(24))
         return M_twirl
     else:
         raise ValueError("Clifford twirl for non-single qubit Clifford groups not yet implemented!")
 
-def makeRealCliffsD(gs_real,primD):
+def make_real_cliffsD(gs_real,primD):
     """
     Deprecated.  See makeRealCliffs_gs instead.
     """
     CliffRealMatsD = {}
-    for i in xrange(24):
+    for i in range(24):
         gatestr = []
         for gate in CliffD[i]:
             gatestr += primD[gate]
         CliffRealMatsD[i] = gs_real.product(gatestr)
     return CliffRealMatsD
 
-def makeRealCliffs_gs(gs_real,primD):
+def make_real_cliffs_gs(gs_real,primD):
     """
     Turns a "real" (non-perfect) gate set into a "real" (non-perfect) Clifford gate set. 
     *At present only works for single-qubit Clifford group.*
@@ -194,7 +215,7 @@ def makeRealCliffs_gs(gs_real,primD):
                                  prepLabels=["rho0"], prepExpressions=["0"],
                                  effectLabels=["E0"], effectExpressions=["1"],
                                  spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
-    for i in xrange(24):
+    for i in range(24):
         gatestr = []
         for gate in CliffD[i]:
             gatestr += primD[gate]
@@ -250,7 +271,7 @@ def analytic_rb_cliff_gateset_error_rate(gs_real_cliffs):
     
     """
     error_list = []
-    for gate in gs_cliff_generic_1q.gates.keys():
+    for gate in list(gs_cliff_generic_1q.gates.keys()):
         error_list.append(analytic_rb_gate_error_rate(gs_real_cliffs[gate],gs_cliff_generic_1q[gate]))
     r_analytic = _np.mean(error_list)
     return r_analytic
@@ -321,7 +342,7 @@ class rb_results():
         self.cliff_len_list_orig = cliff_len_list
         
         self.prim_seq_list = prim_seq_list
-        self.prim_len_list = map(len,prim_seq_list)
+        self.prim_len_list = list(map(len,prim_seq_list))
         self.cliff_len_list = cliff_len_list
 #        self.successes = successes
         self.prim_analyzed = False
@@ -361,9 +382,10 @@ class rb_results():
                 raise ValueError('Survival probability less than 0!')
 
         if self.pre_avg:
-            cliff_zip = zip(self.cliff_len_list,successes,N_list)
-            cliff_zip = _np.array(cliff_zip,dtype=[('length',int),('F',float),('N',float)])
-            cliff_zip = _np.sort(cliff_zip,order='length')
+            cliff_zip = list(zip(self.cliff_len_list,successes,N_list))
+            cliff_zip = sorted(cliff_zip,key=lambda x: x[0])
+            #cliff_zip = _np.array(cliff_zip,dtype=[('length',int),('F',float),('N',float)])
+            #cliff_zip = _np.sort(cliff_zip,order='length')
             cliff_avg = []
             cliff_avg_len_list = []
             total_N_list = []
@@ -371,7 +393,7 @@ class rb_results():
             current_len = 0
             total = 0
             total_seqs = 0
-            for i in xrange(len(cliff_zip)):
+            for i in range(len(cliff_zip)):
                 tup = cliff_zip[i]
                 if tup[0] != current_len:
                     if current_len != 0:
@@ -394,13 +416,14 @@ class rb_results():
             total = 0
             total_seqs = 0
 
-            prim_zip = zip(prim_len_list,successes)
+            prim_zip = list(zip(prim_len_list,successes))
 
-            prim_zip = zip(self.prim_len_list,successes,N_list)
-            prim_zip = _np.array(prim_zip,dtype=[('length',int),('F',float),('N',float)])
-            prim_zip = _np.sort(prim_zip,order='length')
+            prim_zip = list(zip(self.prim_len_list,successes,N_list))
+            prim_zip = sorted(prim_zip,key=lambda x: x[0])
+#            prim_zip = _np.array(prim_zip,dtype=[('length',int),('F',float),('N',float)])
+#            prim_zip = _np.sort(prim_zip,order='length')
 
-            for i in xrange(len(cliff_zip)):
+            for i in range(len(cliff_zip)):
                 tup = prim_zip[i]
                 if tup[0] != current_len:
                     if current_len != 0:
@@ -494,28 +517,28 @@ class rb_results():
         Display per Clifford gate RB error rate.
         """
         if self.cliff_analyzed:
-            print "For Cliffords:"
-            print "A =", self.cliff_A
-            print "B =", self.cliff_B
-            print "f =", self.cliff_f
-            print "F_avg =", self.cliff_F_avg
-            print "r =", self.cliff_r
+            print("For Cliffords:")
+            print("A =", self.cliff_A)
+            print("B =", self.cliff_B)
+            print("f =", self.cliff_f)
+            print("F_avg =", self.cliff_F_avg)
+            print("r =", self.cliff_r)
         else:
-            print "No Clifford analysis performed!"
+            print("No Clifford analysis performed!")
     def print_prim(self):
         """
         Display per primitive gate RB error rate.  These physical interpretation of these
         numbers may not be reliable; per Clifford error rates are recommended instead. 
         """
         if self.prim_analyzed:
-            print "For primitives:"
-            print "A =", self.prim_A
-            print "B =", self.prim_B
-            print "f =", self.prim_f
-            print "F_avg =", self.prim_F_avg
-            print "r =", self.prim_r
+            print("For primitives:")
+            print("A =", self.prim_A)
+            print("B =", self.prim_B)
+            print("f =", self.prim_f)
+            print("F_avg =", self.prim_F_avg)
+            print("r =", self.prim_r)
         else:
-            print "No primimitives analysis performed!"
+            print("No primimitives analysis performed!")
     def plot(self,prim_or_cliff,xlim=None,ylim=None,save_fig_path=None):
         """
         Plot RB decay curve, either as a function of primitive sequence length
@@ -533,7 +556,7 @@ class rb_results():
                 B = self.prim_B
                 f = self.prim_f
             except:
-                print "Prim data not found."
+                print("Prim data not found.")
             xlabel = 'RB sequence length (primitives)'
         else:
             xdata = self.cliff_len_list
@@ -543,7 +566,7 @@ class rb_results():
                 B = self.cliff_B
                 f = self.cliff_f
             except:
-                print "Clifford data not found."
+                print("Clifford data not found.")
             xlabel = 'RB sequence length (Cliffords)'
         cmap = _plt.cm.get_cmap('Set1')
         #        try:
@@ -591,9 +614,9 @@ class rb_results():
                     cliff_A_list = []
                     cliff_B_list = []
                     cliff_f_list = []
-                for resample in xrange(bootstrap_resamples):
+                for resample in range(bootstrap_resamples):
                     bootstrapped_dataset_list.append(pygsti.bootstrap.make_bootstrap_dataset(self.dataset,'nonparametric'))
-                for resample in xrange(bootstrap_resamples):
+                for resample in range(bootstrap_resamples):
                     temp_rb_results = process_rb_data(bootstrapped_dataset_list[resample],self.prim_seq_list_orig,self.cliff_len_list_orig,prim_dict = self.prim_dict,pre_avg=self.pre_avg,process_prim=process_prim,process_cliff=process_cliff,f0 = [0.98],AB0=[0.5,0.5])
                     if process_prim:
                         prim_A_list.append(temp_rb_results.prim_A)
@@ -643,13 +666,13 @@ class rb_results():
             self.bootstrap = True
 
         elif method=='analytic':
-            print "WARNING: ANALYTIC BOOSTRAP ERROR BAR METHOD NOT YET GUARANTEED TO BE STABLE."
-            print 'Processesing analytic bootstrap, following Wallman and Flammia.'
-            print 'The error bars are reliable if and only if the schedule for K_m'
-            print 'has been chosen appropriately, given:'
-            print 'delta =',self.delta
-            print 'epsilon =',self.epsilon
-            print 'r_0 =',self.r_0
+            print("WARNING: ANALYTIC BOOSTRAP ERROR BAR METHOD NOT YET GUARANTEED TO BE STABLE.")
+            print('Processesing analytic bootstrap, following Wallman and Flammia.')
+            print('The error bars are reliable if and only if the schedule for K_m')
+            print('has been chosen appropriately, given:')
+            print('delta =',self.delta)
+            print('epsilon =',self.epsilon)
+            print('r_0 =',self.r_0)
             
             self.sigma_list = _np.sqrt(self.epsilon**2 + 1./self.total_N_list)
             results = _curve_fit(rb_decay_WF,self.cliff_len_list,self.cliff_successes,p0 = p0,sigma = self.sigma_list)
@@ -661,35 +684,35 @@ class rb_results():
             self.cliff_F_avg_error_WF = (self.d-1.)/self.d * self.cliff_f_error_WF
             self.cliff_r_error_WF = self.cliff_F_avg_error_WF
 
-        print "Error bars computed.  Use error_bars method to access."
+        print("Error bars computed.  Use error_bars method to access.")
 
-    def error_bars(self,method,process_prim=False,process_cliff=False):
+    def print_error_bars(self,method,process_prim=False,process_cliff=False):
         assert method in ['bootstrap', 'analytic']
         if method == 'bootstrap':
             if not self.bootstrap:
                 raise ValueError('Bootstrapped error bars requested but not yet generated; use generate_error_bars method first.')
-            print "Results with boostrapped-derived error bars (1 sigma):"
+            print("Results with boostrapped-derived error bars (1 sigma):")
             if process_prim:
-                print "prim A =", self.prim_A, "+/-", self.prim_A_error_BS
-                print "prim B =", self.prim_B, "+/-", self.prim_B_error_BS
-                print "prim f =", self.prim_f, "+/-", self.prim_f_error_BS
-                print "prim F_avg =", self.prim_F_avg, "+/-", self.prim_F_avg_error_BS
-                print "prim r =", self.prim_r, "+/-", self.prim_r_error_BS
+                print("prim A =", self.prim_A, "+/-", self.prim_A_error_BS)
+                print("prim B =", self.prim_B, "+/-", self.prim_B_error_BS)
+                print("prim f =", self.prim_f, "+/-", self.prim_f_error_BS)
+                print("prim F_avg =", self.prim_F_avg, "+/-", self.prim_F_avg_error_BS)
+                print("prim r =", self.prim_r, "+/-", self.prim_r_error_BS)
             if process_cliff:
-                print "Cliff A =", self.cliff_A, "+/-", self.cliff_A_error_BS
-                print "Cliff B =", self.cliff_B, "+/-", self.cliff_B_error_BS
-                print "Cliff f =", self.cliff_f, "+/-", self.cliff_f_error_BS
-                print "Cliff F_avg =", self.cliff_F_avg, "+/-", self.cliff_F_avg_error_BS
-                print "Cliff r =", self.cliff_r, "+/-", self.cliff_r_error_BS
+                print("Cliff A =", self.cliff_A, "+/-", self.cliff_A_error_BS)
+                print("Cliff B =", self.cliff_B, "+/-", self.cliff_B_error_BS)
+                print("Cliff f =", self.cliff_f, "+/-", self.cliff_f_error_BS)
+                print("Cliff F_avg =", self.cliff_F_avg, "+/-", self.cliff_F_avg_error_BS)
+                print("Cliff r =", self.cliff_r, "+/-", self.cliff_r_error_BS)
         elif method == 'analytic':
-                print "Results with Wallman and Flammia-derived error bars (1 sigma):"
-                print "Cliff A =", self.cliff_A, "+/-", self.cliff_A_error_WF
-                print "Cliff B =", self.cliff_B, "+/-", self.cliff_B_error_WF
-                print "Cliff f =", self.cliff_f, "+/-", self.cliff_f_error_WF
-                print "Cliff F_avg =", self.cliff_F_avg, "+/-", self.cliff_F_avg_error_WF
-                print "Cliff r =", self.cliff_r, "+/-", self.cliff_r_error_WF
+                print("Results with Wallman and Flammia-derived error bars (1 sigma):")
+                print("Cliff A =", self.cliff_A, "+/-", self.cliff_A_error_WF)
+                print("Cliff B =", self.cliff_B, "+/-", self.cliff_B_error_WF)
+                print("Cliff f =", self.cliff_f, "+/-", self.cliff_f_error_WF)
+                print("Cliff F_avg =", self.cliff_F_avg, "+/-", self.cliff_F_avg_error_WF)
+                print("Cliff r =", self.cliff_r, "+/-", self.cliff_r_error_WF)
                 if self.cliff_r - self.cliff_r_error_WF > self.r_0:
-                    print "r is bigger than r_0 + sigma_r, so above error bars should not be trusted."
+                    print("r is bigger than r_0 + sigma_r, so above error bars should not be trusted.")
                     
 gs_cliff_canon = pygsti.construction.build_gateset([2],[('Q0',)], ['Gi','Gxp2','Gxp','Gxmp2','Gyp2','Gyp','Gymp2'], 
                                 [ "I(Q0)","X(pi/2,Q0)", "X(pi,Q0)", "X(-pi/2,Q0)",
@@ -730,7 +753,7 @@ CliffD[23] = ['Gxp2','Gyp2','Gxmp2']
 
 CliffMatD = {}
 CliffMatInvD = {}
-for i in xrange(24):
+for i in range(24):
     CliffMatD[i] = gs_cliff_canon.product(CliffD[i])
     CliffMatInvD[i] = _np.linalg.matrix_power(CliffMatD[i],-1)
 
@@ -740,17 +763,17 @@ gs_cliff_generic_1q = pygsti.construction.build_gateset([2],[('Q0',)], [],
                                  effectLabels=["E0"], effectExpressions=["1"],
                                  spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
 
-for i in CliffMatD.keys():
+for i in list(CliffMatD.keys()):
     gate_lbl = 'Gc'+str(i)
     gs_cliff_generic_1q.gates[gate_lbl] = pygsti.objects.FullyParameterizedGate(CliffMatD[i])
 
 def makeCliffGroupTable():
     CliffGroupTable = _np.zeros([24,24], dtype=int)
     counter = 0
-    for i in xrange(24):
-        for j in xrange(24):
+    for i in range(24):
+        for j in range(24):
             test = _np.dot(CliffMatD[j],CliffMatD[i])#Want reverse order for multiplication here because gates are applied left to right.
-            for k in xrange(24):
+            for k in range(24):
                 diff = _np.linalg.norm(test-CliffMatD[k])
                 if diff < 10**-10:
                     CliffGroupTable[i,j]=k
@@ -763,8 +786,8 @@ def makeCliffGroupTable():
 CliffGroupTable = makeCliffGroupTable()
 
 CliffInvTable = {}
-for i in xrange(24):
-    for j in xrange(24):
+for i in range(24):
+    for j in range(24):
         if CliffGroupTable[i,j] == 0:
             CliffInvTable[i] = j
             
@@ -851,23 +874,23 @@ def make_random_RB_cliff_string_lists(m_min,m_max,Delta_m,K_m_sched,generic_or_c
         _np.random.seed(seed)
     cliff_string_list = []
     if not isinstance(K_m_sched,OrderedDict):
-        print "K_m_sched is not an OrderedDict, so Wallman and Flammia error bars are not valid."
+        print("K_m_sched is not an OrderedDict, so Wallman and Flammia error bars are not valid.")
         if not isinstance(K_m_sched,int):
             raise ValueError('K_m_sched must be an OrderedDict or an int!')
         K_m_sched_dict = OrderedDict()
-        for m in xrange(m_min, m_max+1,Delta_m):
+        for m in range(m_min, m_max+1,Delta_m):
             K_m_sched_dict[m] = K_m_sched
     else:
         K_m_sched_dict = K_m_sched
-    for m in xrange(m_min,m_max+1,Delta_m):
+    for m in range(m_min,m_max+1,Delta_m):
         temp_list = []
         K_m = K_m_sched_dict[m]
-        for i in xrange(K_m):
+        for i in range(K_m):
             temp_list.append(tuple(make_random_RB_cliff_string(m).tolist()))
 #        temp_list = pygsti.listtools.remove_duplicates(temp_list)
 #        print len(temp_list)
         cliff_string_list += temp_list
-    cliff_len_list = map(len,cliff_string_list)
+    cliff_len_list = list(map(len,cliff_string_list))
     if generic_or_canonical_or_primitive == 'generic':
         for cliff_tup_num, cliff_tup in enumerate(cliff_string_list):
             cliff_string_list[cliff_tup_num] = ['Gc'+str(i) for i in cliff_tup]
