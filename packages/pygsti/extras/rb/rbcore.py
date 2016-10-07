@@ -1,0 +1,298 @@
+from __future__ import division, print_function, absolute_import, unicode_literals
+#*****************************************************************
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
+#*****************************************************************
+""" Randomized Benhmarking Core Routines """
+
+from ... import construction as _cnst
+from ... import objects as _objs
+
+import numpy as _np
+from scipy.optimize import curve_fit as _curve_fit
+from scipy.optimize import minimize as _minimize
+from matplotlib import pyplot as _plt
+from collections import OrderedDict as _OrderedDict
+import pickle as _pickle
+
+
+def _H_WF(epsilon,nu):
+    """
+    Implements Eq. 9 from Wallman and Flammia 
+    (http://iopscience.iop.org/article/10.1088/1367-2630/16/10/103032).
+    """
+    return (1./(1-epsilon))**((1.-epsilon)/(nu+1.)) * \
+        (float(nu)/(nu+epsilon))**((float(nu)+epsilon)/(nu+1.))
+
+
+def _sigma_m_squared_base_WF(m,r):
+    """
+    Implements Eq. 6 (ignoring higher order terms) from Wallman and Flammia
+    (http://iopscience.iop.org/article/10.1088/1367-2630/16/10/103032).
+    """
+    return m**2 * r**2 + 7./4 * m * r**2
+
+
+def _K_WF(epsilon,delta,m,r,sigma_m_squared_func=_sigma_m_squared_base_WF):
+    """
+    Implements Eq. 10 (rounding up) from Wallman and Flammia
+    (http://iopscience.iop.org/article/10.1088/1367-2630/16/10/103032).
+    """
+    sigma_m_squared = sigma_m_squared_func(m,r)
+    return int(_np.ceil(-_np.log(2./delta) / 
+                         _np.log(_H_WF(epsilon,sigma_m_squared))))
+
+
+def rb_decay_WF(m,A,B,f):#Taken from Wallman and Flammia- Eq. 1
+    """
+    Computes the survival probability function F = A + B * f^m, as provided
+    in Equation 1 of "Randomized benchmarking with confidence" 
+    (http://iopscience.iop.org/article/10.1088/1367-2630/16/10/103032).
+
+    Parameters
+    ----------
+    m : integer
+        RB sequence length minus one
+    
+    A : float
+    
+    B : float
+    
+    f : float
+    Returns
+    ----------
+    float
+    """
+    return A+B*f**m
+
+
+def make_K_m_sched(m_min,m_max,Delta_m,epsilon,delta,r_0,
+                   sigma_m_squared_func=_sigma_m_squared_base_WF):
+    """
+    Computes a "K_m" schedule, that is, how many sequences of Clifford length m
+    should be sampled over a range of m values, given certain precision
+    specifications.
+    
+    For further discussion of the epsilon, delta, r, and sigma_m_squared_func
+    parameters, see 
+    http://iopscience.iop.org/article/10.1088/1367-2630/16/10/103032, referred
+    to in this documentation as "W&F".
+    
+    Parameters
+    ----------
+    m_min : integer
+        Smallest desired Clifford sequence length.
+    
+    m_max : integer
+        Largest desired Clifford sequence length.
+    
+    Delta_m : integer
+        Desired Clifford sequence length increment.
+        
+    epsilon : float
+        Specifies desired confidence interval half-width for each average
+        survival probability estimate \hat{F}_m (See W&F Eq. 8).  
+        E.g., epsilon = 0.01 means that the confidence interval width for 
+        \hat{F}_m is 0.02.  The smaller epsilon is, the larger each value of
+        K_m will be.
+
+    delta : float
+        Specifies desired confidence level for confidence interval specified
+        by epsilon. delta = 1-0.6827 corresponds to a confidence level of 1
+        sigma.  This value should be used if W&F-derived error bars are
+        desired. (See W&F Eq. 8).  The smaller delta is, the larger each value
+        of K_m will be.
+
+    r_0 : float
+        Estimate of upper bound of the RB number for the system in question.  
+        The smaller r is, the smaller each value of K_m will be.  However, if
+        the system's actual RB number is larger than r_0, then the W&F-derived
+        error bars cannot be assumed to be valid.  Additionally, it is assumed
+        that m*r_0 << 1.
+    
+    sigma_m_squared_func : function, optional
+        Function used to serve as the rough upper bound on the variance of 
+        \hat{F}_m.  Default is _sigma_m_squared_base_WF, which implements 
+        Eq. 6 of W&F (ignoring higher order terms).
+
+    Returns
+    ----------
+    K_m_sched : OrderedDict
+        An ordered dictionary whose keys are Clifford sequence lengths m and 
+        whose values are number of Clifford sequences of length m to sample 
+        (determined by _K_WF(m,epsilon,delta,r_0)).
+    """
+    K_m_sched = _OrderedDict()
+    for m in range(m_min,m_max+1,Delta_m):
+        K_m_sched[m] = _K_WF(epsilon,delta,m,r_0,
+                             sigma_m_squared_func=sigma_m_squared_func)
+    return K_m_sched
+
+
+def f_to_F_avg(f,d=2):
+    """
+    Following Wallman and Flammia Eq. 2, maps fit decay fit parameter f to
+    F_avg, that is, the average gate fidelity of a noise channel \mathcal{E}
+    with respect to the identity channel (see W&F Eq.3).
+    
+    Parameters
+    ----------
+    f : float
+        Fit parameter f from \bar{F}_m = A + B*f**m.
+    
+    d : int, optional
+        Number of dimensions of the Hilbert space (default is 2, corresponding
+        to a single qubit).     
+     
+    Returns
+    ----------
+    F_avg : float
+        Average gate fidelity F_avg(\mathcal{E}) = \int(d\psi Tr[\psi 
+        \mathcal{E}(\psi)]), where d\psi is the uniform measure over all pure
+        states (see W&F Eq. 3).
+    
+    """
+    F_avg = ((d-1)*f+1.)/d
+    return F_avg
+
+
+def f_to_r(f,d=2):
+    """
+    Following Wallman and Flammia, maps fit decay fit parameter f to r, the 
+    "average gate infidelity".  This quantity is what is often referred to as
+    "the RB number". 
+    
+    Parameters
+    ----------
+    f : float
+        Fit parameter f from \bar{F}_m = A + B*f**m.
+    
+    d : int, optional
+        Number of dimensions of the Hilbert space (default is 2,
+        corresponding to a single qubit).     
+     
+    Returns
+    -------
+    r : float
+        The average gate infidelity, that is, "the RB number".      
+    
+    """
+    r = 1 - f_to_F_avg(f,d=d)
+    return r
+
+
+def cliff_twirl(M):
+    """
+    Returns the Clifford twirl of a map M:  
+    Twirl(M) = 1/|Clifford group| * Sum_{C in Clifford group} (C^-1 * M * C)
+    
+    *At present only works for single-qubit Clifford group.*
+
+    Parameters
+    ----------
+    M : array or gate
+        The CPTP map to be twirled.
+    
+    Returns
+    -------
+    M_twirl : array
+        The Clifford twirl of M.
+    """
+    if M.shape == (4,4):
+        M_twirl = 1./len(CliffMatD) * _np.sum(_np.dot(
+                _np.dot(CliffMatInvD[i],M),CliffMatD[i]) for i in range(24))
+        return M_twirl
+    else:
+        raise ValueError("Clifford twirl for non-single qubit Clifford " +
+                         "groups not yet implemented!")
+
+
+def make_real_cliffs_gs(gs_real,primD):
+    """
+    Turns a "real" (non-perfect) gate set into a "real" (non-perfect) Clifford
+    gate set.  *At present only works for single-qubit Clifford group.*
+
+    Parameters
+    ----------
+    gs_real : gate set
+        A "real" (non-ideal) gate set.
+    
+    primD : dictionary
+        A primitives dictionary, mapping the "canonical gate set" {I, X(pi/2),
+        X(-pi/2), X(pi), Y(pi/2), Y(-pi/2), Y(pi)} to the gate set that is the
+        target gate set for gs_real.
+    
+    Returns
+    -------
+    gs_real_cliffs : gate set
+        A gate set of imperfect Cliffords; each Clifford is constructed out of
+        the gates contained in gs_real.
+    """
+    gs_real_cliffs = _cnst.build_gateset(
+        [2],[('Q0',)], [], [],
+        prepLabels=["rho0"], prepExpressions=["0"],
+        effectLabels=["E0"], effectExpressions=["1"],
+        spamdefs={'plus': ('rho0','E0'), 
+                  'minus': ('rho0','remainder') } )
+    for i in range(24):
+        gatestr = []
+        for gate in CliffD[i]:
+            gatestr += primD[gate]
+        gs_real_cliffs.gates['Gc'+str(i)] = \
+            _objs.FullyParameterizedGate(gs_real.product(gatestr))
+    return gs_real_cliffs
+
+
+def analytic_rb_gate_error_rate(actual, target):
+    """
+    Computes the twirled Clifford error rate for a given gate.
+    *At present only works for single-qubit gates.*
+
+    Parameters
+    ----------
+    actual : array or gate
+        The noisy gate whose twirled Clifford error rate is to be computed.
+        
+    target : array or gate
+        The target gate against which "actual" is being compared.
+    
+    Returns
+    ----------
+    error_rate : float
+        The twirled Clifford error rate.
+    """
+    
+    twirled_channel = cliff_twirl(_np.dot(actual,_np.linalg.inv(target)))
+    error_rate = 0.5 * (1 - 1./3 * (_np.trace(twirled_channel) - 1))
+    return error_rate
+
+
+def analytic_rb_cliff_gateset_error_rate(gs_real_cliffs):
+    """
+    Computes the average twirled Clifford error rate for a noisy Clifford 
+    gate set.  This is, analytically, "the RB number".
+    *At present only works for single-qubit gate sets.*    
+    
+    Parameters
+    ----------
+    gs_real_cliffs : gate set
+        A gate set of noisy Clifford gates.  If the experimental gate set is, 
+        as is typical, not a Clifford gate set, then said gate set should be 
+        converted to a Clifford gate set using make_real_cliffs_gs.
+
+    Returns
+    -------
+    r_analytic : float
+        The average per-Clifford error rate of the noisy Clifford gate set.
+        This is, analytically, "the RB number".    
+    """
+    error_list = []
+    for gate in list(gs_cliff_generic_1q.gates.keys()):
+        error_list.append(analytic_rb_gate_error_rate(
+                gs_real_cliffs[gate],gs_cliff_generic_1q[gate]))
+    r_analytic = _np.mean(error_list)
+    return r_analytic
+
+
+
