@@ -7,5 +7,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Randomized Benhmarking Sub-package """
 
 from .rbcore import *
-from .rbresults import RBResults
-import .rbstd1Q as std1Q
+from .rbobjs import *
+from .rbutils import * 
+from . import rbstd1Q as std1Q

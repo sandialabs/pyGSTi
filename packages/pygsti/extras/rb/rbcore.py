@@ -8,76 +8,64 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 from ... import construction as _cnst
 from ... import objects as _objs
+from ... import io as _io
+from . import rbutils as _rbutils
+from . import rbobjs as _rbobjs
 
+import itertools as _itertools
 import numpy as _np
-from scipy.optimize import curve_fit as _curve_fit
+from numpy import random as _rndm
 from scipy.optimize import minimize as _minimize
-from matplotlib import pyplot as _plt
 from collections import OrderedDict as _OrderedDict
-import pickle as _pickle
 
 
-def _H_WF(epsilon,nu):
+def create_random_rb_clifford_string(m, clifford_group, 
+                                     seed=None, randState=None):
     """
-    Implements Eq. 9 from Wallman and Flammia 
-    (http://iopscience.iop.org/article/10.1088/1367-2630/16/10/103032).
-    """
-    return (1./(1-epsilon))**((1.-epsilon)/(nu+1.)) * \
-        (float(nu)/(nu+epsilon))**((float(nu)+epsilon)/(nu+1.))
-
-
-def _sigma_m_squared_base_WF(m,r):
-    """
-    Implements Eq. 6 (ignoring higher order terms) from Wallman and Flammia
-    (http://iopscience.iop.org/article/10.1088/1367-2630/16/10/103032).
-    """
-    return m**2 * r**2 + 7./4 * m * r**2
-
-
-def _K_WF(epsilon,delta,m,r,sigma_m_squared_func=_sigma_m_squared_base_WF):
-    """
-    Implements Eq. 10 (rounding up) from Wallman and Flammia
-    (http://iopscience.iop.org/article/10.1088/1367-2630/16/10/103032).
-    """
-    sigma_m_squared = sigma_m_squared_func(m,r)
-    return int(_np.ceil(-_np.log(2./delta) / 
-                         _np.log(_H_WF(epsilon,sigma_m_squared))))
-
-
-def rb_decay_WF(m,A,B,f):#Taken from Wallman and Flammia- Eq. 1
-    """
-    Computes the survival probability function F = A + B * f^m, as provided
-    in Equation 1 of "Randomized benchmarking with confidence" 
-    (http://iopscience.iop.org/article/10.1088/1367-2630/16/10/103032).
-
+    Generate a random RB sequence.
+    
     Parameters
     ----------
-    m : integer
-        RB sequence length minus one
+    m : int
+        Sequence length is m+1 (because m Cliffords are chosen at random,
+        then one additional Clifford is selected to invert the sequence).
+
+    clifford_group : MatrixGroup
+        Which Clifford group to use.
     
-    A : float
+    seed : int, optional
+        Seed for the random number generator.
+
+    randState : numpy.random.RandomState, optional
+        A RandomState object to generate samples from. Can be useful to set
+        instead of `seed` if you want reproducible distribution samples across
+        multiple random function calls but you don't want to bother with
+        manually incrementing seeds between those calls.
     
-    B : float
-    
-    f : float
     Returns
-    ----------
-    float
+    -------
+    clifford_string : list
+        Random Clifford sequence of length m+1.  For ideal Cliffords, the
+        sequence implements the identity operation.
     """
-    return A+B*f**m
+    if randState is None:
+        rndm = _rndm.RandomState(seed) # ok if seed is None
+    else:
+        rndm = randState
+
+    rndm_indices = rndm.randint(0,len(clifford_group),m)
+    cliff_lbl_string = [ clifford_group.labels[i] for i in rndm_indices ]    
+    effective_cliff_lbl = clifford_group.product(cliff_lbl_string)
+    cliff_inv = clifford_group.get_inv(effective_cliff_lbl)
+    cliff_lbl_string.append( cliff_inv )
+    return _objs.GateString(cliff_lbl_string)
 
 
-def make_K_m_sched(m_min,m_max,Delta_m,epsilon,delta,r_0,
-                   sigma_m_squared_func=_sigma_m_squared_base_WF):
+def list_random_rb_clifford_strings(m_min, m_max, Delta_m, clifford_group,
+                                    K_m_sched, alias_maps=None, seed=None,
+                                    randState=None):
     """
-    Computes a "K_m" schedule, that is, how many sequences of Clifford length m
-    should be sampled over a range of m values, given certain precision
-    specifications.
-    
-    For further discussion of the epsilon, delta, r, and sigma_m_squared_func
-    parameters, see 
-    http://iopscience.iop.org/article/10.1088/1367-2630/16/10/103032, referred
-    to in this documentation as "W&F".
+    Makes a list of random RB sequences.
     
     Parameters
     ----------
@@ -89,210 +77,523 @@ def make_K_m_sched(m_min,m_max,Delta_m,epsilon,delta,r_0,
     
     Delta_m : integer
         Desired Clifford sequence length increment.
-        
-    epsilon : float
-        Specifies desired confidence interval half-width for each average
-        survival probability estimate \hat{F}_m (See W&F Eq. 8).  
-        E.g., epsilon = 0.01 means that the confidence interval width for 
-        \hat{F}_m is 0.02.  The smaller epsilon is, the larger each value of
-        K_m will be.
 
-    delta : float
-        Specifies desired confidence level for confidence interval specified
-        by epsilon. delta = 1-0.6827 corresponds to a confidence level of 1
-        sigma.  This value should be used if W&F-derived error bars are
-        desired. (See W&F Eq. 8).  The smaller delta is, the larger each value
-        of K_m will be.
+    clifford_group : MatrixGroup
+        Which Clifford group to use.
 
-    r_0 : float
-        Estimate of upper bound of the RB number for the system in question.  
-        The smaller r is, the smaller each value of K_m will be.  However, if
-        the system's actual RB number is larger than r_0, then the W&F-derived
-        error bars cannot be assumed to be valid.  Additionally, it is assumed
-        that m*r_0 << 1.
+    K_m_sched : int or dict
+        If an integer, the fixed number of Clifford sequences to be sampled at
+        each length m.  If a dictionary, then a mapping from Clifford
+        sequence length m to number of Cliffords to be sampled at that length.
     
-    sigma_m_squared_func : function, optional
-        Function used to serve as the rough upper bound on the variance of 
-        \hat{F}_m.  Default is _sigma_m_squared_base_WF, which implements 
-        Eq. 6 of W&F (ignoring higher order terms).
+    typ : {"generic", "canonical", "primitive"}
+        What kind of gate set should the selected gate sequences be expressed
+        as:
 
-    Returns
-    ----------
-    K_m_sched : OrderedDict
-        An ordered dictionary whose keys are Clifford sequence lengths m and 
-        whose values are number of Clifford sequences of length m to sample 
-        (determined by _K_WF(m,epsilon,delta,r_0)).
-    """
-    K_m_sched = _OrderedDict()
-    for m in range(m_min,m_max+1,Delta_m):
-        K_m_sched[m] = _K_WF(epsilon,delta,m,r_0,
-                             sigma_m_squared_func=sigma_m_squared_func)
-    return K_m_sched
-
-
-def f_to_F_avg(f,d=2):
-    """
-    Following Wallman and Flammia Eq. 2, maps fit decay fit parameter f to
-    F_avg, that is, the average gate fidelity of a noise channel \mathcal{E}
-    with respect to the identity channel (see W&F Eq.3).
+        - "generic" : Clifford gates are used, with labels "Gc0" through
+        "Gc23".
+        - "canonical" : The "canonical" gate set is used (so called because of
+        its abundance in the literature for describing Clifford operations).
+        This gate set contains the gates {I, X(pi/2), X(-pi/2), X(pi), Y(pi/2),
+        Y(-pi/2), Y(pi)}
+        - "primitive" : A gate set is used which is neither "generic" nor 
+        "canonical".  E.g., {I, X(pi/2), Y(pi/2)}.  In this case, primD must
+        be specified.
     
-    Parameters
-    ----------
-    f : float
-        Fit parameter f from \bar{F}_m = A + B*f**m.
-    
-    d : int, optional
-        Number of dimensions of the Hilbert space (default is 2, corresponding
-        to a single qubit).     
-     
-    Returns
-    ----------
-    F_avg : float
-        Average gate fidelity F_avg(\mathcal{E}) = \int(d\psi Tr[\psi 
-        \mathcal{E}(\psi)]), where d\psi is the uniform measure over all pure
-        states (see W&F Eq. 3).
-    
-    """
-    F_avg = ((d-1)*f+1.)/d
-    return F_avg
+    clifford_to_canonical : dict, optional
+        Dictionary mapping clifford labels (as defined in clifford_group) to 
+        tuples of "canonical-clifford" labels.  This dictionary is required
+        when `typ` is "canonical" or "primitive".
 
-
-def f_to_r(f,d=2):
-    """
-    Following Wallman and Flammia, maps fit decay fit parameter f to r, the 
-    "average gate infidelity".  This quantity is what is often referred to as
-    "the RB number". 
+    canonical_to_primitive : dict, optional
+        Dictionary mapping "canonical-clifford" labels, defined by the keys
+        of `clifford_to_canonical` (typically {I, X(pi/2),  X(-pi/2), X(pi),
+        Y(pi/2), Y(-pi/2), Y(pi)}) to tuples of "primitive" labels.  This
+        dictionary is required only when `typ` is "primitive".
     
-    Parameters
-    ----------
-    f : float
-        Fit parameter f from \bar{F}_m = A + B*f**m.
-    
-    d : int, optional
-        Number of dimensions of the Hilbert space (default is 2,
-        corresponding to a single qubit).     
-     
-    Returns
-    -------
-    r : float
-        The average gate infidelity, that is, "the RB number".      
-    
-    """
-    r = 1 - f_to_F_avg(f,d=d)
-    return r
+    seed : int, optional
+        Seed for random number generator; optional.
 
-
-def cliff_twirl(M):
-    """
-    Returns the Clifford twirl of a map M:  
-    Twirl(M) = 1/|Clifford group| * Sum_{C in Clifford group} (C^-1 * M * C)
-    
-    *At present only works for single-qubit Clifford group.*
-
-    Parameters
-    ----------
-    M : array or gate
-        The CPTP map to be twirled.
+    randState : numpy.random.RandomState, optional
+        A RandomState object to generate samples from. Can be useful to set
+        instead of `seed` if you want reproducible distribution samples across
+        multiple random function calls but you don't want to bother with
+        manually incrementing seeds between those calls.
     
     Returns
-    -------
-    M_twirl : array
-        The Clifford twirl of M.
+    -----------
+    clifford_string_list : list
+        List of gate strings; each gate string is an RB experiment.
+    
+    clifford_len_list : list
+        List of Clifford lengths for clifford_string_list.  clifford_len_list[i] is
+        the number of Clifford operations selected for the creation of
+        clifford_string_list[i].
     """
-    if M.shape == (4,4):
-        M_twirl = 1./len(CliffMatD) * _np.sum(_np.dot(
-                _np.dot(CliffMatInvD[i],M),CliffMatD[i]) for i in range(24))
-        return M_twirl
+
+    if randState is None:
+        rndm = _rndm.RandomState(seed) # ok if seed is None
     else:
-        raise ValueError("Clifford twirl for non-single qubit Clifford " +
-                         "groups not yet implemented!")
+        rndm = randState
+
+    if isinstance(K_m_sched,int):
+        K_m_sched_dict = {m : K_m_sched 
+                          for m in range(m_min, m_max+1,Delta_m) }
+    else: K_m_sched_dict = K_m_sched
+    assert hasattr(K_m_sched_dict, 'keys'),'K_m_sched must be a dict or int!'
+
+    string_lists = {'clifford': []} # GateStrings with Clifford-group labels
+    if alias_maps is not None:
+        for gstyp in alias_maps.keys(): string_lists[gstyp] = []
+
+    for m in range(m_min,m_max+1,Delta_m):
+        K_m = K_m_sched_dict[m]
+        strs_for_this_m = [ create_random_rb_clifford_string(
+            m,clifford_group,randState=rndm) for i in range(K_m) ]
+        string_lists['clifford'].append(strs_for_this_m)
+        if alias_maps is not None:
+            for gstyp,alias_map in alias_maps.items(): 
+                string_lists[gstyp].append(
+                    _cnst.translate_gatestring_list(strs_for_this_m,alias_map))
+
+    if alias_maps is None:
+        return string_lists['clifford'] #only list of lists is clifford one
+    else:
+        return string_lists #note we also return this if alias_maps == {}
+
+#        for cliff_tup_num, cliff_tup in enumerate(cliff_string_list):
+#            gatestr = []
+#            for cliff in cliff_tup:
+#                gatestr += CliffD[cliff]
+#            cliff_string_list[cliff_tup_num] = [str(i) for i in gatestr]
+
+#        if typ == 'canonical':
+#            return canonical_string_list
+#        elif typ == 'primitive':
+#            primitive_string_list = _cnst.translate_gatestring_list(
+#                canonical_string_list, canonical_to_primitive)
+#            return primitive_string_list
+#        else:
+#            raise ValueError('typ must be "generic" or "canonical"'
+#                             + ' or "primitive"!')
 
 
-def make_real_cliffs_gs(gs_real,primD):
+def write_empty_rb_files(filename, m_min, m_max, Delta_m, clifford_group, K_m,
+                         alias_maps=None, seed=None, randState=None):
     """
-    Turns a "real" (non-perfect) gate set into a "real" (non-perfect) Clifford
-    gate set.  *At present only works for single-qubit Clifford group.*
+    Wrapper for make_random_rb_cliff_string_lists.  Functionality is same as 
+    random_RB_cliff_string_lists, except that both an empty data template file is written
+    to disk as is the list recording the Clifford length of each gate sequence.
+    See docstring for make_random_rb_cliff_string_lists for more details.
+    """
+    if alias_maps is None: alias_maps = {} # so below always returns a dict
+    random_string_lists = \
+        list_random_rb_clifford_strings(m_min, m_max, Delta_m, clifford_group,
+                                        K_m, alias_maps, seed, randState)
+    #always write cliffords to empty dataset (in future have this be an arg?)
+    _io.write_empty_dataset(
+        filename+'.txt', list(
+            _itertools.chain(*random_string_lists['clifford'])))
+    for gstyp,strLists in random_string_lists.items():
+        _io.write_gatestring_list(filename +'_%s.txt' % gstyp,
+                                  list(_itertools.chain(*strLists)))
+    return random_string_lists
 
-    Parameters
-    ----------
-    gs_real : gate set
-        A "real" (non-ideal) gate set.
+                
+            #for cliff_tup_num, cliff_tup in enumerate(cliff_string_list):
+            #            gatestr = []
+            #            for cliff in cliff_tup:
+            #                subgatestr = []
+            #                for gate in CliffD[cliff]:
+            #                    subgatestr += primD[gate]
+            #                gatestr += subgatestr
+            #            cliff_string_list[cliff_tup_num] = [str(i) for i in gatestr]
+#    cliff_string_list =  _cnst.gatestring_list(cliff_string_list)
+#    return cliff_string_list, cliff_len_list
+
+
+#def process_rb_data(dataset, prim_seq_list, cliff_len_list, prim_dict=None,
+#                    pre_avg=True, process_prim=False, process_cliff=False,
+#                    f0 = [0.98],AB0 = [0.5,0.5]):
+
+
+#def process_rb_data(dataset, clifford_gatestrings, cliff_to_canonical = None, 
+#                    canonical_to_primitive = None, success_spamlabel = 'plus',
+#                    dim = 2, pre_avg=True, f0 = [0.98], AB0 = [0.5,0.5]):
+#    """
+#    Process RB data, yielding an RB results object containing desired RB
+#    quantities.  See docstring for rb_results for more details.
+#
+#    TODO: copy rb_resutls docstring here?
+#    """
+#
+#
+#    def preavg_by_length(lengths, success_probs, Ns):
+#        bins = {}
+#        for L,p,N in zip(lengths, success_probs, Ns):
+#            if L not in bins:
+#                bins[L] = _np.array([L,p,N,1],'d')
+#            else:
+#                bins[L] += _np.array([L,p,N,1],'d')
+#        avgs = { L: ar/ar[3] for L,ar in bins.items() }
+#        Ls = sorted(avgs.keys())
+#        preavg_lengths =  [ avgs[L][0] for L in Ls ] 
+#        preavg_psuccess = [ avgs[L][1] for L in Ls ] 
+#        preavg_Ns =       [ avgs[L][2] for L in Ls ] 
+#        return preavg_lengths, preavg_psuccess, preavg_Ns
+#
+#
+#    def fit(xdata,ydata):
+#        def obj_func_full(params):
+#            A,B,f = params
+#            return _np.sum((A+B*f**xdata-ydata)**2)
+#
+#        def obj_func_1d(f):
+#            A = B = 0.5
+#            return obj_func_full([A,B,f])
+#
+#        initial_soln = _minimize(obj_func_1d,f0, method='L-BFGS-B',
+#                                 bounds=[(0.,1.)])
+#        f0 = cliff_initial_soln.x[0]
+#        p0 = AB0 + [f0]
+#        final_soln = _minimize(obj_func_full,p0, method='L-BFGS-B',
+#                               bounds=[(0.,1.),(0.0,1.),(0.,1.)])
+#        A,B,f = final_soln.x
+#        return {'A': A,'B': B,'f': f, 'F_avg': f_to_F_avg(f,dim),
+#                'r': f_to_r(f,dim)}
+#
+#
+#    #Note: assumes dataset contains gate strings which use *clifford* labels
+#    cliff_lengths = list(map(len,clifford_gatestrings))
+#    Ns = [ dataset[seq].total() for seq in clifford_gatestrings ]
+#    successes = [ dataset[seq].fraction(success_spamlabel) 
+#                  for seq in clifford_gatestrings ] 
+#
+#    if pre_avg:
+#        cliff_lengths,cliff_successes,cliff_Ns = \
+#            preavg_by_length(cliff_lengths,successes,Ns)
+#    cliff_results = fit(cliff_lengths, cliff_successes)
+#    cliff_results.update({'gatestrings': clifford_gatestrings,
+#                          'lengths': cliff_lengths,
+#                          'successes': cliff_successes,
+#                          'counts': cliff_Ns })
+#
+#    if cliff_to_canonical is not None:
+#        canonical_gatestrings = [ _objs.GateString(_itertools.chain(
+#                    *[cliff_to_canonical[cliffLbl] for cliffLbl in gs]))
+#                    for gs in clifford_gatestrings ]
+#        canonical_lengths = list(map(len,canonical_gatestrings))
+#
+#        if pre_avg:
+#            canonical_lengths,canonical_successes,canonical_Ns = \
+#                preavg_by_length(canonical_lengths,successes,Ns)
+#        canonical_results = fit(canonical_lengths, canonical_successes)
+#        canonical_results.update({'gatestrings': canonical_gatestrings,
+#                                  'lengths': canonical_lengths,
+#                                  'successes': canonical_successes,
+#                                  'counts': canonical_Ns })
+#
+#        if canonical_to_primitive is not None:
+#            primitive_gatestrings = [ _objs.GateString(_itertools.chain(
+#                 *[canonical_to_primitive[canonLbl] for canonLbl in gs]))
+#                 for gs in canonical_gatestrings ]
+#            primitive_lengths = list(map(len,primitive_gatestrings))
+#
+#            if pre_avg:
+#                primitive_lengths,primitive_successes,primitive_Ns = \
+#                    preavg_by_length(primitive_lengths,successes,Ns)
+#            prim_results = fit(primitive_lengths, primitive_successes)
+#            prim_results.update({'gatestrings': primitive_gatestrings,
+#                                 'lengths': primitive_lengths,
+#                                 'successes': primitive_successes,
+#                                 'counts': primitive_Ns })
+#
+#    results = _rbobjs.RBResults(dataset, cliff_results, canonical_results,
+#                                prim_results, dim, pre_avg, cliff_to_canonical,
+#                                canonical_to_primitive)
+#    return results
+
+
+def do_randomized_benchmarking(dataset, clifford_gatestrings,
+                               success_spamlabel = 'plus',
+                               dim = 2, pre_avg=True, 
+                               clifford_to_primitive = None,
+                               clifford_to_canonical = None, 
+                               canonical_to_primitive = None,
+                               f0 = [0.98], AB0 = [0.5,0.5]):
+    """
+    TODO: docstring
+    """
+    alias_maps = {}
+    if clifford_to_canonical is not None:
+        alias_maps['canonical'] = clifford_to_canonical
+        if canonical_to_primitive is not None:
+            alias_maps['primitive'] = _cnst.compose_alias_dicts(
+                clifford_to_canonical, canonical_to_primitive)
     
-    primD : dictionary
-        A primitives dictionary, mapping the "canonical gate set" {I, X(pi/2),
-        X(-pi/2), X(pi), Y(pi/2), Y(-pi/2), Y(pi)} to the gate set that is the
-        target gate set for gs_real.
+    if clifford_to_primitive is not None:
+        assert (canonical_to_primitive is None), \
+            "primitive gates specified via clifford_to_primitive AND " + \
+            "canonical_to_primitive!"
+        alias_maps['primitive'] = clifford_to_primitive
+
+    return do_rb_base(dataset, clifford_gatestrings, "clifford", alias_maps,
+                      success_spamlabel, dim, pre_avg, f0, AB0)
+
+def do_rb_base(dataset, base_gatestrings, basename, alias_maps=None,
+               success_spamlabel = 'plus', dim = 2, pre_avg=True,
+               f0 = [0.98], AB0 = [0.5,0.5]):
+    """
+    Process RB data, yielding an RB results object containing desired RB
+    quantities.  See docstring for rb_results for more details.
+
+    TODO: copy rb_resutls docstring here?
+    """
+
+    def preavg_by_length(lengths, success_probs, Ns):
+        bins = {}
+        for L,p,N in zip(lengths, success_probs, Ns):
+            if L not in bins:
+                bins[L] = _np.array([L,p,N,1],'d')
+            else:
+                bins[L] += _np.array([L,p,N,1],'d')
+        avgs = { L: ar/ar[3] for L,ar in bins.items() }
+        Ls = sorted(avgs.keys())
+        preavg_lengths =  [ avgs[L][0] for L in Ls ] 
+        preavg_psuccess = [ avgs[L][1] for L in Ls ] 
+        preavg_Ns =       [ avgs[L][2] for L in Ls ] 
+        return preavg_lengths, preavg_psuccess, preavg_Ns
+
+
+    def fit(xdata,ydata):
+        def obj_func_full(params):
+            A,B,f = params
+            return _np.sum((A+B*f**xdata-ydata)**2)
+
+        def obj_func_1d(f):
+            A = B = 0.5
+            return obj_func_full([A,B,f])
+
+        initial_soln = _minimize(obj_func_1d,f0, method='L-BFGS-B',
+                                 bounds=[(0.,1.)])
+        f0b = initial_soln.x[0]
+        p0 = AB0 + [f0b]
+        final_soln = _minimize(obj_func_full,p0, method='L-BFGS-B',
+                               bounds=[(0.,1.),(0.0,1.),(0.,1.)])
+        A,B,f = final_soln.x
+        return {'A': A,'B': B,'f': f, 'F_avg': _rbutils.f_to_F_avg(f,dim),
+                'r': _rbutils.f_to_r(f,dim)}
+
+    result_dicts = {}
+
+    #Note: assumes dataset contains gate strings which use *base* labels
+    base_lengths = list(map(len,base_gatestrings))
+    Ns = [ dataset[seq].total() for seq in base_gatestrings ]
+    successes = [ dataset[seq].fraction(success_spamlabel) 
+                  for seq in base_gatestrings ] 
+
+    if pre_avg:
+        base_lengths,base_successes,base_Ns = \
+            preavg_by_length(base_lengths,successes,Ns)
+    base_results = fit(base_lengths, base_successes)
+    base_results.update({'gatestrings': base_gatestrings,
+                          'lengths': base_lengths,
+                          'successes': base_successes,
+                          'counts': base_Ns })
+    result_dicts[basename] = base_results
     
-    Returns
-    -------
-    gs_real_cliffs : gate set
-        A gate set of imperfect Cliffords; each Clifford is constructed out of
-        the gates contained in gs_real.
-    """
-    gs_real_cliffs = _cnst.build_gateset(
-        [2],[('Q0',)], [], [],
-        prepLabels=["rho0"], prepExpressions=["0"],
-        effectLabels=["E0"], effectExpressions=["1"],
-        spamdefs={'plus': ('rho0','E0'), 
-                  'minus': ('rho0','remainder') } )
-    for i in range(24):
-        gatestr = []
-        for gate in CliffD[i]:
-            gatestr += primD[gate]
-        gs_real_cliffs.gates['Gc'+str(i)] = \
-            _objs.FullyParameterizedGate(gs_real.product(gatestr))
-    return gs_real_cliffs
+    for gstyp,alias_map in alias_maps.items():
+        if alias_map is None: continue #skip when map is None
+
+        gstyp_gatestrings = _cnst.translate_gatestring_list(
+            base_gatestrings, alias_map)
+        gstyp_lengths = list(map(len,gstyp_gatestrings))
+
+        if pre_avg:
+            gstyp_lengths,gstyp_successes,gstyp_Ns = \
+                preavg_by_length(gstyp_lengths,successes,Ns)
+        gstyp_results = fit(gstyp_lengths, gstyp_successes)
+        gstyp_results.update({'gatestrings': gstyp_gatestrings,
+                              'lengths': gstyp_lengths,
+                              'successes': gstyp_successes,
+                              'counts': gstyp_Ns })
+        result_dicts[gstyp] = gstyp_results
+
+    results = _rbobjs.RBResults(dataset, result_dicts, basename, alias_maps,
+                                success_spamlabel, dim, pre_avg, f0, AB0)
+    return results
 
 
-def analytic_rb_gate_error_rate(actual, target):
-    """
-    Computes the twirled Clifford error rate for a given gate.
-    *At present only works for single-qubit gates.*
 
-    Parameters
-    ----------
-    actual : array or gate
-        The noisy gate whose twirled Clifford error rate is to be computed.
-        
-    target : array or gate
-        The target gate against which "actual" is being compared.
+
     
-    Returns
-    ----------
-    error_rate : float
-        The twirled Clifford error rate.
-    """
-    
-    twirled_channel = cliff_twirl(_np.dot(actual,_np.linalg.inv(target)))
-    error_rate = 0.5 * (1 - 1./3 * (_np.trace(twirled_channel) - 1))
-    return error_rate
 
-
-def analytic_rb_cliff_gateset_error_rate(gs_real_cliffs):
-    """
-    Computes the average twirled Clifford error rate for a noisy Clifford 
-    gate set.  This is, analytically, "the RB number".
-    *At present only works for single-qubit gate sets.*    
-    
-    Parameters
-    ----------
-    gs_real_cliffs : gate set
-        A gate set of noisy Clifford gates.  If the experimental gate set is, 
-        as is typical, not a Clifford gate set, then said gate set should be 
-        converted to a Clifford gate set using make_real_cliffs_gs.
-
-    Returns
-    -------
-    r_analytic : float
-        The average per-Clifford error rate of the noisy Clifford gate set.
-        This is, analytically, "the RB number".    
-    """
-    error_list = []
-    for gate in list(gs_cliff_generic_1q.gates.keys()):
-        error_list.append(analytic_rb_gate_error_rate(
-                gs_real_cliffs[gate],gs_cliff_generic_1q[gate]))
-    r_analytic = _np.mean(error_list)
-    return r_analytic
-
-
-
+#
+#    def 
+#        prim_len_list = []
+#        successes = []
+#        N_list = []
+#        for seq_num, seq in enumerate(self.prim_seq_list):
+#            data_line = self.dataset[seq]
+#            plus = data_line['plus']
+#            minus = data_line['minus']
+#            N = plus + minus
+#            prim_length = len(seq)
+#            prim_len_list.append(prim_length)
+#            seq_success_prob = 1 - plus/float(N)
+#            successes.append(seq_success_prob)
+#            N_list.append(N)
+#            if seq_success_prob < 0:
+#                raise ValueError('Survival probability less than 0!')
+#
+#        if self.pre_avg:
+#            cliff_zip = list(zip(self.cliff_len_list,successes,N_list))
+#            cliff_zip = sorted(cliff_zip,key=lambda x: x[0])
+#            #cliff_zip = _np.array(cliff_zip,dtype=[('length',int),('F',float),('N',float)])
+#            #cliff_zip = _np.sort(cliff_zip,order='length')
+#            cliff_avg = []
+#            cliff_avg_len_list = []
+#            total_N_list = []
+#            total_N = 0
+#            current_len = 0
+#            total = 0
+#            total_seqs = 0
+#            for i in range(len(cliff_zip)):
+#                tup = cliff_zip[i]
+#                if tup[0] != current_len:
+#                    if current_len != 0:
+#                        cliff_avg_len_list.append(current_len)
+#                        cliff_avg.append(float(total) / total_seqs)
+#                        total_N_list.append(total_N)
+#                    current_len = tup[0]
+#                    total = 0
+#                    total_seqs = 0
+#                    total_N = 0
+#                total += tup[1]
+#                total_N += tup[2]
+#                total_seqs += 1
+#
+#            self.total_N_list = _np.array(total_N_list)
+#
+#            prim_avg = []
+#            prim_avg_len_list = []
+#            current_len = 0
+#            total = 0
+#            total_seqs = 0
+#
+#            prim_zip = list(zip(prim_len_list,successes))
+#
+#            prim_zip = list(zip(self.prim_len_list,successes,N_list))
+#            prim_zip = sorted(prim_zip,key=lambda x: x[0])
+##            prim_zip = _np.array(prim_zip,dtype=[('length',int),('F',float),('N',float)])
+##            prim_zip = _np.sort(prim_zip,order='length')
+#
+#            for i in range(len(cliff_zip)):
+#                tup = prim_zip[i]
+#                if tup[0] != current_len:
+#                    if current_len != 0:
+#                        prim_avg_len_list.append(current_len)
+#                        prim_avg.append(float(total) / total_seqs)
+#                    current_len = tup[0]
+#                    total = 0
+#                    total_seqs = 0
+#                total += tup[1]
+#                total_seqs += 1
+#
+#            self.cliff_len_list = cliff_avg_len_list
+#            self.cliff_successes = cliff_avg
+#
+#            self.prim_len_list = prim_avg_len_list
+#            self.prim_successes = prim_avg            
+#        else:
+#            self.prim_successes = successes
+#            self.cliff_successes = successes
+#
+##        self.successes = successes
+##        self.prim_len_list = prim_len_list
+##        self.data_parsed = True
+##    def parse_data_preavg(self):
+##        if not self.data_parsed:
+##            self.parse_data()
+#
+#
+#    def analyze_data(self,rb_decay_func = rb_decay_WF,process_prim = False,
+#                     process_cliff = False, f0 = [0.98], AB0=[0.5,0.5]):
+#        """
+#        Analyze RB data to compute fit parameters and in turn the RB error
+#        rate.
+#
+#        TODO: docstring describing parameters
+#        """
+#
+#        if process_prim:
+#            xdata = self.prim_len_list
+#            ydata = self.prim_successes
+#            def obj_func_full(params):
+#                A,B,f = params
+#                val = _np.sum((A+B*f**xdata-ydata)**2)
+#                return val
+#            def obj_func_1d(f):
+#                A = 0.5
+#                B = 0.5
+#                val = obj_func_full([A,B,f])
+#                return val
+#            self.prim_initial_soln = _minimize(obj_func_1d,f0,
+#                                               method='L-BFGS-B',
+#                                               bounds=[(0.,1.)])
+#            f1 = [self.prim_initial_soln.x[0]]
+#            p0 = AB0 + f1
+#            self.prim_end_soln = _minimize(obj_func_full,p0,
+#                                           method='L-BFGS-B',
+#                                           bounds=[(0.,1.),(0.,1.),(0.,1.)])
+#            A,B,f = self.prim_end_soln.x
+##            results = _curve_fit(rb_decay_func,self.prim_len_list,self.prim_successes,p0 = p0)
+##            A,B,f = results[0]
+##            cov = results[1]
+#            self.prim_A = A
+#            self.prim_B = B
+#            self.prim_f = f
+##            self.prim_cov = cov
+#            self.prim_F_avg = f_to_F_avg(self.prim_f)
+#            self.prim_r = f_to_r(self.prim_f)
+#            self.prim_analyzed = True
+#        if process_cliff:
+#            xdata = self.cliff_len_list
+#            ydata = self.cliff_successes
+#            def obj_func_full(params):
+#                A,B,f = params
+#                val = _np.sum((A+B*f**xdata-ydata)**2)
+#                return val
+#            def obj_func_1d(f):
+#                A = 0.5
+#                B = 0.5
+#                val = obj_func_full([A,B,f])
+#                return val
+#            self.cliff_initial_soln = _minimize(obj_func_1d,f0,
+#                                                method='L-BFGS-B',
+#                                                bounds=[(0.,1.)])
+#            f0 = self.cliff_initial_soln.x[0]
+#            p0 = AB0 + [f0]
+#            self.cliff_end_soln = _minimize(obj_func_full,p0,
+#                                            method='L-BFGS-B',
+#                                            bounds=[(0.,1.),(0.0,1.),(0.,1.)])
+#            A,B,f = self.cliff_end_soln.x
+##            results = _curve_fit(rb_decay_func,self.cliff_len_list,self.cliff_successes,p0 = p0)
+##            A,B,f = results[0]
+##            cov = results[1]
+#            self.cliff_A = A
+#            self.cliff_B = B
+#            self.cliff_f = f
+##            self.cliff_cov = cov
+#            self.cliff_F_avg = f_to_F_avg(self.cliff_f)
+#            self.cliff_r = f_to_r(self.cliff_f)
+#            self.cliff_analyzed = True
+#
+#
+#    results_obj = rb_results(dataset, prim_seq_list, cliff_nlen_list,
+#                             prim_dict=prim_dict, pre_avg=pre_avg)
+#    results_obj.parse_data()
+#    results_obj.analyze_data(process_prim = process_prim,
+#                             process_cliff = process_cliff,
+#                             f0 = f0, AB0 = AB0)
+#    return results_obj

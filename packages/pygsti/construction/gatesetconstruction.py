@@ -969,6 +969,41 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
     return ret
 
 
+def build_alias_gateset(gs_primitives,alias_dict):
+    """
+    Creates a new gateset by composing the gates of an existing `GateSet`,
+    `gs_primitives`, according to a dictionary of `GateString`s, `alias_dict`.
+    The keys of `alias_dict` are the gate labels of the returned `GateSet1.
+    SPAM vectors are unaltered, and simply copied from `gs_primitives`.
+
+    Parameters
+    ----------
+    gs_primitives : GateSet
+        A Gateset containing the "primitive" gates (those used to compose
+        the gates of the returned gateset).
+    
+    alias_dict : dictionary
+        A dictionary whose keys are strings and values are GateString objects
+        specifying sequences of primitive gates.  Each key,value pair specifies
+        the composition rule for a creating a gate in the returned gate set.
+    
+    Returns
+    -------
+    GateSet
+        A gate set whose gates are compositions of primitive gates and whose
+        spam operations are the same as those of `gs_primitives`.
+    """
+    gs_new = gs_primitives.copy()
+    for gl in gs_primitives.gates.keys():
+        del gs_new.gates[gl] #remove all gates from gs_new
+
+    for gl,gstr in alias_dict.items():
+        gs_new[gl] = gs_primitives.product(gstr)
+          #Creates fully parameterized gates by default...
+    return gs_new
+
+
+
 
 ###SCRATCH
 # Old from embed_gate:
