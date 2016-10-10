@@ -998,7 +998,7 @@ def build_alias_gateset(gs_primitives,alias_dict):
         del gs_new.gates[gl] #remove all gates from gs_new
 
     for gl,gstr in alias_dict.items():
-        gs_new[gl] = gs_primitives.product(gstr)
+        gs_new.gates[gl] = gs_primitives.product(gstr)
           #Creates fully parameterized gates by default...
     return gs_new
 

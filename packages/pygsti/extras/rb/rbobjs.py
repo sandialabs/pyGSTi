@@ -18,7 +18,7 @@ from scipy.optimize import curve_fit as _curve_fit
 class MatrixGroup(object):
     def __init__(self, listOfMatrices, labels=None):
         self.mxs = list(listOfMatrices)
-        self.labels = list(labels)
+        self.labels = list(labels) if (labels is not None) else None
         assert(labels is None or len(labels) == len(listOfMatrices))
         if labels is not None:
             self.label_indices = { lbl:indx for indx,lbl in enumerate(labels)}
@@ -46,13 +46,12 @@ class MatrixGroup(object):
         assert (-1 not in self.product_table), "Cannot construct group table"
         
         #Construct inverse table
-        self.inverse_table = _np.zeros(N, dtype=int)
+        self.inverse_table = -1 * _np.ones(N, dtype=int)
         for i in range(N):
             for j in range(N):
                 if self.product_table[i,j] == 0: # the identity
                     self.inverse_table[i] = j; break
-            else:
-                raise ValueError("Cannot find inverse for %d-th group el" % i)
+        assert (-1 not in self.inverse_table), "Cannot construct inv table"
 
     def get_matrix(self, i):
         if not isinstance(i,int): i = self.label_indices[i]
@@ -169,7 +168,7 @@ class RBResults(object):
         """
         s = ""
         key_list = ['A','B','f','F_avg','r']
-        if self.dicts[gstyp] is not None:            
+        if gstyp in self.dicts and self.dicts[gstyp] is not None:            
             #print("For %ss:" % gstyp)
             s += "%s results\n" % gstyp
             if 'A_error_BS' in self.dicts[gstyp]: 
@@ -330,10 +329,11 @@ class RBResults(object):
         print('epsilon =',epsilon)
         print('r_0 =',r_0)
 
-        gstyp_list = ['clifford'] #WF assume clifford-gatestring data (??)
+        gstyp_list = ['clifford'] #KENNY: WF assume clifford-gatestring data (??)
         
         for gstyp in gstyp_list:
-            sigma_list = _np.sqrt(epsilon**2 + 1./self.dicts[gstyp]['counts'])
+            Ns = _np.array(self.dicts[gstyp]['counts'])
+            sigma_list = _np.sqrt(epsilon**2 + 1./Ns)
             results = _curve_fit(_rbutils.rb_decay_WF,
                              self.dicts[gstyp]['lengths'],
                              self.dicts[gstyp]['successes'],
