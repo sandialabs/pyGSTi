@@ -93,9 +93,9 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
             rndm = randState
 
     if aliasDict is not None:
-        translated_list = _gstrc.translate_gatestring_list(gatestring_list,
-                                                           aliasDict)
-    else: translated_list = s
+        translated_list = _gstrc.translate_gatestring_list(
+                                      gatestring_list, aliasDict)
+    else: translated_list = gatestring_list
 
     for k,(s,trans_s) in enumerate(zip(gatestring_list,translated_list)):
 
