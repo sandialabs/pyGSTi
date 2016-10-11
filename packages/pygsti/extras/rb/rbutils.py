@@ -47,13 +47,10 @@ def rb_decay_WF(m,A,B,f):#Taken from Wallman and Flammia- Eq. 1
     m : integer
         RB sequence length minus one
     
-    A : float
-    
-    B : float
-    
-    f : float
+    A,B,f : float
+
     Returns
-    ----------
+    -------
     float
     """
     return A+B*f**m
@@ -179,12 +176,13 @@ def clifford_twirl(M,clifford_group):
     Returns the Clifford twirl of a map M:  
     Twirl(M) = 1/|Clifford group| * Sum_{C in Clifford group} (C^-1 * M * C)
     
-    *At present only works for single-qubit Clifford group.*
-
     Parameters
     ----------
     M : array or gate
         The CPTP map to be twirled.
+
+    clifford_group : MatrixGroup
+        Which Clifford group to use.
     
     Returns
     -------
@@ -198,53 +196,9 @@ def clifford_twirl(M,clifford_group):
     return M_twirl
 
 
-#def make_real_cliffs_gs(gs_real,primD):
-#    """
-#    Turns a "real" (non-perfect) gate set into a "real" (non-perfect) Clifford
-#    gate set.  *At present only works for single-qubit Clifford group.*
-#
-#    Parameters
-#    ----------
-#    gs_real : gate set
-#        A "real" (non-ideal) gate set.
-#    
-#    primD : dictionary
-#        A primitives dictionary, mapping the "canonical gate set" {I, X(pi/2),
-#        X(-pi/2), X(pi), Y(pi/2), Y(-pi/2), Y(pi)} to the gate set that is the
-#        target gate set for gs_real.
-#    
-#    Returns
-#    -------
-#    gs_real_cliffs : gate set
-#        A gate set of imperfect Cliffords; each Clifford is constructed out of
-#        the gates contained in gs_real.
-#    """
-#    alias_dict = _OrderedDict()
-#    for i in range(24):
-#        alias_dict['Gc'+str(i)] = _objs.GateString(
-#            list( _itertools.chain( *[ primD[canonical_gate] 
-#                                       for canonical_gate in CliffD[i] ] )))
-#    return _cnst.build_alias_gateset(gs_real,alias_dict)
-
-#    gs_real_cliffs = _cnst.build_gateset(
-#        [2],[('Q0',)], [], [],
-#        prepLabels=["rho0"], prepExpressions=["0"],
-#        effectLabels=["E0"], effectExpressions=["1"],
-#        spamdefs={'plus': ('rho0','E0'), 
-#                  'minus': ('rho0','remainder') } )
-#    for i in range(24):
-#        gatestr = []
-#        for gate in CliffD[i]:
-#            gatestr += primD[gate]
-#        gs_real_cliffs.gates['Gc'+str(i)] = \
-#            _objs.FullyParameterizedGate(gs_real.product(gatestr))
-#    return gs_real_cliffs
-
-
 def analytic_rb_gate_error_rate(actual, target, clifford_group):
     """
     Computes the twirled Clifford error rate for a given gate.
-    *At present only works for single-qubit gates.*
 
     Parameters
     ----------
@@ -253,6 +207,10 @@ def analytic_rb_gate_error_rate(actual, target, clifford_group):
         
     target : array or gate
         The target gate against which "actual" is being compared.
+
+    clifford_group : MatrixGroup
+        Which Clifford group to use.
+
     
     Returns
     ----------
@@ -263,7 +221,8 @@ def analytic_rb_gate_error_rate(actual, target, clifford_group):
     twirled_channel = clifford_twirl(_np.dot(actual,_np.linalg.inv(target)),
                                      clifford_group)
     #TODO: is below formulat correct for arbitrary clifford groups? (or 
-    #  should we assert twirled_channel.shape == (4,4) here?
+    #  should we assert twirled_channel.shape == (4,4) here? KENNY
+    # from docstring:  *At present only works for single-qubit gates.*
     error_rate = 0.5 * (1 - 1./3 * (_np.trace(twirled_channel) - 1))
     return error_rate
 
@@ -278,10 +237,18 @@ def analytic_rb_clifford_gateset_error_rate(gs_clifford_actual,
     
     Parameters
     ----------
-    gs_real_cliffs : gate set
-        A gate set of noisy Clifford gates.  If the experimental gate set is, 
-        as is typical, not a Clifford gate set, then said gate set should be 
-        converted to a Clifford gate set using make_real_cliffs_gs.
+    gs_clifford_actual : GateSet
+        A gate set of estimated Clifford gates.  If the experimental gate set
+        is, as is typical, not a Clifford gate set, then said gate set should
+        be converted to a Clifford gate set using a clifford-to-primitive map
+        with `pygsti.construction.build_alias_gateset` .
+
+    gs_clifford_target : GateSet
+        The corresponding ideal gate set of the same (Clifford) gates as
+        `gs_clifford_actual`.
+
+    clifford_group : MatrixGroup
+        Which Clifford group to use.
 
     Returns
     -------

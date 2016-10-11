@@ -15,7 +15,4 @@ from .matrixtools import *
 from .likelihoodfns import *
 from .chi2fns import *
 from .gatetools import *
-from .rbtools import *
 from .slicetools import *
-#from . import rpetools as rpe #keep in separate namespace for now
-#from .rb import rb

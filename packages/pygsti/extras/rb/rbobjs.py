@@ -16,7 +16,22 @@ from matplotlib import pyplot as _plt
 from scipy.optimize import curve_fit as _curve_fit
 
 class MatrixGroup(object):
+    """
+    Encapsulates a group where each element is represented by a matrix
+    """
+
     def __init__(self, listOfMatrices, labels=None):
+        """
+        Constructs a new MatrixGroup object
+
+        Parameters
+        ----------
+        listOfMatrices : list
+            A list of the group elements (should be 2d numpy arrays).
+
+        labels : list, optional
+            A label corresponding to each group element.
+        """
         self.mxs = list(listOfMatrices)
         self.labels = list(labels) if (labels is not None) else None
         assert(labels is None or len(labels) == len(listOfMatrices))
@@ -54,14 +69,52 @@ class MatrixGroup(object):
         assert (-1 not in self.inverse_table), "Cannot construct inv table"
 
     def get_matrix(self, i):
+        """
+        Returns the matrix corresponding to index or label `i`
+
+        Parameters
+        ----------
+        i : int or str
+            If an integer, an element index.  Otherwise, an element label.
+        
+        Returns
+        -------
+        numpy array
+        """
         if not isinstance(i,int): i = self.label_indices[i]
         return self.mxs[i]
 
     def get_matrix_inv(self, i):
+        """
+        Returns the inverse of the matrix corresponding to index or label `i`
+
+        Parameters
+        ----------
+        i : int or str
+            If an integer, an element index.  Otherwise, an element label.
+        
+        Returns
+        -------
+        numpy array
+        """
         if not isinstance(i,int): i = self.label_indices[i]
         return self.mxs[self.inverse_table[i]]
 
     def get_inv(self, i):
+        """
+        Returns the index/label corresponding to the inverse of index/label `i`
+
+        Parameters
+        ----------
+        i : int or str
+            If an integer, an element index.  Otherwise, an element label.
+        
+        Returns
+        -------
+        int or str
+            If `i` is an integer, returns the element's index.  Otherwise
+            returns the element's label.
+        """
         if isinstance(i,int):
             return self.inverse_table[i]
         else:
@@ -69,6 +122,25 @@ class MatrixGroup(object):
             return self.labels[ self.inverse_table[i] ]
         
     def product(self, indices):
+        """
+        Returns the index/label of corresponding to the product of a list
+        or tuple of indices/labels.
+
+        Parameters
+        ----------
+        indices : iterable
+            Specifies the sequence of group elements to include in the matrix 
+            product.  If `indices` contains integers, they an interpreted as
+            group element indices, and an integer is returned.  Otherwise,
+            `indices` is assumed to contain group element labels, and a label
+            is returned.
+        
+        Returns
+        -------
+        int or str
+            If `indices` contains integers, returns the resulting element's
+            index.  Otherwise returns the resulting element's label.
+        """
         if len(indices) == 0: return None
         if isinstance(indices[0],int):
             return _reduce(lambda i,j: self.product_table[i,j], indices)
@@ -78,6 +150,7 @@ class MatrixGroup(object):
             return self.labels[fi]
 
     def __len__(self):
+        """ Returns the order of the group (number of elements) """
         return len(self.mxs)
 
 
@@ -102,55 +175,46 @@ class RBResults(object):
         ----------
         dataset : dataset
             The dataset which contains all the experimental RB data.
-        
-        prim_seq_list : list
-            The list of gate sequences used for RB, where each gate is a 
-            "primitive", that is, a basic physical operation.  (The primitives
-            are frequently {I, X(pi/2), Y(pi/2)}).
-        
-        cliff_len_list : list
-            A list declaring how long each sequence in prim_seq_length is, in
-            terms of Clifford operations.  Without this list, it is impossible
-            to analyze RB data correctly.
-        
-        d : int, optional
-            Hilbert space dimension.  Default is 2, corresponding to a single
-            qubit.
-        
-        prim_dict : dictionary, optional
-            A primitives dictionary, mapping the "canonical gate set" 
-            {I, X(pi/2), X(-pi/2), X(pi), Y(pi/2), Y(-pi/2), Y(pi)} to the
-            gate set of primitives (physical operations).
-        
+
+        result_dicts : dict
+            A dictionary of dictionaries of RB result values.  Keys are 
+            gate-label-sets, e.g. "clifford", "canonical", and "primivitve".
+            Values are dictionaries containing RB input and computed values.
+
+        basename : str
+            A name given to the "base" gate-label-set, usually "clifford",
+            which coresponds to the gate labels used in `dataset`.
+
+        alias_maps : dict of dicts, optional
+            If not None, a dictionary whose keys name other (non-"base") 
+            gate-label-sets, and whose values are "alias" dictionaries 
+            which map the "base" labels to those of the named gate-label-set.
+            These maps specify how to move from the "base" gate-label-set to 
+            the others.
+            RB values for each of these gate-label-sets will be present in the 
+            returned results object.
+
+        success_spamlabel : str, optional
+            The spam label which denotes the *expected* outcome of preparing,
+            doing nothing (or the identity), and measuring.  In the ideal case
+            of perfect gates, the probability of seeing this outcome when just
+            preparing and measuring (no intervening gates) is 100%.
+            
+        dim : int, optional
+            Hilbert space dimension.  Default corresponds to a single qubit.
+    
         pre_avg : bool, optional
             Whether or not survival probabilities for different sequences of
-            the same length are to be averaged together before curve fitting
-            is performed.  Some information is lost when performing
-            pre-averaging, but it follows the literature.
-        
-        epsilon : float, optional
-            Specifies desired confidence interval half-width for each average
-            survival probability estimate \hat{F}_m (See W&F Eq. 8).  
-            E.g., epsilon = 0.01 means that the confidence interval width for
-            \hat{F}_m is 0.02.  Only to be specified if W&F error bars are
-            desired.  See make_K_m_sched for further details.
+            the same length were averaged together before curve fitting
+            was performed.
     
-        delta : float, optional
-            Specifies desired confidence level for confidence interval
-            specified by epsilon.  delta = 1-0.6827 corresponds to a
-            confidence level of 1 sigma.  This value should be used if 
-            W&F-derived error bars are desired.  (See W&F Eq. 8).  The smaller
-            delta is, the larger each value of K_m will be.  Only to be
-            specified if W&F error bars are desired. See make_K_m_sched for 
-            further details.
-    
-        r_0 : float, optional
-            Estimate of upper bound of the RB number for the system in 
-            question. The smaller r is, the smaller each value of K_m will be.
-            However, if the system's actual RB number is larger than r_0, then
-            the W&F-derived error bars cannot be assumed to be valid.  Addition
-            ally, it is assumed that m_max*r_0 << 1.  Only to be specified if
-            W&F error bars are desired. See make_K_m_sched for further details.
+        f0 : list, optional
+            A length-1 list specifying the starting value of the 'f' fitting
+            parameter that was used in curve fitting.
+            
+        AB0 : list, optional
+            A length-2 list, [A0, B0], of starting values for the 'A' and 'B'
+            fitting parameters. 
         """
         self.dataset = dataset
         self.dicts = result_dicts
@@ -164,7 +228,19 @@ class RBResults(object):
 
     def detail_str(self, gstyp):
         """
-        Display the per-"gatestring type" RB error rate.
+        Format a string with computed RB values using the given 
+        gate-label-set, `gstyp`.  For example, if `gstyp` == "clifford", then
+        the per-"clifford" RB error rates and parameter are given.
+
+        Parameters
+        ----------
+        gstyp : str
+            The gate-label-set specifying which RB error rates and parameters
+            to extract.
+
+        Returns
+        -------
+        str
         """
         s = ""
         key_list = ['A','B','f','F_avg','r']
@@ -193,9 +269,19 @@ class RBResults(object):
 
     def print_detail(self, gstyp):
         """
-        Display per Clifford gate RB error rate.
+        Print computed RB values using the given gate-label-set, `gstyp`.
+
+        For example, if `gstyp` == "clifford", the the per-"clifford" RB
+        error rates and parameter are printed.
+
+        Parameters
+        ----------
+        gstyp : str
+            The gate-label-set specifying which RB error rates and parameters
+            to extract.
         """
         print(self.detail_str(gstyp))
+
 
     def print_clifford(self):
         """
@@ -220,10 +306,27 @@ class RBResults(object):
 
     def plot(self,gstyp,xlim=None,ylim=None,save_fig_path=None):
         """
-        Plot RB decay curve, either as a function of primitive sequence length
-        or Clifford sequence length.
+        Plot RB decay curve, as a function of some the sequence length
+        computed using the `gstyp` gate-label-set.
 
-        TODO: docstring describing parameters
+        Parameters
+        ----------
+        gstyp : str
+            The gate-label-set specifying which translation (i.e. strings with
+            which gate labels) to use when computing sequence lengths.
+
+        xlim : tuple, optional
+            The x-range as (xmin,xmax).
+
+        ylim : tuple, optional
+            The y-range as (ymin,ymax).
+
+        save_fig_path : str, optional
+            If not None, the filename where the resulting plot should be saved.
+
+        Returns
+        -------
+        None
         """
         if gstyp not in self.dicts:
             raise ValueError("%s data not found!" % gstyp)
@@ -262,22 +365,48 @@ class RBResults(object):
             newplot.savefig(save_fig_path)
     
 
-    def compute_bootstrap_error_bars(self, gstyp_list, resamples = 100,
+    def compute_bootstrap_error_bars(self, gstyp_list = "all", resamples = 100,
                                      p0 = [0.5,0.5,0.98], seed=None,
                                      randState=None):
         """
-        Compute error bars on RB fit parameters, including the RB decay rate.
-        Error bars can be computed either using a non-parametric bootstrap, 
-        or quasi-analytic methods provided in W&F.
+        Compute error bars on RB fit parameters, including the RB decay rate
+        using a non-parametric bootstrap method.
 
-        *At present, only the bootstrap method is fully supported.*
+        Parameters
+        ----------
+        gstyp_list : list, optional
+           A list of gate-label-set values (e.g. "clifford", "primitive")
+           specifying which "per-X" RB values to compute error bars for.
+           The special value "all" can be used to compute error bars for all
+           existing gate-label-sets.
 
-        TODO: docstring describing parameters
+        resamples : int, optional
+            The number of nonparametric bootstrap resamplings
+
+        p0 : list, optional
+            A list of [f,A,B] parameters to seed the RB curve fitting.  Usually
+            the default values are fine.
+
+        seed : int, optional
+            Seed for random number generator; optional.
+    
+        randState : numpy.random.RandomState, optional
+            A RandomState object to generate samples from. Can be useful to set
+            instead of `seed` if you want reproducible distribution samples
+            across multiple random function calls but you don't want to bother
+            with manually incrementing seeds between those calls.
+
+        Returns
+        -------
+        None
         """
         if randState is None:
             rndm = _rndm.RandomState(seed) # ok if seed is None
         else:
             rndm = randState
+
+        if gstyp_list == "all":
+            gstyp_list = list(self.dicts.keys())
 
         #Setup lists to hold items to take stddev of:
         A_list = {}; B_list = {}; f_list = {}
@@ -320,6 +449,43 @@ class RBResults(object):
 
     def compute_analytic_error_bars(self, epsilon, delta, r_0, 
                                     p0 = [0.5,0.5,0.98]):
+        """
+        Compute error bars on RB fit parameters, including the RB decay rate
+        using the quasi-analytic methods provided in W&F.
+
+        *At present, this method is not fully supported.*
+
+        Parameters
+        ----------
+        epsilon : float
+            Specifies desired confidence interval half-width for each average
+            survival probability estimate \hat{F}_m (See W&F Eq. 8).  
+            E.g., epsilon = 0.01 means that the confidence interval width for
+            \hat{F}_m is 0.02. See `create_K_m_sched` for further details.
+    
+        delta : float
+            Specifies desired confidence level for confidence interval
+            specified by epsilon.  delta = 1-0.6827 corresponds to a
+            confidence level of 1 sigma.  (See W&F Eq. 8).  The smaller
+            delta is, the larger each value of K_m will be. See 
+            `create_K_m_sched` for further details.
+    
+        r_0 : float
+            Estimate of upper bound of the RB number for the system in 
+            question. The smaller r is, the smaller each value of K_m will be.
+            However, if the system's actual RB number is larger than r_0, then
+            the W&F-derived error bars cannot be assumed to be valid.  Addition
+            ally, it is assumed that m_max*r_0 << 1.  See `create_K_m_sched`
+            for further details.
+
+        p0 : list, optional
+            A list of [f,A,B] parameters to seed the RB curve fitting.  Usually
+            the default values are fine.
+
+        Returns
+        -------
+        None
+        """
         print("WARNING: ANALYTIC BOOSTRAP ERROR BAR METHOD NOT YET" +
               "GUARANTEED TO BE STABLE.")
         print('Processesing analytic bootstrap, following Wallman and' +
@@ -349,38 +515,3 @@ class RBResults(object):
             self.dicts[gstyp]['F_avg_error_WF']
 
         print("Analytic error bars computed.  Use print methods to access.")
-
-
-
-#    def print_error_bars(self,method,process_prim=False,process_cliff=False):
-#        """
-#        TODO: docstring
-#        """
-#        assert method in ['bootstrap', 'analytic']
-#        if method == 'bootstrap':
-#            if not self.bootstrap:
-#                raise ValueError('Bootstrapped error bars requested but not' +
-#                       'yet generated; use generate_error_bars method first.')
-#            print("Results with boostrapped-derived error bars (1 sigma):")
-#            if process_prim:
-#                print("prim A =", self.prim_A, "+/-", self.prim_A_error_BS)
-#                print("prim B =", self.prim_B, "+/-", self.prim_B_error_BS)
-#                print("prim f =", self.prim_f, "+/-", self.prim_f_error_BS)
-#                print("prim F_avg =", self.prim_F_avg, "+/-", self.prim_F_avg_error_BS)
-#                print("prim r =", self.prim_r, "+/-", self.prim_r_error_BS)
-#            if process_cliff:
-#                print("Cliff A =", self.cliff_A, "+/-", self.cliff_A_error_BS)
-#                print("Cliff B =", self.cliff_B, "+/-", self.cliff_B_error_BS)
-#                print("Cliff f =", self.cliff_f, "+/-", self.cliff_f_error_BS)
-#                print("Cliff F_avg =", self.cliff_F_avg, "+/-", self.cliff_F_avg_error_BS)
-#                print("Cliff r =", self.cliff_r, "+/-", self.cliff_r_error_BS)
-#        elif method == 'analytic':
-#                print("Results with Wallman and Flammia-derived error bars (1 sigma):")
-#                print("Cliff A =", self.cliff_A, "+/-", self.cliff_A_error_WF)
-#                print("Cliff B =", self.cliff_B, "+/-", self.cliff_B_error_WF)
-#                print("Cliff f =", self.cliff_f, "+/-", self.cliff_f_error_WF)
-#                print("Cliff F_avg =", self.cliff_F_avg, "+/-", self.cliff_F_avg_error_WF)
-#                print("Cliff r =", self.cliff_r, "+/-", self.cliff_r_error_WF)
-#                if self.cliff_r - self.cliff_r_error_WF > self.r_0:
-#                    print("r is bigger than r_0 + sigma_r, so above error bars should not be trusted.")
-                    

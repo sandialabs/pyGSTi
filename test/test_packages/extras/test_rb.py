@@ -75,8 +75,7 @@ class RBTestCase(BaseTestCase):
         print("Experimental RB error rate:", rb_results.dicts['clifford']['r'])
 
         rb_results.compute_bootstrap_error_bars(('clifford','primitive'),seed=0)
-        rb_results.compute_bootstrap_error_bars(('clifford','primitive'),
-                                                randState=np.random.RandomState(0)) #same as above
+        rb_results.compute_bootstrap_error_bars("all", randState=np.random.RandomState(0)) #same
         rb_results.compute_analytic_error_bars(0.001, 0.001, 1.0)
 
         rb_results.print_clifford()
@@ -97,6 +96,11 @@ class RBTestCase(BaseTestCase):
                                                  seed=0)
         lst = rb.list_random_rb_clifford_strings(1,11,5, rb.std1Q.clifford_group,
                                                  10, randState=rndm)
+
+        filename_base = os.path.join(temp_files,'rb_test_empty')
+        rb.write_empty_rb_files(filename_base, 1, 11, 5, rb.std1Q.clifford_group, 10,
+                                None, seed=0)
+
 
     def test_rb_objects(self):
         mxs = [ np.identity(2) ]
