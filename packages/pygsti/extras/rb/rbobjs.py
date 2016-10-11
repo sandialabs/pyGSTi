@@ -334,8 +334,9 @@ class RBResults(object):
         newplot = _plt.figure(figsize=(8, 4))
         newplotgca = newplot.gca()
 
-        xdata = self.dicts[gstyp]['lengths']
-        ydata = self.dicts[gstyp]['successes']
+        # Note: minus one to get xdata discounts final Clifford-inverse
+        xdata = _np.asarray(self.dicts[gstyp]['lengths']) - 1 
+        ydata = _np.asarray(self.dicts[gstyp]['successes'])
         A = self.dicts[gstyp]['A']
         B = self.dicts[gstyp]['B']
         f = self.dicts[gstyp]['f']
@@ -495,7 +496,8 @@ class RBResults(object):
         print('epsilon =',epsilon)
         print('r_0 =',r_0)
 
-        gstyp_list = ['clifford'] #KENNY: WF assume clifford-gatestring data (??)
+        gstyp_list = ['clifford'] 
+          #KENNY: does WF assume clifford-gatestring data?
         
         for gstyp in gstyp_list:
             Ns = _np.array(self.dicts[gstyp]['counts'])
