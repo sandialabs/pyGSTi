@@ -12,9 +12,11 @@ import warnings as _warnings
 
 from ..objects import gatestring as _gs
 from ..objects import dataset as _ds
+from . import gatestringconstruction as _gstrc
 
 def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
-                       sampleError="none", seed=None, randState=None):
+                       sampleError="none", seed=None, randState=None,
+                       aliasDict=None):
     """Creates a DataSet using the probabilities obtained from a gateset.
 
     Parameters
@@ -62,6 +64,13 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
         multiple random function calls but you don't want to bother with
         manually incrementing seeds between those calls.
 
+    aliasDict : dict, optional
+        A dictionary mapping single gate labels into tuples of one or more 
+        other gate labels which translate the given gate strings before values
+        are computed using `gatesetOrDataset`.  The resulting Dataset, however,
+        contains the *un-translated* gate strings as keys.
+
+
     Returns
     -------
     DataSet
@@ -83,9 +92,16 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
         else:
             rndm = randState
 
-    for k,s in enumerate(gatestring_list):
+    if aliasDict is not None:
+        translated_list = _gstrc.translate_gatestring_list(
+                                      gatestring_list, aliasDict)
+    else: translated_list = gatestring_list
+
+    for k,(s,trans_s) in enumerate(zip(gatestring_list,translated_list)):
+
         if gsGen:
-            ps = gsGen.probs(s) # a dictionary of probabilities; keys = spam labels
+            ps = gsGen.probs(trans_s) 
+              # a dictionary of probabilities; keys = spam labels
 
             if sampleError in ("binomial","multinomial"):
                 #Adjust to probabilities if needed (and warn if not close to in-bounds)
@@ -110,10 +126,11 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                     
                 assert(0.0 <= sum(ps.values()) <= 1.0)
         else:
-            ps = { sl: dsGen[s].fraction(sl) for sl in dsGen.get_spam_labels() }
+            ps = { sl: dsGen[trans_s].fraction(sl) 
+                   for sl in dsGen.get_spam_labels() }
 
         if nSamples is None and dsGen is not None:
-            N = dsGen[s].total() #use the number of samples from the generating dataset
+            N = dsGen[trans_s].total() #use the number of samples from the generating dataset
         else:
             try:
                 N = nSamples[k] #try to treat nSamples as a list
