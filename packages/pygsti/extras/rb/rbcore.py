@@ -402,6 +402,9 @@ def do_rb_base(dataset, base_gatestrings, basename, alias_maps=None,
 
 
     def fit(xdata,ydata):
+        xdata = _np.asarray(xdata) - 1 #discount Clifford-inverse
+        ydata = _np.asarray(ydata)
+
         def obj_func_full(params):
             A,B,f = params
             return _np.sum((A+B*f**xdata-ydata)**2)

@@ -220,8 +220,8 @@ def analytic_rb_gate_error_rate(actual, target, clifford_group):
     
     twirled_channel = clifford_twirl(_np.dot(actual,_np.linalg.inv(target)),
                                      clifford_group)
-    #TODO: is below formulat correct for arbitrary clifford groups? (or 
-    #  should we assert twirled_channel.shape == (4,4) here? KENNY
+    #KENNY: is below formulat correct for arbitrary clifford groups? (or 
+    #  should we assert twirled_channel.shape == (4,4) here? 
     # from docstring:  *At present only works for single-qubit gates.*
     error_rate = 0.5 * (1 - 1./3 * (_np.trace(twirled_channel) - 1))
     return error_rate
