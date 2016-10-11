@@ -38,7 +38,7 @@ elif doDrivers == 'True':
     tests = ['drivers']
 
 elif doDefault == 'True':
-    tests = ['objects', 'tools', 'iotest', 'optimize', 'algorithms', 'construction']
+    tests = ['objects', 'tools', 'iotest', 'optimize', 'algorithms', 'construction','extras']
 
 elif doMPI == 'True':
     tests = ['mpi']
