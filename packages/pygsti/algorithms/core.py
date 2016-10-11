@@ -2770,7 +2770,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
                 for gateLbl in gs.gates:
                     wt = itemWeights.get(gateLbl, gateWeight)
                     diff += wt * (1.0 - _tools.process_fidelity(
-                            targetGateset.gates[gateLbl], gs.gates[gateLbl]))
+                            targetGateset.gates[gateLbl], gs.gates[gateLbl]))**2
 
             elif targetGatesMetric == "tracedist":
                 for gateLbl in gs.gates:
@@ -2788,7 +2788,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
                     wt = itemWeights.get(spamlabel, spamWeight)
                     diff += wt * (1.0 - _tools.process_fidelity(
                             targetGateset.get_spamgate(spamlabel),
-                            gs.get_spamgate(spamlabel)))
+                            gs.get_spamgate(spamlabel)))**2
 
             elif targetSpamMetric == "tracedist":
                 for spamlabel in gs.get_spam_labels():
