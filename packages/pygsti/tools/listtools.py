@@ -76,6 +76,36 @@ def remove_duplicates(l,indexToTest=None):
     return lcopy
 
 
+def compute_occurance_indices(lst):
+    """
+    Returns a 0-based list of integers specifying which occurance,
+    i.e. enumerated duplicate, each list item is.
+
+    For example, if `lst` = [ 'A','B','C','C','A'] then the
+    returned list will be   [  0 , 0 , 0 , 1 , 1 ].  This is useful
+    when working with `DataSet` objects that have `collisionAction` 
+    set to "keepseparate".
+
+    Parameters
+    ----------
+    lst : list
+        The list to process.
+
+    Returns
+    -------
+    list
+    """
+    lookup = {}; ret = []
+    for x in lst:
+        if x not in lookup:
+            lookup[x] = 0
+        else:
+            lookup[x] += 1
+        ret.append( lookup[x] )
+    return ret
+
+
+
 # ------------------------------------------------------------------------------
 # Machinery initially designed for an in-place take operation, which computes
 # how to do in-place permutations of arrays/lists efficiently.  Kept here

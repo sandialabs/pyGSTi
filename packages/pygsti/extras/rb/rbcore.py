@@ -9,6 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 from ... import construction as _cnst
 from ... import objects as _objs
 from ... import io as _io
+from ... import tools as _tools
 from . import rbutils as _rbutils
 from . import rbobjs as _rbobjs
 
@@ -427,9 +428,11 @@ def do_rb_base(dataset, base_gatestrings, basename, alias_maps=None,
 
     #Note: assumes dataset contains gate strings which use *base* labels
     base_lengths = list(map(len,base_gatestrings))
-    Ns = [ dataset[seq].total() for seq in base_gatestrings ]
-    successes = [ dataset[seq].fraction(success_spamlabel) 
-                  for seq in base_gatestrings ] 
+    occ_indices = _tools.compute_occurance_indices(base_gatestrings)
+    Ns = [ dataset.get_row(seq,k).total() 
+           for seq,k in zip(base_gatestrings,occ_indices) ]
+    successes = [ dataset.get_row(seq,k).fraction(success_spamlabel) 
+                  for seq,k in zip(base_gatestrings,occ_indices) ] 
 
     if pre_avg:
         base_lengths,base_successes,base_Ns = \

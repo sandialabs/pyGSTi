@@ -30,7 +30,8 @@ def load_parameter_file(filename):
         return _json.load(inputfile)
     # return _json.load( open(filename, "rb") )
 
-def load_dataset(filename, cache=False, verbosity=1):
+def load_dataset(filename, cache=False, collisionAction="aggregate",
+                 verbosity=1):
     """
     Load a DataSet from a file.  First tries to load file as a
     saved DataSet object, then as a standard text-formatted DataSet.
@@ -46,6 +47,12 @@ def load_dataset(filename, cache=False, verbosity=1):
         and is newer than filename.  If no cache file exists or one
         exists but it is older than filename, a cache file will be
         written after loading from filename.
+
+    collisionAction : {"aggregate", "keepseparate"}
+        Specifies how duplicate gate sequences should be handled.  "aggregate"
+        adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
+        sequence data with by appending a final "#<number>" gate label to the
+        duplicated gate sequence.
 
     verbosity : int, optional
         If zero, no output is shown.  If greater than zero,
@@ -82,7 +89,8 @@ def load_dataset(filename, cache=False, verbosity=1):
 
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
-            ds = parser.parse_datafile(filename, bToStdout)
+            ds = parser.parse_datafile(filename, bToStdout,
+                                       collisionAction=collisionAction)
 
             printer.log("Writing cache file (to speed future loads): %s"
                         % cache_filename)
@@ -90,11 +98,13 @@ def load_dataset(filename, cache=False, verbosity=1):
         else:
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
-            ds = parser.parse_datafile(filename, bToStdout)
+            ds = parser.parse_datafile(filename, bToStdout,
+                                       collisionAction=collisionAction)
         return ds
 
 
-def load_multidataset(filename, cache=False, verbosity=1):
+def load_multidataset(filename, cache=False, collisionAction="aggregate",
+                      verbosity=1):
     """
     Load a MultiDataSet from a file.  First tries to load file as a
     saved MultiDataSet object, then as a standard text-formatted MultiDataSet.
@@ -110,6 +120,12 @@ def load_multidataset(filename, cache=False, verbosity=1):
         and is newer than filename.  If no cache file exists or one
         exists but it is older than filename, a cache file will be
         written after loading from filename.
+
+    collisionAction : {"aggregate", "keepseparate"}
+        Specifies how duplicate gate sequences should be handled.  "aggregate"
+        adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
+        sequence data with by appending a final "#<number>" gate label to the
+        duplicated gate sequence.
 
     verbosity : int, optional
         If zero, no output is shown.  If greater than zero,
@@ -147,7 +163,8 @@ def load_multidataset(filename, cache=False, verbosity=1):
 
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
-            mds = parser.parse_multidatafile(filename, bToStdout)
+            mds = parser.parse_multidatafile(filename, bToStdout,
+                                             collisionAction=collisionAction)
 
             printer.log("Writing cache file (to speed future loads): %s" 
                         % cache_filename)
@@ -156,7 +173,8 @@ def load_multidataset(filename, cache=False, verbosity=1):
         else:
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
-            mds = parser.parse_multidatafile(filename, bToStdout)
+            mds = parser.parse_multidatafile(filename, bToStdout,
+                                             collisionAction=collisionAction)
     return mds
 
 
