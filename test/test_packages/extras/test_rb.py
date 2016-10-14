@@ -44,7 +44,8 @@ class RBTestCase(BaseTestCase):
         N=100    
         rb_data = pygsti.construction.generate_fake_data(gs_experimental,all_rb_sequences,
                                                          N,'binomial',seed=1,
-                                                         aliasDict=clifford_to_primitive)
+                                                         aliasDict=clifford_to_primitive,
+                                                         collisionAction="keepseparate")
 
         rb_results = rb.do_randomized_benchmarking(
             rb_data, all_rb_sequences, success_spamlabel='minus', dim=2,

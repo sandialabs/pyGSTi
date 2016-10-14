@@ -292,7 +292,7 @@ class StdInputParser(object):
                 lookupDict[ label ] = _objs.GateString(tup, s)
         return lookupDict
 
-    def parse_datafile(self, filename, showProgress=True):
+    def parse_datafile(self, filename, showProgress=True, collisionAction="aggregate"):
         """
         Parse a data set file into a DataSet object.
 
@@ -303,6 +303,12 @@ class StdInputParser(object):
 
         showProgress : bool, optional
             Whether or not progress should be displayed
+
+        collisionAction : {"aggregate", "keepseparate"}
+            Specifies how duplicate gate sequences should be handled.  "aggregate"
+            adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
+            sequence data with by appending a final "#<number>" gate label to the
+            duplicated gate sequence.
 
         Returns
         -------
@@ -337,7 +343,7 @@ class StdInputParser(object):
             _os.chdir(orig_cwd)
 
         #Read data lines of data file
-        dataset = _objs.DataSet(spamLabels=spamLabels)
+        dataset = _objs.DataSet(spamLabels=spamLabels,collisionAction=collisionAction)
         nLines  = 0
         with open(filename, 'r') as datafile:
             nLines = sum(1 for line in datafile)
@@ -429,7 +435,8 @@ class StdInputParser(object):
         return countDict
 
 
-    def parse_multidatafile(self, filename, showProgress=True):
+    def parse_multidatafile(self, filename, showProgress=True,
+                            collisionAction="aggregate"):
         """
         Parse a multiple data set file into a MultiDataSet object.
 
@@ -440,6 +447,12 @@ class StdInputParser(object):
 
         showProgress : bool, optional
             Whether or not progress should be displayed
+
+        collisionAction : {"aggregate", "keepseparate"}
+            Specifies how duplicate gate sequences should be handled.  "aggregate"
+            adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
+            sequence data with by appending a final "#<number>" gate label to the
+            duplicated gate sequence.
 
         Returns
         -------
@@ -477,7 +490,8 @@ class StdInputParser(object):
         #Read data lines of data file
         datasets = _OrderedDict()
         for dsLabel,spamLabels in dsSpamLabels.items():
-            datasets[dsLabel] = _objs.DataSet(spamLabels=spamLabels)
+            datasets[dsLabel] = _objs.DataSet(spamLabels=spamLabels,
+                                              collisionAction=collisionAction)
 
         dsCountDicts = _OrderedDict()
         for dsLabel in dsSpamLabels: dsCountDicts[dsLabel] = {}

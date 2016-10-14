@@ -16,7 +16,7 @@ from . import gatestringconstruction as _gstrc
 
 def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                        sampleError="none", seed=None, randState=None,
-                       aliasDict=None):
+                       aliasDict=None, collisionAction="aggregate"):
     """Creates a DataSet using the probabilities obtained from a gateset.
 
     Parameters
@@ -70,6 +70,9 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
         are computed using `gatesetOrDataset`.  The resulting Dataset, however,
         contains the *un-translated* gate strings as keys.
 
+    collisionAction : {"aggregate", "keepseparate"}
+        Determines how duplicate gate sequences are handled by the resulting
+        `DataSet`.  Please see the constructor documentation for `DataSet`.
 
     Returns
     -------
@@ -80,11 +83,13 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
     if isinstance(gatesetOrDataset, _ds.DataSet):
         dsGen = gatesetOrDataset #dataset
         gsGen = None
-        dataset = _ds.DataSet( spamLabels=dsGen.get_spam_labels() )
+        dataset = _ds.DataSet( spamLabels=dsGen.get_spam_labels(),
+                               collisionAction=collisionAction)
     else:
         gsGen = gatesetOrDataset #dataset
         dsGen = None
-        dataset = _ds.DataSet( spamLabels=gsGen.get_spam_labels() )
+        dataset = _ds.DataSet( spamLabels=gsGen.get_spam_labels(),
+                               collisionAction=collisionAction )
 
     if sampleError in ("binomial","multinomial"):
         if randState is None:
