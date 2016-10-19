@@ -437,6 +437,8 @@ def do_rb_base(dataset, base_gatestrings, basename, alias_maps=None,
     if pre_avg:
         base_lengths,base_successes,base_Ns = \
             preavg_by_length(base_lengths,successes,Ns)
+    else:
+        base_lengths,base_successes,base_Ns = base_lengths,successes,Ns
     base_results = fit(base_lengths, base_successes)
     base_results.update({'gatestrings': base_gatestrings,
                           'lengths': base_lengths,
@@ -454,6 +456,8 @@ def do_rb_base(dataset, base_gatestrings, basename, alias_maps=None,
         if pre_avg:
             gstyp_lengths,gstyp_successes,gstyp_Ns = \
                 preavg_by_length(gstyp_lengths,successes,Ns)
+        else:
+            gstyp_lengths,gstyp_successes,gstyp_Ns = gstyp_lengths,successes,Ns
         gstyp_results = fit(gstyp_lengths, gstyp_successes)
         gstyp_results.update({'gatestrings': gstyp_gatestrings,
                               'lengths': gstyp_lengths,
