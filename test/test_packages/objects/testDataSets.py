@@ -242,10 +242,7 @@ Gx^4 0.2 100
         saved_ds = pygsti.io.load_dataset(compare_files + "/Fake_Dataset_multi.txt")
         if bDeepTesting and self.isPython2(): self.assertEqualDatasets(ds_multi, saved_ds)
 
-        #Now test RB and RPE datasets
-        rbDS = pygsti.construction.generate_sim_rb_data(depol_gateset, ds_binom, seed=1234)
-        rbDS_perfect = pygsti.construction.generate_sim_rb_data_perfect(depol_gateset, ds_binom)
-
+        #Now test RPE datasets
         rpeGS = pygsti.construction.make_parameterized_rpe_gate_set(np.pi/2, np.pi/4, 0, 0.1, 0.1, True)
         rpeGS2 = pygsti.construction.make_parameterized_rpe_gate_set(np.pi/2, np.pi/4, 0, 0.1, 0.1, False)
         rpeGS3 = pygsti.construction.make_parameterized_rpe_gate_set(np.pi/2, np.pi/4, np.pi/4, 0.1, 0.1, False)
@@ -396,9 +393,13 @@ Gx^4 20 80 0.2 100
             multiDS.load(streamfile)
         multiDS2 = pygsti.obj.MultiDataSet(fileToLoadFrom=temp_files + "/multidataset.saved")
 
-
-
-
+    def test_collisionAction(self):
+        ds = pygsti.objects.DataSet(spamLabels=['plus','minus'], collisionAction="keepseparate")
+        ds.add_count_list( ('Gx','Gx'), [10,90] )
+        ds.add_count_list( ('Gx','Gy'), [20,80] )
+        ds.add_count_list( ('Gx','Gx'), [30,70] ) # a duplicate
+        self.assertEqual( ds.keys(), [ ('Gx','Gx'), ('Gx','Gy'), ('Gx','Gx','#1') ] )
+        self.assertEqual( ds.keys(stripOccuranceTags=True), [ ('Gx','Gx'), ('Gx','Gy'), ('Gx','Gx') ] )
 
 
 

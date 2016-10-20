@@ -126,7 +126,7 @@ class DataSet(object):
 
     def __init__(self, counts=None, gateStrings=None, gateStringIndices=None,
                  spamLabels=None, spamLabelIndices=None,  bStatic=False, fileToLoadFrom=None,
-                 collisionAction="add"):
+                 collisionAction="aggregate"):
         """
         Initialize a DataSet.
 
@@ -305,12 +305,31 @@ class DataSet(object):
             self.add_count_dict(gatestring, countDict)
         
 
-    def keys(self):
+    def keys(self, stripOccuranceTags=False):
         """
-        Returns the gate strings of this DataSet as tuples
-            of gate labels (not GateString objects).
+        Returns the gate strings used as keys of this DataSet.
+
+        Parameters
+        ----------
+        stripOccuranceTags : bool, optional
+            Only applicable if `collisionAction` has been set to
+            "keepseparate", when this argument is set to True
+            any final "#<number>" elements of (would-be dupilcate)
+            gate sequences are stripped so that the returned list
+            may have *duplicate* entries.
+
+        Returns
+        -------
+        list
+            A list of GateString objects which index the data
+            counts within this data set.            
         """
-        return list(self.gsIndex.keys())
+        if stripOccuranceTags and self.collisionAction == "keepseparate":
+            return [ (gs[:-1] if (len(gs)>0 and gs[-1].startswith("#")) else gs) 
+                     for gs in self.gsIndex.keys() ]
+        else:
+            return list(self.gsIndex.keys())
+        
 
     def has_key(self, gatestring):
         """
