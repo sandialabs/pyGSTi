@@ -51,14 +51,6 @@ class DataSetConstructionTestCase(BaseTestCase):
         dataset = pc.generate_fake_data(self.dataset, self.gatestring_list, nSamples=None, sampleError='multinomial', seed=100)
         dataset = pc.generate_fake_data(dataset, self.gatestring_list, nSamples=1000, sampleError='round', seed=100)
 
-    # Obviously, this isn't an experimental rb data set. I just want to see if the function actually runs -Lucas
-    def test_generate_sim_rb_data(self):
-        dataset = pc.generate_sim_rb_data(self.depolGateset, self.dataset)
-
-    def test_generate_sim_rb_data_perfect(self):
-        dataset = pc.generate_sim_rb_data_perfect(self.depolGateset, self.dataset)
-
-
 
 
 if __name__ == '__main__':

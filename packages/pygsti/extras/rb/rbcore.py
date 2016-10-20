@@ -468,3 +468,58 @@ def do_rb_base(dataset, base_gatestrings, basename, alias_maps=None,
     results = _rbobjs.RBResults(dataset, result_dicts, basename, alias_maps,
                                 success_spamlabel, dim, pre_avg, f0, AB0)
     return results
+
+
+def generate_sim_rb_data(gateset, expRBdataset, seed=None):
+    """
+    Creates a DataSet using the gate strings from a given experimental RB
+    DataSet and probabilities generated from a given GateSet.
+
+    Parameters
+    ----------
+    gateset : GateSet
+       The gate set used to generate probabilities
+
+    expRBdataset : DataSet
+      The data set used to specify which gate strings to compute counts for.
+      Usually this is an experimental RB data set.
+
+    seed : int, optional
+       Seed for numpy's random number generator.
+
+    Returns
+    -------
+    DataSet
+    """
+    gateStrings = list(expRBdataset.keys(stripOccuranceTags=True))
+    Ns = [ expRBdataset[s].total() for s in gateStrings ]
+    return _cnst.generate_fake_data(gateset,gateStrings,Ns,sampleError='multinomial',
+                                    collisionAction=expRBdataset.collisionAction)
+
+
+def generate_sim_rb_data_perfect(gateset,expRBdataset,N=1e6):
+    """
+    Creates a "perfect" DataSet using the gate strings from a given
+    experimental RB DataSet and probabilities generated from a given GateSet.
+    "Perfect" here means the generated counts have no sampling error.
+
+    Parameters
+    ----------
+    gateset : GateSet
+       The gate set used to generate probabilities
+
+    expRBdataset : DataSet
+      The data set used to specify which gate strings to compute counts for.
+      Usually this is an experimental RB data set.
+
+    N : int, optional
+       The (uniform) number of samples to use.
+
+    Returns
+    -------
+    DataSet
+    """
+    gateStrings = list(expRBdataset.keys(stripOccuranceTags=True))
+    return _cnst.generate_fake_data(gateset,gateStrings,N,sampleError='none',
+                                    collisionAction=expRBdataset.collisionAction)
+

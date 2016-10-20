@@ -126,6 +126,23 @@ class RBTestCase(BaseTestCase):
 
     def test_rb_utils(self):
         pass
+
+    
+    def test_rb_dataset_construction(self):
+        gateset = std1Q_XYI.gs_target
+        fids,germs = std1Q_XYI.fiducials, std1Q_XYI.germs
+        depol_gateset = gateset.depolarize(gate_noise=0.1,spam_noise=0)
+        gateStrings = pygsti.construction.create_gatestring_list(
+            "f0+T(germ,N)+f1", f0=fids, f1=fids, germ=germs, N=3,
+            T=pygsti.construction.repeat_with_max_length,
+            order=["germ","f0","f1"])
+        ds_binom = pygsti.construction.generate_fake_data(depol_gateset, gateStrings, nSamples=1000,
+                                                          sampleError='binomial', seed=100,
+                                                          collisionAction="keepseparate")
+
+        rbDS = rb.generate_sim_rb_data(depol_gateset, ds_binom, seed=1234)
+        rbDS_perfect = rb.generate_sim_rb_data_perfect(depol_gateset, ds_binom)
+
             
 
 

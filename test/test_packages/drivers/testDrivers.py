@@ -222,7 +222,7 @@ class TestDriversMethods(DriversTestCase):
         result = self.runSilent(pygsti.do_long_sequence_gst,
                                 ds, gs_target, std.fiducials, std.fiducials,
                                 std.germs, maxLens, truncScheme=ts, constrainToTP=False,
-                                advancedOptions={'tolerance':1e-3} ) #decrease tolerance
+                                advancedOptions={'tolerance':1e-4} ) #decrease tolerance
                                 # b/c this problem seems hard to converge at the very end
                                 # very small changes (~0.0001) to the total chi^2.
 

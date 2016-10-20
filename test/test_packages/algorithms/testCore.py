@@ -397,7 +397,7 @@ class TestCoreMethods(BaseTestCase):
 
         gs_lsgst_compare = pygsti.io.load_gateset(compare_files + "/lsgstMS.gateset")
         gs_lsgst_go = pygsti.optimize_gauge(gs_lsgst, 'target', targetGateset=gs_lsgst_compare, spamWeight=1.0)
-        self.assertAlmostEqual( gs_lsgst_go.frobeniusdist(gs_lsgst_compare), 0, places=5)
+        self.assertAlmostEqual( gs_lsgst_go.frobeniusdist(gs_lsgst_compare), 0, places=4)
 
     def test_miscellaneous(self):
         ds = self.ds

@@ -16,8 +16,9 @@ from ..tools import mpitools as _mpit
 MACH_PRECISION = 1e-12
 
 
-def custom_leastsq(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
-                   rel_tol=1e-6, max_iter=100, comm=None, verbosity=0, profiler=None):
+def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
+                   rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, comm=None,
+                   verbosity=0, profiler=None):
     msg = ""
     converged = False
     x = x0
@@ -42,8 +43,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
         if len(msg) > 0: 
             break #exit outer loop if an exit-message has been set
 
-        if norm_f < f_norm_tol**2:
-            msg = "norm(objectivefn) is small"
+        if norm_f < f_norm2_tol:
+            msg = "Sum of squares is at most %g" % f_norm2_tol
             converged = True; break
 
         if verbosity > 0:
@@ -71,7 +72,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
         undampled_JTJ_diag = JTJ.diagonal().copy()
 
         if norm_JTf < jac_norm_tol:
-            msg = "norm(jacobian) is small"
+            msg = "norm(jacobian) is at most %g" % jac_norm_tol
             converged = True; break
 
         if k == 0:
@@ -102,11 +103,11 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
                 if verbosity > 1:
                     print("  - Inner Loop: mu=%g, norm_dx=%g" % (mu,norm_dx))
 
-                if norm_dx < (rel_tol**2)*norm_x:
-                    msg = "relative change in x is small"
+                if norm_dx < (rel_xtol**2)*norm_x:
+                    msg = "Relative change in |x| is at most %g" % rel_xtol
                     converged = True; break
 
-                if norm_dx > (norm_x+rel_tol)/(MACH_PRECISION**2):
+                if norm_dx > (norm_x+rel_xtol)/(MACH_PRECISION**2):
                     msg = "(near-)singular linear system"; break
                 
                 new_f = obj_fn(new_x)
@@ -119,8 +120,14 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
                 dF = norm_f - norm_new_f      # actual decrease in ||F||^2
 
                 if verbosity > 1:
-                    print("      (cont): norm_new_f=%g, dL=%g, dF=%g" % 
-                          (norm_new_f,dL,dF))
+                    print("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g" % 
+                          (norm_new_f,dL,dF,dL/norm_f,dF/norm_f))
+
+                if dL/norm_f < rel_ftol and dF/norm_f < rel_ftol and dF/dL < 2.0:
+                    msg = "Both actual and predicted relative reductions in the" + \
+                        " sum of squares are at most %g" % rel_ftol
+                    converged = True; break
+
                 if profiler: profiler.mem_check("custom_leastsq: before success")
 
                 if dL > 0 and dF > 0:
