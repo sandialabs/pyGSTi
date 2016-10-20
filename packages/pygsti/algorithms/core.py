@@ -1314,8 +1314,9 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     x0 = gs.to_vector()
     if CUSTOMLM:
         opt_x,converged,msg = _opt.custom_leastsq(
-            objective_func, jacobian, x0, f_norm_tol=_np.sqrt(tol),
-            jac_norm_tol=tol,rel_tol=tol, max_iter=maxiter, comm=comm,
+            objective_func, jacobian, x0, f_norm2_tol=tol,
+            jac_norm_tol=tol, rel_ftol=tol, rel_xtol=tol,
+            max_iter=maxiter, comm=comm,
             verbosity=printer.verbosity-1, profiler=profiler)
         printer.log("Least squares message = %s" % msg,2)
         assert(converged)
@@ -2303,8 +2304,9 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     x0 = gs.to_vector()
     if CUSTOMLM:
         opt_x,converged,msg = _opt.custom_leastsq(
-            objective_func, jacobian, x0, f_norm_tol=_np.sqrt(tol),
-            jac_norm_tol=tol, rel_tol=tol, max_iter=maxiter, comm=comm,
+            objective_func, jacobian, x0, f_norm2_tol=tol,
+            jac_norm_tol=tol, rel_ftol=tol, rel_xtol=tol,
+            max_iter=maxiter, comm=comm,
             verbosity=printer.verbosity-1, profiler=profiler)
         printer.log("Least squares message = %s" % msg,2)
         assert(converged)
