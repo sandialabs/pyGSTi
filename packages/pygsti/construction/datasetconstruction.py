@@ -129,7 +129,7 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                             ps[sl] -= x; extra_p -= x
                         else: break
                     
-                assert(0.0 <= sum(ps.values()) <= 1.0)
+                assert(-TOL <= sum(ps.values()) <= 1.+TOL)
         else:
             ps = { sl: dsGen[trans_s].fraction(sl) 
                    for sl in dsGen.get_spam_labels() }
