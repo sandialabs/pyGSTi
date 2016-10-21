@@ -193,7 +193,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
 
     #Get dataset
     if isinstance(dataFilenameOrSet, str):
-        ds = _io.load_dataset(dataFilenameOrSet, True, printer)
+        ds = _io.load_dataset(dataFilenameOrSet, True, "aggregate", printer)
         default_dir = _os.path.dirname(dataFilenameOrSet) #default directory for reports, etc
         default_base = _os.path.splitext( _os.path.basename(dataFilenameOrSet) )[0]
     else:
