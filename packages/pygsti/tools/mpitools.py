@@ -336,11 +336,11 @@ def distribute_for_dot(contracted_dim, comm):
 
 def mpidot(a,b,loc_slice,comm):
     """ TODO: docstring """
-    from mpi4py import MPI #not at top so can import pygsti on cluster login nodes
     if comm is None or comm.Get_size() == 1:
         assert(loc_slice == slice(0,b.shape[0]))
         return _np.dot(a,b)
 
+    from mpi4py import MPI #not at top so can import pygsti on cluster login nodes
     loc_dot = _np.dot(a[:,loc_slice],b[loc_slice,:])
     result = _np.empty( loc_dot.shape, loc_dot.dtype )
     comm.Allreduce(loc_dot, result, op=MPI.SUM)
