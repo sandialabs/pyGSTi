@@ -879,7 +879,7 @@ class LinearlyParameterizedGate(Gate):
         Build the internal gate matrix using the current parameters.
         """
         matrix = self.baseMatrix.copy()
-        for (i,j),terms in list(self.elementExpressions.items()):
+        for (i,j),terms in self.elementExpressions.items():
             for term in terms:
                 param_prod = _np.prod( [ self.parameterArray[p] for p in term.paramIndices ] )
                 matrix[i,j] += term.coeff * param_prod
@@ -974,14 +974,21 @@ class LinearlyParameterizedGate(Gate):
             Array of derivatives, shape == (dimension^2, num_params)
         """
         #k = 0
-        derivMx = _np.zeros( (self.dim**2, self.numParams), 'd' )
-        for (i,j),terms in list(self.elementExpressions.items()):
-            vec_ij = i*self.dim + j
+        derivMx = _np.zeros( (self.numParams, self.dim, self.dim), 'complex' )
+        for (i,j),terms in self.elementExpressions.items():
             for term in terms:
                 params_to_mult = [ self.parameterArray[p] for p in term.paramIndices ]
                 for i,p in enumerate(term.paramIndices):
                     param_partial_prod = _np.prod( params_to_mult[0:i] + params_to_mult[i+1:] ) # exclude i-th factor
-                    derivMx[vec_ij, p] += term.coeff * param_partial_prod
+                    derivMx[p,i,j] += term.coeff * param_partial_prod
+
+        derivMx = _np.dot(self.leftTrans, _np.dot(derivMx, self.rightTrans)) # (d,d) * (P,d,d) * (d,d) => (P,d,d)
+        derivMx = _np.rollaxis(derivMx,0,3) # now (d,d,P)
+        derivMx = derivMx.reshape([self.dim**2, self.numParams]) # (d^2,P) == final shape
+
+        if self.enforceReal:
+            assert(_np.linalg.norm(_np.imag(derivMx)) < 1e-8)
+            derivMx = _np.real(derivMx)
 
         if wrtFilter is None:
             return derivMx
