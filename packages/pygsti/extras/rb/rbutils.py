@@ -55,6 +55,27 @@ def rb_decay_WF(m,A,B,f):#Taken from Wallman and Flammia- Eq. 1
     """
     return A+B*f**m
 
+def rb_decay_1st_order(m,A1,B1,C1,D1,f1):
+    """
+    Computes the first order survival probability function 
+    F = A1 + B1*f1^m + C1(D1-f1^2)f1^(m-2), as provided in Equation 3 of "Scalable 
+    and Robust Randomized Benchmarking of Quantum Processes" 
+    (http://journals.aps.org/prl/abstract/10.1103/PhysRevLett.106.180504).
+
+    Parameters
+    ----------
+    m : integer
+        RB sequence length minus one
+    
+    A1,B1,C1,D1,f1 : float
+
+    Returns
+    -------
+    float
+    """
+
+    return A1+B1*f1**m+C1*(m-1)*(D1-f1**2)*f1**(m-2)
+
 
 def create_K_m_sched(m_min,m_max,Delta_m,epsilon,delta,r_0,
                      sigma_m_squared_func=_sigma_m_squared_base_WF):
@@ -169,6 +190,25 @@ def f_to_r(f,d=2):
     """
     r = 1 - f_to_F_avg(f,d=d)
     return r
+
+def D1f1_to_gdep(D1,f1):
+    """
+    Calculates the measure of date-dependence in the noise as defined below
+    Equation 4 in "Robust Randomized Benchmarking of Quantum Processes" 
+    (http://journals.aps.org/prl/abstract/10.1103/PhysRevLett.106.180504).
+
+    Parameters
+    ----------
+    D1, f1 : float
+        Two of the fit parameters from first order fitting model
+      
+    Returns
+    -------
+    gdep : float
+    
+    """
+    gdep = D1 - f1**2
+    return gdep
 
 
 def clifford_twirl(M,clifford_group):
