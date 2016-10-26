@@ -2205,11 +2205,6 @@ class GateSetCalculator(object):
 
             #Set wrtBlockSize to use available processors if it isn't specified
             if wrtFilter is None:
-                #if mySubComm is not None: #DEBUG3
-                #    blkSizeTest = mySubComm.bcast(wrtBlockSize,root=0)
-                #    print("MPIDBB: rank%d wrtBlockSize = %g" % (comm.Get_rank(),wrtBlockSize))
-                #    assert(abs(blkSizeTest-wrtBlockSize) < 1e-3) #all procs should have *same*
-
                 blkSize = wrtBlockSize #could be None
                 if (mySubComm is not None) and (mySubComm.Get_size() > 1):
                     comm_blkSize = self.tot_gate_params / mySubComm.Get_size()
@@ -2239,18 +2234,8 @@ class GateSetCalculator(object):
                 assert(wrtFilter is None) #cannot specify both wrtFilter and blkSize
                 nBlks = int(_np.ceil(self.tot_gate_params / blkSize))
                   # num blocks required to achieve desired average size == blkSize
-                #if mySubComm is not None: #DEBUG3
-                #    blkSizeTest = mySubComm.bcast(blkSize,root=0)
-                #    print("MPIDBB: rank%d blkSize = %g" % (comm.Get_rank(),blkSize))
-                #    nBlksTest = mySubComm.bcast(nBlks, root=0)
-                #    print("MPIDBB: rank%d nBlks = %d" % (comm.Get_rank(),nBlks))
-                #    assert(blkSizeTest == blkSize) #all procs should have *same*
-                #    assert(nBlksTest == nBlks) #all procs should have *same*
                 blocks = _mpit.slice_up_range(self.tot_gate_params, nBlks,
                                               start=self.tot_spam_params)
-                #if mySubComm is not None: #DEBUG3
-                #    blksTest = mySubComm.bcast(blocks, root=0)
-                #    assert(blksTest == blocks) #all procs should have *same*
 
                 # Create placeholder dGs for *no* gate params to compute
                 #  derivatives wrt all spam parameters
@@ -2270,10 +2255,6 @@ class GateSetCalculator(object):
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
                        +" than derivative columns(%d)!" % self.tot_gate_params 
                        +" [blkSize = %.1f, nBlks=%d]" % (blkSize,nBlks))
-                #if comm is not None: #still use global comm for debugging rank
-                #    print("MPI DEBUG: Rank%d p-block sizes = %s" % 
-                #          (comm.Get_rank(),",".join([str(_slct.length(blocks[i]))
-                #                                     for i in myBlkIndices])))
 
                 def calc_and_fill_blk(spamLabel, isp, fslc, pslc, sumInto):
                     tm = _time.time()
@@ -2313,12 +2294,6 @@ class GateSetCalculator(object):
                     profiler.mem_check("bulk_fill_dprobs: post fill blk")
 
                 #gather results
-                #if comm is not None and comm.Get_rank() == 0:
-                #    print("DEBUG1: blocks = ",blocks)
-                #    print("DEBUG1: owners = ",blkOwners)
-                #    print("DEBUG1: final slice = ",fslc)
-                #    print("DEBUG1: mxToFill[:,fslc] shape=", mxToFill[:,fslc].shape)
-                #    print("DEBUG1: subcomm size = ",mySubComm.Get_size())
                 tm = _time.time()
                 _mpit.gather_slices(blocks, blkOwners, mxToFill[:,fslc],
                                     2, mySubComm, gatherMemLimit)
@@ -2329,11 +2304,6 @@ class GateSetCalculator(object):
         #collect/gather results
         tm = _time.time()
         subtreeFinalSlices = [ t.final_slice(evalTree) for t in subtrees]
-        #if comm is not None and comm.Get_rank() == 0:
-        #    print("DEBUG2: slices = ",subtreeFinalSlices)
-        #    print("DEBUG2: owners = ",subTreeOwners)
-        #    print("DEBUG2: mxToFill shape=", mxToFill.shape)
-        #    print("DEBUG2: comm size = ",comm.Get_size())
         _mpit.gather_slices(subtreeFinalSlices, subTreeOwners, mxToFill,
                             1, comm, gatherMemLimit) 
         #note: pass mxToFill, dim=(K,S,M), so gather mxToFill[:,fslc] (axis=1)
