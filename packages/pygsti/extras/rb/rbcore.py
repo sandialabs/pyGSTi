@@ -324,7 +324,7 @@ def do_randomized_benchmarking(dataset, clifford_gatestrings,
 
 def do_rb_base(dataset, base_gatestrings, basename, alias_maps=None,
                success_spamlabel = 'plus', dim = 2, pre_avg=True,
-               f0 = [0.98], AB0 = [0.5,0.5]):
+               f0 = [0.98], AB0 = [0.5,0.5], ABCD0=None):
     """
     Core Randomized Benchmarking compute function.
 
@@ -378,6 +378,12 @@ def do_rb_base(dataset, base_gatestrings, basename, alias_maps=None,
         A length-2 list, [A0, B0], of starting values for the 'A' and 'B'
         fitting parameters.  The default values are almost always fine, and
         one should only modifiy this parameter in special cases.
+        
+    ABCD0 : list, optional
+        If not None, a length-4 list of starting values for the 'A', 'B', 'C' 
+        and 'D' fitting parameters in the *first order* fit.  Setting to None
+        should almost always be fine, and in this case the parameters 'A', 'B', 
+        and 'D' are seeded by values obtained in the zeroth order fit.
 
     Returns
     -------
@@ -413,6 +419,10 @@ def do_rb_base(dataset, base_gatestrings, basename, alias_maps=None,
         def obj_func_1d(f):
             A = B = 0.5
             return obj_func_full([A,B,f])
+        
+        def obj_func_1st_order_full(params):
+            A,B,C,D,f = params
+            return _np.sum((A+B*f**xdata+C*(xdata-1)*(D-f**2)*f**(xdata-2)-ydata)**2)
 
         initial_soln = _minimize(obj_func_1d,f0, method='L-BFGS-B',
                                  bounds=[(0.,1.)])
@@ -420,9 +430,35 @@ def do_rb_base(dataset, base_gatestrings, basename, alias_maps=None,
         p0 = AB0 + [f0b]
         final_soln = _minimize(obj_func_full,p0, method='L-BFGS-B',
                                bounds=[(0.,1.),(0.0,1.),(0.,1.)])
+        # TIM: Strictly speaking, A is not bounded within [0,1], although it is for
+        # reasonably good SPAM and gates. Under the assumption that the zeroth order
+        # model is correct (i.e., gate indep. noise), it is B and A+B which are 
+        # probabilities and guaranteed to be within [0,1], regardless of the quality
+        # of SPAM and the gates.
+        
         A,B,f = final_soln.x
+        
+        if ABCD0 is None:
+            C0 = 0.5
+            D0 = f**2
+            p1st0 = [A,B,C0,D0,f]
+        else:
+            p1st0 = ABCD0 + [f]
+        
+        final_soln_1storder = _minimize(obj_func_1st_order_full, p1st0, 
+                               method='L-BFGS-B',
+                               bounds=[(-1.,1.),(-1.,1.),(-1.,1.),(0.,1.),(0.,1.)])
+        # TIM: Are the bounds on these variables valid? Probably not, but it is 
+        # very unclear what they should be (note, A1,B1 and A,B are not the same thing,
+        # so it isn't necessarily true that e.g, B in [0,1]). However,It is very likely 
+        # that these bounds hold for `reasonably good' gate sets.
+        
+        A1,B1,C1,D1,f1 = final_soln_1storder.x
+           
         return {'A': A,'B': B,'f': f, 'F_avg': _rbutils.f_to_F_avg(f,dim),
-                'r': _rbutils.f_to_r(f,dim)}
+                'r': _rbutils.f_to_r(f,dim), 'A1': A1, 'B1': B1, 'C1': C1,
+                'D1': D1, 'f1': f1, 'F_avg1': _rbutils.f_to_F_avg(f1,dim),
+                'r1': _rbutils.f_to_r(f1,dim), 'gdep':_rbutils.D1f1_to_gdep(D1,f1)}
 
     result_dicts = {}
 
@@ -466,7 +502,7 @@ def do_rb_base(dataset, base_gatestrings, basename, alias_maps=None,
         result_dicts[gstyp] = gstyp_results
 
     results = _rbobjs.RBResults(dataset, result_dicts, basename, alias_maps,
-                                success_spamlabel, dim, pre_avg, f0, AB0)
+                                success_spamlabel, dim, pre_avg, f0, AB0, ABCD0)
     return results
 
 
