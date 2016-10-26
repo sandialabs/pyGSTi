@@ -608,67 +608,8 @@ class EvalTree(list):
                     startingTreeEls.update( singleItemTreeSetList[i_min] )
                     del availableIndices[ii_min]
 
-
-                #WORKS, but not optimal
-                #iStartingTrees = []
-                #availableIndices = list(range(nSingleItemTrees))
-                #while len(iStartingTrees) < numSubTrees:
-                #    print("SPLIT: beginning starting tree iter with" +
-                #          "%d available and %d starting trees" %
-                #          (len(availableIndices), len(iStartingTrees)))
-                #    #build a sorted list of the minimal intersections for each
-                #    # available index.  This is essentially finding each
-                #    # single-item-set's "top pick" of a partner single-item-set
-                #    # to add as a starting tree along with it.
-                #    intersectSizes = []
-                #    for ii,i in enumerate(availableIndices[:-1]):
-                #        s1 = singleItemTreeSetList[i]
-                #        jj_min = _np.argmin(
-                #            ( len(s1.intersection( singleItemTreeSetList[j] ))
-                #              for j in availableIndices[ii+1:] ) ) + (ii+1)
-                #        j_min = availableIndices[jj_min] # *index* of minimal intersect with s1
-                #        minIntSize = len(s1.intersection(singleItemTreeSetList[j_min]))
-                #        intersectSizes.append( ((i,j_min,ii,jj_min),minIntSize) )
-                #    sortedIntersects = sorted(intersectSizes,key=lambda x: x[1])
-                #
-                #    #Add starting trees based on these minimal intersects.  If
-                #    # we exhaust all the small intersection pairs we've found
-                #    # then repeat, restricting to the updated available indices.
-                #    toRemove = []
-                #    for (i,j,ii,jj),_ in sortedIntersects:
-                #        if i in iStartingTrees or j in iStartingTrees: continue
-                #        iStartingTrees.append(i); toRemove.append(ii)
-                #        if len(iStartingTrees) == numSubTrees:  break
-                #        iStartingTrees.append(j); toRemove.append(jj)
-                #        if len(iStartingTrees) == numSubTrees:  break
-                #    else:
-                #        #We'll need to iterate again, so remove the available indices
-                #        # that have already been added as starting trees
-                #        toRemove = sorted(toRemove, reverse=True)
-                #        for index in toRemove:
-                #            del availableIndices[index]
-                
-                #ORIGINAL: this uses too much memory and procs die
-                #intersectSizes = {}
-                #for i in range(nSingleItemTrees):
-                #    s1 = singleItemTreeSetList[i]
-                #    for j in range(i+1,nSingleItemTrees):
-                #        s2 = singleItemTreeSetList[j]
-                #        intersectSizes[(i,j)] = len(s1.intersection(s2))
-                #
-                #print("SPLIT 2b. mem = %g" %  (_prof._get_mem_usage()*_prof.BtoGB) )
-                #sortedIntersects = sorted(iter(intersectSizes.items()),
-                #                            key=lambda x: x[1])
-                #print("SPLIT 3 mem = %g" % (_prof._get_mem_usage()*_prof.BtoGB) )
-                #iStartingTrees = []
-                #for (i,j),_ in sortedIntersects:
-                #    if i in iStartingTrees or j in iStartingTrees: continue
-                #    iStartingTrees.append(i)
-                #    if len(iStartingTrees) == numSubTrees:  break
-                #    iStartingTrees.append(j)
-                #    if len(iStartingTrees) == numSubTrees:  break
-                #else:
-                #    raise ValueError("Could not find set of starting trees!")
+                #Merge all the non-starting trees into the starting trees
+                # so that we're left with the desired number of trees
                 subTreeSetList = [singleItemTreeSetList[i] for i in iStartingTrees]
                 assert(len(subTreeSetList) == numSubTrees)
 
