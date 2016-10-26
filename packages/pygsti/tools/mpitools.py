@@ -9,7 +9,48 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 
 def distribute_indices(indices, comm, allow_split_comm=True):
-    """ TODO: docstring """
+    """ 
+    Partition an array of indices (any type) evenly among `comm`'s processors.
+
+    Parameters
+    ----------
+    indices : list
+        An array of items (any type) which are to be partitioned.
+
+    comm : mpi4py.MPI.Comm
+        The communicator which specifies the number of processors and
+        which may be split into returned sub-communicators.
+
+    allow_split_comm : bool
+        If True, when there are more processors than indices, 
+        multiple processors will be given the *same* set of local
+        indices and `comm` will be split into sub-communicators,
+        one for each group of processors that are given the same
+        indices.  If False, then "extra" processors are simply given
+        nothing to do, i.e. empty lists of local indices.
+
+    Returns
+    -------
+    loc_indices : list
+        A list containing the elements of `indices` belonging to the current
+        processor.
+
+    owners : dict
+        A dictionary mapping the elements of `indices` to integer ranks, such
+        that `owners[el]` gives the rank of the processor responsible for 
+        communicating that element's results to the other processors.  Note that
+        in the case when `allow_split_comm=True` and multiple procesors have
+        computed the results for a given element, only a single (the first) 
+        processor rank "owns" the element, and is thus responsible for sharing
+        the results.  This notion of ownership is useful when gathering the
+        results.
+        
+    loc_comm : mpi4py.MPI.Comm or None
+        The local communicator for the group of processors which have been
+        given the same `loc_indices` to compute, obtained by splitting `comm`.
+        If `loc_indices` is unique to the current processor, or if 
+        `allow_split_comm` is False, None is returned.
+    """
     if comm is None:
         nprocs, rank = 1, 0
     else:
@@ -31,7 +72,51 @@ def distribute_indices(indices, comm, allow_split_comm=True):
     return loc_indices, owners, loc_comm
 
 def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
-    """ TODO: docstring """
+    """ 
+    Partition an array of "indices" evenly among a given number of "processors"
+
+    This function is similar to :func:`distribute_indices`, but allows for more
+    a more generalized notion of what a "processor" is, since the number of
+    processors and rank are given independently and do not have to be
+    associated with an MPI comm.  Note also that `indices` can be an arbitrary
+    list of items, making this function very general.
+
+    Parameters
+    ----------
+    indices : list
+        An array of items (any type) which are to be partitioned.
+       
+    nprocs : int
+        The number of "processors" to distribute the elements of
+        `indices` among.
+
+    rank : int
+        The rank of the current "processor" (must be an integer
+        between 0 and `nprocs-1`).  Note that this value is not
+        obtained from any MPI communicator.
+
+    allow_split_comm : bool
+        If True, when there are more processors than indices, 
+        multiple processors will be given the *same* set of local
+        indices.  If False, then extra processors are simply given
+        nothing to do, i.e. empty lists of local indices.
+
+    Returns
+    -------
+    loc_indices : list
+        A list containing the elements of `indices` belonging to the current
+        processor (i.e. the one specified by `rank`).
+
+    owners : dict
+        A dictionary mapping the elements of `indices` to integer ranks, such
+        that `owners[el]` gives the rank of the processor responsible for 
+        communicating that element's results to the other processors.  Note that
+        in the case when `allow_split_comm=True` and multiple procesors have
+        computed the results for a given element, only a single (the first) 
+        processor rank "owns" the element, and is thus responsible for sharing
+        the results.  This notion of ownership is useful when gathering the
+        results.
+    """
     nIndices = len(indices)
     if nIndices == 0: # special case when == 0
         return [], {}
@@ -122,7 +207,41 @@ def slice_up_range(n, num_slices, start=0):
 
 
 def distribute_slice(s, comm, allow_split_comm=True):
-    """ TODO: docstring """
+    """ 
+    Partition a continuous slice evenly among `comm`'s processors.
+
+    This function is similar to :func:`distribute_indices`, but
+    is specific to the case when the indices being distributed
+    are a consecutive set of integers (specified by a slice).
+
+    Parameters
+    ----------
+    s : slice
+        The slice to be partitioned.
+
+    comm : mpi4py.MPI.Comm
+        The communicator which specifies the number of processors and
+        which may be split into returned sub-communicators.
+
+    allow_split_comm : bool
+        If True, when there are more processors than slice indices, 
+        multiple processors will be given the *same* local slice
+        and `comm` will be split into sub-communicators, one for each
+        group of processors that are given the same local slice.
+        If False, then "extra" processors are simply given
+        nothing to do, i.e. an empty local slice.
+
+    Returns
+    -------
+    loc_slice : slice
+        A slice specifying the indices belonging to the current processor.
+        
+    loc_comm : mpi4py.MPI.Comm or None
+        The local communicator for the group of processors which have been
+        given the same `loc_slice` to compute, obtained by splitting `comm`.
+        If `loc_slice` is unique to the current processor, or if 
+        `allow_split_comm` is False, None is returned.
+    """
     if comm is None:
         nprocs, rank = 1, 0
     else:
@@ -133,7 +252,7 @@ def distribute_slice(s, comm, allow_split_comm=True):
       # Though in principle this should be able to work
     if s.start is None or s.stop is None: indices = []
     else: indices = list(range(s.start,s.stop))
-    loc_indices, owners = distribute_indices_base(indices, nprocs, rank,
+    loc_indices, _ = distribute_indices_base(indices, nprocs, rank,
                                                   allow_split_comm)
     if len(loc_indices) > 0:
         assert(loc_indices == list(range(loc_indices[0],loc_indices[-1]+1)))
@@ -153,179 +272,111 @@ def distribute_slice(s, comm, allow_split_comm=True):
         loc_comm = None
 
 
-    return loc_slice, owners, loc_comm
+    return loc_slice, loc_comm
 
-
-
-
-#def gather_subtree_results(evt, spam_label_rows,
-#                            gIndex_owners, my_gIndices,
-#                            result_tup, my_results, comm, timer_dict=None):
-#    """ TODO: docstring """
-#    from mpi4py import MPI #not at top so can import pygsti on cluster login nodes
-#
-#    #Doesn't need to be a member function: TODO - move to
-#    # an MPI helper class?
-#    S = evt.num_final_strings() # number of strings
-#    result_range = list(range(len(result_tup)))
-#
-#    assert(result_tup[-1].shape[1] == S) #when this isn't true, (e.g. flat==True
-#    #  # for bulk_dproduct), we need to copy blocks instead of single indices
-#    #  # in the myFinalToParentFinalMap line below...
-#
-#    #NEW WAY (TESTING HERE)
-#
-#    #Perform broadcasts for each spam label in definite order on all procs
-#    #  (just iterating over spam_label_rows.items() does *not* ensure this)
-#    spamLabels = sorted(list(spam_label_rows.keys()))
-#    myRank = comm.Get_rank() if (comm is not None) else 0
-#    for spamLabel in spamLabels:
-#        rowIndex = spam_label_rows[spamLabel]
-#    
-#        for r in result_range:
-#            if result_tup[r] is None:
-#                continue #skip None result_tup elements (will be None on all procs)
-#
-#            #Figure out which sub-results this processor "owns" - i.e. is
-#            # responsible for communicating to the other procs.
-#            li_gi_tups = [] # local-subtree-index, global-subtree-index tuples
-#            for i,subtree in enumerate(evt.get_sub_trees()):
-#                if gIndex_owners[i] == myRank:
-#                    li_gi_tups.append( (my_gIndices.index(i), i) )
-#
-#            #Compute the maximum number of communication rounds needed
-#            # (i.e. the max. # of subtrees owned by any single proc)
-#            if comm is None: 
-#                nRounds = len(li_gi_tups)
-#            else:
-#                tm = _time.time()
-#                nRounds = comm.allreduce(len(li_gi_tups),MPI.MAX)
-#                add_time(timer_dict, "MPI IPC2 allreduce", _time.time()-tm)
-#
-#            #Start sending data in rounds
-#            for rnd in range(nRounds):
-#                if rnd < len(li_gi_tups):
-#                    li,gi = li_gi_tups[rnd]
-#                    sub_result = my_results[li][spamLabel][r]
-#                else:
-#                    gi, sub_result = -1, _np.empty(0, 'd')
-#
-#                if comm is None:
-#                    gInds = [gi]; shapes=[sub_result.shape];
-#                    sizes = [sub_result.size]; displacements=[0]
-#                    scratch = sub_result.flatten()
-#                else:
-#                    tm = _time.time()
-#                    gInds = comm.allgather(gi)  #gather global subtree indices into an array
-#                    shapes = comm.allgather(sub_result.shape)  #gather sizes (integers) into an array
-#                    sizes = [_np.product(shape) for shape in shapes]
-#                    displacements = [sum(sizes[:i]) for i in range(len(sizes))] #calc displacements
-#                    scratch = _np.empty(sum(sizes), 'd')
-#                    add_time(timer_dict, "MPI IPC2 allgather", _time.time()-tm)
-#
-#                    tm = _time.time()
-#                    comm.Allgatherv([sub_result.flatten(), sub_result.size, MPI.F_DOUBLE],
-#                                    [scratch, sizes, displacements, MPI.F_DOUBLE])
-#                    add_time(timer_dict, "MPI IPC2 Allgatherv", _time.time()-tm)
-#                sub_result = None #gathered into scratch
-#                
-#                #Place each of the communicated segments into place
-#                tm = _time.time()
-#                for gi,disp,sz,shape in zip(gInds,displacements,sizes,shapes):
-#                    if sz == 0: continue
-#                    sub_result = scratch[disp:disp+sz].reshape(shape)
-#                    if evt.is_split():
-#                        subtree = evt.get_sub_trees()[gi]
-#                        result_tup[r][rowIndex][ subtree.myFinalToParentFinalMap ] = sub_result
-#                    else: #subtree is actually the entire tree (evt), so just "copy" all
-#                        result_tup[r][rowIndex] = sub_result
-#                    sub_result = None #explicity say we're done with sub_result (make sure mem get's freed)
-#                scratch = None #Done with scratch
-#                add_time(timer_dict, "MPI IPC2 copy", _time.time()-tm)
-#                
-#    return
-#
-#
-#    #ORIGINAL
-#    for i,subtree in enumerate(evt.get_sub_trees()):
-#        li = my_gIndices.index(i) if (i in my_gIndices) else None
-#
-#        #Perform broadcasts for each spam label in definite order on all procs
-#        #  (just iterating over spam_label_rows.items() does *not* ensure this)
-#        spamLabels = sorted(list(spam_label_rows.keys()))
-#        for spamLabel in spamLabels:
-#            rowIndex = spam_label_rows[spamLabel]
-#            for r in result_range:
-#                if result_tup[r] is None:
-#                    continue #skip None result_tup elements
-#
-#                sub_result = my_results[li][spamLabel][r] \
-#                    if (li is not None) else None
-#
-#                if comm is None: #No comm; rank 0 owns everything
-#                    assert(gIndex_owners[i] == 0)
-#                else:
-#                    tm = _time.time()
-#                    sub_result_shape = sub_result.shape if (sub_result is not None) else None
-#                    sub_result_shape = comm.bcast(sub_result_shape, root=gIndex_owners[i])
-#                    add_time(timer_dict, "MPI IPC2 bcast1", _time.time()-tm)
-#                    tm = _time.time()
-#                    if sub_result is None: sub_result = _np.empty(sub_result_shape,'d') #can assume type == 'd' so far
-#                    comm.Bcast(sub_result, root=gIndex_owners[i]) # broadcast w/out pickling (fast)
-#                    #OLD: sub_result = comm.bcast(sub_result, root=gIndex_owners[i]) #broadcasts *with* pickling (slow)
-#                    add_time(timer_dict, "MPI IPC2 bcast2", _time.time()-tm)
-#                    add_time(timer_dict, "MPI IPC2 bcast size", sub_result.size)
-#
-#                tm = _time.time()
-#                if evt.is_split():
-#                    result_tup[r][rowIndex][ subtree.myFinalToParentFinalMap ] = sub_result
-#                else: #subtree is actually the entire tree (evt), so just "copy" all
-#                    result_tup[r][rowIndex] = sub_result
-#                add_time(timer_dict, "MPI IPC2 copy", _time.time()-tm)
-
-
- #def gather_blk_results(nBlocks, blk_owners, my_blkIndices,
- #                       my_blk_results, comm):
- #   """ TODO: docstring """
- #
- #   if comm is None:
- #       assert(all([x == 0 for x in list(blk_owners.values())]))
- #       assert(nBlocks == len(my_blk_results))
- #       all_blk_results = [ my_blk_results ]
- #       all_blk_indices = [ my_blkIndices ]
- #   else:
- #       # gather a list of each processor's list of computed "blocks"
- #       all_blk_results = comm.allgather(my_blk_results)
- #       all_blk_indices = comm.allgather(my_blkIndices)
- #
- #   # edit this list to put blocks in the correct order
- #   blk_list = []
- #   for iBlk in range(nBlocks):
- #       owner_rank = blk_owners[iBlk]
- #       loc_iBlk = all_blk_indices[owner_rank].index(iBlk)
- #       blk_list.append( all_blk_results[owner_rank][loc_iBlk] )
- #
- #   return blk_list
 
 def gather_slices(slices, slice_owners,
-                  arToFill, axis, comm):
-    """ TODO: docstring """
+                  arToFill, axis, comm, max_buffer_size=None):
+    """ 
+    Gathers data within a numpy array, `arToFill`, according to given slices.
+
+    Upon entry it is assumed that the different processors within `comm` have
+    computed different parts of `arToFill`, namely different slices of the
+    `axis`-th axis.  At exit, data has been gathered such that all processors
+    have the results for the entire `arToFill` (or at least for all the slices
+    given).
+
+    Parameters
+    ----------
+    slices : list
+        A list of all the slices (computed by *any* of the processors, not
+        just the current one).
+        
+    slice_owners : dict
+        A dictionary mapping the index of a slice within `slices` to an 
+        integer rank of the processor responsible for communicating that
+        slice's data to the rest of the processors.
+
+    arToFill : numpy.ndarray
+        The array which contains partial data upon entry and the gathered
+        data upon exit.
+
+    axis : int
+        The axis of `arToFill` on which the slices apply (which axis 
+        do the slices in `slices` refer to?).
+
+    comm : mpi4py.MPI.Comm or None
+        The communicator specifying the processors involved and used
+        to perform the gather operation.
+
+    max_buffer_size : int or None
+        The maximum buffer size in bytes that is allowed to be used 
+        for gathering data.  If None, there is no limit.
+
+    Returns
+    -------
+    None
+    """
     if comm is None: return #no gathering needed!
 
     #Perform broadcasts for each slice in order
     my_rank = comm.Get_rank()
     arIndx = [ slice(None,None) ] * arToFill.ndim
+
+    if max_buffer_size is not None: #no maximum of buffer size
+        bytes_per_index = arToFill.nbytes / arToFill.shape[axis]
+        max_indices = max(1,int(max_buffer_size/bytes_per_index))
+        bShowMessage = bool(my_rank == 0)
+    else:
+        max_indices = None
+        bShowMessage = False
+
     for iSlice,slc in enumerate(slices):
         owner = slice_owners[iSlice] #owner's rank
-        arIndx[axis] = slc
-        buf = arToFill[arIndx].copy() if (my_rank == owner) \
-            else _np.empty(arToFill[arIndx].shape, arToFill.dtype)
-        comm.Bcast(buf,
-                   root=slice_owners[iSlice]) # broadcast w/out pickling (fast)
-        if my_rank != owner: arToFill[arIndx] = buf
+        assert(slc.step is None or slc.step == 1) #only allow step=1 slices (easy stop-start arithmetic below)
+
+        if max_indices is None or max_indices >= (slc.stop-slc.start):
+            arIndx[axis] = slc
+            buf = arToFill[arIndx].copy() if (my_rank == owner) \
+                else _np.empty(arToFill[arIndx].shape, arToFill.dtype)
+            comm.Bcast(buf, root=slice_owners[iSlice])
+            if my_rank != owner: arToFill[arIndx] = buf
+        else:
+            if bShowMessage:
+                print("MPIDB: gather_slices restricting %s to %d indices at once"
+                      % (str(slc),max_indices)); bShowMessage = False
+            sub_start = slc.start
+            while sub_start < slc.stop: #broadcast in chunks to keep buffer size small
+                sub_slc = slice(sub_start, min(sub_start+max_indices,slc.stop))
+                arIndx[axis] = sub_slc
+                buf = arToFill[arIndx].copy() if (my_rank == owner) \
+                    else _np.empty(arToFill[arIndx].shape, arToFill.dtype)
+                comm.Bcast(buf, root=slice_owners[iSlice])
+                if my_rank != owner: arToFill[arIndx] = buf
+                sub_start += max_indices
 
 
 def distribute_for_dot(contracted_dim, comm):
+    """
+    Prepares for one or muliple distributed dot products given the dimension
+    to be contracted (i.e. the number of columns of A or rows of B in dot(A,B)).
+    The returned slice should be passed as `loc_slice` to :func:`mpidot`.
+
+    Parameters
+    ----------
+    contracted_dim : int
+        The dimension that will be contracted in ensuing :func:`mpidot`
+        calls (see above).
+
+    comm : mpi4py.MPI.Comm or None
+        The communicator used to perform the distribution.
+
+    Returns
+    -------
+    slice
+        The "local" slice specifying the indices belonging to the current
+        processor.  Should be passed to :func:`mpidot` as `loc_slice`.
+    """
     loc_indices,_,_ = distribute_indices(
         list(range(contracted_dim)), comm, False)
 
@@ -335,7 +386,25 @@ def distribute_for_dot(contracted_dim, comm):
     return slice(start, stop) # local column range as a slice
 
 def mpidot(a,b,loc_slice,comm):
-    """ TODO: docstring """
+    """
+    Performs a distributed dot product, dot(a,b).
+
+    Parameters
+    ----------
+    a,b : numpy.ndarray
+        Arrays to dot together.
+
+    loc_slice : slice
+        A slice specifying the indices along the contracted dimension belonging
+        to this processor (obtained from :func:`distribute_for_dot`)
+
+    comm : mpi4py.MPI.Comm or None
+        The communicator used to parallelize the dot product.
+
+    Returns
+    -------
+    numpy.ndarray
+    """
     if comm is None or comm.Get_size() == 1:
         assert(loc_slice == slice(0,b.shape[0]))
         return _np.dot(a,b)

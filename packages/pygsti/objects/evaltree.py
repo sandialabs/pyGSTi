@@ -552,7 +552,7 @@ class EvalTree(list):
         -------
         None
         """
-        dbList = self.generate_gatestring_list()
+        #dbList = self.generate_gatestring_list()
 
         if (maxSubTreeSize is None and numSubTrees is None) or \
            (maxSubTreeSize is not None and numSubTrees is not None):
@@ -580,25 +580,95 @@ class EvalTree(list):
             #Merges: find the best merges to perform if any are required
             if nSingleItemTrees > numSubTrees:
 
-                #find trees that have least intersection to begin
-                intersectSizes = {}
-                for i in range(nSingleItemTrees):
-                    s1 = singleItemTreeSetList[i]
-                    for j in range(i+1,nSingleItemTrees):
-                        s2 = singleItemTreeSetList[j]
-                        intersectSizes[(i,j)] = len(s1.intersection(s2))
-
-                sortedIntersects = sorted(iter(intersectSizes.items()),
-                                            key=lambda x: x[1])
+                #Find trees that have least intersection to begin:
+                # The goal is to find a set of single-item trees such that
+                # none of them intersect much with any other of them.
+                #
+                # Algorithm: 
+                #   - start with a set of the one tree that has least
+                #       intersection with any other tree.
+                #   - iteratively add the tree that has the least intersection
+                #       with the trees in the existing set
                 iStartingTrees = []
-                for (i,j),_ in sortedIntersects:
-                    if i in iStartingTrees or j in iStartingTrees: continue
-                    iStartingTrees.append(i)
-                    if len(iStartingTrees) == numSubTrees:  break
-                    iStartingTrees.append(j)
-                    if len(iStartingTrees) == numSubTrees:  break
-                else:
-                    raise ValueError("Could not find set of starting trees!")
+                availableIndices = list(range(nSingleItemTrees))
+                i_min = _np.argmin( #index of a tree in the minimal intersection
+                    ( min( (len(s1.intersection(s2)) 
+                            for s2 in singleItemTreeSetList[i+1:]) )
+                      for i,s1 in enumerate(singleItemTreeSetList[:-1]) ))
+                iStartingTrees.append(i_min)
+                startingTreeEls = singleItemTreeSetList[i_min].copy()
+                del availableIndices[i_min]
+                
+                while len(iStartingTrees) < numSubTrees:
+                    ii_min = _np.argmin( 
+                        ( len(startingTreeEls.intersection(singleItemTreeSetList[i])) 
+                          for i in availableIndices ) )
+                    i_min = availableIndices[ii_min]
+                    iStartingTrees.append(i_min)
+                    startingTreeEls.update( singleItemTreeSetList[i_min] )
+                    del availableIndices[ii_min]
+
+
+                #WORKS, but not optimal
+                #iStartingTrees = []
+                #availableIndices = list(range(nSingleItemTrees))
+                #while len(iStartingTrees) < numSubTrees:
+                #    print("SPLIT: beginning starting tree iter with" +
+                #          "%d available and %d starting trees" %
+                #          (len(availableIndices), len(iStartingTrees)))
+                #    #build a sorted list of the minimal intersections for each
+                #    # available index.  This is essentially finding each
+                #    # single-item-set's "top pick" of a partner single-item-set
+                #    # to add as a starting tree along with it.
+                #    intersectSizes = []
+                #    for ii,i in enumerate(availableIndices[:-1]):
+                #        s1 = singleItemTreeSetList[i]
+                #        jj_min = _np.argmin(
+                #            ( len(s1.intersection( singleItemTreeSetList[j] ))
+                #              for j in availableIndices[ii+1:] ) ) + (ii+1)
+                #        j_min = availableIndices[jj_min] # *index* of minimal intersect with s1
+                #        minIntSize = len(s1.intersection(singleItemTreeSetList[j_min]))
+                #        intersectSizes.append( ((i,j_min,ii,jj_min),minIntSize) )
+                #    sortedIntersects = sorted(intersectSizes,key=lambda x: x[1])
+                #
+                #    #Add starting trees based on these minimal intersects.  If
+                #    # we exhaust all the small intersection pairs we've found
+                #    # then repeat, restricting to the updated available indices.
+                #    toRemove = []
+                #    for (i,j,ii,jj),_ in sortedIntersects:
+                #        if i in iStartingTrees or j in iStartingTrees: continue
+                #        iStartingTrees.append(i); toRemove.append(ii)
+                #        if len(iStartingTrees) == numSubTrees:  break
+                #        iStartingTrees.append(j); toRemove.append(jj)
+                #        if len(iStartingTrees) == numSubTrees:  break
+                #    else:
+                #        #We'll need to iterate again, so remove the available indices
+                #        # that have already been added as starting trees
+                #        toRemove = sorted(toRemove, reverse=True)
+                #        for index in toRemove:
+                #            del availableIndices[index]
+                
+                #ORIGINAL: this uses too much memory and procs die
+                #intersectSizes = {}
+                #for i in range(nSingleItemTrees):
+                #    s1 = singleItemTreeSetList[i]
+                #    for j in range(i+1,nSingleItemTrees):
+                #        s2 = singleItemTreeSetList[j]
+                #        intersectSizes[(i,j)] = len(s1.intersection(s2))
+                #
+                #print("SPLIT 2b. mem = %g" %  (_prof._get_mem_usage()*_prof.BtoGB) )
+                #sortedIntersects = sorted(iter(intersectSizes.items()),
+                #                            key=lambda x: x[1])
+                #print("SPLIT 3 mem = %g" % (_prof._get_mem_usage()*_prof.BtoGB) )
+                #iStartingTrees = []
+                #for (i,j),_ in sortedIntersects:
+                #    if i in iStartingTrees or j in iStartingTrees: continue
+                #    iStartingTrees.append(i)
+                #    if len(iStartingTrees) == numSubTrees:  break
+                #    iStartingTrees.append(j)
+                #    if len(iStartingTrees) == numSubTrees:  break
+                #else:
+                #    raise ValueError("Could not find set of starting trees!")
                 subTreeSetList = [singleItemTreeSetList[i] for i in iStartingTrees]
                 assert(len(subTreeSetList) == numSubTrees)
 
@@ -806,10 +876,10 @@ class EvalTree(list):
             #if bDebug: print("NEW SUBTREE: indices=%s, len=%d, nFinal=%d"  %
             #                  (subTree.parentIndexMap, len(subTree), subTree.num_final_strings()))
 
-        dbList2 = self.generate_gatestring_list()
+        #dbList2 = self.generate_gatestring_list()
         #if bDebug: print("DBLIST = ",dbList)
         #if bDebug: print("DBLIST2 = ",dbList2)
-        assert(dbList == dbList2)
+        #assert(dbList == dbList2)
 
         return
 

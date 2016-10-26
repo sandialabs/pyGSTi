@@ -27,8 +27,16 @@ except ImportError:
         if _sys.platform != 'darwin': mem *= 1024 #now always in bytes
         return mem
 
-#from mpi4py import MPI
-#MPI.COMM_WORLD
+def _get_root_mem_usage(comm):
+    """ Returns the memory usage on the 0th processor """
+    mem = _get_mem_usage()
+    if comm is not None: 
+        if comm.Get_rank() == 0:
+            comm.bcast(mem,root=0)
+        else:
+            mem = comm.bcast(None, root=0)
+    return mem
+
 
 BtoGB = 1.0/(1024.0**3) #convert bytes -> GB
 

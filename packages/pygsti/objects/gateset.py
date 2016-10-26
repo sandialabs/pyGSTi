@@ -1272,15 +1272,12 @@ class GateSet(object):
                     mem += cacheSize * dim * dim # probs cache
                     mem += cacheSize # scale cache (exps)
                     mem += cacheSize # scale vals
-                    mem += nSubtreesPerProc * nspam * cacheSize #accum subtree prob results
 
                 elif fnName == "bulk_fill_dprobs":
                     mem += cacheSize * wrtLen * dim * dim # dprobs cache
                     mem += cacheSize * dim * dim # probs cache
                     mem += cacheSize # scale cache
                     mem += cacheSize # scale vals
-                    mem += nSubtreesPerProc * nspam * cacheSize #accum subtree prob results
-                    mem += nSubtreesPerProc * nspam * cacheSize * num_params #accum subtree dprob results
 
                 elif fnName == "bulk_fill_hprobs":
                     mem += cacheSize * wrtLen * num_params * dim * dim # hprobs cache
@@ -1289,8 +1286,6 @@ class GateSet(object):
                     mem += cacheSize # scale cache
                     mem += cacheSize # scale vals
                     mem += nSubtreesPerProc * nspam * cacheSize #accum subtree prob results
-                    mem += nSubtreesPerProc * nspam * cacheSize * num_params #accum subtree dprob results
-                    mem += nSubtreesPerProc * nspam * cacheSize * num_params**2 #accum subtree hprob results
 
                 else:
                     raise ValueError("Unknown subcall name: %s" % fnName)
@@ -1310,10 +1305,6 @@ class GateSet(object):
                                 (8*cacheSize * wrtLen * dim * dim / (1024.0**3)))
                     printer.log(" DB Detail: probs cache = %.2fGB" % 
                                 (8*cacheSize * dim * dim / (1024.0**3)))
-                    printer.log(" DB Detail: subtree probs = %.2fGB" % 
-                                (8*nSubtreesPerProc * nspam * cacheSize / (1024.0**3)))
-                    printer.log(" DB Detail: subtree dprobs = %.2fGB" % 
-                                (8*nSubtreesPerProc * nspam * cacheSize * num_params / (1024.0**3)))
 
             #printer.log("DB: memEstimate(ng=%d, np=%d, Ng=%d) = %.2f GB" 
             #            % (ng,np,Ng,mem*floatSize/(1024.0**3)))
@@ -1334,13 +1325,15 @@ class GateSet(object):
         elif distributeMethod == "deriv":
             ng = Ng = 1; np = nprocs
             if memLimit is not None:
+                #First try to decrease mem consumption by increasing np
                 for n in range(nprocs, num_params+1):
                     if memEstimate(ng,n,Ng) < memLimit:
                         np = n; break
                 else:
                     np = num_params; Ng = max(nprocs // np, 1)
                     ng = Ng
-                    while memEstimate(ng,np,Ng) > memLimit: ng += Ng #so ng % Ng == 0
+                    while memEstimate(ng,np,Ng) > memLimit:
+                        ng += Ng #so ng % Ng == 0
 
         elif distributeMethod == "balanced":
             # try to minimize "unbalanced" procs
@@ -1369,6 +1362,14 @@ class GateSet(object):
             
         if np == 1: # (paramBlkSize == num_params)
             paramBlkSize = None # == all parameters, and may speed logic in dprobs, etc.
+        else:
+            if comm is not None:
+                blkSizeTest = comm.bcast(paramBlkSize,root=0)
+                #print("MPIDB: rank%d paramBlkSize = %g, num_params = %d, np = %d" %
+                # (comm.Get_rank(),paramBlkSize,num_params,np))
+                assert(abs(blkSizeTest-paramBlkSize) < 1e-3) 
+                  #all procs should have *same* paramBlkSize
+
         return evt, paramBlkSize
 
 
@@ -1409,7 +1410,7 @@ class GateSet(object):
 
         if maxTreeSize is not None:
             evalTree.split(maxTreeSize, None) # won't split if unnecessary
-        
+
         if minSubtrees is not None:
             if not evalTree.is_split() or len(evalTree.get_sub_trees()) < minSubtrees:
                 evalTree.split(None,minSubtrees)
@@ -1979,7 +1980,7 @@ class GateSet(object):
     def bulk_fill_dprobs(self, mxToFill, spam_label_rows,
                          evalTree, prMxToFill=None,clipTo=None,
                          check=False,comm=None, wrtBlockSize=None,
-                         profiler=None):
+                         profiler=None, gatherMemLimit=None):
 
         """
         Identical to bulk_dprobs(...) except results are
@@ -2040,6 +2041,10 @@ class GateSet(object):
         profiler : Profiler, optional
           A profiler object used for to track timing and memory usage.
 
+        gatherMemLimit : int, optional
+          A memory limit in bytes to impose upon the "gather" operations
+          performed as a part of MPI processor syncronization.
+
 
         Returns
         -------
@@ -2048,12 +2053,13 @@ class GateSet(object):
         return self._calc().bulk_fill_dprobs(mxToFill, spam_label_rows,
                                              evalTree, prMxToFill, clipTo,
                                              check, comm, None, wrtBlockSize,
-                                             profiler)
+                                             profiler, gatherMemLimit)
 
 
     def bulk_fill_hprobs(self, mxToFill, spam_label_rows,
                          evalTree=None, prMxToFill=None, derivMxToFill=None,
-                         clipTo=None, check=False, comm=None, wrtBlockSize=None):
+                         clipTo=None, check=False, comm=None,
+                         wrtBlockSize=None, gatherMemLimit=None):
 
         """
         Identical to bulk_hprobs(...) except results are
@@ -2117,6 +2123,10 @@ class GateSet(object):
           use of available processors is used as the final block size. Use
           this argument to reduce amount of intermediate memory required.
 
+        gatherMemLimit : int, optional
+          A memory limit in bytes to impose upon the "gather" operations
+          performed as a part of MPI processor syncronization.
+
 
         Returns
         -------
@@ -2124,7 +2134,8 @@ class GateSet(object):
         """
         return self._calc().bulk_fill_hprobs(mxToFill, spam_label_rows,
                                      evalTree, prMxToFill, derivMxToFill,
-                                     clipTo, check, comm, None, wrtBlockSize)
+                                     clipTo, check, comm, None,
+                                     wrtBlockSize, gatherMemLimit)
 
 
     def bulk_hprobs_by_column(self, spam_label_rows, evalTree,

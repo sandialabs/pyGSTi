@@ -1053,7 +1053,7 @@ class GateSetCalculator(object):
 
             # Use comm to distribute columns
             allDerivColSlice = slice(0,nGateDerivCols) if (wrtSlice is None) else wrtSlice
-            myDerivColSlice, _, mySubComm = \
+            myDerivColSlice, mySubComm = \
                 _mpit.distribute_slice(allDerivColSlice, comm)
             #print("MPI: _compute_dproduct_cache over %d cols (%s) (rank %d computing %s)" \
             #    % (nGateDerivCols, str(allDerivColIndices), comm.Get_rank(), str(myDerivColIndices)))
@@ -1154,7 +1154,7 @@ class GateSetCalculator(object):
 
             # Use comm to distribute columns
             allDeriv2ColSlice = slice(0,nGateDerivCols2) if (wrtSlice is None) else wrtSlice
-            myDerivColSlice, _, mySubComm = \
+            myDerivColSlice, mySubComm = \
                 _mpit.distribute_slice(allDeriv2ColSlice, comm)
             #print("MPI: _compute_hproduct_cache over %d cols (rank %d computing %s)" \
             #    % (nGateDerivCols2, comm.Get_rank(), str(myDerivColSlice)))
@@ -2041,7 +2041,7 @@ class GateSetCalculator(object):
     def bulk_fill_dprobs(self, mxToFill, spam_label_rows, evalTree,
                          prMxToFill=None,clipTo=None,check=False,
                          comm=None, wrtFilter=None, wrtBlockSize=None,
-                         profiler=None):
+                         profiler=None, gatherMemLimit=None):
 
         """
         Identical to bulk_dprobs(...) except results are
@@ -2109,6 +2109,10 @@ class GateSetCalculator(object):
 
         profiler : Profiler, optional
           A profiler object used for to track timing and memory usage.
+
+        gatherMemLimit : int, optional
+          A memory limit in bytes to impose upon the "gather" operations
+          performed as a part of MPI processor syncronization.
 
         Returns
         -------
@@ -2201,6 +2205,11 @@ class GateSetCalculator(object):
 
             #Set wrtBlockSize to use available processors if it isn't specified
             if wrtFilter is None:
+                #if mySubComm is not None: #DEBUG3
+                #    blkSizeTest = mySubComm.bcast(wrtBlockSize,root=0)
+                #    print("MPIDBB: rank%d wrtBlockSize = %g" % (comm.Get_rank(),wrtBlockSize))
+                #    assert(abs(blkSizeTest-wrtBlockSize) < 1e-3) #all procs should have *same*
+
                 blkSize = wrtBlockSize #could be None
                 if (mySubComm is not None) and (mySubComm.Get_size() > 1):
                     comm_blkSize = self.tot_gate_params / mySubComm.Get_size()
@@ -2230,8 +2239,18 @@ class GateSetCalculator(object):
                 assert(wrtFilter is None) #cannot specify both wrtFilter and blkSize
                 nBlks = int(_np.ceil(self.tot_gate_params / blkSize))
                   # num blocks required to achieve desired average size == blkSize
+                #if mySubComm is not None: #DEBUG3
+                #    blkSizeTest = mySubComm.bcast(blkSize,root=0)
+                #    print("MPIDBB: rank%d blkSize = %g" % (comm.Get_rank(),blkSize))
+                #    nBlksTest = mySubComm.bcast(nBlks, root=0)
+                #    print("MPIDBB: rank%d nBlks = %d" % (comm.Get_rank(),nBlks))
+                #    assert(blkSizeTest == blkSize) #all procs should have *same*
+                #    assert(nBlksTest == nBlks) #all procs should have *same*
                 blocks = _mpit.slice_up_range(self.tot_gate_params, nBlks,
                                               start=self.tot_spam_params)
+                #if mySubComm is not None: #DEBUG3
+                #    blksTest = mySubComm.bcast(blocks, root=0)
+                #    assert(blksTest == blocks) #all procs should have *same*
 
                 # Create placeholder dGs for *no* gate params to compute
                 #  derivatives wrt all spam parameters
@@ -2294,9 +2313,15 @@ class GateSetCalculator(object):
                     profiler.mem_check("bulk_fill_dprobs: post fill blk")
 
                 #gather results
+                #if comm is not None and comm.Get_rank() == 0:
+                #    print("DEBUG1: blocks = ",blocks)
+                #    print("DEBUG1: owners = ",blkOwners)
+                #    print("DEBUG1: final slice = ",fslc)
+                #    print("DEBUG1: mxToFill[:,fslc] shape=", mxToFill[:,fslc].shape)
+                #    print("DEBUG1: subcomm size = ",mySubComm.Get_size())
                 tm = _time.time()
                 _mpit.gather_slices(blocks, blkOwners, mxToFill[:,fslc],
-                                    2, mySubComm)
+                                    2, mySubComm, gatherMemLimit)
                 #note: gathering axis 2 of mxToFill[:,fslc], dim=(K,s,M)
                 profiler.add_time("MPI IPC", tm)
                 profiler.mem_check("bulk_fill_dprobs: post gather blocks")
@@ -2304,8 +2329,13 @@ class GateSetCalculator(object):
         #collect/gather results
         tm = _time.time()
         subtreeFinalSlices = [ t.final_slice(evalTree) for t in subtrees]
+        #if comm is not None and comm.Get_rank() == 0:
+        #    print("DEBUG2: slices = ",subtreeFinalSlices)
+        #    print("DEBUG2: owners = ",subTreeOwners)
+        #    print("DEBUG2: mxToFill shape=", mxToFill.shape)
+        #    print("DEBUG2: comm size = ",comm.Get_size())
         _mpit.gather_slices(subtreeFinalSlices, subTreeOwners, mxToFill,
-                            1, comm) 
+                            1, comm, gatherMemLimit) 
         #note: pass mxToFill, dim=(K,S,M), so gather mxToFill[:,fslc] (axis=1)
 
         if prMxToFill is not None:
@@ -2330,7 +2360,8 @@ class GateSetCalculator(object):
 
     def bulk_fill_hprobs(self, mxToFill, spam_label_rows, evalTree,
                          prMxToFill=None, derivMxToFill=None, clipTo=None,
-                         check=False,comm=None, wrtFilter=None, wrtBlockSize=None):
+                         check=False,comm=None, wrtFilter=None,
+                         wrtBlockSize=None, gatherMemLimit=None):
 
         """
         Identical to bulk_hprobs(...) except results are
@@ -2394,6 +2425,10 @@ class GateSetCalculator(object):
           maximal use of available processors is used as the final block size.
           This argument must be None if wrtFilter is not None.  Set this to
           non-None to reduce amount of intermediate memory required.
+
+        gatherMemLimit : int, optional
+          A memory limit in bytes to impose upon the "gather" operations
+          performed as a part of MPI processor syncronization.
 
 
         Returns
@@ -2557,16 +2592,16 @@ class GateSetCalculator(object):
 
                 #gather results
                 _mpit.gather_slices(blocks, blkOwners, mxToFill[:,fslc],
-                                    3, mySubComm)
+                                    3, mySubComm, gatherMemLimit)
                 #note: gathering axis 3 of mxToFill[:,fslc], dim=(K,s,M,M)
 
         #collect/gather results
         subtreeFinalSlices = [ t.final_slice(evalTree) for t in subtrees]
         _mpit.gather_slices(subtreeFinalSlices, subTreeOwners, 
-                            mxToFill, 1, comm) 
+                            mxToFill, 1, comm, gatherMemLimit) 
         if derivMxToFill is not None:
             _mpit.gather_slices(subtreeFinalSlices, subTreeOwners,
-                                derivMxToFill, 1, comm) 
+                                derivMxToFill, 1, comm, gatherMemLimit) 
         if prMxToFill is not None:
             _mpit.gather_slices(subtreeFinalSlices, subTreeOwners,
                                 prMxToFill, 1, comm) 
