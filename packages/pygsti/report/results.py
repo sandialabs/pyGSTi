@@ -3860,7 +3860,7 @@ class ResultOptions(object):
         self.template_path = "."
         self.latex_cmd = "pdflatex"
         # Don't allow LaTeX to try and recover from errors interactively.
-        self.latex_opts = ["-interaction=nonstopmode", "-halt-on-error"]
+        self.latex_opts = ["-interaction=nonstopmode", "-halt-on-error", "-shell-escape"]
         self.latex_call = [self.latex_cmd] + self.latex_opts
         if _os.path.exists("/dev/null"):
             self.latex_postcmd = "-halt-on-error </dev/null >/dev/null"

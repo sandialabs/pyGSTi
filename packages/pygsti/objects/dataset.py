@@ -235,6 +235,7 @@ class DataSet(object):
         self.bStatic = bStatic
 
         # collision action
+        assert(collisionAction in ('aggregate','keepseparate'))
         self.collisionAction = collisionAction
 
 

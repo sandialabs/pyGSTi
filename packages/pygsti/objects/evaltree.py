@@ -552,7 +552,7 @@ class EvalTree(list):
         -------
         None
         """
-        dbList = self.generate_gatestring_list()
+        #dbList = self.generate_gatestring_list()
 
         if (maxSubTreeSize is None and numSubTrees is None) or \
            (maxSubTreeSize is not None and numSubTrees is not None):
@@ -580,25 +580,36 @@ class EvalTree(list):
             #Merges: find the best merges to perform if any are required
             if nSingleItemTrees > numSubTrees:
 
-                #find trees that have least intersection to begin
-                intersectSizes = {}
-                for i in range(nSingleItemTrees):
-                    s1 = singleItemTreeSetList[i]
-                    for j in range(i+1,nSingleItemTrees):
-                        s2 = singleItemTreeSetList[j]
-                        intersectSizes[(i,j)] = len(s1.intersection(s2))
-
-                sortedIntersects = sorted(iter(intersectSizes.items()),
-                                            key=lambda x: x[1])
+                #Find trees that have least intersection to begin:
+                # The goal is to find a set of single-item trees such that
+                # none of them intersect much with any other of them.
+                #
+                # Algorithm: 
+                #   - start with a set of the one tree that has least
+                #       intersection with any other tree.
+                #   - iteratively add the tree that has the least intersection
+                #       with the trees in the existing set
                 iStartingTrees = []
-                for (i,j),_ in sortedIntersects:
-                    if i in iStartingTrees or j in iStartingTrees: continue
-                    iStartingTrees.append(i)
-                    if len(iStartingTrees) == numSubTrees:  break
-                    iStartingTrees.append(j)
-                    if len(iStartingTrees) == numSubTrees:  break
-                else:
-                    raise ValueError("Could not find set of starting trees!")
+                availableIndices = list(range(nSingleItemTrees))
+                i_min = _np.argmin( #index of a tree in the minimal intersection
+                    ( min( (len(s1.intersection(s2)) 
+                            for s2 in singleItemTreeSetList[i+1:]) )
+                      for i,s1 in enumerate(singleItemTreeSetList[:-1]) ))
+                iStartingTrees.append(i_min)
+                startingTreeEls = singleItemTreeSetList[i_min].copy()
+                del availableIndices[i_min]
+                
+                while len(iStartingTrees) < numSubTrees:
+                    ii_min = _np.argmin( 
+                        ( len(startingTreeEls.intersection(singleItemTreeSetList[i])) 
+                          for i in availableIndices ) )
+                    i_min = availableIndices[ii_min]
+                    iStartingTrees.append(i_min)
+                    startingTreeEls.update( singleItemTreeSetList[i_min] )
+                    del availableIndices[ii_min]
+
+                #Merge all the non-starting trees into the starting trees
+                # so that we're left with the desired number of trees
                 subTreeSetList = [singleItemTreeSetList[i] for i in iStartingTrees]
                 assert(len(subTreeSetList) == numSubTrees)
 
@@ -806,10 +817,10 @@ class EvalTree(list):
             #if bDebug: print("NEW SUBTREE: indices=%s, len=%d, nFinal=%d"  %
             #                  (subTree.parentIndexMap, len(subTree), subTree.num_final_strings()))
 
-        dbList2 = self.generate_gatestring_list()
+        #dbList2 = self.generate_gatestring_list()
         #if bDebug: print("DBLIST = ",dbList)
         #if bDebug: print("DBLIST2 = ",dbList2)
-        assert(dbList == dbList2)
+        #assert(dbList == dbList2)
 
         return
 
