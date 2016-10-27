@@ -1257,6 +1257,8 @@ class GateSet(object):
         nprocs = 1 if comm is None else comm.Get_size()
         num_params = self.num_params()
         dim = self._dim
+        if memLimit is not None and memLimit <= 0:
+            raise ValueError("bulk_evaltree_from_resources memLimit = %g <= 0!" % memLimit)
 
         def memEstimate(ng,np,Ng,verb=0):
             #Slower (but more accurate way)

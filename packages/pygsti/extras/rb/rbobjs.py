@@ -337,7 +337,8 @@ class RBResults(object):
     def __str__(self):
         s = ""
         for gstyp in self.dicts:
-            s += self.detail_str(gstyp) + "\n"
+            s += self.detail_str(gstyp, order='zeroth') + "\n"
+            s += self.detail_str(gstyp, order='first') + "\n"
         return s
 
 

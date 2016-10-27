@@ -204,7 +204,7 @@ class TestCoreMethods(BaseTestCase):
             minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6), returnAll=True, returnErrorVec=True)
         gs_lsgst_verb = self.runSilent(pygsti.do_iterative_mc2gst, ds, gs_clgst, self.lsgstStrings, verbosity=10,
                                              minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6),
-                                             memLimit=10*1024**2)
+                                             memLimit=100*1024**2)
         gs_lsgst_reg = self.runSilent(pygsti.do_iterative_mc2gst,ds, gs_clgst,
                                       self.lsgstStrings, verbosity=10,
                                       minProbClipForWeighting=1e-6,
@@ -229,9 +229,10 @@ class TestCoreMethods(BaseTestCase):
                                                       gatestringWeightsDict={ ('Gx',): 2.0 } )
 
         #Check with small but ok memlimit
+        curMem = pygsti.objs.profiler._get_mem_usage()
         self.runSilent(pygsti.do_mc2gst,ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
                          probClipInterval=(-1e6,1e6), regularizeFactor=1e-3,
-                         verbosity=10, memLimit=300000)
+                         verbosity=10, memLimit=curMem+8500000)
 
 
         #Check errors:
@@ -284,7 +285,7 @@ class TestCoreMethods(BaseTestCase):
 
         gs_mlegst_verb = self.runSilent(pygsti.do_iterative_mlgst, ds, gs_clgst, self.lsgstStrings, verbosity=10,
                                              minProbClip=1e-6, probClipInterval=(-1e2,1e2),
-                                             memLimit=10*1024**2)
+                                             memLimit=100*1024**2)
         self.assertAlmostEqual(gs_mlegst.frobeniusdist(gs_mlegst_verb),0)
         self.assertAlmostEqual(gs_mlegst.frobeniusdist(all_gs_mlegst_tups[-1]),0)
 
@@ -312,8 +313,9 @@ class TestCoreMethods(BaseTestCase):
                                                       useFreqWeightedChiSq=True, gateStringSetLabels=["Set1","Set2"],
                                                       gatestringWeightsDict={ ('Gx',): 2.0 } )
 
+        curMem = pygsti.objs.profiler._get_mem_usage()
         self.runSilent(pygsti.do_mlgst, ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-6,
-                        probClipInterval=(-1e2,1e2), verbosity=4, memLimit=300000) #invoke memory control
+                        probClipInterval=(-1e2,1e2), verbosity=4, memLimit=curMem+8500000) #invoke memory control
 
         pygsti.do_mlgst(ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-6,
                         probClipInterval=(-1e2,1e2), verbosity=0, poissonPicture=False)
