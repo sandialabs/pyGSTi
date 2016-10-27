@@ -1190,7 +1190,7 @@ class EigenvalueParameterizedGate(Gate):
         assert(_np.linalg.norm(_np.imag(matrix)) < 1e-8 ) #matrix should be real
         evals, B = _np.linalg.eig(matrix) # matrix == B * diag(evals) * Bi
         dim = len(evals)
-        
+
         #Sort eigenvalues & eigenvectors by:
         # 1) unit eigenvalues first (with TP eigenvalue first of all)
         # 2) non-unit real eigenvalues in order of magnitude
@@ -1215,9 +1215,12 @@ class EigenvalueParameterizedGate(Gate):
                 t = unitInds[0]; unitInds[0] = unitInds[k]; unitInds[k] = t
 
             #Assume we can recombine unit-eval eigenvectors so that the first
-            # one == unitRow and the rest do not have any 0th component.
-            B[:, unitInds[0] ] = unitRow
-            for ui in unitInds[1:]:
+            # one (actually the closest-to-unit-row one) == unitRow and the
+            # rest do not have any 0th component.
+            iClose = _np.argmax( [abs(B[0,ui]) for ui in unitInds] )
+            B[:, unitInds[iClose] ] = unitRow
+            for i,ui in enumerate(unitInds):
+                if i == iClose: continue
                 B[0, ui] = 0.0; B[:,ui] /= _np.linalg.norm(B[:,ui])
 
         realInds = sorted(realInds, key=lambda i: -abs(evals[i]))

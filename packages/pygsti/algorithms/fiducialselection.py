@@ -517,7 +517,7 @@ def build_bitvec_mx(n, k):
 
         """
         if i == 0:
-            bitVecMx[counter][[previous_bit_locs]] = 1
+            bitVecMx[counter][list(previous_bit_locs)] = 1
             counter += 1
         else:
             subK = k - i
