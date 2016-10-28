@@ -8,6 +8,9 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 from collections import OrderedDict as _OrderedDict
+from ... import objects as _objs
+from ... import construction as _cnst
+from ... import tools as _tls
 
 def _H_WF(epsilon,nu):
     """
@@ -210,7 +213,6 @@ def D1f1_to_gdep(D1,f1):
     gdep = D1 - f1**2
     return gdep
 
-
 def clifford_twirl(M,clifford_group):
     """
     Returns the Clifford twirl of a map M:  
@@ -235,7 +237,30 @@ def clifford_twirl(M,clifford_group):
                  clifford_group.get_matrix(i)) for i in range(G))
     return M_twirl
 
+def depolarisation_parameter(gate, clifford_group, d=2):
+    """
+    Returns the depolarisation parameter of the Clifford-twirled
+    version of 'gate'.
+    
+    Parameters
+    ----------
+    gate : array or gate
+        The map to be twirled and dep. par. to be extracted.
 
+    clifford_group : MatrixGroup
+        Which Clifford group to use.
+    
+    Returns
+    -------
+    p : float
+        The depolarisation parameter
+    """
+    
+    twirled_channel = clifford_twirl(gate,clifford_group)
+    p = 1./(d**2 -1) * (_np.trace(twirled_channel) - 1)
+    
+    return p
+    
 def analytic_rb_gate_error_rate(actual, target, clifford_group):
     """
     Computes the twirled Clifford error rate for a given gate.
@@ -305,3 +330,225 @@ def analytic_rb_clifford_gateset_error_rate(gs_clifford_actual,
     r_analytic = _np.mean(error_list)
     return r_analytic
 
+def error_gate_set(gs_actual, gs_target):
+    
+    """
+    Computes the 'left-multiplied' error maps associated with a noisy gate 
+    set, along with the average error map. This is the gate set [n_1,...] 
+    such that g_i = t_i, where t_i is the gate which g_i is a noisy 
+    implementation of, the final gate in the set has the key Gavg and is the
+    average of the error maps.
+    
+    Parameters
+    ----------
+    gs_actual : GateSet
+    
+    gs_target : GateSet
+        The corresponding ideal gate set of the gates as `gs_actual`.
+    
+    Returns
+    -------
+    error_gs : GateSet
+        The left multplied error gates, along with the average error map,
+        with the key 'Gavg'.
+    
+    """
+    
+    error_gate_list = []
+    error_gs = gs_actual.copy()
+    for gate in list(gs_target.gates.keys()):
+        error_gs.gates[gate] = _np.dot(gs_actual.gates[gate], 
+                               _np.transpose(gs_target.gates[gate]))     
+        error_gate_list.append(error_gs.gates[gate])
+        
+    error_gs['Gavg'] = _np.mean( _np.array([ i for i in error_gate_list]), 
+                                      axis=0, dtype=_np.float64)    
+       
+    return error_gs
+
+def delta_parameter(gs_actual, gs_target, norm='diamond'):
+    
+    """
+    Computes the 'delta' parameter used in the systematic error of the
+    zeroth, first (or higher order) fitting models. This delta parameter
+    is with respect to how close 'gs_actual' is to 'gs_target'. This 
+    parameter is a measure of the gate-dependence of the error of the 
+    gate set.
+    
+    Parameters
+    ----------
+    gs_actual : GateSet
+    
+    gs_target : GateSet
+        The corresponding ideal gate set of the gates as `gs_actual`.
+        
+    norm : Str
+        The norm used in the calculation.
+    
+    Returns
+    -------
+    delta_avg : float
+        The value of the delta parameter calculated for the given
+        norm and gate sets.
+    
+    """
+    error_gs = error_gate_set(gs_actual, gs_target)
+    delta = []
+    
+    for gate in list(gs_target.gates.keys()):
+        if norm=='diamond':
+            delta.append( _tls.diamonddist(error_gs.gates[gate],
+                                           error_gs.gates['Gavg']))
+        else:
+            print("Only diamond norm implemented currently")
+            
+    delta_avg = _np.mean(delta)
+    
+    return delta_avg
+        
+
+def analytic_rb_parameters(gs_actual, gs_target, clifford_group, 
+                           success_spamlabel, norm='diamond', d=2):
+    """
+    Computes the analytic zeroth and first order fit parameters from
+    a given noisy gate set. Also calculates the delta parameter used
+    in bounding the difference between the analytic decay curve and
+    an actual decay curve.
+    
+    Parameters
+    ----------
+    gs_actual : GateSet
+    
+    gs_target : GateSet
+        The corresponding ideal gate set of the gates as `gs_actual`.
+      
+    clifford_group : MatrixGroup
+        Which Clifford group to use.
+        
+    success_spamlabel : str
+        The spam label associated with survival.    
+        
+    norm : str
+        The norm used in the calculation.
+    
+    d : int
+        The dimension.
+    
+    Returns
+    -------
+    analytic_params : dictionary of floats
+        The values of the analytic fit parameters for the given gate 
+        set. These parameters are as defined in Magesan et al PRA 85
+        042311 2012, and we are considering the case of time-indep
+        gates. The parameters here are converted to those therein
+        as A -> B_0, B -> A_0, A1 -> B_1, B1 -> A_1, C1 -> C_1, 
+        D_1 -> q, p -> f, g_dep -> q - p^2, where the parameter name 
+        used herein is first.
+    
+    """
+    if d != 2:
+        print('Analytical decay rate is correct only for d=2')
+    error_gs = error_gate_set(gs_actual, gs_target)    
+           
+    analytic_params = {}
+    analytic_params['r'] = analytic_rb_clifford_gateset_error_rate(
+                            gs_actual, gs_target, clifford_group)    
+    analytic_params['f'] = depolarisation_parameter(error_gs['Gavg'], 
+                                             clifford_group, d=2)
+    analytic_params['delta'] = delta_parameter(gs_actual, gs_target, norm)
+       
+    R_list = []
+    Q_list = []
+    for gate in list(gs_target.gates.keys()):
+        R_list.append(_np.dot(_np.dot(error_gs[gate],gs_target.gates[gate]),
+              _np.dot(error_gs['Gavg'],_np.transpose(gs_target.gates[gate]))))
+        Q_list.append(_np.dot(gs_target.gates[gate],
+              _np.dot(error_gs[gate],_np.transpose(gs_target.gates[gate]))))
+    
+    error_gs['GR'] = _np.mean( _np.array([ i for i in R_list]), 
+                                      axis=0, dtype=_np.float64)
+    error_gs['GQ'] = _np.mean( _np.array([ i for i in Q_list]), 
+                                      axis=0, dtype=_np.float64)    
+    error_gs['GQ2'] = _np.dot(error_gs['GQ'],error_gs['Gavg'])
+    
+    error_gs['rhoc_mixed'] = 1./d*error_gs['identity']
+    error_gs.spamdefs['plus_cm'] = ('rhoc_mixed','E0')
+    error_gs.spamdefs['minus_cm'] = ('rhoc_mixed','remainder')
+    gsl = [('Gavg',),('GR',),('Gavg','GQ',)]   
+    ave_error_gsl = _cnst.create_gatestring_list("a", a=gsl)
+    N=1
+    data = _cnst.generate_fake_data(error_gs, ave_error_gsl, N, 
+                                    sampleError="none", seed=1)
+    
+    success_spamlabel_cm = success_spamlabel +'_cm'
+    
+    pr_L_p = data[('Gavg',)][success_spamlabel]
+    pr_L_I = data[('Gavg',)][success_spamlabel_cm]
+    pr_R_p = data[('GR',)][success_spamlabel]
+    pr_R_I = data[('GR',)][success_spamlabel_cm]
+    pr_Q_p = data[('Gavg','GQ',)][success_spamlabel]
+    an_f = analytic_params['f']
+
+    analytic_params['A'] = pr_L_I
+    analytic_params['B'] = pr_L_p - pr_L_I    
+    analytic_params['A1'] = pr_R_I
+    analytic_params['B1'] = (pr_Q_p/an_f) - pr_L_p + ((an_f -1)*pr_L_I/an_f) \
+                            + ((pr_R_p - pr_R_I)/an_f)
+    analytic_params['C1'] = pr_L_p - pr_L_I
+    analytic_params['D1'] = depolarisation_parameter(error_gs['GQ2'], 
+                                             clifford_group, d=2)
+    analytic_params['g_dep'] = D1f1_to_gdep(analytic_params['D1'],an_f)
+    
+    return analytic_params
+
+def systematic_error_bound(m,delta,order='zeroth'):
+    """
+    Computes the value of the systematic error bound at a given sequence
+    length.
+    
+    Parameters
+    ----------
+    m : float
+        Sequence length, and so it is often an int
+    
+    delta : float
+        The size of the 'delta' parameter for the gate set in question
+      
+    order : str
+        May be 'zeroth or 'first'. The order fitting model for which the
+        error bound should be calcluated.
+    
+    Returns
+    -------
+    sys_eb: float
+        The systematic error bound
+    
+    """
+    sys_eb = (delta + 1)**(m+1) - 1
+    
+    if order=='first':
+        sys_eb = sys_eb - (m+1)*delta
+
+    return sys_eb
+
+def seb_upper(y,m,delta,order='zeroth'):
+    """
+    Finds an upper bound on the surival probability from the analytic value
+    """
+    sys_eb = systematic_error_bound(m,delta,order)
+    
+    upper = y + sys_eb
+    upper[upper > 1]=1
+     
+    return upper
+
+def seb_lower(y,m,delta,order='zeroth'):
+    """
+    Finds a lower bound on the surival probability from the analytic value
+    """
+    sys_eb = systematic_error_bound(m,delta,order)
+    
+    lower = y - sys_eb
+    lower[lower < 0]=0
+       
+    return lower

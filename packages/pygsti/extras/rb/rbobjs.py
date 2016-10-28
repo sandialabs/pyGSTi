@@ -342,7 +342,9 @@ class RBResults(object):
         return s
 
 
-    def plot(self,gstyp,xlim=None,ylim=None,save_fig_path=None,order='zeroth'):
+    def plot(self,gstyp, xlim=None, ylim=None, save_fig_path=None, 
+             order='zeroth', analytic=None, analytic_params=None, 
+             sys_error_bound=None,legend=False,loc='upper right'):
         """
         Plot RB decay curve, as a function of some the sequence length
         computed using the `gstyp` gate-label-set.
@@ -366,6 +368,27 @@ class RBResults(object):
             Optional. Allowed values are 'zeroth', 'first' or 'all'. Specifies 
             whether the zeroth or first order fitting model results are plotted,
             or both.
+            
+        analytic : str
+            Optional. If not None, allowed values are 'zeroth', 'first' or 'all'.
+            Specifies which analytic decay curves should be plotted. To use this 
+            functionality it is necessary to know the noisy gate set.
+            
+        analytic_params : dictionary
+            Optional, but required if analytic is not None. A dictionary containing
+            the analytic decay parameters for the noisy gate set, as calculated using
+            the 'analytic_rb_parameters' function located in rbutils.py
+            
+        sys_error_bound : str
+            Optional. If not None, allowed values are 'zeroth', 'first' or 'all'.
+            Specifies which systematic error bounds to plot. They can only be plotted
+            if analytic is not None, and analytic_params have been provided.
+            
+        legend : bool
+            Specifies whether a legend is added to the graph
+            
+        loc : str
+            Specifies the location of the legend.
 
         Returns
         -------
@@ -388,51 +411,71 @@ class RBResults(object):
         C1 = self.dicts[gstyp]['C1']
         D1 = self.dicts[gstyp]['D1']
         f1 = self.dicts[gstyp]['f1']
+        if analytic != None:
+            if gstyp != 'clifford':
+                print("Analytical curve is for Clifford decay!")            
+            if analytic_params==None:
+                print("Function must be given the analytical parameters!")
+            f_an = analytic_params['f']
+            A_an = analytic_params['A']
+            B_an = analytic_params['B']
+            A1_an = analytic_params['A1']
+            B1_an = analytic_params['B1']
+            C1_an = analytic_params['C1']
+            D1_an = analytic_params['D1']
+            
         xlabel = 'RB sequence length (%ss)' % gstyp
 
         cmap = _plt.cm.get_cmap('Set1')
         newplotgca.plot(xdata,ydata,'.', markersize=15, clip_on=False,
                         color=cmap(30))
         
-        if order=='zeroth':
-            newplotgca.plot(_np.arange(max(xdata)),
-                            _rbutils.rb_decay_WF(_np.arange(max(xdata)),A,B,f),
-                            '-', lw=2, color=cmap(110))
-
-            newplotgca.set_xlabel(xlabel, fontsize=15)
-            newplotgca.set_ylabel('Success Rate',fontsize=15)
-            newplotgca.set_title('RB Success Curve', fontsize=20)
-            
-        if order=='first':
-            newplotgca.plot(_np.arange(max(xdata)),
-                            _rbutils.rb_decay_1st_order(_np.arange(max(xdata)),
-                            A1,B1,C1,D1,f1),'-', lw=2, color=cmap(110))
-
-            newplotgca.set_xlabel(xlabel, fontsize=15)
-            newplotgca.set_ylabel('Success Rate',fontsize=15)
-            newplotgca.set_title('RB First Order Fit Success Curve', fontsize=20)
-            
-        if order=='all':
+        if order=='zeroth' or order=='all':
             newplotgca.plot(_np.arange(max(xdata)),
                             _rbutils.rb_decay_WF(_np.arange(max(xdata)),A,B,f),
                             '-', lw=2, color=cmap(110), label='Zeroth order fit')
+          
+        if order=='first' or order=='all':
             newplotgca.plot(_np.arange(max(xdata)),
                             _rbutils.rb_decay_1st_order(_np.arange(max(xdata)),
-                            A1,B1,C1,D1,f1),'--', lw=4, color=cmap(50),
+                            A1,B1,C1,D1,f1),'--', lw=2, color=cmap(50), 
                             label='First order fit')
 
-            newplotgca.set_xlabel(xlabel, fontsize=15)
-            newplotgca.set_ylabel('Success Rate',fontsize=15)
-            newplotgca.set_title('RB Success Curves', fontsize=20)  
-            
 
+        if analytic=='zeroth' or analytic=='all':
+            newplotgca.plot(_np.arange(max(xdata)),
+                            _rbutils.rb_decay_WF(_np.arange(max(xdata)),A_an,B_an,f_an),
+                            '-.', lw=4, color=cmap(70), label='Zeroth order analytic')
+            if sys_error_bound=='zeroth' or sys_error_bound=='all':
+                _plt.fill_between(_np.arange(max(xdata)),_rbutils.seb_lower( 
+                                _rbutils.rb_decay_WF(_np.arange(max(xdata)),A_an,B_an,f_an),
+                                _np.arange(max(xdata)), analytic_params['delta'], order='zeroth'), 
+                                _rbutils.seb_upper(_rbutils.rb_decay_WF(_np.arange(max(xdata)),A_an,B_an,f_an), 
+                                _np.arange(max(xdata)), analytic_params['delta'], order='zeroth'), alpha=0.5, 
+                                                     edgecolor='#CC4F1B', facecolor='#FF9848')
+        if analytic=='first' or analytic=='all':
+            newplotgca.plot(_np.arange(max(xdata)),
+                            _rbutils.rb_decay_1st_order(_np.arange(max(xdata)),A1_an,B1_an,C1_an,D1_an,f_an),
+                            '.', lw=4, color=cmap(10), label='First order analytic')
+            if sys_error_bound=='first' or sys_error_bound=='all':
+                _plt.fill_between(_np.arange(max(xdata)),_rbutils.seb_lower( 
+                                _rbutils.rb_decay_1st_order(_np.arange(max(xdata)),A1_an,B1_an,C1_an,D1_an,f_an),
+                                _np.arange(max(xdata)), analytic_params['delta'], order='first'), 
+                                _rbutils.seb_upper(_rbutils.rb_decay_WF(_np.arange(max(xdata)),A_an,B_an,f_an), 
+                                _np.arange(max(xdata)), analytic_params['delta'], order='first'), alpha=0.2, 
+                                      edgecolor='#1B2ACC', facecolor='#089FFF', linewidth=4)
+                 
+
+        newplotgca.set_xlabel(xlabel, fontsize=15)
+        newplotgca.set_ylabel('Success Rate',fontsize=15)
+        newplotgca.set_title('RB Decay Curves', fontsize=20)  
         newplotgca.set_frame_on(False)
         newplotgca.yaxis.grid(True)
         newplotgca.tick_params(axis='x', top='off', labelsize=12)
         newplotgca.tick_params(axis='y', left='off', right='off', labelsize=12)
         
-        if order=='all':
-            _plt.legend(loc='upper right')
+        if legend==True:
+            _plt.legend(loc=loc)
 
         if xlim:
             _plt.xlim(xlim)
