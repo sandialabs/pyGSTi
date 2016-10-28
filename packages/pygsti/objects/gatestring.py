@@ -157,7 +157,7 @@ class GateString(object):
         return GateString(self.tup + x.tup, s, bCheck=False)
 
     def __mul__(self,x):
-        assert(isinstance(x,int) and x >= 0)
+        assert( (isinstance(x,int) or _np.issubdtype(x,int)) and x >= 0)
         if x > 1: s = "(%s)^%d" % (self.str,x)
         elif x == 1: s = "(%s)" % self.str
         else: s = "{}"
