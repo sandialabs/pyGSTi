@@ -1091,6 +1091,8 @@ class GateSetCalculator(object):
                 dgate = self.dproduct( (gateLabel,) , wrtFilter=wrtIndices)
                 dProdCache[i] = dgate / _np.exp(scaleCache[i])
 
+        #profiler.print_mem("DEBUGMEM: POINT1"); profiler.comm.barrier()
+
         #evaluate gate strings using tree (skip over the zero and single-gate-strings)
         for i in evalTree.get_evaluation_order():
             tm = _time.time()
@@ -1112,6 +1114,8 @@ class GateSetCalculator(object):
                     _warnings.warn("Scaled dProd small in order to keep prod managable.")
             elif _np.count_nonzero(dProdCache[i]) and dProdCache[i].max() < DSMALL and dProdCache[i].min() > -DSMALL:
                 _warnings.warn("Would have scaled dProd but now will not alter scaleCache.")
+
+        #profiler.print_mem("DEBUGMEM: POINT2"); profiler.comm.barrier()
 
         profiler.add_time("compute_dproduct_cache: serial", tSerialStart)
         profiler.add_count("compute_dproduct_cache: num columns", nGateDerivCols)
@@ -2169,7 +2173,7 @@ class GateSetCalculator(object):
 
             #Free memory from previous subtree iteration before computing caches
             scaleVals = Gs = dGs = None
-            prodCache = scaleCache = None
+            prodCache = scaleCache = dProdCache = None
 
             #Fill cache info (not requiring column distribution)
             tm = _time.time()
@@ -2220,15 +2224,16 @@ class GateSetCalculator(object):
                 gatesSlice = wrtSlices['gates'] if (wrtSlices is not None) else None
                 dProdCache = self._compute_dproduct_cache(evalSubTree, prodCache, scaleCache,
                                                           mySubComm, gatesSlice, profiler)
-                profiler.add_time("bulk_fill_dprobs: compute_dproduct_cache", tm)
                 dGs = evalSubTree.final_view(dProdCache, axis=0)
                   #( nGateStrings, nDerivCols, dim, dim )
+                profiler.add_time("bulk_fill_dprobs: compute_dproduct_cache", tm)
                 profiler.mem_check("bulk_fill_dprobs: post compute dproduct")
 
                 #Compute all requested derivative columns at once
                 self._fill_result_tuple( (prMxToFill, mxToFill), spam_label_rows,
                                          fslc, slice(None), calc_and_fill )
                 profiler.mem_check("bulk_fill_dprobs: post fill")
+                dProdCache = dGs = None #free mem
 
             else: # Divide columns into blocks of at most blkSize
                 assert(wrtFilter is None) #cannot specify both wrtFilter and blkSize
@@ -2276,7 +2281,6 @@ class GateSetCalculator(object):
                 for iBlk in myBlkIndices:
                     tm = _time.time()
                     gateSlice = _slct.shift(blocks[iBlk],-self.tot_spam_params)
-                    dProdCache = dGs = None #free mem from previous iter
                     dProdCache = self._compute_dproduct_cache(evalSubTree, prodCache, scaleCache,
                                                               blkComm, gateSlice, profiler)
                     profiler.add_time("bulk_fill_dprobs: compute_dproduct_cache", tm)
@@ -2292,6 +2296,7 @@ class GateSetCalculator(object):
                         blocks[iBlk], calc_and_fill_blk )                    
 
                     profiler.mem_check("bulk_fill_dprobs: post fill blk")
+                    dProdCache = dGs = None #free mem
 
                 #gather results
                 tm = _time.time()
@@ -2552,13 +2557,15 @@ class GateSetCalculator(object):
 
                 for iBlk in myBlkIndices:
                     gateSlice = _slct.shift(blocks[iBlk],-self.tot_spam_params)
-                    hProdCache = hGs = None # free mem from previous iter
                     hProdCache = self._compute_hproduct_cache(evalSubTree, prodCache, dProdCache,
                                                               scaleCache, blkComm, gateSlice)
                     hGs = evalSubTree.final_view(hProdCache, axis=0)
                     self._fill_result_tuple( 
                         (mxToFill,), spam_label_rows, fslc, 
-                        blocks[iBlk], calc_and_fill_blk )                    
+                        blocks[iBlk], calc_and_fill_blk )
+
+                    hProdCache = hGs = None # free mem
+
 
                 #gather results
                 _mpit.gather_slices(blocks, blkOwners, mxToFill[:,fslc],

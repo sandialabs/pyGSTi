@@ -1014,9 +1014,12 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     #Create evaluation tree (split into subtrees if needed)
     tm = _time.time()
     if (memLimit is not None):
-        curMem = _objs.profiler._get_root_mem_usage(comm)
+        curMem = _objs.profiler._get_max_mem_usage(comm)
         gthrMem = int(0.1*(memLimit-persistentMem))
         mlim = memLimit-persistentMem-gthrMem-curMem
+        printer.log("Memory limit = %.2fGB" % (memLimit*C))
+        printer.log(" Cur, Persist, Gather = %.2f, %.2f, %.2f GB" %
+                    (curMem*C, persistentMem*C, gthrMem*C))
     else: gthrMem = mlim = None
     evTree, wrtBlkSize = gs.bulk_evaltree_from_resources(
         gateStringsToUse, comm, mlim,
@@ -2023,9 +2026,12 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
 
     #Get evaluation tree (split into subtrees if needed)
     if (memLimit is not None):
-        curMem = _objs.profiler._get_root_mem_usage(comm)
+        curMem = _objs.profiler._get_max_mem_usage(comm)
         gthrMem = int(0.1*(memLimit-persistentMem))
         mlim = memLimit-persistentMem-gthrMem-curMem
+        printer.log("Memory limit = %.2fGB" % (memLimit*C))
+        printer.log(" Cur, Persist, Gather = %.2f, %.2f, %.2f GB" %
+                    (curMem*C, persistentMem*C, gthrMem*C))
     else: gthrMem = mlim = None
     evTree, wrtBlkSize = gs.bulk_evaltree_from_resources(
         gateStringsToUse, comm, mlim,

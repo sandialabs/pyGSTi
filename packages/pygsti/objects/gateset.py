@@ -12,6 +12,7 @@ import scipy as _scipy
 import itertools as _itertools
 import collections as _collections
 import warnings as _warnings
+import time as _time
 
 from ..tools import matrixtools as _mt
 from ..tools import basistools as _bt
@@ -1257,14 +1258,33 @@ class GateSet(object):
         nprocs = 1 if comm is None else comm.Get_size()
         num_params = self.num_params()
         dim = self._dim
-        if memLimit is not None and memLimit <= 0:
-            raise ValueError("bulk_evaltree_from_resources memLimit = %g <= 0!" % memLimit)
+        evt_cache = {} # cache of eval trees based on # min subtrees, to avoid re-computation
+        floatSize = 8 # in bytes: TODO: a better way
+        C = 1.0/(1024.0**3)
 
-        def memEstimate(ng,np,Ng,verb=0):
-            #Slower (but more accurate way)
-            #tstTree = self.bulk_evaltree(gatestring_list, minSubtrees=ng)
-            #cacheSize = max([len(s) for s in tstTree.get_sub_trees()])
-            cacheSize = int( 1.1 * len(gatestring_list) / ng ) #heuristic (but fast)
+
+        if memLimit is not None:
+            if memLimit <= 0:
+                raise MemoryError("Attempted evaltree generation " +
+                                  "w/memlimit = %g <= 0!" % memLimit)
+            printer.log("Begin evaltree generation (%s) w/mem limit = %.2fGB"
+                        % (distributeMethod, memLimit*C))
+
+
+        def memEstimate(ng,np,Ng,fastCacheSz=False,verb=0):
+            tm = _time.time()
+
+            #Get cache size
+            if not fastCacheSz:
+                #Slower (but more accurate way)
+                if ng not in evt_cache: evt_cache[ng] = self.bulk_evaltree(
+                    gatestring_list,minSubtrees=ng,verbosity=printer+1)
+                tstTree = evt_cache[ng]
+                cacheSize = max([len(s) for s in tstTree.get_sub_trees()])
+            else:
+                #heuristic (but fast)
+                cacheSize = int( 1.5 * len(gatestring_list) / ng )
+
             wrtLen = (num_params+np-1) // np # ceiling(num_params / np)
             nSubtreesPerProc = (ng+Ng-1) // Ng # ceiling(ng / Ng)
 
@@ -1292,24 +1312,28 @@ class GateSet(object):
                 else:
                     raise ValueError("Unknown subcall name: %s" % fnName)
             
-            floatSize = 8 # in bytes: TODO: a better way
-
-            if verb > 0:
+            if verb == 1:
+                fc_est_str = " (%.2fGB fcest)" % (memEstimate(ng,np,Ng,True)*C)\
+                    if (not fastCacheSz) else ""
+                printer.log(" mem (%d subtrees, %d param-grps, %d proc-grps)"
+                            % (ng, np, Ng) + " in %.0fs: %.2fGB%s"
+                            % (_time.time()-tm, mem*floatSize*C, fc_est_str))
+            elif verb == 2:
                 printer.log("Memory estimate (ng=%d, np=%d, Ng=%d):" 
                             % (ng,np,Ng))
                 printer.log("  subcalls = %s" % str(subcalls))
                 printer.log("  cacheSize = %d" % cacheSize)
                 printer.log("  wrtLen = %d" % wrtLen)
                 printer.log("  nSubtreesPerProc = %d" % nSubtreesPerProc)
-                printer.log("=> %.2f GB" % (mem*floatSize/(1024.0**3)))
-                if "bulk_fill_dprobs" in subcalls:
-                    printer.log(" DB Detail: dprobs cache = %.2fGB" % 
-                                (8*cacheSize * wrtLen * dim * dim / (1024.0**3)))
-                    printer.log(" DB Detail: probs cache = %.2fGB" % 
-                                (8*cacheSize * dim * dim / (1024.0**3)))
+                printer.log("=> %.2f GB" % (mem*floatSize*C))
+                #if "bulk_fill_dprobs" in subcalls:
+                #    printer.log(" DB Detail: dprobs cache = %.2fGB" % 
+                #                (8*cacheSize * wrtLen * dim * dim * C))
+                #    printer.log(" DB Detail: probs cache = %.2fGB" % 
+                #                (8*cacheSize * dim * dim * C))
 
             #printer.log("DB: memEstimate(ng=%d, np=%d, Ng=%d) = %.2f GB" 
-            #            % (ng,np,Ng,mem*floatSize/(1024.0**3)))
+            #            % (ng,np,Ng,mem*floatSize*C))
             return mem * floatSize
 
 
@@ -1317,7 +1341,16 @@ class GateSet(object):
             np = 1; Ng = nprocs
             ng = nprocs
             if memLimit is not None:
-                while memEstimate(ng,np,Ng) > memLimit: ng += Ng #so ng % Ng == 0
+                #Increase ng in amounts of Ng (so ng % Ng == 0).  Start
+                # with fast cacheSize computation then switch to slow
+                while memEstimate(ng,np,Ng,True) > memLimit: ng += Ng
+                mem_estimate = memEstimate(ng,np,Ng,verb=1)
+                while mem_estimate > memLimit:
+                    ng += Ng; next = memEstimate(ng,np,Ng,verb=1)
+                    assert next < mem_estimate, \
+                        "Not enough memory: splitting unproductive"
+                    mem_estimate = next
+                
                    #Note: could do these while loops smarter, e.g. binary search-like?
                    #  or assume memEstimate scales linearly in ng? E.g:
                    #     if memLimit < memEstimate:
@@ -1328,23 +1361,40 @@ class GateSet(object):
             ng = Ng = 1; np = nprocs
             if memLimit is not None:
                 #First try to decrease mem consumption by increasing np
+                memEstimate(ng,nprocs,Ng,verb=1) #initial estimate (to screen)
                 for n in range(nprocs, num_params+1):
                     if memEstimate(ng,n,Ng) < memLimit:
                         np = n; break
                 else:
-                    np = num_params; Ng = max(nprocs // np, 1)
-                    ng = Ng
-                    while memEstimate(ng,np,Ng) > memLimit:
-                        ng += Ng #so ng % Ng == 0
+                    #Increase ng in amounts of Ng (so ng % Ng == 0).  Start
+                    # with fast cacheSize computation then switch to slow
+                    np = num_params; ng = Ng = max(nprocs // np, 1)
+                    while memEstimate(ng,np,Ng,True) > memLimit: ng += Ng
+                    mem_estimate = memEstimate(ng,np,Ng,verb=1)
+                    while mem_estimate > memLimit:
+                        ng += Ng; next = memEstimate(ng,np,Ng,verb=1)
+                        assert next < mem_estimate, \
+                            "Not enough memory: splitting unproductive"
+                        mem_estimate = next
 
         elif distributeMethod == "balanced":
             # try to minimize "unbalanced" procs
-            np = gcf(num_params, nprocs)
-            ng = Ng = max(nprocs / np, 1)
-            if memLimit is not None:
-                while memEstimate(ng,np,Ng) > memLimit: ng += Ng #so ng % Ng == 0
+            #np = gcf(num_params, nprocs)
+            #ng = Ng = max(nprocs / np, 1)
+            #if memLimit is not None:
+            #    while memEstimate(ng,np,Ng) > memLimit: ng += Ng #so ng % Ng == 0
+            raise NotImplementedError("balanced distribution still todo")
 
-        evt = self.bulk_evaltree(gatestring_list, minSubtrees=ng, numSubtreeComms=Ng)
+        #construct final EvalTree
+        tm = _time.time()
+        if ng in evt_cache:
+            evt = evt_cache[ng]; evt.distribution['numSubtreeComms'] = Ng
+        else:
+            evt = self.bulk_evaltree(gatestring_list, minSubtrees=ng,
+                                     numSubtreeComms=Ng, verbosity=printer)
+            evt_cache[ng] = evt #for use below
+        printer.log("Final tree constructed in %.0fs" % (_time.time()-tm))
+
         paramBlkSize = num_params / np   #the *average* param block size
           # (in general *not* an integer), which ensures that the intended # of
           # param blocks is communicatd to gsCalc.py routines (taking ceiling or
@@ -1356,8 +1406,8 @@ class GateSet(object):
                     + "%d params (taken as %d param groups of ~%d params)." 
                     % (num_params, np, paramBlkSize))
         if memLimit is not None:
-            printer.log("Memlimit = %.2f GB" % (memLimit/(1024.0**3)))
-            memEstimate(ng,np,Ng,verb=1) #prints mem estimate details
+            printer.log("Tree memlimit = %.2f GB" % (memLimit*C))
+            memEstimate(ng,np,Ng,False,verb=2) #prints mem estimate details
 
         if (comm is None or comm.Get_rank() == 0) and evt.is_split():
             if printer.verbosity >= 2: evt.print_analysis()
@@ -1367,8 +1417,6 @@ class GateSet(object):
         else:
             if comm is not None:
                 blkSizeTest = comm.bcast(paramBlkSize,root=0)
-                #print("MPIDB: rank%d paramBlkSize = %g, num_params = %d, np = %d" %
-                # (comm.Get_rank(),paramBlkSize,num_params,np))
                 assert(abs(blkSizeTest-paramBlkSize) < 1e-3) 
                   #all procs should have *same* paramBlkSize
 
@@ -1377,7 +1425,7 @@ class GateSet(object):
 
 
     def bulk_evaltree(self, gatestring_list, minSubtrees=None, maxTreeSize=None,
-                      numSubtreeComms=1):
+                      numSubtreeComms=1, verbosity=0):
         """
         Create an evaluation tree for all the gate strings in gatestring_list.
 
@@ -1402,26 +1450,37 @@ class GateSet(object):
             to divide the subtrees of the EvalTree among
             when calling its `distribute` method.
 
+        verbosity : int, optional
+            How much detail to send to stdout.
+
         Returns
         -------
         EvalTree
             An evaluation tree object.
         """
+        tm = _time.time()
+        printer = VerbosityPrinter.build_printer(verbosity)
         evalTree = _evaltree.EvalTree()
         evalTree.initialize([""] + list(self.gates.keys()), gatestring_list, numSubtreeComms)
 
+        printer.log("bulk_evaltree: created initial tree (%d strs) in %.0fs" %
+                    (len(gatestring_list),_time.time()-tm)); tm = _time.time()
+
         if maxTreeSize is not None:
-            evalTree.split(maxTreeSize, None) # won't split if unnecessary
+            evalTree.split(maxTreeSize, None, printer) # won't split if unnecessary
 
         if minSubtrees is not None:
             if not evalTree.is_split() or len(evalTree.get_sub_trees()) < minSubtrees:
-                evalTree.split(None,minSubtrees)
+                evalTree.split(None, minSubtrees, printer)
                 if maxTreeSize is not None and \
                         any([ len(sub)>maxTreeSize for sub in evalTree.get_sub_trees()]):
                     _warnings.warn("Could not create a tree with minSubtrees=%d" % minSubtrees
                                    + " and maxTreeSize=%d" % maxTreeSize)
                     evalTree.split(maxTreeSize, None) # fall back to split for max size
-
+        
+        if maxTreeSize is not None or minSubtrees is not None:
+            printer.log("bulk_evaltree: split tree (%d subtrees) in %.0fs" 
+                        % (len(evalTree.get_sub_trees()),_time.time()-tm))
         return evalTree
 
 
