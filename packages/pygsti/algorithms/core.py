@@ -1018,12 +1018,12 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         gthrMem = int(0.1*(memLimit-persistentMem))
         mlim = memLimit-persistentMem-gthrMem-curMem
         printer.log("Memory limit = %.2fGB" % (memLimit*C))
-        printer.log(" Cur, Persist, Gather = %.2f, %.2f, %.2f GB" %
+        printer.log("Cur, Persist, Gather = %.2f, %.2f, %.2f GB" %
                     (curMem*C, persistentMem*C, gthrMem*C))
     else: gthrMem = mlim = None
     evTree, wrtBlkSize = gs.bulk_evaltree_from_resources(
-        gateStringsToUse, comm, mlim,
-        distributeMethod, ["bulk_fill_probs","bulk_fill_dprobs"], printer) 
+        gateStringsToUse, comm, mlim, distributeMethod,
+        ["bulk_fill_probs","bulk_fill_dprobs"], printer) 
     profiler.add_time("do_mc2gst: pre-opt treegen",tStart)
 
     # permute (if needed) gate string list for efficient subtree division
@@ -1316,9 +1316,9 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
         totChi2 = sum([x**2 for x in minErrVec])
         pvalue = 1.0 - _stats.chi2.cdf(totChi2,nDataParams-nModelParams) # reject GST model if p-value < threshold (~0.05?)
-        printer.log("  Sum of Chi^2 = %g (%d data params - %d model params = expected mean of %g; p-value = %g)" % \
+        printer.log("Sum of Chi^2 = %g (%d data params - %d model params = expected mean of %g; p-value = %g)" % \
             (totChi2, nDataParams,  nModelParams, nDataParams-nModelParams, pvalue), 1)
-        printer.log("  Completed in %.1fs" % (_time.time()-tStart), 1)
+        printer.log("Completed in %.1fs" % (_time.time()-tStart), 1)
 
     #if targetGateset is not None:
     #  target_vec = targetGateset.to_vector()
@@ -2029,13 +2029,13 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
         curMem = _objs.profiler._get_max_mem_usage(comm)
         gthrMem = int(0.1*(memLimit-persistentMem))
         mlim = memLimit-persistentMem-gthrMem-curMem
-        printer.log("Memory limit = %.2fGB" % (memLimit*C))
-        printer.log(" Cur, Persist, Gather = %.2f, %.2f, %.2f GB" %
+        printer.log("Memory: limit = %.2fGB" % (memLimit*C) + 
+                    "(cur, persist, gthr = %.2f, %.2f, %.2f GB)" %
                     (curMem*C, persistentMem*C, gthrMem*C))
     else: gthrMem = mlim = None
     evTree, wrtBlkSize = gs.bulk_evaltree_from_resources(
-        gateStringsToUse, comm, mlim,
-        distributeMethod, ["bulk_fill_probs","bulk_fill_dprobs"], printer)
+        gateStringsToUse, comm, mlim, distributeMethod,
+        ["bulk_fill_probs","bulk_fill_dprobs"], printer)
 
     # permute (if needed) gate string list for efficient subtree division
     # Note: cannot rely on order of gateStringsToUse above this point --

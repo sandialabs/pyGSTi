@@ -970,7 +970,8 @@ class GateSetCalculator(object):
         # incorrect (and luckily never used) - so it's been removed.
         
         if comm is not None: #ignorning comm since can't do anything with it!
-            _warnings.warn("More processors than can be used for product computation")
+            #_warnings.warn("More processors than can be used for product computation")
+            pass #this is a fairly common occurance, and doesn't merit a warning
 
         # ------------------------------------------------------------------
 

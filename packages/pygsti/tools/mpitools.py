@@ -326,10 +326,10 @@ def gather_slices(slices, slice_owners,
     if max_buffer_size is not None: #no maximum of buffer size
         bytes_per_index = arToFill.nbytes / arToFill.shape[axis]
         max_indices = max(1,int(max_buffer_size/bytes_per_index))
-        bShowMessage = bool(my_rank == 0)
+        #bShowMessage = bool(my_rank == 0)
     else:
         max_indices = None
-        bShowMessage = False
+        #bShowMessage = False
 
     for iSlice,slc in enumerate(slices):
         owner = slice_owners[iSlice] #owner's rank
@@ -342,9 +342,9 @@ def gather_slices(slices, slice_owners,
             comm.Bcast(buf, root=slice_owners[iSlice])
             if my_rank != owner: arToFill[arIndx] = buf
         else:
-            if bShowMessage:
-                print("MPIDB: gather_slices restricting %s to %d indices at once"
-                      % (str(slc),max_indices)); bShowMessage = False
+#            if bShowMessage:
+#                print("MPIDB: gather_slices restricting %s to %d indices at once"
+#                      % (str(slc),max_indices)); bShowMessage = False
             sub_start = slc.start
             while sub_start < slc.stop: #broadcast in chunks to keep buffer size small
                 sub_slc = slice(sub_start, min(sub_start+max_indices,slc.stop))

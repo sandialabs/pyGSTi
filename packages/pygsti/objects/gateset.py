@@ -1267,7 +1267,7 @@ class GateSet(object):
             if memLimit <= 0:
                 raise MemoryError("Attempted evaltree generation " +
                                   "w/memlimit = %g <= 0!" % memLimit)
-            printer.log("Begin evaltree generation (%s) w/mem limit = %.2fGB"
+            printer.log("Evaltree generation (%s) w/mem limit = %.2fGB"
                         % (distributeMethod, memLimit*C))
 
 
@@ -1278,12 +1278,12 @@ class GateSet(object):
             if not fastCacheSz:
                 #Slower (but more accurate way)
                 if ng not in evt_cache: evt_cache[ng] = self.bulk_evaltree(
-                    gatestring_list,minSubtrees=ng,verbosity=printer+1)
+                    gatestring_list,minSubtrees=ng,verbosity=printer-1)
                 tstTree = evt_cache[ng]
                 cacheSize = max([len(s) for s in tstTree.get_sub_trees()])
             else:
                 #heuristic (but fast)
-                cacheSize = int( 1.5 * len(gatestring_list) / ng )
+                cacheSize = int( 1.3 * len(gatestring_list) / ng )
 
             wrtLen = (num_params+np-1) // np # ceiling(num_params / np)
             nSubtreesPerProc = (ng+Ng-1) // Ng # ceiling(ng / Ng)
@@ -1313,27 +1313,24 @@ class GateSet(object):
                     raise ValueError("Unknown subcall name: %s" % fnName)
             
             if verb == 1:
-                fc_est_str = " (%.2fGB fcest)" % (memEstimate(ng,np,Ng,True)*C)\
+                fc_est_str = " (%.2fGB fc)" % (memEstimate(ng,np,Ng,True)*C)\
                     if (not fastCacheSz) else ""
-                printer.log(" mem (%d subtrees, %d param-grps, %d proc-grps)"
-                            % (ng, np, Ng) + " in %.0fs: %.2fGB%s"
+                printer.log(" mem(%d subtrees, %d param-grps, %d proc-grps)"
+                            % (ng, np, Ng) + " in %.0fs = %.2fGB%s"
                             % (_time.time()-tm, mem*floatSize*C, fc_est_str))
             elif verb == 2:
-                printer.log("Memory estimate (ng=%d, np=%d, Ng=%d):" 
-                            % (ng,np,Ng))
-                printer.log("  subcalls = %s" % str(subcalls))
-                printer.log("  cacheSize = %d" % cacheSize)
-                printer.log("  wrtLen = %d" % wrtLen)
-                printer.log("  nSubtreesPerProc = %d" % nSubtreesPerProc)
-                printer.log("=> %.2f GB" % (mem*floatSize*C))
+                printer.log(" Memory estimate = %.2fGB" % (mem*floatSize*C) +
+                            " (cache=%d, wrtLen=%d, subsPerProc=%d)." %
+                            (cacheSize, wrtLen, nSubtreesPerProc))
+                #printer.log("  subcalls = %s" % str(subcalls))
+                #printer.log("  cacheSize = %d" % cacheSize)
+                #printer.log("  wrtLen = %d" % wrtLen)
+                #printer.log("  nSubtreesPerProc = %d" % nSubtreesPerProc)
                 #if "bulk_fill_dprobs" in subcalls:
                 #    printer.log(" DB Detail: dprobs cache = %.2fGB" % 
                 #                (8*cacheSize * wrtLen * dim * dim * C))
                 #    printer.log(" DB Detail: probs cache = %.2fGB" % 
                 #                (8*cacheSize * dim * dim * C))
-
-            #printer.log("DB: memEstimate(ng=%d, np=%d, Ng=%d) = %.2f GB" 
-            #            % (ng,np,Ng,mem*floatSize*C))
             return mem * floatSize
 
 
@@ -1385,15 +1382,9 @@ class GateSet(object):
             #    while memEstimate(ng,np,Ng) > memLimit: ng += Ng #so ng % Ng == 0
             raise NotImplementedError("balanced distribution still todo")
 
-        #construct final EvalTree
-        tm = _time.time()
-        if ng in evt_cache:
-            evt = evt_cache[ng]; evt.distribution['numSubtreeComms'] = Ng
-        else:
-            evt = self.bulk_evaltree(gatestring_list, minSubtrees=ng,
-                                     numSubtreeComms=Ng, verbosity=printer)
-            evt_cache[ng] = evt #for use below
-        printer.log("Final tree constructed in %.0fs" % (_time.time()-tm))
+        # Retrieve final EvalTree (already computed from estimates above)
+        assert (ng in evt_cache), "Tree Caching Error"
+        evt = evt_cache[ng]; evt.distribution['numSubtreeComms'] = Ng
 
         paramBlkSize = num_params / np   #the *average* param block size
           # (in general *not* an integer), which ensures that the intended # of
@@ -1401,13 +1392,12 @@ class GateSet(object):
           # floor can lead to inefficient MPI distribution)
 
         printer.log("Created evaluation tree with %d subtrees.  " % ng
-                    + "Will divide %d procs into %d (subtree-processing) " % (nprocs,Ng)
-                    + "groups of ~%d procs each, to distribute over " % (nprocs/Ng)
+                    + "Will divide %d procs into %d (subtree-processing)" % (nprocs,Ng))
+        printer.log(" groups of ~%d procs each, to distribute over " % (nprocs/Ng)
                     + "%d params (taken as %d param groups of ~%d params)." 
                     % (num_params, np, paramBlkSize))
         if memLimit is not None:
-            printer.log("Tree memlimit = %.2f GB" % (memLimit*C))
-            memEstimate(ng,np,Ng,False,verb=2) #prints mem estimate details
+            memEstimate(ng,np,Ng,False,verb=2) #print mem estimate details
 
         if (comm is None or comm.Get_rank() == 0) and evt.is_split():
             if printer.verbosity >= 2: evt.print_analysis()
