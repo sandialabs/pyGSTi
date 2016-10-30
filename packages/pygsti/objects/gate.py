@@ -177,14 +177,52 @@ def convert(gate, toType):
         raise ValueError("Invalid toType argument: %s" % toType)
 
 
+def finite_difference_deriv_wrt_params(gate, eps=1e-7):
+    """
+    Computes a finite-difference Jacobian for a Gate object.
+
+    The returned value is a matrix whose columns are the vectorized
+    derivatives of the flattened gate matrix with respect to a single
+    gate parameter, matching the format expected from the gate's
+    `deriv_wrt_params` method.
+
+    Parameters
+    ----------
+    gate : Gate
+        The gate object to compute a Jacobian for.
+        
+    eps : float, optional
+        The finitite difference step to use.
+
+    Returns
+    -------
+    numpy.ndarray
+        An M by N matrix where M is the number of gate elements and
+        N is the number of gate parameters. 
+    """
+    dim = gate.get_dimension()
+    gate2 = gate.copy()
+    p = gate.to_vector()
+    fd_deriv = _np.empty((dim,dim,gate.num_params()), 'd') #assume real (?)
+
+    for i in range(gate.num_params()):
+        p_plus_dp = p.copy()
+        p_plus_dp[i] += eps
+        gate2.from_vector(p_plus_dp)
+        fd_deriv[:,:,i] = (gate2-gate)/eps
+
+    fd_deriv.shape = [dim**2,gate.num_params()]
+    return fd_deriv
+
+
 def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
     """
     Checks the `deriv_wrt_params` method of a Gate object.
 
     This routine is meant to be used as an aid in testing and debugging
-    gate classes by computing by finite-difference the Jacobian that
-    should be returned by `gate.deriv_wrt_params` and comparing the
-    two results.  A ValueError is raised if the two do not match.
+    gate classes by comparing the finite-difference Jacobian that
+    *should* be returned by `gate.deriv_wrt_params` with the one that
+    actually is.  A ValueError is raised if the two do not match.
 
     Parameters
     ----------
@@ -204,30 +242,17 @@ def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
     -------
     None
     """
-    dim = gate.get_dimension()
-    gate2 = gate.copy()
-    p = gate.to_vector()
-    fd_deriv = _np.empty((dim,dim,gate.num_params()), 'd') #assume real (?)
-
-    for i in range(gate.num_params()):
-        p_plus_dp = p.copy()
-        p_plus_dp[i] += eps
-        gate2.from_vector(p_plus_dp)
-        fd_deriv[:,:,i] = (gate2-gate)/eps
-
-    fd_deriv.shape = [dim**2,gate.num_params()]
-
+    fd_deriv = finite_difference_deriv_wrt_params(gate, eps=1e-7):
     if deriv_to_check is None:
         deriv_to_check = gate.deriv_wrt_params()
 
-    #print("fd_deriv = \n",fd_deriv)
-    #print("an_deriv = \n",deriv_to_check)
+    #print("finite difference deriv = \n",fd_deriv)
+    #print("deriv_wrt_params deriv = \n",deriv_to_check)
 
     if _np.linalg.norm(fd_deriv - deriv_to_check) > 5*eps:
         raise ValueError("Failed check of deriv_wrt_params:\n" +
-                         " norm diff = %g" % _np.linalg.norm(fd_deriv - deriv_to_check))
-    
-
+                         " norm diff = %g" % 
+                         _np.linalg.norm(fd_deriv - deriv_to_check))
 
 
 class Gate(object):
