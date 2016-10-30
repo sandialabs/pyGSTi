@@ -177,6 +177,58 @@ def convert(gate, toType):
         raise ValueError("Invalid toType argument: %s" % toType)
 
 
+def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
+    """
+    Checks the `deriv_wrt_params` method of a Gate object.
+
+    This routine is meant to be used as an aid in testing and debugging
+    gate classes by computing by finite-difference the Jacobian that
+    should be returned by `gate.deriv_wrt_params` and comparing the
+    two results.  A ValueError is raised if the two do not match.
+
+    Parameters
+    ----------
+    gate : Gate
+        The gate object to test.
+
+    deriv_to_check : numpy.ndarray or None, optional
+        If not None, the Jacobian to compare against the finite difference
+        result.  If None, `gate.deriv_wrt_parms()` is used.  Setting this
+        argument can be useful when the function is called *within* a Gate
+        class's `deriv_wrt_params()` method itself as a part of testing.
+        
+    eps : float, optional
+        The finitite difference step to use.
+
+    Returns
+    -------
+    None
+    """
+    dim = gate.get_dimension()
+    gate2 = gate.copy()
+    p = gate.to_vector()
+    fd_deriv = _np.empty((dim,dim,gate.num_params()), 'd') #assume real (?)
+
+    for i in range(gate.num_params()):
+        p_plus_dp = p.copy()
+        p_plus_dp[i] += eps
+        gate2.from_vector(p_plus_dp)
+        fd_deriv[:,:,i] = (gate2-gate)/eps
+
+    fd_deriv.shape = [dim**2,gate.num_params()]
+
+    if deriv_to_check is None:
+        deriv_to_check = gate.deriv_wrt_params()
+
+    #print("fd_deriv = \n",fd_deriv)
+    #print("an_deriv = \n",deriv_to_check)
+
+    if _np.linalg.norm(fd_deriv - deriv_to_check) > 5*eps:
+        raise ValueError("Failed check of deriv_wrt_params:\n" +
+                         " norm diff = %g" % _np.linalg.norm(fd_deriv - deriv_to_check))
+    
+
+
 
 class Gate(object):
     """
@@ -973,22 +1025,46 @@ class LinearlyParameterizedGate(Gate):
         numpy array
             Array of derivatives, shape == (dimension^2, num_params)
         """
-        #k = 0
+        #DEBUG - print expressions
+        #for (i,j),terms in self.elementExpressions.items():
+        #    tStr = ' + '.join([ '*'.join(["p%d"%p for p in term.paramIndices])
+        #                        for term in terms] )
+        #    print("Gate[%d,%d] = " % (i,j), tStr)
+        
         derivMx = _np.zeros( (self.numParams, self.dim, self.dim), 'complex' )
         for (i,j),terms in self.elementExpressions.items():
             for term in terms:
                 params_to_mult = [ self.parameterArray[p] for p in term.paramIndices ]
-                for i,p in enumerate(term.paramIndices):
-                    param_partial_prod = _np.prod( params_to_mult[0:i] + params_to_mult[i+1:] ) # exclude i-th factor
+                for k,p in enumerate(term.paramIndices):
+                    param_partial_prod = _np.prod( params_to_mult[0:k] + params_to_mult[k+1:] ) # exclude k-th factor
                     derivMx[p,i,j] += term.coeff * param_partial_prod
 
-        derivMx = _np.dot(self.leftTrans, _np.dot(derivMx, self.rightTrans)) # (d,d) * (P,d,d) * (d,d) => (P,d,d)
-        derivMx = _np.rollaxis(derivMx,0,3) # now (d,d,P)
+        dbg = derivMx.copy()
+        dbg = _np.rollaxis(dbg,0,3) # now (d,d,P)
+        dbg = dbg.reshape([self.dim**2, self.numParams]) # (d^2,P) == final shape
+        #print("DEBUG pre-trans: \n",_np.real(dbg))
+
+        #print("DEBUG left-trans: \n",self.leftTrans)
+        #print("DEBUG right-trans: \n",self.rightTrans)
+
+        tmp = _np.dot(derivMx, self.rightTrans)
+        #print("SHAPES = ",self.leftTrans.shape,derivMx.shape,self.rightTrans.shape,tmp.shape)
+        
+        #print("DEBUG pre0: \n",derivMx[0,:,:])
+        derivMx = _np.dot(self.leftTrans, _np.dot(derivMx, self.rightTrans)) # (d,d) * (P,d,d) * (d,d) => (d,P,d)
+        #print("DEBUG post0: \n",derivMx[0,:,:],"\nshape = ",derivMx.shape)
+        derivMx = _np.rollaxis(derivMx,1,3) # now (d,d,P)
         derivMx = derivMx.reshape([self.dim**2, self.numParams]) # (d^2,P) == final shape
+
+        #print("DEBUG post-trans: \n",_np.real(derivMx))
 
         if self.enforceReal:
             assert(_np.linalg.norm(_np.imag(derivMx)) < 1e-8)
             derivMx = _np.real(derivMx)
+
+
+        #DEBUG
+        #check_deriv_wrt_params(self, derivMx)
 
         if wrtFilter is None:
             return derivMx
