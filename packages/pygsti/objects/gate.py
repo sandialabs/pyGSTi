@@ -242,7 +242,7 @@ def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
     -------
     None
     """
-    fd_deriv = finite_difference_deriv_wrt_params(gate, eps=1e-7):
+    fd_deriv = finite_difference_deriv_wrt_params(gate, eps)
     if deriv_to_check is None:
         deriv_to_check = gate.deriv_wrt_params()
 
@@ -1050,12 +1050,6 @@ class LinearlyParameterizedGate(Gate):
         numpy array
             Array of derivatives, shape == (dimension^2, num_params)
         """
-        #DEBUG - print expressions
-        #for (i,j),terms in self.elementExpressions.items():
-        #    tStr = ' + '.join([ '*'.join(["p%d"%p for p in term.paramIndices])
-        #                        for term in terms] )
-        #    print("Gate[%d,%d] = " % (i,j), tStr)
-        
         derivMx = _np.zeros( (self.numParams, self.dim, self.dim), 'complex' )
         for (i,j),terms in self.elementExpressions.items():
             for term in terms:
@@ -1063,33 +1057,14 @@ class LinearlyParameterizedGate(Gate):
                 for k,p in enumerate(term.paramIndices):
                     param_partial_prod = _np.prod( params_to_mult[0:k] + params_to_mult[k+1:] ) # exclude k-th factor
                     derivMx[p,i,j] += term.coeff * param_partial_prod
-
-        dbg = derivMx.copy()
-        dbg = _np.rollaxis(dbg,0,3) # now (d,d,P)
-        dbg = dbg.reshape([self.dim**2, self.numParams]) # (d^2,P) == final shape
-        #print("DEBUG pre-trans: \n",_np.real(dbg))
-
-        #print("DEBUG left-trans: \n",self.leftTrans)
-        #print("DEBUG right-trans: \n",self.rightTrans)
-
-        tmp = _np.dot(derivMx, self.rightTrans)
-        #print("SHAPES = ",self.leftTrans.shape,derivMx.shape,self.rightTrans.shape,tmp.shape)
         
-        #print("DEBUG pre0: \n",derivMx[0,:,:])
         derivMx = _np.dot(self.leftTrans, _np.dot(derivMx, self.rightTrans)) # (d,d) * (P,d,d) * (d,d) => (d,P,d)
-        #print("DEBUG post0: \n",derivMx[0,:,:],"\nshape = ",derivMx.shape)
         derivMx = _np.rollaxis(derivMx,1,3) # now (d,d,P)
         derivMx = derivMx.reshape([self.dim**2, self.numParams]) # (d^2,P) == final shape
-
-        #print("DEBUG post-trans: \n",_np.real(derivMx))
 
         if self.enforceReal:
             assert(_np.linalg.norm(_np.imag(derivMx)) < 1e-8)
             derivMx = _np.real(derivMx)
-
-
-        #DEBUG
-        #check_deriv_wrt_params(self, derivMx)
 
         if wrtFilter is None:
             return derivMx
@@ -1224,6 +1199,11 @@ class LinearlyParameterizedGate(Gate):
         s = "Linearly Parameterized gate with shape %s, num params = %d\n" % \
             (str(self.base.shape), self.numParams)
         s += _mt.mx_to_string(self.base, width=5, prec=1)
+        s += "\nParameterization:"
+        for (i,j),terms in self.elementExpressions.items():
+            tStr = ' + '.join([ '*'.join(["p%d"%p for p in term.paramIndices])
+                                for term in terms] )
+            s += "Gate[%d,%d] = %s\n" % (i,j,tStr)
         return s
 
     def __reduce__(self):
