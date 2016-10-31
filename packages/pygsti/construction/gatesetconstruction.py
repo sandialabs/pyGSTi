@@ -758,7 +758,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
                 elif l.startswith('L'): stateSpaceDim *= 1
                 else: raise ValueError("Invalid state space label: %s" % l)
 
-            if unitaryEmbedding or parameterization != "linear":
+            if unitaryEmbedding or parameterization not in ("linear","linearTP"):
                 raise ValueError("'D' gate only makes sense to use when unitaryEmbedding is False and parameterization == 'linear'")
 
             if defaultI2P == "TP":

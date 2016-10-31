@@ -37,6 +37,14 @@ def _get_root_mem_usage(comm):
             mem = comm.bcast(None, root=0)
     return mem
 
+def _get_max_mem_usage(comm):
+    """ Returns the memory usage on the 0th processor """
+    mem = _get_mem_usage()
+    if comm is not None: 
+        memlist = comm.allgather(mem)
+        mem = max(memlist)
+    return mem
+
 
 BtoGB = 1.0/(1024.0**3) #convert bytes -> GB
 
@@ -183,8 +191,77 @@ class Profiler(object):
             self.mem_checkpoints[name] = [ (timestamp,usage) ]
 
         bPrint = self.print_memchecks if (printme is None) else printme
-        if bPrint and (self.comm is None or self.comm.Get_rank() == 0):
+        if bPrint: self.print_mem(name)
+
+    def print_mem(self, name, show_minmax=False):
+        """
+        Prints the current memory usage (but doesn't store it).
+
+        Useful for debugging, this function prints the current memory
+        usage - optionally giving the mininum, maximum, and average
+        across all the processors.
+
+        Parameters
+        ----------
+        name : string
+            A label to print before the memory usage number(s).
+
+        show_minmax : bool, optional
+            If True and there are multiple processors, print the
+            min, average, and max memory usage from among the processors.
+            Note that this will invoke MPI collective communication and so
+            this `print_mem` call **must** be executed by all the processors.
+            If False and there are multiple processors, only the rank 0
+            processor prints output.
+
+        Returns
+        -------
+        None
+        """
+        usage = _get_mem_usage()
+        if self.comm is not None:
+            if show_minmax:
+                memlist = self.comm.gather(usage, root=0)
+                if self.comm.Get_rank() == 0:
+                    avg_usage = sum(memlist)*BtoGB / self.comm.Get_size()
+                    min_usage = min(memlist)*BtoGB
+                    max_usage = max(memlist)*BtoGB
+                    print("MEM USAGE [%s] = %.2f GB, %.2f GB, %.2f GB" %
+                          (name,min_usage,avg_usage,max_usage))
+            elif self.comm.Get_rank() == 0:
+                print("MEM USAGE [%s] = %.2f GB" % (name,usage*BtoGB))
+        else:
             print("MEM USAGE [%s] = %.2f GB" % (name,usage*BtoGB))
+
+
+    def print_msg(self, msg, all_ranks=False):
+        """ 
+        Prints a message to stdout, possibly from all ranks.
+
+        A utility function used in debugging, this function offers a 
+        convenient way to print a message on only the root processor 
+        or on all processors.
+
+        Parameters
+        ----------
+        msg : string
+            The message to print.
+
+        all_ranks : bool, optional
+            If True, all processors will print `msg`, preceded by their
+            rank label (e.g. "Rank4: ").  If False, only the rank 0
+            processor will print the message.
+
+        Returns
+        -------
+        None
+        """
+        if self.comm is not None:
+            if all_ranks:
+                print("Rank%d: %s" % (self.comm.Get_rank(),msg))
+            elif self.comm.Get_rank() == 0:
+                print(msg)
+        else: print(msg)
 
 
     def format_times(self, sortBy="name"):

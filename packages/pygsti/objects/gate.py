@@ -177,6 +177,83 @@ def convert(gate, toType):
         raise ValueError("Invalid toType argument: %s" % toType)
 
 
+def finite_difference_deriv_wrt_params(gate, eps=1e-7):
+    """
+    Computes a finite-difference Jacobian for a Gate object.
+
+    The returned value is a matrix whose columns are the vectorized
+    derivatives of the flattened gate matrix with respect to a single
+    gate parameter, matching the format expected from the gate's
+    `deriv_wrt_params` method.
+
+    Parameters
+    ----------
+    gate : Gate
+        The gate object to compute a Jacobian for.
+        
+    eps : float, optional
+        The finitite difference step to use.
+
+    Returns
+    -------
+    numpy.ndarray
+        An M by N matrix where M is the number of gate elements and
+        N is the number of gate parameters. 
+    """
+    dim = gate.get_dimension()
+    gate2 = gate.copy()
+    p = gate.to_vector()
+    fd_deriv = _np.empty((dim,dim,gate.num_params()), 'd') #assume real (?)
+
+    for i in range(gate.num_params()):
+        p_plus_dp = p.copy()
+        p_plus_dp[i] += eps
+        gate2.from_vector(p_plus_dp)
+        fd_deriv[:,:,i] = (gate2-gate)/eps
+
+    fd_deriv.shape = [dim**2,gate.num_params()]
+    return fd_deriv
+
+
+def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
+    """
+    Checks the `deriv_wrt_params` method of a Gate object.
+
+    This routine is meant to be used as an aid in testing and debugging
+    gate classes by comparing the finite-difference Jacobian that
+    *should* be returned by `gate.deriv_wrt_params` with the one that
+    actually is.  A ValueError is raised if the two do not match.
+
+    Parameters
+    ----------
+    gate : Gate
+        The gate object to test.
+
+    deriv_to_check : numpy.ndarray or None, optional
+        If not None, the Jacobian to compare against the finite difference
+        result.  If None, `gate.deriv_wrt_parms()` is used.  Setting this
+        argument can be useful when the function is called *within* a Gate
+        class's `deriv_wrt_params()` method itself as a part of testing.
+        
+    eps : float, optional
+        The finitite difference step to use.
+
+    Returns
+    -------
+    None
+    """
+    fd_deriv = finite_difference_deriv_wrt_params(gate, eps)
+    if deriv_to_check is None:
+        deriv_to_check = gate.deriv_wrt_params()
+
+    #print("finite difference deriv = \n",fd_deriv)
+    #print("deriv_wrt_params deriv = \n",deriv_to_check)
+
+    if _np.linalg.norm(fd_deriv - deriv_to_check) > 5*eps:
+        raise ValueError("Failed check of deriv_wrt_params:\n" +
+                         " norm diff = %g" % 
+                         _np.linalg.norm(fd_deriv - deriv_to_check))
+
 
 class Gate(object):
     """
@@ -973,17 +1050,16 @@ class LinearlyParameterizedGate(Gate):
         numpy array
             Array of derivatives, shape == (dimension^2, num_params)
         """
-        #k = 0
         derivMx = _np.zeros( (self.numParams, self.dim, self.dim), 'complex' )
         for (i,j),terms in self.elementExpressions.items():
             for term in terms:
                 params_to_mult = [ self.parameterArray[p] for p in term.paramIndices ]
-                for i,p in enumerate(term.paramIndices):
-                    param_partial_prod = _np.prod( params_to_mult[0:i] + params_to_mult[i+1:] ) # exclude i-th factor
+                for k,p in enumerate(term.paramIndices):
+                    param_partial_prod = _np.prod( params_to_mult[0:k] + params_to_mult[k+1:] ) # exclude k-th factor
                     derivMx[p,i,j] += term.coeff * param_partial_prod
-
-        derivMx = _np.dot(self.leftTrans, _np.dot(derivMx, self.rightTrans)) # (d,d) * (P,d,d) * (d,d) => (P,d,d)
-        derivMx = _np.rollaxis(derivMx,0,3) # now (d,d,P)
+        
+        derivMx = _np.dot(self.leftTrans, _np.dot(derivMx, self.rightTrans)) # (d,d) * (P,d,d) * (d,d) => (d,P,d)
+        derivMx = _np.rollaxis(derivMx,1,3) # now (d,d,P)
         derivMx = derivMx.reshape([self.dim**2, self.numParams]) # (d^2,P) == final shape
 
         if self.enforceReal:
@@ -1123,6 +1199,11 @@ class LinearlyParameterizedGate(Gate):
         s = "Linearly Parameterized gate with shape %s, num params = %d\n" % \
             (str(self.base.shape), self.numParams)
         s += _mt.mx_to_string(self.base, width=5, prec=1)
+        s += "\nParameterization:"
+        for (i,j),terms in self.elementExpressions.items():
+            tStr = ' + '.join([ '*'.join(["p%d"%p for p in term.paramIndices])
+                                for term in terms] )
+            s += "Gate[%d,%d] = %s\n" % (i,j,tStr)
         return s
 
     def __reduce__(self):
