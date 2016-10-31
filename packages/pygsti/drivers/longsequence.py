@@ -228,86 +228,93 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     tNxt = _time.time()
     profiler.add_time('do_long_sequence_gst: loading',tRef); tRef=tNxt
 
-    #Starting Point
+    #Starting Point - compute on rank 0 and distribute
     startingPt = advancedOptions.get('starting point',"LGST")
     gate_dim = gs_target.get_dimension()
-    if startingPt == "LGST":
-        specs = _construction.build_spam_specs(prepStrs=prepStrs, effectStrs=effectStrs,
-                                               prep_labels=gs_target.get_prep_labels(),
-                                               effect_labels=gs_target.get_effect_labels())
-        gs_lgst = _alg.do_lgst(ds, specs, gs_target, svdTruncateTo=gate_dim,
-                               verbosity=printer)
+    if comm is None or comm.Get_rank() == 0:
 
-    elif startingPt == "target":
-        gs_lgst = gs_target.copy()
-
-    else:
-        raise ValueError("Invalid starting point: %s" % startingPt)
-
-    tNxt = _time.time()
-    profiler.add_time('do_long_sequence_gst: LGST',tRef); tRef=tNxt
-
-    if constrainToTP: #gauge optimize (and contract if needed) to TP, then lock down first basis element as the identity
-        #TODO: instead contract to vSPAM? (this could do more than just alter the 1st element...)
-        gs_lgst.set_all_parameterizations("full") #make sure we can do gauge optimization
-        minPenalty, _, gs_in_TP = _alg.optimize_gauge(
-            gs_lgst, "TP",  returnAll=True, spamWeight=1.0,
-            gateWeight=1.0, verbosity=printer)
-            #Note: no  itemWeights=gaugeOptItemWeights here (LGST)
-
-        if minPenalty > 0:
-            gs_in_TP = _alg.contract(gs_in_TP, "TP")
-            if minPenalty > 1e-5:
-                _warnings.warn("Could not gauge optimize to TP (penalty=%g), so contracted LGST gateset to TP" % minPenalty)
-
-
-        if startingPt == "LGST": #only need to gauge optmize LGST result
-            gs_after_gauge_opt = _alg.optimize_gauge(
-                gs_in_TP, "target", targetGateset=gs_target, constrainToTP=True,
-                spamWeight=1.0, gateWeight=1.0)
-                #Note: no  itemWeights=gaugeOptItemWeights here (LGST)
-
-            firstElIdentityVec = _np.zeros( (gate_dim,1) )
-            firstElIdentityVec[0] = gate_dim**0.25 # first basis el is assumed = sqrt(gate_dim)-dimensional identity density matrix
-            gs_after_gauge_opt.povm_identity = firstElIdentityVec # declare that this basis has the identity as its first element
+        if startingPt == "LGST":
+            specs = _construction.build_spam_specs(prepStrs=prepStrs, effectStrs=effectStrs,
+                                                   prep_labels=gs_target.get_prep_labels(),
+                                                   effect_labels=gs_target.get_effect_labels())
+            gs_lgst = _alg.do_lgst(ds, specs, gs_target, svdTruncateTo=gate_dim,
+                                   verbosity=printer)
+    
+        elif startingPt == "target":
+            gs_lgst = gs_target.copy()
+    
         else:
-            gs_after_gauge_opt = gs_in_TP.copy()
-
-    else: # no TP constraint, just gauge optimize
-        if startingPt == "LGST": #don't need to gauge optimize 'target' starting pt
-            try:
-                printer.log("\nGauge Optimizing without constraints...",2)
-                gs_after_gauge_opt = _alg.optimize_gauge(
-                    gs_lgst, "target", targetGateset=gs_target,
-                    spamWeight=1.0, gateWeight=1.0)
-                printer.log("Success!",2)
+            raise ValueError("Invalid starting point: %s" % startingPt)
+        
+        tNxt = _time.time()
+        profiler.add_time('do_long_sequence_gst: LGST',tRef); tRef=tNxt
+    
+        if constrainToTP: #gauge optimize (and contract if needed) to TP, then lock down first basis element as the identity
+            #TODO: instead contract to vSPAM? (this could do more than just alter the 1st element...)
+            gs_lgst.set_all_parameterizations("full") #make sure we can do gauge optimization
+            minPenalty, _, gs_in_TP = _alg.optimize_gauge(
+                gs_lgst, "TP",  returnAll=True, spamWeight=1.0,
+                gateWeight=1.0, verbosity=printer)
                 #Note: no  itemWeights=gaugeOptItemWeights here (LGST)
-            except:
+        
+            if minPenalty > 0:
+                gs_in_TP = _alg.contract(gs_in_TP, "TP")
+                if minPenalty > 1e-5:
+                    _warnings.warn("Could not gauge optimize to TP (penalty=%g), so contracted LGST gateset to TP" % minPenalty)
+        
+            if startingPt == "LGST": #only need to gauge optmize LGST result
+                gs_after_gauge_opt = _alg.optimize_gauge(
+                    gs_in_TP, "target", targetGateset=gs_target, constrainToTP=True,
+                    spamWeight=1.0, gateWeight=1.0)
+                    #Note: no  itemWeights=gaugeOptItemWeights here (LGST)
+    
+                firstElIdentityVec = _np.zeros( (gate_dim,1) )
+                firstElIdentityVec[0] = gate_dim**0.25 # first basis el is assumed = sqrt(gate_dim)-dimensional identity density matrix
+                gs_after_gauge_opt.povm_identity = firstElIdentityVec # declare that this basis has the identity as its first element
+            else:
+                gs_after_gauge_opt = gs_in_TP.copy()
+    
+        else: # no TP constraint, just gauge optimize
+            if startingPt == "LGST": #don't need to gauge optimize 'target' starting pt
                 try:
-                    printer.log("Failed! Trying with TP constraint...",2)
+                    printer.log("\nGauge Optimizing without constraints...",2)
                     gs_after_gauge_opt = _alg.optimize_gauge(
-                        gs_lgst, "target", targetGateset=gs_target, 
-                        constrainToTP=True, spamWeight=1.0, gateWeight=1.0)
+                        gs_lgst, "target", targetGateset=gs_target,
+                        spamWeight=1.0, gateWeight=1.0)
                     printer.log("Success!",2)
                     #Note: no  itemWeights=gaugeOptItemWeights here (LGST)
                 except:
-                    printer.log("Still Failed! No gauge optimization " +
-                                "performed on LGST estimate.",2)
-                    gs_after_gauge_opt = gs_lgst.copy()
-        else:
-            gs_after_gauge_opt = gs_lgst.copy()
+                    try:
+                        printer.log("Failed! Trying with TP constraint...",2)
+                        gs_after_gauge_opt = _alg.optimize_gauge(
+                            gs_lgst, "target", targetGateset=gs_target, 
+                            constrainToTP=True, spamWeight=1.0, gateWeight=1.0)
+                        printer.log("Success!",2)
+                        #Note: no  itemWeights=gaugeOptItemWeights here (LGST)
+                    except:
+                        printer.log("Still Failed! No gauge optimization " +
+                                    "performed on LGST estimate.",2)
+                        gs_after_gauge_opt = gs_lgst.copy()
+            else:
+                gs_after_gauge_opt = gs_lgst.copy()
+    
+            #TODO: set identity vector, or leave as is, which assumes LGST had the right one and contraction doesn't change it ??
+            # Really, should we even allow use of the identity vector when doing a non-TP-constrained optimization?
+    
+        #Advanced Options can specify further manipulation of LGST seed
+        if advancedOptions.get('contractLGSTtoCPTP',False):
+            gs_after_gauge_opt = _alg.contract(gs_after_gauge_opt, "CPTP")
+        if advancedOptions.get('depolarizeLGST',0) > 0:
+            gs_after_gauge_opt = gs_after_gauge_opt.depolarize(gate_noise=advancedOptions['depolarizeLGST'])
+    
+        if constrainToTP:
+            gs_after_gauge_opt.set_all_parameterizations("TP")
 
-        #TODO: set identity vector, or leave as is, which assumes LGST had the right one and contraction doesn't change it ??
-        # Really, should we even allow use of the identity vector when doing a non-TP-constrained optimization?
+        if comm is not None: #broadcast starting gate set
+            comm.bcast(gs_after_gauge_opt, root=0)
+    else:
+        gs_after_gauge_opt = comm.bcast(None, root=0)
 
-    #Advanced Options can specify further manipulation of LGST seed
-    if advancedOptions.get('contractLGSTtoCPTP',False):
-        gs_after_gauge_opt = _alg.contract(gs_after_gauge_opt, "CPTP")
-    if advancedOptions.get('depolarizeLGST',0) > 0:
-        gs_after_gauge_opt = gs_after_gauge_opt.depolarize(gate_noise=advancedOptions['depolarizeLGST'])
-
-    if constrainToTP:
-        gs_after_gauge_opt.set_all_parameterizations("TP")
 
     tNxt = _time.time()
     profiler.add_time('do_long_sequence_gst: Prep LGST seed',tRef); tRef=tNxt
