@@ -23,10 +23,80 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
                                    testLs=(256,2048), spamLabels="all", tol=0.75,
                                    searchMode="sequential", nRandom=100, seed=None,
                                    verbosity=0, testPairList=None, memLimit=None):
+    """
+    Finds a (global) set of fiducial pairs that are amplificationally complete.
 
+    A "standard" set of GST gate sequences consists of all sequences of the form:
+
+    statePrep + prepFiducial + germPower + measureFiducial + measurement
+    
+    This set is typically over-complete, and it is possible to restrict the 
+    (prepFiducial, measureFiducial) pairs to a subset of all the possible 
+    pairs given the separate `prepStrs` and `effectStrs` lists.  This function
+    attempts to find a set of fiducial pairs that still amplify all of the
+    gate set's parameters (i.e. is "amplificationally complete").  The test
+    for amplification is performed using the two germ-power lengths given by
+    `testLs`, and tests whether the magnitudes of the Jacobian's singular
+    values scale linearly with the germ-power length.
+
+    In the special case when `testPairList` is not None, the function *tests*
+    the given set of fiducial pairs for amplificational completeness, and 
+    does not perform any search.
+
+    Parameters
+    ----------
+    targetGateset : GateSet
+        The target gateset used to determine amplificational completeness.
+
+    prepStrs, effectStrs, germList : list of GateStrings
+        The (full) fiducial and germ gate sequences.
+
+    testLs : (L1,L2) tuple of ints, optional
+        A tuple of integers specifying the germ-power lengths to use when
+        checking for amplificational completeness.
+
+    spamLabels : list or "all", optional
+        A list of the SPAM labels to consider when checking for completeness.
+        Usually this should be left as the special (and default) value "all",
+        which considers all of the SPAM labels.
+
+    tol : float, optional
+        The tolerance for the fraction of the expected amplification that must
+        be observed to call a parameter "amplified".
+
+    searchMode : {"sequential","random"}, optional
+        If "sequential", then all potential fiducial pair sets of a given length
+        are considered in sequence before moving to sets of a larger size.  This
+        can take a long time when there are many possible fiducial pairs.
+        If "random", then only `nRandom` randomly chosen fiducial pair sets are
+        considered for each set size before the set is enlarged.
+
+    nRandom : int, optional
+        The number of random-pair-sets to consider for a given set size.
+
+    seed : int, optional
+        The seed to use for generating random-pair-sets.
+        
+    verbosity : int, optional
+        How much detail to print to stdout.
+
+    testPairList : list or None, optional
+        If not None, a list of (iRhoStr,iEffectStr) tuples of integers,
+        specifying a list of fiducial pairs (indices are into `prepStrs` and
+        `effectStrs`, respectively).  These pairs are then tested for 
+        amplificational completeness and the number of amplified parameters
+        is printed to stdout.  (This is a special debugging functionality.)
+
+    memLimit : int, optional
+        A memory limit in bytes.
+
+    Returns
+    -------
+    list
+        A list of (iRhoStr,iEffectStr) tuples of integers, specifying a list
+        of fiducial pairs (indices are into `prepStrs` and `effectStrs`).
+    """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
-
-    """ Still in experimental stages.  TODO docstring. """
     #trim LSGST list of all f1+germ^exp+f2 strings to just those needed to get full rank jacobian. (compressed sensing like)
 
     #tol = 0.5 #fraction of expected amplification that must be observed to call a parameter "amplified"
@@ -197,10 +267,77 @@ def find_sufficient_fiducial_pairs_per_germ(targetGateset, prepStrs, effectStrs,
                                             searchMode="sequential", constrainToTP=True,
                                             nRandom=100, seed=None, verbosity=0,
                                             memLimit=None):
+    """
+    Finds a per-germ set of fiducial pairs that are amplificationally complete.
+
+    A "standard" set of GST gate sequences consists of all sequences of the form:
+
+    statePrep + prepFiducial + germPower + measureFiducial + measurement
+    
+    This set is typically over-complete, and it is possible to restrict the 
+    (prepFiducial, measureFiducial) pairs to a subset of all the possible 
+    pairs given the separate `prepStrs` and `effectStrs` lists.  This function
+    attempts to find sets of fiducial pairs, one set per germ, that still
+    amplify all of the gate set's parameters (i.e. is "amplificationally
+    complete").  For each germ, a fiducial pair set is found that amplifies
+    all of the "parameters" (really linear combinations of them) that the
+    particular germ amplifies.  
+
+    To test whether a set of fiducial pairs satisfies this condition, the
+    sum of projectors `P_i = dot(J_i,J_i^T)`, where `J_i` is a matrix of the
+    derivatives of each of the selected (prepFiducial+germ+effectFiducial)
+    sequence probabilities with respect to the i-th germ eigenvalue (or
+    more generally, amplified parameter), is computed.  If the fiducial-pair
+    set is sufficient, the rank of the resulting sum (an operator) will be
+    equal to the total (maximal) number of parameters the germ can amplify.
+
+    Parameters
+    ----------
+    targetGateset : GateSet
+        The target gateset used to determine amplificational completeness.
+
+    prepStrs, effectStrs, germList : list of GateStrings
+        The (full) fiducial and germ gate sequences.
+
+    spamLabels : list or "all", optional
+        A list of the SPAM labels to consider when checking for completeness.
+        Usually this should be left as the special (and default) value "all",
+        which considers all of the SPAM labels.
+
+    searchMode : {"sequential","random"}, optional
+        If "sequential", then all potential fiducial pair sets of a given length
+        are considered in sequence (per germ) before moving to sets of a larger
+        size.  This can take a long time when there are many possible fiducial
+        pairs.  If "random", then only `nRandom` randomly chosen fiducial pair
+        sets are considered for each set size before the set is enlarged.
+
+    constrainToTP : bool, optional
+        Whether or not to consider non-TP parameters the the germs amplify.  If
+        the fiducal pairs will be used in a GST estimation where the gate set is
+        constrained to being trace-preserving (TP), this should be set to True.
+
+    nRandom : int, optional
+        The number of random-pair-sets to consider for a given set size.
+
+    seed : int, optional
+        The seed to use for generating random-pair-sets.
+        
+    verbosity : int, optional
+        How much detail to print to stdout.
+
+    memLimit : int, optional
+        A memory limit in bytes.
+
+    Returns
+    -------
+    dict
+        A dictionary whose keys are the germ gate strings and whose values are
+        lists of (iRhoStr,iEffectStr) tuples of integers, each specifying the
+        list of fiducial pairs for a particular germ (indices are into
+        `prepStrs` and `effectStrs`).
+    """
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
-
-    """ Still in experimental stages.  TODO docstring. """
 
     if spamLabels == "all":
         spamLabels = targetGateset.get_spam_labels()
