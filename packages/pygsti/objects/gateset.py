@@ -1353,6 +1353,8 @@ class GateSet(object):
                    #     if memLimit < memEstimate:
                    #         reductionFactor = float(memEstimate) / float(memLimit)
                    #         maxTreeSize = int(nstrs / reductionFactor)
+            else:
+                memEstimate(ng,np,Ng) # to compute & cache final EvalTree
 
         elif distributeMethod == "deriv":
             ng = Ng = 1; np = nprocs
@@ -1373,6 +1375,8 @@ class GateSet(object):
                         assert next < mem_estimate, \
                             "Not enough memory: splitting unproductive"
                         mem_estimate = next
+            else:
+                memEstimate(ng,np,Ng) # to compute & cache final EvalTree
 
         elif distributeMethod == "balanced":
             # try to minimize "unbalanced" procs
