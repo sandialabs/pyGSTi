@@ -42,18 +42,18 @@ class GateTestCase(BaseTestCase):
                       'dnup': ("rho0","E2"), 'dndn': ("rho0","remainder") },
             basis="pp", parameterization="linearTP" )
 
-        gs_target_lp2.preps['rho0'] = pygsti.objects.TPParameterizedSPAMVec(gs_target_lp2['rho0'])
+        gs_target_lp2.preps['rho0'] = pygsti.objects.TPParameterizedSPAMVec(gs_target_lp2.preps['rho0'])
         #because there's no easy way to specify this TP parameterization...
         # (above is leftover from a longer feature test)
         
-        check = pygsti.objects.profiler.check_deriv_wrt_params
-        testDeriv = check(gs_target_lp['Gi'])
-        testDeriv = check(gs_target_lp['Gx'])
-        testDeriv = check(gs_target_lp2['Gix'])
-        testDeriv = check(gs_target_lp2['Giy'])
-        testDeriv = check(gs_target_lp2['Gxi'])
-        testDeriv = check(gs_target_lp2['Gyi'])
-        testDeriv = check(gs_target_lp2['Gcnot'])
+        check = pygsti.objects.gate.check_deriv_wrt_params
+        testDeriv = check(gs_target_lp.gates['Gi'])
+        testDeriv = check(gs_target_lp.gates['Gx'])
+        testDeriv = check(gs_target_lp2.gates['Gix'])
+        testDeriv = check(gs_target_lp2.gates['Giy'])
+        testDeriv = check(gs_target_lp2.gates['Gxi'])
+        testDeriv = check(gs_target_lp2.gates['Gyi'])
+        testDeriv = check(gs_target_lp2.gates['Gcnot'])
 
 
 if __name__ == '__main__':
