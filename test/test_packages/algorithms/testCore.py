@@ -191,6 +191,7 @@ class TestCoreMethods(BaseTestCase):
         gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
         gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",targetGateset=self.gateset, spamWeight=1.0, gateWeight=1.0)
         gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
+        CM = pygsti.objects.profiler._get_mem_usage()
 
         gs_single_lsgst = pygsti.do_mc2gst(ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
                                            probClipInterval=(-1e6,1e6), regularizeFactor=1e-3,
@@ -198,18 +199,18 @@ class TestCoreMethods(BaseTestCase):
 
         gs_lsgst = pygsti.do_iterative_mc2gst(ds, gs_clgst, self.lsgstStrings, verbosity=0,
                                              minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6),
-                                             memLimit=1000*1024**2)
+                                             memLimit=CM + 1024**3)
         all_minErrs, all_gs_lsgst_tups = pygsti.do_iterative_mc2gst(
             ds, gs_clgst, [ [gs.tup for gs in gsList] for gsList in self.lsgstStrings],
             minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6), returnAll=True, returnErrorVec=True)
         gs_lsgst_verb = self.runSilent(pygsti.do_iterative_mc2gst, ds, gs_clgst, self.lsgstStrings, verbosity=10,
                                              minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6),
-                                             memLimit=1000*1024**2)
+                                             memLimit=CM + 1024**3)
         gs_lsgst_reg = self.runSilent(pygsti.do_iterative_mc2gst,ds, gs_clgst,
                                       self.lsgstStrings, verbosity=10,
                                       minProbClipForWeighting=1e-6,
                                       probClipInterval=(-1e6,1e6),
-                                      regularizeFactor=10, memLimit=1000*1024**2)
+                                      regularizeFactor=10, memLimit=CM + 1024**3)
         self.assertAlmostEqual(gs_lsgst.frobeniusdist(gs_lsgst_verb),0)
         self.assertAlmostEqual(gs_lsgst.frobeniusdist(all_gs_lsgst_tups[-1]),0)
 
@@ -220,7 +221,7 @@ class TestCoreMethods(BaseTestCase):
                                                  check=True, check_jacobian=True)
         gs_lsgst_chk_verb = self.runSilent(pygsti.do_iterative_mc2gst, ds, gs_clgst, self.lsgstStrings[0:2], verbosity=10,
                                                       minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6),
-                                                      check=True, check_jacobian=True, memLimit=1000*1024**2)
+                                                      check=True, check_jacobian=True, memLimit=CM + 1024**3)
 
         #Other option variations - just make sure they run at this point
         gs_lsgst_chk_opts = pygsti.do_iterative_mc2gst(ds, gs_clgst, self.lsgstStrings[0:2], verbosity=0,
@@ -231,7 +232,7 @@ class TestCoreMethods(BaseTestCase):
         #Check with small but ok memlimit -- not anymore since new mem estimation uses current memory, making this non-robust
         #self.runSilent(pygsti.do_mc2gst,ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
         #                 probClipInterval=(-1e6,1e6), regularizeFactor=1e-3,
-        #                 verbosity=10, memLimit=1000*1024**2)
+        #                 verbosity=10, memLimit=CM + 1024**3)
 
 
         #Check errors:
@@ -271,20 +272,21 @@ class TestCoreMethods(BaseTestCase):
         gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
         gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",targetGateset=self.gateset, spamWeight=1.0, gateWeight=1.0)
         gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
+        CM = pygsti.objects.profiler._get_mem_usage()
 
         gs_single_mlgst = pygsti.do_mlgst(ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-6,
                                           probClipInterval=(-1e2,1e2), verbosity=0)
 
         gs_mlegst = pygsti.do_iterative_mlgst(ds, gs_clgst, self.lsgstStrings, verbosity=0,
                                                minProbClip=1e-6, probClipInterval=(-1e2,1e2),
-                                               memLimit=1000*1024**2)
+                                               memLimit=CM + 1024**3)
         maxLogL, all_gs_mlegst_tups = pygsti.do_iterative_mlgst(
             ds, gs_clgst, [ [gs.tup for gs in gsList] for gsList in self.lsgstStrings],
             minProbClip=1e-6, probClipInterval=(-1e2,1e2), returnAll=True, returnMaxLogL=True)
 
         gs_mlegst_verb = self.runSilent(pygsti.do_iterative_mlgst, ds, gs_clgst, self.lsgstStrings, verbosity=10,
                                              minProbClip=1e-6, probClipInterval=(-1e2,1e2),
-                                             memLimit=1000*1024**2)
+                                             memLimit=CM + 1024**3)
         self.assertAlmostEqual(gs_mlegst.frobeniusdist(gs_mlegst_verb),0)
         self.assertAlmostEqual(gs_mlegst.frobeniusdist(all_gs_mlegst_tups[-1]),0)
 
