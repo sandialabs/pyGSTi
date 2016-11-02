@@ -1354,6 +1354,10 @@ def get_gaugeopt_params_table(gaugeOptArgs):
         table.addrow(("Gate weighting", str(gaugeOptArgs['gateWeight'])), (None,None))
     if 'spamWeight' in gaugeOptArgs:
         table.addrow(("SPAM weighting", str(gaugeOptArgs['spamWeight'])), (None,None))
+    if 'itemWeights' in gaugeOptArgs:
+        if gaugeOptArgs['itemWeights']:
+            table.addrow(("Item weighting", ", ".join([("%s=%.2g" % (k,v)) 
+                           for k,v in gaugeOptArgs['itemWeights'].items()])), (None,None))
 
     table.finish()
     return table
