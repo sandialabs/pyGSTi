@@ -655,5 +655,6 @@ def error_generator(gate, target_gate):
       The error generator.
     """
     target_gate_inv = _spl.inv(target_gate)
-    error_gen = _np.real_if_close(_spl.logm(_np.dot(target_gate_inv,gate)))
+    error_gen = _np.real_if_close(_spl.logm(_np.dot(target_gate_inv,gate)),
+                                  tol=10000) # in machine epsilons
     return error_gen
