@@ -66,7 +66,7 @@ class FormatSet():
     -------
 
     __init__: (specs): Specs is a dictionary of the form { 'setting'(kwarg) : value }
-                       Ex: { 'precision' : 6, 'polarprecision' : 3 }
+                       Ex: { 'precision' : 6, 'polarprecision' : 3, 'sciprecision' : 0 }
                        given to _ParameterizedFormatters that need them
 
     formatList : Given a list of items and formatters and a target format, returns formatted items
@@ -173,7 +173,7 @@ class _ParameterizedFormatter(object):
     Class that will pass down specs (arguments) to functions that need them
 
     For example, a precision-parameterized latex formatter without the help of the _PrecisionFormatter might look like this:
-    formatter = _ParameterizedFormatter(latex, ['precision', 'polarprecision'])
+    formatter = _ParameterizedFormatter(latex, ['precision', 'polarprecision', 'sciprecision'])
     Which, when used with a FormatSet, would have arguments to table.render() passed down to the latex() function
     '''
     def __init__(self, custom, neededSpecs, defaults={}, formatstring='%s'):
@@ -206,7 +206,7 @@ class _PrecisionFormatter(_ParameterizedFormatter):
       the latex formatter function during table.render() calls
     '''
     def __init__(self, custom, defaults={}, formatstring='%s'):
-        super(_PrecisionFormatter, self).__init__(custom, ['precision', 'polarprecision'],
+        super(_PrecisionFormatter, self).__init__(custom, ['precision', 'polarprecision','sciprecision'],
                                                  defaults, formatstring)
 
 # Formatter class that requires a scratchDirectory from an instance of FormatSet for saving figures to
@@ -290,10 +290,10 @@ FormatSet.formatDict['Normal'] = {
 
 # 'normal' formatting but round to 2 decimal places regardless of what is passed in to table.render()
 FormatSet.formatDict['Rounded'] = {
-    'html'  : _ParameterizedFormatter(html_value,  ['polarprecision'], {'precision' : 2}),
-    'latex' : _ParameterizedFormatter(latex_value, ['polarprecision'], {'precision' : 2}),
+    'html'  : _ParameterizedFormatter(html_value,  ['polarprecision'], {'precision' : 2, 'sciprecision': 0}),
+    'latex' : _ParameterizedFormatter(latex_value, ['polarprecision'], {'precision' : 2, 'sciprecision': 0}),
     'text'  : _no_format,
-    'ppt'   : _ParameterizedFormatter(ppt_value,   ['polarprecision'], {'precision' : 2})}
+    'ppt'   : _ParameterizedFormatter(ppt_value,   ['polarprecision'], {'precision' : 2, 'sciprecision': 0})}
 
 # Similar to the above two formatdicts,
 # but recieves precision during table.render(), which is sent as kwarg to html_value, for example

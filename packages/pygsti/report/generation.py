@@ -987,12 +987,12 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset):
     -------
     ReportTable
     """
-    colHeadings = { 'latex': ('L','$\\chi^2$','$k$','$\\chi^2-k$','$\sqrt{2k}$','$p$','$N_s$','$N_p$', 'Rating'),
+    colHeadings = { 'latex': ('L','$\\chi^2$','$k$','$\\chi^2-k$','$\sqrt{2k}$','$N_\\sigma$','$N_s$','$N_p$', 'Rating'),
                     'html': ('L','&chi;<sup>2</sup>','k','&chi;<sup>2</sup>-k',
                              '&radic;<span style="text-decoration:overline;">2k</span>',
-                             'p','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
-                    'text': ('L','chi^2','k','chi^2-k','sqrt{2k}','p','N_s','N_p', 'Rating'),
-                    'ppt': ('L','chi^2','k','chi^2-k','sqrt{2k}','p','N_s','N_p', 'Rating')
+                             'N<sub>sigma</sub>','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
+                    'text': ('L','chi^2','k','chi^2-k','sqrt{2k}','N_{sigma}','N_s','N_p', 'Rating'),
+                    'ppt': ('L','chi^2','k','chi^2-k','sqrt{2k}','N_{sigma}','N_s','N_p', 'Rating')
                   }
 
     table = _ReportTable(colHeadings, None)
@@ -1004,7 +1004,8 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset):
         Np = gs.num_nongauge_params()
 
         k = max(Ns-Np,0) #expected chi^2 mean
-        pv = 1.0 - _stats.chi2.cdf(chi2,k) # reject GST model if p-value < threshold (~0.05?)
+        Nsig = (chi2-k)/_np.sqrt(2*k)
+        #pv = 1.0 - _stats.chi2.cdf(chi2,k) # reject GST model if p-value < threshold (~0.05?)
 
         if   (chi2-k) < _np.sqrt(2*k): rating = 5
         elif (chi2-k) < 2*k: rating = 4
@@ -1012,7 +1013,7 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset):
         elif (chi2-k) < 10*k: rating = 2
         else: rating = 1
         table.addrow(
-                    (str(L),chi2,k,chi2-k,_np.sqrt(2*k),pv,Ns,Np,"<STAR>"*rating),
+                    (str(L),chi2,k,chi2-k,_np.sqrt(2*k),Nsig,Ns,Np,"<STAR>"*rating),
                     (None,'Normal','Normal','Normal','Normal','Rounded','Normal','Normal','Conversion'))
 
     table.finish()
@@ -1043,12 +1044,12 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset):
     ReportTable
     """
     colHeadings = { 'latex': ('L','$2\Delta\\log(\\mathcal{L})$','$k$','$2\Delta\\log(\\mathcal{L})-k$',
-                              '$\sqrt{2k}$','$p$','$N_s$','$N_p$', 'Rating'),
+                              '$\sqrt{2k}$','$N_\\sigma$','$N_s$','$N_p$', 'Rating'),
                     'html': ('L','2&Delta;(log L)','k','2&Delta;(log L)-k',
                              '&radic;<span style="text-decoration:overline;">2k</span>',
-                             'p','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
-                    'text': ('L','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','p','N_s','N_p', 'Rating'),
-                    'ppt': ('L','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','p','N_s','N_p', 'Rating')
+                             'N<sub>sigma</sub>','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
+                    'text': ('L','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','N_{sigma}','N_s','N_p', 'Rating'),
+                    'ppt': ('L','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','N_{sigma}','N_s','N_p', 'Rating')
                   }
     table = _ReportTable(colHeadings, None)
 
@@ -1062,7 +1063,8 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset):
 
         k = max(Ns-Np,0) #expected 2*(logL_ub-logl) mean
         twoDeltaLogL = 2*(logL_upperbound - logl)
-        pv = 1.0 - _stats.chi2.cdf(twoDeltaLogL,k) # reject GST model if p-value < threshold (~0.05?)
+        Nsig = (twoDeltaLogL-k)/_np.sqrt(2*k)
+        #pv = 1.0 - _stats.chi2.cdf(twoDeltaLogL,k) # reject GST model if p-value < threshold (~0.05?)
 
         if   (twoDeltaLogL-k) < _np.sqrt(2*k): rating = 5
         elif (twoDeltaLogL-k) < 2*k: rating = 4
@@ -1071,7 +1073,7 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset):
         else: rating = 1
 
         table.addrow(
-                    (str(L),twoDeltaLogL,k,twoDeltaLogL-k,_np.sqrt(2*k),pv,Ns,Np,"<STAR>"*rating),
+                    (str(L),twoDeltaLogL,k,twoDeltaLogL-k,_np.sqrt(2*k),Nsig,Ns,Np,"<STAR>"*rating),
                     (None,'Normal','Normal','Normal','Normal','Rounded','Normal','Normal','Conversion'))
 
     table.finish()

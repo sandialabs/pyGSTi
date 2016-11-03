@@ -22,7 +22,7 @@ try:  basestring
 except NameError: basestring = str
 
 
-def html(x, brackets=False, precision=6, polarprecision=3):
+def html(x, brackets=False, precision=6, polarprecision=3, sciprecision=0):
     """
     Convert a numpy array, number, or string to html.
 
@@ -40,6 +40,11 @@ def html(x, brackets=False, precision=6, polarprecision=3):
     polarprecision : int, optional
         Precision with which to round polars.
 
+    sciprecision : int, optional
+        Precision with which to el when precision
+        requires use of scientific notation.
+
+
     Returns
     -------
     string
@@ -52,14 +57,14 @@ def html(x, brackets=False, precision=6, polarprecision=3):
         for l in x.shape:
             if l > 1: d += 1
         x = _np.squeeze(x)
-        if d == 0: return html_value(x, precision=precision, polarprecision=polarprecision)
-        if d == 1: return html_vector(x, brackets=brackets, precision=precision, polarprecision=polarprecision)
-        if d == 2: return html_matrix(x, brackets=brackets, precision=precision, polarprecision=polarprecision)
+        if d == 0: return html_value(x, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
+        if d == 1: return html_vector(x, brackets=brackets, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
+        if d == 2: return html_matrix(x, brackets=brackets, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
         raise ValueError("I don't know how to render a rank %d numpy array as html" % d)
     elif type(x) in (float,int,complex,_np.float64,_np.int64):
-        return html_value(x, precision=precision, polarprecision=polarprecision)
+        return html_value(x, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
     elif type(x) in (list,tuple):
-        return html_list(x, precision=precision, polarprecision=polarprecision)
+        return html_list(x, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
     elif isinstance(x,basestring):
         return html_escaped(x)
     else:
@@ -67,7 +72,7 @@ def html(x, brackets=False, precision=6, polarprecision=3):
         return str(x)
 
 
-def html_list(l, brackets=False, precision=6, polarprecision=3):
+def html_list(l, brackets=False, precision=6, polarprecision=3, sciprecision=0):
     """
     Convert a list to html.
 
@@ -85,6 +90,11 @@ def html_list(l, brackets=False, precision=6, polarprecision=3):
     polarprecision : int, optional
         Precision with which to round polars.
 
+    sciprecision : int, optional
+        Precision with which to el when precision
+        requires use of scientific notation.
+
+
     Returns
     -------
     string
@@ -93,13 +103,15 @@ def html_list(l, brackets=False, precision=6, polarprecision=3):
 
     lines = [ ]
     for el in l:
-        lines.append( html(el, brackets, precision=precision, polarprecision=polarprecision) )
+        lines.append( html(el, brackets, precision=precision,
+                           polarprecision=polarprecision, sciprecision=sciprecision) )
     return '<div class=math><table cellpadding="0" cellspacing="0" class=matrixbrak> <tr><td>' \
         + '<table cellpadding="0" cellspacing="0" class="matrix"><tr><td>' \
         + "</td></t><tr><td>".join(lines) + "</td></tr></table></td>" + '</tr></table></div>\n'
 
 
-def html_vector(v, brackets=False, precision=6, polarprecision=3):
+def html_vector(v, brackets=False, precision=6,
+                polarprecision=3, sciprecision=0):
     """
     Convert a 1D numpy array to html.
 
@@ -117,6 +129,11 @@ def html_vector(v, brackets=False, precision=6, polarprecision=3):
     polarprecision : int, optional
         Precision with which to round polars.
 
+    sciprecision : int, optional
+        Precision with which to el when precision
+        requires use of scientific notation.
+
+
     Returns
     -------
     string
@@ -125,7 +142,9 @@ def html_vector(v, brackets=False, precision=6, polarprecision=3):
 
     lines = [ ]
     for el in v:
-        lines.append( html_value(el, precision=precision, polarprecision=polarprecision) )
+        lines.append( html_value(el, precision=precision,
+                                 polarprecision=polarprecision,
+                                 sciprecision=sciprecision) )
     if brackets:
         return '<div class=math><table cellpadding="0" cellspacing="0" class=matrixbrak> <tr><td class="lbrak">&nbsp;</td><td>' \
                + '<table cellpadding="0" cellspacing="0" class="matrix"><tr><td>' + "</td></t><tr><td>".join(lines) + "</td></tr></table></td>" \
@@ -136,7 +155,8 @@ def html_vector(v, brackets=False, precision=6, polarprecision=3):
                + '</tr></table></div>\n'
 
 
-def html_matrix(m, fontsize=None, brackets=False, precision=6, polarprecision=3):
+def html_matrix(m, fontsize=None, brackets=False, precision=6,
+                polarprecision=3, sciprecision=0):
     """
     Convert a 2D numpy array to html.
 
@@ -157,6 +177,11 @@ def html_matrix(m, fontsize=None, brackets=False, precision=6, polarprecision=3)
     polarprecision : int, optional
         Precision with which to round polars.
 
+    sciprecision : int, optional
+        Precision with which to el when precision
+        requires use of scientific notation.
+
+
     Returns
     -------
     string
@@ -167,7 +192,10 @@ def html_matrix(m, fontsize=None, brackets=False, precision=6, polarprecision=3)
         prefix += "" #unsupported currently
 
     for r in range(m.shape[0]):
-        lines.append( "<tr><td>" + " </td><td> ".join( [html_value(el, precision=precision, polarprecision=polarprecision) for el in m[r,:] ] ) + "</td></tr>" )
+        lines.append( "<tr><td>" + " </td><td> ".join(
+                [html_value(el, precision=precision,
+                            polarprecision=polarprecision,
+                            sciprecision=sciprecision) for el in m[r,:] ] ) + "</td></tr>" )
 
     if brackets:
         return '<div class=math><table cellpadding="0" cellspacing="0" class=matrixbrak> <tr><td class="lbrak">&nbsp;</td><td>' \
@@ -179,7 +207,8 @@ def html_matrix(m, fontsize=None, brackets=False, precision=6, polarprecision=3)
                + '</tr></table></div>\n'
 
 
-def html_value(el, precision=6, complexAsPolar=True, polarprecision=3):
+def html_value(el, precision=6, polarprecision=3,
+               sciprecision=0, complexAsPolar=True):
     """
     Convert a floating point or complex value to html.
 
@@ -194,9 +223,14 @@ def html_value(el, precision=6, complexAsPolar=True, polarprecision=3):
     polarprecision : int, optional
         Precision with which to round polars.
 
+    sciprecision : int, optional
+        Precision with which to el when precision
+        requires use of scientific notation.
+
     complexAsPolar : bool, optional
         Whether to output complex values in polar form.  If False, usual
         a+ib form is used.
+
 
     Returns
     -------
@@ -209,13 +243,13 @@ def html_value(el, precision=6, complexAsPolar=True, polarprecision=3):
 
     def render(x):
         if abs(x) < 5*10**(-(precision+1)):
-            s = "%.0e" % x # one significant figure
+            s = "%.*e" % (sciprecision,x)
         elif abs(x) < 1:
             s = "%.*f" % (precision, x)
         elif abs(x) <= 10**precision:
             s = "%.*f" % (precision-int(_np.log10(abs(x))),x)  #round to get precision+1 digits when x is > 1
         else:
-            s = "%.0e" % x # one significant figure
+            s = "%.*e" % (sciprecision,x)
 
         #Fix scientific notition
         p = s.split('e')

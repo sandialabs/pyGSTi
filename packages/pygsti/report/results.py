@@ -1667,10 +1667,11 @@ class Results(object):
         std_tables = \
             ('targetSpamTable','targetGatesTable','datasetOverviewTable',
              'bestGatesetSpamTable','bestGatesetSpamParametersTable',
+             'bestGatesetGaugeOptParamsTable',
              'bestGatesetGatesTable','bestGatesetChoiTable',
              'bestGatesetDecompTable','bestGatesetRotnAxisTable',
-             'bestGatesetClosestUnitaryTable',
              'bestGatesetVsTargetTable','bestGatesetErrorGenTable')
+             #removed: 'bestGatesetClosestUnitaryTable',
 
         ls_and_germs_tables = ('fiducialListTable','prepStrListTable',
                                'effectStrListTable','germListTable',
@@ -1690,7 +1691,8 @@ class Results(object):
                 qtys[key] = self.tables.get(key, verbosity=printer - 1).render(
                     'latex',longtables=self.options.long_tables, scratchDir=D,
                     precision=self.options.precision,
-                    polarprecision=self.options.polar_precision)
+                    polarprecision=self.options.polar_precision,
+                    sciprecision=self.options.sci_precision)
                 qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
 
         for key in tables_to_blank:
@@ -1705,7 +1707,8 @@ class Results(object):
                         'latex', longtables=self.options.long_tables,
                         scratchDir=D,
                         precision=self.options.precision,
-                        polarprecision=self.options.polar_precision)
+                        polarprecision=self.options.polar_precision,
+                        sciprecision=self.options.sci_precision)
                            for key in goaTables }  )
             #TODO: tables[ref] and then tooltips?
 
@@ -1715,7 +1718,8 @@ class Results(object):
             qtys.update( { key : goaTables[key].render(
                         'latex',longtables=self.options.long_tables,
                         precision=self.options.precision,
-                        polarprecision=self.options.polar_precision)
+                        polarprecision=self.options.polar_precision,
+                        sciprecision=self.options.sci_precision)
                            for key in goaTables }  )  # for format substitution
             #TODO: tables[ref] and then tooltips?
 
@@ -1728,7 +1732,7 @@ class Results(object):
             bWasInteractive = True
         else: bWasInteractive = False
 
-        maxW,maxH = 6.5,9.0 #max width and height of graphic in latex document (in inches)
+        maxW,maxH = 6.5,8.0 #max width and height of graphic in latex document (in inches)
 
         def incgr(figFilenm,W=None,H=None): #includegraphics "macro"
             if W is None: W = maxW
@@ -1759,7 +1763,15 @@ class Results(object):
             printer.log("%s plots (%d): " % (plotFnName, nPlots))
 
             with printer.progress_logging(1):
-                printer.show_progress(0, 2, prefix='', end='')
+                printer.show_progress(0, 3, prefix='', end='')
+
+                w = min(len(self.gatestring_lists['prep fiducials']) * 0.3,maxW)
+                h = min(len(self.gatestring_lists['effect fiducials']) * 0.3,maxH)
+                fig = set_fig_qtys("colorBoxPlotKeyPlot",
+                                   "colorBoxPlotKey.png", printer - 1, w,h)
+
+                printer.show_progress(1, 3, prefix='', end='')
+
                 fig = set_fig_qtys("bestEstimateColorBoxPlot",
                                    "best%sBoxes.pdf" % plotFnName, printer - 1)
                 maxX = fig.get_extra_info()['nUsedXs']
@@ -1770,7 +1782,7 @@ class Results(object):
                 #    #no tooltip for histogram... - probably should make it
                 #    # it's own element of .figures dict
 
-                printer.show_progress(1, 2, prefix='', end='')
+                printer.show_progress(2, 3, prefix='', end='')
                 fig = set_fig_qtys("invertedBestEstimateColorBoxPlot",
                                    "best%sBoxes_inverted.pdf" % plotFnName, printer - 1)
         else:
@@ -2145,7 +2157,8 @@ class Results(object):
             qtys[key] = self.tables.get(key, verbosity=printer - 1).render(
                 'latex',longtables=self.options.long_tables, scratchDir=D,
                 precision=self.options.precision,
-                polarprecision=self.options.polar_precision)
+                polarprecision=self.options.polar_precision,
+                sciprecision=self.options.sci_precision)
             qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
 
         for key in tables_to_blank:
@@ -2189,7 +2202,7 @@ class Results(object):
         #    fig = self.figures.get(figkey, verbosity=v)
         #    fig.save_to(_os.path.join(report_dir, D, figFilenm))
         #    maxX = fig.get_extra_info()['nUsedXs']; maxY = fig.get_extra_info()['nUsedYs']
-        #    maxW,maxH = 6.5,9.0 #max width and height of graphic in latex document (in inches)
+        #    maxW,maxH = 6.5,8.5 #max width and height of graphic in latex document (in inches)
         #
         #    if verbosity > 0:
         #        print ""; _sys.stdout.flush()
@@ -2424,7 +2437,8 @@ class Results(object):
             qtys[key] = self.tables.get(key, verbosity=printer - 1).render(
                 'latex',longtables=self.options.long_tables, scratchDir=D,
                 precision=self.options.precision,
-                polarprecision=self.options.polar_precision)
+                polarprecision=self.options.polar_precision,
+                sciprecision=self.options.sci_precision)
             qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
 
         for key in tables_to_blank:
@@ -3096,7 +3110,8 @@ class Results(object):
             latexTabStr = qtys[key].render(
                 'latex', longtables=self.options.long_tables, scratchDir=D,
                 precision=self.options.precision,
-                polarprecision=self.options.polar_precision)
+                polarprecision=self.options.polar_precision,
+                sciprecision=self.options.sci_precision)
             d = {'toLatex': latexTabStr }
             printer.log("Latexing %s table..." % key)
             outputFilename = _os.path.join(fileDir, "%s.tex" % key)
@@ -3450,13 +3465,9 @@ class Results(object):
              'bestGatesetEvalTable', 'bestGatesetRelEvalTable',
              'targetGatesBoxTable', 'bestGatesetErrGenBoxTable')
 
-#'bestGatesetDecompTable','bestGatesetRotnAxisTable',
-#'bestGatesetClosestUnitaryTable',
-
         ls_and_germs_tables = ('fiducialListTable','prepStrListTable',
                                'effectStrListTable','germList2ColTable',
                                'progressTable')
-
 
         tables_to_compute = std_tables
         tables_to_blank = []
@@ -3474,7 +3485,8 @@ class Results(object):
             qtys[key] = self.tables.get(key, verbosity=printer - 1).render(
                 'latex',longtables=self.options.long_tables, scratchDir=D,
                 precision=self.options.precision,
-                polarprecision=self.options.polar_precision)
+                polarprecision=self.options.polar_precision,
+                sciprecision=self.options.sci_precision)
             qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
 
         _os.chdir(cwd) #change back to original directory
@@ -3508,7 +3520,7 @@ class Results(object):
             bWasInteractive = True
         else: bWasInteractive = False
 
-        maxW,maxH = 6.5,9.0 #max width and height of graphic in latex document (in inches)
+        maxW,maxH = 6.5,8.5 #max width and height of graphic in latex document (in inches)
 
         def incgr(figFilenm,W=None,H=None): #includegraphics "macro"
             if W is None: W = maxW
@@ -3857,6 +3869,7 @@ class ResultOptions(object):
         self.table_class = "pygstiTbl"
         self.precision = 4
         self.polar_precision = 3
+        self.sci_precision = 0
         self.template_path = "."
         self.latex_cmd = "pdflatex"
         # Don't allow LaTeX to try and recover from errors interactively.

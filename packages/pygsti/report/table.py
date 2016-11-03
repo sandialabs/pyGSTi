@@ -22,12 +22,13 @@ class ReportTable(object):
         pass #nothing to do currently
 
     def render(self, fmt, longtables=False, tableclass='pygstiTbl',
-               scratchDir=None, precision=6, polarprecision=3):
+               scratchDir=None, precision=6, polarprecision=3, sciprecision=0):
 
         specs = {
             'scratchDir'     : scratchDir,
             'precision'      : precision,
-            'polarprecision' : polarprecision
+            'polarprecision' : polarprecision,
+            'sciprecision'   : sciprecision
             }
 
         # Create a formatSet, which contains rules for rendering lists
