@@ -167,7 +167,8 @@ class RBResults(object):
     
     def __init__(self, dataset, result_dicts, basename, alias_maps, 
                  success_spamlabel='plus', dim=2, pre_avg=True, f0=[0.98],
-                 AB0=[0.5,0.5], ABCD0=None):
+                 A0=[0.5],ApB0=[1.],C0=[0.], f_bnd=[0.,1.], A_bnd=[0.,1.], 
+                 ApB_bnd=[0.,1.], C_bnd=[-1.,1.]):
         """
         Constructs a new RBResults object.
 
@@ -208,18 +209,36 @@ class RBResults(object):
             the same length were averaged together before curve fitting
             was performed.
     
-        f0 : list, optional
-            A length-1 list specifying the starting value of the 'f' fitting
-            parameter that was used in curve fitting.
+        f0 : float, optional
+            A single floating point number, to be used as the starting
+            'f' value for the fitting procedure.  The default value is almost
+            always fine, and one should only modifiy this parameter in special
+            cases.
+        
+        A0 : float, optional
+            A single floating point number, to be used as the starting
+            'A' value for the fitting procedure.  The default value is almost
+            always fine, and one should only modifiy this parameter in special
+            cases. 
+        
+        ApB0 : float, optional
+            A single floating point number, to be used as the starting
+            'A'+'B' value for the fitting procedure.  The default value is almost
+            always fine, and one should only modifiy this parameter in special
+            cases. 
+        
+        C0 : float, optional
+            A single floating point number, to be used as the starting
+            'C' value for the first order fitting procedure.  The default value 
+            is almost always fine, and one should only modifiy this parameter in 
+            special cases.
+        
+        f_bnd, A_bnd, ApB_bnd, C_bnd : list, optional
+            A 2-element list of floating point numbers. Each list gives the upper
+            and lower bounds over which the relevant parameter is minimized. The
+            default values are well-motivated and should be almost always fine
+            with sufficient data.   
             
-        AB0 : list, optional
-            A length-2 list, [A0, B0], of starting values for the 'A' and 'B'
-            fitting parameters in the zeroth order fit. 
-            
-        ABCD0 : list, optional
-            A length-4 list, [A10, B10, C10, D10], of starting values for the 
-            'A1' and 'B1', 'C1' and 'D1' fitting parameters in the first order
-            fit. 
         """
         self.dataset = dataset
         self.dicts = result_dicts
@@ -229,8 +248,13 @@ class RBResults(object):
         self.pre_avg = pre_avg
         self.success_spamlabel = success_spamlabel
         self.f0 = f0
-        self.AB0 = AB0
-        self.ABCD0 = ABCD0
+        self.A0 = A0
+        self.ApB0 = ApB0
+        self.C0 = C0
+        self.f_bnd = f_bnd
+        self.A_bnd = A_bnd
+        self.ApB_bnd = ApB_bnd
+        self.C_bnd = C_bnd
 
     def detail_str(self, gstyp, order):
         """
@@ -255,7 +279,7 @@ class RBResults(object):
         """
         s = ""
         key_list = ['A','B','f','F_avg','r']
-        key_list_1st_order = ['A1','B1','C1','D1','f1','F_avg1','r1','gdep']
+        key_list_1st_order = ['A1','B1','C1','f1','F_avg1','r1']
         if gstyp in self.dicts and self.dicts[gstyp] is not None:            
             #print("For %ss:" % gstyp)
             if order=='zeroth':
@@ -279,7 +303,7 @@ class RBResults(object):
                         s += "%s = %s\n" % (key, str(self.dicts[gstyp][key]))
             if order=='first':
                 s += "%s results \n" % gstyp
-                s += "   - Using %s order fitting function: A1 + B1*f^m + C1*(m-1)(D1-f^2)*f^(m-2)  \n" % order
+                s += "   - Using %s order fitting function: A1 + (B1+C1m)*f^m \n" % order
                 if 'A1_error_BS' in self.dicts[gstyp]: 
                     s += "   - with boostrapped-derived error bars (1 sigma):\n"
                     for key in key_list_1st_order:
@@ -344,7 +368,7 @@ class RBResults(object):
 
     def plot(self,gstyp, xlim=None, ylim=None, save_fig_path=None, 
              order='zeroth', analytic=None, analytic_params=None, 
-             sys_error_bound=None,legend=False,loc='upper right'):
+             sys_error_bound=None,legend=True,loc='upper right'):
         """
         Plot RB decay curve, as a function of some the sequence length
         computed using the `gstyp` gate-label-set.
@@ -401,7 +425,7 @@ class RBResults(object):
         newplotgca = newplot.gca()
 
         # Note: minus one to get xdata discounts final Clifford-inverse
-        xdata = _np.asarray(self.dicts[gstyp]['lengths']) - 1 
+        xdata = _np.asarray(self.dicts[gstyp]['lengths']) - 1
         ydata = _np.asarray(self.dicts[gstyp]['successes'])
         A = self.dicts[gstyp]['A']
         B = self.dicts[gstyp]['B']
@@ -409,8 +433,8 @@ class RBResults(object):
         A1 = self.dicts[gstyp]['A1']
         B1 = self.dicts[gstyp]['B1']
         C1 = self.dicts[gstyp]['C1']
-        D1 = self.dicts[gstyp]['D1']
         f1 = self.dicts[gstyp]['f1']
+        pre_avg = self.pre_avg
         if analytic != None:
             if gstyp != 'clifford':
                 print("Analytical curve is for Clifford decay!")            
@@ -422,12 +446,15 @@ class RBResults(object):
             A1_an = analytic_params['A1']
             B1_an = analytic_params['B1']
             C1_an = analytic_params['C1']
-            D1_an = analytic_params['D1']
             
         xlabel = 'RB sequence length (%ss)' % gstyp
 
         cmap = _plt.cm.get_cmap('Set1')
-        newplotgca.plot(xdata,ydata,'.', markersize=15, clip_on=False,
+        if pre_avg:
+            newplotgca.plot(xdata,ydata,'.', markersize=15, clip_on=False,
+                        color=cmap(30))
+        else:
+            newplotgca.plot(xdata,ydata,'.', markersize=1, clip_on=False,
                         color=cmap(30))
         
         if order=='zeroth' or order=='all':
@@ -438,7 +465,7 @@ class RBResults(object):
         if order=='first' or order=='all':
             newplotgca.plot(_np.arange(max(xdata)),
                             _rbutils.rb_decay_1st_order(_np.arange(max(xdata)),
-                            A1,B1,C1,D1,f1),'--', lw=2, color=cmap(50), 
+                            A1,B1,C1,f1),'-', lw=2, color=cmap(50), 
                             label='First order fit')
 
 
@@ -455,15 +482,15 @@ class RBResults(object):
                                                      edgecolor='#CC4F1B', facecolor='#FF9848')
         if analytic=='first' or analytic=='all':
             newplotgca.plot(_np.arange(max(xdata)),
-                            _rbutils.rb_decay_1st_order(_np.arange(max(xdata)),A1_an,B1_an,C1_an,D1_an,f_an),
-                            '.', lw=4, color=cmap(10), label='First order analytic')
+                            _rbutils.rb_decay_1st_order(_np.arange(max(xdata)),A1_an,B1_an,C1_an,f_an),
+                            '-.', lw=4, color=cmap(10), label='First order analytic')
             if sys_error_bound=='first' or sys_error_bound=='all':
                 _plt.fill_between(_np.arange(max(xdata)),_rbutils.seb_lower( 
-                                _rbutils.rb_decay_1st_order(_np.arange(max(xdata)),A1_an,B1_an,C1_an,D1_an,f_an),
+                                _rbutils.rb_decay_1st_order(_np.arange(max(xdata)),A1_an,B1_an,C1_an,f_an),
                                 _np.arange(max(xdata)), analytic_params['delta'], order='first'), 
-                                _rbutils.seb_upper(_rbutils.rb_decay_WF(_np.arange(max(xdata)),A_an,B_an,f_an), 
-                                _np.arange(max(xdata)), analytic_params['delta'], order='first'), alpha=0.2, 
-                                      edgecolor='#1B2ACC', facecolor='#089FFF', linewidth=4)
+                                _rbutils.seb_upper(_rbutils.rb_decay_1st_order(_np.arange(max(xdata)),A1_an,
+                                B1_an,C1_an,f_an), _np.arange(max(xdata)), analytic_params['delta'], order='first'), 
+                                  alpha=0.2, edgecolor='#1B2ACC', facecolor='#089FFF', linewidth=4)
                  
 
         newplotgca.set_xlabel(xlabel, fontsize=15)
@@ -476,7 +503,6 @@ class RBResults(object):
         
         if legend==True:
             _plt.legend(loc=loc)
-
         if xlim:
             _plt.xlim(xlim)
         if ylim:
@@ -525,11 +551,11 @@ class RBResults(object):
 
         #Setup lists to hold items to take stddev of:
         A_list = {}; B_list = {}; f_list = {}; A1_list = {}
-        B1_list = {}; C1_list = {}; D1_list = {}; f1_list = {};
+        B1_list = {}; C1_list = {}; f1_list = {};
         for gstyp in gstyp_list:
             A_list[gstyp] = []; B_list[gstyp] = []; f_list[gstyp] = []; \
-            A1_list[gstyp] = []; B1_list[gstyp] = []; C1_list[gstyp] = []; \
-            D1_list[gstyp] = []; f1_list[gstyp] = []
+            A1_list[gstyp] = []; B1_list[gstyp] = []; C1_list[gstyp] = [];\
+            f1_list[gstyp] = []
 
         #Create bootstrap datasets
         bootstrapped_dataset_list = []
@@ -547,8 +573,10 @@ class RBResults(object):
             resample_results = _do_rb_base(dsBootstrap, base_gatestrings,
                                            self.basename, alias_maps,
                                            self.success_spamlabel, self.d,
-                                           self.pre_avg,self.f0, self.AB0,
-                                           self.ABCD0)
+                                           self.pre_avg,self.f0, self.A0,
+                                           self.ApB0, self.C0, self.f_bnd,
+                                           self.A_bnd, self.ApB_bnd, 
+                                           self.C_bnd)
             for gstyp in gstyp_list:
                 A_list[gstyp].append(resample_results.dicts[gstyp]['A'])
                 B_list[gstyp].append(resample_results.dicts[gstyp]['B'])
@@ -556,7 +584,6 @@ class RBResults(object):
                 A1_list[gstyp].append(resample_results.dicts[gstyp]['A1'])
                 B1_list[gstyp].append(resample_results.dicts[gstyp]['B1'])
                 C1_list[gstyp].append(resample_results.dicts[gstyp]['C1'])
-                D1_list[gstyp].append(resample_results.dicts[gstyp]['D1'])
                 f1_list[gstyp].append(resample_results.dicts[gstyp]['f1'])
                
         for gstyp in gstyp_list:
@@ -566,7 +593,6 @@ class RBResults(object):
             self.dicts[gstyp]['A1_error_BS'] = _np.std(A1_list[gstyp],ddof=1)
             self.dicts[gstyp]['B1_error_BS'] = _np.std(B1_list[gstyp],ddof=1)
             self.dicts[gstyp]['C1_error_BS'] = _np.std(C1_list[gstyp],ddof=1)
-            self.dicts[gstyp]['D1_error_BS'] = _np.std(D1_list[gstyp],ddof=1)
             self.dicts[gstyp]['f1_error_BS'] = _np.std(f1_list[gstyp],ddof=1)
             
             self.dicts[gstyp]['F_avg_error_BS'] = (self.d-1.) / self.d \
@@ -577,13 +603,8 @@ class RBResults(object):
                 self.dicts[gstyp]['F_avg_error_BS']
             self.dicts[gstyp]['r1_error_BS'] = \
                 self.dicts[gstyp]['F_avg1_error_BS']
-            self.dicts[gstyp]['gdep_error_BS'] = _np.sqrt( \
-                self.dicts[gstyp]['D1_error_BS']**2 + \
-                4 * self.dicts[gstyp]['f1']**2 \
-                *self.dicts[gstyp]['f1_error_BS']**2 )
 
         print("Bootstrapped error bars computed.  Use print methods to access.")
-
 
     def compute_analytic_error_bars(self, epsilon, delta, r_0, 
                                     p0 = [0.5,0.5,0.98]):

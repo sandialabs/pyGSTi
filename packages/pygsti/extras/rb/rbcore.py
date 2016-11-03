@@ -239,7 +239,10 @@ def do_randomized_benchmarking(dataset, clifford_gatestrings,
                                clifford_to_primitive = None,
                                clifford_to_canonical = None, 
                                canonical_to_primitive = None,
-                               f0 = [0.98], AB0 = [0.5,0.5]):
+                               f0 = 0.98, A0 = 0.5, ApB0 = 1.0, 
+                               C0= 0.0, f_bnd=[0.,1.], 
+                               A_bnd=[0.,1.], ApB_bnd=[0.,1.],
+                               C_bnd=[-1.,1.]):
     """
     Computes randomized benchmarking (RB) parameters (but not error bars).
 
@@ -287,17 +290,36 @@ def do_randomized_benchmarking(dataset, clifford_gatestrings,
         None, the returned result object contains data for the 'primitive'
         gate-label-set. Cannot be specified along with `clifford_to_primitive`.
 
-    f0 : list, optional
-        A list of a single floating point number, to be used as the starting
+    f0 : float, optional
+        A single floating point number, to be used as the starting
         'f' value for the fitting procedure.  The default value is almost
         always fine, and one should only modifiy this parameter in special
         cases.
         
-    AB0 : list, optional
-        A length-2 list, [A0, B0], of starting values for the 'A' and 'B'
-        fitting parameters.  The default values are almost always fine, and
-        one should only modifiy this parameter in special cases.
-
+    A0 : float, optional
+        A single floating point number, to be used as the starting
+        'A' value for the fitting procedure.  The default value is almost
+        always fine, and one should only modifiy this parameter in special
+        cases. 
+        
+    ApB0 : float, optional
+        A single floating point number, to be used as the starting
+        'A'+'B' value for the fitting procedure.  The default value is almost
+        always fine, and one should only modifiy this parameter in special
+        cases. 
+        
+    C0 : float, optional
+        A single floating point number, to be used as the starting
+        'C' value for the first order fitting procedure.  The default value 
+        is almost always fine, and one should only modifiy this parameter in 
+        special cases.
+        
+    f_bnd, A_bnd, ApB_bnd, C_bnd : list, optional
+        A 2-element list of floating point numbers. Each list gives the upper
+        and lower bounds over which the relevant parameter is minimized. The
+        default values are well-motivated and should be almost always fine
+        with sufficient data.
+        
     Returns
     -------
     RBResults
@@ -319,12 +341,14 @@ def do_randomized_benchmarking(dataset, clifford_gatestrings,
         alias_maps['primitive'] = clifford_to_primitive
 
     return do_rb_base(dataset, clifford_gatestrings, "clifford", alias_maps,
-                      success_spamlabel, dim, pre_avg, f0, AB0)
+                      success_spamlabel, dim, pre_avg, f0, A0, ApB0, C0, 
+                      f_bnd, A_bnd, ApB_bnd, C_bnd)
 
 
 def do_rb_base(dataset, base_gatestrings, basename, alias_maps=None,
                success_spamlabel = 'plus', dim = 2, pre_avg=True,
-               f0 = [0.98], AB0 = [0.5,0.5], ABCD0=None):
+               f0 = 0.98, A0 = 0.5, ApB0 = 1.0, C0= 0.0, f_bnd=[0.,1.], 
+               A_bnd=[0.,1.], ApB_bnd=[0.,1.], C_bnd=[-1.,1.]):
     """
     Core Randomized Benchmarking compute function.
 
@@ -368,23 +392,36 @@ def do_rb_base(dataset, base_gatestrings, basename, alias_maps=None,
         is performed.  Some information is lost when performing
         pre-averaging, but it follows the literature.
 
-    f0 : list, optional
-        A list of a single floating point number, to be used as the starting
+    f0 : float, optional
+        A single floating point number, to be used as the starting
         'f' value for the fitting procedure.  The default value is almost
         always fine, and one should only modifiy this parameter in special
         cases.
         
-    AB0 : list, optional
-        A length-2 list, [A0, B0], of starting values for the 'A' and 'B'
-        fitting parameters.  The default values are almost always fine, and
-        one should only modifiy this parameter in special cases.
+    A0 : float, optional
+        A single floating point number, to be used as the starting
+        'A' value for the fitting procedure.  The default value is almost
+        always fine, and one should only modifiy this parameter in special
+        cases. 
         
-    ABCD0 : list, optional
-        If not None, a length-4 list of starting values for the 'A', 'B', 'C' 
-        and 'D' fitting parameters in the *first order* fit.  Setting to None
-        should almost always be fine, and in this case the parameters 'A', 'B', 
-        and 'D' are seeded by values obtained in the zeroth order fit.
-
+    ApB0 : float, optional
+        A single floating point number, to be used as the starting
+        'A'+'B' value for the fitting procedure.  The default value is almost
+        always fine, and one should only modifiy this parameter in special
+        cases. 
+        
+    C0 : float, optional
+        A single floating point number, to be used as the starting
+        'C' value for the first order fitting procedure.  The default value 
+        is almost always fine, and one should only modifiy this parameter in 
+        special cases.
+        
+    f_bnd, A_bnd, ApB_bnd, C_bnd : list, optional
+        A 2-element list of floating point numbers. Each list gives the upper
+        and lower bounds over which the relevant parameter is minimized. The
+        default values are well-motivated and should be almost always fine
+        with sufficient data.
+        
     Returns
     -------
     RBResults
@@ -413,52 +450,43 @@ def do_rb_base(dataset, base_gatestrings, basename, alias_maps=None,
         ydata = _np.asarray(ydata)
 
         def obj_func_full(params):
-            A,B,f = params
-            return _np.sum((A+B*f**xdata-ydata)**2)
+            A,Bs,f = params
+            return _np.sum((A+(Bs-A)*f**xdata-ydata)**2)
 
         def obj_func_1d(f):
-            A = B = 0.5
-            return obj_func_full([A,B,f])
+            A = 0.5
+            Bs = 1.
+            return obj_func_full([A,Bs,f])
         
         def obj_func_1st_order_full(params):
-            A,B,C,D,f = params
-            return _np.sum((A+B*f**xdata+C*(xdata-1)*(D-f**2)*f**(xdata-2)-ydata)**2)
+            A1, B1s, C1, f1 = params
+            return _np.sum((A1+(B1s-A1+C1*xdata)*f1**xdata-ydata)**2)
 
         initial_soln = _minimize(obj_func_1d,f0, method='L-BFGS-B',
                                  bounds=[(0.,1.)])
         f0b = initial_soln.x[0]
-        p0 = AB0 + [f0b]
+        p0 = [A0,ApB0,f0b] 
         final_soln = _minimize(obj_func_full,p0, method='L-BFGS-B',
-                               bounds=[(0.,1.),(0.0,1.),(0.,1.)])
-        # TIM: Strictly speaking, A is not bounded within [0,1], although it is for
-        # reasonably good SPAM and gates. Under the assumption that the zeroth order
-        # model is correct (i.e., gate indep. noise), it is B and A+B which are 
-        # probabilities and guaranteed to be within [0,1], regardless of the quality
-        # of SPAM and the gates.
+                               bounds=[A_bnd,ApB_bnd,f_bnd])      
+        A,Bs,f = final_soln.x
         
-        A,B,f = final_soln.x
-        
-        if ABCD0 is None:
-            C0 = 0.5
-            D0 = f**2
-            p1st0 = [A,B,C0,D0,f]
-        else:
-            p1st0 = ABCD0 + [f]
-        
-        final_soln_1storder = _minimize(obj_func_1st_order_full, p1st0, 
+        p0 = [A,Bs,C0,f]        
+        final_soln_1storder = _minimize(obj_func_1st_order_full, p0, 
                                method='L-BFGS-B',
-                               bounds=[(-1.,1.),(-1.,1.),(-1.,1.),(0.,1.),(0.,1.)])
-        # TIM: Are the bounds on these variables valid? Probably not, but it is 
-        # very unclear what they should be (note, A1,B1 and A,B are not the same thing,
-        # so it isn't necessarily true that e.g, B in [0,1]). However,It is very likely 
-        # that these bounds hold for `reasonably good' gate sets.
+                               bounds=[A_bnd,ApB_bnd,C_bnd,f_bnd])
         
-        A1,B1,C1,D1,f1 = final_soln_1storder.x
-           
-        return {'A': A,'B': B,'f': f, 'F_avg': _rbutils.f_to_F_avg(f,dim),
-                'r': _rbutils.f_to_r(f,dim), 'A1': A1, 'B1': B1, 'C1': C1,
-                'D1': D1, 'f1': f1, 'F_avg1': _rbutils.f_to_F_avg(f1,dim),
-                'r1': _rbutils.f_to_r(f1,dim), 'gdep':_rbutils.D1f1_to_gdep(D1,f1)}
+        A1,B1s,C1,f1 = final_soln_1storder.x
+        
+        if A > 0.6 or A1 > 0.6 or A < 0.4 or A1 < 0.4:
+            print("Warning: Asymptotic fit parameter is not within [0.4,0.6].")
+                       
+        if C1 > 0.1 or C1 < -0.1:
+            print("Warning: Additional parameter in first order fit is significantly non-zero")
+            
+        return {'A': A,'B': Bs-A,'f': f, 'F_avg': _rbutils.f_to_F_avg(f,dim),
+                'r': _rbutils.f_to_r(f,dim), 'A1': A1, 'B1': B1s-A1, 'C1': C1,
+                'f1': f1, 'F_avg1': _rbutils.f_to_F_avg(f1,dim),
+                'r1': _rbutils.f_to_r(f1,dim)}
 
     result_dicts = {}
 
@@ -502,7 +530,7 @@ def do_rb_base(dataset, base_gatestrings, basename, alias_maps=None,
         result_dicts[gstyp] = gstyp_results
 
     results = _rbobjs.RBResults(dataset, result_dicts, basename, alias_maps,
-                                success_spamlabel, dim, pre_avg, f0, AB0, ABCD0)
+                                success_spamlabel, dim, pre_avg, f0, A0, ApB0, C0)
     return results
 
 
