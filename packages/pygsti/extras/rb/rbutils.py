@@ -416,8 +416,8 @@ def delta_parameter(gs_actual, gs_target, norm='diamond'):
             delta.append(norm1to1(gate_dif,n_samples=1000, return_list=False))
             
         else:
-            raise ValueError, "Only diamond or 1to1 norm available. \
-            set norm='diamond' or norm='1to1'"
+            raise ValueError("Only diamond or 1to1 norm available. "
+                             + "set norm='diamond' or norm='1to1'")
             
     delta_avg = _np.mean(delta)
     
