@@ -628,3 +628,68 @@ def norm1to1(operator, n_samples=10000, return_list=False):
         return vals
     else:
         return max(vals)
+
+def dataset_to_mkn_dict(dataset,seqs,success_spam_label):
+    """
+    Maps an RB dataset to an ordered dictionary; keys are 
+    sequence lengths, values are arrays of length N (number of experimental samples) where
+    value of the i^th element is the total number of RB sequences of length M that saw
+    i successes.
+    """
+    output = _OrderedDict({})
+    N = None
+    for seq in seqs:
+        m = len(seq)
+        N_temp = dataset[seq].total()
+        if N is None:
+            N = N_temp
+        elif N_temp != N:
+            raise ValueError("Different N values discovered!")
+        n = dataset[seq][success_spam_label]
+        try:
+            output[m][n] += 1
+        except:
+            output[m] = _np.zeros(N+1)
+            output[m][n] += 1
+    return output
+
+def mkn_dict_to_weighted_delta_f1_hat_dict(mkn_dict):
+    """
+    Maps mkn dict (defined in rbutils.dataset_to_mkn_dict) to 
+    weighted_f1_hat_dict.
+    """
+    weighted_f1_hat_dict = _OrderedDict({})
+    for m in mkn_dict.keys():
+        K = _np.sum(mkn_dict[m])
+        N = len(mkn_dict[m]) - 1
+        kn = mkn_dict[m]
+        f1_hat = 1. / (K * N) * _np.sum([n * kn[n] for n in xrange(N+1)])
+        weighted_f1_hat_dict[m] = f1_hat * (1. - f1_hat) / N
+    return weighted_f1_hat_dict
+
+def mkn_dict_to_f_empirical_squared_dict(mkn_dict):
+    """
+    Maps mkn dict (defined in rbutils.dataset_to_mkn_dict) to 
+    f_empirical_squared_dict.
+    """
+    f_empirical_squared_dict = _OrderedDict({})
+    for m in mkn_dict.keys():
+        K = _np.sum(mkn_dict[m])
+        N = len(mkn_dict[m]) - 1
+        kn = mkn_dict[m]
+        f_empirical_squared_dict[m] = 1. / (2 * K**2 * N**2) * _np.sum(
+                [ (i - j) * kn[i] * kn[j] for i in xrange(N+1) for j in xrange(N+1)])
+    return f_empirical_squared_dict
+    
+def mkn_dict_to_delta_f1_squared_dict(mkn_dict):
+    """
+    Maps mkn dict (defined in rbutils.dataset_to_mkn_dict) to 
+    delta_f1_squared_dict.
+    """
+    delta_f1_squared_dict = _OrderedDict({})
+    f_empircal_squared_dict = mkn_dict_to_f_empircal_squared_dict(mkn_dict)
+    weighted_delta_f1_hat_dict = mkn_dict_to_weighted_delta_f1_hat_dict(mkn_dict)
+    for m in mkn_dict.keys():
+        K = _np.sum(mkn_dict[m])
+        delta_f1_squared_dict[m] = 1. / K * _np.max(f_empircal_squared_dict[m],weighted_delta_f1_hat_dict[m])
+    return delta_f1_squared_dict
