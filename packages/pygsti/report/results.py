@@ -418,7 +418,7 @@ class Results(object):
 
         def fn(key, confidenceLevel, vb):
             gsTgt, _ = setup()
-            return _generation.get_gateset_spam_table(gsTgt, None, False)
+            return _generation.get_gateset_spam_table(gsTgt, None, None, False)
         fns['targetSpamBriefTable'] = (fn, validate_essential)
 
 
@@ -452,28 +452,24 @@ class Results(object):
         fns['fiducialListTable'] = (fn, validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
-            setup()
             return _generation.get_gatestring_table(
                 self.gatestring_lists['prep fiducials'],
                 "Preparation Fiducial")
         fns['prepStrListTable'] = (fn, validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
-            setup()
             return _generation.get_gatestring_table(
                 self.gatestring_lists['effect fiducials'],
                 "Measurement Fiducial")
         fns['effectStrListTable'] = (fn, validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
-            setup()
             return _generation.get_gatestring_table(
                 self.gatestring_lists['germs'], "Germ")
         fns['germListTable'] = (fn, validate_LsAndGerms)
 
 
         def fn(key, confidenceLevel, vb):
-            setup()
             return _generation.get_gatestring_table(
                 self.gatestring_lists['germs'], "Germ", nCols=2)
         fns['germList2ColTable'] = (fn, validate_LsAndGerms)
@@ -483,13 +479,13 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             _, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
-            return _generation.get_gateset_spam_table(gsBest, cri)
+            return _generation.get_gateset_spam_table(gsBest, None, cri)
         fns['bestGatesetSpamTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
-            _, gsBest = setup()
+            gsTgt, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
-            return _generation.get_gateset_spam_table(gsBest, cri, False)
+            return _generation.get_gateset_spam_table(gsBest, gsTgt, cri, False)
         fns['bestGatesetSpamBriefTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
@@ -601,18 +597,71 @@ class Results(object):
         fns['progressTable'] = (fn, validate_LsAndGerms)
 
 
+        def fn(key, confidenceLevel, vb):
+            #Much of the below setup is similar to plot_setup() in _get_figure_fns
+            strs  = (self.gatestring_lists['prep fiducials'],
+                     self.gatestring_lists['effect fiducials'])
+            germs = [ g for g in self.gatestring_lists['germs'] if len(g) <= 3 ]
+            gsBest = self.gatesets['final estimate']
+            fidPairs = self.parameters['fiducial pairs']
+            Ls = self.parameters['max length list']
+
+            if fidPairs is None: fidpair_filters = None
+            elif isinstance(fidPairs,dict) or hasattr(fidPairs,"keys"):
+                #Assume fidPairs is a dict indexed by germ
+                fidpair_filters = { (x,y): fidPairs[germ] 
+                                    for x in Ls for y in germs }
+            else:
+                #Assume fidPairs is a list
+                fidpair_filters = { (x,y): fidPairs
+                                    for x in Ls for y in germs }
+
+            gstr_filters = { (x,y) : self.gatestring_lists['iteration'][i]
+                             for i,x in enumerate(Ls) for y in germs }
+
+            if self.parameters['objective'] == "logl":
+                return _generation.get_logl_bygerm_table(
+                    gsBest, self.dataset, germs, strs, Ls,
+                    self.parameters['L,germ tuple base string dict'],
+                    fidpair_filters, gstr_filters)
+            elif self.parameters['objective'] == "chi2":
+                raise NotImplementedError("byGermTable not implemented for chi2 objective")
+            else: raise ValueError("Invalid Objective: %s" %
+                                   self.parameters['objective'])
+        fns['byGermTable'] = (fn, validate_LsAndGerms)
+
+
         # figure-containing tables
         def fn(key, confidenceLevel, vb):
-            gsTgt, _ = setup()
+            gsTgt, gsBest = setup()
             return _generation.get_gateset_gate_boxes_table(
-                gsTgt, "targetGatesBoxes")
+                [gsTgt], ["targetGatesBoxes"], maxHeight=4.0)
         fns['targetGatesBoxTable'] = (fn, validate_essential)
+
+        def fn(key, confidenceLevel, vb):
+            gsTgt, gsBest = setup()
+            return _generation.get_gateset_gate_boxes_table(
+                [gsTgt, gsBest], ["targetGatesBoxes", "bestGatesBoxes"],
+                ['Target','Estimated'])
+        fns['bestGatesetGatesBoxTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
             return _generation.get_gates_vs_target_err_gen_boxes_table(
                 gsBest, gsTgt, "bestErrgenBoxes")
         fns['bestGatesetErrGenBoxTable'] = (fn, validate_essential)
+
+        def fn(key, confidenceLevel, vb):
+            gsTgt, gsBest = setup()
+            return _generation.get_projected_err_gen_comparison_table(
+                gsBest, gsTgt, compare_with='target')
+        fns['bestGatesetErrGenProjectionTargetMetricsTable'] = (fn,validate_essential)
+
+        def fn(key, confidenceLevel, vb):
+            gsTgt, gsBest = setup()
+            return _generation.get_projected_err_gen_comparison_table(
+                gsBest, gsTgt, compare_with='estimate')
+        fns['bestGatesetErrGenProjectionSelfMetricsTable'] = (fn,validate_essential)
 
         def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
@@ -693,7 +742,6 @@ class Results(object):
                 fidpair_filters = { (x,y): fidPairs
                                     for x in Ls[st:] for y in germs }
 
-            if fidPairs is None: fidpair_filters = None
             gstr_filters = { (x,y) : self.gatestring_lists['iteration'][i]
                              for i,x in enumerate(Ls[st:],start=st)
                              for y in germs }
@@ -3282,7 +3330,8 @@ class Results(object):
 
     def create_general_report_pdf(self, confidenceLevel=None, filename="auto",
                                   title="auto", datasetLabel="auto", suffix="",
-                                  tips=False, verbosity=0, comm=None):
+                                  tips=False, verbosity=0, comm=None,
+                                  showAppendix=False):
         """
         Create a "general" GST report.  This report is suited to display
         results for any number of qubits, and is detailed in the sense that
@@ -3329,6 +3378,9 @@ class Results(object):
         comm : mpi4py.MPI.Comm, optional
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
+
+        showAppendix : bool, optional
+            Whether to display the appendix.
 
         Returns
         -------
@@ -3411,8 +3463,8 @@ class Results(object):
             ("false" if confidenceLevel is None else "true")
         qtys['settoggles'] += "\\toggle%s{LsAndGermsSet}\n" % \
             ("true" if self._LsAndGermInfoSet else "false")
-        #qtys['settoggles'] += "\\toggle%s{debuggingaidsappendix}\n" % \
-        #    ("true" if debugAidsAppendix else "false")
+        qtys['settoggles'] += "\\toggle%s{showAppendix}\n" % \
+            ("true" if showAppendix else "false")
         #qtys['settoggles'] += "\\toggle%s{gaugeoptappendix}\n" % \
         #    ("true" if gaugeOptAppendix else "false")
         #qtys['settoggles'] += "\\toggle%s{pixelplotsappendix}\n" % \
@@ -3463,19 +3515,35 @@ class Results(object):
              'bestGatesetSpamVsTargetTable', 'bestGatesetGaugeOptParamsTable',
              'bestGatesetChoiEvalTable', 'datasetOverviewTable',
              'bestGatesetEvalTable', 'bestGatesetRelEvalTable',
-             'targetGatesBoxTable', 'bestGatesetErrGenBoxTable')
+             'targetGatesBoxTable', 'bestGatesetGatesBoxTable',
+             'bestGatesetErrGenBoxTable')
 
         ls_and_germs_tables = ('fiducialListTable','prepStrListTable',
                                'effectStrListTable','germList2ColTable',
                                'progressTable')
 
-        tables_to_compute = std_tables
+        appendix_tables = ('bestGatesetErrGenProjectionTargetMetricsTable',
+                           'bestGatesetErrGenProjectionSelfMetricsTable')
+        appendix_ls_and_germs_tables = ('byGermTable',)
+
         tables_to_blank = []
+        tables_to_compute = std_tables
 
         if self._LsAndGermInfoSet:
             tables_to_compute += ls_and_germs_tables
         else:
             tables_to_blank += ls_and_germs_tables
+
+        if showAppendix:
+            tables_to_compute += appendix_tables
+            if self._LsAndGermInfoSet:
+                tables_to_compute += appendix_ls_and_germs_tables
+            else:
+                tables_to_blank += appendix_ls_and_germs_tables
+        else:
+            tables_to_blank += appendix_tables
+            tables_to_blank += appendix_ls_and_germs_tables
+
 
         #Change to report directory so figure generation works correctly
         cwd = _os.getcwd()

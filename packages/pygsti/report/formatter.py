@@ -89,7 +89,10 @@ class FormatSet():
                 if formatted_item is None:
                     raise ValueError("Formatter " + str(type(formatter[fmt]))
                                      + " returned None for item = " + str(item))
-                formatted_items.append( formatter[fmt](item) )
+                if isinstance(formatted_item, list): #formatters can create multiple table cells by returning *lists* 
+                    formatted_items.extend( formatted_item )
+                else:
+                    formatted_items.append( formatted_item )
             else:
                 if item is None:
                     raise ValueError("Unformatted None in formatList")
@@ -160,6 +163,54 @@ class _Formatter(object):
         # Additional formatting, ex $%s$ or <i>%s</i>
         return self.formatstring % label
 
+
+class _TupleFormatter(object):
+    '''
+    Callable class that can replace a formatter function, similar to
+    _Formatter, but expects a tuple as input instead of a single string.
+
+    Only defines __init__ and __call__ methods
+    '''
+
+    def __init__(self, label_formatter=None, formatstring='{l0}'):
+        '''
+        Parameters
+        ----------
+        label_formatter : callable or None
+            Another formatter that is used to format the "label",
+            defined to be the first element of the tuple this 
+            formatter is called with.
+
+        formatstring : string (optional)
+            Outer formatting for after label_formatter has been applied.
+        '''
+        self.formatstring    = formatstring
+        self.label_formatter = label_formatter
+
+    def __call__(self, label_tuple):
+        '''
+        Formatting function template
+
+        Parameters
+        --------
+        label_tuple : tuple
+            The label, followed by other paramters, to be formatted.
+
+        Returns
+        --------
+        formatted label : string
+        '''
+        label = label_tuple[0] #process first element of tuple as _Formatter
+
+        if self.label_formatter is not None:
+            label = self.label_formatter(label)
+
+        # Formatting according to format string
+        format_dict = { 'l0': label }
+        format_dict.update( { 'l%d' % i: label_tuple[i] 
+                              for i in range(1,len(label_tuple)) })
+        return self.formatstring.format(**format_dict)
+
 def _no_format(label):
     return label
 
@@ -208,6 +259,7 @@ class _PrecisionFormatter(_ParameterizedFormatter):
     def __init__(self, custom, defaults={}, formatstring='%s'):
         super(_PrecisionFormatter, self).__init__(custom, ['precision', 'polarprecision','sciprecision'],
                                                  defaults, formatstring)
+
 
 # Formatter class that requires a scratchDirectory from an instance of FormatSet for saving figures to
 class _FigureFormatter(_ParameterizedFormatter):
@@ -452,7 +504,7 @@ FormatSet.formatDict['Figure'] = {
                                extension='.png'),
     'latex' : _FigureFormatter(formatstring="\\vcenteredhbox{\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/%s}}",
                                extension='.pdf'),
-    'text'  : lambda t : t[0],
+    'text'  : lambda figInfo : figInfo[0],
     'ppt'   : lambda figInfo : 'Figure formatting not implemented for ppt'} # Not Implemented
 
 # Bold formatting
@@ -461,3 +513,37 @@ FormatSet.formatDict['Bold'] = {
     'latex' : _PrecisionFormatter(latex, formatstring='\\textbf{%s}'),
     'text'  : _Formatter(formatstring='**%s**'),
     'ppt'   : _PrecisionFormatter(ppt)} # No bold in ppt?
+
+
+#Multi-row and multi-column formatting (with "Conversion" type inner formatting)
+FormatSet.formatDict['MultiRow'] = {
+    'html'  : _TupleFormatter(_fmtCnv_html),
+    'latex' : _TupleFormatter(_fmtCnv_latex, formatstring='\\multirow{{{l1}}}{{*}}{{{l0}}}'),
+    'text'  : _TupleFormatter(_Formatter(stringreplacers=[('<STAR>', '*'), ('|', ' ')])),
+    'ppt'   : _TupleFormatter(_Formatter(stringreplacers=[('<STAR>', '*'), ('|', '\n')]))}
+
+
+def _empty_str(l): return ""
+FormatSet.formatDict['SpannedRow'] = {
+    'html'  : _fmtCnv_html,
+    'latex' : _empty_str,
+    'text'  : _Formatter(stringreplacers=[('<STAR>', '*'), ('|', ' ')]),
+    'ppt'   : _Formatter(stringreplacers=[('<STAR>', '*'), ('|', '\n')])}
+
+def _repeat_no_format(label_tuple): 
+    label, reps = label_tuple
+    return ["%s" % label]*reps
+
+FormatSet.formatDict['MultiCol'] = {
+    'html'  : _repeat_no_format,
+    'latex' : _TupleFormatter(_fmtCnv_latex, formatstring='\\multicolumn{{{l1}}}{{c|}}{{{l0}}}'),
+    'text'  : _repeat_no_format,
+    'ppt'   : _repeat_no_format}
+
+
+#Special formatting for Hamiltonian and Stochastic gateset types
+FormatSet.formatDict['GatesetType'] = {
+    'html'  : _no_format,
+    'latex' : _Formatter(stringreplacers=[('H','$\\mathcal{H}$'),('S','$\\mathcal{S}$')]),
+    'text'  : _no_format,
+    'ppt'   : _no_format}

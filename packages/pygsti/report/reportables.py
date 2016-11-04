@@ -741,7 +741,7 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
         key = "%s Jamiolkowski trace dist" % gateLabel; possible_qtys.append(key)
         if key in qtynames:
             def jt_diff(gate): # assume vary gateset1, gateset2 fixed
-                return _tools.jtracedist(gate,gateset2.gates[gateLabel]) #Note: default 'gm' basis
+                return _tools.jtracedist(gate,gateset2.gates[gateLabel], mxBasis)
             #print "DEBUG: jtdist(%s)" % gateLabel
             ret[key] = _getGateQuantity(jt_diff, gateset1, gateLabel, eps, confidenceRegionInfo)
 
@@ -749,7 +749,7 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
         if key in qtynames:
 
             def half_diamond_norm(gate):
-                return 0.5 * _tools.diamonddist(gate, gateset2.gates[gateLabel]) #Note: default 'gm' basis
+                return 0.5 * _tools.diamonddist(gate, gateset2.gates[gateLabel], mxBasis)
                   #vary elements of gateset1 (assume gateset2 is fixed)
 
             try:
