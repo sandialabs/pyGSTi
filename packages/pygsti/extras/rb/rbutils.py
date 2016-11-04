@@ -11,6 +11,8 @@ from collections import OrderedDict as _OrderedDict
 from ... import objects as _objs
 from ... import construction as _cnst
 from ... import tools as _tls
+from scipy.linalg import sqrtm
+import itertools as _ittls
 
 def _H_WF(epsilon,nu):
     """
@@ -58,26 +60,32 @@ def rb_decay_WF(m,A,B,f):#Taken from Wallman and Flammia- Eq. 1
     """
     return A+B*f**m
 
-def rb_decay_1st_order(m,A1,B1,C1,D1,f1):
+def rb_decay_1st_order(m,A1,B1,C1,f1):
     """
-    Computes the first order survival probability function 
-    F = A1 + B1*f1^m + C1(D1-f1^2)f1^(m-2), as provided in Equation 3 of "Scalable 
-    and Robust Randomized Benchmarking of Quantum Processes" 
+    Computes an altered verion of the first order survival probability function 
+    F = A_1*f1^m + B_1 + C_1 (m-1)(q-p^2)p^(m-2), as provided in Equation 3 of 
+    "Scalable and Robust Randomized Benchmarking of Quantum Processes" 
     (http://journals.aps.org/prl/abstract/10.1103/PhysRevLett.106.180504).
+    The reason for the change is that the model in this paper has 1 to many
+    parameters for the fitting, and is also ill-defined for m=1 and f1=0, which
+    is problematic for fitting. The conversion is
+    A1 = B_1
+    B1 = A_1 - C_1(q/f1^(-2) - 1)
+    C1 = C_1(q/f1^(-2) - 1)
 
     Parameters
     ----------
     m : integer
         RB sequence length minus one
     
-    A1,B1,C1,D1,f1 : float
+    A1,B1,C1,f1 : float
 
     Returns
     -------
     float
     """
 
-    return A1+B1*f1**m+C1*(m-1)*(D1-f1**2)*f1**(m-2)
+    return A1+(B1+C1*m)*f1**m
 
 
 def create_K_m_sched(m_min,m_max,Delta_m,epsilon,delta,r_0,
@@ -399,8 +407,17 @@ def delta_parameter(gs_actual, gs_target, norm='diamond'):
         if norm=='diamond':
             delta.append( _tls.diamonddist(error_gs.gates[gate],
                                            error_gs.gates['Gavg']))
+            
+        elif norm=='1to1':
+            # TIM: Here dimension has been forced to be 2, as the function is
+            # not passed the dimension of the gates. This should be
+            # changed at some point.
+            gate_dif = _tls.gm_to_std(error_gs.gates[gate]-error_gs.gates['Gavg'],2)
+            delta.append(norm1to1(gate_dif,n_samples=1000, return_list=False))
+            
         else:
-            print("Only diamond norm implemented currently")
+            raise ValueError("Only diamond or 1to1 norm available. "
+                             + "set norm='diamond' or norm='1to1'")
             
     delta_avg = _np.mean(delta)
     
@@ -409,6 +426,7 @@ def delta_parameter(gs_actual, gs_target, norm='diamond'):
 
 def analytic_rb_parameters(gs_actual, gs_target, clifford_group, 
                            success_spamlabel, norm='diamond', d=2):
+    # Tim: This function has a range of issues if d !=2.                     
     """
     Computes the analytic zeroth and first order fit parameters from
     a given noisy gate set. Also calculates the delta parameter used
@@ -441,9 +459,14 @@ def analytic_rb_parameters(gs_actual, gs_target, clifford_group,
         set. These parameters are as defined in Magesan et al PRA 85
         042311 2012, and we are considering the case of time-indep
         gates. The parameters here are converted to those therein
-        as A -> B_0, B -> A_0, A1 -> B_1, B1 -> A_1, C1 -> C_1, 
-        D_1 -> q, p -> f, g_dep -> q - p^2, where the parameter name 
-        used herein is first.
+        as 
+        B -> A_0, 
+        A -> B_0,
+        A1 = B_1
+        B1 = A_1 - C_1(q/f1^(-2) - 1)
+        C1 = C_1(q/f1^(-2) - 1)
+        f1 = p
+        where the parameter name used herein is first.
     
     """
     if d != 2:
@@ -488,17 +511,23 @@ def analytic_rb_parameters(gs_actual, gs_target, clifford_group,
     pr_R_I = data[('GR',)][success_spamlabel_cm]
     pr_Q_p = data[('Gavg','GQ',)][success_spamlabel]
     an_f = analytic_params['f']
-
-    analytic_params['A'] = pr_L_I
-    analytic_params['B'] = pr_L_p - pr_L_I    
-    analytic_params['A1'] = pr_R_I
-    analytic_params['B1'] = (pr_Q_p/an_f) - pr_L_p + ((an_f -1)*pr_L_I/an_f) \
-                            + ((pr_R_p - pr_R_I)/an_f)
-    analytic_params['C1'] = pr_L_p - pr_L_I
-    analytic_params['D1'] = depolarisation_parameter(error_gs['GQ2'], 
-                                             clifford_group, d=2)
-    analytic_params['g_dep'] = D1f1_to_gdep(analytic_params['D1'],an_f)
     
+    B_1 = pr_R_I
+    A_1 = (pr_Q_p/an_f) - pr_L_p + ((an_f -1)*pr_L_I/an_f) \
+                            + ((pr_R_p - pr_R_I)/an_f)
+    C_1 = pr_L_p - pr_L_I
+    q = depolarisation_parameter(error_gs['GQ2'], clifford_group, d=2)
+    
+    if an_f < 0.01:
+        print("Warning: first order analytical constants are not guaranteed \
+              to be reliable with very large errors")
+        
+    analytic_params['A'] = pr_L_I
+    analytic_params['B'] = pr_L_p - pr_L_I       
+    analytic_params['A1'] = B_1
+    analytic_params['B1'] = A_1 - C_1*(q - 1)/an_f**2
+    analytic_params['C1'] = C_1*(q- an_f**2)/an_f**2
+
     return analytic_params
 
 def systematic_error_bound(m,delta,order='zeroth'):
@@ -552,3 +581,50 @@ def seb_lower(y,m,delta,order='zeroth'):
     lower[lower < 0]=0
        
     return lower
+
+def vec(matrix_in):
+    """
+    Stack the columns of a matrix to return a vector
+    """
+    return [b for a in _np.transpose(matrix_in) for b in a]
+
+def unvec(vector_in):
+    """
+    Slice a vector into columns of a matrix.
+    """
+    dim = int(_np.sqrt(len(vector_in)))
+    return _np.transpose(_np.array(list(
+                _ittls.izip(*[_ittls.chain(vector_in,
+                            _ittls.repeat(None, dim-1))]*dim))))
+
+def norm1(matr):
+    """
+    Returns the 1 norm of a matrix
+    """
+    return float(_np.real(_np.trace(sqrtm(_np.dot(matr.conj().T,matr)))))
+
+def random_hermitian(dimension):
+    """
+    Generates a randmon Hermitian matrix
+    """
+    my_norm = 0.
+    while my_norm < 0.5:
+        dimension = int(dimension)
+        a = _np.random.random(size=[dimension,dimension])
+        b = _np.random.random(size=[dimension,dimension])
+        c = a+1.j*b + (a+1.j*b).conj().T
+        my_norm = norm1(c)
+    return c / my_norm
+
+def norm1to1(operator, n_samples=10000, return_list=False):
+    """
+    Returns the Hermitian 1-to-1 norm of a superoperator represented in
+    the standard basis, calculated via Monte-Carlo sampling.
+    """
+    rand_dim = int(_np.sqrt(float(len(operator))))
+    vals = [ norm1(unvec(_np.dot(operator,vec(random_hermitian(rand_dim)))))
+             for n in range(n_samples)]
+    if return_list:
+        return vals
+    else:
+        return max(vals)

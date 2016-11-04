@@ -21,7 +21,7 @@ try:  basestring
 except NameError: basestring = str
 
 
-def ppt(x, brackets=False, precision=6, polarprecision=3):
+def ppt(x, brackets=False, precision=6, polarprecision=3, sciprecision=0):
     """
     Convert a numpy array, number, or string to ppt.
 
@@ -39,6 +39,11 @@ def ppt(x, brackets=False, precision=6, polarprecision=3):
     polarprecision : int, optional
         Rounding for polar numbers
 
+    sciprecision : int, optional
+        Precision with which to el when precision
+        requires use of scientific notation.
+
+
     Returns
     -------
     string
@@ -51,14 +56,14 @@ def ppt(x, brackets=False, precision=6, polarprecision=3):
         for l in x.shape:
             if l > 1: d += 1
         x = _np.squeeze(x)
-        if d == 0: return ppt_value(x, precision=precision, polarprecision=polarprecision)
-        if d == 1: return ppt_vector(x, brackets=brackets, precision=precision, polarprecision=polarprecision)
-        if d == 2: return ppt_matrix(x, brackets=brackets, precision=precision, polarprecision=polarprecision)
+        if d == 0: return ppt_value(x, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
+        if d == 1: return ppt_vector(x, brackets=brackets, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
+        if d == 2: return ppt_matrix(x, brackets=brackets, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
         raise ValueError("I don't know how to render a rank %d numpy array as ppt" % d)
     elif type(x) in (float,int,complex,_np.float64,_np.int64):
-        return ppt_value(x, precision=precision, polarprecision=polarprecision)
+        return ppt_value(x, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
     elif type(x) in (list,tuple):
-        return ppt_list(x, precision=precision, polarprecision=polarprecision)
+        return ppt_list(x, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
     elif isinstance(x,basestring):
         return ppt_escaped(x)
     else:
@@ -66,7 +71,7 @@ def ppt(x, brackets=False, precision=6, polarprecision=3):
         return str(x)
 
 
-def ppt_list(l, brackets=False, precision=6, polarprecision=3):
+def ppt_list(l, brackets=False, precision=6, polarprecision=3, sciprecision=0):
     """
     Convert a list to powerpoint.
 
@@ -78,6 +83,16 @@ def ppt_list(l, brackets=False, precision=6, polarprecision=3):
     brackets : bool, optional
         Whether to include brackets in the output powerpoint string.
 
+    precision : int, optional
+        Precision with which to round el.
+
+    polarprecision : int, optional
+        Precision with which to round polars.
+
+    sciprecision : int, optional
+        Precision with which to el when precision
+        requires use of scientific notation.
+
     Returns
     -------
     string
@@ -86,11 +101,13 @@ def ppt_list(l, brackets=False, precision=6, polarprecision=3):
 
     lines = [ ]
     for el in l:
-        lines.append( ppt(el, brackets, precision=precision, polarprecision=polarprecision) )
+        lines.append( ppt(el, brackets, precision=precision,
+                          polarprecision=polarprecision,
+                          sciprecision=sciprecision) )
     return ",".join(lines)
 
 
-def ppt_vector(v, brackets=False, precision=6, polarprecision=3):
+def ppt_vector(v, brackets=False, precision=6, polarprecision=3, sciprecision=0):
     """
     Convert a 1D numpy array to powerpoint.
 
@@ -108,6 +125,11 @@ def ppt_vector(v, brackets=False, precision=6, polarprecision=3):
     polarprecision : int, optional
         Rounding for polar numbers
 
+    sciprecision : int, optional
+        Precision with which to el when precision
+        requires use of scientific notation.
+
+
     Returns
     -------
     string
@@ -116,12 +138,14 @@ def ppt_vector(v, brackets=False, precision=6, polarprecision=3):
 
     lines = [ ]
     for el in v:
-        lines.append( ppt_value(el, precision=precision, polarprecision=polarprecision) )
+        lines.append( ppt_value(el, precision=precision,
+                                polarprecision=polarprecision,
+                                sciprecision=sciprecision) )
     #Unsupported: if brackets:
     return  "\n".join(lines)
 
 
-def ppt_matrix(m, fontsize=None, brackets=False, precision=6, polarprecision=3):
+def ppt_matrix(m, fontsize=None, brackets=False, precision=6, polarprecision=3, sciprecision=0):
     """
     Convert a 2D numpy array to powerpoint.
 
@@ -142,6 +166,11 @@ def ppt_matrix(m, fontsize=None, brackets=False, precision=6, polarprecision=3):
     polarprecision : int, optional
         Rounding for polar numbers
 
+    sciprecision : int, optional
+        Precision with which to el when precision
+        requires use of scientific notation.
+
+
     Returns
     -------
     string
@@ -152,13 +181,17 @@ def ppt_matrix(m, fontsize=None, brackets=False, precision=6, polarprecision=3):
         prefix += "" #unsupported currently
 
     for r in range(m.shape[0]):
-        lines.append( "  ".join( [ppt_value(el, precision=precision, polarprecision=polarprecision) for el in m[r,:] ] ))
+        lines.append( "  ".join(
+                [ppt_value(el, precision=precision,
+                           polarprecision=polarprecision,
+                           sciprecision=sciprecision) for el in m[r,:] ] ))
 
     # Unsupported: if brackets:
     return "\n".join(lines)
 
 
-def ppt_value(el, precision=6, complexAsPolar=True, polarprecision=3):
+def ppt_value(el, precision=6, polarprecision=3,
+              sciprecision=0, complexAsPolar=True):
     """
     Convert a floating point or complex value to powerpoint.
 
@@ -167,15 +200,20 @@ def ppt_value(el, precision=6, complexAsPolar=True, polarprecision=3):
     el : float or complex
         Value to convert into powerpoint.
 
-    complexAsPolar : bool, optional
-        Whether to output complex values in polar form.  If False, usual
-        a+ib form is used.
-
     precision : int, optional
         rounding for normal numbers
 
     polarprecision : int, optional
         rounding for polar numbers
+
+    sciprecision : int, optional
+        Precision with which to el when precision
+        requires use of scientific notation.
+
+    complexAsPolar : bool, optional
+        Whether to output complex values in polar form.  If False, usual
+        a+ib form is used.
+
 
     Returns
     -------
@@ -188,13 +226,13 @@ def ppt_value(el, precision=6, complexAsPolar=True, polarprecision=3):
 
     def render(x):
         if abs(x) < 5*10**(-(precision+1)):
-            s = "%.0e" % x # one significant figure
+            s = "%.*e" % (sciprecision,x)
         elif abs(x) < 1:
             s = "%.*f" % (precision, x)
         elif abs(x) <= 10**precision:
             s = "%.*f" % (precision-int(_np.log10(abs(x))),x)  #round to get precision+1 digits when x is > 1
         else:
-            s = "%.0e" % x # one significant figure
+            s = "%.*e" % (sciprecision,x)
 
         #Fix scientific notition
         p = s.split('e')

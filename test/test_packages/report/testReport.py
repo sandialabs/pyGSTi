@@ -105,26 +105,26 @@ class TestReport(ReportBaseCase):
     def test_reports_logL_TP_noCIs(self):
 
         vs = self.versionsuffix
-        self.results_logL.create_full_report_pdf(filename=temp_files + "/full_reportC%s.pdf" % vs, confidenceLevel=None,
-                                                 debugAidsAppendix=False, gaugeOptAppendix=False,
-                                                 pixelPlotAppendix=False, whackamoleAppendix=False,
-                                                 verbosity=2)
-        self.results_logL.create_brief_report_pdf(filename=temp_files + "/brief_reportC%s.pdf" % vs, confidenceLevel=None, verbosity=2)
-        self.results_logL.create_presentation_pdf(filename=temp_files + "/slidesC%s.pdf" % vs, confidenceLevel=None,
-                                                  debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False,
-                                                  verbosity=2)
+        #self.results_logL.create_full_report_pdf(filename=temp_files + "/full_reportC%s.pdf" % vs, confidenceLevel=None,
+        #                                         debugAidsAppendix=False, gaugeOptAppendix=False,
+        #                                         pixelPlotAppendix=False, whackamoleAppendix=False,
+        #                                         verbosity=2)
+        #self.results_logL.create_brief_report_pdf(filename=temp_files + "/brief_reportC%s.pdf" % vs, confidenceLevel=None, verbosity=2)
+        #self.results_logL.create_presentation_pdf(filename=temp_files + "/slidesC%s.pdf" % vs, confidenceLevel=None,
+        #                                          debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False,
+        #                                          verbosity=2)
         self.results_logL.create_general_report_pdf(filename=temp_files + "/general_reportC%s.pdf" % vs, confidenceLevel=None,
-                                                    verbosity=2)
+                                                    verbosity=2, showAppendix=True)
 
-        if self.have_python_pptx:
-            self.results_logL.create_presentation_ppt(filename=temp_files + "/slidesC%s.ppt" % vs, confidenceLevel=None,
-                                                      debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False,
-                                                      verbosity=2)
-
-        ##Compare the text files, assume if these match the PDFs are equivalent
-        self.checkFile("full_reportC%s.tex" % vs)
-        self.checkFile("brief_reportC%s.tex" % vs)
-        self.checkFile("slidesC%s.tex" % vs)
+        #if self.have_python_pptx:
+        #    self.results_logL.create_presentation_ppt(filename=temp_files + "/slidesC%s.ppt" % vs, confidenceLevel=None,
+        #                                              debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False,
+        #                                              verbosity=2)
+        #
+        ###Compare the text files, assume if these match the PDFs are equivalent
+        #self.checkFile("full_reportC%s.tex" % vs)
+        #self.checkFile("brief_reportC%s.tex" % vs)
+        #self.checkFile("slidesC%s.tex" % vs)
         #self.checkFile("general_reportC%s.tex" % vs)
 
 

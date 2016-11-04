@@ -491,6 +491,43 @@ def hamiltonian_to_lindbladian(hamiltonian):
 
 
 
+def stochastic_lindbladian(Q):
+    """
+    Construct the Lindbladian corresponding to stochastic Q-errors.
+
+    Mathematically, for a d-dimensional matrix Q, this routine 
+    constructs the d^2-dimension Lindbladian matrix L whose
+    action is given by L(rho) = Q*rho*Q^dag where rho is a density
+    matrix.  L is returned as a superoperator matrix that acts on a
+    vectorized density matrices.
+
+    Parameters
+    ----------
+    Q : ndarray
+      The matrix used to construct the Lindbladian.
+
+    Returns
+    -------
+    ndarray
+    """
+
+    #TODO: there's probably a fast & slick way to so this computation
+    #  using vectorization identities
+    assert(len(Q.shape) == 2)
+    assert(Q.shape[0] == Q.shape[1])
+    Qdag = _np.conjugate(_np.transpose(Q))
+    d = Q.shape[0]
+    lindbladian = _np.empty( (d**2,d**2), dtype=Q.dtype )
+
+    for i,rho0 in enumerate(std_matrices(d)): #rho0 == input density mx
+        rho1 = _np.dot(Q,_np.dot(rho0,Qdag))
+        lindbladian[:,i] = rho1.flatten()
+          # vectorize rho1 & set as linbladian column
+
+    return lindbladian
+
+
+
 
 
 

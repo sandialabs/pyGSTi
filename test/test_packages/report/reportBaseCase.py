@@ -1,6 +1,7 @@
 import unittest
 import warnings
 import pickle
+import collections
 import pygsti
 import os
 from pygsti.construction import std1Q_XYI as std
@@ -57,8 +58,22 @@ class ReportBaseCase(BaseTestCase):
         lsgst_gatesets_prego = pygsti.do_iterative_mc2gst(self.ds, self.gs_clgst, self.lsgstStrings, verbosity=0,
                                                           minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6),
                                                           returnAll=True)
-        lsgst_gatesets = [ pygsti.optimize_gauge(gs, "target", targetGateset=self.targetGateset,
-                                                 gateWeight=1,spamWeight=0.001) for gs in lsgst_gatesets_prego]
+        gaugeOptParams = collections.OrderedDict([
+                ('toGetTo', 'target'),
+                ('constrainToTP', False),
+                ('constrainToCP', False),
+                ('gateWeight', 1),
+                ('spamWeight', 0.001),
+                ('targetGatesMetric',"frobenius"),
+                ('targetSpamMetric',"frobenius"),
+                ('itemWeights', {}) ])
+
+        lsgst_gatesets = []
+        for gs in lsgst_gatesets_prego:
+            args = gaugeOptParams.copy()
+            args['gateset'] = gs
+            args['targetGateset'] = self.targetGateset
+            lsgst_gatesets.append( pygsti.optimize_gauge(**args) )
 
         self.results = pygsti.report.Results()
         self.results.init_Ls_and_germs("chi2", self.targetGateset, self.ds, self.gs_clgst,
@@ -68,7 +83,8 @@ class ReportBaseCase(BaseTestCase):
         self.results.parameters.update({'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
                                         'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
                                         'weights': None, 'defaultDirectory': temp_files + "",
-                                        'defaultBasename': "MyDefaultReportName" } )
+                                        'defaultBasename': "MyDefaultReportName",
+                                        'gaugeOptParams': gaugeOptParams} )
         self.results.options.precision = 3
         self.results.options.polar_precision = 2
 

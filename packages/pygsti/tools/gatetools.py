@@ -8,9 +8,11 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import scipy.linalg as _spl
+import warnings as _warnings
 
 from ..tools import jamiolkowski as _jam
 from ..tools import matrixtools as _mt
+from ..tools import basistools as _bt
 
 def _hack_sqrtm(A):
     return _spl.sqrtm(A) #Travis found this scipy function
@@ -248,12 +250,13 @@ def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
                     _cvxpy.trace(sig1) == 1. ]
 
     prob = _cvxpy.Problem(objective, constraints)
-#    try:
-    prob.solve(solver="CVXOPT")
-#        prob.solve(solver="ECOS")
+    try:
+        prob.solve(solver="CVXOPT")
+#       prob.solve(solver="ECOS")
 #       prob.solve(solver="SCS")#This always fails
-#    except:
-#        return -1
+    except:
+        _warnings.warn("CVXOPT failed - diamonddist returning -2!")
+        return -2
     return prob.value
 
 
@@ -658,3 +661,159 @@ def error_generator(gate, target_gate):
     error_gen = _np.real_if_close(_spl.logm(_np.dot(target_gate_inv,gate)),
                                   tol=10000) # in machine epsilons
     return error_gen
+
+
+def gate_from_error_generator(error_gen, target_gate):
+    """
+    Construct a gate from an error generator and a target gate.
+
+    Inverts the computation fone in :func:`error_generator` and
+    returns the value of the gate given by
+    gate = target_gate * exp(error_gen).
+
+    Parameters
+    ----------
+    error_gen : ndarray
+      The error generator matrix
+
+    target_gate : ndarray
+      The target gate matrix
+
+    Returns
+    -------
+    ndarray
+      The gate matrix.
+    """
+    return _np.dot(target_gate, _spl.expm(error_gen))
+
+
+def pauliprod_error_generators(dim, projection_type):
+    """
+    Compute the projections of a gate error generator onto generators
+    for a standard set of errors which correspond to pauli-product elements.
+
+    Parameters
+    ----------
+    dim : int
+      The dimension of the error generators to be returned.  This is also the
+      associated gate dimension, and must be a perfect square, as `sqrt(dim)`
+      is the dimension of density matrices. For a single qubit, dim == 4.
+      
+    projection_type : {"hamiltonian", "stochastic"}
+      The type of error generators to construct.  If "hamiltonian", then the
+      Hamiltonian generators which take a density matrix rho -> -i*[ H, rho ]
+      for Pauli-product matrix H.  If "stochastic", then the Stochastic error
+      generators which take rho -> P*rho*P for Pauli-product matrix P.
+
+
+    Returns
+    -------
+    generators : numpy.ndarray
+      An array of shape (#Pauli-prods,dim,dim).  `generators[i]` is the
+      generator corresponding to the ith Pauli-product matrix in the 
+      *std* (matrix unit) basis.  (Note that  since #Pauli-prods == dim,
+      the size is also (dim,dim,dim) ).
+    """
+    d2 = dim
+    d = int(_np.sqrt(d2))
+
+    #Get a list of the d2 Pauli-product matrices
+    # (in the standard basis)
+    ppMxs = _bt.pp_matrices(d)
+
+    assert(len(ppMxs) == d2)
+    assert(_np.isclose(d*d,d2)) #d2 must be a perfect square
+
+    lindbladMxs = _np.empty( (len(ppMxs),d2,d2), 'complex' )
+    for i,ppMx in enumerate(ppMxs):
+        if projection_type == "hamiltonian":
+            lindbladMxs[i] = _bt.hamiltonian_to_lindbladian(ppMx) # in std basis
+        elif projection_type == "stochastic":
+            lindbladMxs[i] = _bt.stochastic_lindbladian(ppMx) # in std basis
+        else:
+            raise ValueError("Invalid projection_type argument: %s"
+                             % projection_type)
+
+    return lindbladMxs
+
+
+def pauliprod_errgen_projections(gate, targetGate, projection_type,
+                                 mxBasis="gm", return_generators=False):
+    """
+    Compute the projections of a gate error generator onto generators
+    for a standard set of errors which correspond to pauli-product elements.
+
+    Parameters
+    ----------
+    gate : ndarray
+      The gate matrix data used when constructing the generator.
+
+    targetGate : ndarray
+      The target gate matrix data to use when constructing the the
+      generator.
+      
+    projection_type : {"hamiltonian", "stochastic"}
+      The type of error generators to project the gate error generator onto.
+      If "hamiltonian", then use the Hamiltonian generators which take a density
+      matrix rho -> -i*[ H, rho ] for Pauli-product matrix H.  If "stochastic",
+      then use the Stochastic error generators which take rho -> P*rho*P for
+      Pauli-product matrix P (recall P is self adjoint).
+
+    mxBasis : {'std', 'gm','pp'}, optional
+      Which basis the gateset is represented in.  Allowed
+      options are Matrix-unit (std), Gell-Mann (gm) and
+      Pauli-product (pp).
+
+    return_generators : bool, optional
+      If True, return the error generators projected against along with the
+      projection values themseves.
+
+    Returns
+    -------
+    projections : numpy.ndarray
+      An array of length equal to the dimension of the gate, which 
+      is of course the size of the appropriate Pauli-product basis.
+
+    generators : numpy.ndarray
+      Only returned when `return_generators == True`.  An array of shape
+      (gate_dim,gate_dim,gate_dim) such that  `generators[i]` is the
+      generator corresponding to the ith Pauli-product matrix.  Note 
+      that these matricies are in the *std* (matrix unit) basis.
+    """
+
+    errgen = error_generator(gate, targetGate)
+    if mxBasis == "pp":   errgen_std = _bt.pp_to_std(errgen)
+    elif mxBasis == "gm": errgen_std = _bt.gm_to_std(errgen)
+    elif mxBasis == "std": errgen_std = errgen
+    else: raise ValueError("Invalid basis specifier: %s" % mxBasis)
+
+    d2 = gate.shape[0]
+    d = int(_np.sqrt(d2))
+    nQubits = _np.log2(d)
+
+    #Get a list of the d2 generators (in corresspondence with the
+    #  Pauli-product matrices given by _bt.pp_matrices(d) ).
+    lindbladMxs = pauliprod_error_generators(d2, projection_type) # in std basis
+
+    assert(len(lindbladMxs) == d2)
+    assert(_np.isclose(d*d,d2)) #d2 must be a perfect square
+
+    projections = _np.empty( len(lindbladMxs), 'd' )
+    for i,lindbladMx in enumerate(lindbladMxs):
+        proj = _np.real_if_close(_np.dot( errgen_std.flatten(), lindbladMx.flatten() ))
+        assert(_np.isreal(proj))
+        projections[i] = proj
+
+        #if not _np.isreal(proj):
+        #    print "DEBUG NOT REAL:"
+        #    print "p=",proj
+        #    print "ppMx=\n",ppMx
+        #    print "errgen=\n",errgen
+        #    print "errgen_std=\n",errgen_std
+        #    print "LMx=\n",lindbladMx
+        #    #print "LMx_pp=\n",lindbladMx_pp
+
+    if return_generators:
+        return projections, lindbladMxs
+    else:
+        return projections

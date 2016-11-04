@@ -3516,81 +3516,82 @@ def gate_matrix_boxplot(gateMatrix, size=None, m=-1.0, M=1.0,
     return rptFig
 
 
-def gate_matrix_errgen_boxplot(gateMatrix, targetMatrix, size=None,
-                               save_to=None, fontSize=20, mxBasis=None,
-                               mxBasisDims=None, xlabel=None, ylabel=None,
-                               title=None, boxLabels=False, prec=0):
-    """
-    Creates a color box plot of a the error generator of a gate matrix.
-
-    The error generator is given by log( inv(targetMatrix) * gateMatrix ).
-    This can be a useful way to display large matrices which have so many
-    entries that their entries cannot easily fit within the width of a page.
-
-    Parameters
-    ----------
-    gateMatrix : ndarray
-      The gate matrix data used when constructing the generator.
-
-    targetMatrix : ndarray
-      The target gate matrix data to use when constructing the the
-      generator.
-
-    size : tuple, optional
-      The (width,height) figure size in inches.  None
-      enables automatic calculation based on gateMatrix
-      size.
-
-    save_to : str, optional
-      save figure as this filename (usually ending in .pdf)
-
-    fontSize : int, optional
-        size of font for title
-
-    mxBasis : str, optional
-      The name abbreviation for the basis. Typically in {"pp","gm","std"}.
-      Used to label the rows & columns.  If you don't want labels, leave as
-      None.
-
-    mxBasisDims : int or list, optional
-      The dimension of the density matrix space this basis spans, or a
-      list specifying the dimensions of terms in a direct-sum
-      decomposition of the density matrix space.  Used to label the
-      rows & columns.  If you don't want labels, leave as None.
-
-    xlabel : str, optional
-      An x-axis label for the plot.
-
-    ylabel : str, optional
-      A y-axis label for the plot.
-
-    title : str, optional
-      A title for the plot.
-
-    boxLabels : bool, optional
-        Whether box labels are displayed.  If False, then a colorbar is
-        displayed to the right of the box plot.
-
-    prec : int or {'compact','compacthp'}, optional
-        Precision for box labels.  Only relevant when boxLabels == True. Allowed
-        values are:
-
-        - 'compact' = round to nearest whole number using at most 3 characters
-        - 'compacthp' = show as much precision as possible using at most 3 characters
-        - int >= 0 = fixed precision given by int
-        - int <  0 = number of significant figures given by -int
-
-
-    Returns
-    -------
-    ReportFigure
-    """
-    errgen = _tools.error_generator(gateMatrix, targetMatrix)
-    absMax = _np.max(_np.abs(errgen))
-    m,M = -absMax, absMax
-    return gate_matrix_boxplot(errgen, size, m,M, save_to, fontSize,
-                               mxBasis, mxBasisDims, xlabel, ylabel, title,
-                               boxLabels, prec)
+#Unused -- too little logic to warrant it's own function...
+#def gate_matrix_errgen_boxplot(gateMatrix, targetMatrix, size=None,
+#                               save_to=None, fontSize=20, mxBasis=None,
+#                               mxBasisDims=None, xlabel=None, ylabel=None,
+#                               title=None, boxLabels=False, prec=0):
+#    """
+#    Creates a color box plot of a the error generator of a gate matrix.
+#
+#    The error generator is given by log( inv(targetMatrix) * gateMatrix ).
+#    This can be a useful way to display large matrices which have so many
+#    entries that their entries cannot easily fit within the width of a page.
+#
+#    Parameters
+#    ----------
+#    gateMatrix : ndarray
+#      The gate matrix data used when constructing the generator.
+#
+#    targetMatrix : ndarray
+#      The target gate matrix data to use when constructing the the
+#      generator.
+#
+#    size : tuple, optional
+#      The (width,height) figure size in inches.  None
+#      enables automatic calculation based on gateMatrix
+#      size.
+#
+#    save_to : str, optional
+#      save figure as this filename (usually ending in .pdf)
+#
+#    fontSize : int, optional
+#        size of font for title
+#
+#    mxBasis : str, optional
+#      The name abbreviation for the basis. Typically in {"pp","gm","std"}.
+#      Used to label the rows & columns.  If you don't want labels, leave as
+#      None.
+#
+#    mxBasisDims : int or list, optional
+#      The dimension of the density matrix space this basis spans, or a
+#      list specifying the dimensions of terms in a direct-sum
+#      decomposition of the density matrix space.  Used to label the
+#      rows & columns.  If you don't want labels, leave as None.
+#
+#    xlabel : str, optional
+#      An x-axis label for the plot.
+#
+#    ylabel : str, optional
+#      A y-axis label for the plot.
+#
+#    title : str, optional
+#      A title for the plot.
+#
+#    boxLabels : bool, optional
+#        Whether box labels are displayed.  If False, then a colorbar is
+#        displayed to the right of the box plot.
+#
+#    prec : int or {'compact','compacthp'}, optional
+#        Precision for box labels.  Only relevant when boxLabels == True. Allowed
+#        values are:
+#
+#        - 'compact' = round to nearest whole number using at most 3 characters
+#        - 'compacthp' = show as much precision as possible using at most 3 characters
+#        - int >= 0 = fixed precision given by int
+#        - int <  0 = number of significant figures given by -int
+#
+#
+#    Returns
+#    -------
+#    ReportFigure
+#    """
+#    errgen = _tools.error_generator(gateMatrix, targetMatrix)
+#    absMax = _np.max(_np.abs(errgen))
+#    m,M = -absMax, absMax
+#    return gate_matrix_boxplot(errgen, size, m,M, save_to, fontSize,
+#                               mxBasis, mxBasisDims, xlabel, ylabel, title,
+#                               boxLabels, prec)
 
 
 def polar_eigenval_plot(gate, targetGate, size=(4,4), title=None,
@@ -3640,11 +3641,7 @@ def polar_eigenval_plot(gate, targetGate, size=(4,4), title=None,
     target_evals = _np.linalg.eigvals(targetGate)
     rel_gate = _np.dot(_np.linalg.inv(targetGate), gate)
     rel_evals = _np.linalg.eigvals(rel_gate)
-
-    gatePow10 = _np.linalg.matrix_power(gate, 10)
-    targetPow10 = _np.linalg.matrix_power(targetGate, 10)
-    rel_gate10 = _np.dot(_np.linalg.inv(targetPow10), gatePow10)
-    rel_evals10 = _np.linalg.eigvals(rel_gate10)
+    rel_evals10 = rel_evals**10
 
     fig = _plt.figure()
     axes = fig.add_axes([0,0,1,1], polar=True, axisbg='#F8F8F8')
@@ -3690,22 +3687,26 @@ def polar_eigenval_plot(gate, targetGate, size=(4,4), title=None,
 
 
 
-def pauliprod_hamiltonian_boxplot(gate, targetGate, size=None, title=None,
-                                  save_to=None, fontSize=15, mxBasis="gm",
-                                  boxLabels=False, prec="compacthp"):
+def pauliprod_projection_boxplot(projections, m=None, M=None, size=None,
+                                 title=None, save_to=None, fontSize=15,
+                                 boxLabels=False, prec="compacthp"):
     """
-    Creates a color box plot showing the projection of the error generator
-    of gateMatrix onto each of the Pauli or Pauli-product Hamiltonian
-    generators.
+    Creates a color box plot displaying the projections of a gate
+    error generator onto generators corresponding to the Pauli-product
+    basis elements.  Typically `projections` is obtained by 
+    calling :func:`pauliprod_errgen_projections`.
 
     Parameters
     ----------
-    gate : ndarray
-      The gate matrix data used when constructing the generator.
+    projections : ndarray
+      A 1-dimensional array of length equal to the Pauli-product
+      basis size (equal to the gate dimension).  Ordering of the
+      values is assumed to correspond to the ordering given by
+      :func:`pp_matrices`.
 
-    targetGate : ndarray
-      The target gate matrix data to use when constructing the the
-      generator.
+    m,M : float, optional
+        Color scale min and max values, respectivey.  If None, then computed
+        automatically from the data range.
 
     size : tuple, optional
       The (width,height) figure size in inches.  None
@@ -3720,11 +3721,6 @@ def pauliprod_hamiltonian_boxplot(gate, targetGate, size=None, title=None,
 
     fontSize : int, optional
         size of font for title
-
-    mxBasis : {'std', 'gm','pp'}, optional
-        Which basis the gateset is represented in.  Allowed
-        options are Matrix-unit (std), Gell-Mann (gm) and
-        Pauli-product (pp).
 
     boxLabels : bool, optional
         Whether box labels are displayed.  If False, then a colorbar is
@@ -3744,60 +3740,30 @@ def pauliprod_hamiltonian_boxplot(gate, targetGate, size=None, title=None,
     -------
     ReportFigure
     """
+    absMax = _np.max(_np.abs(projections))
+    if m is None: m = -absMax
+    if M is None: M =  absMax
 
-    errgen = _tools.error_generator(gate, targetGate)
-    if mxBasis == "pp":   errgen_std = _tools.pp_to_std(errgen)
-    elif mxBasis == "gm": errgen_std = _tools.gm_to_std(errgen)
-    elif mxBasis == "std": errgen_std = errgen
-    else: raise ValueError("Invalid basis specifier: %s" % mxBasis)
-
-    d2 = gate.shape[0]
-    d = int(_np.sqrt(d2))
+    d2 = len(projections) # number of projections == dim of gate
+    d = int(_np.sqrt(d2)) # dim of density matrix
     nQubits = _np.log2(d)
 
-    #Get a list of the d2 Pauli-product matrices
-    # (in the standard basis)
-    hamMxs = _tools.pp_matrices(d)
-
-    assert(_np.isclose(d*d,d2)) #d2 must be a perfect square
-    assert(_np.isclose(nQubits, round(nQubits))) # d must be a pow of 2
-    nQubits = int(nQubits)
-
-    hamProjections = _np.empty( len(hamMxs), 'd' )
-    for i,hamMx in enumerate(hamMxs):
-        lindbladMx = _tools.hamiltonian_to_lindbladian(hamMx) # in std basis
-        #lindbladMx_pp = _tools.std_to_pp(lindbladMx)
-        proj = _np.real_if_close(_np.dot( errgen_std.flatten(), lindbladMx.flatten() ))
-        #if not _np.isreal(proj):
-        #    print "DEBUG NOT REAL:"
-        #    print "p=",proj
-        #    print "ham=\n",hamMx
-        #    print "errgen=\n",errgen
-        #    print "errgen_std=\n",errgen_std
-        #    print "LMx=\n",lindbladMx
-        #    #print "LMx_pp=\n",lindbladMx_pp
-
-        assert(_np.isreal(proj))
-        hamProjections[i] = proj
-
-    absMax = _np.max(_np.abs(hamProjections))
-    m,M = -absMax, absMax
-
     if nQubits == 1:
-        hamProjections = hamProjections.reshape( (1,4) )
+        projections = projections.reshape( (1,4) )
         xlabel = "Q1"; ylabel = ""
     elif nQubits == 2:
-        hamProjections = hamProjections.reshape( (4,4) )
+        projections = projections.reshape( (4,4) )
         xlabel = "Q2"; ylabel="Q1"
     else:
-        hamProjections = hamProjections.reshape( (4,hamProjections.size/4) )
+        projections = projections.reshape( (4,projections.size/4) )
         xlabel = "Q*"; ylabel="Q1"
 
-    xd = int(round(_np.sqrt(hamProjections.shape[1]))) #x-basis-dim
-    yd = int(round(_np.sqrt(hamProjections.shape[0]))) #y-basis-dim
-    return gate_matrix_boxplot(hamProjections, size, m,M, save_to, fontSize,
+    xd = int(round(_np.sqrt(projections.shape[1]))) #x-basis-dim
+    yd = int(round(_np.sqrt(projections.shape[0]))) #y-basis-dim
+    return gate_matrix_boxplot(projections, size, m,M, save_to, fontSize,
                                "pp", xd, xlabel, ylabel, title, boxLabels,
                                prec, yd)
+
 
 
 def choi_eigenvalue_barplot(evals, errbars=None, size=(8,5), barWidth=1,
