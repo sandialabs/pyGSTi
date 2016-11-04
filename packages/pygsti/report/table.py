@@ -1,6 +1,7 @@
 from __future__  import division, print_function, absolute_import, unicode_literals
 from .formatter  import FormatSet   as _FormatSet
 from collections import OrderedDict as _OrderedDict
+import re as _re
 
 class ReportTable(object):
     def __init__(self, colHeadings, formatters, customHeader=None):
@@ -22,12 +23,13 @@ class ReportTable(object):
         pass #nothing to do currently
 
     def render(self, fmt, longtables=False, tableclass='pygstiTbl',
-               scratchDir=None, precision=6, polarprecision=3):
+               scratchDir=None, precision=6, polarprecision=3, sciprecision=0):
 
         specs = {
             'scratchDir'     : scratchDir,
             'precision'      : precision,
-            'polarprecision' : polarprecision
+            'polarprecision' : polarprecision,
+            'sciprecision'   : sciprecision
             }
 
         # Create a formatSet, which contains rules for rendering lists
@@ -56,7 +58,26 @@ class ReportTable(object):
                 formatted_rowData = formatSet.formatList(rowData, formatters,
                                                           "latex")
                 if len(formatted_rowData) > 0:
-                    latex += " & ".join(formatted_rowData) + " \\\\ \hline\n"
+                    latex += " & ".join(formatted_rowData)
+
+                    multirows = [ ("multirow" in el) for el in formatted_rowData ]
+                    if any(multirows):
+                        latex += " \\\\ "
+                        last = True; lineStart = None; col = 1
+                        for multi,data in zip(multirows,formatted_rowData):                                
+                            if last == True and multi == False:
+                                lineStart = col #line start
+                            elif last == False and multi == True:
+                                latex += "\cline{%d-%d} " % (lineStart,col) #line end
+                            last=multi
+                            res = _re.search("multicolumn{([0-9])}",data)
+                            if res: col += int(res.group(1))
+                            else:   col += 1
+                        if last == False: #need to end last line
+                            latex += "\cline{%d-%d} "%(lineStart,col-1)
+                        latex += "\n"
+                    else:
+                       latex += " \\\\ \hline\n"
 
             latex += "\end{%s}\n" % table
             return latex
