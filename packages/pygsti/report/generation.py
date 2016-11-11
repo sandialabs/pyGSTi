@@ -1650,25 +1650,8 @@ def get_projected_err_gen_comparison_table(gateset, targetGateset,
         elif compare_with == "estimate": cmpGate = gate
         else: raise ValueError("Invalid compare_with arg: %s" % compare_with)
 
-        #DEBUG
-        #print("TrDist(HS-Target) =", _tools.jtracedist(gateHS, targetGate, basisNm))
-        #print("TrDist(HS-Est)    =", _tools.jtracedist(gateHS, gate, basisNm))
-        #print("Target = \n",targetGate)
-        #print("Gate = \n",gate)
-        #print("GateHS = \n",gateHS)
-        #assert(False)
-
         infid = {}; trdist = {}; ddist = {}
         infid['Full']  = 1-_tools.process_fidelity(gate, cmpGate, basisNm)
-        #DEBUG!!!
-        #if compare_with == "estimate":
-        #    if not _np.isclose(infid['Full'],0.0):
-        #        print( "gate = \n",gate )
-        #        print( "cmp = \n",cmpGate )
-        #        print( "infidelity = ",infid['Full'] )
-        #        import pickle
-        #        pickle.dump(gate,open("debugGate.pkl","wb"))
-        #    assert(_np.isclose(infid['Full'],0.0))
         infid['H']     = 1-_tools.process_fidelity(gateH, cmpGate, basisNm)
         infid['S']     = 1-_tools.process_fidelity(gateS, cmpGate, basisNm)
         infid['H + S'] = 1-_tools.process_fidelity(gateHS, cmpGate, basisNm)
