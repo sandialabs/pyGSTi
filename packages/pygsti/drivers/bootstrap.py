@@ -69,7 +69,9 @@ def make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=None,
     possibleSpamLabels = inputDataSet.get_spam_labels()
     assert( all([sl in possibleSpamLabels for sl in spamLabels]) )
 
-    simDS = _obj.DataSet(spamLabels=spamLabels) #create new dataset
+    #create new dataset
+    simDS = _obj.DataSet(spamLabels=spamLabels, 
+                         collisionAction=inputDataSet.collisionAction)
     gatestring_list = list(inputDataSet.keys())
     for s in gatestring_list:
         nSamples = inputDataSet[s].total()

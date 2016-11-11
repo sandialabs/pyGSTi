@@ -345,15 +345,15 @@ def do_randomized_benchmarking(dataset, clifford_gatestrings,
             "canonical_to_primitive!"
         alias_maps['primitive'] = clifford_to_primitive
 
-    return do_rb_base(dataset, clifford_gatestrings, "clifford", weight_data, alias_maps,
-                      success_spamlabel, dim, pre_avg, f0, A0, ApB0, C0, 
-                      f_bnd, A_bnd, ApB_bnd, C_bnd)
+    return do_rb_base(dataset, clifford_gatestrings, "clifford", weight_data,
+                      alias_maps, success_spamlabel, dim, pre_avg, f0, A0, ApB0,
+                      C0, f_bnd, A_bnd, ApB_bnd, C_bnd)
 
 
-def do_rb_base(dataset, base_gatestrings, basename, weight_data=True, alias_maps=None,
-               success_spamlabel = 'plus', dim = 2, pre_avg=True,
-               f0 = 0.98, A0 = 0.5, ApB0 = 1.0, C0= 0.0, f_bnd=[0.,1.], 
-               A_bnd=[0.,1.], ApB_bnd=[0.,1.], C_bnd=[-1.,1.]):
+def do_rb_base(dataset, base_gatestrings, basename, weight_data=False,
+               alias_maps=None, success_spamlabel = 'plus', dim = 2,
+               pre_avg=True, f0 = 0.98, A0 = 0.5, ApB0 = 1.0, C0= 0.0,
+               f_bnd=[0.,1.], A_bnd=[0.,1.], ApB_bnd=[0.,1.], C_bnd=[-1.,1.]):
     """
     Core Randomized Benchmarking compute function.
 
@@ -547,8 +547,9 @@ def do_rb_base(dataset, base_gatestrings, basename, weight_data=True, alias_maps
                               'counts': gstyp_Ns })
         result_dicts[gstyp] = gstyp_results
 
-    results = _rbobjs.RBResults(dataset, result_dicts, basename, alias_maps,
-                                success_spamlabel, dim, pre_avg, f0, A0, ApB0, C0)
+    results = _rbobjs.RBResults(dataset, result_dicts, basename, weight_data,
+                                alias_maps, success_spamlabel, dim, pre_avg,
+                                f0, A0, ApB0, C0)
     return results
 
 
