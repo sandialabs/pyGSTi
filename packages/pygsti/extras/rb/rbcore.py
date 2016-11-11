@@ -235,6 +235,7 @@ def write_empty_rb_files(filename, m_min, m_max, Delta_m, clifford_group, K_m,
 
 def do_randomized_benchmarking(dataset, clifford_gatestrings,
                                success_spamlabel = 'plus',
+                               weight_data = False,
                                dim = 2, pre_avg=True, 
                                clifford_to_primitive = None,
                                clifford_to_canonical = None, 
@@ -254,6 +255,10 @@ def do_randomized_benchmarking(dataset, clifford_gatestrings,
     clifford_gatestrings : list of GateStrings
         The complete list of RB sequences in terms of Clifford operations,
         i.e., the labels in each `GateString` denote a Clifford operation.
+
+    weight_data : bool, optional
+        Whether or not to compute and use weights for each data point for the fit 
+        procedures.  Default is False; only works when pre_avg = True.
 
     success_spamlabel : str, optional
         The spam label which denotes the *expected* outcome of preparing,
@@ -340,15 +345,15 @@ def do_randomized_benchmarking(dataset, clifford_gatestrings,
             "canonical_to_primitive!"
         alias_maps['primitive'] = clifford_to_primitive
 
-    return do_rb_base(dataset, clifford_gatestrings, "clifford", alias_maps,
-                      success_spamlabel, dim, pre_avg, f0, A0, ApB0, C0, 
-                      f_bnd, A_bnd, ApB_bnd, C_bnd)
+    return do_rb_base(dataset, clifford_gatestrings, "clifford", weight_data,
+                      alias_maps, success_spamlabel, dim, pre_avg, f0, A0, ApB0,
+                      C0, f_bnd, A_bnd, ApB_bnd, C_bnd)
 
 
-def do_rb_base(dataset, base_gatestrings, basename, alias_maps=None,
-               success_spamlabel = 'plus', dim = 2, pre_avg=True,
-               f0 = 0.98, A0 = 0.5, ApB0 = 1.0, C0= 0.0, f_bnd=[0.,1.], 
-               A_bnd=[0.,1.], ApB_bnd=[0.,1.], C_bnd=[-1.,1.]):
+def do_rb_base(dataset, base_gatestrings, basename, weight_data=False,
+               alias_maps=None, success_spamlabel = 'plus', dim = 2,
+               pre_avg=True, f0 = 0.98, A0 = 0.5, ApB0 = 1.0, C0= 0.0,
+               f_bnd=[0.,1.], A_bnd=[0.,1.], ApB_bnd=[0.,1.], C_bnd=[-1.,1.]):
     """
     Core Randomized Benchmarking compute function.
 
@@ -368,6 +373,10 @@ def do_rb_base(dataset, base_gatestrings, basename, alias_maps=None,
     basename : str
         A name given to the "base" gate-label-set, which ultimately determines
         under what key they are stored in the returned results object.
+
+    weight_data : bool, optional
+        Whether or not to compute and use weights for each data point for the fit 
+        procedures.  Default is False; only works when pre_avg = True.
 
     alias_maps : dict of dicts, optional
         If not None, a dictionary whose keys name other (non-"base") 
@@ -444,14 +453,15 @@ def do_rb_base(dataset, base_gatestrings, basename, alias_maps=None,
         preavg_Ns =       [ avgs[L][2] for L in Ls ] 
         return preavg_lengths, preavg_psuccess, preavg_Ns
 
-
-    def fit(xdata,ydata):
+    def fit(xdata,ydata,weights=None):
         xdata = _np.asarray(xdata) - 1 #discount Clifford-inverse
         ydata = _np.asarray(ydata)
 
+        if weights == None:
+            weights = _np.array([1.] * len(xdata))
         def obj_func_full(params):
             A,Bs,f = params
-            return _np.sum((A+(Bs-A)*f**xdata-ydata)**2)
+            return _np.sum((A+(Bs-A)*f**xdata-ydata)**2 / weights)
 
         def obj_func_1d(f):
             A = 0.5
@@ -460,7 +470,7 @@ def do_rb_base(dataset, base_gatestrings, basename, alias_maps=None,
         
         def obj_func_1st_order_full(params):
             A1, B1s, C1, f1 = params
-            return _np.sum((A1+(B1s-A1+C1*xdata)*f1**xdata-ydata)**2)
+            return _np.sum((A1+(B1s-A1+C1*xdata)*f1**xdata-ydata)**2 / weights)
 
         initial_soln = _minimize(obj_func_1d,f0, method='L-BFGS-B',
                                  bounds=[(0.,1.)])
@@ -501,9 +511,17 @@ def do_rb_base(dataset, base_gatestrings, basename, alias_maps=None,
     if pre_avg:
         base_lengths,base_successes,base_Ns = \
             preavg_by_length(base_lengths,successes,Ns)
+        if weight_data : 
+            mkn_dict = _rbutils.dataset_to_mkn_dict(dataset,base_gatestrings,success_spamlabel)
+            weight_dict = _rbutils.mkn_dict_to_weighted_delta_f1_hat_dict(mkn_dict)
+            weights = _np.array(map(lambda x : weight_dict[x],base_lengths))
+            if _np.count_nonzero(weights) != len(weights):
+                print("Warning: Zero weight detected!")
+        else : 
+            weights = None
     else:
         base_lengths,base_successes,base_Ns = base_lengths,successes,Ns
-    base_results = fit(base_lengths, base_successes)
+    base_results = fit(base_lengths, base_successes,weights)
     base_results.update({'gatestrings': base_gatestrings,
                           'lengths': base_lengths,
                           'successes': base_successes,
@@ -529,8 +547,9 @@ def do_rb_base(dataset, base_gatestrings, basename, alias_maps=None,
                               'counts': gstyp_Ns })
         result_dicts[gstyp] = gstyp_results
 
-    results = _rbobjs.RBResults(dataset, result_dicts, basename, alias_maps,
-                                success_spamlabel, dim, pre_avg, f0, A0, ApB0, C0)
+    results = _rbobjs.RBResults(dataset, result_dicts, basename, weight_data,
+                                alias_maps, success_spamlabel, dim, pre_avg,
+                                f0, A0, ApB0, C0)
     return results
 
 

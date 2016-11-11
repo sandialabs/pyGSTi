@@ -733,6 +733,10 @@ def pauliprod_error_generators(dim, projection_type):
         else:
             raise ValueError("Invalid projection_type argument: %s"
                              % projection_type)
+        norm = _np.linalg.norm(lindbladMxs[i].flat)
+        if not _np.isclose(norm,0):
+            lindbladMxs[i] /= norm #normalize projector
+            assert(_np.isclose(_np.linalg.norm(lindbladMxs[i].flat),1.0))
 
     return lindbladMxs
 
@@ -800,18 +804,9 @@ def pauliprod_errgen_projections(gate, targetGate, projection_type,
 
     projections = _np.empty( len(lindbladMxs), 'd' )
     for i,lindbladMx in enumerate(lindbladMxs):
-        proj = _np.real_if_close(_np.dot( errgen_std.flatten(), lindbladMx.flatten() ))
+        proj = _np.real_if_close(_np.vdot( errgen_std.flatten(), lindbladMx.flatten() ))
         assert(_np.isreal(proj))
         projections[i] = proj
-
-        #if not _np.isreal(proj):
-        #    print "DEBUG NOT REAL:"
-        #    print "p=",proj
-        #    print "ppMx=\n",ppMx
-        #    print "errgen=\n",errgen
-        #    print "errgen_std=\n",errgen_std
-        #    print "LMx=\n",lindbladMx
-        #    #print "LMx_pp=\n",lindbladMx_pp
 
     if return_generators:
         return projections, lindbladMxs

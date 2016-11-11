@@ -268,7 +268,7 @@ It's also useful to know \emph{how} the real gates (or, more precisely, GST's es
 \begin{table}[h]
 \begin{center}
 \putfield{bestGatesetErrGenBoxTable}{Best gate set error generator table will be placed here}
-\caption{\putfield{tt_bestGatesetErrGenBoxTable}{}\textbf{The GST estimate of the logic gate operation generators}. A heat map of the ``Error Generator'' for each gate, which is the Lindbladian $\mathbb{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$. When all elements of these matrices is zero, the estimated gates match the target gates (Table \ref{targetGatesetTable}).  Note that the range of the color scale is variable, being determined by the data.  In the final column, these generators are projected onto each of the ``Pauli-product generators'' given by the action of commutation with each Pauli-product basis element.  Columns and rows correspond to Pauli operators on the first and second (if present) qubit.\label{bestGatesetErrGenTable} }
+\caption{\putfield{tt_bestGatesetErrGenBoxTable}{}\textbf{The GST estimate of the logic gate operation generators}. A heat map of the ``Error Generator'' for each gate, which is the Lindbladian $\mathbb{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$. When all elements of these matrices is zero, the estimated gates match the target gates (Table \ref{targetGatesetTable}).  Note that the range of the color scale is variable, being determined by the data.  In the third column, each generator is projected onto each of the ``Hamiltonian generators'' given by the action of commutation with each Pauli-product basis element.  In the forth column, each generator is projected onto each of the ``Stochastic generators'' given by the action of conjugation with each Pauli-product basis element.  Columns and rows correspond to Pauli operators on the first and second (if present) qubit.\label{bestGatesetErrGenTable} }
 \end{center}
 \end{table}
 
@@ -450,7 +450,7 @@ Identifying patterns and trends within such ``pixel plots'' can aid in identifyi
 \clearpage
 
 \section{Potential Analysis Aids (in development)}
-This appendix is meant to hold experimental figures and tables which may be later deemed worthy to incorporate into the main text (but not yet).  Table \ref{bestGatesetErrGenProjectionMetricsTable} shows the infidelity, Jamiolkowski trace distance, and diamond distance of the gates obtained from only part of the full error generator (show in Table \ref{bestGatesetErrGenTable}). The different ``parts'' of the full generator we consider are its projection onto only the Pauli Hamiltonian error generators, only the Pauli Stochastic error generators, and its projection onto both Hamiltonian and Stochastic error (but nothing else). Table \ref{FitByGermTable} shows, in a similar style to Table \ref{progressTable}, the goodness-of-fit on a per-germ basis (showing only the shorter germs to conserve page space).
+This appendix is meant to hold experimental figures and tables which may be later deemed worthy to incorporate into the main text (but not yet).  Table \ref{bestGatesetErrGenProjectionMetricsTable} shows the infidelity, Jamiolkowski trace distance, and diamond distance of the gates obtained from only part of the full error generator (show in Table \ref{bestGatesetErrGenTable}). The different ``parts'' of the full generator we consider are its projection onto only the Pauli Hamiltonian error generators, only the Pauli Stochastic error generators, and its projection onto both Hamiltonian and Stochastic error (but nothing else).  Table \ref{logLErrgenProjectionTable} shows the goodness of fit, in terms of the log-likelihood value, which is obtained when only a part of the error generator is retained.  Table \ref{FitByGermTable} shows, in a similar style to Table \ref{progressTable}, the goodness-of-fit on a per-germ basis (showing only the shorter germs to conserve page space).
 
 \begin{table}[h]
 \begin{center}
@@ -468,9 +468,19 @@ This appendix is meant to hold experimental figures and tables which may be late
 \end{center}
 \end{table}
 
+
 \begin{table}[h]
 \begin{center}
-\putfield{byGermTable}{logL progress table will be placed here}
+\putfield{logLErrgenProjectionTable}{logL error generator projection table will be placed here}
+\caption{\putfield{tt_logLErrgenProjectionTable}{}\textbf{Comparison between the computed and expected maximum $\log(\mathcal{L})$ for error generator projections}.  Each row shows goodness of fit values for a particular gate set when using all of the gate sequences.  Labels ``$\mathcal{H}$'', ``$\mathcal{S}$'', and ``$\mathcal{H} + \mathcal{S}$'' correspond to the gatesets whose elements are obtained by projecting each gate's error generator onto the space of Hamiltonian-type error generators, Stocastic error generators, and both of these categories, respectively. ``Full'' denotes the final GST estimate itself (no projection), which is redundant with the final row in Table \ref{progressTable}.  Column headings have the same meaning as in Table \ref{progressTable}, and $N_p$ is given by the number of orthogonal error generators used for each of the projections.\label{logLErrgenProjectionTable}}
+%$p$ is the p-value derived from a $\chi^2_k$ distribution.(For example, if $p=0.05$, then the probability of observing a $\chi^{2}$ value as large as, or larger than, the one indicated in the table is 5\%, assuming the GST model is valid.) 
+\end{center}
+\end{table}
+
+
+\begin{table}[h]
+\begin{center}
+\putfield{byGermTable}{logL by-germ table will be placed here}
 \caption{\putfield{tt_byGermTable}{}\textbf{Comparison between the computed and expected maximum $\log(\mathcal{L})$ per germ for short germs}.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively (specific to a single germ).  The quantity $2\Delta\log(\mathcal{L})$ measures the goodness of fit of the GST model (small is better) and is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $N_\sigma = (2\Delta\log(\mathcal{L})-k)/\sqrt{2k}$ is the number of standard deviations from the mean (a $p$-value can be straightforwardly derived from $N_\sigma$).  The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.\label{FitByGermTable}}
 %$p$ is the p-value derived from a $\chi^2_k$ distribution.(For example, if $p=0.05$, then the probability of observing a $\chi^{2}$ value as large as, or larger than, the one indicated in the table is 5\%, assuming the GST model is valid.) 
 \end{center}

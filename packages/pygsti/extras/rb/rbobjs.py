@@ -165,10 +165,10 @@ class RBResults(object):
     http://iopscience.iop.org/article/10.1088/1367-2630/16/10/103032.
     """
     
-    def __init__(self, dataset, result_dicts, basename, alias_maps, 
-                 success_spamlabel='plus', dim=2, pre_avg=True, f0=[0.98],
-                 A0=[0.5],ApB0=[1.],C0=[0.], f_bnd=[0.,1.], A_bnd=[0.,1.], 
-                 ApB_bnd=[0.,1.], C_bnd=[-1.,1.]):
+    def __init__(self, dataset, result_dicts, basename, weight_data=False,
+                 alias_maps=None, success_spamlabel='plus', dim=2, pre_avg=True,
+                 f0=[0.98], A0=[0.5],ApB0=[1.],C0=[0.], f_bnd=[0.,1.],
+                 A_bnd=[0.,1.], ApB_bnd=[0.,1.], C_bnd=[-1.,1.]):
         """
         Constructs a new RBResults object.
 
@@ -185,6 +185,11 @@ class RBResults(object):
         basename : str
             A name given to the "base" gate-label-set, usually "clifford",
             which coresponds to the gate labels used in `dataset`.
+
+        weight_data : bool, optional
+            Whether or not to compute and use weights for each data point for
+            the fit procedures.  Default is False; only works when 
+            `pre_avg = True`.
 
         alias_maps : dict of dicts, optional
             If not None, a dictionary whose keys name other (non-"base") 
@@ -246,6 +251,7 @@ class RBResults(object):
         self.alias_maps = alias_maps
         self.d = dim
         self.pre_avg = pre_avg
+        self.weight_data = weight_data
         self.success_spamlabel = success_spamlabel
         self.f0 = f0
         self.A0 = A0
@@ -571,7 +577,8 @@ class RBResults(object):
         from .rbcore import do_rb_base as _do_rb_base
         for dsBootstrap in bootstrapped_dataset_list:
             resample_results = _do_rb_base(dsBootstrap, base_gatestrings,
-                                           self.basename, alias_maps,
+                                           self.basename, self.weight_data,
+                                           alias_maps,
                                            self.success_spamlabel, self.d,
                                            self.pre_avg,self.f0, self.A0,
                                            self.ApB0, self.C0, self.f_bnd,
