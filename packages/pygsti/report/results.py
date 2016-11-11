@@ -631,6 +631,13 @@ class Results(object):
         fns['byGermTable'] = (fn, validate_LsAndGerms)
 
 
+        def fn(key, confidenceLevel, vb):
+            gsTgt, gsBest = setup()
+            return _generation.get_logl_projected_err_gen_table(
+                gsBest, gsTgt, self.gatestring_lists['final'], self.dataset)
+        fns['logLErrgenProjectionTable'] = (fn, validate_essential)
+
+
         # figure-containing tables
         def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
@@ -3523,7 +3530,8 @@ class Results(object):
                                'progressTable')
 
         appendix_tables = ('bestGatesetErrGenProjectionTargetMetricsTable',
-                           'bestGatesetErrGenProjectionSelfMetricsTable')
+                           'bestGatesetErrGenProjectionSelfMetricsTable',
+                           'logLErrgenProjectionTable')
         appendix_ls_and_germs_tables = ('byGermTable',)
 
         tables_to_blank = []

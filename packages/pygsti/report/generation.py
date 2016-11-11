@@ -1192,6 +1192,108 @@ def get_logl_bygerm_table(gateset, dataset, germs, strs, max_lengths,
     return table
 
 
+def get_logl_projected_err_gen_table(gateset, targetGateset,
+                                     gatestrings, dataset):
+    """
+    Create a table showing the log-likelihood for different projections of the
+    error generator.
+
+    Parameters
+    ----------
+    gateset : GateSet
+        The gate set whose error generator should be projected.
+
+    targetGateset : GateSet
+        The set of target (ideal) gates.
+
+    gatestrings : list
+        A list of GateString objects specifying which gate sequences to use
+        when computing the log-likelihood.
+
+    dataset : DataSet
+        The data set to use when computing the log-likelihood.
+
+    Returns
+    -------
+    ReportTable
+    """
+    gateLabels = list(gateset.gates.keys())  # gate labels
+    basisNm = gateset.get_basis_name()
+    basisDims = gateset.get_basis_dimension()
+
+    if basisNm != targetGateset.get_basis_name():
+        raise ValueError("Basis mismatch between gateset (%s) and target (%s)!"\
+                             % (basisNm, targetGateset.get_basis_name()))
+
+    #Do computation first
+    gsH = gateset.copy(); Np_H = 0
+    gsS = gateset.copy(); Np_S = 0
+    gsHS = gateset.copy(); Np_HS = 0
+    for gl in gateLabels:
+        gate = gateset.gates[gl]
+        targetGate = targetGateset.gates[gl]
+
+        hamProj, hamGens = _tools.pauliprod_errgen_projections(
+            gate, targetGate, "hamiltonian", basisNm, True)
+        stoProj, stoGens = _tools.pauliprod_errgen_projections(
+            gate, targetGate, "stochastic", basisNm, True)
+
+        ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)
+        sto_error_gen = _np.einsum('i,ijk', stoProj, stoGens)
+        ham_error_gen = _tools.std_to_pp(ham_error_gen)
+        sto_error_gen = _tools.std_to_pp(sto_error_gen)
+
+        gsH.gates[gl]  = _tools.gate_from_error_generator(
+            ham_error_gen, targetGate)
+        gsS.gates[gl]  = _tools.gate_from_error_generator(
+            sto_error_gen, targetGate)
+        gsHS.gates[gl] = _tools.gate_from_error_generator(
+            ham_error_gen+sto_error_gen, targetGate)
+
+        Np_H += len(hamProj)
+        Np_S += len(stoProj)
+        Np_HS += len(hamProj) + len(stoProj)
+
+
+    #Generate Table
+    colHeadings = { 'latex': ('Type','$2\Delta\\log(\\mathcal{L})$','$k$','$2\Delta\\log(\\mathcal{L})-k$',
+                              '$\sqrt{2k}$','$N_\\sigma$','$N_s$','$N_p$', 'Rating'),
+                    'html': ('Type','2&Delta;(log L)','k','2&Delta;(log L)-k',
+                             '&radic;<span style="text-decoration:overline;">2k</span>',
+                             'N<sub>sigma</sub>','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
+                    'text': ('Type','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','N_{sigma}','N_s','N_p', 'Rating'),
+                    'ppt': ('Type','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','N_{sigma}','N_s','N_p', 'Rating')
+                  }
+    table = _ReportTable(colHeadings, None)
+    gatesets = (gateset, gsHS, gsH, gsS)
+    gatesetTyps = ("Full","H + S","H","S")
+    Nps = (gateset.num_nongauge_params(), Np_HS, Np_H, Np_S)
+
+    logL_upperbound = _tools.logl_max(dataset, gatestrings)
+    Ns = len(gatestrings)*(len(dataset.get_spam_labels())-1) 
+     #number of independent parameters in dataset
+
+    for typ,gs,Np in zip(gatesetTyps, gatesets, Nps):
+        logl = _tools.logl( gs, dataset, gatestrings )
+        assert (logL_upperbound >= logl), "LogL upper bound violation!"
+        k = max(Ns-Np,0) #expected 2*(logL_ub-logl) mean
+        twoDeltaLogL = 2*(logL_upperbound - logl)
+        Nsig = (twoDeltaLogL-k)/_np.sqrt(2*k)
+
+        if   (twoDeltaLogL-k) < _np.sqrt(2*k): rating = 5
+        elif (twoDeltaLogL-k) < 2*k: rating = 4
+        elif (twoDeltaLogL-k) < 5*k: rating = 3
+        elif (twoDeltaLogL-k) < 10*k: rating = 2
+        else: rating = 1
+
+        table.addrow((typ,twoDeltaLogL,k,twoDeltaLogL-k,_np.sqrt(2*k),Nsig,Ns,Np,"<STAR>"*rating),
+           ('GatesetType','Normal','Normal','Normal','Normal','Rounded','Normal','Normal','Conversion'))
+
+    table.finish()
+    return table
+
+
+
 def get_gatestring_table(gsList, title, nCols=1):
     """
     Creates a 2*nCols-column table enumerating a list of gate strings.
@@ -1428,9 +1530,19 @@ def get_gates_vs_target_err_gen_boxes_table(gateset, targetGateset,
     nRows = len(gateset.gates)
     #nCols = len(colHeadings)
 
-    errgens = {'M': 0}
-    hamProjs = {'M': 0}
-    stoProjs = {'M': 0}
+    errgens = {'M': []}
+    hamProjs = {'M': []}
+    stoProjs = {'M': []}
+
+    def getMinMax(max_lst, M):
+        #return a [min,]max already in list if there's one within an order of magnitude
+        for mx in max_lst:
+            if 0.1 < mx/M < 10: return -mx,mx
+        return None
+            
+    def addMax(max_lst, M):
+        if not getMinMax(max_lst,M):
+            max_lst.append(M)
 
     #Do computation, so shared color scales can be computed
     for gl in gateLabels:
@@ -1444,25 +1556,25 @@ def get_gates_vs_target_err_gen_boxes_table(gateset, targetGateset,
             gate, targetGate, "stochastic", basisNm)
 
         absMax = _np.max(_np.abs(errgens[gl]))
-        errgens['M'] = max(errgens['M'], absMax)
+        addMax(errgens['M'], absMax)
         absMax = _np.max(_np.abs(hamProjs[gl]))
-        hamProjs['M'] = max(hamProjs['M'], absMax)
+        addMax(hamProjs['M'], absMax)
         absMax = _np.max(_np.abs(stoProjs[gl]))
-        stoProjs['M'] = max(stoProjs['M'], absMax)
+        addMax(stoProjs['M'], absMax)
 
     #Do plotting
     for gl in gateLabels:
         
-        m,M = -errgens['M'], errgens['M']
+        m,M = getMinMax(errgens['M'],_np.max(_np.abs(errgens[gl])))
         errgen_fig = _plotting.gate_matrix_boxplot(
             errgens[gl], None, m,M, save_to="", mxBasis=basisNm,
             mxBasisDims=basisDims)
 
-        m,M = -hamProjs['M'], hamProjs['M']
+        m,M = getMinMax(hamProjs['M'],_np.max(_np.abs(hamProjs[gl])))
         hamdecomp_fig = _plotting.pauliprod_projection_boxplot(
             hamProjs[gl], m, M, save_to="", boxLabels=True)
 
-        m,M = -stoProjs['M'], stoProjs['M']
+        m,M = getMinMax(stoProjs['M'],_np.max(_np.abs(stoProjs[gl])))
         stodecomp_fig = _plotting.pauliprod_projection_boxplot(
             stoProjs[gl], m, M, save_to="", boxLabels=True)
 
@@ -1548,6 +1660,15 @@ def get_projected_err_gen_comparison_table(gateset, targetGateset,
 
         infid = {}; trdist = {}; ddist = {}
         infid['Full']  = 1-_tools.process_fidelity(gate, cmpGate, basisNm)
+        #DEBUG!!!
+        #if compare_with == "estimate":
+        #    if not _np.isclose(infid['Full'],0.0):
+        #        print( "gate = \n",gate )
+        #        print( "cmp = \n",cmpGate )
+        #        print( "infidelity = ",infid['Full'] )
+        #        import pickle
+        #        pickle.dump(gate,open("debugGate.pkl","wb"))
+        #    assert(_np.isclose(infid['Full'],0.0))
         infid['H']     = 1-_tools.process_fidelity(gateH, cmpGate, basisNm)
         infid['S']     = 1-_tools.process_fidelity(gateS, cmpGate, basisNm)
         infid['H + S'] = 1-_tools.process_fidelity(gateHS, cmpGate, basisNm)

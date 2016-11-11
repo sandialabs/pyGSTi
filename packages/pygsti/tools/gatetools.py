@@ -724,8 +724,14 @@ def pauliprod_error_generators(dim, projection_type):
     assert(len(ppMxs) == d2)
     assert(_np.isclose(d*d,d2)) #d2 must be a perfect square
 
+    dbMxs = []
     lindbladMxs = _np.empty( (len(ppMxs),d2,d2), 'complex' )
     for i,ppMx in enumerate(ppMxs):
+        DB = _bt.hamiltonian_to_lindbladian(ppMx)
+        dbMxs.append( DB/_np.linalg.norm(DB) if abs(_np.linalg.norm(DB)) > 1e-9 else DB )
+        DB = _bt.stochastic_lindbladian(ppMx)
+        dbMxs.append( DB/_np.linalg.norm(DB) if abs(_np.linalg.norm(DB)) > 1e-9 else DB )
+
         if projection_type == "hamiltonian":
             lindbladMxs[i] = _bt.hamiltonian_to_lindbladian(ppMx) # in std basis
         elif projection_type == "stochastic":
@@ -733,6 +739,20 @@ def pauliprod_error_generators(dim, projection_type):
         else:
             raise ValueError("Invalid projection_type argument: %s"
                              % projection_type)
+        norm = _np.linalg.norm(lindbladMxs[i].flat)
+        if not _np.isclose(norm,0):
+            lindbladMxs[i] /= norm #normalize projector
+            assert(_np.isclose(_np.linalg.norm(lindbladMxs[i].flat),1.0))
+
+    #DEBUG!!!
+    for i in range(len(dbMxs)):
+        for j in range(i,len(dbMxs)):
+            dot = _np.vdot(dbMxs[i].flat, dbMxs[j].flat)
+            #print("Dot(%d,%d) = %s" % (i,j,str(dot)))
+            if i != j:
+                assert(_np.isclose(dot,0.0))
+            else:
+                assert(_np.isclose(dot,1.0) or _np.isclose(dot,0.0))
 
     return lindbladMxs
 
@@ -800,7 +820,7 @@ def pauliprod_errgen_projections(gate, targetGate, projection_type,
 
     projections = _np.empty( len(lindbladMxs), 'd' )
     for i,lindbladMx in enumerate(lindbladMxs):
-        proj = _np.real_if_close(_np.dot( errgen_std.flatten(), lindbladMx.flatten() ))
+        proj = _np.real_if_close(_np.vdot( errgen_std.flatten(), lindbladMx.flatten() ))
         assert(_np.isreal(proj))
         projections[i] = proj
 
