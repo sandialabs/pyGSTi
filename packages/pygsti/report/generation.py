@@ -1537,7 +1537,7 @@ def get_gates_vs_target_err_gen_boxes_table(gateset, targetGateset,
     def getMinMax(max_lst, M):
         #return a [min,]max already in list if there's one within an order of magnitude
         for mx in max_lst:
-            if 0.1 < mx/M < 10: return -mx,mx
+            if 0.9999 < mx/M < 10: return -mx,mx
         return None
             
     def addMax(max_lst, M):
