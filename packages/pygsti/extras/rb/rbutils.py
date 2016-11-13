@@ -629,67 +629,188 @@ def norm1to1(operator, n_samples=10000, return_list=False):
     else:
         return max(vals)
 
-def dataset_to_mkn_dict(dataset,seqs,success_spam_label):
+def dataset_to_summary_dict(dataset,seqs,success_spam_label,use_frequencies=False):
     """
     Maps an RB dataset to an ordered dictionary; keys are 
-    sequence lengths, values are arrays of length N (number of experimental samples) where
-    value of the i^th element is the total number of RB sequences of length M that saw
-    i successes.
-    """
+    sequence lengths, values are number of success counts or frequencies, where
+    value of the i^th element is the total number of successes seen for the 
+    i^th sequence of length m.  (Auxiliary keys map (m,'N') and (m,'K') to  
+    number of repetitions per sequence and number of sequences, respectively,
+    for sequences of length m.)"""
     output = _OrderedDict({})
-    N = None
-    for seq in seqs:
-        m = len(seq)
-        N_temp = dataset[seq].total()
-        if N is None:
-            N = N_temp
-        elif N_temp != N:
-            raise ValueError("Different N values discovered!")
-        n = dataset[seq][success_spam_label]
-        try:
-            output[m][n] += 1
-        except:
-            output[m] = _np.zeros(N+1)
-            output[m][n] += 1
-    return output
+    if not use_frequencies:
+#        N = None
+        for seq in seqs:
+            m = len(seq)
+            N_temp = int(_np.round(dataset[seq].total()))
+            try:
+                output[m,'N']
+            except:
+                output[m,'N'] = N_temp
+            if output[m,'N'] != N_temp:
+                raise ValueError("Different N values used at same m!")
+            try:
+                output[m,'K'] += 1
+            except:
+                output[m,'K'] = 1
+#            if N is None:
+#                N = N_temp
+#            elif N_temp != N:
+#                raise ValueError("Different N values discovered!")
+            n = dataset[seq][success_spam_label]
+            try:
+                output[m].append(n)
+            except:
+                output[m] = [n]
+        return output
+    else:
+#        N = None
+        for seq in seqs:
+            m = len(seq)
+#            N_temp = int(_np.round(dataset[seq].total()))
+#            if N is None:
+#                N = N_temp
+#            elif N_temp != N:
+#                raise ValueError("Different N values discovered!")
+            try:
+                output[m,'K'] += 1
+            except:
+                output[m,'K'] = 1
+            N = dataset[seq].total()
+            n = dataset[seq][success_spam_label]
+            frac = float(n) / float(N)
+            try:
+                output[m].append(frac)
+            except:
+                output[m] = [frac]
+        return output
 
-def mkn_dict_to_weighted_delta_f1_hat_dict(mkn_dict):
-    """
-    Maps mkn dict (defined in rbutils.dataset_to_mkn_dict) to 
-    weighted_f1_hat_dict.
-    """
-    weighted_f1_hat_dict = _OrderedDict({})
-    for m in mkn_dict.keys():
-        K = _np.sum(mkn_dict[m])
-        N = len(mkn_dict[m]) - 1
-        kn = mkn_dict[m]
-        f1_hat = 1. / (K * N) * _np.sum([n * kn[n] for n in xrange(N+1)])
-        weighted_f1_hat_dict[m] = f1_hat * (1. - f1_hat) / N
-    return weighted_f1_hat_dict
+def summary_dict_to_f1_hat_dict(summary_dict,use_frequencies=False):
+    f1_hat_dict = _OrderedDict({})
+    if not use_frequencies:
+        for m in summary_dict.keys():
+            if isinstance(m,int):
+                K = summary_dict[m,'K']
+                N = summary_dict[m,'N']
+                f1_hat_dict[m] = 1. / (N*K) * _np.sum(summary_dict[m])
+        return f1_hat_dict
+    else:
+        for m in summary_dict.keys():
+            if isinstance(m,int):
+                K = summary_dict[m,'K']
+                f1_hat_dict[m] = 1. / (K) * _np.sum(summary_dict[m])
+        return f1_hat_dict
 
-def mkn_dict_to_f_empirical_squared_dict(mkn_dict):
+def summary_dict_to_f_empirical_squared_dict(summary_dict,use_frequencies = False):
     """
-    Maps mkn dict (defined in rbutils.dataset_to_mkn_dict) to 
+    Maps summary dict (defined in rbutils.dataset_to_summary_dict) to 
     f_empirical_squared_dict.
     """
     f_empirical_squared_dict = _OrderedDict({})
-    for m in mkn_dict.keys():
-        K = _np.sum(mkn_dict[m])
-        N = len(mkn_dict[m]) - 1
-        kn = mkn_dict[m]
-        f_empirical_squared_dict[m] = 1. / (2 * K**2 * N**2) * _np.sum(
-                [ (i - j) * kn[i] * kn[j] for i in xrange(N+1) for j in xrange(N+1)])
-    return f_empirical_squared_dict
-    
-def mkn_dict_to_delta_f1_squared_dict(mkn_dict):
+    if not use_frequencies:
+        for m in summary_dict.keys():
+            if isinstance(m,int):
+                K = summary_dict[m,'K']#len(summary_dict[m])
+                bias_correction = K / (K + 1.)
+                N = summary_dict[m,'N']
+                f_empirical_squared_dict[m,'N'] = N
+                f_empirical_squared_dict[m] = bias_correction * 1. / (2 * K**2 * N**2) * _np.sum([(nl - nm)**2 for nl in summary_dict[m] for nm in summary_dict[m]])
+        return f_empirical_squared_dict
+    else:
+        for m in summary_dict.keys():
+            if isinstance(m,int):
+                K = summary_dict[m,'K']#len(summary_dict[m])
+                bias_correction = K / (K + 1.)
+                f_empirical_squared_dict[m] = bias_correction * 1. / (2 * K**2) * _np.sum([(fl - fm)**2 for fl in summary_dict[m] for fm in summary_dict[m]])
+        return f_empirical_squared_dict
+
+def summary_dict_to_delta_f1_squared_dict(summary_dict,infinite_data=True):
     """
-    Maps mkn dict (defined in rbutils.dataset_to_mkn_dict) to 
+    Maps summary dict (defined in rbutils.dataset_to_summary_dict) to 
     delta_f1_squared_dict.
     """
+#    if infinite_data and not use_frequencies:
+#        raise ValueError('If infinite_data is True, then use_frequencies must be True too!')
     delta_f1_squared_dict = _OrderedDict({})
-    f_empircal_squared_dict = mkn_dict_to_f_empircal_squared_dict(mkn_dict)
-    weighted_delta_f1_hat_dict = mkn_dict_to_weighted_delta_f1_hat_dict(mkn_dict)
-    for m in mkn_dict.keys():
-        K = _np.sum(mkn_dict[m])
-        delta_f1_squared_dict[m] = 1. / K * _np.max(f_empircal_squared_dict[m],weighted_delta_f1_hat_dict[m])
+    if infinite_data:
+        use_frequencies = True
+    else:
+        use_frequencies = False
+    delta_f_empirical_squared_dict = summary_dict_to_f_empirical_squared_dict(summary_dict,use_frequencies)
+    f1_hat_dict = summary_dict_to_f1_hat_dict(summary_dict,use_frequencies)
+    for m in summary_dict.keys():
+        if isinstance(m,int):
+            K = summary_dict[m,'K']
+            if infinite_data:
+                term_1 = 1. / (2*K)
+            else:
+                N = summary_dict[m,'N']
+                term_1 = f1_hat_dict[m] * (1 - f1_hat_dict[m]) / float(N)
+            term_2 = delta_f_empirical_squared_dict[m]
+            delta_f1_squared_dict[m] = 1. / K * _np.max([term_1, term_2])
     return delta_f1_squared_dict
+
+# def dataset_to_mkn_dict(dataset,seqs,success_spam_label):
+#     """
+#     Maps an RB dataset to an ordered dictionary; keys are 
+#     sequence lengths, values are arrays of length N (number of experimental samples) where
+#     value of the i^th element is the total number of RB sequences of length M that saw
+#     i successes.
+#     """
+#     output = _OrderedDict({})
+#     N = None
+#     for seq in seqs:
+#         m = len(seq)
+#         N_temp = int(_np.round(dataset[seq].total()))
+#         if N is None:
+#             N = N_temp
+#         elif N_temp != N:
+#             raise ValueError("Different N values discovered!")
+#         n = dataset[seq][success_spam_label]
+#         try:
+#             output[m][n] += 1
+#         except:
+#             output[m] = _np.zeros(N+1)
+#             output[m][n] += 1
+#     return output
+# 
+# def mkn_dict_to_weighted_delta_f1_hat_dict(mkn_dict):
+#     """
+#     Maps mkn dict (defined in rbutils.dataset_to_mkn_dict) to 
+#     weighted_f1_hat_dict.
+#     """
+#     weighted_f1_hat_dict = _OrderedDict({})
+#     for m in mkn_dict.keys():
+#         K = _np.sum(mkn_dict[m])
+#         N = len(mkn_dict[m]) - 1
+#         kn = mkn_dict[m]
+#         f1_hat = 1. / (K * N) * _np.sum([n * kn[n] for n in xrange(N+1)])
+#         weighted_f1_hat_dict[m] = f1_hat * (1. - f1_hat) / N
+#     return weighted_f1_hat_dict
+# 
+# def mkn_dict_to_f_empirical_squared_dict(mkn_dict):
+#     """
+#     Maps mkn dict (defined in rbutils.dataset_to_mkn_dict) to 
+#     f_empirical_squared_dict.
+#     """
+#     f_empirical_squared_dict = _OrderedDict({})
+#     for m in mkn_dict.keys():
+#         K = _np.sum(mkn_dict[m])
+#         N = len(mkn_dict[m]) - 1
+#         kn = mkn_dict[m]
+#         f_empirical_squared_dict[m] = 1. / (2 * K**2 * N**2) * _np.sum(
+#                 [ (i - j) * kn[i] * kn[j] for i in xrange(N+1) for j in xrange(N+1)])
+#     return f_empirical_squared_dict
+#     
+# def mkn_dict_to_delta_f1_squared_dict(mkn_dict):
+#     """
+#     Maps mkn dict (defined in rbutils.dataset_to_mkn_dict) to 
+#     delta_f1_squared_dict.
+#     """
+#     delta_f1_squared_dict = _OrderedDict({})
+#     f_empirical_squared_dict = mkn_dict_to_f_empirical_squared_dict(mkn_dict)
+#     weighted_delta_f1_hat_dict = mkn_dict_to_weighted_delta_f1_hat_dict(mkn_dict)
+#     for m in mkn_dict.keys():
+#         K = _np.sum(mkn_dict[m])
+#         delta_f1_squared_dict[m] = 1. / K * _np.max(f_empirical_squared_dict[m],weighted_delta_f1_hat_dict[m])
+#     return delta_f1_squared_dict
