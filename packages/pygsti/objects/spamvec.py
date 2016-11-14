@@ -254,6 +254,33 @@ class StaticSPAMVec(SPAMVec):
             raise ValueError("Argument must be length %d" % self.dim)
         self.base[:,:] = vec
 
+    def transform(self, S, typ):
+        """
+        Update SPAM (column) vector V as inv(S) * V or S^T * V for prep and
+        effect SPAM vectors, respectively (depending on the value of `typ`). 
+
+        Note that this is equivalent to state preparation vectors getting 
+        mapped: `rho -> inv(S) * rho` and the *transpose* of effect vectors
+        being mapped as `E^T -> E^T * S`.
+
+        Generally, the tranform function updates the *parameters* of 
+        the SPAM vector such that the resulting vector is altered as 
+        described above.  If such an update cannot be done (because
+        the gate parameters do not allow for it), ValueError is raised.
+
+        In this case, a ValueError is *always* raised, since a 
+        StaticSPAMVec has no parameters.
+
+        Parameters
+        ----------
+        S : GaugeGroup.element
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
+            
+        typ : { 'prep', 'effect' }
+            Which type of SPAM vector is being transformed (see above).
+        """
+        raise ValueError("Invalid transform for StaticSPAMVec - no parameters")
 
 
     def num_params(self):
@@ -377,6 +404,40 @@ class FullyParameterizedSPAMVec(SPAMVec):
         if(vec.size != self.dim):
             raise ValueError("Argument must be length %d" % self.dim)
         self.base[:,:] = vec
+
+
+    def transform(self, S, typ):
+        """
+        Update SPAM (column) vector V as inv(S) * V or S^T * V for prep and
+        effect SPAM vectors, respectively (depending on the value of `typ`). 
+
+        Note that this is equivalent to state preparation vectors getting 
+        mapped: `rho -> inv(S) * rho` and the *transpose* of effect vectors
+        being mapped as `E^T -> E^T * S`.
+
+        Generally, the tranform function updates the *parameters* of 
+        the SPAM vector such that the resulting vector is altered as 
+        described above.  If such an update cannot be done (because
+        the gate parameters do not allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        S : GaugeGroup.element
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
+            
+        typ : { 'prep', 'effect' }
+            Which type of SPAM vector is being transformed (see above).
+        """
+        if typ == 'prep':
+            Si  = S.get_tranform_matrix_inverse()
+            self.set_vector(_np.dot(Si, self))
+        elif typ == 'effect':
+            Smx = S.get_tranform_matrix()
+            self.set_vector(_np.dot(_np.transpose(Smx),self)) 
+              #Evec^T --> ( Evec^T * S )^T
+        else:
+            raise ValueError("Invalid typ argument: %s" % typ)
 
 
     def num_params(self):
@@ -524,6 +585,40 @@ class TPParameterizedSPAMVec(SPAMVec):
             raise ValueError("Cannot create TPParameterizedSPAMVec: " +
                              "first element must equal %g!" % firstEl)
         self.base[1:,:] = vec[1:,:]
+
+        
+    def transform(self, S, typ):
+        """
+        Update SPAM (column) vector V as inv(S) * V or S^T * V for prep and
+        effect SPAM vectors, respectively (depending on the value of `typ`). 
+
+        Note that this is equivalent to state preparation vectors getting 
+        mapped: `rho -> inv(S) * rho` and the *transpose* of effect vectors
+        being mapped as `E^T -> E^T * S`.
+
+        Generally, the tranform function updates the *parameters* of 
+        the SPAM vector such that the resulting vector is altered as 
+        described above.  If such an update cannot be done (because
+        the gate parameters do not allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        S : GaugeGroup.element
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
+            
+        typ : { 'prep', 'effect' }
+            Which type of SPAM vector is being transformed (see above).
+        """
+        if typ == 'prep':
+            Si  = S.get_tranform_matrix_inverse()
+            self.set_vector(_np.dot(Si, self))
+        elif typ == 'effect':
+            Smx = S.get_tranform_matrix()
+            self.set_vector(_np.dot(_np.transpose(Smx),self)) 
+              #Evec^T --> ( Evec^T * S )^T
+        else:
+            raise ValueError("Invalid typ argument: %s" % typ)
 
 
     def num_params(self):

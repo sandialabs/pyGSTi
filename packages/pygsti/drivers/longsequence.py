@@ -22,8 +22,8 @@ from .. import io as _io
 def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                          prepStrsListOrFilename, effectStrsListOrFilename,
                          germsListOrFilename, maxLengths, gateLabels=None,
-                         weightsDict=None, fidPairs=None, constrainToTP=True,
-                         gaugeOptToCPTP=False, gaugeOptRatio=0.001,
+                         weightsDict=None, fidPairs=None,
+                         gaugeOptRatio=0.001,
                          gaugeOptItemWeights=None, objective="logl",
                          advancedOptions={}, lsgstLists=None,
                          truncScheme="whole germ powers", comm=None,
@@ -45,9 +45,9 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     "logl"`` to maximize the true log-likelihood instead of minimizing the
     chi-squared function.
 
-    Once computed, the gate set estimates are gauge optimized to the CPTP space
-    (if ``gaugeOptToCPTP == True``) and then to the target gate set (using
-    `gaugeOptRatio` and `gaugeOptItemWeights`). A :class:`~pygsti.report.Results`
+    Once computed, the gate set estimates are optionally gauge optimized to
+    the CPTP space and then to the target gate set (using `gaugeOptRatio`
+    and `gaugeOptItemWeights`). A :class:`~pygsti.report.Results`
     object is returned, which encapsulates the input and outputs of this GST
     analysis, and can generate final end-user output such as reports and
     presentations.
@@ -100,14 +100,6 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         the state preparation and measurement fiducial strings respectively. If
         `fidPairs` is a dict, then the keys must be germ strings and values are
         lists of 2-tuples as in the previous case.
-
-    constrainToTP : bool, optional
-        Whether to constrain GST to trace-preserving gatesets.
-
-    gaugeOptToCPTP : bool, optional
-        If ``True``, resulting gate sets are first optimized to CPTP and then
-        to the target.  If ``False``, gate sets are only optimized to the
-        target gate set.
 
     gaugeOptRatio : float, optional
         The ratio spamWeight/gateWeight used for gauge optimizing to the target
@@ -233,70 +225,86 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     gate_dim = gs_target.get_dimension()
     if comm is None or comm.Get_rank() == 0:
 
+        #Compute starting point
         if startingPt == "LGST":
             specs = _construction.build_spam_specs(prepStrs=prepStrs, effectStrs=effectStrs,
                                                    prep_labels=gs_target.get_prep_labels(),
                                                    effect_labels=gs_target.get_effect_labels())
-            gs_lgst = _alg.do_lgst(ds, specs, gs_target, svdTruncateTo=gate_dim,
-                                   verbosity=printer)
-    
+            gs_start = _alg.do_lgst(ds, specs, gs_target, svdTruncateTo=gate_dim,
+                                    verbosity=printer) # returns a gateset with the *same*
+                                                       # parameterizations as gs_target
         elif startingPt == "target":
-            gs_lgst = gs_target.copy()
-    
+            gs_start = gs_target.copy()
         else:
             raise ValueError("Invalid starting point: %s" % startingPt)
         
         tNxt = _time.time()
-        profiler.add_time('do_long_sequence_gst: LGST',tRef); tRef=tNxt
-    
-        if constrainToTP: #gauge optimize (and contract if needed) to TP, then lock down first basis element as the identity
-            #TODO: instead contract to vSPAM? (this could do more than just alter the 1st element...)
-            gs_lgst.set_all_parameterizations("full") #make sure we can do gauge optimization
-            minPenalty, _, gs_in_TP = _alg.optimize_gauge(
-                gs_lgst, "TP",  returnAll=True, spamWeight=1.0,
-                gateWeight=1.0, verbosity=printer)
-                #Note: no  itemWeights=gaugeOptItemWeights here (LGST)
-        
-            if minPenalty > 0:
-                gs_in_TP = _alg.contract(gs_in_TP, "TP")
-                if minPenalty > 1e-5:
-                    _warnings.warn("Could not gauge optimize to TP (penalty=%g), so contracted LGST gateset to TP" % minPenalty)
-        
-            if startingPt == "LGST": #only need to gauge optmize LGST result
-                gs_after_gauge_opt = _alg.optimize_gauge(
-                    gs_in_TP, "target", targetGateset=gs_target, constrainToTP=True,
-                    spamWeight=1.0, gateWeight=1.0)
-                    #Note: no  itemWeights=gaugeOptItemWeights here (LGST)
-    
-                firstElIdentityVec = _np.zeros( (gate_dim,1) )
-                firstElIdentityVec[0] = gate_dim**0.25 # first basis el is assumed = sqrt(gate_dim)-dimensional identity density matrix
-                gs_after_gauge_opt.povm_identity = firstElIdentityVec # declare that this basis has the identity as its first element
-            else:
-                gs_after_gauge_opt = gs_in_TP.copy()
-    
-        else: # no TP constraint, just gauge optimize
-            if startingPt == "LGST": #don't need to gauge optimize 'target' starting pt
-                try:
-                    printer.log("\nGauge Optimizing without constraints...",2)
-                    gs_after_gauge_opt = _alg.optimize_gauge(
-                        gs_lgst, "target", targetGateset=gs_target,
-                        spamWeight=1.0, gateWeight=1.0)
-                    printer.log("Success!",2)
-                    #Note: no  itemWeights=gaugeOptItemWeights here (LGST)
-                except:
-                    try:
-                        printer.log("Failed! Trying with TP constraint...",2)
-                        gs_after_gauge_opt = _alg.optimize_gauge(
-                            gs_lgst, "target", targetGateset=gs_target, 
-                            constrainToTP=True, spamWeight=1.0, gateWeight=1.0)
-                        printer.log("Success!",2)
-                        #Note: no  itemWeights=gaugeOptItemWeights here (LGST)
-                    except:
-                        printer.log("Still Failed! No gauge optimization " +
-                                    "performed on LGST estimate.",2)
-                        gs_after_gauge_opt = gs_lgst.copy()
-            else:
-                gs_after_gauge_opt = gs_lgst.copy()
+        profiler.add_time('do_long_sequence_gst: Starting Point (%s)'
+                          % startingPt,tRef); tRef=tNxt
+
+        #Gauge optimimize starting point to the target (historical, and
+        # sometimes seems to help in practice, since it's gauge optimizing
+        # to something in the realm of physical gates (e.g. is CPTP)
+        gs_after_gauge_opt = _alg.gaugeopt_to_target(gs_start, gs_target)
+          #use all *default* weights when optimizing the starting point
+
+        if startingPt == "LGST":
+            # reset the POVM identity to that of the target after gauge optimizing
+            # to the target if LGST was used.  Essentially, we declare that this 
+            # basis (gauge) has the same identity as the target (typically the
+            # first basis element).
+            gs_after_gauge_opt.povm_identity = gs_target.povm_identity.copy()
+                
+
+
+#        if constrainToTP: #gauge optimize (and contract if needed) to TP, then lock down first basis element as the identity
+#            #TODO: instead contract to vSPAM? (this could do more than just alter the 1st element...)
+#            gs_lgst.set_all_parameterizations("full") #make sure we can do gauge optimization
+#            minPenalty, _, gs_in_TP = _alg.optimize_gauge(
+#                gs_lgst, "TP",  returnAll=True, spamWeight=1.0,
+#                gateWeight=1.0, verbosity=printer)
+#                #Note: no  itemWeights=gaugeOptItemWeights here (LGST)
+#        
+#            if minPenalty > 0:
+#                gs_in_TP = _alg.contract(gs_in_TP, "TP")
+#                if minPenalty > 1e-5:
+#                    _warnings.warn("Could not gauge optimize to TP (penalty=%g), so contracted LGST gateset to TP" % minPenalty)
+#        
+#            if startingPt == "LGST": #only need to gauge optmize LGST result
+#                gs_after_gauge_opt = _alg.optimize_gauge(
+#                    gs_in_TP, "target", targetGateset=gs_target, constrainToTP=True,
+#                    spamWeight=1.0, gateWeight=1.0)
+#                    #Note: no  itemWeights=gaugeOptItemWeights here (LGST)
+#    
+#                firstElIdentityVec = _np.zeros( (gate_dim,1) )
+#                firstElIdentityVec[0] = gate_dim**0.25 # first basis el is assumed = sqrt(gate_dim)-dimensional identity density matrix
+#                gs_after_gauge_opt.povm_identity = firstElIdentityVec # declare that this basis has the identity as its first element
+#            else:
+#                gs_after_gauge_opt = gs_in_TP.copy()
+#    
+#        else: # no TP constraint, just gauge optimize
+#            if startingPt == "LGST": #don't need to gauge optimize 'target' starting pt
+#                try:
+#                    printer.log("\nGauge Optimizing without constraints...",2)
+#                    gs_after_gauge_opt = _alg.optimize_gauge(
+#                        gs_lgst, "target", targetGateset=gs_target,
+#                        spamWeight=1.0, gateWeight=1.0)
+#                    printer.log("Success!",2)
+#                    #Note: no  itemWeights=gaugeOptItemWeights here (LGST)
+#                except:
+#                    try:
+#                        printer.log("Failed! Trying with TP constraint...",2)
+#                        gs_after_gauge_opt = _alg.optimize_gauge(
+#                            gs_lgst, "target", targetGateset=gs_target, 
+#                            constrainToTP=True, spamWeight=1.0, gateWeight=1.0)
+#                        printer.log("Success!",2)
+#                        #Note: no  itemWeights=gaugeOptItemWeights here (LGST)
+#                    except:
+#                        printer.log("Still Failed! No gauge optimization " +
+#                                    "performed on LGST estimate.",2)
+#                        gs_after_gauge_opt = gs_lgst.copy()
+#            else:
+#                gs_after_gauge_opt = gs_lgst.copy()
     
             #TODO: set identity vector, or leave as is, which assumes LGST had the right one and contraction doesn't change it ??
             # Really, should we even allow use of the identity vector when doing a non-TP-constrained optimization?
@@ -304,11 +312,11 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         #Advanced Options can specify further manipulation of LGST seed
         if advancedOptions.get('contractLGSTtoCPTP',False):
             gs_after_gauge_opt = _alg.contract(gs_after_gauge_opt, "CPTP")
-        if advancedOptions.get('depolarizeLGST',0) > 0:
-            gs_after_gauge_opt = gs_after_gauge_opt.depolarize(gate_noise=advancedOptions['depolarizeLGST'])
+        if advancedOptions.get('depolarizeInitial',0) > 0:
+            gs_after_gauge_opt = gs_after_gauge_opt.depolarize(gate_noise=advancedOptions['depolarizeInitial'])
     
-        if constrainToTP:
-            gs_after_gauge_opt.set_all_parameterizations("TP")
+#        if constrainToTP:
+#            gs_after_gauge_opt.set_all_parameterizations("TP")
 
         if comm is not None: #broadcast starting gate set
             comm.bcast(gs_after_gauge_opt, root=0)
@@ -356,54 +364,50 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     tNxt = _time.time()
     profiler.add_time('do_long_sequence_gst: total long-seq. opt.',tRef); tRef=tNxt
 
-    #Run the gatesets through gauge optimization, first to CPTP then to target
-    #   so fidelity and frobenius distance w/targets is more meaningful
-    if gaugeOptToCPTP:
-        printer.log("\nGauge Optimizing to CPTP...",2)
-        go_gs_lsgst_list = [_alg.optimize_gauge(
-                gs,'CPTP',constrainToTP=constrainToTP) for gs in gs_lsgst_list]
-        #Note: don't set itemWeights in optimize_gauge (doesn't apply to CPTP)
-
-        tNxt = _time.time()
-        profiler.add_time('do_long_sequence_gst: gauge opt to CPTP',tRef); tRef=tNxt
-    else:
-        go_gs_lsgst_list = gs_lsgst_list
-
-    #Note: we used to make constrainToCP contingent on whether each
-    # gateset was already in CP, i.e. only constrain if
-    # _tools.sum_of_negative_choi_evals(gs) < 1e-8.  But we rarely use
-    # CP constraints, and this complicates the logic -- so now when
-    # gaugeOptToCPTP == True, always constrain to CP.
+    #Do final gauge optimization
     gaugeOptType = advancedOptions.get("gauge optimization", "target")
-    if gaugeOptType == "target":
-        go_params = _collections.OrderedDict([
-                ('toGetTo', 'target'),
-                ('constrainToTP', constrainToTP),
-                ('constrainToCP', gaugeOptToCPTP),
-                ('gateWeight', 1.0),
-                ('spamWeight', gaugeOptRatio),
-                ('targetGatesMetric',"frobenius"),
-                ('targetSpamMetric',"frobenius"),
-                ('itemWeights', gaugeOptItemWeights) ])
-    
-        for i, gs in enumerate(go_gs_lsgst_list):
-            args = go_params.copy()
-            args['gateset'] = gs
-            args['targetGateset'] = gs_target
-            try:
-                go_gs_lsgst_list[i] = _alg.optimize_gauge(**args)
-            except:
-                if not go_params['constrainToTP']:
-                    go_params['constrainToTP'] = True
-                    try:
-                        go_gs_lsgst_list[i] = _alg.optimize_gauge(**args)
-                    except:
-                        pass
+    go_gs_lsgst_list = gs_lsgst_list
+    go_params_list = []
 
-        tNxt = _time.time()
-        profiler.add_time('do_long_sequence_gst: gauge opt to target',tRef); tRef=tNxt
+    if gaugeOptType in ("CPTP then target", "target", "CPTP"):
+        if "CPTP" in gaugeOptType:
+            printer.log("\nGauge Optimizing to CPTP...",2)
+            go_params = _collections.OrderedDict([
+                    ('CPpenalty', 1.0),
+                    ('TPpenalty', 1.0),
+                    ('validSpamPenalty', 1.0) ])
+            go_gs_lsgst_list = [
+                _alg.gaugeopt_to_target(gs, None, **go_params) 
+                for gs in go_gs_lsgst_list]
+            tNxt = _time.time()
+            profiler.add_time('do_long_sequence_gst: gauge opt to CPTP',tRef); tRef=tNxt
+            go_params_list.append(go_params)
+
+        if "target" in gaugeOptType:
+            printer.log("\nGauge Optimizing to target...",2)
+            CPTPpenalty = 1.0 if ("CPTP" in gaugeOptType) else 0
+            itemWeights = { 'gates': 1.0, 'spam': gaugeOptRatio }
+            itemWeights.update(gaugeOptItemWeights)
+                            
+            go_params = _collections.OrderedDict([
+                    ('itemWeights', itemWeights),
+                    ('CPpenalty', CPTPpenalty),
+                    ('TPpenalty', CPTPpenalty),
+                    ('validSpamPenalty', CPTPpenalty),
+                    ('gatesMetric',"frobenius"),
+                    ('spamMetric',"frobenius") ])
+            go_gs_lsgst_list = [
+                _alg.gaugeopt_to_target(gs, gs_target, **go_params) 
+                for gs in go_gs_lsgst_list]
+
+            tNxt = _time.time()
+            profiler.add_time('do_long_sequence_gst: gauge opt to target',tRef); tRef=tNxt
+            go_params_list.append(go_params)
+
+    elif gaugeOptType == "none":
+        go_params_list.append( _collections.OrderedDict() )
     else:
-        go_params = _collections.OrderedDict()
+        raise ValueError("Invalid gauge optmization type: %s" % gaugeOptType)
 
     truncFn = _construction.stdlists._getTruncFunction(truncScheme)
 
@@ -411,7 +415,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     ret.init_Ls_and_germs(objective, gs_target, ds,
                         gs_after_gauge_opt, maxLengths, germs,
                         go_gs_lsgst_list, lsgstLists, prepStrs, effectStrs,
-                        truncFn,  constrainToTP, fidPairs, gs_lsgst_list)
+                        truncFn, fidPairs, gs_lsgst_list)
     ret.parameters['minProbClip'] = \
         advancedOptions.get('minProbClip',1e-4)
     ret.parameters['minProbClipForWeighting'] = \
@@ -423,7 +427,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     ret.parameters['defaultDirectory'] = default_dir
     ret.parameters['defaultBasename'] = default_base
     ret.parameters['memLimit'] = advancedOptions.get('memoryLimitInBytes',None)
-    ret.parameters['gaugeOptParams'] = go_params
+    ret.parameters['gaugeOptParams'] = go_params_list
 
     profiler.add_time('do_long_sequence_gst: results initialization',tRef)
     ret.parameters['profiler'] = profiler

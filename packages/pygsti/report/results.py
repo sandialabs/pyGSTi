@@ -17,7 +17,7 @@ import itertools   as _itertools
 from ..objects      import gatestring           as _gs
 from ..objects      import VerbosityPrinter
 from ..construction import spamspecconstruction as _ssc
-from ..algorithms   import optimize_gauge       as _optimizeGauge
+from ..algorithms   import gaugeopt_to_target   as _optimizeGauge
 from ..tools        import listtools            as _lt
 from ..             import _version
 
@@ -85,7 +85,6 @@ class Results(object):
 
         # Set default parameter values
         self.parameters = { 'objective': None,
-                            'constrainToTP': None,
                             'weights':None,
                             'minProbClip': 1e-6,
                             'minProbClipForWeighting': 1e-4,
@@ -100,7 +99,7 @@ class Results(object):
 
 
     def init_single(self, objective, targetGateset, dataset, gatesetEstimate,
-                    gatestring_list, constrainToTP, gatesetEstimate_noGaugeOpt=None):
+                    gatestring_list, gatesetEstimate_noGaugeOpt=None):
         """
         Initialize this Results object from the inputs and outputs of a
         single (non-iterative) GST method.
@@ -124,10 +123,6 @@ class Results(object):
         gatestring_list : list of GateStrings
             The list of gate strings used to optimize the objective.
 
-        constrainToTP : boolean
-            Whether or not the gatesetEstimate was constrained to lie
-            within TP during the objective optimization.
-
         gatesetEstimate_noGaugeOpt : GateSet, optional
             The value of the estimated gate set *before* any gauge
             optimization was performed on it.
@@ -146,7 +141,6 @@ class Results(object):
         self.gatestring_lists['final'] = gatestring_list
         self.dataset = dataset
         self.parameters['objective'] = objective
-        self.parameters['constrainToTP'] = constrainToTP
 
         if gatesetEstimate_noGaugeOpt is not None:
             self.gatesets['iteration estimates pre gauge opt'] = \
@@ -157,7 +151,7 @@ class Results(object):
 
     def init_Ls_and_germs(self, objective, targetGateset, dataset,
                               seedGateset, Ls, germs, gatesetsByL, gateStringListByL,
-                              prepStrs, effectStrs, truncFn, constrainToTP, fidPairs=None,
+                              prepStrs, effectStrs, truncFn, fidPairs=None,
                               gatesetsByL_noGaugeOpt=None):
 
         """
@@ -210,10 +204,6 @@ class Results(object):
             gate string.  For example, see
             pygsti.construction.repeat_with_max_length.
 
-        constrainToTP : boolean
-            Whether or not the gatesetEstimate was constrained to lie
-            within TP during the objective optimization.
-
         fidPairs : list or dict, optional
             Specifies a subset of all prepStr,effectStr string pairs to be used in
             reports.  If `fidPairs` is a list, each element of `fidPairs` is a
@@ -253,7 +243,6 @@ class Results(object):
 
         self.dataset = dataset
         self.parameters['objective'] = objective
-        self.parameters['constrainToTP'] = constrainToTP
         if gatesetsByL_noGaugeOpt is not None:
             self.gatesets['iteration estimates pre gauge opt'] = \
                 gatesetsByL_noGaugeOpt
@@ -1095,40 +1084,30 @@ class Results(object):
 
             gsTarget = self.gatesets['target']
             gsBestEstimate = self.gatesets['final estimate']
-            constrainToTP = self.parameters['constrainToTP']
 
             printer.log("Performing gauge transforms for appendix...")
 
             best_gs_gauges = _collections.OrderedDict()
 
             best_gs_gauges['Target'] = _optimizeGauge(
-                gsBestEstimate, "target", targetGateset=gsTarget,
-                constrainToTP=constrainToTP, gateWeight=1.0,
-                spamWeight=1.0, verbosity=vb)
+                gsBestEstimate, gsTarget, {'gates': 1.0, 'spam': 1.0},
+                verbosity=vb)
 
             best_gs_gauges['TargetSpam'] = _optimizeGauge(
-                gsBestEstimate, "target", targetGateset=gsTarget,
-                verbosity=vb, gateWeight=0.01, spamWeight=0.99,
-                constrainToTP=constrainToTP)
+                gsBestEstimate, gsTarget, {'gates': 1e-3, 'spam': 1.0},
+                verbosity=vb)
 
             best_gs_gauges['TargetGates'] = _optimizeGauge(
-                gsBestEstimate, "target", targetGateset=gsTarget,
-                verbosity=vb, gateWeight=0.99, spamWeight=0.01,
-                constrainToTP=constrainToTP)
+                gsBestEstimate, gsTarget, {'gates': 1.0, 'spam': 1e-3},
+                verbosity=vb)
 
             best_gs_gauges['CPTP'] = _optimizeGauge(
-                gsBestEstimate, "CPTP and target",
-                targetGateset=gsTarget, verbosity=vb,
-                targetFactor=1.0e-7, constrainToTP=constrainToTP)
+                gsBestEstimate, gsTarget, CPpenalty=1e5, TPpenalty=1e5,
+                validSpamPenalty=1e5, verbosity=vb)
 
-            if constrainToTP:
-                best_gs_gauges['TP'] = best_gs_gauges['Target'].copy()
-                  #assume best_gs is already in TP, so just optimize to
-                  # target (done above)
-            else:
-                best_gs_gauges['TP'] = _optimizeGauge(
-                    gsBestEstimate, "TP and target",
-                    targetGateset=gsTarget, targetFactor=1.0e-7)
+            best_gs_gauges['TP'] = _optimizeGauge(
+                gsBestEstimate, gsTarget, TPpenalty=1e5, verbosity=vb)
+
             return best_gs_gauges
         fns['gaugeOptAppendixGatesets'] = (fn, validate_essential)
 
