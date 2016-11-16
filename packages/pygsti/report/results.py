@@ -14,6 +14,7 @@ import collections as _collections
 import matplotlib  as _matplotlib
 import itertools   as _itertools
 
+from ..             import objects              as _objs
 from ..objects      import gatestring           as _gs
 from ..objects      import VerbosityPrinter
 from ..construction import spamspecconstruction as _ssc
@@ -3972,6 +3973,8 @@ def _to_pdfinfo(list_of_keyval_tuples):
             sanitized_val = "Dict[" + \
                 ", ".join([ "%s: %s" % (sanitize(k),sanitize(v)) for k,v
                             in val.items()]) + "]"
+        elif isinstance(val, _objs.GateSet):
+            sanitized_val = "GATESET_DATA"
         else:
             sanitized_val = sanitize_str( str(val) )
         return sanitized_val

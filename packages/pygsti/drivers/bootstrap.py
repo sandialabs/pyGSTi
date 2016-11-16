@@ -201,8 +201,7 @@ def make_bootstrap_gatesets(numGateSets, inputDataSet, generationMethod,
         print("Running MLGST Iteration %d " % run)
         results = _do_long_sequence_gst(
             datasetList[run], targetGateSet, fiducialPrep, fiducialMeasure,
-            germs, maxLengths, lsgstLists=lsgstLists,
-            advancedOptions={'verbosity':verbosity} )
+            germs, maxLengths, lsgstLists=lsgstLists, verbosity=verbosity)
         gatesetList.append(results.gatesets['final estimate'])
 
     if not returnData:

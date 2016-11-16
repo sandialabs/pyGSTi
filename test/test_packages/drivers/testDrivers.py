@@ -56,18 +56,14 @@ class TestDriversMethods(DriversTestCase):
         ts = "whole germ powers"
 
         maxLens = self.maxLens
-        result = pygsti.do_long_sequence_gst(
+        result = self.runSilent(pygsti.do_long_sequence_gst,
                                 ds, std.gs_target, std.fiducials, std.fiducials,
-                                std.germs, maxLens, truncScheme=ts) #self.runSilent(
+                                std.germs, maxLens, advancedOptions={'truncScheme': ts})
 
         result = self.runSilent(pygsti.do_long_sequence_gst,
                                 ds, std.gs_target, std.fiducials, std.fiducials,
-                                std.germs, maxLens, truncScheme=ts, objective="chi2")
-
-        #Removed b/c no constrainToTP argument
-        #result = self.runSilent(pygsti.do_long_sequence_gst,
-        #                        ds, std.gs_target, std.fiducials, std.fiducials,
-        #                        std.germs, maxLens, truncScheme=ts, constrainToTP=False)
+                                std.germs, maxLens, objective="chi2",
+                                advancedOptions={'truncScheme': ts})
 
 
         #Try using files instead of objects
@@ -83,22 +79,23 @@ class TestDriversMethods(DriversTestCase):
                                 temp_files + "/driver_fiducials.txt",
                                 temp_files + "/driver_fiducials.txt",
                                 temp_files + "/driver_germs.txt",
-                                maxLens, truncScheme=ts)
+                                maxLens, advancedOptions={'truncScheme': ts})
 
-        #Try using effectStrs == None, gaugeOptToCPTP, and advanced options
+        #Try using effectStrs == None and some advanced options
         result = self.runSilent(pygsti.do_long_sequence_gst,
                                 ds, std.gs_target, std.fiducials, None,
-                                std.germs, maxLens, truncScheme=ts,
-                                advancedOptions={'contractInitialToCPTP': True,
-                                                 'depolarizeInitial': 0.05,
-                                                 'gauge optimization': "CPTP then target"})
+                                std.germs, maxLens,
+                                advancedOptions={'contractStartToCPTP': True,
+                                                 'depolarizeStart': 0.05,
+                                                 'truncScheme': ts})
 
 
         #Check errors
         with self.assertRaises(ValueError):
             self.runSilent(pygsti.do_long_sequence_gst,
                            ds, std.gs_target, std.fiducials, None,
-                           std.germs, maxLens, truncScheme=ts, objective="FooBar") #bad objective
+                           std.germs, maxLens, objective="FooBar",
+                           advancedOptions={'truncScheme': ts}) #bad objective
 
 
 
@@ -109,11 +106,12 @@ class TestDriversMethods(DriversTestCase):
         maxLens = self.maxLens
         result = self.runSilent(pygsti.do_long_sequence_gst,
             ds, std.gs_target, std.fiducials, std.fiducials,
-            std.germs, maxLens, truncScheme=ts)
+            std.germs, maxLens, advancedOptions={'truncScheme': ts})
 
         result = self.runSilent(pygsti.do_long_sequence_gst,
             ds, std.gs_target, std.fiducials, std.fiducials,
-            std.germs, maxLens, truncScheme=ts, objective="chi2")
+            std.germs, maxLens, objective="chi2", 
+            advancedOptions={'truncScheme': ts})
 
         #result = self.runSilent(pygsti.do_long_sequence_gst,
         #    ds, std.gs_target, std.fiducials, std.fiducials,
@@ -126,11 +124,12 @@ class TestDriversMethods(DriversTestCase):
         maxLens = self.maxLens
         result = self.runSilent(pygsti.do_long_sequence_gst,
             ds, std.gs_target, std.fiducials, std.fiducials,
-            std.germs, maxLens, truncScheme=ts)
+            std.germs, maxLens, advancedOptions={'truncScheme': ts})
 
         result = self.runSilent(pygsti.do_long_sequence_gst,
             ds, std.gs_target, std.fiducials, std.fiducials,
-            std.germs, maxLens, truncScheme=ts, objective="chi2")
+            std.germs, maxLens, objective="chi2",
+            advancedOptions={'truncScheme': ts})
 
         #result = self.runSilent(pygsti.do_long_sequence_gst,
         #    ds, std.gs_target, std.fiducials, std.fiducials,
@@ -148,16 +147,17 @@ class TestDriversMethods(DriversTestCase):
         maxLens = self.maxLens
         result = self.runSilent(pygsti.do_long_sequence_gst,
                                 ds, std.gs_target, std.fiducials, std.fiducials,
-                                std.germs, maxLens, truncScheme=ts, fidPairs=fidPairs)
+                                std.germs, maxLens, fidPairs=fidPairs,
+                                advancedOptions={'truncScheme': ts})
 
         #create a report...
         result.create_full_report_pdf(filename=temp_files + "/full_report_FPR.pdf",
                                       debugAidsAppendix=False, gaugeOptAppendix=False,
                                       pixelPlotAppendix=False, whackamoleAppendix=False,
                                       verbosity=2)
-        import os
-        print("LOG DEBUG")
-        os.system("cat " + temp_files + "/full_report_FPR.log")
+        #import os
+        #print("LOG DEBUG")
+        #os.system("cat " + temp_files + "/full_report_FPR.log")
 
 
     def test_longSequenceGST_randomReduction(self):
@@ -170,10 +170,10 @@ class TestDriversMethods(DriversTestCase):
         reducedLists = pygsti.construction.make_lsgst_lists(
             std.gs_target.gates.keys(), std.fiducials, std.fiducials, std.germs,
             maxLens, fidPairs, ts, keepFraction=0.5, keepSeed=1234)
-        result = self.runSilent(pygsti.do_long_sequence_gst,
+        result = pygsti.do_long_sequence_gst(
                                 ds, std.gs_target, std.fiducials, std.fiducials,
-                                std.germs, maxLens, truncScheme=ts, fidPairs=None,
-                                lsgstLists = reducedLists)
+                                std.germs, maxLens, fidPairs=None, lsgstLists=reducedLists,
+                                advancedOptions={'truncScheme': ts}) #self.runSilent(
 
         #create a report...
         result.create_full_report_pdf(filename=temp_files + "/full_report_RFPR.pdf",
@@ -190,8 +190,8 @@ class TestDriversMethods(DriversTestCase):
             maxLens, fidPairs, ts, keepFraction=0.5, keepSeed=1234)
         result2 = self.runSilent(pygsti.do_long_sequence_gst,
                                  ds, std.gs_target, std.fiducials, std.fiducials,
-                                 std.germs, maxLens, truncScheme=ts, fidPairs=None,
-                                 lsgstLists = reducedLists)
+                                 std.germs, maxLens, fidPairs=None, lsgstLists=reducedLists,
+                                 advancedOptions={'truncScheme': ts})
 
         #create a report...
         result2.create_full_report_pdf(filename=temp_files + "/full_report_RFPR2.pdf",
@@ -212,13 +212,12 @@ class TestDriversMethods(DriversTestCase):
                                                                      'minus': ('rho0','remainder') },
                                                       parameterization="linear")
 
-        print("BASIS = ",gs_target.get_basis_name())
-
         maxLens = self.maxLens
         result = self.runSilent(pygsti.do_long_sequence_gst,
                                 ds, gs_target, std.fiducials, std.fiducials,
-                                std.germs, maxLens, truncScheme=ts,
-                                advancedOptions={'tolerance':1e-4} ) #decrease tolerance
+                                std.germs, maxLens,
+                                advancedOptions={'truncScheme': ts, 'tolerance':1e-4} )
+                                #decrease tolerance
                                 # b/c this problem seems hard to converge at the very end
                                 # very small changes (~0.0001) to the total chi^2.
 
