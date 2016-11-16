@@ -53,6 +53,7 @@ class TestReport(ReportBaseCase):
             self.results.create_presentation_ppt(filename="auto", confidenceLevel=None,
                                                  debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False)
 
+
         #Compare the text files, assume if these match the PDFs are equivalent
         self.checkFile("full_reportA%s.tex" % vs)
         self.checkFile("brief_reportA%s.tex" % vs)
@@ -455,6 +456,13 @@ class TestReport(ReportBaseCase):
     #    fig = pygsti.report.figure.ReportFigure(axes, {})
     #    fig.set_extra_info("extra!")
     #    self.assertEqual(fig.get_extra_info(), "extra!")
+
+    def test_regaugeopt(self):
+        results2 = self.results.copy()
+        results2.reoptimize_gauge({'itemWeights': {'Gx':1 }})
+        results2.create_brief_report_pdf(filename=temp_files + "/reopt_brief1.pdf")
+        results2.reoptimize_gauge({'itemWeights': {'Gy':1 }})
+        results2.create_brief_report_pdf(filename=temp_files + "/reopt_brief2.pdf")
 
 
 if __name__ == "__main__":

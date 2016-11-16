@@ -142,6 +142,13 @@ class ResultCache(object):
         #would use current confidence level
         raise NotImplementedError("Would require mass evaluation of all keys.")
 
+    def copy(self):
+        """ Creates a copy of this ResultCache.  Parent is *reset* """
+        newCache = ResultCache(self._computeFns, parent=None,
+                               typenm=self._typename)
+        newCache._data = self._data.copy() #deepcopy()
+        return newCache
+
     def __getstate__(self):
         #Return the state (for pickling) -- *don't* pickle parent or fns
         return  { '_data': self._data, '_typename': self._typename }
@@ -166,10 +173,10 @@ class ResultCache(object):
         -------
         None
         """
-        for level in _self.data:
-            for key in list(_self.data[level].keys()):
+        for level in self._data:
+            for key in list(self._data[level].keys()):
                 if key in except_these_keys: continue
-                del _self.data[level][key]
+                del self._data[level][key]
 
 
     class NoCRDependenceError(Exception):

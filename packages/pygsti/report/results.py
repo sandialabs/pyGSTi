@@ -13,6 +13,7 @@ import subprocess  as _subprocess
 import collections as _collections
 import matplotlib  as _matplotlib
 import itertools   as _itertools
+import copy as _copy
 
 from ..             import objects              as _objs
 from ..objects      import gatestring           as _gs
@@ -104,7 +105,6 @@ class Results(object):
         """
         Initialize this Results object from the inputs and outputs of a
         single (non-iterative) GST method.
-
 
         Parameters
         ----------
@@ -266,10 +266,11 @@ class Results(object):
         """
         Re-optimizes the gauge of the final gateset.
 
-        This function updates the value of this object's `gatesets['final']`
-        gate set with the result of the specified gauge optimization, and 
-        also clears cached figures, tables, etc. which are gauge dependent
-        to that they are re-computed using the updated gate set.
+        This function updates the value of this object's 
+        `gatesets['final estimate']` gate set with the result of the specified
+        gauge optimization, and also clears cached figures, tables, etc. which
+        are gauge dependent to that they are re-computed using the updated gate
+        set.
 
         Parameters
         ----------
@@ -308,8 +309,8 @@ class Results(object):
             ordered_go_params_list.append( _collections.OrderedDict( 
                 [(k,go_params[k]) for k in sorted(list(go_params.keys()))]))
 
-            self.gatesets['final'] = _alg.gaugeopt_to_target(
-                self.gatesets['final'],**go_params)
+            self.gatesets['final estimate'] = _optimizeGauge(
+                self.gatesets['final estimate'],**go_params)
             
         if setparam:
             self.parameters['gaugeOptParams'] = ordered_go_params_list
@@ -338,6 +339,25 @@ class Results(object):
         self.figures.clear_cached_data(except_figures)
         
         return ordered_go_params_list
+
+
+    def copy(self):
+        """ Creates a copy of this Results object. """
+        cpy = Results(self.options.template_path, self.options.latex_cmd)
+        cpy._bEssentialResultsSet = self._bEssentialResultsSet
+        cpy._LsAndGermInfoSet = self._LsAndGermInfoSet
+        cpy._comm = self._comm
+        cpy._confidence_regions = self._confidence_regions.copy()
+        cpy._specials = self._specials.copy()
+        cpy.tables = self.tables.copy()
+        cpy.figures = self.figures.copy()
+        cpy.gatesets = self.gatesets.copy()
+        cpy.gatestring_lists = self.gatestring_lists.copy()
+        cpy.dataset = self.dataset.copy()
+        cpy.parameters = self.parameters.copy()
+        cpy.options = self.options.copy()
+        cpy.confidence_level = self.confidence_level
+        return cpy
 
 
     def __setstate__(self, stateDict):
@@ -4038,6 +4058,12 @@ class ResultOptions(object):
         s  = "Display options:\n"
         s += self.describe("  ")
         return s
+
+    def copy(self):
+        """ Copy this ResultOptions object """
+        cpy = ResultOptions()
+        cpy.__dict__.update(self.__dict__)
+        return cpy
 
 
 def _to_pdfinfo(list_of_keyval_tuples):
