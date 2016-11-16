@@ -56,17 +56,18 @@ class TestDriversMethods(DriversTestCase):
         ts = "whole germ powers"
 
         maxLens = self.maxLens
-        result = self.runSilent(pygsti.do_long_sequence_gst,
+        result = pygsti.do_long_sequence_gst(
                                 ds, std.gs_target, std.fiducials, std.fiducials,
-                                std.germs, maxLens, truncScheme=ts)
+                                std.germs, maxLens, truncScheme=ts) #self.runSilent(
 
         result = self.runSilent(pygsti.do_long_sequence_gst,
                                 ds, std.gs_target, std.fiducials, std.fiducials,
                                 std.germs, maxLens, truncScheme=ts, objective="chi2")
 
-        result = self.runSilent(pygsti.do_long_sequence_gst,
-                                ds, std.gs_target, std.fiducials, std.fiducials,
-                                std.germs, maxLens, truncScheme=ts, constrainToTP=False)
+        #Removed b/c no constrainToTP argument
+        #result = self.runSilent(pygsti.do_long_sequence_gst,
+        #                        ds, std.gs_target, std.fiducials, std.fiducials,
+        #                        std.germs, maxLens, truncScheme=ts, constrainToTP=False)
 
 
         #Try using files instead of objects
@@ -88,9 +89,9 @@ class TestDriversMethods(DriversTestCase):
         result = self.runSilent(pygsti.do_long_sequence_gst,
                                 ds, std.gs_target, std.fiducials, None,
                                 std.germs, maxLens, truncScheme=ts,
-                                gaugeOptToCPTP=True,
-                                advancedOptions={'contractLGSTtoCPTP': True,
-                                                 'depolarizeLGST': 0.05 })
+                                advancedOptions={'contractInitialToCPTP': True,
+                                                 'depolarizeInitial': 0.05,
+                                                 'gauge optimization': "CPTP then target"})
 
 
         #Check errors
@@ -114,9 +115,9 @@ class TestDriversMethods(DriversTestCase):
             ds, std.gs_target, std.fiducials, std.fiducials,
             std.germs, maxLens, truncScheme=ts, objective="chi2")
 
-        result = self.runSilent(pygsti.do_long_sequence_gst,
-            ds, std.gs_target, std.fiducials, std.fiducials,
-            std.germs, maxLens, truncScheme=ts, constrainToTP=False)
+        #result = self.runSilent(pygsti.do_long_sequence_gst,
+        #    ds, std.gs_target, std.fiducials, std.fiducials,
+        #    std.germs, maxLens, truncScheme=ts, constrainToTP=False)
 
     def test_longSequenceGST_LengthAsExponent(self):
         ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers_lae.dataset")
@@ -131,9 +132,9 @@ class TestDriversMethods(DriversTestCase):
             ds, std.gs_target, std.fiducials, std.fiducials,
             std.germs, maxLens, truncScheme=ts, objective="chi2")
 
-        result = self.runSilent(pygsti.do_long_sequence_gst,
-            ds, std.gs_target, std.fiducials, std.fiducials,
-            std.germs, maxLens, truncScheme=ts, constrainToTP=False)
+        #result = self.runSilent(pygsti.do_long_sequence_gst,
+        #    ds, std.gs_target, std.fiducials, std.fiducials,
+        #    std.germs, maxLens, truncScheme=ts, constrainToTP=False)
 
 
 
@@ -211,17 +212,12 @@ class TestDriversMethods(DriversTestCase):
                                                                      'minus': ('rho0','remainder') },
                                                       parameterization="linear")
 
+        print("BASIS = ",gs_target.get_basis_name())
+
         maxLens = self.maxLens
-        #DEBUG
-        #pygsti.do_long_sequence_gst(
-        #                        ds, gs_target, std.fiducials, std.fiducials,
-        #                        std.germs, maxLens, truncScheme=ts, constrainToTP=False,
-        #                        advancedOptions={'tolerance':1e-3})
-        #assert(False)
-        #END DEBUG
         result = self.runSilent(pygsti.do_long_sequence_gst,
                                 ds, gs_target, std.fiducials, std.fiducials,
-                                std.germs, maxLens, truncScheme=ts, constrainToTP=False,
+                                std.germs, maxLens, truncScheme=ts,
                                 advancedOptions={'tolerance':1e-4} ) #decrease tolerance
                                 # b/c this problem seems hard to converge at the very end
                                 # very small changes (~0.0001) to the total chi^2.
@@ -233,18 +229,11 @@ class TestDriversMethods(DriversTestCase):
                                       verbosity=2)
 
 
-
-        #prepStrsListOrFilename, effectStrsListOrFilename,
-        #germsListOrFilename, maxLengths, gateLabels,
-        #weightsDict, fidPairs, constrainToTP,
-        #gaugeOptToCPTP, gaugeOptRatio, objective="logl",
-        #advancedOptions={}, lsgstLists=None,
-        #truncScheme="whole germ powers"):
-
     def test_bootstrap(self):
         ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
         specs = self.runSilent(pygsti.construction.build_spam_specs, std.fiducials)
-        gs = pygsti.do_lgst(ds, specs, targetGateset=std.gs_target, svdTruncateTo=4, verbosity=0)
+        tp_target = std.gs_target.copy(); tp_target.set_all_parameterizations("TP")
+        gs = pygsti.do_lgst(ds, specs, targetGateset=tp_target, svdTruncateTo=4, verbosity=0)
 
         bootds_p = pygsti.drivers.make_bootstrap_dataset(
             ds,'parametric', gs, seed=1234 )
@@ -265,7 +254,7 @@ class TestDriversMethods(DriversTestCase):
         maxLengths = [0] #just do LGST strings to make this fast...
         bootgs_p = self.runSilent(pygsti.drivers.make_bootstrap_gatesets,
             2, ds, 'parametric', std.fiducials, std.fiducials,
-            std.germs, maxLengths, inputGateSet=gs, constrainToTP=True,
+            std.germs, maxLengths, inputGateSet=gs,
             returnData=False)
 
         default_maxLens = [0]+[2**k for k in range(10)]
@@ -278,38 +267,35 @@ class TestDriversMethods(DriversTestCase):
         bootgs_p_defaultMaxLens = self.runSilent(
             pygsti.drivers.make_bootstrap_gatesets,
             2, ds_defaultMaxLens, 'parametric', std.fiducials, std.fiducials,
-            std.germs, None, inputGateSet=gs, constrainToTP=True,
+            std.germs, None, inputGateSet=gs,
             returnData=False) #test when maxLengths == None
 
         bootgs_np, bootds_np2 = self.runSilent(
             pygsti.drivers.make_bootstrap_gatesets,
             2, ds, 'nonparametric', std.fiducials, std.fiducials,
             std.germs, maxLengths, targetGateSet=gs,
-            constrainToTP=True, returnData=True)
+            returnData=True)
 
         with self.assertRaises(ValueError):
             pygsti.drivers.make_bootstrap_gatesets(
                 2, ds, 'parametric', std.fiducials, std.fiducials,
-                std.germs, maxLengths, constrainToTP=True,
-                returnData=False)
+                std.germs, maxLengths,returnData=False)
                 #must specify either inputGateSet or targetGateSet
 
         with self.assertRaises(ValueError):
             pygsti.drivers.make_bootstrap_gatesets(
                 2, ds, 'parametric', std.fiducials, std.fiducials,
                 std.germs, maxLengths, inputGateSet=gs, targetGateSet=gs,
-                constrainToTP=True, returnData=False)
-                #cannot specify both inputGateSet and targetGateSet
+                returnData=False) #cannot specify both inputGateSet and targetGateSet
 
 
         self.runSilent(pygsti.drivers.gauge_optimize_gs_list,
-                       bootgs_p, std.gs_target, constrainToTP=True,
-                       gateMetric = 'frobenius', spamMetric = 'frobenius',
-                       plot=False)
+                       bootgs_p, std.gs_target, gateMetric = 'frobenius',
+                       spamMetric = 'frobenius', plot=False)
 
         #Test plotting -- seems to work.
         self.runSilent(pygsti.drivers.gauge_optimize_gs_list,
-                       bootgs_p, std.gs_target, constrainToTP=True,
+                       bootgs_p, std.gs_target,
                        gateMetric = 'frobenius', spamMetric = 'frobenius',
                        plot=True)
 

@@ -16,7 +16,10 @@ class GaugeGroup(object):
         return 0
 
     def get_element(self, param_vec):
-        return GaugeGroup.element()
+        return self.element()
+
+    def get_initial_params(self):
+        return _np.array([],'d')
 
     class element(object):
         def __init__(self): pass
@@ -27,9 +30,8 @@ class GaugeGroup(object):
 
 
 class GateGaugeGroup(GaugeGroup):
-    def __init__(self, gate, element_cls=GateGaugeGroupElement):
+    def __init__(self, gate):
         self.gate = gate
-        self.element_cls = element_cls
 
     def num_params(self):
         return self.gate.num_params()
@@ -37,15 +39,16 @@ class GateGaugeGroup(GaugeGroup):
     def get_element(self, param_vec):
         elgate = self.gate.copy()
         elgate.from_vector(param_vec)
-        return self.element_cls(elgate)
+        return self.element(elgate)
     
     def get_initial_params(self):
-        return _np.zeros(self.num_params(),'d')
+        return self.gate.to_vector()
 
     class element(GaugeGroup.element):
         def __init__(self, gate):  
             self.gate = gate
             self._inv_matrix = None
+            GaugeGroup.element.__init__(self)
 
         def get_transform_matrix(self): 
             return _np.asarray(self.gate)
@@ -60,6 +63,7 @@ class GateGaugeGroup(GaugeGroup):
 
         def from_vector(self,v):
             self.gate.from_vector(v)
+            self._inv_matrix = None
 
 
 
@@ -67,46 +71,43 @@ class FullGaugeGroup(GateGaugeGroup):
     def __init__(self, dim):
         from . import gate as _gate #b/c gate.py imports gaugegroup
         gate = _gate.FullyParameterizedGate(_np.identity(dim,'d'))
-        GateGaugeGroup.__init__(self, gate, FullGaugeGroup.element)
-
-    def get_initial_params(self):
-        init_gate = _gate.FullyParameterizedGate(_np.identity(dim,'d'))
-        return init_gate.to_vector()
+        GateGaugeGroup.__init__(self, gate)
 
     class element(GateGaugeGroup.element):
-        pass #inherits everything it needs
+        def __init__(self, gate):
+            GateGaugeGroup.element.__init__(self,gate)
+            pass #inherits everything it needs
 
 class TPGaugeGroup(GateGaugeGroup):
     def __init__(self, dim):
         from . import gate as _gate #b/c gate.py imports gaugegroup
         gate = _gate.TPParameterizedGate(_np.identity(dim,'d'))
-        GateGaugeGroup.__init__(self, gate, TPGaugeGroup.element)
-
-    def get_initial_params(self):
-        init_gate = _gate.TPParameterizedGate(_np.identity(dim,'d'))
-        return init_gate.to_vector()
+        GateGaugeGroup.__init__(self, gate)
 
     class element(GateGaugeGroup.element):
-        pass #inherits everything it needs
+        def __init__(self, gate):
+            GateGaugeGroup.element.__init__(self,gate)
+
+#        pass #inherits everything it needs
 
 class DiagGaugeGroup(GateGaugeGroup):
-    def __init__(self, dim, TPcontrained=False):
+    def __init__(self, dim):
         from . import gate as _gate #b/c gate.py imports gaugegroup
         ltrans = _np.identity(dim,'d')
         rtrans = _np.identity(dim,'d')
         baseMx = _np.identity(dim,'d')
         parameterArray = _np.zeros(dim, 'd')
-        parameterToBaseIndicesMap = { i: (i,i) for i in range(dim) }        
+        parameterToBaseIndicesMap = { i: [(i,i)] for i in range(dim) }
         gate = _gate.LinearlyParameterizedGate(baseMx, parameterArray,
                                                parameterToBaseIndicesMap,
                                                ltrans, rtrans, real=True)
-        GateGaugeGroup.__init__(self, gate, DiagGaugeGroup.element)
-
-    def get_initial_params(self):
-        return _np.ones(self.num_params(),'d')
+        GateGaugeGroup.__init__(self, gate)
 
     class element(GateGaugeGroup.element):
-        pass #inherits everything it needs
+        def __init__(self, gate):
+            GateGaugeGroup.element.__init__(self,gate)
+
+#        pass #inherits everything it needs
 
 
 class TPDiagGaugeGroup(TPGaugeGroup):
@@ -116,18 +117,17 @@ class TPDiagGaugeGroup(TPGaugeGroup):
         rtrans = _np.identity(dim,'d')
         baseMx = _np.identity(dim,'d')
         parameterArray = _np.zeros(dim-1, 'd')
-        parameterToBaseIndicesMap = { i: (i+1,i+1) for i in range(dim-1) }        
+        parameterToBaseIndicesMap = { i: [(i+1,i+1)] for i in range(dim-1) }
         gate = _gate.LinearlyParameterizedGate(baseMx, parameterArray,
                                                parameterToBaseIndicesMap,
                                                ltrans, rtrans, real=True)
-        TPGaugeGroup.__init__(self, gate)
-        self.element_cls = TPDiagGaugeGroup.element
-
-    def get_initial_params(self):
-        return _np.ones(self.num_params(),'d')
+        GateGaugeGroup.__init__(self, gate)
 
     class element(TPGaugeGroup.element):
-        pass #inherits everything it needs
+        def __init__(self, gate):
+            TPGaugeGroup.element.__init__(self,gate)
+
+#        pass #inherits everything it needs
 
 
 

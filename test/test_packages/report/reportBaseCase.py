@@ -39,7 +39,8 @@ class ReportBaseCase(BaseTestCase):
         #ds.save(compare_files + "/reportgen.dataset")
 
         gs_lgst = pygsti.do_lgst(self.ds, self.specs, self.targetGateset, svdTruncateTo=4, verbosity=0)
-        gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",targetGateset=self.targetGateset,gateWeight=1.0,spamWeight=0.0)
+        #gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",targetGateset=self.targetGateset,gateWeight=1.0,spamWeight=0.0) #DEPRECATED
+        gs_lgst_go = pygsti.gaugeopt_to_target(gs_lgst, self.targetGateset, {'gates': 1.0, 'spam': 0.0})
         self.gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
         self.gs_clgst_tp = pygsti.contract(self.gs_clgst, "vSPAM")
         self.gs_clgst_tp.set_all_parameterizations("TP")
@@ -59,27 +60,22 @@ class ReportBaseCase(BaseTestCase):
                                                           minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6),
                                                           returnAll=True)
         gaugeOptParams = collections.OrderedDict([
-                ('toGetTo', 'target'),
-                ('constrainToTP', False),
-                ('constrainToCP', False),
-                ('gateWeight', 1),
-                ('spamWeight', 0.001),
-                ('targetGatesMetric',"frobenius"),
-                ('targetSpamMetric',"frobenius"),
-                ('itemWeights', {}) ])
+                ('TPpenalty', 0),
+                ('CPpenalty', 0),
+                ('gatesMetric',"frobenius"),
+                ('spamMetric',"frobenius"),
+                ('itemWeights', {'gates': 1.0, 'spam': 0.001}) ])
 
         lsgst_gatesets = []
         for gs in lsgst_gatesets_prego:
-            args = gaugeOptParams.copy()
-            args['gateset'] = gs
-            args['targetGateset'] = self.targetGateset
-            lsgst_gatesets.append( pygsti.optimize_gauge(**args) )
+            lsgst_gatesets.append( pygsti.gaugeopt_to_target(gs,self.targetGateset,
+                                                             **gaugeOptParams) )
 
         self.results = pygsti.report.Results()
         self.results.init_Ls_and_germs("chi2", self.targetGateset, self.ds, self.gs_clgst,
                                        self.maxLengthList, self.germs,
                                        lsgst_gatesets, self.lsgstStrings, self.fiducials, self.fiducials,
-                                       pygsti.construction.repeat_with_max_length, False, None, lsgst_gatesets_prego)
+                                       pygsti.construction.repeat_with_max_length, None, lsgst_gatesets_prego)
         self.results.parameters.update({'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
                                         'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
                                         'weights': None, 'defaultDirectory': temp_files + "",
@@ -93,14 +89,16 @@ class ReportBaseCase(BaseTestCase):
         #Compute results for MLGST with TP constraint
         lsgst_gatesets_TP = pygsti.do_iterative_mlgst(self.ds, self.gs_clgst_tp, self.lsgstStrings, verbosity=0,
                                                    minProbClip=1e-4, probClipInterval=(-1e6,1e6),
-                                                   returnAll=True)
-        lsgst_gatesets_TP = [ pygsti.optimize_gauge(gs, "target", targetGateset=self.targetGateset, constrainToTP=True,
-                                                 gateWeight=1,spamWeight=0.001) for gs in lsgst_gatesets_TP]
+                                                   returnAll=True) #TP initial gateset => TP output gatesets
+        tp_target = self.targetGateset.copy(); tp_target.set_all_parameterizations("TP")
+        print("lsgst_gatesets_TP GG = ",lsgst_gatesets_TP[0].default_gauge_group) #DEBUG
+        lsgst_gatesets_TP = [ pygsti.gaugeopt_to_target(gs, tp_target, {'gates': 1.0, 'spam': 0.001})
+                              for gs in lsgst_gatesets_TP ]
 
         self.results_logL = pygsti.report.Results()
         self.results_logL.init_Ls_and_germs("logl", self.targetGateset, self.ds, self.gs_clgst_tp, self.maxLengthList, self.germs,
                                      lsgst_gatesets_TP, self.lsgstStrings, self.fiducials, self.fiducials,
-                                     pygsti.construction.repeat_with_max_length, True)
+                                     pygsti.construction.repeat_with_max_length)
         self.results_logL.options.precision = 3
         self.results_logL.options.polar_precision = 2
 

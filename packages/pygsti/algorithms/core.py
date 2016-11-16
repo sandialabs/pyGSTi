@@ -327,6 +327,10 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
                     _objs.spamvec.optimize_spamvec( new_vec, lgstGateset.effects[effectLabel])
                     lgstGateset.effects[ effectLabel ] = new_vec
 
+            #Also convey default gauge group from guessGatesetForGauge
+            lgstGateset.default_gauge_group = \
+                guessGatesetForGauge.default_gauge_group
+
 
         #inv_BMat_p = _np.dot(invABMat_p, AMat_p) # should be equal to inv(BMat_p) when trunc == gsDim ?? check??
         #lgstGateset.transform( S=_np.dot(invABMat_p, AMat_p), Si=BMat_p ) # lgstGateset had dim trunc, so after transform is has dim gsDim

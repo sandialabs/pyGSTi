@@ -11,6 +11,7 @@ import warnings as _warnings
 
 from .. import objects as _objs
 from .. import tools as _tools
+from .. import optimize as _opt
 
 def contract(gateset, toWhat, dataset=None, maxiter=1000000, tol=0.01, useDirectCP=True, method="Nelder-Mead", verbosity=0):
     """

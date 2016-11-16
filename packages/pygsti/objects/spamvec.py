@@ -10,6 +10,7 @@ functionality.
 """
 
 import numpy as _np
+from ..      import optimize as _opt
 from ..tools import matrixtools as _mt
 from .protectedarray import ProtectedArray as _ProtectedArray
 
@@ -263,7 +264,7 @@ class StaticSPAMVec(SPAMVec):
         mapped: `rho -> inv(S) * rho` and the *transpose* of effect vectors
         being mapped as `E^T -> E^T * S`.
 
-        Generally, the tranform function updates the *parameters* of 
+        Generally, the transform function updates the *parameters* of 
         the SPAM vector such that the resulting vector is altered as 
         described above.  If such an update cannot be done (because
         the gate parameters do not allow for it), ValueError is raised.
@@ -415,7 +416,7 @@ class FullyParameterizedSPAMVec(SPAMVec):
         mapped: `rho -> inv(S) * rho` and the *transpose* of effect vectors
         being mapped as `E^T -> E^T * S`.
 
-        Generally, the tranform function updates the *parameters* of 
+        Generally, the transform function updates the *parameters* of 
         the SPAM vector such that the resulting vector is altered as 
         described above.  If such an update cannot be done (because
         the gate parameters do not allow for it), ValueError is raised.
@@ -430,10 +431,10 @@ class FullyParameterizedSPAMVec(SPAMVec):
             Which type of SPAM vector is being transformed (see above).
         """
         if typ == 'prep':
-            Si  = S.get_tranform_matrix_inverse()
+            Si  = S.get_transform_matrix_inverse()
             self.set_vector(_np.dot(Si, self))
         elif typ == 'effect':
-            Smx = S.get_tranform_matrix()
+            Smx = S.get_transform_matrix()
             self.set_vector(_np.dot(_np.transpose(Smx),self)) 
               #Evec^T --> ( Evec^T * S )^T
         else:
@@ -596,7 +597,7 @@ class TPParameterizedSPAMVec(SPAMVec):
         mapped: `rho -> inv(S) * rho` and the *transpose* of effect vectors
         being mapped as `E^T -> E^T * S`.
 
-        Generally, the tranform function updates the *parameters* of 
+        Generally, the transform function updates the *parameters* of 
         the SPAM vector such that the resulting vector is altered as 
         described above.  If such an update cannot be done (because
         the gate parameters do not allow for it), ValueError is raised.
@@ -611,10 +612,10 @@ class TPParameterizedSPAMVec(SPAMVec):
             Which type of SPAM vector is being transformed (see above).
         """
         if typ == 'prep':
-            Si  = S.get_tranform_matrix_inverse()
+            Si  = S.get_transform_matrix_inverse()
             self.set_vector(_np.dot(Si, self))
         elif typ == 'effect':
-            Smx = S.get_tranform_matrix()
+            Smx = S.get_transform_matrix()
             self.set_vector(_np.dot(_np.transpose(Smx),self)) 
               #Evec^T --> ( Evec^T * S )^T
         else:

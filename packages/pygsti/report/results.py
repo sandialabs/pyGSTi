@@ -150,9 +150,9 @@ class Results(object):
 
 
     def init_Ls_and_germs(self, objective, targetGateset, dataset,
-                              seedGateset, Ls, germs, gatesetsByL, gateStringListByL,
-                              prepStrs, effectStrs, truncFn, fidPairs=None,
-                              gatesetsByL_noGaugeOpt=None):
+                          seedGateset, Ls, germs, gatesetsByL, gateStringListByL,
+                          prepStrs, effectStrs, truncFn, fidPairs=None,
+                          gatesetsByL_noGaugeOpt=None):
 
         """
         Initialize this Results object from the inputs and outputs of
@@ -1820,7 +1820,8 @@ class Results(object):
                 fig = set_fig_qtys("invertedBestEstimateColorBoxPlot",
                                    "best%sBoxes_inverted.pdf" % plotFnName, printer - 1)
         else:
-            for figkey in ["bestEstimateColorBoxPlot",
+            for figkey in ["colorBoxPlotKeyPlot",
+                           "bestEstimateColorBoxPlot",
                            "invertedBestEstimateColorBoxPlot"]:
                 qtys[figkey] = qtys["tt_"+figkey] = ""
 

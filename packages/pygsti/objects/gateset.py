@@ -24,6 +24,7 @@ from . import gate as _gate
 from . import spamvec as _sv
 from . import labeldicts as _ld
 from . import gscalc as _gscalc
+from . import gaugegroup as _gg
 
 from .verbosityprinter import VerbosityPrinter
 
@@ -129,7 +130,9 @@ class GateSet(object):
         if self.povm_identity is not None:
             self._povm_identity.set_vector(value)
         else:
-            self._povm_identity = _sv.StaticSPAMVec(value) # always static
+            self._povm_identity = _sv.FullyParameterizedSPAMVec(value)
+              # fully parameterized, even though not vectorized (so
+              # can gauge transform it)
 
     @property
     def default_gauge_group(self):
@@ -139,7 +142,7 @@ class GateSet(object):
         """
         return self._default_gauge_group
 
-    @povm_identity.setter
+    @default_gauge_group.setter
     def default_gauge_group(self, value):
         self._default_gauge_group = value
 
@@ -466,8 +469,15 @@ class GateSet(object):
         for lbl,vec in self.effects.items():
             self.effects[lbl] = _sv.convert(vec, etyp)
 
-        #Note: self.povm_identity should *always* be static, and
-        # is not changed by this method.
+        if typ == 'full': 
+            self.default_gauge_group = _gg.FullGaugeGroup(self.dim)
+        elif typ == 'TP': 
+            self.default_gauge_group = _gg.TPGaugeGroup(self.dim)
+        elif typ == 'static': 
+            self.default_gauge_group = None
+        
+        #Note: self.povm_identity should *always* be fully
+        # paramterized, and is not changed by this method.
 
 
 

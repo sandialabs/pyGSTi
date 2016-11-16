@@ -46,7 +46,11 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
 
         if targetGateset is not None:
             if gatesMetric == "frobenius":
-                ret += gs.frobeniusdist(targetGateset,None,gateWeight,0,itemWeights)
+                if spamMetric == "frobenius":
+                    ret += gs.frobeniusdist(targetGateset, None, gateWeight,
+                                            spamWeight, itemWeights)
+                else:
+                    ret += gs.frobeniusdist(targetGateset,None,gateWeight,0,itemWeights)
     
             elif gatesMetric == "fidelity":
                 for gateLbl in gs.gates:
@@ -63,7 +67,8 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
             else: raise ValueError("Invalid gatesMetric: %s" % gatesMetric)
     
             if spamMetric == "frobenius":
-                ret += gs.frobeniusdist(targetGateset,None,0,spamWeight,itemWeights)
+                pass #added in special case above to match normalization in frobeniusdist
+                #ret += gs.frobeniusdist(targetGateset,None,0,spamWeight,itemWeights)
     
             elif spamMetric == "fidelity":
                 for spamlabel in gs.get_spam_labels():
@@ -83,13 +88,25 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
 
         return ret
     
-    return gaugeopt_custom(gateset, objective_fn, gauge_group,
-                    method, maxiter, maxfev, tol, returnAll, verbosity)
+    result = gaugeopt_custom(gateset, objective_fn, gauge_group,
+                 method, maxiter, maxfev, tol, returnAll, verbosity)
+
+    #If we've gauge optimized to a target gate set, declare that the
+    # resulting gate set is now in the same basis as the target.
+    if targetGateset is not None:
+        newGateset = result[-1] if returnAll else result
+        newGateset.set_basis(targetGateset.get_basis_name(),
+                             targetGateset.get_basis_dimension())
+    
+    return result
+
 
 
 def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
                     method='L-BFGS-B', maxiter=100000, maxfev=None, tol=1e-8,
-                    returnAll=False, verbosity):
+                    returnAll=False, verbosity=0):
+
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
     if gauge_group is None:
         gauge_group = gateset.default_gauge_group
@@ -108,7 +125,7 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
         return objective_fn(gs)
 
     bToStdout = (printer.verbosity > 2 and printer.filename is None)
-    print_obj_func = _opt.create_obj_func_printer(objective_func) #only ever prints to stdout!
+    print_obj_func = _opt.create_obj_func_printer(call_objective_fn) #only ever prints to stdout!
     minSol = _opt.minimize(call_objective_fn, x0,
                           method=method, maxiter=maxiter, maxfev=maxfev, tol=tol,
                           callback = print_obj_func if bToStdout else None)

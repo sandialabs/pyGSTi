@@ -1735,10 +1735,11 @@ def get_gaugeopt_params_table(gaugeOptArgs):
 
     table = _ReportTable(colHeadings, formatters)
 
-    gaugeOptArgs = gaugeOptArgs[-1] 
-      #for now, just print the params of the *last*
-      # gauge optimiziation, though in the future we could print
-      # multiple columns, one for each optimization.
+    if isinstance(gaugeOptArgs,list) or isinstance(gaugeOptArgs,tuple):
+        gaugeOptArgs = gaugeOptArgs[-1]
+        #for now, just print the params of the *last*
+        # gauge optimiziation, though in the future we could print
+        # multiple columns, one for each optimization.
 
     if 'method' in gaugeOptArgs:
         table.addrow(("Method", str(gaugeOptArgs['method'])), (None,None))

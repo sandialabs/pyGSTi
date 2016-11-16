@@ -485,7 +485,7 @@ class StaticGate(Gate):
         """
         Update gate matrix G with inv(S) * G * S.
 
-        Generally, the tranform function updates the *parameters* of 
+        Generally, the transform function updates the *parameters* of 
         the gate such that the resulting gate matrix is altered as 
         described above.  If such an update cannot be done (because
         the gate parameters do not allow for it), ValueError is raised.
@@ -500,7 +500,7 @@ class StaticGate(Gate):
             A gauge group element which specifies the "S" matrix 
             (and it's inverse) used in the above similarity transform.
         """
-        raise ValueError("Cannot tranform a StaticGate - it has no parameters!")
+        raise ValueError("Cannot transform a StaticGate - it has no parameters!")
         #self.set_matrix(_np.dot(Si,_np.dot(self.base, S)))
 
 
@@ -655,7 +655,7 @@ class FullyParameterizedGate(Gate):
         """
         Update gate matrix G with inv(S) * G * S,
 
-        Generally, the tranform function updates the *parameters* of 
+        Generally, the transform function updates the *parameters* of 
         the gate such that the resulting gate matrix is altered as 
         described above.  If such an update cannot be done (because
         the gate parameters do not allow for it), ValueError is raised.
@@ -669,8 +669,8 @@ class FullyParameterizedGate(Gate):
             A gauge group element which specifies the "S" matrix 
             (and it's inverse) used in the above similarity transform.
         """
-        Smx = S.get_tranform_matrix()
-        Si  = S.get_tranform_matrix_inverse()
+        Smx = S.get_transform_matrix()
+        Si  = S.get_transform_matrix_inverse()
         self.set_matrix(_np.dot(Si,_np.dot(self.base, Smx)))
 
 
@@ -838,7 +838,7 @@ class TPParameterizedGate(Gate):
         """
         Update gate matrix G with inv(S) * G * S,
 
-        Generally, the tranform function updates the *parameters* of 
+        Generally, the transform function updates the *parameters* of 
         the gate such that the resulting gate matrix is altered as 
         described above.  If such an update cannot be done (because
         the gate parameters do not allow for it), ValueError is raised.
@@ -853,8 +853,8 @@ class TPParameterizedGate(Gate):
             A gauge group element which specifies the "S" matrix 
             (and it's inverse) used in the above similarity transform.
         """
-        Smx = S.get_tranform_matrix()
-        Si  = S.get_tranform_matrix_inverse()
+        Smx = S.get_transform_matrix()
+        Si  = S.get_transform_matrix_inverse()
         self.set_matrix(_np.dot(Si,_np.dot(self.base, Smx)))
 
 
@@ -930,12 +930,12 @@ class LinearlyParameterizedGate(Gate):
         leftTransform : numpy array or None, optional
             A 2D array of the same shape as basematrix which left-multiplies
             the base matrix after parameters have been evaluated.  Defaults to
-            no tranform.
+            no transform.
 
         rightTransform : numpy array or None, optional
             A 2D array of the same shape as basematrix which right-multiplies
             the base matrix after parameters have been evaluated.  Defaults to
-            no tranform.
+            no transform.
 
         real : bool, optional
             Whether or not the resulting gate matrix, after all
@@ -1111,7 +1111,7 @@ class LinearlyParameterizedGate(Gate):
         """
         Update gate matrix G with inv(S) * G * S,
 
-        Generally, the tranform function updates the *parameters* of 
+        Generally, the transform function updates the *parameters* of 
         the gate such that the resulting gate matrix is altered as 
         described above.  If such an update cannot be done (because
         the gate parameters do not allow for it), ValueError is raised.
@@ -1125,7 +1125,7 @@ class LinearlyParameterizedGate(Gate):
         #Currently just raise error - in general there is no *unique* 
         # parameter alteration that would affect a similarity transform,
         # and even if one exists it may be difficult to find efficiently.
-        raise ValueError("Invalid tranform for this LinearlyParameterizedGate")
+        raise ValueError("Invalid transform for this LinearlyParameterizedGate")
     
         #OLD (TODO: remove)
         #self.leftTrans = _np.dot(Si,self.leftTrans)
@@ -1615,7 +1615,7 @@ class EigenvalueParameterizedGate(Gate):
         """
         Update gate matrix G with inv(S) * G * S,
 
-        Generally, the tranform function updates the *parameters* of 
+        Generally, the transform function updates the *parameters* of 
         the gate such that the resulting gate matrix is altered as 
         described above.  If such an update cannot be done (because
         the gate parameters do not allow for it), ValueError is raised.
@@ -1629,7 +1629,7 @@ class EigenvalueParameterizedGate(Gate):
         #Currently just raise error, as a general similarity transformation
         # *will* affect the eigenvalues.  In the future, perhaps we could allow
         # *unitary* type similarity transformations.
-        raise ValueError("Invalid tranform for this EigenvalueParameterizedGate")
+        raise ValueError("Invalid transform for this EigenvalueParameterizedGate")
 
         #OLD:
         #if Si is None: Si = _np.linalg.inv(S)

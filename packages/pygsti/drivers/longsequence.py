@@ -177,13 +177,13 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         verbosity = advancedOptions['verbosity'] 
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
 
-    #Get target gateset
+    #Get/load target gateset
     if isinstance(targetGateFilenameOrSet, str):
         gs_target = _io.load_gateset(targetGateFilenameOrSet)
     else:
         gs_target = targetGateFilenameOrSet #assume a GateSet object
 
-    #Get dataset
+    #Get/load dataset
     if isinstance(dataFilenameOrSet, str):
         ds = _io.load_dataset(dataFilenameOrSet, True, "aggregate", printer)
         default_dir = _os.path.dirname(dataFilenameOrSet) #default directory for reports, etc
@@ -192,6 +192,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         ds = dataFilenameOrSet #assume a Dataset object
         default_dir = default_base = None
 
+    #Get/load fiducials
     if isinstance(prepStrsListOrFilename, str):
         prepStrs = _io.load_gatestring_list(prepStrsListOrFilename)
     else: prepStrs = prepStrsListOrFilename
@@ -203,9 +204,12 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
             effectStrs = _io.load_gatestring_list(effectStrsListOrFilename)
         else: effectStrs = effectStrsListOrFilename
 
+    #Get/load germs
     if isinstance(germsListOrFilename, str):
         germs = _io.load_gatestring_list(germsListOrFilename)
     else: germs = germsListOrFilename
+
+    #Construct gate sequences
     if lsgstLists is None:
 
         #Get gate strings and labels
@@ -309,8 +313,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
             #TODO: set identity vector, or leave as is, which assumes LGST had the right one and contraction doesn't change it ??
             # Really, should we even allow use of the identity vector when doing a non-TP-constrained optimization?
     
-        #Advanced Options can specify further manipulation of LGST seed
-        if advancedOptions.get('contractLGSTtoCPTP',False):
+        #Advanced Options can specify further manipulation of Initial seed
+        if advancedOptions.get('contractInitialToCPTP',False):
             gs_after_gauge_opt = _alg.contract(gs_after_gauge_opt, "CPTP")
         if advancedOptions.get('depolarizeInitial',0) > 0:
             gs_after_gauge_opt = gs_after_gauge_opt.depolarize(gate_noise=advancedOptions['depolarizeInitial'])
@@ -325,7 +329,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
 
 
     tNxt = _time.time()
-    profiler.add_time('do_long_sequence_gst: Prep LGST seed',tRef); tRef=tNxt
+    profiler.add_time('do_long_sequence_gst: Prep Initial seed',tRef); tRef=tNxt
 
     #Run LSGST on data
     if objective == "chi2":
@@ -387,7 +391,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
             printer.log("\nGauge Optimizing to target...",2)
             CPTPpenalty = 1.0 if ("CPTP" in gaugeOptType) else 0
             itemWeights = { 'gates': 1.0, 'spam': gaugeOptRatio }
-            itemWeights.update(gaugeOptItemWeights)
+            if gaugeOptItemWeights is not None:
+                itemWeights.update(gaugeOptItemWeights)
                             
             go_params = _collections.OrderedDict([
                     ('itemWeights', itemWeights),

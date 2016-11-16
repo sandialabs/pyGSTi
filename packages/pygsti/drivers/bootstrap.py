@@ -263,7 +263,7 @@ def gauge_optimize_gs_list(gsList, targetGateset,
         for gs in listOfBootStrapEstsNoOpt:
             listOfBootStrapEstsNoOptG0toTargetVarSpam.append(
                 _alg.gaugeopt_to_target(gs,targetGateset, 
-                                        itemWeights={'spam': spW }
+                                        itemWeights={'spam': spW },
                                         gatesMetric=gateMetric,
                                         spamMetric=spamMetric))
 
