@@ -152,6 +152,25 @@ class ResultCache(object):
         self._data = stateDict['_data']
         self._typename = stateDict['_typename']
 
+    def clear_cached_data(self, except_these_keys):
+        """
+        Clears the cached data for all keys except those
+        specified.
+
+        Parameters
+        ----------
+        except_these_keys : list
+            A list of keys to *keep* cached.
+
+        Returns
+        -------
+        None
+        """
+        for level in _self.data:
+            for key in list(_self.data[level].keys()):
+                if key in except_these_keys: continue
+                del _self.data[level][key]
+
 
     class NoCRDependenceError(Exception):
         """

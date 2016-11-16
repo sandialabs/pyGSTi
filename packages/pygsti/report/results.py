@@ -262,6 +262,83 @@ class Results(object):
                                         for L in Ls for germ in germs] )
         self._LsAndGermInfoSet = True
 
+    def reoptimize_gauge(self, gaugeOptParams, setparam=True):
+        """
+        Re-optimizes the gauge of the final gateset.
+
+        This function updates the value of this object's `gatesets['final']`
+        gate set with the result of the specified gauge optimization, and 
+        also clears cached figures, tables, etc. which are gauge dependent
+        to that they are re-computed using the updated gate set.
+
+        Parameters
+        ----------
+        gaugeOptParams : dict, optional
+            A dictionary of arguments to :func:`gaugeopt_to_target`, specifying
+            how the gauge optimization should be performed.  The keys and
+            values of this dictionary may correspond to any of the arguments
+            of :func:`gaugeopt_to_target` *except* for the first `gateset` 
+            argument, which is taken to be `gatesets['final']`.  The 
+            `targetGateset` argument *can* be specified, but if it isn't, is
+            taken to be `gatesets['target']`.  This argument may also be a
+            list of such dictionaries, in which case each element describes
+            a successive stage of gauge optimization.
+
+        setparam : bool, optional
+            Whether to set `parameters['gaugeOptParams']` to the list of
+            parameter dictionaries returned by this function.
+
+        Returns
+        -------
+        List of OrderedDicts
+            A list of dictionaries, each containing gauge optimization
+            parameters for a single stage of gauge optimization.
+        """
+        assert(self._bEssentialResultsSet)
+
+        if hasattr(gaugeOptParams,"keys"):
+            go_params_list = [gaugeOptParams]
+        else: go_params_list = gaugeOptParams
+
+        ordered_go_params_list = []
+        for go_params in go_params_list:
+            if "targetGateset" not in go_params:
+                go_params["targetGateset"] = self.gatesets['target']
+
+            ordered_go_params_list.append( _collections.OrderedDict( 
+                [(k,go_params[k]) for k in sorted(list(go_params.keys()))]))
+
+            self.gatesets['final'] = _alg.gaugeopt_to_target(
+                self.gatesets['final'],**go_params)
+            
+        if setparam:
+            self.parameters['gaugeOptParams'] = ordered_go_params_list
+            
+        #Clear everything that is (possibly) gauge dependent
+        #  Note: also clear 'bestGatesetGaugeOptParamsTable' since we might have updated params
+        except_tables = ['fiducialListTable', 'prepStrListTable',
+                         'effectStrListTable', 'germListTable',
+                         'germList2ColTable', 'chi2ProgressTable',
+                         'logLProgressTable', 'progressTable',
+                         'byGermTable', 'bestGatesetEvalTable']
+        except_figures = [ "colorBoxPlotKeyPlot", "bestEstimateColorBoxPlot",
+                           "invertedBestEstimateColorBoxPlot",
+                           "bestEstimateSummedColorBoxPlot",
+                           "blankBoxPlot", "blankSummedBoxPlot"]
+        except_specials = [ 'blankGaugeOptAppendixTables',
+                            'bestEstimateColorBoxPlotPages']
+
+        if 'max length list' in self.parameters:
+            except_figures += ["estimateForLIndex%dColorBoxPlot" % i 
+                     for i in range(len(self.parameters['max length list']))]
+
+        self._confidence_regions = {}
+        self._specials.clear_cached_data(except_specials)
+        self.tables.clear_cached_data(except_tables)
+        self.figures.clear_cached_data(except_figures)
+        
+        return ordered_go_params_list
+
 
     def __setstate__(self, stateDict):
         #Must set ResultCache parent & functions, since these are
