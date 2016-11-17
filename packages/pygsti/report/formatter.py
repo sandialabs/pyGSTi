@@ -399,6 +399,7 @@ FormatSet.formatDict['Brackets'] = {
 # These two formatters are more complex, justifying individual functions:
 
 def _fmtCnv_html(x):
+    x = x.replace("\\", b"&#92"); #backslash
     x = x.replace("|"," ") #remove pipes=>newlines, since html wraps table text automatically
     x = x.replace("<STAR>","REPLACEWITHSTARCODE") #b/c cgi.escape would mangle <STAR> marker
     x = _cgi.escape(x).encode("ascii","xmlcharrefreplace")
@@ -406,6 +407,7 @@ def _fmtCnv_html(x):
     return x
 
 def _fmtCnv_latex(x):
+    x = x.replace("\\", "\\textbackslash")
     x = x.replace('%','\\%')
     x = x.replace('#','\\#')
     x = x.replace("half-width", "$\\nicefrac{1}{2}$-width")

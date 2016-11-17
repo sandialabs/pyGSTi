@@ -383,6 +383,62 @@ def get_gates_vs_target_table(gateset, targetGateset,
     return table
 
 
+def get_selected_gates_vs_target_table(gatesets, targetGateset,
+                                       confidenceRegionInfo=None):
+    """
+    Create a table comparing gates from *different* gatesets to a target.
+
+    This table is used to compare per-gate-optimized gatesets (e.g.
+    gauge optimizations to each gate individually) to a single target
+    gate set.
+
+    Parameters
+    ----------
+    gatesets : dict of GateSets
+        A dictionary of gate sets, one per gate of `targetGateset`.  Keys
+        are gate labels and values are GateSet objects.
+
+    targetGateset : GateSet
+        The target gate set, containing the gates to which the other
+        gates are compared.
+
+    confidenceRegionInfo : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+
+    Returns
+    -------
+    ReportTable
+    """
+    gateLabels  = list(targetGateset.gates.keys())  # gate labels
+
+    colHeadings = ('Gate', "Process|Infidelity", "1/2 Trace|Distance", "1/2 Diamond-Norm") #, "Frobenius|Distance"
+    formatters  = (None,'Conversion','Conversion','Conversion') # ,'Conversion'
+
+    qtyNames        = ('infidelity','Jamiolkowski trace dist','diamond norm') #,'Frobenius diff'
+
+    qtys = {}
+    for gl in gateLabels:
+        qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames ]
+        qtys[gl] = _cr.compute_gateset_gateset_qtys(
+            qtys_to_compute, gatesets[gl], targetGateset,
+            confidenceRegionInfo)
+
+    table = _ReportTable(colHeadings, formatters)
+
+    formatters = [None] + [ 'ErrorBars' ]*len(qtyNames)
+
+    for gl in gateLabels:
+        if confidenceRegionInfo is None:
+            rowData = [gl] + [ (qtys[gl]['%s %s' % (gl,qty)].get_value(),None) for qty in qtyNames ]
+        else:
+            rowData = [gl] + [ qtys[gl]['%s %s' % (gl,qty)].get_value_and_err_bar() for qty in qtyNames ]
+        table.addrow(rowData, formatters)
+
+    table.finish()
+    return table
+
+
 def get_spam_vs_target_table(gateset, targetGateset,
                              confidenceRegionInfo=None):
     """
@@ -1708,6 +1764,100 @@ def get_projected_err_gen_comparison_table(gateset, targetGateset,
     for gl,vals in zip(gateLabels,ddists):
         table.addrow((gl, vals['Full'], vals['H + S'], vals['H'], vals['S']),
                      (None,'Precision','Precision','Precision','Precision'))
+
+    table.finish()
+    return table
+
+
+def get_pauli_err_gen_projector_boxes_table(gateset_dim, projection_type,
+                                            figFilePrefix,
+                                            maxWidth=6.5, maxHeight=8.0):
+    """
+    Create a table of gate error generators, where each is shown as grid of boxes.
+
+    Parameters
+    ----------
+    gateset_dim : int
+        The dimension of the gate set, which equals the number of 
+        rows (or columns) in a gate matrix (e.g., 4 for a single qubit).
+
+    projection_type : {"hamiltonian", "stochastic"}
+        The type of error generator projectors to create a table for.
+        If "hamiltonian", then use the Hamiltonian generators which take a
+        density matrix rho -> -i*[ H, rho ] for Pauli-product matrix H.
+        If "stochastic", then use the Stochastic error generators which take
+        rho -> P*rho*P for Pauli-product matrix P (recall P is self adjoint).
+
+    figFilePrefix : str
+        A filename prefix (not including any directories!) to use
+        when rendering figures as a part of rendering this table.
+
+    maxWidth : float
+        The maximum width (in inches) of the entire figure.
+
+    maxHeight : float
+        The maximum height (in inches) of the entire figure.
+
+    Returns
+    -------
+    ReportTable
+    """
+
+    d2 = gateset_dim # number of projections == dim of gate
+    d = int(_np.sqrt(d2)) # dim of density matrix
+    nQubits = _np.log2(d)
+
+    #Get a list of the d2 generators (in corresspondence with the
+    #  Pauli-product matrices given by _bt.pp_matrices(d) ).
+    lindbladMxs = _tools.pauliprod_error_generators(d2, projection_type)
+       # in std basis
+
+    if nQubits == 1:
+        yd,xd = 1,2 # y and x pauli-prod *basis* dimensions
+        xlabel = "Q1"; ylabel = ""
+    elif nQubits == 2:
+        yd,xd = 2,2
+        xlabel = "Q2"; ylabel="Q1"
+    else:
+        yd,xd = 2,d/2
+        xlabel = "Q*"; ylabel="Q1"
+
+    topright = "%s \\ %s" % (ylabel,xlabel) if (len(ylabel) > 0) else ""
+    colHeadings=[topright] + \
+        [("%s" % x) if len(x) else "" \
+             for x in _tools.basis_element_labels("pp",xd)]
+    rowLabels=[("%s" % x) if len(x) else "" \
+                 for x in _tools.basis_element_labels("pp",yd)]
+
+    xLabels = _tools.basis_element_labels("pp",xd)
+    yLabels = _tools.basis_element_labels("pp",yd)
+
+    table = _ReportTable(colHeadings,["Conversion"]+[None]*(len(colHeadings)-1))
+    nRows = len(rowLabels)
+    nCols = len(colHeadings)
+
+    maxFigSz = min(0.85*(maxHeight/nRows), 0.85*(maxWidth/nCols))
+    
+    iCur = 0
+    for i,ylabel  in enumerate(yLabels):
+        rowData = [rowLabels[i]]
+        rowFormatters = [None]
+
+        for j,xlabel in enumerate(xLabels):
+            projector = lindbladMxs[iCur]; iCur += 1
+            projector = _tools.std_to_pp(projector) #now in pp basis ("pp" below)
+            m,M = -_np.max(_np.abs(projector)), _np.max(_np.abs(projector))
+            fig = _plotting.gate_matrix_boxplot(
+                projector, None, m,M, save_to="", mxBasis="pp", mxBasisDims=d)
+
+            sz = min(projector.shape[0] * 0.5, maxFigSz)
+            nm = figFilePrefix + "_%s_%s_projector" % (ylabel,xlabel)
+            figInfo = (fig,nm,sz,sz)
+
+            rowData.append(figInfo)
+            rowFormatters.append('Figure')
+
+        table.addrow(rowData, rowFormatters)
 
     table.finish()
     return table

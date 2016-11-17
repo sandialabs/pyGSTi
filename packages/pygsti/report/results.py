@@ -486,6 +486,9 @@ class Results(object):
         def validate_LsAndGerms(key):
             return [key] if (self._bEssentialResultsSet and
                              self._LsAndGermInfoSet) else []
+        def noConfidenceLevelDependence(level):
+            """ Designates a table as independent of the confidence level"""
+            if level is not None: raise _ResultCache.NoCRDependenceError
 
         def setup():
             return (self.gatesets['target'], self.gatesets['final estimate'])
@@ -622,6 +625,22 @@ class Results(object):
             cri = self._get_confidence_region(confidenceLevel)
             return _generation.get_gates_vs_target_table(gsBest, gsTgt, cri)
         fns['bestGatesetVsTargetTable'] = (fn, validate_essential)
+
+        def fn(key, confidenceLevel, vb):
+            gsTgt, _ = setup()
+            noConfidenceLevelDependence(confidenceLevel)
+            best_gs_gauges = self._specials.get(
+                'gaugeOptGeneralAppendixGatesets',verbosity=vb)
+            return _generation.get_selected_gates_vs_target_table(
+                best_gs_gauges, gsTgt, None)
+        fns['gaugeOptGatesetsVsTargetTable'] = (fn, validate_essential)
+
+        def fn(key, confidenceLevel, vb):
+            noConfidenceLevelDependence(confidenceLevel)
+            best_gs_gauges = self._specials.get(
+                'gaugeOptGeneralAppendixGatesets',verbosity=vb)
+            return _generation.get_gateset_choi_table(best_gs_gauges['CPTP'])
+        fns['gaugeOptCPTPGatesetChoiTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
@@ -776,7 +795,19 @@ class Results(object):
                 gsBest, "bestChoiEvalBars", confidenceRegionInfo=cri)
         fns['bestGatesetChoiEvalTable'] = (fn, validate_essential)
 
+        def fn(key, confidenceLevel, vb):
+            _, gsBest = setup()
+            noConfidenceLevelDependence(confidenceLevel)
+            return _generation.get_pauli_err_gen_projector_boxes_table(
+                gsBest.dim, "hamiltonian", "pauli_ham")
+        fns['hamiltonianProjectorTable'] = (fn, validate_essential)
 
+        def fn(key, confidenceLevel, vb):
+            _, gsBest = setup()
+            noConfidenceLevelDependence(confidenceLevel)
+            return _generation.get_pauli_err_gen_projector_boxes_table(
+                gsBest.dim, "stochastic", "pauli_sto")
+        fns['stochasticProjectorTable'] = (fn, validate_essential)
 
         return fns
 
@@ -1275,6 +1306,35 @@ class Results(object):
 
             return ret
         fns['blankGaugeOptAppendixTables'] = (fn, validate_essential)
+
+
+        def fn(key, confidenceLevel, vb):
+            printer = VerbosityPrinter.build_printer(vb)
+            noConfidenceLevelDependence(confidenceLevel)
+
+            gsTarget = self.gatesets['target']
+            gsBestEstimate = self.gatesets['final estimate']
+
+            printer.log("Performing gauge transforms for appendix...")
+
+            best_gs_gauges = _collections.OrderedDict()
+
+            for gateLabel in gsBestEstimate.gates:
+                best_gs_gauges[gateLabel] = _optimizeGauge(
+                    gsBestEstimate, gsTarget, 
+                    {'gates': 0.0, 'spam': 0.0, gateLabel: 1.0},
+                    verbosity=vb)
+
+            gaugeParams = self.parameters['gaugeOptParams'].copy()
+            gaugeParams['CPpenalty'] = 100
+            gaugeParams['TPpenalty'] = 100
+            gaugeParams['validSpamPenalty'] = 100
+            gaugeParams['verbosity'] = vb
+            best_gs_gauges['CPTP'] = _optimizeGauge(
+                gsBestEstimate, gsTarget, **gaugeParams)
+
+            return best_gs_gauges
+        fns['gaugeOptGeneralAppendixGatesets'] = (fn, validate_essential)
 
 
         def fn(key, confidenceLevel, vb):
@@ -3609,7 +3669,11 @@ class Results(object):
 
         appendix_tables = ('bestGatesetErrGenProjectionTargetMetricsTable',
                            'bestGatesetErrGenProjectionSelfMetricsTable',
-                           'logLErrgenProjectionTable')
+                           'logLErrgenProjectionTable',
+                           'hamiltonianProjectorTable',
+                           'stochasticProjectorTable',
+                           'gaugeOptGatesetsVsTargetTable',
+                           'gaugeOptCPTPGatesetChoiTable')
         appendix_ls_and_germs_tables = ('byGermTable',)
 
         tables_to_blank = []
