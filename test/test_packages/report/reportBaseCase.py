@@ -91,7 +91,6 @@ class ReportBaseCase(BaseTestCase):
                                                    minProbClip=1e-4, probClipInterval=(-1e6,1e6),
                                                    returnAll=True) #TP initial gateset => TP output gatesets
         tp_target = self.targetGateset.copy(); tp_target.set_all_parameterizations("TP")
-        print("lsgst_gatesets_TP GG = ",lsgst_gatesets_TP[0].default_gauge_group) #DEBUG
         lsgst_gatesets_TP = [ pygsti.gaugeopt_to_target(gs, tp_target, {'gates': 1.0, 'spam': 0.001})
                               for gs in lsgst_gatesets_TP ]
 
