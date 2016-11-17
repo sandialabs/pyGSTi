@@ -14,6 +14,7 @@ import scipy.linalg as _spl
 from ..tools import basistools as _bt
 from ..objects import gate as _gate
 from ..objects import gateset as _gateset
+from ..objects import gaugegroup as _gg
 
 
 #############################################
@@ -419,7 +420,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
         - "pp"  = gate matrix operates on density mx expresses as sum of
           tensor-product of Pauli matrices
 
-    parameterization : {"full","TP","static","linear"}, optional
+    parameterization : {"full","TP","static","linear","linearTP"}, optional
         How to parameterize the resulting gate.
 
         - "full" = return a FullyParameterizedGate.
@@ -939,7 +940,7 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
         - "pp"  = gate matrix operates on density mx expresses as sum of
           tensor-product of Pauli matrices
 
-    parameterization : {"full","linear","linearTP"}, optional
+    parameterization : {"full","TP","linear","linearTP"}, optional
         How to parameterize the gates of the resulting GateSet (see
         documentation for :meth:`build_gate`).
 
@@ -982,6 +983,14 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
         basisDims = stateSpaceDims
 
     ret.set_basis(basis, basisDims)
+
+    if parameterization == "full":
+        ret.default_gauge_group = _gg.FullGaugeGroup(ret.dim)
+    elif parameterization == "TP":
+        ret.default_gauge_group = _gg.TPGaugeGroup(ret.dim)
+    else:
+        ret.default_gauge_group = None #assume no gauge freedom
+
     return ret
 
 

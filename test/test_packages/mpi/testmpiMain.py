@@ -50,8 +50,8 @@ def runAnalysis(obj, ds, myspecs, gsTarget, lsgstStringsToUse,
                              svdTruncateTo=gsTarget.dim, verbosity=3)
 
     assertGatesetsInSync(gs_lgst, comm)
-    gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",
-                                       targetGateset=gsTarget)
+    gs_lgst_go = pygsti.gaugeopt_to_target(gs_lgst,gsTarget)
+    
     assertGatesetsInSync(gs_lgst_go, comm)
 
     #Run full iterative LSGST
@@ -642,8 +642,7 @@ def test_MPI_gatestrings_chi2(comm):
         assertGatesetsInSync(gs1, comm)
         assertGatesetsInSync(gs2, comm)
 
-        gs2_go = pygsti.optimize_gauge(gs2, "target", targetGateset=gs1,
-                                       gateWeight=1.0, spamWeight=1.0)
+        gs2_go = pygsti.gaugeopt_to_target(gs2, gs1, {'gates': 1.0, 'spam': 1.0})
         print("Frobenius distance %d (rank %d) = " % (i,comm.Get_rank()), gs1.frobeniusdist(gs2_go))
         if gs1.frobeniusdist(gs2_go) >= 1e-5:
             print("DIFF (%d) = " % comm.Get_rank(), gs1.strdiff(gs2_go))
@@ -666,8 +665,7 @@ def test_MPI_gatestrings_logl(comm):
         assertGatesetsInSync(gs1, comm)
         assertGatesetsInSync(gs2, comm)
 
-        gs2_go = pygsti.optimize_gauge(gs2, "target", targetGateset=gs1,
-                                       gateWeight=1.0, spamWeight=1.0)
+        gs2_go = pygsti.gaugeopt_to_target(gs2, gs1, {'gates': 1.0, 'spam': 1.0})
         print("Frobenius distance %d (rank %d) = " % (i,comm.Get_rank()), gs1.frobeniusdist(gs2_go))
         if gs1.frobeniusdist(gs2_go) >= 1e-5:
             print("DIFF (%d) = " % comm.Get_rank(), gs1.strdiff(gs2_go))
@@ -690,8 +688,7 @@ def test_MPI_derivcols(comm):
         assertGatesetsInSync(gs1, comm)
         assertGatesetsInSync(gs2, comm)
 
-        gs2_go = pygsti.optimize_gauge(gs2, "target", targetGateset=gs1,
-                                       gateWeight=1.0, spamWeight=1.0)
+        gs2_go = pygsti.gaugeopt_to_target(gs2, gs1, {'gates': 1.0, 'spam': 1.0})
         print("Frobenius distance %d (rank %d) = " % (i,comm.Get_rank()), gs1.frobeniusdist(gs2_go))
         if gs1.frobeniusdist(gs2_go) >= 1e-5:
             print("DIFF (%d) = " % comm.Get_rank(), gs1.strdiff(gs2_go))

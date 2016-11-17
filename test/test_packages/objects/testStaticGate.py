@@ -33,7 +33,9 @@ class StaticGateTestCase(BaseTestCase):
         self.assertArraysAlmostEqual(self.gate.deriv_wrt_params(), np.array([]))
 
     def test_transform(self):
-        self.gate.transform([[1,0],[0,1]], [[0,1],[1,0]])
+        with self.assertRaises(ValueError):
+            elT = pygsti.objects.FullGaugeGroup.element([[1,0],[0,1]])
+            self.gate.transform(elT) # can't transform a static gate - no params!
 
     def test_compose(self):
         self.gate.compose(self.gate)

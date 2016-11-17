@@ -1721,44 +1721,44 @@ def get_gaugeopt_params_table(gaugeOptArgs):
 
     Parameters
     ----------
-    gaugeOptArgs : dict
-        A dictionary of specifying values for zero or more
-        of the *arguments* of pyGSTi's optimize_gauge
-        function.
+    gaugeOptArgs : list of dicts
+        A list of dictionaries, each specifying values for zero or more of the
+        *arguments* of pyGSTi's :func:`gaugeopt_to_target` function.
 
     Returns
     -------
     ReportTable
     """
+
     colHeadings = ('Quantity','Value')
     formatters = ('Bold','Bold')
 
     table = _ReportTable(colHeadings, formatters)
 
-    if 'toGetTo' in gaugeOptArgs:
-        table.addrow(("Gauge optimize to", gaugeOptArgs['toGetTo']), (None,None))
+    if isinstance(gaugeOptArgs,list) or isinstance(gaugeOptArgs,tuple):
+        gaugeOptArgs = gaugeOptArgs[-1]
+        #for now, just print the params of the *last*
+        # gauge optimiziation, though in the future we could print
+        # multiple columns, one for each optimization.
+
     if 'method' in gaugeOptArgs:
         table.addrow(("Method", str(gaugeOptArgs['method'])), (None,None))
-    if 'constrainToTP' in gaugeOptArgs:
-        table.addrow(("TP constrained", str(gaugeOptArgs['constrainToTP'])), (None,None))
-    if 'constrainToCP' in gaugeOptArgs:
-        table.addrow(("CP constrained", str(gaugeOptArgs['constrainToCP'])), (None,None))
-    if 'constrainToValidSpam' in gaugeOptArgs:
-        table.addrow(("Valid-SPAM constrained", str(gaugeOptArgs['constrainToValidSpam'])), (None,None))
-    if 'targetFactor' in gaugeOptArgs:
-        table.addrow(("Target weighting", str(gaugeOptArgs['targetFactor'])), (None,None))
-    if 'targetGatesMetric' in gaugeOptArgs:
-        table.addrow(("Metric for gate-to-target", str(gaugeOptArgs['targetGatesMetric'])), (None,None))
-    if 'targetSpamMetric' in gaugeOptArgs:
-        table.addrow(("Metric for SPAM-to-target", str(gaugeOptArgs['targetSpamMetric'])), (None,None))
-    if 'gateWeight' in gaugeOptArgs:
-        table.addrow(("Gate weighting", str(gaugeOptArgs['gateWeight'])), (None,None))
-    if 'spamWeight' in gaugeOptArgs:
-        table.addrow(("SPAM weighting", str(gaugeOptArgs['spamWeight'])), (None,None))
+    if 'TPpenalty' in gaugeOptArgs:
+        table.addrow(("TP penalty factor", str(gaugeOptArgs['TPpenalty'])), (None,None))
+    if 'CPpenalty' in gaugeOptArgs:
+        table.addrow(("CP penalty factor", str(gaugeOptArgs['CPpenalty'])), (None,None))
+    if 'validSpamPenalty' in gaugeOptArgs:
+        table.addrow(("Valid-SPAM constrained", str(gaugeOptArgs['validSpamPenalty'])), (None,None))
+    if 'gatesMetric' in gaugeOptArgs:
+        table.addrow(("Metric for gate-to-target", str(gaugeOptArgs['gatesMetric'])), (None,None))
+    if 'spamMetric' in gaugeOptArgs:
+        table.addrow(("Metric for SPAM-to-target", str(gaugeOptArgs['spamMetric'])), (None,None))
     if 'itemWeights' in gaugeOptArgs:
         if gaugeOptArgs['itemWeights']:
             table.addrow(("Item weighting", ", ".join([("%s=%.2g" % (k,v)) 
                            for k,v in gaugeOptArgs['itemWeights'].items()])), (None,None))
+    if 'gauge_group' in gaugeOptArgs:
+        table.addrow(("Gauge group", str(gaugeOptArgs['gauge_group'])), (None,None))
 
     table.finish()
     return table
