@@ -88,6 +88,9 @@ class TestJamiolkowskiMethods(JamiolkowskiTestCase):
         choiStd = pygsti.jamiolkowski_iso(mxStd, "std","std")
         choiStd2 = pygsti.jamiolkowski_iso(mxGM, "gm","std")
         choiStd3 = pygsti.jamiolkowski_iso(mxPP, "pp","std")
+        fastChoiStd = pygsti.fast_jamiolkowski_iso_std(mxStd, "std")
+        fastChoiStd2 = pygsti.fast_jamiolkowski_iso_std(mxGM, "gm")
+        fastChoiStd3 = pygsti.fast_jamiolkowski_iso_std(mxPP, "pp")
 
         choiGM = pygsti.jamiolkowski_iso(mxStd, "std","gm")
         choiGM2 = pygsti.jamiolkowski_iso(mxGM, "gm","gm")
@@ -99,6 +102,9 @@ class TestJamiolkowskiMethods(JamiolkowskiTestCase):
 
         self.assertArraysAlmostEqual( choiStd, choiStd2)
         self.assertArraysAlmostEqual( choiStd, choiStd3)
+        self.assertArraysAlmostEqual( choiStd, fastChoiStd)
+        self.assertArraysAlmostEqual( choiStd, fastChoiStd2)
+        self.assertArraysAlmostEqual( choiStd, fastChoiStd3)
         self.assertArraysAlmostEqual( choiGM, choiGM2)
         self.assertArraysAlmostEqual( choiGM, choiGM3)
         self.assertArraysAlmostEqual( choiPP, choiPP2)
