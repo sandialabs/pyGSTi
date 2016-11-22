@@ -27,7 +27,7 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
         ret = 0
 
         if CPpenalty != 0:
-            s = _tools.sum_of_negative_choi_evals(gs)
+            s = _tools.sum_of_negative_choi_evals(gs,itemWeights)
             ret += CPpenalty * s
 
         if TPpenalty != 0:
