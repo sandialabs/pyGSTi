@@ -122,17 +122,24 @@ class TestJamiolkowskiMethods(JamiolkowskiTestCase):
         gatePP2 = pygsti.jamiolkowski_iso_inv(choiGM, "gm","pp")
         gatePP3 = pygsti.jamiolkowski_iso_inv(choiPP, "pp","pp")
 
+        fastGateStd = pygsti.fast_jamiolkowski_iso_std_inv(choiStd, "std")
+        fastGateGM  = pygsti.fast_jamiolkowski_iso_std_inv(choiStd, "gm")
+        fastGatePP  = pygsti.fast_jamiolkowski_iso_std_inv(choiStd, "pp")
+
         self.assertArraysAlmostEqual( gateStd, mxStd)
         self.assertArraysAlmostEqual( gateStd2, mxStd)
         self.assertArraysAlmostEqual( gateStd3, mxStd)
+        self.assertArraysAlmostEqual( fastGateStd, mxStd)
 
         self.assertArraysAlmostEqual( gateGM,  mxGM)
         self.assertArraysAlmostEqual( gateGM2, mxGM)
         self.assertArraysAlmostEqual( gateGM3, mxGM)
+        self.assertArraysAlmostEqual( fastGateGM, mxGM)
 
         self.assertArraysAlmostEqual( gatePP,  mxPP)
         self.assertArraysAlmostEqual( gatePP2, mxPP)
         self.assertArraysAlmostEqual( gatePP3, mxPP)
+        self.assertArraysAlmostEqual( fastGatePP, mxPP)
 
 
         with self.assertRaises(ValueError):
