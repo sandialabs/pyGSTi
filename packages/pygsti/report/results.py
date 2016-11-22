@@ -20,6 +20,7 @@ from ..objects      import gatestring           as _gs
 from ..objects      import VerbosityPrinter
 from ..construction import spamspecconstruction as _ssc
 from ..algorithms   import gaugeopt_to_target   as _optimizeGauge
+from ..algorithms   import contract             as _contract
 from ..tools        import listtools            as _lt
 from ..             import _version
 
@@ -630,16 +631,17 @@ class Results(object):
             gsTgt, _ = setup()
             noConfidenceLevelDependence(confidenceLevel)
             best_gs_gauges = self._specials.get(
-                'gaugeOptGeneralAppendixGatesets',verbosity=vb)
+                'singleGateTargetGaugeOptGatesets',verbosity=vb)
             return _generation.get_selected_gates_vs_target_table(
                 best_gs_gauges, gsTgt, None)
         fns['gaugeOptGatesetsVsTargetTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
-            best_gs_gauges = self._specials.get(
-                'gaugeOptGeneralAppendixGatesets',verbosity=vb)
-            return _generation.get_gateset_choi_table(best_gs_gauges['CPTP'])
+            cptp_go_gateset = self._specials.get(
+                'CPTPGaugeOptGateset',verbosity=vb)
+            return _generation.get_gateset_choi_eigenval_table(
+                cptp_go_gateset, "goCPTPChoiEvalBars")
         fns['gaugeOptCPTPGatesetChoiTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
@@ -739,8 +741,11 @@ class Results(object):
 
         def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
+            cptp_go_gateset = self._specials.get('CPTPGaugeOptGateset',verbosity=vb).copy()
+            cptp_go_gateset.set_all_parameterizations("full") #for contraction
+            cptp_gateset = _contract(cptp_go_gateset, "CPTP")
             return _generation.get_logl_projected_err_gen_table(
-                gsBest, gsTgt, self.gatestring_lists['final'], self.dataset)
+                gsBest, gsTgt, self.gatestring_lists['final'], self.dataset, cptp_gateset)
         fns['logLErrgenProjectionTable'] = (fn, validate_essential)
 
 
@@ -1315,8 +1320,6 @@ class Results(object):
             gsTarget = self.gatesets['target']
             gsBestEstimate = self.gatesets['final estimate']
 
-            printer.log("Performing gauge transforms for appendix...")
-
             best_gs_gauges = _collections.OrderedDict()
 
             for gateLabel in gsBestEstimate.gates:
@@ -1325,16 +1328,28 @@ class Results(object):
                     {'gates': 0.0, 'spam': 0.0, gateLabel: 1.0},
                     verbosity=vb)
 
+            return best_gs_gauges
+        fns['singleGateTargetGaugeOptGatesets'] = (fn, validate_essential)
+
+
+        def fn(key, confidenceLevel, vb):
+            printer = VerbosityPrinter.build_printer(vb)
+            noConfidenceLevelDependence(confidenceLevel)
+
+            gsTarget = self.gatesets['target']
+            gsBestEstimate = self.gatesets['final estimate']
+
+            #Heusistic parameters for CPTP gauge opt that doesn't take too long
             gaugeParams = self.parameters['gaugeOptParams'].copy()
             gaugeParams['CPpenalty'] = 100
             gaugeParams['TPpenalty'] = 100
-            gaugeParams['validSpamPenalty'] = 100
-            gaugeParams['verbosity'] = vb
-            best_gs_gauges['CPTP'] = _optimizeGauge(
-                gsBestEstimate, gsTarget, **gaugeParams)
-
-            return best_gs_gauges
-        fns['gaugeOptGeneralAppendixGatesets'] = (fn, validate_essential)
+            gaugeParams['validSpamPenalty'] = 0
+            gaugeParams['tol'] = 0.1
+            gaugeParams['maxiter'] = 100
+            gaugeParams['method'] = 'BFGS'
+            #gaugeParams['verbosity'] = 5 #DEBUG
+            return _optimizeGauge(gsBestEstimate, gsTarget, **gaugeParams)
+        fns['CPTPGaugeOptGateset'] = (fn, validate_essential)
 
 
         def fn(key, confidenceLevel, vb):

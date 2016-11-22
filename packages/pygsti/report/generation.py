@@ -1249,7 +1249,7 @@ def get_logl_bygerm_table(gateset, dataset, germs, strs, max_lengths,
 
 
 def get_logl_projected_err_gen_table(gateset, targetGateset,
-                                     gatestrings, dataset):
+                                     gatestrings, dataset, cptpGateset=None):
     """
     Create a table showing the log-likelihood for different projections of the
     error generator.
@@ -1268,6 +1268,10 @@ def get_logl_projected_err_gen_table(gateset, targetGateset,
 
     dataset : DataSet
         The data set to use when computing the log-likelihood.
+
+    cptpGateset : GateSet, optional
+        An optional gate set to compute log-likelihood values for and report
+        on an additional "CPTP" row of the table.
 
     Returns
     -------
@@ -1321,9 +1325,20 @@ def get_logl_projected_err_gen_table(gateset, targetGateset,
                     'ppt': ('Type','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','N_{sigma}','N_s','N_p', 'Rating')
                   }
     table = _ReportTable(colHeadings, None)
-    gatesets = (gateset, gsHS, gsH, gsS)
-    gatesetTyps = ("Full","H + S","H","S")
-    Nps = (gateset.num_nongauge_params(), Np_HS, Np_H, Np_S)
+    Nng = gateset.num_nongauge_params()
+
+    if cptpGateset is None:
+        gatesets = (gateset, gsHS, gsH, gsS)
+        gatesetTyps = ("Full","H + S","H","S")
+        Nps = (Nng, Np_HS, Np_H, Np_S)
+    else:
+        gsHSCPTP = gsHS.copy()
+        gsHSCPTP.set_all_parameterizations("full")
+        gsHSCPTP = _alg.contract(gsHSCPTP, "CPTP")
+
+        gatesets = (gateset, gsHS, gsH, gsS, cptpGateset, gsHSCPTP)
+        gatesetTyps = ("Full","H + S","H","S","CPTP","H + S CPTP")
+        Nps = (Nng, Np_HS, Np_H, Np_S, Nng, Np_HS)
 
     logL_upperbound = _tools.logl_max(dataset, gatestrings)
     Ns = len(gatestrings)*(len(dataset.get_spam_labels())-1) 
