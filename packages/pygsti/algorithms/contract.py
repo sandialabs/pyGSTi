@@ -173,6 +173,7 @@ def _contractToCP_direct(gateset,verbosity,TPalso=False,maxiter=100000,tol=1e-8)
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
     gs = gateset.copy() #working copy that we keep overwriting with vectorized data
+    mxBasis = gs.get_basis_name()
     #printer.log('', 1)
     printer.log(("--- Contract to %s (direct) ---" % ("CPTP" if TPalso else "CP")), 1)
 
@@ -181,7 +182,7 @@ def _contractToCP_direct(gateset,verbosity,TPalso=False,maxiter=100000,tol=1e-8)
         if(TPalso):
             for k in range(new_gate.shape[1]): new_gate[0,k] = 1.0 if k == 0 else 0.0
 
-        Jmx = _tools.jamiolkowski_iso(new_gate)
+        Jmx = _tools.jamiolkowski_iso(new_gate,gateMxBasis=mxBasis,choiMxBasis="gm")
         evals,evecs = _np.linalg.eig(Jmx)
 
         assert( abs( sum(evals) - 1.0 ) < 1e-8 ) #check that Jmx always has trace == 1
@@ -264,7 +265,7 @@ def _contractToCP_direct(gateset,verbosity,TPalso=False,maxiter=100000,tol=1e-8)
 
             assert( min(evals) >= -1e-10 and abs( sum(evals) - 1.0 ) < 1e-8) #Check that trace-trunc above didn't mess up positivity
 
-            new_gate = _tools.jamiolkowski_iso_inv(new_Jmx)
+            new_gate = _tools.jamiolkowski_iso_inv(new_Jmx,gateMxBasis=mxBasis,choiMxBasis="gm")
 
             #Old way of enforcing TP -- new way should be better since it's not iterative, but keep this around just in case.
             #  new_gate = _tools.jamiolkowski_iso_inv(new_Jmx)
