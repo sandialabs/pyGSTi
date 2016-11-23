@@ -81,7 +81,10 @@ def contract(gateset, toWhat, dataset=None, maxiter=1000000, tol=0.01, useDirect
         distance,contractedGateset = _contractToTP(gateset,verbosity)
         distance,contractedGateset = _contractToXP(contractedGateset, dataset,verbosity, method, maxiter, tol)
     elif toWhat == 'CP':
-        distance,contractedGateset = _contractToCP(gateset, printer, method, maxiter, tol)
+        if useDirectCP:
+            distance,contractedGateset = _contractToCP_direct(gateset, printer, TPalso=False, maxiter=maxiter)
+        else:
+            distance,contractedGateset = _contractToCP(gateset, printer, method, maxiter, tol)
     elif toWhat == 'TP':
         distance,contractedGateset = _contractToTP(gateset,verbosity)
     elif toWhat == 'XP':
@@ -142,9 +145,12 @@ def _contractToCP(gateset,verbosity,method='Nelder-Mead',
     #printer.log('', 2)
     printer.log("--- Contract to CP ---", 1)
     gs = gateset.copy() #working copy that we keep overwriting with vectorized data
+    mxBasis = gs.get_basis_name()
+    basisDim = gs.get_basis_dimension()
 
     def objective_func(vectorGS):
         gs.from_vector(vectorGS)
+        gs.set_basis(mxBasis,basisDim) #set basis for jamiolkowski iso
         cpPenalty = _tools.sum_of_negative_choi_evals(gs) * 1000
         return (CLIFF + cpPenalty if cpPenalty > 1e-10 else 0) + gs.frobeniusdist(gateset)
 
@@ -185,7 +191,8 @@ def _contractToCP_direct(gateset,verbosity,TPalso=False,maxiter=100000,tol=1e-8)
         Jmx = _tools.jamiolkowski_iso(new_gate,gateMxBasis=mxBasis,choiMxBasis="gm")
         evals,evecs = _np.linalg.eig(Jmx)
 
-        assert( abs( sum(evals) - 1.0 ) < 1e-8 ) #check that Jmx always has trace == 1
+        if TPalso:
+            assert( abs( sum(evals) - 1.0 ) < 1e-8 ) #check that Jmx always has trace == 1
         #if abs( sum(evals) - 1.0 ) >= 1e-8: #DEBUG
         #  print "WARNING: JMx given with evals = %s (sum = %s != 1)" % (evals,sum(evals))
         #  print "WARNING: JMx from: "; _tools.print_mx(new_gate)

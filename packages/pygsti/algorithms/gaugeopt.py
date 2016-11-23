@@ -22,11 +22,14 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
     if itemWeights is None: itemWeights = {}
     gateWeight = itemWeights.get('gates',1.0)
     spamWeight = itemWeights.get('spam',1.0)
+    mxBasis = gateset.get_basis_name()
+    basisDim = gateset.get_basis_dimension()
 
     def objective_fn(gs):
         ret = 0
 
         if CPpenalty != 0:
+            gs.set_basis(mxBasis,basisDim) #set basis for jamiolkowski iso
             s = _tools.sum_of_negative_choi_evals(gs,itemWeights)
             ret += CPpenalty * s
 
@@ -286,6 +289,8 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
 
     gateDim = gateset.get_dimension()
     firstRowForTP = _np.zeros(gateDim); firstRowForTP[0] = 1.0
+    mxBasis = gateset.get_basis_name()
+    basisDim = gateset.get_basis_dimension()
 
     if toGetTo == "target":
         if targetGateset is None: raise ValueError("Must specify a targetGateset != None")
@@ -305,6 +310,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
             gs = gateset.copy(); gs.transform(ggEl)
 
             if cpPenalty != 0:
+                gs.set_basis(mxBasis,basisDim) #set basis for jamiolkowski iso
                 s = _tools.sum_of_negative_choi_evals(gs)
                 if s > 1e-8: return cpPenalty #*(1.0+s) #1e-8 should match TOL in contract to CP routines
 
@@ -390,6 +396,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
             ggEl = _objs.TPGaugeGroup.element(matM)
             gs = tpGateset.copy(); gs.transform(ggEl)
 
+            gs.set_basis(mxBasis,basisDim) #set basis for jamiolkowski iso
             cpPenalties = _tools.sums_of_negative_choi_evals(gs)
             #numNonCP = sum([ 1 if p > 1e-4 else 0 for p in cpPenalties ])
             #cpPenalty = sum( [ 10**i*cp for (i,cp) in enumerate(cpPenalties)] ) + 100*numNonCP #DEBUG
@@ -482,6 +489,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
             ggEl = _objs.TPGaugeGroup.element(matM)
             gs = tpGateset.copy(); gs.transform(ggEl)
 
+            gs.set_basis(mxBasis,basisDim) #set basis for jamiolkowski iso
             cpPenalties = _tools.sums_of_negative_choi_evals(gs)
             cpPenalty = sum( cpPenalties )
 

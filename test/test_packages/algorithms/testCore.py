@@ -440,6 +440,8 @@ class TestCoreMethods(BaseTestCase):
         gs_lgst_target     = self.runSilent(pygsti.optimize_gauge, gs_lgst,"target",targetGateset=self.gateset,verbosity=10) #DEPRECATED
         gs_lgst_target     = self.runSilent(pygsti.gaugeopt_to_target, gs_lgst, self.gateset, verbosity=10)
 
+        gs_clgst_cp    = self.runSilent(pygsti.contract, gs_lgst_target, "CP",verbosity=10, tol=10.0, useDirectCP=False) #DEBUG
+
         #Gauge Opt to Target using non-frobenius metrics
         gs_lgst_targetAlt  = self.runSilent(pygsti.optimize_gauge, gs_lgst_target,"target",targetGateset=self.gateset,
                                             targetGatesMetric='fidelity', verbosity=10) #DEPRECATED
@@ -511,6 +513,7 @@ class TestCoreMethods(BaseTestCase):
         gs_lgst_target_cp  = self.runSilent(pygsti.gaugeopt_to_target, gs_clgst_cptp, self.gateset, 
                                             CPpenalty=1.0, gauge_group=TP_gauge_group, verbosity=10)
 
+        gs_lgst.set_basis("gm",4) #so CPTP optimizations can work on gs_lgst
         gs_lgst_cptp       = self.runSilent(pygsti.optimize_gauge, gs_lgst,"CPTP",verbosity=10) #DEPRECATED
         gs_lgst_cptp       = self.runSilent(pygsti.gaugeopt_to_target, gs_lgst, None,
                                             CPpenalty=1.0, TPpenalty=1.0, validSpamPenalty=1.0, verbosity=10)
