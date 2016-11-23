@@ -92,7 +92,7 @@ def make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=None,
 def make_bootstrap_gatesets(numGateSets, inputDataSet, generationMethod,
                             fiducialPrep, fiducialMeasure, germs, maxLengths,
                             inputGateSet=None, targetGateSet=None, startSeed=0,
-                            spamLabels=None, constrainToTP=True, lsgstLists=None,
+                            spamLabels=None, lsgstLists=None,
                             returnData=False, verbosity=2):
     """
     Creates a series of "bootstrapped" GateSets form a single DataSet (and
@@ -151,9 +151,6 @@ def make_bootstrap_gatesets(numGateSets, inputDataSet, generationMethod,
        The list of SPAM labels to include in the output dataset.  If None
        are specified, defaults to the spam labels of inputDataSet.
 
-    constrainToTP : bool, optional
-        Whether to constrain GST to trace-preserving gatesets.
-
     lsgstLists : list of gate string lists, optional
         Provides explicit list of gate string lists to be used in analysis;
         to be given if the dataset uses "incomplete" or "reduced" sets of
@@ -204,8 +201,7 @@ def make_bootstrap_gatesets(numGateSets, inputDataSet, generationMethod,
         print("Running MLGST Iteration %d " % run)
         results = _do_long_sequence_gst(
             datasetList[run], targetGateSet, fiducialPrep, fiducialMeasure,
-            germs, maxLengths, constrainToTP=constrainToTP,
-            lsgstLists=lsgstLists, advancedOptions={'verbosity':verbosity} )
+            germs, maxLengths, lsgstLists=lsgstLists, verbosity=verbosity)
         gatesetList.append(results.gatesets['final estimate'])
 
     if not returnData:
@@ -214,7 +210,7 @@ def make_bootstrap_gatesets(numGateSets, inputDataSet, generationMethod,
         return gatesetList, datasetList
 
 
-def gauge_optimize_gs_list(gsList, targetGateset, constrainToTP=True,
+def gauge_optimize_gs_list(gsList, targetGateset,
                            gateMetric = 'frobenius', spamMetric = 'frobenius',
                            plot=True):
     """
@@ -230,11 +226,7 @@ def gauge_optimize_gs_list(gsList, targetGateset, constrainToTP=True,
 
     targetGateset : GateSet
        The gateset to compare the gauge-optimized gates with, and also
-       to gauge-optimize them to (as a parameter to optimize_gauge).
-
-    constrainToTP : bool
-       Whether to constrain the gauge optimization so that initially
-       trace-preserving (TP) gates will remain TP.
+       to gauge-optimize them to.
 
     gateMetric : { "frobenius", "fidelity", "tracedist" }, optional
        The metric used within the gauge optimization to determing error
@@ -269,11 +261,10 @@ def gauge_optimize_gs_list(gsList, targetGateset, constrainToTP=True,
         listOfBootStrapEstsNoOptG0toTargetVarSpam = []
         for gs in listOfBootStrapEstsNoOpt:
             listOfBootStrapEstsNoOptG0toTargetVarSpam.append(
-                _alg.optimize_gauge(gs,"target",
-                                   targetGateset=targetGateset,
-                                   spamWeight=spW,constrainToTP=constrainToTP,
-                                   targetGatesMetric=gateMetric,
-                                   targetSpamMetric=spamMetric))
+                _alg.gaugeopt_to_target(gs,targetGateset, 
+                                        itemWeights={'spam': spW },
+                                        gatesMetric=gateMetric,
+                                        spamMetric=spamMetric))
 
         GateSetGOtoTargetVarSpamVecArray = _np.zeros([numResamples],
                                                      dtype='object')
@@ -319,12 +310,10 @@ def gauge_optimize_gs_list(gsList, targetGateset, constrainToTP=True,
     listOfBootStrapEstsG0toTargetSmallSpam = []
     for gs in listOfBootStrapEstsNoOpt:
         listOfBootStrapEstsG0toTargetSmallSpam.append(
-            _alg.optimize_gauge(gs,"target",
-                                targetGateset=targetGateset,
-                                spamWeight=bestSPAMWeight,
-                                constrainToTP=constrainToTP,
-                                targetGatesMetric=gateMetric,
-                                targetSpamMetric=spamMetric)   )
+            _alg.gaugeopt_to_target(gs,targetGateset,
+                                    itemWeights={'spam': bestSPAMWeight},
+                                    gatesMetric=gateMetric,
+                                    spamMetric=spamMetric))
 
     return listOfBootStrapEstsG0toTargetSmallSpam
 

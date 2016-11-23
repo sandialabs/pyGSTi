@@ -24,6 +24,7 @@ from . import gate as _gate
 from . import spamvec as _sv
 from . import labeldicts as _ld
 from . import gscalc as _gscalc
+from . import gaugegroup as _gg
 
 from .verbosityprinter import VerbosityPrinter
 
@@ -107,6 +108,7 @@ class GateSet(object):
 
         self._remainderlabel = remainder_label
         self._identitylabel = identity_label
+        self._default_gauge_group = None
 
         super(GateSet, self).__init__()
 
@@ -128,7 +130,22 @@ class GateSet(object):
         if self.povm_identity is not None:
             self._povm_identity.set_vector(value)
         else:
-            self._povm_identity = _sv.StaticSPAMVec(value) # always static
+            self._povm_identity = _sv.FullyParameterizedSPAMVec(value)
+              # fully parameterized, even though not vectorized (so
+              # can gauge transform it)
+
+    @property
+    def default_gauge_group(self):
+        """ 
+        Gets the default gauge group for performing gauge
+        transformations on this GateSet.
+        """
+        return self._default_gauge_group
+
+    @default_gauge_group.setter
+    def default_gauge_group(self, value):
+        self._default_gauge_group = value
+
 
     @property
     def dim(self):
@@ -452,8 +469,15 @@ class GateSet(object):
         for lbl,vec in self.effects.items():
             self.effects[lbl] = _sv.convert(vec, etyp)
 
-        #Note: self.povm_identity should *always* be static, and
-        # is not changed by this method.
+        if typ == 'full': 
+            self.default_gauge_group = _gg.FullGaugeGroup(self.dim)
+        elif typ == 'TP': 
+            self.default_gauge_group = _gg.TPGaugeGroup(self.dim)
+        elif typ == 'static': 
+            self.default_gauge_group = None
+        
+        #Note: self.povm_identity should *always* be fully
+        # paramterized, and is not changed by this method.
 
 
 
@@ -854,35 +878,29 @@ class GateSet(object):
         return ret
 
 
-    def transform(self, S, Si=None):
+    def transform(self, S):
         """
         Update each of the gate matrices G in this gateset with inv(S) * G * S,
         each rhoVec with inv(S) * rhoVec, and each EVec with EVec * S
 
         Parameters
         ----------
-        S : numpy array
-            Matrix to perform similarity transform.
-            Should be shape (dim, dim).
-
-        Si : numpy array, optional
-            Inverse of S.  If None, inverse of S is computed.
-            Should be shape (dim, dim).
+        S : GaugeGroup.element
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
         """
-        if Si is None: Si = _nla.inv(S)
-
         for rhoVec in list(self.preps.values()):
-            rhoVec.set_vector(_np.dot(Si,rhoVec))
+            rhoVec.transform(S,'prep')
 
         for EVec in list(self.effects.values()):
-            EVec.set_vector(_np.dot(_np.transpose(S),EVec)) #( Evec^T * S )^T
+            EVec.transform(S,'effect')
 
         if self.povm_identity is not None: # same as Es
-            self.povm_identity.set_vector( _np.dot(_np.transpose(S),
-                                                 self.povm_identity) )
+            self.povm_identity.transform(S,'effect')
 
         for gateObj in list(self.gates.values()):
-            gateObj.transform(S,Si)
+            gateObj.transform(S)
+
 
     def _calc(self):
         return _gscalc.GateSetCalculator(self._dim, self.gates, self.preps,
@@ -2437,6 +2455,7 @@ class GateSet(object):
         newGateset._basisNameAndDim = self._basisNameAndDim
         newGateset._remainderlabel = self._remainderlabel
         newGateset._identitylabel = self._identitylabel
+        newGateset._default_gauge_group = self._default_gauge_group
         return newGateset
 
     def __str__(self):

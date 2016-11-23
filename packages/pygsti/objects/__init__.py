@@ -33,6 +33,9 @@ from .spamspec import SpamSpec
 from .profiler import Profiler
 from .profiler import DummyProfiler
 
+from .gaugegroup import FullGaugeGroup, TPGaugeGroup, \
+    DiagGaugeGroup, TPDiagGaugeGroup
+
 #Experimental only: don't import in production pyGSTi
 #from gigateset import GaugeInvGateSet
 

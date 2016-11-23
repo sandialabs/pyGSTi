@@ -10,7 +10,7 @@ import numpy as _np
 import functools as _functools
 from ..      import optimize as _opt
 from ..tools import matrixtools as _mt
-
+from . import gaugegroup as _gaugegroup
 from .protectedarray import ProtectedArray as _ProtectedArray
 
 
@@ -255,6 +255,7 @@ def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
                          _np.linalg.norm(fd_deriv - deriv_to_check))
 
 
+
 class Gate(object):
     """
     Excapulates a parameterization of a gate matrix.  This class is the
@@ -480,21 +481,27 @@ class StaticGate(Gate):
         return StaticGate(self.base)
 
 
-    def transform(self, S, Si):
+    def transform(self, S):
         """
-        Update gate matrix G with inv(S) * G * S,
+        Update gate matrix G with inv(S) * G * S.
+
+        Generally, the transform function updates the *parameters* of 
+        the gate such that the resulting gate matrix is altered as 
+        described above.  If such an update cannot be done (because
+        the gate parameters do not allow for it), ValueError is raised.
+
+        In this particular case *no* transforms are possible since a
+        StaticGate has no parameters to modify.  Thus, this function
+        *always* raises a ValueError.
 
         Parameters
         ----------
-        S : numpy array
-            Matrix to perform similarity transform.
-            Should be shape (dim, dim).
-
-        Si : numpy array
-            Inverse of S.  If None, inverse of S is computed.
-            Should be shape (dim, dim).
+        S : GaugeGroup.element
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
         """
-        self.set_matrix(_np.dot(Si,_np.dot(self.base, S)))
+        raise ValueError("Cannot transform a StaticGate - it has no parameters!")
+        #self.set_matrix(_np.dot(Si,_np.dot(self.base, S)))
 
 
     def compose(self, otherGate):
@@ -644,21 +651,27 @@ class FullyParameterizedGate(Gate):
         return FullyParameterizedGate(self.base)
 
 
-    def transform(self, S, Si):
+    def transform(self, S):
         """
         Update gate matrix G with inv(S) * G * S,
 
+        Generally, the transform function updates the *parameters* of 
+        the gate such that the resulting gate matrix is altered as 
+        described above.  If such an update cannot be done (because
+        the gate parameters do not allow for it), ValueError is raised.
+
+        In this particular case *any* transform of the appropriate
+        dimension is possible, since all gate matrix elements are parameters.
+
         Parameters
         ----------
-        S : numpy array
-            Matrix to perform similarity transform.
-            Should be shape (dim, dim).
-
-        Si : numpy array
-            Inverse of S.  If None, inverse of S is computed.
-            Should be shape (dim, dim).
+        S : GaugeGroup.element
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
         """
-        self.set_matrix(_np.dot(Si,_np.dot(self.base, S)))
+        Smx = S.get_transform_matrix()
+        Si  = S.get_transform_matrix_inverse()
+        self.set_matrix(_np.dot(Si,_np.dot(self.base, Smx)))
 
 
     def __str__(self):
@@ -821,21 +834,28 @@ class TPParameterizedGate(Gate):
         return TPParameterizedGate(self.base)
 
 
-    def transform(self, S, Si):
+    def transform(self, S):
         """
         Update gate matrix G with inv(S) * G * S,
 
+        Generally, the transform function updates the *parameters* of 
+        the gate such that the resulting gate matrix is altered as 
+        described above.  If such an update cannot be done (because
+        the gate parameters do not allow for it), ValueError is raised.
+
+        In this particular case any TP gauge transformation is possible,
+        i.e. when `S` is an instance of `TPGaugeGroup.element` or 
+        corresponds to a TP-like transform matrix.
+
         Parameters
         ----------
-        S : numpy array
-            Matrix to perform similarity transform.
-            Should be shape (dim, dim).
-
-        Si : numpy array
-            Inverse of S.  If None, inverse of S is computed.
-            Should be shape (dim, dim).
+        S : GaugeGroup.element
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
         """
-        self.set_matrix(_np.dot(Si,_np.dot(self.base, S)))
+        Smx = S.get_transform_matrix()
+        Si  = S.get_transform_matrix_inverse()
+        self.set_matrix(_np.dot(Si,_np.dot(self.base, Smx)))
 
 
     def compose(self, otherGate):
@@ -910,12 +930,12 @@ class LinearlyParameterizedGate(Gate):
         leftTransform : numpy array or None, optional
             A 2D array of the same shape as basematrix which left-multiplies
             the base matrix after parameters have been evaluated.  Defaults to
-            no tranform.
+            no transform.
 
         rightTransform : numpy array or None, optional
             A 2D array of the same shape as basematrix which right-multiplies
             the base matrix after parameters have been evaluated.  Defaults to
-            no tranform.
+            no transform.
 
         real : bool, optional
             Whether or not the resulting gate matrix, after all
@@ -1087,23 +1107,30 @@ class LinearlyParameterizedGate(Gate):
         return newGate
 
 
-    def transform(self, S, Si):
+    def transform(self, S):
         """
         Update gate matrix G with inv(S) * G * S,
 
+        Generally, the transform function updates the *parameters* of 
+        the gate such that the resulting gate matrix is altered as 
+        described above.  If such an update cannot be done (because
+        the gate parameters do not allow for it), ValueError is raised.
+
         Parameters
         ----------
-        S : numpy array
-            Matrix to perform similarity transform.
-            Should be shape (dim, dim).
-
-        Si : numpy array
-            Inverse of S.  If None, inverse of S is computed.
-            Should be shape (dim, dim).
+        S : GaugeGroup.element
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
         """
-        self.leftTrans = _np.dot(Si,self.leftTrans)
-        self.rightTrans = _np.dot(self.rightTrans,S)
-        self._construct_matrix()
+        #Currently just raise error - in general there is no *unique* 
+        # parameter alteration that would affect a similarity transform,
+        # and even if one exists it may be difficult to find efficiently.
+        raise ValueError("Invalid transform for this LinearlyParameterizedGate")
+    
+        #OLD (TODO: remove)
+        #self.leftTrans = _np.dot(Si,self.leftTrans)
+        #self.rightTrans = _np.dot(self.rightTrans,S)
+        #self._construct_matrix()
 
 
     def compose(self, otherGate):
@@ -1588,20 +1615,27 @@ class EigenvalueParameterizedGate(Gate):
         """
         Update gate matrix G with inv(S) * G * S,
 
+        Generally, the transform function updates the *parameters* of 
+        the gate such that the resulting gate matrix is altered as 
+        described above.  If such an update cannot be done (because
+        the gate parameters do not allow for it), ValueError is raised.
+
         Parameters
         ----------
-        S : numpy array
-            Matrix to perform similarity transform.
-            Should be shape (dim, dim).
-
-        Si : numpy array
-            Inverse of S.  If None, inverse of S is computed.
-            Should be shape (dim, dim).
+        S : GaugeGroup.element
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
         """
-        if Si is None: Si = _np.linalg.inv(S)
-        self.B = _np.dot(Si,self.B)
-        self.Bi = _np.dot(self.Bi,S)
-        self._construct_matrix()
+        #Currently just raise error, as a general similarity transformation
+        # *will* affect the eigenvalues.  In the future, perhaps we could allow
+        # *unitary* type similarity transformations.
+        raise ValueError("Invalid transform for this EigenvalueParameterizedGate")
+
+        #OLD:
+        #if Si is None: Si = _np.linalg.inv(S)
+        #self.B = _np.dot(Si,self.B)
+        #self.Bi = _np.dot(self.Bi,S)
+        #self._construct_matrix()
 
 
     def compose(self, otherGate):

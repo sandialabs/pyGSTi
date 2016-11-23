@@ -701,7 +701,14 @@ SPAMLABEL minus = rho remainder
             deriv = gate.deriv_wrt_params()
             #test results?
 
-            gate_copy.transform(np.identity(4,'d'), np.identity(4,'d'))
+            T = pygsti.obj.FullGaugeGroup.element(np.identity(4,'d'))
+            if type(gate) in (pygsti.obj.LinearlyParameterizedGate,
+                              pygsti.obj.StaticGate):
+                with self.assertRaises(ValueError):
+                    gate_copy.transform(T)
+            else:
+                gate_copy.transform(T)
+
             self.assertArraysAlmostEqual(gate_copy, gate)
 
             gate_as_str = str(gate)

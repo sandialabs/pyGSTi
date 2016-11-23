@@ -383,6 +383,62 @@ def get_gates_vs_target_table(gateset, targetGateset,
     return table
 
 
+def get_selected_gates_vs_target_table(gatesets, targetGateset,
+                                       confidenceRegionInfo=None):
+    """
+    Create a table comparing gates from *different* gatesets to a target.
+
+    This table is used to compare per-gate-optimized gatesets (e.g.
+    gauge optimizations to each gate individually) to a single target
+    gate set.
+
+    Parameters
+    ----------
+    gatesets : dict of GateSets
+        A dictionary of gate sets, one per gate of `targetGateset`.  Keys
+        are gate labels and values are GateSet objects.
+
+    targetGateset : GateSet
+        The target gate set, containing the gates to which the other
+        gates are compared.
+
+    confidenceRegionInfo : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+
+    Returns
+    -------
+    ReportTable
+    """
+    gateLabels  = list(targetGateset.gates.keys())  # gate labels
+
+    colHeadings = ('Gate', "Process|Infidelity", "1/2 Trace|Distance", "1/2 Diamond-Norm") #, "Frobenius|Distance"
+    formatters  = (None,'Conversion','Conversion','Conversion') # ,'Conversion'
+
+    qtyNames        = ('infidelity','Jamiolkowski trace dist','diamond norm') #,'Frobenius diff'
+
+    qtys = {}
+    for gl in gateLabels:
+        qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames ]
+        qtys[gl] = _cr.compute_gateset_gateset_qtys(
+            qtys_to_compute, gatesets[gl], targetGateset,
+            confidenceRegionInfo)
+
+    table = _ReportTable(colHeadings, formatters)
+
+    formatters = [None] + [ 'ErrorBars' ]*len(qtyNames)
+
+    for gl in gateLabels:
+        if confidenceRegionInfo is None:
+            rowData = [gl] + [ (qtys[gl]['%s %s' % (gl,qty)].get_value(),None) for qty in qtyNames ]
+        else:
+            rowData = [gl] + [ qtys[gl]['%s %s' % (gl,qty)].get_value_and_err_bar() for qty in qtyNames ]
+        table.addrow(rowData, formatters)
+
+    table.finish()
+    return table
+
+
 def get_spam_vs_target_table(gateset, targetGateset,
                              confidenceRegionInfo=None):
     """
@@ -1193,7 +1249,7 @@ def get_logl_bygerm_table(gateset, dataset, germs, strs, max_lengths,
 
 
 def get_logl_projected_err_gen_table(gateset, targetGateset,
-                                     gatestrings, dataset):
+                                     gatestrings, dataset, cptpGateset=None):
     """
     Create a table showing the log-likelihood for different projections of the
     error generator.
@@ -1212,6 +1268,10 @@ def get_logl_projected_err_gen_table(gateset, targetGateset,
 
     dataset : DataSet
         The data set to use when computing the log-likelihood.
+
+    cptpGateset : GateSet, optional
+        An optional gate set to compute log-likelihood values for and report
+        on an additional "CPTP" row of the table.
 
     Returns
     -------
@@ -1265,9 +1325,20 @@ def get_logl_projected_err_gen_table(gateset, targetGateset,
                     'ppt': ('Type','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','N_{sigma}','N_s','N_p', 'Rating')
                   }
     table = _ReportTable(colHeadings, None)
-    gatesets = (gateset, gsHS, gsH, gsS)
-    gatesetTyps = ("Full","H + S","H","S")
-    Nps = (gateset.num_nongauge_params(), Np_HS, Np_H, Np_S)
+    Nng = gateset.num_nongauge_params()
+
+    if cptpGateset is None:
+        gatesets = (gateset, gsHS, gsH, gsS)
+        gatesetTyps = ("Full","H + S","H","S")
+        Nps = (Nng, Np_HS, Np_H, Np_S)
+    else:
+        gsHSCPTP = gsHS.copy()
+        gsHSCPTP.set_all_parameterizations("full")
+        gsHSCPTP = _alg.contract(gsHSCPTP, "CPTP")
+
+        gatesets = (gateset, gsHS, gsH, gsS, cptpGateset, gsHSCPTP)
+        gatesetTyps = ("Full","H + S","H","S","CPTP","H + S CPTP")
+        Nps = (Nng, Np_HS, Np_H, Np_S, Nng, Np_HS)
 
     logL_upperbound = _tools.logl_max(dataset, gatestrings)
     Ns = len(gatestrings)*(len(dataset.get_spam_labels())-1) 
@@ -1713,6 +1784,100 @@ def get_projected_err_gen_comparison_table(gateset, targetGateset,
     return table
 
 
+def get_pauli_err_gen_projector_boxes_table(gateset_dim, projection_type,
+                                            figFilePrefix,
+                                            maxWidth=6.5, maxHeight=8.0):
+    """
+    Create a table of gate error generators, where each is shown as grid of boxes.
+
+    Parameters
+    ----------
+    gateset_dim : int
+        The dimension of the gate set, which equals the number of 
+        rows (or columns) in a gate matrix (e.g., 4 for a single qubit).
+
+    projection_type : {"hamiltonian", "stochastic"}
+        The type of error generator projectors to create a table for.
+        If "hamiltonian", then use the Hamiltonian generators which take a
+        density matrix rho -> -i*[ H, rho ] for Pauli-product matrix H.
+        If "stochastic", then use the Stochastic error generators which take
+        rho -> P*rho*P for Pauli-product matrix P (recall P is self adjoint).
+
+    figFilePrefix : str
+        A filename prefix (not including any directories!) to use
+        when rendering figures as a part of rendering this table.
+
+    maxWidth : float
+        The maximum width (in inches) of the entire figure.
+
+    maxHeight : float
+        The maximum height (in inches) of the entire figure.
+
+    Returns
+    -------
+    ReportTable
+    """
+
+    d2 = gateset_dim # number of projections == dim of gate
+    d = int(_np.sqrt(d2)) # dim of density matrix
+    nQubits = _np.log2(d)
+
+    #Get a list of the d2 generators (in corresspondence with the
+    #  Pauli-product matrices given by _bt.pp_matrices(d) ).
+    lindbladMxs = _tools.pauliprod_error_generators(d2, projection_type)
+       # in std basis
+
+    if nQubits == 1:
+        yd,xd = 1,2 # y and x pauli-prod *basis* dimensions
+        xlabel = "Q1"; ylabel = ""
+    elif nQubits == 2:
+        yd,xd = 2,2
+        xlabel = "Q2"; ylabel="Q1"
+    else:
+        yd,xd = 2,d/2
+        xlabel = "Q*"; ylabel="Q1"
+
+    topright = "%s \\ %s" % (ylabel,xlabel) if (len(ylabel) > 0) else ""
+    colHeadings=[topright] + \
+        [("%s" % x) if len(x) else "" \
+             for x in _tools.basis_element_labels("pp",xd)]
+    rowLabels=[("%s" % x) if len(x) else "" \
+                 for x in _tools.basis_element_labels("pp",yd)]
+
+    xLabels = _tools.basis_element_labels("pp",xd)
+    yLabels = _tools.basis_element_labels("pp",yd)
+
+    table = _ReportTable(colHeadings,["Conversion"]+[None]*(len(colHeadings)-1))
+    nRows = len(rowLabels)
+    nCols = len(colHeadings)
+
+    maxFigSz = min(0.85*(maxHeight/nRows), 0.85*(maxWidth/nCols))
+    
+    iCur = 0
+    for i,ylabel  in enumerate(yLabels):
+        rowData = [rowLabels[i]]
+        rowFormatters = [None]
+
+        for j,xlabel in enumerate(xLabels):
+            projector = lindbladMxs[iCur]; iCur += 1
+            projector = _tools.std_to_pp(projector) #now in pp basis ("pp" below)
+            m,M = -_np.max(_np.abs(projector)), _np.max(_np.abs(projector))
+            fig = _plotting.gate_matrix_boxplot(
+                projector, None, m,M, save_to="", mxBasis="pp", mxBasisDims=d)
+
+            sz = min(projector.shape[0] * 0.5, maxFigSz)
+            nm = figFilePrefix + "_%s_%s_projector" % (ylabel,xlabel)
+            figInfo = (fig,nm,sz,sz)
+
+            rowData.append(figInfo)
+            rowFormatters.append('Figure')
+
+        table.addrow(rowData, rowFormatters)
+
+    table.finish()
+    return table
+
+
 
 def get_gaugeopt_params_table(gaugeOptArgs):
     """
@@ -1721,44 +1886,44 @@ def get_gaugeopt_params_table(gaugeOptArgs):
 
     Parameters
     ----------
-    gaugeOptArgs : dict
-        A dictionary of specifying values for zero or more
-        of the *arguments* of pyGSTi's optimize_gauge
-        function.
+    gaugeOptArgs : list of dicts
+        A list of dictionaries, each specifying values for zero or more of the
+        *arguments* of pyGSTi's :func:`gaugeopt_to_target` function.
 
     Returns
     -------
     ReportTable
     """
+
     colHeadings = ('Quantity','Value')
     formatters = ('Bold','Bold')
 
     table = _ReportTable(colHeadings, formatters)
 
-    if 'toGetTo' in gaugeOptArgs:
-        table.addrow(("Gauge optimize to", gaugeOptArgs['toGetTo']), (None,None))
+    if isinstance(gaugeOptArgs,list) or isinstance(gaugeOptArgs,tuple):
+        gaugeOptArgs = gaugeOptArgs[-1]
+        #for now, just print the params of the *last*
+        # gauge optimiziation, though in the future we could print
+        # multiple columns, one for each optimization.
+
     if 'method' in gaugeOptArgs:
         table.addrow(("Method", str(gaugeOptArgs['method'])), (None,None))
-    if 'constrainToTP' in gaugeOptArgs:
-        table.addrow(("TP constrained", str(gaugeOptArgs['constrainToTP'])), (None,None))
-    if 'constrainToCP' in gaugeOptArgs:
-        table.addrow(("CP constrained", str(gaugeOptArgs['constrainToCP'])), (None,None))
-    if 'constrainToValidSpam' in gaugeOptArgs:
-        table.addrow(("Valid-SPAM constrained", str(gaugeOptArgs['constrainToValidSpam'])), (None,None))
-    if 'targetFactor' in gaugeOptArgs:
-        table.addrow(("Target weighting", str(gaugeOptArgs['targetFactor'])), (None,None))
-    if 'targetGatesMetric' in gaugeOptArgs:
-        table.addrow(("Metric for gate-to-target", str(gaugeOptArgs['targetGatesMetric'])), (None,None))
-    if 'targetSpamMetric' in gaugeOptArgs:
-        table.addrow(("Metric for SPAM-to-target", str(gaugeOptArgs['targetSpamMetric'])), (None,None))
-    if 'gateWeight' in gaugeOptArgs:
-        table.addrow(("Gate weighting", str(gaugeOptArgs['gateWeight'])), (None,None))
-    if 'spamWeight' in gaugeOptArgs:
-        table.addrow(("SPAM weighting", str(gaugeOptArgs['spamWeight'])), (None,None))
+    if 'TPpenalty' in gaugeOptArgs:
+        table.addrow(("TP penalty factor", str(gaugeOptArgs['TPpenalty'])), (None,None))
+    if 'CPpenalty' in gaugeOptArgs:
+        table.addrow(("CP penalty factor", str(gaugeOptArgs['CPpenalty'])), (None,None))
+    if 'validSpamPenalty' in gaugeOptArgs:
+        table.addrow(("Valid-SPAM constrained", str(gaugeOptArgs['validSpamPenalty'])), (None,None))
+    if 'gatesMetric' in gaugeOptArgs:
+        table.addrow(("Metric for gate-to-target", str(gaugeOptArgs['gatesMetric'])), (None,None))
+    if 'spamMetric' in gaugeOptArgs:
+        table.addrow(("Metric for SPAM-to-target", str(gaugeOptArgs['spamMetric'])), (None,None))
     if 'itemWeights' in gaugeOptArgs:
         if gaugeOptArgs['itemWeights']:
             table.addrow(("Item weighting", ", ".join([("%s=%.2g" % (k,v)) 
                            for k,v in gaugeOptArgs['itemWeights'].items()])), (None,None))
+    if 'gauge_group' in gaugeOptArgs:
+        table.addrow(("Gauge group", str(gaugeOptArgs['gauge_group'])), (None,None))
 
     table.finish()
     return table
