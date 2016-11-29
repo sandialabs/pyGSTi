@@ -1289,6 +1289,9 @@ def get_logl_projected_err_gen_table(gateset, targetGateset,
     gsH = gateset.copy(); Np_H = 0
     gsS = gateset.copy(); Np_S = 0
     gsHS = gateset.copy(); Np_HS = 0
+    gsLND = gateset.copy(); Np_LND = 0
+    #gsHSCP = gateset.copy()
+    gsLNDCP = gateset.copy()
     for gl in gateLabels:
         gate = gateset.gates[gl]
         targetGate = targetGateset.gates[gl]
@@ -1297,11 +1300,19 @@ def get_logl_projected_err_gen_table(gateset, targetGateset,
             gate, targetGate, "hamiltonian", basisNm, True)
         stoProj, stoGens = _tools.pauliprod_errgen_projections(
             gate, targetGate, "stochastic", basisNm, True)
+        HProj, OProj, HGens, OGens = \
+            _tools.pauliprod_lindblad_errgen_projections(
+            gate, targetGate, basisNm, normalize=False,
+            return_generators=True)
 
         ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)
         sto_error_gen = _np.einsum('i,ijk', stoProj, stoGens)
+        lnd_error_gen = _np.einsum('i,ijk', HProj, HGens) + \
+            _np.einsum('ij,ijkl', OProj, OGens)
+
         ham_error_gen = _tools.std_to_pp(ham_error_gen)
         sto_error_gen = _tools.std_to_pp(sto_error_gen)
+        lnd_error_gen = _tools.std_to_pp(lnd_error_gen)
 
         gsH.gates[gl]  = _tools.gate_from_error_generator(
             ham_error_gen, targetGate)
@@ -1309,11 +1320,48 @@ def get_logl_projected_err_gen_table(gateset, targetGateset,
             sto_error_gen, targetGate)
         gsHS.gates[gl] = _tools.gate_from_error_generator(
             ham_error_gen+sto_error_gen, targetGate)
+        gsLND.gates[gl] = _tools.gate_from_error_generator(
+            lnd_error_gen, targetGate)
+
+        print("\nDEBUG %s -----------------" % gl)
+        #print("gate %s = \n" % gl, gate)
+        #print("LND gate %s = \n" % gl,gsLND.gates[gl])
+        #print("HProj = ",HProj)
+        #print("OProj = \n",_tools.mx_to_string(OProj))
+        print("OProj evals = ", _np.real_if_close(_np.linalg.eigvals(OProj)))
+        print("")
+
+        #CPTP projection
+
+        #Removed attempt to contract H+S to CPTP by removing positive stochastic projections,
+        # but this doesn't always return the gate to being CPTP (maybe b/c of normalization)...
+        #sto_error_gen_cp = _np.einsum('i,ijk', stoProj.clip(None,0), stoGens) #only negative stochastic projections OK
+        #sto_error_gen_cp = _tools.std_to_pp(sto_error_gen_cp)
+        #gsHSCP.gates[gl] = _tools.gate_from_error_generator(
+        #    ham_error_gen, targetGate) #+sto_error_gen_cp
+
+        evals,U = _np.linalg.eig(OProj)
+        pos_evals = evals.clip(5e-4,1e100) #clip negative eigenvalues to 0
+        OProj_cp = _np.dot(U,_np.dot(_np.diag(pos_evals),_np.linalg.inv(U))) #OProj_cp is now a pos-def matrix
+        lnd_error_gen_cp = _np.einsum('i,ijk', HProj, HGens) + \
+            _np.einsum('ij,ijkl', OProj_cp, OGens)
+        lnd_error_gen_cp = _tools.std_to_pp(lnd_error_gen_cp)
+
+        gsLNDCP.gates[gl] = _tools.gate_from_error_generator(
+            lnd_error_gen_cp, targetGate)
 
         Np_H += len(hamProj)
         Np_S += len(stoProj)
         Np_HS += len(hamProj) + len(stoProj)
+        Np_LND += HProj.size + OProj.size
 
+    #DEBUG!!!
+    #print("DEBUG: BEST sum neg evals = ",_tools.sum_of_negative_choi_evals(gateset))
+    #print("DEBUG: LNDCP sum neg evals = ",_tools.sum_of_negative_choi_evals(gsLNDCP))
+
+    #Check for CPTP where expected
+    #assert(_tools.sum_of_negative_choi_evals(gsHSCP) < 1e-6)
+    assert(_tools.sum_of_negative_choi_evals(gsLNDCP) < 1e-6)
 
     #Generate Table
     colHeadings = { 'latex': ('Type','$2\Delta\\log(\\mathcal{L})$','$k$','$2\Delta\\log(\\mathcal{L})-k$',
@@ -1328,17 +1376,19 @@ def get_logl_projected_err_gen_table(gateset, targetGateset,
     Nng = gateset.num_nongauge_params()
 
     if cptpGateset is None:
-        gatesets = (gateset, gsHS, gsH, gsS)
-        gatesetTyps = ("Full","H + S","H","S")
-        Nps = (Nng, Np_HS, Np_H, Np_S)
+        gatesets = (gateset, gsHS, gsH, gsS, gsLND)
+        gatesetTyps = ("Full","H + S","H","S","LND")
+        Nps = (Nng, Np_HS, Np_H, Np_S, Np_LND)
     else:
         gsHSCPTP = gsHS.copy()
         gsHSCPTP.set_all_parameterizations("full")
         gsHSCPTP = _alg.contract(gsHSCPTP, "CPTP")
+        assert(_tools.sum_of_negative_choi_evals(gsHSCPTP) < 1e-6)
+        assert(_tools.sum_of_negative_choi_evals(cptpGateset) < 1e-6)
 
-        gatesets = (gateset, gsHS, gsH, gsS, cptpGateset, gsHSCPTP)
-        gatesetTyps = ("Full","H + S","H","S","CPTP","H + S CPTP")
-        Nps = (Nng, Np_HS, Np_H, Np_S, Nng, Np_HS)
+        gatesets = (gateset, gsHS, gsH, gsS, gsLND, cptpGateset, gsLNDCP, gsHSCPTP)
+        gatesetTyps = ("Full","H + S","H","S","LND","CPTP","LND CPTP","H + S CPTP")
+        Nps = (Nng, Np_HS, Np_H, Np_S, Np_LND, Nng, Np_LND, Np_HS)
 
     logL_upperbound = _tools.logl_max(dataset, gatestrings)
     Ns = len(gatestrings)*(len(dataset.get_spam_labels())-1) 

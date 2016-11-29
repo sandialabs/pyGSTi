@@ -20,6 +20,7 @@ from .gate import FullyParameterizedGate
 from .gate import TPParameterizedGate
 from .gate import StaticGate
 from .gate import EigenvalueParameterizedGate
+from .gate import LindbladParameterizedGate
 from .spamvec import SPAMVec
 from .spamvec import FullyParameterizedSPAMVec
 from .spamvec import TPParameterizedSPAMVec
