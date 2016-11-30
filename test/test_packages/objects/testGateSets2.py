@@ -110,8 +110,9 @@ class TestGateSetMethods(GateSetTestCase):
                       [ 0.4038386 ,  0.89518315,  0.20206879,  0.6484708 ],
                       [ 0.44878029,  0.42095514,  0.27645424,  0.41766033]]) #some random array
         Tinv = np.linalg.inv(T)
+        elT = pygsti.objects.FullGaugeGroup.element(T)
         cp = self.gateset.copy()
-        cp.transform(T,Tinv)
+        cp.transform(elT)
 
         self.assertAlmostEqual( self.gateset.frobeniusdist(cp, T), 0 )
         self.assertAlmostEqual( self.gateset.jtracedist(cp, T), 0 )

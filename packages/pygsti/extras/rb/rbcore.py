@@ -564,8 +564,8 @@ def do_rb_base(dataset, base_gatestrings, basename, weight_data=False, infinite_
         result_dicts[gstyp] = gstyp_results
 
     results = _rbobjs.RBResults(dataset, result_dicts, basename, weight_data,
-                                alias_maps, success_spamlabel, dim, pre_avg,
-                                f0, A0, ApB0, C0)
+                                infinite_data, alias_maps, success_spamlabel,
+                                dim, pre_avg, f0, A0, ApB0, C0)
     return results
 
 
