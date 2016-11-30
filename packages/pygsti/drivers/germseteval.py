@@ -17,7 +17,7 @@ import pygsti.objects as obj
 def simulate_convergence(germs, prepFiducials, effectFiducials, targetGS,
                          randStr=1e-2, numPertGS=5, maxLengthsPower=8,
                          clickNums=32, numRuns=7, seed=None, randState=None,
-                         gaugeOptRatio=1e-3, constrainToTP=True):
+                         gaugeOptRatio=1e-3):
     if not isinstance(clickNums, list):
         clickNums = [clickNums]
     if randState is None:
@@ -50,22 +50,17 @@ def simulate_convergence(germs, prepFiducials, effectFiducials, targetGS,
 
                         result = pygsti.do_long_sequence_gst(
                             ds, targetGS, prepFiducials, effectFiducials,
-                            germs, maxLengths, gaugeOptRatio=gaugeOptRatio,
-                            constrainToTP=constrainToTP)
+                            germs, maxLengths, gaugeOptRatio=gaugeOptRatio)
 
                         errors = [(trueGateset
                                    .frobeniusdist(
-                                       alg.optimize_gauge(
-                                           estimate, 'target',
-                                           targetGateset=trueGateset,
-                                           constrainToTP=constrainToTP,
-                                           spamWeight=0.0),
+                                       alg.gaugeopt_to_target(
+                                           estimate, trueGateset,
+                                           itemWeights={'spam': 0.0}),
                                        spamWeight=0.0), L)
-                                  for estimate, L
-                                  in zip(result
-                                         .gatesets['iteration estimates'][1:],
-                                         result
-                                         .parameters['max length list'][1:])]
+                                  for estimate, L in 
+                                  zip(result.gatesets['iteration estimates'][1:],
+                                      result.parameters['max length list'][1:])]
 
                         resultDict[trueGatesetNum, numClicks, run] = result
                         errorDict[trueGatesetNum, numClicks, run] = errors

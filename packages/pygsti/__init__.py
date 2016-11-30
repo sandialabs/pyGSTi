@@ -15,6 +15,8 @@ from . import objects as obj
 from . import report as rpt
 
 from .algorithms.core import *
+from .algorithms.gaugeopt import *
+from .algorithms.contract import *
 from .algorithms.grammatrix import *
 from .tools import *
 from .drivers import *

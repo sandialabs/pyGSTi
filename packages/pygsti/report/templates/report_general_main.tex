@@ -472,7 +472,7 @@ This appendix is meant to hold experimental figures and tables which may be late
 \begin{table}[h]
 \begin{center}
 \putfield{logLErrgenProjectionTable}{logL error generator projection table will be placed here}
-\caption{\putfield{tt_logLErrgenProjectionTable}{}\textbf{Comparison between the computed and expected maximum $\log(\mathcal{L})$ for error generator projections}.  Each row shows goodness of fit values for a particular gate set when using all of the gate sequences.  Labels ``$\mathcal{H}$'', ``$\mathcal{S}$'', and ``$\mathcal{H} + \mathcal{S}$'' correspond to the gatesets whose elements are obtained by projecting each gate's error generator onto the space of Hamiltonian-type error generators, Stocastic error generators, and both of these categories, respectively. ``Full'' denotes the final GST estimate itself (no projection), which is redundant with the final row in Table \ref{progressTable}.  Column headings have the same meaning as in Table \ref{progressTable}, and $N_p$ is given by the number of orthogonal error generators used for each of the projections.\label{logLErrgenProjectionTable}}
+\caption{\putfield{tt_logLErrgenProjectionTable}{}\textbf{Comparison between the computed and expected maximum $\log(\mathcal{L})$ for error generator projections}.  Each row shows goodness of fit values for a particular gate set when using all of the gate sequences.  Labels ``$\mathcal{H}$'', ``$\mathcal{S}$'', and ``$\mathcal{H} + \mathcal{S}$'' correspond to the gatesets whose elements are obtained by projecting each gate's error generator onto the space of Hamiltonian-type error generators, Stocastic error generators, and both of these categories, respectively. ``Full'' denotes the final GST estimate itself (no projection), which is redundant with the final row in Table \ref{progressTable}.  The ``CPTP'' row shows the fit obtained gauge-optimizing to CPTP then contracting to CPTP, and the ``$\mathcal{H} + \mathcal{S}$ CPTP'' shows the fit obtained by contracting the ``$\mathcal{H} + \mathcal{S}$'' gate set to CPTP.  Column headings have the same meaning as in Table \ref{progressTable}, and $N_p$ is given by the number of orthogonal error generators used for each of the projections.\label{logLErrgenProjectionTable}}
 %$p$ is the p-value derived from a $\chi^2_k$ distribution.(For example, if $p=0.05$, then the probability of observing a $\chi^{2}$ value as large as, or larger than, the one indicated in the table is 5\%, assuming the GST model is valid.) 
 \end{center}
 \end{table}
@@ -485,6 +485,38 @@ This appendix is meant to hold experimental figures and tables which may be late
 %$p$ is the p-value derived from a $\chi^2_k$ distribution.(For example, if $p=0.05$, then the probability of observing a $\chi^{2}$ value as large as, or larger than, the one indicated in the table is 5\%, assuming the GST model is valid.) 
 \end{center}
 \end{table}
+
+
+\begin{table}[h]
+\begin{center}
+\putfield{hamiltonianProjectorTable}{projector table here}
+\caption{\putfield{tt_hamiltonianProjectorTable}{}\textbf{Hamiltonian Error Generators}.  These color box plots display the Hamiltonian-type error generators which are used to project the ``Full'' error generator of the GST estimate in Table \ref{bestGatesetErrGenTable}.  Rows and columns of this table reflect the arrangement of the color-box-plots of the Hamiltonian-error-generator cells of Table \ref{bestGatesetErrGenTable}.\label{hamiltonianProjectorTable}}
+\end{center}
+\end{table}
+
+
+\begin{table}[h]
+\begin{center}
+\putfield{stochasticProjectorTable}{projector table here}
+\caption{\putfield{tt_stochasticProjectorTable}{}\textbf{Stochastic Error Generators}.  These color box plots display the stochastic-type error generators which are used to project the ``Full'' error generator of the GST estimate in Table \ref{bestGatesetErrGenTable}.  Rows and columns of this table reflect the arrangement of the color-box-plots of the stochastic-error-generator cells of Table \ref{bestGatesetErrGenTable}.\label{stochasitcProjectorTable}}
+\end{center}
+\end{table}
+
+
+\begin{table}[h]
+\begin{center}
+\putfield{gaugeOptGatesetsVsTargetTable}{per-gate gauge optimized table}
+\caption{\putfield{tt_gaugeOptGatesetsVsTargetTable}{}\textbf{Per gate gauge optimized comparison with target}.  Rows and columns are similar to those of Table \ref{bestGatesetVsTargetTable}, except that each row shows results for a \emph{differently gauge-optimized} gate set.  In particular, results for each gate are computed using a gate set that was gauge optimized to target \emph{only} that single gate.  This shows, in a sense, that minimum infidelity that can be reached on a per-gate basis.  The trace and diamond distances are often similar to the infidelity, indicating that gauge transformations are able to ``undo'' the coherent errors of a single gate.\label{gaugeOptGatesetsVsTargetTable}}
+\end{center}
+\end{table}
+
+\begin{table}[h]
+\begin{center}
+\putfield{gaugeOptCPTPGatesetChoiTable}{CPTP-gauge optimized Choi matrix table}
+\caption{\putfield{tt_gaugeOptCPTPGatesetChoiTable}{}\textbf{CPTP-gauge optimized Choi matrix table}.  Similar to Table \ref{bestGatesetChoiTable} except that gate set being analyzed has been gauge optimized to CPTP (but not contracted).  The resulting gates are, in effect, as close to CPTP as the numerical optimizer was able to find without reducing the quality of the fit (i.e. by gauge transformations alone).\label{gaugeOptCPTPGatesetChoiTable}}
+\end{center}
+\end{table}
+
 
 
 }{}

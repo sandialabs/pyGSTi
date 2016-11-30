@@ -527,8 +527,50 @@ def stochastic_lindbladian(Q):
     return lindbladian
 
 
+def nonham_lindbladian(Lm,Ln):
+    """
+    Construct the Lindbladian corresponding to generalized
+    non-Hamiltonian (stochastic) errors.
 
+    Mathematically, for d-dimensional matrices Lm and Ln, this routine 
+    constructs the d^2-dimension Lindbladian matrix L whose action is
+    given by:
 
+    L(rho) = Ln*rho*Lm^dag - 1/2(rho*Lm^dag*Ln + Lm^dag*Ln*rho)
+
+    where rho is a density matrix.  L is returned as a superoperator
+    matrix that acts on a vectorized density matrices.
+
+    Parameters
+    ----------
+    Lm, Ln : ndarray
+      The matrices used to construct the Lindbladian.
+
+    Returns
+    -------
+    ndarray
+    """
+
+    #TODO: there's probably a fast & slick way to so this computation
+    #  using vectorization identities
+    assert(len(Lm.shape) == 2)
+    assert(Lm.shape[0] == Lm.shape[1])
+    Lm_dag = _np.conjugate(_np.transpose(Lm))
+    d = Lm.shape[0]
+    lindbladian = _np.empty( (d**2,d**2), dtype=Lm.dtype )
+
+#    print("BEGIN VERBOSE") #DEBUG!!!
+    for i,rho0 in enumerate(std_matrices(d)): #rho0 == input density mx
+        rho1 = _np.dot(Ln,_np.dot(rho0,Lm_dag)) - 0.5 * (
+            _np.dot(rho0,_np.dot(Lm_dag,Ln))+_np.dot(_np.dot(Lm_dag,Ln),rho0))
+#        print("rho0[%d] = \n" % i,rho0)
+#        print("rho1[%d] = \n" % i,rho1)
+        lindbladian[:,i] = rho1.flatten()
+          # vectorize rho1 & set as linbladian column
+#    print("FINAL = \n",lindbladian)
+#    print("END VERBOSE\n")
+
+    return lindbladian
 
 
 def _GetGellMannNonIdentityDiagMxs(dimension):
@@ -1187,7 +1229,7 @@ def ppvec_to_stdmx(v):
     return ret
 
 
-def gmvec_to_stdmx(v):
+def gmvec_to_stdmx(v,keep_complex=False):
     """
     Convert a vector in the Gell-Mann basis to a matrix
      in the standard basis.
@@ -1197,6 +1239,8 @@ def gmvec_to_stdmx(v):
     v : numpy array
         The vector (length must be a perfect square, e.g. 4, 9, 16, ...)
 
+    keep_complex : bool, optional
+        If set to true, retains complex information in v.
     Returns
     -------
     numpy array
@@ -1208,10 +1252,13 @@ def gmvec_to_stdmx(v):
 
     ret = _np.zeros( (dim,dim), 'complex' )
     for i,gmMx in enumerate(gmMxs):
-        ret += float(v[i])*gmMx
+        if keep_complex:
+            ret += v[i] * gmMx
+        else:
+            ret += float(v[i])*gmMx
     return ret
 
-def stdvec_to_stdmx(v):
+def stdvec_to_stdmx(v,keep_complex=False):
     """
     Convert a vector in the standard basis to a matrix
      in the standard basis.
@@ -1221,6 +1268,8 @@ def stdvec_to_stdmx(v):
     v : numpy array
         The vector, length 4 (1Q) or 16 (2Q)
 
+    keep_complex : bool, optional
+        If set to true, retains complex information in v.    
     Returns
     -------
     numpy array
@@ -1233,7 +1282,10 @@ def stdvec_to_stdmx(v):
 
     ret = _np.zeros( (dim,dim), 'complex' )
     for i,stdMx in enumerate(stdMxs):
-        ret += float(v[i])*stdMx
+        if keep_complex:
+            ret += v[i] * stdMx
+        else:
+            ret += float(v[i])*stdMx
     return ret
 
 
