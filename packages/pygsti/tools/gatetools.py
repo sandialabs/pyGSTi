@@ -812,3 +812,236 @@ def pauliprod_errgen_projections(gate, targetGate, projection_type,
         return projections, lindbladMxs
     else:
         return projections
+
+
+def lindblad_error_generators(dmbasis, normalize):
+    """
+    Compute the superoperator-generators corresponding to Lindblad terms.
+
+    This routine computes the Hamiltonian and Non-Hamiltonian ("other") 
+    superoperator generators which correspond to the terms of the Lindblad
+    expression:
+    
+    L(rho) = sum_i( h_i [B_i,rho] ) + 
+             sum_ij( o_ij * (B_i rho B_j^dag -
+                             0.5( rho B_j^dag B_i + B_j^dag B_i rho) ) )
+
+    where {B_i} is a basis for Hilbert Schmidt (density matrix) space with the
+    identity element removed so that each B_i is traceless.  If we write L(rho)
+    in terms of superoperators H_i and O_ij,
+    
+    L(rho) = sum_i( h_i H_i(rho) ) + sum_ij( o_ij O_ij(rho) )
+
+    then this function computes the matrices for H_i and O_ij using the given
+    density matrix basis.  Thus, if `dmbasis` is expressed in the standard
+    basis (as it should be), the returned matrices are also in this basis.
+
+    If these elements are used as projectors it may be usedful to normalize 
+    them (by setting `normalize=True`).  Note, however, that these projectors
+    are not all orthogonal - in particular the O_ij's are not orthogonal to 
+    one another.
+
+    Parameters
+    ----------
+    dmbasis : list
+        A list of basis matrices {B_i} *including* the identity as the first
+        element, making this argument easily obtained by call to
+        :func:`pp_matrices` or a similar function.  The matrices are expected
+        to be in the standard basis, and should be traceless except for the
+        identity.
+
+    normalize : bool
+        Whether or not generators should be normalized so that 
+        numpy.linalg.norm(generator.flat) == 1.0  Note that the generators 
+        will still, in general, be non-orthogonal.
+
+
+    Returns
+    -------
+    ham_generators : numpy.ndarray
+        An array of shape (d-1,d,d), where d is the size of the basis,
+        i.e. d == len(dmbasis).  `ham_generators[i]` gives the matrix for H_i.
+
+    other_generators : numpy.ndarray
+        An array of shape (d-1,d-1,d,d), where d is the size of the basis.
+        `other_generators[i,j]` gives the matrix for O_ij.
+    """
+    mxs = dmbasis # list of basis matrices (assumed to be in std basis)
+    d2 = len(mxs)
+    d = int(_np.sqrt(d2))
+    assert(_np.isclose(d*d,d2)), "basis size  must be a perfect square"
+    assert(_np.isclose(_np.linalg.norm(mxs[0]-_np.identity(d)/_np.sqrt(d)),0)),\
+        "The first matrix in 'dmbasis' must be the identity"
+
+    hamLindbladTerms = _np.empty( (d2-1,d2,d2), 'complex' )
+    for i,B in enumerate(mxs[1:]): #don't include identity
+        hamLindbladTerms[i] = _bt.hamiltonian_to_lindbladian(B) # in std basis
+        if normalize:
+            norm = _np.linalg.norm(hamLindbladTerms[i].flat)
+            if not _np.isclose(norm,0):
+                hamLindbladTerms[i] /= norm #normalize projector
+                assert(_np.isclose(_np.linalg.norm(hamLindbladTerms[i].flat),1.0))
+
+
+    otherLindbladTerms = _np.empty( (d2-1,d2-1,d2,d2), 'complex' )
+    for i,Lm in enumerate(mxs[1:]): #don't include identity
+        for j,Ln in enumerate(mxs[1:]): #don't include identity
+            #print("DEBUG NONHAM LIND (%d,%d)" % (i,j)) #DEBUG!!!
+            otherLindbladTerms[i,j] = _bt.nonham_lindbladian(Lm,Ln)
+            if normalize:
+                norm = _np.linalg.norm(otherLindbladTerms[i,j].flat)
+                if not _np.isclose(norm,0):
+                    otherLindbladTerms[i,j] /= norm #normalize projector
+                    assert(_np.isclose(_np.linalg.norm(
+                                otherLindbladTerms[i,j].flat),1.0))
+            #I don't think this is true in general, but appears to be true for "pp" basis (why?)
+            #if j < i: # check that other[i,j] == other[j,i].C, i.e. other is Hermitian
+            #    assert(_np.isclose(_np.linalg.norm(
+            #                otherLindbladTerms[i,j]-
+            #                otherLindbladTerms[j,i].conjugate()),0))
+
+
+    #Check for orthogonality - otherLindblad terms are *not* orthogonal!
+    #N = otherLindbladTerms.shape[0]
+    #for i in range(N):
+    #    for j in range(N):
+    #        v1 = otherLindbladTerms[i,j].flatten()
+    #        for k in range(N):
+    #            for l in range(N):
+    #                if k == i and l == j: continue
+    #                v2 = otherLindbladTerms[k,l].flatten()
+    #                if not _np.isclose(0, _np.vdot(v1,v2)):
+    #                    print("%d,%d <-> %d,%d dot = %g [%g]" % (i,j,k,l,_np.vdot(v1,v2),_np.dot(v1,v2)))
+    #                    #print("v1 = ",v1)
+    #                    #print("v2 = ",v2)
+    #                #    assert(False)
+    #                #assert(_np.isclose(0, _np.vdot(v1,v2)))
+
+    #Check hamiltonian error gens are orthogonal to others
+    #N = otherLindbladTerms.shape[0]
+    #for i,hlt in enumerate(hamLindbladTerms):
+    #    v1 = hlt.flatten()
+    #    for j in range(N):
+    #        for k in range(N):
+    #            v2 = otherLindbladTerms[j,k].flatten()
+    #            assert(_np.isclose(0, _np.vdot(v1,v2)))                
+
+    return hamLindbladTerms, otherLindbladTerms
+
+
+def pauliprod_lindblad_errgen_projections(gate, targetGate, mxBasis="gm",
+                                          normalize=True, 
+                                          return_generators=False):
+    """
+    Compute the projections of a gate error generator onto generators
+    for the Lindblad-term errors when expressed in the pauli-product basis.
+
+    Parameters
+    ----------
+    gate : ndarray
+      The gate matrix data used when constructing the generator.
+
+    targetGate : ndarray
+      The target gate matrix data to use when constructing the the
+      generator.
+      
+    mxBasis : {'std', 'gm','pp'}, optional
+      Which basis the gateset is represented in.  Allowed
+      options are Matrix-unit (std), Gell-Mann (gm) and
+      Pauli-product (pp).
+
+    normalize : bool, optional
+        Whether or not the generators being projected onto are normalized, so
+        that numpy.linalg.norm(generator.flat) == 1.0.  Note that the generators
+        will still, in general, be non-orthogonal.
+
+    return_generators : bool, optional
+      If True, return the error generators projected against along with the
+      projection values themseves.
+
+    Returns
+    -------
+    ham_projections : numpy.ndarray
+      An array of length d-1, where d is the dimension of the gate,
+      giving the projections onto the Hamiltonian-type Lindblad terms.
+
+    other_projections : numpy.ndarray
+      An array of shape (d-1,d-1), where d is the dimension of the gate,
+      giving the projections onto the "other"-type Lindblad terms.
+
+    ham_generators : numpy.ndarray
+      The Hamiltonian-type Lindblad term generators, as would be returned
+      from `lindblad_error_generators(pp_matrices(sqrt(d)), normalize)`.
+      Shape is (d-1,d,d), and `ham_generators[i]` is in the standard basis.
+
+    other_generators : numpy.ndarray
+      The "other"-type Lindblad term generators, as would be returned
+      from `lindblad_error_generators(pp_matrices(sqrt(d)), normalize)`.
+      Shape is (d-1,d-1,d,d), and `other_generators[i]` is in the std basis.
+    """
+
+    errgen = error_generator(gate, targetGate)
+    if mxBasis == "pp":   errgen_std = _bt.pp_to_std(errgen)
+    elif mxBasis == "gm": errgen_std = _bt.gm_to_std(errgen)
+    elif mxBasis == "std": errgen_std = errgen
+    else: raise ValueError("Invalid basis specifier: %s" % mxBasis)
+
+    d2 = gate.shape[0]
+    d = int(_np.sqrt(d2))
+    nQubits = _np.log2(d)
+
+    #Get a list of the d2 generators (in corresspondence with the
+    #  Pauli-product matrices given by _bt.pp_matrices(d) ).
+    hamGens,otherGens = lindblad_error_generators(_bt.pp_matrices(d), 
+                                                  normalize) # in std basis
+
+    assert(hamGens.shape == (d2-1,d2,d2))
+    assert(otherGens.shape == (d2-1,d2-1,d2,d2))
+    assert(_np.isclose(d*d,d2)) #d2 must be a perfect square
+
+    #OLD: just lump hamiltonian generators in with the others, even though they
+    #   should be orthogonal to all the non-hamiltonian error generators.
+    #hamProjs = _np.empty( hamGens.shape[0], 'd' )
+    #for i,genMx in enumerate(hamGens):
+    #    hamProjs[i] = _np.real_if_close(_np.vdot( errgen_std.flatten(), genMx.flatten() ))
+    #    assert(_np.isreal(hamProjs[i]))
+
+    #OLD: doesn't work because otherGens are *not* orthogonal (but they are linearly independent)
+    #otherProjs = _np.empty( (otherGens.shape[0],otherGens.shape[1]), 'complex' )
+    #for i in range(otherGens.shape[0]):
+    #    for j in range(otherGens.shape[1]):
+    #        otherProjs[i,j] = _np.vdot( errgen_std.flatten(),
+    #                                    otherGens[i,j].flatten())
+    #        if i==j: 
+    #            otherProjs[i,j] = _np.real_if_close(otherProjs[i,j])
+    #            assert(_np.isreal(otherProjs[i,j]))
+    #        if i > j:
+    #            #print("DEBUG conjugates (%d,%d):" % (i,j)) #DEBUG!!!
+    #            #print("other[%d,%d] = \n" % (i,j), otherGens[i,j])
+    #            #print("other[%d,%d] = \n" % (j,i), otherGens[j,i])
+    #            assert(_np.isclose(otherProjs[i,j], otherProjs[j,i].conjugate())) 
+    #             #at least for "pp" basis, otherProjs is hermetian when computed this way...
+
+    #Perform linear least squares solve to find "projections" onto each otherGens element - defined so that
+    #  sum_i projection_i * otherGen_i = (errgen_std-ham_errgen) as well as possible.
+   
+    #ham_error_gen = _np.einsum('i,ijk', hamProjs, hamGens)
+    #other_errgen = errgen_std - ham_error_gen #what's left once hamiltonian errors are projected out
+    
+    #Do linear least squares soln to expressing errgen_std as a linear combo
+    # of the lindblad generators
+    M = _np.concatenate( (hamGens.reshape((d2-1,d2**2)).T, otherGens.reshape(((d2-1)**2,d2**2)).T), axis=1)
+    assert(_np.linalg.matrix_rank(M,1e-7) == M.shape[1]) #check err gens are linearly independent
+    Mdag = M.T.conjugate()
+    projs = _np.dot(_np.linalg.inv(_np.dot(Mdag,M)),
+                         _np.dot(Mdag,errgen_std.flatten()))
+    hamProjs = projs[0:(d2-1)]
+    otherProjs = projs[(d2-1):]
+
+    hamProjs.shape = (hamGens.shape[0],)
+    otherProjs.shape = (otherGens.shape[0],otherGens.shape[1])
+
+    if return_generators:
+        return hamProjs, otherProjs, hamGens, otherGens
+    else:
+        return hamProjs, otherProjs
