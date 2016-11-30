@@ -112,7 +112,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
 
         - gateLabels = list of strings
         - gsWeights = dict or None
-        - startingPoint = "LGST" (default) or  "target"
+        - starting point = "LGST" (default) or  "target"
         - depolarizeStart = float (default == 0)
         - contractStartToCPTP = True / False (default)
         - tolerance = float
@@ -125,6 +125,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         - nestedGateStringLists = True (default) / False
         - distributeMethod = "gatestrings" or "deriv" (default)
         - profile = int (default == 1)
+        - truncScheme = "whole germ powers" (default) or "truncated germ powers"
+                        or "length as exponent"
 
     comm : mpi4py.MPI.Comm, optional
         When not ``None``, an MPI communicator for distributing the computation
