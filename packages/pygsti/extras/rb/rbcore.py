@@ -237,6 +237,7 @@ def do_randomized_benchmarking(dataset, clifford_gatestrings,
                                success_spamlabel = 'plus',
                                weight_data = False,
                                infinite_data = False,
+                               one_freq_adjust=False,
                                dim = 2, pre_avg=True, 
                                clifford_to_primitive = None,
                                clifford_to_canonical = None, 
@@ -351,12 +352,12 @@ def do_randomized_benchmarking(dataset, clifford_gatestrings,
         alias_maps['primitive'] = clifford_to_primitive
 
     return do_rb_base(dataset, clifford_gatestrings, "clifford", weight_data, infinite_data,
-                      alias_maps, success_spamlabel, dim, pre_avg, f0, A0, ApB0, C0, 
-                      f_bnd, A_bnd, ApB_bnd, C_bnd)
+                      one_freq_adjust, alias_maps, success_spamlabel, dim, pre_avg, f0, 
+                      A0, ApB0, C0, f_bnd, A_bnd, ApB_bnd, C_bnd)
 
 
-def do_rb_base(dataset, base_gatestrings, basename, weight_data=False, infinite_data=False,
-               alias_maps=None,
+def do_rb_base(dataset, base_gatestrings, basename, weight_data=False, 
+               infinite_data=False, one_freq_adjust=False, alias_maps=None,
                success_spamlabel = 'plus', dim = 2, pre_avg=True,
                f0 = 0.98, A0 = 0.5, ApB0 = 1.0, C0= 0.0, f_bnd=[0.,1.], 
                A_bnd=[0.,1.], ApB_bnd=[0.,1.], C_bnd=[-1.,1.]):
@@ -463,30 +464,214 @@ def do_rb_base(dataset, base_gatestrings, basename, weight_data=False, infinite_
         preavg_Ns =       [ avgs[L][2] for L in Ls ] 
         return preavg_lengths, preavg_psuccess, preavg_Ns
 
-    def fit(xdata,ydata,weights=None):
+    def fit(xdata,ydata,one_freq_dict=None,weights=None):
         xdata = _np.asarray(xdata) - 1 #discount Clifford-inverse
         ydata = _np.asarray(ydata)
         if weights is None:
             weights = _np.array([1.] * len(xdata))
-        def obj_func_full(params):
-            A,Bs,f = params
-            return _np.sum((A+(Bs-A)*f**xdata-ydata)**2 / weights)
+        if one_freq_dict is None:
+            def obj_func_full(params):
+                A,Bs,f = params
+                return _np.sum((A+(Bs-A)*f**xdata-ydata)**2 / weights)
+        
+            def obj_func_1st_order_full(params):
+                A1, B1s, C1, f1 = params
+                return _np.sum((A1+(B1s-A1+C1*xdata)*f1**xdata-ydata)**2 / weights)
+        else:
+            xdata_correction = _np.array(one_freq_dict['m_list']) - 1
+            n_0_list = one_freq_dict['n_0_list']
+            N_list = one_freq_dict['N_list']
+            K_list = one_freq_dict['K_list']
+            ydata_correction = []
+            weights_correction = []
+            indices_to_delete = []
+            for m in xdata_correction:
+                for i,j in enumerate(xdata):
+                    if j==m:
+                        ydata_correction.append(ydata[i])
+                        weights_correction.append(weights[i])
+#                        indices_to_delete.append([i])
+                        indices_to_delete.append(i)
+            ydata_correction = _np.array(ydata_correction)
+            xdata = _np.delete(xdata,indices_to_delete)
+            ydata = _np.delete(ydata,indices_to_delete)
+            weights = _np.delete(weights,indices_to_delete)
+#            print(one_freq_dict)
+#            print('xdata:')
+#            print(xdata)
+#            print('ydata:')
+#            print(ydata)
+#            print('weights:')
+#            print(weights)
+            case_1_dict = {}
+            case_3_dict = {}
+            for m, n_0, N, K in zip(xdata_correction,n_0_list,N_list,K_list):            
+                case_1_dict[m,n_0,N,K] = (n_0-1)**(n_0-1)*(N-n_0)**(N-n_0) / ((N-1)**(N-1))
+                case_3_dict[m,n_0,N,K] = (n_0**n_0 * (N-n_0-1)**(N-n_0-1))/((N-1)**(N-1))
+            def obj_func_full(params):
+                A,Bs,f = params
+###                print("A="+str(A))
+###                print("Bs="+str(Bs))
+###                print("f="+str(f))
+                if (((A < 0 or A > 1) or (Bs < 0 or Bs > 1)) or (f <= 0 or f >= 1)):
+                    return 1e6
+                total_0 = _np.sum((A+(Bs-A)*f**xdata-ydata)**2 / weights)
+#                correction_1 = _np.sum((A+(Bs-A)*f**xdata_correction - ydata_correction)**2  / weights_correction)
+                correction_2 = 0
+                for m, n_0, N, K in zip(xdata_correction,n_0_list,N_list,K_list):
+#                    print("type(A)="+str(type(A)))
+#                    print("type(Bs)="+str(type(Bs)))
+#                    print("type(f)="+str(type(f)))
+#                    print("type(m)="+str(type(m)))
+#                    print("type(n_0)="+str(type(n_0)))
+#                    print("type(N)="+str(type(N)))
+#                    print("type(K)="+str(type(K)))
+                    F = A+(Bs-A)*f**m
+#                    print("A="+str(A))
+#                    print("Bs="+str(Bs))
+#                    print("f="+str(f))
+#                    print("m="+str(m))
+                    try:
+                        assert len(F)==1
+                        F=F[0]
+                    except:
+                        pass
+#                    print("F="+str(F))
+#                    print("K="+str(K))
+#                    print("n_0="+str(n_0))
+#                    print("N="+str(N))
+                    if F < (n_0 - 1) / (N - 1):
+###                        print('Case 1 m='+str(m))
+###                        print('F='+str(F))
+###                        print(case_1_dict[m,n_0,N,K])
+#                        print("type(F)="+str(type(F)))
+#                        print("F="+str(F))
+#                        print("K="+str(K))
+#                        print("n_0="+str(n_0))
+#                        print("N="+str(N))
+#                        correction_2 += K * _np.log(F * (n_0-1)**(n_0-1)*(N-n_0)**(N-n_0) / ((N-1)**(N-1)))#+1e-10)
+                        correction_2 += K * _np.log(F * case_1_dict[m,n_0,N,K])#+1e-10
+##                        correction_2 += (F * (n_0-1)**(n_0-1)*(N-n_0)**(N-n_0) / ((N-1)**(N-1)))**K
+                    elif F >= (n_0 - 1) / (N - 1) and F < n_0 / (N-1):
+###                        print('Case 2 m='+str(m))
+###                        print('F='+str(F))
+###                        print('1-F='+str(1-F))
+###                        print(F**n_0 * (1-F)**(N-n_0))
+#                        print(case_1_dict[m,n_0,N,K])
+#                        print("F="+str(F))
+#                        print("K="+str(K))
+#                        print("n_0="+str(n_0))
+#                        print("N="+str(N))
+                        correction_2 += K * _np.log(F**n_0 * (1-F)**(N-n_0))
+##                        correction_2 += (F**n_0 * (1-F)**(N-n_0))**K
+                    elif F>= n_0 / (N-1):
+###                        print('Case 3 m='+str(m))
+###                        print('1-F='+str(1-F))
+###                        print(case_3_dict[m,n_0,N,K])
+                        correction_2 += K * _np.log((1-F) * case_3_dict[m,n_0,N,K])#+1e-10)
+#                        correction_2 += K * _np.log((1-F) * (n_0**n_0 * (N-n_0-1)**(N-n_0-1))/((N-1)**(N-1)))#+1e-10)
+##                        correction_2 += ((1-F) * (n_0**n_0 * (N-n_0-1)**(N-n_0-1))/((N-1)**(N-1)))**K
+                    else:
+                        print((n_0 - 1) / (N - 1))
+                        print(n_0 / (N-1))
+                        print("F="+str(F))
+                        print("A="+str(A))
+                        print("Bs="+str(Bs))
+                        print("f="+str(f))
+                        print("m="+str(m))
+                        raise ValueError("F does not fall within any physical bounds for m="+str(m)+"!")
+#                return total_0 - correction_1 + correction_2
+                return total_0 - correction_2
 
+            def obj_func_1st_order_full(params):
+#                print("1st order call")
+                A1, B1s, C1, f1 = params
+                total_0 = _np.sum((A1+(B1s-A1+C1*xdata)*f1**xdata-ydata)**2 / weights)
+#                correction_1 = _np.sum((A1+(B1s-A1+C1*xdata_correction)*f1**xdata_correction-ydata_correction)**2 / weights)
+                correction_2 = 0
+                for m, n_0, N, K in zip(xdata_correction,n_0_list,N_list,K_list):
+#                    print("type(A)="+str(type(A)))
+#                    print("type(Bs)="+str(type(Bs)))
+#                    print("type(f)="+str(type(f)))
+#                    print("type(m)="+str(type(m)))
+#                    print("type(n_0)="+str(type(n_0)))
+#                    print("type(N)="+str(type(N)))
+#                    print("type(K)="+str(type(K)))
+                    F = A+(Bs-A)*f**m
+#                    print("A="+str(A))
+#                    print("Bs="+str(Bs))
+#                    print("f="+str(f))
+#                    print("m="+str(m))
+                    try:
+                        assert len(F)==1
+                        F=F[0]
+                    except:
+                        pass
+#                    print("F="+str(F))
+#                    print("K="+str(K))
+#                    print("n_0="+str(n_0))
+#                    print("N="+str(N))
+                    if F < (n_0 - 1) / (N - 1):
+###                        print('Case 1 m='+str(m))
+###                        print('F='+str(F))
+###                        print(case_1_dict[m,n_0,N,K])
+#                        print("type(F)="+str(type(F)))
+#                        print("F="+str(F))
+#                        print("K="+str(K))
+#                        print("n_0="+str(n_0))
+#                        print("N="+str(N))
+#                        correction_2 += K * _np.log(F * (n_0-1)**(n_0-1)*(N-n_0)**(N-n_0) / ((N-1)**(N-1)))#+1e-10)
+                        correction_2 += K * _np.log(F * case_1_dict[m,n_0,N,K])#+1e-10
+##                        correction_2 += (F * (n_0-1)**(n_0-1)*(N-n_0)**(N-n_0) / ((N-1)**(N-1)))**K
+                    elif F >= (n_0 - 1) / (N - 1) and F < n_0 / (N-1):
+###                        print('Case 2 m='+str(m))
+###                        print('F='+str(F))
+###                        print('1-F='+str(1-F))
+###                        print(F**n_0 * (1-F)**(N-n_0))
+#                        print(case_1_dict[m,n_0,N,K])
+#                        print("F="+str(F))
+#                        print("K="+str(K))
+#                        print("n_0="+str(n_0))
+#                        print("N="+str(N))
+                        correction_2 += K * _np.log(F**n_0 * (1-F)**(N-n_0))
+##                        correction_2 += (F**n_0 * (1-F)**(N-n_0))**K
+                    elif F>= n_0 / (N-1):
+###                        print('Case 3 m='+str(m))
+###                        print('1-F='+str(1-F))
+###                        print(case_3_dict[m,n_0,N,K])
+                        correction_2 += K * _np.log((1-F) * case_3_dict[m,n_0,N,K])#+1e-10)
+#                        correction_2 += K * _np.log((1-F) * (n_0**n_0 * (N-n_0-1)**(N-n_0-1))/((N-1)**(N-1)))#+1e-10)
+##                        correction_2 += ((1-F) * (n_0**n_0 * (N-n_0-1)**(N-n_0-1))/((N-1)**(N-1)))**K
+                    else:
+                        print((n_0 - 1) / (N - 1))
+                        print(n_0 / (N-1))
+                        print("F="+str(F))
+                        print("A="+str(A))
+                        print("Bs="+str(Bs))
+                        print("f="+str(f))
+                        print("m="+str(m))
+                        raise ValueError("F does not fall within any physical bounds for m="+str(m)+"!")
+#                return total_0 - correction_1 + correction_2
+                return total_0 - correction_2
         def obj_func_1d(f):
             A = 0.5
             Bs = 1.
+#            print("f="+str(f))
             return obj_func_full([A,Bs,f])
-        
-        def obj_func_1st_order_full(params):
-            A1, B1s, C1, f1 = params
-            return _np.sum((A1+(B1s-A1+C1*xdata)*f1**xdata-ydata)**2 / weights)
+
+#        print('xdata:')
+#        print(xdata)
+#        print('ydata:')
+#        print(ydata)
+#        print('weights:')
+#        print(weights)
 
         initial_soln = _minimize(obj_func_1d,f0, method='L-BFGS-B',
                                  bounds=[(0.,1.)])
         f0b = initial_soln.x[0]
         p0 = [A0,ApB0,f0b] 
         final_soln = _minimize(obj_func_full,p0, method='L-BFGS-B',
-                               bounds=[A_bnd,ApB_bnd,f_bnd])      
+                               bounds=[A_bnd,ApB_bnd,f_bnd])
         A,Bs,f = final_soln.x
         
         p0 = [A,Bs,C0,f]        
@@ -514,6 +699,9 @@ def do_rb_base(dataset, base_gatestrings, basename, weight_data=False, infinite_
     occ_indices = _tools.compute_occurance_indices(base_gatestrings)
     Ns = [ dataset.get_row(seq,k).total() 
            for seq,k in zip(base_gatestrings,occ_indices) ]
+#    print(base_gatestrings)
+#    print(occ_indices)
+#    print(success_spamlabel)
     successes = [ dataset.get_row(seq,k).fraction(success_spamlabel) 
                   for seq,k in zip(base_gatestrings,occ_indices) ] 
 
@@ -533,11 +721,20 @@ def do_rb_base(dataset, base_gatestrings, basename, weight_data=False, infinite_
             weights = _np.array(map(lambda x : weight_dict[x],base_lengths))
             if _np.count_nonzero(weights) != len(weights):
                 print("Warning: Zero weight detected!")
+            if one_freq_adjust:
+                one_freq_dict = _rbutils.summary_dict_to_one_freq_dict(summary_dict)
+                if len(one_freq_dict['m_list']) == 0:
+                    one_freq_dict = None
+            else:
+                one_freq_dict = None
         else : 
             weights = None
+            one_freq_dict = None
     else:
         base_lengths,base_successes,base_Ns = base_lengths,successes,Ns
-    base_results = fit(base_lengths, base_successes,weights)
+        weights = None
+        one_freq_dict = None
+    base_results = fit(base_lengths, base_successes, one_freq_dict, weights)
     base_results.update({'gatestrings': base_gatestrings,
                           'lengths': base_lengths,
                           'successes': base_successes,
@@ -556,7 +753,7 @@ def do_rb_base(dataset, base_gatestrings, basename, weight_data=False, infinite_
                 preavg_by_length(gstyp_lengths,successes,Ns)
         else:
             gstyp_lengths,gstyp_successes,gstyp_Ns = gstyp_lengths,successes,Ns
-        gstyp_results = fit(gstyp_lengths, gstyp_successes)
+        gstyp_results = fit(gstyp_lengths, gstyp_successes, one_freq_dict, weights)
         gstyp_results.update({'gatestrings': gstyp_gatestrings,
                               'lengths': gstyp_lengths,
                               'successes': gstyp_successes,
