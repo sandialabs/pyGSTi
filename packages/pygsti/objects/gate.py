@@ -1708,7 +1708,8 @@ class LindbladParameterizedGate(Gate):
     the Lindblad form that is exponentiated to give the gate's error generator.
     """
 
-    def __init__(self, gateMatrix, unitaryPrefactor=None):
+    def __init__(self, gateMatrix, unitaryPrefactor=None,
+                 cptp=True, onlydiag=False, truncate=True):
         """
         Initialize a LindbladParameterizedGate object.
 
@@ -1730,12 +1731,31 @@ class LindbladParameterizedGate(Gate):
             that only the erroneous part of the gate (i.e. the gate 
             relative to the target), which should be close to the identity,
             is parameterized.  If none, the identity is used by default.
+
+        cptp : bool, optional
+            Whether or not the new gate should be constrained to CPTP.
+            (if True, see behavior or `truncate`).
+
+        onlydiag : bool, optional
+            Whether only the "diagonal" non-Hamiltonian type Lindblad terms
+            should be used for the parameterization.  If False, all Lindblad
+            terms are used.
+
+        truncate : bool, optional
+            Whether to truncate the projections onto the Lindblad terms in
+            order to preserve CPTP (when necessary).  If False, then an 
+            error is thrown when `cptp == True` and when Lindblad projections
+            result in a non-positive-definite matrix of non-Hamiltonian term
+            coefficients.
         """
         if gateMatrix is None:
             assert(unitaryPrefactor is not None), "arguments cannot both be None"
             gateMatrix = unitaryPrefactor
         if unitaryPrefactor is None:
             unitaryPrefactor = _np.identity(gateMatrix.shape[0],'d')
+
+        assert(cptp == True), "CPTP == False is not implemented yet"
+        assert(onlydiag == False), "onlydiag == True is not implemented yet"
         
         d2 = gateMatrix.shape[0]
         d = int(round(_np.sqrt(d2)))
@@ -1755,7 +1775,8 @@ class LindbladParameterizedGate(Gate):
         #push any slightly negative evals of otherC positive so that
         # the cholesky decomp will work.
         evals,U = _np.linalg.eig(otherC)
-        assert(all([ev >= -1e-16 for ev in evals])), "gateMatrix must be CPTP!"
+        assert(truncate or all([ev >= -1e-16 for ev in evals])), \
+            "gateMatrix must be CPTP!"
         pos_evals = evals.clip(1e-16,1e100)
         otherC = _np.dot(U,_np.dot(_np.diag(pos_evals),_np.linalg.inv(U)))
 
@@ -1763,13 +1784,14 @@ class LindbladParameterizedGate(Gate):
         otherParams = _np.empty((d2-1,d2-1),'d')
         for i in range(d2-1):
             assert(_np.isreal(Lmx[i,i]))
-            otherParams[i,i] = Lmx[i,i]
+            otherParams[i,i] = Lmx[i,i].real
             for j in range(i):
-                assert(_np.isclose(abs(Lmx[i,j]-Lmx[j,i].conjugate()),0))
                 otherParams[i,j] = Lmx[i,j].real
                 otherParams[j,i] = Lmx[i,j].imag
 
-        self.paramvals = _np.concatenate( (hamC, otherParams.flat) )
+        assert(_np.isclose(_np.linalg.norm(hamC.imag),0)), \
+            "Hamiltoian coeffs are not all real!"
+        self.paramvals = _np.concatenate( (hamC.real, otherParams.flat) )
 
         assert(self.paramvals.shape == ((d2-1)*d2,))
         assert(not _np.array_equal(gateMatrix,unitaryPrefactor) or
@@ -1956,7 +1978,6 @@ class LindbladParameterizedGate(Gate):
             commutant = _np.einsum("ik,kja->ija",self.err_gen,last_commutant) - \
                 _np.einsum("ika,kj->ija",last_commutant,self.err_gen)
             term = 1/_np.math.factorial(i) * commutant
-            #print("dH norm(term%d) = %g" % (i,_np.linalg.norm(term))) 
             series += term #1/_np.math.factorial(i) * commutant
             last_commutant = commutant; i += 1
         dH = _np.einsum('il,lka,kj->ija', self.unitary_prefactor, series, self.exp_err_gen)
