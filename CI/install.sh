@@ -2,7 +2,10 @@
 # This script needs to be run as admin
 
 #Install suitesparse for UMFPACK, which cvxopt now needs...
-apt-get install libsuitesparse-dev
+echo "CHECK for UMFPACK DEBUG"
+sudo find / -iname umfpack.h 2>/dev/null
+apt-get install libsuitesparse-metis-dev
+sudo find / -iname umfpack.h 2>/dev/null
 
 echo "Checking if pdflatex install is needed"
 
