@@ -5,8 +5,9 @@
 echo "CHECK for UMFPACK DEBUG"
 sudo find / -iname umfpack.h 2>/dev/nulli
 echo "INSTALLING UMFPACK?"
-#apt-get install libsuitesparse-metis-dev
-apt-get install libumfpack5.4.0
+apt-get install libsuitesparse-dev
+cp /usr/lib/liblapack.so /usr/lib/libsuitesparseconfig.so
+#apt-get install libumfpack5.4.0
 echo "CHECK if umfpack.h exists"
 sudo find / -iname umfpack.h 2>/dev/null
 echo "Done check"
