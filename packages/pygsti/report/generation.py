@@ -1286,12 +1286,14 @@ def get_logl_projected_err_gen_table(gateset, targetGateset,
                              % (basisNm, targetGateset.get_basis_name()))
 
     #Do computation first
-    gsH = gateset.copy(); Np_H = 0
-    gsS = gateset.copy(); Np_S = 0
-    gsHS = gateset.copy(); Np_HS = 0
-    gsLND = gateset.copy(); Np_LND = 0
+    # Note: set to "full" parameterization so we can set the gates below
+    #  regardless of what to fo parameterization the original gateset had.
+    gsH = gateset.copy(); gsH.set_all_parameterizations("full"); Np_H = 0
+    gsS = gateset.copy(); gsS.set_all_parameterizations("full"); Np_S = 0
+    gsHS = gateset.copy(); gsHS.set_all_parameterizations("full"); Np_HS = 0
+    gsLND = gateset.copy(); gsLND.set_all_parameterizations("full"); Np_LND = 0
     #gsHSCP = gateset.copy()
-    gsLNDCP = gateset.copy()
+    gsLNDCP = gateset.copy(); gsLNDCP.set_all_parameterizations("full")
     for gl in gateLabels:
         gate = gateset.gates[gl]
         targetGate = targetGateset.gates[gl]
