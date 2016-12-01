@@ -1,6 +1,9 @@
 #!/bin/bash
 # This script needs to be run as admin
 
+#Install suitesparse for UMFPACK, which cvxopt now needs...
+apt-get install libsuitesparse-dev
+
 echo "Checking if pdflatex install is needed"
 
 if [ "$ReportA" == "True" ]; then
