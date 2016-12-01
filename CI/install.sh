@@ -3,9 +3,13 @@
 
 #Install suitesparse for UMFPACK, which cvxopt now needs...
 echo "CHECK for UMFPACK DEBUG"
+sudo find / -iname umfpack.h 2>/dev/nulli
+echo "INSTALLING UMFPACK?"
+#apt-get install libsuitesparse-metis-dev
+apt-get install libumfpack5.4.0
+echo "CHECK if umfpack.h exists"
 sudo find / -iname umfpack.h 2>/dev/null
-apt-get install libsuitesparse-metis-dev
-sudo find / -iname umfpack.h 2>/dev/null
+echo "Done check"
 
 echo "Checking if pdflatex install is needed"
 
