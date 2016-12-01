@@ -28,7 +28,7 @@ before_install:
 
 install:
   - travis_retry travis_wait pip install -r requirements.txt
-  - pip install cvxpy cvxopt python-pptx mpi4py zmq coverage >/dev/null
+  - pip install cvxpy cvxopt python-pptx mpi4py zmq coverage
   - pip install -e . >/dev/null
   
 cache:
