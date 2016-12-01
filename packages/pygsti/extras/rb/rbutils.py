@@ -750,6 +750,37 @@ def summary_dict_to_delta_f1_squared_dict(summary_dict,infinite_data=True):
             delta_f1_squared_dict[m] = 1. / K * _np.max([term_1, term_2])
     return delta_f1_squared_dict
 
+def checkEqual(iterator):
+    """
+    Checks if every element of iterator is the same.
+    """
+    iterator = iter(iterator)
+    try:
+        first = next(iterator)
+    except StopIteration:
+        return True
+    return all(first == rest for rest in iterator)
+
+
+def summary_dict_to_one_freq_dict(summary_dict):
+    """
+    Maps summary dict (defined in rbutils.dataset_to_summary_dict) to one_freq_dict;
+    used when at least one sequence length has only one observed frequency.
+    """
+    one_freq_dict = _OrderedDict({})
+    one_freq_dict['m_list'] = []
+    one_freq_dict['n_0_list'] = []
+    one_freq_dict['N_list'] = []
+    one_freq_dict['K_list'] = []
+    for key in summary_dict.keys():
+        if isinstance(key,int):
+            if checkEqual(summary_dict[key]):
+                one_freq_dict['m_list'].append(key)
+                one_freq_dict['n_0_list'].append(summary_dict[key][0])
+                one_freq_dict['N_list'].append(summary_dict[key,u'N'])
+                one_freq_dict['K_list'].append(summary_dict[key,u'K'])
+    return one_freq_dict
+
 # def dataset_to_mkn_dict(dataset,seqs,success_spam_label):
 #     """
 #     Maps an RB dataset to an ordered dictionary; keys are 

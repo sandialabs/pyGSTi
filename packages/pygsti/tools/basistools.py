@@ -1229,7 +1229,7 @@ def ppvec_to_stdmx(v):
     return ret
 
 
-def gmvec_to_stdmx(v):
+def gmvec_to_stdmx(v,keep_complex=False):
     """
     Convert a vector in the Gell-Mann basis to a matrix
      in the standard basis.
@@ -1239,6 +1239,8 @@ def gmvec_to_stdmx(v):
     v : numpy array
         The vector (length must be a perfect square, e.g. 4, 9, 16, ...)
 
+    keep_complex : bool, optional
+        If set to true, retains complex information in v.
     Returns
     -------
     numpy array
@@ -1250,10 +1252,13 @@ def gmvec_to_stdmx(v):
 
     ret = _np.zeros( (dim,dim), 'complex' )
     for i,gmMx in enumerate(gmMxs):
-        ret += float(v[i])*gmMx
+        if keep_complex:
+            ret += v[i] * gmMx
+        else:
+            ret += float(v[i])*gmMx
     return ret
 
-def stdvec_to_stdmx(v):
+def stdvec_to_stdmx(v,keep_complex=False):
     """
     Convert a vector in the standard basis to a matrix
      in the standard basis.
@@ -1263,6 +1268,8 @@ def stdvec_to_stdmx(v):
     v : numpy array
         The vector, length 4 (1Q) or 16 (2Q)
 
+    keep_complex : bool, optional
+        If set to true, retains complex information in v.    
     Returns
     -------
     numpy array
@@ -1275,7 +1282,10 @@ def stdvec_to_stdmx(v):
 
     ret = _np.zeros( (dim,dim), 'complex' )
     for i,stdMx in enumerate(stdMxs):
-        ret += float(v[i])*stdMx
+        if keep_complex:
+            ret += v[i] * stdMx
+        else:
+            ret += float(v[i])*stdMx
     return ret
 
 
