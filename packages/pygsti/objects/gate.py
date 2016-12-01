@@ -1753,7 +1753,6 @@ class LindbladParameterizedGate(Gate):
         Build the internal gate matrix using the current parameters.
         """
         d2 = self.dim
-        EVAL_OFFSET = 1e-1
 
         # self.paramvals = [hamCoeffs] + [otherParams]
         #  where hamCoeffs are *real* and of length d2-1 (self.dim == d2)
@@ -1765,7 +1764,7 @@ class LindbladParameterizedGate(Gate):
         #  Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i] (i > j)
         otherParams = self.paramvals[d2-1:].reshape((d2-1,d2-1))
         for i in range(d2-1):
-            self.Lmx[i,i] = otherParams[i,i]**2 + EVAL_OFFSET
+            self.Lmx[i,i] = otherParams[i,i]
             for j in range(i):
                 self.Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i]
 
@@ -1775,9 +1774,9 @@ class LindbladParameterizedGate(Gate):
         otherCoeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
 
         #DEBUG - test for pos-def
-        #evals = _np.linalg.eigvals(otherCoeffs)
-        #DEBUG_TOL = 1e-10 #;print("EVALS DEBUG = ",evals)
-        #assert(all([ev >= DEBUG_TOL for ev in evals]))
+        #evals = _np.linalg.eigvalsh(otherCoeffs)
+        #DEBUG_TOL = 1e-16; #print("EVALS DEBUG = ",evals)
+        #assert(all([ev >= -DEBUG_TOL for ev in evals]))
 
 
         #Finally, build gate matrix from generators and coefficients:
@@ -1925,7 +1924,6 @@ class LindbladParameterizedGate(Gate):
         #Deriv wrt other params
         L,Lbar = self.Lmx,self.Lmx.conjugate()
         F1 = _np.tril(_np.ones((d2-1,d2-1),'d'))
-        F1[_np.diag_indices_from(F1)] =[2*otherParams[i,i] for i in range(d2-1)]
         F2 = _np.triu(_np.ones((d2-1,d2-1),'d'),1) * 1j
 
           # Derivative of exponent wrt other param; shape == [d2,d2,d2-1,d2-1]
