@@ -19,7 +19,7 @@ from . import scoring as _scoring
 
 def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
                    numGSCopies=5, seed=None, maxGermLength=6,
-                   forceSingletons=True, algorithm='greedy',
+                   force="singletons", algorithm='greedy',
                    algorithm_kwargs=None, verbosity=1):
     """Generate a germ set for doing GST with a given target gateset.
 
@@ -65,8 +65,10 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
         length up to `maxGermsLength` for the germ selection algorithms to play
         around with.
 
-    forceSingletons : bool, optional
-        Whether or not to force all germ sets to contain each gate as a germ.
+    force : str or list, optional
+        A list of GateStrings which *must* be included in the final germ set.
+        If set to the special string "singletons" then all length-1 strings will
+        be included.  Seting to None is the same as an empty list.
 
     algorithm : {'greedy', 'grasp', 'slack'}, optional
         Specifies the algorithm to use to generate the germ set. Current
@@ -123,7 +125,7 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
             'randomize': False,
             'seed': seed,
             'verbosity': max(0, verbosity - 1),
-            'forceSingletons': forceSingletons,
+            'force': force,
             'scoreFunc': 'all',
             }
         for key in default_kwargs:
@@ -148,7 +150,7 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
             'randomize': False,
             'seed': seed,
             'verbosity': max(0, verbosity - 1),
-            'forceSingletons': forceSingletons,
+            'force': force,
             'returnAll': False,
             'scoreFunc': 'all',
             }
@@ -179,7 +181,7 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
             'randomize': False,
             'seed': seed,
             'verbosity': max(0, verbosity - 1),
-            'forceSingletons': forceSingletons,
+            'force': force,
             'scoreFunc': 'all',
             }
         if ('slackFrac' not in algorithm_kwargs
@@ -290,10 +292,10 @@ def setup_gateset_list(gatesetList, randomize, randomizationStrength,
                        numCopies, seed):
     if not isinstance(gatesetList, (list, tuple)):
         gatesetList = [gatesetList]
-
     if len(gatesetList) > 1 and numCopies is not None:
         _warnings.warn("Ignoring numCopies={} since multiple gatesets were "
                        "supplied.".format(numCopies))
+        assert(False)
 
     if randomize:
         gatesetList = randomizeGatesetList(gatesetList, randomizationStrength,
@@ -455,20 +457,20 @@ def calc_twirled_DDD(gateset, germsList, eps=None, check=False,
 
 
 def compute_score(weights, gateset_num, scoreFunc, derivDaggerDerivList,
-                  forceSingletons, forceSingletonsScore, numGates,
+                  forceIndices, forceScore,
                   nGaugeParams, gatePenalty, germLengths, l1Penalty=1e-2,
                   scoreDict=None):
     """Returns a germ set "score" in which smaller is better.  Also returns
-    intentionally bad score if `weights` does not include all individual gates
-    as individual germs when `forceSingletons` is ``True``.
+    intentionally bad score (`forceScore`) if `weights` is zero on any of
+    the "forced" germs (i.e. at any index in `forcedIndices`).
 
     This function is included for use by :func:`optimize_integer_germs_slack`,
     but is not convenient for just computing the score of a germ set. For that,
     use :func:`calculate_germset_score`.
 
     """
-    if forceSingletons and _np.count_nonzero(weights[:numGates]) != numGates:
-        score = forceSingletonsScore
+    if forceIndices and _np.any(weights[forceIndices] <= 0):
+        score = forceScore
     else:
         combinedDDD = _np.einsum('i,ijk', weights,
                                  derivDaggerDerivList[gateset_num])
@@ -523,9 +525,9 @@ def checkGermsListCompleteness(gatesetList, germsList, scoreFunc, threshold):
 
 def removeSPAMVectors(gateset):
     reducedGateset = gateset.copy()
-    for prepLabel in reducedGateset.preps:
+    for prepLabel in list(reducedGateset.preps.keys()):
         del reducedGateset.preps[prepLabel]
-    for effectLabel in reducedGateset.effects:
+    for effectLabel in list(reducedGateset.effects.keys()):
         del reducedGateset.effects[effectLabel]
     return reducedGateset
 
@@ -861,7 +863,7 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
 def build_up(gatesetList, germsList, randomize=True,
              randomizationStrength=1e-3, numCopies=None, seed=0, gatePenalty=0,
              scoreFunc='all', tol=1e-6, threshold=1e6, check=False,
-             forceSingletons=True, verbosity=0):
+             force="singletons", verbosity=0):
     """Greedy algorithm starting with 0 germs.
 
     Tries to minimize the number of germs needed to achieve amplificational
@@ -884,10 +886,15 @@ def build_up(gatesetList, germsList, randomize=True,
 
     weights = _np.zeros(numGerms, 'i')
     goodGermsList = []
-    if forceSingletons:
-        weights[_np.where(germLengths == 1)] = 1
-        goodGermsList = [germ for germ
-                         in _np.array(germsList)[_np.where(germLengths == 1)]]
+    if force:
+        if force == "singletons":
+            weights[_np.where(germLengths == 1)] = 1
+            goodGermsList = [germ for germ
+                             in _np.array(germsList)[_np.where(germLengths==1)]]
+        else: #force should be a list of GateStrings
+            for gs in force:
+                weights[germsList.index(gs)] = 1
+            goodGermsList = force[:]
 
     undercompleteGatesetNum = checkGermsListCompleteness(gatesetList,
                                                          germsList,
@@ -955,7 +962,7 @@ def build_up(gatesetList, germsList, randomize=True,
 def build_up_breadth(gatesetList, germsList, randomize=True,
                      randomizationStrength=1e-3, numCopies=None, seed=0,
                      gatePenalty=0, scoreFunc='all', tol=1e-6, threshold=1e6,
-                     check=False, forceSingletons=True, verbosity=0):
+                     check=False, force="singletons", verbosity=0):
     """Greedy algorithm starting with 0 germs.
 
     Tries to minimize the number of germs needed to achieve amplificational
@@ -988,10 +995,15 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
 
     goodGerms = []
     weights = _np.zeros(numGerms, 'i')
-    if forceSingletons:
-        weights[_np.where(germLengths == 1)] = 1
-        goodGerms = [germ for germ
-                     in _np.array(germsList)[_np.where(germLengths == 1)]]
+    if force:
+        if force == "singletons":
+            weights[_np.where(germLengths == 1)] = 1
+            goodGermsList = [germ for germ
+                             in _np.array(germsList)[_np.where(germLengths==1)]]
+        else: #force should be a list of GateStrings
+            for gs in force:
+                weights[germsList.index(gs)] = 1
+            goodGermsList = force[:]
 
     undercompleteGatesetNum = checkGermsListCompleteness(gatesetList,
                                                          germsList,
@@ -1025,6 +1037,8 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
 
     initN = 1
     while _np.any(weights == 0):
+        printer.log("Outer iteration: %d of %d amplified, %d germs" % 
+                    (initN,numNonGaugeParams,len(goodGerms)), 2)
         # As long as there are some unused germs, see if you need to add
         # another one.
         if initN == numNonGaugeParams:
@@ -1032,27 +1046,38 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
 
         candidateGerms = _np.where(weights == 0)[0]
         candidateGermScores = []
-        for candidateGermIdx in _np.where(weights == 0)[0]:
-            # If the germs aren't sufficient, try adding a single germ
-            candidateWeights = weights.copy()
-            candidateWeights[candidateGermIdx] = 1
-            germVsGatesetScores = []
-            for derivDaggerDeriv in twirledDerivDaggerDerivList:
-                # Loop over all gatesets
-                partialDDD = derivDaggerDeriv[
-                    _np.where(candidateWeights == 1)[0], :, :]
-                germVsGatesetScores.append(compute_non_AC_score(
-                    partialDerivDaggerDeriv=partialDDD, initN=initN,
-                    **nonAC_kwargs))
-            # Take the score for the current germ to be it's worst score over
-            # all gatesets.
-            candidateGermScores.append(max(germVsGatesetScores))
+        candidateGermIndices = _np.where(weights == 0)[0]
+        with printer.progress_logging(3):
+            for i,candidateGermIdx in enumerate(candidateGermIndices):
+                printer.show_progress(i, len(candidateGermIndices), 
+                                      prefix="Inner iter over candidate germs",
+                                      suffix=str(germsList[candidateGermIdx]))
+    
+                # If the germs aren't sufficient, try adding a single germ
+                candidateWeights = weights.copy()
+                candidateWeights[candidateGermIdx] = 1
+                germVsGatesetScores = []
+                for derivDaggerDeriv in twirledDerivDaggerDerivList:
+                    # Loop over all gatesets
+                    partialDDD = derivDaggerDeriv[
+                        _np.where(candidateWeights == 1)[0], :, :]
+                    germVsGatesetScores.append(compute_non_AC_score(
+                        partialDerivDaggerDeriv=partialDDD, initN=initN,
+                        **nonAC_kwargs))
+                # Take the score for the current germ to be it's worst score over
+                # all gatesets.
+                worstScore = max(germVsGatesetScores)
+                printer.log(str(worstScore), 4)
+                candidateGermScores.append(worstScore)
         # Add the germ that gives the best worst score
         bestCandidateGerm = candidateGerms[_np.array(
             candidateGermScores).argmin()]
         weights[bestCandidateGerm] = 1
         goodGerms.append(germsList[bestCandidateGerm])
-        initN = min(candidateGermScores).N
+        bestScore = min(candidateGermScores)
+        initN = bestScore.N
+        printer.log("Added %s to final germs (%s)" % 
+                    (str(germsList[bestCandidateGerm]), str(bestScore)), 3)
 
     return goodGerms
 
@@ -1064,8 +1089,8 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                                  initialWeights=None, scoreFunc='all',
                                  maxIter=100, fixedSlack=False,
                                  slackFrac=False, returnAll=False, tol=1e-6,
-                                 check=False, forceSingletons=True,
-                                 forceSingletonsScore=1e100, threshold=1e6,
+                                 check=False, force="singletons",
+                                 forceScore=1e100, threshold=1e6,
                                  verbosity=1):
     """Find a locally optimal subset of the germs in germsList.
 
@@ -1088,9 +1113,6 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
 
     germsList : list of GateString
         List of all germs gate sequences to consider.
-
-        IMPORTANT:  If `forceSingletons` is ``True``, the first k elements of
-        `germsList` must be all k gates in GateSet.
 
     randomize : Bool, optional
         Whether or not the input GateSet(s) are first subject to unitary
@@ -1163,15 +1185,14 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         Whether to perform internal consistency checks, at the
         expense of making the function slower.
 
-    forceSingletons : bool, optional (default is True)
-        Whether or not to force all germ sets to contain each gate as a germ.
+    force : str or list, optional
+        A list of GateStrings which *must* be included in the final germ set.
+        If set to the special string "singletons" then all length-1 strings will
+        be included.  Seting to None is the same as an empty list.
 
-        IMPORTANT:  This only works if, for a gate set of k gates, the first k
-        elements of germsList are the k gates.
-
-    forceSingletonsScore : float, optional (default is 1e100)
-        When `forceSingletons` is ``True``, what score to assign any germ set
-        that does not contain each gate as a germ.
+    forceScore : float, optional (default is 1e100)
+        When `force` designates a non-empty set of gate strings, the score to
+        assign any germ set that does not contain each and every required germ.
 
     threshold : float, optional (default is 1e6)
         Specifies a maximum score for the score matrix, above which the germ
@@ -1249,9 +1270,15 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     #   keys = (gatesetNum, tuple-ized weight vector of 1's and 0's only)
     #   values = list_score
     scoreD = {}
-    numGates = len(gateset0.gates.keys())
-
     germLengths = _np.array([len(germ) for germ in germsList], 'i')
+
+    if force:
+        if force == "singletons":
+            forceIndices = _np.where(germLengths == 1)
+        else: #force should be a list of GateStrings
+            forceIndices = _np.array([germsList.index(gs) for gs in force])
+    else:
+        forceIndices = None
 
     twirledDerivDaggerDerivList = [calc_twirled_DDD(gateset, germsList, tol,
                                                     check, germLengths)
@@ -1262,9 +1289,8 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     cs_kwargs = {
         'scoreFunc': scoreFunc,
         'derivDaggerDerivList': twirledDerivDaggerDerivList,
-        'forceSingletons': forceSingletons,
-        'forceSingletonsScore': forceSingletonsScore,
-        'numGates': numGates,
+        'forceIndices': forceIndices,
+        'forceScore': forceScore,
         'nGaugeParams': nGaugeParams,
         'gatePenalty': gatePenalty,
         'germLengths': germLengths,
@@ -1287,9 +1313,6 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
 
             bFoundBetterNeighbor = False
             for neighbor in get_neighbors(weights):
-                # if force_singletons:
-                #     if _np.count_nonzeros(neighbor[:numGates]) != numGates
-                #         continue
                 neighborScoreList = []
                 for gateset_num in range(len(gatesetList)):
                     if (gateset_num, tuple(neighbor)) not in scoreD:
@@ -1419,7 +1442,7 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
                                 randomizationStrength=1e-3, numCopies=None,
                                 seed=None, l1Penalty=1e-2, gatePenalty=0.0,
                                 scoreFunc='all', tol=1e-6, threshold=1e6,
-                                check=False, forceSingletons=True,
+                                check=False, force="singletons",
                                 iterations=5, returnAll=False, shuffle=False,
                                 verbosity=0):
     """Use GRASP to find a high-performing germ set.
@@ -1500,8 +1523,10 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
         Whether to perform internal consistency checks, at the
         expense of making the function slower.
 
-    forceSingletons : bool, optional (default is True)
-        Whether or not to force all germ sets to contain each gate as a germ.
+    force : str or list, optional
+        A list of GateStrings which *must* be included in the final germ set.
+        If set to the special string "singletons" then all length-1 strings will
+        be included.  Seting to None is the same as an empty list.
 
     iterations : int, optional
         The number of GRASP iterations to perform.
@@ -1540,8 +1565,12 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
     numGerms = len(germsList)
 
     initialWeights = _np.zeros(numGerms, dtype='i')
-    if forceSingletons:
-        initialWeights[_np.where(germLengths == 1)] = 1
+    if force:
+        if force == "singletons":
+            initialWeights[_np.where(germLengths == 1)] = 1
+        else: #force should be a list of GateStrings
+            for gs in force:
+                initialWeights[germsList.index(gs)] = 1
 
     getNeighborsFn = lambda weights: _grasp.get_swap_neighbors(
         weights, forcedWeights=initialWeights, shuffle=shuffle)
