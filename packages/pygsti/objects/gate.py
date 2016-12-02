@@ -1754,8 +1754,8 @@ class LindbladParameterizedGate(Gate):
         if unitaryPrefactor is None:
             unitaryPrefactor = _np.identity(gateMatrix.shape[0],'d')
 
-        assert(cptp == True), "CPTP == False is not implemented yet"
-        assert(onlydiag == False), "onlydiag == True is not implemented yet"
+        self.cptp = cptp
+        self.onlydiag = onlydiag
         
         d2 = gateMatrix.shape[0]
         d = int(round(_np.sqrt(d2)))
@@ -1771,31 +1771,69 @@ class LindbladParameterizedGate(Gate):
 
         assert(self.hamGens.shape == (d2-1,d2,d2))
         assert(self.otherGens.shape == (d2-1,d2-1,d2,d2))
+        assert(_np.isclose(_np.linalg.norm(otherC-otherC.T.conjugate())
+                           ,0)), "other coeff mx is not Hermitian!"
 
-        #push any slightly negative evals of otherC positive so that
-        # the cholesky decomp will work.
-        evals,U = _np.linalg.eig(otherC)
-        assert(truncate or all([ev >= -1e-16 for ev in evals])), \
-            "gateMatrix must be CPTP!"
-        pos_evals = evals.clip(1e-16,1e100)
-        otherC = _np.dot(U,_np.dot(_np.diag(pos_evals),_np.linalg.inv(U)))
+        if onlydiag:
+            if not truncate:
+                assert(all([_np.isclose(abs(otherC[i,j]),0) for i in range(d2-1)
+                            for j in range(d2-1) if i != j])), \
+                            "gateMatrix must be truncated and truncate == False"                
 
-        Lmx = _np.linalg.cholesky(otherC)
-        otherParams = _np.empty((d2-1,d2-1),'d')
-        for i in range(d2-1):
-            assert(_np.isreal(Lmx[i,i]))
-            otherParams[i,i] = Lmx[i,i].real
-            for j in range(i):
-                otherParams[i,j] = Lmx[i,j].real
-                otherParams[j,i] = Lmx[i,j].imag
+            otherC = _np.array([otherC[i,i] for i in range(d2-1)],'complex')
+            assert(_np.all(_np.isreal(otherC)))
+
+            if cptp: #otherParams is a 1D vector of the sqrts of diagonal els
+                otherC = otherC.clip(1e-16,1e100) #must be positive
+                otherParams = _np.sqrt(otherC.real) # shape (d2-1,)
+            else: #otherParams is a 1D vector of the real diagonal els of otherC
+                otherParams = otherC.real # shape (d2-1,)
+
+            #re-assign self.otherGens to hold only the diagonal generators
+            self.otherGens = \
+                _np.array([self.otherGens[i,i] for i in range(d2-1)],'complex')
+        else:
+            otherParams = _np.empty((d2-1,d2-1),'d')
+
+            if cptp: #otherParams mx stores Cholesky decomp
+
+                #push any slightly negative evals of otherC positive so that
+                # the Cholesky decomp will work.
+                evals,U = _np.linalg.eig(otherC)
+                assert(truncate or all([ev >= -1e-16 for ev in evals])), \
+                    "gateMatrix must be CPTP (truncate == False)!"
+                pos_evals = evals.clip(1e-16,1e100)
+                otherC = _np.dot(U,_np.dot(_np.diag(pos_evals),_np.linalg.inv(U)))
+                Lmx = _np.linalg.cholesky(otherC)
+
+                for i in range(d2-1):
+                    assert(_np.isreal(Lmx[i,i]))
+                    otherParams[i,i] = Lmx[i,i].real
+                    for j in range(i):
+                        otherParams[i,j] = Lmx[i,j].real
+                        otherParams[j,i] = Lmx[i,j].imag
+
+            else: #otherParams mx stores otherC (hermitian) directly
+                for i in range(d2-1):
+                    assert(_np.isreal(otherC[i,i]))
+                    otherParams[i,i] = otherC[i,i].real
+                    for j in range(i):
+                        otherParams[i,j] = otherC[i,j].real
+                        otherParams[j,i] = otherC[i,j].imag
+                
 
         assert(_np.isclose(_np.linalg.norm(hamC.imag),0)), \
             "Hamiltoian coeffs are not all real!"
         self.paramvals = _np.concatenate( (hamC.real, otherParams.flat) )
 
-        assert(self.paramvals.shape == ((d2-1)*d2,))
-        assert(not _np.array_equal(gateMatrix,unitaryPrefactor) or
-               _np.allclose(self.paramvals,_np.zeros((d2-1)*d2, 'd')))
+        if onlydiag:
+            assert(self.paramvals.shape == ((d2-1)*2,))
+            assert(not _np.array_equal(gateMatrix,unitaryPrefactor) or
+                   _np.allclose(self.paramvals,_np.zeros((d2-1)*2, 'd')))
+        else:
+            assert(self.paramvals.shape == ((d2-1)*d2,))
+            assert(not _np.array_equal(gateMatrix,unitaryPrefactor) or
+                   _np.allclose(self.paramvals,_np.zeros((d2-1)*d2, 'd')))
 
         #Assume gate in in the pauli-product basis for now, just for
         # simplicity.  I think everything should work fine in any other
@@ -1820,31 +1858,56 @@ class LindbladParameterizedGate(Gate):
         # self.paramvals = [hamCoeffs] + [otherParams]
         #  where hamCoeffs are *real* and of length d2-1 (self.dim == d2)
         hamCoeffs = self.paramvals[0:d2-1]
-        #  and otherParams is an array of length (d2-1)*(d2-1) that
-        #  encodes a lower-triangular matrix "Lmx" with positive (real)
-        #  elements along its diagonal via:
-        #  Lmx[i,i] = otherParams[i,i]**2  (so it's positive)
-        #  Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i] (i > j)
-        otherParams = self.paramvals[d2-1:].reshape((d2-1,d2-1))
-        for i in range(d2-1):
-            self.Lmx[i,i] = otherParams[i,i]
-            for j in range(i):
-                self.Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i]
 
-        #The matrix of (complex) "other"-coefficients is build by
-        # assuming Lmx is its Cholesky decomp, which since Lmx has
-        # positive diagonal elements means otherCoeffs is pos-def.
-        otherCoeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
+        #built up otherCoeffs based on self.cptp and self.onlydiag
+        if self.onlydiag:
+            otherParams = self.paramvals[d2-1:]
+            assert(otherParams.shape == (d2-1,))
 
-        #DEBUG - test for pos-def
-        #evals = _np.linalg.eigvalsh(otherCoeffs)
-        #DEBUG_TOL = 1e-16; #print("EVALS DEBUG = ",evals)
-        #assert(all([ev >= -DEBUG_TOL for ev in evals]))
+            if self.cptp:
+                otherCoeffs = otherParams**2
+            else:
+                otherCoeffs = otherParams
+        else:
+            otherParams = self.paramvals[d2-1:].reshape((d2-1,d2-1))
 
+            if self.cptp:
+                #  otherParams is an array of length (d2-1)*(d2-1) that
+                #  encodes a lower-triangular matrix "Lmx" with positive (real)
+                #  elements along its diagonal via:
+                #  Lmx[i,i] = otherParams[i,i]**2  (so it's positive)
+                #  Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i] (i > j)
+                for i in range(d2-1):
+                    self.Lmx[i,i] = otherParams[i,i]
+                    for j in range(i):
+                        self.Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i]
+        
+                #The matrix of (complex) "other"-coefficients is build by
+                # assuming Lmx is its Cholesky decomp, which since Lmx has
+                # positive diagonal elements means otherCoeffs is pos-def.
+                otherCoeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
+
+                #DEBUG - test for pos-def
+                #evals = _np.linalg.eigvalsh(otherCoeffs)
+                #DEBUG_TOL = 1e-16; #print("EVALS DEBUG = ",evals)
+                #assert(all([ev >= -DEBUG_TOL for ev in evals]))
+
+            else:
+                #otherParams holds otherCoeff real and imaginary parts directly
+                otherCoeffs = _np.empty((d2-1,d2-1),'complex')
+                for i in range(d2-1):
+                    otherCoeffs[i,i] = otherParams[i,i]
+                    for j in range(i):
+                        otherCoeffs[i,j] = otherParams[i,j] +1j*otherParams[j,i]
+                        otherCoeffs[j,i] = otherParams[i,j] -1j*otherParams[j,i]
 
         #Finally, build gate matrix from generators and coefficients:
-        lnd_error_gen = _np.einsum('i,ijk', hamCoeffs, self.hamGens) + \
-            _np.einsum('ij,ijkl', otherCoeffs, self.otherGens)
+        if self.onlydiag:
+            lnd_error_gen = _np.einsum('i,ijk', hamCoeffs, self.hamGens) + \
+                _np.einsum('i,ikl', otherCoeffs, self.otherGens)
+        else:
+            lnd_error_gen = _np.einsum('i,ijk', hamCoeffs, self.hamGens) + \
+                _np.einsum('ij,ijkl', otherCoeffs, self.otherGens)
         lnd_error_gen = _np.dot(self.leftTrans, _np.dot(
                 lnd_error_gen, self.rightTrans)) #basis chg
         self.err_gen = lnd_error_gen
@@ -1968,7 +2031,6 @@ class LindbladParameterizedGate(Gate):
         """
         G = self.base
         d2 = self.dim
-        otherParams = self.paramvals[d2-1:].reshape((d2-1,d2-1))
         TERM_TOL = 1e-12
 
         #Deriv wrt hamiltonian params
@@ -1984,27 +2046,71 @@ class LindbladParameterizedGate(Gate):
         dH = dH.reshape((d2**2,d2-1)) # [iFlattenedGate,iHamParam]
 
         #Deriv wrt other params
-        L,Lbar = self.Lmx,self.Lmx.conjugate()
-        F1 = _np.tril(_np.ones((d2-1,d2-1),'d'))
-        F2 = _np.triu(_np.ones((d2-1,d2-1),'d'),1) * 1j
+        if self.onlydiag:
+            otherParams = self.paramvals[d2-1:]
 
-          # Derivative of exponent wrt other param; shape == [d2,d2,d2-1,d2-1]
-        dOdp  = _np.einsum('amlj,mb,ab->ljab', self.otherGens, Lbar, F1) #only a >= b nonzero (F1)
-        dOdp += _np.einsum('malj,mb,ab->ljab', self.otherGens, L, F1)    # ditto
-        dOdp += _np.einsum('bmlj,ma,ab->ljab', self.otherGens, Lbar, F2) #only b > a nonzero (F2)
-        dOdp += _np.einsum('mblj,ma,ab->ljab', self.otherGens, L, F2.conjugate()) # ditto
-        dOdp  = _np.einsum('lk,knab,nj->ljab', self.leftTrans, dOdp, self.rightTrans)
+            # Derivative of exponent wrt other param; shape == [d2,d2,d2-1]
+            if self.cptp:
+                dOdp  = _np.einsum('alj,a->lja', self.otherGens, 2*otherParams)
+            else:
+                dOdp  = _np.einsum('alj->lja', self.otherGens)
 
-        series = last_commutant = term = dOdp; i=2
-        while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
-            commutant = _np.einsum("ik,kjab->ijab",self.err_gen,last_commutant) - \
-                _np.einsum("ikab,kj->ijab",last_commutant,self.err_gen)
-            term = 1/_np.math.factorial(i) * commutant
-            series += term #1/_np.math.factorial(i) * commutant
-            last_commutant = commutant; i += 1
-        dO = _np.einsum('il,lkab,kj->ijab', self.unitary_prefactor, series, self.exp_err_gen) # dim [d2,d2,d2-1,d2-1]
-        dO = dO.reshape(d2**2,(d2-1)**2)
+            #apply basis transform
+            dOdp  = _np.einsum('lk,kna,nj->lja', self.leftTrans, dOdp, self.rightTrans)
+            assert(_np.linalg.norm(_np.imag(dOdp)) < 1e-8)
+
+            #take d(maxtrix-exp) using series approximation
+            series = last_commutant = term = dOdp; i=2
+            while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
+                commutant = _np.einsum("ik,kja->ija",self.err_gen,last_commutant) - \
+                    _np.einsum("ika,kj->ija",last_commutant,self.err_gen)
+                term = 1/_np.math.factorial(i) * commutant
+                series += term #1/_np.math.factorial(i) * commutant
+                last_commutant = commutant; i += 1
+            dO = _np.einsum('il,lka,kj->ija', self.unitary_prefactor, series, self.exp_err_gen) # dim [d2,d2,d2-1]
+            dO = dO.reshape(d2**2,d2-1)
+
+
+        else: #all lindblad terms included
+
+            if self.cptp:
+                L,Lbar = self.Lmx,self.Lmx.conjugate()
+                F1 = _np.tril(_np.ones((d2-1,d2-1),'d'))
+                F2 = _np.triu(_np.ones((d2-1,d2-1),'d'),1) * 1j
         
+                  # Derivative of exponent wrt other param; shape == [d2,d2,d2-1,d2-1]
+                dOdp  = _np.einsum('amlj,mb,ab->ljab', self.otherGens, Lbar, F1) #only a >= b nonzero (F1)
+                dOdp += _np.einsum('malj,mb,ab->ljab', self.otherGens, L, F1)    # ditto
+                dOdp += _np.einsum('bmlj,ma,ab->ljab', self.otherGens, Lbar, F2) #only b > a nonzero (F2)
+                dOdp += _np.einsum('mblj,ma,ab->ljab', self.otherGens, L, F2.conjugate()) # ditto
+            else:
+                F0 = _np.identity(d2-1,'d')
+                F1 = _np.tril(_np.ones((d2-1,d2-1),'d'),-1)
+                F2 = _np.triu(_np.ones((d2-1,d2-1),'d'),1) * 1j
+        
+                  # Derivative of exponent wrt other param; shape == [d2,d2,d2-1,d2-1]
+                dOdp  = _np.einsum('ablj,ab->ljab', self.otherGens, F0)  # a == b case
+                dOdp += _np.einsum('ablj,ab->ljab', self.otherGens, F1) + \
+                        _np.einsum('balj,ab->ljab', self.otherGens, F1) # a > b (F1)
+                dOdp += _np.einsum('balj,ab->ljab', self.otherGens, F2) - \
+                        _np.einsum('ablj,ab->ljab', self.otherGens, F2) # a < b (F2)
+
+            #apply basis transform
+            dOdp  = _np.einsum('lk,knab,nj->ljab', self.leftTrans, dOdp, self.rightTrans)
+            assert(_np.linalg.norm(_np.imag(dOdp)) < 1e-8)
+
+            #take d(maxtrix-exp) using series approximation
+            series = last_commutant = term = dOdp; i=2
+            while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
+                commutant = _np.einsum("ik,kjab->ijab",self.err_gen,last_commutant) - \
+                    _np.einsum("ikab,kj->ijab",last_commutant,self.err_gen)
+                term = 1/_np.math.factorial(i) * commutant
+                series += term #1/_np.math.factorial(i) * commutant
+                last_commutant = commutant; i += 1
+            dO = _np.einsum('il,lkab,kj->ijab', self.unitary_prefactor, series, self.exp_err_gen) # dim [d2,d2,d2-1,d2-1]
+            dO = dO.reshape(d2**2,(d2-1)**2)
+
+
         derivMx = _np.concatenate((dH,dO), axis=1)
 
         assert(_np.linalg.norm(_np.imag(derivMx)) < 1e-8)
@@ -2030,7 +2136,8 @@ class LindbladParameterizedGate(Gate):
             A copy of this gate.
         """
         #Construct new gate with dummy identity mx
-        newGate = LindbladParameterizedGate(None,self.unitary_prefactor)
+        newGate = LindbladParameterizedGate(None,self.unitary_prefactor,
+                                            self.cptp, self.onlydiag)
         
         #Deep copy data
         newGate.paramvals = self.paramvals.copy()
