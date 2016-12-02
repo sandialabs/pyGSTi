@@ -78,7 +78,7 @@ class AutoExperimentDesignTestCase(BaseTestCase):
 
         incompletePrepFids, incompleteMeasFids = fidsel.generate_fiducials(gs_target, maxFidLength=1)
 
-        nonSingletonGerms = germsel.generate_germs(gs_target, forceSingletons=False, maxGermLength=4,
+        nonSingletonGerms = germsel.generate_germs(gs_target, force=None, maxGermLength=4,
                                                    algorithm='grasp', algorithm_kwargs={'iterations': 5})
 
 
