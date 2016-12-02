@@ -885,16 +885,16 @@ def build_up(gatesetList, germsList, randomize=True,
     numGerms = len(germsList)
 
     weights = _np.zeros(numGerms, 'i')
-    goodGermsList = []
+    goodGerms = []
     if force:
         if force == "singletons":
             weights[_np.where(germLengths == 1)] = 1
-            goodGermsList = [germ for germ
+            goodGerms = [germ for germ
                              in _np.array(germsList)[_np.where(germLengths==1)]]
         else: #force should be a list of GateStrings
             for gs in force:
                 weights[germsList.index(gs)] = 1
-            goodGermsList = force[:]
+            goodGerms = force[:]
 
     undercompleteGatesetNum = checkGermsListCompleteness(gatesetList,
                                                          germsList,
@@ -935,7 +935,7 @@ def build_up(gatesetList, germsList, randomize=True,
         while _np.any(weights == 0):
             # As long as there are some unused germs, see if you need to add
             # another one.
-            if test_germ_list_infl(reducedGateset, goodGermsList,
+            if test_germ_list_infl(reducedGateset, goodGerms,
                                    scoreFunc=scoreFunc, threshold=threshold):
                 # The germs are sufficient for the current gateset
                 break
@@ -954,9 +954,9 @@ def build_up(gatesetList, germsList, randomize=True,
             bestCandidateGerm = candidateGerms[_np.array(
                 candidateGermScores).argmin()]
             weights[bestCandidateGerm] = 1
-            goodGermsList.append(germsList[bestCandidateGerm])
+            goodGerms.append(germsList[bestCandidateGerm])
 
-    return goodGermsList
+    return goodGerms
 
 
 def build_up_breadth(gatesetList, germsList, randomize=True,
@@ -998,12 +998,12 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
     if force:
         if force == "singletons":
             weights[_np.where(germLengths == 1)] = 1
-            goodGermsList = [germ for germ
+            goodGerms = [germ for germ
                              in _np.array(germsList)[_np.where(germLengths==1)]]
         else: #force should be a list of GateStrings
             for gs in force:
                 weights[germsList.index(gs)] = 1
-            goodGermsList = force[:]
+            goodGerms = force[:]
 
     undercompleteGatesetNum = checkGermsListCompleteness(gatesetList,
                                                          germsList,
@@ -1377,15 +1377,15 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     printer.log("weights = %s" % weights, 1)
     printer.log("L1(weights) = %s" % sum(weights), 1)
 
-    goodGermsList = []
+    goodGerms = []
     for index, val in enumerate(weights):
         if val == 1:
-            goodGermsList.append(germsList[index])
+            goodGerms.append(germsList[index])
 
     if returnAll:
-        return goodGermsList, weights, scoreD
+        return goodGerms, weights, scoreD
     else:
-        return goodGermsList
+        return goodGerms
 
 
 def germ_breadth_score_fn(germSet, germsList, twirledDerivDaggerDerivList,
