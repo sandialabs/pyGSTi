@@ -115,6 +115,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         - starting point = "LGST" (default) or  "target" or GateSet
         - depolarizeStart = float (default == 0)
         - contractStartToCPTP = True / False (default)
+        - cptpPenaltyFactor = float (default = 0)
         - tolerance = float
         - maxIterations = int
         - minProbClip = float
@@ -125,6 +126,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         - nestedGateStringLists = True (default) / False
         - distributeMethod = "gatestrings" or "deriv" (default)
         - profile = int (default == 1)
+        - check = True / False (default)
         - truncScheme = "whole germ powers" (default) or "truncated germ powers"
                         or "length as exponent"
 
@@ -323,6 +325,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         gs_lsgst_list = _alg.do_iterative_mc2gst(
             ds, gs_start, lsgstLists,
             tol = advancedOptions.get('tolerance',1e-6),
+            cptp_penalty_factor = advancedOptions.get('cptpPenaltyFactor',0),
             maxiter = advancedOptions.get('maxIterations',100000),
             minProbClipForWeighting=advancedOptions.get(
                 'minProbClipForWeighting',1e-4),
@@ -335,21 +338,26 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
             useFreqWeightedChiSq=advancedOptions.get(
                 'useFreqWeightedChiSq',False), profiler=profiler,
             comm=comm, distributeMethod=advancedOptions.get(
-                'distributeMethod',"deriv") )
+                'distributeMethod',"deriv"),
+            check_jacobian=advancedOptions.get('check',False),
+            check=advancedOptions.get('check',False))
+
     elif objective == "logl":
         gs_lsgst_list = _alg.do_iterative_mlgst(
           ds, gs_start, lsgstLists,
           tol = advancedOptions.get('tolerance',1e-6),
+          cptp_penalty_factor = advancedOptions.get('cptpPenaltyFactor',0),
           maxiter = advancedOptions.get('maxIterations',100000),
           minProbClip = advancedOptions.get('minProbClip',1e-4),
           probClipInterval = advancedOptions.get('probClipInterval',(-1e6,1e6)),
           radius=advancedOptions.get('radius',1e-4),
           returnAll=True, verbosity=printer,
-          memLimit=memLimit,
+          memLimit=memLimit, profiler=profiler, comm=comm,
           useFreqWeightedChiSq=advancedOptions.get(
-                'useFreqWeightedChiSq',False), profiler=profiler,
-          comm=comm, distributeMethod=advancedOptions.get(
-                'distributeMethod',"deriv"))
+                'useFreqWeightedChiSq',False), 
+          distributeMethod=advancedOptions.get(
+                'distributeMethod',"deriv"),
+          check=advancedOptions.get('check',False))
     else:
         raise ValueError("Invalid longSequenceObjective: %s" % objective)
 
