@@ -166,10 +166,10 @@ class RBResults(object):
     """
     
     def __init__(self, dataset, result_dicts, basename, weight_data,
-                 infinite_data, alias_maps=None, success_spamlabel='plus',
-                 dim=2, pre_avg=True, f0=[0.98], A0=[0.5],ApB0=[1.],C0=[0.],
-                 f_bnd=[0.,1.], A_bnd=[0.,1.], ApB_bnd=[0.,1.], C_bnd=[-1.,1.],
-                one_freq_adjust=False):
+                 infinite_data, one_freq_adjust=False, alias_maps=None,
+                 success_spamlabel='plus', dim=2, pre_avg=True, f0=[0.98],
+                 A0=[0.5], ApB0=[1.], C0=[0.], f_bnd=[0.,1.], A_bnd=[0.,1.],
+                 ApB_bnd=[0.,1.], C_bnd=[-1.,1.]):
         """
         Constructs a new RBResults object.
 
@@ -195,6 +195,9 @@ class RBResults(object):
         infinite_data : bool, optional
             Whether or not the dataset is generated using no sampling error.  Default is
             False; only works when weight_data = True.
+
+        one_freq_adjust : bool, optional
+            TODO: argument description
 
         alias_maps : dict of dicts, optional
             If not None, a dictionary whose keys name other (non-"base") 
@@ -257,7 +260,8 @@ class RBResults(object):
         self.d = dim
         self.pre_avg = pre_avg
         self.weight_data = weight_data
-        self.infinte_data = infinite_data
+        self.infinite_data = infinite_data
+        self.one_freq_adjust= one_freq_adjust,
         self.success_spamlabel = success_spamlabel
         self.f0 = f0
         self.A0 = A0
@@ -592,8 +596,8 @@ class RBResults(object):
         for dsBootstrap in bootstrapped_dataset_list:
             resample_results = _do_rb_base(dsBootstrap, base_gatestrings,
                                            self.basename, self.weight_data,
-                                           self.infinte_data, self.one_freq_adjust,
-                                           alias_maps,
+                                           self.infinite_data, 
+                                           self.one_freq_adjust, alias_maps,
                                            self.success_spamlabel, self.d,
                                            self.pre_avg,self.f0, self.A0,
                                            self.ApB0, self.C0, self.f_bnd,

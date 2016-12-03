@@ -265,6 +265,9 @@ def do_randomized_benchmarking(dataset, clifford_gatestrings,
     infinite_data : bool, optional
         Whether or not the dataset is generated using no sampling error.  Default is
         False; only works when weight_data = True.
+        
+    one_freq_adjust : bool, optional
+        TODO: argument description
 
     success_spamlabel : str, optional
         The spam label which denotes the *expected* outcome of preparing,
@@ -388,6 +391,9 @@ def do_rb_base(dataset, base_gatestrings, basename, weight_data=False,
     infinite_data : bool, optional
         Whether or not the dataset is generated using no sampling error.  Default is
         False; only works when weight_data = True.
+
+    one_freq_adjust : bool, optional
+        TODO: argument description
 
     alias_maps : dict of dicts, optional
         If not None, a dictionary whose keys name other (non-"base") 
@@ -761,8 +767,8 @@ def do_rb_base(dataset, base_gatestrings, basename, weight_data=False,
         result_dicts[gstyp] = gstyp_results
 
     results = _rbobjs.RBResults(dataset, result_dicts, basename, weight_data,
-                                infinite_data, alias_maps, success_spamlabel,
-                                dim, pre_avg, f0, A0, ApB0, C0)
+                                infinite_data, one_freq_adjust, alias_maps,
+                                success_spamlabel,dim, pre_avg, f0,A0,ApB0,C0)
     return results
 
 
