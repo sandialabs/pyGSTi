@@ -205,7 +205,11 @@ class TestCoreMethods(BaseTestCase):
 
         gs_single_lsgst = pygsti.do_mc2gst(ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
                                            probClipInterval=(-1e6,1e6), regularizeFactor=1e-3,
-                                           verbosity=0)
+                                           verbosity=0) #uses regularizeFactor
+
+        gs_single_lsgst_cp = pygsti.do_mc2gst(ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
+                                           probClipInterval=(-1e6,1e6), cptp_penalty_factor=1.0,
+                                           verbosity=0) #uses cptp_penalty_factor
 
         gs_lsgst = pygsti.do_iterative_mc2gst(ds, gs_clgst, self.lsgstStrings, verbosity=0,
                                              minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6),
@@ -251,12 +255,10 @@ class TestCoreMethods(BaseTestCase):
                              probClipInterval=(-1e6,1e6), regularizeFactor=1e-3,
                              verbosity=0, memLimit=1)
 
-        with self.assertRaises(NotImplementedError):
+        with self.assertRaises(AssertionError):
             pygsti.do_mc2gst(ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
                              probClipInterval=(-1e6,1e6), regularizeFactor=1e-3,
-                             verbosity=0, cptp_penalty_factor=1.0) #cptp pentalty not implemented yet
-
-
+                             verbosity=0, cptp_penalty_factor=1.0) #can't specify both cptp_penalty_factor and regularizeFactor
 
 
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
