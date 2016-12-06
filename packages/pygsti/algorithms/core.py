@@ -1350,7 +1350,12 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
 
     full_minErrVec = objective_func(opt_x)  #note: calls gs.from_vector(opt_x,...) so don't need to call this again
-    minErrVec = full_minErrVec if regularizeFactor == 0 else full_minErrVec[0:-len(x0)] #don't include regularization terms
+    if regularizeFactor != 0:
+        minErrVec = full_minErrVec[0:-len(x0)] #don't include regularization terms
+    elif cptp_penalty_factor != 0:
+        minErrVec = full_minErrVec[0:-len(gs.gates)] #don't include regularization terms
+    else:
+        minErrVec = full_minErrVec
     soln_gs = gs.copy();
     profiler.add_time("do_mc2gst: leastsq",tm)
 
@@ -2343,7 +2348,11 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     gs.from_vector(opt_x)
     #gs.log("MLGST", { 'tol': tol,  'maxiter': maxiter } )
 
-    minErrVec = objective_func(opt_x)  #note: calls gs.from_vector(opt_x,...) so don't need to call this again
+    full_minErrVec = objective_func(opt_x)  #note: calls gs.from_vector(opt_x,...) so don't need to call this again
+    if cptp_penalty_factor != 0:
+        minErrVec = full_minErrVec[0:-len(gs.gates)] #don't include regularization terms
+    else:
+        minErrVec = full_minErrVec
     deltaLogL = sum([x**2 for x in minErrVec]) # upperBoundLogL - logl (a positive number)
 
     #if constrainType == 'projection':
