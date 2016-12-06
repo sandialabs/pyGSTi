@@ -1063,11 +1063,16 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         dsGateStringsToUse = gateStringsToUse
             # no difference in the strings used by the alias
 
+    #Compute "extra" (i.e. beyond the (gatestring,spamlable)) rows of jacobian        
+    if regularizeFactor != 0: ex = vec_gs_len
+    elif cptp_penalty_factor != 0: ex = len(gs.gates)
+    else: ex = 0
+
     #  Allocate peristent memory 
     #  (must be AFTER possible gate string permutation by
     #   tree and initialization of dsGateStringsToUse)
     probs  = _np.empty( (len(spamLabels),len(gateStringsToUse)) )
-    dprobs = _np.empty( (len(spamLabels),len(gateStringsToUse),vec_gs_len) )
+    jac    = _np.empty( (len(spamLabels)*len(gateStringsToUse)+ex,vec_gs_len) )
 
     N =_np.array([dataset[gateStr].total() for gateStr in dsGateStringsToUse],'d')
     f =_np.empty( (len(spamLabels),len(gateStringsToUse)) )
@@ -1188,16 +1193,18 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         if regularizeFactor == 0 and cptp_penalty_factor == 0: # Fast un-regularized version
             def jacobian(vectorGS):
                 tm = _time.time()
+                dprobs = jac.view() #avoid mem copying: use jac mem for dprobs
+                dprobs.shape = (ns,ng,vec_gs_len)
                 gs.from_vector(vectorGS)
                 gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree,
                                     prMxToFill=probs, clipTo=probClipInterval,
                                     check=check, comm=comm, wrtBlockSize=wrtBlkSize,
                                     profiler=profiler, gatherMemLimit=gthrMem)
                 weights  = get_weights( probs )
-                jac = dprobs.view() # avoid memory copying by *= dprobs above
-                jac *= (weights+(probs-f)*get_dweights(probs, weights ))[:,:,None]
+                dprobs *= (weights+(probs-f)*get_dweights(probs, weights ))[:,:,None]
                   # (K,M,N) * (K,M,1)   (N = dim of vectorized gateset)
-                jac.shape = [KM,vec_gs_len] #reshape ensuring no copy is needed
+                  # this multiply also computes jac, which is just dprobs
+                  # with a different shape (jac.shape == [KM,vec_gs_len])
                 
                 if check_jacobian: _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
 
@@ -1209,15 +1216,20 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         elif regularizeFactor != 0:
             def jacobian(vectorGS): # Fast regularized version
                 tm = _time.time()
+                dprobs = jac[0:KM,:] #avoid mem copying: use jac mem for dprobs
+                dprobs.shape = (ns,ng,vec_gs_len)
                 gs.from_vector(vectorGS)
                 gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree,
                                     prMxToFill=probs, clipTo=probClipInterval,
                                     check=check, comm=comm, wrtBlockSize=wrtBlkSize,
                                     profiler=profiler, gatherMemLimit=gthrMem)
                 weights  = get_weights( probs )
+                dprobs *= (weights+(probs-f)*get_dweights( probs, weights ))[:,:,None]
+                  # (K,M,N) * (K,M,1)   (N = dim of vectorized gateset)
+                  # Note: this also computes jac[0:KM,:]
                 gsVecGrad = _np.diag( [ (regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in vectorGS ] ) # (N,N)
-                jac = dprobs * (weights+(probs-f)*get_dweights( probs, weights ))[:,:,None]  # (K,M,N) * (K,M,1)   (N = dim of vectorized gateset)
-                jac = _np.concatenate( (jac.reshape( [KM,vec_gs_len] ), gsVecGrad), axis=0 ) # (KM,N) + (N,N) = (KM+N,N)
+                jac[KM:,:] = gsVecGrad # jac.shape == (KM+N,N)
+
                 if check_jacobian: _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
 
                 # dpr has shape == (nGateStrings, nDerivCols), gsVecGrad has shape == (nDerivCols, nDerivCols)
@@ -1228,17 +1240,21 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         else: #cptp_pentalty_factor != 0
             def jacobian(vectorGS): # Fast cptp-penalty version
                 tm = _time.time()
+                dprobs = jac[0:KM,:] #avoid mem copying: use jac mem for dprobs
+                dprobs.shape = (ns,ng,vec_gs_len)
                 gs.from_vector(vectorGS)
                 gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree,
                                     prMxToFill=probs, clipTo=probClipInterval,
                                     check=check, comm=comm, wrtBlockSize=wrtBlkSize,
                                     profiler=profiler, gatherMemLimit=gthrMem)
                 weights  = get_weights( probs )
-                jac = dprobs * (weights+(probs-f)*get_dweights( probs, weights ))[:,:,None]  # (K,M,N) * (K,M,1)   (N = dim of vectorized gateset)
-                cpPenaltyVecGrad = _cptp_penalty_jac(gs, cptp_penalty_factor,
-                                                     vec_gs_len, nGateParams,
-                                                     nSpamParams,gateBasis)
-                jac = _np.concatenate( (jac.reshape( [KM,vec_gs_len] ), cpPenaltyVecGrad), axis=0 ) # (KM,N) + (#gates,N) = (KM+#gates,N)
+                dprobs *= (weights+(probs-f)*get_dweights( probs, weights ))[:,:,None]
+                  # (K,M,N) * (K,M,1)   (N = dim of vectorized gateset)
+                  # Note: this also computes jac[0:KM,:]
+                _cptp_penalty_jac_fill(jac[KM:,:], gs, cptp_penalty_factor,
+                                       vec_gs_len, nGateParams, nSpamParams,
+                                       gateBasis)
+
                 if check_jacobian: _,_,fd_jac = _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
                 profiler.add_time("do_mc2gst: JACOBIAN",tm)
                 return jac
@@ -1247,6 +1263,8 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     else: # Verbose (DEBUG) version
         def jacobian(vectorGS):
             tm = _time.time()
+            dprobs = jac[0:KM,:] #avoid mem copying: use jac mem for dprobs
+            dprobs.shape = (ns,ng,vec_gs_len)
             gs.from_vector(vectorGS)
             gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree,
                                 prMxToFill=probs, clipTo=probClipInterval,
@@ -1258,19 +1276,16 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
             #weights[ _np.logical_or(pr < minProbClipForWeighting, pr > (1-minProbClipForWeighting)) ] = 0.0
 
             dPr_prefactor = (weights+(probs-f)*get_dweights( probs, weights )) # (K,M)
-            jac = dprobs.view() # just use dprobs memory for jac; no need to copy
-            jac *= dPr_prefactor[:,:,None] #  (K,M,N) * (K,M,1) = (K,M,N)  (N = dim of vectorized gateset)
-            jac.shape = [KM,vec_gs_len] #reshape ensuring no copy is needed
+            dprobs *= dPr_prefactor[:,:,None]  #  (K,M,N) * (K,M,1) = (K,M,N)  (N = dim of vectorized gateset)
 
             if regularizeFactor != 0:
                 gsVecGrad = _np.diag( [ (regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in vectorGS ] )
-                jac = _np.concatenate( (jac, gsVecGrad), axis=0 ) # (KM,N) + (N,N) = (KM+N,N)
+                jac[KM:,:] = gsVecGrad # jac.shape == (KM+N,N)
 
             elif cptp_penalty_factor != 0:
-                cpPenaltyVecGrad = _cptp_penalty_jac(gs, cptp_penalty_factor,
-                                                     vec_gs_len, nGateParams,
-                                                     nSpamParams,gateBasis)
-                jac = _np.concatenate( (jac, cpPenaltyVecGrad), axis=0 ) # (KM,N) + (#gates,N) = (KM+#gates,N)
+                _cptp_penalty_jac_fill(jac[KM:,:], gs, cptp_penalty_factor,
+                                       vec_gs_len, nGateParams, nSpamParams,
+                                       gateBasis)
                 
             #Zero-out insignificant entries in jacobian -- seemed to help some, but leaving this out, thinking less complicated == better
             #absJac = _np.abs(jac);  maxabs = _np.max(absJac)
@@ -2129,10 +2144,14 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
         dsGateStringsToUse = gateStringsToUse
            # no difference in the strings used by the alias
 
+    #Compute "extra" (i.e. beyond the (gatestring,spamlable)) rows of jacobian        
+    if cptp_penalty_factor != 0: ex = len(gs.gates)
+    else: ex = 0
+
     #Allocate peristent memory
     cntVecMx = _np.empty( (len(spamLabels),len(gateStringsToUse)), 'd' )
     probs = _np.empty( (len(spamLabels),len(gateStringsToUse)), 'd' )
-    dprobs = _np.empty( (len(spamLabels),len(gateStringsToUse),vec_gs_len) )
+    jac    = _np.empty( (len(spamLabels)*len(gateStringsToUse)+ex,vec_gs_len) )
 
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
     _tools.fill_count_vecs(cntVecMx, spam_lbl_rows, dataset, dsGateStringsToUse)
@@ -2203,6 +2222,8 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
 
         def jacobian(vectorGS):
             tm = _time.time()
+            dprobs = jac[0:KM,:] #avoid mem copying: use jac mem for dprobs
+            dprobs.shape = (ns,ng,vec_gs_len)
             gs.from_vector(vectorGS)
             gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree,
                                 prMxToFill=probs, clipTo=probClipInterval,
@@ -2224,15 +2245,13 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
             dprobs_factor_zerofreq = (0.5 / v) * totalCntVec[None,:] * _np.where( probs >= a, 1.0, (-1.0/a**2)*probs**2 + 2*probs/a )
             dprobs_factor = _np.where( probs < min_p, dprobs_factor_neg, dprobs_factor_pos)
             dprobs_factor = _np.where( minusCntVecMx == 0, dprobs_factor_zerofreq, dprobs_factor )
-            jac = dprobs.view() # use dprobs memory for jac; no need to copy
-            jac *= dprobs_factor[:,:,None] # (K,M,N) * (K,M,1)   (N = dim of vectorized gateset)
-            jac.shape = [KM,vec_gs_len] #reshape ensuring no copy is needed
+            dprobs *= dprobs_factor[:,:,None] # (K,M,N) * (K,M,1)   (N = dim of vectorized gateset)
+              #Note: this also sets jac[0:KM,:]
 
             if cptp_penalty_factor != 0:
-                cpPenaltyVecGrad = _cptp_penalty_jac(gs, cptp_penalty_factor,
-                                                     vec_gs_len, nGateParams,
-                                                     nSpamParams, gateBasis)
-                jac = _np.concatenate( (jac, cpPenaltyVecGrad), axis=0 ) # (KM,N) + (#gates,N) = (KM+#gates,N)
+                _cptp_penalty_jac_fill(jac[KM:,:], gs, cptp_penalty_factor,
+                                       vec_gs_len, nGateParams, nSpamParams,
+                                       gateBasis)
 
             if check: _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
             profiler.add_time("do_mlgst: JACOBIAN",tm)
@@ -2285,6 +2304,8 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
 
         def jacobian(vectorGS):
             tm = _time.time()
+            dprobs = jac[0:KM,:] #avoid mem copying: use jac mem for dprobs
+            dprobs.shape = (ns,ng,vec_gs_len)
             gs.from_vector(vectorGS)
             gs.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree,
                                 prMxToFill=probs, clipTo=probClipInterval,
@@ -2305,15 +2326,13 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
             dprobs_factor_neg = (0.5 / v) * (S + 2*S2*(probs - min_p))
             dprobs_factor = _np.where( probs < min_p, dprobs_factor_neg, dprobs_factor_pos)
             dprobs_factor = _np.where( minusCntVecMx == 0, 0.0, dprobs_factor )
-            jac = dprobs.view() # use dprobs memory for jac; no need to copy
-            jac *= dprobs_factor[:,:,None] # (K,M,N) * (K,M,1)   (N = dim of vectorized gateset)
-            jac.shape = [KM,vec_gs_len] #reshape ensuring no copy is needed
+            dprobs *= dprobs_factor[:,:,None] # (K,M,N) * (K,M,1)   (N = dim of vectorized gateset)
+              #Note: this also sets jac[0:KM,:]
 
             if cptp_penalty_factor != 0:
-                cpPenaltyVecGrad = _cptp_penalty_jac(gs, cptp_penalty_factor,
-                                                     vec_gs_len, nGateParams,
-                                                     nSpamParams, gateBasis)
-                jac = _np.concatenate( (jac, cpPenaltyVecGrad), axis=0 ) # (KM,N) + (#gates,N) = (KM+#gates,N)
+                _cptp_penalty_jac_fill(jac[KM:,:], gs, cptp_penalty_factor,
+                                       vec_gs_len, nGateParams, nSpamParams,
+                                       gateBasis)
 
             if check: _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
             profiler.add_time("do_mlgst: JACOBIAN",tm)
@@ -2642,51 +2661,46 @@ def _cptp_penalty(gs,prefactor,gateBasis):
                 _tools.fast_jamiolkowski_iso_std(gate, gateBasis)
                 ) for _,gate in gs.iter_gates()], 'd')
 
-def _cptp_penalty_jac(gs, prefactor, nParams, nGateParams, nSpamParams,
-                      gateBasis):
+
+def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, gs, prefactor, nParams,
+                           nGateParams, nSpamParams, gateBasis):
     """
     Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
     Returns a (real) array of shape (len(gs.gates), nParams).
     """
-    cpPenaltyVecGrad = _np.zeros((len(gs.gates),nParams),'d')
+    k = nSpamParams # offset to beginning of current gate's params
     for i,(gl,gate) in enumerate(gs.iter_gates()):
+        nP = gate.num_params()
 
         #get sgn(chi-matrix) == d(|chi|_Tr)/dchi in std basis
         # so sgnchi == d(|chi_std|_Tr)/dchi_std
         chi = _tools.fast_jamiolkowski_iso_std(gate, gateBasis)
         sgnchi = _np.dot(chi, _np.linalg.inv(
                 _spl.sqrtm(_np.matrix(_np.dot(chi.T.conjugate(),chi)))))
-        assert(_np.linalg.norm(sgnchi - sgnchi.T.conjugate()) < 1e-8), \
+        assert(_np.linalg.norm(sgnchi - sgnchi.T.conjugate()) < 1e-4), \
             "sngchi should be Hermitian!"
 
-        # get d(gate)/dp in gateBasis [shape == (nParams,dim,dim)]
-        dGdp = gs.dproduct((gl,)) 
+        # get d(gate)/dp in gateBasis [shape == (nP,dim,dim)]
+        #OLD: dGdp = gs.dproduct((gl,)) but wasteful
+        dGdp = gate.deriv_wrt_params() #shape (dim**2, nP)
+        dGdp = _np.swapaxes(dGdp,0,1)  #shape (nP, dim**2, )
+        dGdp.shape = (nP,gs.dim,gs.dim)
         
-        #OLD / DEBUG: TODO - remove
-        #if gateBasis == "pp":  B = pp_to_std_transform_matrix(basisDim)
-        #elif gateBasis == "gm":  B = gm_to_std_transform_matrix(basisDim)
-        #else: raise NotImplementedError("CPTP penalty for %s basis not implemented" % gateBasis)
-        #invB = _np.linalg.inv(invB)
-        #dGdp_std = _np.einsum("ik,akl,lj->aij",B, dGdp, invB)
-        #print("DEBUG!!! chi = \n",chi)
-        #print("DEBUG!!! chi evals = \n",_np.linalg.eigvals(chi))
-        #print("DEBUG!!!\n",_np.dot(chi.T.conjugate(),chi))
-        #print("DEBUG!!! sgnchi=\n",sgnchi)
-
         # M maps to choi-jamiolkowsky "basis".  MdGdp_std is choi mapping
         # of dGdp in the std basis == dchi_std/dp
-        MdGdp_std = _np.empty(dGdp.shape, 'complex') #can't reuse dGdp b/c complex
-        for p in range(nGateParams): #p indexes param
+        MdGdp_std = _np.empty((nP,gs.dim,gs.dim), 'complex')
+        for p in range(gate.num_params()): #p indexes param
             MdGdp_std[p] = _tools.fast_jamiolkowski_iso_std(dGdp[p], gateBasis) #now "M(dGdp_std)"
             assert(_np.linalg.norm(MdGdp_std[p] - MdGdp_std[p].T.conjugate()) < 1e-8) #check hermitian
 
         #contract to get (note contract along both mx indices) b/c treat like a
         # mx basis: d(|chi_std|_Tr)/dp = d(|chi_std|_Tr)/dchi_std * dchi_std/dp
-        MdGdp_std.shape = (nGateParams,gs.dim**2) #flatten gate-part
-        v = prefactor * _np.einsum("i,ai->a",sgnchi.flat,MdGdp_std)
-        assert(_np.linalg.norm(v.imag) < 1e-10)
-        cpPenaltyVecGrad[i,nSpamParams:] = v.real
-    return cpPenaltyVecGrad
+        v = prefactor * _np.einsum("ij,aij->a",sgnchi,MdGdp_std)
+        assert(_np.linalg.norm(v.imag) < 1e-4)
+        cpPenaltyVecGradToFill[i,:] = 0.0
+        cpPenaltyVecGradToFill[i,k:k+gate.num_params()] = v.real
+        chi = sgnchi = dGdp = MdGdp_std = v = None #free mem
+        k += gate.num_params()
 
 
 def find_closest_unitary_gatemx(gateMx):
