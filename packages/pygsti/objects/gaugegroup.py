@@ -130,18 +130,13 @@ class TPDiagGaugeGroup(TPGaugeGroup):
 #        pass #inherits everything it needs
 
 
+class UnitaryGaugeGroup(GateGaugeGroup):
+    def __init__(self, dim):
+        from . import gate as _gate #b/c gate.py imports gaugegroup
+        gate = _gate.LindbladParameterizedGate(None, _np.identity(dim,'d'),
+                                               cptp=True, nonHamTerms="none")
+        GateGaugeGroup.__init__(self, gate)
 
-#TODO: Gate classes need transform(gaugeGroupElement)
-#      GateSet class needs transform(gaugeGroupElement)
-#      optimize_gate needs to infer params from gaugeGroup and
-#       call gateset.tranform(el)
-
-
-
-
-#TODO: implement a UnitaryGate in gate.py
-#class UnitaryGaugeGroup(GateGaugeGroup): 
-#    pass
-#
-#class UnitaryGaugeGroupElement(GateGaugeGroupElement):
-#    pass
+    class element(GateGaugeGroup.element):
+        def __init__(self, gate):
+            GateGaugeGroup.element.__init__(self,gate)

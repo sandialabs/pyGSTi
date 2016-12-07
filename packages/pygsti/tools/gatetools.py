@@ -108,6 +108,21 @@ def frobeniusdist2(A, B):
     return _mt.frobeniusnorm2(A-B)
 
 
+def tracenorm(A):
+    """
+    Compute the trace norm of matrix A given by:
+
+      Tr( sqrt{ A^2 } )
+
+    Parameters
+    ----------
+    A : numpy array
+        The matrix to compute the trace norm of.
+    """
+    evals = _np.linalg.eigvals( A )
+    return sum( [abs(ev) for ev in evals] )
+
+
 def tracedist(A, B):
     """
     Compute the trace distance between matrices A and B,
@@ -120,8 +135,7 @@ def tracedist(A, B):
     A, B : numpy array
         The matrices to compute the distance between.
     """
-    evals = _np.linalg.eigvals( A-B )
-    return 0.5 * sum( [abs(ev) for ev in evals] )
+    return 0.5 * tracenorm(A-B)
 
 
 

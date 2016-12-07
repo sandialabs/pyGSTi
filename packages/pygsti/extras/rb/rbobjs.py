@@ -166,7 +166,7 @@ class RBResults(object):
     """
     
     def __init__(self, dataset, result_dicts, basename, weight_data,
-                 infinite_data, one_freq_adjust, alias_maps=None,
+                 infinite_data, one_freq_adjust=False, alias_maps=None,
                  success_spamlabel='plus', dim=2, pre_avg=True, f0=[0.98],
                  A0=[0.5], ApB0=[1.], C0=[0.], f_bnd=[0.,1.], A_bnd=[0.,1.],
                  ApB_bnd=[0.,1.], C_bnd=[-1.,1.]):
@@ -271,6 +271,7 @@ class RBResults(object):
         self.A_bnd = A_bnd
         self.ApB_bnd = ApB_bnd
         self.C_bnd = C_bnd
+        self.one_freq_adjust = one_freq_adjust
 
     def detail_str(self, gstyp, order):
         """
@@ -384,7 +385,7 @@ class RBResults(object):
 
     def plot(self,gstyp, xlim=None, ylim=None, save_fig_path=None, 
              order='zeroth', analytic=None, analytic_params=None, 
-             sys_error_bound=None,legend=True,loc='upper right'):
+             sys_error_bound=None,legend=True,title=True,loc='upper right'):
         """
         Plot RB decay curve, as a function of some the sequence length
         computed using the `gstyp` gate-label-set.
@@ -451,44 +452,50 @@ class RBResults(object):
         C1 = self.dicts[gstyp]['C1']
         f1 = self.dicts[gstyp]['f1']
         pre_avg = self.pre_avg
-        if analytic != None:
-            if gstyp != 'clifford':
-                print("Analytical curve is for Clifford decay!")            
-            if analytic_params==None:
-                print("Function must be given the analytical parameters!")
+        if (analytic is not None) and (gstyp != 'clifford'):
+            print("Analytical curve is for Clifford decay only. Setting analytic to None.")
+            analytic = None
+        if (analytic is not None) and (analytic_params is None):
+            raise ValueError("No input analytic parameters specified. Please" +
+                           " specify analytic_params, or set analytic to None.")
+        if analytic is not None:
             f_an = analytic_params['f']
             A_an = analytic_params['A']
             B_an = analytic_params['B']
             A1_an = analytic_params['A1']
             B1_an = analytic_params['B1']
             C1_an = analytic_params['C1']
-            
-        xlabel = 'RB sequence length (%ss)' % gstyp
+                
+        if gstyp!='clifford':
+            xlabel = 'Sequence length ({0})'.format(gstyp.capitalize())
+        
+        if gstyp=='clifford':
+            xlabel = 'Sequence length'
 
         cmap = _plt.cm.get_cmap('Set1')
         if pre_avg:
-            newplotgca.plot(xdata,ydata,'.', markersize=15, clip_on=False,
-                        color=cmap(30))
+            newplotgca.plot(xdata,ydata,'.', markersize=10, clip_on=False,
+                        color=cmap(30),label='RB average survival probs.')
         else:
-            newplotgca.plot(xdata,ydata,'.', markersize=1, clip_on=False,
-                        color=cmap(30))
+            newplotgca.plot(xdata,ydata,'.', markersize=3, clip_on=False,
+                        color=cmap(30),label='RB survival probs.')
         
         if order=='zeroth' or order=='all':
             newplotgca.plot(_np.arange(max(xdata)),
                             _rbutils.rb_decay_WF(_np.arange(max(xdata)),A,B,f),
-                            '-', lw=2, color=cmap(110), label='Zeroth order fit')
+                            '-', lw=3, color=cmap(169), label='Zeroth order fit')
           
         if order=='first' or order=='all':
             newplotgca.plot(_np.arange(max(xdata)),
                             _rbutils.rb_decay_1st_order(_np.arange(max(xdata)),
-                            A1,B1,C1,f1),'-', lw=2, color=cmap(50), 
+                            A1,B1,C1,f1),'-', lw=2, color=cmap(55), 
                             label='First order fit')
 
 
         if analytic=='zeroth' or analytic=='all':
             newplotgca.plot(_np.arange(max(xdata)),
                             _rbutils.rb_decay_WF(_np.arange(max(xdata)),A_an,B_an,f_an),
-                            '-.', lw=4, color=cmap(70), label='Zeroth order analytic')
+                            '--', lw=3, color=cmap(125), label='Zeroth order analytic')
             if sys_error_bound=='zeroth' or sys_error_bound=='all':
                 _plt.fill_between(_np.arange(max(xdata)),_rbutils.seb_lower( 
                                 _rbutils.rb_decay_WF(_np.arange(max(xdata)),A_an,B_an,f_an),
@@ -499,7 +506,7 @@ class RBResults(object):
         if analytic=='first' or analytic=='all':
             newplotgca.plot(_np.arange(max(xdata)),
                             _rbutils.rb_decay_1st_order(_np.arange(max(xdata)),A1_an,B1_an,C1_an,f_an),
-                            '-.', lw=4, color=cmap(10), label='First order analytic')
+                            '--', lw=2, color=cmap(5), label='First order analytic')
             if sys_error_bound=='first' or sys_error_bound=='all':
                 _plt.fill_between(_np.arange(max(xdata)),_rbutils.seb_lower( 
                                 _rbutils.rb_decay_1st_order(_np.arange(max(xdata)),A1_an,B1_an,C1_an,f_an),
@@ -510,8 +517,9 @@ class RBResults(object):
                  
 
         newplotgca.set_xlabel(xlabel, fontsize=15)
-        newplotgca.set_ylabel('Success Rate',fontsize=15)
-        newplotgca.set_title('RB Decay Curves', fontsize=20)  
+        newplotgca.set_ylabel('Survival probability',fontsize=15)
+        if title==True:
+            newplotgca.set_title('RB Decay Curves', fontsize=20)  
         newplotgca.set_frame_on(False)
         newplotgca.yaxis.grid(True)
         newplotgca.tick_params(axis='x', top='off', labelsize=12)

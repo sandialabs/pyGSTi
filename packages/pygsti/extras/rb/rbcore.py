@@ -687,11 +687,11 @@ def do_rb_base(dataset, base_gatestrings, basename, weight_data=False,
         
         A1,B1s,C1,f1 = final_soln_1storder.x
         
-        if A > 0.6 or A1 > 0.6 or A < 0.4 or A1 < 0.4:
-            print("Warning: Asymptotic fit parameter is not within [0.4,0.6].")
+#        if A > 0.6 or A1 > 0.6 or A < 0.4 or A1 < 0.4:
+#            print("Warning: Asymptotic fit parameter is not within [0.4,0.6].")
                        
-        if C1 > 0.1 or C1 < -0.1:
-            print("Warning: Additional parameter in first order fit is significantly non-zero")
+#        if C1 > 0.1 or C1 < -0.1:
+#            print("Warning: Additional parameter in first order fit is significantly non-zero")
             
         return {'A': A,'B': Bs-A,'f': f, 'F_avg': _rbutils.f_to_F_avg(f,dim),
                 'r': _rbutils.f_to_r(f,dim), 'A1': A1, 'B1': B1s-A1, 'C1': C1,
