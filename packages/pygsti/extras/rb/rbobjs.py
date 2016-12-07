@@ -456,8 +456,8 @@ class RBResults(object):
             print("Analytical curve is for Clifford decay only. Setting analytic to None.")
             analytic = None
         if (analytic is not None) and (analytic_params is None):
-            raise ValueError, "No input analytic parameters specified.\
-                     Please specify analytic_params, or set analytic to None."
+            raise ValueError("No input analytic parameters specified. Please" +
+                           " specify analytic_params, or set analytic to None.")
         if analytic is not None:
             f_an = analytic_params['f']
             A_an = analytic_params['A']
