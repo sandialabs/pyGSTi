@@ -129,6 +129,7 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
 
     bToStdout = (printer.verbosity > 2 and printer.filename is None)
     print_obj_func = _opt.create_obj_func_printer(call_objective_fn) #only ever prints to stdout!
+    if bToStdout: print_obj_func(x0) #print initial point
     minSol = _opt.minimize(call_objective_fn, x0,
                           method=method, maxiter=maxiter, maxfev=maxfev, tol=tol,
                           callback = print_obj_func if bToStdout else None)
