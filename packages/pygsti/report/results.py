@@ -1340,15 +1340,19 @@ class Results(object):
             gsBestEstimate = self.gatesets['final estimate']
 
             #Heusistic parameters for CPTP gauge opt that doesn't take too long
-            gaugeParams = self.parameters['gaugeOptParams'].copy()
+            if hasattr(self.parameters['gaugeOptParams'],"keys"):
+                gaugeParams = self.parameters['gaugeOptParams'].copy()
+            else:
+                gaugeParams = self.parameters['gaugeOptParams'][0].copy()
             gaugeParams['CPpenalty'] = 100
             gaugeParams['TPpenalty'] = 100
             gaugeParams['validSpamPenalty'] = 0
             gaugeParams['tol'] = 0.1
             gaugeParams['maxiter'] = 100
             gaugeParams['method'] = 'BFGS'
+            gaugeParams['targetGateset'] = gsTarget
             #gaugeParams['verbosity'] = 5 #DEBUG
-            return _optimizeGauge(gsBestEstimate, gsTarget, **gaugeParams)
+            return _optimizeGauge(gsBestEstimate, **gaugeParams)
         fns['CPTPGaugeOptGateset'] = (fn, validate_essential)
 
 

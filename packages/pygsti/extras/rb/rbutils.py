@@ -266,7 +266,8 @@ def depolarisation_parameter(gate, clifford_group, d=2):
     
     twirled_channel = clifford_twirl(gate,clifford_group)
     p = 1./(d**2 -1) * (_np.trace(twirled_channel) - 1)
-    
+    #p = (d**2 - _np.trace(twirled_channel))/ (d**2 -1)
+        
     return p
     
 def analytic_rb_gate_error_rate(actual, target, clifford_group):
@@ -291,12 +292,15 @@ def analytic_rb_gate_error_rate(actual, target, clifford_group):
         The twirled Clifford error rate.
     """
     
+    d=2
+    
     twirled_channel = clifford_twirl(_np.dot(actual,_np.linalg.inv(target)),
                                      clifford_group)
     #KENNY: is below formulat correct for arbitrary clifford groups? (or 
     #  should we assert twirled_channel.shape == (4,4) here? 
     # from docstring:  *At present only works for single-qubit gates.*
-    error_rate = 0.5 * (1 - 1./3 * (_np.trace(twirled_channel) - 1))
+    error_rate = (d-1) * (1 - depolarisation_parameter(twirled_channel, clifford_group, d)) / d
+    #error_rate = (d-1) * depolarisation_parameter(twirled_channel, clifford_group, d) / d
     return error_rate
 
 
@@ -343,7 +347,7 @@ def error_gate_set(gs_actual, gs_target):
     """
     Computes the 'left-multiplied' error maps associated with a noisy gate 
     set, along with the average error map. This is the gate set [n_1,...] 
-    such that g_i = t_i, where t_i is the gate which g_i is a noisy 
+    such that g_i = n_it_i, where t_i is the gate which g_i is a noisy 
     implementation of, the final gate in the set has the key Gavg and is the
     average of the error maps.
     
@@ -425,7 +429,7 @@ def delta_parameter(gs_actual, gs_target, norm='diamond'):
         
 
 def analytic_rb_parameters(gs_actual, gs_target, clifford_group, 
-                           success_spamlabel, norm='diamond', d=2):
+                           success_spamlabel, norm='1to1', d=2):
     # Tim: This function has a range of issues if d !=2.                     
     """
     Computes the analytic zeroth and first order fit parameters from

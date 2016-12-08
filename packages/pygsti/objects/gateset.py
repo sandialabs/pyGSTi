@@ -866,15 +866,22 @@ class GateSet(object):
         #print "Rank 1-Pp = ",_np.linalg.matrix_rank(_np.identity(nParams,'d') - Pp, P_RANK_TOL)
         #print " Evals(1-Pp) = \n","\n".join([ "%d: %g" % (i,ev) \
         #       for i,ev in enumerate(_np.sort(_np.linalg.eigvals(_np.identity(nParams,'d') - Pp))) ])
+        
+        try:
+            rank_P = _np.linalg.matrix_rank(P, P_RANK_TOL) # original un-normalized projector onto gauge space
+            
+            # Note: use P_RANK_TOL here even though projector is *un-normalized* since sometimes P will
+            #  have eigenvalues 1e-17 and one or two 1e-11 that should still be "zero" but aren't when
+            #  no tolerance is given.  Perhaps a more custom tolerance based on the singular values of P
+            #  but different from numpy's default tolerance would be appropriate here.
 
-        rank_P = _np.linalg.matrix_rank(P, P_RANK_TOL) # original un-normalized projector onto gauge space
-          # Note: use P_RANK_TOL here even though projector is *un-normalized* since sometimes P will
-          #  have eigenvalues 1e-17 and one or two 1e-11 that should still be "zero" but aren't when
-          #  no tolerance is given.  Perhaps a more custom tolerance based on the singular values of P
-          #  but different from numpy's default tolerance would be appropriate here.
-
-        assert( rank_P == _np.linalg.matrix_rank(Pp, P_RANK_TOL)) #rank shouldn't change with normalization
-        assert( (nParams - rank_P) == _np.linalg.matrix_rank(ret, P_RANK_TOL) ) # dimension of orthogonal space
+            assert( rank_P == _np.linalg.matrix_rank(Pp, P_RANK_TOL)) #rank shouldn't change with normalization
+            assert( (nParams - rank_P) == _np.linalg.matrix_rank(ret, P_RANK_TOL) ) # dimension of orthogonal space
+        except(_np.linalg.linalg.LinAlgError):
+            _warnings.warn("Linear algebra error (probably a non-convergent" +
+                           "SVD) ignored during matric rank checks in " +
+                           "GateSet.get_nongauge_projector(...) ")
+            
         return ret
 
 
