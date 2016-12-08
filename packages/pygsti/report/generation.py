@@ -1986,7 +1986,8 @@ def get_gaugeopt_params_table(gaugeOptArgs):
 def get_logl_confidence_region(gateset, dataset, confidenceLevel,
                                gatestring_list=None, probClipInterval=(-1e6,1e6),
                                minProbClip=1e-4, radius=1e-4, hessianProjection="std",
-                               regionType="std", comm=None, memLimit=None):
+                               regionType="std", comm=None, memLimit=None,
+                               cptp_penalty_factor=None, distributeMethod="deriv"):
 
     """
     Constructs a ConfidenceRegion given a gateset and dataset using the log-likelihood Hessian.
@@ -2036,6 +2037,11 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
           numerical optimization is performed to find the non-gauge space
           which minimizes the (average) size of the confidence intervals
           corresponding to gate (as opposed to SPAM vector) parameters.
+        - 'linear response' -- obtain elements of the Hessian via the
+          linear response of a "forcing term".  This requres a likelihood
+          optimization for *every* computed error bar, but avoids pre-
+          computation of the entire Hessian matrix, which can be 
+          prohibitively costly on large parameter spaces.
 
     regionType : {'std', 'non-markovian'}, optional
         The type of confidence region to create.  'std' creates a standard
@@ -2050,6 +2056,14 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
         A rough memory limit in bytes which restricts the amount of intermediate
         values that are computed and stored.
 
+    cptp_penalty_factor : float, optional
+        The CPTP penalty factor used in MLGST when computing error bars via
+        linear-response.
+
+    distributeMethod : {"gatestrings", "deriv"}
+        The distribute-method used in MLGST when computing error bars via
+        linear-response.
+
 
     Returns
     -------
@@ -2058,10 +2072,26 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
     if gatestring_list is None:
         gatestring_list = list(dataset.keys())
 
-    #Compute appropriate Hessian
-    hessian = _tools.logl_hessian(gateset, dataset, gatestring_list,
-                                  minProbClip, probClipInterval, radius,
-                                  comm=comm, memLimit=memLimit)
+    if hessianProjection != "linear response":
+        #Compute appropriate Hessian
+        hessian = _tools.logl_hessian(gateset, dataset, gatestring_list,
+                                      minProbClip, probClipInterval, radius,
+                                      comm=comm, memLimit=memLimit)
+        mlgst_args = None
+    else: 
+        hessian = None
+        mlgst_args = {
+            'dataset': dataset,
+            'gateStringsToUse': gatestring_list,
+            'maxiter': 10000, 'tol': 1e-10,
+            'cptp_penalty_factor': cptp_penalty_factor,
+            'minProbClip': minProbClip, 
+            'probClipInterval': probClipInterval,
+            'radius': radius,
+            'poissonPicture': True, 'verbosity': 2, #NOTE: HARDCODED
+            'memLimit': memLimit, 'comm': comm,
+            'distributeMethod': distributeMethod, 'profiler': None
+            }
 
     #Compute the non-Markovian "radius" if required
     if regionType == "std":
@@ -2083,7 +2113,8 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
 
     cri = _objs.ConfidenceRegion(gateset, hessian, confidenceLevel,
                                  hessianProjection,
-                                 nonMarkRadiusSq=nonMarkRadiusSq)
+                                 nonMarkRadiusSq=nonMarkRadiusSq,
+                                 linresponse_mlgst_params=mlgst_args)
 
     #Check that number of gauge parameters reported by gateset is consistent with confidence region
     # since the parameter number computed this way is used in chi2 or logl progress tables
@@ -2145,6 +2176,12 @@ def get_chi2_confidence_region(gateset, dataset, confidenceLevel,
           numerical optimization is performed to find the non-gauge space
           which minimizes the (average) size of the confidence intervals
           corresponding to gate (as opposed to SPAM vector) parameters.
+        - 'linear response' -- obtain elements of the Hessian via the
+          linear response of a "forcing term".  This requres a likelihood
+          optimization for *every* computed error bar, but avoids pre-
+          computation of the entire Hessian matrix, which can be 
+          prohibitively costly on large parameter spaces.
+
 
     regionType : {'std', 'non-markovian'}, optional
         The type of confidence region to create.  'std' creates a standard
@@ -2166,6 +2203,10 @@ def get_chi2_confidence_region(gateset, dataset, confidenceLevel,
     """
     if gatestring_list is None:
         gatestring_list = list(dataset.keys())
+
+    if hessianProjection == "linear response":
+        raise NotImplementedError("Linear response hessian projection is only"
+                                  + " implemented for the logL-objective case")
 
     #Compute appropriate Hessian
     chi2, hessian = _tools.chi2(dataset, gateset, gatestring_list,

@@ -1365,12 +1365,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
 
     full_minErrVec = objective_func(opt_x)  #note: calls gs.from_vector(opt_x,...) so don't need to call this again
-    if regularizeFactor != 0:
-        minErrVec = full_minErrVec[0:-len(x0)] #don't include regularization terms
-    elif cptp_penalty_factor != 0:
-        minErrVec = full_minErrVec[0:-len(gs.gates)] #don't include regularization terms
-    else:
-        minErrVec = full_minErrVec
+    minErrVec = full_minErrVec[0:-ex] #don't include "extra" regularization terms
     soln_gs = gs.copy();
     profiler.add_time("do_mc2gst: leastsq",tm)
 
@@ -2000,7 +1995,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
              probClipInterval=(-1e6,1e6), radius=1e-4,
              poissonPicture=True, verbosity=0, check=False,
              gateLabelAliases=None, memLimit=None, comm=None,
-             distributeMethod = "gatestrings", profiler=None):
+             distributeMethod = "deriv", profiler=None):
 
     """
     Performs Maximum Likelihood Estimation Gate Set Tomography on the dataset.
@@ -2079,6 +2074,47 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     gateset : GateSet
         The gate set that maximized the log-likelihood.
     """
+    return _do_mlgst_base(dataset, startGateset, gateStringsToUse, maxiter,
+                          maxfev, tol,cptp_penalty_factor, minProbClip,
+                          probClipInterval, radius, poissonPicture, verbosity,
+                          check, gateLabelAliases, memLimit, comm,
+                          distributeMethod, profiler, None, None)
+
+
+def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
+                   maxiter=100000, maxfev=None, tol=1e-6,
+                   cptp_penalty_factor=0, minProbClip=1e-4,
+                   probClipInterval=(-1e6,1e6), radius=1e-4,
+                   poissonPicture=True, verbosity=0, check=False,
+                   gateLabelAliases=None, memLimit=None, comm=None,
+                   distributeMethod = "deriv", profiler=None,
+                   evaltree_cache=None, forcefn_grad=None,
+                   shiftFctr=100):
+    """ 
+    Same args and behavior as do_mlgst, but with additional:
+    
+    Parameters
+    ----------
+    evaltree_cache : dict, optional
+        A dictionary which server as a cache for the computed EvalTree used
+        in this computation.  If an empty dictionary is supplied, it is filled
+        with cached values to speed up subsequent executions of this function
+        which use the *same* `startGateset`, `gateStringsToUse`, `memLimit`,
+        `comm`, and `distributeMethod`.
+       
+    forcefn_grad : numpy array, optional
+        An array of shape `(D,nParams)`, where `D` is the dimsion of the
+        (unspecified) forcing function and `nParams=startGateset.num_params()`.
+        This array gives the gradient of the forcing function with respect to
+        each gateset parameter and is used for the computation of "linear
+        response error bars".
+
+    shiftFctr : float
+        A tuning parameter used to ensure the positivity of the forcing term.
+        This should be > 1, and the larger the value the more positive-shift 
+        is applied to keep the forcing term positive.  Thus, if you receive
+        an "Inadequate forcing shift" error, make this value larger.
+    """
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     if profiler is None: profiler = _dummy_profiler
@@ -2126,9 +2162,22 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
                     "(cur, persist, gthr = %.2f, %.2f, %.2f GB)" %
                     (curMem*C, persistentMem*C, gthrMem*C))
     else: gthrMem = mlim = None
-    evTree, wrtBlkSize = gs.bulk_evaltree_from_resources(
-        gateStringsToUse, comm, mlim, distributeMethod,
-        ["bulk_fill_probs","bulk_fill_dprobs"], printer)
+    
+    if evaltree_cache and evaltree_cache.has_key('evTree') \
+            and evaltree_cache.has_key('wrtBlkSize'):
+        #use cache dictionary to speed multiple calls which use
+        # the same gateset, gate strings, comm, memlim, etc.
+        evTree = evaltree_cache['evTree']
+        wrtBlkSize = evaltree_cache['wrtBlkSize']
+    else:
+        evTree, wrtBlkSize = gs.bulk_evaltree_from_resources(
+            gateStringsToUse, comm, mlim, distributeMethod,
+            ["bulk_fill_probs","bulk_fill_dprobs"], printer)
+        
+        #Fill cache dict if one was given
+        if evaltree_cache is not None:
+            evaltree_cache['evTree'] = evTree
+            evaltree_cache['wrtBlkSize'] = wrtBlkSize
 
     # permute (if needed) gate string list for efficient subtree division
     # Note: cannot rely on order of gateStringsToUse above this point --
@@ -2150,8 +2199,9 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
            # no difference in the strings used by the alias
 
     #Compute "extra" (i.e. beyond the (gatestring,spamlable)) rows of jacobian        
-    if cptp_penalty_factor != 0: ex = len(gs.gates)
-    else: ex = 0
+    ex = 0
+    if cptp_penalty_factor != 0: ex += len(gs.gates)
+    if forcefn_grad is not None: ex += forcefn_grad.shape[0]
 
     #Allocate peristent memory
     cntVecMx = _np.empty( (len(spamLabels),len(gateStringsToUse)), 'd' )
@@ -2177,6 +2227,16 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     KM = len(spamLabels)*len(gateStringsToUse) #shorthand for this combined dimension used below
     min_p = minProbClip
     a = radius # parameterizes "roundness" of f == 0 terms
+
+    if forcefn_grad is not None:
+        ffg_norm = _np.linalg.norm(forcefn_grad)
+        start_norm = _np.linalg.norm(startGateset.to_vector())
+        forceShift = ffg_norm * (ffg_norm + start_norm) * shiftFctr
+          #used to keep forceShift - _np.dot(forcefn_grad,vectorGS) positive
+          # Note -- not analytic, just a heuristic!
+        forceOffset = KM+len(gs.gates) if cptp_penalty_factor != 0 else KM
+          #index to jacobian row of first forcing term
+
 
     if poissonPicture:
 
@@ -2213,8 +2273,12 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
             v.shape = [KM] #reshape ensuring no copy is needed
             if cptp_penalty_factor != 0:
                 cpPenaltyVec = _cptp_penalty(gs,cptp_penalty_factor,gateBasis)
-                profiler.add_time("do_mlgst: OBJECTIVE",tm)
-                return _np.concatenate( (v, cpPenaltyVec) )
+                v = _np.concatenate( (v, cpPenaltyVec) )
+
+            if forcefn_grad is not None:
+                forceVec = forceShift - _np.dot(forcefn_grad,vectorGS)
+                assert(_np.all(forceVec >= 0)), "Inadequate forcing shift!"
+                v = _np.concatenate( (v, _np.sqrt(forceVec)) )
             
             profiler.add_time("do_mlgst: OBJECTIVE",tm)
             return v #Note: no test for whether probs is in [0,1] so no guarantee that
@@ -2258,6 +2322,9 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
                                        vec_gs_len, nGateParams, nSpamParams,
                                        gateBasis)
 
+            if forcefn_grad is not None:
+                jac[forceOffset:,:] = -forcefn_grad
+
             if check: _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
             profiler.add_time("do_mlgst: JACOBIAN",tm)
             return jac
@@ -2295,8 +2362,12 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
             v.shape = [KM] #reshape ensuring no copy is needed
             if cptp_penalty_factor != 0:
                 cpPenaltyVec = _cptp_penalty(gs,cptp_penalty_factor,gateBasis)
-                profiler.add_time("do_mlgst: OBJECTIVE",tm)
-                return _np.concatenate( (v, cpPenaltyVec) )
+                v = _np.concatenate( (v, cpPenaltyVec) )
+
+            if forcefn_grad is not None:
+                forceVec = forceShift - _np.dot(forcefn_grad,vectorGS)
+                assert(_np.all(forceVec >= 0)), "Inadequate forcing shift!"
+                v = _np.concatenate( (v, _np.sqrt(forceVec)) )
 
             profiler.add_time("do_mlgst: OBJECTIVE",tm)
             return v  #Note: no test for whether probs is in [0,1] so no guarantee that
@@ -2339,6 +2410,9 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
                                        vec_gs_len, nGateParams, nSpamParams,
                                        gateBasis)
 
+            if forcefn_grad is not None:
+                jac[forceOffset:,:] = -forcefn_grad
+
             if check: _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
             profiler.add_time("do_mlgst: JACOBIAN",tm)
             return jac
@@ -2368,10 +2442,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     #gs.log("MLGST", { 'tol': tol,  'maxiter': maxiter } )
 
     full_minErrVec = objective_func(opt_x)  #note: calls gs.from_vector(opt_x,...) so don't need to call this again
-    if cptp_penalty_factor != 0:
-        minErrVec = full_minErrVec[0:-len(gs.gates)] #don't include regularization terms
-    else:
-        minErrVec = full_minErrVec
+    minErrVec = full_minErrVec[0:-ex] #don't include "extra" regularization terms
     deltaLogL = sum([x**2 for x in minErrVec]) # upperBoundLogL - logl (a positive number)
 
     #if constrainType == 'projection':

@@ -98,7 +98,9 @@ class Results(object):
                             'defaultBasename': None,
                             'linlogPercentile':  5,
                             'memLimit': None,
-                            'gaugeOptParams': {} }
+                            'gaugeOptParams': {},
+                            'cptpPenaltyFactor': 0,
+                            'distributeMethod': "deriv" }
 
 
     def init_single(self, objective, targetGateset, dataset, gatesetEstimate,
@@ -570,48 +572,56 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             _, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
+            if cri and cri.has_hessian() == False: cri = None
             return _generation.get_gateset_spam_table(gsBest, None, cri)
         fns['bestGatesetSpamTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
+            if cri and cri.has_hessian() == False: cri = None
             return _generation.get_gateset_spam_table(gsBest, gsTgt, cri, False)
         fns['bestGatesetSpamBriefTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             _, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
+            if cri and cri.has_hessian() == False: cri = None
             return _generation.get_gateset_spam_parameters_table(gsBest, cri)
         fns['bestGatesetSpamParametersTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             _, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
+            if cri and cri.has_hessian() == False: cri = None
             return _generation.get_gateset_gates_table(gsBest, cri)
         fns['bestGatesetGatesTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             _, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
+            if cri and cri.has_hessian() == False: cri = None
             return _generation.get_gateset_choi_table(gsBest, cri)
         fns['bestGatesetChoiTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             _, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
+            if cri and cri.has_hessian() == False: cri = None
             return _generation.get_gateset_decomp_table(gsBest, cri)
         fns['bestGatesetDecompTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             _, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
+            if cri and cri.has_hessian() == False: cri = None
             return _generation.get_gateset_rotn_axis_table(gsBest, cri, True)
         fns['bestGatesetRotnAxisTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
+            if cri and cri.has_hessian() == False: cri = None
             return _generation.get_gateset_eigenval_table(gsBest, gsTgt, cri)
         fns['bestGatesetEvalTable'] = (fn, validate_essential)
 
@@ -624,6 +634,7 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
+            #Note: ALWAYS compute error bars if cri is not None
             return _generation.get_gates_vs_target_table(gsBest, gsTgt, cri)
         fns['bestGatesetVsTargetTable'] = (fn, validate_essential)
 
@@ -647,12 +658,14 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
+            if cri and cri.has_hessian() == False: cri = None
             return _generation.get_spam_vs_target_table(gsBest, gsTgt, cri)
         fns['bestGatesetSpamVsTargetTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
+            if cri and cri.has_hessian() == False: cri = None
             return _generation.get_gates_vs_target_err_gen_table(
                 gsBest, gsTgt, cri)
         fns['bestGatesetErrorGenTable'] = (fn, validate_essential)
@@ -660,13 +673,13 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
+            if cri and cri.has_hessian() == False: cri = None
             return _generation.get_gates_vs_target_angles_table(
                 gsBest, gsTgt, cri)
         fns['bestGatesetVsTargetAnglesTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             setup()
-            self._get_confidence_region(confidenceLevel)
             return _generation.get_gaugeopt_params_table(
                 self.parameters['gaugeOptParams'])
         fns['bestGatesetGaugeOptParamsTable'] = (fn, validate_essential)
@@ -796,6 +809,7 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             _, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
+            if cri and cri.has_hessian() == False: cri = None
             return _generation.get_gateset_choi_eigenval_table(
                 gsBest, "bestChoiEvalBars", confidenceRegionInfo=cri)
         fns['bestGatesetChoiEvalTable'] = (fn, validate_essential)
@@ -1610,7 +1624,9 @@ class Results(object):
                     self.parameters['radius'],
                     self.parameters['hessianProjection'],
                     regionType, self._comm,
-                    self.parameters['memLimit'])
+                    self.parameters['memLimit'],
+                    self.parameters['cptpPenaltyFactor'],
+                    self.parameters['distributeMethod'])
             elif self.parameters['objective'] == "chi2":
                 cr = _generation.get_chi2_confidence_region(
                     self.gatesets['final estimate'], self.dataset,
