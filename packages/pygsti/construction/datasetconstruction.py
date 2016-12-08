@@ -173,3 +173,42 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
         dataset.add_count_dict(s, counts)
     dataset.done_adding_data()
     return dataset
+    
+def merge_outcomes(dataset,label_merge_dict):
+    """Creates a DataSet which merges certain outcomes in input DataSet;
+    used, for example, to aggregate a 2-qubit 4-outcome DataSet into a 1-qubit 2-outcome
+    DataSet.
+    
+    Parameters
+    ----------
+    dataset : DataSet object
+        The input DataSet whose results will be compiled according to the rules 
+        set forth in label_merge_dict
+
+    label_merge_dict : dictionary
+        The dictionary whose keys define the new DataSet outcomes, and whose items 
+        are lists of input DataSet outcomes that are to be summed together.  For example,
+        if a two-qubit DataSet has outcome labels "upup", "updn", "dnup", and "dndn", and
+        we want to ''trace out'' the second qubit, we could use label_merge_dict =
+        {'plus':['upup','updn'],'minus':['dnup','dndn']}.
+    
+    Returns
+    -------
+    merged_dataset : DataSet object
+        The DataSet with outcomes merged according to the rules given in label_merge_dict.
+    """
+
+    new_effects = label_merge_dict.keys()
+    merged_dataset = _ds.DataSet(spamLabels=new_effects)
+    if sorted([effect for sublist in label_merge_dict.values() for effect in sublist]) != sorted(dataset.get_spam_labels()):
+        print('Warning: There is a mismatch between original effects in label_merge_dict and original effects in original dataset.')
+    for key in dataset.keys():
+        dataline = dataset[key]
+        count_dict = {}
+        for new_effect in new_effects:
+            count_dict[new_effect] = 0
+            for old_effect in label_merge_dict[new_effect]:
+                count_dict[new_effect] += dataline[old_effect]
+        merged_dataset.add_count_dict(key,count_dict)
+    merged_dataset.done_adding_data()
+    return merged_dataset
