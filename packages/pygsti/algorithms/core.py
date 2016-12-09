@@ -1365,7 +1365,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
 
     full_minErrVec = objective_func(opt_x)  #note: calls gs.from_vector(opt_x,...) so don't need to call this again
-    minErrVec = full_minErrVec[0:-ex] #don't include "extra" regularization terms
+    minErrVec = full_minErrVec[0:-ex] if (ex > 0) else full_minErrVec  #don't include "extra" regularization terms
     soln_gs = gs.copy();
     profiler.add_time("do_mc2gst: leastsq",tm)
 
@@ -2442,7 +2442,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
     #gs.log("MLGST", { 'tol': tol,  'maxiter': maxiter } )
 
     full_minErrVec = objective_func(opt_x)  #note: calls gs.from_vector(opt_x,...) so don't need to call this again
-    minErrVec = full_minErrVec[0:-ex] #don't include "extra" regularization terms
+    minErrVec = full_minErrVec[0:-ex] if (ex > 0) else full_minErrVec  #don't include "extra" regularization terms
     deltaLogL = sum([x**2 for x in minErrVec]) # upperBoundLogL - logl (a positive number)
 
     #if constrainType == 'projection':
