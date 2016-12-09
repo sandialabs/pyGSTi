@@ -785,15 +785,26 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
             ret[key] = _getGateQuantity(angle_btwn_axes, gateset1, gateLabel,
                                     eps, confidenceRegionInfo)
 
-        key = '%s relative eigenvalues' % gateLabel; possible_qtys.append(key)
+        key = '%s relative logTiG eigenvalues' % gateLabel; possible_qtys.append(key)
         if key in qtynames:
             def rel_eigvals(gate):
-                rel_gate = _np.dot(_np.linalg.inv(gateset2.gates[gateLabel]), gate)
+                rel_gate = _tools.error_generator(gate, gateset2.gates[gateLabel], "logTiG")
                 return _np.linalg.eigvals(rel_gate)
                   #vary elements of gateset1 (assume gateset2 is fixed)
 
             ret[key] = _getGateQuantity(rel_eigvals, gateset1, gateLabel,
                                         eps, confidenceRegionInfo)
+
+        key = '%s relative logG-logT eigenvalues' % gateLabel; possible_qtys.append(key)
+        if key in qtynames:
+            def rel_eigvals(gate):
+                rel_gate = _tools.error_generator(gate, gateset2.gates[gateLabel], "logG-logT")
+                return _np.linalg.eigvals(rel_gate)
+                  #vary elements of gateset1 (assume gateset2 is fixed)
+
+            ret[key] = _getGateQuantity(rel_eigvals, gateset1, gateLabel,
+                                        eps, confidenceRegionInfo)
+
 
     ### per prep vector quantities
     #############################################

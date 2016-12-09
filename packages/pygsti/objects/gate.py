@@ -1768,9 +1768,10 @@ class LindbladParameterizedGate(Gate):
 
         #For now, always use pauli-product basis (should be able to use
         # gm also, but one thing at a time).
+        errgen = _gt.error_generator(gateMatrix, unitaryPrefactor, "logTiG")
         hamC, otherC, self.hamGens, self.otherGens = \
             _gt.pauliprod_lindblad_errgen_projections(
-            gateMatrix, unitaryPrefactor,"pp", normalize=False,
+            errgen, "pp", normalize=False,
             return_generators=True) #generators in std basis
 
         assert(self.hamGens.shape == (d2-1,d2,d2))

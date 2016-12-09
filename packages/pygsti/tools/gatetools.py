@@ -650,7 +650,7 @@ def unitary_to_process_mx(U):
 
 
 
-def error_generator(gate, target_gate):
+def error_generator(gate, target_gate, typ="logG-logT"): #or HERE
     """
     Construct the error generator from a gate and its target.
 
@@ -666,18 +666,29 @@ def error_generator(gate, target_gate):
     target_gate : ndarray
       The target gate matrix
 
+    typ : {"logG-logT", "logTiG"}
+      The type of error generator to compute.  Allowed values are:
+      
+      - "logG-logT" : errgen = log(gate) - log(target_gate)
+      - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+
     Returns
     -------
     errgen : ndarray
       The error generator.
     """
-    target_gate_inv = _spl.inv(target_gate)
-    error_gen = _np.real_if_close(_spl.logm(_np.dot(target_gate_inv,gate)),
+    if typ == "logG-logT":
+        return  _np.real_if_close(_spl.logm(gate) - _spl.logm(target_gate),
                                   tol=10000) # in machine epsilons
-    return error_gen
+    elif typ == "logTiG":
+        target_gate_inv = _spl.inv(target_gate)
+        return _np.real_if_close(_spl.logm(_np.dot(target_gate_inv,gate)),
+                                      tol=10000) # in machine epsilons
+    else:
+        raise ValueError("Invalid error-generator type: %s" % typ)
 
 
-def gate_from_error_generator(error_gen, target_gate):
+def gate_from_error_generator(error_gen, target_gate, typ="logG-logT"):
     """
     Construct a gate from an error generator and a target gate.
 
@@ -693,12 +704,24 @@ def gate_from_error_generator(error_gen, target_gate):
     target_gate : ndarray
       The target gate matrix
 
+    typ : {"logG-logT", "logTiG"}
+      The type of error generator to compute.  Allowed values are:
+      
+      - "logG-logT" : errgen = log(gate) - log(target_gate)
+      - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+
+
     Returns
     -------
     ndarray
       The gate matrix.
     """
-    return _np.dot(target_gate, _spl.expm(error_gen))
+    if typ == "logG-logT":
+        return _spl.expm(error_gen + _spl.logm(target_gate))
+    elif typ == "logTiG":
+        return _np.dot(target_gate, _spl.expm(error_gen))
+    else:
+        raise ValueError("Invalid error-generator type: %s" % typ)
 
 
 def pauliprod_error_generators(dim, projection_type):
@@ -755,7 +778,7 @@ def pauliprod_error_generators(dim, projection_type):
     return lindbladMxs
 
 
-def pauliprod_errgen_projections(gate, targetGate, projection_type,
+def pauliprod_errgen_projections(errgen, projection_type,
                                  mxBasis="gm", return_generators=False):
     """
     Compute the projections of a gate error generator onto generators
@@ -763,12 +786,8 @@ def pauliprod_errgen_projections(gate, targetGate, projection_type,
 
     Parameters
     ----------
-    gate : ndarray
-      The gate matrix data used when constructing the generator.
-
-    targetGate : ndarray
-      The target gate matrix data to use when constructing the the
-      generator.
+    errgen: : ndarray
+      The error generator matrix to project.
       
     projection_type : {"hamiltonian", "stochastic"}
       The type of error generators to project the gate error generator onto.
@@ -778,7 +797,7 @@ def pauliprod_errgen_projections(gate, targetGate, projection_type,
       Pauli-product matrix P (recall P is self adjoint).
 
     mxBasis : {'std', 'gm','pp'}, optional
-      Which basis the gateset is represented in.  Allowed
+      Which basis `errgen` is represented in.  Allowed
       options are Matrix-unit (std), Gell-Mann (gm) and
       Pauli-product (pp).
 
@@ -799,13 +818,12 @@ def pauliprod_errgen_projections(gate, targetGate, projection_type,
       that these matricies are in the *std* (matrix unit) basis.
     """
 
-    errgen = error_generator(gate, targetGate)
     if mxBasis == "pp":   errgen_std = _bt.pp_to_std(errgen)
     elif mxBasis == "gm": errgen_std = _bt.gm_to_std(errgen)
     elif mxBasis == "std": errgen_std = errgen
     else: raise ValueError("Invalid basis specifier: %s" % mxBasis)
 
-    d2 = gate.shape[0]
+    d2 = errgen.shape[0]
     d = int(_np.sqrt(d2))
     nQubits = _np.log2(d)
 
@@ -943,7 +961,7 @@ def lindblad_error_generators(dmbasis, normalize):
     return hamLindbladTerms, otherLindbladTerms
 
 
-def pauliprod_lindblad_errgen_projections(gate, targetGate, mxBasis="gm",
+def pauliprod_lindblad_errgen_projections(errgen, mxBasis="gm",
                                           normalize=True, 
                                           return_generators=False):
     """
@@ -952,15 +970,11 @@ def pauliprod_lindblad_errgen_projections(gate, targetGate, mxBasis="gm",
 
     Parameters
     ----------
-    gate : ndarray
-      The gate matrix data used when constructing the generator.
-
-    targetGate : ndarray
-      The target gate matrix data to use when constructing the the
-      generator.
+    errgen: : ndarray
+      The error generator matrix to project.
       
     mxBasis : {'std', 'gm','pp'}, optional
-      Which basis the gateset is represented in.  Allowed
+      Which basis `errgen` is represented in.  Allowed
       options are Matrix-unit (std), Gell-Mann (gm) and
       Pauli-product (pp).
 
@@ -994,13 +1008,12 @@ def pauliprod_lindblad_errgen_projections(gate, targetGate, mxBasis="gm",
       Shape is (d-1,d-1,d,d), and `other_generators[i]` is in the std basis.
     """
 
-    errgen = error_generator(gate, targetGate)
     if mxBasis == "pp":   errgen_std = _bt.pp_to_std(errgen)
     elif mxBasis == "gm": errgen_std = _bt.gm_to_std(errgen)
     elif mxBasis == "std": errgen_std = errgen
     else: raise ValueError("Invalid basis specifier: %s" % mxBasis)
 
-    d2 = gate.shape[0]
+    d2 = errgen.shape[0]
     d = int(_np.sqrt(d2))
     nQubits = _np.log2(d)
 

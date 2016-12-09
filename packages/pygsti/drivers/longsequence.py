@@ -405,6 +405,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     ret.parameters['defaultBasename'] = default_base
     ret.parameters['memLimit'] = memLimit
     ret.parameters['gaugeOptParams'] = ordered_go_params_list
+    ret.parameters['cptpPenaltyFactor'] = advancedOptions.get('cptpPenaltyFactor',0)
+    ret.parameters['distributeMethod'] = advancedOptions.get('distributeMethod','deriv')
 
     profiler.add_time('do_long_sequence_gst: results initialization',tRef)
     ret.parameters['profiler'] = profiler
