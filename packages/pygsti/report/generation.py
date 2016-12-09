@@ -2037,6 +2037,9 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
           numerical optimization is performed to find the non-gauge space
           which minimizes the (average) size of the confidence intervals
           corresponding to gate (as opposed to SPAM vector) parameters.
+        - 'intrinsic error' -- compute separately the intrinsic error
+          in the gate and spam GateSet parameters and set weighting metric
+          based on their ratio.
         - 'linear response' -- obtain elements of the Hessian via the
           linear response of a "forcing term".  This requres a likelihood
           optimization for *every* computed error bar, but avoids pre-
@@ -2176,6 +2179,9 @@ def get_chi2_confidence_region(gateset, dataset, confidenceLevel,
           numerical optimization is performed to find the non-gauge space
           which minimizes the (average) size of the confidence intervals
           corresponding to gate (as opposed to SPAM vector) parameters.
+        - 'intrinsic error' -- compute separately the intrinsic error
+          in the gate and spam GateSet parameters and set weighting metric
+          based on their ratio.
         - 'linear response' -- obtain elements of the Hessian via the
           linear response of a "forcing term".  This requres a likelihood
           optimization for *every* computed error bar, but avoids pre-

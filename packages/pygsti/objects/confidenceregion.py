@@ -9,6 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy       as _np
 import scipy.stats as _stats
 import warnings    as _warnings
+import itertools   as _itertools
 from .. import optimize as _opt
 
 from .gateset import P_RANK_TOL
@@ -83,6 +84,9 @@ class ConfidenceRegion(object):
               numerical optimization is performed to find the non-gauge space
               which minimizes the (average) size of the confidence intervals
               corresponding to gate (as opposed to SPAM vector) parameters.
+            - 'intrinsic error' -- compute separately the intrinsic error
+              in the gate and spam GateSet parameters and set weighting metric
+              based on their ratio.
             - 'linear response' -- obtain elements of the Hessian via the
               linear response of a "forcing term".  This requres a likelihood
               optimization for *every* computed error bar, but avoids pre-
@@ -132,6 +136,9 @@ class ConfidenceRegion(object):
                                                              self.nGaugeParams, confidenceLevel,
                                                              "L-BFGS-B", maxiter, maxiter,
                                                              tol, verbosity=3) #verbosity for DEBUG
+            elif hessianProjection == 'intrinsic error':
+                projected_hessian = _optProjectionFromSplit(gateset, hessian, confidenceLevel,
+                                                            verbosity=3) #verbosity for DEBUG
             elif hessianProjection == 'linear response':
                 raise ValueError("'hessian' must be None when using the " +
                                  "'linear response' hessian projection type")
@@ -765,14 +772,12 @@ def _optProjectionForGateCIs(gateset, base_hessian, nNonGaugeParams, nGaugeParam
                              maxfev = 10000, tol = 1e-6, verbosity = 0):
     printer = VerbosityPrinter.build_printer(verbosity)
 
-    printer = VerbosityPrinter.build_printer(verbosity)
-
     printer.log('', 3)
     printer.log("--- Hessian Projector Optimization for gate CIs (%s) ---" % method, 2, indentOffset=-1)
 
     def objective_func(vectorM):
         matM = vectorM.reshape( (nNonGaugeParams,nGaugeParams) )
-        proj_extra = gateset.get_nongauge_projector(matM)
+        proj_extra = gateset.get_nongauge_projector(nonGaugeMixMx=matM)
         projected_hessian_ex = _np.dot(proj_extra, _np.dot(base_hessian, proj_extra))
 
         ci = ConfidenceRegion(gateset, projected_hessian_ex, level, hessianProjection="none")
@@ -796,3 +801,49 @@ def _optProjectionForGateCIs(gateset, base_hessian, nNonGaugeParams, nGaugeParam
     printer.log('The resulting min sqrt(sum(gateCIs**2)): %g' % minSol.fun, 2)
 
     return projected_hessian_ex
+
+
+def _optProjectionFromSplit(gateset, base_hessian, level, verbosity = 0):
+    printer = VerbosityPrinter.build_printer(verbosity)
+
+    printer.log('', 3)
+    printer.log("--- Hessian Projector Optimization from separate SPAM and Gate weighting ---", 2, indentOffset=-1)
+
+
+    #get gate-intrinsic-error
+    proj = gateset.get_nongauge_projector(itemWeights={'gates':1.0,'spam': 0.0})
+    projected_hessian = _np.dot(proj, _np.dot(base_hessian, proj))
+    ci = ConfidenceRegion(gateset, projected_hessian, level, hessianProjection="none")
+    gateCIs = _np.concatenate( [ ci.get_profile_likelihood_confidence_intervals(gl).flatten()
+                                     for gl in gateset.gates] )
+    gate_intrinsic_err = _np.sqrt( _np.sum(gateCIs**2) )
+
+    #get spam-intrinsic-error
+    proj = gateset.get_nongauge_projector(itemWeights={'gates':0.0,'spam': 1.0})
+    projected_hessian = _np.dot(proj, _np.dot(base_hessian, proj))
+    ci = ConfidenceRegion(gateset, projected_hessian, level, hessianProjection="none")
+    spamCIs = _np.concatenate( [ ci.get_profile_likelihood_confidence_intervals(gl).flatten()
+                                     for sl in _itertools.chain(iter(gateset.preps),
+                                                                iter(gateset.effects))] )
+    spam_intrinsic_err = _np.sqrt( _np.sum(spamCIs**2) )
+
+    ratio = gate_intrinsic_err / spam_intrinsic_err
+    proj = gateset.get_nongauge_projector(itemWeights={'gates':1.0,'spam': ratio})
+    projected_hessian = _np.dot(proj, _np.dot(base_hessian, proj))
+
+    if printer.verbosity >= 2:
+        #Create ci here just to extract #'s for print stmts
+        ci = ConfidenceRegion(gateset, projected_hessian, level, hessianProjection="none")
+        gateCIs = _np.concatenate( [ ci.get_profile_likelihood_confidence_intervals(gl).flatten()
+                                         for gl in gateset.gates] )
+        spamCIs = _np.concatenate( [ ci.get_profile_likelihood_confidence_intervals(gl).flatten()
+                                         for sl in _itertools.chain(iter(gateset.preps),
+                                                                    iter(gateset.effects))] )
+        gate_err = _np.sqrt( _np.sum(gateCIs**2) )
+        spam_err = _np.sqrt( _np.sum(spamCIs**2) )
+        printer.log('Resulting intrinsic errors: %g (gates), %g (spam)' %
+                    (gate_intrinsic_err, spam_intrinsic_err), 2)
+        printer.log('Resulting sqrt(sum(gateCIs**2)): %g' % gate_err, 2)
+        printer.log('Resulting sqrt(sum(spamCIs**2)): %g' % spam_err, 2)
+
+    return projected_hessian
