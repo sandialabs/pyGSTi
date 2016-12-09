@@ -2734,12 +2734,18 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
 
 def _cptp_penalty(gs,prefactor,gateBasis):
     """
-    Helper function - CPTP penalty (sum of tracenorms of gates)
-    Returns a (real) 1D array of length len(gs.gates).
+    Helper function - CPTP penalty: (sum of tracenorms of gates),
+    which in least squares optimization means returning an array
+    of the sqrt(tracenorm) of each gate.
+
+    Returns
+    -------
+    numpy array
+        a (real) 1D array of length len(gs.gates).
     """
-    return prefactor*_np.array( [_tools.tracenorm(
-                _tools.fast_jamiolkowski_iso_std(gate, gateBasis)
-                ) for _,gate in gs.iter_gates()], 'd')
+    return prefactor*_np.sqrt( _np.array( [_tools.tracenorm(
+                    _tools.fast_jamiolkowski_iso_std(gate, gateBasis)
+                    ) for _,gate in gs.iter_gates()], 'd') )
 
 
 def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, gs, prefactor, nParams,
@@ -2748,6 +2754,8 @@ def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, gs, prefactor, nParams,
     Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
     Returns a (real) array of shape (len(gs.gates), nParams).
     """
+    
+    # d( sqrt(|chi|_Tr) ) = (0.5 / sqrt(|chi|_Tr)) * d( |chi|_Tr )
     k = nSpamParams # offset to beginning of current gate's params
     for i,(gl,gate) in enumerate(gs.iter_gates()):
         nP = gate.num_params()
@@ -2773,9 +2781,10 @@ def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, gs, prefactor, nParams,
             MdGdp_std[p] = _tools.fast_jamiolkowski_iso_std(dGdp[p], gateBasis) #now "M(dGdp_std)"
             assert(_np.linalg.norm(MdGdp_std[p] - MdGdp_std[p].T.conjugate()) < 1e-8) #check hermitian
 
-        #contract to get (note contract along both mx indices) b/c treat like a
-        # mx basis: d(|chi_std|_Tr)/dp = d(|chi_std|_Tr)/dchi_std * dchi_std/dp
-        v = prefactor * _np.einsum("ij,aij->a",sgnchi,MdGdp_std)
+        #contract to get (note contract along both mx indices b/c treat like a
+        # mx basis): d(|chi_std|_Tr)/dp = d(|chi_std|_Tr)/dchi_std * dchi_std/dp
+        v =  _np.einsum("ij,aij->a",sgnchi,MdGdp_std)
+        v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(chi))) #add 0.5/|chi|_Tr factor
         assert(_np.linalg.norm(v.imag) < 1e-4)
         cpPenaltyVecGradToFill[i,:] = 0.0
         cpPenaltyVecGradToFill[i,k:k+gate.num_params()] = v.real
