@@ -496,7 +496,8 @@ def get_spam_vs_target_table(gateset, targetGateset,
 
 
 def get_gates_vs_target_err_gen_table(gateset, targetGateset,
-                                        confidenceRegionInfo=None):
+                                      confidenceRegionInfo=None,
+                                      genType="logG-logT"):
     """
     Create a table listing the error generators obtained by
     comparing a gateset's gates to a target gateset.
@@ -510,6 +511,13 @@ def get_gates_vs_target_err_gen_table(gateset, targetGateset,
         If not None, specifies a confidence-region
         used to display error intervals.
 
+    genType : {"logG-logT", "logTiG"}
+      The type of error generator to compute.  Allowed values are:
+      
+      - "logG-logT" : errgen = log(gate) - log(target_gate)
+      - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+
+
     Returns
     -------
     ReportTable
@@ -520,8 +528,8 @@ def get_gates_vs_target_err_gen_table(gateset, targetGateset,
     table = _ReportTable(colHeadings, (None,None))
 
     for gl in gateLabels:
-        table.addrow((gl, _tools.error_generator(gateset.gates[gl],
-                                                 targetGateset.gates[gl])),
+        table.addrow((gl, _tools.error_generator(
+                    gateset.gates[gl], targetGateset.gates[gl], genType)),
                      (None, 'Brackets'))
     table.finish()
     return table
@@ -842,7 +850,8 @@ def get_gateset_eigenval_table(gateset, targetGateset,
 def get_gateset_relative_eigenval_table(gateset, targetGateset,
                                         figFilePrefix,
                                         maxWidth=6.5, maxHeight=8.0,
-                                        confidenceRegionInfo=None):
+                                        confidenceRegionInfo=None,
+                                        genType="logG-logT"):
     """
     Create table which lists and plots the *relative* eigenvalues of a
     gateset's gates.
@@ -873,6 +882,12 @@ def get_gateset_relative_eigenval_table(gateset, targetGateset,
         If not None, specifies a confidence-region
         used to display error intervals.
 
+    genType : {"logG-logT", "logTiG"}
+      The type of error generator to compute.  Allowed values are:
+      
+      - "logG-logT" : errgen = log(gate) - log(target_gate)
+      - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+
 
     Returns
     -------
@@ -883,7 +898,7 @@ def get_gateset_relative_eigenval_table(gateset, targetGateset,
     colHeadings = ('Gate','Relative Evals','Polar Plot') # ,'Hamiltonian'
     formatters = [None]*3
 
-    qtyNames = ('relative eigenvalues',)
+    qtyNames = ('relative %s eigenvalues' % genType,)
     qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames for gl in gateLabels ]
     qtys = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
                                             confidenceRegionInfo)
@@ -907,11 +922,13 @@ def get_gateset_relative_eigenval_table(gateset, targetGateset,
         figInfo = (fig,nm,sz,sz)
 
         if confidenceRegionInfo is None:
-            rel_evals = qtys['%s relative eigenvalues' % gl].get_value()
+            rel_evals = qtys['%s relative %s eigenvalues' 
+                             % (gl,genType)].get_value()
             rel_evals = rel_evals.reshape(rel_evals.size//2, 2)
             rowData = [gl, (rel_evals,None), figInfo]
         else:
-            rel_evals, rel_evalsEB = qtys['%s relative eigenvalues' % gl].get_value_and_err_bar()
+            rel_evals, rel_evalsEB = qtys['%s relative %s eigenvalues' 
+                                         % (gl,genType)].get_value_and_err_bar()
             rel_evals = rel_evals.reshape(rel_evals.size//2, 2)
             rowData = [gl, (rel_evals,rel_evalsEB), figInfo]
 
@@ -1249,7 +1266,8 @@ def get_logl_bygerm_table(gateset, dataset, germs, strs, max_lengths,
 
 
 def get_logl_projected_err_gen_table(gateset, targetGateset,
-                                     gatestrings, dataset, cptpGateset=None):
+                                     gatestrings, dataset, 
+                                     cptpGateset=None, genType="logG-logT"):
     """
     Create a table showing the log-likelihood for different projections of the
     error generator.
@@ -1272,6 +1290,13 @@ def get_logl_projected_err_gen_table(gateset, targetGateset,
     cptpGateset : GateSet, optional
         An optional gate set to compute log-likelihood values for and report
         on an additional "CPTP" row of the table.
+
+    genType : {"logG-logT", "logTiG"}
+      The type of error generator to compute.  Allowed values are:
+      
+      - "logG-logT" : errgen = log(gate) - log(target_gate)
+      - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+
 
     Returns
     -------
@@ -1298,13 +1323,14 @@ def get_logl_projected_err_gen_table(gateset, targetGateset,
         gate = gateset.gates[gl]
         targetGate = targetGateset.gates[gl]
 
+        errgen = _tools.error_generator(gate, targetGate, genType)
         hamProj, hamGens = _tools.pauliprod_errgen_projections(
-            gate, targetGate, "hamiltonian", basisNm, True)
+            errgen, "hamiltonian", basisNm, True)
         stoProj, stoGens = _tools.pauliprod_errgen_projections(
-            gate, targetGate, "stochastic", basisNm, True)
+            errgen, "stochastic", basisNm, True)
         HProj, OProj, HGens, OGens = \
             _tools.pauliprod_lindblad_errgen_projections(
-            gate, targetGate, basisNm, normalize=False,
+            errgen, basisNm, normalize=False,
             return_generators=True)
 
         ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)
@@ -1317,13 +1343,13 @@ def get_logl_projected_err_gen_table(gateset, targetGateset,
         lnd_error_gen = _tools.std_to_pp(lnd_error_gen)
 
         gsH.gates[gl]  = _tools.gate_from_error_generator(
-            ham_error_gen, targetGate)
+            ham_error_gen, targetGate, genType)
         gsS.gates[gl]  = _tools.gate_from_error_generator(
-            sto_error_gen, targetGate)
+            sto_error_gen, targetGate, genType)
         gsHS.gates[gl] = _tools.gate_from_error_generator(
-            ham_error_gen+sto_error_gen, targetGate)
+            ham_error_gen+sto_error_gen, targetGate, genType)
         gsLND.gates[gl] = _tools.gate_from_error_generator(
-            lnd_error_gen, targetGate)
+            lnd_error_gen, targetGate, genType)
 
         print("\nDEBUG %s -----------------" % gl)
         #print("gate %s = \n" % gl, gate)
@@ -1340,7 +1366,7 @@ def get_logl_projected_err_gen_table(gateset, targetGateset,
         #sto_error_gen_cp = _np.einsum('i,ijk', stoProj.clip(None,0), stoGens) #only negative stochastic projections OK
         #sto_error_gen_cp = _tools.std_to_pp(sto_error_gen_cp)
         #gsHSCP.gates[gl] = _tools.gate_from_error_generator(
-        #    ham_error_gen, targetGate) #+sto_error_gen_cp
+        #    ham_error_gen, targetGate, genType) #+sto_error_gen_cp
 
         evals,U = _np.linalg.eig(OProj)
         pos_evals = evals.clip(0,1e100) #clip negative eigenvalues to 0
@@ -1350,7 +1376,7 @@ def get_logl_projected_err_gen_table(gateset, targetGateset,
         lnd_error_gen_cp = _tools.std_to_pp(lnd_error_gen_cp)
 
         gsLNDCP.gates[gl] = _tools.gate_from_error_generator(
-            lnd_error_gen_cp, targetGate)
+            lnd_error_gen_cp, targetGate, genType)
 
         Np_H += len(hamProj)
         Np_S += len(stoProj)
@@ -1609,8 +1635,9 @@ def get_gateset_gate_boxes_table(gatesets, figFilePrefixes, titles=None,
 
 def get_gates_vs_target_err_gen_boxes_table(gateset, targetGateset,
                                             figFilePrefix, maxWidth=6.5,
-                                            maxHeight=8.0,
-                                            confidenceRegionInfo=None):
+                                            maxHeight=8.0, 
+                                            confidenceRegionInfo=None,
+                                            genType="logG-logT"):
     """
     Create a table of gate error generators, where each is shown as grid of boxes.
 
@@ -1632,6 +1659,12 @@ def get_gates_vs_target_err_gen_boxes_table(gateset, targetGateset,
     confidenceRegionInfo : ConfidenceRegion, optional
         If not None, specifies a confidence-region
         used to display error intervals.
+
+    genType : {"logG-logT", "logTiG"}
+      The type of error generator to compute.  Allowed values are:
+      
+      - "logG-logT" : errgen = log(gate) - log(target_gate)
+      - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
 
 
     Returns
@@ -1672,11 +1705,11 @@ def get_gates_vs_target_err_gen_boxes_table(gateset, targetGateset,
         gate = gateset.gates[gl]
         targetGate = targetGateset.gates[gl]
 
-        errgens[gl] = _tools.error_generator(gate, targetGate)
+        errgens[gl] = _tools.error_generator(gate, targetGate, genType)
         hamProjs[gl] = _tools.pauliprod_errgen_projections(
-            gate, targetGate, "hamiltonian", basisNm)
+            errgens[gl], "hamiltonian", basisNm)
         stoProjs[gl] = _tools.pauliprod_errgen_projections(
-            gate, targetGate, "stochastic", basisNm)
+            errgens[gl], "stochastic", basisNm)
 
         absMax = _np.max(_np.abs(errgens[gl]))
         addMax(errgens['M'], absMax)
@@ -1720,7 +1753,8 @@ def get_gates_vs_target_err_gen_boxes_table(gateset, targetGateset,
 
 
 def get_projected_err_gen_comparison_table(gateset, targetGateset,
-                                           compare_with="target"):
+                                           compare_with="target",
+                                           genType="logG-logT"):
     """
     Create a table comparing the gates generated by projections of
     the full gate error generators.
@@ -1734,6 +1768,13 @@ def get_projected_err_gen_comparison_table(gateset, targetGateset,
         Whether the gates generated by the projections should be
         compared to the target gates or to the un-projected
         "estimated" gate.
+
+    genType : {"logG-logT", "logTiG"}
+      The type of error generator to compute.  Allowed values are:
+      
+      - "logG-logT" : errgen = log(gate) - log(target_gate)
+      - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+
 
     Returns
     -------
@@ -1753,21 +1794,21 @@ def get_projected_err_gen_comparison_table(gateset, targetGateset,
         gate = gateset.gates[gl]
         targetGate = targetGateset.gates[gl]
 
-        #errgen = _tools.error_generator(gate, targetGate)
+        errgen = _tools.error_generator(gate, targetGate, genType)
         hamProj, hamGens = _tools.pauliprod_errgen_projections(
-            gate, targetGate, "hamiltonian", basisNm, True)
+            errgen, "hamiltonian", basisNm, True)
         stoProj, stoGens = _tools.pauliprod_errgen_projections(
-            gate, targetGate, "stochastic", basisNm, True)
+            errgen, "stochastic", basisNm, True)
 
         ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)
         sto_error_gen = _np.einsum('i,ijk', stoProj, stoGens)
         ham_error_gen = _tools.std_to_pp(ham_error_gen)
         sto_error_gen = _tools.std_to_pp(sto_error_gen)
 
-        gateH = _tools.gate_from_error_generator(ham_error_gen, targetGate)
-        gateS = _tools.gate_from_error_generator(sto_error_gen, targetGate)
+        gateH = _tools.gate_from_error_generator(ham_error_gen, targetGate, genType)
+        gateS = _tools.gate_from_error_generator(sto_error_gen, targetGate, genType)
         gateHS = _tools.gate_from_error_generator(ham_error_gen+sto_error_gen,
-                                                  targetGate)
+                                                  targetGate, genType)
 
         if compare_with == "target": cmpGate = targetGate
         elif compare_with == "estimate": cmpGate = gate

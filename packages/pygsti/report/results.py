@@ -667,7 +667,7 @@ class Results(object):
             cri = self._get_confidence_region(confidenceLevel)
             if cri and cri.has_hessian() == False: cri = None
             return _generation.get_gates_vs_target_err_gen_table(
-                gsBest, gsTgt, cri)
+                gsBest, gsTgt, cri, self.options.errgen_type)
         fns['bestGatesetErrorGenTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
@@ -758,7 +758,8 @@ class Results(object):
             cptp_go_gateset.set_all_parameterizations("full") #for contraction
             cptp_gateset = _contract(cptp_go_gateset, "CPTP")
             return _generation.get_logl_projected_err_gen_table(
-                gsBest, gsTgt, self.gatestring_lists['final'], self.dataset, cptp_gateset)
+                gsBest, gsTgt, self.gatestring_lists['final'], self.dataset,
+                cptp_gateset, self.options.errgen_type)
         fns['logLErrgenProjectionTable'] = (fn, validate_essential)
 
 
@@ -779,19 +780,19 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
             return _generation.get_gates_vs_target_err_gen_boxes_table(
-                gsBest, gsTgt, "bestErrgenBoxes")
+                gsBest, gsTgt, "bestErrgenBoxes", genType=self.options.errgen_type)
         fns['bestGatesetErrGenBoxTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
             return _generation.get_projected_err_gen_comparison_table(
-                gsBest, gsTgt, compare_with='target')
+                gsBest, gsTgt, compare_with='target', genType=self.options.errgen_type)
         fns['bestGatesetErrGenProjectionTargetMetricsTable'] = (fn,validate_essential)
 
         def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
             return _generation.get_projected_err_gen_comparison_table(
-                gsBest, gsTgt, compare_with='estimate')
+                gsBest, gsTgt, compare_with='estimate', genType=self.options.errgen_type)
         fns['bestGatesetErrGenProjectionSelfMetricsTable'] = (fn,validate_essential)
 
         def fn(key, confidenceLevel, vb):
@@ -803,7 +804,8 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
             return _generation.get_gateset_relative_eigenval_table(
-                gsBest, gsTgt, "bestRelEvalPolarPlt")
+                gsBest, gsTgt, "bestRelEvalPolarPlt",
+                genType=self.options.errgen_type)
         fns['bestGatesetRelEvalTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
@@ -1293,7 +1295,7 @@ class Results(object):
                     gopt_gs, gsTarget, None)
                 ret['best%sGatesetErrorGenTable' % gaugeKey] = \
                     _generation.get_gates_vs_target_err_gen_table(
-                    gopt_gs, gsTarget)
+                    gopt_gs, gsTarget, self.options.errgen_type)
 
             return ret
         fns['gaugeOptAppendixTables'] = (fn, validate_essential)
@@ -1856,6 +1858,13 @@ class Results(object):
             confidenceLevel if confidenceLevel is not None else "NOT-SET"
         qtys['linlg_pcntle'] = self.parameters['linlogPercentile']
 
+        if self.options.errgen_type == "logTiG":
+            qtys['errorgenformula'] = "$\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$"
+        elif self.options.errgen_type == "logG-logT":
+            qtys['errorgenformula'] = "$\hat{G} = e^{\mathbb{L} + \log G_{\mathrm{target}}}$"
+        else:
+            qtys['errorgenformula'] = "???"
+
         if confidenceLevel is not None:
             cri = self._get_confidence_region(confidenceLevel)
             qtys['confidenceIntervalScaleFctr'] = \
@@ -2335,6 +2344,14 @@ class Results(object):
             if obj == "logl" else "$\\chi^2$"
         qtys['gofObjective'] = "$2\\Delta\\log{\\mathcal{L}}$" \
             if obj == "logl" else "$\\chi^2$"
+
+        if self.options.errgen_type == "logTiG":
+            qtys['errorgenformula'] = "$\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$"
+        elif self.options.errgen_type == "logG-logT":
+            qtys['errorgenformula'] = "$\hat{G} = e^{\mathbb{L} + \log G_{\mathrm{target}}}$"
+        else:
+            qtys['errorgenformula'] = "???"
+
 
         if confidenceLevel is not None:
             cri = self._get_confidence_region(confidenceLevel)
@@ -3672,6 +3689,14 @@ class Results(object):
             qtys['confidenceIntervalScaleFctr'] = "NOT-SET"
             qtys['confidenceIntervalNumNonGaugeParams'] = "NOT-SET"
 
+        if self.options.errgen_type == "logTiG":
+            qtys['errorgenformula'] = "$\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$"
+        elif self.options.errgen_type == "logG-logT":
+            qtys['errorgenformula'] = "$\hat{G} = e^{\mathbb{L} + \log G_{\mathrm{target}}}$"
+        else:
+            qtys['errorgenformula'] = "???"
+
+
         pdfInfo = [('Author','pyGSTi'), ('Title', title),
                    ('Keywords', 'GST'), ('pyGSTi Version',_version.__version__),
                    ('opt_long_tables', self.options.long_tables),
@@ -3935,6 +3960,7 @@ class ResultOptions(object):
         # Don't allow LaTeX to try and recover from errors interactively.
         self.latex_opts = ["-interaction=nonstopmode", "-halt-on-error", "-shell-escape"]
         self.latex_call = [self.latex_cmd] + self.latex_opts
+        self.errgen_type = "logG-logT"
         if _os.path.exists("/dev/null"):
             self.latex_postcmd = "-halt-on-error </dev/null >/dev/null"
         else:
@@ -3951,6 +3977,10 @@ class ResultOptions(object):
             % str(self.precision)
         s += prefix + ".polar_precision -- precision for polar exponent = %s\n" \
             % str(self.polar_precision)
+        s += prefix + ".sci_precision -- precision for scientific notn = %s\n" \
+            % str(self.sci_precision)
+        s += prefix + ".errgen_typ -- type of error generator = %s\n" \
+            % str(self.errgen_typ)
         s += prefix + ".template_path  -- pyGSTi templates path = '%s'\n" \
             % str(self.template_path)
         s += prefix + ".latex_cmd      -- latex compiling command = '%s'\n" \
