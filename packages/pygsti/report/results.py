@@ -2628,6 +2628,13 @@ class Results(object):
         qtys['gofObjective'] = "$2\\Delta\\log{\\mathcal{L}}$" \
             if self.parameters['objective'] == "logl" else "$\\chi^2$"
 
+        if self.options.errgen_type == "logTiG":
+            qtys['errorgenformula'] = "$\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$"
+        elif self.options.errgen_type == "logG-logT":
+            qtys['errorgenformula'] = "$\hat{G} = e^{\mathbb{L} + \log G_{\mathrm{target}}}$"
+        else:
+            qtys['errorgenformula'] = "???"
+
         if confidenceLevel is not None:
             cri = self._get_confidence_region(confidenceLevel)
             qtys['confidenceIntervalScaleFctr'] = "%.3g" % cri.intervalScaling
