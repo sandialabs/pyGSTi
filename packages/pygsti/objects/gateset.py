@@ -658,7 +658,7 @@ class GateSet(object):
         return deriv
 
 
-    def get_nongauge_projector(self, nonGaugeMixMx=None):
+    def get_nongauge_projector(self, itemWeights=None, nonGaugeMixMx=None):
         """
         Construct a projector onto the non-gauge parameter space, useful for
         isolating the gauge degrees of freedom from the non-gauge degrees of
@@ -666,11 +666,22 @@ class GateSet(object):
 
         Parameters
         ----------
+        itemWeights : dict, optional
+            Dictionary of weighting factors for individual gates and spam operators.
+            Keys can be gate, state preparation, POVM effect, spam labels, or the 
+            special strings "gates" or "spam" whic represent the entire set of gate
+            or SPAM operators, respectively.  Values are floating point numbers.
+            These weights define the metric used to compute the non-gauge space,
+            *orthogonal* the gauge space, that is projected onto.
+
         nonGaugeMixMx : numpy array, optional
-            A matrix specifying how to mix the non-gauge degrees of freedom
-            into the gauge degrees of freedom that are projected out by the
-            returned object.  This argument is for advanced usage and typically
-            is left set to None.
+            An array of shape (nNonGaugeParams,nGaugeParams) specifying how to
+            mix the non-gauge degrees of freedom into the gauge degrees of
+            freedom that are projected out by the returned object.  This argument
+            essentially sets the off-diagonal block of the metric used for 
+            orthogonality in the "gauge + non-gauge" space.  It is for advanced
+            usage and typically left as None (the default).
+.
 
         Returns
         -------
@@ -755,10 +766,10 @@ class GateSet(object):
         ## elements, they are treated as not being a part of the "gateset"
         #bIgnoreUnparameterizedEls = True
 
-        #Note: parameterizaton object (pmDeriv) must have all elements of gate
+        #Note: gateset object (gsDeriv) must have all elements of gate
         # mxs and spam vectors as parameters (i.e. be "fully parameterized") in
         # order to match deriv_wrt_params call, which gives derivatives wrt
-        # *all* elements of a gate set / parameterizaton.
+        # *all* elements of a gate set.
         gsDeriv = GateSet("full", self.preps._prefix, self.effects._prefix,
                           self.gates._prefix, self._remainderlabel,
                           self._identitylabel)
@@ -822,8 +833,12 @@ class GateSet(object):
         #print "------------------------------"
         #assert(_np.linalg.norm(_np.imag(gen_dG)) < 1e-9) #gen_dG is real
 
-        # BEGIN GAUGE MIX ----------------------------------------
         if nonGaugeMixMx is not None:
+            msg = "You've set both nonGaugeMixMx and itemWeights, both of which"\
+                + " set the gauge metric... You probably don't want to do this."
+            assert(itemWeights is None), msg
+
+            # BEGIN GAUGE MIX ----------------------------------------
             # nullspace of gen_dG^T (mx with gauge direction vecs as rows) gives non-gauge directions
             nonGaugeDirections = _mt.nullspace(gen_dG.T) #columns are non-gauge directions
 
@@ -840,25 +855,46 @@ class GateSet(object):
             #print "gen_dG shape = ",gen_dG.shape
             #print "NGD shape = ",nonGaugeDirections.shape
             #print "NGD rank = ",_np.linalg.matrix_rank(nonGaugeDirections, P_RANK_TOL)
-        #END GAUGE MIX ----------------------------------------
+            #END GAUGE MIX ----------------------------------------
 
+        # Build final non-gauge projector by getting a mx of column vectors 
+        # orthogonal to the cols fo gen_dG:
+        #     gen_dG^T * gen_ndG = 0 => nullspace(gen_dG^T)
+        # or for a general metric W:
+        #     gen_dG^T * W * gen_ndG = 0 => nullspace(gen_dG^T * W)
+        # (This is instead of construction as I - gaugeSpaceProjector)
 
+        if itemWeights is not None:
+            metric_diag = _np.ones(self.num_params(), 'd')
+            offsets = self.get_vector_offsets()
+            gateWeight = itemWeights.get('gates', 1.0)
+            spamWeight = itemWeights.get('spam', 1.0)
+            for lbl in self.gates:
+                i,j = offsets[lbl]
+                metric_diag[i:j] = itemWeights.get(lbl, gateWeight)
+            for lbl in _itertools.chain(iter(self.preps),iter(self.effects)):
+                i,j = offsets[lbl]
+                metric_diag[i:j] = itemWeights.get(lbl, spamWeight)
+            metric = _np.diag(metric_diag)
+            gen_ndG = _mt.nullspace(_np.dot(gen_dG.T,metric))
+        else:
+            gen_ndG = _mt.nullspace(gen_dG.T) #cols are non-gauge directions
+                
 
         # ORIG WAY: use psuedo-inverse to normalize projector.  Ran into problems where
         #  default rcond == 1e-15 didn't work for 2-qubit case, but still more stable than inv method below
-        P = _np.dot(gen_dG, _np.transpose(gen_dG)) # almost a projector, but cols of dG are not orthonormal
+        P = _np.dot(gen_ndG, _np.transpose(gen_ndG)) # almost a projector, but cols of dG are not orthonormal
         Pp = _np.dot( _np.linalg.pinv(P, rcond=1e-7), P ) # make P into a true projector (onto gauge space)
 
         # ALT WAY: use inverse of dG^T*dG to normalize projector (see wikipedia on projectors, dG => A)
         #  This *should* give the same thing as above, but numerical differences indicate the pinv method
         #  is prefereable (so long as rcond=1e-7 is ok in general...)
         #  Check: P'*P' = (dG (dGT dG)^1 dGT)(dG (dGT dG)^-1 dGT) = (dG (dGT dG)^1 dGT) = P'
-        #invGG = _np.linalg.inv(_np.dot(_np.transpose(gen_dG), gen_dG))
-        #Pp_alt = _np.dot(gen_dG, _np.dot(invGG, _np.transpose(gen_dG))) # a true projector (onto gauge space)
+        #invGG = _np.linalg.inv(_np.dot(_np.transpose(gen_ndG), gen_ndG))
+        #Pp_alt = _np.dot(gen_ndG, _np.dot(invGG, _np.transpose(gen_ndG))) # a true projector (onto gauge space)
         #print "Pp - Pp_alt norm diff = ", _np.linalg.norm(Pp_alt - Pp)
 
-        ret = _np.identity(nParams,'d') - Pp # projector onto the non-gauge space
-
+        #OLD: ret = _np.identity(nParams,'d') - Pp 
         # Check ranks to make sure everything is consistent.  If either of these assertions fail,
         #  then pinv's rcond or some other numerical tolerances probably need adjustment.
         #print "Rank P = ",_np.linalg.matrix_rank(P)
@@ -868,7 +904,7 @@ class GateSet(object):
         #       for i,ev in enumerate(_np.sort(_np.linalg.eigvals(_np.identity(nParams,'d') - Pp))) ])
         
         try:
-            rank_P = _np.linalg.matrix_rank(P, P_RANK_TOL) # original un-normalized projector onto gauge space
+            rank_P = _np.linalg.matrix_rank(P, P_RANK_TOL) # original un-normalized projector
             
             # Note: use P_RANK_TOL here even though projector is *un-normalized* since sometimes P will
             #  have eigenvalues 1e-17 and one or two 1e-11 that should still be "zero" but aren't when
@@ -876,13 +912,14 @@ class GateSet(object):
             #  but different from numpy's default tolerance would be appropriate here.
 
             assert( rank_P == _np.linalg.matrix_rank(Pp, P_RANK_TOL)) #rank shouldn't change with normalization
-            assert( (nParams - rank_P) == _np.linalg.matrix_rank(ret, P_RANK_TOL) ) # dimension of orthogonal space
+            #assert( (nParams - rank_P) == _np.linalg.matrix_rank(ret, P_RANK_TOL) ) # dimension of orthogonal space
         except(_np.linalg.linalg.LinAlgError):
             _warnings.warn("Linear algebra error (probably a non-convergent" +
                            "SVD) ignored during matric rank checks in " +
                            "GateSet.get_nongauge_projector(...) ")
             
-        return ret
+        return Pp 
+        #OLD: return ret
 
 
     def transform(self, S):
