@@ -2763,6 +2763,17 @@ def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, gs, prefactor, nParams,
         #get sgn(chi-matrix) == d(|chi|_Tr)/dchi in std basis
         # so sgnchi == d(|chi_std|_Tr)/dchi_std
         chi = _tools.fast_jamiolkowski_iso_std(gate, gateBasis)
+
+        # Alt#1 way to compute sgnchi (evals)
+        #evals,U = _np.linalg.eig(chi)
+        #sgnevals = [ ev/abs(ev) if (abs(ev) > 1e-7) else 0.0 for ev in evals]
+        #sgnchi = _np.dot(U,_np.dot(_np.diag(sgnevals),_np.linalg.inv(U)))
+
+        # Alt#2 way to compute sgnchi (svd)
+        #U,s,Vt = _np.linalg.svd(chi)
+        #sgnvals = [ sv/abs(sv) if (abs(sv) > 1e-7) else 0.0 for sv in s]
+        #sgnchi = _np.dot(U,_np.dot(_np.diag(sgnvals),Vt))
+
         sgnchi = _np.dot(chi, _np.linalg.inv(
                 _spl.sqrtm(_np.matrix(_np.dot(chi.T.conjugate(),chi)))))
         assert(_np.linalg.norm(sgnchi - sgnchi.T.conjugate()) < 1e-4), \
@@ -2780,6 +2791,12 @@ def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, gs, prefactor, nParams,
         for p in range(gate.num_params()): #p indexes param
             MdGdp_std[p] = _tools.fast_jamiolkowski_iso_std(dGdp[p], gateBasis) #now "M(dGdp_std)"
             assert(_np.linalg.norm(MdGdp_std[p] - MdGdp_std[p].T.conjugate()) < 1e-8) #check hermitian
+
+        MdGdp_std = _np.conjugate(MdGdp_std) # I'm not sure
+          # why this is needed: I think b/c els of sgnchi and MdGdp_std[p]
+          # are hermitian and we want to think of the real and im parts of
+          # (i,j) and (j,i) els as the two "variables" we differentiate wrt.
+          # TODO: work this out on paper.
 
         #contract to get (note contract along both mx indices b/c treat like a
         # mx basis): d(|chi_std|_Tr)/dp = d(|chi_std|_Tr)/dchi_std * dchi_std/dp
