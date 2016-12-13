@@ -796,7 +796,7 @@ def _optProjectionForGateCIs(gateset, base_hessian, nNonGaugeParams, nGaugeParam
                                     callback = print_obj_func if verbosity > 2 else None)
 
     mixMx = minSol.x.reshape( (nNonGaugeParams,nGaugeParams) )
-    proj_extra = gateset.get_nongauge_projector(mixMx)
+    proj_extra = gateset.get_nongauge_projector(nonGaugeMixMx=mixMx)
     projected_hessian_ex = _np.dot(proj_extra, _np.dot(base_hessian, proj_extra))
 
     printer.log('The resulting min sqrt(sum(gateCIs**2)): %g' % minSol.fun, 2)

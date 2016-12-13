@@ -12,7 +12,6 @@ from . import rbobjs as _rbobjs
 import numpy as _np
 from collections import OrderedDict as _OrderedDict
 
-
 # "canonical" clifford gateset
 gs_cliff_canonical = _cnst.build_gateset(
     [2],[('Q0',)], ['Gi','Gxp2','Gxp','Gxmp2','Gyp2','Gyp','Gymp2'], 
@@ -21,7 +20,6 @@ gs_cliff_canonical = _cnst.build_gateset(
     prepLabels=["rho0"], prepExpressions=["0"],
     effectLabels=["E0"], effectExpressions=["1"], 
     spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
-
 
 #Mapping of all 1Q cliffords onto "canonical" set:
 #  Definitions taken from arXiv:1508.06676v1
@@ -52,6 +50,24 @@ clifford_to_canonical["Gc21"] = ['Gyp2']
 clifford_to_canonical["Gc22"] = ['Gxmp2','Gyp']
 clifford_to_canonical["Gc23"] = ['Gxp2','Gyp2','Gxmp2']
 
+# Mapping the "canonical" gate set onto the "primitive"
+# gate set containing Gi, Gx, Gy, using the natural
+# mapping
+canonical_to_XYI_primitive = _OrderedDict()
+canonical_to_XYI_primitive['Gi'] = ['Gi']
+canonical_to_XYI_primitive['Gxp2'] = ['Gx']
+canonical_to_XYI_primitive['Gxp'] = ['Gx','Gx']
+canonical_to_XYI_primitive['Gxmp2'] = ['Gx','Gx','Gx']
+canonical_to_XYI_primitive['Gyp2'] = ['Gy']
+canonical_to_XYI_primitive['Gyp'] = ['Gy','Gy']
+canonical_to_XYI_primitive['Gymp2'] = ['Gy','Gy','Gy']
+
+# Mapping the Clifford gate set onto the "primitive"
+# gate set containing Gi, Gx, Gy, via the composition
+# of the clifford -> canonical and canonical ->
+# primitive maps
+clifford_to_XYI_primitive = _cnst.compose_alias_dicts(clifford_to_canonical,
+                                                      canonical_to_XYI_primitive)
 
 # full 1Q Clifford gateset (24 gates)
 gs_clifford_target = _cnst.build_alias_gateset(gs_cliff_canonical,
