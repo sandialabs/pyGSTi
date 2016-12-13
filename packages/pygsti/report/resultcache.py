@@ -59,7 +59,10 @@ class ResultCache(object):
         stored_data_item
         """
 
-        printer = VerbosityPrinter.build_printer(verbosity)
+        if self._parent:
+            printer = VerbosityPrinter.build_printer(verbosity, comm=self._parent._comm)
+        else:
+            printer = VerbosityPrinter.build_printer(verbosity)
 
         if confidence_level=="current":
             level = self._parent.confidence_level if self._parent else None
