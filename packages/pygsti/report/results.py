@@ -1776,7 +1776,7 @@ class Results(object):
         -------
         None
         """
-        printer = VerbosityPrinter.build_printer(verbosity)
+        printer = VerbosityPrinter.build_printer(verbosity, comm=comm)
 
         assert(self._bEssentialResultsSet)
         self.confidence_level = confidenceLevel
@@ -2272,7 +2272,7 @@ class Results(object):
         None
         """
 
-        printer = VerbosityPrinter.build_printer(verbosity)
+        printer = VerbosityPrinter.build_printer(verbosity, comm=comm)
 
         assert(self._bEssentialResultsSet)
         self.confidence_level = confidenceLevel
@@ -2560,7 +2560,7 @@ class Results(object):
         None
         """
 
-        printer = VerbosityPrinter.build_printer(verbosity)
+        printer = VerbosityPrinter.build_printer(verbosity, comm=comm)
 
         assert(self._bEssentialResultsSet)
         self.confidence_level = confidenceLevel
@@ -2991,7 +2991,7 @@ class Results(object):
         None
         """
 
-        printer = VerbosityPrinter.build_printer(verbosity)
+        printer = VerbosityPrinter.build_printer(verbosity, comm=comm)
 
         assert(self._bEssentialResultsSet)
         self.confidence_level = confidenceLevel
@@ -3593,7 +3593,7 @@ class Results(object):
         None
         """
 
-        printer = VerbosityPrinter.build_printer(verbosity)
+        printer = VerbosityPrinter.build_printer(verbosity, comm=comm)
         tStart = _time.time()
 
         assert(self._bEssentialResultsSet)
@@ -3967,7 +3967,7 @@ class ResultOptions(object):
         # Don't allow LaTeX to try and recover from errors interactively.
         self.latex_opts = ["-interaction=nonstopmode", "-halt-on-error", "-shell-escape"]
         self.latex_call = [self.latex_cmd] + self.latex_opts
-        self.errgen_type = "logG-logT"
+        self.errgen_type = "logTiG" #"logG-logT"
         if _os.path.exists("/dev/null"):
             self.latex_postcmd = "-halt-on-error </dev/null >/dev/null"
         else:
@@ -3986,8 +3986,8 @@ class ResultOptions(object):
             % str(self.polar_precision)
         s += prefix + ".sci_precision -- precision for scientific notn = %s\n" \
             % str(self.sci_precision)
-        s += prefix + ".errgen_typ -- type of error generator = %s\n" \
-            % str(self.errgen_typ)
+        s += prefix + ".errgen_type -- type of error generator = %s\n" \
+            % str(self.errgen_type)
         s += prefix + ".template_path  -- pyGSTi templates path = '%s'\n" \
             % str(self.template_path)
         s += prefix + ".latex_cmd      -- latex compiling command = '%s'\n" \
