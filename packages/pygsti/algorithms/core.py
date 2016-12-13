@@ -2135,6 +2135,15 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
             raise ValueError("MPI ERROR: *different* MLGST start gatesets" +
                              " given to different processors!")
 
+        if forcefn_grad is not None:
+            forcefn_cmp = comm.bcast(forcefn_grad if (comm.Get_rank() == 0) else None, root=0)
+            normdiff = _np.linalg.norm(forcefn_cmp - forcefn_grad)
+            if normdiff > 1e-6: 
+                #printer.warning("forcefn_grad norm mismatch = ",normdiff) #only prints on rank0
+                _warnings.warn("Rank %d: forcefn_grad norm mismatch = %g" % (comm.Get_rank(),normdiff))
+            #assert(normdiff <= 1e-6)
+            forcefn_grad = forcefn_cmp #use broadcast value to make certain each proc has *exactly* the same input
+
     spamLabels = gs.get_spam_labels() #fixes the ordering of the spam labels
     vec_gs_len = gs.num_params()
     nSpamParams = sum([ rhoVec.num_params() for rhoVec in gs.preps.values() ]) \
