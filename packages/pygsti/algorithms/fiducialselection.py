@@ -811,7 +811,7 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
                     weights, score, L1 = neighbor, neighborScore, neighborL1
                     bFoundBetterNeighbor = True
                     printer.log("Found better neighbor: nFids = %d score = %g"
-                                % (L1, score), 2)
+                                % (L1, score), 3)
 
 
             if not bFoundBetterNeighbor: # Time to relax our search.
@@ -839,15 +839,15 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
                                               sum(neighbor))
                         bFoundBetterNeighbor = True
                         printer.log("Found better neighbor: nFids = %d "
-                                    "score = %g" % (L1, score), 2)
+                                    "score = %g" % (L1, score), 3)
 
                 if not bFoundBetterNeighbor: #Relaxing didn't help!
-                    printer.log("Stationary point found!", 1)
+                    printer.log("Stationary point found!", 2)
                     break # end main for loop
 
-            printer.log("Moving to better neighbor", 1)
+            printer.log("Moving to better neighbor", 2)
         else:
-            printer.log("Hit max. iterations", 1)
+            printer.log("Hit max. iterations", 2)
 
     printer.log("score = %s" % score, 1)
     printer.log("weights = %s" % weights, 1)
