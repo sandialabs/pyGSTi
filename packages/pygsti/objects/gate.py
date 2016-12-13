@@ -1819,7 +1819,7 @@ class LindbladParameterizedGate(Gate):
                 otherC = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))
                 try:
                     Lmx = _np.linalg.cholesky(otherC)
-                except _np.LinAlgError: #Lmx not postitive definite?
+                except _np.linalg.LinAlgError: #Lmx not postitive definite?
                     pos_evals = evals.clip(1e-15,1e100) #try again with 1e-15
                     otherC = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))
                     Lmx = _np.linalg.cholesky(otherC)

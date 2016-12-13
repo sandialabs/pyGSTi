@@ -280,9 +280,9 @@ class _FigureFormatter(_ParameterizedFormatter):
     # Override call method of Parameterized formatter
     def __call__(self, figInfo):
         fig, name, W, H = figInfo
-        if len(self.specs['scratchDir']) > 0: #empyt scratchDir signals not to output figure
-            fig.save_to(_os.path.join(self.specs['scratchDir'], name + self.extension))
-            scratchDir = self.specs['scratchDir']
+        scratchDir = self.specs['scratchDir']
+        if len(scratchDir) > 0: #empty scratchDir signals not to output figure
+            fig.save_to(_os.path.join(scratchDir, name + self.extension))
         return self.formatstring % (W, H, scratchDir,
                                     name + self.extension)
 
