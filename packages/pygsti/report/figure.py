@@ -43,11 +43,16 @@ class ReportFigure(object):
         self.extraInfo   = extraInfo
         self.pickledAxes = _pickle.dumps(axes)
 
-        self.tempFileDict = { fmt : _tempfile.NamedTemporaryFile() for fmt in imageformats }
+        self.tempFileDict = { }
 
         for fmt in imageformats:
-            _plt.savefig(self.tempFileDict[fmt], format=fmt, bbox_extra_artists=(axes,),
+            tf = _tempfile.TemporaryFile()
+            _plt.savefig(tf, format=fmt, bbox_extra_artists=(axes,),
                          bbox_inches='tight') #need extra artists otherwise
+            tf.seek(0) #rewind to beginning of file
+            self.tempFileDict[fmt] = bytearray(tf.read())
+            tf.close()
+
 
     def _save_axes(self, filename):
         axes = _pickle.loads(self.pickledAxes)
@@ -70,7 +75,10 @@ class ReportFigure(object):
                 ext = os.path.splitext(filename)[1][1:] # remove .
                 print(ext)
                 if ext in self.tempFileDict:
-                    _shutil.copy2(self.tempFileDict[ext].name, filename)
+                    tf = _tempfile.NamedTemporaryFile()
+                    tf.write(self.tempFileDict[ext])
+                    _shutil.copy2(tf.name, filename)
+                    tf.close()
                 else:
                     print('Extension not in cached files and unpickling failed. Trying experimental backend switching. Your machine may catch fire..')
                     # Subprocess didn't work without auxillary file (cannot import parent module '') -> we weren't desperate enough to do the auxillary file, so no promises that works either
