@@ -677,8 +677,9 @@ class ConfidenceRegion(object):
         mlgst_args['evaltree_cache'] = self.mlgst_evaltree_cache
         maxLogL, bestGS = _alg.core._do_mlgst_base(**mlgst_args)
         bestGS = _alg.gaugeopt_to_target(bestGS, self.gateset) #maybe more params here?
-        delta2 = _np.dot(gradF, bestGS.to_vector() - self.gateset.to_vector()) \
-            / _np.array([_np.dot(gradF[i],gradF[i]) for i in range(gradF.shape[0])])
+        norms = _np.array([_np.dot(gradF[i],gradF[i]) for i in range(gradF.shape[0])])
+        delta2 = _np.abs(_np.dot(gradF, bestGS.to_vector() - self.gateset.to_vector()) \
+            * _np.where(norms > 1e-10, 1.0/norms, 0.0))
         delta2 *= self._C1 #scaling appropriate for confidence level
         delta = _np.sqrt(delta2) # error^2 -> error
 
