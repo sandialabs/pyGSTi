@@ -1351,13 +1351,13 @@ def get_logl_projected_err_gen_table(gateset, targetGateset,
         gsLND.gates[gl] = _tools.gate_from_error_generator(
             lnd_error_gen, targetGate, genType)
 
-        print("\nDEBUG %s -----------------" % gl)
-        #print("gate %s = \n" % gl, gate)
-        #print("LND gate %s = \n" % gl,gsLND.gates[gl])
-        #print("HProj = ",HProj)
-        #print("OProj = \n",_tools.mx_to_string(OProj))
-        print("OProj evals = ", _np.real_if_close(_np.linalg.eigvals(OProj)))
-        print("")
+        #print("\nDEBUG %s -----------------" % gl)
+        ##print("gate %s = \n" % gl, gate)
+        ##print("LND gate %s = \n" % gl,gsLND.gates[gl])
+        ##print("HProj = ",HProj)
+        ##print("OProj = \n",_tools.mx_to_string(OProj))
+        #print("OProj evals = ", _np.real_if_close(_np.linalg.eigvals(OProj)))
+        #print("")
 
         #CPTP projection
 
