@@ -698,7 +698,7 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
             wtsLoc = _np.where(wts)[0]
             for fidArray in fidArrayList:
                 scoreMx[:, colInd:colInd+int(numFids)] = fidArray[:, wtsLoc]
-                colInd += numFids
+                colInd += int(numFids)
             scoreSqMx = _np.dot(scoreMx, scoreMx.T)
 #            score = numFids * _np.sum(1./_np.linalg.eigvalsh(scoreSqMx))
             score = numFids * _scoring.list_score(
