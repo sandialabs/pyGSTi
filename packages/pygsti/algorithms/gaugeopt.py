@@ -18,6 +18,103 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
                        gatesMetric="frobenius", spamMetric="frobenius",
                        gauge_group=None, method='L-BFGS-B', maxiter=100000,
                        maxfev=None, tol=1e-8, returnAll=False, verbosity=0):
+    """
+    Optimize the gauge degrees of freedom of a gateset to that of a target.
+
+    Parameters
+    ----------
+    gateset : GateSet
+        The gateset to gauge-optimize
+
+    targetGateset : GateSet
+        The gateset to optimize to.  The metric used for comparing gatesets
+        is given by `gatesMetric` and `spamMetric`.
+
+    itemWeights : dict, optional
+        Dictionary of weighting factors for gates and spam operators.  Keys can
+        be gate, state preparation, or POVM effect, as well as the special values
+        "spam" or "gates" which apply the given weighting to *all* spam operators
+        or gates respectively.  Values are floating point numbers.  Values given 
+        for specific gates or spam operators take precedence over "gates" and
+        "spam" values.  The precise use of these weights depends on the gateset
+        metric(s) being used.
+       
+    CPpenalty : float, optional
+        A prefactor for a L1-like CP pentalty term that prefers gatesets 
+        which are completely positive.  The penalty term equals the sum
+        of the magnitudes of the negative eigenvalues of each gate's 
+        Choi matrix.
+
+    TPpenalty : float, optional
+        A prefactor for an L1-like TP pentalty term which penalizes
+        gates when their first row is *not* equal to [1, 0, ... 0],
+        and penalizes state preparation vectors when their first element
+        does not equal sqrt( 1/sqrt(dim) ).
+
+    validSpamPenalty : float, optional
+        A prefactor for a term in the objective function which penalizes
+        state preparation vectors which don't correspond to *positive*
+        (density) matrices and penalizes effects which have eigenvalues
+        outside of the [0,1] range.
+        
+    gatesMetric : {"frobenius", "fidelity", "tracedist"}, optional
+        The metric used to compare gates within gate sets. "frobenius" computes 
+        the normalized sqrt(sum-of-squared-differences), with weights
+        multiplying the squared differences (see :func:`GateSet.frobeniusdist`).
+        "fidelity" and "tracedist" sum the individual infidelities or trace
+        distances of each gate, weighted by the weights.
+
+    spamMetric : {"frobenius", "fidelity", "tracedist"}, optional
+        The metric used to compare spam vectors within gate sets. "frobenius"
+        computes the normalized sqrt(sum-of-squared-differences), with weights
+        multiplying the squared differences (see :func:`GateSet.frobeniusdist`).
+        "fidelity" and "tracedist" sum the individual infidelities or trace
+        distances of each "SPAM gate", weighted by the weights.
+
+    gauge_group : GaugeGroup, optional
+        The gauge group which defines which gauge trasformations are optimized
+        over.  If None, then the `gateset`'s default gauge group is used.
+
+    method : string, optional
+        The method used to optimize the objective function.  Can be any method
+        known by scipy.optimize.minimize such as 'BFGS', 'Nelder-Mead', 'CG', 'L-BFGS-B',
+        or additionally:
+
+        - 'custom' -- custom CG that often works better than 'CG'
+        - 'supersimplex' -- repeated application of 'Nelder-Mead' to converge it
+        - 'basinhopping' -- scipy.optimize.basinhopping using L-BFGS-B as a local optimizer
+        - 'swarm' -- particle swarm global optimization algorithm
+        - 'evolve' -- evolutionary global optimization algorithm using DEAP
+        - 'brute' -- Experimental: scipy.optimize.brute using 4 points along each dimensions
+
+    maxiter : int, optional
+        Maximum number of iterations for the gauge optimization.
+
+    maxfev : int, optional
+        Maximum number of function evaluations for the gauge optimization.
+        Defaults to maxiter.
+
+    tol : float, optional
+        The tolerance for the gauge optimization.
+
+    returnAll : bool, optional
+        When True, return best "goodness" value and gauge matrix in addition to the
+        gauge optimized gateset.
+
+    verbosity : int, optional
+        How much detail to send to stdout.
+
+
+    Returns
+    -------
+    gateset                            if returnAll == False
+
+    (goodnessMin, gaugeMx, gateset)    if returnAll == True
+
+      where goodnessMin is the minimum value of the goodness function (the best 'goodness')
+      found, gaugeMx is the gauge matrix used to transform the gateset, and gateset is the
+      final gauge-transformed gateset.
+    """
 
     if itemWeights is None: itemWeights = {}
     gateWeight = itemWeights.get('gates',1.0)
@@ -108,6 +205,62 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
 def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
                     method='L-BFGS-B', maxiter=100000, maxfev=None, tol=1e-8,
                     returnAll=False, verbosity=0):
+    """
+    Optimize the gauge of a gateset using a custom objective function.
+
+    Parameters
+    ----------
+    gateset : GateSet
+        The gateset to gauge-optimize
+
+    objective_fn : function
+        The function to be minimized.  The function must take a single `GateSet`
+        argument and return a float.
+
+    gauge_group : GaugeGroup, optional
+        The gauge group which defines which gauge trasformations are optimized
+        over.  If None, then the `gateset`'s default gauge group is used.
+
+    method : string, optional
+        The method used to optimize the objective function.  Can be any method
+        known by scipy.optimize.minimize such as 'BFGS', 'Nelder-Mead', 'CG', 'L-BFGS-B',
+        or additionally:
+
+        - 'custom' -- custom CG that often works better than 'CG'
+        - 'supersimplex' -- repeated application of 'Nelder-Mead' to converge it
+        - 'basinhopping' -- scipy.optimize.basinhopping using L-BFGS-B as a local optimizer
+        - 'swarm' -- particle swarm global optimization algorithm
+        - 'evolve' -- evolutionary global optimization algorithm using DEAP
+        - 'brute' -- Experimental: scipy.optimize.brute using 4 points along each dimensions
+
+    maxiter : int, optional
+        Maximum number of iterations for the gauge optimization.
+
+    maxfev : int, optional
+        Maximum number of function evaluations for the gauge optimization.
+        Defaults to maxiter.
+
+    tol : float, optional
+        The tolerance for the gauge optimization.
+
+    returnAll : bool, optional
+        When True, return best "goodness" value and gauge matrix in addition to the
+        gauge optimized gateset.
+
+    verbosity : int, optional
+        How much detail to send to stdout.
+
+
+    Returns
+    -------
+    gateset                            if returnAll == False
+
+    (goodnessMin, gaugeMx, gateset)    if returnAll == True
+
+      where goodnessMin is the minimum value of the goodness function (the best 'goodness')
+      found, gaugeMx is the gauge matrix used to transform the gateset, and gateset is the
+      final gauge-transformed gateset.
+    """
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 

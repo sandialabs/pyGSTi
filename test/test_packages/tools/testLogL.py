@@ -69,7 +69,7 @@ class LogLTestCase(BaseTestCase):
                             poissonPicture=True, check=False, memLimit=370000000) # Limit memory a bit
         pygsti.logl_hessian(std.gs_target, ds,
                             probClipInterval=(-1e6,1e6), countVecMx=None,
-                            poissonPicture=True, check=False, memLimit=25000000) # Limit memory a bit more
+                            poissonPicture=True, check=False, memLimit=500000) # Limit memory a bit more
         with self.assertRaises(MemoryError):
             pygsti.logl_hessian(std.gs_target, ds,
                                 probClipInterval=(-1e6,1e6), countVecMx=None,

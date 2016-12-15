@@ -2780,26 +2780,27 @@ def direct2x_comp_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGate
     """
     prepStrs, effectStrs = strs
     nanMx = _np.nan * _np.zeros( (len(strs[1]),len(strs[0])), 'd')
+    gatestring_filter = None #don't use gatestring filters for now
 
     def mx_fn(gateStr,x,y):
 
         if gateStr is None: return nanMx
         directGateset = directGatesets[ gateStr ] #contains "GsigmaLbl" gate <=> gateStr
         spamlabels = directGateset.get_spam_labels()
+
         try:
-        #if gateStr*2 in directGatesets:
             gsmap = get_gatestring_map(gateStr*2, dataset, strs, None,
                                        gatestring_filter)
             gsmap_pr = get_gatestring_map(_objs.GateString(
-                    ("GsigmaLbl","GsigmaLbl") ), dataset,
-                    strs, None, gatestring_filter)
+                    ("GsigmaLbl","GsigmaLbl") ), None,
+                    strs, None, gatestring_filter) 
+                   # Note: don't test for dataset membership here (dataset
+                   #       doesn't contain "GsigmaLbl"!)
             cntMxs = total_count_matrix(gsmap, dataset)[None,:,:]
             probMxs = probability_matrices( gsmap_pr, directGateset, spamlabels ) # no probs_precomp_dict
             freqMxs = frequency_matrices( gsmap, dataset, spamlabels)
             chiSqMxs= _tools.chi2fn( cntMxs, probMxs, freqMxs,
                                      minProbClipForWeighting)
-        #else:
-        #    print "Warning: didn't find len-%d str: " % len(gateStr*2), (gateStr*2)[0:20]
         except:
             return nanMx #if something fails, just punt
 

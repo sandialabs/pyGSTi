@@ -63,7 +63,8 @@ def optimize_gate(gateToOptimize, targetGate):
                            tol=1e-6, callback=None)
 
     gateToOptimize.from_vector(minSol.x)
-    print("DEBUG: optimized gate to min frobenius distance %g" % _mt.frobeniusnorm(gateToOptimize-targetMatrix))
+    #print("DEBUG: optimized gate to min frobenius distance %g" %
+    #      _mt.frobeniusnorm(gateToOptimize-targetMatrix))
 
 
 def compose(gate1, gate2, parameterization="auto"):
