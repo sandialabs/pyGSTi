@@ -123,6 +123,17 @@ class SPAMVec(object):
         """ Return the dimension of the gate matrix. """
         return self.dim
 
+    def transform(self, S):
+        """
+        Update SPAM (column) vector V as inv(S) * V or S^T * V for prep and
+        effect SPAM vectors, respectively (depending on the value of `typ`). 
+        """
+        raise NotImplementedError("This SPAM vector cannot be tranform()'d")
+
+    def depolarize(self, amount):
+        """ Depolarize spam vector by the given amount. """
+        raise NotImplementedError("This SPAM vector cannot be depolarize()'d")
+
     #Handled by derived classes
     #def __str__(self):
     #    s = "Spam vector with length %d\n" % len(self.base)
@@ -284,6 +295,28 @@ class StaticSPAMVec(SPAMVec):
         raise ValueError("Invalid transform for StaticSPAMVec - no parameters")
 
 
+    def depolarize(self, amount):
+        """
+        Depolarize this SPAM vector by the given `amount`.
+
+        Generally, the depolarize function updates the *parameters* of 
+        the SPAMVec such that the resulting vector is depolarized.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float
+            The amount to depolarize by.  All but the first element
+            of vector are multiplied by `1.0 - amount`.
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError("Cannot depolarize a StaticSPAMVec - no parameters")
+
+
     def num_params(self):
         """
         Get the number of independent parameters which specify this SPAM vector.
@@ -439,6 +472,29 @@ class FullyParameterizedSPAMVec(SPAMVec):
               #Evec^T --> ( Evec^T * S )^T
         else:
             raise ValueError("Invalid typ argument: %s" % typ)
+
+
+    def depolarize(self, amount):
+        """
+        Depolarize this SPAM vector by the given `amount`.
+
+        Generally, the depolarize function updates the *parameters* of 
+        the SPAMVec such that the resulting vector is depolarized.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float
+            The amount to depolarize by.  All but the first element
+            of vector are multiplied by `1.0 - amount`.
+
+        Returns
+        -------
+        None
+        """
+        D = _np.diag( [1]+[1-amount]*(self.dim-1) )
+        self.set_vector(_np.dot(D,self)) 
 
 
     def num_params(self):
@@ -620,6 +676,29 @@ class TPParameterizedSPAMVec(SPAMVec):
               #Evec^T --> ( Evec^T * S )^T
         else:
             raise ValueError("Invalid typ argument: %s" % typ)
+
+
+    def depolarize(self, amount):
+        """
+        Depolarize this SPAM vector by the given `amount`.
+
+        Generally, the depolarize function updates the *parameters* of 
+        the SPAMVec such that the resulting vector is depolarized.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float
+            The amount to depolarize by.  All but the first element
+            of vector are multiplied by `1.0 - amount`.
+
+        Returns
+        -------
+        None
+        """
+        D = _np.diag( [1]+[1-amount]*(self.dim-1) )
+        self.set_vector(_np.dot(D,self)) 
 
 
     def num_params(self):

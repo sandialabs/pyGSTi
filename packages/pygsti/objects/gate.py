@@ -287,6 +287,14 @@ class Gate(object):
         """ Return the dimension of the gate matrix. """
         return self.dim
 
+    def transform(self, S):
+        """ Update gate matrix G with inv(S) * G * S."""
+        raise NotImplementedError("This gate cannot be tranform()'d")
+
+    def depolarize(self, amount):
+        """ Depolarize gate by the given amount. """
+        raise NotImplementedError("This gate cannot be depolarize()'d")
+
     #Handled by derived classes
     #def __str__(self):
     #    s = "Gate with shape %s\n" % str(self.base.shape)
@@ -519,6 +527,32 @@ class StaticGate(Gate):
         raise ValueError("Cannot transform a StaticGate - it has no parameters!")
         #self.set_matrix(_np.dot(Si,_np.dot(self.base, S)))
 
+    def depolarize(self, amount):
+        """
+        Depolarize this gate by the given `amount`.
+
+        Generally, the depolarize function updates the *parameters* of 
+        the gate such that the resulting gate matrix is depolarized.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        In this particular case *no* alterations are possible since a
+        StaticGate has no parameters to modify.  Thus, this function
+        *always* raises a ValueError.
+
+        Parameters
+        ----------
+        amount : float
+            The amount to depolarize by.  In standard bases, this corresponds
+            to multiplying the non-identity diagonal elements of the gate
+            matrix by `1.0 - amount`.
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError("Cannot depolarize a StaticGate - it has no parameters!")
+
 
     def compose(self, otherGate):
         """
@@ -688,6 +722,29 @@ class FullyParameterizedGate(Gate):
         Smx = S.get_transform_matrix()
         Si  = S.get_transform_matrix_inverse()
         self.set_matrix(_np.dot(Si,_np.dot(self.base, Smx)))
+
+
+    def depolarize(self, amount):
+        """
+        Depolarize this gate by the given `amount`.
+
+        Generally, the depolarize function updates the *parameters* of 
+        the gate such that the resulting gate matrix is depolarized.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float
+            The amount to depolarize by.  All but the first diagonal
+            element of the gate matrix is multiplied by `1.0 - amount`.
+
+        Returns
+        -------
+        None
+        """
+        D = _np.diag( [1]+[1-amount]*(self.dim-1) )
+        self.set_matrix(_np.dot(D,self))
 
 
     def __str__(self):
@@ -872,6 +929,29 @@ class TPParameterizedGate(Gate):
         Smx = S.get_transform_matrix()
         Si  = S.get_transform_matrix_inverse()
         self.set_matrix(_np.dot(Si,_np.dot(self.base, Smx)))
+
+
+    def depolarize(self, amount):
+        """
+        Depolarize this gate by the given `amount`.
+
+        Generally, the depolarize function updates the *parameters* of 
+        the gate such that the resulting gate matrix is depolarized.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float
+            The amount to depolarize by.  All but the first diagonal
+            element of the gate matrix is multiplied by `1.0 - amount`.
+
+        Returns
+        -------
+        None
+        """
+        D = _np.diag( [1]+[1-amount]*(self.dim-1) )
+        self.set_matrix(_np.dot(D,self))
 
 
     def compose(self, otherGate):
@@ -1154,6 +1234,29 @@ class LinearlyParameterizedGate(Gate):
         #self.leftTrans = _np.dot(Si,self.leftTrans)
         #self.rightTrans = _np.dot(self.rightTrans,S)
         #self._construct_matrix()
+
+
+    def depolarize(self, amount):
+        """
+        Depolarize this gate by the given `amount`.
+
+        Generally, the depolarize function updates the *parameters* of 
+        the gate such that the resulting gate matrix is depolarized.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float
+            The amount to depolarize by.  In standard bases, this corresponds
+            to multiplying the non-identity diagonal elements of the gate
+            matrix by `1.0 - amount`.
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError("Cannot depolarize a LinearlyParameterizedGate (no general procedure)!")
 
 
     def compose(self, otherGate):
@@ -1668,6 +1771,31 @@ class EigenvalueParameterizedGate(Gate):
         #self._construct_matrix()
 
 
+    def depolarize(self, amount):
+        """
+        Depolarize this gate by the given `amount`.
+
+        Generally, the depolarize function updates the *parameters* of 
+        the gate such that the resulting gate matrix is depolarized.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float
+            The amount to depolarize by.  In standard bases, this corresponds
+            to multiplying the non-identity diagonal elements of the gate
+            matrix by `1.0 - amount`.
+
+        Returns
+        -------
+        None
+        """
+        #TODO: maybe could do this if we wanted to get clever: if one eigenvector is the
+        # identity we could reduce all the eigenvalues corresponding to *other* evecs.
+        raise ValueError("Cannot depolarize a EigenvalueParameterizedGate")
+
+
     def compose(self, otherGate):
         """
         Create and return a new gate that is the composition of this gate
@@ -1973,8 +2101,6 @@ class LindbladParameterizedGate(Gate):
         #    print("Choi evals of exp(othergen) = ", sorted(_np.linalg.eigvals(_jt.jamiolkowski_iso(other_exp_err_gen,"pp"))))
         #    print("Evals of otherCoeffs = ",sorted(_np.linalg.eigvals(otherCoeffs)))
         #    assert(False)
-
-        
         
 
     def set_matrix(self, M):
@@ -2207,6 +2333,35 @@ class LindbladParameterizedGate(Gate):
             self._construct_matrix()
         else:
             raise ValueError("Invalid transform for this LindbladParameterizedGate")
+
+
+    def depolarize(self, amount):
+        """
+        Depolarize this gate by the given `amount`.
+
+        Generally, the depolarize function updates the *parameters* of 
+        the gate such that the resulting gate matrix is depolarized.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float
+            The amount to depolarize by.  All but the first diagonal
+            element of the gate matrix is multiplied by `1.0 - amount`.
+
+        Returns
+        -------
+        None
+        """
+        D = _np.diag( [1]+[1-amount]*(self.dim-1) )
+        mx = _np.dot(D,self.base)
+        tGate = LindbladParameterizedGate(mx,self.unitary_prefactor,
+                                          self.cptp,self.nonHamTerms,
+                                          truncate=True)
+        #Note: truncate=True to be safe
+        self.paramvals[:] = tGate.paramvals[:]
+        self._construct_matrix()
 
 
     def compose(self, otherGate):

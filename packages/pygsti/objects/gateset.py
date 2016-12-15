@@ -2612,8 +2612,7 @@ class GateSet(object):
             #Apply the same depolarization to each gate
             D = _np.diag( [1]+[1-gate_noise]*(gateDim-1) )
             for (i,label) in enumerate(self.gates):
-                newGateset.gates[label] = _gate.FullyParameterizedGate(
-                                           _np.dot(D,self.gates[label]) )
+                newGateset.gates[label].depolarize(gate_noise)
 
         if max_spam_noise is not None:
             if spam_noise is not None:
@@ -2636,11 +2635,9 @@ class GateSet(object):
             #Apply the same depolarization to each gate
             D = _np.diag( [1]+[1-spam_noise]*(gateDim-1) )
             for lbl,rhoVec in self.preps.items():
-                newGateset.preps[lbl] = _sv.FullyParameterizedSPAMVec(
-                                            _np.dot(D,rhoVec) )
+                newGateset.preps[lbl].depolarize(spam_noise)
             for lbl,EVec in self.effects.items():
-                newGateset.effects[lbl] = _sv.FullyParameterizedSPAMVec(
-                                         _np.dot(D,EVec) )
+                newGateset.effects[lbl].depolarize(spam_noise)
 
         return newGateset
 
