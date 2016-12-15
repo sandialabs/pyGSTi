@@ -765,6 +765,12 @@ class ConfidenceRegion(object):
 
         return df
 
+    def __getstate__(self):
+        #Return the state (for pickling) -- *don't* pickle any Comm objects
+        to_pickle = self.__dict__.copy()
+        if self.mlgst_params and self.mlgst_params.has_key("comm"):
+            del self.mlgst_params['comm'] # one *cannot* pickle Comm objects
+        return to_pickle
 
 
 

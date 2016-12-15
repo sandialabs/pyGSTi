@@ -363,10 +363,18 @@ class Results(object):
         return cpy
 
 
+    def __getstate__(self):
+        #Return the state (for pickling) -- *don't* pickle Comm object
+        to_pickle = self.__dict__.copy()
+        del to_pickle['_comm'] # one *cannot* pickle Comm objects
+        return to_pickle
+
+
     def __setstate__(self, stateDict):
         #Must set ResultCache parent & functions, since these are
         # not pickled (to avoid circular pickle references)
         self.__dict__.update(stateDict)
+        self._comm = None
         self._specials._setparent(self._get_special_fns(), self)
         self.tables._setparent(self._get_table_fns(), self)
         self.figures._setparent(self._get_figure_fns(), self)
