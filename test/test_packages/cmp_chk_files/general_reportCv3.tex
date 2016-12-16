@@ -53,12 +53,10 @@
 
 \newtoggle{confidences}
 \newtoggle{LsAndGermsSet}
-%\newtoggle{debuggingaidsappendix}
-%\newtoggle{gaugeoptappendix}
-%\newtoggle{pixelplotsappendix}
-%\newtoggle{whackamoleappendix}
+\newtoggle{showAppendix}
 \togglefalse{confidences}
 \toggletrue{LsAndGermsSet}
+\toggletrue{showAppendix}
 
 
 \hypersetup{
@@ -71,9 +69,10 @@ opt_table_class={pygstiTbl},
 opt_template_path={None},
 opt_latex_cmd={pdflatex},
 L_germ_tuple_base_string_dict={Dict[[0, Gx]: {}, [0, Gy]: {}, [0, Gi]: {}, [0, GxGy]: {}, [0, GxGyGi]: {}, [0, GxGiGy]: {}, [0, GxGiGi]: {}, [0, GyGiGi]: {}, [0, GxGxGiGy]: {}, [0, GxGyGyGi]: {}, [0, GxGxGyGxGyGy]: {}, [1, Gx]: [Gx], [1, Gy]: [Gy], [1, Gi]: [Gi], [1, GxGy]: {}, [1, GxGyGi]: {}, [1, GxGiGy]: {}, [1, GxGiGi]: {}, [1, GyGiGi]: {}, [1, GxGxGiGy]: {}, [1, GxGyGyGi]: {}, [1, GxGxGyGxGyGy]: {}, [2, Gx]: [Gx]2, [2, Gy]: [Gy]2, [2, Gi]: [Gi]2, [2, GxGy]: [GxGy], [2, GxGyGi]: {}, [2, GxGiGy]: {}, [2, GxGiGi]: {}, [2, GyGiGi]: {}, [2, GxGxGiGy]: {}, [2, GxGyGyGi]: {}, [2, GxGxGyGxGyGy]: {}, [4, Gx]: [Gx]4, [4, Gy]: [Gy]4, [4, Gi]: [Gi]4, [4, GxGy]: [GxGy]2, [4, GxGyGi]: [GxGyGi], [4, GxGiGy]: [GxGiGy], [4, GxGiGi]: [GxGiGi], [4, GyGiGi]: [GyGiGi], [4, GxGxGiGy]: [GxGxGiGy], [4, GxGyGyGi]: [GxGyGyGi], [4, GxGxGyGxGyGy]: {}, [8, Gx]: [Gx]8, [8, Gy]: [Gy]8, [8, Gi]: [Gi]8, [8, GxGy]: [GxGy]4, [8, GxGyGi]: [GxGyGi]2, [8, GxGiGy]: [GxGiGy]2, [8, GxGiGi]: [GxGiGi]2, [8, GyGiGi]: [GyGiGi]2, [8, GxGxGiGy]: [GxGxGiGy]2, [8, GxGyGyGi]: [GxGyGyGi]2, [8, GxGxGyGxGyGy]: [GxGxGyGxGyGy]]},
-constrainToTP={True},
+cptpPenaltyFactor={0},
 defaultBasename={None},
 defaultDirectory={None},
+distributeMethod={deriv},
 fiducial_pairs={None},
 gaugeOptParams={Dict[]},
 hessianProjection={optimal gate CIs},
@@ -128,16 +127,18 @@ Section \ref{secGoodness} is dedicated to summarizing how well the model imposed
 %REMOVE Finally, appendices may be present (depending on which options were chosen when this report was generated).  Appendices present more detailed debugging information, elaborating on the goodness-of-fit metrics presented in Section \ref{secGoodness}.
 
 \section{Input Summary\label{secInput}}
-The input for this GST analysis comprised: (1) a target gate set (see Tables \ref{targetSpamTable}-\ref{targetGatesTable}); and (2) a dataset called ``$\mathcal{D}$''.
+The input for this GST analysis comprised: (1) a target gate set (see Table \ref{targetGatesetTable}); and (2) a dataset called ``$\mathcal{D}$''.
 
 \subsection{Target Gate set}
 
-The target gate set describes the ideal initial state (density matrix), measurement (POVM effect), and gate operations (superoperators).  The density matrices and POVM effects are represented as square $d\times d$ matrices on a Hilbert space $\mathcal{H}$.  These are shown in table \ref{targetSpamTable}.  It is often convenient in compuatations to represent them as $d^2$-element vectors in the Hilbert-Schmidt space $\mathcal{B}(\mathcal{H})$ of linear operators on $\mathcal{H}$.  We don't, however, display this representation here because 1) it's meaning is often less intuitive than the $d\times d$ matrix, and 2) its length can make it unwieldy to write down.  Superoperators are sometimes represented in Choi or Kraus form, but for GST it is more convenient to represent them as square $d^2\times d^2$ matrices that multiply associatively and act on $\mathcal{B}(\mathcal{H})$.  These are shown in Table \ref{targetGatesTable} as heat map images to allow compact representation of large matrices.
+The target gate set describes the ideal initial state (density matrix), measurement (POVM effect), and gate operations (superoperators).  The density matrices and POVM effects are represented as square $d\times d$ matrices on a Hilbert space $\mathcal{H}$.  These are shown in table \ref{targetGatesetTable}.  It is often convenient in compuatations to represent them as $d^2$-element vectors in the Hilbert-Schmidt space $\mathcal{B}(\mathcal{H})$ of linear operators on $\mathcal{H}$.  We don't, however, display this representation here because 1) it's meaning is often less intuitive than the $d\times d$ matrix, and 2) its length can make it unwieldy to write down.  Superoperators are sometimes represented in Choi or Kraus form, but for GST it is more convenient to represent them as square $d^2\times d^2$ matrices that multiply associatively and act on $\mathcal{B}(\mathcal{H})$.  These are also shown in Table \ref{targetGatesetTable} as heat map images to allow compact representation of large matrices.
 
 These Hilbert-Schmidt space representations require choosing a basis $\{M_i\}$ for $\mathcal{B}(\mathcal{H})$.  We use the \emph{Pauli basis}, comprising the four $2\times2$ Pauli matrices (including the identity $\Id$) when $d=2$.  When $d>2$, we either use Gell-Mann matrices or the set of tensor products of Pauli matrices as a basis (indicated where relevant).  Keep in mind that we want to use an orthonormal basis, so the basis matrices are normalized so that $\sbraket{M_i}{M_j} = \Tr M_i^\dagger M_j = \delta_{ij}$.  In $d=2$, this means that the basis matrices are $M_i = \frac{1}{\sqrt{2}}\sigma_i$.
 
 \begin{table}[h]
 \begin{center}
+\begin{minipage}[b]{0.40\linewidth}
+\adjustbox{max width=\linewidth}{
 \begin{tabular}[l]{|c|c|}
 \hline
 Operator & Matrix \\ \hline
@@ -153,27 +154,38 @@ $E_{0}$ & $ \left(\!\!\begin{array}{cc}
  \\ \hline
 \end{tabular}
 
-\caption{\textbf{Target gate set: SPAM (state preparation and measurement) gates}.  These are the \emph{ideal} input state ($\rho_0$) and `plus' POVM effect $E_0$ for the device on which we report.  SPAM gates are given here as $d\times d$ matrices.  See Table \ref{bestGatesetSpamTable} for GST estimates of the actual $\rho_0$ and $E_0$ implemented in this experiment.\label{targetSpamTable}}
-\end{center}
-\end{table}
-
-The ideal state prepration and measurement (SPAM) operations for your particular case are given in Table \ref{targetSpamTable}.  The ideal \emph{logic gate} operations are given as superoperators in Table \ref{targetGatesTable}.  In most cases, the ideal/target logic gates are unitary maps.  
-%REMOVE The corresponding superoperators are orthogonal rotations on $\mathcal{B}(\mathcal{H})$.  For your convenience, Table \ref{targetGatesTable} also lists (for each logic gate) an axis of rotation [as a vector in $\mathcal{B}(\mathcal{H})$] and an angle of rotation.  
-
-\begin{table}[h]
-\begin{center}
+}
+\end{minipage}
+\begin{minipage}[b]{0.40\linewidth}
+\adjustbox{max width=\linewidth}{
 \begin{tabular}[l]{|c|c|}
 \hline
-Gate & Superoperator (Pauli basis) \\ \hline
-Gi & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportCv3_files/targetGatesBoxes_Gi.pdf}} \\ \hline
-Gx & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportCv3_files/targetGatesBoxes_Gx.pdf}} \\ \hline
-Gy & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportCv3_files/targetGatesBoxes_Gy.pdf}} \\ \hline
+Gate &  Superoperator (Pauli basis) \\ \hline
+Gi & \vcenteredhbox{\includegraphics[width=1.27in,height=1.27in,keepaspectratio]{general_reportCv3_files/targetGatesBoxes_Gi.pdf}} \\ \hline
+Gx & \vcenteredhbox{\includegraphics[width=1.27in,height=1.27in,keepaspectratio]{general_reportCv3_files/targetGatesBoxes_Gx.pdf}} \\ \hline
+Gy & \vcenteredhbox{\includegraphics[width=1.27in,height=1.27in,keepaspectratio]{general_reportCv3_files/targetGatesBoxes_Gy.pdf}} \\ \hline
 \end{tabular}
 
-\caption{\textbf{Target gate set: logic gates}.  These are the \emph{ideal} (generally unitary) logic gates.  Each has a name starting with ``G'', and is represented as a $d^2\times d^2$ \emph{superoperator} that acts by matrix multiplication on vectors in $\mathcal{B}(\mathcal{H})$.  Matrices are displayed using a heat map that ranges between 1.0 (red) and -1.0 (blue).\label{targetGatesTable}}
+}
+\end{minipage}
+\caption{\textbf{Target gate set: SPAM (state preparation and measurement) and logic gates}.  The \textbf{left} table shows the \emph{ideal} input state ($\rho_0$) and `plus' POVM effect $E_0$ for the device on which we report.  SPAM gates are given here as $d\times d$ matrices.  The \textbf{right} table shows the \emph{ideal} (generally unitary) logic gates.  Each has a name starting with ``G'', and is represented as a $d^2\times d^2$ \emph{superoperator} that acts by matrix multiplication on vectors in $\mathcal{B}(\mathcal{H})$.  Matrices are displayed using a heat map that ranges between 1.0 (red) and -1.0 (blue).\label{targetGatesetTable}}
+% REMOVE See Table \ref{bestGatesetSpamTable} for GST estimates of the actual $\rho_0$ and $E_0$ implemented in this experiment.\label{targetSpamTable}}
 % REMOVE See Table \ref{bestGatesetGatesTable} for GST estimates of the actual logic gates implemented in this experiment.
 \end{center}
 \end{table}
+
+%The ideal state prepration and measurement (SPAM) operations for your particular case are given in Table \ref{targetSpamTable}.  The ideal \emph{logic gate} operations are given as superoperators in Table \ref{targetGatesTable}.  In most cases, the ideal/target logic gates are unitary maps.
+%REMOVE The corresponding superoperators are orthogonal rotations on $\mathcal{B}(\mathcal{H})$.  For your convenience, Table \ref{targetGatesTable} also lists (for each logic gate) an axis of rotation [as a vector in $\mathcal{B}(\mathcal{H})$] and an angle of rotation.  
+
+%\begin{table}[h]
+%\begin{center}
+%\XXXputfield{targetGatesBoxTable}{Target gate set overview table will be placed here}
+%\caption{\XXXputfield{tt_targetGatesBoxTable}{}\textbf{Target gate set: logic gates, compared to their estimates}.  These are the \emph{ideal} (generally unitary) logic gates.  Each has a name starting with ``G'', and is represented as a $d^2\times d^2$ \emph{superoperator} that acts by matrix multiplication on vectors in $\mathcal{B}(\mathcal{H})$.  Matrices are displayed using a heat map that ranges between 1.0 (red) and -1.0 (blue).\label{targetGatesTable}}
+%% REMOVE See Table \ref{bestGatesetGatesTable} for GST estimates of the actual logic gates implemented in this experiment.
+%\end{center}
+%\end{table}
+
+
 
 \subsection{GST Input Data}
 
@@ -275,7 +287,7 @@ The primary output of GST is an estimated gate set.  This section presents the r
 
 \subsection{Raw GST estimates}
 
-Table \ref{bestGatesetSpamTable} reports GST's best estimate of the SPAM operations.  The estimated SPAM operations are $d\times d$ matrices that can be expressed as length-$d^2$ vectors in $\mathcal{B}(\mathcal{H})$ by writing each matrix as a linear combinations of $d^2$ basis matrices (e.g.~the four Pauli matrices when $d=2$).  The estimated logic gates are superoperators represented as matrices acting on $\mathcal{B}(\mathcal{H})$, all in the basis specified.   By taking the dot product of state preparation and measurement vectors, estimated SPAM probabilites are computed in Table \ref{bestGatesetSpamParametersTable}.  Because the superoperator matrices can be quite large, we do not display their raw entries because of page-space limitations.  (Plotting them as heat maps similar to Table \ref{targetGatesTable} is unhelpful because the magnitude of the errors is typically so much smaller than the magniude of the elements that errors are invisible on the color scale.) Instead, we display discrepancies between the estimates and the targets using \emph{derived} quantities -- i.e., properties calculated from the gate matrices and SPAM vectors -- in the section \ref{derivedQtySection}.
+Table \ref{bestGatesetSpamTable} reports GST's best estimate of the SPAM operations.  The estimated SPAM operations are $d\times d$ matrices that can be expressed as length-$d^2$ vectors in $\mathcal{B}(\mathcal{H})$ by writing each matrix as a linear combinations of $d^2$ basis matrices (e.g.~the four Pauli matrices when $d=2$).  The estimated logic gates are superoperators represented as matrices acting on $\mathcal{B}(\mathcal{H})$, all in the basis specified.   By taking the dot product of state preparation and measurement vectors, estimated SPAM probabilites are computed in Table \ref{bestGatesetSpamParametersTable}.  Table \ref{bestGatesetGatesTable} reports the logic gate operations alongside the desired operations of Table \ref{targetGatesetTable}.  Because the superoperator matrices can be quite large, they are displayed as heat maps.  Errors whose magnitude is much smaller than the magniude of the gate elements are invisible on the heat map's color scale, and thus Table \ref{bestGatesetGatesTable} should only be used for rough comparison.  For more precise comparison, we display discrepancies between the estimates and the targets using \emph{derived} quantities -- i.e., properties calculated from the gate matrices and SPAM vectors -- in the section \ref{derivedQtySection}.
 \iftoggle{confidences}{
 Table \ref{bestGatesetSpamTable} reports NOT-SET\% confidence intervals for each of the gate matrix and SPAM vector elements.  A confidence region is obtained by approximating the log-likelihood (see below) as being quadratic about its minimum, and determining the ellipsoid where this approximation equals a value, $C$, defined below.  For a given parameter (e.g. gate or SPAM vector element) $x$, a confidence interval is obtained by projecting the ellipsiodal region onto that $x$'s axis.  This computes a 1-dimensional NOT-SET\% confidence interval for the profile log-liklihood for $x$, and for this reason the value of $C$ used above is chosen such that $\mathrm{CDF}[\chi^2_1](C) = NOT-SET\%$ (that is, at the value $C$ the cumulative density function of a $\chi^2_1$ distribution reaches NOT-SET\%).  If, instead, the interval corresponding to a projection of the NOT-SET\% multi-dimensional confidence region (defined by $C$ s.t.~$\mathrm{CDF}[\chi^2_n](C) = NOT-SET\%$, where $n=NOT-SET$ is the number of non-gauge gate set parameters) is desired, then the all the interval widths reported here should be multiplied by NOT-SET.  The resulting confidence interval is always symmetric about the estimated value, and we report the half-width of the intervals in the tables.  In table \ref{bestGatesetSpamParametersTable} and those in the following section, we specify the NOT-SET\% confidence intervals of derived quantities in using \emph{value} $\pm$ \emph{half-width} notation.  The derived-quantity confidence intervals in section \ref{derivedQtySection} are computed by finding the minimum and maximum values of the linearization of the derived quantity (e.g.~fidelity).
 }{}
@@ -283,22 +295,30 @@ Table \ref{bestGatesetSpamTable} reports NOT-SET\% confidence intervals for each
 
 \begin{table}[h]
 \begin{center}
-\begin{tabular}[l]{|c|c|}
+\begin{tabular}[l]{|c|c|c|}
 \hline
-Operator & Matrix \\ \hline
+Operator & Target Matrix & Estimate Matrix \\ \hline
 $\rho_{0}$ & $ \left(\!\!\begin{array}{cc}
-0.951 & 0.001e^{-i0.16} \\ 
-0.001e^{i0.16} & 0.049
+1 & 0 \\ 
+0 & 0
+ \end{array}\!\!\right) $
+ & $ \left(\!\!\begin{array}{cc}
+0.951 & 0.001e^{-i0.17} \\ 
+0.001e^{i0.17} & 0.049
  \end{array}\!\!\right) $
  \\ \hline
 $E_{0}$ & $ \left(\!\!\begin{array}{cc}
+0 & 0 \\ 
+0 & 1
+ \end{array}\!\!\right) $
+ & $ \left(\!\!\begin{array}{cc}
 0.047 & 0.002e^{i1.61} \\ 
-0.002e^{-i1.61} & 0.955
+0.002e^{-i1.61} & 0.954
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
 
-\caption{\textbf{The GST estimate of the SPAM operations}.  Compare to Table \ref{targetSpamTable}.\label{bestGatesetSpamTable}}
+\caption{\textbf{The GST estimate of the SPAM operations}.  Compares the estimated SPAM operations to those desired (repeated from Table \ref{targetGatesetTable} for convenience).\label{bestGatesetSpamTable}}
 \end{center}
 \end{table}
 
@@ -314,7 +334,20 @@ $\rho_{0}$ & 0.091 & 0.909 \\ \hline
 \end{center}
 \end{table}
 
-%, and Table \ref{bestGatesetGatesTable} reports the logic gate operations
+\begin{table}[h]
+\begin{center}
+\begin{tabular}[l]{|c|c|c|}
+\hline
+Gate & Target Superoperator (Pauli basis) & Estimated Superoperator (Pauli basis) \\ \hline
+Gi & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportCv3_files/targetGatesBoxes_Gi.pdf}} & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportCv3_files/bestGatesBoxes_Gi.pdf}} \\ \hline
+Gx & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportCv3_files/targetGatesBoxes_Gx.pdf}} & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportCv3_files/bestGatesBoxes_Gx.pdf}} \\ \hline
+Gy & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportCv3_files/targetGatesBoxes_Gy.pdf}} & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportCv3_files/bestGatesBoxes_Gy.pdf}} \\ \hline
+\end{tabular}
+
+\caption{\textbf{The GST estimate of the logic gate operations}.  Compares the \emph{ideal} (generally unitary) logic gates (second column, also in Table \ref{targetGatesetTable}) with those \emph{estimated} by GST (third column).  Each gate is represented as a $d^2\times d^2$ \emph{superoperator} that acts by matrix multiplication on vectors in $\mathcal{B}(\mathcal{H})$.  Matrices are displayed using a heat map that ranges between 1.0 (red) and -1.0 (blue).  Note that it is impossible to discern even order-$1\%$ deviations from the ideal using this color scale, and one should rely on other analysis for more a precise comparison.\label{bestGatesetGatesTable}}
+% REMOVE See Table \ref{bestGatesetGatesTable} for GST estimates of the actual logic gates implemented in this experiment.
+\end{center}
+\end{table}
 
 %\begin{table}[h]
 %\begin{center}
@@ -361,8 +394,8 @@ Gy & 0.038 & 0.038 & 0.038 \\ \hline
 \hline
 Prep/POVM & \begin{tabular}{c}State\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} \\ \hline
 $\rho_{0}$ & 0.049 & 0.049 \\ \hline
-$E_{0}$ & 0.045 & 0.046 \\ \hline
-$E_C$ & 0.046 & 0.046 \\ \hline
+$E_{0}$ & 0.046 & 0.046 \\ \hline
+$E_C$ & 0.047 & 0.047 \\ \hline
 \end{tabular}
 
 \caption{\textbf{Comparison of GST estimated SPAM to target SPAM}.  This table presents, for each state preparation and POVM effect, two different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.\label{bestGatesetSpamVsTargetTable}}
@@ -372,20 +405,19 @@ $E_C$ & 0.046 & 0.046 \\ \hline
 
 \begin{table}[h]
 \begin{center}
-\begin{tabular}[l]{|c|c|c|}
+\begin{tabular}[l]{|c|c|c|c|}
 \hline
-Gate & Error Generator & Pauli projections \\ \hline
-Gi & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportCv3_files/bestErrgenBoxes_Gi_errgen.pdf}} & \vcenteredhbox{\includegraphics[width=1.74in,height=1.74in,keepaspectratio]{general_reportCv3_files/bestErrgenBoxes_Gi_hamdecomp.pdf}} \\ \hline
-Gx & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportCv3_files/bestErrgenBoxes_Gx_errgen.pdf}} & \vcenteredhbox{\includegraphics[width=1.74in,height=1.74in,keepaspectratio]{general_reportCv3_files/bestErrgenBoxes_Gx_hamdecomp.pdf}} \\ \hline
-Gy & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportCv3_files/bestErrgenBoxes_Gy_errgen.pdf}} & \vcenteredhbox{\includegraphics[width=1.74in,height=1.74in,keepaspectratio]{general_reportCv3_files/bestErrgenBoxes_Gy_hamdecomp.pdf}} \\ \hline
+Gate & Error Generator & Hamiltonian Projections & Stochastic Projections \\ \hline
+Gi & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportCv3_files/bestErrgenBoxes_Gi_errgen.pdf}} & \vcenteredhbox{\includegraphics[width=1.56in,height=1.56in,keepaspectratio]{general_reportCv3_files/bestErrgenBoxes_Gi_hamdecomp.pdf}} & \vcenteredhbox{\includegraphics[width=1.56in,height=1.56in,keepaspectratio]{general_reportCv3_files/bestErrgenBoxes_Gi_stodecomp.pdf}} \\ \hline
+Gx & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportCv3_files/bestErrgenBoxes_Gx_errgen.pdf}} & \vcenteredhbox{\includegraphics[width=1.56in,height=1.56in,keepaspectratio]{general_reportCv3_files/bestErrgenBoxes_Gx_hamdecomp.pdf}} & \vcenteredhbox{\includegraphics[width=1.56in,height=1.56in,keepaspectratio]{general_reportCv3_files/bestErrgenBoxes_Gx_stodecomp.pdf}} \\ \hline
+Gy & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportCv3_files/bestErrgenBoxes_Gy_errgen.pdf}} & \vcenteredhbox{\includegraphics[width=1.56in,height=1.56in,keepaspectratio]{general_reportCv3_files/bestErrgenBoxes_Gy_hamdecomp.pdf}} & \vcenteredhbox{\includegraphics[width=1.56in,height=1.56in,keepaspectratio]{general_reportCv3_files/bestErrgenBoxes_Gy_stodecomp.pdf}} \\ \hline
 \end{tabular}
 
-\caption{\textbf{The GST estimate of the logic gate operation generators}. A heat map of the ``Error Generator'' for each gate, which is the Lindbladian $\mathbb{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$. When all elements of these matrices is zero, the estimated gates match the target gates (Table \ref{targetGatesTable}).  Note that the range of the color scale is variable, being determined by the data.  In the final column, these generators are projected onto each of the ``Pauli-product generators'' given by the action of commutation with each Pauli-product basis element.  Columns and rows correspond to Pauli operators on the first and second (if present) qubit.\label{bestGatesetErrGenTable} }
+\caption{\textbf{The GST estimate of the logic gate operation generators}. A heat map of the ``Error Generator'' for each gate, which is the Lindbladian $\mathbb{L}$ that describes \emph{how} the gate is failing to match the target.  This error generator is defined by the equation $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$. When all elements of these matrices is zero, the estimated gates match the target gates (Table \ref{targetGatesetTable}).  Note that the range of the color scale is variable, being determined by the data.  In the third column, each generator is projected onto each of the ``Hamiltonian generators'' given by the action of commutation with each Pauli-product basis element.  In the forth column, each generator is projected onto each of the ``Stochastic generators'' given by the action of conjugation with each Pauli-product basis element.  Columns and rows correspond to Pauli operators on the first and second (if present) qubit.\label{bestGatesetErrGenTable} }
 \end{center}
 \end{table}
 
-
-It's usually useful to understand \emph{how} gates fail.  The error generators in Table \ref{bestGatesetErrGenTable} provide one view on this, but they are not necessarily intuitive.   For example, you might want to know whether your gate suffers depolarizing, dephasing, or over-rotation errors.  In Tables \ref{bestGatesetEigenvalueTable}, the eigenvalues of the estimated gates are shown and plotted on the complex disc (which can be helpful for visualizing the different types of errors, e.g., over- or under-rotation vs.~depolarization).  Table \ref{bestGatesetRelativeEigenvalueTable} shows the same quantities but for the eigenvalues of $G_{\mathrm{target}}^{-1}\hat{G} = e^{\mathbb{L}}$, which would all be $1.0$ if the gate were ideal.  %Table \ref{bestGatesetPolarEigvalTable} plots these eigenvalues on the complex disc, which can be helpful for visualizing the different types of errors (e.g.~over- or under-rotation vs.~depolarization). 
+It's usually useful to understand \emph{how} gates fail.  The error generators in Table \ref{bestGatesetErrGenTable} provide one view on this, but they are not necessarily intuitive.   For example, you might want to know whether your gate suffers depolarizing, dephasing, or over-rotation errors.  In Tables \ref{bestGatesetEigenvalueTable}, the eigenvalues of the estimated gates are shown and plotted on the complex disc (which can be helpful for visualizing the different types of errors, e.g., over- or under-rotation vs.~depolarization).  Table \ref{bestGatesetRelativeEigenvalueTable} shows the same quantities but for the eigenvalues of $\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$, which would all be $1.0$ if the gate were ideal.  %Table \ref{bestGatesetPolarEigvalTable} plots these eigenvalues on the complex disc, which can be helpful for visualizing the different types of errors (e.g.~over- or under-rotation vs.~depolarization). 
 %TODO: add hamiltonian generator projections figure?
 
 \begin{table}[h]
@@ -422,23 +454,23 @@ Gy & $ \begin{array}{cc}
 \hline
 Gate & Relative Evals & Polar Plot \\ \hline
 Gi & $ \begin{array}{cc}
-0.949 & 0.946e^{i0.00} \\ 
-0.946e^{-i0.00} & 1
+-0.053 & 0.056e^{i3.11} \\ 
+0.056e^{-i3.11} & 0
  \end{array} $
  & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportCv3_files/bestRelEvalPolarPlt_Gi.pdf}} \\ \hline
 Gx & $ \begin{array}{cc}
-1 & 0.948 \\ 
-0.95e^{i0.00} & 0.95e^{-i0.00}
+0 & -0.054 \\ 
+0.051e^{i3.12} & 0.051e^{-i3.12}
  \end{array} $
  & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportCv3_files/bestRelEvalPolarPlt_Gx.pdf}} \\ \hline
 Gy & $ \begin{array}{cc}
-1 & 0.952 \\ 
-0.949 & 0.948
+0 & -0.049 \\ 
+-0.052 & -0.053
  \end{array} $
  & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportCv3_files/bestRelEvalPolarPlt_Gy.pdf}} \\ \hline
 \end{tabular}
 
-\caption{\textbf{Relative Eigenvalues of estimated gates}.  For each gate, the spectrum of $G_{\mathrm{target}}^{-1}\hat{G}$, defined as its \emph{relative eigenvalues} (see text for details).  The second column displays these eigenvalues over the complex disc.  Small \textcolor{red}{\textbf{red}} circles plot the \textcolor{red}{\textbf{relative eigenvalues}}, and \textcolor{darkgreen}{\textbf{green}} circles plot the relative eigenvalues of the gate \textcolor{darkgreen}{\textbf{repeated 10 times}} (to increase visibility).\label{bestGatesetRelativeEigenvalueTable}}
+\caption{\textbf{Relative Eigenvalues of estimated gates}.  For each gate, the spectrum of $G_{\mathrm{target}}^{-1}\hat{G}$, defined as its \emph{relative eigenvalues} (see text for details).  The second column displays these eigenvalues over the complex disc.  Small \textcolor{red}{\textbf{red}} circles plot the \textcolor{red}{\textbf{relative eigenvalues}}, and \textcolor{darkgreen}{\textbf{green}} circles plot the relative eigenvalues of the gate \textcolor{darkgreen}{\textbf{to the 10th power}} (to increase visibility).\label{bestGatesetRelativeEigenvalueTable}}
 \end{center}
 \end{table}
 
@@ -557,15 +589,16 @@ As a rough rule of thumb, for GST experiments involving relatively long sequence
 \begin{center}
 \begin{tabular}[l]{|c|c|c|c|c|c|c|c|c|}
 \hline
-L & $2\Delta\log(\mathcal{L})$ & $k$ & $2\Delta\log(\mathcal{L})-k$ & $\sqrt{2k}$ & $p$ & $N_s$ & $N_p$ & Rating \\ \hline
-0 & 53.75 & 61 & -7.251 & 11.05 & 0.73 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-1 & 53.75 & 61 & -7.251 & 11.05 & 0.73 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-2 & 106.8 & 137 & -30.25 & 16.55 & 0.97 & 168 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-4 & 439.5 & 410 & 29.48 & 28.64 & 0.15 & 441 & 31 & $\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-8 & 691.3 & 786 & -94.72 & 39.65 & 0.99 & 817 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+L & $2\Delta\log(\mathcal{L})$ & $k$ & $2\Delta\log(\mathcal{L})-k$ & $\sqrt{2k}$ & $N_\sigma$ & $N_s$ & $N_p$ & Rating \\ \hline
+0 & 53.75 & 61 & -7.251 & 11.05 & -0.66 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+1 & 53.75 & 61 & -7.251 & 11.05 & -0.66 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+2 & 106.8 & 137 & -30.25 & 16.55 & -1.83 & 168 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+4 & 439.5 & 410 & 29.48 & 28.64 & 1.03 & 441 & 31 & $\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+8 & 691.3 & 786 & -94.72 & 39.65 & -2.39 & 817 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
 \end{tabular}
 
-\caption{\textbf{Comparison between the computed and expected maximum $\log(\mathcal{L})$ for different values of $L$}.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively.  The quantity $2\Delta\log(\mathcal{L})$ measures the goodness of fit of the GST model (small is better) and is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $p$ is the p-value derived from a $\chi^2_k$ distribution.(For example, if $p=0.05$, then the probability of observing a $\chi^{2}$ value as large as, or larger than, the one indicated in the table is 5\%, assuming the GST model is valid.) The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.\label{progressTable}}
+\caption{\textbf{Comparison between the computed and expected maximum $\log(\mathcal{L})$ for different values of $L$}.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively.  The quantity $2\Delta\log(\mathcal{L})$ measures the goodness of fit of the GST model (small is better) and is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $N_\sigma = (2\Delta\log(\mathcal{L})-k)/\sqrt{2k}$ is the number of standard deviations from the mean (a $p$-value can be straightforwardly derived from $N_\sigma$).  The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.\label{progressTable}}
+%$p$ is the p-value derived from a $\chi^2_k$ distribution.(For example, if $p=0.05$, then the probability of observing a $\chi^{2}$ value as large as, or larger than, the one indicated in the table is 5\%, assuming the GST model is valid.) 
 \end{center}
 \end{table}
 
@@ -610,7 +643,7 @@ Identifying patterns and trends within such ``pixel plots'' can aid in identifyi
 
 \begin{figure}
 \begin{center}
-\includegraphics[width=6.50in,height=7.75in,keepaspectratio]{general_reportCv3_files/bestLogLBoxes_pg0.png}
+\includegraphics[width=6.50in,height=7.25in,keepaspectratio]{general_reportCv3_files/bestLogLBoxes_pg0.png}
 \caption{\textbf{$2\Delta\log(\mathcal{L})$ contributions for every individual experiment in the dataset}.   Each pixel represents a single experiment (gate sequence), and its color indicates whether GST was able to fit the corresponding frequency well.  Shades of white/gray are typical. Red squares represent statistically significant evidence for model violation (non-Markovianity), and should appear with probability at most 5\% if the data really are Markovian. Blocks of pixels correspond to base sequences (arranged vertically by germ and horizontally by length); each pixel within a block corresponds to a specific choice of pre- and post-fiducial sequences as shown in Figure \ref{colorBoxPlotKeyPlot}.  See text for further details.\label{bestEstimateColorBoxPlot}}
 \end{center}
 \end{figure}
@@ -626,6 +659,185 @@ Identifying patterns and trends within such ``pixel plots'' can aid in identifyi
 
 }{}
 
-%XXXputfield{appendices}{Appendices start here}
+
+\iftoggle{showAppendix}{
+
+\appendix
+
+\clearpage
+
+\section{Potential Analysis Aids (in development)}
+This appendix is meant to hold experimental figures and tables which may be later deemed worthy to incorporate into the main text (but not yet).  Table \ref{bestGatesetErrGenProjectionMetricsTable} shows the infidelity, Jamiolkowski trace distance, and diamond distance of the gates obtained from only part of the full error generator (show in Table \ref{bestGatesetErrGenTable}). The different ``parts'' of the full generator we consider are its projection onto only the Pauli Hamiltonian error generators, only the Pauli Stochastic error generators, and its projection onto both Hamiltonian and Stochastic error (but nothing else).  Table \ref{logLErrgenProjectionTable} shows the goodness of fit, in terms of the log-likelihood value, which is obtained when only a part of the error generator is retained.  Table \ref{FitByGermTable} shows, in a similar style to Table \ref{progressTable}, the goodness-of-fit on a per-germ basis (showing only the shorter germs to conserve page space).
+
+\begin{table}[h]
+\begin{center}
+\begin{minipage}[b]{0.40\linewidth}
+\adjustbox{max width=\linewidth}{
+\begin{tabular}[l]{|c|c|c|c|c|}
+\hline
+\multirow{2}{*}{Gate} & \multicolumn{4}{c|}{Process Infidelity} \\ \cline{2-5}
+ & Full & $\mathcal{H}$ + $\mathcal{S}$ & $\mathcal{H}$ & $\mathcal{S}$ \\ \hline
+Gi & 0.04 & 0.04 & 1\e{-5} & 0.04 \\ \hline
+Gx & 0.038 & 0.038 & 4\e{-6} & 0.038 \\ \hline
+Gy & 0.038 & 0.038 & 4\e{-6} & 0.038 \\ \hline
+\multirow{2}{*}{} & \multicolumn{4}{c|}{$\nicefrac{1}{2}$ Trace Distance} \\ \cline{2-5} 
+ & Full & $\mathcal{H}$ + $\mathcal{S}$ & $\mathcal{H}$ & $\mathcal{S}$ \\ \hline
+Gi & 0.04 & 0.04 & 0.003 & 0.04 \\ \hline
+Gx & 0.038 & 0.038 & 0.002 & 0.038 \\ \hline
+Gy & 0.038 & 0.038 & 0.002 & 0.038 \\ \hline
+\multirow{2}{*}{} & \multicolumn{4}{c|}{$\nicefrac{1}{2}$ $\Diamond$-Norm} \\ \cline{2-5} 
+ & Full & $\mathcal{H}$ + $\mathcal{S}$ & $\mathcal{H}$ & $\mathcal{S}$ \\ \hline
+Gi & 0.04 & 0.04 & 0.003 & 0.04 \\ \hline
+Gx & 0.038 & 0.038 & 0.002 & 0.038 \\ \hline
+Gy & 0.038 & 0.038 & 0.002 & 0.038 \\ \hline
+\end{tabular}
+
+}
+\end{minipage}
+\begin{minipage}[b]{0.40\linewidth}
+\adjustbox{max width=\linewidth}{
+\begin{tabular}[l]{|c|c|c|c|c|}
+\hline
+\multirow{2}{*}{Gate} & \multicolumn{4}{c|}{Process Infidelity} \\ \cline{2-5}
+ & Full & $\mathcal{H}$ + $\mathcal{S}$ & $\mathcal{H}$ & $\mathcal{S}$ \\ \hline
+Gi & 0 & 3\e{-4} & 0.04 & 3\e{-4} \\ \hline
+Gx & 0 & 1\e{-4} & 0.038 & 2\e{-4} \\ \hline
+Gy & 0 & 2\e{-4} & 0.038 & 2\e{-4} \\ \hline
+\multirow{2}{*}{} & \multicolumn{4}{c|}{$\nicefrac{1}{2}$ Trace Distance} \\ \cline{2-5} 
+ & Full & $\mathcal{H}$ + $\mathcal{S}$ & $\mathcal{H}$ & $\mathcal{S}$ \\ \hline
+Gi & 0 & 0.003 & 0.04 & 0.006 \\ \hline
+Gx & 0 & 0.002 & 0.038 & 0.004 \\ \hline
+Gy & 0 & 0.002 & 0.038 & 0.004 \\ \hline
+\multirow{2}{*}{} & \multicolumn{4}{c|}{$\nicefrac{1}{2}$ $\Diamond$-Norm} \\ \cline{2-5} 
+ & Full & $\mathcal{H}$ + $\mathcal{S}$ & $\mathcal{H}$ & $\mathcal{S}$ \\ \hline
+Gi & 0 & 0.004 & 0.04 & 0.006 \\ \hline
+Gx & 0 & 0.002 & 0.038 & 0.004 \\ \hline
+Gy & 0 & 0.002 & 0.038 & 0.004 \\ \hline
+\end{tabular}
+
+}
+\end{minipage}
+\caption{ \textbf{Comparisons of error-generator-projection derived estimates to target and estimated gates}.  Each of these two tables compares the ``full'' best-estimate GST gates with those generated by a projection (i.e. less-than-the whole) error generator show in Table \ref{bestGatesetErrGenTable}.  Columns labeled ``$\mathcal{H}$'' correspond to projecting the error generator onto the space of all the Hamiltonian-type error generators, and those labeled ``$\mathcal{S}$'' correspond to the similar projection but using the Stocastic error generators.  The label ``$\mathcal{H} + \mathcal{S}$'' intuitively refers to projecting onto the space spanned by both Hamiltonian and Stochastic error generators.  ``Full'' denotes that the entire error generator is used, and thus the constructed gate is equal to the final GST estimate.  The \textbf{left} table compares each constructed gate with the \textbf{ideal target} gate, whereas the \textbf{right} table compares it with the \textbf{GST best-estimate} gate.  Each table is divided into vertical sections based on the metric being used.\label{bestGatesetErrGenProjectionMetricsTable} }
+\end{center}
+\end{table}
+
+
+\begin{table}[h]
+\begin{center}
+\begin{tabular}[l]{|c|c|c|c|c|c|c|c|c|}
+\hline
+Type & $2\Delta\log(\mathcal{L})$ & $k$ & $2\Delta\log(\mathcal{L})-k$ & $\sqrt{2k}$ & $N_\sigma$ & $N_s$ & $N_p$ & Rating \\ \hline
+Full & 691.3 & 786 & -94.72 & 39.65 & -2.39 & 817 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+$\mathcal{H}$ + $\mathcal{S}$ & 705.8 & 793 & -87.17 & 39.82 & -2.19 & 817 & 24 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+$\mathcal{H}$ & 5\e{4} & 805 & 5\e{4} & 40.12 & 1\e{3} & 817 & 12 & $\bigstar$ \\ \hline
+$\mathcal{S}$ & 714.4 & 805 & -90.59 & 40.12 & -2.26 & 817 & 12 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+LND & 691.3 & 781 & -89.72 & 39.52 & -2.27 & 817 & 36 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+CPTP & 691.3 & 786 & -94.72 & 39.65 & -2.39 & 817 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+LND CPTP & 691.3 & 781 & -89.72 & 39.52 & -2.27 & 817 & 36 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+$\mathcal{H}$ + $\mathcal{S}$ CPTP & 705.8 & 793 & -87.17 & 39.82 & -2.19 & 817 & 24 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+\end{tabular}
+
+\caption{\textbf{Comparison between the computed and expected maximum $\log(\mathcal{L})$ for error generator projections}.  Each row shows goodness of fit values for a particular gate set when using all of the gate sequences.  Labels ``$\mathcal{H}$'', ``$\mathcal{S}$'', and ``$\mathcal{H} + \mathcal{S}$'' correspond to the gatesets whose elements are obtained by projecting each gate's error generator onto the space of Hamiltonian-type error generators, Stocastic error generators, and both of these categories, respectively. ``Full'' denotes the final GST estimate itself (no projection), which is redundant with the final row in Table \ref{progressTable}.  The ``CPTP'' row shows the fit obtained gauge-optimizing to CPTP then contracting to CPTP, and the ``$\mathcal{H} + \mathcal{S}$ CPTP'' shows the fit obtained by contracting the ``$\mathcal{H} + \mathcal{S}$'' gate set to CPTP.  Column headings have the same meaning as in Table \ref{progressTable}, and $N_p$ is given by the number of orthogonal error generators used for each of the projections.\label{logLErrgenProjectionTable}}
+%$p$ is the p-value derived from a $\chi^2_k$ distribution.(For example, if $p=0.05$, then the probability of observing a $\chi^{2}$ value as large as, or larger than, the one indicated in the table is 5\%, assuming the GST model is valid.) 
+\end{center}
+\end{table}
+
+
+\begin{table}[h]
+\begin{center}
+\begin{tabular}[l]{|c|c|c|c|c|c|c|c|c|}
+\hline
+germ & $2\Delta\log(\mathcal{L})$ & $k$ & $2\Delta\log(\mathcal{L})-k$ & $\sqrt{2k}$ & $N_\sigma$ & $N_s$ & $N_p$ & Rating \\ \hline
+$\mbox{Gx}$ & 58.57 & 49 & 9.574 & 9.899 & 0.97 & 80 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+$\mbox{Gy}$ & 110.2 & 79 & 31.22 & 12.57 & 2.48 & 110 & 31 & $\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+$\mbox{Gi}$ & 137.9 & 137 & 0.946 & 16.55 & 0.06 & 168 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+$\mbox{Gx}\cdot\mbox{Gy}$ & 120.4 & 98 & 22.38 & 14 & 1.6 & 129 & 31 & $\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+$\mbox{Gx}\cdot\mbox{Gy}\cdot\mbox{Gi}$ & 86.77 & 65 & 21.77 & 11.4 & 1.91 & 96 & 31 & $\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+$\mbox{Gx}\cdot\mbox{Gi}\cdot\mbox{Gy}$ & 72.88 & 65 & 7.879 & 11.4 & 0.69 & 96 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+$\mbox{Gx}\cdot\mbox{Gi}\cdot\mbox{Gi}$ & 70.31 & 65 & 5.309 & 11.4 & 0.47 & 96 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+$\mbox{Gy}\cdot\mbox{Gi}\cdot\mbox{Gi}$ & 62.24 & 65 & -2.764 & 11.4 & -0.24 & 96 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+\end{tabular}
+
+\caption{\textbf{Comparison between the computed and expected maximum $\log(\mathcal{L})$ per germ for short germs}.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively (specific to a single germ).  The quantity $2\Delta\log(\mathcal{L})$ measures the goodness of fit of the GST model (small is better) and is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $N_\sigma = (2\Delta\log(\mathcal{L})-k)/\sqrt{2k}$ is the number of standard deviations from the mean (a $p$-value can be straightforwardly derived from $N_\sigma$).  The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.\label{FitByGermTable}}
+%$p$ is the p-value derived from a $\chi^2_k$ distribution.(For example, if $p=0.05$, then the probability of observing a $\chi^{2}$ value as large as, or larger than, the one indicated in the table is 5\%, assuming the GST model is valid.) 
+\end{center}
+\end{table}
+
+
+\begin{table}[h]
+\begin{center}
+\begin{tabular}[l]{|c|c|c|c|c|}
+\hline
+ & I & X & Y & Z \\ \hline
+ & \vcenteredhbox{\includegraphics[width=1.10in,height=1.10in,keepaspectratio]{general_reportCv3_files/pauli_ham__I_projector.pdf}} & \vcenteredhbox{\includegraphics[width=1.10in,height=1.10in,keepaspectratio]{general_reportCv3_files/pauli_ham__X_projector.pdf}} & \vcenteredhbox{\includegraphics[width=1.10in,height=1.10in,keepaspectratio]{general_reportCv3_files/pauli_ham__Y_projector.pdf}} & \vcenteredhbox{\includegraphics[width=1.10in,height=1.10in,keepaspectratio]{general_reportCv3_files/pauli_ham__Z_projector.pdf}} \\ \hline
+\end{tabular}
+
+\caption{\textbf{Hamiltonian Error Generators}.  These color box plots display the Hamiltonian-type error generators which are used to project the ``Full'' error generator of the GST estimate in Table \ref{bestGatesetErrGenTable}.  Rows and columns of this table reflect the arrangement of the color-box-plots of the Hamiltonian-error-generator cells of Table \ref{bestGatesetErrGenTable}.\label{hamiltonianProjectorTable}}
+\end{center}
+\end{table}
+
+
+\begin{table}[h]
+\begin{center}
+\begin{tabular}[l]{|c|c|c|c|c|}
+\hline
+ & I & X & Y & Z \\ \hline
+ & \vcenteredhbox{\includegraphics[width=1.10in,height=1.10in,keepaspectratio]{general_reportCv3_files/pauli_sto__I_projector.pdf}} & \vcenteredhbox{\includegraphics[width=1.10in,height=1.10in,keepaspectratio]{general_reportCv3_files/pauli_sto__X_projector.pdf}} & \vcenteredhbox{\includegraphics[width=1.10in,height=1.10in,keepaspectratio]{general_reportCv3_files/pauli_sto__Y_projector.pdf}} & \vcenteredhbox{\includegraphics[width=1.10in,height=1.10in,keepaspectratio]{general_reportCv3_files/pauli_sto__Z_projector.pdf}} \\ \hline
+\end{tabular}
+
+\caption{\textbf{Stochastic Error Generators}.  These color box plots display the stochastic-type error generators which are used to project the ``Full'' error generator of the GST estimate in Table \ref{bestGatesetErrGenTable}.  Rows and columns of this table reflect the arrangement of the color-box-plots of the stochastic-error-generator cells of Table \ref{bestGatesetErrGenTable}.\label{stochasitcProjectorTable}}
+\end{center}
+\end{table}
+
+
+\begin{table}[h]
+\begin{center}
+\begin{tabular}[l]{|c|c|c|c|}
+\hline
+Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
+Gi & 0.04 & 0.04 & 0.04 \\ \hline
+Gx & 0.038 & 0.038 & 0.038 \\ \hline
+Gy & 0.038 & 0.038 & 0.038 \\ \hline
+\end{tabular}
+
+\caption{\textbf{Per gate gauge optimized comparison with target}.  Rows and columns are similar to those of Table \ref{bestGatesetVsTargetTable}, except that each row shows results for a \emph{differently gauge-optimized} gate set.  In particular, results for each gate are computed using a gate set that was gauge optimized to target \emph{only} that single gate.  This shows, in a sense, that minimum infidelity that can be reached on a per-gate basis.  The trace and diamond distances are often similar to the infidelity, indicating that gauge transformations are able to ``undo'' the coherent errors of a single gate.\label{gaugeOptGatesetsVsTargetTable}}
+\end{center}
+\end{table}
+
+\begin{table}[h]
+\begin{center}
+\begin{tabular}[l]{|c|c|c|}
+\hline
+Gate & Eigenvalues & Eigenvalue Magnitudes \\ \hline
+Gi & $ \begin{array}{c}
+0.011 \\ 
+0.013 \\ 
+0.017 \\ 
+0.96
+ \end{array} $
+ & \vcenteredhbox{\includegraphics[width=2.53in,height=2.53in,keepaspectratio]{general_reportCv3_files/goCPTPChoiEvalBars_Gi.pdf}} \\ \hline
+Gx & $ \begin{array}{c}
+0.011 \\ 
+0.013 \\ 
+0.014 \\ 
+0.962
+ \end{array} $
+ & \vcenteredhbox{\includegraphics[width=2.53in,height=2.53in,keepaspectratio]{general_reportCv3_files/goCPTPChoiEvalBars_Gx.pdf}} \\ \hline
+Gy & $ \begin{array}{c}
+0.011 \\ 
+0.012 \\ 
+0.015 \\ 
+0.962
+ \end{array} $
+ & \vcenteredhbox{\includegraphics[width=2.53in,height=2.53in,keepaspectratio]{general_reportCv3_files/goCPTPChoiEvalBars_Gy.pdf}} \\ \hline
+\end{tabular}
+
+\caption{\textbf{CPTP-gauge optimized Choi matrix table}.  Similar to Table \ref{bestGatesetChoiTable} except that gate set being analyzed has been gauge optimized to CPTP (but not contracted).  The resulting gates are, in effect, as close to CPTP as the numerical optimizer was able to find without reducing the quality of the fit (i.e. by gauge transformations alone).\label{gaugeOptCPTPGatesetChoiTable}}
+\end{center}
+\end{table}
+
+
+
+}{}
 
 \end{document}

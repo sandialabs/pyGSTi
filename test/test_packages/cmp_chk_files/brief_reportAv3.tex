@@ -60,11 +60,12 @@ opt_table_class={pygstiTbl},
 opt_template_path={None},
 opt_latex_cmd={pdflatex},
 L_germ_tuple_base_string_dict={Dict[[0, Gx]: {}, [0, Gy]: {}, [0, Gi]: {}, [0, GxGy]: {}, [0, GxGyGi]: {}, [0, GxGiGy]: {}, [0, GxGiGi]: {}, [0, GyGiGi]: {}, [0, GxGxGiGy]: {}, [0, GxGyGyGi]: {}, [0, GxGxGyGxGyGy]: {}, [1, Gx]: [Gx], [1, Gy]: [Gy], [1, Gi]: [Gi], [1, GxGy]: {}, [1, GxGyGi]: {}, [1, GxGiGy]: {}, [1, GxGiGi]: {}, [1, GyGiGi]: {}, [1, GxGxGiGy]: {}, [1, GxGyGyGi]: {}, [1, GxGxGyGxGyGy]: {}, [2, Gx]: [Gx]2, [2, Gy]: [Gy]2, [2, Gi]: [Gi]2, [2, GxGy]: [GxGy], [2, GxGyGi]: {}, [2, GxGiGy]: {}, [2, GxGiGi]: {}, [2, GyGiGi]: {}, [2, GxGxGiGy]: {}, [2, GxGyGyGi]: {}, [2, GxGxGyGxGyGy]: {}, [4, Gx]: [Gx]4, [4, Gy]: [Gy]4, [4, Gi]: [Gi]4, [4, GxGy]: [GxGy]2, [4, GxGyGi]: [GxGyGi], [4, GxGiGy]: [GxGiGy], [4, GxGiGi]: [GxGiGi], [4, GyGiGi]: [GyGiGi], [4, GxGxGiGy]: [GxGxGiGy], [4, GxGyGyGi]: [GxGyGyGi], [4, GxGxGyGxGyGy]: {}, [8, Gx]: [Gx]8, [8, Gy]: [Gy]8, [8, Gi]: [Gi]8, [8, GxGy]: [GxGy]4, [8, GxGyGi]: [GxGyGi]2, [8, GxGiGy]: [GxGiGy]2, [8, GxGiGi]: [GxGiGi]2, [8, GyGiGi]: [GyGiGi]2, [8, GxGxGiGy]: [GxGxGiGy]2, [8, GxGyGyGi]: [GxGyGyGi]2, [8, GxGxGyGxGyGy]: [GxGxGyGxGyGy]]},
-constrainToTP={False},
+cptpPenaltyFactor={0},
 defaultBasename={MyDefaultReportName},
 defaultDirectory={temp_test_files},
+distributeMethod={deriv},
 fiducial_pairs={None},
-gaugeOptParams={Dict[]},
+gaugeOptParams={Dict[TPpenalty: 0, CPpenalty: 0, gatesMetric: frobenius, spamMetric: frobenius, itemWeights: Dict[gates: 1.0, spam: 0.001]]},
 hessianProjection={optimal gate CIs},
 linlogPercentile={5},
 max_length_list={[0, 1, 2, 4, 8]},
@@ -102,12 +103,12 @@ Table \ref{progressTable} shows how well GST was able to fit you data through it
 \begin{center}
 \begin{tabular}[l]{|c|c|c|c|c|c|c|c|c|}
 \hline
-L & $\chi^2$ & $k$ & $\chi^2-k$ & $\sqrt{2k}$ & $p$ & $N_s$ & $N_p$ & Rating \\ \hline
-0 & 53.25 & 52 & 1.245 & 10.2 & 0.43 & 92 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-1 & 53.25 & 52 & 1.245 & 10.2 & 0.43 & 92 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-2 & 106.4 & 128 & -21.64 & 16 & 0.92 & 168 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-4 & 353.9 & 401 & -47.15 & 28.32 & 0.96 & 441 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-8 & 690.8 & 777 & -86.18 & 39.42 & 0.99 & 817 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+L & $\chi^2$ & $k$ & $\chi^2-k$ & $\sqrt{2k}$ & $N_\sigma$ & $N_s$ & $N_p$ & Rating \\ \hline
+0 & 53.25 & 52 & 1.245 & 10.2 & 0.12 & 92 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+1 & 53.25 & 52 & 1.245 & 10.2 & 0.12 & 92 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+2 & 106.4 & 128 & -21.64 & 16 & -1.35 & 168 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+4 & 353.9 & 401 & -47.15 & 28.32 & -1.66 & 441 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+8 & 690.8 & 777 & -86.18 & 39.42 & -2.19 & 817 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
 \end{tabular}
 
 \caption{\textbf{Comparison between the computed and expected $\chi^2$ for different values of $L$}.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively.  $\chi^2$ is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $P$ is the p-value derived from a $\chi^2_k$ distribution (i.e.~when $P <$ some threshold like $0.05$ there is grounds for rejecting the GST fit). The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.\label{progressTable}}
@@ -259,28 +260,28 @@ Gy & 0.5$\pi$ & 0.549$\pi$ & 0.502$\pi$ &  \\ \hline
 \begin{center}
 \begin{tabular}[l]{|c|c|c|}
 \hline
-Operator & Hilbert-Schmidt vector (Pauli basis) & Matrix \\ \hline
-$\rho_{0}$ & $ \begin{array}{c}
+Operator & Matrix & Hilbert-Schmidt vector (Pauli basis) \\ \hline
+$\rho_{0}$ & $ \left(\!\!\begin{array}{cc}
+0.989 & 0.001e^{-i0.15} \\ 
+0.001e^{i0.15} & 0.012
+ \end{array}\!\!\right) $
+ & $ \begin{array}{c}
 0.708 \\ 
 0.002 \\ 
 3\e{-4} \\ 
 0.691
  \end{array} $
- & $ \left(\!\!\begin{array}{cc}
-0.989 & 0.001e^{-i0.15} \\ 
-0.001e^{i0.15} & 0.012
- \end{array}\!\!\right) $
  \\ \hline
-$E_{0}$ & $ \begin{array}{c}
+$E_{0}$ & $ \left(\!\!\begin{array}{cc}
+0.081 & 0.002e^{i1.85} \\ 
+0.002e^{-i1.85} & 0.919
+ \end{array}\!\!\right) $
+ & $ \begin{array}{c}
 0.708 \\ 
 -0.001 \\ 
 -0.002 \\ 
 -0.592
  \end{array} $
- & $ \left(\!\!\begin{array}{cc}
-0.081 & 0.002e^{i1.85} \\ 
-0.002e^{-i1.85} & 0.919
- \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
 
@@ -320,7 +321,7 @@ Gx & $ \left(\!\!\begin{array}{cccc}
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-1 & -4\e{-5} & -2\e{-5} & 5\e{-6} \\ 
+1 & -4\e{-5} & -2\e{-5} & 6\e{-6} \\ 
 3\e{-4} & 7\e{-5} & -0.004 & 0.949 \\ 
 3\e{-4} & 0.001 & 0.951 & 0.001 \\ 
 -2\e{-4} & -0.949 & -0.006 & -0.001
