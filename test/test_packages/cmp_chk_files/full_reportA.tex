@@ -69,11 +69,12 @@ opt_table_class={pygstiTbl},
 opt_template_path={None},
 opt_latex_cmd={pdflatex},
 L_germ_tuple_base_string_dict={Dict[[0, Gx]: {}, [0, Gy]: {}, [0, Gi]: {}, [0, GxGy]: {}, [0, GxGyGi]: {}, [0, GxGiGy]: {}, [0, GxGiGi]: {}, [0, GyGiGi]: {}, [0, GxGxGiGy]: {}, [0, GxGyGyGi]: {}, [0, GxGxGyGxGyGy]: {}, [1, Gx]: [Gx], [1, Gy]: [Gy], [1, Gi]: [Gi], [1, GxGy]: {}, [1, GxGyGi]: {}, [1, GxGiGy]: {}, [1, GxGiGi]: {}, [1, GyGiGi]: {}, [1, GxGxGiGy]: {}, [1, GxGyGyGi]: {}, [1, GxGxGyGxGyGy]: {}, [2, Gx]: [Gx]2, [2, Gy]: [Gy]2, [2, Gi]: [Gi]2, [2, GxGy]: [GxGy], [2, GxGyGi]: {}, [2, GxGiGy]: {}, [2, GxGiGi]: {}, [2, GyGiGi]: {}, [2, GxGxGiGy]: {}, [2, GxGyGyGi]: {}, [2, GxGxGyGxGyGy]: {}, [4, Gx]: [Gx]4, [4, Gy]: [Gy]4, [4, Gi]: [Gi]4, [4, GxGy]: [GxGy]2, [4, GxGyGi]: [GxGyGi], [4, GxGiGy]: [GxGiGy], [4, GxGiGi]: [GxGiGi], [4, GyGiGi]: [GyGiGi], [4, GxGxGiGy]: [GxGxGiGy], [4, GxGyGyGi]: [GxGyGyGi], [4, GxGxGyGxGyGy]: {}, [8, Gx]: [Gx]8, [8, Gy]: [Gy]8, [8, Gi]: [Gi]8, [8, GxGy]: [GxGy]4, [8, GxGyGi]: [GxGyGi]2, [8, GxGiGy]: [GxGiGy]2, [8, GxGiGi]: [GxGiGi]2, [8, GyGiGi]: [GyGiGi]2, [8, GxGxGiGy]: [GxGxGiGy]2, [8, GxGyGyGi]: [GxGyGyGi]2, [8, GxGxGyGxGyGy]: [GxGxGyGxGyGy]]},
-constrainToTP={False},
+cptpPenaltyFactor={0},
 defaultBasename={MyDefaultReportName},
 defaultDirectory={temp_test_files},
+distributeMethod={deriv},
 fiducial_pairs={None},
-gaugeOptParams={Dict[]},
+gaugeOptParams={Dict[TPpenalty: 0, CPpenalty: 0, gatesMetric: frobenius, spamMetric: frobenius, itemWeights: Dict[gates: 1.0, spam: 0.001]]},
 hessianProjection={optimal gate CIs},
 linlogPercentile={5},
 max_length_list={[0, 1, 2, 4, 8]},
@@ -146,28 +147,28 @@ These Hilbert-Schmidt space representations require choosing a basis $\{M_i\}$ f
 \begin{center}
 \begin{tabular}[l]{|c|c|c|}
 \hline
-Operator & Hilbert-Schmidt vector (Pauli basis) & Matrix \\ \hline
-$\rho_{0}$ & $ \begin{array}{c}
+Operator & Matrix & Hilbert-Schmidt vector (Pauli basis) \\ \hline
+$\rho_{0}$ & $ \left(\!\!\begin{array}{cc}
+1 & 0 \\ 
+0 & 0
+ \end{array}\!\!\right) $
+ & $ \begin{array}{c}
 0.707 \\ 
 0 \\ 
 0 \\ 
 0.707
  \end{array} $
- & $ \left(\!\!\begin{array}{cc}
-1 & 0 \\ 
-0 & 0
- \end{array}\!\!\right) $
  \\ \hline
-$E_{0}$ & $ \begin{array}{c}
+$E_{0}$ & $ \left(\!\!\begin{array}{cc}
+0 & 0 \\ 
+0 & 1
+ \end{array}\!\!\right) $
+ & $ \begin{array}{c}
 0.707 \\ 
 0 \\ 
 0 \\ 
 -0.707
  \end{array} $
- & $ \left(\!\!\begin{array}{cc}
-0 & 0 \\ 
-0 & 1
- \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
 
@@ -321,7 +322,24 @@ Counts per string & 1000 \\ \hline
 
 \section{Output from GST\label{secOutput}}
 
-The primary output of GST is an estimated gate set.  This section presents the raw estimate, and then some useful derived quantities of the estimated gates, including comparisons to the target gates.
+The primary output of GST is an estimated gate set.  This section presents the raw estimate, and then some useful derived quantities of the estimated gates, including comparisons to the target gates.  Some of these quanties are ``gauge-dependent'', meaning they will depend on unphysical gauge degrees of freedom that are a necessary byproduct of estimating an entire gate set at once (akin to a freedom of reference frame).  After finding a best-estimate based on the (physical) data, GST optimizes within the space of all (unphysical) gauge degrees of freedom.  Typically this is done to make the estimated gates and SPAM operations look as close to the ideal target gates as possible.  But tradeoffs can and almost always must be made regarding this optimization.  Table \ref{bestGatesetGaugeParamsTable} lists the relevant parameters used during the gauge optimization step which resulted in the estimates that follow.
+
+\begin{table}[h]
+\begin{center}
+\begin{tabular}[l]{|c|c|}
+\hline
+\textbf{Quantity} & \textbf{Value} \\ \hline
+TP penalty factor & 0 \\ \hline
+CP penalty factor & 0 \\ \hline
+Metric for gate-to-target & frobenius \\ \hline
+Metric for SPAM-to-target & frobenius \\ \hline
+Item weighting & gates=1, spam=0.001 \\ \hline
+\end{tabular}
+
+\caption{\textbf{Gauge Optimization Details}.  A list of the parameters used when performing the gauge optimization that produced the final GST results found in subsequent tables and figures.\label{bestGatesetGaugeParamsTable}}
+\end{center}
+\end{table}
+
 
 \subsection{Raw GST estimates}
 
@@ -335,28 +353,28 @@ Tables \ref{bestGatesetSpamTable} and \ref{bestGatesetGatesTable} report NOT-SET
 \begin{center}
 \begin{tabular}[l]{|c|c|c|}
 \hline
-Operator & Hilbert-Schmidt vector (Pauli basis) & Matrix \\ \hline
-$\rho_{0}$ & $ \begin{array}{c}
+Operator & Matrix & Hilbert-Schmidt vector (Pauli basis) \\ \hline
+$\rho_{0}$ & $ \left(\!\!\begin{array}{cc}
+0.989 & 0.001e^{-i0.15} \\ 
+0.001e^{i0.15} & 0.012
+ \end{array}\!\!\right) $
+ & $ \begin{array}{c}
 0.708 \\ 
 0.002 \\ 
 3\e{-4} \\ 
 0.691
  \end{array} $
- & $ \left(\!\!\begin{array}{cc}
-0.989 & 0.001e^{-i0.15} \\ 
-0.001e^{i0.15} & 0.012
- \end{array}\!\!\right) $
  \\ \hline
-$E_{0}$ & $ \begin{array}{c}
+$E_{0}$ & $ \left(\!\!\begin{array}{cc}
+0.081 & 0.002e^{i1.85} \\ 
+0.002e^{-i1.85} & 0.919
+ \end{array}\!\!\right) $
+ & $ \begin{array}{c}
 0.708 \\ 
 -0.001 \\ 
 -0.002 \\ 
 -0.592
  \end{array} $
- & $ \left(\!\!\begin{array}{cc}
-0.081 & 0.002e^{i1.85} \\ 
-0.002e^{-i1.85} & 0.919
- \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
 
@@ -396,7 +414,7 @@ Gx & $ \left(\!\!\begin{array}{cccc}
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-1 & -4\e{-5} & -2\e{-5} & 5\e{-6} \\ 
+1 & -4\e{-5} & -2\e{-5} & 6\e{-6} \\ 
 3\e{-4} & 7\e{-5} & -0.004 & 0.949 \\ 
 3\e{-4} & 0.001 & 0.951 & 0.001 \\ 
 -2\e{-4} & -0.949 & -0.006 & -0.001
@@ -518,7 +536,7 @@ Gy & $ \begin{array}{c}
  \end{array} $
  & $ \begin{array}{c}
 1 \\ 
--4\e{-6} \\ 
+-3\e{-6} \\ 
 0.007 \\ 
 -2\e{-4}
  \end{array} $
@@ -545,41 +563,16 @@ Gy & 0.5$\pi$ & 0.451$\pi$ & 0.498$\pi$ &  \\ \hline
 \end{center}
 \end{table}
 
-It might be useful to know the closest \emph{unitary} operation to the estimated gate, and how close it is.  Usually, you were trying to implement a unitary.  If the closest unitary to $G$ was indeed $G_{\mathrm{target}}$, then all errors are incoherent; if not, you might be able to tweak the gate parameters to get closer relatively easily.  Also, implementing a particular unitary may be less important than just achieving \emph{some} set of mutually independent unitaries.  In these and other cases, the distance from an estimated gate to its closest unitary approximation is of interest.
+%It might be useful to know the closest \emph{unitary} operation to the estimated gate, and how close it is.  Usually, you were trying to implement a unitary.  If the closest unitary to $G$ was indeed $G_{\mathrm{target}}$, then all errors are incoherent; if not, you might be able to tweak the gate parameters to get closer relatively easily.  Also, implementing a particular unitary may be less important than just achieving \emph{some} set of mutually independent unitaries.  In these and other cases, the distance from an estimated gate to its closest unitary approximation is of interest.
 
-Table \ref{bestGatesetClosestUnitaryTable} lists, for each estimated gate, the properties of its closest unitary approximation.  The table defines the closest unitary, in terms of an axis and angle (in $\mathcal{B}(\mathcal{H})$) of rotation.  It also presents the process fidelity and Jamiolkowski trace distance between the estimated gate and its closest unitary approximation.  A sanity check is computed by comparing the fidelity of the obtained closest unitary with a theoretical upper bound (if a value greater than one appears in this column then the other values in that row may be inaccurate).  If these numbers are similar to those in Table \ref{bestGatesetVsTargetTable}, then the gates are as close to the targets as they are to \emph{any} unitary.
+%Table \ref{bestGatesetClosestUnitaryTable} lists, for each estimated gate, the properties of its closest unitary approximation.  The table defines the closest unitary, in terms of an axis and angle (in $\mathcal{B}(\mathcal{H})$) of rotation.  It also presents the process fidelity and Jamiolkowski trace distance between the estimated gate and its closest unitary approximation.  A sanity check is computed by comparing the fidelity of the obtained closest unitary with a theoretical upper bound (if a value greater than one appears in this column then the other values in that row may be inaccurate).  If these numbers are similar to those in Table \ref{bestGatesetVsTargetTable}, then the gates are as close to the targets as they are to \emph{any} unitary.
 
-\begin{table}[h]
-\begin{center}
-\begin{tabular}[l]{|c|c|c|c|c|c|}
-\hline
-Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & \begin{tabular}{c}Rotation\\Axis\end{tabular} & \begin{tabular}{c}Rotation\\Angle\end{tabular} & Sanity \checkmark \\ \hline
-Gi & 0.04 & 0.04 & $ \begin{array}{c}
-0 \\ 
--0.261 \\ 
--0.741 \\ 
-0.618
- \end{array} $
- & 0.002$\pi$ & 5\e{-6} \\ \hline
-Gx & 0.038 & 0.038 & $ \begin{array}{c}
-0 \\ 
-1 \\ 
--0.003 \\ 
--9\e{-7}
- \end{array} $
- & 0.5$\pi$ & 5\e{-7} \\ \hline
-Gy & 0.038 & 0.038 & $ \begin{array}{c}
-0 \\ 
--0.003 \\ 
-1 \\ 
-7\e{-7}
- \end{array} $
- & 0.5$\pi$ & 3\e{-7} \\ \hline
-\end{tabular}
-
-\caption{Information pertaining to the closest unitary gate to each of the estimated gates.\label{bestGatesetClosestUnitaryTable}}
-\end{center}
-\end{table}
+%\begin{table}[h]
+%\begin{center}
+%\XXXputfield{bestGatesetClosestUnitaryTable}{Best gate set overview table will be placed here}
+%\caption{\XXXputfield{tt_bestGatesetClosestUnitaryTable}{}Information pertaining to the closest unitary gate to each of the estimated gates.\label{bestGatesetClosestUnitaryTable}}
+%\end{center}
+%\end{table}
 
 
 Finally, Table \ref{bestGatesetChoiTable} presents each estimated gate's \emph{Choi matrix}, along with its spectrum.  The Choi matrix (sometimes ambiguously referred to as the ``process matrix'') is an alternative way to describe a process.  We usually prefer the ``superoperator representation'', which has the very useful property that the process matrix corresponding to applying $G_a$ and then $G_b$ is simply $G_bG_a$.  This is completely false for the Choi representation.  Nonetheless, the Choi representation is often useful, so we present it here -- but without a detailed discussion of its properties (see, e.g. the textbook by Nielsen and Chuang).
@@ -594,10 +587,10 @@ Additionally, the condition of \emph{complete positivity} or CP (which all real 
 \hline
 Gate & Choi matrix (Pauli basis) & Eigenvalues \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
-0.96 & 0.001e^{i1.80} & 0.002e^{-i1.66} & 0.002e^{-i1.40} \\ 
-0.001e^{-i1.80} & 0.012 & 0.001e^{-i0.21} & 0.002e^{-i3.12} \\ 
-0.002e^{i1.66} & 0.001e^{i0.21} & 0.013 & 0.001e^{i2.86} \\ 
-0.002e^{i1.40} & 0.002e^{i3.12} & 0.001e^{-i2.86} & 0.014
+0.96 & 0.001e^{-i1.80} & 0.002e^{-i1.48} & 0.002e^{i1.40} \\ 
+0.001e^{i1.80} & 0.012 & 0.001e^{-i2.93} & 0.002e^{i3.12} \\ 
+0.002e^{i1.48} & 0.001e^{i2.93} & 0.013 & 0.001e^{i0.28} \\ 
+0.002e^{-i1.40} & 0.002e^{-i3.12} & 0.001e^{-i0.28} & 0.014
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.011 \\ 
@@ -607,10 +600,10 @@ Gi & $ \left(\!\!\begin{array}{cccc}
  \end{array} $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
-0.487 & 0.475e^{-i1.57} & 0.001e^{-i1.61} & 0.001e^{-i1.52} \\ 
-0.475e^{i1.57} & 0.488 & 0.001e^{-i0.05} & 0.001e^{-i3.11} \\ 
-0.001e^{i1.61} & 0.001e^{i0.05} & 0.013 & 8\e{-5}e^{-i1.17} \\ 
-0.001e^{i1.52} & 0.001e^{i3.11} & 8\e{-5}e^{i1.17} & 0.012
+0.487 & 0.475e^{i1.57} & 0.001e^{-i1.53} & 0.001e^{i1.52} \\ 
+0.475e^{-i1.57} & 0.488 & 0.001e^{-i3.10} & 0.001e^{i3.11} \\ 
+0.001e^{i1.53} & 0.001e^{i3.10} & 0.013 & 8\e{-5}e^{-i1.97} \\ 
+0.001e^{-i1.52} & 0.001e^{-i3.11} & 8\e{-5}e^{i1.97} & 0.012
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.011 \\ 
@@ -620,10 +613,10 @@ Gx & $ \left(\!\!\begin{array}{cccc}
  \end{array} $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-0.488 & 0.002e^{i1.54} & 0.474e^{i1.57} & 0.001e^{-i1.61} \\ 
-0.002e^{-i1.54} & 0.012 & 0.001e^{i0.07} & 1\e{-4}e^{-i2.04} \\ 
-0.474e^{-i1.57} & 0.001e^{-i0.07} & 0.488 & 0.001e^{-i0.06} \\ 
-0.001e^{i1.61} & 1\e{-4}e^{i2.04} & 0.001e^{i0.06} & 0.012
+0.488 & 0.002e^{-i1.54} & 0.474e^{i1.57} & 0.001e^{i1.61} \\ 
+0.002e^{i1.54} & 0.012 & 0.001e^{i3.07} & 1\e{-4}e^{i2.04} \\ 
+0.474e^{-i1.57} & 0.001e^{-i3.07} & 0.488 & 0.001e^{-i3.08} \\ 
+0.001e^{-i1.61} & 1\e{-4}e^{-i2.04} & 0.001e^{i3.08} & 0.012
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.011 \\ 
@@ -695,15 +688,16 @@ As a rough rule of thumb, for GST experiments involving relatively long sequence
 \begin{center}
 \begin{tabular}[l]{|c|c|c|c|c|c|c|c|c|}
 \hline
-L & $\chi^2$ & $k$ & $\chi^2-k$ & $\sqrt{2k}$ & $p$ & $N_s$ & $N_p$ & Rating \\ \hline
-0 & 53.25 & 52 & 1.245 & 10.2 & 0.43 & 92 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-1 & 53.25 & 52 & 1.245 & 10.2 & 0.43 & 92 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-2 & 106.4 & 128 & -21.64 & 16 & 0.92 & 168 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-4 & 353.9 & 401 & -47.15 & 28.32 & 0.96 & 441 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-8 & 690.8 & 777 & -86.18 & 39.42 & 0.99 & 817 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+L & $\chi^2$ & $k$ & $\chi^2-k$ & $\sqrt{2k}$ & $N_\sigma$ & $N_s$ & $N_p$ & Rating \\ \hline
+0 & 53.25 & 52 & 1.245 & 10.2 & 0.12 & 92 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+1 & 53.25 & 52 & 1.245 & 10.2 & 0.12 & 92 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+2 & 106.4 & 128 & -21.64 & 16 & -1.35 & 168 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+4 & 353.9 & 401 & -47.15 & 28.32 & -1.66 & 441 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+8 & 690.8 & 777 & -86.18 & 39.42 & -2.19 & 817 & 40 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
 \end{tabular}
 
-\caption{\textbf{Comparison between the computed and expected $\chi^2$ for different values of $L$}.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively.  $\chi^2$ measures the goodness of fit of the GST model (small is better) and is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $p$ is the $p$-value derived from a $\chi^2_k$ distribution. (For example, if $p=0.05$, then the probability of observing a $\chi^{2}$ value as large as, or larger than, the one indicated in the table is 5\%, assuming the GST model is valid.) The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.\label{progressTable}}
+\caption{\textbf{Comparison between the computed and expected $\chi^2$ for different values of $L$}.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively.  $\chi^2$ measures the goodness of fit of the GST model (small is better) and is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $N_\sigma = (\chi^2-k)/\sqrt{2k}$ is the number of standard deviations from the mean (a $p$-value can be straightforwardly derived from $N_\sigma$). The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.\label{progressTable}}
+%$p$ is the p-value derived from a $\chi^2_k$ distribution.(For example, if $p=0.05$, then the probability of observing a $\chi^{2}$ value as large as, or larger than, the one indicated in the table is 5\%, assuming the GST model is valid.)
 \end{center}
 \end{table}
 
@@ -719,7 +713,7 @@ L & $\chi^2$ & $k$ & $\chi^2-k$ & $\sqrt{2k}$ & $p$ & $N_s$ & $N_p$ & Rating \\ 
 
 The aggregated $\chi^2$ numbers presented in Table \ref{progressTable} tell you how well the GST estimate fits the \emph{entire} dataset.  If they are in line with theory ($\chi^2 \approx k$), then there is little more to be said.  But if the best fit to the data is not good, we can debug it by identifying \emph{which} experiments are inconsistent with the fit.
 
-Figure \ref{bestEstimateColorBoxPlot} displays the $\chi^2$ value for each individual gate sequence (Eq.~\ref{eqGateStringChi2}).  Each gate sequence corresponds to a single colored ``pixel'' in the plot.  Each block of pixels corresponds to a single base sequence (i.e., a germ power), and the individual pixels within a block correspond to the various fiducial sequence pairs between which that base sequence was sandwiched.  (The column indicates the fiducial adjacent to state preparation, while the row indicates the fiducial adjacent to measurement).  Base sequences are arranged in a grid; different rows correspond to different germs, while different columns correspond to different maximum lengths $L$.  Pixels are labeled with the $\chi^2$ value for that sequence, and colored appropriately.
+Figure \ref{bestEstimateColorBoxPlot} displays the $\chi^2$ value for each individual gate sequence (Eq.~\ref{eqGateStringChi2}).  Each gate sequence corresponds to a single colored ``pixel'' in the plot.  Each block of pixels corresponds to a single base sequence (i.e., a germ power), and the individual pixels within a block correspond to the various fiducial sequence pairs between which that base sequence was sandwiched, as indicated in Figure \ref{colorBoxPlotKeyPlot}.  Base sequences are arranged in a grid; different rows correspond to different germs, while different columns correspond to different maximum lengths $L$.  Pixels are labeled with the $\chi^2$ value for that sequence, and colored appropriately.
 
 Sequences whose observed frequencies are consistent with a Markovian gate set are shown in gray, with darker shades indicating greater inconsistency with the estimated gate set.  Data shown in red are \emph{not} consistent with a Markovian gate set.  It may appear contradictory to say that (a) gray is ``consistent" with Markovian, but (b) darker shades indicate ``greater inconsistency".  The resolution is that the $\chi^2$ values quantify inconsistency with the model, \emph{but} they themselves are also subject to random fluctuations.  Therefore, even if the data are perfectly consistent with the model, we expect to see (for example) a single $\chi^2_s \geq 10$ once per each 638 experiments.  Observing $\chi^2_s \geq 10$ for any given sequence does suggest that the data from
 $s$ were relatively surprising, but we also expect to see one such fluctuation if there are more than about 600 experiments.  The gray/red threshold is chosen based on the total number of sequences so that \emph{if} the data are perfectly Markovian, then the probability of one or more experiments being colored red is only 5\%.
@@ -730,7 +724,15 @@ Similar pixel plots for the intermediate estimates whose total $\chi^2$ is liste
 
 \begin{figure}
 \begin{center}
-\includegraphics[width=6.50in,height=9.00in,keepaspectratio]{full_reportA_files/bestChi2Boxes.pdf}
+\includegraphics[width=1.80in,height=1.80in,keepaspectratio]{full_reportA_files/colorBoxPlotKey.png}
+\caption{\textbf{Sub-block key for subsequent plots.} Shows how elements of the sub-blocks in Figure \ref{bestEstimateColorBoxPlot} correspond to preparation and measurement fiducial sequences.  Note that the column indicates the fiducial adjacent to state preparation, while the row indicates the fiducial adjacent to measurement.\label{colorBoxPlotKeyPlot}}
+\end{center}
+\end{figure}
+
+
+\begin{figure}
+\begin{center}
+\includegraphics[width=6.50in,height=8.00in,keepaspectratio]{full_reportA_files/bestChi2Boxes.pdf}
 \caption{\textbf{$\chi^2$ values for every individual experiment in the dataset}.  Each pixel represents a single experiment (gate sequence), and its color indicates whether GST was able to fit the corresponding frequency well.  Shades of white/gray are typical. Red squares represent statistically significant evidence for model violation (non-Markovianity), and should appear with probability at most 5\% if the data really are Markovian. Square blocks of pixels correspond to base sequences (arranged vertically by germ and horizontally by length); each pixel within a block corresponds to a specific choice of pre- and post-fiducial sequences.  See text for further details.\label{bestEstimateColorBoxPlot}}
 \end{center}
 \end{figure}
@@ -739,7 +741,7 @@ Figure \ref{invertedBestEstimateColorBoxPlot} shows exactly the same $\chi^2$ an
 
 \begin{figure}
 \begin{center}
-\includegraphics[width=6.50in,height=9.00in,keepaspectratio]{full_reportA_files/bestChi2Boxes_inverted.pdf}
+\includegraphics[width=6.50in,height=8.00in,keepaspectratio]{full_reportA_files/bestChi2Boxes_inverted.pdf}
 \caption{\textbf{$\chi^2$ values for each experiment, arranged differently.}  This figure shows the same data as Figure \ref{bestEstimateColorBoxPlot}, but arranged differently.  Each block now corresponds to a particular pair of fiducial sequences, while pixels within the block correspond to different base sequences sandwiched between those fiducials.\label{invertedBestEstimateColorBoxPlot}}
 \end{center}
 \end{figure}
