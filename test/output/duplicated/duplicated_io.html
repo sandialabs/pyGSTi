@@ -1,0 +1,285 @@
+
+<HTML>
+    <HEAD>
+        <TITLE> CloneDigger Report </TITLE>
+        <script type="text/javascript">
+        function unhide(divID) {
+            var item = document.getElementById(divID);
+            if (item) {
+                item.className=(item.className=='hidden')?'unhidden':'hidden';
+            }
+        }
+</script>
+
+<style type="text/css">
+.hidden { display: none; }
+.unhidden { display: block; }
+.preformatted {
+        border: 1px dashed #3c78b5;
+    font-size: 11px;
+        font-family: Courier;
+    margin: 10px;
+        line-height: 13px;
+}
+.preformattedHeader {
+    background-color: #f0f0f0;
+        border-bottom: 1px dashed #3c78b5;
+    padding: 3px;
+        text-align: center;
+}
+.preformattedContent {
+    background-color: #f0f0f0;
+    padding: 3px;
+}
+<!--
+<div class="preformatted"><div class="preformattedContent">
+<pre>Clone Digger
+</pre>
+</div></div>
+-->
+
+</style>
+
+    </HEAD>
+    <BODY>
+    
+    
+    <P>Source files: 5</P>
+        <a href = "javascript:unhide('files');">Click here to show/hide file names</a><div id="files" class="hidden"><P><B>Source files:</B><BR>io/loaders.py, <BR>io/outputdata.py, <BR>io/__init__.py, <BR>io/stdinput.py, <BR>io/writers.py</P></div>
+        <P>Clones detected: 6</P>
+        <P>109 of 649 lines are duplicates (16.80%) </P>
+<P>
+<B>Parameters<BR> </B>
+clustering_threshold = 10<BR>
+distance_threshold = 5<BR>
+size_threshold = 5<BR>
+hashing_depth = 1<BR>
+clusterize_using_hash = False<BR>
+clusterize_using_dcup = False<BR>
+</P> 
+        
+    <B>Time elapsed</B><BR>Construction of AST : 0.12 seconds<BR>
+Building statement hash : 0.00 seconds<BR>
+Building patterns : 0.25 seconds<BR>
+Marking similar statements : 0.31 seconds<BR>
+Finding similar sequences of statements : 0.01 seconds<BR>
+Refining candidates : 0.11 seconds<BR>
+ Total time: 0.81<BR>
+ Started at: Mon Aug  1 06:55:59 2016<BR>
+ Finished at: Mon Aug  1 06:56:00 2016
+    <P><B>Clone # 1</B><BR>Distance between two fragments = 1 <BR>Clone size = 12<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "io/stdinput.py"<BR>The first line is 311</TD><TD></TD><TD>Source file "io/stdinput.py"<BR>The first line is 445</TD></TR><TR>
+<TD>
+preamble_directives = {}</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+preamble_directives = {}</TD>
+</TR>
+<TR>
+<TD>
+with (open(filename, 'r')) as (<span style="color: rgb(255, 0, 0);">datafile</span>):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for line in <span style="color: rgb(255, 0, 0);">datafile</span>:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;line = line.strip()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (len(line) == 0) or (line[0] != '#'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;break<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if line.startswith('## '):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parts = line[len('## '):].split('=')<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if len(parts) == 2:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;preamble_directives[parts[0].strip()] = parts[1].strip()</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+with (open(filename, 'r')) as (<span style="color: rgb(255, 0, 0);">multidatafile</span>):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;for line in <span style="color: rgb(255, 0, 0);">multidatafile</span>:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;line = line.strip()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if (len(line) == 0) or (line[0] != '#'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;break<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if line.startswith('## '):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parts = line[len('## '):].split('=')<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if len(parts) == 2:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;preamble_directives[parts[0].strip()] = parts[1].strip()</TD>
+</TR>
+<TR>
+<TD>
+orig_cwd = _os.getcwd()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+orig_cwd = _os.getcwd()</TD>
+</TR>
+<TR>
+<TD>
+if len(_os.path.dirname(filename)) > 0:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;_os.chdir(_os.path.dirname(filename))</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if len(_os.path.dirname(filename)) > 0:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;_os.chdir(_os.path.dirname(filename))</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 2</B><BR>Distance between two fragments = 0 <BR>Clone size = 10<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "io/stdinput.py"<BR>The first line is 344</TD><TD></TD><TD>Source file "io/stdinput.py"<BR>The first line is 484</TD></TR><TR>
+<TD>
+def is_interactive():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;import __main__ as main<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return not hasattr(main, '__file__')</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+def is_interactive():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;import __main__ as main<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;return not hasattr(main, '__file__')</TD>
+</TR>
+<TR>
+<TD>
+if is_interactive():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;try:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;import time<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from IPython.display import clear_output<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def display_progress(i, N):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;time.sleep(0.001)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;clear_output()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(('Loading %s: %.0f%%') % ((filename, ((100.0) * (float(i))) / (float(N)))))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_sys.stdout.flush()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;except:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def display_progress(i, N):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;def display_progress(i, N):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if is_interactive():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;try:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;import time<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;from IPython.display import clear_output<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def display_progress(i, N):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;time.sleep(0.001)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;clear_output()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(('Loading %s: %.0f%%') % ((filename, ((100.0) * (float(i))) / (float(N)))))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_sys.stdout.flush()<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;except:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;def display_progress(i, N):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;def display_progress(i, N):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pass</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 3</B><BR>Distance between two fragments = 4 <BR>Clone size = 10<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "io/stdinput.py"<BR>The first line is 324</TD><TD></TD><TD>Source file "io/stdinput.py"<BR>The first line is 459</TD></TR><TR>
+<TD>
+try:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if 'Lookup' in preamble_directives:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lookupDict = self.parse_dictfile(preamble_directives['Lookup'])<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lookupDict = {}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if 'Columns' in preamble_directives:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;colLabels = [l.strip() for l in preamble_directives['Columns'].split(',') ]<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;colLabels = [<span style="color: rgb(255, 0, 0);">'plus count'</span>, <span style="color: rgb(255, 0, 0);">'count total'</span>]<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">spamLabels</span>, fillInfo = self.<span style="color: rgb(255, 0, 0);">_extractLabelsFromColLabels</span>(colLabels)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;nDataCols = len(colLabels)<BR>
+finally:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;_os.chdir(orig_cwd)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+try:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if 'Lookup' in preamble_directives:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lookupDict = self.parse_dictfile(preamble_directives['Lookup'])<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lookupDict = {}<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if 'Columns' in preamble_directives:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;colLabels = [l.strip() for l in preamble_directives['Columns'].split(',') ]<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;colLabels = [<span style="color: rgb(255, 0, 0);">'dataset1 plus count'</span>, <span style="color: rgb(255, 0, 0);">'dataset1 count total'</span>]<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: rgb(255, 0, 0);">dsSpamLabels</span>, fillInfo = self.<span style="color: rgb(255, 0, 0);">_extractLabelsFromMultiDataColLabels</span>(colLabels)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;nDataCols = len(colLabels)<BR>
+finally:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;_os.chdir(orig_cwd)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 4</B><BR>Distance between two fragments = 3 <BR>Clone size = 10<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "io/writers.py"<BR>The first line is 138</TD><TD></TD><TD>Source file "io/writers.py"<BR>The first line is 95</TD></TR><TR>
+<TD>
+if gatestring_list is not None:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (len(gatestring_list) > 0) and (not isinstance(gatestring_list[0], _objs.GateString)):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise ValueError('Argument gatestring_list must be a list of GateString objects!')<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gatestring_list = list(<span style="color: rgb(255, 0, 0);">multidataset.gsIndex</span>.keys())</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+if gatestring_list is not None:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;if (len(gatestring_list) > 0) and (not isinstance(gatestring_list[0], _objs.GateString)):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise ValueError('Argument gatestring_list must be a list of GateString objects!')<BR>
+else:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gatestring_list = list(<span style="color: rgb(255, 0, 0);">dataset</span>.keys())</TD>
+</TR>
+<TR>
+<TD>
+spamLabels = <span style="color: rgb(255, 0, 0);">multidataset</span>.get_spam_labels()</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+spamLabels = <span style="color: rgb(255, 0, 0);">dataset</span>.get_spam_labels()</TD>
+</TR>
+<TR>
+<TD>
+if spamLabelOrder is not None:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;assert len(spamLabelOrder) == len(spamLabels)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;assert all([sl in spamLabels for sl in spamLabelOrder ])<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;assert all([sl in spamLabelOrder for sl in spamLabels ])<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;spamLabels = spamLabelOrder</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if spamLabelOrder is not None:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;assert len(spamLabelOrder) == len(spamLabels)<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;assert all([sl in spamLabels for sl in spamLabelOrder ])<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;assert all([sl in spamLabelOrder for sl in spamLabels ])<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;spamLabels = spamLabelOrder</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 5</B><BR>Distance between two fragments = 3 <BR>Clone size = 8<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "io/stdinput.py"<BR>The first line is 364</TD><TD></TD><TD>Source file "io/stdinput.py"<BR>The first line is 503</TD></TR><TR>
+<TD>
+if ((iLine) % (nSkip) == 0) or ((iLine) + (1) == nLines):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;display_progress((iLine) + (1), nLines)</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if ((iLine) % (nSkip) == 0) or ((iLine) + (1) == nLines):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;display_progress((iLine) + (1), nLines)</TD>
+</TR>
+<TR>
+<TD>
+line = line.strip()</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+line = line.strip()</TD>
+</TR>
+<TR>
+<TD>
+if (len(line) == 0) or (line[0] == '#'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;continue</TD>
+<TD style="width: 10px;" BGCOLOR=AQUA> </TD><TD>
+if (len(line) == 0) or (line[0] == '#'):<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;continue</TD>
+</TR>
+<TR>
+<TD>
+try:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringTuple, <span style="color: rgb(255, 0, 0);">gateStringStr</span>, valueList = self.parse_dataline(line, lookupDict, nDataCols)<BR>
+except ValueError, e:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;raise ValueError(('%s Line %d: %s') % ((filename, iLine, str(e))))</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+try:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;gateStringTuple, <span style="color: rgb(255, 0, 0);">_</span>, valueList = self.parse_dataline(line, lookupDict, nDataCols)<BR>
+except ValueError, e:<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;raise ValueError(('%s Line %d: %s') % ((filename, iLine, str(e))))</TD>
+</TR>
+<TR>
+<TD>
+self.<span style="color: rgb(255, 0, 0);">_fillDataCountDict</span>(<span style="color: rgb(255, 0, 0);">countDict</span>, fillInfo, valueList)</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+self.<span style="color: rgb(255, 0, 0);">_fillMultiDataCountDicts</span>(<span style="color: rgb(255, 0, 0);">dsCountDicts</span>, fillInfo, valueList)</TD>
+</TR>
+</TABLE> </P> <HR><BR>
+<P><B>Clone # 6</B><BR>Distance between two fragments = 3 <BR>Clone size = 5<TABLE NOWRAP WIDTH=100% BORDER=1><TD>Source file "io/writers.py"<BR>The first line is 217</TD><TD></TD><TD>Source file "io/writers.py"<BR>The first line is 223</TD></TR><TR>
+<TD>
+for <span style="color: rgb(255, 0, 0);">prepLabel</span>, <span style="color: rgb(255, 0, 0);">rhoVec</span> in gs.<span style="color: rgb(255, 0, 0);">preps</span>.items():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;output.write(('%s\n') % (<span style="color: rgb(255, 0, 0);">prepLabel</span>))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;output.write('PauliVec\n')<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;output.write((' '.join((('%.8g') % (el) for el in <span style="color: rgb(255, 0, 0);">rhoVec</span> ))) + ('\n'))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;output.write('\n')</TD>
+<TD style="width: 10px;" BGCOLOR=RED> </TD><TD>
+for <span style="color: rgb(255, 0, 0);">ELabel</span>, <span style="color: rgb(255, 0, 0);">EVec</span> in gs.<span style="color: rgb(255, 0, 0);">effects</span>.items():<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;output.write(('%s\n') % (<span style="color: rgb(255, 0, 0);">ELabel</span>))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;output.write('PauliVec\n')<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;output.write((' '.join((('%.8g') % (el) for el in <span style="color: rgb(255, 0, 0);">EVec</span> ))) + ('\n'))<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;output.write('\n')</TD>
+</TR>
+</TABLE> </P> <HR>
+    
+    
+    <HR>
+    Clone Digger is aimed to find software clones in Python and Java programs. It is provided under the GPL license and can be downloaded from the site <a href="http://clonedigger.sourceforge.net">http://clonedigger.sourceforge.net</a>
+    </BODY>
+</HTML>

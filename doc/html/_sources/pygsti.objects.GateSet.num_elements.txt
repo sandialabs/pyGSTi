@@ -1,6 +1,0 @@
-pygsti.objects.GateSet.num_elements
-===================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: GateSet.num_elements

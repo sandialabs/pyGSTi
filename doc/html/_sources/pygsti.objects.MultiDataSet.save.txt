@@ -1,6 +1,0 @@
-pygsti.objects.MultiDataSet.save
-================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: MultiDataSet.save

@@ -1,12 +1,13 @@
+from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
-#    This Software is released under the GPL license detailed    
-#    in the file "license.txt" in the top-level pyGSTi directory 
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """ Utility functions for RPE """
 import numpy as _np
 from scipy import optimize as _opt
-import gatetools as _gt
+from . import gatetools as _gt
 
 #from rpe_models import rpeInstanceDict
 
@@ -14,9 +15,9 @@ def extract_rotation_hat(xhat,yhat,k,Nx,Ny,angleName="epsilon",
                          previousAngle=None,rpeconfig_inst=None):
     """
     For a single germ generation (k value), estimate the angle of rotation
-    for either alpha, epsilon, or Phi.  (Warning:  Do not use for theta 
+    for either alpha, epsilon, or Phi.  (Warning:  Do not use for theta
     estimate without further processing!)
-    
+
     Parameters
     ----------
     xhat : float
@@ -38,8 +39,8 @@ def extract_rotation_hat(xhat,yhat,k,Nx,Ny,angleName="epsilon",
       The angle to be extracted
 
     previousAngle : float, optional
-       Angle estimate from previous generation; used to refine this 
-       generation's estimate.  Default is None (for estimation with no 
+       Angle estimate from previous generation; used to refine this
+       generation's estimate.  Default is None (for estimation with no
        previous genereation's data)
 
     rpeconfig_inst : Declares which gate set configuration RPE should be trying to fit;
@@ -85,9 +86,9 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon",lengthList=N
     """
     For a dataset containing sin and cos strings to estimate either alpha,
     epsilon, or Phi return a list of alpha, epsilon, or Phi estimates (one for
-    each generation).  Note: this assumes the dataset contains 'plus' and 
+    each generation).  Note: this assumes the dataset contains 'plus' and
     'minus' SPAM labels.
-    
+
     Parameters
     ----------
     DS : DataSet
@@ -108,8 +109,7 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon",lengthList=N
     rpeconfig_inst : rpeconfig object
         Declares which gate set configuration RPE should be trying to fit;
         determines particular functions and values to be used.
-   
-    
+       
     Returns
     -------
     angleHatList : list of floats
@@ -129,13 +129,14 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon",lengthList=N
                                           Nx,Ny,angleName,angleTemp1,rpeconfig_inst)
         angleHatList.append(angleTemp1)
     return angleHatList
+
     
 def sin_phi2_func(theta,Phi,epsilon,rpeconfig_inst=None):
     """
     Returns the function whose zero, for fixed Phi and epsilon, occurs at the
     desired value of theta. (This function exists to be passed to a minimizer
     to obtain theta.)
-        
+
     Parameters
     ----------
     theta : float
@@ -164,7 +165,7 @@ def sin_phi2_func(theta,Phi,epsilon,rpeconfig_inst=None):
 def est_theta_list(DS,angleSinStrs,angleCosStrs,epsilonList,returnPhiFunList = False,rpeconfig_inst=None):
     """
     For a dataset containing sin and cos strings to estimate theta,
-    along with already-made estimates of epsilon, return a list of theta 
+    along with already-made estimates of epsilon, return a list of theta
     (one for each generation).
 
     Parameters
@@ -222,7 +223,7 @@ def extract_alpha(gateset,rpeconfig_inst):
     
     WARNING:  This is a gauge-covariant parameter!  Gauge must be fixed prior
     to estimating.
-    
+
     Parameters
     ----------
     gateset : GateSet
@@ -248,7 +249,7 @@ def extract_epsilon(gateset,rpeconfig_inst):
     
     WARNING:  This is a gauge-covariant parameter!  Gauge must be fixed prior
     to estimating.
-    
+
     Parameters
     ----------
     gateset : GateSet
@@ -276,16 +277,15 @@ def extract_theta(gateset,rpeconfig_inst):
     
     WARNING:  This is a gauge-covariant parameter!  (I think!)  Gauge must be
     fixed prior to estimating.
-    
+
     Parameters
     ----------
     gateset : GateSet
-       The gateset whose loose axis misalignment is to be calculated.
+        The gateset whose loose axis misalignment is to be calculated.
     
     rpeconfig_inst : rpeconfig object
         Declares which gate set configuration RPE should be trying to fit;
         determines particular functions and values to be used.
-
     
     Returns
     -------
@@ -336,10 +336,10 @@ def analyze_rpe_data(inputDataset,trueOrTargetGateset,stringListD,rpeconfig_inst
     Parameters
     ----------
     inputDataset : DataSet
-       The dataset containing the RPE experiments.
+        The dataset containing the RPE experiments.
 
     trueOrTargetGateset : GateSet
-       The gateset used to generate the RPE data OR the target gateset.
+        The gateset used to generate the RPE data OR the target gateset.
 
     stringListD : dict
        The dictionary of gate string lists used for the RPE experiments.
@@ -354,7 +354,7 @@ def analyze_rpe_data(inputDataset,trueOrTargetGateset,stringListD,rpeconfig_inst
     resultsD : dict
         A dictionary of the results
         The keys of the dictionary are:
-        
+
         -'alphaHatList' : List (ordered by k) of alpha estimates.
         -'epsilonHatList' : List (ordered by k) of epsilon estimates.
         -'thetaHatList' : List (ordered by k) of theta estimates.
@@ -370,7 +370,7 @@ def analyze_rpe_data(inputDataset,trueOrTargetGateset,stringListD,rpeconfig_inst
     alphaCosStrList = stringListD['alpha','cos']
     alphaSinStrList = stringListD['alpha','sin']
     epsilonCosStrList = stringListD['epsilon','cos']
-    epsilonSinStrList = stringListD['epsilon','sin'] 
+    epsilonSinStrList = stringListD['epsilon','sin']
     thetaCosStrList = stringListD['theta','cos']
     thetaSinStrList = stringListD['theta','sin']
     try:
@@ -442,4 +442,3 @@ def analyze_rpe_data(inputDataset,trueOrTargetGateset,stringListD,rpeconfig_inst
     resultsD['thetaErrorList'] = thetaErrorList
     resultsD['PhiFunErrorList'] = PhiFunErrorList
     return resultsD
-

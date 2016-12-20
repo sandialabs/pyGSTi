@@ -1,6 +1,0 @@
-pygsti.objects.LinearlyParameterizedGate.num_params
-===================================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: LinearlyParameterizedGate.num_params

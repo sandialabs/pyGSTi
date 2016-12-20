@@ -1,6 +1,0 @@
-pygsti.objects.LinearlyParameterizedGate.to_vector
-==================================================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: LinearlyParameterizedGate.to_vector

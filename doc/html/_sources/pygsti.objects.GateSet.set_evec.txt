@@ -1,6 +1,0 @@
-pygsti.objects.GateSet.set_evec
-===============================
-
-.. currentmodule:: pygsti.objects
-
-.. automethod:: GateSet.set_evec
