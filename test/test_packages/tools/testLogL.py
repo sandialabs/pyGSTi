@@ -10,33 +10,34 @@ class LogLTestCase(BaseTestCase):
         gatestrings = pygsti.construction.gatestring_list( [ ('Gx',), ('Gy',), ('Gx','Gx') ] )
         spam_labels = std.gs_target.get_spam_labels()
         pygsti.create_count_vec_dict( spam_labels, ds, gatestrings )
+        gateset = pygsti.io.load_gateset(compare_files + "/analysis.gateset")
 
-        L1 = pygsti.logl(std.gs_target, ds, gatestrings,
+        L1 = pygsti.logl(gateset, ds, gatestrings,
                          probClipInterval=(-1e6,1e6), countVecMx=None,
                          poissonPicture=True, check=False)
-        L2 = pygsti.logl(std.gs_target, ds, gatestrings,
+        L2 = pygsti.logl(gateset, ds, gatestrings,
                          probClipInterval=(-1e6,1e6), countVecMx=None,
                          poissonPicture=False, check=False) #Non-poisson-picture
 
-        dL1 = pygsti.logl_jacobian(std.gs_target, ds, gatestrings,
+        dL1 = pygsti.logl_jacobian(gateset, ds, gatestrings,
                                    probClipInterval=(-1e6,1e6), radius=1e-4,
                                    poissonPicture=True, check=False)
-        dL2 = pygsti.logl_jacobian(std.gs_target, ds, gatestrings,
+        dL2 = pygsti.logl_jacobian(gateset, ds, gatestrings,
                                    probClipInterval=(-1e6,1e6), radius=1e-4,
                                    poissonPicture=False, check=False)
-        dL2b = pygsti.logl_jacobian(std.gs_target, ds, None,
+        dL2b = pygsti.logl_jacobian(gateset, ds, None,
                                    probClipInterval=(-1e6,1e6), radius=1e-4,
                                    poissonPicture=False, check=False) #test None as gs list
 
 
-        hL1 = pygsti.logl_hessian(std.gs_target, ds, gatestrings,
+        hL1 = pygsti.logl_hessian(gateset, ds, gatestrings,
                                   probClipInterval=(-1e6,1e6), radius=1e-4,
                                   poissonPicture=True, check=False)
 
-        hL2 = pygsti.logl_hessian(std.gs_target, ds, gatestrings,
+        hL2 = pygsti.logl_hessian(gateset, ds, gatestrings,
                                   probClipInterval=(-1e6,1e6), radius=1e-4,
                                   poissonPicture=False, check=False)
-        hL2b = pygsti.logl_hessian(std.gs_target, ds, None,
+        hL2b = pygsti.logl_hessian(gateset, ds, None,
                                    probClipInterval=(-1e6,1e6), radius=1e-4,
                                    poissonPicture=False, check=False) #test None as gs list
 
@@ -44,13 +45,14 @@ class LogLTestCase(BaseTestCase):
         maxL1 = pygsti.logl_max(ds, gatestrings, poissonPicture=True, check=True)
         maxL2 = pygsti.logl_max(ds, gatestrings, poissonPicture=False, check=True)
 
-        pygsti.cptp_penalty(std.gs_target, include_spam_penalty=True)
+        pygsti.cptp_penalty(gateset, include_spam_penalty=True)
         twoDelta1 = pygsti.two_delta_loglfn(N=100, p=0.5, f=0.6, minProbClip=1e-6, poissonPicture=True)
         twoDelta2 = pygsti.two_delta_loglfn(N=100, p=0.5, f=0.6, minProbClip=1e-6, poissonPicture=False)
 
     def test_no_gatestrings(self):
         ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
-        L1 = pygsti.logl(std.gs_target, ds,
+        gateset = std.gs_target #could use pygsti.io.load_gateset(compare_files + "/analysis.gateset"), but then change hardcoded #'s
+        L1 = pygsti.logl(gateset, ds,
                          probClipInterval=(-1e6,1e6), countVecMx=None,
                          poissonPicture=True, check=False)
         self.assertAlmostEqual(L1, -4531934.43735, 2)
@@ -59,21 +61,36 @@ class LogLTestCase(BaseTestCase):
 
     def test_memory(self):
         ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
+        gateset = pygsti.io.load_gateset(compare_files + "/analysis.gateset")
         with self.assertRaises(MemoryError):
-            pygsti.logl_hessian(std.gs_target, ds,
+            pygsti.logl_hessian(gateset, ds,
                                 probClipInterval=(-1e6,1e6), countVecMx=None,
                                 poissonPicture=True, check=False, memLimit=0) # No memory for you
 
-        L = pygsti.logl_hessian(std.gs_target, ds,
+        L = pygsti.logl_hessian(gateset, ds, 
                             probClipInterval=(-1e6,1e6), countVecMx=None,
-                            poissonPicture=True, check=False, memLimit=370000000) # Limit memory a bit
-        pygsti.logl_hessian(std.gs_target, ds,
+                            poissonPicture=True, check=False, memLimit=None, verbosity=10) # Reference: no mem limit
+        L1 = pygsti.logl_hessian(gateset, ds, 
                             probClipInterval=(-1e6,1e6), countVecMx=None,
-                            poissonPicture=True, check=False, memLimit=500000) # Limit memory a bit more
-        with self.assertRaises(MemoryError):
-            pygsti.logl_hessian(std.gs_target, ds,
+                            poissonPicture=True, check=False, memLimit=370000000, verbosity=10) # Limit memory a bit
+        L2 = pygsti.logl_hessian(gateset, ds,
+                            probClipInterval=(-1e6,1e6), countVecMx=None,
+                            poissonPicture=True, check=False, memLimit=500000, verbosity=10) # Limit memory a bit more
+        L3 = pygsti.logl_hessian(gateset, ds, 
                                 probClipInterval=(-1e6,1e6), countVecMx=None,
-                                poissonPicture=True, check=False, memLimit=30000) # Until another error is thrown
+                                poissonPicture=True, check=False, memLimit=100000, verbosity=10) # Very low memory (splits tree)
+
+        #print("****DEBUG LOGL HESSIAN L****")
+        #print("shape = ",L.shape)
+        #to_check = L
+        #for i in range(L.shape[0]):
+        #    for j in range(L.shape[1]):
+        #        diff = abs(L3[i,j]-L[i,j])
+        #        if diff > 1e-6:
+        #            print("[%d,%d] diff = %g - %g = %g" % (i,j,L3[i,j],L[i,j],L3[i,j]-L[i,j]))
+        self.assertArraysAlmostEqual(L, L1)
+        self.assertArraysAlmostEqual(L, L2)
+        self.assertArraysAlmostEqual(L, L3)
 
     def test_forbidden_probablity(self):
         ds   = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
@@ -84,7 +101,8 @@ class LogLTestCase(BaseTestCase):
         from mpi4py import MPI
         comm = MPI.COMM_WORLD
         ds   = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
-        L = pygsti.logl_hessian(std.gs_target, ds,
+        gateset = pygsti.io.load_gateset(compare_files + "/analysis.gateset")
+        L = pygsti.logl_hessian(gateset, ds,
                                 probClipInterval=(-1e6,1e6), countVecMx=None, memLimit=25000000,
                                 poissonPicture=True, check=False, comm=comm)
 
