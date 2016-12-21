@@ -1367,29 +1367,31 @@ class GateSet(object):
             mem = 0
             for fnName in subcalls:
                 if fnName == "bulk_fill_probs":
-                    mem += cacheSize * dim * dim # probs cache
+                    mem += cacheSize * dim * dim # product cache
                     mem += cacheSize # scale cache (exps)
                     mem += cacheSize # scale vals
 
                 elif fnName == "bulk_fill_dprobs":
-                    mem += cacheSize * wrtLen1 * dim * dim # dprobs cache
-                    mem += cacheSize * dim * dim # probs cache
+                    mem += cacheSize * wrtLen1 * dim * dim # dproduct cache
+                    mem += cacheSize * dim * dim # product cache
                     mem += cacheSize # scale cache
                     mem += cacheSize # scale vals
 
                 elif fnName == "bulk_fill_hprobs":
-                    mem += cacheSize * wrtLen1 * wrtLen2 * dim * dim # hprobs cache
-                    mem += cacheSize * (wrtLen1 + wrtLen2) * dim * dim # dprobs cache
-                    mem += cacheSize * dim * dim # probs cache
+                    mem += cacheSize * wrtLen1 * wrtLen2 * dim * dim # hproduct cache
+                    mem += cacheSize * (wrtLen1 + wrtLen2) * dim * dim # dproduct cache
+                    mem += cacheSize * dim * dim # product cache
                     mem += cacheSize # scale cache
                     mem += cacheSize # scale vals
 
                 elif fnName == "bulk_hprobs_by_block":
-                    mem += cacheSize * nspam * wrtLen1 * wrtLen2 # hprobs results
-                    mem += cacheSize * nspam * (wrtLen1 + wrtLen2) # dprobs results
+                    #Note: includes "results" memory since this is allocated within
+                    # the generator and yielded, *not* allocated by the user.
+                    mem += 2 * cacheSize * nspam * wrtLen1 * wrtLen2 # hprobs & dprobs12 results
+                    mem += cacheSize * nspam * (wrtLen1 + wrtLen2) # dprobs1 & dprobs2
                     mem += cacheSize * wrtLen1 * wrtLen2 * dim * dim # hproduct cache
                     mem += cacheSize * (wrtLen1 + wrtLen2) * dim * dim # dproduct cache
-                    mem += cacheSize * dim * dim # probs cache
+                    mem += cacheSize * dim * dim # product cache
                     mem += cacheSize # scale cache
                     mem += cacheSize # scale vals
 
