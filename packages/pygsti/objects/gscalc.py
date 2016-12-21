@@ -3328,9 +3328,9 @@ class GateSetCalculator(object):
 
             if bReturnDProbs12:
                 dprobs12 = dprobs1[:,:,:,None] * dprobs2[:,:,None,:] # (K,M,N,1) * (K,M,1,N') = (K,M,N,N')
-                yield wrtSlice1, wrtSlice2, hessian_block.copy(), dprobs12.copy() #copy??
+                yield wrtSlice1, wrtSlice2, hessian_block, dprobs12
             else:
-                yield wrtSlice1, wrtSlice2, hessian_block.copy()
+                yield wrtSlice1, wrtSlice2, hessian_block
 
 
     def frobeniusdist(self, otherCalc, transformMx=None,
