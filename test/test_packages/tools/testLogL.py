@@ -67,18 +67,20 @@ class LogLTestCase(BaseTestCase):
                                 probClipInterval=(-1e6,1e6),
                                 poissonPicture=True, check=False, memLimit=0) # No memory for you
 
-        L = pygsti.logl_hessian(gateset, ds, 
-                            probClipInterval=(-1e6,1e6),
-                            poissonPicture=True, check=False, memLimit=None, verbosity=10) # Reference: no mem limit
-        L1 = pygsti.logl_hessian(gateset, ds, 
-                            probClipInterval=(-1e6,1e6),
-                            poissonPicture=True, check=False, memLimit=370000000, verbosity=10) # Limit memory a bit
-        L2 = pygsti.logl_hessian(gateset, ds,
-                            probClipInterval=(-1e6,1e6),
-                            poissonPicture=True, check=False, memLimit=500000, verbosity=10) # Limit memory a bit more
-        L3 = pygsti.logl_hessian(gateset, ds, 
+        L = pygsti.logl_hessian(gateset, ds, probClipInterval=(-1e6,1e6),
+                                poissonPicture=True, check=False, memLimit=None, verbosity=10) # Reference: no mem limit
+        L1 = pygsti.logl_hessian(gateset, ds, probClipInterval=(-1e6,1e6),
+                                 poissonPicture=True, check=False, memLimit=370000000, verbosity=10) # Limit memory a bit
+        L2 = pygsti.logl_hessian(gateset, ds,probClipInterval=(-1e6,1e6),
+                                 poissonPicture=True, check=False, memLimit=1000000, verbosity=10) # Limit memory a bit more
+        L3 = pygsti.logl_hessian(gateset, ds, probClipInterval=(-1e6,1e6),
+                                 poissonPicture=True, check=False, memLimit=300000, verbosity=10) # Very low memory (splits tree)
+        
+        with self.assertRaises(MemoryError):
+            pygsti.logl_hessian(gateset, ds,
                                 probClipInterval=(-1e6,1e6),
-                                poissonPicture=True, check=False, memLimit=100000, verbosity=10) # Very low memory (splits tree)
+                                poissonPicture=True, check=False, memLimit=100000) # Splitting unproductive
+
 
         #print("****DEBUG LOGL HESSIAN L****")
         #print("shape = ",L.shape)
