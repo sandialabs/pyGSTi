@@ -64,20 +64,20 @@ class LogLTestCase(BaseTestCase):
         gateset = pygsti.io.load_gateset(compare_files + "/analysis.gateset")
         with self.assertRaises(MemoryError):
             pygsti.logl_hessian(gateset, ds,
-                                probClipInterval=(-1e6,1e6), countVecMx=None,
+                                probClipInterval=(-1e6,1e6),
                                 poissonPicture=True, check=False, memLimit=0) # No memory for you
 
         L = pygsti.logl_hessian(gateset, ds, 
-                            probClipInterval=(-1e6,1e6), countVecMx=None,
+                            probClipInterval=(-1e6,1e6),
                             poissonPicture=True, check=False, memLimit=None, verbosity=10) # Reference: no mem limit
         L1 = pygsti.logl_hessian(gateset, ds, 
-                            probClipInterval=(-1e6,1e6), countVecMx=None,
+                            probClipInterval=(-1e6,1e6),
                             poissonPicture=True, check=False, memLimit=370000000, verbosity=10) # Limit memory a bit
         L2 = pygsti.logl_hessian(gateset, ds,
-                            probClipInterval=(-1e6,1e6), countVecMx=None,
+                            probClipInterval=(-1e6,1e6),
                             poissonPicture=True, check=False, memLimit=500000, verbosity=10) # Limit memory a bit more
         L3 = pygsti.logl_hessian(gateset, ds, 
-                                probClipInterval=(-1e6,1e6), countVecMx=None,
+                                probClipInterval=(-1e6,1e6),
                                 poissonPicture=True, check=False, memLimit=100000, verbosity=10) # Very low memory (splits tree)
 
         #print("****DEBUG LOGL HESSIAN L****")
@@ -103,7 +103,7 @@ class LogLTestCase(BaseTestCase):
         ds   = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
         gateset = pygsti.io.load_gateset(compare_files + "/analysis.gateset")
         L = pygsti.logl_hessian(gateset, ds,
-                                probClipInterval=(-1e6,1e6), countVecMx=None, memLimit=25000000,
+                                probClipInterval=(-1e6,1e6), memLimit=25000000,
                                 poissonPicture=True, check=False, comm=comm)
 
         print(L)

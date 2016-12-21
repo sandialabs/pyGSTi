@@ -412,9 +412,8 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
     return _np.sum(jac, axis=(0,1)) # sum over spam label and gate string dimensions
 
 
-def logl_hessian(gateset, dataset, gatestring_list=None,
-                 minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
-                 evalTree=None, countVecMx=None, poissonPicture=True,
+def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
+                 probClipInterval=(-1e6,1e6), radius=1e-4, poissonPicture=True,
                  check=False, comm=None, memLimit=None, verbosity=0):
     """
     The hessian of the log-likelihood function.
@@ -446,18 +445,6 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
     radius : float, optional
         Specifies the severity of rounding used to "patch" the zero-frequency
         terms of the log-likelihood.
-
-    evalTree : evaluation tree, optional
-        given by a prior call to bulk_evaltree for the same gatestring_list.
-        Significantly speeds up evaluation of log-likelihood derivatives, even
-        more so when accompanied by countVecMx (see below).  Defaults to None.
-
-    countVecMx : numpy array, optional
-      Two-dimensional numpy array whose rows correspond to the gate's spam
-      labels (i.e. gateset.get_spam_labels()).  Each row is  contains the
-      dataset counts for that spam label for each gate string in gatestring_list.
-      Use fill_count_vecs(...) to generate this quantity once for multiple
-      evaluations of the log-likelihood function which use the same dataset.
 
     poissonPicture : boolean, optional
         Whether the Poisson-picutre log-likelihood should be differentiated.
@@ -492,16 +479,9 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
     spamLabels = gateset.get_spam_labels() #fixes the ordering of the spam labels
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
     
-    assert(countVecMx is None),"NEW: should not specify countVecMx to logl_hessian??"
-    assert(evalTree is None),"NEW: should not specify eval tree to logl_hessian??"
-
-    #Memory allocation
-    ns = len(spamLabels); ng = len(gatestring_list)
-    ne = gateset.num_params(); gd = gateset.get_dimension()
-    C = 1.0/1024.0**3
-
     #  Estimate & check persistent memory (from allocs directly below)
-    persistentMem = 8*ne**2 # in bytes
+    C = 1.0/1024.0**3; nP = gateset.num_params()
+    persistentMem = 8*nP**2 # in bytes
     if memLimit is not None and memLimit < persistentMem:
         raise MemoryError("HLogL Memory limit (%g GB) is " % (memLimit*C) +
                           "< memory required to hold final results (%g GB)"
@@ -513,13 +493,13 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
     #  Estimate & check intermediate memory
     #  - figure out how many row & column partitions are needed
     #    to fit computation within available memory (and use all cpus)
-    nprocs = comm.Get_size() if (comm is not None) else 1
-
+    mlim = None if (memLimit is None) else memLimit-persistentMem
     evalTree, blkSize1, blkSize2 = gateset.bulk_evaltree_from_resources(
-        gatestring_list, comm, memLimit, "deriv", ['bulk_hprobs_by_block'],
+        gatestring_list, comm, mlim, "deriv", ['bulk_hprobs_by_block'],
         verbosity)
-    rowParts = int(round(ne / blkSize1)) if (blkSize1 is not None) else 1
-    colParts = int(round(ne / blkSize2)) if (blkSize2 is not None) else 1
+    
+    rowParts = int(round(nP / blkSize1)) if (blkSize1 is not None) else 1
+    colParts = int(round(nP / blkSize2)) if (blkSize2 is not None) else 1
 
     a = radius # parameterizes "roundness" of f == 0 terms
     min_p = minProbClip
