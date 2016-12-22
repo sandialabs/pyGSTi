@@ -35,7 +35,15 @@ fiducials36 = _strc.gatestring_list(
 
 fiducials = fiducials16
 prepStrs = fiducials16
+
 effectStrs = _strc.gatestring_list(
+    [(), ('Gix',), ('Giy',), 
+     ('Gix','Gix'), ('Gxi',), 
+     ('Gyi',), ('Gxi','Gxi'), 
+     ('Gxi','Gix'), ('Gxi','Giy'), 
+     ('Gyi','Gix'), ('Gyi','Giy')] )
+
+legacy_effectStrs = _strc.gatestring_list(
     [ (), ('Gix',), ('Giy',), ('Gxi',), ('Gyi',),
       ('Gix','Gxi'), ('Gxi','Giy'), ('Gyi','Gix'),
       ('Gyi','Giy'), ('Gxi','Gxi') ] )
@@ -100,7 +108,7 @@ germs = _strc.gatestring_list(
      ('Gyi', 'Gyi', 'Gyi', 'Gyi', 'Gix', 'Giy', 'Gix', 'Gyi')
      ])
 
-germs71 = _strc.gatestring_list(
+legacy_germs = _strc.gatestring_list(
     [('Giy',),
      ('Gxi',),
      ('Gyi',),
