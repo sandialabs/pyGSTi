@@ -1,4 +1,5 @@
 import unittest
+import itertools
 import pygsti
 import numpy as np
 import warnings
@@ -498,12 +499,13 @@ class TestGateSetMethods(GateSetTestCase):
         probs_to_fillB = np.empty( (nSpamLabels,nGateStrings), 'd')
         dprobs_to_fill = np.empty( (nSpamLabels,nGateStrings,nParams), 'd')
         dprobs_to_fillB = np.empty( (nSpamLabels,nGateStrings,nParams), 'd')
+        #dprobs_to_fill2 = np.empty( (nSpamLabels,nGateStrings,nParams), 'd')
+        #dprobs_to_fill2B = np.empty( (nSpamLabels,nGateStrings,nParams), 'd')
         hprobs_to_fill = np.empty( (nSpamLabels,nGateStrings,nParams,nParams), 'd')
         hprobs_to_fillB = np.empty( (nSpamLabels,nGateStrings,nParams,nParams), 'd')
         spam_label_rows = { 'plus': 0, 'minus': 1 }
         self.assertNoWarnings(self.gateset.bulk_fill_hprobs, hprobs_to_fill, spam_label_rows, evt,
                               prMxToFill=probs_to_fill, derivMxToFill=dprobs_to_fill, check=True)
-
         self.assertArraysAlmostEqual(hprobs_to_fill[0,0,:,:],hP0)
         self.assertArraysAlmostEqual(hprobs_to_fill[0,1,:,:],hP1)
         self.assertArraysAlmostEqual(hprobs_to_fill[0,2,:,:],hP2)
@@ -549,18 +551,77 @@ class TestGateSetMethods(GateSetTestCase):
         self.assertArraysAlmostEqual(dProdsF, np.repeat(S3,N)[:,None]*dProdsF2)
         self.assertArraysAlmostEqual(prodsF, S3[:,None,None]*prodsF2)
 
+        nP = self.gateset.num_params()
 
         hcols = []
         d12cols = []
-        for hprobs, dprobs12 in self.gateset.bulk_hprobs_by_column(
-            spam_label_rows, evt, True, clipTo=(-1e6,1e6) ):
-            hcols.append(hprobs)
-            d12cols.append(dprobs12)
-        all_hcols = np.concatenate( hcols, axis=3 )
+        slicesList = [ (slice(0,nP),slice(i,i+1)) for i in range(nP) ]
+        for s1,s2, hprobs_col, dprobs12_col in self.gateset.bulk_hprobs_by_block(
+            spam_label_rows, evt, slicesList, True):
+            hcols.append(hprobs_col)
+            d12cols.append(dprobs12_col)
+        all_hcols = np.concatenate( hcols, axis=3 )  #axes = (spam, gatestring, derivParam1, derivParam2)
         all_d12cols = np.concatenate( d12cols, axis=3 )
         dprobs12 = dprobs_to_fill[:,:,:,None] * dprobs_to_fill[:,:,None,:]
+        
         self.assertArraysAlmostEqual(all_hcols,hprobs_to_fill)
         self.assertArraysAlmostEqual(all_d12cols,dprobs12)
+        
+        hcols = []
+        d12cols = []
+        slicesList = [ (slice(0,nP),slice(i,i+1)) for i in range(1,10) ]
+        for s1,s2, hprobs_col, dprobs12_col in self.gateset.bulk_hprobs_by_block(
+            spam_label_rows, evt, slicesList, True):
+            hcols.append(hprobs_col)
+            d12cols.append(dprobs12_col)
+        all_hcols = np.concatenate( hcols, axis=3 )  #axes = (spam, gatestring, derivParam1, derivParam2)
+        all_d12cols = np.concatenate( d12cols, axis=3 )
+        self.assertArraysAlmostEqual(all_hcols,hprobs_to_fill[:,:,:,1:10])
+        self.assertArraysAlmostEqual(all_d12cols,dprobs12[:,:,:,1:10])
+        
+        hcols = []
+        d12cols = []
+        slicesList = [ (slice(2,12),slice(i,i+1)) for i in range(1,10) ]
+        for s1,s2, hprobs_col, dprobs12_col in self.gateset.bulk_hprobs_by_block(
+            spam_label_rows, evt, slicesList, True):
+            hcols.append(hprobs_col)
+            d12cols.append(dprobs12_col)
+        all_hcols = np.concatenate( hcols, axis=3 )  #axes = (spam, gatestring, derivParam1, derivParam2)
+        all_d12cols = np.concatenate( d12cols, axis=3 )
+        
+        self.assertArraysAlmostEqual(all_hcols,hprobs_to_fill[:,:,2:12,1:10])
+        self.assertArraysAlmostEqual(all_d12cols,dprobs12[:,:,2:12,1:10])
+
+
+        hprobs_by_block = np.zeros(hprobs_to_fill.shape,'d')
+        dprobs12_by_block = np.zeros(dprobs12.shape,'d')
+        blocks1 = pygsti.tools.mpitools.slice_up_range(nP, 3)
+        blocks2 = pygsti.tools.mpitools.slice_up_range(nP, 5)
+        slicesList = list(itertools.product(blocks1,blocks2))
+        for s1,s2, hprobs_blk, dprobs12_blk in self.gateset.bulk_hprobs_by_block(
+            spam_label_rows, evt, slicesList, True):
+            hprobs_by_block[:,:,s1,s2] = hprobs_blk
+            dprobs12_by_block[:,:,s1,s2] = dprobs12_blk
+
+        self.assertArraysAlmostEqual(hprobs_by_block,hprobs_to_fill)
+        self.assertArraysAlmostEqual(dprobs12_by_block,dprobs12)
+
+
+        #print("****DEBUG HESSIAN BY COL****")
+        #print("shape = ",all_hcols.shape)
+        #to_check = hprobs_to_fill[:,:,2:12,1:10]
+        #for si in range(all_hcols.shape[0]):
+        #    for stri in range(all_hcols.shape[1]):
+        #        diff = np.linalg.norm(all_hcols[si,stri]-to_check[si,stri])
+        #        print("[%d,%d] diff = %g" % (si,stri,diff))
+        #        if diff > 1e-6:
+        #            for i in range(all_hcols.shape[2]):
+        #                for j in range(all_hcols.shape[3]):
+        #                    x = all_hcols[si,stri,i,j]
+        #                    y = to_check[si,stri,i,j]
+        #                    if abs(x-y) > 1e-6:
+        #                        print("  el(%d,%d):  %g - %g = %g" % (i,j,x,y,x-y))
+
 
 
 

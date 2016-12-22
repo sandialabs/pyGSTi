@@ -38,6 +38,36 @@ def shift(s,offset):
     """
     return slice(s.start+offset,s.stop+offset,s.step)
 
+
+def intersect(s1,s2):
+    """
+    Returns the intersection of two slices (which must have the same step).
+
+    Parameters
+    ----------
+    s1, s2 : slice
+      The slices to intersect.
+
+    Returns
+    -------
+    slice
+    """
+    assert((s1.step is None and s2.step is None) or s1.step==s2.step), \
+        "Only implemented for same-step slices"
+    if s1.start is None: start = s2.start
+    elif s2.start is None: start = s1.start
+    else: start = max(s1.start,s2.start)
+
+    if s1.stop is None: stop = s2.stop
+    elif s2.stop is None: stop = s1.stop
+    else: stop = min(s1.stop,s2.stop)
+
+    if stop is not None and start is not None and stop < start:
+        stop = start
+
+    return slice(start, stop, s1.step)
+
+
 def indices(s):
     """
     Returns a list of the indices specified by slice `s`.

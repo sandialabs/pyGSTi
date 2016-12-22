@@ -1324,6 +1324,7 @@ class GateSet(object):
         floatSize = 8 # in bytes: TODO: a better way
         C = 1.0/(1024.0**3)
 
+        bNp2Matters = ("bulk_fill_hprobs" in subcalls) or ("bulk_hprobs_by_block" in subcalls)
 
         if memLimit is not None:
             if memLimit <= 0:
@@ -1332,8 +1333,20 @@ class GateSet(object):
             printer.log("Evaltree generation (%s) w/mem limit = %.2fGB"
                         % (distributeMethod, memLimit*C))
 
+        def prime_factors(n):  #TODO: move this fn somewhere else
+            i = 2; factors = []
+            while i * i <= n:
+                if n % i:
+                    i += 1
+                else:
+                    n //= i
+                    factors.append(i)
+            if n > 1:
+                factors.append(n)
+            return factors
 
-        def memEstimate(ng,np,Ng,fastCacheSz=False,verb=0):
+
+        def memEstimate(ng,np1,np2,Ng,fastCacheSz=False,verb=0):
             tm = _time.time()
 
             #Get cache size
@@ -1347,43 +1360,54 @@ class GateSet(object):
                 #heuristic (but fast)
                 cacheSize = int( 1.3 * len(gatestring_list) / ng )
 
-            wrtLen = (num_params+np-1) // np # ceiling(num_params / np)
+            wrtLen1 = (num_params+np1-1) // np1 # ceiling(num_params / np1)
+            wrtLen2 = (num_params+np2-1) // np2 # ceiling(num_params / np2)
             nSubtreesPerProc = (ng+Ng-1) // Ng # ceiling(ng / Ng)
 
             mem = 0
             for fnName in subcalls:
                 if fnName == "bulk_fill_probs":
-                    mem += cacheSize * dim * dim # probs cache
+                    mem += cacheSize * dim * dim # product cache
                     mem += cacheSize # scale cache (exps)
                     mem += cacheSize # scale vals
 
                 elif fnName == "bulk_fill_dprobs":
-                    mem += cacheSize * wrtLen * dim * dim # dprobs cache
-                    mem += cacheSize * dim * dim # probs cache
+                    mem += cacheSize * wrtLen1 * dim * dim # dproduct cache
+                    mem += cacheSize * dim * dim # product cache
                     mem += cacheSize # scale cache
                     mem += cacheSize # scale vals
 
                 elif fnName == "bulk_fill_hprobs":
-                    mem += cacheSize * wrtLen * num_params * dim * dim # hprobs cache
-                    mem += cacheSize * wrtLen * dim * dim # dprobs cache
-                    mem += cacheSize * dim * dim # probs cache
+                    mem += cacheSize * wrtLen1 * wrtLen2 * dim * dim # hproduct cache
+                    mem += cacheSize * (wrtLen1 + wrtLen2) * dim * dim # dproduct cache
+                    mem += cacheSize * dim * dim # product cache
                     mem += cacheSize # scale cache
                     mem += cacheSize # scale vals
-                    mem += nSubtreesPerProc * nspam * cacheSize #accum subtree prob results
+
+                elif fnName == "bulk_hprobs_by_block":
+                    #Note: includes "results" memory since this is allocated within
+                    # the generator and yielded, *not* allocated by the user.
+                    mem += 2 * cacheSize * nspam * wrtLen1 * wrtLen2 # hprobs & dprobs12 results
+                    mem += cacheSize * nspam * (wrtLen1 + wrtLen2) # dprobs1 & dprobs2
+                    mem += cacheSize * wrtLen1 * wrtLen2 * dim * dim # hproduct cache
+                    mem += cacheSize * (wrtLen1 + wrtLen2) * dim * dim # dproduct cache
+                    mem += cacheSize * dim * dim # product cache
+                    mem += cacheSize # scale cache
+                    mem += cacheSize # scale vals
 
                 else:
                     raise ValueError("Unknown subcall name: %s" % fnName)
             
             if verb == 1:
-                fc_est_str = " (%.2fGB fc)" % (memEstimate(ng,np,Ng,True)*C)\
+                fc_est_str = " (%.2fGB fc)" % (memEstimate(ng,np1,np2,Ng,True)*C)\
                     if (not fastCacheSz) else ""
-                printer.log(" mem(%d subtrees, %d param-grps, %d proc-grps)"
-                            % (ng, np, Ng) + " in %.0fs = %.2fGB%s"
+                printer.log(" mem(%d subtrees, %d,%d param-grps, %d proc-grps)"
+                            % (ng, np1, np2, Ng) + " in %.0fs = %.2fGB%s"
                             % (_time.time()-tm, mem*floatSize*C, fc_est_str))
             elif verb == 2:
                 printer.log(" Memory estimate = %.2fGB" % (mem*floatSize*C) +
-                            " (cache=%d, wrtLen=%d, subsPerProc=%d)." %
-                            (cacheSize, wrtLen, nSubtreesPerProc))
+                     " (cache=%d, wrtLen1=%d, wrtLen2=%d, subsPerProc=%d)." %
+                            (cacheSize, wrtLen1, wrtLen2, nSubtreesPerProc))
                 #printer.log("  subcalls = %s" % str(subcalls))
                 #printer.log("  cacheSize = %d" % cacheSize)
                 #printer.log("  wrtLen = %d" % wrtLen)
@@ -1397,15 +1421,15 @@ class GateSet(object):
 
 
         if distributeMethod == "gatestrings":
-            np = 1; Ng = nprocs
+            np1 = 1; np2 = 1; Ng = nprocs
             ng = nprocs
             if memLimit is not None:
                 #Increase ng in amounts of Ng (so ng % Ng == 0).  Start
                 # with fast cacheSize computation then switch to slow
-                while memEstimate(ng,np,Ng,True) > memLimit: ng += Ng
-                mem_estimate = memEstimate(ng,np,Ng,verb=1)
+                while memEstimate(ng,np1,np2,Ng,True) > memLimit: ng += Ng
+                mem_estimate = memEstimate(ng,np1,np2,Ng,verb=1)
                 while mem_estimate > memLimit:
-                    ng += Ng; next = memEstimate(ng,np,Ng,verb=1)
+                    ng += Ng; next = memEstimate(ng,np1,np2,Ng,verb=1)
                     assert next < mem_estimate, \
                         "Not enough memory: splitting unproductive"
                     mem_estimate = next
@@ -1416,67 +1440,128 @@ class GateSet(object):
                    #         reductionFactor = float(memEstimate) / float(memLimit)
                    #         maxTreeSize = int(nstrs / reductionFactor)
             else:
-                memEstimate(ng,np,Ng) # to compute & cache final EvalTree
+                memEstimate(ng,np1,np2,Ng) # to compute & cache final EvalTree
 
         elif distributeMethod == "deriv":
-            ng = Ng = 1; np = nprocs
-            if memLimit is not None:
-                #First try to decrease mem consumption by increasing np
-                memEstimate(ng,nprocs,Ng,verb=1) #initial estimate (to screen)
-                for n in range(nprocs, num_params+1):
-                    if memEstimate(ng,n,Ng) < memLimit:
-                        np = n; break
+
+            #Set Ng, the number of subTree processor groups, such
+            # that Ng divides nprocs evenly or vice versa
+            def set_Ng(desired_Ng):
+                if desired_Ng >= nprocs:
+                    return nprocs * int(_np.ceil(1.*desired_Ng/nprocs))
                 else:
-                    #Increase ng in amounts of Ng (so ng % Ng == 0).  Start
-                    # with fast cacheSize computation then switch to slow
-                    np = num_params; ng = Ng = max(nprocs // np, 1)
-                    while memEstimate(ng,np,Ng,True) > memLimit: ng += Ng
-                    mem_estimate = memEstimate(ng,np,Ng,verb=1)
-                    while mem_estimate > memLimit:
-                        ng += Ng; next = memEstimate(ng,np,Ng,verb=1)
-                        assert next < mem_estimate, \
-                            "Not enough memory: splitting unproductive"
-                        mem_estimate = next
+                    fctrs = sorted(prime_factors(nprocs)); i=1
+                    if int(_np.ceil(desired_Ng)) in fctrs:
+                        return int(_np.ceil(desired_Ng)) #we got lucky
+                    while _np.product(fctrs[0:i]) < desired_Ng: i+=1
+                    return _np.product(fctrs[0:i])
+            
+            ng = Ng = 1
+            if bNp2Matters:
+                if nprocs > num_params**2:
+                    np1 = np2 = num_params
+                    ng = Ng = set_Ng(nprocs / num_params**2) #Note __future__ division
+                elif nprocs > num_params:
+                    np1 = num_params
+                    np2 = int(_np.ceil(nprocs / num_params))
+                else:
+                    np1 = nprocs; np2 = 1
             else:
-                memEstimate(ng,np,Ng) # to compute & cache final EvalTree
+                np2 = 1
+                if nprocs > num_params:
+                    np1 = num_params
+                    ng = Ng = set_Ng(nprocs / num_params)
+                else: 
+                    np1 = nprocs
+
+            if memLimit is not None:
+
+                ok = False
+                if (not ok) and np1 < num_params:
+                    #First try to decrease mem consumption by increasing np1
+                    memEstimate(ng,np1,np2,Ng,verb=1) #initial estimate (to screen)
+                    for n in range(np1, num_params+1, nprocs):
+                        if memEstimate(ng,n,np2,Ng) < memLimit:
+                            np1 = n; ok=True; break
+                    else: np1 = num_params
+
+                if (not ok) and bNp2Matters and np2 < num_params:
+                    #Next try to decrease mem consumption by increasing np2
+                    for n in range(np2, num_params+1):
+                        if memEstimate(ng,np1,n,Ng) < memLimit:
+                            np2 = n; ok=True; break
+                    else: np2 = num_params
+                                        
+                if not ok:
+                    #Finally, increase ng in amounts of Ng (so ng % Ng == 0).  Start
+                    # with fast cacheSize computation then switch to slow
+                    while memEstimate(ng,np1,np2,Ng,True) > memLimit: ng += Ng
+                    mem_estimate = memEstimate(ng,np1,np2,Ng,verb=1)
+                    while mem_estimate > memLimit:
+                        ng += Ng; next = memEstimate(ng,np1,np2,Ng,verb=1)
+                        if next >= mem_estimate:
+                            raise MemoryError("Not enough memory: splitting unproductive")
+                        mem_estimate = next                    
+
+                    #OLD
+                    #np1 = num_params
+                    #np2 = num_params if bNp2Matters else 1
+                    #ng = Ng = max(nprocs // (np1*np2), 1)
+            else:
+                memEstimate(ng,np1,np2,Ng) # to compute & cache final EvalTree
 
         elif distributeMethod == "balanced":
             # try to minimize "unbalanced" procs
             #np = gcf(num_params, nprocs)
             #ng = Ng = max(nprocs / np, 1)
             #if memLimit is not None:
-            #    while memEstimate(ng,np,Ng) > memLimit: ng += Ng #so ng % Ng == 0
+            #    while memEstimate(ng,np1,np2,Ng) > memLimit: ng += Ng #so ng % Ng == 0
             raise NotImplementedError("balanced distribution still todo")
 
         # Retrieve final EvalTree (already computed from estimates above)
         assert (ng in evt_cache), "Tree Caching Error"
         evt = evt_cache[ng]; evt.distribution['numSubtreeComms'] = Ng
 
-        paramBlkSize = num_params / np   #the *average* param block size
+        paramBlkSize1 = num_params / np1
+        paramBlkSize2 = num_params / np2   #the *average* param block size
           # (in general *not* an integer), which ensures that the intended # of
           # param blocks is communicatd to gsCalc.py routines (taking ceiling or
           # floor can lead to inefficient MPI distribution)
 
         printer.log("Created evaluation tree with %d subtrees.  " % ng
                     + "Will divide %d procs into %d (subtree-processing)" % (nprocs,Ng))
-        printer.log(" groups of ~%d procs each, to distribute over " % (nprocs/Ng)
-                    + "%d params (taken as %d param groups of ~%d params)." 
-                    % (num_params, np, paramBlkSize))
+        if bNp2Matters:
+            printer.log(" groups of ~%d procs each, to distribute over " % (nprocs/Ng)
+                        + "(%d,%d) params (taken as %d,%d param groups of ~%d,%d params)." 
+                        % (num_params,num_params, np1,np2, paramBlkSize1,paramBlkSize2))
+        else:
+            printer.log(" groups of ~%d procs each, to distribute over " % (nprocs/Ng)
+                        + "%d params (taken as %d param groups of ~%d params)." 
+                        % (num_params, np1, paramBlkSize1))
+
         if memLimit is not None:
-            memEstimate(ng,np,Ng,False,verb=2) #print mem estimate details
+            memEstimate(ng,np1,np2,Ng,False,verb=2) #print mem estimate details
 
         if (comm is None or comm.Get_rank() == 0) and evt.is_split():
             if printer.verbosity >= 2: evt.print_analysis()
             
-        if np == 1: # (paramBlkSize == num_params)
-            paramBlkSize = None # == all parameters, and may speed logic in dprobs, etc.
+        if np1 == 1: # (paramBlkSize == num_params)
+            paramBlkSize1 = None # == all parameters, and may speed logic in dprobs, etc.
         else:
             if comm is not None:
-                blkSizeTest = comm.bcast(paramBlkSize,root=0)
-                assert(abs(blkSizeTest-paramBlkSize) < 1e-3) 
-                  #all procs should have *same* paramBlkSize
+                blkSizeTest = comm.bcast(paramBlkSize1,root=0)
+                assert(abs(blkSizeTest-paramBlkSize1) < 1e-3) 
+                  #all procs should have *same* paramBlkSize1
 
-        return evt, paramBlkSize
+        if np2 == 1: # (paramBlkSize == num_params)
+            paramBlkSize2 = None # == all parameters, and may speed logic in hprobs, etc.
+        else:
+            if comm is not None:
+                blkSizeTest = comm.bcast(paramBlkSize2,root=0)
+                assert(abs(blkSizeTest-paramBlkSize2) < 1e-3) 
+                  #all procs should have *same* paramBlkSize2
+
+        return evt, paramBlkSize1, paramBlkSize2
 
 
 
@@ -1724,9 +1809,12 @@ class GateSet(object):
           scaleVals[i] contains the multiplicative scaling needed for
           the hessians, derivatives, and/or products for the i-th gate string.
         """
-        return self._calc().bulk_hproduct(
+        ret = self._calc().bulk_hproduct(
             evalTree, flat, bReturnDProdsAndProds, bScale, comm)
-
+        if bReturnDProdsAndProds:
+            return ret[0:2] + ret[3:] #remove ret[2] == deriv wrt filter2,
+                         # which isn't an input param for GateSet version
+        else: return ret
 
 
     def bulk_pr(self, spamLabel, evalTree, clipTo=None, check=False, comm=None):
@@ -1835,7 +1923,7 @@ class GateSet(object):
     def bulk_hpr(self, spamLabel, evalTree,
                  returnPr=False,returnDeriv=False,
                  clipTo=None,check=False,comm=None,
-                 wrtBlockSize=None):
+                 wrtBlockSize1=None, wrtBlockSize2=None):
 
         """
         Compute the 2nd derivatives of the probabilities generated by a each gate
@@ -1870,12 +1958,14 @@ class GateSet(object):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.
 
-        wrtBlockSize : int or float, optional
-          The maximum average number of *2nd* derivative columns to compute
-          *products* for simultaneously.  None means compute all columns at
-          once. The minimum of wrtBlockSize and the size that makes maximal
-          use of available processors is used as the final block size. Use
-          this argument to reduce amount of intermediate memory required.
+        wrtBlockSize2, wrtBlockSize2 : int or float, optional
+          The maximum number of 1st (row) and 2nd (col) derivatives to compute
+          *products* for simultaneously.  None means compute all requested
+          rows or columns at once.  The  minimum of wrtBlockSize and the size
+          that makes maximal use of available processors is used as the final
+          block size.  These arguments must be None if the corresponding
+          wrtFilter is not None.  Set this to non-None to reduce amount of
+          intermediate memory required.
 
 
         Returns
@@ -1899,7 +1989,8 @@ class GateSet(object):
             containing the probabilities for each gate string.
         """
         return self._calc().bulk_hpr(spamLabel, evalTree, returnPr,returnDeriv,
-                                    clipTo, check, comm, None, wrtBlockSize)
+                                    clipTo, check, comm, None, None,
+                                     wrtBlockSize1, wrtBlockSize2)
 
 
     def bulk_probs(self, evalTree, clipTo=None, check=False, comm=None):
@@ -1993,7 +2084,8 @@ class GateSet(object):
 
 
     def bulk_hprobs(self, evalTree, returnPr=False,returnDeriv=False,
-                    clipTo=None, check=False, comm=None, wrtBlockSize=None):
+                    clipTo=None, check=False, comm=None,
+                    wrtBlockSize1=None, wrtBlockSize2=None):
 
         """
         Construct a dictionary containing the bulk-probability-
@@ -2026,12 +2118,14 @@ class GateSet(object):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.
 
-        wrtBlockSize : int or float, optional
-          The maximum average number of *2nd* derivative columns to compute
-          *products* for simultaneously.  None means compute all columns at
-          once. The minimum of wrtBlockSize and the size that makes maximal
-          use of available processors is used as the final block size. Use
-          this argument to reduce amount of intermediate memory required.
+        wrtBlockSize2, wrtBlockSize2 : int or float, optional
+          The maximum number of 1st (row) and 2nd (col) derivatives to compute
+          *products* for simultaneously.  None means compute all requested
+          rows or columns at once.  The  minimum of wrtBlockSize and the size
+          that makes maximal use of available processors is used as the final
+          block size.  These arguments must be None if the corresponding
+          wrtFilter is not None.  Set this to non-None to reduce amount of
+          intermediate memory required.
 
 
         Returns
@@ -2042,7 +2136,8 @@ class GateSet(object):
             for each spam label (string) SL.
         """
         return self._calc().bulk_hprobs(evalTree, returnPr, returnDeriv,
-                                        clipTo, check, comm, None, wrtBlockSize)
+                                        clipTo, check, comm, None, None,
+                                        wrtBlockSize1, wrtBlockSize2)
 
 
     def bulk_fill_probs(self, mxToFill, spam_label_rows,
@@ -2175,8 +2270,9 @@ class GateSet(object):
 
     def bulk_fill_hprobs(self, mxToFill, spam_label_rows,
                          evalTree=None, prMxToFill=None, derivMxToFill=None,
-                         clipTo=None, check=False, comm=None,
-                         wrtBlockSize=None, gatherMemLimit=None):
+                         clipTo=None, check=False, comm=None, 
+                         wrtBlockSize1=None, wrtBlockSize2=None,
+                         gatherMemLimit=None):
 
         """
         Identical to bulk_hprobs(...) except results are
@@ -2233,12 +2329,14 @@ class GateSet(object):
            of the parameters being second-differentiated with respect to (see
            wrtBlockSize).
 
-        wrtBlockSize : int or float, optional
-          The maximum average number of *2nd* derivative columns to compute
-          *products* for simultaneously.  None means compute all columns at
-          once. The minimum of wrtBlockSize and the size that makes maximal
-          use of available processors is used as the final block size. Use
-          this argument to reduce amount of intermediate memory required.
+        wrtBlockSize2, wrtBlockSize2 : int or float, optional
+          The maximum number of 1st (row) and 2nd (col) derivatives to compute
+          *products* for simultaneously.  None means compute all requested
+          rows or columns at once.  The  minimum of wrtBlockSize and the size
+          that makes maximal use of available processors is used as the final
+          block size.  These arguments must be None if the corresponding
+          wrtFilter is not None.  Set this to non-None to reduce amount of
+          intermediate memory required.
 
         gatherMemLimit : int, optional
           A memory limit in bytes to impose upon the "gather" operations
@@ -2250,14 +2348,13 @@ class GateSet(object):
         None
         """
         return self._calc().bulk_fill_hprobs(mxToFill, spam_label_rows,
-                                     evalTree, prMxToFill, derivMxToFill,
-                                     clipTo, check, comm, None,
-                                     wrtBlockSize, gatherMemLimit)
+                                     evalTree, prMxToFill, derivMxToFill, None,
+                                     clipTo, check, comm, None, None,
+                                     wrtBlockSize1,wrtBlockSize2,gatherMemLimit)
 
 
-    def bulk_hprobs_by_column(self, spam_label_rows, evalTree,
-                              bReturnDProbs12=False,clipTo=None,
-                              check=False,comm=None, wrtFilter=None):
+    def bulk_hprobs_by_block(self, spam_label_rows, evalTree, wrtSlicesList,
+                              bReturnDProbs12=False, comm=None):
         """
         Constructs a generator that computes the 2nd derivatives of the
         probabilities generated by a each gate sequence given by evalTree
@@ -2282,6 +2379,13 @@ class GateSet(object):
            given by a prior call to bulk_evaltree.  Specifies the gate strings
            to compute the bulk operation on.  This tree *cannot* be split.
 
+        wrtSlicesList : list
+            A list of `(rowSlice,colSlice)` 2-tuples, each of which specify
+            a "block" of the Hessian to compute.  Iterating over the output
+            of this function iterates over these computed blocks, in the order
+            given by `wrtSlicesList`.  `rowSlice` and `colSlice` must by Python
+            `slice` objects.
+
         bReturnDProbs12 : boolean, optional
            If true, the generator computes a 2-tuple: (hessian_col, d12_col),
            where d12_col is a column of the matrix d12 defined by:
@@ -2296,26 +2400,31 @@ class GateSet(object):
            across multiple processors.  Distribution is performed as in
            bulk_product, bulk_dproduct, and bulk_hproduct.
 
-        wrtFilter : list of ints, optional
-          If not None, a list of integers specifying the indices of the
-          parameters to include in the *2nd* derivative dimension, i.e.,
-          which Hessian columns to compute.
-
 
         Returns
         -------
-        column_generator
-          A generator which, when iterated, yields an array of
-          shape K x S x M x 1 numpy array (a Hessian column), where K is the
-          length of spam_label_rows, S is equal to the number of gate strings
-          (i.e. evalTree.num_final_strings()), and M is the number of gateset
-          parameters.  If bReturnDProbs12 == True, then two such arrays
-          are given (as a 2-tuple).
+        block_generator
+          A generator which, when iterated, yields the 3-tuple 
+          `(rowSlice, colSlice, hprobs)` or `(rowSlice, colSlice, dprobs12)`
+          (the latter if `bReturnDProbs12 == True`).  `rowSlice` and `colSlice`
+          are slices directly from `wrtSlicesList`. `hprobs` and `dprobs12` are
+          arrays of shape K x S x B x B', where:
+
+          - K is the length of spam_label_rows,
+          - S is the number of gate strings (i.e. evalTree.num_final_strings()),
+          - B is the number of parameter rows (the length of rowSlice)
+          - B' is the number of parameter columns (the length of colSlice)
+
+          If `mx` and `dp` the outputs of :func:`bulk_fill_hprobs`
+          (i.e. args `mxToFill` and `derivMxToFill`), then:
+
+          - `hprobs == mx[:,:,rowSlice,colSlice]`
+          - `dprobs12 == dp[:,:,rowSlice,None] * dp[:,:,None,colSlice]`
         """
-        return self._calc().bulk_hprobs_by_column(
-            spam_label_rows, evalTree, bReturnDProbs12, comm, wrtFilter)
-
-
+        return self._calc().bulk_hprobs_by_block(
+            spam_label_rows, evalTree, wrtSlicesList,
+            bReturnDProbs12, comm)
+            
 
     def frobeniusdist(self, otherGateSet, transformMx=None,
                       gateWeight=1.0, spamWeight=1.0, itemWeights=None,

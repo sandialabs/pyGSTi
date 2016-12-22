@@ -10,6 +10,7 @@ import warnings as _warnings
 import numpy as _np
 import numpy.linalg as _nla
 import time as _time
+import collections as _collections
 
 from ..tools import gatetools as _gt
 from ..tools import mpitools as _mpit
@@ -324,10 +325,8 @@ class GateSetCalculator(object):
             vec_gs_size = flattened_dprod.shape[1]
             return _np.swapaxes( flattened_dprod, 0, 1 ).reshape( (vec_gs_size, dim, dim) ) # axes = (gate_ij, prod_row, prod_col)
 
-            #OLD?
-            ##return ret
 
-    def hproduct(self, gatestring, flat=False, wrtFilter=None):
+    def hproduct(self, gatestring, flat=False, wrtFilter1=None, wrtFilter2=None):
         """
         Compute the hessian of a specified sequence of gate labels.
 
@@ -339,9 +338,10 @@ class GateSetCalculator(object):
         flat : bool, optional
           Affects the shape of the returned derivative array (see below).
 
-        wrtFilter : list of ints, optional
+        wrtFilter1, wrtFilter2 : list of ints, optional
           If not None, a list of integers specifying which gate parameters
-          to include in the derivative.  Each element is an index into an
+          to differentiate with respect to in the first (row) and second (col)
+          derivative operations, respectively.  Each element is an index into an
           array of gate parameters ordered by concatenating each gate's
           parameters (in the order specified by the gate set).  This argument
           is used internally for distributing derivative calculations across
@@ -449,12 +449,17 @@ class GateSetCalculator(object):
             to_concat.append( _np.concatenate( [ d2prod_dgateLabels[(gateLabel1,gateLabel2)] for gateLabel2 in gatesToVectorize2 ], axis=2 ) ) #concat along ij (nParams2)
         flattened_d2prod = _np.concatenate( to_concat, axis=1 ) # concat along kl (nParams1)
 
-        if wrtFilter is not None:
-            # could do this, but may be slow (no copyList precomputed) and
-            # it shouldn't be a mem bottleneck, so just use numpy.take
-            #flattened_d2prod = inplace_take(flattened_d2prod, wrtFilter, axis=2) 
-            flattened_d2prod = flattened_d2prod.take(wrtFilter, axis=2)
+        if wrtFilter1 is not None:
+            flattened_d2prod = flattened_d2prod.take(wrtFilter1, axis=1)
+              #take subset of 1st derivatives w.r.t. gateset parameter
+
+        if wrtFilter2 is not None:
+            flattened_d2prod = flattened_d2prod.take(wrtFilter2, axis=2)
               #take subset of 2nd derivatives w.r.t. gateset parameter
+
+            # Alternate to take() above, but may be slow (no copyList precomputed) and
+            # this shouldn't be a mem bottleneck, so just use numpy.take :
+            #flattened_d2prod = inplace_take(flattened_d2prod, wrtFilter2, axis=2) 
 
 
         if flat:
@@ -1054,7 +1059,7 @@ class GateSetCalculator(object):
 
             # Use comm to distribute columns
             allDerivColSlice = slice(0,nGateDerivCols) if (wrtSlice is None) else wrtSlice
-            myDerivColSlice, mySubComm = \
+            _, myDerivColSlice, _, mySubComm = \
                 _mpit.distribute_slice(allDerivColSlice, comm)
             #print("MPI: _compute_dproduct_cache over %d cols (%s) (rank %d computing %s)" \
             #    % (nGateDerivCols, str(allDerivColIndices), comm.Get_rank(), str(myDerivColIndices)))
@@ -1109,7 +1114,7 @@ class GateSetCalculator(object):
             profiler.add_count("compute_dproduct_cache: dots")
 
             scale = scaleCache[i] - (scaleCache[iLeft] + scaleCache[iRight])
-            if not _np.isclose(scale,0):
+            if abs(scale) > 1e-8: # _np.isclose(scale,0) is SLOW!
                 dProdCache[i] /= _np.exp(scale)
                 if dProdCache[i].max() < DSMALL and dProdCache[i].min() > -DSMALL:
                     _warnings.warn("Scaled dProd small in order to keep prod managable.")
@@ -1124,20 +1129,23 @@ class GateSetCalculator(object):
         return dProdCache
 
 
-    def _compute_hproduct_cache(self, evalTree, prodCache, dProdCache, scaleCache,
-                                comm=None, wrtSlice=None):
+    def _compute_hproduct_cache(self, evalTree, prodCache, dProdCache1,
+                                dProdCache2, scaleCache, comm=None,
+                                wrtSlice1=None, wrtSlice2=None):
         """
         Computes a tree of product 2nd derivatives in a linear cache space. Will
-        use derivative columns and then (and only when needed) a split tree
+        use derivative rows and columns and then (as needed) a split tree
         to parallelize computation, since there are no memory savings
         from using a split tree.
         """
 
         dim = self.dim
 
-        nGateDerivCols1 = self.tot_gate_params
-        nGateDerivCols2 = nGateDerivCols1 if (wrtSlice is None) \
-                           else _slct.length(wrtSlice)
+        # Note: dProdCache?.shape = (#gatestrings,#params_to_diff_wrt,dim,dim)
+        nGateDerivCols1 = dProdCache1.shape[1]
+        nGateDerivCols2 = dProdCache2.shape[1]
+        assert(wrtSlice1 is None or _slct.length(wrtSlice1) == nGateDerivCols1)
+        assert(wrtSlice2 is None or _slct.length(wrtSlice2) == nGateDerivCols2)
         hessn_shape = (nGateDerivCols1, nGateDerivCols2, dim, dim)
         cacheSize = len(evalTree)
 
@@ -1146,8 +1154,8 @@ class GateSetCalculator(object):
         if comm is not None and comm.Get_size() > 1:
             # parallelize of deriv cols, then sub-trees (if available and necessary)
 
-            if comm.Get_size() > nGateDerivCols2:
-                #If there are more processors than deriv cols, give a
+            if comm.Get_size() > nGateDerivCols1*nGateDerivCols2:
+                #If there are more processors than deriv cells, give a
                 # warning -- note that we *cannot* make use of a tree being
                 # split because there's no good way to reconstruct the
                 # *non-final* parent-tree elements from those of the sub-trees.
@@ -1155,27 +1163,64 @@ class GateSetCalculator(object):
                                " by giving hproduct cache computation" +
                                " *fewer* processors and *smaller* (sub-)tree" +
                                " (e.g. by splitting tree beforehand), as there"+
-                               " are more cpus than derivative columns.")
+                               " are more cpus than hessian elements.")
+
+            # allocate final result memory
+            hProdCache = _np.zeros( (cacheSize,) + hessn_shape )            
 
             # Use comm to distribute columns
-            allDeriv2ColSlice = slice(0,nGateDerivCols2) if (wrtSlice is None) else wrtSlice
-            myDerivColSlice, mySubComm = \
-                _mpit.distribute_slice(allDeriv2ColSlice, comm)
+            allDeriv1ColSlice = slice(0,nGateDerivCols1)
+            allDeriv2ColSlice = slice(0,nGateDerivCols2)
+            deriv1Slices, myDeriv1ColSlice, deriv1Owners, mySubComm = \
+                _mpit.distribute_slice(allDeriv1ColSlice, comm)
+
+            # Get slice into entire range of gateset params so that
+            #  per-gate hessians can be computed properly
+            if wrtSlice1 is not None and wrtSlice1.start is not None:
+                myHessianSlice1 = _slct.shift(myDeriv1ColSlice, wrtSlice1.start)
+            else: myHessianSlice1 = myDeriv1ColSlice
+
             #print("MPI: _compute_hproduct_cache over %d cols (rank %d computing %s)" \
             #    % (nGateDerivCols2, comm.Get_rank(), str(myDerivColSlice)))
 
             if mySubComm is not None and mySubComm.Get_size() > 1:
-                _warnings.warn("Too many processors to make use of in " +
-                               " _compute_hproduct_cache.")
-                if mySubComm.Get_rank() > 0: myDerivColSlice = slice(0,0)
-                  #don't compute anything on "extra", i.e. rank != 0, cpus
+                deriv2Slices, myDeriv2ColSlice, deriv2Owners, mySubSubComm = \
+                    _mpit.distribute_slice(allDeriv2ColSlice, mySubComm)
 
-            my_results = self._compute_hproduct_cache(
-                evalTree, prodCache, dProdCache, scaleCache, None, myDerivColSlice)
-                # pass None as comm, *not* mySubComm, since we can't do any further parallelization
+                # Get slice into entire range of gateset params (see above)
+                if wrtSlice2 is not None and wrtSlice2.start is not None:
+                    myHessianSlice2 = _slct.shift(myDeriv2ColSlice, wrtSlice2.start)
+                else: myHessianSlice2 = myDeriv2ColSlice
 
-            all_results = comm.allgather(my_results)
-            return _np.concatenate(all_results, axis=2) #TODO: replace concat w/better gather
+                if mySubSubComm is not None and mySubSubComm.Get_size() > 1:
+                    _warnings.warn("Too many processors to make use of in " +
+                                   " _compute_hproduct_cache.")
+                    #TODO: remove: not needed now that we track owners
+                    #if mySubSubComm.Get_rank() > 0: myDeriv2ColSlice = slice(0,0)
+                    #  #don't compute anything on "extra", i.e. rank != 0, cpus
+
+                hProdCache[:,myDeriv1ColSlice,myDeriv2ColSlice] = self._compute_hproduct_cache(
+                    evalTree, prodCache, dProdCache1[:,myDeriv1ColSlice], dProdCache2[:,myDeriv2ColSlice],
+                    scaleCache, None, myHessianSlice1, myHessianSlice2)
+                    # pass None as comm, *not* mySubSubComm, since we can't do any further parallelization
+
+                _mpit.gather_slices(deriv2Slices, deriv2Owners, hProdCache[:,myDeriv1ColSlice],
+                                    2, mySubComm) #, gatherMemLimit) #gather over col-distribution (Deriv2)
+                  #note: gathering axis 2 of hProdCache[:,myDeriv1ColSlice],
+                  #      dim=(cacheSize,nGateDerivCols1,nGateDerivCols2,dim,dim)
+            else:
+                #compute "Deriv1" row-derivatives distribution only; don't use column distribution
+                hProdCache[:,myDeriv1ColSlice] = self._compute_hproduct_cache(
+                    evalTree, prodCache, dProdCache1[:,myDeriv1ColSlice], dProdCache2,
+                    scaleCache, None, myHessianSlice1, wrtSlice2)
+                    # pass None as comm, *not* mySubComm (this is ok, see "if" condition above)
+
+            _mpit.gather_slices(deriv1Slices, deriv1Owners, hProdCache, 1, comm)
+                        #, gatherMemLimit) #gather over row-distribution (Deriv1)
+              #note: gathering axis 1 of hProdCache,
+              #      dim=(cacheSize,nGateDerivCols1,nGateDerivCols2,dim,dim)
+
+            return hProdCache
 
         # ------------------------------------------------------------------
 
@@ -1194,23 +1239,10 @@ class GateSetCalculator(object):
             #if gateLabel == "": #special case of empty label == no gate
             #    hProdCache[i] = _np.zeros( hessn_shape )
             #else:
-            #    hgate = self.hproduct( (gateLabel,), wrtFilter=_slct.indices(wrtSlice))
+            #    hgate = self.hproduct( (gateLabel,), 
+            #                           wrtFilter1=_slct.indices(wrtSlice1),
+            #                           wrtFilter2=_slct.indices(wrtSlice2))
             #    hProdCache[i] = hgate / _np.exp(scaleCache[i])
-
-        #Function for "symmetric dLdR" ("dLdR + swapaxes(dLdR)") term for Hessian
-        if wrtSlice is None:
-            def compute_sym_dLdR(dL,dR):
-                dLdR = _np.swapaxes(_np.dot(dL,dR),1,2)
-                return dLdR + _np.swapaxes(dLdR,0,1)
-                  #same as (but faster than) _np.einsum('ikm,jml->ijkl',dL,dR)
-        else:
-            def compute_sym_dLdR(dL,dR):
-                dL_filtered = dL[wrtSlice] #OLD: dL.take(wrtFilter, axis=0)
-                dR_filtered = dR[wrtSlice] #OLD: dR.take(wrtFilter, axis=0)
-                dLdR1 = _np.swapaxes(_np.dot(dL,dR_filtered),1,2)
-                dLdR2 = _np.swapaxes(_np.dot(dL_filtered,dR),1,2)
-                return dLdR1 + _np.swapaxes(dLdR2,0,1)
-
 
         #evaluate gate strings using tree (skip over the zero and single-gate-strings)
         for i in evalTree.get_evaluation_order():
@@ -1220,13 +1252,19 @@ class GateSetCalculator(object):
             # (iRight,iLeft,iFinal) = tup implies gatestring[i] = gatestring[iLeft] + gatestring[iRight], but we want:
             (iRight,iLeft) = evalTree[i]   # since then matrixOf(gatestring[i]) = matrixOf(gatestring[iLeft]) * matrixOf(gatestring[iRight])
             L,R = prodCache[iLeft], prodCache[iRight]
-            dL,dR = dProdCache[iLeft], dProdCache[iRight]
+            dL1,dR1 = dProdCache1[iLeft], dProdCache1[iRight]
+            dL2,dR2 = dProdCache2[iLeft], dProdCache2[iRight]
             hL,hR = hProdCache[iLeft], hProdCache[iRight]
-            dLdR_sym = compute_sym_dLdR(dL,dR) # Note: L, R = GxG ; dL,dR = vgs x GxG ; hL,hR = vgs x vgs x GxG
+              # Note: L, R = GxG ; dL,dR = vgs x GxG ; hL,hR = vgs x vgs x GxG
+
+            dLdRa = _np.swapaxes(_np.dot(dL1,dR2),1,2)
+            dLdRb = _np.swapaxes(_np.dot(dL2,dR1),1,2)
+            dLdR_sym = dLdRa + _np.swapaxes(dLdRb,0,1) 
+
             hProdCache[i] = _np.dot(hL, R) + dLdR_sym + _np.transpose(_np.dot(L,hR),(1,2,0,3))
 
             scale = scaleCache[i] - (scaleCache[iLeft] + scaleCache[iRight])
-            if not _np.isclose(scale,0):
+            if abs(scale) > 1e-8: # _np.isclose(scale,0) is SLOW!
                 hProdCache[i] /= _np.exp(scale)
                 if hProdCache[i].max() < HSMALL and hProdCache[i].min() > -HSMALL:
                     _warnings.warn("Scaled hProd small in order to keep prod managable.")
@@ -1275,9 +1313,7 @@ class GateSetCalculator(object):
         #use cached data to construct return values
         Gs = evalTree.final_view(prodCache, axis=0)
            #shape == ( len(gatestring_list), dim, dim ), Gs[i] is product for i-th gate string
-        #OLD: Gs = prodCache.take(  finalIndxList, axis=0 ) #shape == ( len(gatestring_list), dim, dim ), Gs[i] is product for i-th gate string
         scaleExps = evalTree.final_view(scaleCache)
-        #OLD: scaleExps = scaleCache.take( finalIndxList )
 
         old_err = _np.seterr(over='ignore')
         scaleVals = _np.exp(scaleExps) #may overflow, but OK if infs occur here
@@ -1374,7 +1410,6 @@ class GateSetCalculator(object):
         #use cached data to construct return values
         old_err = _np.seterr(over='ignore')
         scaleExps = evalTree.final_view( scaleCache )
-        #OLD: scaleExps = scaleCache.take( finalIndxList )
         scaleVals = _np.exp(scaleExps) #may overflow, but OK if infs occur here
         _np.seterr(**old_err)
 
@@ -1423,7 +1458,7 @@ class GateSetCalculator(object):
 
 
     def bulk_hproduct(self, evalTree, flat=False, bReturnDProdsAndProds=False,
-                      bScale=False, comm=None, wrtFilter=None):
+                      bScale=False, comm=None, wrtFilter1=None, wrtFilter2=None):
 
         """
         Return the Hessian of many gate string products at once.
@@ -1439,7 +1474,7 @@ class GateSetCalculator(object):
 
         bReturnDProdsAndProds : bool, optional
           when set to True, additionally return the probabilities and
-          their derivatives.
+          their derivatives (see below).
 
         bScale : bool, optional
           When True, return a scaling factor (see below).
@@ -1452,14 +1487,14 @@ class GateSetCalculator(object):
            gateset parameters, distribution over a split evalTree (if given)
            is possible.
 
-        wrtFilter : list of ints, optional
+        wrtFilter1, wrtFilter2 : list of ints, optional
           If not None, a list of integers specifying which gate parameters
-          to include in the derivative.  Each element is an index into an
+          to differentiate with respect to in the first (row) and second (col)
+          derivative operations, respectively.  Each element is an index into an
           array of gate parameters ordered by concatenating each gate's
           parameters (in the order specified by the gate set).  This argument
           is used internally for distributing derivative calculations across
           multiple processors.
-
 
         Returns
         -------
@@ -1483,13 +1518,13 @@ class GateSetCalculator(object):
               of the (i / G^2)-th flattened gate string product with respect to
               the k-th then j-th gateset parameters.
 
-        derivs : numpy array
+        derivs1, derivs2 : numpy array
           Only returned if bReturnDProdsAndProds == True.
 
-          * if flat == False, an array of shape S x M x G x G, where
+          * if flat == False, two arrays of shape S x M x G x G, where
 
             - S == len(gatestring_list)
-            - M == the length of the vectorized gateset
+            - M == the number of gateset params or wrtFilter1 or 2, respectively
             - G == the linear dimension of a gate matrix (G x G gate matrices)
 
             and derivs[i,j,k,l] holds the derivative of the (k,l)-th entry
@@ -1517,16 +1552,22 @@ class GateSetCalculator(object):
 
         """
         dim = self.dim
-        nGateDerivCols = self.tot_gate_params
+        nGateDerivCols1 = self.tot_gate_params if (wrtFilter1 is None) else _slct.length(wrtFilter1)
+        nGateDerivCols2 = self.tot_gate_params if (wrtFilter2 is None) else _slct.length(wrtFilter2)
         nGateStrings = evalTree.num_final_strings() #len(gatestring_list)
-        wrtSlice = _slct.list_to_slice(wrtFilter) if (wrtFilter is not None) else None
+        wrtSlice1 = _slct.list_to_slice(wrtFilter1) if (wrtFilter1 is not None) else None
+        wrtSlice2 = _slct.list_to_slice(wrtFilter2) if (wrtFilter2 is not None) else None
           #TODO: just allow slices as argument: wrtFilter -> wrtSlice?
 
         prodCache, scaleCache = self._compute_product_cache(evalTree, comm)
-        dProdCache = self._compute_dproduct_cache(evalTree, prodCache, scaleCache,
-                                                  comm, None) #wrtFilter *not* for 1st derivs
-        hProdCache = self._compute_hproduct_cache(evalTree, prodCache, dProdCache,
-                                                  scaleCache, comm, wrtSlice)
+        dProdCache1 = self._compute_dproduct_cache(evalTree, prodCache, scaleCache,
+                                                  comm, wrtSlice1)        
+        dProdCache2 = dProdCache1 if (wrtSlice1 == wrtSlice2) else \
+            self._compute_dproduct_cache(evalTree, prodCache, scaleCache,
+                                         comm, wrtSlice2)
+
+        hProdCache = self._compute_hproduct_cache(evalTree, prodCache, dProdCache1, dProdCache2,
+                                                  scaleCache, comm, wrtSlice1, wrtSlice2)
 
         #use cached data to construct return values
         old_err = _np.seterr(over='ignore')
@@ -1539,28 +1580,32 @@ class GateSetCalculator(object):
               #shape == ( len(gatestring_list), dim, dim ), 
               # Gs[i] is product for i-th gate string
 
-            dGs = evalTree.final_view(dProdCache, axis=0)
-              #shape == ( len(gatestring_list), nGateDerivCols, dim, dim ),
+            dGs1 = evalTree.final_view(dProdCache1, axis=0)
+            dGs2 = evalTree.final_view(dProdCache2, axis=0)
+              #shape == ( len(gatestring_list), nGateDerivColsX, dim, dim ),
               # dGs[i] is dprod_dGates for ith string
 
             hGs = evalTree.final_view(hProdCache, axis=0)
-              #shape == ( len(gatestring_list), nGateDerivCols, nGateDerivCols, dim, dim ),
+              #shape == ( len(gatestring_list), nGateDerivCols1, nGateDerivCols2, dim, dim ),
               # hGs[i] is hprod_dGates for ith string
 
             if not bScale:
                 old_err = _np.seterr(over='ignore', invalid='ignore')
                 Gs  = _np.swapaxes( _np.swapaxes(Gs,0,2) * scaleVals, 0,2)  #may overflow, but ok
-                dGs = _np.swapaxes( _np.swapaxes(dGs,0,3) * scaleVals, 0,3) #may overflow or get nans (invalid), but ok
+                dGs1 = _np.swapaxes( _np.swapaxes(dGs1,0,3) * scaleVals, 0,3) #may overflow or get nans (invalid), but ok
+                dGs2 = _np.swapaxes( _np.swapaxes(dGs2,0,3) * scaleVals, 0,3) #may overflow or get nans (invalid), but ok
                 hGs = _np.swapaxes( _np.swapaxes(hGs,0,4) * scaleVals, 0,4) #may overflow or get nans (invalid), but ok
-                dGs[_np.isnan(dGs)] = 0  #convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero deriv value (see below)
+                dGs1[_np.isnan(dGs1)] = 0  #convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero deriv value (see below)
+                dGs2[_np.isnan(dGs2)] = 0  #convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero deriv value (see below)
                 hGs[_np.isnan(hGs)] = 0  #convert nans to zero, as these occur b/c an inf scaleVal is mult by a zero hessian value (see below)
                 _np.seterr(**old_err)
 
             if flat:
-                dGs = _np.swapaxes( _np.swapaxes(dGs,0,1).reshape( (nGateDerivCols, nGateStrings*dim**2) ), 0,1 ) # cols = deriv cols, rows = flattened all else
-                hGs = _np.rollaxis( _np.rollaxis(hGs,0,3).reshape( (nGateDerivCols, nGateDerivCols, nGateStrings*dim**2) ), 2) # cols = deriv cols, rows = all else
+                dGs1 = _np.swapaxes( _np.swapaxes(dGs1,0,1).reshape( (nGateDerivCols1, nGateStrings*dim**2) ), 0,1 ) # cols = deriv cols, rows = flattened all else
+                dGs2 = _np.swapaxes( _np.swapaxes(dGs2,0,1).reshape( (nGateDerivCols2, nGateStrings*dim**2) ), 0,1 ) # cols = deriv cols, rows = flattened all else
+                hGs = _np.rollaxis( _np.rollaxis(hGs,0,3).reshape( (nGateDerivCols1, nGateDerivCols2, nGateStrings*dim**2) ), 2) # cols = deriv cols, rows = all else
 
-            return (hGs, dGs, Gs, scaleVals) if bScale else (hGs, dGs, Gs)
+            return (hGs, dGs1, dGs2, Gs, scaleVals) if bScale else (hGs, dGs1, dGs2, Gs)
 
         else:
             hGs = evalTree.final_view(hProdCache, axis=0) 
@@ -1576,7 +1621,7 @@ class GateSetCalculator(object):
                 #hGs = clip(hGs,-1e300,1e300)
                 _np.seterr(**old_err)
 
-            if flat: hGs = _np.rollaxis( _np.rollaxis(hGs,0,3).reshape( (nGateDerivCols, nGateDerivCols, nGateStrings*dim**2) ), 2) # as above
+            if flat: hGs = _np.rollaxis( _np.rollaxis(hGs,0,3).reshape( (nGateDerivCols1, nGateDerivCols2, nGateStrings*dim**2) ), 2) # as above
 
             return (hGs, scaleVals) if bScale else hGs
 
@@ -1670,55 +1715,143 @@ class GateSetCalculator(object):
         return sub_vdp
 
 
-    def _hprobs_from_rhoE(self, spamLabel, rho, E, Gs, dGs, hGs, scaleVals,
-                          wrtSlices=None, spamColsOnly=False):
+    def _get_filter_info(self, wrtSlices):
+        """ 
+        Returns a "filter" object containing info about the mapping
+        of prep and effect parameters onto a final "filtered" set.
+        """
+        PrepEffectFilter = _collections.namedtuple(
+            'PrepEffectFilter', 'rho_local_slices rho_global_slices ' +
+            'e_local_slices e_global_slices num_rho_params num_e_params')
+      
+        if wrtSlices is not None:
+            loc_rho_slices = [ 
+                _slct.shift(_slct.intersect(
+                        wrtSlices['preps'],
+                        slice(self.rho_offset[i],self.rho_offset[i+1])),
+                            -self.rho_offset[i]) for i in range(len(self.preps))]
+            tmp_num_params = [_slct.length(s) for s in loc_rho_slices]
+            tmp_offsets = [ sum(tmp_num_params[0:i]) for i in range(len(self.preps)+1) ]
+            global_rho_slices = [ slice(tmp_offsets[i],tmp_offsets[i+1]) 
+                                  for i in range(len(self.preps)) ]
+
+            loc_e_slices = [ 
+                _slct.shift(_slct.intersect(
+                        wrtSlices['effects'],
+                        slice(self.e_offset[i],self.e_offset[i+1])),
+                            -self.e_offset[i]) for i in range(len(self.effects))]
+            tmp_num_params = [_slct.length(s) for s in loc_e_slices]
+            tmp_offsets = [ sum(tmp_num_params[0:i]) for i in range(len(self.effects)+1) ]
+            global_e_slices = [ slice(tmp_offsets[i],tmp_offsets[i+1]) 
+                                  for i in range(len(self.effects)) ]
+
+            return PrepEffectFilter(rho_local_slices=loc_rho_slices,
+                                    rho_global_slices=global_rho_slices,
+                                    e_local_slices=loc_e_slices,
+                                    e_global_slices=global_e_slices,
+                                    num_rho_params=_slct.length(wrtSlices['preps']),
+                                    num_e_params=_slct.length(wrtSlices['effects']))
+        else:
+            loc_rho_slices = [slice(None,None)]*len(self.preps)
+            loc_e_slices = [slice(None,None)]*len(self.effects)
+            global_rho_slices = [slice(self.rho_offset[i],self.rho_offset[i+1]) for i in range(len(self.preps)) ]
+            global_e_slices = [slice(self.e_offset[i],self.e_offset[i+1]) for i in range(len(self.effects)) ]
+            return PrepEffectFilter(rho_local_slices=loc_rho_slices,
+                                    rho_global_slices=global_rho_slices,
+                                    e_local_slices=loc_e_slices,
+                                    e_global_slices=global_e_slices,
+                                    num_rho_params=self.tot_rho_params,
+                                    num_e_params=self.tot_e_params)
+                               
+
+
+    def _hprobs_from_rhoE(self, spamLabel, rho, E, Gs, dGs1, dGs2, hGs, scaleVals,
+                          wrtSlices1=None, wrtSlices2=None):
         (rholabel,elabel) = self.spamdefs[spamLabel]
         nGateStrings = Gs.shape[0]
+        flt1 = self._get_filter_info(wrtSlices1)
+        flt2 = self._get_filter_info(wrtSlices2)
 
-        if not spamColsOnly:
-            #Compute d2(probability)/dGates2 and save in return list
-            # d2pr_dGates2[i,j,k] = sum_l,m E[0,l] hGs[i,j,k,l,m] rho[m,0]
-            # d2pr_dGates2[i,j,k] = sum_l E[0,l] dot( dGs, rho )[i,j,k,l,0]
-            # d2pr_dGates2[i,j,k] = dot( E, dot( dGs, rho ) )[0,i,j,k,0]
-            # d2pr_dGates2        = squeeze( dot( E, dot( dGs, rho ) ), axis=(0,4))
-            old_err2 = _np.seterr(invalid='ignore', over='ignore')
-            d2pr_dGates2 = _np.squeeze( _np.dot( E, _np.dot( hGs, rho ) ), axis=(0,4) ) * scaleVals[:,None,None]
-            _np.seterr(**old_err2)
+        # GATE DERIVS (assume hGs is already sized/filtered) -------------------
 
-            # may overflow, but OK ; shape == (len(gatestring_list), nGateDerivCols, nGateDerivCols)
-            # may also give invalid value due to scaleVals being inf and dot-prod being 0. In
-            #  this case set to zero since we can't tell whether it's + or - inf anyway...
-            d2pr_dGates2[ _np.isnan(d2pr_dGates2) ] = 0
+        #Compute d2(probability)/dGates2 and save in return list
+        # d2pr_dGates2[i,j,k] = sum_l,m E[0,l] hGs[i,j,k,l,m] rho[m,0]
+        # d2pr_dGates2[i,j,k] = sum_l E[0,l] dot( dGs, rho )[i,j,k,l,0]
+        # d2pr_dGates2[i,j,k] = dot( E, dot( dGs, rho ) )[0,i,j,k,0]
+        # d2pr_dGates2        = squeeze( dot( E, dot( dGs, rho ) ), axis=(0,4))
+        old_err2 = _np.seterr(invalid='ignore', over='ignore')
+        d2pr_dGates2 = _np.squeeze( _np.dot( E, _np.dot( hGs, rho ) ), axis=(0,4) ) * scaleVals[:,None,None]
+        _np.seterr(**old_err2)
+
+        # may overflow, but OK ; shape == (len(gatestring_list), nGateDerivCols, nGateDerivCols)
+        # may also give invalid value due to scaleVals being inf and dot-prod being 0. In
+        #  this case set to zero since we can't tell whether it's + or - inf anyway...
+        d2pr_dGates2[ _np.isnan(d2pr_dGates2) ] = 0
 
 
-        #SPAM DERIVS ---------------------------------
-
-        vec_gs_size = dGs.shape[1]
+        # SPAM DERIVS (assume dGs1 and dGs2 are already sized/filtered) --------
+        
+        vec_gs_size1 = dGs1.shape[1]
+        vec_gs_size2 = dGs2.shape[1]
 
         # Get: d2pr_drhos[i, j, rho_offset[rhoIndex]:rho_offset[rhoIndex+1]] = dot(E,dGs[i,j],drho/drhoP))
         # d2pr_drhos[i,j,J0+J] = sum_kl E[0,k] dGs[i,j,k,l] drhoP[l,J]
         # d2pr_drhos[i,j,J0+J] = dot(E, dGs, drhoP)[0,i,j,J]
         # d2pr_drhos[:,:,J0+J] = squeeze(dot(E, dGs, drhoP),axis=(0,))[:,:,J]
         rhoIndex = list(self.preps.keys()).index(rholabel)
-        d2pr_drhos = _np.zeros( (nGateStrings, vec_gs_size, self.tot_rho_params) )
-        d2pr_drhos[:, :, self.rho_offset[rhoIndex]:self.rho_offset[rhoIndex+1]] = \
-            _np.squeeze( _np.dot(_np.dot(E,dGs),rho.deriv_wrt_params()), axis=(0,)) \
+        drho = rho.deriv_wrt_params()[:,flt2.rho_local_slices[rhoIndex]]
+        d2pr_drhos1 = _np.zeros( (nGateStrings, vec_gs_size1, flt2.num_rho_params) )
+        d2pr_drhos1[:, :, flt2.rho_global_slices[rhoIndex]] = \
+            _np.squeeze( _np.dot(_np.dot(E,dGs1),drho), axis=(0,)) \
             * scaleVals[:,None,None] #overflow OK
+
+        # get d2pr_drhos where gate derivatives are wrt the 2nd set of gate parameters
+        if dGs1 is dGs2 and wrtSlices1 == wrtSlices2: #TODO: better check for equivalence: maybe let dGs2 be None?
+            assert(vec_gs_size1 == vec_gs_size2)
+            d2pr_drhos2 = _np.transpose(d2pr_drhos1,(0,2,1))
+        else:
+            drho = rho.deriv_wrt_params()[:,flt1.rho_local_slices[rhoIndex]]
+            d2pr_drhos2 = _np.zeros( (nGateStrings, vec_gs_size2, flt1.num_rho_params) )
+            d2pr_drhos2[:, :, flt1.rho_global_slices[rhoIndex]] = \
+                _np.squeeze( _np.dot(_np.dot(E,dGs2),drho), axis=(0,)) \
+                * scaleVals[:,None,None] #overflow OK
+            d2pr_drhos2 = _np.transpose(d2pr_drhos2,(0,2,1))
+
 
         # Get: d2pr_dEs[i, j, e_offset[eIndex]:e_offset[eIndex+1]] = dot(transpose(dE/dEP),dGs[i,j],rho)
         # d2pr_dEs[i,j,J0+J] = sum_kl dEPT[J,k] dGs[i,j,k,l] rho[l,0]
         # d2pr_dEs[i,j,J0+J] = sum_k dEP[k,J] dot(dGs, rho)[i,j,k,0]
         # d2pr_dEs[i,j,J0+J] = dot( squeeze(dot(dGs, rho),axis=(3,)), dEP)[i,j,J]
         # d2pr_dEs[:,:,J0+J] = dot( squeeze(dot(dGs, rho),axis=(3,)), dEP)[:,:,J]
-        d2pr_dEs = _np.zeros( (nGateStrings, vec_gs_size, self.tot_e_params) )
-        dp_dAnyE = _np.squeeze(_np.dot(dGs,rho), axis=(3,)) * scaleVals[:,None,None] #overflow OK
+        d2pr_dEs1 = _np.zeros( (nGateStrings, vec_gs_size1, flt2.num_e_params) )
+        dp_dAnyE = _np.squeeze(_np.dot(dGs1,rho), axis=(3,)) * scaleVals[:,None,None] #overflow OK
         if elabel == self._remainderLabel:
             for ei,evec in enumerate(self.effects.values()):
-                d2pr_dEs[:, :, self.e_offset[ei]:self.e_offset[ei+1]] = -1.0 * _np.dot(dp_dAnyE, evec.deriv_wrt_params())
+                devec = evec.deriv_wrt_params()[:,flt2.e_local_slices[ei]]
+                d2pr_dEs1[:, :, flt2.e_global_slices[ei]] = -1.0 * _np.dot(dp_dAnyE, devec)
         else:
             eIndex = list(self.effects.keys()).index(elabel)
-            d2pr_dEs[:, :, self.e_offset[eIndex]:self.e_offset[eIndex+1]] = \
-                _np.dot(dp_dAnyE, self.effects[elabel].deriv_wrt_params())
+            devec = self.effects[elabel].deriv_wrt_params()[:,flt2.e_local_slices[eIndex]]
+            d2pr_dEs1[:, :, flt2.e_global_slices[eIndex]] = \
+                _np.dot(dp_dAnyE, devec)
+
+        # get d2pr_dEs where gate derivatives are wrt the 2nd set of gate parameters
+        if dGs1 is dGs2 and wrtSlices1 == wrtSlices2: #TODO: better check for equivalence: maybe let dGs2 be None?
+            assert(vec_gs_size1 == vec_gs_size2)
+            d2pr_dEs2 = _np.transpose(d2pr_dEs1,(0,2,1))
+        else:
+            d2pr_dEs2 = _np.zeros( (nGateStrings, vec_gs_size2, flt1.num_e_params) )
+            dp_dAnyE = _np.squeeze(_np.dot(dGs2,rho), axis=(3,)) * scaleVals[:,None,None] #overflow OK
+            if elabel == self._remainderLabel:
+                for ei,evec in enumerate(self.effects.values()):
+                    devec = evec.deriv_wrt_params()[:,flt1.e_local_slices[ei]]
+                    d2pr_dEs2[:, :, flt1.e_global_slices[ei]] = -1.0 * _np.dot(dp_dAnyE, devec)
+            else:
+                eIndex = list(self.effects.keys()).index(elabel)
+                devec = self.effects[elabel].deriv_wrt_params()[:,flt1.e_local_slices[eIndex]]
+                d2pr_dEs2[:, :, flt1.e_global_slices[eIndex]] = \
+                    _np.dot(dp_dAnyE, devec)
+            d2pr_dEs2 = _np.transpose(d2pr_dEs2,(0,2,1))
 
 
         # Get: d2pr_dErhos[i, e_offset[eIndex]:e_offset[eIndex+1], e_offset[rhoIndex]:e_offset[rhoIndex+1]] =
@@ -1728,58 +1861,53 @@ class GateSetCalculator(object):
         # d2pr_dErhos[i,J0+J,K0+K] = dot(dEPT,prod,drhoP)[J,i,K]
         # d2pr_dErhos[i,J0+J,K0+K] = swapaxes(dot(dEPT,prod,drhoP),0,1)[i,J,K]
         # d2pr_dErhos[:,J0+J,K0+K] = swapaxes(dot(dEPT,prod,drhoP),0,1)[:,J,K]
-        d2pr_dErhos = _np.zeros( (nGateStrings, self.tot_e_params, self.tot_rho_params) )
-        dp_dAnyE = _np.dot(Gs, rho.deriv_wrt_params()) * scaleVals[:,None,None] #overflow OK
+        d2pr_dErhos1 = _np.zeros( (nGateStrings, flt1.num_e_params, flt2.num_rho_params) )
+        drho = rho.deriv_wrt_params()[:,flt2.rho_local_slices[rhoIndex]]
+        dp_dAnyE = _np.dot(Gs, drho) * scaleVals[:,None,None] #overflow OK
         if elabel == self._remainderLabel:
             for ei,evec in enumerate(self.effects.values()):
-                d2pr_dErhos[:, self.e_offset[ei]:self.e_offset[ei+1], self.rho_offset[rhoIndex]:self.rho_offset[rhoIndex+1]] = \
-                    -1.0 * _np.swapaxes( _np.dot(_np.transpose(evec.deriv_wrt_params()), dp_dAnyE ), 0,1)
+                devec = evec.deriv_wrt_params()[:, flt1.e_local_slices[ei]]
+                d2pr_dErhos1[:, flt1.e_global_slices[ei], flt2.rho_global_slices[rhoIndex]] = \
+                    -1.0 * _np.swapaxes( _np.dot(_np.transpose(devec), dp_dAnyE ), 0,1)
         else:
             eIndex = list(self.effects.keys()).index(elabel)
-            d2pr_dErhos[:, self.e_offset[eIndex]:self.e_offset[eIndex+1], self.rho_offset[rhoIndex]:self.rho_offset[rhoIndex+1]] = \
-                _np.swapaxes( _np.dot(_np.transpose(self.effects[elabel].deriv_wrt_params()), dp_dAnyE ), 0,1)
+            devec = self.effects[elabel].deriv_wrt_params()[:, flt1.e_local_slices[eIndex]]
+            d2pr_dErhos1[:, flt1.e_global_slices[eIndex], flt2.rho_global_slices[rhoIndex]] = \
+                _np.swapaxes( _np.dot(_np.transpose(devec), dp_dAnyE ), 0,1)
 
-        d2pr_d2rhos = _np.zeros( (nGateStrings, self.tot_rho_params, self.tot_rho_params) )
-        d2pr_d2Es   = _np.zeros( (nGateStrings, self.tot_e_params, self.tot_e_params) )
-        #END SPAM -----------------------
-
-        if wrtSlices is None:
-            if not spamColsOnly:
-                ret_row1 = _np.concatenate( ( d2pr_d2rhos,_np.transpose(d2pr_dErhos,(0,2,1)), _np.transpose(d2pr_drhos,(0,2,1)) ), axis=2) # wrt rho
-                ret_row2 = _np.concatenate( ( d2pr_dErhos, d2pr_d2Es, _np.transpose(d2pr_dEs,(0,2,1)) ), axis=2 ) # wrt E
-                ret_row3 = _np.concatenate( ( d2pr_drhos,d2pr_dEs,d2pr_dGates2), axis=2 ) #wrt gates
+        # get d2pr_dEs where E derivatives are wrt the 2nd set of gate parameters
+        if wrtSlices1 == wrtSlices2: #Note: this doesn't involve gate derivatives
+            d2pr_dErhos2 = _np.transpose(d2pr_dErhos1,(0,2,1))
+        else:
+            d2pr_dErhos2 = _np.zeros( (nGateStrings, flt2.num_e_params, flt1.num_rho_params) )
+            drho = rho.deriv_wrt_params()[:,flt1.rho_local_slices[rhoIndex]]
+            dp_dAnyE = _np.dot(Gs, drho) * scaleVals[:,None,None] #overflow OK
+            if elabel == self._remainderLabel:
+                for ei,evec in enumerate(self.effects.values()):
+                    devec = evec.deriv_wrt_params()[:, flt2.e_local_slices[ei]]
+                    d2pr_dErhos2[:, flt2.e_global_slices[ei], flt1.rho_global_slices[rhoIndex]] = \
+                        -1.0 * _np.swapaxes( _np.dot(_np.transpose(devec), dp_dAnyE ), 0,1)
             else:
-                # cols for deriv w.r.t. spam parameters only:
-                ret_row1 = _np.concatenate( ( d2pr_d2rhos, _np.transpose(d2pr_dErhos,(0,2,1)) ), axis=2) # wrt rho
-                ret_row2 = _np.concatenate( ( d2pr_dErhos, d2pr_d2Es ), axis=2 ) # wrt E
-                ret_row3 = _np.concatenate( ( d2pr_drhos,d2pr_dEs), axis=2 ) #wrt gates
-        else:
-            assert(not spamColsOnly) #easy to do, but not supported yet
-            ret_row1 = _np.concatenate(
-                ( d2pr_d2rhos[:,:,wrtSlices['preps']],
-                  _np.transpose(d2pr_dErhos,(0,2,1))[:,:,wrtSlices['effects']],
-                  _np.transpose(d2pr_drhos, (0,2,1))[:,:,wrtSlices['gates']]), axis=2) #wrt rho
-            ret_row2 = _np.concatenate(
-                ( d2pr_dErhos[:,:,wrtSlices['preps']],
-                  d2pr_d2Es[:,:,wrtSlices['effects']],
-                  _np.transpose(d2pr_dEs,(0,2,1))[:,:,wrtSlices['gates']]), axis=2) #wrt E
-            ret_row3 = _np.concatenate(
-                ( d2pr_drhos[:,:,wrtSlices['preps']],
-                  d2pr_dEs[:,:,wrtSlices['effects']],
-                  d2pr_dGates2), axis=2) #wrt gates
-            
-        sub_vhp = _np.concatenate( (ret_row1, ret_row2, ret_row3), axis=1 )
+                eIndex = list(self.effects.keys()).index(elabel)
+                devec = self.effects[elabel].deriv_wrt_params()[:, flt2.e_local_slices[eIndex]]
+                d2pr_dErhos2[:, flt2.e_global_slices[eIndex], flt1.rho_global_slices[rhoIndex]] = \
+                    _np.swapaxes( _np.dot(_np.transpose(devec), dp_dAnyE ), 0,1)
+            d2pr_dErhos2 = _np.transpose(d2pr_dErhos2,(0,2,1))
 
-        if spamColsOnly:
-            # cols for deriv w.r.t gate parameters would be:
-            # row1 = _np.transpose(d2pr_drhos,(0,2,1))
-            # row2 = _np.transpose(d2pr_dEs,(0,2,1))
-            # row3 = d2pr_dGates2
-            dGates_row1 = _np.transpose(d2pr_drhos,(0,2,1))
-            dGates_row2 = _np.transpose(d2pr_dEs,(0,2,1))
-            return sub_vhp, dGates_row1, dGates_row2
-        else:
-            return sub_vhp
+                
+        #Note: these 2nd derivatives would need to be modified from being all-zeros if 
+        # the spam vectors were allowed to be more than linear in their parameters.
+        d2pr_d2rhos = _np.zeros( (nGateStrings, flt1.num_rho_params, flt2.num_rho_params) )
+        d2pr_d2Es   = _np.zeros( (nGateStrings, flt1.num_e_params, flt2.num_e_params) )
+
+        # END SPAM DERIVS -----------------------
+        
+        ret_row1 = _np.concatenate( ( d2pr_d2rhos,  d2pr_dErhos2, d2pr_drhos2  ), axis=2 ) # wrt rho
+        ret_row2 = _np.concatenate( ( d2pr_dErhos1, d2pr_d2Es,    d2pr_dEs2    ), axis=2 ) # wrt E
+        ret_row3 = _np.concatenate( ( d2pr_drhos1,  d2pr_dEs1,    d2pr_dGates2 ), axis=2 ) # wrt gates
+           
+        sub_vhp = _np.concatenate( (ret_row1, ret_row2, ret_row3), axis=1 )
+        return sub_vhp
 
 
     def _check(self, evalTree, spam_label_rows, prMxToFill=None, dprMxToFill=None, hprMxToFill=None, clipTo=None):
@@ -1847,25 +1975,29 @@ class GateSetCalculator(object):
 
 
     def _fill_result_tuple(self, result_tup, spam_label_rows, tree_slice,
-                           param_slice, calc_and_fill_fn):
+                           param_slice1, param_slice2, calc_and_fill_fn):
         fslc = tree_slice
-        pslc = param_slice
+        pslc1 = param_slice1
+        pslc2 = param_slice2
         remainder_index = None
         for spamLabel,rowIndex in spam_label_rows.items():
             if self._is_remainder_spamlabel(spamLabel):
                 remainder_index = rowIndex; continue
-            calc_and_fill_fn(spamLabel,rowIndex,fslc,pslc,False)
+            calc_and_fill_fn(spamLabel,rowIndex,fslc,pslc1,pslc2,False)
 
         #compute remainder label
         if remainder_index is not None:
-            # nps[k] == num of param slices in result_tup[k] index
+            # nps[k] == num of param slices in result_tup[k] index (assume
+            #           the first two dims are spamLabel and a gatestring indx.
             nps = { k: (el.ndim-2) 
                     for k,el in enumerate(result_tup) if el is not None }
                 
             def mkindx(iSpam,k): 
                 """ Constructs multi-index appropriate for result_tup[k]
-                    (Note that pslc alwsys acts on *final* dimension)   """
-                addl = [slice(None)]*(nps[k]-1)+[pslc] if nps[k] > 0 else []
+                    (Note that pslc1,pslc2 alwsys act on *final* dimension2)   """
+                if nps[k] > 1: addl = [slice(None)]*(nps[k]-2)+[pslc1,pslc2]
+                elif nps[k] == 1: addl = [pslc1]
+                else: addl = []
                 return [ iSpam,fslc ] + addl
 
             non_none_result_indices = [ i for i in range(len(result_tup)) \
@@ -1885,7 +2017,7 @@ class GateSetCalculator(object):
                             result_tup[i][mkindx(rowIndex,i)]
                 else:
                     calc_and_fill_fn(spamLabel,remainder_index,fslc,
-                                     pslc,sumInto=True)
+                                     pslc1,pslc2,sumInto=True)
 
             #At this point, result_tup[i][remainder_index,fslc,...] contains the 
             # sum of the results from all other spam labels.
@@ -2015,7 +2147,7 @@ class GateSetCalculator(object):
             Gs  = evalSubTree.final_view( prodCache, axis=0)
               # ( nGateStrings, dim, dim )
 
-            def calc_and_fill(spamLabel, isp, fslc, pslc, sumInto):
+            def calc_and_fill(spamLabel, isp, fslc, pslc1, pslc2, sumInto):
                 tm = _time.time()
                 old_err = _np.seterr(over='ignore')
                 rho,E = self._rhoE_from_spamLabel(spamLabel)
@@ -2028,7 +2160,7 @@ class GateSetCalculator(object):
                 _np.seterr(**old_err)
 
             self._fill_result_tuple( (mxToFill,), spam_label_rows,
-                                     fslc, slice(None), calc_and_fill )
+                                     fslc, slice(None), slice(None), calc_and_fill )
 
         #collect/gather results
         subtreeFinalSlices = [ t.final_slice(evalTree) for t in subtrees]
@@ -2187,7 +2319,7 @@ class GateSetCalculator(object):
               #( nGateStrings, dim, dim )
             profiler.mem_check("bulk_fill_dprobs: post compute product")
 
-            def calc_and_fill(spamLabel, isp, fslc, pslc, sumInto):
+            def calc_and_fill(spamLabel, isp, fslc, pslc1, pslc2, sumInto):
                 tm = _time.time()
                 old_err = _np.seterr(over='ignore')
                 rho,E = self._rhoE_from_spamLabel(spamLabel)
@@ -2196,13 +2328,13 @@ class GateSetCalculator(object):
                     if prMxToFill is not None:
                         prMxToFill[isp,fslc] += \
                             self._probs_from_rhoE(spamLabel, rho, E, Gs, scaleVals)
-                    mxToFill[isp,fslc,pslc] += self._dprobs_from_rhoE( 
+                    mxToFill[isp,fslc,pslc1] += self._dprobs_from_rhoE( 
                         spamLabel, rho, E, Gs, dGs, scaleVals, wrtSlices)
                 else:
                     if prMxToFill is not None:
                         prMxToFill[isp,fslc] = \
                             self._probs_from_rhoE(spamLabel, rho, E, Gs, scaleVals)
-                    mxToFill[isp,fslc,pslc] = self._dprobs_from_rhoE( 
+                    mxToFill[isp,fslc,pslc1] = self._dprobs_from_rhoE( 
                         spamLabel, rho, E, Gs, dGs, scaleVals, wrtSlices)
 
                 _np.seterr(**old_err)
@@ -2232,7 +2364,7 @@ class GateSetCalculator(object):
 
                 #Compute all requested derivative columns at once
                 self._fill_result_tuple( (prMxToFill, mxToFill), spam_label_rows,
-                                         fslc, slice(None), calc_and_fill )
+                                         fslc, slice(None), slice(None), calc_and_fill )
                 profiler.mem_check("bulk_fill_dprobs: post fill")
                 dProdCache = dGs = None #free mem
 
@@ -2251,7 +2383,7 @@ class GateSetCalculator(object):
                 # (computation that is *not* divided into blocks)
                 self._fill_result_tuple( 
                     (prMxToFill, mxToFill), spam_label_rows, fslc,
-                    slice(0,self.tot_spam_params), calc_and_fill )
+                    slice(0,self.tot_spam_params), slice(None), calc_and_fill )
                 profiler.mem_check("bulk_fill_dprobs: post fill spam")
 
                 #distribute derivative computation across blocks
@@ -2262,20 +2394,19 @@ class GateSetCalculator(object):
                        +" than derivative columns(%d)!" % self.tot_gate_params 
                        +" [blkSize = %.1f, nBlks=%d]" % (blkSize,nBlks))
 
-                def calc_and_fill_blk(spamLabel, isp, fslc, pslc, sumInto):
+                def calc_and_fill_blk(spamLabel, isp, fslc, pslc1, pslc2, sumInto):
                     tm = _time.time()
                     old_err = _np.seterr(over='ignore')
                     rho,E = self._rhoE_from_spamLabel(spamLabel)
-                    gateSlc = _slct.shift(pslc,-self.tot_spam_params)
+                    wrtNoSpam = {'preps':slice(0,0),'effects':slice(0,0)}
                     
                     if sumInto:
-                        mxToFill[isp,fslc,pslc] += self._dprobs_from_rhoE(
-                            spamLabel, rho, E, Gs, dGs, scaleVals,
-                            {'preps':slice(0,0),'effects':slice(0,0),'gates':gateSlc })
+                        mxToFill[isp,fslc,pslc1] += self._dprobs_from_rhoE(
+                            spamLabel, rho, E, Gs, dGs, scaleVals, wrtNoSpam)
+                            
                     else:
-                        mxToFill[isp,fslc,pslc] = self._dprobs_from_rhoE(
-                            spamLabel, rho, E, Gs, dGs, scaleVals,
-                            {'preps':slice(0,0),'effects':slice(0,0),'gates':gateSlc })
+                        mxToFill[isp,fslc,pslc1] = self._dprobs_from_rhoE(
+                            spamLabel, rho, E, Gs, dGs, scaleVals, wrtNoSpam)
                     _np.seterr(**old_err)
                     profiler.add_time("bulk_fill_dprobs: calc_and_fill_blk", tm)
 
@@ -2294,7 +2425,7 @@ class GateSetCalculator(object):
                       #( nGateStrings, nDerivCols, dim, dim )
                     self._fill_result_tuple( 
                         (mxToFill,), spam_label_rows, fslc, 
-                        blocks[iBlk], calc_and_fill_blk )                    
+                        blocks[iBlk], slice(None), calc_and_fill_blk )                    
 
                     profiler.mem_check("bulk_fill_dprobs: post fill blk")
                     dProdCache = dGs = None #free mem
@@ -2335,9 +2466,9 @@ class GateSetCalculator(object):
 
 
     def bulk_fill_hprobs(self, mxToFill, spam_label_rows, evalTree,
-                         prMxToFill=None, derivMxToFill=None, clipTo=None,
-                         check=False,comm=None, wrtFilter=None,
-                         wrtBlockSize=None, gatherMemLimit=None):
+                         prMxToFill=None, deriv1MxToFill=None, deriv2MxToFill=None, 
+                         clipTo=None, check=False,comm=None, wrtFilter1=None, wrtFilter2=None,
+                         wrtBlockSize1=None, wrtBlockSize2=None, gatherMemLimit=None):
 
         """
         Identical to bulk_hprobs(...) except results are
@@ -2373,10 +2504,12 @@ class GateSetCalculator(object):
           with the probabilities as per spam_label_rows, similar to
           bulk_fill_probs(...).
 
-        derivMxToFill : numpy array, optional
+        derivMxToFill1, derivMxToFill2 : numpy array, optional
           when not None, an already-allocated KxSxM numpy array that is filled
           with the probability derivatives as per spam_label_rows, similar to
-          bulk_fill_dprobs(...).
+          bulk_fill_dprobs(...), but where M is the number of gateset parameters
+          selected for the 1st and 2nd differentiation, respectively (i.e. by
+          wrtFilter1 and wrtFilter2).
 
         clipTo : 2-tuple
           (min,max) to clip returned probability to if not None.
@@ -2394,13 +2527,19 @@ class GateSetCalculator(object):
            of the parameters being differentiated with respect to (see
            wrtBlockSize).
 
-        wrtBlockSize : int or float, optional
-          The maximum number of *2nd* derivative columns to compute *products*
-          for simultaneously.  None means compute all requested columns
-          at once.  The  minimum of wrtBlockSize and the size that makes
-          maximal use of available processors is used as the final block size.
-          This argument must be None if wrtFilter is not None.  Set this to
-          non-None to reduce amount of intermediate memory required.
+        wrtFilter1, wrtFilter2 : list of ints, optional
+          If not None, a list of integers specifying which gate set parameters
+          to differentiate with respect to in the first (row) and second (col)
+          derivative operations, respectively.
+
+        wrtBlockSize2, wrtBlockSize2 : int or float, optional
+          The maximum number of 1st (row) and 2nd (col) derivatives to compute
+          *products* for simultaneously.  None means compute all requested
+          rows or columns at once.  The  minimum of wrtBlockSize and the size
+          that makes maximal use of available processors is used as the final
+          block size.  These arguments must be None if the corresponding
+          wrtFilter is not None.  Set this to non-None to reduce amount of
+          intermediate memory required.
 
         gatherMemLimit : int, optional
           A memory limit in bytes to impose upon the "gather" operations
@@ -2418,21 +2557,36 @@ class GateSetCalculator(object):
                 assert(remainder_row_index is None) # ensure there is at most one dummy spam label
                 remainder_row_index = rowIndex
 
-        if wrtFilter is not None:
-            assert(wrtBlockSize is None) #Cannot specify both wrtFilter and wrtBlockSize
+        if wrtFilter1 is not None:
+            assert(wrtBlockSize1 is None and wrtBlockSize2 is None) #Cannot specify both wrtFilter and wrtBlockSize
             tot_rho = self.tot_rho_params
             tot_spam = self.tot_rho_params + self.tot_e_params
-            wrtSlices = {
-                'preps':    [ x for x in wrtFilter if x < tot_rho ],
-                'effects' : [ (x-tot_rho) for x in wrtFilter if tot_rho <= x < tot_spam ],
-                'gates' :   [ (x-tot_spam) for x in wrtFilter if x >= tot_spam ] }
+            wrtSlices1 = {
+                'preps':    [ x for x in wrtFilter1 if x < tot_rho ],
+                'effects' : [ (x-tot_rho) for x in wrtFilter1 if tot_rho <= x < tot_spam ],
+                'gates' :   [ (x-tot_spam) for x in wrtFilter1 if x >= tot_spam ] }
 
-            wrtSlices['preps'] = _slct.list_to_slice(wrtSlices['preps'])
-            wrtSlices['effects'] = _slct.list_to_slice(wrtSlices['effects'])
-            wrtSlices['gates'] = _slct.list_to_slice(wrtSlices['gates'])
+            wrtSlices1['preps'] = _slct.list_to_slice(wrtSlices1['preps'])
+            wrtSlices1['effects'] = _slct.list_to_slice(wrtSlices1['effects'])
+            wrtSlices1['gates'] = _slct.list_to_slice(wrtSlices1['gates'])
         else:
-            wrtSlices = None
+            wrtSlices1 = None
 
+
+        if wrtFilter2 is not None:
+            assert(wrtBlockSize1 is None and wrtBlockSize2 is None) #Cannot specify both wrtFilter and wrtBlockSize
+            tot_rho = self.tot_rho_params
+            tot_spam = self.tot_rho_params + self.tot_e_params
+            wrtSlices2 = {
+                'preps':    [ x for x in wrtFilter2 if x < tot_rho ],
+                'effects' : [ (x-tot_rho) for x in wrtFilter2 if tot_rho <= x < tot_spam ],
+                'gates' :   [ (x-tot_spam) for x in wrtFilter2 if x >= tot_spam ] }
+
+            wrtSlices2['preps'] = _slct.list_to_slice(wrtSlices2['preps'])
+            wrtSlices2['effects'] = _slct.list_to_slice(wrtSlices2['effects'])
+            wrtSlices2['gates'] = _slct.list_to_slice(wrtSlices2['gates'])
+        else:
+            wrtSlices2 = None
 
         #get distribution across subtrees (groups if needed)
         subtrees = evalTree.get_sub_trees()
@@ -2445,23 +2599,16 @@ class GateSetCalculator(object):
             fslc = evalSubTree.final_slice(evalTree)
 
             #Free memory from previous subtree iteration before computing caches
-            scaleVals = Gs = dGs = hGs = None
+            scaleVals = Gs = dGs1 = dGs2 = hGs = None
             prodCache = scaleCache = dProdCache = None
 
-            #Fill cache info (not requiring column distribution)
+            #Fill product cache info (not requiring row or column distribution)
             prodCache, scaleCache = self._compute_product_cache(evalSubTree, mySubComm)
-            dProdCache = self._compute_dproduct_cache(evalSubTree, prodCache, scaleCache,
-                                                      mySubComm, None) #wrtFilter *not* for 1st derivs
-
-            #use cached data to final values
             scaleVals = self._scaleExp( evalSubTree.final_view(scaleCache))
             Gs  = evalSubTree.final_view(prodCache, axis=0)
               #( nGateStrings, dim, dim )
-            dGs = evalSubTree.final_view(dProdCache, axis=0) 
-              #( nGateStrings, nGateDerivCols, dim, dim )
 
-
-            def calc_and_fill(spamLabel, isp, fslc, pslc, sumInto):
+            def calc_and_fill(spamLabel, isp, fslc, pslc1, pslc2, sumInto):
                 tm = _time.time()
                 old_err = _np.seterr(over='ignore')
                 rho,E = self._rhoE_from_spamLabel(spamLabel)
@@ -2470,116 +2617,156 @@ class GateSetCalculator(object):
                     if prMxToFill is not None:
                         prMxToFill[isp,fslc] += \
                             self._probs_from_rhoE(spamLabel, rho, E, Gs, scaleVals)
-                    if derivMxToFill is not None:
-                        derivMxToFill[isp,fslc,:] += self._dprobs_from_rhoE( 
-                            spamLabel, rho, E, Gs, dGs, scaleVals)
-                    mxToFill[isp,fslc,:,pslc] += self._hprobs_from_rhoE( 
-                        spamLabel, rho, E, Gs, dGs, hGs, scaleVals, wrtSlices)
+                    if deriv1MxToFill is not None:
+                        deriv1MxToFill[isp,fslc,pslc1] += self._dprobs_from_rhoE( 
+                            spamLabel, rho, E, Gs, dGs1, scaleVals, wrtSlices1)
+                    if deriv2MxToFill is not None:
+                        deriv2MxToFill[isp,fslc,pslc2] += self._dprobs_from_rhoE( 
+                            spamLabel, rho, E, Gs, dGs2, scaleVals, wrtSlices2)
+
+                    mxToFill[isp,fslc,pslc1,pslc2] += self._hprobs_from_rhoE( 
+                        spamLabel, rho, E, Gs, dGs1, dGs2, hGs, scaleVals, wrtSlices1, wrtSlices2)
 
                 else:
                     if prMxToFill is not None:
                         prMxToFill[isp,fslc] = \
                             self._probs_from_rhoE(spamLabel, rho, E, Gs, scaleVals)
-                    if derivMxToFill is not None:
-                        derivMxToFill[isp,fslc,:] = self._dprobs_from_rhoE( 
-                            spamLabel, rho, E, Gs, dGs, scaleVals)
-                    mxToFill[isp,fslc,:,pslc] = self._hprobs_from_rhoE( 
-                        spamLabel, rho, E, Gs, dGs, hGs, scaleVals, wrtSlices)
+                    if deriv1MxToFill is not None:
+                        deriv1MxToFill[isp,fslc,pslc1] = self._dprobs_from_rhoE( 
+                            spamLabel, rho, E, Gs, dGs1, scaleVals, wrtSlices1)
+                    if deriv2MxToFill is not None:
+                        deriv2MxToFill[isp,fslc,pslc2] = self._dprobs_from_rhoE( 
+                            spamLabel, rho, E, Gs, dGs2, scaleVals, wrtSlices2)
+
+                    mxToFill[isp,fslc,pslc1,pslc2] = self._hprobs_from_rhoE( 
+                        spamLabel, rho, E, Gs, dGs1, dGs2, hGs, scaleVals, wrtSlices1, wrtSlices2)
 
                 _np.seterr(**old_err)
 
             #Set wrtBlockSize to use available processors if it isn't specified
-            if wrtFilter is None:
-                blkSize = wrtBlockSize #could be None
+            if wrtFilter1 is None and wrtFilter2 is None:
+                blkSize1 = wrtBlockSize1 #could be None
+                blkSize2 = wrtBlockSize2 #could be None
                 if (mySubComm is not None) and (mySubComm.Get_size() > 1):
                     comm_blkSize = self.tot_gate_params / mySubComm.Get_size()
-                    blkSize = comm_blkSize if (blkSize is None) \
-                        else min(comm_blkSize, blkSize) #override with smaller comm_blkSize
+                    blkSize1 = comm_blkSize if (blkSize1 is None) \
+                        else min(comm_blkSize, blkSize1) #override with smaller comm_blkSize
+                    blkSize2 = comm_blkSize if (blkSize2 is None) \
+                        else min(comm_blkSize, blkSize2) #override with smaller comm_blkSize
             else:
-                blkSize = None # wrtFilter dictates block
+                blkSize1 = blkSize2 = None # wrtFilter1 & wrtFilter2 dictates block
 
-            if blkSize is None:
+
+            if blkSize1 is None and blkSize2 is None:
                 #Fill hessian cache info
-                gatesSlice = wrtSlices['gates'] if (wrtSlices is not None) else None
-                hProdCache = self._compute_hproduct_cache(evalSubTree, prodCache, dProdCache,
-                                                          scaleCache, mySubComm, gatesSlice)
+                gatesSlice1 = wrtSlices1['gates'] if (wrtSlices1 is not None) else None
+                gatesSlice2 = wrtSlices2['gates'] if (wrtSlices2 is not None) else None
+
+                dProdCache1 = self._compute_dproduct_cache(
+                    evalSubTree, prodCache, scaleCache, mySubComm, gatesSlice1)
+                dProdCache2 = dProdCache1 if (gatesSlice1 == gatesSlice2) else \
+                    self._compute_dproduct_cache(evalSubTree, prodCache,
+                                                 scaleCache, mySubComm, gatesSlice2)
+
+                dGs1 = evalSubTree.final_view(dProdCache1, axis=0) 
+                dGs2 = evalSubTree.final_view(dProdCache2, axis=0) 
+                  #( nGateStrings, nGateDerivColsX, dim, dim )
+
+                hProdCache = self._compute_hproduct_cache(evalSubTree, prodCache, dProdCache1,
+                                                          dProdCache2, scaleCache, mySubComm,
+                                                          gatesSlice1, gatesSlice2)
                 hGs = evalSubTree.final_view(hProdCache, axis=0)
-                   #( nGateStrings, nGateDerivCols, len(wrtFilter), dim, dim )
+                   #( nGateStrings, len(wrtFilter1), len(wrtFilter2), dim, dim )
 
                 #Compute all requested derivative columns at once
-                self._fill_result_tuple((prMxToFill, derivMxToFill, mxToFill),
+                self._fill_result_tuple((prMxToFill, deriv1MxToFill, deriv2MxToFill, mxToFill),
                                         spam_label_rows, fslc, slice(None),
-                                        calc_and_fill)
+                                        slice(None), calc_and_fill)
 
             else: # Divide columns into blocks of at most blkSize
-                assert(wrtFilter is None) #cannot specify both wrtFilter and blkSize
-                nBlks = int(_np.ceil(self.tot_gate_params / blkSize))
-                  # num blocks required to achieve desired average size == blkSize
-                blocks = _mpit.slice_up_range(self.tot_gate_params, nBlks,
-                                              start=self.tot_spam_params)
-
-                # Create placeholder dGs for *no* gate params to compute
-                #  2nd derivatives wrt all spam parameters
-                hGs = _np.empty( (Gs.shape[0],self.tot_gate_params,0,self.dim,self.dim), 'd')
-                wrtSlices = { 'preps':    slice(0,self.tot_rho_params),
-                               'effects' : slice(0,self.tot_e_params), 
-                               'gates' :   slice(0,0) }
-                   #needed b/c _hprobs_from_rhoE(...) uses wrtSlices['gates']
-
-                #Compute spam derivative columns and possibly probs
-                # (computation that is *not* divided into blocks)
-                self._fill_result_tuple( 
-                    (prMxToFill, derivMxToFill, mxToFill), spam_label_rows,
-                    fslc, slice(0,self.tot_spam_params), calc_and_fill )
+                assert(wrtFilter1 is None and wrtFilter2 is None) #cannot specify both wrtFilter and blkSize
+                nBlks1 = int(_np.ceil(self.tot_params / blkSize1))
+                nBlks2 = int(_np.ceil(self.tot_params / blkSize2))
+                  # num blocks required to achieve desired average size == blkSize1 or blkSize2
+                blocks1 = _mpit.slice_up_range(self.tot_params, nBlks1)
+                blocks2 = _mpit.slice_up_range(self.tot_params, nBlks2)
 
                 #distribute derivative computation across blocks
-                myBlkIndices, blkOwners, blkComm = \
-                    _mpit.distribute_indices(list(range(nBlks)), mySubComm)
-                if blkComm is not None:
+                myBlk1Indices, blk1Owners, blk1Comm = \
+                    _mpit.distribute_indices(list(range(nBlks1)), mySubComm)
+
+                myBlk2Indices, blk2Owners, blk2Comm = \
+                    _mpit.distribute_indices(list(range(nBlks2)), blk1Comm)
+
+                if blk2Comm is not None:
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
-                       +" than derivative columns(%d)!" % self.tot_gate_params 
-                       +" [blkSize = %.1f, nBlks=%d]" % (blkSize,nBlks))
+                       +" than hessian elements(%d)!" % (self.tot_gate_params**2)
+                       +" [blkSize = {%.1f,%.1f}, nBlks={%d,%d}]" % (blkSize1,blkSize2,nBlks1,nBlks2))
 
-                def calc_and_fill_blk(spamLabel, isp, fslc, pslc, sumInto):
-                    tm = _time.time()
-                    old_err = _np.seterr(over='ignore')
-                    rho,E = self._rhoE_from_spamLabel(spamLabel)
-                    gateSlc = _slct.shift(pslc,-self.tot_spam_params)
-                    
-                    if sumInto:
-                        mxToFill[isp,fslc,:,pslc] += self._hprobs_from_rhoE(
-                            spamLabel, rho, E, Gs, dGs, hGs, scaleVals,
-                            {'preps':slice(0,0),'effects':slice(0,0),'gates':gateSlc })
-                    else:
-                        mxToFill[isp,fslc,:,pslc] = self._hprobs_from_rhoE(
-                            spamLabel, rho, E, Gs, dGs, hGs, scaleVals,
-                            {'preps':slice(0,0),'effects':slice(0,0),'gates':gateSlc })
-                    _np.seterr(**old_err)
+                for iBlk1 in myBlk1Indices:
+                    prepSlice1 = _slct.intersect(blocks1[iBlk1],slice(0,self.tot_rho_params))
+                    effectSlice1 = _slct.shift( _slct.intersect(blocks1[iBlk1],slice(self.tot_rho_params,self.tot_spam_params)), -self.tot_rho_params)
+                    gateSlice1 = _slct.shift( _slct.intersect(blocks1[iBlk1],slice(self.tot_spam_params,None)), -self.tot_spam_params)
+                    dProdCache1 = self._compute_dproduct_cache(
+                        evalSubTree, prodCache, scaleCache, blk1Comm, gateSlice1)
+                    dGs1 = evalSubTree.final_view(dProdCache1, axis=0) 
 
-                for iBlk in myBlkIndices:
-                    gateSlice = _slct.shift(blocks[iBlk],-self.tot_spam_params)
-                    hProdCache = self._compute_hproduct_cache(evalSubTree, prodCache, dProdCache,
-                                                              scaleCache, blkComm, gateSlice)
-                    hGs = evalSubTree.final_view(hProdCache, axis=0)
-                    self._fill_result_tuple( 
-                        (mxToFill,), spam_label_rows, fslc, 
-                        blocks[iBlk], calc_and_fill_blk )
+                    for iBlk2 in myBlk2Indices:
+                        prepSlice2 = _slct.intersect(blocks2[iBlk2],slice(0,self.tot_rho_params))
+                        effectSlice2 = _slct.shift( _slct.intersect(blocks2[iBlk2],slice(self.tot_rho_params,self.tot_spam_params)), -self.tot_rho_params)
+                        gateSlice2 = _slct.shift( _slct.intersect(blocks2[iBlk2],slice(self.tot_spam_params,None)), -self.tot_spam_params)
 
-                    hProdCache = hGs = None # free mem
+                        if (gateSlice1 == gateSlice2):
+                            dProdCache2 = dProdCache1 ; dGs2 = dGs1
+                        else:
+                            dProdCache2 =self._compute_dproduct_cache(
+                                evalSubTree, prodCache, scaleCache, blk2Comm, gateSlice2)
+                            dGs2 = evalSubTree.final_view(dProdCache2, axis=0) 
+                        rank = comm.Get_rank()
 
+                        hProdCache = self._compute_hproduct_cache(
+                            evalSubTree, prodCache, dProdCache1, dProdCache2,
+                            scaleCache, blk2Comm, gateSlice1, gateSlice2)
+                        hGs = evalSubTree.final_view(hProdCache, axis=0)
 
-                #gather results
-                _mpit.gather_slices(blocks, blkOwners, mxToFill[:,fslc],
-                                    3, mySubComm, gatherMemLimit)
-                #note: gathering axis 3 of mxToFill[:,fslc], dim=(K,s,M,M)
+                        #Set spam filtering for calc_and_fill
+                        wrtSlices1 = {'preps': prepSlice1, 'effects': effectSlice1 }
+                        wrtSlices2 = {'preps': prepSlice2, 'effects': effectSlice2 }
 
+                        self._fill_result_tuple((prMxToFill, deriv1MxToFill, deriv2MxToFill, mxToFill),
+                                                spam_label_rows, fslc, blocks1[iBlk1], blocks2[iBlk2],
+                                                calc_and_fill)
+    
+                        hProdCache = hGs = dProdCache2 = dGs2 =  None # free mem
+                    dProdCache1 = dGs1 = None #free mem
+
+                    #gather column results: gather axis 3 of mxToFill[:,fslc,blocks1[iBlk1]], dim=(K,s,blk1,M)
+                    _mpit.gather_slices(blocks2, blk2Owners, mxToFill[:,fslc,blocks1[iBlk1]],
+                                        3, blk1Comm, gatherMemLimit)
+
+                #gather row results; gather axis 2 of mxToFill[:,fslc], dim=(K,s,M,M)
+                _mpit.gather_slices(blocks1, blk1Owners, mxToFill[:,fslc],
+                                    2, mySubComm, gatherMemLimit)
+                if deriv1MxToFill is not None:
+                    _mpit.gather_slices(blocks1, blk1Owners, deriv1MxToFill[:,fslc],
+                                        2, mySubComm, gatherMemLimit)
+                if deriv2MxToFill is not None:
+                    _mpit.gather_slices(blocks2, blk2Owners, deriv2MxToFill[:,fslc],
+                                        2, blk1Comm, gatherMemLimit) 
+                   #Note: deriv2MxToFill gets computed on every inner loop completion
+                   # (to save mem) but isn't gathered until now (but using blk1Comm).
+                   # (just as prMxToFill is computed fully on each inner loop *iteration*!)
+            
         #collect/gather results
         subtreeFinalSlices = [ t.final_slice(evalTree) for t in subtrees]
         _mpit.gather_slices(subtreeFinalSlices, subTreeOwners, 
                             mxToFill, 1, comm, gatherMemLimit) 
-        if derivMxToFill is not None:
+        if deriv1MxToFill is not None:
             _mpit.gather_slices(subtreeFinalSlices, subTreeOwners,
-                                derivMxToFill, 1, comm, gatherMemLimit) 
+                                deriv1MxToFill, 1, comm, gatherMemLimit) 
+        if deriv2MxToFill is not None:
+            _mpit.gather_slices(subtreeFinalSlices, subTreeOwners,
+                                deriv2MxToFill, 1, comm, gatherMemLimit) 
         if prMxToFill is not None:
             _mpit.gather_slices(subtreeFinalSlices, subTreeOwners,
                                 prMxToFill, 1, comm) 
@@ -2590,7 +2777,7 @@ class GateSetCalculator(object):
 
         if check:
             self._check(evalTree, spam_label_rows,
-                        prMxToFill, derivMxToFill, mxToFill, clipTo)
+                        prMxToFill, deriv1MxToFill, mxToFill, clipTo)
 
 
 
@@ -2843,7 +3030,8 @@ class GateSetCalculator(object):
     def bulk_hpr(self, spamLabel, evalTree,
                  returnPr=False,returnDeriv=False,
                  clipTo=None,check=False,comm=None,
-                 wrtFilter=None, wrtBlockSize=None):
+                 wrtFilter1=None, wrtFilter2=None,
+                 wrtBlockSize1=None, wrtBlockSize2=None):
 
         """
         Compute the 2nd derivatives of the probabilities generated by a each gate
@@ -2881,20 +3069,19 @@ class GateSetCalculator(object):
            of the parameters being differentiated with respect to (see
            wrtBlockSize).
 
-        wrtFilter : list of ints, optional
-          If not None, a list of integers specifying which parameters
-          to include in the *2nd* derivative dimension. This argument
-          is used internally for distributing calculations across multiple
-          processors and to control memory usage.  Cannot be specified
-          in conjuction with wrtBlockSize.
+        wrtFilter1, wrtFilter2 : list of ints, optional
+          If not None, a list of integers specifying which gate set parameters
+          to differentiate with respect to in the first (row) and second (col)
+          derivative operations, respectively.
 
-        wrtBlockSize : int or float, optional
-          The maximum average number of *2nd* derivative columns to compute
+        wrtBlockSize2, wrtBlockSize2 : int or float, optional
+          The maximum number of 1st (row) and 2nd (col) derivatives to compute
           *products* for simultaneously.  None means compute all requested
-          columns at once.  The  minimum of wrtBlockSize and the size that makes
-          maximal use of available processors is used as the final block size.
-          This argument must be None if wrtFilter is not None.  Set this to
-          non-None to reduce amount of intermediate memory required.
+          rows or columns at once.  The  minimum of wrtBlockSize and the size
+          that makes maximal use of available processors is used as the final
+          block size.  These arguments must be None if the corresponding
+          wrtFilter is not None.  Set this to non-None to reduce amount of
+          intermediate memory required.
 
 
         Returns
@@ -2908,28 +3095,39 @@ class GateSetCalculator(object):
             and hessians[i,j,k] is the derivative of the i-th probability
             w.r.t. the k-th then the j-th gateset parameter.
 
-        derivs : numpy array
-            only returned if returnDeriv == True. A S x M array where
-            derivs[i,j] holds the derivative of the i-th probability
-            w.r.t. the j-th gateset parameter.
+        derivs1, derivs2 : numpy array
+            only returned if returnDeriv == True. Two S x M arrays where
+            derivsX[i,j] holds the derivative of the i-th probability
+            w.r.t. the j-th gateset parameter, where j is taken from the
+            first and second sets of filtered parameters (i.e. by
+            wrtFilter1 and wrtFilter2).  If `wrtFilter1 == wrtFilter2`,
+            then derivs2 is not returned (to save memory, since it's the
+            same as derivs1).
 
         probabilities : numpy array
             only returned if returnPr == True.  A length-S array
             containing the probabilities for each gate string.
         """
         nGateStrings = evalTree.num_final_strings()
-        nDerivCols = self.tot_params
+        nDerivCols1 = self.tot_params if (wrtFilter1 is None) \
+                           else len(wrtFilter1)
+        nDerivCols2 = self.tot_params if (wrtFilter2 is None) \
+                           else len(wrtFilter2)
 
-        vhp = _np.empty( (1,nGateStrings,nDerivCols,nDerivCols), 'd' )
-        vdp = _np.empty( (1,nGateStrings,nDerivCols), 'd' ) \
+        vhp = _np.empty( (1,nGateStrings,nDerivCols1,nDerivCols2), 'd' )
+        vdp1 = _np.empty( (1,nGateStrings,self.tot_params), 'd' ) \
             if returnDeriv else None
+        vdp2 = vdp1.copy() if (returnDeriv and wrtFilter1!=wrtFilter2) else None
         vp = _np.empty( (1,nGateStrings), 'd' ) if returnPr else None
 
         self.bulk_fill_hprobs(vhp, {spamLabel: 0}, evalTree,
-                              vp, vdp, clipTo, check, comm,
-                              wrtFilter, wrtBlockSize)
+                              vp, vdp1, vdp2, clipTo, check, comm,
+                              wrtFilter1,wrtFilter2,wrtBlockSize1,wrtBlockSize2)
         if returnDeriv:
-            return (vhp[0], vdp[0], vp[0]) if returnPr else (vhp[0],vdp[0])
+            if vdp2 is None:
+                return (vhp[0], vdp1[0], vp[0]) if returnPr else (vhp[0],vdp1[0])
+            else:
+                return (vhp[0], vdp1[0], vdp2[0], vp[0]) if returnPr else (vhp[0],vdp1[0],vdp2[0])
         else:
             return (vhp[0], vp[0]) if returnPr else vhp[0]
 
@@ -2938,7 +3136,8 @@ class GateSetCalculator(object):
     def bulk_hprobs(self, evalTree,
                     returnPr=False,returnDeriv=False,clipTo=None,
                     check=False,comm=None,
-                    wrtFilter=None, wrtBlockSize=None):
+                    wrtFilter1=None, wrtFilter2=None,
+                    wrtBlockSize1=None, wrtBlockSize2=None):
 
         """
         Construct a dictionary containing the bulk-probability-
@@ -2974,25 +3173,24 @@ class GateSetCalculator(object):
            of the parameters being differentiated with respect to (see
            wrtBlockSize).
 
-        wrtFilter : list of ints, optional
-          If not None, a list of integers specifying which parameters
-          to include in the *2nd* derivative dimension. This argument
-          is used internally for distributing calculations across multiple
-          processors and to control memory usage.  Cannot be specified
-          in conjuction with wrtBlockSize.
+        wrtFilter1, wrtFilter2 : list of ints, optional
+          If not None, a list of integers specifying which gate set parameters
+          to differentiate with respect to in the first (row) and second (col)
+          derivative operations, respectively.
 
-        wrtBlockSize : int or float, optional
-          The maximum average number of *2nd* derivative columns to compute
+        wrtBlockSize2, wrtBlockSize2 : int or float, optional
+          The maximum number of 1st (row) and 2nd (col) derivatives to compute
           *products* for simultaneously.  None means compute all requested
-          columns at once.  The  minimum of wrtBlockSize and the size that makes
-          maximal use of available processors is used as the final block size.
-          This argument must be None if wrtFilter is not None.  Set this to
-          non-None to reduce amount of intermediate memory required.
+          rows or columns at once.  The  minimum of wrtBlockSize and the size
+          that makes maximal use of available processors is used as the final
+          block size.  These arguments must be None if the corresponding
+          wrtFilter is not None.  Set this to non-None to reduce amount of
+          intermediate memory required.
 
 
         Returns
         -------
-        hprobs : dictionary
+        dict
             A dictionary such that
             ``hprobs[SL] = bulk_hpr(SL,evalTree,gates,G0,SPAM,SP0,returnPr,returnDeriv,clipTo,check)``
             for each spam label (string) SL.
@@ -3000,24 +3198,36 @@ class GateSetCalculator(object):
         spam_label_rows = \
             { spamLabel: i for (i,spamLabel) in enumerate(self.spamdefs) }
         nGateStrings = evalTree.num_final_strings()
-        nDerivCols = self.tot_params
+        nDerivCols1 = self.tot_params if (wrtFilter1 is None) \
+                           else len(wrtFilter1)
+        nDerivCols2 = self.tot_params if (wrtFilter2 is None) \
+                           else len(wrtFilter2)
         nSpamLabels = len(self.spamdefs)
 
-        vhp = _np.empty( (nSpamLabels,nGateStrings,nDerivCols,nDerivCols),'d')
-        vdp = _np.empty( (nSpamLabels,nGateStrings,nDerivCols), 'd' ) \
+        vhp = _np.empty( (nSpamLabels,nGateStrings,nDerivCols1,nDerivCols2),'d')
+        vdp1 = _np.empty( (nSpamLabels,nGateStrings,self.tot_params), 'd' ) \
             if returnDeriv else None
+        vdp2 = vdp1.copy() if (returnDeriv and wrtFilter1!=wrtFilter2) else None
         vp = _np.empty( (nSpamLabels,nGateStrings), 'd' ) if returnPr else None
 
         self.bulk_fill_hprobs(vhp, spam_label_rows, evalTree,
-                              vp, vdp, clipTo, check, comm,
-                              wrtFilter, wrtBlockSize)
+                              vp, vdp1, vdp2, clipTo, check, comm,
+                              wrtFilter1,wrtFilter1,wrtBlockSize1,wrtBlockSize2)
         if returnDeriv:
-            if returnPr:
-                return { spamLabel: (vhp[i],vdp[i],vp[i]) \
-                         for (i,spamLabel) in enumerate(self.spamdefs) }
+            if vdp2 is None:
+                if returnPr:
+                    return { spamLabel: (vhp[i],vdp1[i],vp[i]) \
+                             for (i,spamLabel) in enumerate(self.spamdefs) }
+                else:
+                    return { spamLabel: (vhp[i],vdp1[i]) \
+                             for (i,spamLabel) in enumerate(self.spamdefs) }
             else:
-                return { spamLabel: (vhp[i],vdp[i]) \
-                         for (i,spamLabel) in enumerate(self.spamdefs) }
+                if returnPr:
+                    return { spamLabel: (vhp[i],vdp1[i],vdp2[i],vp[i]) \
+                             for (i,spamLabel) in enumerate(self.spamdefs) }
+                else:
+                    return { spamLabel: (vhp[i],vdp1[i],vdp2[i]) \
+                             for (i,spamLabel) in enumerate(self.spamdefs) }
         else:
             if returnPr:
                 return { spamLabel: (vhp[i],vp[i]) \
@@ -3027,8 +3237,9 @@ class GateSetCalculator(object):
                          for (i,spamLabel) in enumerate(self.spamdefs) }
 
 
-    def bulk_hprobs_by_column(self, spam_label_rows, evalTree,
-                              bReturnDProbs12=False, comm=None, wrtFilter=None):
+    def bulk_hprobs_by_block(self, spam_label_rows, evalTree, wrtSlicesList,
+                             bReturnDProbs12=False, comm=None):
+                             
         """
         Constructs a generator that computes the 2nd derivatives of the
         probabilities generated by a each gate sequence given by evalTree
@@ -3045,13 +3256,20 @@ class GateSetCalculator(object):
         Parameters
         ----------
         spam_label_rows : dictionary
-          a dictionary with keys == spam labels and values which
-          are integer row indices into mxToFill, specifying the
-          correspondence between rows of mxToFill and spam labels.
+            a dictionary with keys == spam labels and values which
+            are integer row indices into mxToFill, specifying the
+            correspondence between rows of mxToFill and spam labels.
 
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
-           to compute the bulk operation on.  This tree *cannot* be split.
+            given by a prior call to bulk_evaltree.  Specifies the gate strings
+            to compute the bulk operation on.  This tree *cannot* be split.
+
+        wrtSlicesList : list
+            A list of `(rowSlice,colSlice)` 2-tuples, each of which specify
+            a "block" of the Hessian to compute.  Iterating over the output
+            of this function iterates over these computed blocks, in the order
+            given by `wrtSlicesList`.  `rowSlice` and `colSlice` must by Python
+            `slice` objects.
 
         bReturnDProbs12 : boolean, optional
            If true, the generator computes a 2-tuple: (hessian_col, d12_col),
@@ -3067,232 +3285,142 @@ class GateSetCalculator(object):
            across multiple processors.  Distribution is performed as in
            bulk_product, bulk_dproduct, and bulk_hproduct.
 
-        wrtFilter : list of ints, optional
-          If not None, a list of integers specifying the indices of the
-          parameters to include in the *2nd* derivative dimension, i.e.,
-          which Hessian columns to compute.
-
 
         Returns
         -------
-        column_generator
-          A generator which, when iterated, yields an array of
-          shape K x S x M x 1 numpy array (a Hessian column), where K is the
-          length of spam_label_rows, S is equal to the number of gate strings
-          (i.e. evalTree.num_final_strings()), and M is the number of gateset
-          parameters.  If bReturnDProbs12 == True, then two such arrays
-          are given (as a 2-tuple).
+        block_generator
+          A generator which, when iterated, yields the 3-tuple 
+          `(rowSlice, colSlice, hprobs)` or `(rowSlice, colSlice, dprobs12)`
+          (the latter if `bReturnDProbs12 == True`).  `rowSlice` and `colSlice`
+          are slices directly from `wrtSlicesList`. `hprobs` and `dprobs12` are
+          arrays of shape K x S x B x B', where:
+
+          - K is the length of spam_label_rows,
+          - S is the number of gate strings (i.e. evalTree.num_final_strings()),
+          - B is the number of parameter rows (the length of rowSlice)
+          - B' is the number of parameter columns (the length of colSlice)
+
+          If `mx`, `dp1`, and `dp2` are the outputs of :func:`bulk_fill_hprobs`
+          (i.e. args `mxToFill`, `deriv1MxToFill`, and `deriv1MxToFill`), then:
+
+          - `hprobs == mx[:,:,rowSlice,colSlice]`
+          - `dprobs12 == dp1[:,:,rowSlice,None] * dp2[:,:,None,colSlice]`
         """
-        assert(not evalTree.is_split()) #no split trees allowed - unduly complicates generator
-
-        if wrtFilter is not None:
-            tot_spam = self.tot_rho_params + self.tot_e_params
-            wrtSlices = {
-                'spam':    [ x for x in wrtFilter if x < tot_spam ],
-                'gates' :   [ (x-tot_spam) for x in wrtFilter if x >= tot_spam ] }
-
-            wrtSlices['spam'] = _slct.list_to_slice(wrtSlices['spam'])
-            wrtSlices['gates'] = _slct.list_to_slice(wrtSlices['gates'])
-        else:
-            wrtSlices = None
-
-        remainder_row_index = None
-        for spamLabel,rowIndex in spam_label_rows.items():
-            if self._is_remainder_spamlabel(spamLabel):
-                assert(self.assumeSumToOne) # ensure the remainder label is allowed
-                assert(remainder_row_index is None) # ensure there is at most one dummy spam label
-                remainder_row_index = rowIndex
-
+        assert(not evalTree.is_split())
         nGateStrings = evalTree.num_final_strings()
-        nGateDerivCols = self.tot_gate_params
-        nSpamDerivCols = self.tot_rho_params + self.tot_e_params
-        nDerivCols = self.tot_params
 
-        #allocate memory for result
-        if bReturnDProbs12:
-            dprobs = _np.empty( (len(spam_label_rows),nGateStrings,nDerivCols), 'd' )
-        hessianSingleCol = _np.empty( (len(spam_label_rows),nGateStrings,nDerivCols,1), 'd' )
-        hessianSpamCols = _np.empty( (len(spam_label_rows),nGateStrings,
-                                      nDerivCols,nSpamDerivCols), 'd' )
-        dGates_row1 = _np.zeros( (len(spam_label_rows), nGateStrings, self.tot_rho_params, nGateDerivCols) )
-        dGates_row2 = _np.zeros( (len(spam_label_rows), nGateStrings, self.tot_e_params, nGateDerivCols) )
-
-
-        #print "TIME0 = ",(_time.time()-tS); sys.stdout.flush()
-
-        #Fill product and dproduct caches
+        #Fill product cache info (not distributed)
         prodCache, scaleCache = self._compute_product_cache(evalTree, comm)
-        dProdCache = self._compute_dproduct_cache(
-            evalTree, prodCache, scaleCache, comm)
-
-        #use cached data to compute final values
-        scaleVals = self._scaleExp( evalTree.final_view(scaleCache) )
-        Gs  = evalTree.final_view(prodCache, axis=0) 
+        scaleVals = self._scaleExp( evalTree.final_view(scaleCache))
+        Gs  = evalTree.final_view(prodCache, axis=0)
           #( nGateStrings, dim, dim )
-        dGs = evalTree.final_view(dProdCache, axis=0) 
-          #( nGateStrings, nGateDerivCols, dim, dim )
 
-        def calc_and_fill(spamLabel, isp, fslc, pslc, sumInto):
+        #Same as in bulk_fill_hprobs (TODO consolidate?)
+        def calc_and_fill(spamLabel, isp, fslc, pslc1, pslc2, sumInto):
+            tm = _time.time()
             old_err = _np.seterr(over='ignore')
             rho,E = self._rhoE_from_spamLabel(spamLabel)
-
+            
             if sumInto:
-                if bReturnDProbs12:
-                    dprobs[isp,fslc,:] += self._dprobs_from_rhoE(
-                        spamLabel, rho, E, Gs, dGs, scaleVals)
-                a,b,c = self._hprobs_from_rhoE(spamLabel, rho, E, Gs, dGs, None,
-                                               scaleVals, None, spamColsOnly=True)
-                #Future: fix _hprobs_from_rhoE so we can do this sum w/out copying
-                hessianSpamCols[isp,fslc,:,pslc] += a
-                dGates_row1[isp,fslc,:,pslc] += b
-                dGates_row2[isp,fslc,:,pslc] += c
+                if prMxToFill is not None:
+                    prMxToFill[isp,fslc] += \
+                        self._probs_from_rhoE(spamLabel, rho, E, Gs, scaleVals)
+                if deriv1MxToFill is not None:
+                    deriv1MxToFill[isp,fslc,pslc1] += self._dprobs_from_rhoE( 
+                        spamLabel, rho, E, Gs, dGs1, scaleVals, wrtSPAMSlices1)
+                if deriv2MxToFill is not None:
+                    deriv2MxToFill[isp,fslc,pslc2] += self._dprobs_from_rhoE( 
+                        spamLabel, rho, E, Gs, dGs2, scaleVals, wrtSPAMSlices2)
+
+                mxToFill[isp,fslc,pslc1,pslc2] += self._hprobs_from_rhoE( 
+                    spamLabel, rho, E, Gs, dGs1, dGs2, hGs, scaleVals, wrtSPAMSlices1, wrtSPAMSlices2)
+
             else:
-                if bReturnDProbs12:
-                    dprobs[isp,fslc,:] = self._dprobs_from_rhoE(
-                        spamLabel, rho, E, Gs, dGs, scaleVals)
-                (hessianSpamCols[isp,fslc,:,pslc], 
-                 dGates_row1[isp,fslc,:,pslc], 
-                 dGates_row2[isp,fslc,:,pslc]) = \
-                 self._hprobs_from_rhoE(spamLabel, rho, E, Gs, dGs, None,
-                                       scaleVals, None, spamColsOnly=True)
+                if prMxToFill is not None:
+                    prMxToFill[isp,fslc] = \
+                        self._probs_from_rhoE(spamLabel, rho, E, Gs, scaleVals)
+                if deriv1MxToFill is not None:
+                    deriv1MxToFill[isp,fslc,pslc1] = self._dprobs_from_rhoE( 
+                        spamLabel, rho, E, Gs, dGs1, scaleVals, wrtSPAMSlices1)
+                if deriv2MxToFill is not None:
+                    deriv2MxToFill[isp,fslc,pslc2] = self._dprobs_from_rhoE( 
+                        spamLabel, rho, E, Gs, dGs2, scaleVals, wrtSPAMSlices2)
+
+                mxToFill[isp,fslc,pslc1,pslc2] = self._hprobs_from_rhoE( 
+                    spamLabel, rho, E, Gs, dGs1, dGs2, hGs, scaleVals, wrtSPAMSlices1, wrtSPAMSlices2)
+
             _np.seterr(**old_err)
 
-            rho,E = self._rhoE_from_spamLabel(spamLabel)
 
-        def calc_and_fill_1col(spamLabel, isp, fslc, pslc, sumInto, iCol):
-            #Compute d2(probability)/dGates2 (see below) for single param
-            old_err2 = _np.seterr(invalid='ignore', over='ignore')
-            rho,E = self._rhoE_from_spamLabel(spamLabel)
-            assert(fslc == slice(None) and pslc == slice(None))
+        #distribute derivative computation across blocks
+        nBlks = len(wrtSlicesList)
+        myBlkIndices, blkOwners, blkComm = \
+            _mpit.distribute_indices(list(range(nBlks)), comm)
+        mySlicesList = [wrtSlicesList[i] for i in myBlkIndices]
 
-            if sumInto:
-                hessianSingleCol[isp,:, 0:self.tot_rho_params, 0:1] += \
-                    dGates_row1[isp,:,:,iCol:iCol+1]
-                hessianSingleCol[isp,:, self.tot_rho_params:self.tot_spam_params, 0:1] += \
-                    dGates_row2[isp,:,:,iCol:iCol+1]
-                hessianSingleCol[isp, :, self.tot_spam_params:, 0:1] += \
-                    _np.squeeze( _np.dot( E, _np.dot( hGs, rho ) ),
-                                 axis=(0,4) ) * scaleVals[:,None,None]
-                    # shape = (nGateStrings, nGateDerivCols, 1)
+        if blkComm is not None:
+            _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
+               +" than blocks to compute(%d)!" % nBlks)
+
+        last_gateSlice1 = None #keep last dProdCache1
+
+        for wrtSlice1,wrtSlice2 in mySlicesList:
+            
+            prepSlice1 = _slct.intersect(wrtSlice1,slice(0,self.tot_rho_params))
+            effectSlice1 = _slct.shift( _slct.intersect(wrtSlice1,slice(self.tot_rho_params,self.tot_spam_params)), -self.tot_rho_params)
+            gateSlice1 = _slct.shift( _slct.intersect(wrtSlice1,slice(self.tot_spam_params,None)), -self.tot_spam_params)
+            
+            if gateSlice1 != last_gateSlice1:
+                dProdCache1 = dGs1 = None #free Mem
+                dProdCache1 = self._compute_dproduct_cache(
+                    evalTree, prodCache, scaleCache, blkComm, gateSlice1)
+                dGs1 = evalTree.final_view(dProdCache1, axis=0) 
+                last_gateSlice1 = gateSlice1
+    
+            prepSlice2 = _slct.intersect(wrtSlice2,slice(0,self.tot_rho_params))
+            effectSlice2 = _slct.shift( _slct.intersect(wrtSlice2,slice(self.tot_rho_params,self.tot_spam_params)), -self.tot_rho_params)
+            gateSlice2 = _slct.shift( _slct.intersect(wrtSlice2,slice(self.tot_spam_params,None)), -self.tot_spam_params)
+        
+            if (gateSlice1 == gateSlice2):
+                dProdCache2 = dProdCache1 ; dGs2 = dGs1
             else:
-                hessianSingleCol[isp,:, 0:self.tot_rho_params, 0:1] = \
-                    dGates_row1[isp,:,:,iCol:iCol+1]
-                hessianSingleCol[isp,:, self.tot_rho_params:self.tot_spam_params, 0:1] = \
-                    dGates_row2[isp,:,:,iCol:iCol+1]
-                hessianSingleCol[isp, :, self.tot_spam_params:, 0:1] = \
-                    _np.squeeze( _np.dot( E, _np.dot( hGs, rho ) ),
-                                 axis=(0,4) ) * scaleVals[:,None,None]
-                    # shape = (nGateStrings, nGateDerivCols, 1)
-
-            _np.seterr(**old_err2)
-            hessianSingleCol[isp][_np.isnan(hessianSingleCol[isp])] = 0
-
-
-        #def calc_from_spamlabel(spamLabel):
-        #    old_err = _np.seterr(over='ignore')
-        #    rho,E = self._rhoE_from_spamLabel(spamLabel)
-        #
-        #    vdp = self._dprobs_from_rhoE(spamLabel, rho, E, Gs, dGs, scaleVals) \
-        #        if bReturnDProbs12 else None
-        #    vhp, dGates_row1, dGates_row2 = \
-        #        self._hprobs_from_rhoE(spamLabel, rho, E, Gs, dGs, None,
-        #                               scaleVals, None, spamColsOnly=True)
-        #    _np.seterr(**old_err)
-        #    return None, vdp, vhp, dGates_row1, dGates_row2
-        #           # None so fill_sub_result works correctly
-        #
-        #def calc_from_spamlabel_inner(spamLabel):
-        #    rho,E = self._rhoE_from_spamLabel(spamLabel)
-        #
-        #    #Compute d2(probability)/dGates2 (see below) for single param
-        #    old_err2 = _np.seterr(invalid='ignore', over='ignore')
-        #    d2pr_dgates2 = _np.squeeze(
-        #        _np.dot( E, _np.dot( hGs, rho ) ), axis=(0,4) ) * scaleVals[:,None,None]
-        #        # shape = (nGateStrings, nGateDerivCols, 1)
-        #    _np.seterr(**old_err2)
-        #    d2pr_dgates2[ _np.isnan(d2pr_dgates2) ] = 0
-        #
-        #    return d2pr_dgates2
-
-
-        #print "TIME1 = ",(_time.time()-tS); sys.stdout.flush()
-        self._fill_result_tuple( 
-            (dprobs, hessianSpamCols, dGates_row1, dGates_row2),
-            spam_label_rows, slice(None), slice(None), calc_and_fill)
-
-
-        #self._fill_sub_result( (None, dprobs, hessianSpamCols, dGates_row1, dGates_row2),
-        #                       spam_label_rows, calc_from_spamlabel )
-
-
-        #At this point, all spam columns have been computed, so yield them
-        # (then we can de-allocate hessianSpamCols)
-        spam_cols_to_yield = _slct.indices(wrtSlices['spam']) \
-            if (wrtSlices is not None) else list(range(nSpamDerivCols))
-
-        if bReturnDProbs12:
-            for i in spam_cols_to_yield:
-                dprobs12_col = dprobs[:,:,:,None] * dprobs[:,:,None,i:i+1] # (K,M,N,1) * (K,M,1,1) = (K,M,N,1)
-                yield hessianSpamCols[:,:,:,i:i+1], dprobs12_col           # Notation:  (K=#spam, M=#strings, N=#vec_gs )
-        else:
-            for i in spam_cols_to_yield:
-                yield hessianSpamCols[:,:,:,i:i+1]
-        hessianSpamCols = None # free this memory
-
-        #print "TIME4 = ",(_time.time()-tS); sys.stdout.flush()
-
-        #Now compute one by one the remaining (gate-deriv) hessian columns
-        gate_cols_to_yield = _slct.indices(wrtSlices['gates']) \
-            if (wrtSlices is not None) else list(range(nGateDerivCols))
-
-        for i in gate_cols_to_yield:
-            #print "TIME0.75(%d/%d) = " % (i,len(gates_wrtFilter)),(_time.time()-tS); sys.stdout.flush()
-            hProdCache = self._compute_hproduct_cache(evalTree, prodCache, dProdCache,
-                                                      scaleCache, comm, slice(i,i+1))
-
-            hGs = evalTree.final_view(hProdCache, axis=0) 
-              #( nGateStrings, nGateDerivCols, 1, dim, dim )
-            #print "TIME0.75(%d)B = " % i,(_time.time()-tS), " shape ",hProdCache.shape; sys.stdout.flush()
-
-            #pass additional "i" argument to calc_and_fill_1col to tell it to
-            # compute just the i-th column and fill the one & only column of
-            # hessianSingleCol
-            self._fill_result_tuple( 
-                (hessianSingleCol,),spam_label_rows, slice(None), slice(None),
-                lambda sl,isp,fslc,pslc,sm: calc_and_fill_1col(sl,isp,fslc,
-                                                                pslc,sm,i))
-
-
-            #for spamLabel,rowIndex in spam_label_rows.items():
-            #    if rowIndex == remainder_row_index: continue #skip remainder label
-            #    d2pr_dGates2 = calc_from_spamlabel_inner(spamLabel)
-            #    hessianSingleCol[rowIndex] = _np.concatenate( (dGates_row1[rowIndex,:,:,i:i+1],
-            #                                                   dGates_row2[rowIndex,:,:,i:i+1],
-            #                                                   d2pr_dGates2), axis=1 )
-            ##compute remainder label
-            #if remainder_row_index is not None:
-            #    d2pr_sum =  None
-            #    for spamLabel in self.spamdefs: #loop over ALL spam labels
-            #        if self._is_remainder_spamlabel(spamLabel): continue # except "remainder"
-            #        if spamLabel in spam_label_rows:
-            #            k = spam_label_rows[spamLabel]
-            #            d2pr_dGates2 = hessianSingleCol[k][:,nSpamDerivCols:,:]
-            #        else:
-            #            d2pr_dGates2 = calc_from_spamlabel_inner(spamLabel)
-            #        d2pr_sum = d2pr_dGates2 if d2pr_sum is None else d2pr_sum + d2pr_dGates2
-            #    hessianSingleCol[remainder_row_index] = \
-            #        _np.concatenate( (dGates_row1[remainder_row_index,:,:,i:i+1],
-            #                          dGates_row2[remainder_row_index,:,:,i:i+1],
-            #                          -d2pr_sum), axis=1 )
-
+                dProdCache2 =self._compute_dproduct_cache(
+                    evalTree, prodCache, scaleCache, blkComm, gateSlice2)
+                dGs2 = evalTree.final_view(dProdCache2, axis=0) 
+            
+            hProdCache = self._compute_hproduct_cache(
+                evalTree, prodCache, dProdCache1, dProdCache2,
+                scaleCache, blkComm, gateSlice1, gateSlice2)
+            hGs = evalTree.final_view(hProdCache, axis=0)
+                
             if bReturnDProbs12:
-                j = nSpamDerivCols + i
-                dprobs12_col = dprobs[:,:,:,None] * dprobs[:,:,None,j:j+1] # (K,M,N,1) * (K,M,1,1) = (K,M,N,1)
-                yield hessianSingleCol.copy(), dprobs12_col.copy()
+                dprobs1 = _np.zeros( (len(spam_label_rows),nGateStrings,_slct.length(wrtSlice1)), 'd' )
+                dprobs2 = _np.zeros( (len(spam_label_rows),nGateStrings,_slct.length(wrtSlice2)), 'd' )
             else:
-                yield hessianSingleCol.copy()
+                dprobs1 = dprobs2 = None            
+            hprobs = _np.zeros( (len(spam_label_rows),nGateStrings,
+                                 _slct.length(wrtSlice1),_slct.length(wrtSlice2)), 'd' )
 
+            #Set spam filtering and params for calc_and_fill
+            wrtSPAMSlices1 = {'preps': prepSlice1, 'effects': effectSlice1 }
+            wrtSPAMSlices2 = {'preps': prepSlice2, 'effects': effectSlice2 }
+            prMxToFill = None
+            deriv1MxToFill = dprobs1
+            deriv2MxToFill = dprobs2
+            mxToFill = hprobs
 
+            #Fill arrays
+            self._fill_result_tuple((None, dprobs1, dprobs2, hprobs), spam_label_rows,
+                                    slice(None), slice(None), slice(None), calc_and_fill)
+            hProdCache = hGs = dProdCache2 = dGs2 =  None # free mem
+            if bReturnDProbs12:
+                dprobs12 = dprobs1[:,:,:,None] * dprobs2[:,:,None,:] # (K,M,N,1) * (K,M,1,N') = (K,M,N,N')
+                yield wrtSlice1, wrtSlice2, hprobs, dprobs12
+            else:
+                yield wrtSlice1, wrtSlice2, hprobs
+
+        dProdCache1 = dGs1 = None #free mem
+                    
 
     def frobeniusdist(self, otherCalc, transformMx=None,
                       gateWeight=1.0, spamWeight=1.0, itemWeights=None,

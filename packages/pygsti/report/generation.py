@@ -2118,9 +2118,10 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
 
     if hessianProjection != "linear response":
         #Compute appropriate Hessian
+        vb = 3 if memLimit else 0 #only show details of hessian comp when there's a mem limit (a heuristic)
         hessian = _tools.logl_hessian(gateset, dataset, gatestring_list,
                                       minProbClip, probClipInterval, radius,
-                                      comm=comm, memLimit=memLimit)
+                                      comm=comm, memLimit=memLimit, verbosity=vb)
         mlgst_args = None
     else: 
         hessian = None

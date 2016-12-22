@@ -1034,7 +1034,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         printer.log("Cur, Persist, Gather = %.2f, %.2f, %.2f GB" %
                     (curMem*C, persistentMem*C, gthrMem*C))
     else: gthrMem = mlim = None
-    evTree, wrtBlkSize = gs.bulk_evaltree_from_resources(
+    evTree, wrtBlkSize, _ = gs.bulk_evaltree_from_resources(
         gateStringsToUse, comm, mlim, distributeMethod,
         ["bulk_fill_probs","bulk_fill_dprobs"], printer) 
     profiler.add_time("do_mc2gst: pre-opt treegen",tStart)
@@ -2179,7 +2179,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
         evTree = evaltree_cache['evTree']
         wrtBlkSize = evaltree_cache['wrtBlkSize']
     else:
-        evTree, wrtBlkSize = gs.bulk_evaltree_from_resources(
+        evTree, wrtBlkSize, _ = gs.bulk_evaltree_from_resources(
             gateStringsToUse, comm, mlim, distributeMethod,
             ["bulk_fill_probs","bulk_fill_dprobs"], printer)
         
