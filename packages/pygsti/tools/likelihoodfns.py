@@ -599,9 +599,9 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
     probs_mem  = _np.empty( (len(spamLabels),maxNumGatestrings), 'd' )
 
     #DEBUG
-    import time
-    import sys
-    tStart = time.time()
+    #import time
+    #import sys
+    #tStart = time.time()
 
     #Loop over subtrees
     for iSubTree in mySubTreeIndices:
@@ -638,16 +638,16 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
        
         subtree_hessian = _np.zeros( (nP,nP), 'd')
 
-        k,kmax = 0,len(mySliceTupList) #DEBUG
+        #k,kmax = 0,len(mySliceTupList) #DEBUG
         for (slice1,slice2,hprobs,dprobs12) in gateset.bulk_hprobs_by_block(
             spam_lbl_rows, evalSubTree, mySliceTupList, True, blkComm):
 
             #DEBUG
-            iSub = mySubTreeIndices.index(iSubTree)
-            print("DEBUG: rank%d: %gs: block %d/%d, sub-tree %d/%d, sub-tree-len = %d"
-                      % (comm.Get_rank(),time.time()-tStart,k,kmax,iSub,
-                         len(mySubTreeIndices), len(evalSubTree)))            
-            sys.stdout.flush(); k += 1
+            #iSub = mySubTreeIndices.index(iSubTree)
+            #print("DEBUG: rank%d: %gs: block %d/%d, sub-tree %d/%d, sub-tree-len = %d"
+            #          % (comm.Get_rank(),time.time()-tStart,k,kmax,iSub,
+            #             len(mySubTreeIndices), len(evalSubTree)))            
+            #sys.stdout.flush(); k += 1
 
             subtree_hessian[slice1,slice2] = \
                 hessian_from_hprobs(hprobs, dprobs12, cntVecMx,
