@@ -17,7 +17,6 @@ from . import slicetools as _slct
 
 TOL = 1e-20
 
-#import sys #DEBUG TIMER
 
 # Functions for computing the log liklihood function and its derivatives
 
@@ -583,8 +582,6 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
             return _np.sum(hessian, axis=(0,1)) #see comments as above
 
 
-    # tStart = _time.time() #TIMER
-
     #Note - we could in the future use comm to distribute over
     # subtrees here.  We currently don't because we parallelize
     # over columns and it seems that in almost all cases of
@@ -600,6 +597,11 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
     maxNumGatestrings = max([subtrees[i].num_final_strings() for i in mySubTreeIndices])
     cntVecMx_mem = _np.empty( (len(spamLabels),maxNumGatestrings),'d')
     probs_mem  = _np.empty( (len(spamLabels),maxNumGatestrings), 'd' )
+
+    #DEBUG
+    import time
+    import sys
+    tStart = time.time()
 
     #Loop over subtrees
     for iSubTree in mySubTreeIndices:
@@ -624,23 +626,37 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
         nCols = gateset.num_params()
         blocks1 = _mpit.slice_up_range(nCols, rowParts)
         blocks2 = _mpit.slice_up_range(nCols, colParts)
-        sliceTupList = list(_itertools.product(blocks1,blocks2))
-        loc_iBlks, blkOwners, blkComm = \
-            _mpit.distribute_indices(list(range(rowParts*colParts)), mySubComm)
-        mySliceTupList = [ sliceTupList[i] for i in loc_iBlks ]
+        sliceTupList_all = list(_itertools.product(blocks1,blocks2))
+        #cull out lower triangle blocks, which have no overlap with
+        # the upper triangle of the hessian
+        sliceTupList = [ (slc1,slc2) for slc1,slc2 in sliceTupList_all
+                         if slc1.start <= slc2.stop ]
 
+        loc_iBlks, blkOwners, blkComm = \
+            _mpit.distribute_indices(list(range(len(sliceTupList))), mySubComm)
+        mySliceTupList = [ sliceTupList[i] for i in loc_iBlks ]
+       
         subtree_hessian = _np.zeros( (nP,nP), 'd')
 
+        k,kmax = 0,len(mySliceTupList) #DEBUG
         for (slice1,slice2,hprobs,dprobs12) in gateset.bulk_hprobs_by_block(
             spam_lbl_rows, evalSubTree, mySliceTupList, True, blkComm):
+
+            #DEBUG
+            iSub = mySubTreeIndices.index(iSubTree)
+            print("DEBUG: rank%d: %gs: block %d/%d, sub-tree %d/%d, sub-tree-len = %d"
+                      % (comm.Get_rank(),time.time()-tStart,k,kmax,iSub,
+                         len(mySubTreeIndices), len(evalSubTree)))            
+            sys.stdout.flush(); k += 1
+
             subtree_hessian[slice1,slice2] = \
                 hessian_from_hprobs(hprobs, dprobs12, cntVecMx,
                                         totalCntVec, pos_probs)
                 #NOTE: hessian_from_hprobs MAY modify hprobs and dprobs12
 
-
         #Gather columns from different procs and add to running final hessian
-        _mpit.gather_slices(sliceTupList, blkOwners, subtree_hessian, (0,1), mySubComm)
+        #_mpit.gather_slices_by_owner(slicesIOwn, subtree_hessian, (0,1), mySubComm)
+        _mpit.gather_slices_by_owner(sliceTupList, blkOwners, subtree_hessian, (0,1), mySubComm)
         final_hessian += subtree_hessian
 
     #gather (add together) final_hessians from different processors
@@ -650,6 +666,11 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
             final_hessian[:,:] = 0.0 #zero out hessian so it won't contribute
         final_hessian = comm.allreduce(final_hessian)
         
+    #copy upper triangle to lower triangle (we only compute upper)
+    for i in range(final_hessian.shape[0]):
+        for j in range(i+1,final_hessian.shape[1]):
+            final_hessian[j,i] = final_hessian[i,j]
+
     return final_hessian # (N,N)
 
 
