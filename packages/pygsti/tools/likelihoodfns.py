@@ -656,7 +656,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
 
         #Gather columns from different procs and add to running final hessian
         #_mpit.gather_slices_by_owner(slicesIOwn, subtree_hessian, (0,1), mySubComm)
-        _mpit.gather_slices_by_owner(sliceTupList, blkOwners, subtree_hessian, (0,1), mySubComm)
+        _mpit.gather_slices(sliceTupList, blkOwners, subtree_hessian, (0,1), mySubComm)
         final_hessian += subtree_hessian
 
     #gather (add together) final_hessians from different processors
