@@ -370,16 +370,16 @@ def gather_slices(slices, slice_owners,
     max_indices = [None]*len(axes)
     if max_buffer_size is not None: #no maximum of buffer size
         chunkBytes = arToFill.nbytes #start with the entire array as the "chunk"
-        for iaxis in range(len(axes)):
+        for iaxis,axis in enumerate(axes):
             # Consider restricting the chunk size along the iaxis-th axis.
             #  If we can achieve the desired max_buffer_size by restricting
             #  just along this axis, great.  Otherwise, restrict to at most
             #  1 index along this axis and keep going.
-            bytes_per_index = chunkBytes / arToFill.shape[iaxis]
+            bytes_per_index = chunkBytes / arToFill.shape[axis]
             max_inds = int(max_buffer_size/bytes_per_index)
             if max_inds == 0:
                 max_indices[iaxis] = 1
-                chunkBytes /= arToFill.shape[iaxis]
+                chunkBytes /= arToFill.shape[axis]
             else:
                 max_indices[iaxis] = max_inds
                 break
@@ -416,29 +416,116 @@ def gather_slices(slices, slice_owners,
             #broadcast arIndx slice
             buf = arToFill[arIndx].copy() if (my_rank == owner) \
                 else _np.empty(arToFill[arIndx].shape, arToFill.dtype)
-            comm.Bcast(buf, root=slice_owners[iSlice])
+            comm.Bcast(buf, root=owner)
             if my_rank != owner: arToFill[arIndx] = buf
-
-
-#OLD: TODO REMOVE
-#            if max_indices[iaxis] is None or max_indices[iaxis] >= (slc.stop-slc.start):
-#                arIndx[axis] = slc
-#            else:
-#    #            if bShowMessage:
-#    #                print("MPIDB: gather_slices restricting %s to %d indices at once"
-#    #                      % (str(slc),max_indices)); bShowMessage = False
-#                sub_start = slc.start
-#                while sub_start < slc.stop: #broadcast in chunks to keep buffer size small
-#                    sub_slc = slice(sub_start, min(sub_start+max_indices,slc.stop))
-#                    arIndx[axis] = sub_slc
-#                    buf = arToFill[arIndx].copy() if (my_rank == owner) \
-#                        else _np.empty(arToFill[arIndx].shape, arToFill.dtype)
-#                    comm.Bcast(buf, root=slice_owners[iSlice])
-#                    if my_rank != owner: arToFill[arIndx] = buf
-#                    sub_start += max_indices
+            buf = None #free buffer mem asap
 
 
 
+def gather_slices_by_owner(slicesIOwn, arToFill,
+                           axes, comm, max_buffer_size=None):
+    """ 
+    Gathers data within a numpy array, `arToFill`, according to given slices.
+
+    Upon entry it is assumed that the different processors within `comm` have
+    computed different parts of `arToFill`, namely different slices of the
+    axes indexed by `axes`. At exit, data has been gathered such that all processors
+    have the results for the entire `arToFill` (or at least for all the slices
+    given).
+
+    Parameters
+    ----------
+    slicesIOwn : list
+        A list of all the slices computed by the *current* processor.
+        Each element of `slices` may be either a single slice or a
+        tuple of slices (when gathering across multiple dimensions).
+        
+    arToFill : numpy.ndarray
+        The array which contains partial data upon entry and the gathered
+        data upon exit.
+
+    axes : int or tuple of ints
+        The axis or axes of `arToFill` on which the slices apply (which axis 
+        do the slices in `slices` refer to?).  Note that `len(axes)` must
+        be equal to the number of slices (i.e. the tuple length) of each
+        element of `slices`.
+
+    comm : mpi4py.MPI.Comm or None
+        The communicator specifying the processors involved and used
+        to perform the gather operation.
+
+    max_buffer_size : int or None
+        The maximum buffer size in bytes that is allowed to be used 
+        for gathering data.  If None, there is no limit.
+
+    Returns
+    -------
+    None
+    """
+
+    #Note: same beginning as gather_slices (TODO: consolidate?)
+    if comm is None: return #no gathering needed!
+
+    #Perform broadcasts for each slice in order
+    my_rank = comm.Get_rank()
+    arIndx = [ slice(None,None) ] * arToFill.ndim
+
+    axes = (axes,) if isinstance(axes,int) else axes
+
+    max_indices = [None]*len(axes)
+    if max_buffer_size is not None: #no maximum of buffer size
+        chunkBytes = arToFill.nbytes #start with the entire array as the "chunk"
+        for iaxis,axis in enumerate(axes):
+            # Consider restricting the chunk size along the iaxis-th axis.
+            #  If we can achieve the desired max_buffer_size by restricting
+            #  just along this axis, great.  Otherwise, restrict to at most
+            #  1 index along this axis and keep going.
+            bytes_per_index = chunkBytes / arToFill.shape[axis]
+            max_inds = int(max_buffer_size/bytes_per_index)
+            if max_inds == 0:
+                max_indices[iaxis] = 1
+                chunkBytes /= arToFill.shape[axis]
+            else:
+                max_indices[iaxis] = max_inds
+                break
+        else:
+            _warnings.warn("gather_slices_by_owner: Could not achieve max_buffer_size")
+    # -- end part that is the same as gather_slices
+            
+    #Get a list of the slices to broadcast, indexed by the rank of the owner proc
+    slices_by_owner = comm.allgather(slicesIOwn) 
+    for owner, slices in enumerate(slices_by_owner):    
+        for slcOrSlcTup in slices:
+            slcTup =(slcOrSlcTup,) if isinstance(slcOrSlcTup,slice) else slcOrSlcTup
+            assert(len(slcTup) == len(axes))
+    
+            #Get the a list of the (sub-)slices along each axis, whose product
+            # (along the specified axes) gives the entire block given by slcTup
+            axisSlices = []
+            for iaxis,axis in enumerate(axes):
+                slc = slcTup[iaxis]
+                assert(slc.step is None or slc.step == 1) #only allow step=1 slices (easy stop-start arithmetic below)
+                if max_indices[iaxis] is None or max_indices[iaxis] >= (slc.stop-slc.start):
+                    axisSlices.append( [slc] ) #arIndx[axis] = slc
+                else:
+                    sub_slices = []
+                    sub_start = slc.start
+                    while sub_start < slc.stop: #broadcast in chunks to keep buffer size small
+                        sub_slices.append( slice(sub_start, min(sub_start+max_indices[iaxis],slc.stop)) )
+                        sub_start += max_indices[iaxis]
+                    axisSlices.append(sub_slices)
+    
+            for axSlcs in _itertools.product(*axisSlices):
+                #create arIndx from per-axis (sub-)slices and broadcast
+                for iaxis,axis in enumerate(axes):
+                    arIndx[axis] = axSlcs[iaxis]
+    
+                #broadcast arIndx slice
+                buf = arToFill[arIndx].copy() if (my_rank == owner) \
+                    else _np.empty(arToFill[arIndx].shape, arToFill.dtype)
+                comm.Bcast(buf, root=owner)
+                if my_rank != owner: arToFill[arIndx] = buf
+                buf = None #free buffer mem asap
 
 
 def distribute_for_dot(contracted_dim, comm):
