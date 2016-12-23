@@ -949,7 +949,8 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
     GateSet
         The created gate set.
     """
-    ret = _gateset.GateSet(default_param="full") #TODO: tp/static parameterization
+    defP = "TP" if (parameterization in ("TP","linearTP")) else "full"
+    ret = _gateset.GateSet(default_param=defP)
                  #prep_prefix="rho", effect_prefix="E", gate_prefix="G",
                  #remainder_label="remainder", identity_label="identity")
 
