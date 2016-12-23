@@ -302,6 +302,11 @@ def _contractToCP_direct(gateset,verbosity,TPalso=False,maxiter=100000,tol=1e-8)
     distance = gs.frobeniusdist(gateset)
     printer.log(('The closest legal point found was distance: %s' % str(distance)), 1)
 
+    if TPalso: #TP also constrains prep vectors
+        gate_dim = gs.get_dimension()
+        for rhoVec in list(gs.preps.values()):
+            rhoVec[0,0] = 1.0 / gate_dim**0.25
+
     return distance, gs
 
 
