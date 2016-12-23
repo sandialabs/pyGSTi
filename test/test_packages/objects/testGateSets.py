@@ -126,7 +126,7 @@ class TestGateSetMethods(GateSetTestCase):
         self.assertArraysAlmostEqual( gs['Gi'], Gi_test_matrix )
 
         with self.assertRaises(KeyError):
-            gs.preps['foobar'] = [1,0,0,0] #bad key prefix
+            gs.preps['foobar'] = [1.0/np.sqrt(2),0,0,0] #bad key prefix
 
         with self.assertRaises(KeyError):
             gs2 = gs.copy()

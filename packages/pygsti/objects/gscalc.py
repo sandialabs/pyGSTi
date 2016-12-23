@@ -3352,19 +3352,15 @@ class GateSetCalculator(object):
             _np.seterr(**old_err)
 
 
-        #distribute derivative computation across blocks
-        nBlks = len(wrtSlicesList)
-        myBlkIndices, blkOwners, blkComm = \
-            _mpit.distribute_indices(list(range(nBlks)), comm)
-        mySlicesList = [wrtSlicesList[i] for i in myBlkIndices]
-
-        if blkComm is not None:
-            _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
-               +" than blocks to compute(%d)!" % nBlks)
+        #NOTE: don't distribute wrtSlicesList across comm procs,
+        # as we assume the user has already done any such distribution
+        # and has given each processor a list appropriate for it.
+        # Use comm only for speeding up the calcs of the given 
+        # wrtSlicesList
 
         last_gateSlice1 = None #keep last dProdCache1
 
-        for wrtSlice1,wrtSlice2 in mySlicesList:
+        for wrtSlice1,wrtSlice2 in wrtSlicesList:
             
             prepSlice1 = _slct.intersect(wrtSlice1,slice(0,self.tot_rho_params))
             effectSlice1 = _slct.shift( _slct.intersect(wrtSlice1,slice(self.tot_rho_params,self.tot_spam_params)), -self.tot_rho_params)
@@ -3373,7 +3369,7 @@ class GateSetCalculator(object):
             if gateSlice1 != last_gateSlice1:
                 dProdCache1 = dGs1 = None #free Mem
                 dProdCache1 = self._compute_dproduct_cache(
-                    evalTree, prodCache, scaleCache, blkComm, gateSlice1)
+                    evalTree, prodCache, scaleCache, comm, gateSlice1)
                 dGs1 = evalTree.final_view(dProdCache1, axis=0) 
                 last_gateSlice1 = gateSlice1
     
@@ -3385,12 +3381,12 @@ class GateSetCalculator(object):
                 dProdCache2 = dProdCache1 ; dGs2 = dGs1
             else:
                 dProdCache2 =self._compute_dproduct_cache(
-                    evalTree, prodCache, scaleCache, blkComm, gateSlice2)
+                    evalTree, prodCache, scaleCache, comm, gateSlice2)
                 dGs2 = evalTree.final_view(dProdCache2, axis=0) 
             
             hProdCache = self._compute_hproduct_cache(
                 evalTree, prodCache, dProdCache1, dProdCache2,
-                scaleCache, blkComm, gateSlice1, gateSlice2)
+                scaleCache, comm, gateSlice1, gateSlice2)
             hGs = evalTree.final_view(hProdCache, axis=0)
                 
             if bReturnDProbs12:
