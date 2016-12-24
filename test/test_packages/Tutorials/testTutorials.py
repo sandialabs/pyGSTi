@@ -140,6 +140,12 @@ class TutorialsMethods(TutorialsTestCase):
     def test_tutorial_14(self):
         self.runTutorial_jupyter("14 GST on 2 qubits - custom 2Q gate.ipynb")
 
+    def test_tutorial_15(self):
+        self.runTutorial_jupyter("15 Easy Experiment Setup.ipynb")
+
+    def test_tutorial_16(self):
+        self.runTutorial_jupyter("16 Randomized Benchmarking.ipynb")
+
 
 
 if __name__ == "__main__":
