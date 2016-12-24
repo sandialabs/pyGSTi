@@ -11,6 +11,8 @@ import numpy.linalg as _nla
 import scipy as _scipy
 import itertools as _itertools
 import collections as _collections
+import warnings as _warnings
+import time as _time
 
 from ..tools import matrixtools as _mt
 from ..tools import basistools as _bt
@@ -22,6 +24,9 @@ from . import gate as _gate
 from . import spamvec as _sv
 from . import labeldicts as _ld
 from . import gscalc as _gscalc
+from . import gaugegroup as _gg
+
+from .verbosityprinter import VerbosityPrinter
 
 # Tolerace for matrix_rank when finding rank of a *normalized* projection
 # matrix.  This is a legitimate tolerace since a normalized projection matrix
@@ -103,6 +108,7 @@ class GateSet(object):
 
         self._remainderlabel = remainder_label
         self._identitylabel = identity_label
+        self._default_gauge_group = None
 
         super(GateSet, self).__init__()
 
@@ -124,7 +130,22 @@ class GateSet(object):
         if self.povm_identity is not None:
             self._povm_identity.set_vector(value)
         else:
-            self._povm_identity = _sv.StaticSPAMVec(value) # always static
+            self._povm_identity = _sv.FullyParameterizedSPAMVec(value)
+              # fully parameterized, even though not vectorized (so
+              # can gauge transform it)
+
+    @property
+    def default_gauge_group(self):
+        """ 
+        Gets the default gauge group for performing gauge
+        transformations on this GateSet.
+        """
+        return self._default_gauge_group
+
+    @default_gauge_group.setter
+    def default_gauge_group(self, value):
+        self._default_gauge_group = value
+
 
     @property
     def dim(self):
@@ -448,8 +469,15 @@ class GateSet(object):
         for lbl,vec in self.effects.items():
             self.effects[lbl] = _sv.convert(vec, etyp)
 
-        #Note: self.povm_identity should *always* be static, and
-        # is not changed by this method.
+        if typ == 'full': 
+            self.default_gauge_group = _gg.FullGaugeGroup(self.dim)
+        elif typ == 'TP': 
+            self.default_gauge_group = _gg.TPGaugeGroup(self.dim)
+        elif typ == 'static': 
+            self.default_gauge_group = None
+        
+        #Note: self.povm_identity should *always* be fully
+        # paramterized, and is not changed by this method.
 
 
 
@@ -630,7 +658,7 @@ class GateSet(object):
         return deriv
 
 
-    def get_nongauge_projector(self, nonGaugeMixMx=None):
+    def get_nongauge_projector(self, itemWeights=None, nonGaugeMixMx=None):
         """
         Construct a projector onto the non-gauge parameter space, useful for
         isolating the gauge degrees of freedom from the non-gauge degrees of
@@ -638,11 +666,22 @@ class GateSet(object):
 
         Parameters
         ----------
+        itemWeights : dict, optional
+            Dictionary of weighting factors for individual gates and spam operators.
+            Keys can be gate, state preparation, POVM effect, spam labels, or the 
+            special strings "gates" or "spam" whic represent the entire set of gate
+            or SPAM operators, respectively.  Values are floating point numbers.
+            These weights define the metric used to compute the non-gauge space,
+            *orthogonal* the gauge space, that is projected onto.
+
         nonGaugeMixMx : numpy array, optional
-            A matrix specifying how to mix the non-gauge degrees of freedom
-            into the gauge degrees of freedom that are projected out by the
-            returned object.  This argument is for advanced usage and typically
-            is left set to None.
+            An array of shape (nNonGaugeParams,nGaugeParams) specifying how to
+            mix the non-gauge degrees of freedom into the gauge degrees of
+            freedom that are projected out by the returned object.  This argument
+            essentially sets the off-diagonal block of the metric used for 
+            orthogonality in the "gauge + non-gauge" space.  It is for advanced
+            usage and typically left as None (the default).
+.
 
         Returns
         -------
@@ -727,10 +766,10 @@ class GateSet(object):
         ## elements, they are treated as not being a part of the "gateset"
         #bIgnoreUnparameterizedEls = True
 
-        #Note: parameterizaton object (pmDeriv) must have all elements of gate
+        #Note: gateset object (gsDeriv) must have all elements of gate
         # mxs and spam vectors as parameters (i.e. be "fully parameterized") in
         # order to match deriv_wrt_params call, which gives derivatives wrt
-        # *all* elements of a gate set / parameterizaton.
+        # *all* elements of a gate set.
         gsDeriv = GateSet("full", self.preps._prefix, self.effects._prefix,
                           self.gates._prefix, self._remainderlabel,
                           self._identitylabel)
@@ -769,13 +808,7 @@ class GateSet(object):
         #                        # clear dG row corresponding to it.
 
         M = _np.concatenate( (dP,dG), axis=1 )
-
-        def nullspace(m, tol=1e-7): #get the nullspace of a matrix
-            _,s,vh = _np.linalg.svd(m)
-            rank = (s > tol).sum()
-            return vh[rank:].T.copy()
-
-        nullsp = nullspace(M) #columns are nullspace basis vectors
+        nullsp = _mt.nullspace(M) #columns are nullspace basis vectors
         gen_dG = nullsp[0:nParams,:] #take upper (gate-param-segment) of vectors for basis
                                      # of subspace intersection in gate-parameter space
         #Note: gen_dG == "generalized dG", and is (nParams)x(nullSpaceDim==gaugeSpaceDim), so P
@@ -800,10 +833,14 @@ class GateSet(object):
         #print "------------------------------"
         #assert(_np.linalg.norm(_np.imag(gen_dG)) < 1e-9) #gen_dG is real
 
-        # BEGIN GAUGE MIX ----------------------------------------
         if nonGaugeMixMx is not None:
+            msg = "You've set both nonGaugeMixMx and itemWeights, both of which"\
+                + " set the gauge metric... You probably don't want to do this."
+            assert(itemWeights is None), msg
+
+            # BEGIN GAUGE MIX ----------------------------------------
             # nullspace of gen_dG^T (mx with gauge direction vecs as rows) gives non-gauge directions
-            nonGaugeDirections = nullspace(gen_dG.T) #columns are non-gauge directions
+            nonGaugeDirections = _mt.nullspace(gen_dG.T) #columns are non-gauge directions
 
             #for each column of gen_dG, which is a gauge direction in gateset parameter space,
             # we add some amount of non-gauge direction, given by coefficients of the
@@ -818,25 +855,46 @@ class GateSet(object):
             #print "gen_dG shape = ",gen_dG.shape
             #print "NGD shape = ",nonGaugeDirections.shape
             #print "NGD rank = ",_np.linalg.matrix_rank(nonGaugeDirections, P_RANK_TOL)
-        #END GAUGE MIX ----------------------------------------
+            #END GAUGE MIX ----------------------------------------
 
+        # Build final non-gauge projector by getting a mx of column vectors 
+        # orthogonal to the cols fo gen_dG:
+        #     gen_dG^T * gen_ndG = 0 => nullspace(gen_dG^T)
+        # or for a general metric W:
+        #     gen_dG^T * W * gen_ndG = 0 => nullspace(gen_dG^T * W)
+        # (This is instead of construction as I - gaugeSpaceProjector)
 
+        if itemWeights is not None:
+            metric_diag = _np.ones(self.num_params(), 'd')
+            offsets = self.get_vector_offsets()
+            gateWeight = itemWeights.get('gates', 1.0)
+            spamWeight = itemWeights.get('spam', 1.0)
+            for lbl in self.gates:
+                i,j = offsets[lbl]
+                metric_diag[i:j] = itemWeights.get(lbl, gateWeight)
+            for lbl in _itertools.chain(iter(self.preps),iter(self.effects)):
+                i,j = offsets[lbl]
+                metric_diag[i:j] = itemWeights.get(lbl, spamWeight)
+            metric = _np.diag(metric_diag)
+            gen_ndG = _mt.nullspace(_np.dot(gen_dG.T,metric))
+        else:
+            gen_ndG = _mt.nullspace(gen_dG.T) #cols are non-gauge directions
+                
 
         # ORIG WAY: use psuedo-inverse to normalize projector.  Ran into problems where
         #  default rcond == 1e-15 didn't work for 2-qubit case, but still more stable than inv method below
-        P = _np.dot(gen_dG, _np.transpose(gen_dG)) # almost a projector, but cols of dG are not orthonormal
+        P = _np.dot(gen_ndG, _np.transpose(gen_ndG)) # almost a projector, but cols of dG are not orthonormal
         Pp = _np.dot( _np.linalg.pinv(P, rcond=1e-7), P ) # make P into a true projector (onto gauge space)
 
         # ALT WAY: use inverse of dG^T*dG to normalize projector (see wikipedia on projectors, dG => A)
         #  This *should* give the same thing as above, but numerical differences indicate the pinv method
         #  is prefereable (so long as rcond=1e-7 is ok in general...)
         #  Check: P'*P' = (dG (dGT dG)^1 dGT)(dG (dGT dG)^-1 dGT) = (dG (dGT dG)^1 dGT) = P'
-        #invGG = _np.linalg.inv(_np.dot(_np.transpose(gen_dG), gen_dG))
-        #Pp_alt = _np.dot(gen_dG, _np.dot(invGG, _np.transpose(gen_dG))) # a true projector (onto gauge space)
+        #invGG = _np.linalg.inv(_np.dot(_np.transpose(gen_ndG), gen_ndG))
+        #Pp_alt = _np.dot(gen_ndG, _np.dot(invGG, _np.transpose(gen_ndG))) # a true projector (onto gauge space)
         #print "Pp - Pp_alt norm diff = ", _np.linalg.norm(Pp_alt - Pp)
 
-        ret = _np.identity(nParams,'d') - Pp # projector onto the non-gauge space
-
+        #OLD: ret = _np.identity(nParams,'d') - Pp 
         # Check ranks to make sure everything is consistent.  If either of these assertions fail,
         #  then pinv's rcond or some other numerical tolerances probably need adjustment.
         #print "Rank P = ",_np.linalg.matrix_rank(P)
@@ -844,47 +902,49 @@ class GateSet(object):
         #print "Rank 1-Pp = ",_np.linalg.matrix_rank(_np.identity(nParams,'d') - Pp, P_RANK_TOL)
         #print " Evals(1-Pp) = \n","\n".join([ "%d: %g" % (i,ev) \
         #       for i,ev in enumerate(_np.sort(_np.linalg.eigvals(_np.identity(nParams,'d') - Pp))) ])
+        
+        try:
+            rank_P = _np.linalg.matrix_rank(P, P_RANK_TOL) # original un-normalized projector
+            
+            # Note: use P_RANK_TOL here even though projector is *un-normalized* since sometimes P will
+            #  have eigenvalues 1e-17 and one or two 1e-11 that should still be "zero" but aren't when
+            #  no tolerance is given.  Perhaps a more custom tolerance based on the singular values of P
+            #  but different from numpy's default tolerance would be appropriate here.
 
-        rank_P = _np.linalg.matrix_rank(P, P_RANK_TOL) # original un-normalized projector onto gauge space
-          # Note: use P_RANK_TOL here even though projector is *un-normalized* since sometimes P will
-          #  have eigenvalues 1e-17 and one or two 1e-11 that should still be "zero" but aren't when
-          #  no tolerance is given.  Perhaps a more custom tolerance based on the singular values of P
-          #  but different from numpy's default tolerance would be appropriate here.
+            assert( rank_P == _np.linalg.matrix_rank(Pp, P_RANK_TOL)) #rank shouldn't change with normalization
+            #assert( (nParams - rank_P) == _np.linalg.matrix_rank(ret, P_RANK_TOL) ) # dimension of orthogonal space
+        except(_np.linalg.linalg.LinAlgError):
+            _warnings.warn("Linear algebra error (probably a non-convergent" +
+                           "SVD) ignored during matric rank checks in " +
+                           "GateSet.get_nongauge_projector(...) ")
+            
+        return Pp 
+        #OLD: return ret
 
-        assert( rank_P == _np.linalg.matrix_rank(Pp, P_RANK_TOL)) #rank shouldn't change with normalization
-        assert( (nParams - rank_P) == _np.linalg.matrix_rank(ret, P_RANK_TOL) ) # dimension of orthogonal space
-        return ret
 
-
-    def transform(self, S, Si=None):
+    def transform(self, S):
         """
         Update each of the gate matrices G in this gateset with inv(S) * G * S,
         each rhoVec with inv(S) * rhoVec, and each EVec with EVec * S
 
         Parameters
         ----------
-        S : numpy array
-            Matrix to perform similarity transform.
-            Should be shape (dim, dim).
-
-        Si : numpy array, optional
-            Inverse of S.  If None, inverse of S is computed.
-            Should be shape (dim, dim).
+        S : GaugeGroup.element
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
         """
-        if Si is None: Si = _nla.inv(S)
-
         for rhoVec in list(self.preps.values()):
-            rhoVec.set_vector(_np.dot(Si,rhoVec))
+            rhoVec.transform(S,'prep')
 
         for EVec in list(self.effects.values()):
-            EVec.set_vector(_np.dot(_np.transpose(S),EVec)) #( Evec^T * S )^T
+            EVec.transform(S,'effect')
 
         if self.povm_identity is not None: # same as Es
-            self.povm_identity.set_vector( _np.dot(_np.transpose(S),
-                                                 self.povm_identity) )
+            self.povm_identity.transform(S,'effect')
 
         for gateObj in list(self.gates.values()):
-            gateObj.transform(S,Si)
+            gateObj.transform(S)
+
 
     def _calc(self):
         return _gscalc.GateSetCalculator(self._dim, self.gates, self.preps,
@@ -1178,7 +1238,335 @@ class GateSet(object):
         return self._calc().hprobs(gatestring, returnPr, returnDeriv, clipTo)
 
 
-    def bulk_evaltree(self, gatestring_list):
+    def bulk_evaltree_from_resources(self, gatestring_list, comm=None, memLimit=None,
+                                     distributeMethod="gatestrings", subcalls=[],
+                                     verbosity=0):
+        """
+        Create an evaluation tree based on available memory and CPUs.
+
+        This tree can be used by other Bulk_* functions, and is it's own
+        function so that for many calls to Bulk_* made with the same
+        gatestring_list, only a single call to bulk_evaltree is needed.
+
+        Parameters
+        ----------
+        gatestring_list : list of (tuples or GateStrings)
+            Each element specifies a gate string to include in the evaluation tree.
+
+        comm : mpi4py.MPI.Comm
+            When not None, an MPI communicator for distributing computations
+            across multiple processors.
+
+        memLimit : int, optional
+            A rough memory limit in bytes which is used to determine subtree 
+            number and size.
+
+        distributeMethod : {"gatestrings", "deriv"}
+            How to distribute calculation amongst processors (only has effect
+            when comm is not None).  "gatestrings" will divide the list of
+            gatestrings and thereby result in more subtrees; "deriv" will divide
+            the columns of any jacobian matrices, thereby resulting in fewer
+            (larger) subtrees.
+
+        subcalls : list, optional
+            A list of the names of the GateSet functions that will be called 
+            using the returned evaluation tree, which are necessary for 
+            estimating memory usage (for comparison to memLimit).  If 
+            memLimit is None, then there's no need to specify `subcalls`.
+
+        verbosity : int, optional
+            How much detail to send to stdout.
+
+        Returns
+        -------
+        evt : EvalTree
+            The evaluation tree object, split as necesary.
+        paramBlockSize : int or None
+            The maximum size of parameter blocks (i.e. the maximum
+            number of parameters to compute at once in calls to 
+            dprobs, etc., usually specified as wrtBlockSize).
+        """
+
+        # Let np = # param groups, so 1 <= np <= num_params, size of each param group = num_params/np
+        # Let ng = # gate string groups == # subtrees, so 1 <= ng <= max_split_num; size of each group = size of corresponding subtree
+        # With nprocs processors, split into Ng comms of ~nprocs/Ng procs each.  These comms are each assigned 
+        #  some number of gate string groups, where their ~nprocs/Ng processors are used to partition the np param
+        #  groups. Note that 1 <= Ng <= min(ng,nprocs).
+        # Notes:
+        #  - making np or ng > nprocs can be useful for saving memory.  Raising np saves *Jacobian* and *Hessian*
+        #     function memory without evaltree overhead, and I think will typically be preferred over raising
+        #     ng which will also save Product function memory but will incur evaltree overhead.
+        #  - any given CPU will be running a *single* (ng-index,np-index) pair at any given time, and so many
+        #     memory estimates only depend on ng and np, not on Ng.  (The exception is when a routine *gathers*
+        #     the end results from a divided computation.)
+        #  - "gatestrings" distributeMethod: never distribute num_params (np == 1, Ng == nprocs always).
+        #     Choose ng such that ng >= nprocs, memEstimate(ng,np=1) < memLimit, and ng % nprocs == 0 (ng % Ng == 0).
+        #  - "deriv" distributeMethod: if possible, set ng=1, nprocs <= np <= num_params, Ng = 1 (np % nprocs == 0?)
+        #     If memory constraints don't allow this, set np = num_params, Ng ~= nprocs/num_params (but Ng >= 1), 
+        #     and ng set by memEstimate and ng % Ng == 0 (so comms are kept busy)
+        #    
+        # find ng, np, Ng such that:
+        # - memEstimate(ng,np,Ng) < memLimit
+        # - full cpu usage: 
+        #       - np*ng >= nprocs (all procs used)
+        #       - ng % Ng == 0 (all subtree comms kept busy)
+        #     -nice, but not essential:
+        #       - num_params % np == 0 (each param group has same size)
+        #       - np % (nprocs/Ng) == 0 would be nice (all procs have same num of param groups to process)
+
+        printer = VerbosityPrinter.build_printer(verbosity, comm)
+
+        nspam = len(self.get_spam_labels())
+        nprocs = 1 if comm is None else comm.Get_size()
+        num_params = self.num_params()
+        dim = self._dim
+        evt_cache = {} # cache of eval trees based on # min subtrees, to avoid re-computation
+        floatSize = 8 # in bytes: TODO: a better way
+        C = 1.0/(1024.0**3)
+
+        bNp2Matters = ("bulk_fill_hprobs" in subcalls) or ("bulk_hprobs_by_block" in subcalls)
+
+        if memLimit is not None:
+            if memLimit <= 0:
+                raise MemoryError("Attempted evaltree generation " +
+                                  "w/memlimit = %g <= 0!" % memLimit)
+            printer.log("Evaltree generation (%s) w/mem limit = %.2fGB"
+                        % (distributeMethod, memLimit*C))
+
+        def prime_factors(n):  #TODO: move this fn somewhere else
+            i = 2; factors = []
+            while i * i <= n:
+                if n % i:
+                    i += 1
+                else:
+                    n //= i
+                    factors.append(i)
+            if n > 1:
+                factors.append(n)
+            return factors
+
+
+        def memEstimate(ng,np1,np2,Ng,fastCacheSz=False,verb=0):
+            tm = _time.time()
+
+            #Get cache size
+            if not fastCacheSz:
+                #Slower (but more accurate way)
+                if ng not in evt_cache: evt_cache[ng] = self.bulk_evaltree(
+                    gatestring_list,minSubtrees=ng,verbosity=printer-1)
+                tstTree = evt_cache[ng]
+                cacheSize = max([len(s) for s in tstTree.get_sub_trees()])
+            else:
+                #heuristic (but fast)
+                cacheSize = int( 1.3 * len(gatestring_list) / ng )
+
+            wrtLen1 = (num_params+np1-1) // np1 # ceiling(num_params / np1)
+            wrtLen2 = (num_params+np2-1) // np2 # ceiling(num_params / np2)
+            nSubtreesPerProc = (ng+Ng-1) // Ng # ceiling(ng / Ng)
+
+            mem = 0
+            for fnName in subcalls:
+                if fnName == "bulk_fill_probs":
+                    mem += cacheSize * dim * dim # product cache
+                    mem += cacheSize # scale cache (exps)
+                    mem += cacheSize # scale vals
+
+                elif fnName == "bulk_fill_dprobs":
+                    mem += cacheSize * wrtLen1 * dim * dim # dproduct cache
+                    mem += cacheSize * dim * dim # product cache
+                    mem += cacheSize # scale cache
+                    mem += cacheSize # scale vals
+
+                elif fnName == "bulk_fill_hprobs":
+                    mem += cacheSize * wrtLen1 * wrtLen2 * dim * dim # hproduct cache
+                    mem += cacheSize * (wrtLen1 + wrtLen2) * dim * dim # dproduct cache
+                    mem += cacheSize * dim * dim # product cache
+                    mem += cacheSize # scale cache
+                    mem += cacheSize # scale vals
+
+                elif fnName == "bulk_hprobs_by_block":
+                    #Note: includes "results" memory since this is allocated within
+                    # the generator and yielded, *not* allocated by the user.
+                    mem += 2 * cacheSize * nspam * wrtLen1 * wrtLen2 # hprobs & dprobs12 results
+                    mem += cacheSize * nspam * (wrtLen1 + wrtLen2) # dprobs1 & dprobs2
+                    mem += cacheSize * wrtLen1 * wrtLen2 * dim * dim # hproduct cache
+                    mem += cacheSize * (wrtLen1 + wrtLen2) * dim * dim # dproduct cache
+                    mem += cacheSize * dim * dim # product cache
+                    mem += cacheSize # scale cache
+                    mem += cacheSize # scale vals
+
+                else:
+                    raise ValueError("Unknown subcall name: %s" % fnName)
+            
+            if verb == 1:
+                fc_est_str = " (%.2fGB fc)" % (memEstimate(ng,np1,np2,Ng,True)*C)\
+                    if (not fastCacheSz) else ""
+                printer.log(" mem(%d subtrees, %d,%d param-grps, %d proc-grps)"
+                            % (ng, np1, np2, Ng) + " in %.0fs = %.2fGB%s"
+                            % (_time.time()-tm, mem*floatSize*C, fc_est_str))
+            elif verb == 2:
+                printer.log(" Memory estimate = %.2fGB" % (mem*floatSize*C) +
+                     " (cache=%d, wrtLen1=%d, wrtLen2=%d, subsPerProc=%d)." %
+                            (cacheSize, wrtLen1, wrtLen2, nSubtreesPerProc))
+                #printer.log("  subcalls = %s" % str(subcalls))
+                #printer.log("  cacheSize = %d" % cacheSize)
+                #printer.log("  wrtLen = %d" % wrtLen)
+                #printer.log("  nSubtreesPerProc = %d" % nSubtreesPerProc)
+                #if "bulk_fill_dprobs" in subcalls:
+                #    printer.log(" DB Detail: dprobs cache = %.2fGB" % 
+                #                (8*cacheSize * wrtLen * dim * dim * C))
+                #    printer.log(" DB Detail: probs cache = %.2fGB" % 
+                #                (8*cacheSize * dim * dim * C))
+            return mem * floatSize
+
+
+        if distributeMethod == "gatestrings":
+            np1 = 1; np2 = 1; Ng = nprocs
+            ng = nprocs
+            if memLimit is not None:
+                #Increase ng in amounts of Ng (so ng % Ng == 0).  Start
+                # with fast cacheSize computation then switch to slow
+                while memEstimate(ng,np1,np2,Ng,True) > memLimit: ng += Ng
+                mem_estimate = memEstimate(ng,np1,np2,Ng,verb=1)
+                while mem_estimate > memLimit:
+                    ng += Ng; next = memEstimate(ng,np1,np2,Ng,verb=1)
+                    assert next < mem_estimate, \
+                        "Not enough memory: splitting unproductive"
+                    mem_estimate = next
+                
+                   #Note: could do these while loops smarter, e.g. binary search-like?
+                   #  or assume memEstimate scales linearly in ng? E.g:
+                   #     if memLimit < memEstimate:
+                   #         reductionFactor = float(memEstimate) / float(memLimit)
+                   #         maxTreeSize = int(nstrs / reductionFactor)
+            else:
+                memEstimate(ng,np1,np2,Ng) # to compute & cache final EvalTree
+
+        elif distributeMethod == "deriv":
+
+            #Set Ng, the number of subTree processor groups, such
+            # that Ng divides nprocs evenly or vice versa
+            def set_Ng(desired_Ng):
+                if desired_Ng >= nprocs:
+                    return nprocs * int(_np.ceil(1.*desired_Ng/nprocs))
+                else:
+                    fctrs = sorted(prime_factors(nprocs)); i=1
+                    if int(_np.ceil(desired_Ng)) in fctrs:
+                        return int(_np.ceil(desired_Ng)) #we got lucky
+                    while _np.product(fctrs[0:i]) < desired_Ng: i+=1
+                    return _np.product(fctrs[0:i])
+            
+            ng = Ng = 1
+            if bNp2Matters:
+                if nprocs > num_params**2:
+                    np1 = np2 = num_params
+                    ng = Ng = set_Ng(nprocs / num_params**2) #Note __future__ division
+                elif nprocs > num_params:
+                    np1 = num_params
+                    np2 = int(_np.ceil(nprocs / num_params))
+                else:
+                    np1 = nprocs; np2 = 1
+            else:
+                np2 = 1
+                if nprocs > num_params:
+                    np1 = num_params
+                    ng = Ng = set_Ng(nprocs / num_params)
+                else: 
+                    np1 = nprocs
+
+            if memLimit is not None:
+
+                ok = False
+                if (not ok) and np1 < num_params:
+                    #First try to decrease mem consumption by increasing np1
+                    memEstimate(ng,np1,np2,Ng,verb=1) #initial estimate (to screen)
+                    for n in range(np1, num_params+1, nprocs):
+                        if memEstimate(ng,n,np2,Ng) < memLimit:
+                            np1 = n; ok=True; break
+                    else: np1 = num_params
+
+                if (not ok) and bNp2Matters and np2 < num_params:
+                    #Next try to decrease mem consumption by increasing np2
+                    for n in range(np2, num_params+1):
+                        if memEstimate(ng,np1,n,Ng) < memLimit:
+                            np2 = n; ok=True; break
+                    else: np2 = num_params
+                                        
+                if not ok:
+                    #Finally, increase ng in amounts of Ng (so ng % Ng == 0).  Start
+                    # with fast cacheSize computation then switch to slow
+                    while memEstimate(ng,np1,np2,Ng,True) > memLimit: ng += Ng
+                    mem_estimate = memEstimate(ng,np1,np2,Ng,verb=1)
+                    while mem_estimate > memLimit:
+                        ng += Ng; next = memEstimate(ng,np1,np2,Ng,verb=1)
+                        if next >= mem_estimate:
+                            raise MemoryError("Not enough memory: splitting unproductive")
+                        mem_estimate = next                    
+
+                    #OLD
+                    #np1 = num_params
+                    #np2 = num_params if bNp2Matters else 1
+                    #ng = Ng = max(nprocs // (np1*np2), 1)
+            else:
+                memEstimate(ng,np1,np2,Ng) # to compute & cache final EvalTree
+
+        elif distributeMethod == "balanced":
+            # try to minimize "unbalanced" procs
+            #np = gcf(num_params, nprocs)
+            #ng = Ng = max(nprocs / np, 1)
+            #if memLimit is not None:
+            #    while memEstimate(ng,np1,np2,Ng) > memLimit: ng += Ng #so ng % Ng == 0
+            raise NotImplementedError("balanced distribution still todo")
+
+        # Retrieve final EvalTree (already computed from estimates above)
+        assert (ng in evt_cache), "Tree Caching Error"
+        evt = evt_cache[ng]; evt.distribution['numSubtreeComms'] = Ng
+
+        paramBlkSize1 = num_params / np1
+        paramBlkSize2 = num_params / np2   #the *average* param block size
+          # (in general *not* an integer), which ensures that the intended # of
+          # param blocks is communicatd to gsCalc.py routines (taking ceiling or
+          # floor can lead to inefficient MPI distribution)
+
+        printer.log("Created evaluation tree with %d subtrees.  " % ng
+                    + "Will divide %d procs into %d (subtree-processing)" % (nprocs,Ng))
+        if bNp2Matters:
+            printer.log(" groups of ~%d procs each, to distribute over " % (nprocs/Ng)
+                        + "(%d,%d) params (taken as %d,%d param groups of ~%d,%d params)." 
+                        % (num_params,num_params, np1,np2, paramBlkSize1,paramBlkSize2))
+        else:
+            printer.log(" groups of ~%d procs each, to distribute over " % (nprocs/Ng)
+                        + "%d params (taken as %d param groups of ~%d params)." 
+                        % (num_params, np1, paramBlkSize1))
+
+        if memLimit is not None:
+            memEstimate(ng,np1,np2,Ng,False,verb=2) #print mem estimate details
+
+        if (comm is None or comm.Get_rank() == 0) and evt.is_split():
+            if printer.verbosity >= 2: evt.print_analysis()
+            
+        if np1 == 1: # (paramBlkSize == num_params)
+            paramBlkSize1 = None # == all parameters, and may speed logic in dprobs, etc.
+        else:
+            if comm is not None:
+                blkSizeTest = comm.bcast(paramBlkSize1,root=0)
+                assert(abs(blkSizeTest-paramBlkSize1) < 1e-3) 
+                  #all procs should have *same* paramBlkSize1
+
+        if np2 == 1: # (paramBlkSize == num_params)
+            paramBlkSize2 = None # == all parameters, and may speed logic in hprobs, etc.
+        else:
+            if comm is not None:
+                blkSizeTest = comm.bcast(paramBlkSize2,root=0)
+                assert(abs(blkSizeTest-paramBlkSize2) < 1e-3) 
+                  #all procs should have *same* paramBlkSize2
+
+        return evt, paramBlkSize1, paramBlkSize2
+
+
+
+    def bulk_evaltree(self, gatestring_list, minSubtrees=None, maxTreeSize=None,
+                      numSubtreeComms=1, verbosity=0):
         """
         Create an evaluation tree for all the gate strings in gatestring_list.
 
@@ -1191,13 +1579,49 @@ class GateSet(object):
         gatestring_list : list of (tuples or GateStrings)
             Each element specifies a gate string to include in the evaluation tree.
 
+        minSubtrees : int (optional)
+            The minimum number of subtrees the resulting EvalTree must have.
+
+        maxTreeSize : int (optional)
+            The maximum size allowed for the single un-split tree or any of
+            its subtrees.
+
+        numSubtreeComms : int, optional
+            The number of processor groups (communicators)
+            to divide the subtrees of the EvalTree among
+            when calling its `distribute` method.
+
+        verbosity : int, optional
+            How much detail to send to stdout.
+
         Returns
         -------
         EvalTree
             An evaluation tree object.
         """
+        tm = _time.time()
+        printer = VerbosityPrinter.build_printer(verbosity)
         evalTree = _evaltree.EvalTree()
-        evalTree.initialize([""] + list(self.gates.keys()), gatestring_list)
+        evalTree.initialize([""] + list(self.gates.keys()), gatestring_list, numSubtreeComms)
+
+        printer.log("bulk_evaltree: created initial tree (%d strs) in %.0fs" %
+                    (len(gatestring_list),_time.time()-tm)); tm = _time.time()
+
+        if maxTreeSize is not None:
+            evalTree.split(maxTreeSize, None, printer) # won't split if unnecessary
+
+        if minSubtrees is not None:
+            if not evalTree.is_split() or len(evalTree.get_sub_trees()) < minSubtrees:
+                evalTree.split(None, minSubtrees, printer)
+                if maxTreeSize is not None and \
+                        any([ len(sub)>maxTreeSize for sub in evalTree.get_sub_trees()]):
+                    _warnings.warn("Could not create a tree with minSubtrees=%d" % minSubtrees
+                                   + " and maxTreeSize=%d" % maxTreeSize)
+                    evalTree.split(maxTreeSize, None) # fall back to split for max size
+        
+        if maxTreeSize is not None or minSubtrees is not None:
+            printer.log("bulk_evaltree: split tree (%d subtrees) in %.0fs" 
+                        % (len(evalTree.get_sub_trees()),_time.time()-tm))
         return evalTree
 
 
@@ -1385,9 +1809,12 @@ class GateSet(object):
           scaleVals[i] contains the multiplicative scaling needed for
           the hessians, derivatives, and/or products for the i-th gate string.
         """
-        return self._calc().bulk_hproduct(
+        ret = self._calc().bulk_hproduct(
             evalTree, flat, bReturnDProdsAndProds, bScale, comm)
-
+        if bReturnDProdsAndProds:
+            return ret[0:2] + ret[3:] #remove ret[2] == deriv wrt filter2,
+                         # which isn't an input param for GateSet version
+        else: return ret
 
 
     def bulk_pr(self, spamLabel, evalTree, clipTo=None, check=False, comm=None):
@@ -1466,8 +1893,8 @@ class GateSet(object):
            of the parameters being differentiated with respect to (see
            wrtBlockSize).
 
-        wrtBlockSize : int, optional
-          The maximum number of derivative columns to compute *products*
+        wrtBlockSize : int or float, optional
+          The maximum average number of derivative columns to compute *products*
           for simultaneously.  None means compute all columns at once.
           The minimum of wrtBlockSize and the size that makes maximal
           use of available processors is used as the final block size. Use
@@ -1496,7 +1923,7 @@ class GateSet(object):
     def bulk_hpr(self, spamLabel, evalTree,
                  returnPr=False,returnDeriv=False,
                  clipTo=None,check=False,comm=None,
-                 wrtBlockSize=None):
+                 wrtBlockSize1=None, wrtBlockSize2=None):
 
         """
         Compute the 2nd derivatives of the probabilities generated by a each gate
@@ -1531,12 +1958,14 @@ class GateSet(object):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.
 
-        wrtBlockSize : int, optional
-          The maximum number of *2nd* derivative columns to compute *products*
-          for simultaneously.  None means compute all columns at once.
-          The minimum of wrtBlockSize and the size that makes maximal
-          use of available processors is used as the final block size. Use
-          this argument to reduce amount of intermediate memory required.
+        wrtBlockSize2, wrtBlockSize2 : int or float, optional
+          The maximum number of 1st (row) and 2nd (col) derivatives to compute
+          *products* for simultaneously.  None means compute all requested
+          rows or columns at once.  The  minimum of wrtBlockSize and the size
+          that makes maximal use of available processors is used as the final
+          block size.  These arguments must be None if the corresponding
+          wrtFilter is not None.  Set this to non-None to reduce amount of
+          intermediate memory required.
 
 
         Returns
@@ -1560,7 +1989,8 @@ class GateSet(object):
             containing the probabilities for each gate string.
         """
         return self._calc().bulk_hpr(spamLabel, evalTree, returnPr,returnDeriv,
-                                    clipTo, check, comm, None, wrtBlockSize)
+                                    clipTo, check, comm, None, None,
+                                     wrtBlockSize1, wrtBlockSize2)
 
 
     def bulk_probs(self, evalTree, clipTo=None, check=False, comm=None):
@@ -1634,8 +2064,8 @@ class GateSet(object):
            of the parameters being differentiated with respect to (see
            wrtBlockSize).
 
-        wrtBlockSize : int, optional
-          The maximum number of derivative columns to compute *products*
+        wrtBlockSize : int or float, optional
+          The maximum average number of derivative columns to compute *products*
           for simultaneously.  None means compute all columns at once.
           The minimum of wrtBlockSize and the size that makes maximal
           use of available processors is used as the final block size. Use
@@ -1654,7 +2084,8 @@ class GateSet(object):
 
 
     def bulk_hprobs(self, evalTree, returnPr=False,returnDeriv=False,
-                    clipTo=None, check=False, comm=None, wrtBlockSize=None):
+                    clipTo=None, check=False, comm=None,
+                    wrtBlockSize1=None, wrtBlockSize2=None):
 
         """
         Construct a dictionary containing the bulk-probability-
@@ -1687,12 +2118,14 @@ class GateSet(object):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.
 
-        wrtBlockSize : int, optional
-          The maximum number of *2nd* derivative columns to compute *products*
-          for simultaneously.  None means compute all columns at once.
-          The minimum of wrtBlockSize and the size that makes maximal
-          use of available processors is used as the final block size. Use
-          this argument to reduce amount of intermediate memory required.
+        wrtBlockSize2, wrtBlockSize2 : int or float, optional
+          The maximum number of 1st (row) and 2nd (col) derivatives to compute
+          *products* for simultaneously.  None means compute all requested
+          rows or columns at once.  The  minimum of wrtBlockSize and the size
+          that makes maximal use of available processors is used as the final
+          block size.  These arguments must be None if the corresponding
+          wrtFilter is not None.  Set this to non-None to reduce amount of
+          intermediate memory required.
 
 
         Returns
@@ -1703,7 +2136,8 @@ class GateSet(object):
             for each spam label (string) SL.
         """
         return self._calc().bulk_hprobs(evalTree, returnPr, returnDeriv,
-                                        clipTo, check, comm, None, wrtBlockSize)
+                                        clipTo, check, comm, None, None,
+                                        wrtBlockSize1, wrtBlockSize2)
 
 
     def bulk_fill_probs(self, mxToFill, spam_label_rows,
@@ -1756,8 +2190,9 @@ class GateSet(object):
 
 
     def bulk_fill_dprobs(self, mxToFill, spam_label_rows,
-                        evalTree, prMxToFill=None,clipTo=None,
-                        check=False,comm=None, wrtBlockSize=None):
+                         evalTree, prMxToFill=None,clipTo=None,
+                         check=False,comm=None, wrtBlockSize=None,
+                         profiler=None, gatherMemLimit=None):
 
         """
         Identical to bulk_dprobs(...) except results are
@@ -1808,12 +2243,20 @@ class GateSet(object):
            of the parameters being differentiated with respect to (see
            wrtBlockSize).
 
-        wrtBlockSize : int, optional
-          The maximum number of derivative columns to compute *products*
+        wrtBlockSize : int or float, optional
+          The maximum average number of derivative columns to compute *products*
           for simultaneously.  None means compute all columns at once.
           The minimum of wrtBlockSize and the size that makes maximal
           use of available processors is used as the final block size. Use
           this argument to reduce amount of intermediate memory required.
+
+        profiler : Profiler, optional
+          A profiler object used for to track timing and memory usage.
+
+        gatherMemLimit : int, optional
+          A memory limit in bytes to impose upon the "gather" operations
+          performed as a part of MPI processor syncronization.
+
 
         Returns
         -------
@@ -1821,12 +2264,15 @@ class GateSet(object):
         """
         return self._calc().bulk_fill_dprobs(mxToFill, spam_label_rows,
                                              evalTree, prMxToFill, clipTo,
-                                             check, comm, None, wrtBlockSize)
+                                             check, comm, None, wrtBlockSize,
+                                             profiler, gatherMemLimit)
 
 
     def bulk_fill_hprobs(self, mxToFill, spam_label_rows,
                          evalTree=None, prMxToFill=None, derivMxToFill=None,
-                         clipTo=None, check=False, comm=None, wrtBlockSize=None):
+                         clipTo=None, check=False, comm=None, 
+                         wrtBlockSize1=None, wrtBlockSize2=None,
+                         gatherMemLimit=None):
 
         """
         Identical to bulk_hprobs(...) except results are
@@ -1883,12 +2329,18 @@ class GateSet(object):
            of the parameters being second-differentiated with respect to (see
            wrtBlockSize).
 
-        wrtBlockSize : int, optional
-          The maximum number of *2nd* derivative columns to compute *products*
-          for simultaneously.  None means compute all columns at once.
-          The minimum of wrtBlockSize and the size that makes maximal
-          use of available processors is used as the final block size. Use
-          this argument to reduce amount of intermediate memory required.
+        wrtBlockSize2, wrtBlockSize2 : int or float, optional
+          The maximum number of 1st (row) and 2nd (col) derivatives to compute
+          *products* for simultaneously.  None means compute all requested
+          rows or columns at once.  The  minimum of wrtBlockSize and the size
+          that makes maximal use of available processors is used as the final
+          block size.  These arguments must be None if the corresponding
+          wrtFilter is not None.  Set this to non-None to reduce amount of
+          intermediate memory required.
+
+        gatherMemLimit : int, optional
+          A memory limit in bytes to impose upon the "gather" operations
+          performed as a part of MPI processor syncronization.
 
 
         Returns
@@ -1896,13 +2348,13 @@ class GateSet(object):
         None
         """
         return self._calc().bulk_fill_hprobs(mxToFill, spam_label_rows,
-                                     evalTree, prMxToFill, derivMxToFill,
-                                     clipTo, check, comm, None, wrtBlockSize)
+                                     evalTree, prMxToFill, derivMxToFill, None,
+                                     clipTo, check, comm, None, None,
+                                     wrtBlockSize1,wrtBlockSize2,gatherMemLimit)
 
 
-    def bulk_hprobs_by_column(self, spam_label_rows, evalTree,
-                              bReturnDProbs12=False,clipTo=None,
-                              check=False,comm=None, wrtFilter=None):
+    def bulk_hprobs_by_block(self, spam_label_rows, evalTree, wrtSlicesList,
+                              bReturnDProbs12=False, comm=None):
         """
         Constructs a generator that computes the 2nd derivatives of the
         probabilities generated by a each gate sequence given by evalTree
@@ -1927,6 +2379,13 @@ class GateSet(object):
            given by a prior call to bulk_evaltree.  Specifies the gate strings
            to compute the bulk operation on.  This tree *cannot* be split.
 
+        wrtSlicesList : list
+            A list of `(rowSlice,colSlice)` 2-tuples, each of which specify
+            a "block" of the Hessian to compute.  Iterating over the output
+            of this function iterates over these computed blocks, in the order
+            given by `wrtSlicesList`.  `rowSlice` and `colSlice` must by Python
+            `slice` objects.
+
         bReturnDProbs12 : boolean, optional
            If true, the generator computes a 2-tuple: (hessian_col, d12_col),
            where d12_col is a column of the matrix d12 defined by:
@@ -1941,26 +2400,31 @@ class GateSet(object):
            across multiple processors.  Distribution is performed as in
            bulk_product, bulk_dproduct, and bulk_hproduct.
 
-        wrtFilter : list of ints, optional
-          If not None, a list of integers specifying the indices of the
-          parameters to include in the *2nd* derivative dimension, i.e.,
-          which Hessian columns to compute.
-
 
         Returns
         -------
-        column_generator
-          A generator which, when iterated, yields an array of
-          shape K x S x M x 1 numpy array (a Hessian column), where K is the
-          length of spam_label_rows, S is equal to the number of gate strings
-          (i.e. evalTree.num_final_strings()), and M is the number of gateset
-          parameters.  If bReturnDProbs12 == True, then two such arrays
-          are given (as a 2-tuple).
+        block_generator
+          A generator which, when iterated, yields the 3-tuple 
+          `(rowSlice, colSlice, hprobs)` or `(rowSlice, colSlice, dprobs12)`
+          (the latter if `bReturnDProbs12 == True`).  `rowSlice` and `colSlice`
+          are slices directly from `wrtSlicesList`. `hprobs` and `dprobs12` are
+          arrays of shape K x S x B x B', where:
+
+          - K is the length of spam_label_rows,
+          - S is the number of gate strings (i.e. evalTree.num_final_strings()),
+          - B is the number of parameter rows (the length of rowSlice)
+          - B' is the number of parameter columns (the length of colSlice)
+
+          If `mx` and `dp` the outputs of :func:`bulk_fill_hprobs`
+          (i.e. args `mxToFill` and `derivMxToFill`), then:
+
+          - `hprobs == mx[:,:,rowSlice,colSlice]`
+          - `dprobs12 == dp[:,:,rowSlice,None] * dp[:,:,None,colSlice]`
         """
-        return self._calc().bulk_hprobs_by_column(
-            spam_label_rows, evalTree, bReturnDProbs12, comm, wrtFilter)
-
-
+        return self._calc().bulk_hprobs_by_block(
+            spam_label_rows, evalTree, wrtSlicesList,
+            bReturnDProbs12, comm)
+            
 
     def frobeniusdist(self, otherGateSet, transformMx=None,
                       gateWeight=1.0, spamWeight=1.0, itemWeights=None,
@@ -2144,6 +2608,7 @@ class GateSet(object):
         newGateset._basisNameAndDim = self._basisNameAndDim
         newGateset._remainderlabel = self._remainderlabel
         newGateset._identitylabel = self._identitylabel
+        newGateset._default_gauge_group = self._default_gauge_group
         return newGateset
 
     def __str__(self):
@@ -2256,8 +2721,7 @@ class GateSet(object):
             #Apply the same depolarization to each gate
             D = _np.diag( [1]+[1-gate_noise]*(gateDim-1) )
             for (i,label) in enumerate(self.gates):
-                newGateset.gates[label] = _gate.FullyParameterizedGate(
-                                           _np.dot(D,self.gates[label]) )
+                newGateset.gates[label].depolarize(gate_noise)
 
         if max_spam_noise is not None:
             if spam_noise is not None:
@@ -2280,11 +2744,9 @@ class GateSet(object):
             #Apply the same depolarization to each gate
             D = _np.diag( [1]+[1-spam_noise]*(gateDim-1) )
             for lbl,rhoVec in self.preps.items():
-                newGateset.preps[lbl] = _sv.FullyParameterizedSPAMVec(
-                                            _np.dot(D,rhoVec) )
+                newGateset.preps[lbl].depolarize(spam_noise)
             for lbl,EVec in self.effects.items():
-                newGateset.effects[lbl] = _sv.FullyParameterizedSPAMVec(
-                                         _np.dot(D,EVec) )
+                newGateset.effects[lbl].depolarize(spam_noise)
 
         return newGateset
 

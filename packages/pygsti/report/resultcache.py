@@ -59,7 +59,10 @@ class ResultCache(object):
         stored_data_item
         """
 
-        printer = VerbosityPrinter.build_printer(verbosity)
+        if self._parent:
+            printer = VerbosityPrinter.build_printer(verbosity, comm=self._parent._comm)
+        else:
+            printer = VerbosityPrinter.build_printer(verbosity)
 
         if confidence_level=="current":
             level = self._parent.confidence_level if self._parent else None
@@ -142,6 +145,13 @@ class ResultCache(object):
         #would use current confidence level
         raise NotImplementedError("Would require mass evaluation of all keys.")
 
+    def copy(self):
+        """ Creates a copy of this ResultCache.  Parent is *reset* """
+        newCache = ResultCache(self._computeFns, parent=None,
+                               typenm=self._typename)
+        newCache._data = self._data.copy() #deepcopy()
+        return newCache
+
     def __getstate__(self):
         #Return the state (for pickling) -- *don't* pickle parent or fns
         return  { '_data': self._data, '_typename': self._typename }
@@ -151,6 +161,25 @@ class ResultCache(object):
         self._parent = None
         self._data = stateDict['_data']
         self._typename = stateDict['_typename']
+
+    def clear_cached_data(self, except_these_keys):
+        """
+        Clears the cached data for all keys except those
+        specified.
+
+        Parameters
+        ----------
+        except_these_keys : list
+            A list of keys to *keep* cached.
+
+        Returns
+        -------
+        None
+        """
+        for level in self._data:
+            for key in list(self._data[level].keys()):
+                if key in except_these_keys: continue
+                del self._data[level][key]
 
 
     class NoCRDependenceError(Exception):

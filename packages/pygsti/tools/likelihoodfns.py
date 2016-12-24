@@ -8,13 +8,15 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import warnings as _warnings
+import itertools as _itertools
 #import time as _time
 from . import basistools as _bt
 from . import jamiolkowski as _jam
+from . import mpitools as _mpit
+from . import slicetools as _slct
 
 TOL = 1e-20
 
-#import sys #DEBUG TIMER
 
 # Functions for computing the log liklihood function and its derivatives
 
@@ -409,10 +411,9 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
     return _np.sum(jac, axis=(0,1)) # sum over spam label and gate string dimensions
 
 
-def logl_hessian(gateset, dataset, gatestring_list=None,
-                 minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
-                 evalTree=None, countVecMx=None, poissonPicture=True,
-                 check=False, comm=None, memLimit=None):
+def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
+                 probClipInterval=(-1e6,1e6), radius=1e-4, poissonPicture=True,
+                 check=False, comm=None, memLimit=None, verbosity=0):
     """
     The hessian of the log-likelihood function.
 
@@ -444,18 +445,6 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
         Specifies the severity of rounding used to "patch" the zero-frequency
         terms of the log-likelihood.
 
-    evalTree : evaluation tree, optional
-        given by a prior call to bulk_evaltree for the same gatestring_list.
-        Significantly speeds up evaluation of log-likelihood derivatives, even
-        more so when accompanied by countVecMx (see below).  Defaults to None.
-
-    countVecMx : numpy array, optional
-      Two-dimensional numpy array whose rows correspond to the gate's spam
-      labels (i.e. gateset.get_spam_labels()).  Each row is  contains the
-      dataset counts for that spam label for each gate string in gatestring_list.
-      Use fill_count_vecs(...) to generate this quantity once for multiple
-      evaluations of the log-likelihood function which use the same dataset.
-
     poissonPicture : boolean, optional
         Whether the Poisson-picutre log-likelihood should be differentiated.
 
@@ -471,6 +460,9 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
         A rough memory limit in bytes which restricts the amount of intermediate
         values that are computed and stored.
 
+    verbosity : int, optional
+        How much detail to print to stdout.
+
 
     Returns
     -------
@@ -485,117 +477,69 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
 
     spamLabels = gateset.get_spam_labels() #fixes the ordering of the spam labels
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
-
-    if evalTree is None:
-        evalTree = gateset.bulk_evaltree(gatestring_list)
-
-    #Memory allocation
-    ns = len(spamLabels); ng = len(gatestring_list)
-    ne = gateset.num_params(); gd = gateset.get_dimension()
-    C = 1.0/1024.0**3
-
+    
     #  Estimate & check persistent memory (from allocs directly below)
-    persistentMem = 8*ne**2 # in bytes
+    C = 1.0/1024.0**3; nP = gateset.num_params()
+    persistentMem = 8*nP**2 # in bytes
     if memLimit is not None and memLimit < persistentMem:
         raise MemoryError("HLogL Memory limit (%g GB) is " % (memLimit*C) +
                           "< memory required to hold final results (%g GB)"
                           % (persistentMem*C))
 
     #  Allocate persistent memory
-    # Not needed yet: final_hessian = _np.zeros( (nP,nP), 'd')
+    final_hessian = _np.zeros( (nP,nP), 'd')
 
     #  Estimate & check intermediate memory
-    #  - check if we can fit entire hessian computation in memory; if so
-    #      run in "all at once" mode
-    #  - otherwise, work with a single column of the hessian at a time,
-    #      which we call "by column" mode
-    #  - if even in "by column" mode there's not enough memory, split the
-    #      tree as needed (or raise an error if this is not possible)
-    intermedMem  = 8* (ng*(2*ns + ns*ne + ns*ne**2)) # ~ local: for bulk_fill_hprods results
-    intermedMem += 8*ng*gd**2*(ne**2 + ne + 1) # ~ bulk_hproduct
-    if memLimit is not None and memLimit < intermedMem:
-        mode = "by column"
-        ne_spam = sum([v.num_params() for v in list(gateset.preps.values())] +
-                      [v.num_params() for v in list(gateset.effects.values())])
-        intermedMem  = 8* (ng*(2*ns)) # ~ local: for bulk_hprods_by_column
-        intermedMem += 8*ns*ng*ne*(2*ne_spam+2) # ~ bulk_hprods_by_column internal - immediate
-        intermedMem += 8*ng*gd**2*(ne + ne + 1) # ~ bulk_hprods_by_column internal - caches
-        if memLimit < intermedMem:
-            reductionFactor = float(intermedMem) / float(memLimit)
-            maxEvalSubTreeSize = ng / reductionFactor # float
-            minTreeSize = evalTree.get_min_tree_size()
-            if maxEvalSubTreeSize < minTreeSize:
-                raise MemoryError("Not enough memory to perform needed tree splitting!")
-        else:
-            maxEvalSubTreeSize = ng
-    else:
-        mode = "all at once"
-        maxEvalSubTreeSize = ng
-
-    #  Allocate memory (alloc max required & take views)
-    maxNumGatestrings = maxEvalSubTreeSize
-    cntVecMx_mem = _np.empty( (len(spamLabels),maxNumGatestrings),'d')
-    probs_mem  = _np.empty( (len(spamLabels),maxNumGatestrings), 'd' )
-    if mode == "all at once":
-        dprobs_mem = _np.empty( (len(spamLabels),maxNumGatestrings,nP), 'd' )
-        hprobs_mem = _np.empty( (len(spamLabels),maxNumGatestrings,nP,nP), 'd' )
-
-    assert(not evalTree.is_split()) #assume we do all the splitting
-    if maxEvalSubTreeSize < ng:
-        evalTree.split(maxEvalSubTreeSize, None)
-    #else:
-    #    evalTree.split(None, 1) #trivial split - necessary?
-
-    #DEBUG - no verbosity passed in to just leave commented out
-    if memLimit is not None:
-        print("HLogL Memory estimates: (%d spam labels," % ns + \
-            "%d gate strings, %d gateset params, %d gate dim)" % (ng,ne,gd))
-        print("Mode = %s" % mode)
-        print("Peristent: %g GB " % (persistentMem*C))
-        print("Intermediate: %g GB " % (intermedMem*C))
-        print("Limit: %g GB" % (memLimit*C))
-        if maxEvalSubTreeSize < ng:
-            print("Maximum sub-tree size = %d" % maxEvalSubTreeSize)
-            print("HLogL mem limit has imposed a division of evaluation tree.")
-            print("Original tree length %d split into %d sub-trees of total length %d" % \
-                (len(evalTree), len(evalTree.get_sub_trees()), sum(map(len,evalTree.get_sub_trees()))))
+    #  - figure out how many row & column partitions are needed
+    #    to fit computation within available memory (and use all cpus)
+    mlim = None if (memLimit is None) else memLimit-persistentMem
+    evalTree, blkSize1, blkSize2 = gateset.bulk_evaltree_from_resources(
+        gatestring_list, comm, mlim, "deriv", ['bulk_hprobs_by_block'],
+        verbosity)
+    
+    rowParts = int(round(nP / blkSize1)) if (blkSize1 is not None) else 1
+    colParts = int(round(nP / blkSize2)) if (blkSize2 is not None) else 1
 
     a = radius # parameterizes "roundness" of f == 0 terms
     min_p = minProbClip
 
-
-    #print "TEST dprobs timing"
-    #t1 = _time.time()
-    #for iTree,evalSubTree in enumerate(evalTree.get_sub_trees()):
-    #    sub_nGateStrings = evalSubTree.num_final_strings()
-    #    probs  =  probs_mem[:,0:sub_nGateStrings]
-    #    dprobs = dprobs_mem[:,0:sub_nGateStrings,:]
-    #
-    #    gateset._calc().bulk_fill_dprobs(dprobs, spam_lbl_rows, evalSubTree,
-    #                                     prMxToFill=probs,
-    #                                     clipTo=probClipInterval, check=check)
-    #    print "DEBUG: %gs: sub-tree %d/%d, sub-tree-len = %d" \
-    #        % (_time.time()-t1,iTree, len(evalTree.get_sub_trees()), len(evalSubTree))
-    #    sys.stdout.flush()
-    #print "TOTAL TEST Time = ",(_time.time()-t1)
-
     if poissonPicture:
+        #NOTE: hessian_from_hprobs MAY modify hprobs and dprobs12 (to save mem)
         def hessian_from_hprobs(hprobs, dprobs12, cntVecMx, totalCntVec, pos_probs):
             # Notation:  (K=#spam, M=#strings, N=#wrtParams1, N'=#wrtParams2 )
-            S = cntVecMx / min_p - totalCntVec[None,:] # slope term that is derivative of logl at min_p
+            totCnts = totalCntVec[None,:]  #shorthand (just a view)
+            S = cntVecMx / min_p - totCnts # slope term that is derivative of logl at min_p
             S2 = -0.5 * cntVecMx / (min_p**2)          # 2nd derivative of logl term at min_p
 
-            hprobs_pos  = (-cntVecMx / pos_probs**2)[:,:,None,None] * dprobs12   # (K,M,1,1) * (K,M,N,N')
-            hprobs_pos += (cntVecMx / pos_probs - totalCntVec[None,:])[:,:,None,None] * hprobs  # (K,M,1,1) * (K,M,N,N')
-            hprobs_neg  = (2*S2)[:,:,None,None] * dprobs12 + (S + 2*S2*(probs - min_p))[:,:,None,None] * hprobs # (K,M,1,1) * (K,M,N,N')
+            #hprobs_pos  = (-cntVecMx / pos_probs**2)[:,:,None,None] * dprobs12   # (K,M,1,1) * (K,M,N,N')
+            #hprobs_pos += (cntVecMx / pos_probs - totalCntVec[None,:])[:,:,None,None] * hprobs  # (K,M,1,1) * (K,M,N,N')
+            #hprobs_neg  = (2*S2)[:,:,None,None] * dprobs12 + (S + 2*S2*(probs - min_p))[:,:,None,None] * hprobs # (K,M,1,1) * (K,M,N,N')
+            #hprobs_zerofreq = _np.where( (probs >= a)[:,:,None,None],
+            #                             -totalCntVec[None,:,None,None] * hprobs,
+            #                             (-totalCntVec[None,:] * ( (-2.0/a**2)*probs + 2.0/a))[:,:,None,None] * dprobs12
+            #                             - (totalCntVec[None,:] * ((-1.0/a**2)*probs**2 + 2*probs/a))[:,:,None,None] * hprobs )
+            #hessian = _np.where( (probs < min_p)[:,:,None,None], hprobs_neg, hprobs_pos)
+            #hessian = _np.where( (cntVecMx == 0)[:,:,None,None], hprobs_zerofreq, hessian) # (K,M,N,N')
+            
+            #Accomplish the same thing as the above commented-out lines, 
+            # but with more memory effiency:
+            dprobs12_coeffs = \
+                _np.where(probs < min_p, 2*S2, -cntVecMx / pos_probs**2)
+            zfc = _np.where(probs >= a, 0.0, -totCnts*((-2.0/a**2)*probs+2.0/a))
+            dprobs12_coeffs = _np.where(cntVecMx == 0, zfc, dprobs12_coeffs)
 
-            hprobs_zerofreq = _np.where( (probs >= a)[:,:,None,None],
-                                         -totalCntVec[None,:,None,None] * hprobs,
-                                         (-totalCntVec[None,:] * ( (-2.0/a**2)*probs + 2.0/a))[:,:,None,None] * dprobs12
-                                         - (totalCntVec[None,:] * ((-1.0/a**2)*probs**2 + 2*probs/a))[:,:,None,None] * hprobs )
+            hprobs_coeffs = \
+                _np.where(probs < min_p, S + 2*S2*(probs - min_p),
+                          cntVecMx / pos_probs - totCnts)
+            zfc = _np.where(probs >= a, -totCnts, 
+                            -totCnts * ((-1.0/a**2)*probs**2 + 2*probs/a))
+            hprobs_coeffs = _np.where(cntVecMx == 0, zfc, hprobs_coeffs)
 
-            hessian = _np.where( (probs < min_p)[:,:,None,None], hprobs_neg, hprobs_pos)
-            hessian = _np.where( (cntVecMx == 0)[:,:,None,None], hprobs_zerofreq, hessian) # (K,M,N,N)
+              # hessian = hprobs_coeffs * hprobs + dprobs12_coeff * dprobs12
+              #  but re-using dprobs12 and hprobs memory (which is overwritten!)
+            hprobs *= hprobs_coeffs[:,:,None,None]
+            dprobs12 *= dprobs12_coeffs[:,:,None,None]
+            hessian = dprobs12; hessian += hprobs
 
             # hessian[iSpamLabel,iGateString,iGateSetParam1,iGateSetParams2] contains all
             #  d2(logl)/d(gatesetParam1)d(gatesetParam2) contributions
@@ -607,24 +551,36 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
     else:
 
         #(the non-poisson picture requires that the probabilities of the spam labels for a given string are constrained to sum to 1)
+        #NOTE: hessian_from_hprobs MAY modify hprobs and dprobs12 (to save mem)
         def hessian_from_hprobs(hprobs, dprobs12, cntVecMx, totalCntVec, pos_probs):
             S = cntVecMx / min_p # slope term that is derivative of logl at min_p
             S2 = -0.5 * cntVecMx / (min_p**2) # 2nd derivative of logl term at min_p
 
-            hprobs_pos  = (-cntVecMx / pos_probs**2)[:,:,None,None] * dprobs12   # (K,M,1,1) * (K,M,N,N')
-            hprobs_pos += (cntVecMx / pos_probs)[:,:,None,None] * hprobs  # (K,M,1,1) * (K,M,N,N')
-            hprobs_neg  = (2*S2)[:,:,None,None] * dprobs12 + (S + 2*S2*(probs - min_p))[:,:,None,None] * hprobs # (K,M,1,1) * (K,M,N,N')
+            #hprobs_pos  = (-cntVecMx / pos_probs**2)[:,:,None,None] * dprobs12   # (K,M,1,1) * (K,M,N,N')
+            #hprobs_pos += (cntVecMx / pos_probs)[:,:,None,None] * hprobs  # (K,M,1,1) * (K,M,N,N')
+            #hprobs_neg  = (2*S2)[:,:,None,None] * dprobs12 + (S + 2*S2*(probs - min_p))[:,:,None,None] * hprobs # (K,M,1,1) * (K,M,N,N')
+            #hessian = _np.where( (probs < min_p)[:,:,None,None], hprobs_neg, hprobs_pos)
+            #hessian = _np.where( (cntVecMx == 0)[:,:,None,None], 0.0, hessian) # (K,M,N,N')
 
-            hessian = _np.where( (probs < min_p)[:,:,None,None], hprobs_neg, hprobs_pos)
-            hessian = _np.where( (cntVecMx == 0)[:,:,None,None], 0.0, hessian) # (K,M,N,N')
+            #Accomplish the same thing as the above commented-out lines, 
+            # but with more memory effiency:
+            dprobs12_coeffs = \
+                _np.where(probs < min_p, 2*S2, -cntVecMx / pos_probs**2)
+            dprobs12_coeffs = _np.where(cntVecMx == 0, 0.0, dprobs12_coeffs)
+
+            hprobs_coeffs = \
+                _np.where(probs < min_p, S + 2*S2*(probs - min_p),
+                          cntVecMx / pos_probs)
+            hprobs_coeffs = _np.where(cntVecMx == 0, 0.0, hprobs_coeffs)
+
+              # hessian = hprobs_coeffs * hprobs + dprobs12_coeff * dprobs12
+              #  but re-using dprobs12 and hprobs memory (which is overwritten!)
+            hprobs *= hprobs_coeffs[:,:,None,None]
+            dprobs12 *= dprobs12_coeffs[:,:,None,None]
+            hessian = dprobs12; hessian += hprobs
 
             return _np.sum(hessian, axis=(0,1)) #see comments as above
 
-
-
-    # tStart = _time.time() #TIMER
-
-    final_hessian = None #final computed quantity
 
     #Note - we could in the future use comm to distribute over
     # subtrees here.  We currently don't because we parallelize
@@ -633,8 +589,23 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
     # so adding the additional ability to parallelize over
     # subtrees would just add unnecessary complication.
 
+    #get distribution across subtrees (groups if needed)
+    subtrees = evalTree.get_sub_trees()
+    mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
+
+    #  Allocate memory (alloc max required & take views)
+    maxNumGatestrings = max([subtrees[i].num_final_strings() for i in mySubTreeIndices])
+    cntVecMx_mem = _np.empty( (len(spamLabels),maxNumGatestrings),'d')
+    probs_mem  = _np.empty( (len(spamLabels),maxNumGatestrings), 'd' )
+
+    #DEBUG
+    #import time
+    #import sys
+    #tStart = time.time()
+
     #Loop over subtrees
-    for evalSubTree in evalTree.get_sub_trees():
+    for iSubTree in mySubTreeIndices:
+        evalSubTree = subtrees[iSubTree]
         sub_nGateStrings = evalSubTree.num_final_strings()
 
         #  Create views into pre-allocated memory
@@ -642,131 +613,65 @@ def logl_hessian(gateset, dataset, gatestring_list=None,
         probs  =  probs_mem[:,0:sub_nGateStrings]
 
         # Fill cntVecMx, totalCntVec
-        if countVecMx is None:
-            fill_count_vecs(cntVecMx,spam_lbl_rows,dataset,
+        fill_count_vecs(cntVecMx,spam_lbl_rows,dataset,
                             evalSubTree.generate_gatestring_list())
-        else:
-            # This local doesn't seem to exist, but the affected tests pass. However, pylint does not
-            for i in myFinalToParentFinalMap:    #pylint: disable=undefined-variable
-                cntVecMx[:,i] = countVecMx[:,i] #fill w/supplied countVecMx
         totalCntVec = _np.sum(cntVecMx, axis=0)
 
-        if mode == "all at once":
+        #compute pos_probs separately
+        gateset.bulk_fill_probs(probs, spam_lbl_rows, evalSubTree,
+                                clipTo=probClipInterval, check=check,
+                                comm=mySubComm)
+        pos_probs = _np.where(probs < min_p, min_p, probs)
 
-            #additional memory views
-            dprobs = dprobs_mem[:,0:sub_nGateStrings,:]
-            hprobs = hprobs_mem[:,0:sub_nGateStrings,:,:]
+        nCols = gateset.num_params()
+        blocks1 = _mpit.slice_up_range(nCols, rowParts)
+        blocks2 = _mpit.slice_up_range(nCols, colParts)
+        sliceTupList_all = list(_itertools.product(blocks1,blocks2))
+        #cull out lower triangle blocks, which have no overlap with
+        # the upper triangle of the hessian
+        sliceTupList = [ (slc1,slc2) for slc1,slc2 in sliceTupList_all
+                         if slc1.start <= slc2.stop ]
 
-            #TODO: call GateSet routine directly
-            gateset.bulk_fill_hprobs(hprobs, spam_lbl_rows, evalSubTree,
-                                     prMxToFill=probs, derivMxToFill=dprobs,
-                                     clipTo=probClipInterval, check=check,
-                                     comm=comm)
+        loc_iBlks, blkOwners, blkComm = \
+            _mpit.distribute_indices(list(range(len(sliceTupList))), mySubComm)
+        mySliceTupList = [ sliceTupList[i] for i in loc_iBlks ]
+       
+        subtree_hessian = _np.zeros( (nP,nP), 'd')
 
-            pos_probs = _np.where(probs < min_p, min_p, probs)
-            dprobs12 = dprobs[:,:,:,None] * dprobs[:,:,None,:] # (K,M,N,1) * (K,M,1,N) = (K,M,N,N)
-            subtree_hessian = hessian_from_hprobs(hprobs, dprobs12, cntVecMx,
-                                                  totalCntVec, pos_probs)
+        #k,kmax = 0,len(mySliceTupList) #DEBUG
+        for (slice1,slice2,hprobs,dprobs12) in gateset.bulk_hprobs_by_block(
+            spam_lbl_rows, evalSubTree, mySliceTupList, True, blkComm):
 
-        elif mode == "by column":
+            #DEBUG
+            #iSub = mySubTreeIndices.index(iSubTree)
+            #print("DEBUG: rank%d: %gs: block %d/%d, sub-tree %d/%d, sub-tree-len = %d"
+            #          % (comm.Get_rank(),time.time()-tStart,k,kmax,iSub,
+            #             len(mySubTreeIndices), len(evalSubTree)))            
+            #sys.stdout.flush(); k += 1
 
-            #compute pos_probs separately
-            gateset.bulk_fill_probs(probs, spam_lbl_rows, evalSubTree,
-                                    clipTo=probClipInterval, check=check,
-                                    comm=comm)
-            pos_probs = _np.where(probs < min_p, min_p, probs)
+            subtree_hessian[slice1,slice2] = \
+                hessian_from_hprobs(hprobs, dprobs12, cntVecMx,
+                                        totalCntVec, pos_probs)
+                #NOTE: hessian_from_hprobs MAY modify hprobs and dprobs12
 
-            # k = 0 #DEBUG
+        #Gather columns from different procs and add to running final hessian
+        #_mpit.gather_slices_by_owner(slicesIOwn, subtree_hessian, (0,1), mySubComm)
+        _mpit.gather_slices(sliceTupList, blkOwners, subtree_hessian, (0,1), mySubComm)
+        final_hessian += subtree_hessian
 
-
-            #perform parallelization over columns
-            if comm is None:
-                nprocs, rank = 1, 0
-            else:
-                nprocs = comm.Get_size()
-                rank = comm.Get_rank()
-
-            nCols = gateset.num_params()
-            if nprocs > nCols:
-                raise ValueError("Too many (>%d) processors!" % nCols)
-            loc_iCols = list(range(rank,nCols,nprocs))
-
-            #  iterate over columns of hessian via bulk_hprobs_by_column
-            assert(not evalSubTree.is_split()) #sub trees should not be split further
-            loc_hessian_cols = [] # holds columns for this subtree (for this processor)
-            for hprobs, dprobs12 in gateset.bulk_hprobs_by_column(
-                spam_lbl_rows, evalSubTree, True, wrtFilter=loc_iCols):
-
-                #DEBUG!!!
-                #print "DEBUG: rank%d: %gs: column %d/%d, sub-tree %d/%d, sub-tree-len = %d" \
-                #    % (rank,_time.time()-tStart,k,len(loc_iCols),iTree,
-                #       len(evalTree.get_sub_trees()), len(evalSubTree))
-                #sys.stdout.flush(); k += 1
-
-                hessian_col = hessian_from_hprobs(hprobs, dprobs12, cntVecMx, totalCntVec, pos_probs)
-                loc_hessian_cols.append(hessian_col)
-                  #add current hessian column to list of columns on this proc
-
-            #gather columns for this subtree (from all processors)
-            if comm is None:
-                proc_hessian_cols = [ loc_hessian_cols ]
-            else:
-                proc_hessian_cols = comm.allgather(loc_hessian_cols)
-            proc_nCols = list(map(len,proc_hessian_cols)) # num cols on each proc
-
-            #Untangle interleaved column ordering and concatenate
-            max_loc_cols = max(proc_nCols) #max. cols computed on a single proc
-            to_concat = [ proc_hessian_cols[rank][k] for k in range(max_loc_cols) \
-                              for rank in range(nprocs) if proc_nCols[rank] > k  ]
-            subtree_hessian = _np.concatenate(to_concat, axis=1)
-              #same shape as final hessian, but only contribs from this subtree
-
-            #OLD: subtree_hessian = _np.concatenate(hessian_cols, axis=1)
-
-        #Add sub-tree contribution to final hessian
-        if final_hessian is None:
-            final_hessian = subtree_hessian
-        else:
-            final_hessian += subtree_hessian
+    #gather (add together) final_hessians from different processors
+    if comm is not None and len(set(subTreeOwners.values())) > 1:
+        if comm.Get_rank() not in subTreeOwners.values(): 
+            # this proc is not the "owner" of its subtrees and should not send a contribution to the sum
+            final_hessian[:,:] = 0.0 #zero out hessian so it won't contribute
+        final_hessian = comm.allreduce(final_hessian)
+        
+    #copy upper triangle to lower triangle (we only compute upper)
+    for i in range(final_hessian.shape[0]):
+        for j in range(i+1,final_hessian.shape[1]):
+            final_hessian[j,i] = final_hessian[i,j]
 
     return final_hessian # (N,N)
-
-
-
-#TODO: update like above
-#def logl_debug(gateset, dataset, out_of_bounds_val=-1e8):
-#    L = 0
-#    for d in dataset.values():
-#        p = gateset.PrPlus(d.gateString)
-#        np = d.nPlus; nm = d.nMinus
-#        if p < TOL and round(np) == 0: continue #contributes zero to the sum
-#        if 1-p < TOL and round(nm) == 0: continue #contributes zero to the sum
-#        if p < TOL or 1-p < TOL:
-#            print "LogL out of bounds p = %g for %s" % (p,d.gateString)
-#            return out_of_bounds_val #logl is undefined
-#        L += logL_term(np,nm,p)
-#
-#    return L
-
-
-
-#def logl_sloped_boundary(gateset, dataset):
-#    L = 0
-#    EPS=1e-20; S = 1 #slope reduction factor
-#    for d in dataset.values():
-#        p = gateset.PrPlus(d.gateString)
-#        np = d.nPlus; nm = d.nMinus
-#        if p < TOL and round(np) == 0: continue #contributes zero to the sum
-#        if 1-p < TOL and round(nm) == 0: continue #contributes zero to the sum
-#        L += np*log(p)   if p > EPS else np*(log(EPS) - (EPS-p)/(S*EPS))
-#        L += nm*log(1-p) if p < 1-EPS else np*(log(EPS) - (p-(1-EPS))/(S*EPS))
-#
-#        #DEBUG
-#        #pre = ((1-p)*d.nPlus - p*d.nMinus) / (p*(1-p))
-#        #print "Pre(%s) = " % (d.gateString), pre, "  (p = %g, np = %g)" % (p, d.nPlus)
-#        #END DEBUG
-#
-#    return L
 
 
 def logl_max(dataset, gatestring_list=None, countVecMx=None, poissonPicture=True, check=False):

@@ -53,6 +53,7 @@ class TestReport(ReportBaseCase):
             self.results.create_presentation_ppt(filename="auto", confidenceLevel=None,
                                                  debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False)
 
+
         #Compare the text files, assume if these match the PDFs are equivalent
         self.checkFile("full_reportA%s.tex" % vs)
         self.checkFile("brief_reportA%s.tex" % vs)
@@ -114,13 +115,13 @@ class TestReport(ReportBaseCase):
                                                   debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False,
                                                   verbosity=2)
         self.results_logL.create_general_report_pdf(filename=temp_files + "/general_reportC%s.pdf" % vs, confidenceLevel=None,
-                                                    verbosity=2)
+                                                    verbosity=2, showAppendix=True)
 
         if self.have_python_pptx:
             self.results_logL.create_presentation_ppt(filename=temp_files + "/slidesC%s.ppt" % vs, confidenceLevel=None,
                                                       debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False,
                                                       verbosity=2)
-
+        
         ##Compare the text files, assume if these match the PDFs are equivalent
         self.checkFile("full_reportC%s.tex" % vs)
         self.checkFile("brief_reportC%s.tex" % vs)
@@ -212,7 +213,7 @@ class TestReport(ReportBaseCase):
 
         #tests which fill in the cracks of the full-report tests
         tab = gen.get_gateset_spam_table(gateset, None)
-        tab_wCI = gen.get_gateset_spam_table(gateset, ci)
+        tab_wCI = gen.get_gateset_spam_table(gateset, None, ci)
         table_wCI_as_str = str(tab_wCI)
 
         gen.get_gateset_spam_table(gateset, None)
@@ -342,7 +343,7 @@ class TestReport(ReportBaseCase):
     def test_results_object(self):
         results = pygsti.report.Results()
         results.init_single("logl", self.targetGateset, self.ds, self.gs_clgst,
-                            self.lgstStrings, False, self.targetGateset)
+                            self.lgstStrings, self.targetGateset)
 
         results.parameters.update(
             {'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
@@ -374,7 +375,7 @@ class TestReport(ReportBaseCase):
         #similar test for chi2 hessian
         results2 = pygsti.report.Results()
         results2.init_single("chi2", self.targetGateset, self.ds, self.gs_clgst,
-                            self.lgstStrings, False, self.targetGateset)
+                            self.lgstStrings, self.targetGateset)
         results2.parameters.update(
             {'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
              'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
@@ -432,7 +433,7 @@ class TestReport(ReportBaseCase):
         #bad objective function name
         results_badObjective = pygsti.report.Results()
         #results_badObjective.init_single("foobar", self.targetGateset, self.ds, self.gs_clgst,
-        #                                 self.lgstStrings, False)
+        #                                 self.lgstStrings)
         results_badObjective.init_Ls_and_germs("foobar", self.targetGateset, self.ds, self.gs_clgst, [0], self.germs,
                                                [self.gs_clgst], [self.lgstStrings], self.fiducials, self.fiducials,
                                                pygsti.construction.repeat_with_max_length, True)
@@ -455,6 +456,13 @@ class TestReport(ReportBaseCase):
     #    fig = pygsti.report.figure.ReportFigure(axes, {})
     #    fig.set_extra_info("extra!")
     #    self.assertEqual(fig.get_extra_info(), "extra!")
+
+    def test_regaugeopt(self):
+        results2 = self.results.copy()
+        results2.reoptimize_gauge({'itemWeights': {'Gx':1 }})
+        results2.create_brief_report_pdf(filename=temp_files + "/reopt_brief1.pdf")
+        results2.reoptimize_gauge({'itemWeights': {'Gy':1 }})
+        results2.create_brief_report_pdf(filename=temp_files + "/reopt_brief2.pdf")
 
 
 if __name__ == "__main__":

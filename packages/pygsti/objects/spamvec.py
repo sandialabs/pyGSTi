@@ -10,8 +10,59 @@ functionality.
 """
 
 import numpy as _np
+from ..      import optimize as _opt
 from ..tools import matrixtools as _mt
 from .protectedarray import ProtectedArray as _ProtectedArray
+
+
+def optimize_spamvec(vecToOptimize, targetVec):
+    """
+    Optimize the parameters of vecToOptimize so that the
+      the resulting SPAM vector is as close as possible to
+      targetVec.
+
+    This is trivial for the case of FullyParameterizedSPAMVec
+      instances, but for other types of parameterization
+      this involves an iterative optimization over all the
+      parameters of vecToOptimize.
+
+    Parameters
+    ----------
+    vecToOptimize : SPAMVec
+      The vector to optimize. This object gets altered.
+
+    targetVec : SPAMVec
+      The SPAM vector used as the target.
+
+    Returns
+    -------
+    None
+    """
+
+    #TODO: cleanup this code:
+    if isinstance(vecToOptimize, StaticSPAMVec):
+        return #nothing to optimize
+
+    if isinstance(vecToOptimize, FullyParameterizedSPAMVec):
+        if(targetVec.dim != vecToOptimize.dim): #special case: gates can have different overall dimension
+            vecToOptimize.dim = targetVec.dim   #  this is a HACK to allow model selection code to work correctly
+        vecToOptimize.set_vector(targetVec)     #just copy entire overall matrix since fully parameterized
+        return
+
+    assert(targetVec.dim == vecToOptimize.dim) #vectors must have the same overall dimension
+    targetVector = _np.asarray(targetVec)
+    import sys
+    def objective_func(param_vec):
+        vecToOptimize.from_vector(param_vec)
+        return _mt.frobeniusnorm(vecToOptimize-targetVector)
+
+    x0 = vecToOptimize.to_vector()
+    minSol = _opt.minimize(objective_func, x0, method='BFGS', maxiter=10000, maxfev=10000,
+                           tol=1e-6, callback=None)
+
+    vecToOptimize.from_vector(minSol.x)
+    #print("DEBUG: optimized vector to min frobenius distance %g" % _mt.frobeniusnorm(vecToOptimize-targetVector))
+
 
 def convert(spamvec, toType):
     """
@@ -71,6 +122,17 @@ class SPAMVec(object):
     def get_dimension(self):
         """ Return the dimension of the gate matrix. """
         return self.dim
+
+    def transform(self, S):
+        """
+        Update SPAM (column) vector V as inv(S) * V or S^T * V for prep and
+        effect SPAM vectors, respectively (depending on the value of `typ`). 
+        """
+        raise NotImplementedError("This SPAM vector cannot be tranform()'d")
+
+    def depolarize(self, amount):
+        """ Depolarize spam vector by the given amount. """
+        raise NotImplementedError("This SPAM vector cannot be depolarize()'d")
 
     #Handled by derived classes
     #def __str__(self):
@@ -204,6 +266,55 @@ class StaticSPAMVec(SPAMVec):
             raise ValueError("Argument must be length %d" % self.dim)
         self.base[:,:] = vec
 
+    def transform(self, S, typ):
+        """
+        Update SPAM (column) vector V as inv(S) * V or S^T * V for prep and
+        effect SPAM vectors, respectively (depending on the value of `typ`). 
+
+        Note that this is equivalent to state preparation vectors getting 
+        mapped: `rho -> inv(S) * rho` and the *transpose* of effect vectors
+        being mapped as `E^T -> E^T * S`.
+
+        Generally, the transform function updates the *parameters* of 
+        the SPAM vector such that the resulting vector is altered as 
+        described above.  If such an update cannot be done (because
+        the gate parameters do not allow for it), ValueError is raised.
+
+        In this case, a ValueError is *always* raised, since a 
+        StaticSPAMVec has no parameters.
+
+        Parameters
+        ----------
+        S : GaugeGroup.element
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
+            
+        typ : { 'prep', 'effect' }
+            Which type of SPAM vector is being transformed (see above).
+        """
+        raise ValueError("Invalid transform for StaticSPAMVec - no parameters")
+
+
+    def depolarize(self, amount):
+        """
+        Depolarize this SPAM vector by the given `amount`.
+
+        Generally, the depolarize function updates the *parameters* of 
+        the SPAMVec such that the resulting vector is depolarized.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float
+            The amount to depolarize by.  All but the first element
+            of vector are multiplied by `1.0 - amount`.
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError("Cannot depolarize a StaticSPAMVec - no parameters")
 
 
     def num_params(self):
@@ -327,6 +438,63 @@ class FullyParameterizedSPAMVec(SPAMVec):
         if(vec.size != self.dim):
             raise ValueError("Argument must be length %d" % self.dim)
         self.base[:,:] = vec
+
+
+    def transform(self, S, typ):
+        """
+        Update SPAM (column) vector V as inv(S) * V or S^T * V for prep and
+        effect SPAM vectors, respectively (depending on the value of `typ`). 
+
+        Note that this is equivalent to state preparation vectors getting 
+        mapped: `rho -> inv(S) * rho` and the *transpose* of effect vectors
+        being mapped as `E^T -> E^T * S`.
+
+        Generally, the transform function updates the *parameters* of 
+        the SPAM vector such that the resulting vector is altered as 
+        described above.  If such an update cannot be done (because
+        the gate parameters do not allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        S : GaugeGroup.element
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
+            
+        typ : { 'prep', 'effect' }
+            Which type of SPAM vector is being transformed (see above).
+        """
+        if typ == 'prep':
+            Si  = S.get_transform_matrix_inverse()
+            self.set_vector(_np.dot(Si, self))
+        elif typ == 'effect':
+            Smx = S.get_transform_matrix()
+            self.set_vector(_np.dot(_np.transpose(Smx),self)) 
+              #Evec^T --> ( Evec^T * S )^T
+        else:
+            raise ValueError("Invalid typ argument: %s" % typ)
+
+
+    def depolarize(self, amount):
+        """
+        Depolarize this SPAM vector by the given `amount`.
+
+        Generally, the depolarize function updates the *parameters* of 
+        the SPAMVec such that the resulting vector is depolarized.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float
+            The amount to depolarize by.  All but the first element
+            of vector are multiplied by `1.0 - amount`.
+
+        Returns
+        -------
+        None
+        """
+        D = _np.diag( [1]+[1-amount]*(self.dim-1) )
+        self.set_vector(_np.dot(D,self)) 
 
 
     def num_params(self):
@@ -474,6 +642,63 @@ class TPParameterizedSPAMVec(SPAMVec):
             raise ValueError("Cannot create TPParameterizedSPAMVec: " +
                              "first element must equal %g!" % firstEl)
         self.base[1:,:] = vec[1:,:]
+
+        
+    def transform(self, S, typ):
+        """
+        Update SPAM (column) vector V as inv(S) * V or S^T * V for prep and
+        effect SPAM vectors, respectively (depending on the value of `typ`). 
+
+        Note that this is equivalent to state preparation vectors getting 
+        mapped: `rho -> inv(S) * rho` and the *transpose* of effect vectors
+        being mapped as `E^T -> E^T * S`.
+
+        Generally, the transform function updates the *parameters* of 
+        the SPAM vector such that the resulting vector is altered as 
+        described above.  If such an update cannot be done (because
+        the gate parameters do not allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        S : GaugeGroup.element
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
+            
+        typ : { 'prep', 'effect' }
+            Which type of SPAM vector is being transformed (see above).
+        """
+        if typ == 'prep':
+            Si  = S.get_transform_matrix_inverse()
+            self.set_vector(_np.dot(Si, self))
+        elif typ == 'effect':
+            Smx = S.get_transform_matrix()
+            self.set_vector(_np.dot(_np.transpose(Smx),self)) 
+              #Evec^T --> ( Evec^T * S )^T
+        else:
+            raise ValueError("Invalid typ argument: %s" % typ)
+
+
+    def depolarize(self, amount):
+        """
+        Depolarize this SPAM vector by the given `amount`.
+
+        Generally, the depolarize function updates the *parameters* of 
+        the SPAMVec such that the resulting vector is depolarized.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float
+            The amount to depolarize by.  All but the first element
+            of vector are multiplied by `1.0 - amount`.
+
+        Returns
+        -------
+        None
+        """
+        D = _np.diag( [1]+[1-amount]*(self.dim-1) )
+        self.set_vector(_np.dot(D,self)) 
 
 
     def num_params(self):

@@ -45,7 +45,7 @@ def run_mpi_coverage_tests(coverage_cmd, nproc=4):
 def create_html(dirname, coverage_cmd):
     subprocess.call([coverage_cmd, 'html', '--directory=%s' % dirname])
 
-default   = ['tools', 'io', 'objects', 'construction', 'drivers', 'report', 'algorithms', 'optimize', 'mpi']
+default   = ['tools', 'io', 'objects', 'construction', 'drivers', 'report', 'algorithms', 'optimize', 'extras', 'mpi']
 slowtests = ['report', 'drivers']
 
 def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
@@ -178,7 +178,7 @@ if __name__ == "__main__":
     parser.add_argument('--parallel', '-p', action='store_true',
                         help='run tests in parallel')
     parser.add_argument('--cover', action='store_true',
-                        help='skip coverage')
+                        help='generate coverage')
     parser.add_argument('--cores', type=int, default=None,
                         help='run tests with n cores')
     parser.add_argument('--coverdir', type=str, default='../output/coverage',

@@ -88,6 +88,9 @@ class TestJamiolkowskiMethods(JamiolkowskiTestCase):
         choiStd = pygsti.jamiolkowski_iso(mxStd, "std","std")
         choiStd2 = pygsti.jamiolkowski_iso(mxGM, "gm","std")
         choiStd3 = pygsti.jamiolkowski_iso(mxPP, "pp","std")
+        fastChoiStd = pygsti.fast_jamiolkowski_iso_std(mxStd, "std")
+        fastChoiStd2 = pygsti.fast_jamiolkowski_iso_std(mxGM, "gm")
+        fastChoiStd3 = pygsti.fast_jamiolkowski_iso_std(mxPP, "pp")
 
         choiGM = pygsti.jamiolkowski_iso(mxStd, "std","gm")
         choiGM2 = pygsti.jamiolkowski_iso(mxGM, "gm","gm")
@@ -99,6 +102,9 @@ class TestJamiolkowskiMethods(JamiolkowskiTestCase):
 
         self.assertArraysAlmostEqual( choiStd, choiStd2)
         self.assertArraysAlmostEqual( choiStd, choiStd3)
+        self.assertArraysAlmostEqual( choiStd, fastChoiStd)
+        self.assertArraysAlmostEqual( choiStd, fastChoiStd2)
+        self.assertArraysAlmostEqual( choiStd, fastChoiStd3)
         self.assertArraysAlmostEqual( choiGM, choiGM2)
         self.assertArraysAlmostEqual( choiGM, choiGM3)
         self.assertArraysAlmostEqual( choiPP, choiPP2)
@@ -116,17 +122,24 @@ class TestJamiolkowskiMethods(JamiolkowskiTestCase):
         gatePP2 = pygsti.jamiolkowski_iso_inv(choiGM, "gm","pp")
         gatePP3 = pygsti.jamiolkowski_iso_inv(choiPP, "pp","pp")
 
+        fastGateStd = pygsti.fast_jamiolkowski_iso_std_inv(choiStd, "std")
+        fastGateGM  = pygsti.fast_jamiolkowski_iso_std_inv(choiStd, "gm")
+        fastGatePP  = pygsti.fast_jamiolkowski_iso_std_inv(choiStd, "pp")
+
         self.assertArraysAlmostEqual( gateStd, mxStd)
         self.assertArraysAlmostEqual( gateStd2, mxStd)
         self.assertArraysAlmostEqual( gateStd3, mxStd)
+        self.assertArraysAlmostEqual( fastGateStd, mxStd)
 
         self.assertArraysAlmostEqual( gateGM,  mxGM)
         self.assertArraysAlmostEqual( gateGM2, mxGM)
         self.assertArraysAlmostEqual( gateGM3, mxGM)
+        self.assertArraysAlmostEqual( fastGateGM, mxGM)
 
         self.assertArraysAlmostEqual( gatePP,  mxPP)
         self.assertArraysAlmostEqual( gatePP2, mxPP)
         self.assertArraysAlmostEqual( gatePP3, mxPP)
+        self.assertArraysAlmostEqual( fastGatePP, mxPP)
 
 
         with self.assertRaises(ValueError):

@@ -13,11 +13,14 @@ import subprocess  as _subprocess
 import collections as _collections
 import matplotlib  as _matplotlib
 import itertools   as _itertools
+import copy as _copy
 
+from ..             import objects              as _objs
 from ..objects      import gatestring           as _gs
 from ..objects      import VerbosityPrinter
 from ..construction import spamspecconstruction as _ssc
-from ..algorithms   import optimize_gauge       as _optimizeGauge
+from ..algorithms   import gaugeopt_to_target   as _optimizeGauge
+from ..algorithms   import contract             as _contract
 from ..tools        import listtools            as _lt
 from ..             import _version
 
@@ -85,7 +88,6 @@ class Results(object):
 
         # Set default parameter values
         self.parameters = { 'objective': None,
-                            'constrainToTP': None,
                             'weights':None,
                             'minProbClip': 1e-6,
                             'minProbClipForWeighting': 1e-4,
@@ -96,15 +98,16 @@ class Results(object):
                             'defaultBasename': None,
                             'linlogPercentile':  5,
                             'memLimit': None,
-                            'gaugeOptParams': {} }
+                            'gaugeOptParams': {},
+                            'cptpPenaltyFactor': 0,
+                            'distributeMethod': "deriv" }
 
 
     def init_single(self, objective, targetGateset, dataset, gatesetEstimate,
-                    gatestring_list, constrainToTP, gatesetEstimate_noGaugeOpt=None):
+                    gatestring_list, gatesetEstimate_noGaugeOpt=None):
         """
         Initialize this Results object from the inputs and outputs of a
         single (non-iterative) GST method.
-
 
         Parameters
         ----------
@@ -124,10 +127,6 @@ class Results(object):
         gatestring_list : list of GateStrings
             The list of gate strings used to optimize the objective.
 
-        constrainToTP : boolean
-            Whether or not the gatesetEstimate was constrained to lie
-            within TP during the objective optimization.
-
         gatesetEstimate_noGaugeOpt : GateSet, optional
             The value of the estimated gate set *before* any gauge
             optimization was performed on it.
@@ -146,7 +145,6 @@ class Results(object):
         self.gatestring_lists['final'] = gatestring_list
         self.dataset = dataset
         self.parameters['objective'] = objective
-        self.parameters['constrainToTP'] = constrainToTP
 
         if gatesetEstimate_noGaugeOpt is not None:
             self.gatesets['iteration estimates pre gauge opt'] = \
@@ -156,9 +154,9 @@ class Results(object):
 
 
     def init_Ls_and_germs(self, objective, targetGateset, dataset,
-                              seedGateset, Ls, germs, gatesetsByL, gateStringListByL,
-                              prepStrs, effectStrs, truncFn, constrainToTP, fidPairs=None,
-                              gatesetsByL_noGaugeOpt=None):
+                          seedGateset, Ls, germs, gatesetsByL, gateStringListByL,
+                          prepStrs, effectStrs, truncFn, fidPairs=None,
+                          gatesetsByL_noGaugeOpt=None):
 
         """
         Initialize this Results object from the inputs and outputs of
@@ -210,15 +208,13 @@ class Results(object):
             gate string.  For example, see
             pygsti.construction.repeat_with_max_length.
 
-        constrainToTP : boolean
-            Whether or not the gatesetEstimate was constrained to lie
-            within TP during the objective optimization.
-
-        fidPairs : list of 2-tuples, optional
-            Specifies a subset of all prepStr,effectStr string pairs to be used in this
-            analysis.  Each element of fidPairs is a (iRhoStr, iEStr) 2-tuple of integers,
-            which index a string within the state preparation and measurement fiducial
-            strings respectively.
+        fidPairs : list or dict, optional
+            Specifies a subset of all prepStr,effectStr string pairs to be used in
+            reports.  If `fidPairs` is a list, each element of `fidPairs` is a
+            ``(iRhoStr, iEStr)`` 2-tuple of integers, which index a string within
+            the state preparation and measurement fiducial strings respectively. If
+            `fidPairs` is a dict, then the keys must be germ strings and values are
+            lists of 2-tuples as in the previous case.
 
         gatesetsByL_noGaugeOpt : list of GateSets, optional
             The value of the estimated gate sets *before* any gauge
@@ -251,7 +247,6 @@ class Results(object):
 
         self.dataset = dataset
         self.parameters['objective'] = objective
-        self.parameters['constrainToTP'] = constrainToTP
         if gatesetsByL_noGaugeOpt is not None:
             self.gatesets['iteration estimates pre gauge opt'] = \
                 gatesetsByL_noGaugeOpt
@@ -270,11 +265,116 @@ class Results(object):
                                         for L in Ls for germ in germs] )
         self._LsAndGermInfoSet = True
 
+    def reoptimize_gauge(self, gaugeOptParams, setparam=True):
+        """
+        Re-optimizes the gauge of the final gateset.
+
+        This function updates the value of this object's 
+        `gatesets['final estimate']` gate set with the result of the specified
+        gauge optimization, and also clears cached figures, tables, etc. which
+        are gauge dependent to that they are re-computed using the updated gate
+        set.
+
+        Parameters
+        ----------
+        gaugeOptParams : dict, optional
+            A dictionary of arguments to :func:`gaugeopt_to_target`, specifying
+            how the gauge optimization should be performed.  The keys and
+            values of this dictionary may correspond to any of the arguments
+            of :func:`gaugeopt_to_target` *except* for the first `gateset` 
+            argument, which is taken to be `gatesets['final']`.  The 
+            `targetGateset` argument *can* be specified, but if it isn't, is
+            taken to be `gatesets['target']`.  This argument may also be a
+            list of such dictionaries, in which case each element describes
+            a successive stage of gauge optimization.
+
+        setparam : bool, optional
+            Whether to set `parameters['gaugeOptParams']` to the list of
+            parameter dictionaries returned by this function.
+
+        Returns
+        -------
+        List of OrderedDicts
+            A list of dictionaries, each containing gauge optimization
+            parameters for a single stage of gauge optimization.
+        """
+        assert(self._bEssentialResultsSet)
+
+        if hasattr(gaugeOptParams,"keys"):
+            go_params_list = [gaugeOptParams]
+        else: go_params_list = gaugeOptParams
+
+        ordered_go_params_list = []
+        for go_params in go_params_list:
+            if "targetGateset" not in go_params:
+                go_params["targetGateset"] = self.gatesets['target']
+
+            ordered_go_params_list.append( _collections.OrderedDict( 
+                [(k,go_params[k]) for k in sorted(list(go_params.keys()))]))
+
+            self.gatesets['final estimate'] = _optimizeGauge(
+                self.gatesets['final estimate'],**go_params)
+            
+        if setparam:
+            self.parameters['gaugeOptParams'] = ordered_go_params_list
+            
+        #Clear everything that is (possibly) gauge dependent
+        #  Note: also clear 'bestGatesetGaugeOptParamsTable' since we might have updated params
+        except_tables = ['fiducialListTable', 'prepStrListTable',
+                         'effectStrListTable', 'germListTable',
+                         'germList2ColTable', 'chi2ProgressTable',
+                         'logLProgressTable', 'progressTable',
+                         'byGermTable', 'bestGatesetEvalTable']
+        except_figures = [ "colorBoxPlotKeyPlot", "bestEstimateColorBoxPlot",
+                           "invertedBestEstimateColorBoxPlot",
+                           "bestEstimateSummedColorBoxPlot",
+                           "blankBoxPlot", "blankSummedBoxPlot"]
+        except_specials = [ 'blankGaugeOptAppendixTables',
+                            'bestEstimateColorBoxPlotPages']
+
+        if 'max length list' in self.parameters:
+            except_figures += ["estimateForLIndex%dColorBoxPlot" % i 
+                     for i in range(len(self.parameters['max length list']))]
+
+        self._confidence_regions = {}
+        self._specials.clear_cached_data(except_specials)
+        self.tables.clear_cached_data(except_tables)
+        self.figures.clear_cached_data(except_figures)
+        
+        return ordered_go_params_list
+
+
+    def copy(self):
+        """ Creates a copy of this Results object. """
+        cpy = Results(self.options.template_path, self.options.latex_cmd)
+        cpy._bEssentialResultsSet = self._bEssentialResultsSet
+        cpy._LsAndGermInfoSet = self._LsAndGermInfoSet
+        cpy._comm = self._comm
+        cpy._confidence_regions = self._confidence_regions.copy()
+        cpy._specials = self._specials.copy()
+        cpy.tables = self.tables.copy()
+        cpy.figures = self.figures.copy()
+        cpy.gatesets = self.gatesets.copy()
+        cpy.gatestring_lists = self.gatestring_lists.copy()
+        cpy.dataset = self.dataset.copy()
+        cpy.parameters = self.parameters.copy()
+        cpy.options = self.options.copy()
+        cpy.confidence_level = self.confidence_level
+        return cpy
+
+
+    def __getstate__(self):
+        #Return the state (for pickling) -- *don't* pickle Comm object
+        to_pickle = self.__dict__.copy()
+        del to_pickle['_comm'] # one *cannot* pickle Comm objects
+        return to_pickle
+
 
     def __setstate__(self, stateDict):
         #Must set ResultCache parent & functions, since these are
         # not pickled (to avoid circular pickle references)
         self.__dict__.update(stateDict)
+        self._comm = None
         self._specials._setparent(self._get_special_fns(), self)
         self.tables._setparent(self._get_table_fns(), self)
         self.figures._setparent(self._get_figure_fns(), self)
@@ -397,6 +497,9 @@ class Results(object):
         def validate_LsAndGerms(key):
             return [key] if (self._bEssentialResultsSet and
                              self._LsAndGermInfoSet) else []
+        def noConfidenceLevelDependence(level):
+            """ Designates a table as independent of the confidence level"""
+            if level is not None: raise _ResultCache.NoCRDependenceError
 
         def setup():
             return (self.gatesets['target'], self.gatesets['final estimate'])
@@ -416,7 +519,7 @@ class Results(object):
 
         def fn(key, confidenceLevel, vb):
             gsTgt, _ = setup()
-            return _generation.get_gateset_spam_table(gsTgt, None, False)
+            return _generation.get_gateset_spam_table(gsTgt, None, None, False)
         fns['targetSpamBriefTable'] = (fn, validate_essential)
 
 
@@ -450,28 +553,24 @@ class Results(object):
         fns['fiducialListTable'] = (fn, validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
-            setup()
             return _generation.get_gatestring_table(
                 self.gatestring_lists['prep fiducials'],
                 "Preparation Fiducial")
         fns['prepStrListTable'] = (fn, validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
-            setup()
             return _generation.get_gatestring_table(
                 self.gatestring_lists['effect fiducials'],
                 "Measurement Fiducial")
         fns['effectStrListTable'] = (fn, validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
-            setup()
             return _generation.get_gatestring_table(
                 self.gatestring_lists['germs'], "Germ")
         fns['germListTable'] = (fn, validate_LsAndGerms)
 
 
         def fn(key, confidenceLevel, vb):
-            setup()
             return _generation.get_gatestring_table(
                 self.gatestring_lists['germs'], "Germ", nCols=2)
         fns['germList2ColTable'] = (fn, validate_LsAndGerms)
@@ -481,48 +580,56 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             _, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
-            return _generation.get_gateset_spam_table(gsBest, cri)
+            if cri and cri.has_hessian() == False: cri = None
+            return _generation.get_gateset_spam_table(gsBest, None, cri)
         fns['bestGatesetSpamTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
-            _, gsBest = setup()
+            gsTgt, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
-            return _generation.get_gateset_spam_table(gsBest, cri, False)
+            if cri and cri.has_hessian() == False: cri = None
+            return _generation.get_gateset_spam_table(gsBest, gsTgt, cri, False)
         fns['bestGatesetSpamBriefTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             _, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
+            if cri and cri.has_hessian() == False: cri = None
             return _generation.get_gateset_spam_parameters_table(gsBest, cri)
         fns['bestGatesetSpamParametersTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             _, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
+            if cri and cri.has_hessian() == False: cri = None
             return _generation.get_gateset_gates_table(gsBest, cri)
         fns['bestGatesetGatesTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             _, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
+            if cri and cri.has_hessian() == False: cri = None
             return _generation.get_gateset_choi_table(gsBest, cri)
         fns['bestGatesetChoiTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             _, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
+            if cri and cri.has_hessian() == False: cri = None
             return _generation.get_gateset_decomp_table(gsBest, cri)
         fns['bestGatesetDecompTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             _, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
+            if cri and cri.has_hessian() == False: cri = None
             return _generation.get_gateset_rotn_axis_table(gsBest, cri, True)
         fns['bestGatesetRotnAxisTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
+            if cri and cri.has_hessian() == False: cri = None
             return _generation.get_gateset_eigenval_table(gsBest, gsTgt, cri)
         fns['bestGatesetEvalTable'] = (fn, validate_essential)
 
@@ -535,32 +642,52 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
+            #Note: ALWAYS compute error bars if cri is not None
             return _generation.get_gates_vs_target_table(gsBest, gsTgt, cri)
         fns['bestGatesetVsTargetTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
+            gsTgt, _ = setup()
+            noConfidenceLevelDependence(confidenceLevel)
+            best_gs_gauges = self._specials.get(
+                'singleGateTargetGaugeOptGatesets',verbosity=vb)
+            return _generation.get_selected_gates_vs_target_table(
+                best_gs_gauges, gsTgt, None)
+        fns['gaugeOptGatesetsVsTargetTable'] = (fn, validate_essential)
+
+        def fn(key, confidenceLevel, vb):
+            noConfidenceLevelDependence(confidenceLevel)
+            cptp_go_gateset = self._specials.get(
+                'CPTPGaugeOptGateset',verbosity=vb)
+            return _generation.get_gateset_choi_eigenval_table(
+                cptp_go_gateset, "goCPTPChoiEvalBars")
+        fns['gaugeOptCPTPGatesetChoiTable'] = (fn, validate_essential)
+
+        def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
+            if cri and cri.has_hessian() == False: cri = None
             return _generation.get_spam_vs_target_table(gsBest, gsTgt, cri)
         fns['bestGatesetSpamVsTargetTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
+            if cri and cri.has_hessian() == False: cri = None
             return _generation.get_gates_vs_target_err_gen_table(
-                gsBest, gsTgt, cri)
+                gsBest, gsTgt, cri, self.options.errgen_type)
         fns['bestGatesetErrorGenTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
+            if cri and cri.has_hessian() == False: cri = None
             return _generation.get_gates_vs_target_angles_table(
                 gsBest, gsTgt, cri)
         fns['bestGatesetVsTargetAnglesTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             setup()
-            self._get_confidence_region(confidenceLevel)
             return _generation.get_gaugeopt_params_table(
                 self.parameters['gaugeOptParams'])
         fns['bestGatesetGaugeOptParamsTable'] = (fn, validate_essential)
@@ -599,18 +726,82 @@ class Results(object):
         fns['progressTable'] = (fn, validate_LsAndGerms)
 
 
+        def fn(key, confidenceLevel, vb):
+            #Much of the below setup is similar to plot_setup() in _get_figure_fns
+            strs  = (self.gatestring_lists['prep fiducials'],
+                     self.gatestring_lists['effect fiducials'])
+            germs = [ g for g in self.gatestring_lists['germs'] if len(g) <= 3 ]
+            gsBest = self.gatesets['final estimate']
+            fidPairs = self.parameters['fiducial pairs']
+            Ls = self.parameters['max length list']
+
+            if fidPairs is None: fidpair_filters = None
+            elif isinstance(fidPairs,dict) or hasattr(fidPairs,"keys"):
+                #Assume fidPairs is a dict indexed by germ
+                fidpair_filters = { (x,y): fidPairs[germ] 
+                                    for x in Ls for y in germs }
+            else:
+                #Assume fidPairs is a list
+                fidpair_filters = { (x,y): fidPairs
+                                    for x in Ls for y in germs }
+
+            gstr_filters = { (x,y) : self.gatestring_lists['iteration'][i]
+                             for i,x in enumerate(Ls) for y in germs }
+
+            if self.parameters['objective'] == "logl":
+                return _generation.get_logl_bygerm_table(
+                    gsBest, self.dataset, germs, strs, Ls,
+                    self.parameters['L,germ tuple base string dict'],
+                    fidpair_filters, gstr_filters)
+            elif self.parameters['objective'] == "chi2":
+                raise NotImplementedError("byGermTable not implemented for chi2 objective")
+            else: raise ValueError("Invalid Objective: %s" %
+                                   self.parameters['objective'])
+        fns['byGermTable'] = (fn, validate_LsAndGerms)
+
+
+        def fn(key, confidenceLevel, vb):
+            gsTgt, gsBest = setup()
+            cptp_go_gateset = self._specials.get('CPTPGaugeOptGateset',verbosity=vb).copy()
+            cptp_go_gateset.set_all_parameterizations("full") #for contraction
+            cptp_gateset = _contract(cptp_go_gateset, "CPTP")
+            return _generation.get_logl_projected_err_gen_table(
+                gsBest, gsTgt, self.gatestring_lists['final'], self.dataset,
+                cptp_gateset, self.options.errgen_type)
+        fns['logLErrgenProjectionTable'] = (fn, validate_essential)
+
+
         # figure-containing tables
         def fn(key, confidenceLevel, vb):
-            gsTgt, _ = setup()
+            gsTgt, gsBest = setup()
             return _generation.get_gateset_gate_boxes_table(
-                gsTgt, "targetGatesBoxes")
+                [gsTgt], ["targetGatesBoxes"], maxHeight=4.0)
         fns['targetGatesBoxTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
+            return _generation.get_gateset_gate_boxes_table(
+                [gsTgt, gsBest], ["targetGatesBoxes", "bestGatesBoxes"],
+                ['Target','Estimated'])
+        fns['bestGatesetGatesBoxTable'] = (fn, validate_essential)
+
+        def fn(key, confidenceLevel, vb):
+            gsTgt, gsBest = setup()
             return _generation.get_gates_vs_target_err_gen_boxes_table(
-                gsBest, gsTgt, "bestErrgenBoxes")
+                gsBest, gsTgt, "bestErrgenBoxes", genType=self.options.errgen_type)
         fns['bestGatesetErrGenBoxTable'] = (fn, validate_essential)
+
+        def fn(key, confidenceLevel, vb):
+            gsTgt, gsBest = setup()
+            return _generation.get_projected_err_gen_comparison_table(
+                gsBest, gsTgt, compare_with='target', genType=self.options.errgen_type)
+        fns['bestGatesetErrGenProjectionTargetMetricsTable'] = (fn,validate_essential)
+
+        def fn(key, confidenceLevel, vb):
+            gsTgt, gsBest = setup()
+            return _generation.get_projected_err_gen_comparison_table(
+                gsBest, gsTgt, compare_with='estimate', genType=self.options.errgen_type)
+        fns['bestGatesetErrGenProjectionSelfMetricsTable'] = (fn,validate_essential)
 
         def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
@@ -621,17 +812,31 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             gsTgt, gsBest = setup()
             return _generation.get_gateset_relative_eigenval_table(
-                gsBest, gsTgt, "bestRelEvalPolarPlt")
+                gsBest, gsTgt, "bestRelEvalPolarPlt",
+                genType=self.options.errgen_type)
         fns['bestGatesetRelEvalTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             _, gsBest = setup()
             cri = self._get_confidence_region(confidenceLevel)
+            if cri and cri.has_hessian() == False: cri = None
             return _generation.get_gateset_choi_eigenval_table(
                 gsBest, "bestChoiEvalBars", confidenceRegionInfo=cri)
         fns['bestGatesetChoiEvalTable'] = (fn, validate_essential)
 
+        def fn(key, confidenceLevel, vb):
+            _, gsBest = setup()
+            noConfidenceLevelDependence(confidenceLevel)
+            return _generation.get_pauli_err_gen_projector_boxes_table(
+                gsBest.dim, "hamiltonian", "pauli_ham")
+        fns['hamiltonianProjectorTable'] = (fn, validate_essential)
 
+        def fn(key, confidenceLevel, vb):
+            _, gsBest = setup()
+            noConfidenceLevelDependence(confidenceLevel)
+            return _generation.get_pauli_err_gen_projector_boxes_table(
+                gsBest.dim, "stochastic", "pauli_sto")
+        fns['stochasticProjectorTable'] = (fn, validate_essential)
 
         return fns
 
@@ -680,9 +885,21 @@ class Results(object):
             fidPairs = self.parameters['fiducial pairs']
             Ls = self.parameters['max length list']
             st = 1 if Ls[0] == 0 else 0 #start index: skip LGST column in plots
-            filter_dict = { Ls[i]:self.gatestring_lists['iteration'][i]
-                            for i in range(st,len(Ls)) }
-            return Ls,germs,gsBest,fidPairs,filter_dict,m,M,baseStr_dict,strs,st
+
+            if fidPairs is None: fidpair_filters = None
+            elif isinstance(fidPairs,dict) or hasattr(fidPairs,"keys"):
+                #Assume fidPairs is a dict indexed by germ
+                fidpair_filters = { (x,y): fidPairs[germ] 
+                                    for x in Ls[st:] for y in germs }
+            else:
+                #Assume fidPairs is a list
+                fidpair_filters = { (x,y): fidPairs
+                                    for x in Ls[st:] for y in germs }
+
+            gstr_filters = { (x,y) : self.gatestring_lists['iteration'][i]
+                             for i,x in enumerate(Ls[st:],start=st)
+                             for y in germs }
+            return Ls,germs,gsBest,fidpair_filters,gstr_filters,m,M,baseStr_dict,strs,st
 
         def noConfidenceLevelDependence(level):
             """ Designates a figure as independent of the confidence level"""
@@ -706,12 +923,13 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
             plotFn = getPlotFn();  mpc = getMPC()
-            Ls,germs, gsBest, fidPairs, filter_dict, _, _, baseStr_dict, strs, st = plot_setup()
+            Ls,germs, gsBest, fpr_filters, gstr_filters, _, _, baseStr_dict, strs, st = plot_setup()
             return plotFn(Ls[st:], germs, baseStr_dict,
                           self.dataset, gsBest, strs,
                           r"$L$", "germ", scale=1.0, sumUp=False,
-                          histogram=True, title="", fidPairs=fidPairs,
-                          gatestring_filters = filter_dict,
+                          histogram=True, title="", 
+                          fidpair_filters=fpr_filters,
+                          gatestring_filters = gstr_filters,
                           linlg_pcntle=float(self.parameters['linlogPercentile']) / 100,
                           minProbClipForWeighting=mpc, save_to="", ticSize=20)
         fns["bestEstimateColorBoxPlot"] = (fn,validate_LsAndGerms)
@@ -719,12 +937,13 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
             plotFn = getPlotFn(); mpc = getMPC()
-            Ls,germs, gsBest, fidPairs, filter_dict, _, _, baseStr_dict, strs, st = plot_setup()
+            Ls,germs, gsBest, fpr_filters, gstr_filters, _, _, baseStr_dict, strs, st = plot_setup()
             return plotFn( Ls[st:], germs, baseStr_dict,
                            self.dataset, gsBest, strs,
                            r"$L$", "germ", scale=1.0, sumUp=False,
-                           histogram=True, title="", fidPairs=fidPairs,
-                           gatestring_filters = filter_dict,
+                           histogram=True, title="",
+                           fidpair_filters=fpr_filters,
+                           gatestring_filters = gstr_filters,
                            linlg_pcntle=float(self.parameters['linlogPercentile']) / 100,
                            save_to="", ticSize=20, minProbClipForWeighting=mpc,
                            invert=True)
@@ -733,14 +952,15 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
             plotFn = getPlotFn();  mpc = getMPC()
-            Ls,germs, gsBest, fidPairs, filter_dict, _, _, baseStr_dict, strs, st = plot_setup()
+            Ls,germs, gsBest, fpr_filters, gstr_filters, _, _, baseStr_dict, strs, st = plot_setup()
             #sumScale = len(strs[0])*len(strs[1]) \
             #    if fidPairs is None else len(fidPairs)
             return plotFn( Ls[st:], germs, baseStr_dict,
                            self.dataset, gsBest, strs,
-                          r"$L$", "germ", scale=1.0,
+                           r"$L$", "germ", scale=1.0,
                            sumUp=True, histogram=False, title="",
-                           fidPairs=fidPairs, gatestring_filters = filter_dict,
+                           fidpair_filters=fpr_filters,
+                           gatestring_filters = gstr_filters,
                            minProbClipForWeighting=mpc,
                            save_to="", ticSize=14, linlg_pcntle=float(self.parameters['linlogPercentile']) / 100)
         fns["bestEstimateSummedColorBoxPlot"] = (fn,validate_LsAndGerms)
@@ -750,15 +970,16 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
             plotFn = getPlotFn();  mpc = getMPC()
-            Ls,germs, _, fidPairs, filter_dict, _, _, baseStr_dict, strs, st = plot_setup()
+            Ls,germs, _, fpr_filters, gstr_filters, _, _, baseStr_dict, strs, st = plot_setup()
             i = int(_re.match(expr1,key).group(1))
             return plotFn( Ls[st:i+1], germs, baseStr_dict,
-                        self.dataset, self.gatesets['iteration estimates'][i],
-                        strs, r"$L$", "germ", scale=1.0, sumUp=False,
-                        histogram=False, title="", fidPairs=fidPairs,
-                        gatestring_filters = filter_dict,
-                        linlg_pcntle=float(self.parameters['linlogPercentile']) / 100,
-                        save_to="", minProbClipForWeighting=mpc, ticSize=20)
+                           self.dataset, self.gatesets['iteration estimates'][i],
+                           strs, r"$L$", "germ", scale=1.0, sumUp=False,
+                           histogram=False, title="",
+                           fidpair_filters=fpr_filters,
+                           gatestring_filters = gstr_filters,
+                           linlg_pcntle=float(self.parameters['linlogPercentile']) / 100,
+                           save_to="", minProbClipForWeighting=mpc, ticSize=20)
         def fn_validate(key):
             if not self._LsAndGermInfoSet: return []
 
@@ -789,26 +1010,28 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
             directPlotFn = getDirectPlotFn(); mpc = getMPC()
-            Ls, germs, _, fidPairs, filter_dict, _, _, baseStr_dict, strs, st = plot_setup()
+            Ls, germs, _, _, _, _, _, baseStr_dict, strs, st = plot_setup()
             directLGST = self._specials.get('direct_lgst_gatesets',verbosity=vb)
             return directPlotFn( Ls[st:], germs, baseStr_dict, self.dataset,
                                  directLGST, strs, r"$L$", "germ",
                                  scale=1.0, sumUp=False, title="",
-                                 minProbClipForWeighting=mpc, fidPairs=fidPairs,
-                                 gatestring_filters = None, #don't use filter_dict for direct plots
+                                 minProbClipForWeighting=mpc,
+                                 fidpair_filters= None,
+                                 gatestring_filters = None, #don't use filters for direct plots
                                  save_to="", ticSize=20, linlg_pcntle=float(self.parameters['linlogPercentile']) / 100)
         fns["directLGSTColorBoxPlot"] = (fn,validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
             directPlotFn = getDirectPlotFn(); mpc = getMPC()
-            Ls, germs, _, fidPairs, filter_dict, _, _, baseStr_dict, strs, st = plot_setup()
+            Ls, germs, _, _, _, _, _, baseStr_dict, strs, st = plot_setup()
             directLongSeqGST = self._specials.get('DirectLongSeqGatesets',
                                                   verbosity=vb)
             return directPlotFn( Ls[st:], germs, baseStr_dict, self.dataset,
                                  directLongSeqGST, strs, r"$L$", "germ",
                                  scale=1.0, sumUp=False, title="",
-                                 minProbClipForWeighting=mpc, fidPairs=fidPairs,
+                                 minProbClipForWeighting=mpc,
+                                 fidpair_filters = None,
                                  gatestring_filters = None, #don't use filter_dict for direct plots
                                  save_to="", ticSize=20, linlg_pcntle=float(self.parameters['linlogPercentile']) / 100)
         fns["directLongSeqGSTColorBoxPlot"] = (fn,validate_LsAndGerms)
@@ -849,7 +1072,7 @@ class Results(object):
         expr2 = "whack(.+?)MoleBoxes"
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
-            Ls,germs, gsBest, fidPairs, filter_dict, _, _, baseStr_dict, strs, st = plot_setup()
+            Ls,germs, gsBest, fpr_filters, gstr_filters, _, _, baseStr_dict, strs, st = plot_setup()
             highestL = Ls[-1]; hammerWeight = 10.0; mpc = getMPC()
             gateLabel = _re.match(expr2,key).group(1)
             strToWhack = _gs.GateString( (gateLabel,)*highestL )
@@ -859,8 +1082,8 @@ class Results(object):
                                     gsBest, strs, r"$L$", "germ", scale=1.0,
                                     sumUp=False,title="",whackWith=hammerWeight,
                                     save_to="", minProbClipForWeighting=mpc,
-                                    ticSize=20, fidPairs=fidPairs,
-                                    gatestring_filters = filter_dict)
+                                    ticSize=20, fidpair_filters=fpr_filters,
+                                    gatestring_filters = gstr_filters)
         def fn_validate(key):
             if not self._LsAndGermInfoSet: return []
 
@@ -878,7 +1101,7 @@ class Results(object):
         expr3 = "whack(.+?)MoleBoxesSummed"
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
-            Ls,germs, gsBest, fidPairs, filter_dict, _, _, baseStr_dict, strs, st = plot_setup()
+            Ls,germs, gsBest, fpr_filters, gstr_filters, _, _, baseStr_dict, strs, st = plot_setup()
             highestL = Ls[-1]; hammerWeight = 10.0; mpc = getMPC()
             gateLabel = _re.match(expr3,key).group(1)
             strToWhack = _gs.GateString( (gateLabel,)*highestL )
@@ -888,8 +1111,9 @@ class Results(object):
                                     gsBest, strs, r"$L$", "germ", scale=1.0,
                                     sumUp=True, title="",whackWith=hammerWeight,
                                     save_to="", minProbClipForWeighting=mpc,
-                                    ticSize=20, fidPairs=fidPairs,
-                                    gatestring_filters = filter_dict)
+                                    ticSize=20, fidpair_filters=fpr_filters,
+                                    gatestring_filters = gstr_filters)
+
         def fn_validate(key):
             if not self._LsAndGermInfoSet: return []
 
@@ -1018,40 +1242,30 @@ class Results(object):
 
             gsTarget = self.gatesets['target']
             gsBestEstimate = self.gatesets['final estimate']
-            constrainToTP = self.parameters['constrainToTP']
 
             printer.log("Performing gauge transforms for appendix...")
 
             best_gs_gauges = _collections.OrderedDict()
 
             best_gs_gauges['Target'] = _optimizeGauge(
-                gsBestEstimate, "target", targetGateset=gsTarget,
-                constrainToTP=constrainToTP, gateWeight=1.0,
-                spamWeight=1.0, verbosity=vb)
+                gsBestEstimate, gsTarget, {'gates': 1.0, 'spam': 1.0},
+                verbosity=vb)
 
             best_gs_gauges['TargetSpam'] = _optimizeGauge(
-                gsBestEstimate, "target", targetGateset=gsTarget,
-                verbosity=vb, gateWeight=0.01, spamWeight=0.99,
-                constrainToTP=constrainToTP)
+                gsBestEstimate, gsTarget, {'gates': 1e-3, 'spam': 1.0},
+                verbosity=vb)
 
             best_gs_gauges['TargetGates'] = _optimizeGauge(
-                gsBestEstimate, "target", targetGateset=gsTarget,
-                verbosity=vb, gateWeight=0.99, spamWeight=0.01,
-                constrainToTP=constrainToTP)
+                gsBestEstimate, gsTarget, {'gates': 1.0, 'spam': 1e-3},
+                verbosity=vb)
 
             best_gs_gauges['CPTP'] = _optimizeGauge(
-                gsBestEstimate, "CPTP and target",
-                targetGateset=gsTarget, verbosity=vb,
-                targetFactor=1.0e-7, constrainToTP=constrainToTP)
+                gsBestEstimate, gsTarget, CPpenalty=1e5, TPpenalty=1e5,
+                validSpamPenalty=1e5, verbosity=vb)
 
-            if constrainToTP:
-                best_gs_gauges['TP'] = best_gs_gauges['Target'].copy()
-                  #assume best_gs is already in TP, so just optimize to
-                  # target (done above)
-            else:
-                best_gs_gauges['TP'] = _optimizeGauge(
-                    gsBestEstimate, "TP and target",
-                    targetGateset=gsTarget, targetFactor=1.0e-7)
+            best_gs_gauges['TP'] = _optimizeGauge(
+                gsBestEstimate, gsTarget, TPpenalty=1e5, verbosity=vb)
+
             return best_gs_gauges
         fns['gaugeOptAppendixGatesets'] = (fn, validate_essential)
 
@@ -1089,7 +1303,7 @@ class Results(object):
                     gopt_gs, gsTarget, None)
                 ret['best%sGatesetErrorGenTable' % gaugeKey] = \
                     _generation.get_gates_vs_target_err_gen_table(
-                    gopt_gs, gsTarget)
+                    gopt_gs, gsTarget, self.options.errgen_type)
 
             return ret
         fns['gaugeOptAppendixTables'] = (fn, validate_essential)
@@ -1121,6 +1335,49 @@ class Results(object):
 
             return ret
         fns['blankGaugeOptAppendixTables'] = (fn, validate_essential)
+
+
+        def fn(key, confidenceLevel, vb):
+            printer = VerbosityPrinter.build_printer(vb)
+            noConfidenceLevelDependence(confidenceLevel)
+
+            gsTarget = self.gatesets['target']
+            gsBestEstimate = self.gatesets['final estimate']
+
+            best_gs_gauges = _collections.OrderedDict()
+
+            for gateLabel in gsBestEstimate.gates:
+                best_gs_gauges[gateLabel] = _optimizeGauge(
+                    gsBestEstimate, gsTarget, 
+                    {'gates': 0.0, 'spam': 0.0, gateLabel: 1.0},
+                    verbosity=vb)
+
+            return best_gs_gauges
+        fns['singleGateTargetGaugeOptGatesets'] = (fn, validate_essential)
+
+
+        def fn(key, confidenceLevel, vb):
+            printer = VerbosityPrinter.build_printer(vb)
+            noConfidenceLevelDependence(confidenceLevel)
+
+            gsTarget = self.gatesets['target']
+            gsBestEstimate = self.gatesets['final estimate']
+
+            #Heusistic parameters for CPTP gauge opt that doesn't take too long
+            if hasattr(self.parameters['gaugeOptParams'],"keys"):
+                gaugeParams = self.parameters['gaugeOptParams'].copy()
+            else:
+                gaugeParams = self.parameters['gaugeOptParams'][0].copy()
+            gaugeParams['CPpenalty'] = 100
+            gaugeParams['TPpenalty'] = 100
+            gaugeParams['validSpamPenalty'] = 0
+            gaugeParams['tol'] = 0.1
+            gaugeParams['maxiter'] = 100
+            gaugeParams['method'] = 'BFGS'
+            gaugeParams['targetGateset'] = gsTarget
+            #gaugeParams['verbosity'] = 5 #DEBUG
+            return _optimizeGauge(gsBestEstimate, **gaugeParams)
+        fns['CPTPGaugeOptGateset'] = (fn, validate_essential)
 
 
         def fn(key, confidenceLevel, vb):
@@ -1197,8 +1454,21 @@ class Results(object):
             fidPairs = self.parameters['fiducial pairs']
             Ls = self.parameters['max length list']
             st = 1 if Ls[0] == 0 else 0 #start index: skip LGST column in plots
-            filter_dict = { Ls[i]:self.gatestring_lists['iteration'][i]
-                            for i in range(st,len(Ls)) }
+
+            if fidPairs is None: fidpair_filters = None
+            elif isinstance(fidPairs,dict) or hasattr(fidPairs,"keys"):
+                #Assume fidPairs is a dict indexed by germ
+                fidpair_filters = { (x,y): fidPairs[germ] 
+                                    for x in Ls[st:] for y in germs }
+            else:
+                #Assume fidPairs is a list
+                fidpair_filters = { (x,y): fidPairs
+                                    for x in Ls[st:] for y in germs }
+
+            if fidPairs is None: fidpair_filters = None
+            gstr_filters = { (x,y) : self.gatestring_lists['iteration'][i]
+                             for i,x in enumerate(Ls[st:],start=st)
+                             for y in germs }
 
             obj = self.parameters['objective']
             assert(obj in ("chi2","logl"))
@@ -1220,8 +1490,9 @@ class Results(object):
                 fig = plotFn(Ls[st:], fig_germs, baseStr_dict,
                              self.dataset, gsBest, strs,
                              r"$L$", "germ", scale=1.0, sumUp=False,
-                             histogram=True, title="", fidPairs=fidPairs,
-                             gatestring_filters = filter_dict,
+                             histogram=True, title="", 
+                             fidpair_filters=fidpair_filters,
+                             gatestring_filters = gstr_filters,
                              linlg_pcntle=float(self.parameters['linlogPercentile']) / 100,
                              minProbClipForWeighting=mpc, save_to="", ticSize=20)
                 figs.append(fig); n += maxGermsPerFig
@@ -1363,7 +1634,9 @@ class Results(object):
                     self.parameters['radius'],
                     self.parameters['hessianProjection'],
                     regionType, self._comm,
-                    self.parameters['memLimit'])
+                    self.parameters['memLimit'],
+                    self.parameters['cptpPenaltyFactor'],
+                    self.parameters['distributeMethod'])
             elif self.parameters['objective'] == "chi2":
                 cr = _generation.get_chi2_confidence_region(
                     self.gatesets['final estimate'], self.dataset,
@@ -1511,7 +1784,7 @@ class Results(object):
         -------
         None
         """
-        printer = VerbosityPrinter.build_printer(verbosity)
+        printer = VerbosityPrinter.build_printer(verbosity, comm=comm)
 
         assert(self._bEssentialResultsSet)
         self.confidence_level = confidenceLevel
@@ -1593,6 +1866,13 @@ class Results(object):
             confidenceLevel if confidenceLevel is not None else "NOT-SET"
         qtys['linlg_pcntle'] = self.parameters['linlogPercentile']
 
+        if self.options.errgen_type == "logTiG":
+            qtys['errorgenformula'] = "$\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$"
+        elif self.options.errgen_type == "logG-logT":
+            qtys['errorgenformula'] = "$\hat{G} = e^{\mathbb{L} + \log G_{\mathrm{target}}}$"
+        else:
+            qtys['errorgenformula'] = "???"
+
         if confidenceLevel is not None:
             cri = self._get_confidence_region(confidenceLevel)
             qtys['confidenceIntervalScaleFctr'] = \
@@ -1631,10 +1911,11 @@ class Results(object):
         std_tables = \
             ('targetSpamTable','targetGatesTable','datasetOverviewTable',
              'bestGatesetSpamTable','bestGatesetSpamParametersTable',
+             'bestGatesetGaugeOptParamsTable',
              'bestGatesetGatesTable','bestGatesetChoiTable',
              'bestGatesetDecompTable','bestGatesetRotnAxisTable',
-             'bestGatesetClosestUnitaryTable',
              'bestGatesetVsTargetTable','bestGatesetErrorGenTable')
+             #removed: 'bestGatesetClosestUnitaryTable',
 
         ls_and_germs_tables = ('fiducialListTable','prepStrListTable',
                                'effectStrListTable','germListTable',
@@ -1654,7 +1935,8 @@ class Results(object):
                 qtys[key] = self.tables.get(key, verbosity=printer - 1).render(
                     'latex',longtables=self.options.long_tables, scratchDir=D,
                     precision=self.options.precision,
-                    polarprecision=self.options.polar_precision)
+                    polarprecision=self.options.polar_precision,
+                    sciprecision=self.options.sci_precision)
                 qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
 
         for key in tables_to_blank:
@@ -1669,7 +1951,8 @@ class Results(object):
                         'latex', longtables=self.options.long_tables,
                         scratchDir=D,
                         precision=self.options.precision,
-                        polarprecision=self.options.polar_precision)
+                        polarprecision=self.options.polar_precision,
+                        sciprecision=self.options.sci_precision)
                            for key in goaTables }  )
             #TODO: tables[ref] and then tooltips?
 
@@ -1679,7 +1962,8 @@ class Results(object):
             qtys.update( { key : goaTables[key].render(
                         'latex',longtables=self.options.long_tables,
                         precision=self.options.precision,
-                        polarprecision=self.options.polar_precision)
+                        polarprecision=self.options.polar_precision,
+                        sciprecision=self.options.sci_precision)
                            for key in goaTables }  )  # for format substitution
             #TODO: tables[ref] and then tooltips?
 
@@ -1692,7 +1976,7 @@ class Results(object):
             bWasInteractive = True
         else: bWasInteractive = False
 
-        maxW,maxH = 6.5,9.0 #max width and height of graphic in latex document (in inches)
+        maxW,maxH = 6.5,8.0 #max width and height of graphic in latex document (in inches)
 
         def incgr(figFilenm,W=None,H=None): #includegraphics "macro"
             if W is None: W = maxW
@@ -1723,7 +2007,15 @@ class Results(object):
             printer.log("%s plots (%d): " % (plotFnName, nPlots))
 
             with printer.progress_logging(1):
-                printer.show_progress(0, 2, prefix='', end='')
+                printer.show_progress(0, 3, prefix='', end='')
+
+                w = min(len(self.gatestring_lists['prep fiducials']) * 0.3,maxW)
+                h = min(len(self.gatestring_lists['effect fiducials']) * 0.3,maxH)
+                fig = set_fig_qtys("colorBoxPlotKeyPlot",
+                                   "colorBoxPlotKey.png", printer - 1, w,h)
+
+                printer.show_progress(1, 3, prefix='', end='')
+
                 fig = set_fig_qtys("bestEstimateColorBoxPlot",
                                    "best%sBoxes.pdf" % plotFnName, printer - 1)
                 maxX = fig.get_extra_info()['nUsedXs']
@@ -1734,11 +2026,12 @@ class Results(object):
                 #    #no tooltip for histogram... - probably should make it
                 #    # it's own element of .figures dict
 
-                printer.show_progress(1, 2, prefix='', end='')
+                printer.show_progress(2, 3, prefix='', end='')
                 fig = set_fig_qtys("invertedBestEstimateColorBoxPlot",
                                    "best%sBoxes_inverted.pdf" % plotFnName, printer - 1)
         else:
-            for figkey in ["bestEstimateColorBoxPlot",
+            for figkey in ["colorBoxPlotKeyPlot",
+                           "bestEstimateColorBoxPlot",
                            "invertedBestEstimateColorBoxPlot"]:
                 qtys[figkey] = qtys["tt_"+figkey] = ""
 
@@ -1987,7 +2280,7 @@ class Results(object):
         None
         """
 
-        printer = VerbosityPrinter.build_printer(verbosity)
+        printer = VerbosityPrinter.build_printer(verbosity, comm=comm)
 
         assert(self._bEssentialResultsSet)
         self.confidence_level = confidenceLevel
@@ -2060,6 +2353,14 @@ class Results(object):
         qtys['gofObjective'] = "$2\\Delta\\log{\\mathcal{L}}$" \
             if obj == "logl" else "$\\chi^2$"
 
+        if self.options.errgen_type == "logTiG":
+            qtys['errorgenformula'] = "$\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$"
+        elif self.options.errgen_type == "logG-logT":
+            qtys['errorgenformula'] = "$\hat{G} = e^{\mathbb{L} + \log G_{\mathrm{target}}}$"
+        else:
+            qtys['errorgenformula'] = "???"
+
+
         if confidenceLevel is not None:
             cri = self._get_confidence_region(confidenceLevel)
             qtys['confidenceIntervalScaleFctr'] = "%.3g" % cri.intervalScaling
@@ -2109,7 +2410,8 @@ class Results(object):
             qtys[key] = self.tables.get(key, verbosity=printer - 1).render(
                 'latex',longtables=self.options.long_tables, scratchDir=D,
                 precision=self.options.precision,
-                polarprecision=self.options.polar_precision)
+                polarprecision=self.options.polar_precision,
+                sciprecision=self.options.sci_precision)
             qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
 
         for key in tables_to_blank:
@@ -2153,7 +2455,7 @@ class Results(object):
         #    fig = self.figures.get(figkey, verbosity=v)
         #    fig.save_to(_os.path.join(report_dir, D, figFilenm))
         #    maxX = fig.get_extra_info()['nUsedXs']; maxY = fig.get_extra_info()['nUsedYs']
-        #    maxW,maxH = 6.5,9.0 #max width and height of graphic in latex document (in inches)
+        #    maxW,maxH = 6.5,8.5 #max width and height of graphic in latex document (in inches)
         #
         #    if verbosity > 0:
         #        print ""; _sys.stdout.flush()
@@ -2266,7 +2568,7 @@ class Results(object):
         None
         """
 
-        printer = VerbosityPrinter.build_printer(verbosity)
+        printer = VerbosityPrinter.build_printer(verbosity, comm=comm)
 
         assert(self._bEssentialResultsSet)
         self.confidence_level = confidenceLevel
@@ -2334,6 +2636,13 @@ class Results(object):
         qtys['gofObjective'] = "$2\\Delta\\log{\\mathcal{L}}$" \
             if self.parameters['objective'] == "logl" else "$\\chi^2$"
 
+        if self.options.errgen_type == "logTiG":
+            qtys['errorgenformula'] = "$\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$"
+        elif self.options.errgen_type == "logG-logT":
+            qtys['errorgenformula'] = "$\hat{G} = e^{\mathbb{L} + \log G_{\mathrm{target}}}$"
+        else:
+            qtys['errorgenformula'] = "???"
+
         if confidenceLevel is not None:
             cri = self._get_confidence_region(confidenceLevel)
             qtys['confidenceIntervalScaleFctr'] = "%.3g" % cri.intervalScaling
@@ -2388,7 +2697,8 @@ class Results(object):
             qtys[key] = self.tables.get(key, verbosity=printer - 1).render(
                 'latex',longtables=self.options.long_tables, scratchDir=D,
                 precision=self.options.precision,
-                polarprecision=self.options.polar_precision)
+                polarprecision=self.options.polar_precision,
+                sciprecision=self.options.sci_precision)
             qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
 
         for key in tables_to_blank:
@@ -2689,7 +2999,7 @@ class Results(object):
         None
         """
 
-        printer = VerbosityPrinter.build_printer(verbosity)
+        printer = VerbosityPrinter.build_printer(verbosity, comm=comm)
 
         assert(self._bEssentialResultsSet)
         self.confidence_level = confidenceLevel
@@ -3060,7 +3370,8 @@ class Results(object):
             latexTabStr = qtys[key].render(
                 'latex', longtables=self.options.long_tables, scratchDir=D,
                 precision=self.options.precision,
-                polarprecision=self.options.polar_precision)
+                polarprecision=self.options.polar_precision,
+                sciprecision=self.options.sci_precision)
             d = {'toLatex': latexTabStr }
             printer.log("Latexing %s table..." % key)
             outputFilename = _os.path.join(fileDir, "%s.tex" % key)
@@ -3231,7 +3542,8 @@ class Results(object):
 
     def create_general_report_pdf(self, confidenceLevel=None, filename="auto",
                                   title="auto", datasetLabel="auto", suffix="",
-                                  tips=False, verbosity=0, comm=None):
+                                  tips=False, verbosity=0, comm=None,
+                                  showAppendix=False):
         """
         Create a "general" GST report.  This report is suited to display
         results for any number of qubits, and is detailed in the sense that
@@ -3249,7 +3561,9 @@ class Results(object):
            The output filename where the report file(s) will be saved.  Specifying
            "auto" will use the default directory and base name (specified in
            set_additional_info) if given, otherwise the file "GSTReport.pdf" will
-           be output to the current directoy.
+           be output to the current directoy.  If None, then results are computed
+           but no file output is generated (useful for pre-computing cached
+           derived quantities).
 
         title : string, optional
            The title of the report.  "auto" uses a default title which
@@ -3279,12 +3593,15 @@ class Results(object):
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
 
+        showAppendix : bool, optional
+            Whether to display the appendix.
+
         Returns
         -------
         None
         """
 
-        printer = VerbosityPrinter.build_printer(verbosity)
+        printer = VerbosityPrinter.build_printer(verbosity, comm=comm)
         tStart = _time.time()
 
         assert(self._bEssentialResultsSet)
@@ -3312,17 +3629,21 @@ class Results(object):
         #Get report output filename
         default_dir = self.parameters['defaultDirectory']
         default_base = self.parameters['defaultBasename']
+        bOutputFiles = bool(filename is not None)
 
-        if filename != "auto":
-            report_dir = _os.path.dirname(filename)
-            report_base = _os.path.splitext( _os.path.basename(filename) )[0] \
-                           + suffix
-        else:
+        if filename == "auto":
             cwd = _os.getcwd()
             report_dir  = default_dir  if (default_dir  is not None) else cwd
             report_base = default_base if (default_base is not None) \
                                        else "GSTReport"
             report_base += suffix
+        elif filename is not None:
+            report_dir = _os.path.dirname(filename)
+            report_base = _os.path.splitext( _os.path.basename(filename) )[0] \
+                           + suffix
+        else:
+            report_dir = None
+            report_base = None
 
         if datasetLabel == "auto":
             if default_base is not None:
@@ -3360,8 +3681,8 @@ class Results(object):
             ("false" if confidenceLevel is None else "true")
         qtys['settoggles'] += "\\toggle%s{LsAndGermsSet}\n" % \
             ("true" if self._LsAndGermInfoSet else "false")
-        #qtys['settoggles'] += "\\toggle%s{debuggingaidsappendix}\n" % \
-        #    ("true" if debugAidsAppendix else "false")
+        qtys['settoggles'] += "\\toggle%s{showAppendix}\n" % \
+            ("true" if showAppendix else "false")
         #qtys['settoggles'] += "\\toggle%s{gaugeoptappendix}\n" % \
         #    ("true" if gaugeOptAppendix else "false")
         #qtys['settoggles'] += "\\toggle%s{pixelplotsappendix}\n" % \
@@ -3383,6 +3704,14 @@ class Results(object):
             qtys['confidenceIntervalScaleFctr'] = "NOT-SET"
             qtys['confidenceIntervalNumNonGaugeParams'] = "NOT-SET"
 
+        if self.options.errgen_type == "logTiG":
+            qtys['errorgenformula'] = "$\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$"
+        elif self.options.errgen_type == "logG-logT":
+            qtys['errorgenformula'] = "$\hat{G} = e^{\mathbb{L} + \log G_{\mathrm{target}}}$"
+        else:
+            qtys['errorgenformula'] = "???"
+
+
         pdfInfo = [('Author','pyGSTi'), ('Title', title),
                    ('Keywords', 'GST'), ('pyGSTi Version',_version.__version__),
                    ('opt_long_tables', self.options.long_tables),
@@ -3397,9 +3726,12 @@ class Results(object):
 
         #Get figure directory for figure generation *and* as a
         # scratch space for tables.
-        D = report_base + "_files" #figure directory relative to reportDir
-        if not _os.path.isdir( _os.path.join(report_dir,D)):
-            _os.mkdir( _os.path.join(report_dir,D))
+        if bOutputFiles:
+            D = report_base + "_files" #figure directory relative to reportDir
+            if not _os.path.isdir( _os.path.join(report_dir,D)):
+                _os.mkdir( _os.path.join(report_dir,D))
+        else:
+            D = "" #empty scratch dir for figures
 
         # 1) get latex tables
         printer.log("*** Generating tables *** (%.1fs elapsed)"
@@ -3412,33 +3744,51 @@ class Results(object):
              'bestGatesetSpamVsTargetTable', 'bestGatesetGaugeOptParamsTable',
              'bestGatesetChoiEvalTable', 'datasetOverviewTable',
              'bestGatesetEvalTable', 'bestGatesetRelEvalTable',
-             'targetGatesBoxTable', 'bestGatesetErrGenBoxTable')
-
-#'bestGatesetDecompTable','bestGatesetRotnAxisTable',
-#'bestGatesetClosestUnitaryTable',
+             'targetGatesBoxTable', 'bestGatesetGatesBoxTable',
+             'bestGatesetErrGenBoxTable')
 
         ls_and_germs_tables = ('fiducialListTable','prepStrListTable',
                                'effectStrListTable','germList2ColTable',
                                'progressTable')
 
+        appendix_tables = ('bestGatesetErrGenProjectionTargetMetricsTable',
+                           'bestGatesetErrGenProjectionSelfMetricsTable',
+                           'logLErrgenProjectionTable',
+                           'hamiltonianProjectorTable',
+                           'stochasticProjectorTable',
+                           'gaugeOptGatesetsVsTargetTable',
+                           'gaugeOptCPTPGatesetChoiTable')
+        appendix_ls_and_germs_tables = ('byGermTable',)
 
-        tables_to_compute = std_tables
         tables_to_blank = []
+        tables_to_compute = std_tables
 
         if self._LsAndGermInfoSet:
             tables_to_compute += ls_and_germs_tables
         else:
             tables_to_blank += ls_and_germs_tables
 
+        if showAppendix:
+            tables_to_compute += appendix_tables
+            if self._LsAndGermInfoSet:
+                tables_to_compute += appendix_ls_and_germs_tables
+            else:
+                tables_to_blank += appendix_ls_and_germs_tables
+        else:
+            tables_to_blank += appendix_tables
+            tables_to_blank += appendix_ls_and_germs_tables
+
+
         #Change to report directory so figure generation works correctly
         cwd = _os.getcwd()
-        if len(report_dir) > 0: _os.chdir(report_dir)
+        if bOutputFiles and len(report_dir) > 0: _os.chdir(report_dir)
 
         for key in tables_to_compute:
             qtys[key] = self.tables.get(key, verbosity=printer - 1).render(
                 'latex',longtables=self.options.long_tables, scratchDir=D,
                 precision=self.options.precision,
-                polarprecision=self.options.polar_precision)
+                polarprecision=self.options.polar_precision,
+                sciprecision=self.options.sci_precision)
             qtys["tt_"+key] = tooltiptex(".tables['%s']" % key)
 
         _os.chdir(cwd) #change back to original directory
@@ -3472,7 +3822,7 @@ class Results(object):
             bWasInteractive = True
         else: bWasInteractive = False
 
-        maxW,maxH = 6.5,9.0 #max width and height of graphic in latex document (in inches)
+        maxW,maxH = 6.5,8.5 #max width and height of graphic in latex document (in inches)
 
         def incgr(figFilenm,W=None,H=None): #includegraphics "macro"
             if W is None: W = maxW
@@ -3482,48 +3832,11 @@ class Results(object):
 
         def set_fig_qtys(figkey, figFilenm, v, W=None,H=None):
             fig = self.figures.get(figkey, verbosity=v)
-            fig.save_to(_os.path.join(report_dir, D, figFilenm))
+            if bOutputFiles:
+                fig.save_to(_os.path.join(report_dir, D, figFilenm))
             qtys[figkey] = incgr(figFilenm,W,H)
             qtys['tt_' + figkey] = tooltiptex(".figures['%s']" % figkey)
             return fig
-
-        ## Gate/SPAM box tables for visualizing large matrices.
-        ##  - these tables are "special" in that they contain figures, so
-        ##    there's no way to simply incorporate them into the figures or
-        ##    tables member dictionaries.
-        #def make_gateset_box_table(gsKey, tablekey, figPrefixes, figColWidths, figHeadings):
-        #    gs = self.gatesets[gsKey]
-        #    latex = "\\begin{tabular}[l]{| >{\\centering\\arraybackslash}m{0.75in} | %s |}\n\hline\n" % \
-        #        " | ".join([ ">{\\centering\\arraybackslash}m{%.1fin}" % w for w in figColWidths ])
-        #    latex += "Gate & %s \\\\ \hline\n" % " & ".join(figHeadings)
-        #
-        #    for gateLabel in gs.gates:
-        #        latex += gateLabel
-        #        for figprefix,colW in zip(figPrefixes,figColWidths):
-        #            figkey = figprefix + gateLabel
-        #            figFilenm = figkey + ".pdf"
-        #            fig = self.figures.get(figkey, verbosity=v)
-        #            fig.save_to(_os.path.join(report_dir, D, figFilenm))
-        #            maxFigH = min(0.95*(maxH / len(gs.gates)),colW)
-        #            sz = min(gs.gates[gateLabel].shape[0] * 0.15, maxFigH)
-        #            latex += " & " + incgr(figFilenm,sz,sz)
-        #        latex += "\\\\ \hline\n"
-        #
-        #    latex += "\end{tabular}\n"
-        #
-        #    qtys['tt_' + tablekey] = "" #tooltiptex(".tables['%s']" % tablekey)
-        #    qtys[tablekey] = latex
-        #
-        #basisNm = _bt.basis_longname(self.gatesets['target'].get_basis_name(),
-        #                             self.gatesets['target'].get_basis_dimension())
-        #make_gateset_box_table('target', 'targetGatesBoxTable',
-        #                       ("targetGateBoxes",), (3,), ("Matrix (%s basis)" % basisNm,) )
-        #
-        #basisNm = _bt.basis_longname(self.gatesets['final estimate'].get_basis_name(),
-        #                             self.gatesets['final estimate'].get_basis_dimension())
-        #make_gateset_box_table('final estimate', 'bestGatesetErrGenBoxTable',
-        #                       ("bestGateErrGenBoxes","pauliProdHamiltonianDecompBoxes"), (3,1.5),
-        #                       ("Error Generator (%s basis)" % basisNm, "Pauli-product projections") )
 
         #Chi2 or logl plots
         if self._LsAndGermInfoSet:
@@ -3562,7 +3875,8 @@ class Results(object):
             incgr_list = []
             for iFig,fig in enumerate(figs):
                 figFilenm = "best%sBoxes_pg%d.png" % (plotFnName,iFig)
-                fig.save_to(_os.path.join(report_dir, D, figFilenm))
+                if bOutputFiles:
+                    fig.save_to(_os.path.join(report_dir, D, figFilenm))
                 if iFig == 0:
                     maxX = fig.get_extra_info()['nUsedXs']
                     maxY = fig.get_extra_info()['nUsedYs']
@@ -3580,36 +3894,6 @@ class Results(object):
                            incgr_list)
             qtys['tt_' + figkey] = tooltiptex(".figures['%s']" % "bestEstimateColorBoxPlot")
 
-            #fig = set_fig_qtys("bestEstimateColorBoxPlot",
-            #                   "best%sBoxes.png" % plotFnName)
-            #maxX = fig.get_extra_info()['nUsedXs']
-            #maxY = fig.get_extra_info()['nUsedYs']
-
-            #qtys["bestEstimateColorBoxPlot_hist"] = \
-            #    incgr("best%sBoxes_hist.pdf" % plotFnName figFilenm)
-            #    #no tooltip for histogram... - probably should make it
-            #    # it's own element of .figures dict
-
-            #if verbosity > 0:
-            #    print "2 ",; _sys.stdout.flush()
-            #fig = set_fig_qtys("invertedBestEstimateColorBoxPlot",
-            #                   "best%sBoxes_inverted.pdf" % plotFnName)
-
-            #Unused polar plots figure...
-            #if verbosity > 0:
-            #    print "4 ",; _sys.stdout.flush()
-            #
-            #qtys["bestEstimatePolarEvalPlots"] = ""
-            #qtys["tt_bestEstimatePolarEvalPlots"] = ""
-            #for gl in self.gatesets['final estimate'].gates:
-            #    figkey = "bestEstimatePolar%sEvalPlot" % gl
-            #    figFilenm = "best%sPolarEvals.png" % gl
-            #    fig = self.figures.get(figkey, verbosity=v)
-            #    fig.save_to(_os.path.join(report_dir, D, figFilenm))
-            #    W = H = 2.5
-            #    qtys["bestEstimatePolarEvalPlots"] += incgr(figFilenm,W,H) + "\n"
-            #    qtys['tt_bestEstimatePolarEvalPlots'] += tooltiptex(".figures['%s']" % figkey)
-
         else:
             for figkey in ["colorBoxPlotKeyPlot",
                            "bestEstimateColorBoxPlot"]:
@@ -3618,136 +3902,13 @@ class Results(object):
 
 
         pixplots = ""
-        #if pixelPlotAppendix:
-        #    Ls = self.parameters['max length list']
-        #    for i in range(st,len(Ls)-1):
-        #
-        #        if verbosity > 0:
-        #            print "%d " % (i-st+3),; _sys.stdout.flush()
-        #        fig = self.figures.get("estimateForLIndex%dColorBoxPlot" % i,
-        #                               verbosity=v)
-        #        fig.save_to( _os.path.join(report_dir, D,
-        #                                   "L%d_%sBoxes.pdf" % (i,plotFnName)))
-        #        lx = fig.get_extra_info()['nUsedXs']
-        #        ly = fig.get_extra_info()['nUsedYs']
-        #
-        #        #scale figure size according to number of rows and columns+1
-        #        # (+1 for labels ~ another col) relative to initial plot
-        #        W = float(lx+1)/float(maxX+1) * maxW
-        #        H = float(ly)  /float(maxY)   * maxH
-        #
-        #        pixplots += "\n"
-        #        pixplots += "\\begin{figure}\n"
-        #        pixplots += "\\begin{center}\n"
-        #        pixplots += "\\includegraphics[width=%.2fin,height=%.2fin," \
-        #            % (W,H) + "keepaspectratio]{%s/L%d_%sBoxes.pdf}\n" \
-        #            %(D,i,plotFnName)
-        #        pixplots += \
-        #            "\\caption{Box plot of iteration %d (L=%d) " % (i,Ls[i]) \
-        #            + "gateset %s values.\label{L%dGateset%sBoxPlot}}\n" \
-        #            % (plotFnLatex,i,plotFnName)
-        #        #TODO: add conditional tooltip string to start of caption
-        #        pixplots += "\\end{center}\n"
-        #        pixplots += "\\end{figure}\n"
 
         #Set template quantity (empty string if appendix disabled)
         qtys['intermediate_pixel_plot_figures'] = pixplots
 
         printer.log('')
-        #if debugAidsAppendix:
-        #    #DirectLGST and deviation
-        #    if verbosity > 0:
-        #        print " -- Direct-X plots ",; _sys.stdout.flush()
-        #        print "(2):"; _sys.stdout.flush()
-        #
-        #    #if verbosity > 0:
-        #    #    print " ?",; _sys.stdout.flush()
-        #    #fig = set_fig_qtys("directLGSTColorBoxPlot",
-        #    #                   "directLGST%sBoxes.pdf" % plotFnName)
-        #
-        #    if verbosity > 0:
-        #        print " 1",; _sys.stdout.flush()
-        #    fig = set_fig_qtys("directLongSeqGSTColorBoxPlot",
-        #                   "directLongSeqGST%sBoxes.pdf" % plotFnName)
-        #
-        #    #if verbosity > 0:
-        #    #    print " ?",; _sys.stdout.flush()
-        #    #fig = set_fig_qtys("directLGSTDeviationColorBoxPlot",
-        #    #                   "directLGSTDeviationBoxes.pdf",W=4,H=5)
-        #
-        #    if verbosity > 0:
-        #        print " 2",; _sys.stdout.flush()
-        #    fig = set_fig_qtys("directLongSeqGSTDeviationColorBoxPlot",
-        #                       "directLongSeqGSTDeviationBoxes.pdf",W=4,H=5)
-        #
-        #    if verbosity > 0:
-        #        print ""; _sys.stdout.flush()
-        #
-        #
-        #    #Small eigenvalue error rate
-        #    if verbosity > 0:
-        #        print " -- Error rate plots..."; _sys.stdout.flush()
-        #    fig = set_fig_qtys("smallEigvalErrRateColorBoxPlot",
-        #                       "smallEigvalErrRateBoxes.pdf",W=4,H=5)
-        #else:
-        #    #UNUSED: "directLGSTColorBoxPlot", "directLGSTDeviationColorBoxPlot"
-        #    for figkey in ["directLongSeqGSTColorBoxPlot",
-        #                   "directLongSeqGSTDeviationColorBoxPlot",
-        #                   "smallEigvalErrRateColorBoxPlot"]:
-        #        qtys[figkey] = qtys["tt_"+figkey] = ""
-
 
         whackamoleplots = ""
-#        if whackamoleAppendix:
-#            #Whack-a-mole plots for highest L of each length-1 germ
-#            Ls = self.parameters['max length list']
-#            highestL = Ls[-1]; allGateStrings = self.gatestring_lists['all']
-#            hammerWeight = 10.0
-#            len1Germs = [ g for g in self.gatestring_lists['germs']
-#                          if len(g) == 1 ]
-#
-#            if verbosity > 0:
-#                print " -- Whack-a-mole plots (%d): " % (2*len(len1Germs)),
-#                _sys.stdout.flush()
-#
-#            for i,germ in enumerate(len1Germs):
-#                if verbosity > 0:
-#                    print "%d " % (i+1),; _sys.stdout.flush()
-#
-#                fig = self.figures.get("whack%sMoleBoxes" % germ[0],verbosity=v)
-#                fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxes.pdf"
-#                                          % germ[0]))
-#
-#                whackamoleplots += "\n"
-#                whackamoleplots += "\\begin{figure}\n"
-#                whackamoleplots += "\\begin{center}\n"
-#                whackamoleplots += "\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/whack%sMoleBoxes.pdf}\n" % (maxW,maxH,D,germ[0])
-#                whackamoleplots += "\\caption{Whack-a-%s-mole box plot for $\mathrm{%s}^{%d}$." % (plotFnLatex,germ[0],highestL)
-#                #TODO: add conditional tooltip string to start of caption
-#                whackamoleplots += "  Hitting with hammer of weight %.1f.\label{Whack%sMoleBoxPlot}}\n" % (hammerWeight,germ[0])
-#                whackamoleplots += "\\end{center}\n"
-#                whackamoleplots += "\\end{figure}\n"
-#
-#            for i,germ in enumerate(len1Germs):
-#                if verbosity > 0:
-#                    print "%d " % (len(len1Germs)+i+1),; _sys.stdout.flush()
-#
-#                fig = self.figures.get("whack%sMoleBoxesSummed" % germ[0],
-#                                       verbosity=v)
-#                fig.save_to(_os.path.join(report_dir, D,"whack%sMoleBoxesSummed.pdf" % germ[0]))
-#
-#                whackamoleplots += "\n"
-#                whackamoleplots += "\\begin{figure}\n"
-#                whackamoleplots += "\\begin{center}\n"
-#                whackamoleplots += "\\includegraphics[width=4in,height=5in,keepaspectratio]{%s/whack%sMoleBoxesSummed.pdf}\n" % (D,germ[0])
-#                whackamoleplots += "\\caption{Whack-a-%s-mole box plot for $\mathrm{%s}^{%d}$, summed over fiducial matrix." % (plotFnLatex,germ[0],highestL)
-#                #TODO: add conditional tooltip string to start of caption
-#                whackamoleplots += "  Hitting with hammer of weight %.1f.\label{Whack%sMoleBoxPlotSummed}}\n" % (hammerWeight,germ[0])
-#                whackamoleplots += "\\end{center}\n"
-#                whackamoleplots += "\\end{figure}\n"
-#
-#            if verbosity > 0:
-#                print ""; _sys.stdout.flush()
 
         #Set template quantity (empty string if appendix disabled)
         qtys['whackamole_plot_figures'] = whackamoleplots
@@ -3757,51 +3918,38 @@ class Results(object):
 
 
         # 3) populate template latex file => report latex file
-        printer.log("*** Merging into template file *** (%.1fs elapsed)"
-                    % (_time.time()-tStart))
-
-        mainTexFilename = _os.path.join(report_dir, report_base + ".tex")
-        appendicesTexFilename = _os.path.join(report_dir, report_base + "_appendices.tex")
-        pdfFilename = _os.path.join(report_dir, report_base + ".pdf")
-
-        mainTemplate = "report_general_main.tex"
-        #if self.parameters['objective'] == "chi2":
-        #    mainTemplate = "report_chi2_main.tex"
-        #    appendicesTemplate = "report_chi2_appendices.tex"
-        #elif self.parameters['objective'] == "logl":
-        #    mainTemplate = "report_logL_main.tex"
-        #    appendicesTemplate = "report_logL_appendices.tex"
-        #else:
-        #    raise ValueError("Invalid objective value: %s"
-        #                     % self.parameters['objective'])
-
-        #if any( (debugAidsAppendix, gaugeOptAppendix,
-        #         pixelPlotAppendix, whackamoleAppendix) ):
-        #    qtys['appendices'] = "\\input{%s}" % \
-        #        _os.path.basename(appendicesTexFilename)
-        #    self._merge_template(qtys, appendicesTemplate,
-        #                         appendicesTexFilename)
-        #else: qtys['appendices'] = ""
-        self._merge_template(qtys, mainTemplate, mainTexFilename)
-
-
-        # 4) compile report latex file into PDF
-        printer.log("Latex file(s) successfully generated.  Attempting to compile with pdflatex...")
-        cwd = _os.getcwd()
-        if len(report_dir) > 0:
-            _os.chdir(report_dir)
-
-        try:
-            self._compile_latex_report(report_dir, report_base,
-                                       self.options.latex_call, printer)
-        except _subprocess.CalledProcessError as e:
-            printer.error("pdflatex returned code %d " % e.returncode +
-                          "Check %s.log to see details." % report_base)
-        finally:
-            _os.chdir(cwd)
-
-        printer.log("Report generation complete! [total time %.0fs]" \
+        if bOutputFiles:
+            printer.log("*** Merging into template file *** (%.1fs elapsed)"
                         % (_time.time()-tStart))
+    
+            mainTexFilename = _os.path.join(report_dir, report_base + ".tex")
+            appendicesTexFilename = _os.path.join(report_dir, report_base + "_appendices.tex")
+            pdfFilename = _os.path.join(report_dir, report_base + ".pdf")
+    
+            mainTemplate = "report_general_main.tex"
+            self._merge_template(qtys, mainTemplate, mainTexFilename)
+    
+    
+            # 4) compile report latex file into PDF
+            printer.log("Latex file(s) successfully generated.  Attempting to compile with pdflatex...")
+            cwd = _os.getcwd()
+            if len(report_dir) > 0:
+                _os.chdir(report_dir)
+    
+            try:
+                self._compile_latex_report(report_dir, report_base,
+                                           self.options.latex_call, printer)
+            except _subprocess.CalledProcessError as e:
+                printer.error("pdflatex returned code %d " % e.returncode +
+                              "Check %s.log to see details." % report_base)
+            finally:
+                _os.chdir(cwd)
+    
+            printer.log("Report generation complete! [total time %.0fs]" \
+                            % (_time.time()-tStart))
+        else:
+            printer.log("'Done! (filename is None, so no output files generated)")
+            
         return
 
 
@@ -3821,11 +3969,13 @@ class ResultOptions(object):
         self.table_class = "pygstiTbl"
         self.precision = 4
         self.polar_precision = 3
+        self.sci_precision = 0
         self.template_path = "."
         self.latex_cmd = "pdflatex"
         # Don't allow LaTeX to try and recover from errors interactively.
-        self.latex_opts = ["-interaction=nonstopmode", "-halt-on-error"]
+        self.latex_opts = ["-interaction=nonstopmode", "-halt-on-error", "-shell-escape"]
         self.latex_call = [self.latex_cmd] + self.latex_opts
+        self.errgen_type = "logTiG" #"logG-logT"
         if _os.path.exists("/dev/null"):
             self.latex_postcmd = "-halt-on-error </dev/null >/dev/null"
         else:
@@ -3842,6 +3992,10 @@ class ResultOptions(object):
             % str(self.precision)
         s += prefix + ".polar_precision -- precision for polar exponent = %s\n" \
             % str(self.polar_precision)
+        s += prefix + ".sci_precision -- precision for scientific notn = %s\n" \
+            % str(self.sci_precision)
+        s += prefix + ".errgen_type -- type of error generator = %s\n" \
+            % str(self.errgen_type)
         s += prefix + ".template_path  -- pyGSTi templates path = '%s'\n" \
             % str(self.template_path)
         s += prefix + ".latex_cmd      -- latex compiling command = '%s'\n" \
@@ -3856,6 +4010,12 @@ class ResultOptions(object):
         s += self.describe("  ")
         return s
 
+    def copy(self):
+        """ Copy this ResultOptions object """
+        cpy = ResultOptions()
+        cpy.__dict__.update(self.__dict__)
+        return cpy
+
 
 def _to_pdfinfo(list_of_keyval_tuples):
 
@@ -3867,6 +4027,8 @@ def _to_pdfinfo(list_of_keyval_tuples):
             sanitized_val = "Dict[" + \
                 ", ".join([ "%s: %s" % (sanitize(k),sanitize(v)) for k,v
                             in val.items()]) + "]"
+        elif isinstance(val, _objs.GateSet):
+            sanitized_val = "GATESET_DATA"
         else:
             sanitized_val = sanitize_str( str(val) )
         return sanitized_val

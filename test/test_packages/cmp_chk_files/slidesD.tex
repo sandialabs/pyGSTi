@@ -52,15 +52,16 @@
   pdfinfo={ Author={pyGSTi},
 Title={GST on $\mathcal{D}$},
 Keywords={GST},
-pyGSTi_Version={0.9.1.1},
+pyGSTi_Version={0.9.2},
 opt_long_tables={False},
 opt_table_class={pygstiTbl},
 opt_template_path={None},
 opt_latex_cmd={pdflatex},
 L_germ_tuple_base_string_dict={Dict[[0, Gx]: {}, [0, Gy]: {}, [0, Gi]: {}, [0, GxGy]: {}, [0, GxGyGi]: {}, [0, GxGiGy]: {}, [0, GxGiGi]: {}, [0, GyGiGi]: {}, [0, GxGxGiGy]: {}, [0, GxGyGyGi]: {}, [0, GxGxGyGxGyGy]: {}, [1, Gx]: [Gx], [1, Gy]: [Gy], [1, Gi]: [Gi], [1, GxGy]: {}, [1, GxGyGi]: {}, [1, GxGiGy]: {}, [1, GxGiGi]: {}, [1, GyGiGi]: {}, [1, GxGxGiGy]: {}, [1, GxGyGyGi]: {}, [1, GxGxGyGxGyGy]: {}, [2, Gx]: [Gx]2, [2, Gy]: [Gy]2, [2, Gi]: [Gi]2, [2, GxGy]: [GxGy], [2, GxGyGi]: {}, [2, GxGiGy]: {}, [2, GxGiGi]: {}, [2, GyGiGi]: {}, [2, GxGxGiGy]: {}, [2, GxGyGyGi]: {}, [2, GxGxGyGxGyGy]: {}, [4, Gx]: [Gx]4, [4, Gy]: [Gy]4, [4, Gi]: [Gi]4, [4, GxGy]: [GxGy]2, [4, GxGyGi]: [GxGyGi], [4, GxGiGy]: [GxGiGy], [4, GxGiGi]: [GxGiGi], [4, GyGiGi]: [GyGiGi], [4, GxGxGiGy]: [GxGxGiGy], [4, GxGyGyGi]: [GxGyGyGi], [4, GxGxGyGxGyGy]: {}, [8, Gx]: [Gx]8, [8, Gy]: [Gy]8, [8, Gi]: [Gi]8, [8, GxGy]: [GxGy]4, [8, GxGyGi]: [GxGyGi]2, [8, GxGiGy]: [GxGiGy]2, [8, GxGiGi]: [GxGiGi]2, [8, GyGiGi]: [GyGiGi]2, [8, GxGxGiGy]: [GxGxGiGy]2, [8, GxGyGyGi]: [GxGyGyGi]2, [8, GxGxGyGxGyGy]: [GxGxGyGxGyGy]]},
-constrainToTP={True},
+cptpPenaltyFactor={0},
 defaultBasename={None},
 defaultDirectory={None},
+distributeMethod={deriv},
 fiducial_pairs={None},
 gaugeOptParams={Dict[]},
 hessianProjection={optimal gate CIs},
@@ -113,12 +114,12 @@ weights={None}  }
 \adjustbox{max height=\dimexpr\textheight-5.5cm\relax, max width=\textwidth}{
 \begin{tabular}[l]{|c|c|c|c|c|c|c|c|c|}
 \hline
-L & $2\Delta\log(\mathcal{L})$ & $k$ & $2\Delta\log(\mathcal{L})-k$ & $\sqrt{2k}$ & $p$ & $N_s$ & $N_p$ & Rating \\ \hline
-0 & 53.746 & 61 & -7.2535 & 11.045 & 0.73 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-1 & 53.747 & 61 & -7.2535 & 11.045 & 0.73 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-2 & 106.74 & 137 & -30.255 & 16.553 & 0.97 & 168 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-4 & 354.36 & 410 & -55.645 & 28.636 & 0.98 & 441 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
-8 & 691.08 & 786 & -94.916 & 39.648 & 0.99 & 817 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+L & $2\Delta\log(\mathcal{L})$ & $k$ & $2\Delta\log(\mathcal{L})-k$ & $\sqrt{2k}$ & $N_\sigma$ & $N_s$ & $N_p$ & Rating \\ \hline
+0 & 53.75 & 61 & -7.251 & 11.05 & -0.66 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+1 & 53.75 & 61 & -7.251 & 11.05 & -0.66 & 92 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+2 & 106.8 & 137 & -30.25 & 16.55 & -1.83 & 168 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+4 & 439.5 & 410 & 29.48 & 28.64 & 1.03 & 441 & 31 & $\bigstar\bigstar\bigstar\bigstar$ \\ \hline
+8 & 691.3 & 786 & -94.72 & 39.65 & -2.39 & 817 & 31 & $\bigstar\bigstar\bigstar\bigstar\bigstar$ \\ \hline
 \end{tabular}
 }
 \caption{Comparison between the computed and expected $2\Delta\log{\mathcal{L}}$ for different values of $L$}
@@ -158,9 +159,9 @@ L & $2\Delta\log(\mathcal{L})$ & $k$ & $2\Delta\log(\mathcal{L})-k$ & $\sqrt{2k}
 \begin{tabular}[l]{|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
-Gi & $ \begin{array}{c} 0.0399 \\ \pm 0.0026 \end{array} $ & $ \begin{array}{c} 0.0401 \\ \pm 0.0026 \end{array} $ & $ \begin{array}{c} 0.0401 \\ \pm 0.0026 \end{array} $ \\ \hline
-Gx & $ \begin{array}{c} 0.0378 \\ \pm 0.0022 \end{array} $ & $ \begin{array}{c} 0.0379 \\ \pm 0.0022 \end{array} $ & $ \begin{array}{c} 0.0379 \\ \pm 0.0022 \end{array} $ \\ \hline
-Gy & $ \begin{array}{c} 0.0377 \\ \pm 0.0022 \end{array} $ & $ \begin{array}{c} 0.0378 \\ \pm 0.0022 \end{array} $ & $ \begin{array}{c} 0.0378 \\ \pm 0.0022 \end{array} $ \\ \hline
+Gi & $ \begin{array}{c} 0.04 \\ \pm 0.003 \end{array} $ & $ \begin{array}{c} 0.04 \\ \pm 0.003 \end{array} $ & $ \begin{array}{c} 0.04 \\ \pm 0.003 \end{array} $ \\ \hline
+Gx & $ \begin{array}{c} 0.038 \\ \pm 0.002 \end{array} $ & $ \begin{array}{c} 0.038 \\ \pm 0.002 \end{array} $ & $ \begin{array}{c} 0.038 \\ \pm 0.002 \end{array} $ \\ \hline
+Gy & $ \begin{array}{c} 0.038 \\ \pm 0.002 \end{array} $ & $ \begin{array}{c} 0.038 \\ \pm 0.002 \end{array} $ & $ \begin{array}{c} 0.038 \\ \pm 0.002 \end{array} $ \\ \hline
 \end{tabular}
 
 \\
@@ -171,23 +172,23 @@ Gy & $ \begin{array}{c} 0.0377 \\ \pm 0.0022 \end{array} $ & $ \begin{array}{c} 
 Gate & Error Generator \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
--0.001 & -0.0569 & -0.0066 & -0.0093 \\ 
-0.0004 & 0.0011 & -0.0543 & 0.0041 \\ 
-0.0011 & 3\e{-5} & 0.0008 & -0.0529
+-0.001 & -0.057 & -0.007 & -0.009 \\ 
+4\e{-4} & 0.001 & -0.054 & 0.004 \\ 
+0.001 & 3\e{-5} & 0.001 & -0.053
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
-0.0003 & -0.0508 & -0.0051 & -0.0057 \\ 
-0.0002 & 0.0003 & -0.0523 & -0.0023 \\ 
--0.0002 & -0.0003 & -0.0001 & -0.0522
+3\e{-4} & -0.051 & -0.005 & -0.006 \\ 
+2\e{-4} & 3\e{-4} & -0.052 & -0.002 \\ 
+-2\e{-4} & -3\e{-4} & -1\e{-4} & -0.052
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
-0.0002 & -0.0523 & 0.0065 & 0.0005 \\ 
-0.0003 & 0.0011 & -0.05 & 0.0012 \\ 
-0.0002 & 0.0001 & -0.0042 & -0.0525
+2\e{-4} & -0.052 & 0.007 & 0.001 \\ 
+3\e{-4} & 0.001 & -0.05 & 0.001 \\ 
+2\e{-4} & 7\e{-5} & -0.004 & -0.053
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -213,80 +214,80 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 \hline
 Gate & Eigenvalues & Fixed pt & Rotn. axis & Diag. decay & Off-diag. decay \\ \hline
 Gi & $ \begin{array}{c}
-0.9487 \\ 
-0.9458e^{i0.002} \\ 
-0.9458e^{-i0.002} \\ 
+0.949 \\ 
+0.946e^{i0.00} \\ 
+0.946e^{-i0.00} \\ 
 1
  \end{array} $
  $\pm$ $ \begin{array}{c}
 0.019 \\ 
-0.013e^{i0.676} \\ 
-0.013e^{i0.676} \\ 
+0.013e^{i0.68} \\ 
+0.013e^{i0.68} \\ 
 0
  \end{array} $
  & $ \begin{array}{c}
 0.999 \\ 
--0.0222 \\ 
-0.0093 \\ 
-0.0204
+-0.023 \\ 
+0.009 \\ 
+0.021
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
-0.9348 \\ 
--0.1473 \\ 
--0.3233
+-0.933 \\ 
+0.151 \\ 
+0.326
  \end{array} $
- & $ \begin{array}{c} 0.0513 \\ \pm 0.019 \end{array} $ & $ \begin{array}{c} 0.0542 \\ \pm 0.0101 \end{array} $ \\ \hline
+ & $ \begin{array}{c} 0.051 \\ \pm 0.019 \end{array} $ & $ \begin{array}{c} 0.054 \\ \pm 0.01 \end{array} $ \\ \hline
 Gx & $ \begin{array}{c}
-0.9491e^{i1.572} \\ 
-0.9491e^{-i1.572} \\ 
-0.9505 \\ 
+0.949e^{i1.57} \\ 
+0.949e^{-i1.57} \\ 
+0.951 \\ 
 1
  \end{array} $
  $\pm$ $ \begin{array}{c}
-0.0047e^{i0.673} \\ 
-0.0047e^{i0.673} \\ 
-0.0056 \\ 
+0.005e^{i0.67} \\ 
+0.005e^{i0.67} \\ 
+0.006 \\ 
 0
  \end{array} $
  & $ \begin{array}{c}
 1 \\ 
-0.0064 \\ 
--9\e{-6} \\ 
-0.0002
+0.007 \\ 
+-3\e{-5} \\ 
+2\e{-4}
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
 -1 \\ 
-1\e{-5} \\ 
--0.0003
+-1\e{-5} \\ 
+-3\e{-4}
  \end{array} $
- & $ \begin{array}{c} 0.0495 \\ \pm 0.0056 \end{array} $ & $ \begin{array}{c} 0.0509 \\ \pm 0.0029 \end{array} $ \\ \hline
+ & $ \begin{array}{c} 0.049 \\ \pm 0.006 \end{array} $ & $ \begin{array}{c} 0.051 \\ \pm 0.003 \end{array} $ \\ \hline
 Gy & $ \begin{array}{c}
-0.9489e^{i1.571} \\ 
-0.9489e^{-i1.571} \\ 
-0.9512 \\ 
+0.949e^{i1.57} \\ 
+0.949e^{-i1.57} \\ 
+0.951 \\ 
 1
  \end{array} $
  $\pm$ $ \begin{array}{c}
-0.0046e^{i0.725} \\ 
-0.0046e^{i0.725} \\ 
-0.0057 \\ 
+0.005e^{i0.73} \\ 
+0.005e^{i0.73} \\ 
+0.006 \\ 
 0
  \end{array} $
  & $ \begin{array}{c}
 1 \\ 
--4\e{-6} \\ 
-0.0067 \\ 
--0.0002
+1\e{-5} \\ 
+0.006 \\ 
+-2\e{-4}
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
--0.0054 \\ 
+-0.005 \\ 
 1 \\ 
--0.0012
+-0.001
  \end{array} $
- & $ \begin{array}{c} 0.0488 \\ \pm 0.0057 \end{array} $ & $ \begin{array}{c} 0.0511 \\ \pm 0.003 \end{array} $ \\ \hline
+ & $ \begin{array}{c} 0.049 \\ \pm 0.006 \end{array} $ & $ \begin{array}{c} 0.051 \\ \pm 0.003 \end{array} $ \\ \hline
 \end{tabular}
 
 \\
@@ -296,9 +297,9 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & $ \begin{array}{c}(0.0006 \\ \pm 0.0027)\pi \end{array} $ &  & $ \begin{array}{c}(0.8843 \\ \pm 0.4857)\pi \end{array} $ & $ \begin{array}{c}(0.5485 \\ \pm 0.6311)\pi \end{array} $ \\ \hline
-Gx & $ \begin{array}{c}(0.5004 \\ \pm 0.0012)\pi \end{array} $ & $ \begin{array}{c}(0.8843 \\ \pm 0.4857)\pi \end{array} $ &  & $ \begin{array}{c}(0.4983 \\ \pm 0.0019)\pi \end{array} $ \\ \hline
-Gy & $ \begin{array}{c}(0.5001 \\ \pm 0.0011)\pi \end{array} $ & $ \begin{array}{c}(0.5485 \\ \pm 0.6311)\pi \end{array} $ & $ \begin{array}{c}(0.4983 \\ \pm 0.0019)\pi \end{array} $ &  \\ \hline
+Gi & $ \begin{array}{c}(0.001 \\ \pm 0.003)\pi \end{array} $ &  & $ \begin{array}{c}(0.117 \\ \pm 0.481)\pi \end{array} $ & $ \begin{array}{c}(0.45 \\ \pm 0.619)\pi \end{array} $ \\ \hline
+Gx & $ \begin{array}{c}(0.5 \\ \pm 0.001)\pi \end{array} $ & $ \begin{array}{c}(0.117 \\ \pm 0.481)\pi \end{array} $ &  & $ \begin{array}{c}(0.498 \\ \pm 0.002)\pi \end{array} $ \\ \hline
+Gy & $ \begin{array}{c}(0.5 \\ \pm 0.001)\pi \end{array} $ & $ \begin{array}{c}(0.45 \\ \pm 0.619)\pi \end{array} $ & $ \begin{array}{c}(0.498 \\ \pm 0.002)\pi \end{array} $ &  \\ \hline
 \end{tabular}
 
 \end{tabular}
@@ -322,41 +323,41 @@ Gy & $ \begin{array}{c}(0.5001 \\ \pm 0.0011)\pi \end{array} $ & $ \begin{array}
 Gate & Superoperator (Pauli basis) & 95\% C.I. $\nicefrac{1}{2}$-width \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
--0.001 & 0.9447 & -0.0063 & -0.0088 \\ 
-0.0004 & 0.0011 & 0.9471 & 0.0038 \\ 
-0.001 & 3\e{-5} & 0.0007 & 0.9485
+-0.001 & 0.945 & -0.006 & -0.009 \\ 
+4\e{-4} & 0.001 & 0.947 & 0.004 \\ 
+0.001 & 2\e{-5} & 0.001 & 0.949
  \end{array}\!\!\right) $
  & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
-0.0022 & 0.0056 & 0.006 & 0.0061 \\ 
-0.0022 & 0.0058 & 0.0056 & 0.006 \\ 
-0.0021 & 0.0056 & 0.0059 & 0.0051
+0.002 & 0.006 & 0.006 & 0.006 \\ 
+0.002 & 0.006 & 0.006 & 0.006 \\ 
+0.002 & 0.006 & 0.006 & 0.005
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
-0.0003 & 0.9505 & -0.0049 & -0.0054 \\ 
-0.0002 & 0.0003 & 0.0001 & -0.9491 \\ 
-0.0002 & 0.0003 & 0.949 & -0.0022
+3\e{-4} & 0.951 & -0.005 & -0.005 \\ 
+2\e{-4} & 3\e{-4} & 1\e{-4} & -0.949 \\ 
+2\e{-4} & 3\e{-4} & 0.949 & -0.002
  \end{array}\!\!\right) $
  & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
-0.0022 & 0.0056 & 0.0058 & 0.0055 \\ 
-0.0011 & 0.0047 & 0.0054 & 0.0029 \\ 
-0.0012 & 0.0047 & 0.0029 & 0.0041
+0.002 & 0.006 & 0.006 & 0.006 \\ 
+0.001 & 0.005 & 0.005 & 0.003 \\ 
+0.001 & 0.005 & 0.003 & 0.004
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
-0.0002 & 0.0001 & -0.004 & 0.9488 \\ 
-0.0003 & 0.0011 & 0.9512 & 0.0011 \\ 
--0.0002 & -0.949 & -0.0062 & -0.0005
+2\e{-4} & 7\e{-5} & -0.004 & 0.949 \\ 
+3\e{-4} & 0.001 & 0.951 & 0.001 \\ 
+-2\e{-4} & -0.949 & -0.006 & -5\e{-4}
  \end{array}\!\!\right) $
  & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
-0.0011 & 0.0056 & 0.0059 & 0.003 \\ 
-0.0021 & 0.0047 & 0.0057 & 0.0046 \\ 
-0.0011 & 0.003 & 0.0053 & 0.0035
+0.001 & 0.006 & 0.006 & 0.003 \\ 
+0.002 & 0.005 & 0.006 & 0.005 \\ 
+0.001 & 0.003 & 0.005 & 0.004
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -378,40 +379,40 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 \begin{tabular}{c}
 \begin{tabular}[l]{|c|c|c|c|}
 \hline
-Operator & Hilbert-Schmidt vector (Pauli basis) & 95\% C.I. $\nicefrac{1}{2}$-width & Matrix \\ \hline
-$\rho_{0}$ & $ \begin{array}{c}
-0.7071 \\ 
-0.0016 \\ 
-0.0003 \\ 
-0.6373
+Operator & Matrix & Hilbert-Schmidt vector (Pauli basis) & 95\% C.I. $\nicefrac{1}{2}$-width \\ \hline
+$\rho_{0}$ & $ \left(\!\!\begin{array}{cc}
+0.951 & 0.001e^{-i0.17} \\ 
+0.001e^{i0.17} & 0.049
+ \end{array}\!\!\right) $
+ & $ \begin{array}{c}
+0.707 \\ 
+0.002 \\ 
+3\e{-4} \\ 
+0.638
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
-0.0058 \\ 
-0.0061 \\ 
-0.0043
+0.006 \\ 
+0.006 \\ 
+0.004
  \end{array} $
- & $ \left(\!\!\begin{array}{cc}
-0.9506 & 0.0012e^{-i0.159} \\ 
-0.0012e^{i0.159} & 0.0494
- \end{array}\!\!\right) $
  \\ \hline
-$E_{0}$ & $ \begin{array}{c}
-0.7077 \\ 
--0.0002 \\ 
--0.0031 \\ 
--0.6429
+$E_{0}$ & $ \left(\!\!\begin{array}{cc}
+0.047 & 0.002e^{i1.61} \\ 
+0.002e^{-i1.61} & 0.955
+ \end{array}\!\!\right) $
+ & $ \begin{array}{c}
+0.708 \\ 
+-1\e{-4} \\ 
+-0.003 \\ 
+-0.642
  \end{array} $
  & $ \begin{array}{c}
-0.0014 \\ 
-0.0054 \\ 
-0.0055 \\ 
-0.0053
+0.001 \\ 
+0.005 \\ 
+0.006 \\ 
+0.005
  \end{array} $
- & $ \left(\!\!\begin{array}{cc}
-0.0458 & 0.0022e^{i1.648} \\ 
-0.0022e^{-i1.648} & 0.9551
- \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
 
@@ -421,7 +422,7 @@ $E_{0}$ & $ \begin{array}{c}
 \begin{tabular}[l]{|c|c|c|}
 \hline
  & $E_{0}$ & $E_C$ \\ \hline
-$\rho_{0}$ & $ \begin{array}{c} 0.0907 \\ \pm 0.0062 \end{array} $ & $ \begin{array}{c} 0.9092 \\ \pm 0.0062 \end{array} $ \\ \hline
+$\rho_{0}$ & $ \begin{array}{c} 0.091 \\ \pm 0.006 \end{array} $ & $ \begin{array}{c} 0.909 \\ \pm 0.006 \end{array} $ \\ \hline
 \end{tabular}
 
 \end{tabular}
@@ -443,60 +444,60 @@ $\rho_{0}$ & $ \begin{array}{c} 0.0907 \\ \pm 0.0062 \end{array} $ & $ \begin{ar
 \hline
 Gate & Choi matrix (Pauli basis) & Eigenvalues \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
-0.9601 & 0.0008e^{i1.878} & 0.0022e^{-i1.620} & 0.0019e^{-i1.429} \\ 
-0.0008e^{-i1.878} & 0.0123 & 0.0013e^{-i0.199} & 0.0022e^{-i3.092} \\ 
-0.0022e^{i1.620} & 0.0013e^{i0.199} & 0.0135 & 0.0012e^{i2.928} \\ 
-0.0019e^{i1.429} & 0.0022e^{i3.092} & 0.0012e^{-i2.928} & 0.0142
+0.96 & 0.001e^{-i1.88} & 0.002e^{-i1.52} & 0.002e^{i1.43} \\ 
+0.001e^{i1.88} & 0.012 & 0.001e^{-i2.94} & 0.002e^{i3.09} \\ 
+0.002e^{i1.52} & 0.001e^{i2.94} & 0.013 & 0.001e^{i0.22} \\ 
+0.002e^{-i1.43} & 0.002e^{-i3.09} & 0.001e^{-i0.22} & 0.014
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
-0.0107 \\ 
-0.0127 \\ 
-0.0165 \\ 
-0.9601
+0.011 \\ 
+0.013 \\ 
+0.017 \\ 
+0.96
  \end{array} $
  $\pm$ $ \begin{array}{c}
-0.0024 \\ 
-0.0023 \\ 
-0.0025 \\ 
-0.0026
+0.002 \\ 
+0.002 \\ 
+0.002 \\ 
+0.003
  \end{array} $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
-0.4871 & 0.4745e^{-i1.571} & 0.0014e^{-i1.601} & 0.0013e^{-i1.532} \\ 
-0.4745e^{i1.571} & 0.4882 & 0.0012e^{-i0.043} & 0.0013e^{-i3.108} \\ 
-0.0014e^{i1.601} & 0.0012e^{i0.043} & 0.013 & 0.0001e^{-i1.247} \\ 
-0.0013e^{i1.532} & 0.0013e^{i3.108} & 0.0001e^{i1.247} & 0.0118
+0.487 & 0.475e^{i1.57} & 0.001e^{-i1.54} & 0.001e^{i1.52} \\ 
+0.475e^{-i1.57} & 0.488 & 0.001e^{-i3.09} & 0.001e^{i3.11} \\ 
+0.001e^{i1.54} & 0.001e^{i3.09} & 0.013 & 9\e{-5}e^{-i1.90} \\ 
+0.001e^{-i1.52} & 0.001e^{-i3.11} & 9\e{-5}e^{i1.90} & 0.012
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
-0.0105 \\ 
-0.0129 \\ 
-0.0144 \\ 
-0.9622
+0.011 \\ 
+0.013 \\ 
+0.014 \\ 
+0.962
  \end{array} $
  $\pm$ $ \begin{array}{c}
-0.0023 \\ 
-0.0022 \\ 
-0.0024 \\ 
-0.0022
+0.002 \\ 
+0.002 \\ 
+0.002 \\ 
+0.002
  \end{array} $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-0.4877 & 0.0018e^{i1.539} & 0.4745e^{i1.571} & 0.0013e^{-i1.607} \\ 
-0.0018e^{-i1.539} & 0.0123 & 0.0007e^{i0.063} & 0.0001e^{-i2.116} \\ 
-0.4745e^{-i1.571} & 0.0007e^{-i0.063} & 0.4879 & 0.0013e^{-i0.046} \\ 
-0.0013e^{i1.607} & 0.0001e^{i2.116} & 0.0013e^{i0.046} & 0.0121
+0.488 & 0.002e^{-i1.54} & 0.474e^{i1.57} & 0.001e^{i1.60} \\ 
+0.002e^{i1.54} & 0.012 & 0.001e^{i3.09} & 1\e{-4}e^{i2.18} \\ 
+0.474e^{-i1.57} & 0.001e^{-i3.09} & 0.488 & 0.001e^{-i3.10} \\ 
+0.001e^{-i1.60} & 1\e{-4}e^{-i2.18} & 0.001e^{i3.10} & 0.012
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
-0.0107 \\ 
-0.0123 \\ 
-0.0148 \\ 
-0.9623
+0.011 \\ 
+0.012 \\ 
+0.015 \\ 
+0.962
  \end{array} $
  $\pm$ $ \begin{array}{c}
-0.0022 \\ 
-0.0019 \\ 
-0.0023 \\ 
-0.0022
+0.002 \\ 
+0.002 \\ 
+0.002 \\ 
+0.002
  \end{array} $
  \\ \hline
 \end{tabular}
@@ -519,28 +520,28 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 \adjustbox{max height=\dimexpr\textheight-5.5cm\relax, max width=\textwidth}{
 \begin{tabular}[l]{|c|c|c|}
 \hline
-Operator & Hilbert-Schmidt vector (Pauli basis) & Matrix \\ \hline
-$\rho_{0}$ & $ \begin{array}{c}
-0.7071 \\ 
-0 \\ 
-0 \\ 
-0.7071
- \end{array} $
- & $ \left(\!\!\begin{array}{cc}
+Operator & Matrix & Hilbert-Schmidt vector (Pauli basis) \\ \hline
+$\rho_{0}$ & $ \left(\!\!\begin{array}{cc}
 1 & 0 \\ 
 0 & 0
  \end{array}\!\!\right) $
- \\ \hline
-$E_{0}$ & $ \begin{array}{c}
-0.7071 \\ 
+ & $ \begin{array}{c}
+0.707 \\ 
 0 \\ 
 0 \\ 
--0.7071
+0.707
  \end{array} $
- & $ \left(\!\!\begin{array}{cc}
+ \\ \hline
+$E_{0}$ & $ \left(\!\!\begin{array}{cc}
 0 & 0 \\ 
 0 & 1
  \end{array}\!\!\right) $
+ & $ \begin{array}{c}
+0.707 \\ 
+0 \\ 
+0 \\ 
+-0.707
+ \end{array} $
  \\ \hline
 \end{tabular}
 }
@@ -676,12 +677,12 @@ Gate labels & Gx, Gy, Gi \\ \hline
 SPAM labels & plus, minus \\ \hline
 Counts per string & 1000 \\ \hline
 \begin{tabular}{c}Gram singular values\\ (right column gives the values\\when using the target gate set)\end{tabular} & \small$ \begin{array}{cc}
-0.0029 & 0 \\ 
-0.0205 & 0 \\ 
-0.6626 & 1 \\ 
-0.6789 & 1 \\ 
-0.7472 & 1 \\ 
-3.0074 & 3
+0.003 & 0 \\ 
+0.02 & 0 \\ 
+0.663 & 1 \\ 
+0.679 & 1 \\ 
+0.747 & 1 \\ 
+3.007 & 3
  \end{array} $
  \\ \hline
 \end{tabular}

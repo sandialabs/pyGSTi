@@ -14,6 +14,7 @@ import scipy.linalg as _spl
 from ..tools import basistools as _bt
 from ..objects import gate as _gate
 from ..objects import gateset as _gateset
+from ..objects import gaugegroup as _gg
 
 
 #############################################
@@ -419,7 +420,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
         - "pp"  = gate matrix operates on density mx expresses as sum of
           tensor-product of Pauli matrices
 
-    parameterization : {"full","TP","static","linear"}, optional
+    parameterization : {"full","TP","static","linear","linearTP"}, optional
         How to parameterize the resulting gate.
 
         - "full" = return a FullyParameterizedGate.
@@ -427,6 +428,8 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
         - "static" = return a StaticGate.
         - "linear" = if possible, return a LinearlyParameterizedGate that
           parameterizes only the pieces explicitly present in gateExpr.
+        - "linearTP" = if possible, return a LinearlyParameterizedGate that
+          parameterizes only the TP pieces explicitly present in gateExpr.
 
     unitaryEmbedding : bool, optional
         An interal switch determining how the gate is constructed.  Should have
@@ -611,6 +614,12 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
                 if indicesToParameterize == "all":
                     iParam = gate_i*gatemx.shape[1] + gate_j #index of (i,j) gate parameter in 1D array of parameters (flatten gatemx)
                     parameterToBaseIndicesMap[ iParam ] = []
+                elif indicesToParameterize == "TP":
+                    if gate_i > 0:
+                        iParam = (gate_i-1)*gatemx.shape[1] + gate_j
+                        parameterToBaseIndicesMap[ iParam ] = []
+                    else:
+                        iParam = None
                 elif (gate_i,gate_j) in indicesToParameterize:
                     iParam = indicesToParameterize.index( (gate_i,gate_j) )
                     parameterToBaseIndicesMap[ iParam ] = []
@@ -685,14 +694,17 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
                 raise ValueError("TP gates must be real. Failed to build gate!")
             return _gate.TPParameterizedGate(_np.real(finalGateInFinalBasis))
 
-        elif parameterization == "linear":
+        elif parameterization in ("linear","linearTP"):
             #OLD (INCORRECT) -- but could give this as paramArray if gave zeros as base matrix instead of finalGate
             # paramArray = gatemx.flatten() if indicesToParameterize == "all" else _np.array([gatemx[t] for t in indicesToParameterize])
 
             #Set all params to *zero* since base matrix contains all initial elements -- parameters just give deviation
-            paramArray = _np.zeros(
-                gatemx.size if indicesToParameterize == "all" else
-                len(indicesToParameterize), 'd' )
+            if indicesToParameterize == "all":
+                paramArray = _np.zeros(gatemx.size, 'd')
+            elif indicesToParameterize == "TP":
+                paramArray = _np.zeros(gatemx.size - gatemx.shape[1], 'd')
+            else:
+                paramArray = _np.zeros(len(indicesToParameterize), 'd' )
 
             return _gate.LinearlyParameterizedGate(
                 finalGate, paramArray, parameterToBaseIndicesMap,
@@ -701,7 +713,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
 
         else:
             raise ValueError("Invalid 'parameterization' parameter: " +
-                             "%s (must by 'full', 'TP', 'static' or 'linear')"
+                             "%s (must by 'full', 'TP', 'static', 'linear' or 'linearTP')"
                              % parameterization)
 
 
@@ -712,6 +724,9 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
 
     #print "DB: dim = ",dim, " dmDim = ",dmDim
     gateInFinalBasis = None #what will become the final gate matrix
+    defaultI2P = "all" if parameterization != "linearTP" else "TP"
+      #default indices to parameterize (I2P) - used only when 
+      # creating parameterized gates
 
     exprTerms = gateExpr.split(':')
     for exprTerm in exprTerms:
@@ -734,7 +749,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
                 gateTermInFinalBasis = embed_gate_unitary(Ugate, tuple(labels)) #Ugate assumed to be in std basis (really the only option)
             else:
                 pp_gateMx = _np.identity(stateSpaceDim**2, 'd') # *real* 4x4 mx in Pauli-product basis -- still just the identity!
-                gateTermInFinalBasis = embed_gate(pp_gateMx, tuple(labels)) # pp_gateMx assumed to be in the Pauli-product basis
+                gateTermInFinalBasis = embed_gate(pp_gateMx, tuple(labels), defaultI2P) # pp_gateMx assumed to be in the Pauli-product basis
 
         elif gateName == "D":  #like 'I', but only parameterize the diagonal elements - so can be a depolarization-type map
             labels = args # qubit labels (TODO: what about 'L' labels? -- not sure if they work with this...)
@@ -744,11 +759,13 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
                 elif l.startswith('L'): stateSpaceDim *= 1
                 else: raise ValueError("Invalid state space label: %s" % l)
 
-            if unitaryEmbedding or parameterization != "linear":
+            if unitaryEmbedding or parameterization not in ("linear","linearTP"):
                 raise ValueError("'D' gate only makes sense to use when unitaryEmbedding is False and parameterization == 'linear'")
 
-            #indicesToParameterize = [ (i,i) for i in range(1,stateSpaceDim**2) ] #parameterize only the diagonals els after the first
-            indicesToParameterize = [ (i,i) for i in range(0,stateSpaceDim**2) ] #parameterize only the diagonals els
+            if defaultI2P == "TP":
+                indicesToParameterize = [ (i,i) for i in range(1,stateSpaceDim**2) ] #parameterize only the diagonals els after the first
+            else:
+                indicesToParameterize = [ (i,i) for i in range(0,stateSpaceDim**2) ] #parameterize only the diagonals els
             pp_gateMx = _np.identity(stateSpaceDim**2, 'd') # *real* 4x4 mx in Pauli-product basis -- still just the identity!
             gateTermInFinalBasis = embed_gate(pp_gateMx, tuple(labels), indicesToParameterize) # pp_gateMx assumed to be in the Pauli-product basis
 
@@ -769,7 +786,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
                 Ugatec = Ugate.conjugate()
                 gateMx = _np.kron(Ugate,Ugatec) # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
                 pp_gateMx = _bt.std_to_pp(gateMx) # *real* 4x4 mx in Pauli-product basis -- better for parameterization
-                gateTermInFinalBasis = embed_gate(pp_gateMx, (label,)) # pp_gateMx assumed to be in the Pauli-product basis
+                gateTermInFinalBasis = embed_gate(pp_gateMx, (label,), defaultI2P) # pp_gateMx assumed to be in the Pauli-product basis
 
         elif gateName == 'N': #more general single-qubit gate
             assert(len(args) == 5) # theta, sigmaX-coeff, sigmaY-coeff, sigmaZ-coeff, qubit-index
@@ -787,7 +804,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
                 Ugatec = Ugate.conjugate()
                 gateMx = _np.kron(Ugate,Ugatec) # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
                 pp_gateMx = _bt.std_to_pp(gateMx) # *real* 4x4 mx in Pauli-product basis -- better for parameterization
-                gateTermInFinalBasis = embed_gate(pp_gateMx, (label,)) # pp_gateMx assumed to be in the Pauli-product basis
+                gateTermInFinalBasis = embed_gate(pp_gateMx, (label,), defaultI2P) # pp_gateMx assumed to be in the Pauli-product basis
 
         elif gateName in ('CX','CY','CZ'): #two-qubit gate names
             assert(len(args) == 3) # theta, qubit-label1, qubit-label2
@@ -807,7 +824,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
                 Ugatec = Ugate.conjugate()
                 gateMx = _np.kron(Ugate,Ugatec) # complex 16x16 mx operating on vectorized 2Q densty matrix in std basis
                 pp_gateMx = _bt.std_to_pp(gateMx) # *real* 16x16 mx in Pauli-product basis -- better for parameterization
-                gateTermInFinalBasis = embed_gate(pp_gateMx, (label1,label2)) # pp_gateMx assumed to be in the Pauli-product basis
+                gateTermInFinalBasis = embed_gate(pp_gateMx, (label1,label2), defaultI2P) # pp_gateMx assumed to be in the Pauli-product basis
 
         elif gateName == "LX":  #TODO - better way to describe leakage?
             assert(len(args) == 3) # theta, dmIndex1, dmIndex2 - X rotation between any two density matrix basis states
@@ -923,7 +940,7 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
         - "pp"  = gate matrix operates on density mx expresses as sum of
           tensor-product of Pauli matrices
 
-    parameterization : {"full","linear"}, optional
+    parameterization : {"full","TP","linear","linearTP"}, optional
         How to parameterize the gates of the resulting GateSet (see
         documentation for :meth:`build_gate`).
 
@@ -932,7 +949,8 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
     GateSet
         The created gate set.
     """
-    ret = _gateset.GateSet(default_param="full") #TODO: tp/static parameterization
+    defP = "TP" if (parameterization in ("TP","linearTP")) else "full"
+    ret = _gateset.GateSet(default_param=defP)
                  #prep_prefix="rho", effect_prefix="E", gate_prefix="G",
                  #remainder_label="remainder", identity_label="identity")
 
@@ -966,7 +984,50 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
         basisDims = stateSpaceDims
 
     ret.set_basis(basis, basisDims)
+
+    if parameterization == "full":
+        ret.default_gauge_group = _gg.FullGaugeGroup(ret.dim)
+    elif parameterization == "TP":
+        ret.default_gauge_group = _gg.TPGaugeGroup(ret.dim)
+    else:
+        ret.default_gauge_group = None #assume no gauge freedom
+
     return ret
+
+
+def build_alias_gateset(gs_primitives,alias_dict):
+    """
+    Creates a new gateset by composing the gates of an existing `GateSet`,
+    `gs_primitives`, according to a dictionary of `GateString`s, `alias_dict`.
+    The keys of `alias_dict` are the gate labels of the returned `GateSet1.
+    SPAM vectors are unaltered, and simply copied from `gs_primitives`.
+
+    Parameters
+    ----------
+    gs_primitives : GateSet
+        A Gateset containing the "primitive" gates (those used to compose
+        the gates of the returned gateset).
+    
+    alias_dict : dictionary
+        A dictionary whose keys are strings and values are GateString objects
+        specifying sequences of primitive gates.  Each key,value pair specifies
+        the composition rule for a creating a gate in the returned gate set.
+    
+    Returns
+    -------
+    GateSet
+        A gate set whose gates are compositions of primitive gates and whose
+        spam operations are the same as those of `gs_primitives`.
+    """
+    gs_new = gs_primitives.copy()
+    for gl in gs_primitives.gates.keys():
+        del gs_new.gates[gl] #remove all gates from gs_new
+
+    for gl,gstr in alias_dict.items():
+        gs_new.gates[gl] = gs_primitives.product(gstr)
+          #Creates fully parameterized gates by default...
+    return gs_new
+
 
 
 

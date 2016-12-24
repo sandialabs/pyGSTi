@@ -28,7 +28,7 @@ def get_blank_table():
     return table
 
 
-def get_gateset_spam_table(gateset, confidenceRegionInfo=None,
+def get_gateset_spam_table(gateset, targetGateset=None, confidenceRegionInfo=None,
                            includeHSVec=True):
     """
     Create a table for gateset's SPAM vectors.
@@ -37,6 +37,10 @@ def get_gateset_spam_table(gateset, confidenceRegionInfo=None,
     ----------
     gateset : GateSet
         The GateSet
+
+    targetGateset : GateSet, optional
+        If provided, the target SPAM vectors are displayed in the first
+        column as a point of comparision.
 
     confidenceRegionInfo : ConfidenceRegion, optional
         If not None, specifies a confidence-region
@@ -55,57 +59,76 @@ def get_gateset_spam_table(gateset, confidenceRegionInfo=None,
     mxBasisDim = gateset.get_basis_dimension()
     basisNm    = _tools.basis_longname(mxBasis, mxBasisDim)
 
-    if confidenceRegionInfo is None:
-        if includeHSVec:
-            colHeadings = ('Operator','Hilbert-Schmidt vector (%s basis)' % basisNm,'Matrix')
-            formatters  = (None,None,None)
-        else:
-            colHeadings = ('Operator','Matrix')
-            formatters  = (None,None)
-
+    colHeadings = ['Operator']
+    formatters  = [ None ]
+    if targetGateset is not None:
+        assert(targetGateset.get_basis_name() == mxBasis)
+        colHeadings.append( 'Target Matrix' )
+        formatters.append( None )
+        colHeadings.append( 'Estimate Matrix' )
+        formatters.append( None )
     else:
-        if includeHSVec:
-            colHeadings = ('Operator',
-                           'Hilbert-Schmidt vector (%s basis)' % basisNm,
-                           '%g%% C.I. half-width' % confidenceRegionInfo.level,
-                           'Matrix')
-            formatters  = (None,None,'Conversion',None)
-        else:
-            colHeadings = ('Operator',
-                           'Matrix')
-            formatters = (None,None)
+        colHeadings.append( 'Matrix' )
+        formatters.append( None )
+
+    if includeHSVec:
+        colHeadings.append( 'Hilbert-Schmidt vector (%s basis)' % basisNm )
+        formatters.append( None )
+        if confidenceRegionInfo is not None:
+            colHeadings.append('%g%% C.I. half-width' % confidenceRegionInfo.level)
+            formatters.append( 'Conversion' )
 
 
     table = _ReportTable(colHeadings, formatters)
 
     for lbl,rhoVec in gateset.preps.items():
         rhoMx = _tools.vec_to_stdmx(rhoVec, mxBasis)
+        rowData = [lbl]; rowFormatters = ['Rho']
+
+        if targetGateset is not None:
+            target_rhoMx = _tools.vec_to_stdmx(targetGateset.preps[lbl],mxBasis)
+            rowData.append( target_rhoMx )
+            rowFormatters.append('Brackets')
+
+        rowData.append( rhoMx )
+        rowFormatters.append('Brackets')
 
         if includeHSVec:
-            if confidenceRegionInfo is None:
-                table.addrow((lbl, rhoVec, rhoMx), ('Rho','Normal','Brackets'))
-            else:
+            rowData.append( rhoVec )
+            rowFormatters.append('Normal')
+
+            if confidenceRegionInfo is not None:
                 intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(lbl)[:,None]
                 if intervalVec.shape[0] == gateset.get_dimension()-1: #TP constrained, so pad with zero top row
                     intervalVec = _np.concatenate( (_np.zeros((1,1),'d'),intervalVec), axis=0 )
-                table.addrow((lbl, rhoVec, intervalVec, rhoMx), ('Rho','Normal','Normal','Brackets'))
-        else:
-            #no dependence on confidence region (yet) when HS vector is not shown...
-            table.addrow((lbl, rhoMx), ('Rho','Brackets'))
+                rowData.append( intervalVec ); rowFormatters.append('Normal')
+
+        #Note: no dependence on confidence region (yet) when HS vector is not shown...
+        table.addrow(rowData, rowFormatters)
 
 
     for lbl,EVec in gateset.effects.items():
         EMx = _tools.vec_to_stdmx(EVec, mxBasis)
+        rowData = [lbl]; rowFormatters = ['Effect']
+
+        if targetGateset is not None:
+            target_EMx = _tools.vec_to_stdmx(targetGateset.effects[lbl],mxBasis)
+            rowData.append( target_EMx )
+            rowFormatters.append('Brackets')
+
+        rowData.append( EMx )
+        rowFormatters.append('Brackets')
 
         if includeHSVec:
-            if confidenceRegionInfo is None:
-                table.addrow((lbl, EVec, EMx), ('Effect', 'Normal', 'Brackets'))
-            else:
+            rowData.append( EVec )
+            rowFormatters.append('Normal')
+
+            if confidenceRegionInfo is not None:
                 intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(lbl)[:,None]
-                table.addrow((lbl, EVec, intervalVec, EMx), ('Effect','Normal','Normal','Brackets'))
-        else:
-            #no dependence on confidence region (yet) when HS vector is not shown...
-            table.addrow((lbl, EMx), ('Effect','Brackets'))
+                rowData.append( intervalVec ); rowFormatters.append('Normal')
+                
+        #Note: no dependence on confidence region (yet) when HS vector is not shown...
+        table.addrow(rowData, rowFormatters)
 
     table.finish()
     return table
@@ -360,6 +383,62 @@ def get_gates_vs_target_table(gateset, targetGateset,
     return table
 
 
+def get_selected_gates_vs_target_table(gatesets, targetGateset,
+                                       confidenceRegionInfo=None):
+    """
+    Create a table comparing gates from *different* gatesets to a target.
+
+    This table is used to compare per-gate-optimized gatesets (e.g.
+    gauge optimizations to each gate individually) to a single target
+    gate set.
+
+    Parameters
+    ----------
+    gatesets : dict of GateSets
+        A dictionary of gate sets, one per gate of `targetGateset`.  Keys
+        are gate labels and values are GateSet objects.
+
+    targetGateset : GateSet
+        The target gate set, containing the gates to which the other
+        gates are compared.
+
+    confidenceRegionInfo : ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals.
+
+    Returns
+    -------
+    ReportTable
+    """
+    gateLabels  = list(targetGateset.gates.keys())  # gate labels
+
+    colHeadings = ('Gate', "Process|Infidelity", "1/2 Trace|Distance", "1/2 Diamond-Norm") #, "Frobenius|Distance"
+    formatters  = (None,'Conversion','Conversion','Conversion') # ,'Conversion'
+
+    qtyNames        = ('infidelity','Jamiolkowski trace dist','diamond norm') #,'Frobenius diff'
+
+    qtys = {}
+    for gl in gateLabels:
+        qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames ]
+        qtys[gl] = _cr.compute_gateset_gateset_qtys(
+            qtys_to_compute, gatesets[gl], targetGateset,
+            confidenceRegionInfo)
+
+    table = _ReportTable(colHeadings, formatters)
+
+    formatters = [None] + [ 'ErrorBars' ]*len(qtyNames)
+
+    for gl in gateLabels:
+        if confidenceRegionInfo is None:
+            rowData = [gl] + [ (qtys[gl]['%s %s' % (gl,qty)].get_value(),None) for qty in qtyNames ]
+        else:
+            rowData = [gl] + [ qtys[gl]['%s %s' % (gl,qty)].get_value_and_err_bar() for qty in qtyNames ]
+        table.addrow(rowData, formatters)
+
+    table.finish()
+    return table
+
+
 def get_spam_vs_target_table(gateset, targetGateset,
                              confidenceRegionInfo=None):
     """
@@ -417,7 +496,8 @@ def get_spam_vs_target_table(gateset, targetGateset,
 
 
 def get_gates_vs_target_err_gen_table(gateset, targetGateset,
-                                        confidenceRegionInfo=None):
+                                      confidenceRegionInfo=None,
+                                      genType="logG-logT"):
     """
     Create a table listing the error generators obtained by
     comparing a gateset's gates to a target gateset.
@@ -431,6 +511,13 @@ def get_gates_vs_target_err_gen_table(gateset, targetGateset,
         If not None, specifies a confidence-region
         used to display error intervals.
 
+    genType : {"logG-logT", "logTiG"}
+      The type of error generator to compute.  Allowed values are:
+      
+      - "logG-logT" : errgen = log(gate) - log(target_gate)
+      - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+
+
     Returns
     -------
     ReportTable
@@ -441,8 +528,8 @@ def get_gates_vs_target_err_gen_table(gateset, targetGateset,
     table = _ReportTable(colHeadings, (None,None))
 
     for gl in gateLabels:
-        table.addrow((gl, _tools.error_generator(gateset.gates[gl],
-                                                 targetGateset.gates[gl])),
+        table.addrow((gl, _tools.error_generator(
+                    gateset.gates[gl], targetGateset.gates[gl], genType)),
                      (None, 'Brackets'))
     table.finish()
     return table
@@ -763,7 +850,8 @@ def get_gateset_eigenval_table(gateset, targetGateset,
 def get_gateset_relative_eigenval_table(gateset, targetGateset,
                                         figFilePrefix,
                                         maxWidth=6.5, maxHeight=8.0,
-                                        confidenceRegionInfo=None):
+                                        confidenceRegionInfo=None,
+                                        genType="logG-logT"):
     """
     Create table which lists and plots the *relative* eigenvalues of a
     gateset's gates.
@@ -794,6 +882,12 @@ def get_gateset_relative_eigenval_table(gateset, targetGateset,
         If not None, specifies a confidence-region
         used to display error intervals.
 
+    genType : {"logG-logT", "logTiG"}
+      The type of error generator to compute.  Allowed values are:
+      
+      - "logG-logT" : errgen = log(gate) - log(target_gate)
+      - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+
 
     Returns
     -------
@@ -804,7 +898,7 @@ def get_gateset_relative_eigenval_table(gateset, targetGateset,
     colHeadings = ('Gate','Relative Evals','Polar Plot') # ,'Hamiltonian'
     formatters = [None]*3
 
-    qtyNames = ('relative eigenvalues',)
+    qtyNames = ('relative %s eigenvalues' % genType,)
     qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames for gl in gateLabels ]
     qtys = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
                                             confidenceRegionInfo)
@@ -828,11 +922,13 @@ def get_gateset_relative_eigenval_table(gateset, targetGateset,
         figInfo = (fig,nm,sz,sz)
 
         if confidenceRegionInfo is None:
-            rel_evals = qtys['%s relative eigenvalues' % gl].get_value()
+            rel_evals = qtys['%s relative %s eigenvalues' 
+                             % (gl,genType)].get_value()
             rel_evals = rel_evals.reshape(rel_evals.size//2, 2)
             rowData = [gl, (rel_evals,None), figInfo]
         else:
-            rel_evals, rel_evalsEB = qtys['%s relative eigenvalues' % gl].get_value_and_err_bar()
+            rel_evals, rel_evalsEB = qtys['%s relative %s eigenvalues' 
+                                         % (gl,genType)].get_value_and_err_bar()
             rel_evals = rel_evals.reshape(rel_evals.size//2, 2)
             rowData = [gl, (rel_evals,rel_evalsEB), figInfo]
 
@@ -987,12 +1083,12 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset):
     -------
     ReportTable
     """
-    colHeadings = { 'latex': ('L','$\\chi^2$','$k$','$\\chi^2-k$','$\sqrt{2k}$','$p$','$N_s$','$N_p$', 'Rating'),
+    colHeadings = { 'latex': ('L','$\\chi^2$','$k$','$\\chi^2-k$','$\sqrt{2k}$','$N_\\sigma$','$N_s$','$N_p$', 'Rating'),
                     'html': ('L','&chi;<sup>2</sup>','k','&chi;<sup>2</sup>-k',
                              '&radic;<span style="text-decoration:overline;">2k</span>',
-                             'p','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
-                    'text': ('L','chi^2','k','chi^2-k','sqrt{2k}','p','N_s','N_p', 'Rating'),
-                    'ppt': ('L','chi^2','k','chi^2-k','sqrt{2k}','p','N_s','N_p', 'Rating')
+                             'N<sub>sigma</sub>','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
+                    'text': ('L','chi^2','k','chi^2-k','sqrt{2k}','N_{sigma}','N_s','N_p', 'Rating'),
+                    'ppt': ('L','chi^2','k','chi^2-k','sqrt{2k}','N_{sigma}','N_s','N_p', 'Rating')
                   }
 
     table = _ReportTable(colHeadings, None)
@@ -1004,7 +1100,8 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset):
         Np = gs.num_nongauge_params()
 
         k = max(Ns-Np,0) #expected chi^2 mean
-        pv = 1.0 - _stats.chi2.cdf(chi2,k) # reject GST model if p-value < threshold (~0.05?)
+        Nsig = (chi2-k)/_np.sqrt(2*k)
+        #pv = 1.0 - _stats.chi2.cdf(chi2,k) # reject GST model if p-value < threshold (~0.05?)
 
         if   (chi2-k) < _np.sqrt(2*k): rating = 5
         elif (chi2-k) < 2*k: rating = 4
@@ -1012,7 +1109,7 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset):
         elif (chi2-k) < 10*k: rating = 2
         else: rating = 1
         table.addrow(
-                    (str(L),chi2,k,chi2-k,_np.sqrt(2*k),pv,Ns,Np,"<STAR>"*rating),
+                    (str(L),chi2,k,chi2-k,_np.sqrt(2*k),Nsig,Ns,Np,"<STAR>"*rating),
                     (None,'Normal','Normal','Normal','Normal','Rounded','Normal','Normal','Conversion'))
 
     table.finish()
@@ -1043,12 +1140,12 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset):
     ReportTable
     """
     colHeadings = { 'latex': ('L','$2\Delta\\log(\\mathcal{L})$','$k$','$2\Delta\\log(\\mathcal{L})-k$',
-                              '$\sqrt{2k}$','$p$','$N_s$','$N_p$', 'Rating'),
+                              '$\sqrt{2k}$','$N_\\sigma$','$N_s$','$N_p$', 'Rating'),
                     'html': ('L','2&Delta;(log L)','k','2&Delta;(log L)-k',
                              '&radic;<span style="text-decoration:overline;">2k</span>',
-                             'p','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
-                    'text': ('L','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','p','N_s','N_p', 'Rating'),
-                    'ppt': ('L','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','p','N_s','N_p', 'Rating')
+                             'N<sub>sigma</sub>','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
+                    'text': ('L','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','N_{sigma}','N_s','N_p', 'Rating'),
+                    'ppt': ('L','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','N_{sigma}','N_s','N_p', 'Rating')
                   }
     table = _ReportTable(colHeadings, None)
 
@@ -1062,7 +1159,8 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset):
 
         k = max(Ns-Np,0) #expected 2*(logL_ub-logl) mean
         twoDeltaLogL = 2*(logL_upperbound - logl)
-        pv = 1.0 - _stats.chi2.cdf(twoDeltaLogL,k) # reject GST model if p-value < threshold (~0.05?)
+        Nsig = (twoDeltaLogL-k)/_np.sqrt(2*k)
+        #pv = 1.0 - _stats.chi2.cdf(twoDeltaLogL,k) # reject GST model if p-value < threshold (~0.05?)
 
         if   (twoDeltaLogL-k) < _np.sqrt(2*k): rating = 5
         elif (twoDeltaLogL-k) < 2*k: rating = 4
@@ -1071,11 +1169,278 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset):
         else: rating = 1
 
         table.addrow(
-                    (str(L),twoDeltaLogL,k,twoDeltaLogL-k,_np.sqrt(2*k),pv,Ns,Np,"<STAR>"*rating),
+                    (str(L),twoDeltaLogL,k,twoDeltaLogL-k,_np.sqrt(2*k),Nsig,Ns,Np,"<STAR>"*rating),
                     (None,'Normal','Normal','Normal','Normal','Rounded','Normal','Normal','Conversion'))
 
     table.finish()
     return table
+
+
+def get_logl_bygerm_table(gateset, dataset, germs, strs, max_lengths,
+                          baseStr_dict, fidpair_filters=None,
+                          gatestring_filters=None):
+    """
+    Create a table showing the log-likelihood on a by-germ basis.
+
+    Parameters
+    ----------
+    gateset : GateSet
+        The gate estimates used to compute the log-likelihood.
+
+    dataset : DataSet
+        The data set used to compute the log-likelihood.
+
+    germs : list of GateStrings
+        The list of germ strings.
+
+    strs : 2-tuple
+        A (prepStrs,effectStrs) tuple usually generated by calling get_spam_strs(...)
+
+    max_lengths : list of ints
+        A list of the maximum lengths used.
+
+    baseStr_dict : dict
+        Dictionary with keys == (L,germ) tuples and values == base gate strings
+        (akin to germ^L but often using some type of trunctation based on L).
+
+    fidpair_filters : dict, optional
+        If not None, a dictionary whose keys are (L,germ) tuples and whose 
+        values are lists of (iRhoStr,iEStr) tuples specifying a subset of all
+        the prepStr,effectStr pairs to include for each particular L,germ pair.
+
+    gatestring_filters : dict, optional
+        If not None, a dictionary whose keys are (L,germ) tuples and whose
+        values are lists of GateString objects specifying which elements which
+        are allowed to be included in the likelihood computation for that pair.
+
+
+    Returns
+    -------
+    ReportTable
+    """
+    colHeadings = { 'latex': ('germ','$2\Delta\\log(\\mathcal{L})$','$k$','$2\Delta\\log(\\mathcal{L})-k$',
+                              '$\sqrt{2k}$','$N_\\sigma$','$N_s$','$N_p$', 'Rating'),
+                    'html': ('germ','2&Delta;(log L)','k','2&Delta;(log L)-k',
+                             '&radic;<span style="text-decoration:overline;">2k</span>',
+                             'N<sub>sigma</sub>','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
+                    'text': ('germ','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','N_{sigma}','N_s','N_p', 'Rating'),
+                    'ppt': ('germ','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','N_{sigma}','N_s','N_p', 'Rating')
+                  }
+    table = _ReportTable(colHeadings, None)
+    Np = gateset.num_nongauge_params()
+    if fidpair_filters is None: fidpair_filters = {}
+    if gatestring_filters is None: gatestring_filters = {}
+
+    for germ in germs:
+        gstrs = []
+        for L in max_lengths:
+            fp_filter = fidpair_filters.get((L,germ),None)
+            gs_filter = gatestring_filters.get((L,germ),None)
+            tuple_list,_,_ = _plotting.get_gatestring_map(
+                baseStr_dict[(L,germ)], dataset, strs, fp_filter, gs_filter)
+            gstrs.extend( [ tup[2] for tup in tuple_list ]) # tup == (i,j,gstr)
+
+        _tools.remove_duplicates_in_place(gstrs)
+
+        logL_upperbound = _tools.logl_max(dataset, gstrs)
+        logl = _tools.logl( gateset, dataset, gstrs )
+        if(logL_upperbound < logl):
+            raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
+        Ns = len(gstrs)*(len(dataset.get_spam_labels())-1) #number of independent parameters in dataset
+        k = max(Ns-Np,0) #expected 2*(logL_ub-logl) mean
+        twoDeltaLogL = 2*(logL_upperbound - logl)
+        Nsig = (twoDeltaLogL-k)/_np.sqrt(2*k)
+        #pv = 1.0 - _stats.chi2.cdf(twoDeltaLogL,k) # reject GST model if p-value < threshold (~0.05?)
+
+        if   (twoDeltaLogL-k) < _np.sqrt(2*k): rating = 5
+        elif (twoDeltaLogL-k) < 2*k: rating = 4
+        elif (twoDeltaLogL-k) < 5*k: rating = 3
+        elif (twoDeltaLogL-k) < 10*k: rating = 2
+        else: rating = 1
+
+        table.addrow((germ,twoDeltaLogL,k,twoDeltaLogL-k,_np.sqrt(2*k),Nsig,Ns,Np,"<STAR>"*rating),
+                     ('GateString','Normal','Normal','Normal','Normal','Rounded','Normal','Normal','Conversion'))
+
+    table.finish()
+    return table
+
+
+def get_logl_projected_err_gen_table(gateset, targetGateset,
+                                     gatestrings, dataset, 
+                                     cptpGateset=None, genType="logG-logT"):
+    """
+    Create a table showing the log-likelihood for different projections of the
+    error generator.
+
+    Parameters
+    ----------
+    gateset : GateSet
+        The gate set whose error generator should be projected.
+
+    targetGateset : GateSet
+        The set of target (ideal) gates.
+
+    gatestrings : list
+        A list of GateString objects specifying which gate sequences to use
+        when computing the log-likelihood.
+
+    dataset : DataSet
+        The data set to use when computing the log-likelihood.
+
+    cptpGateset : GateSet, optional
+        An optional gate set to compute log-likelihood values for and report
+        on an additional "CPTP" row of the table.
+
+    genType : {"logG-logT", "logTiG"}
+      The type of error generator to compute.  Allowed values are:
+      
+      - "logG-logT" : errgen = log(gate) - log(target_gate)
+      - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+
+
+    Returns
+    -------
+    ReportTable
+    """
+    gateLabels = list(gateset.gates.keys())  # gate labels
+    basisNm = gateset.get_basis_name()
+    basisDims = gateset.get_basis_dimension()
+
+    if basisNm != targetGateset.get_basis_name():
+        raise ValueError("Basis mismatch between gateset (%s) and target (%s)!"\
+                             % (basisNm, targetGateset.get_basis_name()))
+
+    #Do computation first
+    # Note: set to "full" parameterization so we can set the gates below
+    #  regardless of what to fo parameterization the original gateset had.
+    gsH = gateset.copy(); gsH.set_all_parameterizations("full"); Np_H = 0
+    gsS = gateset.copy(); gsS.set_all_parameterizations("full"); Np_S = 0
+    gsHS = gateset.copy(); gsHS.set_all_parameterizations("full"); Np_HS = 0
+    gsLND = gateset.copy(); gsLND.set_all_parameterizations("full"); Np_LND = 0
+    #gsHSCP = gateset.copy()
+    gsLNDCP = gateset.copy(); gsLNDCP.set_all_parameterizations("full")
+    for gl in gateLabels:
+        gate = gateset.gates[gl]
+        targetGate = targetGateset.gates[gl]
+
+        errgen = _tools.error_generator(gate, targetGate, genType)
+        hamProj, hamGens = _tools.pauliprod_errgen_projections(
+            errgen, "hamiltonian", basisNm, True)
+        stoProj, stoGens = _tools.pauliprod_errgen_projections(
+            errgen, "stochastic", basisNm, True)
+        HProj, OProj, HGens, OGens = \
+            _tools.pauliprod_lindblad_errgen_projections(
+            errgen, basisNm, normalize=False,
+            return_generators=True)
+
+        ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)
+        sto_error_gen = _np.einsum('i,ijk', stoProj, stoGens)
+        lnd_error_gen = _np.einsum('i,ijk', HProj, HGens) + \
+            _np.einsum('ij,ijkl', OProj, OGens)
+
+        ham_error_gen = _tools.std_to_pp(ham_error_gen)
+        sto_error_gen = _tools.std_to_pp(sto_error_gen)
+        lnd_error_gen = _tools.std_to_pp(lnd_error_gen)
+
+        gsH.gates[gl]  = _tools.gate_from_error_generator(
+            ham_error_gen, targetGate, genType)
+        gsS.gates[gl]  = _tools.gate_from_error_generator(
+            sto_error_gen, targetGate, genType)
+        gsHS.gates[gl] = _tools.gate_from_error_generator(
+            ham_error_gen+sto_error_gen, targetGate, genType)
+        gsLND.gates[gl] = _tools.gate_from_error_generator(
+            lnd_error_gen, targetGate, genType)
+
+        #print("\nDEBUG %s -----------------" % gl)
+        ##print("gate %s = \n" % gl, gate)
+        ##print("LND gate %s = \n" % gl,gsLND.gates[gl])
+        ##print("HProj = ",HProj)
+        ##print("OProj = \n",_tools.mx_to_string(OProj))
+        #print("OProj evals = ", _np.real_if_close(_np.linalg.eigvals(OProj)))
+        #print("")
+
+        #CPTP projection
+
+        #Removed attempt to contract H+S to CPTP by removing positive stochastic projections,
+        # but this doesn't always return the gate to being CPTP (maybe b/c of normalization)...
+        #sto_error_gen_cp = _np.einsum('i,ijk', stoProj.clip(None,0), stoGens) #only negative stochastic projections OK
+        #sto_error_gen_cp = _tools.std_to_pp(sto_error_gen_cp)
+        #gsHSCP.gates[gl] = _tools.gate_from_error_generator(
+        #    ham_error_gen, targetGate, genType) #+sto_error_gen_cp
+
+        evals,U = _np.linalg.eig(OProj)
+        pos_evals = evals.clip(0,1e100) #clip negative eigenvalues to 0
+        OProj_cp = _np.dot(U,_np.dot(_np.diag(pos_evals),_np.linalg.inv(U))) #OProj_cp is now a pos-def matrix
+        lnd_error_gen_cp = _np.einsum('i,ijk', HProj, HGens) + \
+            _np.einsum('ij,ijkl', OProj_cp, OGens)
+        lnd_error_gen_cp = _tools.std_to_pp(lnd_error_gen_cp)
+
+        gsLNDCP.gates[gl] = _tools.gate_from_error_generator(
+            lnd_error_gen_cp, targetGate, genType)
+
+        Np_H += len(hamProj)
+        Np_S += len(stoProj)
+        Np_HS += len(hamProj) + len(stoProj)
+        Np_LND += HProj.size + OProj.size
+
+    #DEBUG!!!
+    #print("DEBUG: BEST sum neg evals = ",_tools.sum_of_negative_choi_evals(gateset))
+    #print("DEBUG: LNDCP sum neg evals = ",_tools.sum_of_negative_choi_evals(gsLNDCP))
+
+    #Check for CPTP where expected
+    #assert(_tools.sum_of_negative_choi_evals(gsHSCP) < 1e-6)
+    assert(_tools.sum_of_negative_choi_evals(gsLNDCP) < 1e-6)
+
+    #Generate Table
+    colHeadings = { 'latex': ('Type','$2\Delta\\log(\\mathcal{L})$','$k$','$2\Delta\\log(\\mathcal{L})-k$',
+                              '$\sqrt{2k}$','$N_\\sigma$','$N_s$','$N_p$', 'Rating'),
+                    'html': ('Type','2&Delta;(log L)','k','2&Delta;(log L)-k',
+                             '&radic;<span style="text-decoration:overline;">2k</span>',
+                             'N<sub>sigma</sub>','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
+                    'text': ('Type','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','N_{sigma}','N_s','N_p', 'Rating'),
+                    'ppt': ('Type','2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}','N_{sigma}','N_s','N_p', 'Rating')
+                  }
+    table = _ReportTable(colHeadings, None)
+    Nng = gateset.num_nongauge_params()
+
+    if cptpGateset is None:
+        gatesets = (gateset, gsHS, gsH, gsS, gsLND)
+        gatesetTyps = ("Full","H + S","H","S","LND")
+        Nps = (Nng, Np_HS, Np_H, Np_S, Np_LND)
+    else:
+        gsHSCPTP = gsHS.copy()
+        gsHSCPTP.set_all_parameterizations("full")
+        gsHSCPTP = _alg.contract(gsHSCPTP, "CPTP")
+        assert(_tools.sum_of_negative_choi_evals(gsHSCPTP) < 1e-6)
+        assert(_tools.sum_of_negative_choi_evals(cptpGateset) < 1e-6)
+
+        gatesets = (gateset, gsHS, gsH, gsS, gsLND, cptpGateset, gsLNDCP, gsHSCPTP)
+        gatesetTyps = ("Full","H + S","H","S","LND","CPTP","LND CPTP","H + S CPTP")
+        Nps = (Nng, Np_HS, Np_H, Np_S, Np_LND, Nng, Np_LND, Np_HS)
+
+    logL_upperbound = _tools.logl_max(dataset, gatestrings)
+    Ns = len(gatestrings)*(len(dataset.get_spam_labels())-1) 
+     #number of independent parameters in dataset
+
+    for typ,gs,Np in zip(gatesetTyps, gatesets, Nps):
+        logl = _tools.logl( gs, dataset, gatestrings )
+        assert (logL_upperbound >= logl), "LogL upper bound violation!"
+        k = max(Ns-Np,0) #expected 2*(logL_ub-logl) mean
+        twoDeltaLogL = 2*(logL_upperbound - logl)
+        Nsig = (twoDeltaLogL-k)/_np.sqrt(2*k)
+
+        if   (twoDeltaLogL-k) < _np.sqrt(2*k): rating = 5
+        elif (twoDeltaLogL-k) < 2*k: rating = 4
+        elif (twoDeltaLogL-k) < 5*k: rating = 3
+        elif (twoDeltaLogL-k) < 10*k: rating = 2
+        else: rating = 1
+
+        table.addrow((typ,twoDeltaLogL,k,twoDeltaLogL-k,_np.sqrt(2*k),Nsig,Ns,Np,"<STAR>"*rating),
+           ('GatesetType','Normal','Normal','Normal','Normal','Rounded','Normal','Normal','Conversion'))
+
+    table.finish()
+    return table
+
 
 
 def get_gatestring_table(gsList, title, nCols=1):
@@ -1174,67 +1539,95 @@ def get_gatestring_multi_table(gsLists, titles, commonTitle=None):
 
 
 
-def get_gateset_gate_boxes_table(gateset, figFilePrefix, maxWidth=6.5,
-                                maxHeight=8.0, confidenceRegionInfo=None):
+def get_gateset_gate_boxes_table(gatesets, figFilePrefixes, titles=None,
+                                 maxWidth=6.5, maxHeight=8.0,
+                                 confidenceRegionInfo=None):
     """
-    Create a table for a gateset's gates, where each gate is a grid of boxes.
+    Create a table for one or more gateset's gates, where each gate is a grid
+    of boxes.
 
     Similar to get_gateset_gates_table(...), except the gates are displayed
-    as grids of colored boxes instead of printing the actual numerical elements.
-    This is useful for displaying large gate matrices.
+    as grids of colored boxes instead of printing the actual numerical elements,
+    and multiple gatesets containing the same gate labels can be displayed
+    (in suggessive columns) This is useful for displaying large gate matrices.
 
     Parameters
     ----------
-    gateset : GateSet
-        The GateSet
+    gatesets : list of GateSet objects
+        The gate sets to display.  All must have the *same* gate labels.
 
-    figFilePrefix : str
-        A filename prefix (not including any directories!) to use
-        when rendering figures as a part of rendering this table.
+    figFilePrefixes : list of strings
+        The filename prefixes (not including any directories!) to use
+        when rendering figures as a part of rendering this table.  The
+        elements of `figFilePrefixes` are in correspondence to those of
+        `gatesets`.
 
-    maxWidth : float
+    titles : list of strings, optional
+        A list of titles corresponding to the gate sets, used to 
+        prefix the column(s) for that gate set.
+
+    maxWidth : float, optional
         The maximum width (in inches) of the entire figure.
 
-    maxHeight : float
+    maxHeight : float, optional
         The maximum height (in inches) of the entire figure.
 
     confidenceRegionInfo : ConfidenceRegion, optional
         If not None, specifies a confidence-region
-        used to display error intervals.
+        used to display error intervals for the *final*
+        GateSet in `gatesets`.
 
 
     Returns
     -------
     ReportTable
     """
-    gateLabels = list(gateset.gates.keys())  # gate labels
-    basisNm = gateset.get_basis_name()
-    basisDims = gateset.get_basis_dimension()
-    basisLongNm = _tools.basis_longname(basisNm, basisDims)
+    gateLabels = list(gatesets[0].gates.keys()) #use labels of 1st gateset
+    if titles is None:
+        titles = ['']*len(gatesets)
 
     if confidenceRegionInfo is None:
-        colHeadings = ('Gate','Superoperator (%s basis)' % basisLongNm)
-        formatters = (None,None)
-    else:
-        colHeadings = ('Gate','Superoperator (%s basis)' % basisLongNm,
-                       '%g%% C.I. half-width' % confidenceRegionInfo.level)
-        formatters = (None,None,'Conversion')
+        colHeadings = ['Gate']
+        for gateset,title in zip(gatesets,titles):
+            basisNm = gateset.get_basis_name()
+            basisDims = gateset.get_basis_dimension()
+            basisLongNm = _tools.basis_longname(basisNm, basisDims)
+            colHeadings.append('%s Superoperator (%s basis)' % (title,basisLongNm))
+        formatters = (None,)*len(colHeadings)
+    else: #Only use confidence region for the *final* gateset.
+        colHeadings = ['Gate']
+        for gateset,title in zip(gatesets,titles):
+            basisNm = gateset.get_basis_name()
+            basisDims = gateset.get_basis_dimension()
+            basisLongNm = _tools.basis_longname(basisNm, basisDims)
+            colHeadings.append('%s Superoperator (%s basis)' % (title,basisLongNm))
+        colHeadings.append('%g%% C.I. half-width' % confidenceRegionInfo.level)
+        formatters = (None,)*(len(colHeadings)-1) + ('Conversion',)
 
     table = _ReportTable(colHeadings, formatters)
-    nRows = len(gateset.gates)
+    nRows = len(gatesets[0].gates)
+    maxFigSz = min(0.95*(maxHeight/nRows), 0.95*(maxWidth - 1.0))
 
     for gl in gateLabels:
         #Note: currently, we don't use confidence region...
-        fig = _plotting.gate_matrix_boxplot(
-            gateset.gates[gl], save_to="",
-            mxBasis=basisNm, mxBasisDims=basisDims)
+        row_data = [gl]
+        row_formatters = [None]
 
-        maxFigSz = min(0.95*(maxHeight/nRows), 0.95*(maxWidth - 1.0))
-        sz = min(gateset.gates[gl].shape[0] * 0.5, maxFigSz)
-        nm = figFilePrefix + "_" + gl
+        for gateset,prefix in zip(gatesets,figFilePrefixes):
+            basisNm = gateset.get_basis_name()
+            basisDims = gateset.get_basis_dimension()
 
-        figInfo = (fig,nm,sz,sz)
-        table.addrow((gl, figInfo ), (None,'Figure'))
+            fig = _plotting.gate_matrix_boxplot(
+                gateset.gates[gl], save_to="",
+                mxBasis=basisNm, mxBasisDims=basisDims)
+
+            sz = min(gateset.gates[gl].shape[0] * 0.5, maxFigSz)
+            nm = prefix + "_" + gl
+            figInfo = (fig,nm,sz,sz)
+            row_data.append( figInfo )
+            row_formatters.append( 'Figure' )
+            
+        table.addrow(row_data, row_formatters)
 
     table.finish()
     return table
@@ -1242,8 +1635,9 @@ def get_gateset_gate_boxes_table(gateset, figFilePrefix, maxWidth=6.5,
 
 def get_gates_vs_target_err_gen_boxes_table(gateset, targetGateset,
                                             figFilePrefix, maxWidth=6.5,
-                                            maxHeight=8.0,
-                                            confidenceRegionInfo=None):
+                                            maxHeight=8.0, 
+                                            confidenceRegionInfo=None,
+                                            genType="logG-logT"):
     """
     Create a table of gate error generators, where each is shown as grid of boxes.
 
@@ -1266,6 +1660,12 @@ def get_gates_vs_target_err_gen_boxes_table(gateset, targetGateset,
         If not None, specifies a confidence-region
         used to display error intervals.
 
+    genType : {"logG-logT", "logTiG"}
+      The type of error generator to compute.  Allowed values are:
+      
+      - "logG-logT" : errgen = log(gate) - log(target_gate)
+      - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+
 
     Returns
     -------
@@ -1279,35 +1679,294 @@ def get_gates_vs_target_err_gen_boxes_table(gateset, targetGateset,
         raise ValueError("Basis mismatch between gateset (%s) and target (%s)!"\
                              % (basisNm, targetGateset.get_basis_name()))
 
-    colHeadings = ('Gate','Error Generator','Pauli projections')
+    colHeadings = ('Gate','Error Generator','Hamiltonian Projections',
+                   'Stochastic Projections')
 
-    table = _ReportTable(colHeadings, (None,None,None))
+    table = _ReportTable(colHeadings, (None,None,None,None))
     nRows = len(gateset.gates)
     #nCols = len(colHeadings)
 
+    errgens = {'M': []}
+    hamProjs = {'M': []}
+    stoProjs = {'M': []}
+
+    def getMinMax(max_lst, M):
+        #return a [min,]max already in list if there's one within an order of magnitude
+        for mx in max_lst:
+            if 0.9999 < mx/M < 10: return -mx,mx
+        return None
+            
+    def addMax(max_lst, M):
+        if not getMinMax(max_lst,M):
+            max_lst.append(M)
+
+    #Do computation, so shared color scales can be computed
     for gl in gateLabels:
         gate = gateset.gates[gl]
         targetGate = targetGateset.gates[gl]
 
-        errgen_fig = _plotting.gate_matrix_errgen_boxplot(
-            gate, targetGate, save_to="", mxBasis=basisNm,
+        errgens[gl] = _tools.error_generator(gate, targetGate, genType)
+        hamProjs[gl] = _tools.pauliprod_errgen_projections(
+            errgens[gl], "hamiltonian", basisNm)
+        stoProjs[gl] = _tools.pauliprod_errgen_projections(
+            errgens[gl], "stochastic", basisNm)
+
+        absMax = _np.max(_np.abs(errgens[gl]))
+        addMax(errgens['M'], absMax)
+        absMax = _np.max(_np.abs(hamProjs[gl]))
+        addMax(hamProjs['M'], absMax)
+        absMax = _np.max(_np.abs(stoProjs[gl]))
+        addMax(stoProjs['M'], absMax)
+
+    #Do plotting
+    for gl in gateLabels:
+        
+        m,M = getMinMax(errgens['M'],_np.max(_np.abs(errgens[gl])))
+        errgen_fig = _plotting.gate_matrix_boxplot(
+            errgens[gl], None, m,M, save_to="", mxBasis=basisNm,
             mxBasisDims=basisDims)
 
-        hamdecomp_fig = _plotting.pauliprod_hamiltonian_boxplot(
-            gate, targetGate, save_to="", mxBasis=basisNm, boxLabels=True)
+        m,M = getMinMax(hamProjs['M'],_np.max(_np.abs(hamProjs[gl])))
+        hamdecomp_fig = _plotting.pauliprod_projection_boxplot(
+            hamProjs[gl], m, M, save_to="", boxLabels=True)
 
-        maxFigSz = min(0.95*(maxHeight/nRows), 0.95*(2./3.)*(maxWidth-1.0))
+        m,M = getMinMax(stoProjs['M'],_np.max(_np.abs(stoProjs[gl])))
+        stodecomp_fig = _plotting.pauliprod_projection_boxplot(
+            stoProjs[gl], m, M, save_to="", boxLabels=True)
+
+        maxFigSz = min(0.85*(maxHeight/nRows), 0.85*(2./3.)*(maxWidth-1.0))
         sz = min(gateset.gates[gl].shape[0] * 0.5, maxFigSz)
         nm = figFilePrefix + "_" + gl + "_errgen"
         errgen_figInfo = (errgen_fig,nm,sz,sz)
 
-        maxFigSz = min(0.95*(maxHeight/nRows), 0.95*(1./3.)*(maxWidth-1.0))
-        sz = min( (gateset.gates[gl].size/4) * 0.5, maxFigSz)
+        maxFigSz = min(0.85*(maxHeight/nRows), 0.85*(1./3.)*(maxWidth-1.0))
+        sz = min( (gateset.gates[gl].size/4) * 0.4, maxFigSz)
         nm = figFilePrefix + "_" + gl + "_hamdecomp"
         hamdecomp_figInfo = (hamdecomp_fig,nm,sz,sz)
+        nm = figFilePrefix + "_" + gl + "_stodecomp"
+        stodecomp_figInfo = (stodecomp_fig,nm,sz,sz)
 
-        table.addrow((gl, errgen_figInfo, hamdecomp_figInfo),
-                     (None, 'Figure', 'Figure'))
+        table.addrow((gl, errgen_figInfo, hamdecomp_figInfo, stodecomp_figInfo),
+                     (None, 'Figure', 'Figure', 'Figure'))
+    table.finish()
+    return table
+
+
+def get_projected_err_gen_comparison_table(gateset, targetGateset,
+                                           compare_with="target",
+                                           genType="logG-logT"):
+    """
+    Create a table comparing the gates generated by projections of
+    the full gate error generators.
+
+    Parameters
+    ----------
+    gateset, targetGateset : GateSet
+        The gate sets to compare
+
+    compare_with : {"target", "estimated"}
+        Whether the gates generated by the projections should be
+        compared to the target gates or to the un-projected
+        "estimated" gate.
+
+    genType : {"logG-logT", "logTiG"}
+      The type of error generator to compute.  Allowed values are:
+      
+      - "logG-logT" : errgen = log(gate) - log(target_gate)
+      - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+
+
+    Returns
+    -------
+    ReportTable
+    """
+    gateLabels = list(gateset.gates.keys())  # gate labels
+    basisNm = gateset.get_basis_name()
+    basisDims = gateset.get_basis_dimension()
+
+    if basisNm != targetGateset.get_basis_name():
+        raise ValueError("Basis mismatch between gateset (%s) and target (%s)!"\
+                             % (basisNm, targetGateset.get_basis_name()))
+
+    #Do computation first
+    infids = []; trdists = []; ddists = []
+    for gl in gateLabels:
+        gate = gateset.gates[gl]
+        targetGate = targetGateset.gates[gl]
+
+        errgen = _tools.error_generator(gate, targetGate, genType)
+        hamProj, hamGens = _tools.pauliprod_errgen_projections(
+            errgen, "hamiltonian", basisNm, True)
+        stoProj, stoGens = _tools.pauliprod_errgen_projections(
+            errgen, "stochastic", basisNm, True)
+
+        ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)
+        sto_error_gen = _np.einsum('i,ijk', stoProj, stoGens)
+        ham_error_gen = _tools.std_to_pp(ham_error_gen)
+        sto_error_gen = _tools.std_to_pp(sto_error_gen)
+
+        gateH = _tools.gate_from_error_generator(ham_error_gen, targetGate, genType)
+        gateS = _tools.gate_from_error_generator(sto_error_gen, targetGate, genType)
+        gateHS = _tools.gate_from_error_generator(ham_error_gen+sto_error_gen,
+                                                  targetGate, genType)
+
+        if compare_with == "target": cmpGate = targetGate
+        elif compare_with == "estimate": cmpGate = gate
+        else: raise ValueError("Invalid compare_with arg: %s" % compare_with)
+
+        infid = {}; trdist = {}; ddist = {}
+        infid['Full']  = 1-_tools.process_fidelity(gate, cmpGate, basisNm)
+        infid['H']     = 1-_tools.process_fidelity(gateH, cmpGate, basisNm)
+        infid['S']     = 1-_tools.process_fidelity(gateS, cmpGate, basisNm)
+        infid['H + S'] = 1-_tools.process_fidelity(gateHS, cmpGate, basisNm)
+        infids.append(infid)
+
+        trdist['Full']  = _tools.jtracedist(gate, cmpGate, basisNm)
+        trdist['H']     = _tools.jtracedist(gateH, cmpGate, basisNm)
+        trdist['S']     = _tools.jtracedist(gateS, cmpGate, basisNm)
+        trdist['H + S'] = _tools.jtracedist(gateHS, cmpGate, basisNm)
+        trdists.append(trdist)
+
+        ddist['Full']  = 0.5 * _tools.diamonddist(gate, cmpGate, basisNm)
+        ddist['H']     = 0.5 * _tools.diamonddist(gateH, cmpGate, basisNm)
+        ddist['S']     = 0.5 * _tools.diamonddist(gateS, cmpGate, basisNm)
+        ddist['H + S'] = 0.5 * _tools.diamonddist(gateHS, cmpGate, basisNm)
+        ddists.append(ddist)
+
+
+    #Generate Table
+    gatesetTyps = ("Full","H + S","H","S")
+    colHeadings = ("Gate",) + tuple( [ "Process Fidelity(%s)" % gt
+                                       for gt in gatesetTyps] )
+    nCols = len(colHeadings)
+    formatters = [None] + ['GatesetType']*(nCols-1)
+
+    table = "tabular"
+    latex_head =  "\\begin{%s}[l]{%s}\n\hline\n" % (table, "|c" * nCols + "|")
+    latex_head += "\\multirow{2}{*}{Gate} & " + \
+                  "\\multicolumn{%d}{c|}{Process Infidelity} \\\\ \cline{2-%d}\n" % (len(gatesetTyps),nCols)
+    latex_head += " & Full & $\mathcal{H}$ + $\mathcal{S}$ & $\mathcal{H}$ & $\mathcal{S}$ \\\\ \hline\n"
+
+    table = _ReportTable(colHeadings, formatters,
+                         customHeader={'latex': latex_head} )
+    nRows = len(gateset.gates)
+
+    for gl,vals in zip(gateLabels,infids):
+        table.addrow((gl, vals['Full'], vals['H + S'], vals['H'], vals['S']),
+                     (None,'Precision','Precision','Precision','Precision'))
+
+    table.addrow((("",2),("1/2 Trace Distance",len(gatesetTyps))),
+                 ('MultiRow','MultiCol'))
+    table.addrow(("Gates",) + tuple(gatesetTyps), 
+                 ('SpannedRow',) + ('GatesetType',)*len(gatesetTyps))
+
+    for gl,vals in zip(gateLabels,trdists):
+        table.addrow((gl, vals['Full'], vals['H + S'], vals['H'], vals['S']),
+                     (None,'Precision','Precision','Precision','Precision'))
+
+    table.addrow((("",2),("1/2 Diamond-Norm",len(gatesetTyps))),
+                 ('MultiRow','MultiCol'))
+    table.addrow(("Gates",) + tuple(gatesetTyps), 
+                 ('SpannedRow',) + ('GatesetType',)*len(gatesetTyps))
+
+    for gl,vals in zip(gateLabels,ddists):
+        table.addrow((gl, vals['Full'], vals['H + S'], vals['H'], vals['S']),
+                     (None,'Precision','Precision','Precision','Precision'))
+
+    table.finish()
+    return table
+
+
+def get_pauli_err_gen_projector_boxes_table(gateset_dim, projection_type,
+                                            figFilePrefix,
+                                            maxWidth=6.5, maxHeight=8.0):
+    """
+    Create a table of gate error generators, where each is shown as grid of boxes.
+
+    Parameters
+    ----------
+    gateset_dim : int
+        The dimension of the gate set, which equals the number of 
+        rows (or columns) in a gate matrix (e.g., 4 for a single qubit).
+
+    projection_type : {"hamiltonian", "stochastic"}
+        The type of error generator projectors to create a table for.
+        If "hamiltonian", then use the Hamiltonian generators which take a
+        density matrix rho -> -i*[ H, rho ] for Pauli-product matrix H.
+        If "stochastic", then use the Stochastic error generators which take
+        rho -> P*rho*P for Pauli-product matrix P (recall P is self adjoint).
+
+    figFilePrefix : str
+        A filename prefix (not including any directories!) to use
+        when rendering figures as a part of rendering this table.
+
+    maxWidth : float
+        The maximum width (in inches) of the entire figure.
+
+    maxHeight : float
+        The maximum height (in inches) of the entire figure.
+
+    Returns
+    -------
+    ReportTable
+    """
+
+    d2 = gateset_dim # number of projections == dim of gate
+    d = int(_np.sqrt(d2)) # dim of density matrix
+    nQubits = _np.log2(d)
+
+    #Get a list of the d2 generators (in corresspondence with the
+    #  Pauli-product matrices given by _bt.pp_matrices(d) ).
+    lindbladMxs = _tools.pauliprod_error_generators(d2, projection_type)
+       # in std basis
+
+    if nQubits == 1:
+        yd,xd = 1,2 # y and x pauli-prod *basis* dimensions
+        xlabel = "Q1"; ylabel = ""
+    elif nQubits == 2:
+        yd,xd = 2,2
+        xlabel = "Q2"; ylabel="Q1"
+    else:
+        yd,xd = 2,d/2
+        xlabel = "Q*"; ylabel="Q1"
+
+    topright = "%s \\ %s" % (ylabel,xlabel) if (len(ylabel) > 0) else ""
+    colHeadings=[topright] + \
+        [("%s" % x) if len(x) else "" \
+             for x in _tools.basis_element_labels("pp",xd)]
+    rowLabels=[("%s" % x) if len(x) else "" \
+                 for x in _tools.basis_element_labels("pp",yd)]
+
+    xLabels = _tools.basis_element_labels("pp",xd)
+    yLabels = _tools.basis_element_labels("pp",yd)
+
+    table = _ReportTable(colHeadings,["Conversion"]+[None]*(len(colHeadings)-1))
+    nRows = len(rowLabels)
+    nCols = len(colHeadings)
+
+    maxFigSz = min(0.85*(maxHeight/nRows), 0.85*(maxWidth/nCols))
+    
+    iCur = 0
+    for i,ylabel  in enumerate(yLabels):
+        rowData = [rowLabels[i]]
+        rowFormatters = [None]
+
+        for j,xlabel in enumerate(xLabels):
+            projector = lindbladMxs[iCur]; iCur += 1
+            projector = _tools.std_to_pp(projector) #now in pp basis ("pp" below)
+            m,M = -_np.max(_np.abs(projector)), _np.max(_np.abs(projector))
+            fig = _plotting.gate_matrix_boxplot(
+                projector, None, m,M, save_to="", mxBasis="pp", mxBasisDims=d)
+
+            sz = min(projector.shape[0] * 0.5, maxFigSz)
+            nm = figFilePrefix + "_%s_%s_projector" % (ylabel,xlabel)
+            figInfo = (fig,nm,sz,sz)
+
+            rowData.append(figInfo)
+            rowFormatters.append('Figure')
+
+        table.addrow(rowData, rowFormatters)
+
     table.finish()
     return table
 
@@ -1320,40 +1979,44 @@ def get_gaugeopt_params_table(gaugeOptArgs):
 
     Parameters
     ----------
-    gaugeOptArgs : dict
-        A dictionary of specifying values for zero or more
-        of the *arguments* of pyGSTi's optimize_gauge
-        function.
+    gaugeOptArgs : list of dicts
+        A list of dictionaries, each specifying values for zero or more of the
+        *arguments* of pyGSTi's :func:`gaugeopt_to_target` function.
 
     Returns
     -------
     ReportTable
     """
+
     colHeadings = ('Quantity','Value')
     formatters = ('Bold','Bold')
 
     table = _ReportTable(colHeadings, formatters)
 
-    if 'toGetTo' in gaugeOptArgs:
-        table.addrow(("Gauge optimize to", gaugeOptArgs['toGetTo']), (None,None))
+    if isinstance(gaugeOptArgs,list) or isinstance(gaugeOptArgs,tuple):
+        gaugeOptArgs = gaugeOptArgs[-1]
+        #for now, just print the params of the *last*
+        # gauge optimiziation, though in the future we could print
+        # multiple columns, one for each optimization.
+
     if 'method' in gaugeOptArgs:
         table.addrow(("Method", str(gaugeOptArgs['method'])), (None,None))
-    if 'constrainToTP' in gaugeOptArgs:
-        table.addrow(("TP constrained", str(gaugeOptArgs['constrainToTP'])), (None,None))
-    if 'constrainToCP' in gaugeOptArgs:
-        table.addrow(("CP constrained", str(gaugeOptArgs['constrainToCP'])), (None,None))
-    if 'constrainToValidSpam' in gaugeOptArgs:
-        table.addrow(("Valid-SPAM constrained", str(gaugeOptArgs['constrainToValidSpam'])), (None,None))
-    if 'targetFactor' in gaugeOptArgs:
-        table.addrow(("Target weighting", str(gaugeOptArgs['targetFactor'])), (None,None))
-    if 'targetGatesMetric' in gaugeOptArgs:
-        table.addrow(("Metric for gate-to-target", str(gaugeOptArgs['targetGatesMetric'])), (None,None))
-    if 'targetSpamMetric' in gaugeOptArgs:
-        table.addrow(("Metric for SPAM-to-target", str(gaugeOptArgs['targetSpamMetric'])), (None,None))
-    if 'gateWeight' in gaugeOptArgs:
-        table.addrow(("Gate weighting", str(gaugeOptArgs['gateWeight'])), (None,None))
-    if 'spamWeight' in gaugeOptArgs:
-        table.addrow(("SPAM weighting", str(gaugeOptArgs['spamWeight'])), (None,None))
+    if 'TPpenalty' in gaugeOptArgs:
+        table.addrow(("TP penalty factor", str(gaugeOptArgs['TPpenalty'])), (None,None))
+    if 'CPpenalty' in gaugeOptArgs:
+        table.addrow(("CP penalty factor", str(gaugeOptArgs['CPpenalty'])), (None,None))
+    if 'validSpamPenalty' in gaugeOptArgs:
+        table.addrow(("Valid-SPAM constrained", str(gaugeOptArgs['validSpamPenalty'])), (None,None))
+    if 'gatesMetric' in gaugeOptArgs:
+        table.addrow(("Metric for gate-to-target", str(gaugeOptArgs['gatesMetric'])), (None,None))
+    if 'spamMetric' in gaugeOptArgs:
+        table.addrow(("Metric for SPAM-to-target", str(gaugeOptArgs['spamMetric'])), (None,None))
+    if 'itemWeights' in gaugeOptArgs:
+        if gaugeOptArgs['itemWeights']:
+            table.addrow(("Item weighting", ", ".join([("%s=%.2g" % (k,v)) 
+                           for k,v in gaugeOptArgs['itemWeights'].items()])), (None,None))
+    if 'gauge_group' in gaugeOptArgs:
+        table.addrow(("Gauge group", str(gaugeOptArgs['gauge_group'])), (None,None))
 
     table.finish()
     return table
@@ -1364,7 +2027,8 @@ def get_gaugeopt_params_table(gaugeOptArgs):
 def get_logl_confidence_region(gateset, dataset, confidenceLevel,
                                gatestring_list=None, probClipInterval=(-1e6,1e6),
                                minProbClip=1e-4, radius=1e-4, hessianProjection="std",
-                               regionType="std", comm=None, memLimit=None):
+                               regionType="std", comm=None, memLimit=None,
+                               cptp_penalty_factor=None, distributeMethod="deriv"):
 
     """
     Constructs a ConfidenceRegion given a gateset and dataset using the log-likelihood Hessian.
@@ -1414,6 +2078,14 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
           numerical optimization is performed to find the non-gauge space
           which minimizes the (average) size of the confidence intervals
           corresponding to gate (as opposed to SPAM vector) parameters.
+        - 'intrinsic error' -- compute separately the intrinsic error
+          in the gate and spam GateSet parameters and set weighting metric
+          based on their ratio.
+        - 'linear response' -- obtain elements of the Hessian via the
+          linear response of a "forcing term".  This requres a likelihood
+          optimization for *every* computed error bar, but avoids pre-
+          computation of the entire Hessian matrix, which can be 
+          prohibitively costly on large parameter spaces.
 
     regionType : {'std', 'non-markovian'}, optional
         The type of confidence region to create.  'std' creates a standard
@@ -1428,6 +2100,14 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
         A rough memory limit in bytes which restricts the amount of intermediate
         values that are computed and stored.
 
+    cptp_penalty_factor : float, optional
+        The CPTP penalty factor used in MLGST when computing error bars via
+        linear-response.
+
+    distributeMethod : {"gatestrings", "deriv"}
+        The distribute-method used in MLGST when computing error bars via
+        linear-response.
+
 
     Returns
     -------
@@ -1436,10 +2116,27 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
     if gatestring_list is None:
         gatestring_list = list(dataset.keys())
 
-    #Compute appropriate Hessian
-    hessian = _tools.logl_hessian(gateset, dataset, gatestring_list,
-                                  minProbClip, probClipInterval, radius,
-                                  comm=comm, memLimit=memLimit)
+    if hessianProjection != "linear response":
+        #Compute appropriate Hessian
+        vb = 3 if memLimit else 0 #only show details of hessian comp when there's a mem limit (a heuristic)
+        hessian = _tools.logl_hessian(gateset, dataset, gatestring_list,
+                                      minProbClip, probClipInterval, radius,
+                                      comm=comm, memLimit=memLimit, verbosity=vb)
+        mlgst_args = None
+    else: 
+        hessian = None
+        mlgst_args = {
+            'dataset': dataset,
+            'gateStringsToUse': gatestring_list,
+            'maxiter': 10000, 'tol': 1e-10,
+            'cptp_penalty_factor': cptp_penalty_factor,
+            'minProbClip': minProbClip, 
+            'probClipInterval': probClipInterval,
+            'radius': radius,
+            'poissonPicture': True, 'verbosity': 2, #NOTE: HARDCODED
+            'memLimit': memLimit, 'comm': comm,
+            'distributeMethod': distributeMethod, 'profiler': None
+            }
 
     #Compute the non-Markovian "radius" if required
     if regionType == "std":
@@ -1461,7 +2158,8 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
 
     cri = _objs.ConfidenceRegion(gateset, hessian, confidenceLevel,
                                  hessianProjection,
-                                 nonMarkRadiusSq=nonMarkRadiusSq)
+                                 nonMarkRadiusSq=nonMarkRadiusSq,
+                                 linresponse_mlgst_params=mlgst_args)
 
     #Check that number of gauge parameters reported by gateset is consistent with confidence region
     # since the parameter number computed this way is used in chi2 or logl progress tables
@@ -1523,6 +2221,15 @@ def get_chi2_confidence_region(gateset, dataset, confidenceLevel,
           numerical optimization is performed to find the non-gauge space
           which minimizes the (average) size of the confidence intervals
           corresponding to gate (as opposed to SPAM vector) parameters.
+        - 'intrinsic error' -- compute separately the intrinsic error
+          in the gate and spam GateSet parameters and set weighting metric
+          based on their ratio.
+        - 'linear response' -- obtain elements of the Hessian via the
+          linear response of a "forcing term".  This requres a likelihood
+          optimization for *every* computed error bar, but avoids pre-
+          computation of the entire Hessian matrix, which can be 
+          prohibitively costly on large parameter spaces.
+
 
     regionType : {'std', 'non-markovian'}, optional
         The type of confidence region to create.  'std' creates a standard
@@ -1544,6 +2251,10 @@ def get_chi2_confidence_region(gateset, dataset, confidenceLevel,
     """
     if gatestring_list is None:
         gatestring_list = list(dataset.keys())
+
+    if hessianProjection == "linear response":
+        raise NotImplementedError("Linear response hessian projection is only"
+                                  + " implemented for the logL-objective case")
 
     #Compute appropriate Hessian
     chi2, hessian = _tools.chi2(dataset, gateset, gatestring_list,

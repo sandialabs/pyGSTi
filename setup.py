@@ -47,7 +47,8 @@ setup(name='pyGSTi',
            'diamond norm computation':  ['cvxpy', 'cvxopt'],
            'powerpoint file generation': ['python-pptx'],
            'nose testing' : ['nose'],
-           'image comparison' : ['Pillow']
+           'image comparison' : ['Pillow'],
+           'accurate memory profiling' : ['psutil']
       },
       platforms = ["any"],      
       url = 'http://www.pygsti.info',

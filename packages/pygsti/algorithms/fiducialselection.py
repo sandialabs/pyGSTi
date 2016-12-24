@@ -517,7 +517,7 @@ def build_bitvec_mx(n, k):
 
         """
         if i == 0:
-            bitVecMx[counter][[previous_bit_locs]] = 1
+            bitVecMx[counter][list(previous_bit_locs)] = 1
             counter += 1
         else:
             subK = k - i
@@ -698,7 +698,7 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
             wtsLoc = _np.where(wts)[0]
             for fidArray in fidArrayList:
                 scoreMx[:, colInd:colInd+int(numFids)] = fidArray[:, wtsLoc]
-                colInd += numFids
+                colInd += int(numFids)
             scoreSqMx = _np.dot(scoreMx, scoreMx.T)
 #            score = numFids * _np.sum(1./_np.linalg.eigvalsh(scoreSqMx))
             score = numFids * _scoring.list_score(
@@ -811,7 +811,7 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
                     weights, score, L1 = neighbor, neighborScore, neighborL1
                     bFoundBetterNeighbor = True
                     printer.log("Found better neighbor: nFids = %d score = %g"
-                                % (L1, score), 2)
+                                % (L1, score), 3)
 
 
             if not bFoundBetterNeighbor: # Time to relax our search.
@@ -839,15 +839,15 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
                                               sum(neighbor))
                         bFoundBetterNeighbor = True
                         printer.log("Found better neighbor: nFids = %d "
-                                    "score = %g" % (L1, score), 2)
+                                    "score = %g" % (L1, score), 3)
 
                 if not bFoundBetterNeighbor: #Relaxing didn't help!
-                    printer.log("Stationary point found!", 1)
+                    printer.log("Stationary point found!", 2)
                     break # end main for loop
 
-            printer.log("Moving to better neighbor", 1)
+            printer.log("Moving to better neighbor", 2)
         else:
-            printer.log("Hit max. iterations", 1)
+            printer.log("Hit max. iterations", 2)
 
     printer.log("score = %s" % score, 1)
     printer.log("weights = %s" % weights, 1)

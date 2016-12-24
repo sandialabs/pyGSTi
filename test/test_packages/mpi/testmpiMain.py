@@ -1,4 +1,5 @@
 import unittest
+import itertools
 import time
 import sys
 import numpy as np
@@ -7,7 +8,7 @@ from .mpinoseutils import *
 import pygsti
 from pygsti.construction import std1Q_XYI as std
 
-g_maxLengths = [0,1,2]
+g_maxLengths = [0,1,2,4,8]
 g_numSubTrees = 3
 
 def runOneQubit_Tutorial():
@@ -50,8 +51,8 @@ def runAnalysis(obj, ds, myspecs, gsTarget, lsgstStringsToUse,
                              svdTruncateTo=gsTarget.dim, verbosity=3)
 
     assertGatesetsInSync(gs_lgst, comm)
-    gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",
-                                       targetGateset=gsTarget)
+    gs_lgst_go = pygsti.gaugeopt_to_target(gs_lgst,gsTarget)
+    
     assertGatesetsInSync(gs_lgst_go, comm)
 
     #Run full iterative LSGST
@@ -163,9 +164,12 @@ def test_MPI_products(comm):
 
       # will use a split tree to parallelize
     parallel = gs.bulk_product(split_tree, bScale=False, comm=comm)
+    parallel = split_tree.permute_computation_to_original(parallel)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
     parallel, pscale = gs.bulk_product(split_tree, bScale=True, comm=comm)
+    parallel = split_tree.permute_computation_to_original(parallel)
+    pscale = split_tree.permute_computation_to_original(pscale)
     assert(np.linalg.norm(serial_scl*sscale[:,None,None] -
                           parallel*pscale[:,None,None]) < 1e-6)
 
@@ -182,9 +186,12 @@ def test_MPI_products(comm):
 
       # will just ignore a split tree for now (just parallel by col)
     parallel = gs.bulk_dproduct(split_tree, bScale=False, comm=comm)
+    parallel = split_tree.permute_computation_to_original(parallel)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
     parallel, pscale = gs.bulk_dproduct(split_tree, bScale=True, comm=comm)
+    parallel = split_tree.permute_computation_to_original(parallel)
+    pscale = split_tree.permute_computation_to_original(pscale)
     assert(np.linalg.norm(serial_scl*sscale[:,None,None,None] -
                           parallel*pscale[:,None,None,None]) < 1e-6)
 
@@ -201,9 +208,12 @@ def test_MPI_products(comm):
 
       # will just ignore a split tree for now (just parallel by col)
     parallel = gs.bulk_hproduct(split_tree, bScale=False, comm=comm)
+    parallel = split_tree.permute_computation_to_original(parallel)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
     parallel, pscale = gs.bulk_hproduct(split_tree, bScale=True, comm=comm)
+    parallel = split_tree.permute_computation_to_original(parallel)
+    pscale = split_tree.permute_computation_to_original(pscale)
     assert(np.linalg.norm(serial_scl*sscale[:,None,None,None,None] -
                           parallel*pscale[:,None,None,None,None]) < 1e-6)
 
@@ -217,7 +227,6 @@ def test_MPI_pr(comm):
     gs.kick(0.1,seed=1234)
 
     #Get some gate strings
-    maxLengths = [0,1,2]
     maxLengths = g_maxLengths
     gstrs = pygsti.construction.make_lsgst_experiment_list(
         list(std.gs_target.gates.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
@@ -255,14 +264,18 @@ def test_MPI_pr(comm):
     #                wrtBlockSize to accomodate remaining processors
     serial = gs.bulk_pr('plus', tree, clipTo=(-1e6,1e6))
     parallel = gs.bulk_pr('plus', split_tree, clipTo=(-1e6,1e6), comm=comm)
+    parallel = split_tree.permute_computation_to_original(parallel)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
     serial = gs.bulk_dpr('plus', tree, clipTo=(-1e6,1e6))
     parallel = gs.bulk_dpr('plus', split_tree, clipTo=(-1e6,1e6), comm=comm)
+    parallel = split_tree.permute_computation_to_original(parallel)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
     serial, sp = gs.bulk_dpr('plus', tree, returnPr=True, clipTo=(-1e6,1e6))
     parallel, pp = gs.bulk_dpr('plus', split_tree, returnPr=True, clipTo=(-1e6,1e6), comm=comm)
+    parallel = split_tree.permute_computation_to_original(parallel)
+    pp = split_tree.permute_computation_to_original(pp)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
     assert(np.linalg.norm(sp-pp) < 1e-6)
 
@@ -270,6 +283,9 @@ def test_MPI_pr(comm):
                              clipTo=(-1e6,1e6))
     parallel, pdp, pp = gs.bulk_hpr('plus', split_tree, returnPr=True,
                                  returnDeriv=True, clipTo=(-1e6,1e6), comm=comm)
+    parallel = split_tree.permute_computation_to_original(parallel)
+    pdp = split_tree.permute_computation_to_original(pdp)
+    pp = split_tree.permute_computation_to_original(pp)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
     assert(np.linalg.norm(sdp-pdp) < 1e-6)
     assert(np.linalg.norm(sp-pp) < 1e-6)
@@ -284,7 +300,6 @@ def test_MPI_probs(comm):
     gs.kick(0.1,seed=1234)
 
     #Get some gate strings
-    maxLengths = [0,1,2]
     maxLengths = g_maxLengths
     gstrs = pygsti.construction.make_lsgst_experiment_list(
         list(std.gs_target.gates.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
@@ -326,27 +341,34 @@ def test_MPI_probs(comm):
     serial = gs.bulk_probs(tree, clipTo=(-1e6,1e6))
     parallel = gs.bulk_probs(split_tree, clipTo=(-1e6,1e6), comm=comm)
     for sl in serial:
-        assert(np.linalg.norm(serial[sl]-parallel[sl]) < 1e-6)
+        p = split_tree.permute_computation_to_original(parallel[sl])
+        assert(np.linalg.norm(serial[sl]-p) < 1e-6)
 
     serial = gs.bulk_dprobs(tree, clipTo=(-1e6,1e6))
     parallel = gs.bulk_dprobs(split_tree, clipTo=(-1e6,1e6), comm=comm)
     for sl in serial:
-        assert(np.linalg.norm(serial[sl]-parallel[sl]) < 1e-6)
+        p = split_tree.permute_computation_to_original(parallel[sl])
+        assert(np.linalg.norm(serial[sl]-p) < 1e-6)
 
     serial = gs.bulk_dprobs(tree, returnPr=True, clipTo=(-1e6,1e6))
     parallel = gs.bulk_dprobs(split_tree, returnPr=True, clipTo=(-1e6,1e6), comm=comm)
     for sl in serial:
-        assert(np.linalg.norm(serial[sl][0]-parallel[sl][0]) < 1e-6)
-        assert(np.linalg.norm(serial[sl][1]-parallel[sl][1]) < 1e-6)
+        p0 = split_tree.permute_computation_to_original(parallel[sl][0])
+        p1 = split_tree.permute_computation_to_original(parallel[sl][1])
+        assert(np.linalg.norm(serial[sl][0]-p0) < 1e-6)
+        assert(np.linalg.norm(serial[sl][1]-p1) < 1e-6)
 
     serial = gs.bulk_hprobs(tree, returnPr=True, returnDeriv=True,
                             clipTo=(-1e6,1e6))
     parallel = gs.bulk_hprobs(split_tree, returnPr=True,
                               returnDeriv=True, clipTo=(-1e6,1e6), comm=comm)
     for sl in serial:
-        assert(np.linalg.norm(serial[sl][0]-parallel[sl][0]) < 1e-6)
-        assert(np.linalg.norm(serial[sl][1]-parallel[sl][1]) < 1e-6)
-        assert(np.linalg.norm(serial[sl][2]-parallel[sl][2]) < 1e-6)
+        p0 = split_tree.permute_computation_to_original(parallel[sl][0])
+        p1 = split_tree.permute_computation_to_original(parallel[sl][1])
+        p2 = split_tree.permute_computation_to_original(parallel[sl][2])
+        assert(np.linalg.norm(serial[sl][0]-p0) < 1e-6)
+        assert(np.linalg.norm(serial[sl][1]-p1) < 1e-6)
+        assert(np.linalg.norm(serial[sl][2]-p2) < 1e-6)
 
 
 
@@ -358,7 +380,6 @@ def test_MPI_fills(comm):
     gs.kick(0.1,seed=1234)
 
     #Get some gate strings
-    maxLengths = [0,1,2]
     maxLengths = g_maxLengths
     gstrs = pygsti.construction.make_lsgst_experiment_list(
         list(std.gs_target.gates.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
@@ -393,7 +414,7 @@ def test_MPI_fills(comm):
 
     gs.bulk_fill_hprobs(vhp_serial, spam_label_rows, tree,
                         vp_serial2, vdp_serial2, (-1e6,1e6), comm=None,
-                        wrtBlockSize=None)
+                        wrtBlockSize1=None, wrtBlockSize2=None)
     assert(np.linalg.norm(vp_serial2-vp_serial) < 1e-6)
     assert(np.linalg.norm(vdp_serial2-vdp_serial) < 1e-6)
 
@@ -401,17 +422,23 @@ def test_MPI_fills(comm):
     #Check serial results with a split tree, just to be sure
     gs.bulk_fill_probs(vp_serial2, spam_label_rows, split_tree,
                        (-1e6,1e6), comm=None)
+    vp_serial2 = split_tree.permute_computation_to_original(vp_serial2,axis=1)
     assert(np.linalg.norm(vp_serial2-vp_serial) < 1e-6)
 
     gs.bulk_fill_dprobs(vdp_serial2, spam_label_rows, split_tree,
                         vp_serial2, (-1e6,1e6), comm=None,
                         wrtBlockSize=None)
+    vp_serial2 = split_tree.permute_computation_to_original(vp_serial2,axis=1)
+    vdp_serial2 = split_tree.permute_computation_to_original(vdp_serial2,axis=1)
     assert(np.linalg.norm(vp_serial2-vp_serial) < 1e-6)
     assert(np.linalg.norm(vdp_serial2-vdp_serial) < 1e-6)
 
     gs.bulk_fill_hprobs(vhp_serial2, spam_label_rows, split_tree,
                         vp_serial2, vdp_serial2, (-1e6,1e6), comm=None,
-                        wrtBlockSize=None)
+                        wrtBlockSize1=None, wrtBlockSize2=None)
+    vp_serial2 = split_tree.permute_computation_to_original(vp_serial2,axis=1)
+    vdp_serial2 = split_tree.permute_computation_to_original(vdp_serial2,axis=1)
+    vhp_serial2 = split_tree.permute_computation_to_original(vhp_serial2,axis=1)
     assert(np.linalg.norm(vp_serial2-vp_serial) < 1e-6)
     assert(np.linalg.norm(vdp_serial2-vdp_serial) < 1e-6)
     assert(np.linalg.norm(vhp_serial2-vhp_serial) < 1e-6)
@@ -426,26 +453,35 @@ def test_MPI_fills(comm):
 
         gs.bulk_fill_probs(vp_parallel, spam_label_rows, tstTree,
                            (-1e6,1e6), comm=comm)
+        vp_parallel = tstTree.permute_computation_to_original(vp_parallel,axis=1)
         assert(np.linalg.norm(vp_parallel-vp_serial) < 1e-6)
 
         for blkSize in [None, 4]:
             gs.bulk_fill_dprobs(vdp_parallel, spam_label_rows, tstTree,
                                 vp_parallel, (-1e6,1e6), comm=comm,
                                 wrtBlockSize=blkSize)
+            vp_parallel = tstTree.permute_computation_to_original(vp_parallel,axis=1)
+            vdp_parallel = tstTree.permute_computation_to_original(vdp_parallel,axis=1)
             assert(np.linalg.norm(vp_parallel-vp_serial) < 1e-6)
             assert(np.linalg.norm(vdp_parallel-vdp_serial) < 1e-6)
 
-            gs.bulk_fill_hprobs(vhp_parallel, spam_label_rows, tstTree,
-                                vp_parallel, vdp_parallel, (-1e6,1e6), comm=comm,
-                                wrtBlockSize=blkSize)
-            assert(np.linalg.norm(vp_parallel-vp_serial) < 1e-6)
-            assert(np.linalg.norm(vdp_parallel-vdp_serial) < 1e-6)
-            assert(np.linalg.norm(vhp_parallel-vhp_serial) < 1e-6)
+            for blkSize2 in [None, 2, 4]:
+                gs.bulk_fill_hprobs(vhp_parallel, spam_label_rows, tstTree,
+                                    vp_parallel, vdp_parallel, (-1e6,1e6), comm=comm,
+                                    wrtBlockSize1=blkSize, wrtBlockSize2=blkSize2)
+                vp_parallel = tstTree.permute_computation_to_original(vp_parallel,axis=1)
+                vdp_parallel = tstTree.permute_computation_to_original(vdp_parallel,axis=1)
+                vhp_parallel = tstTree.permute_computation_to_original(vhp_parallel,axis=1)
+                assert(np.linalg.norm(vp_parallel-vp_serial) < 1e-6)
+                assert(np.linalg.norm(vdp_parallel-vdp_serial) < 1e-6)
+                assert(np.linalg.norm(vhp_parallel-vhp_serial) < 1e-6)
 
 
     #Test Serial vs Parallel use of wrtFilter
-    some_wrtFilter = [0,2,3,5,10]
+    some_wrtFilter = [0,1,2,3,10,11,12,13,14] #must be contiguous now - not arbitraray
+    some_wrtFilter2 = [0,1,2,11,12,13] #must be contiguous now - not arbitraray
     vhp_parallelF = np.empty( (nSpamLabels,nGateStrings,nDerivCols,len(some_wrtFilter)),'d')
+    vhp_parallelF2 = np.empty( (nSpamLabels,nGateStrings,len(some_wrtFilter),len(some_wrtFilter2)),'d')
     vdp_parallelF = np.empty( (nSpamLabels,nGateStrings,len(some_wrtFilter)), 'd' )
 
     for tstTree in [tree, split_tree]:
@@ -453,23 +489,37 @@ def test_MPI_fills(comm):
         gs._calc().bulk_fill_dprobs(vdp_parallelF, spam_label_rows, tstTree,
                             None, (-1e6,1e6), comm=comm,
                             wrtFilter=some_wrtFilter, wrtBlockSize=None)
+        vdp_parallelF = tstTree.permute_computation_to_original(vdp_parallelF,axis=1)
+
         for ii,i in enumerate(some_wrtFilter):
             assert(np.linalg.norm(vdp_serial[:,:,i]-vdp_parallelF[:,:,ii]) < 1e-6)
         taken_result = vdp_serial.take( some_wrtFilter, axis=2 )
         assert(np.linalg.norm(taken_result-vdp_parallelF) < 1e-6)
 
         gs._calc().bulk_fill_hprobs(vhp_parallelF, spam_label_rows, tstTree,
-                        None, None, (-1e6,1e6), comm=comm,
-                        wrtFilter=some_wrtFilter, wrtBlockSize=None)
+                        None, None,None, (-1e6,1e6), comm=comm,
+                        wrtFilter2=some_wrtFilter, wrtBlockSize2=None)
+        vhp_parallelF = tstTree.permute_computation_to_original(vhp_parallelF,axis=1)
 
         for ii,i in enumerate(some_wrtFilter):
             assert(np.linalg.norm(vhp_serial[:,:,:,i]-vhp_parallelF[:,:,:,ii]) < 1e-6)
         taken_result = vhp_serial.take( some_wrtFilter, axis=3 )
         assert(np.linalg.norm(taken_result-vhp_parallelF) < 1e-6)
 
+        gs._calc().bulk_fill_hprobs(vhp_parallelF2, spam_label_rows, tstTree,
+                        None, None,None, (-1e6,1e6), comm=comm,
+                        wrtFilter1=some_wrtFilter, wrtFilter2=some_wrtFilter2)
+        vhp_parallelF2 = tstTree.permute_computation_to_original(vhp_parallelF2,axis=1)
+
+        for ii,i in enumerate(some_wrtFilter):
+            for jj,j in enumerate(some_wrtFilter2):
+                assert(np.linalg.norm(vhp_serial[:,:,i,j]-vhp_parallelF2[:,:,ii,jj]) < 1e-6)
+        taken_result = vhp_serial.take( some_wrtFilter, axis=2 ).take( some_wrtFilter2, axis=3)
+        assert(np.linalg.norm(taken_result-vhp_parallelF2) < 1e-6)
+
 
 @mpitest(4)
-def test_MPI_by_columns(comm):
+def test_MPI_by_block(comm):
 
     #Create some gateset
     if comm is None or comm.Get_rank() == 0:
@@ -504,11 +554,13 @@ def test_MPI_by_columns(comm):
                         vp_serial, vdp_serial, (-1e6,1e6), comm=None)
     dprobs12_serial = vdp_serial[:,:,:,None] * vdp_serial[:,:,None,:]
 
+
     for tstTree in [tree]: # currently no split trees allowed (ValueError), split_tree]:
         hcols = []
         d12cols = []
-        for hprobs, dprobs12 in gs.bulk_hprobs_by_column(
-            spam_label_rows, tstTree, True, clipTo=(-1e6,1e6) ):
+        slicesList = [ (slice(0,nDerivCols),slice(i,i+1)) for i in range(nDerivCols) ]
+        for s1,s2, hprobs, dprobs12 in gs.bulk_hprobs_by_block(
+            spam_label_rows, tstTree, slicesList, True, comm):
             hcols.append(hprobs)
             d12cols.append(dprobs12)
 
@@ -540,6 +592,32 @@ def test_MPI_by_columns(comm):
         assert(np.linalg.norm(all_d12cols-dprobs12_serial) < 1e-6)
 
 
+        hcols = []
+        d12cols = []
+        slicesList = [ (slice(2,12),slice(i,i+1)) for i in range(1,10) ]
+        for s1,s2, hprobs, dprobs12 in gs.bulk_hprobs_by_block(
+            spam_label_rows, tstTree, slicesList, True, comm):
+            hcols.append(hprobs)
+            d12cols.append(dprobs12)
+
+        all_hcols = np.concatenate( hcols, axis=3 )
+        all_d12cols = np.concatenate( d12cols, axis=3 )
+        assert(np.linalg.norm(all_hcols-vhp_serial[:,:,2:12,1:10]) < 1e-6)
+        assert(np.linalg.norm(all_d12cols-dprobs12_serial[:,:,2:12,1:10]) < 1e-6)
+
+
+        hprobs_by_block = np.zeros(vhp_serial.shape,'d')
+        dprobs12_by_block = np.zeros(dprobs12_serial.shape,'d')
+        blocks1 = pygsti.tools.mpitools.slice_up_range(nDerivCols, 3)
+        blocks2 = pygsti.tools.mpitools.slice_up_range(nDerivCols, 5)
+        slicesList = list(itertools.product(blocks1,blocks2))
+        for s1,s2, hprobs_blk, dprobs12_blk in gs.bulk_hprobs_by_block(
+            spam_label_rows, tstTree, slicesList, True, comm):
+            hprobs_by_block[:,:,s1,s2] = hprobs_blk
+            dprobs12_by_block[:,:,s1,s2] = dprobs12_blk
+
+        assert(np.linalg.norm(hprobs_by_block-vhp_serial) < 1e-6)
+        assert(np.linalg.norm(dprobs12_by_block-dprobs12_serial) < 1e-6)
 
 
 
@@ -604,8 +682,7 @@ def test_MPI_gatestrings_chi2(comm):
         assertGatesetsInSync(gs1, comm)
         assertGatesetsInSync(gs2, comm)
 
-        gs2_go = pygsti.optimize_gauge(gs2, "target", targetGateset=gs1,
-                                       gateWeight=1.0, spamWeight=1.0)
+        gs2_go = pygsti.gaugeopt_to_target(gs2, gs1, {'gates': 1.0, 'spam': 1.0})
         print("Frobenius distance %d (rank %d) = " % (i,comm.Get_rank()), gs1.frobeniusdist(gs2_go))
         if gs1.frobeniusdist(gs2_go) >= 1e-5:
             print("DIFF (%d) = " % comm.Get_rank(), gs1.strdiff(gs2_go))
@@ -628,8 +705,7 @@ def test_MPI_gatestrings_logl(comm):
         assertGatesetsInSync(gs1, comm)
         assertGatesetsInSync(gs2, comm)
 
-        gs2_go = pygsti.optimize_gauge(gs2, "target", targetGateset=gs1,
-                                       gateWeight=1.0, spamWeight=1.0)
+        gs2_go = pygsti.gaugeopt_to_target(gs2, gs1, {'gates': 1.0, 'spam': 1.0})
         print("Frobenius distance %d (rank %d) = " % (i,comm.Get_rank()), gs1.frobeniusdist(gs2_go))
         if gs1.frobeniusdist(gs2_go) >= 1e-5:
             print("DIFF (%d) = " % comm.Get_rank(), gs1.strdiff(gs2_go))
@@ -652,8 +728,7 @@ def test_MPI_derivcols(comm):
         assertGatesetsInSync(gs1, comm)
         assertGatesetsInSync(gs2, comm)
 
-        gs2_go = pygsti.optimize_gauge(gs2, "target", targetGateset=gs1,
-                                       gateWeight=1.0, spamWeight=1.0)
+        gs2_go = pygsti.gaugeopt_to_target(gs2, gs1, {'gates': 1.0, 'spam': 1.0})
         print("Frobenius distance %d (rank %d) = " % (i,comm.Get_rank()), gs1.frobeniusdist(gs2_go))
         if gs1.frobeniusdist(gs2_go) >= 1e-5:
             print("DIFF (%d) = " % comm.Get_rank(), gs1.strdiff(gs2_go))

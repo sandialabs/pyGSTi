@@ -1,4 +1,5 @@
 import unittest
+import itertools
 import pygsti
 import numpy as np
 import warnings
@@ -82,7 +83,7 @@ class TestGateSetMethods(GateSetTestCase):
         self.assertArraysAlmostEqual( gs['Gi'], Gi_test_matrix )
 
         with self.assertRaises(KeyError):
-            gs.preps['foobar'] = [1,0,0,0] #bad key prefix
+            gs.preps['foobar'] = [1.0/np.sqrt(2),0,0,0] #bad key prefix
 
         with self.assertRaises(KeyError):
             gs2 = gs.copy()
@@ -110,8 +111,9 @@ class TestGateSetMethods(GateSetTestCase):
                       [ 0.4038386 ,  0.89518315,  0.20206879,  0.6484708 ],
                       [ 0.44878029,  0.42095514,  0.27645424,  0.41766033]]) #some random array
         Tinv = np.linalg.inv(T)
+        elT = pygsti.objects.FullGaugeGroup.element(T)
         cp = self.gateset.copy()
-        cp.transform(T,Tinv)
+        cp.transform(elT)
 
         self.assertAlmostEqual( self.gateset.frobeniusdist(cp, T), 0 )
         self.assertAlmostEqual( self.gateset.jtracedist(cp, T), 0 )
@@ -235,8 +237,10 @@ class TestGateSetMethods(GateSetTestCase):
         evt_split = evt.copy(); evt_split.split(numSubTrees=2)
         bulk_probs_splt = self.assertNoWarnings(self.gateset.bulk_probs,
                                      evt_split, check=True)
-        self.assertArraysAlmostEqual(bulk_probs['plus'], bulk_probs_splt['plus'])
-        self.assertArraysAlmostEqual(bulk_probs['minus'], bulk_probs_splt['minus'])
+        self.assertArraysAlmostEqual(bulk_probs['plus'], 
+                    evt_split.permute_computation_to_original(bulk_probs_splt['plus']))
+        self.assertArraysAlmostEqual(bulk_probs['minus'], 
+                    evt_split.permute_computation_to_original(bulk_probs_splt['minus']))
 
 
         nGateStrings = 2; nSpamLabels = 2
@@ -299,8 +303,10 @@ class TestGateSetMethods(GateSetTestCase):
         evt_split = evt.copy(); evt_split.split(numSubTrees=2)
         bulk_dProbs_splt = self.assertNoWarnings(self.gateset.bulk_dprobs,
                                      evt_split, returnPr=False, check=True)
-        self.assertArraysAlmostEqual(bulk_dProbs['plus'], bulk_dProbs_splt['plus'])
-        self.assertArraysAlmostEqual(bulk_dProbs['minus'], bulk_dProbs_splt['minus'])
+        self.assertArraysAlmostEqual(bulk_dProbs['plus'], 
+                evt_split.permute_computation_to_original(bulk_dProbs_splt['plus']))
+        self.assertArraysAlmostEqual(bulk_dProbs['minus'], 
+               evt_split.permute_computation_to_original(bulk_dProbs_splt['minus']))
 
         dProbs0b = self.gateset.dprobs(gatestring0, returnPr=True)
 
@@ -375,8 +381,10 @@ class TestGateSetMethods(GateSetTestCase):
         evt_split = evt.copy(); evt_split.split(maxSubTreeSize=4)
         bulk_hProbs_splt = self.assertNoWarnings(self.gateset.bulk_hprobs,
                                      evt_split, returnPr=False, check=True)
-        self.assertArraysAlmostEqual(bulk_hProbs['plus'], bulk_hProbs_splt['plus'])
-        self.assertArraysAlmostEqual(bulk_hProbs['minus'], bulk_hProbs_splt['minus'])
+        self.assertArraysAlmostEqual(bulk_hProbs['plus'], 
+                 evt_split.permute_computation_to_original(bulk_hProbs_splt['plus']))
+        self.assertArraysAlmostEqual(bulk_hProbs['minus'], 
+                 evt_split.permute_computation_to_original(bulk_hProbs_splt['minus']))
 
         #Vary keyword args
         hProbs0b = self.gateset.hprobs(gatestring0,returnPr=True)
@@ -441,17 +449,60 @@ class TestGateSetMethods(GateSetTestCase):
         self.assertArraysAlmostEqual(dProdsF, np.repeat(S3,N)[:,None]*dProdsF2)
         self.assertArraysAlmostEqual(prodsF, S3[:,None,None]*prodsF2)
 
+        nP = self.gateset.num_params()
+
         hcols = []
         d12cols = []
-        for hprobs, dprobs12 in self.gateset.bulk_hprobs_by_column(
-            spam_label_rows, evt, True, clipTo=(-1e6,1e6) ):
-            hcols.append(hprobs)
-            d12cols.append(dprobs12)
+        slicesList = [ (slice(0,nP),slice(i,i+1)) for i in range(nP) ]
+        for s1,s2, hprobs_col, dprobs12_col in self.gateset.bulk_hprobs_by_block(
+            spam_label_rows, evt, slicesList, True):
+            hcols.append(hprobs_col)
+            d12cols.append(dprobs12_col)
         all_hcols = np.concatenate( hcols, axis=3 )
         all_d12cols = np.concatenate( d12cols, axis=3 )
         dprobs12 = dprobs_to_fill[:,:,:,None] * dprobs_to_fill[:,:,None,:]
         self.assertArraysAlmostEqual(all_hcols,hprobs_to_fill)
         self.assertArraysAlmostEqual(all_d12cols,dprobs12)
+
+        hcols = []
+        d12cols = []
+        slicesList = [ (slice(0,nP),slice(i,i+1)) for i in range(1,10) ]
+        for s1,s2, hprobs_col, dprobs12_col in self.gateset.bulk_hprobs_by_block(
+            spam_label_rows, evt, slicesList, True):
+            hcols.append(hprobs_col)
+            d12cols.append(dprobs12_col)
+        all_hcols = np.concatenate( hcols, axis=3 )  #axes = (spam, gatestring, derivParam1, derivParam2)
+        all_d12cols = np.concatenate( d12cols, axis=3 )
+        self.assertArraysAlmostEqual(all_hcols,hprobs_to_fill[:,:,:,1:10])
+        self.assertArraysAlmostEqual(all_d12cols,dprobs12[:,:,:,1:10])
+
+        hcols = []
+        d12cols = []
+        slicesList = [ (slice(2,12),slice(i,i+1)) for i in range(1,10) ]
+        for s1,s2, hprobs_col, dprobs12_col in self.gateset.bulk_hprobs_by_block(
+            spam_label_rows, evt, slicesList, True):
+            hcols.append(hprobs_col)
+            d12cols.append(dprobs12_col)
+        all_hcols = np.concatenate( hcols, axis=3 )  #axes = (spam, gatestring, derivParam1, derivParam2)
+        all_d12cols = np.concatenate( d12cols, axis=3 )
+
+        self.assertArraysAlmostEqual(all_hcols,hprobs_to_fill[:,:,2:12,1:10])
+        self.assertArraysAlmostEqual(all_d12cols,dprobs12[:,:,2:12,1:10])
+
+        hprobs_by_block = np.zeros(hprobs_to_fill.shape,'d')
+        dprobs12_by_block = np.zeros(dprobs12.shape,'d')
+        blocks1 = pygsti.tools.mpitools.slice_up_range(nP, 3)
+        blocks2 = pygsti.tools.mpitools.slice_up_range(nP, 5)
+        slicesList = list(itertools.product(blocks1,blocks2))
+        for s1,s2, hprobs_blk, dprobs12_blk in self.gateset.bulk_hprobs_by_block(
+            spam_label_rows, evt, slicesList, True):
+            hprobs_by_block[:,:,s1,s2] = hprobs_blk
+            dprobs12_by_block[:,:,s1,s2] = dprobs12_blk
+
+        self.assertArraysAlmostEqual(hprobs_by_block,hprobs_to_fill)
+        self.assertArraysAlmostEqual(dprobs12_by_block,dprobs12)
+
+
 
 
 

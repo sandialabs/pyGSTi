@@ -9,6 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy       as _np
 import scipy.stats as _stats
 import warnings    as _warnings
+import itertools   as _itertools
 from .. import optimize as _opt
 
 from .gateset import P_RANK_TOL
@@ -51,7 +52,7 @@ class ConfidenceRegion(object):
 
     def __init__(self, gateset, hessian, confidenceLevel,
                  hessianProjection="std", tol=1e-6, maxiter=10000,
-                 nonMarkRadiusSq=0):
+                 nonMarkRadiusSq=0, linresponse_mlgst_params=None):
         """
         Initializes a new ConfidenceRegion.
 
@@ -64,7 +65,9 @@ class ConfidenceRegion(object):
 
         hessian : numpy array
             A nParams x nParams Hessian matrix, where nParams is the number
-            of dimensions of gateset space, i.e. gateset.num_params()
+            of dimensions of gateset space, i.e. gateset.num_params().  This 
+            can and must be None when `hessianProjection` equals
+            `linear response` (see below).
 
         confidenceLevel : float
             The confidence level as a percentage, i.e. between 0 and 100.
@@ -81,6 +84,14 @@ class ConfidenceRegion(object):
               numerical optimization is performed to find the non-gauge space
               which minimizes the (average) size of the confidence intervals
               corresponding to gate (as opposed to SPAM vector) parameters.
+            - 'intrinsic error' -- compute separately the intrinsic error
+              in the gate and spam GateSet parameters and set weighting metric
+              based on their ratio.
+            - 'linear response' -- obtain elements of the Hessian via the
+              linear response of a "forcing term".  This requres a likelihood
+              optimization for *every* computed error bar, but avoids pre-
+              computation of the entire Hessian matrix, which can be 
+              prohibitively costly on large parameter spaces.
 
         tol : float, optional
             Tolerance for optimal Hessian projection.  Only used when
@@ -100,25 +111,42 @@ class ConfidenceRegion(object):
             zero (the default), a standard and thereby statistically rigorous
             conficence region is created.  Non-zero values should only be
             supplied if you really know what you're doing.
+
+        linresponse_mlgst_params : dict, optional
+            Only used when `hessianProjection == 'linear response'`, this 
+            dictionary gives the arguments passed to the :func:`do_mlgst`
+            calls used to compute linear-response error bars.
         """
+
+        assert(not(hessian is None and linresponse_mlgst_params is None)), \
+            "Must supply either a Hessian matrix or MLGST parameters"
 
         proj_non_gauge = gateset.get_nongauge_projector()
         self.nNonGaugeParams = _np.linalg.matrix_rank(proj_non_gauge, P_RANK_TOL)
-        self.nGaugeParams = hessian.shape[0] - self.nNonGaugeParams
+        self.nGaugeParams = gateset.num_params() - self.nNonGaugeParams
 
         #Project Hessian onto non-gauge space
-        if hessianProjection == 'none':
-            projected_hessian = hessian
-        elif hessianProjection == 'std':
-            projected_hessian = _np.dot(proj_non_gauge, _np.dot(hessian, proj_non_gauge))
-        elif hessianProjection == 'optimal gate CIs':
-            projected_hessian = _optProjectionForGateCIs(gateset, hessian, self.nNonGaugeParams,
-                                                         self.nGaugeParams, confidenceLevel,
-                                                         "L-BFGS-B", maxiter, maxiter,
-                                                         tol, verbosity=3) #verbosity for DEBUG
+        if hessian is not None:
+            if hessianProjection == 'none':
+                projected_hessian = hessian
+            elif hessianProjection == 'std':
+                projected_hessian = _np.dot(proj_non_gauge, _np.dot(hessian, proj_non_gauge))
+            elif hessianProjection == 'optimal gate CIs':
+                projected_hessian = _optProjectionForGateCIs(gateset, hessian, self.nNonGaugeParams,
+                                                             self.nGaugeParams, confidenceLevel,
+                                                             "L-BFGS-B", maxiter, maxiter,
+                                                             tol, verbosity=3) #verbosity for DEBUG
+            elif hessianProjection == 'intrinsic error':
+                projected_hessian = _optProjectionFromSplit(gateset, hessian, confidenceLevel,
+                                                            verbosity=3) #verbosity for DEBUG
+            elif hessianProjection == 'linear response':
+                raise ValueError("'hessian' must be None when using the " +
+                                 "'linear response' hessian projection type")
+            else:
+                raise ValueError("Invalid value of hessianProjection argument: %s" % hessianProjection)
         else:
-            raise ValueError("Invalid value of hessianProjection argument: %s" % hessianProjection)
-
+            assert(hessianProjection == 'linear response')
+            projected_hessian = None
 
         #Scale projected Hessian for desired confidence level => quadratic form for confidence region
         # assume hessian gives Fisher info, so asymptotically normal => confidence interval = +/- seScaleFctr * 1/sqrt(hessian)
@@ -144,7 +172,11 @@ class ConfidenceRegion(object):
 
             # save quadratic form Q s.t. xT*Q*x = 1 gives confidence region using C1, i.e. a
             #  region appropriate for generating 1-D confidence intervals.
-            self.regionQuadcForm = projected_hessian / C1
+            if projected_hessian is not None:
+                self.regionQuadcForm = projected_hessian / C1
+            else:
+                self.regionQuadcForm = None
+
             self.intervalScaling = _np.sqrt( Ck / C1 ) # multiplicative scaling required to convert intervals
                                                    # to those obtained using a full (using Ck) confidence region.
             self.stdIntervalScaling = 1.0 # multiplicative scaling required to convert intervals
@@ -158,8 +190,12 @@ class ConfidenceRegion(object):
 
             # save quadratic form Q s.t. xT*Q*x = 1 gives confidence region using C1, i.e. a
             #  region appropriate for generating 1-D confidence intervals.
-            self.regionQuadcForm = projected_hessian / C1
-            self.regionQuadcForm *=  _np.sqrt(self.nNonGaugeParams) #make a *worst case* non-mark. region...
+            if projected_hessian is not None:
+                self.regionQuadcForm = projected_hessian / C1
+                self.regionQuadcForm *=  _np.sqrt(self.nNonGaugeParams) #make a *worst case* non-mark. region...
+            else:
+                self.regionQuadcForm = None
+
             self.intervalScaling = _np.sqrt( Ck / C1 ) # multiplicative scaling required to convert intervals
                                                    # to those obtained using a full (using Ck) confidence region.
 
@@ -174,35 +210,45 @@ class ConfidenceRegion(object):
 
         #print "DEBUG: C1 =",C1," Ck =",Ck," scaling =",self.intervalScaling
 
-        #Invert *non-gauge-part* of quadratic by eigen-decomposing ->
-        #   inverting the non-gauge eigenvalues -> re-constructing via eigenvectors.
-        # (Note that Hessian & quadc form mxs are symmetric so eigenvalues == singular values)
-        evals,U = _np.linalg.eigh(self.regionQuadcForm)  # regionQuadcForm = U * diag(evals) * U.dag (b/c U.dag == inv(U) )
-        Udag = _np.conjugate(_np.transpose(U))
-
-          #invert only the non-gauge eigenvalues (those with ordering index >= nGaugeParams)
-        orderInds = [ el[0] for el in sorted( enumerate(evals), key=lambda x: abs(x[1])) ] # ordering index of each eigenvalue
-        invEvals = _np.zeros( evals.shape, evals.dtype )
-        for i in orderInds[self.nGaugeParams:]:
-            invEvals[i] = 1.0/evals[i]
-        #print "nGaugeParams = ",self.nGaugeParams; print invEvals #DEBUG
-
-          #re-construct "inverted" quadratic form
-        invDiagQuadcForm = _np.diag( invEvals )
-        self.invRegionQuadcForm = _np.dot(U, _np.dot(invDiagQuadcForm, Udag))
-        self.U, self.Udag = U, Udag
+        if self.regionQuadcForm is not None:
+            #Invert *non-gauge-part* of quadratic by eigen-decomposing ->
+            #   inverting the non-gauge eigenvalues -> re-constructing via eigenvectors.
+            # (Note that Hessian & quadc form mxs are symmetric so eigenvalues == singular values)
+            evals,U = _np.linalg.eigh(self.regionQuadcForm)  # regionQuadcForm = U * diag(evals) * U.dag (b/c U.dag == inv(U) )
+            Udag = _np.conjugate(_np.transpose(U))
+    
+              #invert only the non-gauge eigenvalues (those with ordering index >= nGaugeParams)
+            orderInds = [ el[0] for el in sorted( enumerate(evals), key=lambda x: abs(x[1])) ] # ordering index of each eigenvalue
+            invEvals = _np.zeros( evals.shape, evals.dtype )
+            for i in orderInds[self.nGaugeParams:]:
+                invEvals[i] = 1.0/evals[i]
+            #print "nGaugeParams = ",self.nGaugeParams; print invEvals #DEBUG
+    
+              #re-construct "inverted" quadratic form
+            invDiagQuadcForm = _np.diag( invEvals )
+            self.invRegionQuadcForm = _np.dot(U, _np.dot(invDiagQuadcForm, Udag))
+            self.U, self.Udag = U, Udag
+        else:
+            self.invRegionQuadcForm = None
+            self.U = self.Udag = None
 
         #Store params and offsets of gateset for future use
         self.gateset_offsets = gateset.get_vector_offsets()
 
         #Store list of profile-likelihood confidence intervals
         #  which == sqrt(diagonal els) of invRegionQuadcForm
-        self.profLCI = [ _np.sqrt(abs(self.invRegionQuadcForm[k,k])) for k in range(len(evals))]
-        self.profLCI = _np.array( self.profLCI, 'd' )
+        if self.invRegionQuadcForm is not None:
+            self.profLCI = [ _np.sqrt(abs(self.invRegionQuadcForm[k,k])) for k in range(len(evals))]
+            self.profLCI = _np.array( self.profLCI, 'd' )
+        else:
+            self.profLCI = None
 
         self.gateset = gateset
         self.level = confidenceLevel #a percentage, i.e. btwn 0 and 100
 
+        self.mlgst_params = linresponse_mlgst_params
+        self._C1 = C1 #save for linear response scaling
+        self.mlgst_evaltree_cache = {} #for _do_mlgst_base speedup
 
         #DEBUG
         #print "DEBUG HESSIAN:"
@@ -221,6 +267,24 @@ class ConfidenceRegion(object):
         #
         #import sys
         #sys.exit()
+
+    def has_hessian(self):
+        """
+        Returns whether or not the full Hessian has already been computed.
+
+        When True, computation of confidence regions and intervals is
+        fast, since the difficult work of computing the inverse Hessian is
+        already done.  When False, a slower method must be used to estimate
+        the necessary portion of the Hessian.  The result of this function
+        is often used to decide whether or not to proceed with an error-bar
+        computation.
+
+        Returns
+        -------
+        bool
+        """
+        return bool(self.invRegionQuadcForm is not None)
+
 
     def get_gateset(self):
         """
@@ -579,6 +643,57 @@ class ConfidenceRegion(object):
 
 
     def _compute_df_from_gradF(self, gradF, f0, returnFnVal, verbosity):
+        if self.regionQuadcForm is None:
+            df = self._compute_df_from_gradF_linresponse(
+                gradF, f0, verbosity)
+        else:
+            df = self._compute_df_from_gradF_hessian(
+                gradF, f0, verbosity)
+        return (df, f0) if returnFnVal else df
+
+
+    def _compute_df_from_gradF_linresponse(self, gradF, f0, verbosity):
+        from .. import algorithms as _alg
+        assert(self.mlgst_params is not None)
+
+        if hasattr(f0,'dtype') and f0.dtype == _np.dtype("complex"):
+            raise NotImplementedError("Can't handle complex-valued functions yet")
+
+        #massage gradF, which has shape (nParams,) + f0.shape
+        # to that expected by _do_mlgst_base, which is
+        # (flat_f0_size, nParams)
+        if len(gradF.shape) == 1:
+            gradF.shape = (1,gradF.shape[0])
+        else:
+            flatDim = _np.prod(f0.shape)
+            gradF.shape = (gradF.shape[0], flatDim)
+            gradF = _np.transpose(gradF) #now shape == (flatDim, nParams)
+        assert(len(gradF.shape) == 2)
+
+        mlgst_args = self.mlgst_params.copy()
+        mlgst_args['startGateset'] = self.gateset
+        mlgst_args['forcefn_grad'] = gradF
+        mlgst_args['shiftFctr'] = 100.0
+        mlgst_args['evaltree_cache'] = self.mlgst_evaltree_cache
+        maxLogL, bestGS = _alg.core._do_mlgst_base(**mlgst_args)
+        bestGS = _alg.gaugeopt_to_target(bestGS, self.gateset) #maybe more params here?
+        norms = _np.array([_np.dot(gradF[i],gradF[i]) for i in range(gradF.shape[0])])
+        delta2 = _np.abs(_np.dot(gradF, bestGS.to_vector() - self.gateset.to_vector()) \
+            * _np.where(norms > 1e-10, 1.0/norms, 0.0))
+        delta2 *= self._C1 #scaling appropriate for confidence level
+        delta = _np.sqrt(delta2) # error^2 -> error
+
+        if hasattr(f0,'shape'):
+            delta.shape = f0.shape #reshape to un-flattened
+        else:
+            assert(type(f0) == float)
+            delta = float(delta)
+
+        return delta
+        
+
+
+    def _compute_df_from_gradF_hessian(self, gradF, f0, verbosity):
         """
         Internal function which computes error bars given an function value
         and gradient (using linear approx. to function)
@@ -648,8 +763,14 @@ class ConfidenceRegion(object):
 
         printer.log("df = %s" % df)
 
-        return (df, f0 ) if returnFnVal else df
+        return df
 
+    def __getstate__(self):
+        #Return the state (for pickling) -- *don't* pickle any Comm objects
+        to_pickle = self.__dict__.copy()
+        if self.mlgst_params and self.mlgst_params.has_key("comm"):
+            del self.mlgst_params['comm'] # one *cannot* pickle Comm objects
+        return to_pickle
 
 
 
@@ -658,14 +779,12 @@ def _optProjectionForGateCIs(gateset, base_hessian, nNonGaugeParams, nGaugeParam
                              maxfev = 10000, tol = 1e-6, verbosity = 0):
     printer = VerbosityPrinter.build_printer(verbosity)
 
-    printer = VerbosityPrinter.build_printer(verbosity)
-
     printer.log('', 3)
     printer.log("--- Hessian Projector Optimization for gate CIs (%s) ---" % method, 2, indentOffset=-1)
 
     def objective_func(vectorM):
         matM = vectorM.reshape( (nNonGaugeParams,nGaugeParams) )
-        proj_extra = gateset.get_nongauge_projector(matM)
+        proj_extra = gateset.get_nongauge_projector(nonGaugeMixMx=matM)
         projected_hessian_ex = _np.dot(proj_extra, _np.dot(base_hessian, proj_extra))
 
         ci = ConfidenceRegion(gateset, projected_hessian_ex, level, hessianProjection="none")
@@ -683,9 +802,55 @@ def _optProjectionForGateCIs(gateset, base_hessian, nNonGaugeParams, nGaugeParam
                                     callback = print_obj_func if verbosity > 2 else None)
 
     mixMx = minSol.x.reshape( (nNonGaugeParams,nGaugeParams) )
-    proj_extra = gateset.get_nongauge_projector(mixMx)
+    proj_extra = gateset.get_nongauge_projector(nonGaugeMixMx=mixMx)
     projected_hessian_ex = _np.dot(proj_extra, _np.dot(base_hessian, proj_extra))
 
     printer.log('The resulting min sqrt(sum(gateCIs**2)): %g' % minSol.fun, 2)
 
     return projected_hessian_ex
+
+
+def _optProjectionFromSplit(gateset, base_hessian, level, verbosity = 0):
+    printer = VerbosityPrinter.build_printer(verbosity)
+
+    printer.log('', 3)
+    printer.log("--- Hessian Projector Optimization from separate SPAM and Gate weighting ---", 2, indentOffset=-1)
+
+
+    #get gate-intrinsic-error
+    proj = gateset.get_nongauge_projector(itemWeights={'gates':1.0,'spam': 0.0})
+    projected_hessian = _np.dot(proj, _np.dot(base_hessian, proj))
+    ci = ConfidenceRegion(gateset, projected_hessian, level, hessianProjection="none")
+    gateCIs = _np.concatenate( [ ci.get_profile_likelihood_confidence_intervals(gl).flatten()
+                                     for gl in gateset.gates] )
+    gate_intrinsic_err = _np.sqrt( _np.sum(gateCIs**2) )
+
+    #get spam-intrinsic-error
+    proj = gateset.get_nongauge_projector(itemWeights={'gates':0.0,'spam': 1.0})
+    projected_hessian = _np.dot(proj, _np.dot(base_hessian, proj))
+    ci = ConfidenceRegion(gateset, projected_hessian, level, hessianProjection="none")
+    spamCIs = _np.concatenate( [ ci.get_profile_likelihood_confidence_intervals(gl).flatten()
+                                     for sl in _itertools.chain(iter(gateset.preps),
+                                                                iter(gateset.effects))] )
+    spam_intrinsic_err = _np.sqrt( _np.sum(spamCIs**2) )
+
+    ratio = gate_intrinsic_err / spam_intrinsic_err
+    proj = gateset.get_nongauge_projector(itemWeights={'gates':1.0,'spam': ratio})
+    projected_hessian = _np.dot(proj, _np.dot(base_hessian, proj))
+
+    if printer.verbosity >= 2:
+        #Create ci here just to extract #'s for print stmts
+        ci = ConfidenceRegion(gateset, projected_hessian, level, hessianProjection="none")
+        gateCIs = _np.concatenate( [ ci.get_profile_likelihood_confidence_intervals(gl).flatten()
+                                         for gl in gateset.gates] )
+        spamCIs = _np.concatenate( [ ci.get_profile_likelihood_confidence_intervals(gl).flatten()
+                                         for sl in _itertools.chain(iter(gateset.preps),
+                                                                    iter(gateset.effects))] )
+        gate_err = _np.sqrt( _np.sum(gateCIs**2) )
+        spam_err = _np.sqrt( _np.sum(spamCIs**2) )
+        printer.log('Resulting intrinsic errors: %g (gates), %g (spam)' %
+                    (gate_intrinsic_err, spam_intrinsic_err), 2)
+        printer.log('Resulting sqrt(sum(gateCIs**2)): %g' % gate_err, 2)
+        printer.log('Resulting sqrt(sum(spamCIs**2)): %g' % spam_err, 2)
+
+    return projected_hessian

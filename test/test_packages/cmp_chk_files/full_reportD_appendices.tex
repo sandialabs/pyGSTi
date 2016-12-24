@@ -13,7 +13,7 @@ This analysis decouples the various germs and base sequences from each other.  U
 
 \begin{figure}
 \begin{center}
-\includegraphics[width=6.50in,height=9.00in,keepaspectratio]{full_reportD_files/directLongSeqGSTLogLBoxes.pdf}
+\includegraphics[width=6.50in,height=8.00in,keepaspectratio]{full_reportD_files/directLongSeqGSTLogLBoxes.pdf}
 \caption{\textbf{$2\Delta\log(\mathcal{L})$ values for ``direct GST'' fit.}  This plot indicates how well direct GST analysis of each base sequence fits the observed data.  By decoupling different base sequences, this analysis largely avoids making any assumptions about Markovianity, and therefore serves as a sanity check on the full GST analysis.  See text for details.\label{directMLEGSTLogLBoxPlot}}
 \end{center}
 \end{figure}
@@ -58,28 +58,28 @@ The gauge is chosen to minimize the Frobenius distance between the estimate and 
 \begin{center}
 \begin{tabular}[l]{|c|c|c|}
 \hline
-Operator & Hilbert-Schmidt vector (Pauli basis) & Matrix \\ \hline
-$\rho_{0}$ & $ \begin{array}{c}
-0.7071 \\ 
-0.0011 \\ 
-6\e{-6} \\ 
-0.6435
- \end{array} $
- & $ \left(\!\!\begin{array}{cc}
-0.955 & 0.0008e^{-i0.005} \\ 
-0.0008e^{i0.005} & 0.045
+Operator & Matrix & Hilbert-Schmidt vector (Pauli basis) \\ \hline
+$\rho_{0}$ & $ \left(\!\!\begin{array}{cc}
+0.955 & 0.001e^{-i0.03} \\ 
+0.001e^{i0.03} & 0.045
  \end{array}\!\!\right) $
+ & $ \begin{array}{c}
+0.707 \\ 
+0.001 \\ 
+3\e{-5} \\ 
+0.643
+ \end{array} $
  \\ \hline
-$E_{0}$ & $ \begin{array}{c}
-0.7145 \\ 
--0.0001 \\ 
--0.0027 \\ 
--0.6442
- \end{array} $
- & $ \left(\!\!\begin{array}{cc}
-0.0497 & 0.0019e^{i1.613} \\ 
-0.0019e^{-i1.613} & 0.9608
+$E_{0}$ & $ \left(\!\!\begin{array}{cc}
+0.05 & 0.002e^{i1.57} \\ 
+0.002e^{-i1.57} & 0.961
  \end{array}\!\!\right) $
+ & $ \begin{array}{c}
+0.715 \\ 
+-6\e{-6} \\ 
+-0.002 \\ 
+-0.644
+ \end{array} $
  \\ \hline
 \end{tabular}
 
@@ -92,7 +92,7 @@ $E_{0}$ & $ \begin{array}{c}
 \begin{tabular}[l]{|c|c|c|}
 \hline
  & $E_{0}$ & $E_C$ \\ \hline
-$\rho_{0}$ & 0.0907 & 0.9092 \\ \hline
+$\rho_{0}$ & 0.091 & 0.909 \\ \hline
 \end{tabular}
 
 \caption{\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestTargetGatesetSpamTable}.\label{bestTargetGatesetSpamParametersTable}}
@@ -106,23 +106,23 @@ $\rho_{0}$ & 0.0907 & 0.9092 \\ \hline
 Gate & Superoperator (Pauli basis) \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
--0.0009 & 0.9447 & -0.0063 & -0.0088 \\ 
-0.0004 & 0.0011 & 0.9471 & 0.0038 \\ 
-0.0016 & 3\e{-5} & 0.0007 & 0.9485
+-0.001 & 0.945 & -0.006 & -0.009 \\ 
+4\e{-4} & 0.001 & 0.947 & 0.004 \\ 
+0.002 & 2\e{-5} & 0.001 & 0.949
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
-0.0003 & 0.9505 & -0.0051 & -0.0052 \\ 
-0.0102 & 0.0005 & 0.0003 & -0.9491 \\ 
-0.0108 & 0.0005 & 0.9491 & -0.0025
+4\e{-4} & 0.951 & -0.005 & -0.005 \\ 
+0.01 & 4\e{-4} & 3\e{-4} & -0.949 \\ 
+0.011 & 4\e{-4} & 0.949 & -0.002
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
--0.0102 & 0.0001 & -0.0046 & 0.9488 \\ 
-0.0003 & 0.0014 & 0.9512 & 0.0015 \\ 
-0.01 & -0.9491 & -0.0056 & -0.0006
+-0.01 & 2\e{-4} & -0.005 & 0.949 \\ 
+3\e{-4} & 0.001 & 0.951 & 0.001 \\ 
+0.01 & -0.949 & -0.006 & -0.001
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -136,9 +136,9 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 \begin{tabular}[l]{|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
-Gi & 0.0399 & 0.0401 & 0.0401 \\ \hline
-Gx & 0.0378 & 0.0382 & 0.039 \\ \hline
-Gy & 0.0377 & 0.0381 & 0.0388 \\ \hline
+Gi & 0.04 & 0.04 & 0.04 \\ \hline
+Gx & 0.038 & 0.038 & 0.039 \\ \hline
+Gy & 0.038 & 0.038 & 0.039 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -147,23 +147,23 @@ Gy & 0.0377 & 0.0381 & 0.0388 \\ \hline
 Gate & Error Generator \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
--0.0009 & -0.0569 & -0.0066 & -0.0093 \\ 
-0.0004 & 0.0011 & -0.0543 & 0.0041 \\ 
-0.0016 & 3\e{-5} & 0.0008 & -0.0529
+-0.001 & -0.057 & -0.007 & -0.009 \\ 
+4\e{-4} & 0.001 & -0.054 & 0.004 \\ 
+0.002 & 3\e{-5} & 0.001 & -0.053
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
-0.0004 & -0.0508 & -0.0054 & -0.0054 \\ 
-0.0111 & 0.0005 & -0.0523 & -0.0026 \\ 
--0.0104 & -0.0005 & -0.0004 & -0.0523
+4\e{-4} & -0.051 & 7\e{-5} & -0.008 \\ 
+0.017 & 0.001 & -0.05 & -0.001 \\ 
+0.001 & 7\e{-6} & 0.001 & -0.055
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
--0.0102 & -0.0523 & 0.0059 & 0.0006 \\ 
-0.0003 & 0.0015 & -0.05 & 0.0016 \\ 
--0.0105 & 0.0001 & -0.0049 & -0.0526
+-0.016 & -0.052 & 0.001 & -5\e{-5} \\ 
+3\e{-4} & 0.002 & -0.05 & 6\e{-5} \\ 
+-9\e{-5} & -5\e{-4} & -0.008 & -0.053
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -178,62 +178,62 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 \hline
 Gate & Eigenvalues & Fixed pt & Rotn. axis & Diag. decay & Off-diag. decay \\ \hline
 Gi & $ \begin{array}{c}
-0.9487 \\ 
-0.9458e^{i0.002} \\ 
-0.9458e^{-i0.002} \\ 
+0.949 \\ 
+0.946e^{i0.00} \\ 
+0.946e^{-i0.00} \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
-0.9984 \\ 
--0.0226 \\ 
-0.0092 \\ 
-0.0309
+0.998 \\ 
+-0.023 \\ 
+0.009 \\ 
+0.031
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
-0.9348 \\ 
--0.1471 \\ 
--0.3232
+-0.933 \\ 
+0.151 \\ 
+0.325
  \end{array} $
- & 0.0513 & 0.0542 \\ \hline
+ & 0.051 & 0.054 \\ \hline
 Gx & $ \begin{array}{c}
-0.9491e^{i1.572} \\ 
-0.9491e^{-i1.572} \\ 
-0.9505 \\ 
+0.949e^{i1.57} \\ 
+0.949e^{-i1.57} \\ 
+0.951 \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
-0.9998 \\ 
-0.0059 \\ 
--2\e{-5} \\ 
-0.0107
+1 \\ 
+0.006 \\ 
+-3\e{-5} \\ 
+0.011
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
 -1 \\ 
-6\e{-6} \\ 
--0.0005
+3\e{-6} \\ 
+-5\e{-4}
  \end{array} $
- & 0.0495 & 0.0509 \\ \hline
+ & 0.049 & 0.051 \\ \hline
 Gy & $ \begin{array}{c}
-0.9489e^{i1.571} \\ 
-0.9489e^{-i1.571} \\ 
-0.9512 \\ 
+0.949e^{i1.57} \\ 
+0.949e^{-i1.57} \\ 
+0.951 \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
-0.9998 \\ 
--0.0004 \\ 
-0.0066 \\ 
-0.0103
+1 \\ 
+-4\e{-4} \\ 
+0.006 \\ 
+0.01
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
--0.0054 \\ 
+-0.005 \\ 
 1 \\ 
--0.0005
+-0.001
  \end{array} $
- & 0.0488 & 0.0511 \\ \hline
+ & 0.049 & 0.051 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -241,9 +241,9 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & 0.0006$\pi$ &  & 0.8843$\pi$ & 0.5486$\pi$ \\ \hline
-Gx & 0.5004$\pi$ & 0.8843$\pi$ &  & 0.4983$\pi$ \\ \hline
-Gy & 0.5001$\pi$ & 0.5486$\pi$ & 0.4983$\pi$ &  \\ \hline
+Gi & 0.001$\pi$ &  & 0.117$\pi$ & 0.45$\pi$ \\ \hline
+Gx & 0.5$\pi$ & 0.117$\pi$ &  & 0.498$\pi$ \\ \hline
+Gy & 0.5$\pi$ & 0.45$\pi$ & 0.498$\pi$ &  \\ \hline
 \end{tabular}
 
 \caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); and (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay'').  ``--'' indicates that the decomposition failed or couldn't be interpreted. \label{bestTargetGatesetDecompTable}}
@@ -256,27 +256,27 @@ Gy & 0.5001$\pi$ & 0.5486$\pi$ & 0.4983$\pi$ &  \\ \hline
 \begin{tabular}[l]{|c|c|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & \begin{tabular}{c}Rotation\\Axis\end{tabular} & \begin{tabular}{c}Rotation\\Angle\end{tabular} & Sanity \checkmark \\ \hline
-Gi & 0.0399 & 0.0399 & $ \begin{array}{c}
+Gi & 0.04 & 0.04 & $ \begin{array}{c}
 0 \\ 
-0.2623 \\ 
-0.7415 \\ 
--0.6175
+0.262 \\ 
+0.742 \\ 
+-0.618
  \end{array} $
  & 0.002$\pi$ & 6\e{-6} \\ \hline
-Gx & 0.0378 & 0.0381 & $ \begin{array}{c}
+Gx & 0.038 & 0.038 & $ \begin{array}{c}
 0 \\ 
 1 \\ 
--0.0027 \\ 
-0.0002
+-0.003 \\ 
+2\e{-4}
  \end{array} $
- & 0.5004$\pi$ & 0.0004 \\ \hline
-Gy & 0.0377 & 0.038 & $ \begin{array}{c}
+ & 0.5$\pi$ & 4\e{-4} \\ \hline
+Gy & 0.038 & 0.038 & $ \begin{array}{c}
 0 \\ 
-0.0027 \\ 
--1 \\ 
--0.0005
+-0.003 \\ 
+1 \\ 
+5\e{-4}
  \end{array} $
- & 0.5001$\pi$ & 0.0004 \\ \hline
+ & 0.5$\pi$ & 4\e{-4} \\ \hline
 \end{tabular}
 
 \caption{Information pertaining to the closest unitary gate to each of the estimated gates.\label{bestTargetGatesetClosestUnitaryTable}}
@@ -290,42 +290,42 @@ Gy & 0.0377 & 0.038 & $ \begin{array}{c}
 \hline
 Gate & Choi matrix (Pauli basis) & Eigenvalues \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
-0.9601 & 0.0008e^{i1.857} & 0.0022e^{-i1.615} & 0.0019e^{-i1.358} \\ 
-0.0008e^{-i1.857} & 0.0123 & 0.0014e^{-i0.296} & 0.0022e^{-i3.097} \\ 
-0.0022e^{i1.615} & 0.0014e^{i0.296} & 0.0135 & 0.0012e^{i2.942} \\ 
-0.0019e^{i1.358} & 0.0022e^{i3.097} & 0.0012e^{-i2.942} & 0.0142
+0.96 & 0.001e^{-i1.86} & 0.002e^{-i1.53} & 0.002e^{i1.36} \\ 
+0.001e^{i1.86} & 0.012 & 0.001e^{-i2.84} & 0.002e^{i3.10} \\ 
+0.002e^{i1.53} & 0.001e^{i2.84} & 0.013 & 0.001e^{i0.20} \\ 
+0.002e^{-i1.36} & 0.002e^{-i3.10} & 0.001e^{-i0.20} & 0.014
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
-0.0106 \\ 
-0.0127 \\ 
-0.0165 \\ 
-0.9601
+0.011 \\ 
+0.013 \\ 
+0.017 \\ 
+0.96
  \end{array} $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
-0.4871 & 0.4745e^{-i1.571} & 0.0029e^{-i2.637} & 0.003e^{-i0.477} \\ 
-0.4745e^{i1.571} & 0.4882 & 0.0029e^{-i1.163} & 0.0028e^{-i2.002} \\ 
-0.0029e^{i2.637} & 0.0029e^{i1.163} & 0.0131 & 0.0001e^{-i1.553} \\ 
-0.003e^{i0.477} & 0.0028e^{i2.002} & 0.0001e^{i1.553} & 0.0117
+0.487 & 0.475e^{i1.57} & 0.003e^{-i0.50} & 0.003e^{i0.47} \\ 
+0.475e^{-i1.57} & 0.488 & 0.003e^{-i1.98} & 0.003e^{i2.01} \\ 
+0.003e^{i0.50} & 0.003e^{i1.98} & 0.013 & 9\e{-5}e^{-i1.56} \\ 
+0.003e^{-i0.47} & 0.003e^{-i2.01} & 9\e{-5}e^{i1.56} & 0.012
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
-0.0082 \\ 
-0.0131 \\ 
-0.0166 \\ 
-0.9622
+0.008 \\ 
+0.013 \\ 
+0.017 \\ 
+0.962
  \end{array} $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-0.4877 & 0.0031e^{i2.535} & 0.4745e^{i1.571} & 0.0029e^{-i0.544} \\ 
-0.0031e^{-i2.535} & 0.0124 & 0.0026e^{-i1.261} & 0.0001e^{-i2.382} \\ 
-0.4745e^{-i1.571} & 0.0026e^{i1.261} & 0.4879 & 0.0028e^{i1.189} \\ 
-0.0029e^{i0.544} & 0.0001e^{i2.382} & 0.0028e^{-i1.189} & 0.012
+0.488 & 0.003e^{-i2.53} & 0.474e^{i1.57} & 0.003e^{i0.54} \\ 
+0.003e^{i2.53} & 0.012 & 0.003e^{-i1.88} & 1\e{-4}e^{i2.41} \\ 
+0.474e^{-i1.57} & 0.003e^{i1.88} & 0.488 & 0.003e^{i1.96} \\ 
+0.003e^{-i0.54} & 1\e{-4}e^{-i2.41} & 0.003e^{-i1.96} & 0.012
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
-0.0086 \\ 
-0.0123 \\ 
-0.0168 \\ 
-0.9623
+0.009 \\ 
+0.012 \\ 
+0.017 \\ 
+0.962
  \end{array} $
  \\ \hline
 \end{tabular}
@@ -344,28 +344,28 @@ The gauge is chosen to minimize the Frobenius distance between the estimate and 
 \begin{center}
 \begin{tabular}[l]{|c|c|c|}
 \hline
-Operator & Hilbert-Schmidt vector (Pauli basis) & Matrix \\ \hline
-$\rho_{0}$ & $ \begin{array}{c}
-0.7071 \\ 
-0.0001 \\ 
--5\e{-5} \\ 
-0.6631
- \end{array} $
- & $ \left(\!\!\begin{array}{cc}
-0.9689 & 0.0001e^{i0.754} \\ 
-0.0001e^{-i0.754} & 0.0311
+Operator & Matrix & Hilbert-Schmidt vector (Pauli basis) \\ \hline
+$\rho_{0}$ & $ \left(\!\!\begin{array}{cc}
+0.97 & 5\e{-6}e^{i0.58} \\ 
+5\e{-6}e^{-i0.58} & 0.03
  \end{array}\!\!\right) $
+ & $ \begin{array}{c}
+0.707 \\ 
+6\e{-6} \\ 
+-4\e{-6} \\ 
+0.664
+ \end{array} $
  \\ \hline
-$E_{0}$ & $ \begin{array}{c}
-0.7503 \\ 
-4\e{-5} \\ 
--0.0002 \\ 
--0.6633
- \end{array} $
- & $ \left(\!\!\begin{array}{cc}
-0.0615 & 0.0002e^{i1.408} \\ 
-0.0002e^{-i1.408} & 0.9996
+$E_{0}$ & $ \left(\!\!\begin{array}{cc}
+0.063 & 2\e{-5}e^{i1.28} \\ 
+2\e{-5}e^{-i1.28} & 1.002
  \end{array}\!\!\right) $
+ & $ \begin{array}{c}
+0.753 \\ 
+7\e{-6} \\ 
+-2\e{-5} \\ 
+-0.664
+ \end{array} $
  \\ \hline
 \end{tabular}
 
@@ -378,7 +378,7 @@ $E_{0}$ & $ \begin{array}{c}
 \begin{tabular}[l]{|c|c|c|}
 \hline
  & $E_{0}$ & $E_C$ \\ \hline
-$\rho_{0}$ & 0.0907 & 0.9092 \\ \hline
+$\rho_{0}$ & 0.091 & 0.909 \\ \hline
 \end{tabular}
 
 \caption{\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestTargetSpamGatesetSpamTable}.\label{bestTargetSpamGatesetSpamParametersTable}}
@@ -392,23 +392,23 @@ $\rho_{0}$ & 0.0907 & 0.9092 \\ \hline
 Gate & Superoperator (Pauli basis) \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
--0.0005 & 0.9447 & -0.0062 & -0.0088 \\ 
-0.0003 & 0.0011 & 0.9471 & 0.0038 \\ 
-0.0043 & 3\e{-5} & 0.0007 & 0.9485
+-5\e{-4} & 0.945 & -0.006 & -0.009 \\ 
+2\e{-4} & 0.001 & 0.947 & 0.004 \\ 
+0.004 & 3\e{-5} & 0.001 & 0.949
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
-0.0006 & 0.9505 & -0.005 & -0.0052 \\ 
-0.0628 & 0.0007 & 0.0019 & -0.947 \\ 
-0.0629 & 0.0007 & 0.9511 & -0.004
+0.001 & 0.951 & -0.005 & -0.004 \\ 
+0.065 & 1\e{-4} & 0.002 & -0.947 \\ 
+0.066 & 0.001 & 0.951 & -0.004
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
--0.0625 & -0.0002 & -0.0083 & 0.9466 \\ 
-0.0002 & 0.0035 & 0.9512 & 0.0036 \\ 
-0.0622 & -0.9512 & -0.002 & -0.0003
+-0.065 & 0.001 & -0.009 & 0.947 \\ 
+2\e{-4} & 0.004 & 0.951 & 0.003 \\ 
+0.065 & -0.951 & -0.002 & -0.001
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -422,9 +422,9 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 \begin{tabular}[l]{|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
-Gi & 0.0399 & 0.0401 & 0.0402 \\ \hline
-Gx & 0.0378 & 0.0565 & 0.0685 \\ \hline
-Gy & 0.0377 & 0.0556 & 0.0698 \\ \hline
+Gi & 0.04 & 0.04 & 0.04 \\ \hline
+Gx & 0.038 & 0.058 & 0.07 \\ \hline
+Gy & 0.038 & 0.057 & 0.071 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -433,23 +433,23 @@ Gy & 0.0377 & 0.0556 & 0.0698 \\ \hline
 Gate & Error Generator \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
--0.0005 & -0.0569 & -0.0066 & -0.0093 \\ 
-0.0003 & 0.0011 & -0.0544 & 0.004 \\ 
-0.0044 & 3\e{-5} & 0.0008 & -0.0529
+-5\e{-4} & -0.057 & -0.007 & -0.009 \\ 
+2\e{-4} & 0.001 & -0.054 & 0.004 \\ 
+0.005 & 3\e{-5} & 0.001 & -0.053
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
-0.0006 & -0.0508 & -0.0053 & -0.0055 \\ 
-0.0644 & 0.0008 & -0.0501 & -0.0042 \\ 
--0.0645 & -0.0007 & -0.002 & -0.0545
+0.001 & -0.051 & -0.001 & -0.008 \\ 
+0.105 & 0.001 & -0.047 & 0.002 \\ 
+0.001 & 0.001 & 0.005 & -0.057
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
--0.0637 & -0.05 & 0.0021 & 0.0003 \\ 
-0.0004 & 0.0037 & -0.05 & 0.0038 \\ 
--0.0642 & -0.0001 & -0.0087 & -0.0549
+-0.105 & -0.051 & -0.005 & -0.004 \\ 
+4\e{-4} & 0.006 & -0.05 & -5\e{-4} \\ 
+0.001 & -0.004 & -0.009 & -0.054
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -464,62 +464,62 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 \hline
 Gate & Eigenvalues & Fixed pt & Rotn. axis & Diag. decay & Off-diag. decay \\ \hline
 Gi & $ \begin{array}{c}
-0.9487 \\ 
-0.9458e^{i0.002} \\ 
-0.9458e^{-i0.002} \\ 
+0.949 \\ 
+0.946e^{i0.00} \\ 
+0.946e^{-i0.00} \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
-0.9923 \\ 
--0.0233 \\ 
-0.0107 \\ 
-0.0834
+0.992 \\ 
+-0.023 \\ 
+0.01 \\ 
+0.087
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
-0.9346 \\ 
--0.1464 \\ 
--0.3242
+-0.933 \\ 
+0.151 \\ 
+0.327
  \end{array} $
- & 0.0513 & 0.0542 \\ \hline
+ & 0.051 & 0.054 \\ \hline
 Gx & $ \begin{array}{c}
-0.9491e^{i1.572} \\ 
-0.9491e^{-i1.572} \\ 
-0.9505 \\ 
+0.949e^{i1.57} \\ 
+0.949e^{-i1.57} \\ 
+0.951 \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
-0.9959 \\ 
-0.0042 \\ 
-0.0018 \\ 
-0.0641
+0.995 \\ 
+0.005 \\ 
+0.002 \\ 
+0.067
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
 -1 \\ 
-3\e{-5} \\ 
--0.0007
+4\e{-4} \\ 
+-5\e{-4}
  \end{array} $
- & 0.0495 & 0.0509 \\ \hline
+ & 0.049 & 0.051 \\ \hline
 Gy & $ \begin{array}{c}
-0.9489e^{i1.571} \\ 
-0.9489e^{-i1.571} \\ 
-0.9512 \\ 
+0.949e^{i1.57} \\ 
+0.949e^{-i1.57} \\ 
+0.951 \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
-0.9958 \\ 
+0.995 \\ 
 -0.002 \\ 
-0.0082 \\ 
-0.0637
+0.008 \\ 
+0.066
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
--0.0054 \\ 
+-0.006 \\ 
 1 \\ 
-0.0033
+0.003
  \end{array} $
- & 0.0488 & 0.0511 \\ \hline
+ & 0.049 & 0.051 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -527,9 +527,9 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & 0.0006$\pi$ &  & 0.884$\pi$ & 0.5487$\pi$ \\ \hline
-Gx & 0.5004$\pi$ & 0.884$\pi$ &  & 0.4983$\pi$ \\ \hline
-Gy & 0.5001$\pi$ & 0.5487$\pi$ & 0.4983$\pi$ &  \\ \hline
+Gi & 0.001$\pi$ &  & 0.117$\pi$ & 0.45$\pi$ \\ \hline
+Gx & 0.5$\pi$ & 0.117$\pi$ &  & 0.498$\pi$ \\ \hline
+Gy & 0.5$\pi$ & 0.45$\pi$ & 0.498$\pi$ &  \\ \hline
 \end{tabular}
 
 \caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); and (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay'').  ``--'' indicates that the decomposition failed or couldn't be interpreted. \label{bestTargetSpamGatesetDecompTable}}
@@ -542,27 +542,27 @@ Gy & 0.5001$\pi$ & 0.5487$\pi$ & 0.4983$\pi$ &  \\ \hline
 \begin{tabular}[l]{|c|c|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & \begin{tabular}{c}Rotation\\Axis\end{tabular} & \begin{tabular}{c}Rotation\\Angle\end{tabular} & Sanity \checkmark \\ \hline
-Gi & 0.0399 & 0.0399 & $ \begin{array}{c}
+Gi & 0.04 & 0.04 & $ \begin{array}{c}
 0 \\ 
-0.2623 \\ 
-0.7429 \\ 
--0.6159
+-0.262 \\ 
+-0.743 \\ 
+0.616
  \end{array} $
  & 0.002$\pi$ & 3\e{-5} \\ \hline
-Gx & 0.0378 & 0.0564 & $ \begin{array}{c}
+Gx & 0.038 & 0.058 & $ \begin{array}{c}
 0 \\ 
 1 \\ 
--0.0027 \\ 
-0.0003
+-0.003 \\ 
+5\e{-4}
  \end{array} $
- & 0.5004$\pi$ & 0.0139 \\ \hline
-Gy & 0.0377 & 0.0554 & $ \begin{array}{c}
+ & 0.5$\pi$ & 0.015 \\ \hline
+Gy & 0.038 & 0.057 & $ \begin{array}{c}
 0 \\ 
--0.0027 \\ 
-1 \\ 
-0.0035
+0.003 \\ 
+-1 \\ 
+-0.003
  \end{array} $
- & 0.5001$\pi$ & 0.0137 \\ \hline
+ & 0.5$\pi$ & 0.015 \\ \hline
 \end{tabular}
 
 \caption{Information pertaining to the closest unitary gate to each of the estimated gates.\label{bestTargetSpamGatesetClosestUnitaryTable}}
@@ -576,42 +576,42 @@ Gy & 0.0377 & 0.0554 & $ \begin{array}{c}
 \hline
 Gate & Choi matrix (Pauli basis) & Eigenvalues \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
-0.9601 & 0.0008e^{i1.727} & 0.0022e^{-i1.602} & 0.0021e^{-i1.037} \\ 
-0.0008e^{-i1.727} & 0.0123 & 0.0017e^{-i0.696} & 0.0022e^{-i3.111} \\ 
-0.0022e^{i1.602} & 0.0017e^{i0.696} & 0.0135 & 0.0011e^{i3.034} \\ 
-0.0021e^{i1.037} & 0.0022e^{i3.111} & 0.0011e^{-i3.034} & 0.0142
+0.96 & 0.001e^{-i1.72} & 0.002e^{-i1.54} & 0.002e^{i1.02} \\ 
+0.001e^{i1.72} & 0.012 & 0.002e^{-i2.43} & 0.002e^{i3.11} \\ 
+0.002e^{i1.54} & 0.002e^{i2.43} & 0.013 & 0.001e^{i0.10} \\ 
+0.002e^{-i1.02} & 0.002e^{-i3.11} & 0.001e^{-i0.10} & 0.014
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
-0.0104 \\ 
-0.0129 \\ 
-0.0166 \\ 
-0.9601
+0.01 \\ 
+0.013 \\ 
+0.017 \\ 
+0.96
  \end{array} $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
-0.4871 & 0.4745e^{-i1.571} & 0.0158e^{-i3.048} & 0.0158e^{-i0.090} \\ 
-0.4745e^{i1.571} & 0.4882 & 0.0158e^{-i1.502} & 0.0157e^{-i1.642} \\ 
-0.0158e^{i3.048} & 0.0158e^{i1.502} & 0.0138 & 0.001e^{-i3.009} \\ 
-0.0158e^{i0.090} & 0.0157e^{i1.642} & 0.001e^{i3.009} & 0.0109
+0.487 & 0.475e^{i1.57} & 0.016e^{-i0.08} & 0.016e^{i0.08} \\ 
+0.475e^{-i1.57} & 0.488 & 0.016e^{-i1.65} & 0.016e^{i1.62} \\ 
+0.016e^{i0.08} & 0.016e^{i1.65} & 0.014 & 0.001e^{-i0.13} \\ 
+0.016e^{-i0.08} & 0.016e^{-i1.62} & 0.001e^{i0.13} & 0.011
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
--0.0104 \\ 
-0.0133 \\ 
-0.0343 \\ 
-0.9627
+-0.011 \\ 
+0.013 \\ 
+0.035 \\ 
+0.963
  \end{array} $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-0.4877 & 0.0157e^{i3.053} & 0.4745e^{i1.571} & 0.0158e^{-i0.188} \\ 
-0.0157e^{-i3.053} & 0.0122 & 0.0156e^{-i1.495} & 0.0012e^{-i3.103} \\ 
-0.4745e^{-i1.571} & 0.0156e^{i1.495} & 0.4879 & 0.0156e^{i1.597} \\ 
-0.0158e^{i0.188} & 0.0012e^{i3.103} & 0.0156e^{-i1.597} & 0.0122
+0.488 & 0.016e^{-i3.05} & 0.474e^{i1.57} & 0.017e^{i0.19} \\ 
+0.016e^{i3.05} & 0.013 & 0.016e^{-i1.64} & 0.001e^{i3.10} \\ 
+0.474e^{-i1.57} & 0.016e^{i1.64} & 0.488 & 0.016e^{i1.56} \\ 
+0.017e^{-i0.19} & 0.001e^{-i3.10} & 0.016e^{-i1.56} & 0.012
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
--0.0094 \\ 
-0.0117 \\ 
-0.0349 \\ 
-0.9628
+-0.011 \\ 
+0.012 \\ 
+0.036 \\ 
+0.963
  \end{array} $
  \\ \hline
 \end{tabular}
@@ -630,28 +630,28 @@ The gauge is chosen to minimize the Frobenius distance between the estimate and 
 \begin{center}
 \begin{tabular}[l]{|c|c|c|}
 \hline
-Operator & Hilbert-Schmidt vector (Pauli basis) & Matrix \\ \hline
-$\rho_{0}$ & $ \begin{array}{c}
-0.7071 \\ 
-0.0016 \\ 
-0.0002 \\ 
-0.6374
- \end{array} $
- & $ \left(\!\!\begin{array}{cc}
-0.9507 & 0.0012e^{-i0.153} \\ 
-0.0012e^{i0.153} & 0.0493
+Operator & Matrix & Hilbert-Schmidt vector (Pauli basis) \\ \hline
+$\rho_{0}$ & $ \left(\!\!\begin{array}{cc}
+0.951 & 0.001e^{-i0.16} \\ 
+0.001e^{i0.16} & 0.049
  \end{array}\!\!\right) $
+ & $ \begin{array}{c}
+0.707 \\ 
+0.002 \\ 
+3\e{-4} \\ 
+0.638
+ \end{array} $
  \\ \hline
-$E_{0}$ & $ \begin{array}{c}
-0.7078 \\ 
--0.0002 \\ 
--0.0031 \\ 
--0.6429
- \end{array} $
- & $ \left(\!\!\begin{array}{cc}
-0.0459 & 0.0022e^{i1.647} \\ 
-0.0022e^{-i1.647} & 0.9551
+$E_{0}$ & $ \left(\!\!\begin{array}{cc}
+0.047 & 0.002e^{i1.61} \\ 
+0.002e^{-i1.61} & 0.955
  \end{array}\!\!\right) $
+ & $ \begin{array}{c}
+0.708 \\ 
+-1\e{-4} \\ 
+-0.003 \\ 
+-0.642
+ \end{array} $
  \\ \hline
 \end{tabular}
 
@@ -664,7 +664,7 @@ $E_{0}$ & $ \begin{array}{c}
 \begin{tabular}[l]{|c|c|c|}
 \hline
  & $E_{0}$ & $E_C$ \\ \hline
-$\rho_{0}$ & 0.0907 & 0.9092 \\ \hline
+$\rho_{0}$ & 0.091 & 0.909 \\ \hline
 \end{tabular}
 
 \caption{\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestTargetGatesGatesetSpamTable}.\label{bestTargetGatesGatesetSpamParametersTable}}
@@ -678,23 +678,23 @@ $\rho_{0}$ & 0.0907 & 0.9092 \\ \hline
 Gate & Superoperator (Pauli basis) \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
--0.001 & 0.9447 & -0.0063 & -0.0088 \\ 
-0.0004 & 0.0011 & 0.9471 & 0.0038 \\ 
-0.0011 & 3\e{-5} & 0.0007 & 0.9485
+-0.001 & 0.945 & -0.006 & -0.009 \\ 
+4\e{-4} & 0.001 & 0.947 & 0.004 \\ 
+0.001 & 2\e{-5} & 0.001 & 0.949
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
-0.0003 & 0.9505 & -0.0049 & -0.0054 \\ 
-0.0003 & 0.0003 & 0.0001 & -0.9491 \\ 
-0.0003 & 0.0003 & 0.949 & -0.0022
+3\e{-4} & 0.951 & -0.005 & -0.005 \\ 
+2\e{-4} & 3\e{-4} & 8\e{-5} & -0.949 \\ 
+2\e{-4} & 3\e{-4} & 0.949 & -0.002
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
-0.0001 & 0.0001 & -0.004 & 0.9488 \\ 
-0.0003 & 0.0011 & 0.9512 & 0.0011 \\ 
--0.0001 & -0.949 & -0.0062 & -0.0005
+2\e{-4} & 6\e{-5} & -0.004 & 0.949 \\ 
+3\e{-4} & 0.001 & 0.951 & 0.001 \\ 
+-2\e{-4} & -0.949 & -0.006 & -5\e{-4}
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -708,9 +708,9 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 \begin{tabular}[l]{|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
-Gi & 0.0399 & 0.0401 & 0.0401 \\ \hline
-Gx & 0.0378 & 0.0379 & 0.0379 \\ \hline
-Gy & 0.0377 & 0.0378 & 0.0378 \\ \hline
+Gi & 0.04 & 0.04 & 0.04 \\ \hline
+Gx & 0.038 & 0.038 & 0.038 \\ \hline
+Gy & 0.038 & 0.038 & 0.038 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -719,23 +719,23 @@ Gy & 0.0377 & 0.0378 & 0.0378 \\ \hline
 Gate & Error Generator \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
--0.001 & -0.0569 & -0.0066 & -0.0093 \\ 
-0.0004 & 0.0011 & -0.0543 & 0.0041 \\ 
-0.0011 & 3\e{-5} & 0.0008 & -0.0529
+-0.001 & -0.057 & -0.007 & -0.009 \\ 
+4\e{-4} & 0.001 & -0.054 & 0.004 \\ 
+0.001 & 3\e{-5} & 0.001 & -0.053
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
-0.0003 & -0.0508 & -0.0051 & -0.0057 \\ 
-0.0003 & 0.0003 & -0.0523 & -0.0023 \\ 
--0.0003 & -0.0003 & -0.0001 & -0.0522
+3\e{-4} & -0.051 & 5\e{-4} & -0.008 \\ 
+3\e{-4} & 5\e{-4} & -0.05 & -0.001 \\ 
+4\e{-5} & 1\e{-5} & 0.001 & -0.054
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
-0.0001 & -0.0523 & 0.0065 & 0.0005 \\ 
-0.0003 & 0.0011 & -0.05 & 0.0012 \\ 
-0.0001 & 0.0001 & -0.0042 & -0.0525
+3\e{-4} & -0.052 & 0.002 & 6\e{-5} \\ 
+3\e{-4} & 0.002 & -0.05 & 5\e{-5} \\ 
+4\e{-5} & -4\e{-4} & -0.008 & -0.053
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -750,62 +750,62 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 \hline
 Gate & Eigenvalues & Fixed pt & Rotn. axis & Diag. decay & Off-diag. decay \\ \hline
 Gi & $ \begin{array}{c}
-0.9487 \\ 
-0.9458e^{i0.002} \\ 
-0.9458e^{-i0.002} \\ 
+0.949 \\ 
+0.946e^{i0.00} \\ 
+0.946e^{-i0.00} \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
 0.999 \\ 
--0.0222 \\ 
-0.0093 \\ 
-0.0206
+-0.023 \\ 
+0.009 \\ 
+0.021
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
-0.9348 \\ 
--0.1473 \\ 
--0.3233
+-0.933 \\ 
+0.151 \\ 
+0.326
  \end{array} $
- & 0.0513 & 0.0542 \\ \hline
+ & 0.051 & 0.054 \\ \hline
 Gx & $ \begin{array}{c}
-0.9491e^{i1.572} \\ 
-0.9491e^{-i1.572} \\ 
-0.9505 \\ 
+0.949e^{i1.57} \\ 
+0.949e^{-i1.57} \\ 
+0.951 \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
 1 \\ 
-0.0063 \\ 
+0.007 \\ 
 -2\e{-5} \\ 
-0.0003
+2\e{-4}
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
 -1 \\ 
 7\e{-6} \\ 
--0.0003
+-3\e{-4}
  \end{array} $
- & 0.0495 & 0.0509 \\ \hline
+ & 0.049 & 0.051 \\ \hline
 Gy & $ \begin{array}{c}
-0.9489e^{i1.571} \\ 
-0.9489e^{-i1.571} \\ 
-0.9512 \\ 
+0.949e^{i1.57} \\ 
+0.949e^{-i1.57} \\ 
+0.951 \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
 1 \\ 
--2\e{-5} \\ 
-0.0066 \\ 
--0.0001
+-4\e{-6} \\ 
+0.006 \\ 
+-2\e{-4}
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
--0.0054 \\ 
+-0.005 \\ 
 1 \\ 
--0.0012
+-0.001
  \end{array} $
- & 0.0488 & 0.0511 \\ \hline
+ & 0.049 & 0.051 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -813,9 +813,9 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & 0.0006$\pi$ &  & 0.8843$\pi$ & 0.5485$\pi$ \\ \hline
-Gx & 0.5004$\pi$ & 0.8843$\pi$ &  & 0.4983$\pi$ \\ \hline
-Gy & 0.5001$\pi$ & 0.5485$\pi$ & 0.4983$\pi$ &  \\ \hline
+Gi & 0.001$\pi$ &  & 0.117$\pi$ & 0.45$\pi$ \\ \hline
+Gx & 0.5$\pi$ & 0.117$\pi$ &  & 0.498$\pi$ \\ \hline
+Gy & 0.5$\pi$ & 0.45$\pi$ & 0.498$\pi$ &  \\ \hline
 \end{tabular}
 
 \caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); and (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay'').  ``--'' indicates that the decomposition failed or couldn't be interpreted. \label{bestTargetGatesGatesetDecompTable}}
@@ -828,27 +828,27 @@ Gy & 0.5001$\pi$ & 0.5485$\pi$ & 0.4983$\pi$ &  \\ \hline
 \begin{tabular}[l]{|c|c|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & \begin{tabular}{c}Rotation\\Axis\end{tabular} & \begin{tabular}{c}Rotation\\Angle\end{tabular} & Sanity \checkmark \\ \hline
-Gi & 0.0399 & 0.0399 & $ \begin{array}{c}
+Gi & 0.04 & 0.04 & $ \begin{array}{c}
 0 \\ 
-0.2621 \\ 
-0.7412 \\ 
+0.262 \\ 
+0.741 \\ 
 -0.618
  \end{array} $
  & 0.002$\pi$ & 4\e{-6} \\ \hline
-Gx & 0.0378 & 0.0378 & $ \begin{array}{c}
+Gx & 0.038 & 0.038 & $ \begin{array}{c}
 0 \\ 
 -1 \\ 
-0.0027 \\ 
--1\e{-6}
+0.003 \\ 
+-5\e{-6}
  \end{array} $
- & 0.5004$\pi$ & 5\e{-7} \\ \hline
-Gy & 0.0377 & 0.0377 & $ \begin{array}{c}
+ & 0.5$\pi$ & 3\e{-7} \\ \hline
+Gy & 0.038 & 0.038 & $ \begin{array}{c}
 0 \\ 
--0.0027 \\ 
+-0.003 \\ 
 1 \\ 
-4\e{-6}
+-5\e{-6}
  \end{array} $
- & 0.5001$\pi$ & 2\e{-7} \\ \hline
+ & 0.5$\pi$ & 3\e{-7} \\ \hline
 \end{tabular}
 
 \caption{Information pertaining to the closest unitary gate to each of the estimated gates.\label{bestTargetGatesGatesetClosestUnitaryTable}}
@@ -862,42 +862,42 @@ Gy & 0.0377 & 0.0377 & $ \begin{array}{c}
 \hline
 Gate & Choi matrix (Pauli basis) & Eigenvalues \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
-0.9601 & 0.0008e^{i1.878} & 0.0022e^{-i1.620} & 0.0019e^{-i1.428} \\ 
-0.0008e^{-i1.878} & 0.0123 & 0.0013e^{-i0.200} & 0.0022e^{-i3.092} \\ 
-0.0022e^{i1.620} & 0.0013e^{i0.200} & 0.0135 & 0.0012e^{i2.928} \\ 
-0.0019e^{i1.428} & 0.0022e^{i3.092} & 0.0012e^{-i2.928} & 0.0142
+0.96 & 0.001e^{-i1.88} & 0.002e^{-i1.52} & 0.002e^{i1.43} \\ 
+0.001e^{i1.88} & 0.012 & 0.001e^{-i2.94} & 0.002e^{i3.09} \\ 
+0.002e^{i1.52} & 0.001e^{i2.94} & 0.013 & 0.001e^{i0.22} \\ 
+0.002e^{-i1.43} & 0.002e^{-i3.09} & 0.001e^{-i0.22} & 0.014
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
-0.0107 \\ 
-0.0127 \\ 
-0.0165 \\ 
-0.9601
+0.011 \\ 
+0.013 \\ 
+0.017 \\ 
+0.96
  \end{array} $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
-0.4871 & 0.4745e^{-i1.571} & 0.0014e^{-i1.621} & 0.0013e^{-i1.505} \\ 
-0.4745e^{i1.571} & 0.4882 & 0.0012e^{-i0.073} & 0.0013e^{-i3.085} \\ 
-0.0014e^{i1.621} & 0.0012e^{i0.073} & 0.013 & 0.0001e^{-i1.266} \\ 
-0.0013e^{i1.505} & 0.0013e^{i3.085} & 0.0001e^{i1.266} & 0.0118
+0.487 & 0.475e^{i1.57} & 0.001e^{-i1.54} & 0.001e^{i1.53} \\ 
+0.475e^{-i1.57} & 0.488 & 0.001e^{-i3.09} & 0.001e^{i3.11} \\ 
+0.001e^{i1.54} & 0.001e^{i3.09} & 0.013 & 9\e{-5}e^{-i1.91} \\ 
+0.001e^{-i1.53} & 0.001e^{-i3.11} & 9\e{-5}e^{i1.91} & 0.012
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
-0.0105 \\ 
-0.0129 \\ 
-0.0144 \\ 
-0.9622
+0.011 \\ 
+0.013 \\ 
+0.014 \\ 
+0.962
  \end{array} $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-0.4877 & 0.0018e^{i1.557} & 0.4745e^{i1.571} & 0.0013e^{-i1.584} \\ 
-0.0018e^{-i1.557} & 0.0123 & 0.0007e^{i0.023} & 0.0001e^{-i2.152} \\ 
-0.4745e^{-i1.571} & 0.0007e^{-i0.023} & 0.4879 & 0.0013e^{-i0.020} \\ 
-0.0013e^{i1.584} & 0.0001e^{i2.152} & 0.0013e^{i0.020} & 0.0121
+0.488 & 0.002e^{-i1.54} & 0.474e^{i1.57} & 0.001e^{i1.61} \\ 
+0.002e^{i1.54} & 0.012 & 0.001e^{i3.08} & 9\e{-5}e^{i2.15} \\ 
+0.474e^{-i1.57} & 0.001e^{-i3.08} & 0.488 & 0.001e^{-i3.10} \\ 
+0.001e^{-i1.61} & 9\e{-5}e^{-i2.15} & 0.001e^{i3.10} & 0.012
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
-0.0107 \\ 
-0.0123 \\ 
-0.0148 \\ 
-0.9623
+0.011 \\ 
+0.012 \\ 
+0.015 \\ 
+0.962
  \end{array} $
  \\ \hline
 \end{tabular}
@@ -915,28 +915,28 @@ The gauge is chosen to make the gate set as trace-preserving as possible.  This 
 \begin{center}
 \begin{tabular}[l]{|c|c|c|}
 \hline
-Operator & Hilbert-Schmidt vector (Pauli basis) & Matrix \\ \hline
-$\rho_{0}$ & $ \begin{array}{c}
-0.7071 \\ 
-0.0011 \\ 
-6\e{-6} \\ 
-0.6435
- \end{array} $
- & $ \left(\!\!\begin{array}{cc}
-0.955 & 0.0008e^{-i0.005} \\ 
-0.0008e^{i0.005} & 0.045
+Operator & Matrix & Hilbert-Schmidt vector (Pauli basis) \\ \hline
+$\rho_{0}$ & $ \left(\!\!\begin{array}{cc}
+0.955 & 0.001e^{-i0.03} \\ 
+0.001e^{i0.03} & 0.045
  \end{array}\!\!\right) $
+ & $ \begin{array}{c}
+0.707 \\ 
+0.001 \\ 
+3\e{-5} \\ 
+0.643
+ \end{array} $
  \\ \hline
-$E_{0}$ & $ \begin{array}{c}
-0.7145 \\ 
--0.0001 \\ 
--0.0027 \\ 
--0.6442
- \end{array} $
- & $ \left(\!\!\begin{array}{cc}
-0.0497 & 0.0019e^{i1.613} \\ 
-0.0019e^{-i1.613} & 0.9608
+$E_{0}$ & $ \left(\!\!\begin{array}{cc}
+0.05 & 0.002e^{i1.57} \\ 
+0.002e^{-i1.57} & 0.961
  \end{array}\!\!\right) $
+ & $ \begin{array}{c}
+0.715 \\ 
+-6\e{-6} \\ 
+-0.002 \\ 
+-0.644
+ \end{array} $
  \\ \hline
 \end{tabular}
 
@@ -949,7 +949,7 @@ $E_{0}$ & $ \begin{array}{c}
 \begin{tabular}[l]{|c|c|c|}
 \hline
  & $E_{0}$ & $E_C$ \\ \hline
-$\rho_{0}$ & 0.0907 & 0.9092 \\ \hline
+$\rho_{0}$ & 0.091 & 0.909 \\ \hline
 \end{tabular}
 
 \caption{\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestTPGatesetSpamTable}.\label{bestTPGatesetSpamParametersTable}}
@@ -963,23 +963,23 @@ $\rho_{0}$ & 0.0907 & 0.9092 \\ \hline
 Gate & Superoperator (Pauli basis) \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
--0.0009 & 0.9447 & -0.0063 & -0.0088 \\ 
-0.0004 & 0.0011 & 0.9471 & 0.0038 \\ 
-0.0016 & 3\e{-5} & 0.0007 & 0.9485
+-0.001 & 0.945 & -0.006 & -0.009 \\ 
+4\e{-4} & 0.001 & 0.947 & 0.004 \\ 
+0.002 & 2\e{-5} & 0.001 & 0.949
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
-0.0003 & 0.9505 & -0.0051 & -0.0052 \\ 
-0.0102 & 0.0005 & 0.0003 & -0.9491 \\ 
-0.0108 & 0.0005 & 0.9491 & -0.0025
+4\e{-4} & 0.951 & -0.005 & -0.005 \\ 
+0.01 & 4\e{-4} & 3\e{-4} & -0.949 \\ 
+0.011 & 4\e{-4} & 0.949 & -0.002
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
--0.0102 & 0.0001 & -0.0046 & 0.9488 \\ 
-0.0003 & 0.0014 & 0.9512 & 0.0015 \\ 
-0.01 & -0.9491 & -0.0056 & -0.0006
+-0.01 & 2\e{-4} & -0.005 & 0.949 \\ 
+3\e{-4} & 0.001 & 0.951 & 0.001 \\ 
+0.01 & -0.949 & -0.006 & -0.001
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -993,9 +993,9 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 \begin{tabular}[l]{|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
-Gi & 0.0399 & 0.0401 & 0.0401 \\ \hline
-Gx & 0.0378 & 0.0382 & 0.039 \\ \hline
-Gy & 0.0377 & 0.0381 & 0.0388 \\ \hline
+Gi & 0.04 & 0.04 & 0.04 \\ \hline
+Gx & 0.038 & 0.038 & 0.039 \\ \hline
+Gy & 0.038 & 0.038 & 0.039 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -1004,23 +1004,23 @@ Gy & 0.0377 & 0.0381 & 0.0388 \\ \hline
 Gate & Error Generator \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
--0.0009 & -0.0569 & -0.0066 & -0.0093 \\ 
-0.0004 & 0.0011 & -0.0543 & 0.0041 \\ 
-0.0016 & 3\e{-5} & 0.0008 & -0.0529
+-0.001 & -0.057 & -0.007 & -0.009 \\ 
+4\e{-4} & 0.001 & -0.054 & 0.004 \\ 
+0.002 & 3\e{-5} & 0.001 & -0.053
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
-0.0004 & -0.0508 & -0.0054 & -0.0054 \\ 
-0.0111 & 0.0005 & -0.0523 & -0.0026 \\ 
--0.0104 & -0.0005 & -0.0004 & -0.0523
+4\e{-4} & -0.051 & 7\e{-5} & -0.008 \\ 
+0.017 & 0.001 & -0.05 & -0.001 \\ 
+0.001 & 7\e{-6} & 0.001 & -0.055
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
--0.0102 & -0.0523 & 0.0059 & 0.0006 \\ 
-0.0003 & 0.0015 & -0.05 & 0.0016 \\ 
--0.0105 & 0.0001 & -0.0049 & -0.0526
+-0.016 & -0.052 & 0.001 & -5\e{-5} \\ 
+3\e{-4} & 0.002 & -0.05 & 6\e{-5} \\ 
+-9\e{-5} & -5\e{-4} & -0.008 & -0.053
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -1035,62 +1035,62 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 \hline
 Gate & Eigenvalues & Fixed pt & Rotn. axis & Diag. decay & Off-diag. decay \\ \hline
 Gi & $ \begin{array}{c}
-0.9487 \\ 
-0.9458e^{i0.002} \\ 
-0.9458e^{-i0.002} \\ 
+0.949 \\ 
+0.946e^{i0.00} \\ 
+0.946e^{-i0.00} \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
-0.9984 \\ 
--0.0226 \\ 
-0.0092 \\ 
-0.0309
+0.998 \\ 
+-0.023 \\ 
+0.009 \\ 
+0.031
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
-0.9348 \\ 
--0.1471 \\ 
--0.3232
+-0.933 \\ 
+0.151 \\ 
+0.325
  \end{array} $
- & 0.0513 & 0.0542 \\ \hline
+ & 0.051 & 0.054 \\ \hline
 Gx & $ \begin{array}{c}
-0.9491e^{i1.572} \\ 
-0.9491e^{-i1.572} \\ 
-0.9505 \\ 
+0.949e^{i1.57} \\ 
+0.949e^{-i1.57} \\ 
+0.951 \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
-0.9998 \\ 
-0.0059 \\ 
--2\e{-5} \\ 
-0.0107
+1 \\ 
+0.006 \\ 
+-3\e{-5} \\ 
+0.011
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
 -1 \\ 
-6\e{-6} \\ 
--0.0005
+3\e{-6} \\ 
+-5\e{-4}
  \end{array} $
- & 0.0495 & 0.0509 \\ \hline
+ & 0.049 & 0.051 \\ \hline
 Gy & $ \begin{array}{c}
-0.9489e^{i1.571} \\ 
-0.9489e^{-i1.571} \\ 
-0.9512 \\ 
+0.949e^{i1.57} \\ 
+0.949e^{-i1.57} \\ 
+0.951 \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
-0.9998 \\ 
--0.0004 \\ 
-0.0066 \\ 
-0.0103
+1 \\ 
+-4\e{-4} \\ 
+0.006 \\ 
+0.01
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
--0.0054 \\ 
+-0.005 \\ 
 1 \\ 
--0.0005
+-0.001
  \end{array} $
- & 0.0488 & 0.0511 \\ \hline
+ & 0.049 & 0.051 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -1098,9 +1098,9 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & 0.0006$\pi$ &  & 0.8843$\pi$ & 0.5486$\pi$ \\ \hline
-Gx & 0.5004$\pi$ & 0.8843$\pi$ &  & 0.4983$\pi$ \\ \hline
-Gy & 0.5001$\pi$ & 0.5486$\pi$ & 0.4983$\pi$ &  \\ \hline
+Gi & 0.001$\pi$ &  & 0.117$\pi$ & 0.45$\pi$ \\ \hline
+Gx & 0.5$\pi$ & 0.117$\pi$ &  & 0.498$\pi$ \\ \hline
+Gy & 0.5$\pi$ & 0.45$\pi$ & 0.498$\pi$ &  \\ \hline
 \end{tabular}
 
 \caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); and (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay'').  ``--'' indicates that the decomposition failed or couldn't be interpreted. \label{bestTPGatesetDecompTable}}
@@ -1113,27 +1113,27 @@ Gy & 0.5001$\pi$ & 0.5486$\pi$ & 0.4983$\pi$ &  \\ \hline
 \begin{tabular}[l]{|c|c|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & \begin{tabular}{c}Rotation\\Axis\end{tabular} & \begin{tabular}{c}Rotation\\Angle\end{tabular} & Sanity \checkmark \\ \hline
-Gi & 0.0399 & 0.0399 & $ \begin{array}{c}
+Gi & 0.04 & 0.04 & $ \begin{array}{c}
 0 \\ 
-0.2623 \\ 
-0.7415 \\ 
--0.6175
+0.262 \\ 
+0.742 \\ 
+-0.618
  \end{array} $
  & 0.002$\pi$ & 6\e{-6} \\ \hline
-Gx & 0.0378 & 0.0381 & $ \begin{array}{c}
+Gx & 0.038 & 0.038 & $ \begin{array}{c}
 0 \\ 
 1 \\ 
--0.0027 \\ 
-0.0002
+-0.003 \\ 
+2\e{-4}
  \end{array} $
- & 0.5004$\pi$ & 0.0004 \\ \hline
-Gy & 0.0377 & 0.038 & $ \begin{array}{c}
+ & 0.5$\pi$ & 4\e{-4} \\ \hline
+Gy & 0.038 & 0.038 & $ \begin{array}{c}
 0 \\ 
-0.0027 \\ 
--1 \\ 
--0.0005
+-0.003 \\ 
+1 \\ 
+5\e{-4}
  \end{array} $
- & 0.5001$\pi$ & 0.0004 \\ \hline
+ & 0.5$\pi$ & 4\e{-4} \\ \hline
 \end{tabular}
 
 \caption{Information pertaining to the closest unitary gate to each of the estimated gates.\label{bestTPGatesetClosestUnitaryTable}}
@@ -1147,42 +1147,42 @@ Gy & 0.0377 & 0.038 & $ \begin{array}{c}
 \hline
 Gate & Choi matrix (Pauli basis) & Eigenvalues \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
-0.9601 & 0.0008e^{i1.857} & 0.0022e^{-i1.615} & 0.0019e^{-i1.358} \\ 
-0.0008e^{-i1.857} & 0.0123 & 0.0014e^{-i0.296} & 0.0022e^{-i3.097} \\ 
-0.0022e^{i1.615} & 0.0014e^{i0.296} & 0.0135 & 0.0012e^{i2.942} \\ 
-0.0019e^{i1.358} & 0.0022e^{i3.097} & 0.0012e^{-i2.942} & 0.0142
+0.96 & 0.001e^{-i1.86} & 0.002e^{-i1.53} & 0.002e^{i1.36} \\ 
+0.001e^{i1.86} & 0.012 & 0.001e^{-i2.84} & 0.002e^{i3.10} \\ 
+0.002e^{i1.53} & 0.001e^{i2.84} & 0.013 & 0.001e^{i0.20} \\ 
+0.002e^{-i1.36} & 0.002e^{-i3.10} & 0.001e^{-i0.20} & 0.014
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
-0.0106 \\ 
-0.0127 \\ 
-0.0165 \\ 
-0.9601
+0.011 \\ 
+0.013 \\ 
+0.017 \\ 
+0.96
  \end{array} $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
-0.4871 & 0.4745e^{-i1.571} & 0.0029e^{-i2.637} & 0.003e^{-i0.477} \\ 
-0.4745e^{i1.571} & 0.4882 & 0.0029e^{-i1.163} & 0.0028e^{-i2.002} \\ 
-0.0029e^{i2.637} & 0.0029e^{i1.163} & 0.0131 & 0.0001e^{-i1.553} \\ 
-0.003e^{i0.477} & 0.0028e^{i2.002} & 0.0001e^{i1.553} & 0.0117
+0.487 & 0.475e^{i1.57} & 0.003e^{-i0.50} & 0.003e^{i0.47} \\ 
+0.475e^{-i1.57} & 0.488 & 0.003e^{-i1.98} & 0.003e^{i2.01} \\ 
+0.003e^{i0.50} & 0.003e^{i1.98} & 0.013 & 9\e{-5}e^{-i1.56} \\ 
+0.003e^{-i0.47} & 0.003e^{-i2.01} & 9\e{-5}e^{i1.56} & 0.012
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
-0.0082 \\ 
-0.0131 \\ 
-0.0166 \\ 
-0.9622
+0.008 \\ 
+0.013 \\ 
+0.017 \\ 
+0.962
  \end{array} $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-0.4877 & 0.0031e^{i2.535} & 0.4745e^{i1.571} & 0.0029e^{-i0.544} \\ 
-0.0031e^{-i2.535} & 0.0124 & 0.0026e^{-i1.261} & 0.0001e^{-i2.382} \\ 
-0.4745e^{-i1.571} & 0.0026e^{i1.261} & 0.4879 & 0.0028e^{i1.189} \\ 
-0.0029e^{i0.544} & 0.0001e^{i2.382} & 0.0028e^{-i1.189} & 0.012
+0.488 & 0.003e^{-i2.53} & 0.474e^{i1.57} & 0.003e^{i0.54} \\ 
+0.003e^{i2.53} & 0.012 & 0.003e^{-i1.88} & 1\e{-4}e^{i2.41} \\ 
+0.474e^{-i1.57} & 0.003e^{i1.88} & 0.488 & 0.003e^{i1.96} \\ 
+0.003e^{-i0.54} & 1\e{-4}e^{-i2.41} & 0.003e^{-i1.96} & 0.012
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
-0.0086 \\ 
-0.0123 \\ 
-0.0168 \\ 
-0.9623
+0.009 \\ 
+0.012 \\ 
+0.017 \\ 
+0.962
  \end{array} $
  \\ \hline
 \end{tabular}
@@ -1207,28 +1207,28 @@ within the space of TP-preserving gauge transformations.  This CP penalty term i
 \begin{center}
 \begin{tabular}[l]{|c|c|c|}
 \hline
-Operator & Hilbert-Schmidt vector (Pauli basis) & Matrix \\ \hline
-$\rho_{0}$ & $ \begin{array}{c}
-0.7071 \\ 
-0.0011 \\ 
-5\e{-6} \\ 
-0.6435
- \end{array} $
- & $ \left(\!\!\begin{array}{cc}
-0.955 & 0.0008e^{-i0.004} \\ 
-0.0008e^{i0.004} & 0.045
+Operator & Matrix & Hilbert-Schmidt vector (Pauli basis) \\ \hline
+$\rho_{0}$ & $ \left(\!\!\begin{array}{cc}
+0.955 & 0.001e^{-i0.03} \\ 
+0.001e^{i0.03} & 0.045
  \end{array}\!\!\right) $
+ & $ \begin{array}{c}
+0.707 \\ 
+0.001 \\ 
+3\e{-5} \\ 
+0.643
+ \end{array} $
  \\ \hline
-$E_{0}$ & $ \begin{array}{c}
-0.7145 \\ 
--0.0001 \\ 
--0.0027 \\ 
--0.6442
- \end{array} $
- & $ \left(\!\!\begin{array}{cc}
-0.0497 & 0.0019e^{i1.613} \\ 
-0.0019e^{-i1.613} & 0.9608
+$E_{0}$ & $ \left(\!\!\begin{array}{cc}
+0.05 & 0.002e^{i1.57} \\ 
+0.002e^{-i1.57} & 0.961
  \end{array}\!\!\right) $
+ & $ \begin{array}{c}
+0.715 \\ 
+-6\e{-6} \\ 
+-0.002 \\ 
+-0.644
+ \end{array} $
  \\ \hline
 \end{tabular}
 
@@ -1241,7 +1241,7 @@ $E_{0}$ & $ \begin{array}{c}
 \begin{tabular}[l]{|c|c|c|}
 \hline
  & $E_{0}$ & $E_C$ \\ \hline
-$\rho_{0}$ & 0.0907 & 0.9092 \\ \hline
+$\rho_{0}$ & 0.091 & 0.909 \\ \hline
 \end{tabular}
 
 \caption{\textbf{GST estimate of SPAM probabilities}.  Computed by taking the dot products of vectors in Table \ref{bestCPTPGatesetSpamTable}.\label{bestCPTPGatesetSpamParametersTable}}
@@ -1255,23 +1255,23 @@ $\rho_{0}$ & 0.0907 & 0.9092 \\ \hline
 Gate & Superoperator (Pauli basis) \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
--0.0009 & 0.9447 & -0.0063 & -0.0088 \\ 
-0.0004 & 0.0011 & 0.9471 & 0.0038 \\ 
-0.0016 & 3\e{-5} & 0.0007 & 0.9485
+-0.001 & 0.945 & -0.006 & -0.009 \\ 
+4\e{-4} & 0.001 & 0.947 & 0.004 \\ 
+0.002 & 2\e{-5} & 0.001 & 0.949
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
-0.0003 & 0.9505 & -0.0051 & -0.0052 \\ 
-0.0102 & 0.0005 & 0.0003 & -0.9491 \\ 
-0.0108 & 0.0005 & 0.9491 & -0.0025
+4\e{-4} & 0.951 & -0.005 & -0.005 \\ 
+0.01 & 4\e{-4} & 3\e{-4} & -0.949 \\ 
+0.011 & 4\e{-4} & 0.949 & -0.002
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
--0.0102 & 0.0001 & -0.0046 & 0.9487 \\ 
-0.0003 & 0.0014 & 0.9512 & 0.0015 \\ 
-0.01 & -0.9491 & -0.0056 & -0.0006
+-0.01 & 1\e{-4} & -0.005 & 0.949 \\ 
+3\e{-4} & 0.001 & 0.951 & 0.001 \\ 
+0.01 & -0.949 & -0.006 & -0.001
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -1285,9 +1285,9 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 \begin{tabular}[l]{|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & $\nicefrac{1}{2}$ $\Diamond$-Norm \\ \hline
-Gi & 0.0399 & 0.0401 & 0.0401 \\ \hline
-Gx & 0.0378 & 0.0382 & 0.039 \\ \hline
-Gy & 0.0377 & 0.0381 & 0.0388 \\ \hline
+Gi & 0.04 & 0.04 & 0.04 \\ \hline
+Gx & 0.038 & 0.038 & 0.039 \\ \hline
+Gy & 0.038 & 0.038 & 0.039 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -1296,23 +1296,23 @@ Gy & 0.0377 & 0.0381 & 0.0388 \\ \hline
 Gate & Error Generator \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
--0.0009 & -0.0569 & -0.0066 & -0.0093 \\ 
-0.0004 & 0.0011 & -0.0543 & 0.0041 \\ 
-0.0016 & 3\e{-5} & 0.0008 & -0.0529
+-0.001 & -0.057 & -0.007 & -0.009 \\ 
+4\e{-4} & 0.001 & -0.054 & 0.004 \\ 
+0.002 & 3\e{-5} & 0.001 & -0.053
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
-0.0004 & -0.0508 & -0.0054 & -0.0054 \\ 
-0.0111 & 0.0005 & -0.0523 & -0.0026 \\ 
--0.0104 & -0.0005 & -0.0004 & -0.0523
+4\e{-4} & -0.051 & 7\e{-5} & -0.008 \\ 
+0.017 & 0.001 & -0.05 & -0.001 \\ 
+0.001 & 7\e{-6} & 0.001 & -0.055
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
--0.0102 & -0.0523 & 0.0059 & 0.0006 \\ 
-0.0003 & 0.0015 & -0.05 & 0.0016 \\ 
--0.0105 & 0.0001 & -0.0049 & -0.0526
+-0.016 & -0.052 & 0.001 & -5\e{-5} \\ 
+3\e{-4} & 0.002 & -0.05 & 6\e{-5} \\ 
+-9\e{-5} & -5\e{-4} & -0.008 & -0.053
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -1327,62 +1327,62 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 \hline
 Gate & Eigenvalues & Fixed pt & Rotn. axis & Diag. decay & Off-diag. decay \\ \hline
 Gi & $ \begin{array}{c}
-0.9487 \\ 
-0.9458e^{i0.002} \\ 
-0.9458e^{-i0.002} \\ 
+0.949 \\ 
+0.946e^{i0.00} \\ 
+0.946e^{-i0.00} \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
-0.9984 \\ 
--0.0226 \\ 
-0.0092 \\ 
-0.0309
+0.998 \\ 
+-0.023 \\ 
+0.009 \\ 
+0.031
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
-0.9348 \\ 
--0.1471 \\ 
--0.3232
+-0.933 \\ 
+0.151 \\ 
+0.325
  \end{array} $
- & 0.0513 & 0.0542 \\ \hline
+ & 0.051 & 0.054 \\ \hline
 Gx & $ \begin{array}{c}
-0.9491e^{i1.572} \\ 
-0.9491e^{-i1.572} \\ 
-0.9505 \\ 
+0.949e^{i1.57} \\ 
+0.949e^{-i1.57} \\ 
+0.951 \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
-0.9998 \\ 
-0.0059 \\ 
--2\e{-5} \\ 
-0.0107
+1 \\ 
+0.006 \\ 
+-3\e{-5} \\ 
+0.011
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
 -1 \\ 
-6\e{-6} \\ 
--0.0005
+3\e{-6} \\ 
+-5\e{-4}
  \end{array} $
- & 0.0495 & 0.0509 \\ \hline
+ & 0.049 & 0.051 \\ \hline
 Gy & $ \begin{array}{c}
-0.9489e^{i1.571} \\ 
-0.9489e^{-i1.571} \\ 
-0.9512 \\ 
+0.949e^{i1.57} \\ 
+0.949e^{-i1.57} \\ 
+0.951 \\ 
 1
  \end{array} $
  & $ \begin{array}{c}
-0.9998 \\ 
--0.0004 \\ 
-0.0066 \\ 
-0.0103
+1 \\ 
+-4\e{-4} \\ 
+0.006 \\ 
+0.01
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
--0.0054 \\ 
+-0.005 \\ 
 1 \\ 
--0.0005
+-0.001
  \end{array} $
- & 0.0488 & 0.0511 \\ \hline
+ & 0.049 & 0.051 \\ \hline
 \end{tabular}
 
 \vspace{2em}
@@ -1390,9 +1390,9 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & 0.0006$\pi$ &  & 0.8843$\pi$ & 0.5486$\pi$ \\ \hline
-Gx & 0.5004$\pi$ & 0.8843$\pi$ &  & 0.4983$\pi$ \\ \hline
-Gy & 0.5001$\pi$ & 0.5486$\pi$ & 0.4983$\pi$ &  \\ \hline
+Gi & 0.001$\pi$ &  & 0.117$\pi$ & 0.45$\pi$ \\ \hline
+Gx & 0.5$\pi$ & 0.117$\pi$ &  & 0.498$\pi$ \\ \hline
+Gy & 0.5$\pi$ & 0.45$\pi$ & 0.498$\pi$ &  \\ \hline
 \end{tabular}
 
 \caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); and (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay'').  ``--'' indicates that the decomposition failed or couldn't be interpreted. \label{bestCPTPGatesetDecompTable}}
@@ -1405,27 +1405,27 @@ Gy & 0.5001$\pi$ & 0.5486$\pi$ & 0.4983$\pi$ &  \\ \hline
 \begin{tabular}[l]{|c|c|c|c|c|c|}
 \hline
 Gate & \begin{tabular}{c}Process\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} & \begin{tabular}{c}Rotation\\Axis\end{tabular} & \begin{tabular}{c}Rotation\\Angle\end{tabular} & Sanity \checkmark \\ \hline
-Gi & 0.0399 & 0.0399 & $ \begin{array}{c}
+Gi & 0.04 & 0.04 & $ \begin{array}{c}
 0 \\ 
--0.2622 \\ 
--0.7415 \\ 
-0.6175
+0.262 \\ 
+0.742 \\ 
+-0.618
  \end{array} $
  & 0.002$\pi$ & 6\e{-6} \\ \hline
-Gx & 0.0378 & 0.0381 & $ \begin{array}{c}
+Gx & 0.038 & 0.038 & $ \begin{array}{c}
 0 \\ 
-1 \\ 
--0.0027 \\ 
-0.0002
+-1 \\ 
+0.003 \\ 
+-2\e{-4}
  \end{array} $
- & 0.5004$\pi$ & 0.0004 \\ \hline
-Gy & 0.0377 & 0.038 & $ \begin{array}{c}
+ & 0.5$\pi$ & 4\e{-4} \\ \hline
+Gy & 0.038 & 0.038 & $ \begin{array}{c}
 0 \\ 
--0.0027 \\ 
-1 \\ 
-0.0005
+0.003 \\ 
+-1 \\ 
+-5\e{-4}
  \end{array} $
- & 0.5001$\pi$ & 0.0004 \\ \hline
+ & 0.5$\pi$ & 4\e{-4} \\ \hline
 \end{tabular}
 
 \caption{Information pertaining to the closest unitary gate to each of the estimated gates.\label{bestCPTPGatesetClosestUnitaryTable}}
@@ -1439,42 +1439,42 @@ Gy & 0.0377 & 0.038 & $ \begin{array}{c}
 \hline
 Gate & Choi matrix (Pauli basis) & Eigenvalues \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
-0.9601 & 0.0008e^{i1.857} & 0.0022e^{-i1.615} & 0.0019e^{-i1.358} \\ 
-0.0008e^{-i1.857} & 0.0123 & 0.0014e^{-i0.296} & 0.0022e^{-i3.097} \\ 
-0.0022e^{i1.615} & 0.0014e^{i0.296} & 0.0135 & 0.0012e^{i2.942} \\ 
-0.0019e^{i1.358} & 0.0022e^{i3.097} & 0.0012e^{-i2.942} & 0.0142
+0.96 & 0.001e^{-i1.86} & 0.002e^{-i1.53} & 0.002e^{i1.36} \\ 
+0.001e^{i1.86} & 0.012 & 0.001e^{-i2.84} & 0.002e^{i3.10} \\ 
+0.002e^{i1.53} & 0.001e^{i2.84} & 0.013 & 0.001e^{i0.20} \\ 
+0.002e^{-i1.36} & 0.002e^{-i3.10} & 0.001e^{-i0.20} & 0.014
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
-0.0106 \\ 
-0.0127 \\ 
-0.0165 \\ 
-0.9601
+0.011 \\ 
+0.013 \\ 
+0.017 \\ 
+0.96
  \end{array} $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
-0.4871 & 0.4745e^{-i1.571} & 0.0029e^{-i2.637} & 0.003e^{-i0.477} \\ 
-0.4745e^{i1.571} & 0.4882 & 0.0029e^{-i1.163} & 0.0028e^{-i2.002} \\ 
-0.0029e^{i2.637} & 0.0029e^{i1.163} & 0.0131 & 0.0001e^{-i1.579} \\ 
-0.003e^{i0.477} & 0.0028e^{i2.002} & 0.0001e^{i1.579} & 0.0117
+0.487 & 0.475e^{i1.57} & 0.003e^{-i0.50} & 0.003e^{i0.47} \\ 
+0.475e^{-i1.57} & 0.488 & 0.003e^{-i1.98} & 0.003e^{i2.01} \\ 
+0.003e^{i0.50} & 0.003e^{i1.98} & 0.013 & 9\e{-5}e^{-i1.55} \\ 
+0.003e^{-i0.47} & 0.003e^{-i2.01} & 9\e{-5}e^{i1.55} & 0.012
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
-0.0082 \\ 
-0.0131 \\ 
-0.0166 \\ 
-0.9622
+0.008 \\ 
+0.013 \\ 
+0.017 \\ 
+0.962
  \end{array} $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-0.4877 & 0.0031e^{i2.535} & 0.4745e^{i1.571} & 0.0029e^{-i0.544} \\ 
-0.0031e^{-i2.535} & 0.0124 & 0.0026e^{-i1.260} & 0.0001e^{-i2.395} \\ 
-0.4745e^{-i1.571} & 0.0026e^{i1.260} & 0.4879 & 0.0028e^{i1.189} \\ 
-0.0029e^{i0.544} & 0.0001e^{i2.395} & 0.0028e^{-i1.189} & 0.012
+0.488 & 0.003e^{-i2.53} & 0.474e^{i1.57} & 0.003e^{i0.54} \\ 
+0.003e^{i2.53} & 0.012 & 0.003e^{-i1.88} & 1\e{-4}e^{i2.41} \\ 
+0.474e^{-i1.57} & 0.003e^{i1.88} & 0.488 & 0.003e^{i1.96} \\ 
+0.003e^{-i0.54} & 1\e{-4}e^{-i2.41} & 0.003e^{-i1.96} & 0.012
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
-0.0086 \\ 
-0.0123 \\ 
-0.0168 \\ 
-0.9623
+0.009 \\ 
+0.012 \\ 
+0.017 \\ 
+0.962
  \end{array} $
  \\ \hline
 \end{tabular}
@@ -1494,21 +1494,21 @@ This appendix contains $2\Delta\log(\mathcal{L})$ pixel-plots for the intermedia
 
 \begin{figure}
 \begin{center}
-\includegraphics[width=2.60in,height=3.27in,keepaspectratio]{full_reportD_files/L1_LogLBoxes.pdf}
+\includegraphics[width=2.60in,height=2.91in,keepaspectratio]{full_reportD_files/L1_LogLBoxes.pdf}
 \caption{Box plot of iteration 1 (L=1) gateset $\log(\mathcal{L})$ values.\label{L1GatesetLogLBoxPlot}}
 \end{center}
 \end{figure}
 
 \begin{figure}
 \begin{center}
-\includegraphics[width=3.90in,height=3.27in,keepaspectratio]{full_reportD_files/L2_LogLBoxes.pdf}
+\includegraphics[width=3.90in,height=2.91in,keepaspectratio]{full_reportD_files/L2_LogLBoxes.pdf}
 \caption{Box plot of iteration 2 (L=2) gateset $\log(\mathcal{L})$ values.\label{L2GatesetLogLBoxPlot}}
 \end{center}
 \end{figure}
 
 \begin{figure}
 \begin{center}
-\includegraphics[width=5.20in,height=8.18in,keepaspectratio]{full_reportD_files/L3_LogLBoxes.pdf}
+\includegraphics[width=5.20in,height=7.27in,keepaspectratio]{full_reportD_files/L3_LogLBoxes.pdf}
 \caption{Box plot of iteration 3 (L=4) gateset $\log(\mathcal{L})$ values.\label{L3GatesetLogLBoxPlot}}
 \end{center}
 \end{figure}
@@ -1527,21 +1527,21 @@ In the Whack-a-mole plots shown below, each of the longest base sequences is ind
 
 \begin{figure}
 \begin{center}
-\includegraphics[width=6.50in,height=9.00in,keepaspectratio]{full_reportD_files/whackGxMoleBoxes.pdf}
+\includegraphics[width=6.50in,height=8.00in,keepaspectratio]{full_reportD_files/whackGxMoleBoxes.pdf}
 \caption{Whack-a-$\log(\mathcal{L})$-mole box plot for $\mathrm{Gx}^{8}$.  Hitting with hammer of weight 10.0.\label{WhackGxMoleBoxPlot}}
 \end{center}
 \end{figure}
 
 \begin{figure}
 \begin{center}
-\includegraphics[width=6.50in,height=9.00in,keepaspectratio]{full_reportD_files/whackGyMoleBoxes.pdf}
+\includegraphics[width=6.50in,height=8.00in,keepaspectratio]{full_reportD_files/whackGyMoleBoxes.pdf}
 \caption{Whack-a-$\log(\mathcal{L})$-mole box plot for $\mathrm{Gy}^{8}$.  Hitting with hammer of weight 10.0.\label{WhackGyMoleBoxPlot}}
 \end{center}
 \end{figure}
 
 \begin{figure}
 \begin{center}
-\includegraphics[width=6.50in,height=9.00in,keepaspectratio]{full_reportD_files/whackGiMoleBoxes.pdf}
+\includegraphics[width=6.50in,height=8.00in,keepaspectratio]{full_reportD_files/whackGiMoleBoxes.pdf}
 \caption{Whack-a-$\log(\mathcal{L})$-mole box plot for $\mathrm{Gi}^{8}$.  Hitting with hammer of weight 10.0.\label{WhackGiMoleBoxPlot}}
 \end{center}
 \end{figure}
