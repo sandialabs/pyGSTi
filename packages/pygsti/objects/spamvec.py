@@ -61,7 +61,7 @@ def optimize_spamvec(vecToOptimize, targetVec):
                            tol=1e-6, callback=None)
 
     vecToOptimize.from_vector(minSol.x)
-    print("DEBUG: optimized vector to min frobenius distance %g" % _mt.frobeniusnorm(vecToOptimize-targetVector))
+    #print("DEBUG: optimized vector to min frobenius distance %g" % _mt.frobeniusnorm(vecToOptimize-targetVector))
 
 
 def convert(spamvec, toType):
