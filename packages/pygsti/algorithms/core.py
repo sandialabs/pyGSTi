@@ -2253,7 +2253,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
         #
         # L = prod_{i,sl} lambda_{i,sl}^N_{i,sl} e^{-lambda_{i,sl}} / N_{i,sl}!
         #
-        # Where lamba_{i,sl} := p_{i,sl}/N[i] is a rate, i indexes the gate string,
+        # Where lamba_{i,sl} := p_{i,sl}*N[i] is a rate, i indexes the gate string,
         #  and sl indexes the spam label.  N[i] is the total counts for the i-th gatestring, and
         #  so sum_{sl} N_{i,sl} == N[i]. We can ignore the p-independent N_j! and take the log:
         #
