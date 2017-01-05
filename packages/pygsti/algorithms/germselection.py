@@ -22,58 +22,47 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
                    force="singletons", algorithm='greedy',
                    algorithm_kwargs=None, verbosity=1):
     """Generate a germ set for doing GST with a given target gateset.
-
     This function provides a streamlined interface to a variety of germ
     selection algorithms. It's goal is to provide a method that typical users
     can run by simply providing a target gateset and leaving all other settings
     at their default values, while providing flexibility for users desiring
     more control to fine tune some of the general and algorithm-specific
     details.
-
     Currently, to break troublesome degeneracies and provide some confidence
     that the chosen germ set is amplificationally complete (AC) for all
     gatesets in a neighborhood of the target gateset (rather than only the
     target gateset), an ensemble of gatesets with random unitary perturbations
     to their gates must be provided or generated.
-
     Parameters
     ----------
     gs_target : GateSet or list of GateSet
         The gateset you are aiming to implement, or a list of gatesets that are
         copies of the gateset you are trying to implement (either with or
         without random unitary perturbations applied to the gatesets).
-
     randomize : bool, optional
         Whether or not to add random unitary perturbations to the gateset(s)
         provided.
-
     randomizationStrength : float, optional
         The size of the random unitary perturbations applied to gates in the
         gateset. See :meth:`~pygsti.objects.GateSet.randomize_with_unitary`
         for more details.
-
     numGSCopies : int, optional
         The number of copies of the original gateset that should be used.
-
     seed : int, optional
         Seed for generating random unitary perturbations to gatesets. Also
         passed along to stochastic germ-selection algorithms.
-
     maxGermsLength : int, optional
         The maximum length (in terms of gates) of any germ allowed in the germ
         set. Currently will construct a list of all non-equivalent germs of
         length up to `maxGermsLength` for the germ selection algorithms to play
         around with.
-
     force : str or list, optional
         A list of GateStrings which *must* be included in the final germ set.
         If set to the special string "singletons" then all length-1 strings will
         be included.  Seting to None is the same as an empty list.
-
     algorithm : {'greedy', 'grasp', 'slack'}, optional
         Specifies the algorithm to use to generate the germ set. Current
         options are:
-
         'greedy'
             Add germs one-at-a-time until the set is AC, picking the germ that
             improves the germ-set score by the largest amount at each step. See
@@ -88,22 +77,18 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
             degrade the score in an attempt to escape local optima as long as
             the degredation is within some specified amount of "slack". See
             :func:`optimize_integer_germs_slack` for more details.
-
     algorithm_kwargs : dict
         Dictionary of ``{'keyword': keyword_arg}`` pairs providing keyword
         arguments for the specified `algorithm` function. See the documentation
         for functions referred to in the `algorithm` keyword documentation for
         what options are available for each algorithm.
-
     verbosity : int, optional
         The verbosity level of the :class:`~pygsti.objects.VerbosityPrinter`
         used to print log messages.
-
     Returns
     -------
     list of GateString
         A list containing the germs making up the germ set.
-
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
     gatesetList = setup_gateset_list(gs_target, randomize,
@@ -211,7 +196,6 @@ def calculate_germset_score(germs, gs_target=None, neighborhood=None,
                             randomizationStrength=1e-2, scoreFunc='all',
                             gatePenalty=0.0, l1Penalty=0.0):
     """Calculate the score of a germ set with respect to a gate set.
-
     """
     scoreFn = lambda x: _scoring.list_score(x, scoreFunc=scoreFunc)
     if neighborhood is None:
@@ -228,33 +212,25 @@ def calculate_germset_score(germs, gs_target=None, neighborhood=None,
 
 def get_gateset_params(gatesetList):
     """Get the number of gates and gauge parameters of the gatesets in a list.
-
     Also verify all gatesets have the same number of gates and gauge parameters.
-
     Parameters
     ----------
     gatesetList : list of GateSet
         A list of gatesets for which you want an AC germ set.
-
     Returns
     -------
     reducedGatesetList : list of GateSet
         The original list of gatesets with SPAM removed
-
     numGaugeParams : int
         The number of non-SPAM gauge parameters for all gatesets.
-
     numNonGaugeParams : int
         The number of non-SPAM non-gauge parameters for all gatesets.
-
     numGates : int
         The number of gates for all gatesets.
-
     Raises
     ------
     ValueError
         If the number of gauge parameters or gates varies among the gatesets.
-
     """
     # We don't care about SPAM, since it can't be amplified.
     reducedGatesetList = [removeSPAMVectors(gateset)
@@ -309,7 +285,6 @@ def compute_non_AC_score(scoreFn, thresholdAC=1e6, initN=1,
                          partialGermsList=None, eps=None, numGaugeParams=None,
                          gatePenalty=0.0, germLengths=None, l1Penalty=0.0):
     """Compute the score for a germ set when it is not AC against a gateset.
-
     Normally scores computed for germ sets against gatesets for which they are
     not AC will simply be astronomically large. This is fine if AC is all you
     care about, but not so useful if you want to compare partial germ sets
@@ -318,11 +293,9 @@ def compute_non_AC_score(scoreFn, thresholdAC=1e6, initN=1,
     largest `N` eigenvalues for increasing `N` until it finds a value of `N`
     for which the germ set is not AC or all the non gauge parameters are
     accounted for and report the value of `N` as well as the score.
-
     This allows partial germ set scores to be compared against one-another
     sensibly, where a larger value of `N` always beats a smaller value of `N`,
     and ties in the value of `N` are broken by the score for that value of `N`.
-
     Parameters
     ----------
     scoreFn : callable
@@ -330,58 +303,45 @@ def compute_non_AC_score(scoreFn, thresholdAC=1e6, initN=1,
         a score for the partial germ set based on those eigenvalues, with lower
         scores indicating better germ sets. Usually some flavor of
         :func:`~pygsti.algorithms.scoring.list_score`.
-
     thresholdAC : float, optional
         Value which the score (before penalties are applied) must be lower than
         for the germ set to be considered AC.
-
     initN : int
         The number of largest eigenvalues to begin with checking.
-
     partialDerivDaggerDeriv : numpy.array, optional
         Array with three axes, where the first axis indexes individual germs
         within the partial germ set and the remaining axes index entries in the
         positive square of the Jacobian of each individual germ's parameters
         with respect to the gateset parameters.
-
         If this array is not supplied it will need to be computed from
         `germsList` and `gateset`, which will take longer, so it is recommended
         to precompute this array if this routine will be called multiple times.
-
     gateset : GateSet, optional
         The gateset against which the germ set is to be scored. Not needed if
         `partialDerivDaggerDeriv` is provided.
-
     partialGermsList : list of GateString, optional
         The list of germs in the partial germ set to be evaluated. Not needed
         if `partialDerivDaggerDeriv` (and `germLengths` when
         ``gatePenalty > 0``) are provided.
-
     eps : float, optional
         Used when calculating `partialDerivDaggerDeriv` to determine if two
         eigenvalues are equal (see :func:`bulk_twirled_deriv` for details). Not
         used if `partialDerivDaggerDeriv` is provided.
-
     numGaugeParams : int
         The number of gauge parameters of the gateset. Not needed if `gateset`
         is provided.
-
     gatePenalty : float, optional
         Coefficient for a penalty linear in the sum of the germ lengths.
-
     germLengths : numpy.array, optional
         The length of each germ. Not needed if `gatePenalty` is ``0.0`` or
         `partialGermsList` is provided.
-
     l1Penalty : float, optional
         Coefficient for a penalty linear in the number of germs.
-
     Returns
     -------
     CompositeScore
         The score for the germ set indicating how many parameters it amplifies
         and its numerical score restricted to those parameters.
-
     """
     if partialDerivDaggerDeriv is None:
         if gateset is None or partialGermsList is None:
@@ -438,11 +398,9 @@ def compute_non_AC_score(scoreFn, thresholdAC=1e6, initN=1,
 def calc_twirled_DDD(gateset, germsList, eps=None, check=False,
                      germLengths=None):
     """Calculate the positive squares of the germ Jacobians.
-
     twirledDerivDaggerDeriv == array J.H*J contributions from each germ
     (J=Jacobian) indexed by (iGerm, iGatesetParam1, iGatesetParam2)
     size (nGerms, vec_gateset_dim, vec_gateset_dim)
-
     """
     if germLengths is None:
         germLengths = _np.array([len(germ) for germ in germsList])
@@ -463,11 +421,9 @@ def compute_score(weights, gateset_num, scoreFunc, derivDaggerDerivList,
     """Returns a germ set "score" in which smaller is better.  Also returns
     intentionally bad score (`forceScore`) if `weights` is zero on any of
     the "forced" germs (i.e. at any index in `forcedIndices`).
-
     This function is included for use by :func:`optimize_integer_germs_slack`,
     but is not convenient for just computing the score of a germ set. For that,
     use :func:`calculate_germset_score`.
-
     """
     if forceIndices and _np.any(weights[forceIndices] <= 0):
         score = forceScore
@@ -506,11 +462,9 @@ def randomizeGatesetList(gatesetList, randomizationStrength, numCopies,
 
 def checkGermsListCompleteness(gatesetList, germsList, scoreFunc, threshold):
     """Check to see if the germsList is amplificationally complete (AC)
-
     Checks for AC with respect to all the GateSets in `gatesetList`, returning
     the index of the first GateSet for which it is not AC or `-1` if it is AC
     for all GateSets.
-
     """
     for gatesetNum, gateset in enumerate(gatesetList):
         initial_test = test_germ_list_infl(gateset, germsList,
@@ -541,7 +495,6 @@ def get_neighbors(boolVec):
 
 def num_non_spam_gauge_params(gateset):
     """Return number of non-gauge, non-SPAM parameters in a GateSet.
-
     """
     return removeSPAMVectors(gateset).num_gauge_params()
 
@@ -552,7 +505,6 @@ def num_non_spam_gauge_params(gateset):
 #     vec( A * X * B ) = A tensor B^T * vec( X )
 def _SuperOpForPerfectTwirl(wrt, eps):
     """Return super operator for doing a perfect twirl with respect to wrt.
-
     """
     assert wrt.shape[0] == wrt.shape[1] # only square matrices allowed
     dim = wrt.shape[0]
@@ -584,7 +536,6 @@ def _SuperOpForPerfectTwirl(wrt, eps):
 
 def sq_sing_vals_from_deriv(deriv, weights=None):
     """Calculate the squared singulare values of the Jacobian of the germ set.
-
     Parameters
     ----------
     deriv : numpy.array
@@ -593,18 +544,15 @@ def sq_sing_vals_from_deriv(deriv, weights=None):
         vectorized gate representation of that germ raised to some power with
         respect to the gateset parameters, normalized by dividing by the length
         of each germ after repetition.
-
     weights : numpy.array
         Array of length ``nGerms``, giving the relative contributions of each
         individual germ's Jacobian to the combined Jacobian (which is calculated
         as a convex combination of the individual Jacobians).
-
     Returns
     -------
     numpy.array
         The sorted squared singular values of the combined Jacobian of the germ
         set.
-
     """
     # shape (nGerms, vec_gateset_dim, vec_gateset_dim)
     derivDaggerDeriv = _np.einsum('ijk,ijl->ikl', _np.conjugate(deriv), deriv)
@@ -619,27 +567,29 @@ def sq_sing_vals_from_deriv(deriv, weights=None):
 
 def twirled_deriv(gateset, gatestring, eps=1e-6):
     """Compute the "Twirled Derivative" of a gatestring.
-
     The twirled derivative is obtained by acting on the standard derivative of
     a gate string with the twirling superoperator.
+<<<<<<< HEAD
 
+=======
+>>>>>>> develop
     Parameters
     ----------
     gateset : Gateset object
         The GateSet which associates gate labels with operators.
-
     gatestring : GateString object
         The gate string to take a twirled derivative of.
-
     eps : float, optional
         Tolerance used for testing whether two eigenvectors are degenerate
         (i.e. abs(eval1 - eval2) < eps ? )
+<<<<<<< HEAD
 
+=======
+>>>>>>> develop
     Returns
     -------
     numpy array
       An array of shape (gate_dim^2, num_gateset_params)
-
     """
     prod = gateset.product(gatestring)
 
@@ -655,31 +605,32 @@ def twirled_deriv(gateset, gatestring, eps=1e-6):
 
 def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False):
     """Compute the "Twirled Derivative" of a set of gatestrings.
-
     The twirled derivative is obtained by acting on the standard derivative of
     a gate string with the twirling superoperator.
+<<<<<<< HEAD
 
+=======
+>>>>>>> develop
     Parameters
     ----------
     gateset : Gateset object
         The GateSet which associates gate labels with operators.
-
     gatestrings : list of GateString objects
         The gate string to take a twirled derivative of.
-
     eps : float, optional
         Tolerance used for testing whether two eigenvectors are degenerate
         (i.e. abs(eval1 - eval2) < eps ? )
-
     check : bool, optional
         Whether to perform internal consistency checks, at the expense of
         making the function slower.
+<<<<<<< HEAD
 
+=======
+>>>>>>> develop
     Returns
     -------
     numpy array
         An array of shape (num_gate_strings, gate_dim^2, num_gateset_params)
-
     """
     evalTree = gateset.bulk_evaltree(gatestrings)
     dProds, prods = gateset.bulk_dproduct(evalTree, flat=True, bReturnProds=True)#, memLimit=None)
@@ -711,43 +662,42 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False):
 def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
                            returnSpectrum=False, tol=1e-6):
     """Test whether a set of germs is able to amplify all non-gauge parameters.
+<<<<<<< HEAD
 
+=======
+>>>>>>> develop
     Parameters
     ----------
     gateset : GateSet
         The GateSet (associates gate matrices with gate labels).
+<<<<<<< HEAD
 
+=======
+>>>>>>> develop
     germsToTest : list of GateStrings
         List of germs gate sequences to test for completeness.
-
     L : int
         The finite length to use in amplification testing.  Larger
         values take longer to compute but give more robust results.
-
     weights : numpy array, optional
         A 1-D array of weights with length equal len(germsToTest),
         which multiply the contribution of each germ to the total
         jacobian matrix determining parameter amplification. If
         None, a uniform weighting of 1.0/len(germsToTest) is applied.
-
     returnSpectrum : bool, optional
         If True, return the jacobian^T*jacobian spectrum in addition
         to the success flag.
-
     tol : float, optional
         Tolerance: an eigenvalue of jacobian^T*jacobian is considered
         zero and thus a parameter un-amplified when it is less than tol.
-
     Returns
     -------
     success : bool
         Whether all non-gauge parameters were amplified.
-
     spectrum : numpy array
         Only returned when `returnSpectrum` is ``True``.  Sorted array of
         eigenvalues (from small to large) of the jacobian^T * jacobian
         matrix used to determine parameter amplification.
-
     """
     # Remove any SPAM vectors from gateset since we only want
     # to consider the set of *gate* parameters for amplification
@@ -784,49 +734,42 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
 def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
                         returnSpectrum=False, threshold=1e6, check=False):
     """Test whether a set of germs is able to amplify all non-gauge parameters.
+<<<<<<< HEAD
 
+=======
+>>>>>>> develop
     Parameters
     ----------
     gateset : GateSet
         The GateSet (associates gate matrices with gate labels).
-
     germsToTest : list of GateString
         List of germs gate sequences to test for completeness.
-
     scoreFunc : string
         Label to indicate how a germ set is scored. See
         :func:`~pygsti.algorithms.scoring.list_score` for details.
-
     weights : numpy array, optional
         A 1-D array of weights with length equal len(germsToTest),
         which multiply the contribution of each germ to the total
         jacobian matrix determining parameter amplification. If
         None, a uniform weighting of 1.0/len(germsToTest) is applied.
-
     returnSpectrum : bool, optional
         If ``True``, return the jacobian^T*jacobian spectrum in addition
         to the success flag.
-
     threshold : float, optional
         An eigenvalue of jacobian^T*jacobian is considered zero and thus a
         parameter un-amplified when its reciprocal is greater than threshold.
         Also used for eigenvector degeneracy testing in twirling operation.
-
     check : bool, optional
       Whether to perform internal consistency checks, at the
       expense of making the function slower.
-
-
     Returns
     -------
     success : bool
         Whether all non-gauge parameters were amplified.
-
     spectrum : numpy array
         Only returned when `returnSpectrum` is ``True``.  Sorted array of
         eigenvalues (from small to large) of the jacobian^T * jacobian
         matrix used to determine parameter amplification.
-
     """
     # Remove any SPAM vectors from gateset since we only want
     # to consider the set of *gate* parameters for amplification
@@ -865,12 +808,10 @@ def build_up(gatesetList, germsList, randomize=True,
              scoreFunc='all', tol=1e-6, threshold=1e6, check=False,
              force="singletons", verbosity=0):
     """Greedy algorithm starting with 0 germs.
-
     Tries to minimize the number of germs needed to achieve amplificational
     completeness (AC). Begins with 0 germs and adds the germ that increases the
     score used to check for AC by the largest amount at each step, stopping when
     the threshold for AC is achieved.
-
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
@@ -964,7 +905,6 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
                      gatePenalty=0, scoreFunc='all', tol=1e-6, threshold=1e6,
                      check=False, force="singletons", verbosity=0):
     """Greedy algorithm starting with 0 germs.
-
     Tries to minimize the number of germs needed to achieve amplificational
     completeness (AC). Begins with 0 germs and adds the germ that increases the
     score used to check for AC by the largest amount (for the gateset that
@@ -973,12 +913,10 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
     approach, in contrast to :func:`build_up`, which only looks at the
     scores for one gateset at a time until that gateset achieves AC, then
     turning it's attention to the remaining gatesets.
-
     Parameters
     ----------
     germsList : list of GateString
         The list of germs to contruct a germ set from.
-
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
@@ -1093,13 +1031,11 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                                  forceScore=1e100, threshold=1e6,
                                  verbosity=1):
     """Find a locally optimal subset of the germs in germsList.
-
     Locally optimal here means that no single germ can be excluded
     without making the smallest non-gauge eigenvalue of the
     Jacobian.H*Jacobian matrix smaller, i.e. less amplified,
     by more than a fixed or variable amount of "slack", as
     specified by `fixedSlack` or `slackFrac`.
-
     Parameters
     ----------
     gatesetList : GateSet or list of GateSet
@@ -1110,10 +1046,8 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         be made (set by the kwarg `numCopies`), or the user may specify their
         own list of GateSets, each of which in turn may or may not be
         randomized (set by the kwarg `randomize`).
-
     germsList : list of GateString
         List of all germs gate sequences to consider.
-
     randomize : Bool, optional
         Whether or not the input GateSet(s) are first subject to unitary
         randomization.  If ``False``, the user should perform the unitary
@@ -1124,103 +1058,92 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
         will fail, as we score amplificational completeness in the limit of
         infinite sequence length (so any stochastic noise will completely
         depolarize any sequence in that limit).  Default is ``True``.
-
     randomizationStrength : float, optional
         The strength of the unitary noise used to randomize input GateSet(s);
         is passed to :func:`~pygsti.objects.GateSet.randomize_with_unitary`.
         Default is ``1e-3``.
-
     numCopies : int, optional
         The number of GateSet copies to be made of the input GateSet (prior to
         unitary randomization).  If more than one GateSet is passed in,
         `numCopies` should be ``None``.  If only one GateSet is passed in and
         `numCopies` is ``None``, no extra copies are made.
-
     seed : float, optional
         The starting seed used for unitary randomization.  If multiple GateSets
         are to be randomized, ``gatesetList[i]`` is randomized with ``seed +
         i``.  Default is 0.
-
     l1Penalty : float, optional
         How strong the penalty should be for increasing the germ set list by a
         single germ.  Default is 1e-2.
-
     gatePenalty : float, optional
         How strong the penalty should be for increasing a germ in the germ set
         list by a single gate.  Default is 0.
-
     initialWeights : list-like
         List or array of either booleans or (0 or 1) integers
         specifying which germs in `germList` comprise the initial
         germ set.  If ``None``, then starting point includes all
         germs.
-
     scoreFunc : string
         Label to indicate how a germ set is scored. See
         :func:`~pygsti.algorithms.scoring.list_score` for details.
+<<<<<<< HEAD
 
+=======
+>>>>>>> develop
     maxIter : int, optional
         The maximum number of iterations before giving up.
-
     fixedSlack : float, optional
         If not ``None``, a floating point number which specifies that excluding
         a germ is allowed to increase 1.0/smallest-non-gauge-eigenvalue by
         `fixedSlack`.  You must specify *either* `fixedSlack` or `slackFrac`.
-
     slackFrac : float, optional
         If not ``None``, a floating point number which specifies that excluding
         a germ is allowed to increase 1.0/smallest-non-gauge-eigenvalue by
         `fixedFrac`*100 percent.  You must specify *either* `fixedSlack` or
         `slackFrac`.
-
     returnAll : bool, optional
         If ``True``, return the final ``weights`` vector and score dictionary
         in addition to the optimal germ list (see below).
-
     tol : float, optional
         Tolerance used for eigenvector degeneracy testing in twirling
         operation.
-
     check : bool, optional
         Whether to perform internal consistency checks, at the
         expense of making the function slower.
-
     force : str or list, optional
         A list of GateStrings which *must* be included in the final germ set.
         If set to the special string "singletons" then all length-1 strings will
         be included.  Seting to None is the same as an empty list.
-
     forceScore : float, optional (default is 1e100)
         When `force` designates a non-empty set of gate strings, the score to
         assign any germ set that does not contain each and every required germ.
-
     threshold : float, optional (default is 1e6)
         Specifies a maximum score for the score matrix, above which the germ
         set is rejected as amplificationally incomplete.
+<<<<<<< HEAD
 
     verbosity : int, optional
         Integer >= 0 indicating the amount of detail to print.
 
+=======
+    verbosity : int, optional
+        Integer >= 0 indicating the amount of detail to print.
+>>>>>>> develop
     Returns
     -------
     finalGermList : list
         Sublist of `germList` specifying the final, optimal set of germs.
-
     weights : array
         Integer array, of length ``len(germList)``, containing 0s and 1s to
         indicate which elements of `germList` were chosen as `finalGermList`.
         Only returned when `returnAll` is ``True``.
-
     scoreDictionary : dict
         Dictionary with keys which are tuples of 0s and 1s of length
         ``len(germList)``, specifying a subset of germs, and values ==
         1.0/smallest-non-gauge-eigenvalue "scores".
-
     See Also
     --------
     :class:`~pygsti.objects.GateSet`
     :class:`~pygsti.objects.GateString`
-
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
@@ -1391,38 +1314,30 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
 def germ_breadth_score_fn(germSet, germsList, twirledDerivDaggerDerivList,
                           nonAC_kwargs, initN=1):
     """Score a germ set against a collection of gatesets.
-
     Calculate the score of the germ set with respect to each member of a
     collection of gatesets and return the worst score among that collection.
-
     Parameters
     ----------
     germSet : list of GateString
         The set of germs to score.
-
     germsList : list of GateString
         The list of all germs whose Jacobians are provided in
         `twirledDerivDaggerDerivList`.
-
     twirledDerivDaggerDerivList : numpy.array
         Jacobians for all the germs in `germsList` stored as a 3-dimensional
         array, where the first index indexes the particular germ.
-
     nonAC_kwargs : dict
         Dictionary containing further arguments to pass to
         :func:`compute_non_AC_score` for the scoring of the germ set against
         individual gatesets.
-
     initN : int
         The number of eigenvalues to begin checking for amplificational
         completeness with respect to. Passed as an argument to
         :func:`compute_non_AC_score`.
-
     Returns
     -------
     CompositeScore
         The worst score over all gatesets of the germ set.
-
     """
     weights = _np.zeros(len(germsList))
     for germ in germSet:
@@ -1446,7 +1361,6 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
                                 iterations=5, returnAll=False, shuffle=False,
                                 verbosity=0):
     """Use GRASP to find a high-performing germ set.
-
     Parameters
     ----------
     gatesetList : GateSet or list of GateSet
@@ -1457,10 +1371,8 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
         be made (set by the kwarg `numCopies`, or the user may specify their
         own list of GateSets, each of which in turn may or may not be
         randomized (set by the kwarg `randomize`).
-
     germsList : list of GateString
         List of all germs gate sequences to consider.
-
     alpha : float
         A number between 0 and 1 that roughly specifies a score theshold
         relative to the spread of scores that a germ must score better than in
@@ -1468,9 +1380,7 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
         to a purely greedy algorithm (only the best-scoring germ set is
         included in the RCL), while a value of 1 for `alpha` will include all
         germs in the RCL.
-
         See :func:`pygsti.algorithms.scoring.composite_rcl_fn` for more details.
-
     randomize : Bool, optional
         Whether or not the input GateSet(s) are first subject to unitary
         randomization.  If ``False``, the user should perform the unitary
@@ -1481,75 +1391,59 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
         will fail, as we score amplificational completeness in the limit of
         infinite sequence length (so any stochastic noise will completely
         depolarize any sequence in that limit).
-
     randomizationStrength : float, optional
         The strength of the unitary noise used to randomize input GateSet(s);
         is passed to :func:`~pygsti.objects.GateSet.randomize_with_unitary`.
         Default is ``1e-3``.
-
     numCopies : int, optional
         The number of GateSet copies to be made of the input GateSet (prior to
         unitary randomization).  If more than one GateSet is passed in,
         `numCopies` should be ``None``.  If only one GateSet is passed in and
         `numCopies` is ``None``, no extra copies are made.
-
     seed : float, optional
         The starting seed used for unitary randomization.  If multiple GateSets
         are to be randomized, ``gatesetList[i]`` is randomized with ``seed +
         i``.
-
     l1Penalty : float, optional
         How strong the penalty should be for increasing the germ set list by a
         single germ. Used for choosing between outputs of various GRASP
         iterations.
-
     gatePenalty : float, optional
         How strong the penalty should be for increasing a germ in the germ set
         list by a single gate.
-
     scoreFunc : string
         Label to indicate how a germ set is scored. See
         :func:`~pygsti.algorithms.scoring.list_score` for details.
-
     tol : float, optional
         Tolerance used for eigenvector degeneracy testing in twirling
         operation.
-
     threshold : float, optional (default is 1e6)
         Specifies a maximum score for the score matrix, above which the germ
         set is rejected as amplificationally incomplete.
-
     check : bool, optional
         Whether to perform internal consistency checks, at the
         expense of making the function slower.
-
     force : str or list, optional
         A list of GateStrings which *must* be included in the final germ set.
         If set to the special string "singletons" then all length-1 strings will
         be included.  Seting to None is the same as an empty list.
-
     iterations : int, optional
         The number of GRASP iterations to perform.
-
     returnAll : bool, optional
         Flag set to tell the routine if it should return lists of all
         initial constructions and local optimizations in addition to the
         optimal solution (useful for diagnostic purposes or if you're not sure
         what your `finalScoreFn` should really be).
-
     shuffle : bool, optional
         Whether the neighborhood should be presented to the optimizer in a
         random order (important since currently the local optimizer updates the
         solution to the first better solution it finds in the neighborhood).
-
     verbosity : int, optional
         Integer >= 0 indicating the amount of detail to print.
-
     Returns
     -------
     finalGermList : list of GateString
         Sublist of `germsList` specifying the final, optimal set of germs.
-
     """
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 

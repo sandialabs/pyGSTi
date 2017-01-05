@@ -14,7 +14,7 @@ from .. import algorithms as _alg
 from .. import tools as _tools
 
 def make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=None,
-                           seed=None,spamLabels=None):
+                           seed=None,spamLabels=None,verbosity=1):
     """
     Creates a DataSet used for generating bootstrapped error bars.
 
@@ -42,6 +42,10 @@ def make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=None,
     spamLabels : list, optional
        The list of SPAM labels to include in the output dataset.  If None
        are specified, defaults to the spam labels of inputDataSet.
+
+    verbosity : int, optional
+       How verbose the function output is.  If 0, then printing is suppressed.
+       If 1 (or greater), then printing is not suppressed.
 
     Returns
     -------

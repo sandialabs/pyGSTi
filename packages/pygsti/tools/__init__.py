@@ -16,5 +16,8 @@ from .likelihoodfns import *
 from .chi2fns import *
 from .gatetools import *
 from .slicetools import *
+<<<<<<< HEAD
 
 from . import rpetools as rpe
+=======
+>>>>>>> develop
