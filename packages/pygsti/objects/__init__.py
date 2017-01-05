@@ -37,7 +37,6 @@ from .profiler import DummyProfiler
 from .gaugegroup import FullGaugeGroup, TPGaugeGroup, \
     DiagGaugeGroup, TPDiagGaugeGroup, UnitaryGaugeGroup
 
-from .rpeconfig import rpeconfig
 #from gigateset import GaugeInvGateSet
 #Experimental only: don't import in production pyGSTi
 #from gigateset import GaugeInvGateSet

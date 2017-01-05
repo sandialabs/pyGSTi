@@ -1,5 +1,12 @@
+from __future__ import division, print_function, absolute_import, unicode_literals
+#*****************************************************************
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
+#    This Software is released under the GPL license detailed    
+#    in the file "license.txt" in the top-level pyGSTi directory 
+#*****************************************************************
+
 import numpy as _np
-from .. import objects as _objs
+from . import rpeconfig as _rpeconfig
 
 rpeconfig_GxPi2_GyPi2_UpDn_dict = {}
 rpeconfig_GxPi2_GyPi2_UpDn_dict['fixed_axis_gate_label'] = 'Gx'
@@ -58,7 +65,7 @@ rpeconfig_GxPi2_GyPi2_UpDn_dict['theta_sin_germ_str'] = 'GxGyGyGxGxGyGyGx'
 rpeconfig_GxPi2_GyPi2_UpDn_dict['theta_sin_meas_tuple'] = ('Gy',)
 rpeconfig_GxPi2_GyPi2_UpDn_dict['theta_sin_meas_str'] = 'Gy'
 
-rpeconfig_GxPi2_GyPi2_UpDn = _objs.rpeconfig(rpeconfig_GxPi2_GyPi2_UpDn_dict)
+rpeconfig_GxPi2_GyPi2_UpDn = _rpeconfig(rpeconfig_GxPi2_GyPi2_UpDn_dict)
 
 
 

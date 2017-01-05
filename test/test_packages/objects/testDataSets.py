@@ -242,27 +242,6 @@ Gx^4 0.2 100
         saved_ds = pygsti.io.load_dataset(compare_files + "/Fake_Dataset_multi.txt")
         if bDeepTesting and self.isPython2(): self.assertEqualDatasets(ds_multi, saved_ds)
 
-        #Now test RPE datasets
-        rpeGS = pygsti.construction.make_parameterized_rpe_gate_set(np.pi/2, np.pi/4, 0, 0.1, 0.1, True)
-        rpeGS2 = pygsti.construction.make_parameterized_rpe_gate_set(np.pi/2, np.pi/4, 0, 0.1, 0.1, False)
-        rpeGS3 = pygsti.construction.make_parameterized_rpe_gate_set(np.pi/2, np.pi/4, np.pi/4, 0.1, 0.1, False)
-
-        kList = [0,1,2]
-        lst1 = pygsti.construction.make_rpe_alpha_str_lists_gx_gz(kList)
-        lst2 = pygsti.construction.make_rpe_epsilon_str_lists_gx_gz(kList)
-        lst3 = pygsti.construction.make_rpe_theta_str_lists_gx_gz(kList)
-        lstDict = pygsti.construction.make_rpe_string_list_d(2)
-
-        rpeDS = pygsti.construction.make_rpe_data_set(depol_gateset,lstDict,1000,
-                                                          sampleError='binomial',seed=1234)
-
-        #Just make sure this runs:
-        pygsti.construction.rpe_ensemble_test(np.pi/2, np.pi/4, 0, 0.1, 2, 1000, 2)
-
-
-
-
-
 
     def test_gram(self):
         ds = pygsti.objects.DataSet(spamLabels=['plus','minus'])

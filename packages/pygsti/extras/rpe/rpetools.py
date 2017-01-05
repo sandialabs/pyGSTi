@@ -7,7 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Utility functions for RPE """
 import numpy as _np
 from scipy import optimize as _opt
-from . import gatetools as _gt
+from ...tools import decompose_gate_matrix as _decompose_gate_matrix
 
 #from rpe_models import rpeInstanceDict
 
@@ -239,7 +239,7 @@ def extract_alpha(gateset,rpeconfig_inst):
         The value of alpha for the input gateset.
     """
     gate_label = rpeconfig_inst.fixed_axis_gate_label
-    decomp = _gt.decompose_gate_matrix( gateset[gate_label] )
+    decomp = _decompose_gate_matrix( gateset.gates[gate_label] )
     alphaVal = decomp['pi rotations'] * _np.pi
     return alphaVal
 
@@ -265,7 +265,7 @@ def extract_epsilon(gateset,rpeconfig_inst):
         The value of epsilon for the input gateset.
     """
     gate_label = rpeconfig_inst.loose_axis_gate_label
-    decomp = _gt.decompose_gate_matrix( gateset[gate_label] )
+    decomp = _decompose_gate_matrix( gateset.gates[gate_label] )
     
     epsilonVal = decomp['pi rotations'] * _np.pi
     return epsilonVal
@@ -293,10 +293,10 @@ def extract_theta(gateset,rpeconfig_inst):
         The value of theta for the input gateset.
     """
     gate_label = rpeconfig_inst.loose_axis_gate_label
-    decomp = _gt.decompose_gate_matrix( gateset[gate_label] )
+    decomp = _decompose_gate_matrix( gateset.gates[gate_label] )
     target_axis = rpeconfig_inst.loose_axis_target
     
-    decomp = _gt.decompose_gate_matrix( gateset[gate_label] )
+    decomp = _decompose_gate_matrix( gateset.gates[gate_label] )
     thetaVal =  _np.real_if_close( [ _np.arccos(
                 _np.dot(decomp['axis of rotation'], target_axis))])[0]
     if thetaVal > _np.pi/2:

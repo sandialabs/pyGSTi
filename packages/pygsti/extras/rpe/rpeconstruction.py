@@ -6,13 +6,12 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Functions for creating RPE GateSets and GateString lists """
 import numpy as _np
-from . import gatesetconstruction as _setc
-from . import datasetconstruction as _dsc
+from . import rpetools as _rpetools
+from ... import construction as _cnst
+from ... import objects as _objs
+from ... import tools as _tools
 
-from .. import objects as _objs
-from .. import tools as _tools
-
-def make_paramterized_rpe_gate_set(alphaTrue, epsilonTrue, auxRot, SPAMdepol,
+def make_parameterized_rpe_gate_set(alphaTrue, epsilonTrue, auxRot, SPAMdepol,
                                    gateDepol=None, withId=True,rpeconfig_inst=None):
     """
     Make a gateset for simulating RPE, paramaterized by rotation angles.  Note
@@ -70,14 +69,14 @@ def make_paramterized_rpe_gate_set(alphaTrue, epsilonTrue, auxRot, SPAMdepol,
     spamLabelDict = rpeconfig_inst.spamLabelDict
 
     if withId:
-        outputGateset = _setc.build_gateset( 
+        outputGateset = _cnst.build_gateset( 
             [2], [('Q0',)],['Gi',loose_axis_gate_label,fixed_axis_gate_label], 
             [ "I(Q0)", loose_axis_label+"(%s,Q0)" % epsilonTrue, fixed_axis_label+"(%s,Q0)" % alphaTrue],
             prepLabels=["rho0"], prepExpressions=rhoExpressions,
             effectLabels=["E0"], effectExpressions=EExpressions, 
             spamdefs=spamLabelDict)
     else:
-        outputGateset = _setc.build_gateset( 
+        outputGateset = _cnst.build_gateset( 
             [2], [('Q0',)],[loose_axis_gate_label,fixed_axis_gate_label], 
             [ loose_axis_label+"(%s,Q0)" % epsilonTrue, fixed_axis_label+"(%s,Q0)" % alphaTrue],
             prepLabels=["rho0"], prepExpressions=rhoExpressions,
@@ -85,27 +84,27 @@ def make_paramterized_rpe_gate_set(alphaTrue, epsilonTrue, auxRot, SPAMdepol,
             spamdefs=spamLabelDict)
 
     if auxRot != 0:
-        gatesetAux1 = _setc.build_gateset( 
+        gatesetAux1 = _cnst.build_gateset( 
             [2], [('Q0',)],['Gi',auxiliary_axis_gate_label,fixed_axis_gate_label], 
             [ "I(Q0)", auxiliary_axis_label+"(%s,Q0)" % auxRot, fixed_axis_label+"(pi/2,Q0)"],
             prepLabels=["rho0"], prepExpressions=rhoExpressions,
             effectLabels=["E0"], effectExpressions=EExpressions, 
             spamdefs=spamLabelDict)
 
-        outputGateset[loose_axis_gate_label] = \
-                _np.dot( _np.dot(_np.linalg.inv(gatesetAux1[auxiliary_axis_gate_label]),
-                               outputGateset[loose_axis_gate_label]),gatesetAux1[auxiliary_axis_gate_label])
+        outputGateset.gates[loose_axis_gate_label] = \
+                _np.dot( _np.dot(_np.linalg.inv(gatesetAux1.gates[auxiliary_axis_gate_label]),
+                               outputGateset.gates[loose_axis_gate_label]),gatesetAux1.gates[auxiliary_axis_gate_label])
 
     outputGateset = outputGateset.depolarize(gate_noise=gateDepol,
                                              spam_noise=SPAMdepol)
     
-    thetaTrue = _tools.rpe.extract_theta(outputGateset,rpeconfig_inst)
+    thetaTrue = _rpetools.extract_theta(outputGateset,rpeconfig_inst)
     outputGateset.thetaTrue = thetaTrue
     
-    outputGateset.alphaTrue = _tools.rpe.extract_alpha(outputGateset,rpeconfig_inst)
+    outputGateset.alphaTrue = _rpetools.extract_alpha(outputGateset,rpeconfig_inst)
     outputGateset.alphaTrue = alphaTrue
     
-    outputGateset.epsilonTrue = _tools.rpe.extract_epsilon(outputGateset,rpeconfig_inst)
+    outputGateset.epsilonTrue = _rpetools.extract_epsilon(outputGateset,rpeconfig_inst)
     outputGateset.epsilonTrue = epsilonTrue
 
     return outputGateset
@@ -306,6 +305,6 @@ def make_rpe_data_set(gatesetOrDataset,stringListD,nSamples,sampleError='binomia
     DataSet
        A static data set filled with counts for the specified gate strings.
     """
-    return _dsc.generate_fake_data(gatesetOrDataset,
-                                   stringListD['totalStrList'],
-                                   nSamples,sampleError=sampleError,seed=seed)
+    return _cnst.generate_fake_data(gatesetOrDataset,
+                                    stringListD['totalStrList'],
+                                    nSamples,sampleError=sampleError,seed=seed)
