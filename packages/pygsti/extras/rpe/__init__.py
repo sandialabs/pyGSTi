@@ -4,15 +4,9 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Gate Set Tomography Tools Python Package """
+""" Robubst Phase Estimation Sub-package """
 
-#Import the most important/useful routines of each module into
-# the package namespace
-from .basistools import *
-from .jamiolkowski import *
-from .listtools import *
-from .matrixtools import *
-from .likelihoodfns import *
-from .chi2fns import *
-from .gatetools import *
-from .slicetools import *
+from .rpetools import *
+from .rpeconfig import *
+from .rpeconfig_GxPi2_GyPi2_UpDn import *
+from .rpeconstruction import * 

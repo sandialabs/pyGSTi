@@ -5,4 +5,5 @@
 #*****************************************************************
 """ Container for beyond-GST sub-packages """
 
-from .rb import *
+from . import rb
+from . import rpe

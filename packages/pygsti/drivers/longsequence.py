@@ -28,50 +28,41 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     """
     Perform end-to-end GST analysis using Ls and germs, with L as a maximum
     length.
-
     Constructs gate strings by repeating germ strings an integer number of
     times such that the length of the repeated germ is less than or equal to
     the maximum length set in maxLengths.  The LGST estimate of the gates is
     computed, gauge optimized, and then used as the seed for either LSGST or
     MLEGST.
-
     LSGST is iterated ``len(maxLengths)`` times with successively larger sets
     of gate strings.  On the i-th iteration, the repeated germs sequences
     limited by ``maxLengths[i]`` are included in the growing set of strings
     used by LSGST.  The final iteration will use MLEGST when ``objective ==
     "logl"`` to maximize the true log-likelihood instead of minimizing the
     chi-squared function.
-
     Once computed, the gate set estimates are optionally gauge optimized to
     the CPTP space and then to the target gate set (using `gaugeOptRatio`
     and `gaugeOptItemWeights`). A :class:`~pygsti.report.Results`
     object is returned, which encapsulates the input and outputs of this GST
     analysis, and can generate final end-user output such as reports and
     presentations.
-
     Parameters
     ----------
     dataFilenameOrSet : DataSet or string
         The data set object to use for the analysis, specified either directly
         or by the filename of a dataset file (in text format).
-
     targetGateFilenameOrSet : GateSet or string
         The target gate set, specified either directly or by the filename of a
         gateset file (text format).
-
     prepStrsListOrFilename : (list of GateStrings) or string
         The state preparation fiducial gate strings, specified either directly
         or by the filename of a gate string list file (text format).
-
     effectStrsListOrFilename : (list of GateStrings) or string or None
         The measurement fiducial gate strings, specified either directly or by
         the filename of a gate string list file (text format).  If ``None``,
         then use the same strings as specified by prepStrsListOrFilename.
-
     germsListOrFilename : (list of GateStrings) or string
         The germ gate strings, specified either directly or by the filename of a
         gate string list file (text format).
-
     maxLengths : list of ints
         List of integers, one per LSGST iteration, which set truncation lengths
         for repeated germ strings.  The list of gate strings for the i-th LSGST
@@ -87,11 +78,9 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         *can* be set, but is specified internally when it isn't.  If `None`,
         then the dictionary `{'itemWeights': {'gates':1.0, 'spam':0.001}}`
         is used.  If `False`, then then *no* gauge optimization is performed.
-
     objective : {'chi2', 'logl'}, optional
         Specifies which final objective function is used: the chi-squared or
         the log-likelihood.
-
     fidPairs : list of 2-tuples or dict, optional
         Specifies a subset of all prepStr,effectStr string pairs to be used in
         this analysis.  If `fidPairs` is a list, each element of `fidPairs` is a
@@ -99,17 +88,14 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         the state preparation and measurement fiducial strings respectively. If
         `fidPairs` is a dict, then the keys must be germ strings and values are
         lists of 2-tuples as in the previous case.
-
     lsgstLists : list of gate string lists, optional
         Provides explicit list of gate string lists to be used in analysis; to
         be given if the dataset uses "incomplete" or "reduced" sets of gate
         string.  Default is ``None``.
-
     advancedOptions : dict, optional
         Specifies advanced options most of which deal with numerical details of
         the objective function or expert-level functionality.  The allowed keys
         and values include:
-
         - gateLabels = list of strings
         - gsWeights = dict or None
         - starting point = "LGST" (default) or  "target" or GateSet
@@ -129,19 +115,15 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         - check = True / False (default)
         - truncScheme = "whole germ powers" (default) or "truncated germ powers"
                         or "length as exponent"
-
     comm : mpi4py.MPI.Comm, optional
         When not ``None``, an MPI communicator for distributing the computation
         across multiple processors.
-
     memLimit : int or None, optional
         A rough memory limit in bytes which restricts the amount of memory 
         used (per core when run on multi-CPUs).
-
     verbosity : int, optional
        The 'verbosity' option is an integer specifying the level of 
        detail printed to stdout during the calculation.
-
        - 0 -- prints nothing
        - 1 -- shows progress bar for entire iterative GST
        - 2 -- show summary details about each individual iteration
@@ -149,7 +131,6 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
        - 4 -- also shows inner iterations of LM algorithm
        - 5 -- also shows detailed info from within jacobian
               and objective function calls.
-
     Returns
     -------
     Results
