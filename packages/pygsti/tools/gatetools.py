@@ -10,9 +10,9 @@ import numpy as _np
 import scipy.linalg as _spl
 import warnings as _warnings
 
-from ..tools import jamiolkowski as _jam
-from ..tools import matrixtools as _mt
-from ..tools import basistools as _bt
+from . import jamiolkowski as _jam
+from . import matrixtools as _mt
+from . import basistools as _bt
 
 def _hack_sqrtm(A):
     return _spl.sqrtm(A) #Travis found this scipy function
@@ -836,8 +836,11 @@ def pauliprod_errgen_projections(errgen, projection_type,
 
     projections = _np.empty( len(lindbladMxs), 'd' )
     for i,lindbladMx in enumerate(lindbladMxs):
-        proj = _np.real_if_close(_np.vdot( errgen_std.flatten(), lindbladMx.flatten() ))
-        assert(_np.isreal(proj))
+        proj = _np.real_if_close(_np.vdot( errgen_std.flatten(), lindbladMx.flatten() ), tol=1000)
+        #assert(_np.isreal(proj)), "non-real projection: %s" % str(proj) #just a warning now
+        if not _np.isreal(proj): 
+            _warnings.warn("Dropping non-real part of projection: %s" % str(proj))
+            proj = proj.real
         projections[i] = proj
 
     if return_generators:

@@ -9,9 +9,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import matplotlib.pyplot as plt
 
-from ..algorithms import germselection as germsel
-
-
 class GermSetEval:
     def __init__(self, germset=None, gatesets=None, resultDict=None,
                  errorDict=None):
@@ -95,6 +92,8 @@ class GermSetEval:
             return {'fig': fig, 'ax': ax}
 
     def plot_spectra(self, axs=None):
+        from ..algorithms import germselection as germsel
+        
         missing = [key for key in self.__dict__
                    if key in ['germset', 'gatesets']
                    and self.__dict__[key] is None]

@@ -6,9 +6,9 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Functions for reducing the number of required fiducial pairs for analysis."""
 
-import numpy     as _np
-import itertools as _itertools
-import math      as _math
+import numpy      as _np
+import itertools  as _itertools
+import scipy.misc as _spmisc
 from ..construction import gatestringconstruction as _gsc
 from ..tools        import remove_duplicates      as _remove_duplicates
 
@@ -16,8 +16,8 @@ from ..             import objects as _objs
 
 def _nCr(n,r):
     """Number of combinations of r items out of a set of n.  Equals n!/(r!(n-r)!)"""
-    f = _math.factorial
-    return f(n) / f(r) / f(n-r)
+    #f = _math.factorial; return f(n) / f(r) / f(n-r)
+    return int(_spmisc.comb(n,r))
 
 def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList,
                                    testLs=(256,2048), spamLabels="all", tol=0.75,
