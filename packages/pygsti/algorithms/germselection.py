@@ -569,10 +569,7 @@ def twirled_deriv(gateset, gatestring, eps=1e-6):
     """Compute the "Twirled Derivative" of a gatestring.
     The twirled derivative is obtained by acting on the standard derivative of
     a gate string with the twirling superoperator.
-<<<<<<< HEAD
 
-=======
->>>>>>> develop
     Parameters
     ----------
     gateset : Gateset object
@@ -582,10 +579,7 @@ def twirled_deriv(gateset, gatestring, eps=1e-6):
     eps : float, optional
         Tolerance used for testing whether two eigenvectors are degenerate
         (i.e. abs(eval1 - eval2) < eps ? )
-<<<<<<< HEAD
 
-=======
->>>>>>> develop
     Returns
     -------
     numpy array
@@ -607,10 +601,7 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False):
     """Compute the "Twirled Derivative" of a set of gatestrings.
     The twirled derivative is obtained by acting on the standard derivative of
     a gate string with the twirling superoperator.
-<<<<<<< HEAD
 
-=======
->>>>>>> develop
     Parameters
     ----------
     gateset : Gateset object
@@ -623,10 +614,7 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False):
     check : bool, optional
         Whether to perform internal consistency checks, at the expense of
         making the function slower.
-<<<<<<< HEAD
 
-=======
->>>>>>> develop
     Returns
     -------
     numpy array
@@ -662,18 +650,11 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False):
 def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
                            returnSpectrum=False, tol=1e-6):
     """Test whether a set of germs is able to amplify all non-gauge parameters.
-<<<<<<< HEAD
 
-=======
->>>>>>> develop
     Parameters
     ----------
     gateset : GateSet
         The GateSet (associates gate matrices with gate labels).
-<<<<<<< HEAD
-
-=======
->>>>>>> develop
     germsToTest : list of GateStrings
         List of germs gate sequences to test for completeness.
     L : int
@@ -734,10 +715,7 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
 def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
                         returnSpectrum=False, threshold=1e6, check=False):
     """Test whether a set of germs is able to amplify all non-gauge parameters.
-<<<<<<< HEAD
 
-=======
->>>>>>> develop
     Parameters
     ----------
     gateset : GateSet
@@ -1085,10 +1063,6 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     scoreFunc : string
         Label to indicate how a germ set is scored. See
         :func:`~pygsti.algorithms.scoring.list_score` for details.
-<<<<<<< HEAD
-
-=======
->>>>>>> develop
     maxIter : int, optional
         The maximum number of iterations before giving up.
     fixedSlack : float, optional
@@ -1119,15 +1093,9 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     threshold : float, optional (default is 1e6)
         Specifies a maximum score for the score matrix, above which the germ
         set is rejected as amplificationally incomplete.
-<<<<<<< HEAD
-
     verbosity : int, optional
         Integer >= 0 indicating the amount of detail to print.
 
-=======
-    verbosity : int, optional
-        Integer >= 0 indicating the amount of detail to print.
->>>>>>> develop
     Returns
     -------
     finalGermList : list

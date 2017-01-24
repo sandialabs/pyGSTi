@@ -45,10 +45,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     object is returned, which encapsulates the input and outputs of this GST
     analysis, and can generate final end-user output such as reports and
     presentations.
-<<<<<<< HEAD
 
-=======
->>>>>>> develop
     Parameters
     ----------
     dataFilenameOrSet : DataSet or string
@@ -135,10 +132,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
        - 4 -- also shows inner iterations of LM algorithm
        - 5 -- also shows detailed info from within jacobian
               and objective function calls.
-<<<<<<< HEAD
 
-=======
->>>>>>> develop
     Returns
     -------
     Results
