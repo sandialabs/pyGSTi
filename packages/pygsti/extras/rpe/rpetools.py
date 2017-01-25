@@ -7,11 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Utility functions for RPE """
 import numpy as _np
 from scipy import optimize as _opt
-<<<<<<< HEAD:packages/pygsti/tools/rpetools.py
-from . import gatetools as _gt
-=======
 from ...tools import decompose_gate_matrix as _decompose_gate_matrix
->>>>>>> develop:packages/pygsti/extras/rpe/rpetools.py
 
 #from rpe_models import rpeInstanceDict
 
@@ -93,11 +89,6 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon",lengthList=N
     each generation).  Note: this assumes the dataset contains 'plus' and
     'minus' SPAM labels.
 
-<<<<<<< HEAD:packages/pygsti/tools/rpetools.py
-    WARNING:  At present, kList must be of form [1,2,4,...,2**log2kMax].
-
-=======
->>>>>>> develop:packages/pygsti/extras/rpe/rpetools.py
     Parameters
     ----------
     DS : DataSet
@@ -111,9 +102,6 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon",lengthList=N
 
     angleName : { "alpha", "epsilon", "Phi" }, optional
       The angle to be extracted
-<<<<<<< HEAD:packages/pygsti/tools/rpetools.py
-
-=======
       
     lengthList : The list of sequence lengths.  Default is None;
         If None is specified, then lengthList becomes [1,2,4,...,2**(len(angleSinStrs)-1)]
@@ -122,7 +110,6 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon",lengthList=N
         Declares which gate set configuration RPE should be trying to fit;
         determines particular functions and values to be used.
        
->>>>>>> develop:packages/pygsti/extras/rpe/rpetools.py
     Returns
     -------
     angleHatList : list of floats
@@ -131,13 +118,10 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon",lengthList=N
     angleTemp1 = None
     angleHatList = []
     genNum = len(angleSinStrs)
-<<<<<<< HEAD:packages/pygsti/tools/rpetools.py
-    for i in range(genNum):
-=======
+
     if lengthList == None:
         lengthList = [2**k for k in range(genNum)]
     for i, length in enumerate(lengthList):
->>>>>>> develop:packages/pygsti/extras/rpe/rpetools.py
         xhatTemp = DS[angleSinStrs[i]]['plus']
         yhatTemp = DS[angleCosStrs[i]]['plus']
         Nx = xhatTemp + DS[angleSinStrs[i]]['minus']
@@ -147,22 +131,11 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon",lengthList=N
         angleHatList.append(angleTemp1)
     return angleHatList
 
-<<<<<<< HEAD:packages/pygsti/tools/rpetools.py
-def sin_phi2_func(theta,Phi,epsilon):
-=======
-    
 def sin_phi2_func(theta,Phi,epsilon,rpeconfig_inst=None):
->>>>>>> develop:packages/pygsti/extras/rpe/rpetools.py
     """
     Returns the function whose zero, for fixed Phi and epsilon, occurs at the
     desired value of theta. (This function exists to be passed to a minimizer
     to obtain theta.)
-<<<<<<< HEAD:packages/pygsti/tools/rpetools.py
-
-    WARNING:  epsilon gets rescaled to newEpsilon, by dividing by pi/4; will
-    have to change for epsilons far from pi/4.
-=======
->>>>>>> develop:packages/pygsti/extras/rpe/rpetools.py
 
     Parameters
     ----------
@@ -173,13 +146,8 @@ def sin_phi2_func(theta,Phi,epsilon,rpeconfig_inst=None):
        The auxiliary angle Phi; necessary to calculate theta.
 
     epsilon : float
-<<<<<<< HEAD:packages/pygsti/tools/rpetools.py
-       Angle of X rotation.
-
-=======
        Angle of rotation about "loose axis".
     
->>>>>>> develop:packages/pygsti/extras/rpe/rpetools.py
     Returns
     -------
     sinPhi2FuncVal
@@ -251,31 +219,20 @@ def est_theta_list(DS,angleSinStrs,angleCosStrs,epsilonList,returnPhiFunList = F
 
 def extract_alpha(gateset,rpeconfig_inst):
     """
-<<<<<<< HEAD:packages/pygsti/tools/rpetools.py
-    For a given gateset, obtain the angle of rotation about Z axis
-    (for gate "Gz").
-
-=======
     For a given gateset, obtain the angle of rotation about the "fixed axis"
     
->>>>>>> develop:packages/pygsti/extras/rpe/rpetools.py
     WARNING:  This is a gauge-covariant parameter!  Gauge must be fixed prior
     to estimating.
 
     Parameters
     ----------
     gateset : GateSet
-<<<<<<< HEAD:packages/pygsti/tools/rpetools.py
-       The gateset whose "Gz" angle of rotation is to be calculated.
-
-=======
        The gateset whose angle of rotation about the fixed axis is to be calculated.
     
     rpeconfig_inst : rpeconfig object
         Declares which gate set configuration RPE should be trying to fit;
         determines particular functions and values to be used.
     
->>>>>>> develop:packages/pygsti/extras/rpe/rpetools.py
     Returns
     -------
     alphaVal : float
@@ -288,19 +245,6 @@ def extract_alpha(gateset,rpeconfig_inst):
 
 def extract_epsilon(gateset,rpeconfig_inst):
     """
-<<<<<<< HEAD:packages/pygsti/tools/rpetools.py
-    For a given gateset, obtain the angle of rotation about X axis
-    (for gate "Gx").
-
-    WARNING:  This is a gauge-covariant parameter!  Gauge must be fixed prior
-    to estimating.
-
-    Parameters
-    ----------
-    gateset : GateSet
-       The gateset whose "Gx" angle of rotation is to be calculated.
-
-=======
     For a given gateset, obtain the angle of rotation about the "loose axis" 
     
     WARNING:  This is a gauge-covariant parameter!  Gauge must be fixed prior
@@ -315,7 +259,6 @@ def extract_epsilon(gateset,rpeconfig_inst):
         Declares which gate set configuration RPE should be trying to fit;
         determines particular functions and values to be used.
     
->>>>>>> develop:packages/pygsti/extras/rpe/rpetools.py
     Returns
     -------
     epsilonVal : float
@@ -329,33 +272,21 @@ def extract_epsilon(gateset,rpeconfig_inst):
 
 def extract_theta(gateset,rpeconfig_inst):
     """
-<<<<<<< HEAD:packages/pygsti/tools/rpetools.py
-    For a given gateset, obtain the angle between the "X axis of rotation" and
-    the "true" X axis (perpendicular to Z). (Angle of misalignment between "Gx"
-    axis of rotation and X axis as defined by "Gz".)
-
-=======
     For a given gateset, obtain the angle between the estimated "loose axis" and
     the target "loose axis".
     
->>>>>>> develop:packages/pygsti/extras/rpe/rpetools.py
     WARNING:  This is a gauge-covariant parameter!  (I think!)  Gauge must be
     fixed prior to estimating.
 
     Parameters
     ----------
     gateset : GateSet
-<<<<<<< HEAD:packages/pygsti/tools/rpetools.py
-       The gateset whose X axis misaligment is to be calculated.
-
-=======
         The gateset whose loose axis misalignment is to be calculated.
     
     rpeconfig_inst : rpeconfig object
         Declares which gate set configuration RPE should be trying to fit;
         determines particular functions and values to be used.
     
->>>>>>> develop:packages/pygsti/extras/rpe/rpetools.py
     Returns
     -------
     thetaVal : float
@@ -396,18 +327,12 @@ def consistency_check(angle_k, angle_final, k):
 
 def analyze_rpe_data(inputDataset,trueOrTargetGateset,stringListD,rpeconfig_inst,do_consistency_check=False,k_list=None):
     """
-<<<<<<< HEAD:packages/pygsti/tools/rpetools.py
-    Compute angle estimates and compare to true estimates for alpha, epsilon,
-    and theta.
-
-=======
     Compute angle estimates and compare to true or target values for alpha, epsilon,
     and theta.  ("True" will typically be used for simulated data, when the 
     true angle values are known a priori; "target" will typically be used for
     experimental data, where we do not know the true angle values, and can
     only compare to our desired angles.)
     
->>>>>>> develop:packages/pygsti/extras/rpe/rpetools.py
     Parameters
     ----------
     inputDataset : DataSet
@@ -419,15 +344,11 @@ def analyze_rpe_data(inputDataset,trueOrTargetGateset,stringListD,rpeconfig_inst
     stringListD : dict
        The dictionary of gate string lists used for the RPE experiments.
        This should be generated via make_rpe_string_list_d.
-<<<<<<< HEAD:packages/pygsti/tools/rpetools.py
-
-=======
     
     rpeconfig_inst : rpeconfig object
         Declares which gate set configuration RPE should be trying to fit;
         determines particular functions and values to be used.
     
->>>>>>> develop:packages/pygsti/extras/rpe/rpetools.py
     Returns
     -------
     resultsD : dict
