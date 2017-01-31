@@ -1093,9 +1093,12 @@ def rotation_gate_mx(r,mxBasis="gm"):
     Construct a rotation gate matrix.
 
     Build the gate matrix corresponding to the unitary
-    `exp(-i * (r[0]*PP[0] + r[1]*PP[1] + ...) )`
+    `exp(-i * (r[0]/2*PP[0]*sqrt(d) + r[1]/2*PP[1]*sqrt(d) + ...) )`
     where `PP' is the array of Pauli-product matrices 
     obtained via `pp_matrices(d)`, where `d = sqrt(len(r)+1)`.
+    The division by 2 is for convention, and the sqrt(d) is to
+    essentially un-normalise the matrices returned by `pp_matrices`
+    to they are equal to products of the *standard* Pauli matrices.
 
     Parameters
     ----------
@@ -1123,7 +1126,7 @@ def rotation_gate_mx(r,mxBasis="gm"):
     #build unitary (in std basis)
     ex = _np.zeros( (d,d), 'complex' )
     for rot,pp_mx in zip(r,pp[1:]):
-        ex += rot * pp_mx
+        ex += rot/2.0 * pp_mx * _np.sqrt(d)
     U = _spl.expm(-1j * ex)
     stdGate = unitary_to_process_mx(U)
     
