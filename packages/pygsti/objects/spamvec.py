@@ -499,7 +499,7 @@ class FullyParameterizedSPAMVec(SPAMVec):
         -------
         None
         """
-        if isinstance(amount,float):
+        if isinstance(amount,float) or isinstance(amount,int):
             D = _np.diag( [1]+[1-amount]*(self.dim-1) )
         else:
             assert(len(amount) == self.dim-1)
@@ -710,7 +710,7 @@ class TPParameterizedSPAMVec(SPAMVec):
         -------
         None
         """
-        if isinstance(amount,float):
+        if isinstance(amount,float) or isinstance(amount,int):
             D = _np.diag( [1]+[1-amount]*(self.dim-1) )
         else:
             assert(len(amount) == self.dim-1)
