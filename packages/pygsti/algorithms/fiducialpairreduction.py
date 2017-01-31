@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy      as _np
 import itertools  as _itertools
+import random     as _random
 import scipy.misc as _spmisc
 from ..construction import gatestringconstruction as _gsc
 from ..tools        import remove_duplicates      as _remove_duplicates
@@ -17,12 +18,22 @@ from ..             import objects as _objs
 def _nCr(n,r):
     """Number of combinations of r items out of a set of n.  Equals n!/(r!(n-r)!)"""
     #f = _math.factorial; return f(n) / f(r) / f(n-r)
-    return int(_spmisc.comb(n,r))
+    return _spmisc.comb(n,r)
+
+def _random_combination(indices_tuple, r):
+    """
+    Random selection from itertools.combinations(indices_tuple, r)
+      from http://docs.python.org/2/library/itertools.html#recipes 
+    """
+    n = len(indices_tuple)
+    iis = sorted(_random.sample(range(n), r))
+    return tuple(indices_tuple[i] for i in iis)
 
 def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList,
                                    testLs=(256,2048), spamLabels="all", tol=0.75,
                                    searchMode="sequential", nRandom=100, seed=None,
-                                   verbosity=0, testPairList=None, memLimit=None):
+                                   verbosity=0, testPairList=None, memLimit=None,
+                                   minimumPairs=1):
     """
     Finds a (global) set of fiducial pairs that are amplificationally complete.
 
@@ -89,6 +100,11 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
 
     memLimit : int, optional
         A memory limit in bytes.
+
+    minimumPairs : int, optional
+        The minimium number of fiducial pairs to try (default == 1).  Set this
+        to integers larger than 1 to avoid trying pair sets that are known to 
+        be too small.
 
     Returns
     -------
@@ -201,7 +217,7 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
         return None
 
     bestAmplified = 0
-    for nNeededPairs in range(1,nPossiblePairs):
+    for nNeededPairs in range(minimumPairs,nPossiblePairs):
         printer.log("Beginning search for a good set of %d pairs (%d pair lists to test)" % \
                 (nNeededPairs,_nCr(nPossiblePairs,nNeededPairs)))
 
@@ -210,23 +226,12 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
             pairIndicesToIterateOver = _itertools.combinations(allPairIndices, nNeededPairs)
 
         elif searchMode == "random":
-            rand = _np.random.RandomState(seed)  # ok if seed is None
+            _random.seed(seed)  # ok if seed is None
             nTotalPairCombos = _nCr(len(allPairIndices), nNeededPairs)
             if nRandom < nTotalPairCombos:
-                randIndices = _remove_duplicates(sorted(rand.randint(0,nTotalPairCombos,size=nRandom)))
+                pairIndicesToIterateOver = [ _random_combination(allPairIndices, nNeededPairs) for i in range(nRandom) ]
             else:
-                randIndices = list(range(int(nTotalPairCombos)))
-
-            def filterAll(it): #generator which filters iterator "it" using randIndices
-                nxt = 0
-                for i,val in enumerate(it):
-                    if i == randIndices[nxt]:
-                        yield val
-                        nxt += 1
-                        if nxt == len(randIndices): break
-
-            pairIndicesToIterateOver = filterAll(_itertools.combinations(allPairIndices, nNeededPairs))
-
+                pairIndicesToIterateOver = _itertools.combinations(allPairIndices, nNeededPairs)
 
         for pairIndicesToTest in pairIndicesToIterateOver:
             gateStringIndicesForPairs = []
@@ -429,23 +434,12 @@ def find_sufficient_fiducial_pairs_per_germ(targetGateset, prepStrs, effectStrs,
                     pairIndicesToIterateOver = _itertools.combinations(allPairIndices, nNeededPairs)
 
                 elif searchMode == "random":
-                    rand = _np.random.RandomState(seed)  # ok if seed is None
+                    _random.seed(seed)  # ok if seed is None
                     nTotalPairCombos = _nCr(len(allPairIndices), nNeededPairs)
                     if nRandom < nTotalPairCombos:
-                        randIndices = _remove_duplicates(sorted(rand.randint(0,nTotalPairCombos,size=nRandom)))
+                        pairIndicesToIterateOver = [ _random_combination(allPairIndices, nNeededPairs) for i in range(nRandom) ]
                     else:
-                        randIndices = list(range(int(nTotalPairCombos)))
-
-                    def filterAll(it): #generator which filters iterator "it" using randIndices
-                        nxt = 0
-                        for i,val in enumerate(it):
-                            if i == randIndices[nxt]:
-                                yield val
-                                nxt += 1
-                                if nxt == len(randIndices): break
-                                
-                    pairIndicesToIterateOver = filterAll(_itertools.combinations(allPairIndices, nNeededPairs))
-
+                        pairIndicesToIterateOver = _itertools.combinations(allPairIndices, nNeededPairs)
 
                 for pairIndicesToTest in pairIndicesToIterateOver:
     

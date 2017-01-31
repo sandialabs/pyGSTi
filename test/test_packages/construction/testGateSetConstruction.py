@@ -528,11 +528,12 @@ SPAMLABEL minus = rho remainder
         gateset_rot = gateset.rotate( (np.pi/2,0,0) ) #rotate all gates by pi/2 about X axis
         gateset_randu = gateset.randomize_with_unitary(0.01)
         gateset_randu = gateset.randomize_with_unitary(0.01,seed=1234)
-        #print gateset_rot
+        #print(gateset_rot.gates['Gi'])
 
         rotXPi   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi,Q0)")
         rotXPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "X(pi/2,Q0)")
         rotYPiOv2   = pygsti.construction.build_gate( [2],[('Q0',)], "Y(pi/2,Q0)")
+        #print(rotXPiOv2)
 
         self.assertArraysAlmostEqual(gateset_rot['Gi'], rotXPiOv2)
         self.assertArraysAlmostEqual(gateset_rot['Gx'], rotXPi)
@@ -584,11 +585,11 @@ SPAMLABEL minus = rho remainder
             gateset.rotate(rotate=0.2,max_rotate=0.2) #can't specify both
         with self.assertRaises(ValueError):
             gateset.rotate() #must specify rotate or max_rotate
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             gateset.rotate( (1,2,3,4) ) #tuple must be length 3 (or a float)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             gateset.rotate( "a string!" ) #must be a 3-tuple or float
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             gateset_2q.rotate(rotate=(0,0,0)) #wrong dimension gateset
 
 
@@ -598,11 +599,11 @@ SPAMLABEL minus = rho remainder
             gateset_2q.rotate(rotate=0.2,max_rotate=0.2) #can't specify both
         with self.assertRaises(ValueError):
             gateset_2q.rotate() #must specify rotate or max_rotate
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             gateset_2q.rotate( (1,2,3,4) ) #tuple must be length 15 (or a float)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             gateset_2q.rotate( "a string!" ) #must be a 3-tuple or float
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             gateset.rotate( rotate=np.zeros(15,'d')) #wrong dimension gateset
 
         gateset_rand_dep = gateset.depolarize(max_gate_noise=0.1)

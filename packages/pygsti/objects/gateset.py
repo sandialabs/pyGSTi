@@ -2713,9 +2713,7 @@ class GateSet(object):
             #Apply random depolarization to each gate
             r = max_gate_noise * rndm.random_sample( len(self.gates) )
             for (i,label) in enumerate(self.gates):
-                D = _np.diag( [1]+[1-r[i]]*(gateDim-1) )
-                newGateset.gates[label] = _gate.FullyParameterizedGate(
-                                           _np.dot(D,self.gates[label]) )
+                newGateset.gates[label].depolarize(r[i])
 
         elif gate_noise is not None:
             #Apply the same depolarization to each gate
@@ -2730,15 +2728,11 @@ class GateSet(object):
             #Apply random depolarization to each rho and E vector
             r = max_spam_noise * rndm.random_sample( len(self.preps) )
             for (i,lbl) in enumerate(self.preps):
-                D = _np.diag( [1]+[1-r[i]]*(gateDim-1) )
-                newGateset.preps[lbl] = _sv.FullyParameterizedSPAMVec(
-                                           _np.dot(D,self.preps[lbl]))
+                newGateset.preps[lbl].depolarize(r[i])
 
             r = max_spam_noise * rndm.random_sample( len(self.effects) )
             for (i,lbl) in enumerate(self.effects):
-                D = _np.diag( [1]+[1-r[i]]*(gateDim-1) )
-                newGateset.effects[lbl] = _sv.FullyParameterizedSPAMVec(
-                                         _np.dot(D,self.effects[lbl]))
+                newGateset.effects[lbl].depolarize(r[i])
 
         elif spam_noise is not None:
             #Apply the same depolarization to each gate
@@ -2757,7 +2751,7 @@ class GateSet(object):
         and return the result, without modifying the original
         (this) gateset.  You must specify either 'rotate' or
         'max_rotate'. This method currently only works on
-        single-qubit gatesets.
+        n-qubit gatesets.
 
         Parameters
         ----------
@@ -2786,88 +2780,24 @@ class GateSet(object):
         """
         newGateset = self.copy() # start by just copying gateset
         dim = self.get_dimension()
-
-        #NEEDED?
-        #for (i,rhoVec) in enumerate(self.preps):
-        #    newGateset.set_rhovec( rhoVec, i )
-        #for (i,EVec) in enumerate(self.effects):
-        #    newGateset.set_evec( EVec, i )
-
-        if dim not in (4, 16):
-            raise ValueError("Gateset dimension must be either 4 (single-qubit) or 16 (two-qubit)")
-
-        rndm = _np.random.RandomState(seed)
+        myBasis = self.get_basis_name()
 
         if max_rotate is not None:
             if rotate is not None:
                 raise ValueError("Must specify exactly one of 'rotate' and 'max_rotate' NOT both")
 
             #Apply random rotation to each gate
-            if dim == 4:
-                r = max_rotate * rndm.random_sample( len(self.gates) * 3 )
-                for (i,label) in enumerate(self.gates):
-                    rot = r[3*i:3*(i+1)]
-                    newGateset.gates[label] = _gate.FullyParameterizedGate(
-                       _np.dot( _bt.single_qubit_gate(rot[0]/2.0,
-                                rot[1]/2.0,rot[2]/2.0), self.gates[label]) )
-
-            elif dim == 16:
-                r = max_rotate * rndm.random_sample( len(self.gates) * 15 )
-                for (i,label) in enumerate(self.gates):
-                    rot = r[15*i:15*(i+1)]
-                    newGateset.gates[label] = _gate.FullyParameterizedGate(
-                     _np.dot( _bt.two_qubit_gate(rot[0]/2.0,rot[1]/2.0,rot[2]/2.0,
-                                                 rot[3]/2.0,rot[4]/2.0,rot[5]/2.0,
-                                                 rot[6]/2.0,rot[7]/2.0,rot[8]/2.0,
-                                                 rot[9]/2.0,rot[10]/2.0,rot[11]/2.0,
-                                                 rot[12]/2.0,rot[13]/2.0,rot[14]/2.0,
-                                                 ), self.gates[label]) )
-            #else: raise ValueError("Invalid gateset dimension") # checked above
+            rndm = _np.random.RandomState(seed)
+            r = max_rotate * rndm.random_sample( len(self.gates) * (dim-1) )
+            for (i,label) in enumerate(self.gates):
+                rot = _np.array(r[(dim-1)*i:(dim-1)*(i+1)])/_np.sqrt(2.0) # divide by 2 b/c of convention
+                newGateset.gates[label].rotate(rot, myBasis)
 
         elif rotate is not None:
-
-            if dim == 4:
-                #Specify rotation by a single value (to mean this rotation along each axis) or a 3-tuple
-                if type(rotate) in (float,int): rx,ry,rz = rotate,rotate,rotate
-                elif type(rotate) in (tuple,list):
-                    if len(rotate) != 3:
-                        raise ValueError("Rotation, when specified as a tuple "
-                                + "must be of length 3, not: %s" % str(rotate))
-                    (rx,ry,rz) = rotate
-                else: raise ValueError("Rotation must be specifed as a single "
-                       + "number or as a lenght-3 list, not: %s" % str(rotate))
-
-                for (i,label) in enumerate(self.gates):
-                    newGateset.gates[label] = _gate.FullyParameterizedGate(
-                        _np.dot(
-                            _bt.single_qubit_gate(rx/2.0,ry/2.0,rz/2.0),
-                            self.gates[label]) )
-
-            elif dim == 16:
-                #Specify rotation by a single value (to mean this rotation along each axis) or a 15-tuple
-                if type(rotate) in (float,int):
-                    rix,riy,riz = rotate,rotate,rotate
-                    rxi,rxx,rxy,rxz = rotate,rotate,rotate,rotate
-                    ryi,ryx,ryy,ryz = rotate,rotate,rotate,rotate
-                    rzi,rzx,rzy,rzz = rotate,rotate,rotate,rotate
-                elif type(rotate) in (tuple,list):
-                    if len(rotate) != 15:
-                        raise ValueError("Rotation, when specified as a tuple "
-                             + "must be of length 15, not: %s" % str(rotate))
-                    (rix,riy,riz,rxi,rxx,rxy,rxz,ryi,
-                     ryx,ryy,ryz,rzi,rzx,rzy,rzz) = rotate
-                else: raise ValueError("Rotation must be specifed as a single "
-                      + "number or as a lenght-15 list, not: %s" % str(rotate))
-
-                for (i,label) in enumerate(self.gates):
-                    newGateset.gates[label] = _gate.FullyParameterizedGate(
-                        _np.dot(
-                            _bt.two_qubit_gate(rix/2.0,riy/2.0,riz/2.0,
-                                               rxi/2.0,rxx/2.0,rxy/2.0,rxz/2.0,
-                                               ryi/2.0,ryx/2.0,ryy/2.0,ryz/2.0,
-                                               rzi/2.0,rzx/2.0,rzy/2.0,rzz/2.0,)
-                            , self.gates[label]) )
-            #else: raise ValueError("Invalid gateset dimension") # checked above
+            assert(isinstance(rotate,float) or isinstance(rotate,int) or len(rotate) == dim-1), "Invalid 'rotate' argument"
+            if not (isinstance(rotate,float) or isinstance(rotate,int)): rotate = _np.array(rotate) #so can divide by 2 below
+            for (i,label) in enumerate(self.gates):
+                newGateset.gates[label].rotate(rotate/_np.sqrt(2.0), myBasis) # divide by 2 b/c of convention
 
         else: raise ValueError("Must specify either 'rotate' or 'max_rotate' "
                                + "-- neither was non-None")

@@ -50,12 +50,13 @@ def build_vector(stateSpaceDims, stateSpaceLabels, vecExpr, basis="gm"):
         space, and is independent of the direct-sum decomposition of density
         matrix space.
 
-    basis : {'gm','pp','std'}, optional
+    basis : {'gm','pp','std','qt'}, optional
        the basis of the returned vector.
 
         - 'std' == Standard (matrix units)
         - 'gm' == Gell-Mann
         - 'pp' == Pauli-product
+        - 'qt' == Qutrit
 
     Returns
     -------
@@ -82,10 +83,7 @@ def build_vector(stateSpaceDims, stateSpaceLabels, vecExpr, basis="gm"):
                 vecIndex += 1
         start += blockDim
 
-    if basis == "std": return vecInReducedStdBasis
-    elif basis == "gm": return _bt.std_to_gm(vecInReducedStdBasis, stateSpaceDims)
-    elif basis == "pp": return _bt.std_to_pp(vecInReducedStdBasis, stateSpaceDims)
-    else: raise ValueError("Invalid basis argument: %s" % basis)
+    return _bt.change_basis(vecInReducedStdBasis, "std", basis, stateSpaceDims)
 
 def build_identity_vec(stateSpaceDims, basis="gm"):
     """
@@ -99,12 +97,13 @@ def build_identity_vec(stateSpaceDims, basis="gm"):
         the standard basis, and the density-matrix space is the direct sum of
         linear spaces of dimension block-dimension^2.
 
-    basis : {'gm','pp','std'}, optional
+    basis : {'gm','pp','std','qt'}, optional
         the basis of the returned vector.
 
         - 'std' == Standard (matrix units)
         - 'gm' == Gell-Mann
         - 'pp' == Pauli-product
+        - 'qt' == Qutrit
 
     Returns
     -------
@@ -123,10 +122,7 @@ def build_identity_vec(stateSpaceDims, basis="gm"):
                 vecIndex += 1
         start += blockDim
 
-    if basis == "std": return vecInReducedStdBasis
-    elif basis == "gm": return _bt.std_to_gm(vecInReducedStdBasis, stateSpaceDims)
-    elif basis == "pp": return _bt.std_to_pp(vecInReducedStdBasis, stateSpaceDims)
-    else: raise ValueError("Invalid basis argument: %s" % basis)
+    return _bt.change_basis(vecInReducedStdBasis, "std", basis, stateSpaceDims)
 
 
 
@@ -356,17 +352,9 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
     gateInReducedStdBasis = _bt.contract_to_std_direct_sum_mx(gateInStdBasis, stateSpaceDims)
 
     #Change from std (mx unit) basis to another if requested
-    if basis == "std":
-        return _gate.FullyParameterizedGate(gateInReducedStdBasis)
-    elif basis == "gm":
-        return _gate.FullyParameterizedGate( _bt.std_to_gm(gateInReducedStdBasis, stateSpaceDims) )
-    elif basis == "pp":
-        return _gate.FullyParameterizedGate( _bt.std_to_pp(gateInReducedStdBasis, stateSpaceDims) )
-    else:
-        raise ValueError("Invalid 'basis' parameter: %s (must by 'std', 'gm', or 'pp')" % basis)
-
-
-
+    gateMxInFinalBasis = _bt.change_basis(gateInReducedStdBasis, "std", basis, stateSpaceDims)
+    
+    return _gate.FullyParameterizedGate(gateMxInFinalBasis)
 
 
 def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameterization="full", unitaryEmbedding=False):
@@ -410,15 +398,17 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
           an x-rotation between states with integer indices i0 and i1 followed
           by complete decoherence between the states.
 
-    basis : {'gm','pp','std'}, optional
+    basis : {'gm','pp','std','qt'}, optional
         the basis of the returned gate.
 
         - "std" = gate matrix operates on density mx expressed as sum of matrix
           units
         - "gm"  = gate matrix operates on dentity mx expressed as sum of
           normalized Gell-Mann matrices
-        - "pp"  = gate matrix operates on density mx expresses as sum of
+        - "pp"  = gate matrix operates on density mx expressed as sum of
           tensor-product of Pauli matrices
+        - "qt"  = gate matrix operates on density mx expressed as sum of
+          Qutrit basis matrices
 
     parameterization : {"full","TP","static","linear","linearTP"}, optional
         How to parameterize the resulting gate.
@@ -535,14 +525,8 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
         if parameterization != "full":
             raise ValueError("Unitary embedding is only implemented for parmeterization='full'")
 
-        if basis == "std":
-            return _gate.FullyParameterizedGate(finalGateInStdBasis)
-        elif basis == "gm":
-            return _gate.FullyParameterizedGate( _bt.std_to_gm(finalGateInStdBasis, blockDims) )
-        elif basis == "pp":
-            return _gate.FullyParameterizedGate( _bt.std_to_pp(finalGateInStdBasis, blockDims) )
-        else:
-            raise ValueError("Invalid 'basis' parameter: %s (must by 'std', 'gm', or 'pp')" % basis)
+        finalGateInFinalBasis = _bt.change_basis(finalGateInStdBasis, "std", basis, blockDims)
+        return _gate.FullyParameterizedGate(finalGateInFinalBasis)
 
 
     def embed_gate(gatemx, labels, indicesToParameterize="all"):
@@ -671,7 +655,14 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
             #  but don't check for this here as they'll be caught by any gate term that operates on that block
             realMx = True
 
-        else: raise ValueError("Invalid 'basis' parameter: %s (must by 'std', 'gm', or 'pp')" % basis)
+        elif basis == "qt":
+            ppToStd = _bt.pp_to_std_transform_matrix(blockDims[iTensorProdBlk]); stdToPP = _np.linalg.inv(ppToStd)
+            qtToStd = _bt.qt_to_std_transform_matrix(blockDims[iTensorProdBlk]); stdToQT = _np.linalg.inv(qtToStd)
+            full_ppToFinal[offset:offset+N,offset:offset+N] = _np.dot( stdToQT, ppToStd )
+            full_finalToPP[offset:offset+N,offset:offset+N] = _np.dot( stdToPP, qtToStd )
+            realMx = True
+
+        else: raise ValueError("Invalid 'basis' parameter: %s (must by 'std', 'gm', 'pp', or 'qt')" % basis)
 
         if parameterization == "full":
             finalGateInFinalBasis = _np.dot(full_ppToFinal,
@@ -843,14 +834,8 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
             gateTermInStdBasis = _np.kron(Utot,Utotc) # dmDim^2 x dmDim^2 mx operating on vectorized total densty matrix
             gateTermInReducedStdBasis = _bt.contract_to_std_direct_sum_mx(gateTermInStdBasis, blockDims)
 
-            if basis == "std":
-                gateTermInFinalBasis = _gate.FullyParameterizedGate(gateTermInReducedStdBasis)
-            elif basis == "gm":
-                gateTermInFinalBasis = _gate.FullyParameterizedGate( _bt.std_to_gm(gateTermInReducedStdBasis, blockDims) )
-            elif basis == "pp":
-                gateTermInFinalBasis = _gate.FullyParameterizedGate( _bt.std_to_pp(gateTermInReducedStdBasis, blockDims) )
-            else:
-                raise ValueError("Invalid 'basis' parameter: %s (must by 'std', 'gm', or 'pp')" % basis)
+            gateMxInFinalBasis = _bt.change_basis(gateTermInReducedStdBasis, "std", basis, blockDims)
+            gateTermInFinalBasis = _gate.FullyParameterizedGate(gateMxInFinalBasis)
 
         else: raise ValueError("Invalid gate name: %s" % gateName)
 
@@ -930,7 +915,7 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
             that generates probabilities that are 1.0 - (sum of probabilities
             from all other spam labels).
 
-    basis : {'gm','pp','std'}, optional
+    basis : {'gm','pp','std','qt'}, optional
         the basis of the matrices in the returned GateSet
 
         - "std" = gate matrix operates on density mx expressed as sum of matrix
@@ -939,6 +924,8 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
           normalized Gell-Mann matrices
         - "pp"  = gate matrix operates on density mx expresses as sum of
           tensor-product of Pauli matrices
+        - "qt"  = gate matrix operates on density mx expressed as sum of
+          Qutrit basis matrices
 
     parameterization : {"full","TP","linear","linearTP"}, optional
         How to parameterize the gates of the resulting GateSet (see
