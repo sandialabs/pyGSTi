@@ -2790,13 +2790,14 @@ class GateSet(object):
             rndm = _np.random.RandomState(seed)
             r = max_rotate * rndm.random_sample( len(self.gates) * (dim-1) )
             for (i,label) in enumerate(self.gates):
-                rot = _np.array(r[(dim-1)*i:(dim-1)*(i+1)])/2.0 # divide by 2 b/c of convention
+                rot = _np.array(r[(dim-1)*i:(dim-1)*(i+1)])/_np.sqrt(2.0) # divide by 2 b/c of convention
                 newGateset.gates[label].rotate(rot, myBasis)
 
         elif rotate is not None:
-            assert(isinstance(rotate,float) or len(rotate) == dim-1), "Invalid 'rotate' argument"
+            assert(isinstance(rotate,float) or isinstance(rotate,int) or len(rotate) == dim-1), "Invalid 'rotate' argument"
+            if not (isinstance(rotate,float) or isinstance(rotate,int)): rotate = _np.array(rotate) #so can divide by 2 below
             for (i,label) in enumerate(self.gates):
-                newGateset.gates[label].rotate(rotate, myBasis)
+                newGateset.gates[label].rotate(rotate/_np.sqrt(2.0), myBasis) # divide by 2 b/c of convention
 
         else: raise ValueError("Must specify either 'rotate' or 'max_rotate' "
                                + "-- neither was non-None")
