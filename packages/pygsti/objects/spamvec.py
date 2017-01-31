@@ -306,9 +306,12 @@ class StaticSPAMVec(SPAMVec):
 
         Parameters
         ----------
-        amount : float
-            The amount to depolarize by.  All but the first element
-            of vector are multiplied by `1.0 - amount`.
+        amount : float or tuple
+            The amount to depolarize by.  If a tuple, it must have length
+            equal to one less than the dimension of the gate. All but the
+            first element of the spam vector (often corresponding to the 
+            identity element) are multiplied by `amount` (if a float) or
+            the corresponding `amount[i]` (if a tuple).
 
         Returns
         -------
@@ -485,15 +488,22 @@ class FullyParameterizedSPAMVec(SPAMVec):
 
         Parameters
         ----------
-        amount : float
-            The amount to depolarize by.  All but the first element
-            of vector are multiplied by `1.0 - amount`.
+        amount : float or tuple
+            The amount to depolarize by.  If a tuple, it must have length
+            equal to one less than the dimension of the gate. All but the
+            first element of the spam vector (often corresponding to the 
+            identity element) are multiplied by `amount` (if a float) or
+            the corresponding `amount[i]` (if a tuple).
 
         Returns
         -------
         None
         """
-        D = _np.diag( [1]+[1-amount]*(self.dim-1) )
+        if isinstance(amount,float):
+            D = _np.diag( [1]+[1-amount]*(self.dim-1) )
+        else:
+            assert(len(amount) == self.dim-1)
+            D = _np.diag( [1]+list(1.0 - _np.array(amount,'d')) )
         self.set_vector(_np.dot(D,self)) 
 
 
@@ -689,15 +699,22 @@ class TPParameterizedSPAMVec(SPAMVec):
 
         Parameters
         ----------
-        amount : float
-            The amount to depolarize by.  All but the first element
-            of vector are multiplied by `1.0 - amount`.
+        amount : float or tuple
+            The amount to depolarize by.  If a tuple, it must have length
+            equal to one less than the dimension of the gate. All but the
+            first element of the spam vector (often corresponding to the 
+            identity element) are multiplied by `amount` (if a float) or
+            the corresponding `amount[i]` (if a tuple).
 
         Returns
         -------
         None
         """
-        D = _np.diag( [1]+[1-amount]*(self.dim-1) )
+        if isinstance(amount,float):
+            D = _np.diag( [1]+[1-amount]*(self.dim-1) )
+        else:
+            assert(len(amount) == self.dim-1)
+            D = _np.diag( [1]+list(1.0 - _np.array(amount,'d')) )
         self.set_vector(_np.dot(D,self)) 
 
 
