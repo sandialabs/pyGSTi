@@ -1075,3 +1075,52 @@ def pauliprod_lindblad_errgen_projections(errgen, mxBasis="gm",
         return hamProjs, otherProjs, hamGens, otherGens
     else:
         return hamProjs, otherProjs
+
+
+#TODO: replace two_qubit_gate, one_qubit_gate, unitary_to_pauligate_* with
+# calls to this one and unitary_to_processmx
+def rotation_gate_mx(r,mxBasis="gm"):
+    """
+    Construct a rotation gate matrix.
+
+    Build the gate matrix corresponding to the unitary
+    `exp(-i * (r[0]*PP[0] + r[1]*PP[1] + ...) )`
+    where `PP' is the array of Pauli-product matrices 
+    obtained via `pp_matrices(d)`, where `d = sqrt(len(r)+1)`.
+
+    Parameters
+    ----------
+    r : tuple
+        A tuple of coeffiecients, one per non-identity
+        Pauli-product basis element
+
+    mxBasis : {'std', 'gm','pp'}, optional
+      Which basis returned matrix is represented in.
+      Allowed options are Matrix-unit (std), Gell-Mann
+      (gm) and Pauli-product (pp).
+.
+    Returns
+    -------
+    numpy array
+        a d^2 x d^2 gate matrix in the specified basis.
+    """
+    d = int(round(_np.sqrt(len(r)+1)))
+    assert(d**2 == len(r)+1), "Invalid number of rotation angles"
+
+    #get Pauli-product matrices (in std basis)
+    pp = _bt.pp_matrices(d)
+    assert(len(r) == len(pp[1:]))
+
+    #build unitary (in std basis)
+    ex = _np.zeros( (d,d), 'complex' )
+    for rot,pp_mx in zip(r,pp[1:]):
+        ex += rot * pp_mx
+    U = _spl.expm(-1j * ex)
+    stdGate = unitary_to_process_mx(U)
+    
+    if mxBasis == "pp":   ret = _bt.std_to_pp(stdGate)
+    elif mxBasis == "gm": ret = _bt.std_to_gm(stdGate)
+    elif mxBasis == "std": ret = stdGate
+    else: raise ValueError("Invalid basis specifier: %s" % mxBasis)
+
+    return ret
