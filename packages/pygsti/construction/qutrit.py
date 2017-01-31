@@ -78,7 +78,9 @@ def _random_rot(scale,arrType = _np.array, seed=None):
     randU = _linalg.expm(-1j * randH)
     return arrType(randU)
 
-def make_qutrit_gateset(errorScale,Xangle = _np.pi/2, Yangle = _np.pi/2, MSglobal = _np.pi/2, MSlocal = 0, arrType = _np.array,similarity=False,seed=None):
+def make_qutrit_gateset(errorScale, Xangle = _np.pi/2, Yangle = _np.pi/2,
+                        MSglobal = _np.pi/2, MSlocal = 0,
+                        similarity=False,seed=None, basis='gm'):
 
     arrType = _np.array#Are we casting gates as matrices or arrays?
 
@@ -87,7 +89,7 @@ def make_qutrit_gateset(errorScale,Xangle = _np.pi/2, Yangle = _np.pi/2, MSgloba
                      [0,0,0]]))
 
     identity3 = arrType(_np.identity(3))
-    identity3gm = _bt.std_to_gm(_np.reshape(identity3,(9,1)))
+    identity3final = _bt.change_basis(_np.reshape(identity3,(9,1)), "std", basis)
 
     E0 = arrType(_np.diag([1,0,0]))
     E1 = arrType(_np.diag([0,1,0]))
@@ -122,31 +124,32 @@ def make_qutrit_gateset(errorScale,Xangle = _np.pi/2, Yangle = _np.pi/2, MSgloba
 
     #Change gate representation to superoperator in Gell-Mann basis
     gateISO = _np.kron(_np.conj(gateImx),gateImx)
-    gateISOgm = _bt.std_to_gm(gateISO)
+    gateISOfinal = _bt.change_basis(gateISO, "std", basis)
     gateXSO = _np.kron(_np.conj(gateXmx),gateXmx)
-    gateXSOgm = _bt.std_to_gm(gateXSO)
+    gateXSOfinal = _bt.change_basis(gateXSO, "std", basis)
     gateYSO = _np.kron(_np.conj(gateYmx),gateYmx)
-    gateYSOgm = _bt.std_to_gm(gateYSO)
+    gateYSOfinal = _bt.change_basis(gateYSO, "std", basis)
     gateMSO = _np.kron(_np.conj(gateMmx),gateMmx)
-    gateMSOgm = _bt.std_to_gm(gateMSO)
+    gateMSOfinal = _bt.change_basis(gateMSO, "std", basis)
 
-
-    rho0gm = _bt.std_to_gm(_np.reshape(rho0,(9,1)))
-    E0gm =  _bt.std_to_gm(_np.reshape(E0,(9,1)))
-    E1gm = _bt.std_to_gm(_np.reshape(E1,(9,1)))
-    E2gm = _bt.std_to_gm(_np.reshape(E2,(9,1)))
+    rho0final = _bt.change_basis(_np.reshape(rho0,(9,1)), "std", basis)
+    E0final =  _bt.change_basis(_np.reshape(E0,(9,1)), "std", basis)
+    E1final = _bt.change_basis(_np.reshape(E1,(9,1)), "std", basis)
+    E2final = _bt.change_basis(_np.reshape(E2,(9,1)), "std", basis)
 
     qutritGS = _objs.GateSet()
-    qutritGS['rho0'] = rho0gm
-    qutritGS['E0'] = E0gm
-    qutritGS['E1'] = E1gm
-    qutritGS['E2'] = E2gm
-    qutritGS['identity'] = identity3gm
+    qutritGS['rho0'] = rho0final
+    qutritGS['E0'] = E0final
+    qutritGS['E1'] = E1final
+    qutritGS['E2'] = E2final
+    qutritGS['identity'] = identity3final
     qutritGS.spamdefs['0bright'] = ('rho0','E0')
     qutritGS.spamdefs['1bright'] = ('rho0','E1')
     qutritGS.spamdefs['2bright'] = ('rho0','E2')
-    qutritGS['Gi'] = _objs.FullyParameterizedGate(arrType(gateISOgm))
-    qutritGS['Gx'] = _objs.FullyParameterizedGate(arrType(gateXSOgm))
-    qutritGS['Gy'] = _objs.FullyParameterizedGate(arrType(gateYSOgm))
-    qutritGS['Gm'] = _objs.FullyParameterizedGate(arrType(gateMSOgm))
+    qutritGS['Gi'] = _objs.FullyParameterizedGate(arrType(gateISOfinal))
+    qutritGS['Gx'] = _objs.FullyParameterizedGate(arrType(gateXSOfinal))
+    qutritGS['Gy'] = _objs.FullyParameterizedGate(arrType(gateYSOfinal))
+    qutritGS['Gm'] = _objs.FullyParameterizedGate(arrType(gateMSOfinal))
+    qutritGS.set_basis(basis,3)
+    
     return qutritGS
