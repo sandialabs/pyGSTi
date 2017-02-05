@@ -1383,7 +1383,7 @@ def get_logl_projected_err_gen_table(gateset, targetGateset,
         OProj_cp = _np.dot(U,_np.dot(_np.diag(pos_evals),_np.linalg.inv(U))) #OProj_cp is now a pos-def matrix
         lnd_error_gen_cp = _np.einsum('i,ijk', HProj, HGens) + \
             _np.einsum('ij,ijkl', OProj_cp, OGens)
-        lnd_error_gen_cp = _tools.basis_change(lnd_error_gen_cp,"std",basisNm)
+        lnd_error_gen_cp = _tools.change_basis(lnd_error_gen_cp,"std",basisNm)
 
         gsLNDCP.gates[gl] = _tools.gate_from_error_generator(
             lnd_error_gen_cp, targetGate, genType)

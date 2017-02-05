@@ -678,7 +678,23 @@ def error_generator(gate, target_gate, typ="logG-logT"): #or HERE
       The error generator.
     """
     if typ == "logG-logT":
-        return  _np.real_if_close(_spl.logm(gate) - _spl.logm(target_gate),
+        # choose a branch cut position between eigenvalues of target
+        evals = _spl.eigvals(target_gate)
+        N = len(evals)
+        angles = _np.sort(_np.imag(_np.log(evals)))
+        deltas = [ angles[i+1]-angles[i] for i in range(N-1) ]
+        deltas.append(angles[0]+2*_np.pi - angles[N-1])
+        #print("DEBUG: angles = ",angles)
+        #print("DEBUG: deltas = ",deltas)
+        iMax = _np.argmax(deltas)
+        print("DEBUG: iMax = ",iMax)
+        if iMax < N-1:
+            bca = (angles[iMax] + angles[iMax+1])/2 + _np.pi #branch-cut angle
+        else: #iMax == N-1
+            bca = (angles[N-1] + angles[0]+2*_np.pi)/2 - _np.pi
+        a = _np.exp(1j*bca)
+        #print("DEBUG: bca = ",bca)
+        return  _np.real_if_close(_spl.logm(a*gate) - _spl.logm(a*target_gate),
                                   tol=10000) # in machine epsilons
     elif typ == "logTiG":
         target_gate_inv = _spl.inv(target_gate)
