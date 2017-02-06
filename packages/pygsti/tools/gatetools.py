@@ -676,8 +676,9 @@ def error_generator(gate, target_gate, typ="logG-logT"):
     errgen : ndarray
       The error generator.
     """
+    TOL = 1e-8
+    
     if typ == "logG-logT":
-        TOL = 1e-8
         logG = _mt.real_matrix_log(gate,"ignore",TOL)
         logT = _mt.real_matrix_log(target_gate,"ignore",TOL)
 
