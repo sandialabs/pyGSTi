@@ -2083,11 +2083,18 @@ def get_metadata_table(gateset, result_options, result_params):
     for key in sorted(list(result_params.keys())):
         if key in ['L,germ tuple base string dict', 'profiler']: continue #skip these
         if key == 'gaugeOptParams':
-            val = result_params[key].copy()
-            if not isinstance(val,list): val = [val]
-            for go_param_dict in val:
-                if 'targetGateset' in go_param_dict:
-                    del go_param_dict['targetGateset'] #don't print this!
+            if isinstance(result_params[key],dict):
+                val = result_params[key].copy()
+                if 'targetGateset' in val:
+                    del val['targetGateset'] #don't print this!
+                            
+            elif isinstance(result_params[key],list):
+                val = []
+                for go_param_dict in result_params[key]:
+                    if isinstance(go_param_dict,dict): #to ensure .copy() exists
+                        val.append(go_param_dict.copy())
+                        if 'targetGateset' in val[-1]:
+                            del val[-1]['targetGateset'] #don't print this!
         else:
             val = result_params[key]
         table.addrow((key, str(val)), (None,'Verbatim'))
