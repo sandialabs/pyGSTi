@@ -838,6 +838,18 @@ class Results(object):
                 gsBest.dim, "stochastic", gsBest.get_basis_name(), "errgen_sto")
         fns['stochasticProjectorTable'] = (fn, validate_essential)
 
+        def fn(key, confidenceLevel, vb):
+            _, gsBest = setup()
+            noConfidenceLevelDependence(confidenceLevel)
+            return _generation.get_metadata_table(gsBest, self.options, self.parameters)
+        fns['metadataTable'] = (fn, validate_essential)
+
+
+        def fn(key, confidenceLevel, vb):
+            noConfidenceLevelDependence(confidenceLevel)
+            return _generation.get_software_environment_table()
+        fns['softwareEnvTable'] = (fn, validate_essential)
+
         return fns
 
 
@@ -1914,7 +1926,8 @@ class Results(object):
              'bestGatesetGaugeOptParamsTable',
              'bestGatesetGatesTable','bestGatesetChoiTable',
              'bestGatesetDecompTable','bestGatesetRotnAxisTable',
-             'bestGatesetVsTargetTable','bestGatesetErrorGenTable')
+             'bestGatesetVsTargetTable','bestGatesetErrorGenTable',
+             'metadataTable','softwareEnvTable')
              #removed: 'bestGatesetClosestUnitaryTable',
 
         ls_and_germs_tables = ('fiducialListTable','prepStrListTable',
@@ -3745,7 +3758,7 @@ class Results(object):
              'bestGatesetChoiEvalTable', 'datasetOverviewTable',
              'bestGatesetEvalTable', 'bestGatesetRelEvalTable',
              'targetGatesBoxTable', 'bestGatesetGatesBoxTable',
-             'bestGatesetErrGenBoxTable')
+             'bestGatesetErrGenBoxTable', 'metadataTable', 'softwareEnvTable')
 
         ls_and_germs_tables = ('fiducialListTable','prepStrListTable',
                                'effectStrListTable','germList2ColTable',

@@ -71,14 +71,14 @@ class ReportFigure(object):
             try:
                 self._save_axes(filename)
             except Exception as e:
-                print('Initial unpickling of figure failed, trying to use cached formats')
+                print('Warning: unpickling to save figure %s failed:\n  %s' % (filename, str(e)))
                 ext = os.path.splitext(filename)[1][1:] # remove .
-                print(ext)
                 if ext in self.tempFileDict:
                     tf = _tempfile.NamedTemporaryFile()
                     tf.write(self.tempFileDict[ext])
                     _shutil.copy2(tf.name, filename)
                     tf.close()
+                    print("  --> Successfully used cached %s format" % ext)
                 else:
                     print('Extension not in cached files and unpickling failed. Trying experimental backend switching. Your machine may catch fire..')
                     # Subprocess didn't work without auxillary file (cannot import parent module '') -> we weren't desperate enough to do the auxillary file, so no promises that works either

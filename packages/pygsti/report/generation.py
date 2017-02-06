@@ -1065,6 +1065,10 @@ def get_dataset_overview_table(dataset, target, maxlen=10, fixedLists=None,
                   svals_2col), ('Conversion','Small'))
     if maxLengthList is not None:
         table.addrow(("Max. Lengths", ", ".join(map(str,maxLengthList)) ), (None,None))
+    if hasattr(dataset,'comment') and dataset.comment is not None:
+        commentLines = dataset.comment.split('\n')
+        for i,commentLine in enumerate(commentLines,start=1):
+            table.addrow(("User comment %d" % i, commentLine  ), (None,'Verbatim'))
 
     table.finish()
     return table
@@ -1383,7 +1387,7 @@ def get_logl_projected_err_gen_table(gateset, targetGateset,
         OProj_cp = _np.dot(U,_np.dot(_np.diag(pos_evals),_np.linalg.inv(U))) #OProj_cp is now a pos-def matrix
         lnd_error_gen_cp = _np.einsum('i,ijk', HProj, HGens) + \
             _np.einsum('ij,ijkl', OProj_cp, OGens)
-        lnd_error_gen_cp = _tools.basis_change(lnd_error_gen_cp,"std",basisNm)
+        lnd_error_gen_cp = _tools.change_basis(lnd_error_gen_cp,"std",basisNm)
 
         gsLNDCP.gates[gl] = _tools.gate_from_error_generator(
             lnd_error_gen_cp, targetGate, genType)
@@ -2036,6 +2040,171 @@ def get_gaugeopt_params_table(gaugeOptArgs):
                            for k,v in gaugeOptArgs['itemWeights'].items()])), (None,None))
     if 'gauge_group' in gaugeOptArgs:
         table.addrow(("Gauge group", str(gaugeOptArgs['gauge_group'])), (None,None))
+
+    table.finish()
+    return table
+
+
+
+def get_metadata_table(gateset, result_options, result_params):
+    """
+    Create a table displaying the a Result object's options and parameters.
+
+    Parameters
+    ----------
+    gateset : GateSet
+        The gateset (usually the final estimate of a GST computation) to 
+        show information for (e.g. the types of its gates).
+
+    result_options: ResultOptions
+        The options to display
+
+    result_params: dict
+        A parameter dictionary to display
+
+    Returns
+    -------
+    ReportTable
+    """
+    colHeadings = ('Quantity','Value')
+    formatters = ('Bold','Bold')
+
+    #custom latex header for maximum width imposed on 2nd col
+    latex_head =  "\\begin{tabular}[l]{|c|p{3in}|}\n\hline\n"
+    latex_head += "\\textbf{Quantity} & \\textbf{Value} \\\\ \hline\n"
+    table = _ReportTable(colHeadings, formatters,
+                         customHeader={'latex': latex_head} )
+
+    table.addrow(("Long tables (option)", str(result_options.long_tables)), (None,'Verbatim'))
+    table.addrow(("Table class (option)", str(result_options.table_class)), (None,'Verbatim'))
+    table.addrow(("Template path (option)", str(result_options.template_path)), (None,'Verbatim'))
+    table.addrow(("Latex command (option)", str(result_options.latex_cmd)), (None,'Verbatim'))
+
+    for key in sorted(list(result_params.keys())):
+        if key in ['L,germ tuple base string dict', 'profiler']: continue #skip these
+        if key == 'gaugeOptParams':
+            if isinstance(result_params[key],dict):
+                val = result_params[key].copy()
+                if 'targetGateset' in val:
+                    del val['targetGateset'] #don't print this!
+                            
+            elif isinstance(result_params[key],list):
+                val = []
+                for go_param_dict in result_params[key]:
+                    if isinstance(go_param_dict,dict): #to ensure .copy() exists
+                        val.append(go_param_dict.copy())
+                        if 'targetGateset' in val[-1]:
+                            del val[-1]['targetGateset'] #don't print this!
+        else:
+            val = result_params[key]
+        table.addrow((key, str(val)), (None,'Verbatim'))
+
+
+    for lbl,vec in gateset.preps.items():
+        if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
+        elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
+        elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
+        else: paramTyp = "unknown"
+        table.addrow((lbl + " parameterization", paramTyp), (None,'Verbatim'))
+
+    for lbl,vec in gateset.effects.items():
+        if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
+        elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
+        elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
+        else: paramTyp = "unknown"
+        table.addrow((lbl + " parameterization", paramTyp), (None,'Verbatim'))
+
+    #Not displayed since the POVM identity is always fully parameterized,
+    # even through it doesn't contribute to the gate set parameters (a special case)
+    #if gateset.povm_identity is not None:
+    #    vec = gateset.povm_identity
+    #    if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
+    #    elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
+    #    elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
+    #    else: paramTyp = "unknown"
+    #    table.addrow(("POVM identity parameterization", paramTyp), (None,'Verbatim'))
+
+    for gl,gate in gateset.gates.items():
+        if isinstance(gate, _objs.StaticGate): paramTyp = "static"
+        elif isinstance(gate, _objs.FullyParameterizedGate): paramTyp = "full"
+        elif isinstance(gate, _objs.TPParameterizedGate): paramTyp = "TP"
+        elif isinstance(gate, _objs.LinearlyParameterizedGate): paramTyp = "linear"
+        elif isinstance(gate, _objs.EigenvalueParameterizedGate): paramTyp = "eigenvalue"
+        elif isinstance(gate, _objs.LindbladParameterizedGate):
+            paramTyp = "Lindblad"
+            if gate.cptp: paramTyp += " CPTP "
+            paramTyp += gate.nonHamTerms
+        else: paramTyp = "unknown"
+        table.addrow((gl + " parameterization", paramTyp), (None,'Verbatim'))
+        
+    
+    table.finish()
+    return table
+
+
+def get_software_environment_table():
+    """
+    Create a table displaying the software environment relevant to pyGSTi.
+
+    Returns
+    -------
+    ReportTable
+    """
+    import platform
+    
+    def get_version(moduleName):
+        if moduleName == "cvxopt":
+            #special case b/c cvxopt can be weird...
+            try:
+                mod = __import__("cvxopt.info")
+                return str(mod.info.version)
+            except Exception: pass #try the normal way below
+
+        try:
+            mod = __import__(moduleName)
+            return str(mod.__version__)
+        except ImportError:
+            return "missing"
+        except AttributeError:
+            return "ver?"
+        except Exception:
+            return "???"
+        
+    colHeadings = ('Quantity','Value')
+    formatters = ('Bold','Bold')
+
+    #custom latex header for maximum width imposed on 2nd col
+    latex_head =  "\\begin{tabular}[l]{|c|p{3in}|}\n\hline\n"
+    latex_head += "\\textbf{Quantity} & \\textbf{Value} \\\\ \hline\n"
+    table = _ReportTable(colHeadings, formatters,
+                         customHeader={'latex': latex_head} )
+    
+    #Python package information
+    from .._version import __version__ as pyGSTi_version
+    table.addrow(("pyGSTi version", str(pyGSTi_version)), (None,'Verbatim'))
+
+    packages = ['numpy','scipy','matplotlib','pyparsing','cvxopt','cvxpy',
+                'pptx','nose','PIL','psutil']
+    for pkg in packages:
+        table.addrow((pkg, get_version(pkg)), (None,'Verbatim'))
+
+    #Python information
+    table.addrow(("Python version", str(platform.python_version())), (None,'Verbatim'))
+    table.addrow(("Python type", str(platform.python_implementation())), (None,'Verbatim'))
+    table.addrow(("Python compiler", str(platform.python_compiler())), (None,'Verbatim'))
+    table.addrow(("Python build", str(platform.python_build())), (None,'Verbatim'))
+    table.addrow(("Python branch", str(platform.python_branch())), (None,'Verbatim'))
+    table.addrow(("Python revision", str(platform.python_revision())), (None,'Verbatim'))
+
+    #Platform information
+    (system, node, release, version, machine, processor) = platform.uname()
+    table.addrow(("Platform summary", str(platform.platform())), (None,'Verbatim'))
+    table.addrow(("System", str(system)), (None,'Verbatim'))
+    #table.addrow(("Sys Node", str(node)), (None,'Verbatim')) #seems unnecessary
+    table.addrow(("Sys Release", str(release)), (None,'Verbatim'))
+    table.addrow(("Sys Version", str(version)), (None,'Verbatim'))
+    table.addrow(("Machine", str(machine)), (None,'Verbatim'))
+    table.addrow(("Processor", str(processor)), (None,'Verbatim'))
 
     table.finish()
     return table

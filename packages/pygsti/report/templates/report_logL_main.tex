@@ -14,6 +14,7 @@
 \usepackage{hyperref}
 \usepackage{pdfcomment}
 \usepackage{color}
+\usepackage{spverbatim}
 
 \setcounter{topnumber}{3}
 \setcounter{bottomnumber}{3}
@@ -384,6 +385,24 @@ Figure \ref{invertedBestEstimateColorBoxPlot} shows exactly the same $\log(\math
 \end{figure}
 
 }{}
+
+\section{System and pyGSTi parameters\label{metadata}}
+This section contains a raw dump of system information and various pyGSTi parameters.  It's purpose is to stamp this report with parameters indicating how exactly GST was run to create it, as well as to record the software environment in within which the report creation was run.  Note that if the core GST computation was done on a machine different from the one that created this report, the software information contained here will be of less value.
+
+\begin{table}[h]
+\begin{center}
+\putfield{metadataTable}{meta data table will be placed here}
+\caption{\putfield{tt_metadataTable}{}\textbf{Listing of GST parameters and meta-data.}  These parameters and related metadata describe how the GST computation was performed which led to this report. \label{metadataTable}}
+\end{center}
+\end{table}
+
+\begin{table}[h]
+\begin{center}
+\putfield{softwareEnvTable}{software environment table will be placed here}
+\caption{\putfield{tt_softwareEnvTable}{}\textbf{Listing of the software environment.}  Note that this describes the software environment of the machine used to generate this report, and not necessarily the machine used to perform the core GST gate set estimatino.\label{metadataTable}}
+\end{center}
+\end{table}
+
 
 \putfield{appendices}{Appendices start here}
 
