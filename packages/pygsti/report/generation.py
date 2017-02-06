@@ -1065,7 +1065,7 @@ def get_dataset_overview_table(dataset, target, maxlen=10, fixedLists=None,
                   svals_2col), ('Conversion','Small'))
     if maxLengthList is not None:
         table.addrow(("Max. Lengths", ", ".join(map(str,maxLengthList)) ), (None,None))
-    if hasattr(dataset,'comment'):
+    if hasattr(dataset,'comment') and dataset.comment is not None:
         commentLines = dataset.comment.split('\n')
         for i,commentLine in enumerate(commentLines,start=1):
             table.addrow(("User comment %d" % i, commentLine  ), (None,'Verbatim'))
@@ -2046,12 +2046,16 @@ def get_gaugeopt_params_table(gaugeOptArgs):
 
 
 
-def get_metadata_table(result_options, result_params):
+def get_metadata_table(gateset, result_options, result_params):
     """
     Create a table displaying the a Result object's options and parameters.
 
     Parameters
     ----------
+    gateset : GateSet
+        The gateset (usually the final estimate of a GST computation) to 
+        show information for (e.g. the types of its gates).
+
     result_options: ResultOptions
         The options to display
 
@@ -2082,10 +2086,50 @@ def get_metadata_table(result_options, result_params):
             val = result_params[key].copy()
             if not isinstance(val,list): val = [val]
             for go_param_dict in val:
-                del go_param_dict['targetGateset'] #don't print this!
+                if 'targetGateset' in go_param_dict:
+                    del go_param_dict['targetGateset'] #don't print this!
         else:
             val = result_params[key]
         table.addrow((key, str(val)), (None,'Verbatim'))
+
+
+    for lbl,vec in gateset.preps.items():
+        if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
+        elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
+        elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
+        else: paramTyp = "unknown"
+        table.addrow((lbl + " parameterization", paramTyp), (None,'Verbatim'))
+
+    for lbl,vec in gateset.effects.items():
+        if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
+        elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
+        elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
+        else: paramTyp = "unknown"
+        table.addrow((lbl + " parameterization", paramTyp), (None,'Verbatim'))
+
+    #Not displayed since the POVM identity is always fully parameterized,
+    # even through it doesn't contribute to the gate set parameters (a special case)
+    #if gateset.povm_identity is not None:
+    #    vec = gateset.povm_identity
+    #    if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
+    #    elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
+    #    elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
+    #    else: paramTyp = "unknown"
+    #    table.addrow(("POVM identity parameterization", paramTyp), (None,'Verbatim'))
+
+    for gl,gate in gateset.gates.items():
+        if isinstance(gate, _objs.StaticGate): paramTyp = "static"
+        elif isinstance(gate, _objs.FullyParameterizedGate): paramTyp = "full"
+        elif isinstance(gate, _objs.TPParameterizedGate): paramTyp = "TP"
+        elif isinstance(gate, _objs.LinearlyParameterizedGate): paramTyp = "linear"
+        elif isinstance(gate, _objs.EigenvalueParameterizedGate): paramTyp = "eigenvalue"
+        elif isinstance(gate, _objs.LindbladParameterizedGate):
+            paramTyp = "Lindblad"
+            if gate.cptp: paramTyp += " CPTP "
+            paramTyp += gate.nonHamTerms
+        else: paramTyp = "unknown"
+        table.addrow((gl + " parameterization", paramTyp), (None,'Verbatim'))
+        
     
     table.finish()
     return table

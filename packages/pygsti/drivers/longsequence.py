@@ -388,6 +388,16 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     ret.parameters['gaugeOptParams'] = ordered_go_params_list
     ret.parameters['cptpPenaltyFactor'] = advancedOptions.get('cptpPenaltyFactor',0)
     ret.parameters['distributeMethod'] = advancedOptions.get('distributeMethod','deriv')
+    ret.parameters['starting point'] = startingPt
+    ret.parameters['depolarizeStart'] = advancedOptions.get('depolarizeStart',0)
+    ret.parameters['contractStartToCPTP'] = advancedOptions.get('contractStartToCPTP',False)
+    ret.parameters['tolerance'] = advancedOptions.get('tolerance',1e-6)
+    ret.parameters['maxIterations'] = advancedOptions.get('maxIterations',100000)
+    ret.parameters['useFreqWeightedChiSq'] = advancedOptions.get('useFreqWeightedChiSq',False)
+    ret.parameters['nestedGateStringLists'] = advancedOptions.get('nestedGateStringLists',True)
+    ret.parameters['profile'] = advancedOptions.get('profile',1)
+    ret.parameters['check'] = advancedOptions.get('check',False)
+    ret.parameters['truncScheme'] = advancedOptions.get('truncScheme', "whole germ powers")
 
     profiler.add_time('do_long_sequence_gst: results initialization',tRef)
     ret.parameters['profiler'] = profiler

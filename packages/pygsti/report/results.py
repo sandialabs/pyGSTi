@@ -839,8 +839,9 @@ class Results(object):
         fns['stochasticProjectorTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
+            _, gsBest = setup()
             noConfidenceLevelDependence(confidenceLevel)
-            return _generation.get_metadata_table(self.options, self.parameters)
+            return _generation.get_metadata_table(gsBest, self.options, self.parameters)
         fns['metadataTable'] = (fn, validate_essential)
 
 
