@@ -154,17 +154,17 @@ Gi & $ \left(\!\!\begin{array}{cccc}
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
--8\e{-6} & 7\e{-5} & 2\e{-5} & 2\e{-5} \\ 
+-8\e{-6} & 7\e{-5} & 4\e{-5} & 5\e{-5} \\ 
 4\e{-4} & -0.051 & -0.005 & -0.006 \\ 
-2\e{-4} & 3\e{-4} & -0.052 & -0.002 \\ 
--2\e{-4} & -3\e{-4} & -1\e{-4} & -0.052
+3\e{-4} & 4\e{-4} & -0.052 & -0.002 \\ 
+-2\e{-4} & -3\e{-4} & -4\e{-5} & -0.052
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-2\e{-5} & -4\e{-5} & -2\e{-5} & 6\e{-6} \\ 
-2\e{-4} & -0.052 & 0.007 & 0.001 \\ 
+2\e{-5} & -5\e{-5} & -2\e{-5} & 3\e{-5} \\ 
+2\e{-4} & -0.052 & 0.007 & 5\e{-4} \\ 
 3\e{-4} & 0.001 & -0.05 & 0.001 \\ 
-3\e{-4} & 7\e{-5} & -0.004 & -0.053
+2\e{-4} & -7\e{-6} & -0.004 & -0.053
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -219,13 +219,13 @@ Gx & $ \begin{array}{c}
  & $ \begin{array}{c}
 1 \\ 
 0.008 \\ 
--1\e{-5} \\ 
+-2\e{-5} \\ 
 2\e{-4}
  \end{array} $
  & $ \begin{array}{c}
 0.001 \\ 
 -1 \\ 
-1\e{-6} \\ 
+2\e{-5} \\ 
 -3\e{-4}
  \end{array} $
  & $ \begin{array}{c} 0.049 \\ \pm 0.004 \end{array} $ & $ \begin{array}{c} 0.051 \\ \pm 0.002 \end{array} $ \\ \hline
@@ -243,15 +243,15 @@ Gy & $ \begin{array}{c}
  \end{array} $
  & $ \begin{array}{c}
 1 \\ 
--3\e{-6} \\ 
+-8\e{-6} \\ 
 0.007 \\ 
 -2\e{-4}
  \end{array} $
  & $ \begin{array}{c}
-5\e{-4} \\ 
--0.005 \\ 
-1 \\ 
--0.001
+-5\e{-4} \\ 
+0.005 \\ 
+-1 \\ 
+0.001
  \end{array} $
  & $ \begin{array}{c} 0.049 \\ \pm 0.004 \end{array} $ & $ \begin{array}{c} 0.051 \\ \pm 0.002 \end{array} $ \\ \hline
 \end{tabular}
@@ -261,9 +261,9 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & $ \begin{array}{c}(0.001 \\ \pm 0.002)\pi \end{array} $ &  & $ \begin{array}{c}(0.117 \\ \pm 0.336)\pi \end{array} $ & $ \begin{array}{c}(0.451 \\ \pm 0.426)\pi \end{array} $ \\ \hline
-Gx & $ \begin{array}{c}(0.5 \\ \pm 0.001)\pi \end{array} $ & $ \begin{array}{c}(0.117 \\ \pm 0.336)\pi \end{array} $ &  & $ \begin{array}{c}(0.498 \\ \pm 0.001)\pi \end{array} $ \\ \hline
-Gy & $ \begin{array}{c}(0.5 \\ \pm 0.001)\pi \end{array} $ & $ \begin{array}{c}(0.451 \\ \pm 0.426)\pi \end{array} $ & $ \begin{array}{c}(0.498 \\ \pm 0.001)\pi \end{array} $ &  \\ \hline
+Gi & $ \begin{array}{c}(0.001 \\ \pm 0.002)\pi \end{array} $ &  & $ \begin{array}{c}(0.117 \\ \pm 0.336)\pi \end{array} $ & $ \begin{array}{c}(0.549 \\ \pm 0.426)\pi \end{array} $ \\ \hline
+Gx & $ \begin{array}{c}(0.5 \\ \pm 0.001)\pi \end{array} $ & $ \begin{array}{c}(0.117 \\ \pm 0.336)\pi \end{array} $ &  & $ \begin{array}{c}(0.502 \\ \pm 0.001)\pi \end{array} $ \\ \hline
+Gy & $ \begin{array}{c}(0.5 \\ \pm 0.001)\pi \end{array} $ & $ \begin{array}{c}(0.549 \\ \pm 0.426)\pi \end{array} $ & $ \begin{array}{c}(0.502 \\ \pm 0.001)\pi \end{array} $ &  \\ \hline
 \end{tabular}
 
 \caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay''); and (7) the angle between each gate's rotation axis and the rotation axes of the other gates.  ``X'' indicates that the decomposition failed or couldn't be interpreted. \label{bestGatesetDecompTable}}
@@ -280,31 +280,31 @@ Gy & $ \begin{array}{c}(0.5 \\ \pm 0.001)\pi \end{array} $ & $ \begin{array}{c}(
 \hline
 Operator & Matrix & Hilbert-Schmidt vector (Pauli basis) & 95\% C.I. $\nicefrac{1}{2}$-width \\ \hline
 $\rho_{0}$ & $ \left(\!\!\begin{array}{cc}
-0.989 & 0.001e^{-i0.15} \\ 
-0.001e^{i0.15} & 0.012
+0.99 & 0.001e^{-i0.13} \\ 
+0.001e^{i0.13} & 0.01
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
-0.708 \\ 
+0.707 \\ 
 0.002 \\ 
-3\e{-4} \\ 
-0.691
+2\e{-4} \\ 
+0.693
  \end{array} $
  & $ \begin{array}{c}
 0.003 \\ 
 0.004 \\ 
 0.005 \\ 
-0.003
+0.004
  \end{array} $
  \\ \hline
 $E_{0}$ & $ \left(\!\!\begin{array}{cc}
-0.081 & 0.002e^{i1.85} \\ 
-0.002e^{-i1.85} & 0.919
+0.083 & 0.002e^{i1.84} \\ 
+0.002e^{-i1.84} & 0.918
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.708 \\ 
 -0.001 \\ 
 -0.002 \\ 
--0.592
+-0.591
  \end{array} $
  & $ \begin{array}{c}
 0.001 \\ 
@@ -337,7 +337,7 @@ $\rho_{0}$ & $ \begin{array}{c} 0.091 \\ \pm 0.004 \end{array} $ & $ \begin{arra
 \hline
 Gate & Superoperator (Pauli basis) & 95\% C.I. $\nicefrac{1}{2}$-width \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
-1 & 3\e{-4} & 3\e{-4} & 8\e{-5} \\ 
+1 & 3\e{-4} & 3\e{-4} & 7\e{-5} \\ 
 -0.001 & 0.945 & -0.006 & -0.009 \\ 
 0.001 & 0.001 & 0.947 & 0.004 \\ 
 0.001 & 2\e{-5} & 0.001 & 0.949
@@ -350,10 +350,10 @@ Gi & $ \left(\!\!\begin{array}{cccc}
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
-1 & 7\e{-5} & 2\e{-5} & 2\e{-5} \\ 
+1 & 7\e{-5} & 4\e{-5} & 4\e{-5} \\ 
 4\e{-4} & 0.951 & -0.005 & -0.005 \\ 
-2\e{-4} & 3\e{-4} & 1\e{-4} & -0.949 \\ 
-2\e{-4} & 3\e{-4} & 0.949 & -0.002
+2\e{-4} & 3\e{-4} & 4\e{-5} & -0.949 \\ 
+3\e{-4} & 3\e{-4} & 0.949 & -0.002
  \end{array}\!\!\right) $
  & $ \left(\!\!\begin{array}{cccc}
 0.001 & 0.001 & 0.004 & 0.004 \\ 
@@ -363,10 +363,10 @@ Gx & $ \left(\!\!\begin{array}{cccc}
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-1 & -4\e{-5} & -2\e{-5} & 6\e{-6} \\ 
-3\e{-4} & 7\e{-5} & -0.004 & 0.949 \\ 
+1 & -5\e{-5} & -2\e{-5} & 3\e{-5} \\ 
+2\e{-4} & -9\e{-6} & -0.004 & 0.949 \\ 
 3\e{-4} & 0.001 & 0.951 & 0.001 \\ 
--2\e{-4} & -0.949 & -0.006 & -0.001
+-2\e{-4} & -0.949 & -0.006 & -4\e{-4}
  \end{array}\!\!\right) $
  & $ \left(\!\!\begin{array}{cccc}
 0.001 & 0.001 & 0.001 & 0.001 \\ 

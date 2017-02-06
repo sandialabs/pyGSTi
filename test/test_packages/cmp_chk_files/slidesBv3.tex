@@ -63,7 +63,7 @@ defaultBasename={MyDefaultReportName},
 defaultDirectory={temp_test_files},
 distributeMethod={deriv},
 fiducial_pairs={None},
-gaugeOptParams={Dict[TPpenalty: 0, CPpenalty: 0, gatesMetric: frobenius, spamMetric: frobenius, itemWeights: Dict[gates: 1.0, spam: 0.001]]},
+gaugeOptParams={Dict[TPpenalty: 0, CPpenalty: 0, gatesMetric: frobenius, spamMetric: frobenius, itemWeights: Dict[spam: 0.001, gates: 1.0]]},
 hessianProjection={optimal gate CIs},
 linlogPercentile={5},
 max_length_list={[0, 1, 2, 4, 8]},
@@ -178,17 +178,17 @@ Gi & $ \left(\!\!\begin{array}{cccc}
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
--8\e{-6} & 7\e{-5} & 2\e{-5} & 2\e{-5} \\ 
+-8\e{-6} & 7\e{-5} & 4\e{-5} & 5\e{-5} \\ 
 4\e{-4} & -0.051 & -0.005 & -0.006 \\ 
-2\e{-4} & 3\e{-4} & -0.052 & -0.002 \\ 
--2\e{-4} & -3\e{-4} & -1\e{-4} & -0.052
+3\e{-4} & 4\e{-4} & -0.052 & -0.002 \\ 
+-2\e{-4} & -3\e{-4} & -4\e{-5} & -0.052
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-2\e{-5} & -4\e{-5} & -2\e{-5} & 6\e{-6} \\ 
-2\e{-4} & -0.052 & 0.007 & 0.001 \\ 
+2\e{-5} & -5\e{-5} & -2\e{-5} & 3\e{-5} \\ 
+2\e{-4} & -0.052 & 0.007 & 5\e{-4} \\ 
 3\e{-4} & 0.001 & -0.05 & 0.001 \\ 
-3\e{-4} & 7\e{-5} & -0.004 & -0.053
+2\e{-4} & -7\e{-6} & -0.004 & -0.053
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -253,13 +253,13 @@ Gx & $ \begin{array}{c}
  & $ \begin{array}{c}
 1 \\ 
 0.008 \\ 
--1\e{-5} \\ 
+-2\e{-5} \\ 
 2\e{-4}
  \end{array} $
  & $ \begin{array}{c}
 0.001 \\ 
 -1 \\ 
-1\e{-6} \\ 
+2\e{-5} \\ 
 -3\e{-4}
  \end{array} $
  & $ \begin{array}{c} 0.049 \\ \pm 0.004 \end{array} $ & $ \begin{array}{c} 0.051 \\ \pm 0.002 \end{array} $ \\ \hline
@@ -277,7 +277,7 @@ Gy & $ \begin{array}{c}
  \end{array} $
  & $ \begin{array}{c}
 1 \\ 
--3\e{-6} \\ 
+-8\e{-6} \\ 
 0.007 \\ 
 -2\e{-4}
  \end{array} $
@@ -322,7 +322,7 @@ Gy & $ \begin{array}{c}(0.5 \\ \pm 0.001)\pi \end{array} $ & $ \begin{array}{c}(
 \hline
 Gate & Superoperator (Pauli basis) & 95\% C.I. $\nicefrac{1}{2}$-width \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
-1 & 3\e{-4} & 3\e{-4} & 8\e{-5} \\ 
+1 & 3\e{-4} & 3\e{-4} & 7\e{-5} \\ 
 -0.001 & 0.945 & -0.006 & -0.009 \\ 
 0.001 & 0.001 & 0.947 & 0.004 \\ 
 0.001 & 2\e{-5} & 0.001 & 0.949
@@ -335,10 +335,10 @@ Gi & $ \left(\!\!\begin{array}{cccc}
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
-1 & 7\e{-5} & 2\e{-5} & 2\e{-5} \\ 
+1 & 7\e{-5} & 4\e{-5} & 4\e{-5} \\ 
 4\e{-4} & 0.951 & -0.005 & -0.005 \\ 
-2\e{-4} & 3\e{-4} & 1\e{-4} & -0.949 \\ 
-2\e{-4} & 3\e{-4} & 0.949 & -0.002
+2\e{-4} & 3\e{-4} & 4\e{-5} & -0.949 \\ 
+3\e{-4} & 3\e{-4} & 0.949 & -0.002
  \end{array}\!\!\right) $
  & $ \left(\!\!\begin{array}{cccc}
 0.001 & 0.001 & 0.004 & 0.004 \\ 
@@ -348,10 +348,10 @@ Gx & $ \left(\!\!\begin{array}{cccc}
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-1 & -4\e{-5} & -2\e{-5} & 5\e{-6} \\ 
-3\e{-4} & 7\e{-5} & -0.004 & 0.949 \\ 
+1 & -5\e{-5} & -2\e{-5} & 3\e{-5} \\ 
+2\e{-4} & -9\e{-6} & -0.004 & 0.949 \\ 
 3\e{-4} & 0.001 & 0.951 & 0.001 \\ 
--2\e{-4} & -0.949 & -0.006 & -0.001
+-2\e{-4} & -0.949 & -0.006 & -4\e{-4}
  \end{array}\!\!\right) $
  & $ \left(\!\!\begin{array}{cccc}
 0.001 & 0.001 & 0.001 & 0.001 \\ 
@@ -381,31 +381,31 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 \hline
 Operator & Matrix & Hilbert-Schmidt vector (Pauli basis) & 95\% C.I. $\nicefrac{1}{2}$-width \\ \hline
 $\rho_{0}$ & $ \left(\!\!\begin{array}{cc}
-0.989 & 0.001e^{-i0.15} \\ 
-0.001e^{i0.15} & 0.012
+0.99 & 0.001e^{-i0.13} \\ 
+0.001e^{i0.13} & 0.01
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
-0.708 \\ 
+0.707 \\ 
 0.002 \\ 
-3\e{-4} \\ 
-0.691
+2\e{-4} \\ 
+0.693
  \end{array} $
  & $ \begin{array}{c}
 0.003 \\ 
 0.004 \\ 
 0.005 \\ 
-0.003
+0.004
  \end{array} $
  \\ \hline
 $E_{0}$ & $ \left(\!\!\begin{array}{cc}
-0.081 & 0.002e^{i1.85} \\ 
-0.002e^{-i1.85} & 0.919
+0.083 & 0.002e^{i1.84} \\ 
+0.002e^{-i1.84} & 0.918
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.708 \\ 
 -0.001 \\ 
 -0.002 \\ 
--0.592
+-0.591
  \end{array} $
  & $ \begin{array}{c}
 0.001 \\ 
@@ -463,10 +463,10 @@ Gi & $ \left(\!\!\begin{array}{cccc}
  \end{array} $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
-0.487 & 0.475e^{i1.57} & 0.001e^{-i1.53} & 0.001e^{i1.52} \\ 
+0.487 & 0.475e^{i1.57} & 0.001e^{-i1.53} & 0.001e^{i1.51} \\ 
 0.475e^{-i1.57} & 0.488 & 0.001e^{-i3.10} & 0.001e^{i3.11} \\ 
-0.001e^{i1.53} & 0.001e^{i3.10} & 0.013 & 8\e{-5}e^{-i1.97} \\ 
-0.001e^{-i1.52} & 0.001e^{-i3.11} & 8\e{-5}e^{i1.97} & 0.012
+0.001e^{i1.53} & 0.001e^{i3.10} & 0.013 & 8\e{-5}e^{-i1.71} \\ 
+0.001e^{-i1.51} & 0.001e^{-i3.11} & 8\e{-5}e^{i1.71} & 0.012
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.011 \\ 
@@ -482,10 +482,10 @@ Gx & $ \left(\!\!\begin{array}{cccc}
  \end{array} $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-0.488 & 0.002e^{-i1.54} & 0.474e^{i1.57} & 0.001e^{i1.61} \\ 
-0.002e^{i1.54} & 0.012 & 0.001e^{i3.07} & 1\e{-4}e^{i2.04} \\ 
+0.488 & 0.002e^{-i1.55} & 0.474e^{i1.57} & 0.001e^{i1.60} \\ 
+0.002e^{i1.55} & 0.012 & 0.001e^{i3.07} & 1\e{-4}e^{i2.22} \\ 
 0.474e^{-i1.57} & 0.001e^{-i3.07} & 0.488 & 0.001e^{-i3.08} \\ 
-0.001e^{-i1.61} & 1\e{-4}e^{-i2.04} & 0.001e^{i3.08} & 0.012
+0.001e^{-i1.60} & 1\e{-4}e^{-i2.22} & 0.001e^{i3.08} & 0.012
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.011 \\ 

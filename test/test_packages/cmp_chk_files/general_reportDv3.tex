@@ -15,6 +15,7 @@
 \usepackage{hyperref}
 \usepackage{pdfcomment}
 \usepackage{color}
+\usepackage{spverbatim}
 
 \definecolor{darkgreen}{RGB}{0, 128, 0}
 
@@ -303,8 +304,8 @@ $\rho_{0}$ & $ \left(\!\!\begin{array}{cc}
 0 & 0
  \end{array}\!\!\right) $
  & $ \left(\!\!\begin{array}{cc}
-0.951 & 0.001e^{-i0.17} \\ 
-0.001e^{i0.17} & 0.049
+0.951 & 0.001e^{-i0.16} \\ 
+0.001e^{i0.16} & 0.049
  \end{array}\!\!\right) $
  \\ \hline
 $E_{0}$ & $ \left(\!\!\begin{array}{cc}
@@ -312,8 +313,8 @@ $E_{0}$ & $ \left(\!\!\begin{array}{cc}
 0 & 1
  \end{array}\!\!\right) $
  & $ \left(\!\!\begin{array}{cc}
-0.047 & 0.002e^{i1.62} \\ 
-0.002e^{-i1.62} & 0.954
+0.046 & 0.002e^{i1.60} \\ 
+0.002e^{-i1.60} & 0.955
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -394,8 +395,8 @@ Gy & $ \begin{array}{c} 0.038 \\ \pm 0.002 \end{array} $ & $ \begin{array}{c} 0.
 \hline
 Prep/POVM & \begin{tabular}{c}State\\Infidelity\end{tabular} & \begin{tabular}{c}$\nicefrac{1}{2}$ Trace\\Distance\end{tabular} \\ \hline
 $\rho_{0}$ & $ \begin{array}{c} 0.049 \\ \pm 0.003 \end{array} $ & $ \begin{array}{c} 0.049 \\ \pm 0.003 \end{array} $ \\ \hline
-$E_{0}$ & $ \begin{array}{c} 0.046 \\ \pm 0.004 \end{array} $ & $ \begin{array}{c} 0.046 \\ \pm 0.004 \end{array} $ \\ \hline
-$E_C$ & $ \begin{array}{c} 0.047 \\ \pm 0 \end{array} $ & $ \begin{array}{c} 0.047 \\ \pm 0 \end{array} $ \\ \hline
+$E_{0}$ & $ \begin{array}{c} 0.045 \\ \pm 0.004 \end{array} $ & $ \begin{array}{c} 0.045 \\ \pm 0.004 \end{array} $ \\ \hline
+$E_C$ & $ \begin{array}{c} 0.046 \\ \pm 0 \end{array} $ & $ \begin{array}{c} 0.046 \\ \pm 0 \end{array} $ \\ \hline
 \end{tabular}
 
 \caption{\pdftooltip{{\color{blue}\texttt{.tables['bestGatesetSpamVsTargetTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['bestGatesetSpamVsTargetTable']}\textbf{Comparison of GST estimated SPAM to target SPAM}.  This table presents, for each state preparation and POVM effect, two different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.\label{bestGatesetSpamVsTargetTable}}
@@ -459,8 +460,8 @@ Gi & $ \begin{array}{cc}
  \end{array} $
  & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportDv3_files/bestRelEvalPolarPlt_Gi.pdf}} \\ \hline
 Gx & $ \begin{array}{cc}
-0 & -0.053 \\ 
-0.051e^{i3.12} & 0.051e^{-i3.12}
+0 & 0.051e^{i3.12} \\ 
+0.051e^{-i3.12} & -0.054
  \end{array} $
  & \vcenteredhbox{\includegraphics[width=2.00in,height=2.00in,keepaspectratio]{general_reportDv3_files/bestRelEvalPolarPlt_Gx.pdf}} \\ \hline
 Gy & $ \begin{array}{cc}
@@ -678,6 +679,80 @@ Identifying patterns and trends within such ``pixel plots'' can aid in identifyi
 }{}
 
 
+\section{System and pyGSTi parameters\label{metadata}}
+This section contains a raw dump of system information and various pyGSTi parameters.  It's purpose is to stamp this report with parameters indicating how exactly GST was run to create it, as well as to record the software environment in within which the report creation was run.  Note that if the core GST computation was done on a machine different from the one that created this report, the software information contained here will be of less value.
+
+\begin{table}[h]
+\begin{center}
+\begin{tabular}[l]{|c|p{3in}|}
+\hline
+\textbf{Quantity} & \textbf{Value} \\ \hline
+Long tables (option) & \spverb!False! \\ \hline
+Table class (option) & \spverb!pygstiTbl! \\ \hline
+Template path (option) & \spverb!None! \\ \hline
+Latex command (option) & \spverb!pdflatex! \\ \hline
+cptpPenaltyFactor & \spverb!0! \\ \hline
+defaultBasename & \spverb!None! \\ \hline
+defaultDirectory & \spverb!None! \\ \hline
+distributeMethod & \spverb!deriv! \\ \hline
+fiducial pairs & \spverb!None! \\ \hline
+gaugeOptParams & \spverb![{}]! \\ \hline
+hessianProjection & \spverb!optimal gate CIs! \\ \hline
+linlogPercentile & \spverb!5! \\ \hline
+max length list & \spverb![0, 1, 2, 4, 8]! \\ \hline
+memLimit & \spverb!None! \\ \hline
+minProbClip & \spverb!1e-06! \\ \hline
+minProbClipForWeighting & \spverb!0.0001! \\ \hline
+objective & \spverb!logl! \\ \hline
+probClipInterval & \spverb!(-1000000.0, 1000000.0)! \\ \hline
+radius & \spverb!0.0001! \\ \hline
+weights & \spverb!None! \\ \hline
+rho0 parameterization & \spverb!TP! \\ \hline
+E0 parameterization & \spverb!full! \\ \hline
+Gi parameterization & \spverb!TP! \\ \hline
+Gx parameterization & \spverb!TP! \\ \hline
+Gy parameterization & \spverb!TP! \\ \hline
+\end{tabular}
+
+\caption{\pdftooltip{{\color{blue}\texttt{.tables['metadataTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['metadataTable']}\textbf{Listing of GST parameters and meta-data.}  These parameters and related metadata describe how the GST computation was performed which led to this report. \label{metadataTable}}
+\end{center}
+\end{table}
+
+\begin{table}[h]
+\begin{center}
+\begin{tabular}[l]{|c|p{3in}|}
+\hline
+\textbf{Quantity} & \textbf{Value} \\ \hline
+pyGSTi version & \spverb!0.9.2! \\ \hline
+numpy & \spverb!1.11.2! \\ \hline
+scipy & \spverb!0.18.1! \\ \hline
+matplotlib & \spverb!1.5.3! \\ \hline
+pyparsing & \spverb!2.1.10! \\ \hline
+cvxopt & \spverb!1.1.8! \\ \hline
+cvxpy & \spverb!0.4.5! \\ \hline
+pptx & \spverb!0.6.0! \\ \hline
+nose & \spverb!1.3.7! \\ \hline
+PIL & \spverb!3.4.2! \\ \hline
+psutil & \spverb!4.3.1! \\ \hline
+Python version & \spverb!3.5.2! \\ \hline
+Python type & \spverb!CPython! \\ \hline
+Python compiler & \spverb!GCC 4.2.1 (Apple Inc. build 5666) (dot 3)! \\ \hline
+Python build & \spverb!('v3.5.2:4def2a2901a5', 'Jun 26 2016 10:47:25')! \\ \hline
+Python branch & \spverb!v3.5.2! \\ \hline
+Python revision & \spverb!4def2a2901a5! \\ \hline
+Platform summary & \spverb!Darwin-15.6.0-x86_64-i386-64bit! \\ \hline
+System & \spverb!Darwin! \\ \hline
+Sys Release & \spverb!15.6.0! \\ \hline
+Sys Version & \spverb!Darwin Kernel Version 15.6.0: Mon Jan  9 23:07:29 PST 2017; root:xnu-3248.60.11.2.1~1/RELEASE_X86_64! \\ \hline
+Machine & \spverb!x86_64! \\ \hline
+Processor & \spverb!i386! \\ \hline
+\end{tabular}
+
+\caption{\pdftooltip{{\color{blue}\texttt{.tables['softwareEnvTable']}}\quad}{Access this information in pyGSTi via<ResultsObject>.tables['softwareEnvTable']}\textbf{Listing of the software environment.}  Note that this describes the software environment of the machine used to generate this report, and not necessarily the machine used to perform the core GST gate set estimatino.\label{metadataTable}}
+\end{center}
+\end{table}
+
+
 \iftoggle{showAppendix}{
 
 \appendix
@@ -783,8 +858,6 @@ Blank \\ \hline
 \caption{\textbf{CPTP-gauge optimized Choi matrix table}.  Similar to Table \ref{bestGatesetChoiTable} except that gate set being analyzed has been gauge optimized to CPTP (but not contracted).  The resulting gates are, in effect, as close to CPTP as the numerical optimizer was able to find without reducing the quality of the fit (i.e. by gauge transformations alone).\label{gaugeOptCPTPGatesetChoiTable}}
 \end{center}
 \end{table}
-
-
 
 }{}
 

@@ -14,6 +14,7 @@
 \usepackage{hyperref}
 \usepackage{pdfcomment}
 \usepackage{color}
+\usepackage{spverbatim}
 
 \setcounter{topnumber}{3}
 \setcounter{bottomnumber}{3}
@@ -74,7 +75,7 @@ defaultBasename={MyDefaultReportName},
 defaultDirectory={temp_test_files},
 distributeMethod={deriv},
 fiducial_pairs={None},
-gaugeOptParams={Dict[TPpenalty: 0, CPpenalty: 0, gatesMetric: frobenius, spamMetric: frobenius, itemWeights: Dict[gates: 1.0, spam: 0.001]]},
+gaugeOptParams={Dict[TPpenalty: 0, CPpenalty: 0, gatesMetric: frobenius, spamMetric: frobenius, itemWeights: Dict[spam: 0.001, gates: 1.0]]},
 hessianProjection={optimal gate CIs},
 linlogPercentile={5},
 max_length_list={[0, 1, 2, 4, 8]},
@@ -333,7 +334,7 @@ TP penalty factor & 0 \\ \hline
 CP penalty factor & 0 \\ \hline
 Metric for gate-to-target & frobenius \\ \hline
 Metric for SPAM-to-target & frobenius \\ \hline
-Item weighting & gates=1, spam=0.001 \\ \hline
+Item weighting & spam=0.001, gates=1 \\ \hline
 \end{tabular}
 
 \caption{\textbf{Gauge Optimization Details}.  A list of the parameters used when performing the gauge optimization that produced the final GST results found in subsequent tables and figures.\label{bestGatesetGaugeParamsTable}}
@@ -355,25 +356,25 @@ Tables \ref{bestGatesetSpamTable} and \ref{bestGatesetGatesTable} report NOT-SET
 \hline
 Operator & Matrix & Hilbert-Schmidt vector (Pauli basis) \\ \hline
 $\rho_{0}$ & $ \left(\!\!\begin{array}{cc}
-0.989 & 0.001e^{-i0.15} \\ 
-0.001e^{i0.15} & 0.012
+0.99 & 0.001e^{-i0.13} \\ 
+0.001e^{i0.13} & 0.01
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
-0.708 \\ 
+0.707 \\ 
 0.002 \\ 
-3\e{-4} \\ 
-0.691
+2\e{-4} \\ 
+0.693
  \end{array} $
  \\ \hline
 $E_{0}$ & $ \left(\!\!\begin{array}{cc}
-0.081 & 0.002e^{i1.85} \\ 
-0.002e^{-i1.85} & 0.919
+0.083 & 0.002e^{i1.84} \\ 
+0.002e^{-i1.84} & 0.918
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.708 \\ 
 -0.001 \\ 
 -0.002 \\ 
--0.592
+-0.591
  \end{array} $
  \\ \hline
 \end{tabular}
@@ -400,24 +401,24 @@ $\rho_{0}$ & 0.091 & 0.909 \\ \hline
 \hline
 Gate & Superoperator (Pauli basis) \\ \hline
 Gi & $ \left(\!\!\begin{array}{cccc}
-1 & 3\e{-4} & 3\e{-4} & 8\e{-5} \\ 
+1 & 3\e{-4} & 3\e{-4} & 7\e{-5} \\ 
 -0.001 & 0.945 & -0.006 & -0.009 \\ 
 0.001 & 0.001 & 0.947 & 0.004 \\ 
 0.001 & 2\e{-5} & 0.001 & 0.949
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
-1 & 7\e{-5} & 2\e{-5} & 2\e{-5} \\ 
+1 & 7\e{-5} & 4\e{-5} & 4\e{-5} \\ 
 4\e{-4} & 0.951 & -0.005 & -0.005 \\ 
-2\e{-4} & 3\e{-4} & 1\e{-4} & -0.949 \\ 
-2\e{-4} & 3\e{-4} & 0.949 & -0.002
+2\e{-4} & 3\e{-4} & 4\e{-5} & -0.949 \\ 
+3\e{-4} & 3\e{-4} & 0.949 & -0.002
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-1 & -4\e{-5} & -2\e{-5} & 6\e{-6} \\ 
-3\e{-4} & 7\e{-5} & -0.004 & 0.949 \\ 
+1 & -5\e{-5} & -2\e{-5} & 3\e{-5} \\ 
+2\e{-4} & -9\e{-6} & -0.004 & 0.949 \\ 
 3\e{-4} & 0.001 & 0.951 & 0.001 \\ 
--2\e{-4} & -0.949 & -0.006 & -0.001
+-2\e{-4} & -0.949 & -0.006 & -4\e{-4}
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -463,17 +464,17 @@ Gi & $ \left(\!\!\begin{array}{cccc}
  \end{array}\!\!\right) $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
--8\e{-6} & 7\e{-5} & 2\e{-5} & 2\e{-5} \\ 
+-8\e{-6} & 7\e{-5} & 4\e{-5} & 5\e{-5} \\ 
 4\e{-4} & -0.051 & -0.005 & -0.006 \\ 
-2\e{-4} & 3\e{-4} & -0.052 & -0.002 \\ 
--2\e{-4} & -3\e{-4} & -1\e{-4} & -0.052
+3\e{-4} & 4\e{-4} & -0.052 & -0.002 \\ 
+-2\e{-4} & -3\e{-4} & -4\e{-5} & -0.052
  \end{array}\!\!\right) $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-2\e{-5} & -4\e{-5} & -2\e{-5} & 6\e{-6} \\ 
-2\e{-4} & -0.052 & 0.007 & 0.001 \\ 
+2\e{-5} & -5\e{-5} & -2\e{-5} & 3\e{-5} \\ 
+2\e{-4} & -0.052 & 0.007 & 5\e{-4} \\ 
 3\e{-4} & 0.001 & -0.05 & 0.001 \\ 
-3\e{-4} & 7\e{-5} & -0.004 & -0.053
+2\e{-4} & -7\e{-6} & -0.004 & -0.053
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -518,13 +519,13 @@ Gx & $ \begin{array}{c}
  & $ \begin{array}{c}
 1 \\ 
 0.008 \\ 
--1\e{-5} \\ 
+-2\e{-5} \\ 
 2\e{-4}
  \end{array} $
  & $ \begin{array}{c}
 0.001 \\ 
 -1 \\ 
-1\e{-6} \\ 
+2\e{-5} \\ 
 -3\e{-4}
  \end{array} $
  & 0.049 & 0.051 \\ \hline
@@ -536,7 +537,7 @@ Gy & $ \begin{array}{c}
  \end{array} $
  & $ \begin{array}{c}
 1 \\ 
--3\e{-6} \\ 
+-8\e{-6} \\ 
 0.007 \\ 
 -2\e{-4}
  \end{array} $
@@ -600,10 +601,10 @@ Gi & $ \left(\!\!\begin{array}{cccc}
  \end{array} $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
-0.487 & 0.475e^{i1.57} & 0.001e^{-i1.53} & 0.001e^{i1.52} \\ 
+0.487 & 0.475e^{i1.57} & 0.001e^{-i1.53} & 0.001e^{i1.51} \\ 
 0.475e^{-i1.57} & 0.488 & 0.001e^{-i3.10} & 0.001e^{i3.11} \\ 
-0.001e^{i1.53} & 0.001e^{i3.10} & 0.013 & 8\e{-5}e^{-i1.97} \\ 
-0.001e^{-i1.52} & 0.001e^{-i3.11} & 8\e{-5}e^{i1.97} & 0.012
+0.001e^{i1.53} & 0.001e^{i3.10} & 0.013 & 8\e{-5}e^{-i1.71} \\ 
+0.001e^{-i1.51} & 0.001e^{-i3.11} & 8\e{-5}e^{i1.71} & 0.012
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.011 \\ 
@@ -613,10 +614,10 @@ Gx & $ \left(\!\!\begin{array}{cccc}
  \end{array} $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-0.488 & 0.002e^{-i1.54} & 0.474e^{i1.57} & 0.001e^{i1.61} \\ 
-0.002e^{i1.54} & 0.012 & 0.001e^{i3.07} & 1\e{-4}e^{i2.04} \\ 
+0.488 & 0.002e^{-i1.55} & 0.474e^{i1.57} & 0.001e^{i1.60} \\ 
+0.002e^{i1.55} & 0.012 & 0.001e^{i3.07} & 1\e{-4}e^{i2.22} \\ 
 0.474e^{-i1.57} & 0.001e^{-i3.07} & 0.488 & 0.001e^{-i3.08} \\ 
-0.001e^{-i1.61} & 1\e{-4}e^{-i2.04} & 0.001e^{i3.08} & 0.012
+0.001e^{-i1.60} & 1\e{-4}e^{-i2.22} & 0.001e^{i3.08} & 0.012
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.011 \\ 
@@ -747,6 +748,80 @@ Figure \ref{invertedBestEstimateColorBoxPlot} shows exactly the same $\chi^2$ an
 \end{figure}
 
 }{}
+
+\section{System and pyGSTi parameters\label{metadata}}
+This section contains a raw dump of system information and various pyGSTi parameters.  It's purpose is to stamp this report with parameters indicating how exactly GST was run to create it, as well as to record the software environment in within which the report creation was run.  Note that if the core GST computation was done on a machine different from the one that created this report, the software information contained here will be of less value.
+
+\begin{table}[h]
+\begin{center}
+\begin{tabular}[l]{|c|p{3in}|}
+\hline
+\textbf{Quantity} & \textbf{Value} \\ \hline
+Long tables (option) & \spverb!False! \\ \hline
+Table class (option) & \spverb!pygstiTbl! \\ \hline
+Template path (option) & \spverb!None! \\ \hline
+Latex command (option) & \spverb!pdflatex! \\ \hline
+cptpPenaltyFactor & \spverb!0! \\ \hline
+defaultBasename & \spverb!MyDefaultReportName! \\ \hline
+defaultDirectory & \spverb!temp_test_files! \\ \hline
+distributeMethod & \spverb!deriv! \\ \hline
+fiducial pairs & \spverb!None! \\ \hline
+gaugeOptParams & \spverb![OrderedDict([('TPpenalty', 0), ('CPpenalty', 0), ('gatesMetric', 'frobenius'), ('spamMetric', 'frobenius'), ('itemWeights', {'spam': 0.001, 'gates': 1.0})])]! \\ \hline
+hessianProjection & \spverb!optimal gate CIs! \\ \hline
+linlogPercentile & \spverb!5! \\ \hline
+max length list & \spverb![0, 1, 2, 4, 8]! \\ \hline
+memLimit & \spverb!None! \\ \hline
+minProbClip & \spverb!1e-06! \\ \hline
+minProbClipForWeighting & \spverb!0.0001! \\ \hline
+objective & \spverb!chi2! \\ \hline
+probClipInterval & \spverb!(-1000000.0, 1000000.0)! \\ \hline
+radius & \spverb!0.0001! \\ \hline
+weights & \spverb!None! \\ \hline
+rho0 parameterization & \spverb!full! \\ \hline
+E0 parameterization & \spverb!full! \\ \hline
+Gi parameterization & \spverb!full! \\ \hline
+Gx parameterization & \spverb!full! \\ \hline
+Gy parameterization & \spverb!full! \\ \hline
+\end{tabular}
+
+\caption{\textbf{Listing of GST parameters and meta-data.}  These parameters and related metadata describe how the GST computation was performed which led to this report. \label{metadataTable}}
+\end{center}
+\end{table}
+
+\begin{table}[h]
+\begin{center}
+\begin{tabular}[l]{|c|p{3in}|}
+\hline
+\textbf{Quantity} & \textbf{Value} \\ \hline
+pyGSTi version & \spverb!0.9.2! \\ \hline
+numpy & \spverb!1.11.2! \\ \hline
+scipy & \spverb!0.18.1! \\ \hline
+matplotlib & \spverb!1.5.3! \\ \hline
+pyparsing & \spverb!2.1.10! \\ \hline
+cvxopt & \spverb!1.1.8! \\ \hline
+cvxpy & \spverb!0.4.5! \\ \hline
+pptx & \spverb!0.6.0! \\ \hline
+nose & \spverb!1.3.7! \\ \hline
+PIL & \spverb!3.4.2! \\ \hline
+psutil & \spverb!4.3.1! \\ \hline
+Python version & \spverb!3.5.2! \\ \hline
+Python type & \spverb!CPython! \\ \hline
+Python compiler & \spverb!GCC 4.2.1 (Apple Inc. build 5666) (dot 3)! \\ \hline
+Python build & \spverb!('v3.5.2:4def2a2901a5', 'Jun 26 2016 10:47:25')! \\ \hline
+Python branch & \spverb!v3.5.2! \\ \hline
+Python revision & \spverb!4def2a2901a5! \\ \hline
+Platform summary & \spverb!Darwin-15.6.0-x86_64-i386-64bit! \\ \hline
+System & \spverb!Darwin! \\ \hline
+Sys Release & \spverb!15.6.0! \\ \hline
+Sys Version & \spverb!Darwin Kernel Version 15.6.0: Mon Jan  9 23:07:29 PST 2017; root:xnu-3248.60.11.2.1~1/RELEASE_X86_64! \\ \hline
+Machine & \spverb!x86_64! \\ \hline
+Processor & \spverb!i386! \\ \hline
+\end{tabular}
+
+\caption{\textbf{Listing of the software environment.}  Note that this describes the software environment of the machine used to generate this report, and not necessarily the machine used to perform the core GST gate set estimatino.\label{metadataTable}}
+\end{center}
+\end{table}
+
 
 
 
