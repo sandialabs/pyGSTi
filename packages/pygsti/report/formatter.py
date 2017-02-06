@@ -364,6 +364,13 @@ FormatSet.formatDict['Small'] = {
     'text'  : _no_format,
     'ppt'   : _PrecisionFormatter(ppt)}
 
+# 'small' formating - make text smaller
+FormatSet.formatDict['Verbatim'] = {
+    'html'  : _PrecisionFormatter(html),
+    'latex' : _Formatter(formatstring='\\spverb!%s!'),
+    'text'  : _no_format,
+    'ppt'   : _PrecisionFormatter(ppt)}
+
 #############################################
 # Helper functions for formatting pi-labels #
 #############################################

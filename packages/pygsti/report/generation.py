@@ -2042,6 +2042,120 @@ def get_gaugeopt_params_table(gaugeOptArgs):
 
 
 
+def get_metadata_table(result_options, result_params):
+    """
+    Create a table displaying the a Result object's options and parameters.
+
+    Parameters
+    ----------
+    result_options: ResultOptions
+        The options to display
+
+    result_params: dict
+        A parameter dictionary to display
+
+    Returns
+    -------
+    ReportTable
+    """
+    colHeadings = ('Quantity','Value')
+    formatters = ('Bold','Bold')
+
+    #custom latex header for maximum width imposed on 2nd col
+    latex_head =  "\\begin{tabular}[l]{|c|p{3in}|}\n\hline\n"
+    latex_head += "\\textbf{Quantity} & \\textbf{Value} \\\\ \hline\n"
+    table = _ReportTable(colHeadings, formatters,
+                         customHeader={'latex': latex_head} )
+
+    table.addrow(("Long tables (option)", str(result_options.long_tables)), (None,'Verbatim'))
+    table.addrow(("Table class (option)", str(result_options.table_class)), (None,'Verbatim'))
+    table.addrow(("Template path (option)", str(result_options.template_path)), (None,'Verbatim'))
+    table.addrow(("Latex command (option)", str(result_options.latex_cmd)), (None,'Verbatim'))
+
+    for key in sorted(list(result_params.keys())):
+        if key in ['L,germ tuple base string dict', 'profiler']: continue #skip these
+        if key == 'gaugeOptParams':
+            val = result_params[key].copy()
+            if not isinstance(val,list): val = [val]
+            for go_param_dict in val:
+                del go_param_dict['targetGateset'] #don't print this!
+        else:
+            val = result_params[key]
+        table.addrow((key, str(val)), (None,'Verbatim'))
+    
+    table.finish()
+    return table
+
+
+def get_software_environment_table():
+    """
+    Create a table displaying the software environment relevant to pyGSTi.
+
+    Returns
+    -------
+    ReportTable
+    """
+    import platform
+    
+    def get_version(moduleName):
+        if moduleName == "cvxopt":
+            #special case b/c cvxopt can be weird...
+            try:
+                mod = __import__("cvxopt.info")
+                return str(mod.info.version)
+            except Exception: pass #try the normal way below
+
+        try:
+            mod = __import__(moduleName)
+            return str(mod.__version__)
+        except ImportError:
+            return "missing"
+        except AttributeError:
+            return "ver?"
+        except Exception:
+            return "???"
+        
+    colHeadings = ('Quantity','Value')
+    formatters = ('Bold','Bold')
+
+    #custom latex header for maximum width imposed on 2nd col
+    latex_head =  "\\begin{tabular}[l]{|c|p{3in}|}\n\hline\n"
+    latex_head += "\\textbf{Quantity} & \\textbf{Value} \\\\ \hline\n"
+    table = _ReportTable(colHeadings, formatters,
+                         customHeader={'latex': latex_head} )
+    
+    #Python package information
+    from .._version import __version__ as pyGSTi_version
+    table.addrow(("pyGSTi version", str(pyGSTi_version)), (None,'Verbatim'))
+
+    packages = ['numpy','scipy','matplotlib','pyparsing','cvxopt','cvxpy',
+                'pptx','nose','PIL','psutil']
+    for pkg in packages:
+        table.addrow((pkg, get_version(pkg)), (None,'Verbatim'))
+
+    #Python information
+    table.addrow(("Python version", str(platform.python_version())), (None,'Verbatim'))
+    table.addrow(("Python type", str(platform.python_implementation())), (None,'Verbatim'))
+    table.addrow(("Python compiler", str(platform.python_compiler())), (None,'Verbatim'))
+    table.addrow(("Python build", str(platform.python_build())), (None,'Verbatim'))
+    table.addrow(("Python branch", str(platform.python_branch())), (None,'Verbatim'))
+    table.addrow(("Python revision", str(platform.python_revision())), (None,'Verbatim'))
+
+    #Platform information
+    (system, node, release, version, machine, processor) = platform.uname()
+    table.addrow(("Platform summary", str(platform.platform())), (None,'Verbatim'))
+    table.addrow(("System", str(system)), (None,'Verbatim'))
+    #table.addrow(("Sys Node", str(node)), (None,'Verbatim')) #seems unnecessary
+    table.addrow(("Sys Release", str(release)), (None,'Verbatim'))
+    table.addrow(("Sys Version", str(version)), (None,'Verbatim'))
+    table.addrow(("Machine", str(machine)), (None,'Verbatim'))
+    table.addrow(("Processor", str(processor)), (None,'Verbatim'))
+
+    table.finish()
+    return table
+
+
+
 
 def get_logl_confidence_region(gateset, dataset, confidenceLevel,
                                gatestring_list=None, probClipInterval=(-1e6,1e6),
