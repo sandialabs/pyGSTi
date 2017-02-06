@@ -318,6 +318,7 @@ class StdInputParser(object):
 
         #Parse preamble -- lines beginning with # or ## until first non-# line
         preamble_directives = { }
+        preamble_comments = []
         with open(filename, 'r') as datafile:
             for line in datafile:
                 line = line.strip()
@@ -326,6 +327,8 @@ class StdInputParser(object):
                     parts = line[len("## "):].split("=")
                     if len(parts) == 2: # key = value
                         preamble_directives[ parts[0].strip() ] = parts[1].strip()
+                elif line.startswith("#"):
+                    preamble_comments.append(line[1:].strip())
 
         #Process premble
         orig_cwd = _os.getcwd()
@@ -343,7 +346,8 @@ class StdInputParser(object):
             _os.chdir(orig_cwd)
 
         #Read data lines of data file
-        dataset = _objs.DataSet(spamLabels=spamLabels,collisionAction=collisionAction)
+        dataset = _objs.DataSet(spamLabels=spamLabels,collisionAction=collisionAction,
+                                comment="\n".join(preamble_comments))
         nLines  = 0
         with open(filename, 'r') as datafile:
             nLines = sum(1 for line in datafile)
@@ -462,6 +466,7 @@ class StdInputParser(object):
 
         #Parse preamble -- lines beginning with # or ## until first non-# line
         preamble_directives = { }
+        preamble_comments = []
         with open(filename, 'r') as multidatafile:
             for line in multidatafile:
                 line = line.strip()
@@ -470,6 +475,9 @@ class StdInputParser(object):
                     parts = line[len("## "):].split("=")
                     if len(parts) == 2: # key = value
                         preamble_directives[ parts[0].strip() ] = parts[1].strip()
+                elif line.startswith("#"):
+                    preamble_comments.append(line[1:].strip())
+
 
         #Process premble
         orig_cwd = _os.getcwd()
@@ -533,7 +541,7 @@ class StdInputParser(object):
                 for dsLabel, countDict in dsCountDicts.items():
                     datasets[dsLabel].add_count_dict(gateStringTuple, countDict)
 
-        mds = _objs.MultiDataSet()
+        mds = _objs.MultiDataSet(comment="\n".join(preamble_comments))
         for dsLabel,ds in datasets.items():
             ds.done_adding_data()
             mds.add_dataset(dsLabel, ds)

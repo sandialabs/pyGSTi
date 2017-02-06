@@ -65,7 +65,8 @@ class MultiDataSet(object):
     def __init__(self, countsDict=None,
                  gateStrings=None, gateStringIndices=None,
                  spamLabels=None, spamLabelIndices=None,
-                 fileToLoadFrom=None, collisionActions=None):
+                 fileToLoadFrom=None, collisionActions=None,
+                 comment=None):
         """
         Initialize a MultiDataSet.
 
@@ -105,6 +106,16 @@ class MultiDataSet(object):
             sets specified by `countsDict`.  Keys must match those of `countsDict`
             and values are "aggregate" or "keepseparate".  See documentation for
             `DataSet`.  If None, then "aggregate" is used for all sets by default.
+
+        comment : string, optional
+            A user-specified comment string that gets carried around with the 
+            data.  A common use for this field is to attache to the data details
+            regarding its collection.
+
+        Returns
+        -------
+        MultiDataSet
+           a new multi data set object.
         """
 
         #Optionally load from a file
@@ -152,6 +163,10 @@ class MultiDataSet(object):
         else:
             self.countsDict = _OrderedDict()
             self.collisionActions = _OrderedDict()
+
+        # comment
+        self.comment = comment
+
 
     def get_spam_labels(self):
         """
@@ -349,7 +364,8 @@ class MultiDataSet(object):
                      'gsIndexVals': list(self.gsIndex.values()) if self.gsIndex else [],
                      'slIndex': self.slIndex,
                      'countsKeys': list(self.countsDict.keys()),
-                     'collisionActions' : self.collisionActions }  #Don't pickle countsDict numpy data b/c it's inefficient
+                     'collisionActions' : self.collisionActions,
+                     'comment': self.comment }  #Don't pickle countsDict numpy data b/c it's inefficient
         # Compatability for unicode-literal filenames
         bOpen = not (hasattr(fileOrFilename, 'write'))
         if bOpen:
@@ -402,6 +418,7 @@ class MultiDataSet(object):
         self.gsIndex = _OrderedDict( list(zip(gsIndexKeys, state_dict['gsIndexVals'])) )
         self.slIndex = state_dict['slIndex']
         self.collisionActions = state_dict['collisionActions']
+        self.comment = state_dict["comment"]
         self.countsDict = _OrderedDict()
         for key in state_dict['countsKeys']:
             self.countsDict[key] = _np.lib.format.read_array(f) #np.load(f) doesn't play nice with gzip

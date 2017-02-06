@@ -1065,6 +1065,10 @@ def get_dataset_overview_table(dataset, target, maxlen=10, fixedLists=None,
                   svals_2col), ('Conversion','Small'))
     if maxLengthList is not None:
         table.addrow(("Max. Lengths", ", ".join(map(str,maxLengthList)) ), (None,None))
+    if hasattr(dataset,'comment'):
+        commentLines = dataset.comment.split('\n')
+        for i,commentLine in enumerate(commentLines,start=1):
+            table.addrow(("User comment %d" % i, commentLine  ), (None,'Verbatim'))
 
     table.finish()
     return table

@@ -126,7 +126,7 @@ class DataSet(object):
 
     def __init__(self, counts=None, gateStrings=None, gateStringIndices=None,
                  spamLabels=None, spamLabelIndices=None,  bStatic=False, fileToLoadFrom=None,
-                 collisionAction="aggregate"):
+                 collisionAction="aggregate", comment=None):
         """
         Initialize a DataSet.
 
@@ -175,12 +175,16 @@ class DataSet(object):
             duplicated gate sequence, which can then be accessed via the
             `get_row` and `set_row` functions.
 
+        comment : string, optional
+            A user-specified comment string that gets carried around with the 
+            data.  A common use for this field is to attache to the data details
+            regarding its collection.
+
 
         Returns
         -------
         DataSet
            a new data set object.
-
         """
 
         #Optionally load from a file
@@ -237,6 +241,9 @@ class DataSet(object):
         # collision action
         assert(collisionAction in ('aggregate','keepseparate'))
         self.collisionAction = collisionAction
+
+        # comment
+        self.comment = comment
 
 
     def __iter__(self):
@@ -656,7 +663,8 @@ class DataSet(object):
                      'gsIndexVals': list(self.gsIndex.values()) if self.gsIndex else [],
                      'slIndex': self.slIndex,
                      'bStatic': self.bStatic,
-                     'collisionAction': self.collisionAction} 
+                     'collisionAction': self.collisionAction,
+                     'comment': self.comment } 
                      #Don't pickle counts numpy data b/c it's inefficient
         if not self.bStatic: toPickle['nRows'] = len(self.counts)
 
@@ -718,6 +726,7 @@ class DataSet(object):
         self.slIndex = state_dict['slIndex']
         self.bStatic = state_dict['bStatic']
         self.collisionAction = state_dict.get("collisionAction","aggregate") #backward compatibility
+        self.comment = state_dict.get("comment",None) #backward compatibility
 
         if self.bStatic:
             self.counts = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
