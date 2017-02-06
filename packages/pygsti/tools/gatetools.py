@@ -649,8 +649,7 @@ def unitary_to_process_mx(U):
     return _np.kron(U,_np.conjugate(U))
 
 
-
-def error_generator(gate, target_gate, typ="logG-logT"): #or HERE
+def error_generator(gate, target_gate, typ="logG-logT"):
     """
     Construct the error generator from a gate and its target.
 
@@ -678,30 +677,50 @@ def error_generator(gate, target_gate, typ="logG-logT"): #or HERE
       The error generator.
     """
     if typ == "logG-logT":
-        # choose a branch cut position between eigenvalues of target
+        TOL = 1e-8
+        logG = _mt.real_matrix_log(gate,"ignore",TOL)
+        logT = _mt.real_matrix_log(target_gate,"ignore",TOL)
+
+        # if logG and logT are both real, just take the difference,
+        #  as there are no branch cut issues in this case
+        if _np.linalg.norm(_np.imag(logG)) < TOL and \
+           _np.linalg.norm(_np.imag(logT)) < TOL:
+            return _np.real(logG - logT) 
+
+        #Otherwise, there could be branch cut issues, so rotate
+        # the branch cut to a point in between the target's
+        # eigenvalues
+        _warnings.warn("Could not construct a real logarithms for the" +
+                       "'logG-logT' generator.  Perhaps you should use " +
+                       "the 'logTiG' generator instead?")
+
         evals = _spl.eigvals(target_gate)
         N = len(evals)
         angles = _np.sort(_np.imag(_np.log(evals)))
         deltas = [ angles[i+1]-angles[i] for i in range(N-1) ]
         deltas.append(angles[0]+2*_np.pi - angles[N-1])
-        #print("DEBUG: angles = ",angles)
-        #print("DEBUG: deltas = ",deltas)
         iMax = _np.argmax(deltas)
-        print("DEBUG: iMax = ",iMax)
         if iMax < N-1:
             bca = (angles[iMax] + angles[iMax+1])/2 + _np.pi #branch-cut angle
         else: #iMax == N-1
             bca = (angles[N-1] + angles[0]+2*_np.pi)/2 - _np.pi
         a = _np.exp(1j*bca)
-        #print("DEBUG: bca = ",bca)
-        return  _np.real_if_close(_spl.logm(a*gate) - _spl.logm(a*target_gate),
-                                  tol=10000) # in machine epsilons
+        errgen = _spl.logm(a*gate) - _spl.logm(a*target_gate)
+        
     elif typ == "logTiG":
         target_gate_inv = _spl.inv(target_gate)
-        return _np.real_if_close(_spl.logm(_np.dot(target_gate_inv,gate)),
-                                      tol=10000) # in machine epsilons
+        errgen = _spl.logm(_np.dot(target_gate_inv,gate))
+        
     else:
         raise ValueError("Invalid error-generator type: %s" % typ)
+
+    if _np.linalg.norm(_np.imag(errgen)) > TOL:
+        raise ValueError("Could not construct a real generator!")
+        #maybe this is actually ok, but a complex error generator will
+        # need to be plotted differently, etc -- TODO
+    return _np.real(errgen)
+
+
 
 
 def gate_from_error_generator(error_gen, target_gate, typ="logG-logT"):
