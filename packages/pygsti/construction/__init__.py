@@ -13,4 +13,3 @@ from .gatestringconstruction import *
 from .spamspecconstruction import *
 from .datasetconstruction import *
 from .stdlists import *
-from .rpeconstruction import *

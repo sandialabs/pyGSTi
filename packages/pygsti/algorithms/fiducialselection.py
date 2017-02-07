@@ -120,24 +120,25 @@ def generate_fiducials(gs_target, omitIdentity=True, eqThresh=1e-6,
         prepFidList = optimize_integer_fiducials_slack(gateset=gs_target,
                                                        prepOrMeas='prep',
                                                        **algorithm_kwargs)
+        if prepFidList is not None:
+            prepScore = compute_composite_score(
+                gs_target, prepFidList, 'prep',
+                scoreFunc=algorithm_kwargs['scoreFunc'])
+            printer.log('Preparation fiducials:', 1)
+            printer.log(str([str(fid) for fid in prepFidList]), 1)
+            printer.log('Score: {}'.format(prepScore.score), 1)
 
-        prepScore = compute_composite_score(
-            gs_target, prepFidList, 'prep',
-            scoreFunc=algorithm_kwargs['scoreFunc'])
-        printer.log('Preparation fiducials:', 1)
-        printer.log(str([str(fid) for fid in prepFidList]), 1)
-        printer.log('Score: {}'.format(prepScore.score), 1)
-
+            
         measFidList = optimize_integer_fiducials_slack(gateset=gs_target,
                                                        prepOrMeas='meas',
                                                        **algorithm_kwargs)
-
-        measScore = compute_composite_score(
-            gs_target, measFidList, 'meas',
-            scoreFunc=algorithm_kwargs['scoreFunc'])
-        printer.log('Measurement fiducials:', 1)
-        printer.log(str([str(fid) for fid in measFidList]), 1)
-        printer.log('Score: {}'.format(measScore.score), 1)
+        if measFidList is not None:
+            measScore = compute_composite_score(
+                gs_target, measFidList, 'meas',
+                scoreFunc=algorithm_kwargs['scoreFunc'])
+            printer.log('Measurement fiducials:', 1)
+            printer.log(str([str(fid) for fid in measFidList]), 1)
+            printer.log('Score: {}'.format(measScore.score), 1)
 
     elif algorithm == 'grasp':
         printer.log('Using GRASP algorithm.', 1)

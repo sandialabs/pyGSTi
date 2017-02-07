@@ -14,6 +14,7 @@
 \usepackage{hyperref}
 \usepackage{pdfcomment}
 \usepackage{color}
+\usepackage{spverbatim}
 
 \setcounter{topnumber}{3}
 \setcounter{bottomnumber}{3}
@@ -63,7 +64,7 @@
   pdfinfo={ Author={pyGSTi},
 Title={GST report for $\mathcal{D}$},
 Keywords={GST},
-pyGSTi_Version={0.9.2},
+pyGSTi_Version={0.9.3},
 opt_long_tables={False},
 opt_table_class={pygstiTbl},
 opt_template_path={None},
@@ -350,8 +351,8 @@ Tables \ref{bestGatesetSpamTable} and \ref{bestGatesetGatesTable} report 95\% co
 \hline
 Operator & Matrix & Hilbert-Schmidt vector (Pauli basis) & 95\% C.I. $\nicefrac{1}{2}$-width \\ \hline
 $\rho_{0}$ & $ \left(\!\!\begin{array}{cc}
-0.951 & 0.001e^{-i0.17} \\ 
-0.001e^{i0.17} & 0.049
+0.951 & 0.001e^{-i0.16} \\ 
+0.001e^{i0.16} & 0.049
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.707 \\ 
@@ -367,8 +368,8 @@ $\rho_{0}$ & $ \left(\!\!\begin{array}{cc}
  \end{array} $
  \\ \hline
 $E_{0}$ & $ \left(\!\!\begin{array}{cc}
-0.047 & 0.002e^{i1.61} \\ 
-0.002e^{-i1.61} & 0.955
+0.047 & 0.002e^{i1.62} \\ 
+0.002e^{-i1.62} & 0.955
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.708 \\ 
@@ -422,7 +423,7 @@ Gi & $ \left(\!\!\begin{array}{cccc}
 Gx & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
 3\e{-4} & 0.951 & -0.005 & -0.005 \\ 
-2\e{-4} & 3\e{-4} & 1\e{-4} & -0.949 \\ 
+2\e{-4} & 2\e{-4} & 9\e{-5} & -0.949 \\ 
 2\e{-4} & 3\e{-4} & 0.949 & -0.002
  \end{array}\!\!\right) $
  & $ \left(\!\!\begin{array}{cccc}
@@ -434,9 +435,9 @@ Gx & $ \left(\!\!\begin{array}{cccc}
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
 1 & 0 & 0 & 0 \\ 
-2\e{-4} & 7\e{-5} & -0.004 & 0.949 \\ 
+2\e{-4} & 8\e{-5} & -0.004 & 0.949 \\ 
 3\e{-4} & 0.001 & 0.951 & 0.001 \\ 
--2\e{-4} & -0.949 & -0.006 & -5\e{-4}
+-2\e{-4} & -0.949 & -0.006 & -0.001
  \end{array}\!\!\right) $
  & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
@@ -498,7 +499,7 @@ Gy & $ \left(\!\!\begin{array}{cccc}
 0 & 0 & 0 & 0 \\ 
 2\e{-4} & -0.052 & 0.007 & 0.001 \\ 
 3\e{-4} & 0.001 & -0.05 & 0.001 \\ 
-2\e{-4} & 7\e{-5} & -0.004 & -0.053
+3\e{-4} & 9\e{-5} & -0.004 & -0.053
  \end{array}\!\!\right) $
  \\ \hline
 \end{tabular}
@@ -535,9 +536,9 @@ Gi & $ \begin{array}{c}
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
--0.933 \\ 
-0.151 \\ 
-0.326
+0.933 \\ 
+-0.151 \\ 
+-0.326
  \end{array} $
  & $ \begin{array}{c} 0.051 \\ \pm 0.019 \end{array} $ & $ \begin{array}{c} 0.054 \\ \pm 0.01 \end{array} $ \\ \hline
 Gx & $ \begin{array}{c}
@@ -555,13 +556,13 @@ Gx & $ \begin{array}{c}
  & $ \begin{array}{c}
 1 \\ 
 0.007 \\ 
--3\e{-5} \\ 
+-2\e{-5} \\ 
 2\e{-4}
  \end{array} $
  & $ \begin{array}{c}
 0 \\ 
 -1 \\ 
--1\e{-5} \\ 
+3\e{-6} \\ 
 -3\e{-4}
  \end{array} $
  & $ \begin{array}{c} 0.049 \\ \pm 0.006 \end{array} $ & $ \begin{array}{c} 0.051 \\ \pm 0.003 \end{array} $ \\ \hline
@@ -579,7 +580,7 @@ Gy & $ \begin{array}{c}
  \end{array} $
  & $ \begin{array}{c}
 1 \\ 
-1\e{-5} \\ 
+-2\e{-7} \\ 
 0.006 \\ 
 -2\e{-4}
  \end{array} $
@@ -597,9 +598,9 @@ Gy & $ \begin{array}{c}
 \hline
 \multirow{2}{*}{Gate} & \multirow{2}{*}{Angle} & \multicolumn{3}{c|}{Angle between Rotation Axes} \\ \cline{3-5}
  & & Gi & Gx & Gy \\ \hline
-Gi & $ \begin{array}{c}(0.001 \\ \pm 0.003)\pi \end{array} $ &  & $ \begin{array}{c}(0.117 \\ \pm 0.481)\pi \end{array} $ & $ \begin{array}{c}(0.45 \\ \pm 0.619)\pi \end{array} $ \\ \hline
-Gx & $ \begin{array}{c}(0.5 \\ \pm 0.001)\pi \end{array} $ & $ \begin{array}{c}(0.117 \\ \pm 0.481)\pi \end{array} $ &  & $ \begin{array}{c}(0.498 \\ \pm 0.002)\pi \end{array} $ \\ \hline
-Gy & $ \begin{array}{c}(0.5 \\ \pm 0.001)\pi \end{array} $ & $ \begin{array}{c}(0.45 \\ \pm 0.619)\pi \end{array} $ & $ \begin{array}{c}(0.498 \\ \pm 0.002)\pi \end{array} $ &  \\ \hline
+Gi & $ \begin{array}{c}(0.001 \\ \pm 0.003)\pi \end{array} $ &  & $ \begin{array}{c}(0.883 \\ \pm 0.481)\pi \end{array} $ & $ \begin{array}{c}(0.55 \\ \pm 0.619)\pi \end{array} $ \\ \hline
+Gx & $ \begin{array}{c}(0.5 \\ \pm 0.001)\pi \end{array} $ & $ \begin{array}{c}(0.883 \\ \pm 0.481)\pi \end{array} $ &  & $ \begin{array}{c}(0.498 \\ \pm 0.002)\pi \end{array} $ \\ \hline
+Gy & $ \begin{array}{c}(0.5 \\ \pm 0.001)\pi \end{array} $ & $ \begin{array}{c}(0.55 \\ \pm 0.619)\pi \end{array} $ & $ \begin{array}{c}(0.498 \\ \pm 0.002)\pi \end{array} $ &  \\ \hline
 \end{tabular}
 
 \caption{\textbf{Eigen-decomposition of estimated gates}.  Each estimated gate is described in terms of: (1) the eigenvalues of the superoperator; (2) the gate's fixed point (as a vector in $\mathcal{B}(\mathcal{H})$, in the Pauli basis); (3)  the axis around which it rotates, as a vector in $\mathcal{B}(\mathcal{H})$; (4) the angle of the rotation that it applies; (5) the decay rate along the axis of rotation (``diagonal decay''); (6) the decay rate perpendicular to the axis of rotation (``off-diagonal decay''); and (7) the angle between each gate's rotation axis and the rotation axes of the other gates.  ``X'' indicates that the decomposition failed or couldn't be interpreted. \label{bestGatesetDecompTable}}
@@ -649,10 +650,10 @@ Gi & $ \left(\!\!\begin{array}{cccc}
  \end{array} $
  \\ \hline
 Gx & $ \left(\!\!\begin{array}{cccc}
-0.487 & 0.475e^{i1.57} & 0.001e^{-i1.54} & 0.001e^{i1.52} \\ 
-0.475e^{-i1.57} & 0.488 & 0.001e^{-i3.09} & 0.001e^{i3.11} \\ 
-0.001e^{i1.54} & 0.001e^{i3.09} & 0.013 & 9\e{-5}e^{-i1.90} \\ 
-0.001e^{-i1.52} & 0.001e^{-i3.11} & 9\e{-5}e^{i1.90} & 0.012
+0.487 & 0.475e^{i1.57} & 0.001e^{-i1.54} & 0.001e^{i1.53} \\ 
+0.475e^{-i1.57} & 0.488 & 0.001e^{-i3.10} & 0.001e^{i3.11} \\ 
+0.001e^{i1.54} & 0.001e^{i3.10} & 0.013 & 9\e{-5}e^{-i1.91} \\ 
+0.001e^{-i1.53} & 0.001e^{-i3.11} & 9\e{-5}e^{i1.91} & 0.012
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.011 \\ 
@@ -668,10 +669,10 @@ Gx & $ \left(\!\!\begin{array}{cccc}
  \end{array} $
  \\ \hline
 Gy & $ \left(\!\!\begin{array}{cccc}
-0.488 & 0.002e^{-i1.54} & 0.474e^{i1.57} & 0.001e^{i1.60} \\ 
-0.002e^{i1.54} & 0.012 & 0.001e^{i3.09} & 1\e{-4}e^{i2.18} \\ 
-0.474e^{-i1.57} & 0.001e^{-i3.09} & 0.488 & 0.001e^{-i3.10} \\ 
-0.001e^{-i1.60} & 1\e{-4}e^{-i2.18} & 0.001e^{i3.10} & 0.012
+0.488 & 0.002e^{-i1.54} & 0.474e^{i1.57} & 0.001e^{i1.61} \\ 
+0.002e^{i1.54} & 0.012 & 0.001e^{i3.08} & 9\e{-5}e^{i2.13} \\ 
+0.474e^{-i1.57} & 0.001e^{-i3.08} & 0.488 & 0.001e^{-i3.09} \\ 
+0.001e^{-i1.61} & 9\e{-5}e^{-i2.13} & 0.001e^{i3.09} & 0.012
  \end{array}\!\!\right) $
  & $ \begin{array}{c}
 0.011 \\ 
@@ -805,6 +806,80 @@ Figure \ref{invertedBestEstimateColorBoxPlot} shows exactly the same $\log(\math
 \end{figure}
 
 }{}
+
+\section{System and pyGSTi parameters\label{metadata}}
+This section contains a raw dump of system information and various pyGSTi parameters.  It's purpose is to stamp this report with parameters indicating how exactly GST was run to create it, as well as to record the software environment in within which the report creation was run.  Note that if the core GST computation was done on a machine different from the one that created this report, the software information contained here will be of less value.
+
+\begin{table}[h]
+\begin{center}
+\begin{tabular}[l]{|c|p{3in}|}
+\hline
+\textbf{Quantity} & \textbf{Value} \\ \hline
+Long tables (option) & \spverb!False! \\ \hline
+Table class (option) & \spverb!pygstiTbl! \\ \hline
+Template path (option) & \spverb!None! \\ \hline
+Latex command (option) & \spverb!pdflatex! \\ \hline
+cptpPenaltyFactor & \spverb!0! \\ \hline
+defaultBasename & \spverb!None! \\ \hline
+defaultDirectory & \spverb!None! \\ \hline
+distributeMethod & \spverb!deriv! \\ \hline
+fiducial pairs & \spverb!None! \\ \hline
+gaugeOptParams & \spverb![{}]! \\ \hline
+hessianProjection & \spverb!optimal gate CIs! \\ \hline
+linlogPercentile & \spverb!5! \\ \hline
+max length list & \spverb![0, 1, 2, 4, 8]! \\ \hline
+memLimit & \spverb!None! \\ \hline
+minProbClip & \spverb!1e-06! \\ \hline
+minProbClipForWeighting & \spverb!0.0001! \\ \hline
+objective & \spverb!logl! \\ \hline
+probClipInterval & \spverb!(-1000000.0, 1000000.0)! \\ \hline
+radius & \spverb!0.0001! \\ \hline
+weights & \spverb!None! \\ \hline
+rho0 parameterization & \spverb!TP! \\ \hline
+E0 parameterization & \spverb!full! \\ \hline
+Gi parameterization & \spverb!TP! \\ \hline
+Gx parameterization & \spverb!TP! \\ \hline
+Gy parameterization & \spverb!TP! \\ \hline
+\end{tabular}
+
+\caption{\textbf{Listing of GST parameters and meta-data.}  These parameters and related metadata describe how the GST computation was performed which led to this report. \label{metadataTable}}
+\end{center}
+\end{table}
+
+\begin{table}[h]
+\begin{center}
+\begin{tabular}[l]{|c|p{3in}|}
+\hline
+\textbf{Quantity} & \textbf{Value} \\ \hline
+pyGSTi version & \spverb!0.9.3! \\ \hline
+numpy & \spverb!1.11.2! \\ \hline
+scipy & \spverb!0.18.1! \\ \hline
+matplotlib & \spverb!1.5.3! \\ \hline
+pyparsing & \spverb!2.0.1! \\ \hline
+cvxopt & \spverb!1.1.8! \\ \hline
+cvxpy & \spverb!0.4.5! \\ \hline
+pptx & \spverb!0.6.0! \\ \hline
+nose & \spverb!1.3.7! \\ \hline
+PIL & \spverb!3.4.1! \\ \hline
+psutil & \spverb!4.3.1! \\ \hline
+Python version & \spverb!2.7.10! \\ \hline
+Python type & \spverb!CPython! \\ \hline
+Python compiler & \spverb!GCC 4.2.1 Compatible Apple LLVM 7.0.0 (clang-700.0.59.5)! \\ \hline
+Python build & \spverb!('default', 'Oct 23 2015 19:19:21')! \\ \hline
+Python branch & \spverb!! \\ \hline
+Python revision & \spverb!! \\ \hline
+Platform summary & \spverb!Darwin-15.6.0-x86_64-i386-64bit! \\ \hline
+System & \spverb!Darwin! \\ \hline
+Sys Release & \spverb!15.6.0! \\ \hline
+Sys Version & \spverb!Darwin Kernel Version 15.6.0: Mon Jan  9 23:07:29 PST 2017; root:xnu-3248.60.11.2.1~1/RELEASE_X86_64! \\ \hline
+Machine & \spverb!x86_64! \\ \hline
+Processor & \spverb!i386! \\ \hline
+\end{tabular}
+
+\caption{\textbf{Listing of the software environment.}  Note that this describes the software environment of the machine used to generate this report, and not necessarily the machine used to perform the core GST gate set estimatino.\label{metadataTable}}
+\end{center}
+\end{table}
+
 
 \input{full_reportD_appendices.tex}
 

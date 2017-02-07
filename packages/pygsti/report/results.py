@@ -827,16 +827,28 @@ class Results(object):
         def fn(key, confidenceLevel, vb):
             _, gsBest = setup()
             noConfidenceLevelDependence(confidenceLevel)
-            return _generation.get_pauli_err_gen_projector_boxes_table(
-                gsBest.dim, "hamiltonian", "pauli_ham")
+            return _generation.get_err_gen_projector_boxes_table(
+                gsBest.dim, "hamiltonian", gsBest.get_basis_name(), "errgen_ham")
         fns['hamiltonianProjectorTable'] = (fn, validate_essential)
 
         def fn(key, confidenceLevel, vb):
             _, gsBest = setup()
             noConfidenceLevelDependence(confidenceLevel)
-            return _generation.get_pauli_err_gen_projector_boxes_table(
-                gsBest.dim, "stochastic", "pauli_sto")
+            return _generation.get_err_gen_projector_boxes_table(
+                gsBest.dim, "stochastic", gsBest.get_basis_name(), "errgen_sto")
         fns['stochasticProjectorTable'] = (fn, validate_essential)
+
+        def fn(key, confidenceLevel, vb):
+            _, gsBest = setup()
+            noConfidenceLevelDependence(confidenceLevel)
+            return _generation.get_metadata_table(gsBest, self.options, self.parameters)
+        fns['metadataTable'] = (fn, validate_essential)
+
+
+        def fn(key, confidenceLevel, vb):
+            noConfidenceLevelDependence(confidenceLevel)
+            return _generation.get_software_environment_table()
+        fns['softwareEnvTable'] = (fn, validate_essential)
 
         return fns
 
@@ -1190,27 +1202,27 @@ class Results(object):
             else: return []
         fns[expr6] = (fn, fn_validate)
 
-
-        expr7 = "pauliProdHamiltonianDecompBoxes(.+)"
-        def fn(key, confidenceLevel, vb):
-            #cri = self._get_confidence_region(confidenceLevel)
-            noConfidenceLevelDependence(confidenceLevel)
-            gateLabel = _re.match(expr7,key).group(1)
-            gate = self.gatesets['final estimate'].gates[gateLabel]
-            target_gate = self.gatesets['target'].gates[gateLabel]
-            basisNm   = self.gatesets['final estimate'].get_basis_name()
-            assert(basisNm == self.gatesets['target'].get_basis_name())
-            return _plotting.pauliprod_hamiltonian_boxplot(
-                gate, target_gate, save_to="", mxBasis=basisNm, boxLabels=True)
-
-        def fn_validate(key):
-            if not self._bEssentialResultsSet: return []
-            keys = ["pauliProdHamiltonianDecompBoxes%s" % gl
-                    for gl in self.gatesets['final estimate'].gates ]
-            if key == expr7: return keys # all computable keys
-            elif key in keys: return [key]
-            else: return []
-        fns[expr7] = (fn, fn_validate)
+#OLD: unused?
+#        expr7 = "pauliProdHamiltonianDecompBoxes(.+)"
+#        def fn(key, confidenceLevel, vb):
+#            #cri = self._get_confidence_region(confidenceLevel)
+#            noConfidenceLevelDependence(confidenceLevel)
+#            gateLabel = _re.match(expr7,key).group(1)
+#            gate = self.gatesets['final estimate'].gates[gateLabel]
+#            target_gate = self.gatesets['target'].gates[gateLabel]
+#            basisNm   = self.gatesets['final estimate'].get_basis_name()
+#            assert(basisNm == self.gatesets['target'].get_basis_name())
+#            return _plotting.pauliprod_hamiltonian_boxplot(
+#                gate, target_gate, save_to="", mxBasis=basisNm, boxLabels=True)
+#
+#        def fn_validate(key):
+#            if not self._bEssentialResultsSet: return []
+#            keys = ["pauliProdHamiltonianDecompBoxes%s" % gl
+#                    for gl in self.gatesets['final estimate'].gates ]
+#            if key == expr7: return keys # all computable keys
+#            elif key in keys: return [key]
+#            else: return []
+#        fns[expr7] = (fn, fn_validate)
 
         return fns
 
@@ -1914,7 +1926,8 @@ class Results(object):
              'bestGatesetGaugeOptParamsTable',
              'bestGatesetGatesTable','bestGatesetChoiTable',
              'bestGatesetDecompTable','bestGatesetRotnAxisTable',
-             'bestGatesetVsTargetTable','bestGatesetErrorGenTable')
+             'bestGatesetVsTargetTable','bestGatesetErrorGenTable',
+             'metadataTable','softwareEnvTable')
              #removed: 'bestGatesetClosestUnitaryTable',
 
         ls_and_germs_tables = ('fiducialListTable','prepStrListTable',
@@ -3745,7 +3758,7 @@ class Results(object):
              'bestGatesetChoiEvalTable', 'datasetOverviewTable',
              'bestGatesetEvalTable', 'bestGatesetRelEvalTable',
              'targetGatesBoxTable', 'bestGatesetGatesBoxTable',
-             'bestGatesetErrGenBoxTable')
+             'bestGatesetErrGenBoxTable', 'metadataTable', 'softwareEnvTable')
 
         ls_and_germs_tables = ('fiducialListTable','prepStrListTable',
                                'effectStrListTable','germList2ColTable',

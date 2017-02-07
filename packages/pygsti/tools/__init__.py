@@ -17,4 +17,3 @@ from .chi2fns import *
 from .gatetools import *
 from .slicetools import *
 
-from . import rpetools as rpe

@@ -20,9 +20,6 @@ except:
 from .customcg import fmax_cg
 
 
-startTime = _time.time() #for reference point of obj func printer
-
-
 def minimize(fn,x0, method='cg', callback=None,
              tol=1e-10, maxiter=1000000, maxfev=None,
              stopval=None, jac=None):
@@ -717,7 +714,7 @@ def fmin_evolutionary(f, x0, num_generations, num_individuals):
 
 
 
-def create_obj_func_printer(objFunc):
+def create_obj_func_printer(objFunc, startTime=None):
     """
     Create a callback function that prints the value of an objective function.
 
@@ -726,11 +723,19 @@ def create_obj_func_printer(objFunc):
     objFunc : function
         The objective function to print.
 
+    startTime : float (optional)
+        A reference starting time to use when printing elapsed times. If None,
+        then the system time when this function is called is used (which is 
+        often what you want).
+
     Returns
     -------
     function
         A callback function which prints objFunc.
     """
+    if startTime is None:
+        startTime = _time.time() #for reference point of obj func printer
+
     def print_obj_func(x,f=None,accepted=None): # Just print the objective function value (used to monitor convergence in a callback)
         if f is not None and accepted is not None:
             print("%5ds %22.10f %s" % (_time.time()-startTime, f, 'accepted' if accepted else 'not accepted'))

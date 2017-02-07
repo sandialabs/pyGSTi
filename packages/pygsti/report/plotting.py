@@ -3401,7 +3401,7 @@ def gate_matrix_boxplot(gateMatrix, size=None, m=-1.0, M=1.0,
       size of font for title
 
     mxBasis : str, optional
-      The name abbreviation for the basis. Typically in {"pp","gm","std"}.
+      The name abbreviation for the basis. Typically in {"pp","gm","std","qt"}.
       Used to label the rows & columns.  If you don't want labels, leave as
       None.
 
@@ -3550,7 +3550,7 @@ def gate_matrix_boxplot(gateMatrix, size=None, m=-1.0, M=1.0,
 #        size of font for title
 #
 #    mxBasis : str, optional
-#      The name abbreviation for the basis. Typically in {"pp","gm","std"}.
+#      The name abbreviation for the basis. Typically in {"pp","gm","std","qt"}.
 #      Used to label the rows & columns.  If you don't want labels, leave as
 #      None.
 #
@@ -3688,26 +3688,32 @@ def polar_eigenval_plot(gate, targetGate, size=(4,4), title=None,
 
 
 
-def pauliprod_projection_boxplot(projections, m=None, M=None, size=None,
-                                 title=None, save_to=None, fontSize=15,
-                                 boxLabels=False, prec="compacthp"):
+def errgen_projection_boxplot(projections, projection_basis, m=None, M=None,
+                              size=None, title=None, save_to=None, fontSize=15,
+                              boxLabels=False, prec="compacthp"):
     """
-    Creates a color box plot displaying the projections of a gate
-    error generator onto generators corresponding to the Pauli-product
-    basis elements.  Typically `projections` is obtained by 
-    calling :func:`pauliprod_errgen_projections`.
+    Creates a color box plot displaying the projections of a gate error
+    generator onto generators corresponding to a set of standard error
+    generators constructed from the given basis.  Typically `projections`
+    is obtained by calling :func:`std_errgen_projections`.
 
     Parameters
     ----------
     projections : ndarray
-      A 1-dimensional array of length equal to the Pauli-product
-      basis size (equal to the gate dimension).  Ordering of the
-      values is assumed to correspond to the ordering given by
-      :func:`pp_matrices`.
+      A 1-dimensional array of length equal to the numer of elements in
+      the given basis (usually equal to the gate dimension).  Ordering of
+      the values is assumed to correspond to the ordering given by the 
+      routines in `pygsti.tools`, (e.g. :func:`pp_matrices` when 
+      `projection_basis` equals "pp").
+
+    projection_basis : {'std', 'gm', 'pp', 'qt'}
+      The basis is used to construct the error generators onto which
+      the gate  error generator is projected.  Allowed values are
+      Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp) and Qutrit (qt).
 
     m,M : float, optional
-        Color scale min and max values, respectivey.  If None, then computed
-        automatically from the data range.
+      Color scale min and max values, respectivey.  If None, then computed
+      automatically from the data range.
 
     size : tuple, optional
       The (width,height) figure size in inches.  None
@@ -3749,7 +3755,11 @@ def pauliprod_projection_boxplot(projections, m=None, M=None, size=None,
     d = int(_np.sqrt(d2)) # dim of density matrix
     nQubits = _np.log2(d)
 
-    if nQubits == 1:
+    if not _np.isclose(round(nQubits),nQubits):
+        #Non-integral # of qubits, so just show as a single row
+        projections = projections.reshape( (1,projections.size) )
+        xlabel = ""; ylabel = ""        
+    elif nQubits == 1:
         projections = projections.reshape( (1,4) )
         xlabel = "Q1"; ylabel = ""
     elif nQubits == 2:
@@ -3762,7 +3772,7 @@ def pauliprod_projection_boxplot(projections, m=None, M=None, size=None,
     xd = int(round(_np.sqrt(projections.shape[1]))) #x-basis-dim
     yd = int(round(_np.sqrt(projections.shape[0]))) #y-basis-dim
     return gate_matrix_boxplot(projections, size, m,M, save_to, fontSize,
-                               "pp", xd, xlabel, ylabel, title, boxLabels,
+                               projection_basis, xd, xlabel, ylabel, title, boxLabels,
                                prec, yd)
 
 

@@ -834,11 +834,14 @@ def get_gateset_eigenval_table(gateset, targetGateset,
 
         if confidenceRegionInfo is None:
             evals = qtys['%s eigenvalues' % gl].get_value()
-            evals = evals.reshape(evals.size//2, 2) #assumes len(evals) is even!
+            try: evals = evals.reshape(evals.size//2, 2) #assumes len(evals) is even!
+            except: evals = evals.reshape(evals.size, 1)
             rowData = [gl, (evals,None), figInfo]
         else:
             evals, evalsEB = qtys['%s eigenvalues' % gl].get_value_and_err_bar()
-            evals = evals.reshape(evals.size//2, 2) #assumes len(evals) is even!
+            try: evals = evals.reshape(evals.size//2, 2) #assumes len(evals) is even!
+            except: evals = evals.reshape(evals.size, 1)
+
             rowData = [gl, (evals,evalsEB), figInfo]
 
         table.addrow(rowData, formatters)
@@ -924,12 +927,14 @@ def get_gateset_relative_eigenval_table(gateset, targetGateset,
         if confidenceRegionInfo is None:
             rel_evals = qtys['%s relative %s eigenvalues' 
                              % (gl,genType)].get_value()
-            rel_evals = rel_evals.reshape(rel_evals.size//2, 2)
+            try: rel_evals = rel_evals.reshape(rel_evals.size//2, 2)
+            except: rel_evals = rel_evals.reshape(rel_evals.size, 1)
             rowData = [gl, (rel_evals,None), figInfo]
         else:
             rel_evals, rel_evalsEB = qtys['%s relative %s eigenvalues' 
                                          % (gl,genType)].get_value_and_err_bar()
-            rel_evals = rel_evals.reshape(rel_evals.size//2, 2)
+            try: rel_evals = rel_evals.reshape(rel_evals.size//2, 2)
+            except: rel_evals = rel_evals.reshape(rel_evals.size, 1)
             rowData = [gl, (rel_evals,rel_evalsEB), figInfo]
 
         table.addrow(rowData, formatters)
@@ -986,7 +991,10 @@ def get_gateset_choi_eigenval_table(gateset, figFilePrefix,
     for gl in gateLabels:
 
         evals, evalsEB = qtys['%s choi eigenvalues' % gl].get_value_and_err_bar()
-        evals = evals.reshape(evals.size//4, 4) #assumes len(evals) is multiple of 4!
+        try:
+            evals = evals.reshape(evals.size//4, 4) #assumes len(evals) is multiple of 4!
+        except: # if it isn't try 3 (qutrits)
+            evals = evals.reshape(evals.size//3, 3) #assumes len(evals) is multiple of 3!
         nm = figFilePrefix + "_" + gl
 
         if confidenceRegionInfo is None:
@@ -994,7 +1002,9 @@ def get_gateset_choi_eigenval_table(gateset, figFilePrefix,
             figInfo = (fig,nm,sz,sz)
             table.addrow((gl, evals, figInfo), (None, 'Normal', 'Figure'))
         else:
-            evalsEB = evalsEB.reshape(evalsEB.size//4, 4)
+            try:    evalsEB = evalsEB.reshape(evalsEB.size//4, 4)
+            except: evalsEB = evalsEB.reshape(evalsEB.size//3, 3)
+
             fig = _plotting.choi_eigenvalue_barplot(evals, evalsEB, ylabel="")
             figInfo = (fig,nm,sz,sz)
             table.addrow((gl, (evals,evalsEB), figInfo), (None, 'VecErrorBars', 'Figure'))
@@ -1055,6 +1065,10 @@ def get_dataset_overview_table(dataset, target, maxlen=10, fixedLists=None,
                   svals_2col), ('Conversion','Small'))
     if maxLengthList is not None:
         table.addrow(("Max. Lengths", ", ".join(map(str,maxLengthList)) ), (None,None))
+    if hasattr(dataset,'comment') and dataset.comment is not None:
+        commentLines = dataset.comment.split('\n')
+        for i,commentLine in enumerate(commentLines,start=1):
+            table.addrow(("User comment %d" % i, commentLine  ), (None,'Verbatim'))
 
     table.finish()
     return table
@@ -1324,23 +1338,23 @@ def get_logl_projected_err_gen_table(gateset, targetGateset,
         targetGate = targetGateset.gates[gl]
 
         errgen = _tools.error_generator(gate, targetGate, genType)
-        hamProj, hamGens = _tools.pauliprod_errgen_projections(
-            errgen, "hamiltonian", basisNm, True)
-        stoProj, stoGens = _tools.pauliprod_errgen_projections(
-            errgen, "stochastic", basisNm, True)
+        hamProj, hamGens = _tools.std_errgen_projections(
+            errgen, "hamiltonian", basisNm, basisNm, True)
+        stoProj, stoGens = _tools.std_errgen_projections(
+            errgen, "stochastic", basisNm, basisNm, True)
         HProj, OProj, HGens, OGens = \
-            _tools.pauliprod_lindblad_errgen_projections(
-            errgen, basisNm, normalize=False,
-            return_generators=True)
+            _tools.lindblad_errgen_projections(
+                errgen, basisNm, basisNm, normalize=False,
+                return_generators=True)
 
         ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)
         sto_error_gen = _np.einsum('i,ijk', stoProj, stoGens)
         lnd_error_gen = _np.einsum('i,ijk', HProj, HGens) + \
             _np.einsum('ij,ijkl', OProj, OGens)
 
-        ham_error_gen = _tools.std_to_pp(ham_error_gen)
-        sto_error_gen = _tools.std_to_pp(sto_error_gen)
-        lnd_error_gen = _tools.std_to_pp(lnd_error_gen)
+        ham_error_gen = _tools.change_basis(ham_error_gen,"std",basisNm)
+        sto_error_gen = _tools.change_basis(sto_error_gen,"std",basisNm)
+        lnd_error_gen = _tools.change_basis(lnd_error_gen,"std",basisNm)
 
         gsH.gates[gl]  = _tools.gate_from_error_generator(
             ham_error_gen, targetGate, genType)
@@ -1373,7 +1387,7 @@ def get_logl_projected_err_gen_table(gateset, targetGateset,
         OProj_cp = _np.dot(U,_np.dot(_np.diag(pos_evals),_np.linalg.inv(U))) #OProj_cp is now a pos-def matrix
         lnd_error_gen_cp = _np.einsum('i,ijk', HProj, HGens) + \
             _np.einsum('ij,ijkl', OProj_cp, OGens)
-        lnd_error_gen_cp = _tools.std_to_pp(lnd_error_gen_cp)
+        lnd_error_gen_cp = _tools.change_basis(lnd_error_gen_cp,"std",basisNm)
 
         gsLNDCP.gates[gl] = _tools.gate_from_error_generator(
             lnd_error_gen_cp, targetGate, genType)
@@ -1706,10 +1720,10 @@ def get_gates_vs_target_err_gen_boxes_table(gateset, targetGateset,
         targetGate = targetGateset.gates[gl]
 
         errgens[gl] = _tools.error_generator(gate, targetGate, genType)
-        hamProjs[gl] = _tools.pauliprod_errgen_projections(
-            errgens[gl], "hamiltonian", basisNm)
-        stoProjs[gl] = _tools.pauliprod_errgen_projections(
-            errgens[gl], "stochastic", basisNm)
+        hamProjs[gl] = _tools.std_errgen_projections(
+            errgens[gl], "hamiltonian", basisNm, basisNm)
+        stoProjs[gl] = _tools.std_errgen_projections(
+            errgens[gl], "stochastic", basisNm, basisNm)
 
         absMax = _np.max(_np.abs(errgens[gl]))
         addMax(errgens['M'], absMax)
@@ -1727,12 +1741,12 @@ def get_gates_vs_target_err_gen_boxes_table(gateset, targetGateset,
             mxBasisDims=basisDims)
 
         m,M = getMinMax(hamProjs['M'],_np.max(_np.abs(hamProjs[gl])))
-        hamdecomp_fig = _plotting.pauliprod_projection_boxplot(
-            hamProjs[gl], m, M, save_to="", boxLabels=True)
+        hamdecomp_fig = _plotting.errgen_projection_boxplot(
+            hamProjs[gl], basisNm, m, M, save_to="", boxLabels=True)
 
         m,M = getMinMax(stoProjs['M'],_np.max(_np.abs(stoProjs[gl])))
-        stodecomp_fig = _plotting.pauliprod_projection_boxplot(
-            stoProjs[gl], m, M, save_to="", boxLabels=True)
+        stodecomp_fig = _plotting.errgen_projection_boxplot(
+            stoProjs[gl], basisNm, m, M, save_to="", boxLabels=True)
 
         maxFigSz = min(0.85*(maxHeight/nRows), 0.85*(2./3.)*(maxWidth-1.0))
         sz = min(gateset.gates[gl].shape[0] * 0.5, maxFigSz)
@@ -1795,15 +1809,15 @@ def get_projected_err_gen_comparison_table(gateset, targetGateset,
         targetGate = targetGateset.gates[gl]
 
         errgen = _tools.error_generator(gate, targetGate, genType)
-        hamProj, hamGens = _tools.pauliprod_errgen_projections(
-            errgen, "hamiltonian", basisNm, True)
-        stoProj, stoGens = _tools.pauliprod_errgen_projections(
-            errgen, "stochastic", basisNm, True)
+        hamProj, hamGens = _tools.std_errgen_projections(
+            errgen, "hamiltonian", basisNm, basisNm, True)
+        stoProj, stoGens = _tools.std_errgen_projections(
+            errgen, "stochastic", basisNm, basisNm, True)
 
         ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)
         sto_error_gen = _np.einsum('i,ijk', stoProj, stoGens)
-        ham_error_gen = _tools.std_to_pp(ham_error_gen)
-        sto_error_gen = _tools.std_to_pp(sto_error_gen)
+        ham_error_gen = _tools.change_basis(ham_error_gen,"std",basisNm)
+        sto_error_gen = _tools.change_basis(sto_error_gen,"std",basisNm)
 
         gateH = _tools.gate_from_error_generator(ham_error_gen, targetGate, genType)
         gateS = _tools.gate_from_error_generator(sto_error_gen, targetGate, genType)
@@ -1877,9 +1891,9 @@ def get_projected_err_gen_comparison_table(gateset, targetGateset,
     return table
 
 
-def get_pauli_err_gen_projector_boxes_table(gateset_dim, projection_type,
-                                            figFilePrefix,
-                                            maxWidth=6.5, maxHeight=8.0):
+def get_err_gen_projector_boxes_table(gateset_dim, projection_type,
+                                      projection_basis, figFilePrefix,
+                                      maxWidth=6.5, maxHeight=8.0):
     """
     Create a table of gate error generators, where each is shown as grid of boxes.
 
@@ -1892,9 +1906,14 @@ def get_pauli_err_gen_projector_boxes_table(gateset_dim, projection_type,
     projection_type : {"hamiltonian", "stochastic"}
         The type of error generator projectors to create a table for.
         If "hamiltonian", then use the Hamiltonian generators which take a
-        density matrix rho -> -i*[ H, rho ] for Pauli-product matrix H.
+        density matrix rho -> -i*[ H, rho ] for basis matrix H.
         If "stochastic", then use the Stochastic error generators which take
-        rho -> P*rho*P for Pauli-product matrix P (recall P is self adjoint).
+        rho -> P*rho*P for basis matrix P (recall P is self adjoint).
+
+    projection_basis : {'std', 'gm', 'pp', 'qt'}
+      Which basis is used to construct the error generators.  Allowed
+      values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp)
+      and Qutrit (qt).
 
     figFilePrefix : str
         A filename prefix (not including any directories!) to use
@@ -1916,10 +1935,14 @@ def get_pauli_err_gen_projector_boxes_table(gateset_dim, projection_type,
     nQubits = _np.log2(d)
 
     #Get a list of the d2 generators (in corresspondence with the
-    #  Pauli-product matrices given by _bt.pp_matrices(d) ).
-    lindbladMxs = _tools.pauliprod_error_generators(d2, projection_type)
-       # in std basis
+    #  given basis matrices)
+    lindbladMxs = _tools.std_error_generators(d2, projection_type,
+                                              projection_basis) # in std basis
 
+    if not _np.isclose(round(nQubits),nQubits): 
+        #Non-integral # of qubits, so just show as a single row
+        yd,xd = 1,d
+        xlabel = ""; ylabel = ""        
     if nQubits == 1:
         yd,xd = 1,2 # y and x pauli-prod *basis* dimensions
         xlabel = "Q1"; ylabel = ""
@@ -1933,12 +1956,12 @@ def get_pauli_err_gen_projector_boxes_table(gateset_dim, projection_type,
     topright = "%s \\ %s" % (ylabel,xlabel) if (len(ylabel) > 0) else ""
     colHeadings=[topright] + \
         [("%s" % x) if len(x) else "" \
-             for x in _tools.basis_element_labels("pp",xd)]
+             for x in _tools.basis_element_labels(projection_basis,xd)]
     rowLabels=[("%s" % x) if len(x) else "" \
-                 for x in _tools.basis_element_labels("pp",yd)]
+                 for x in _tools.basis_element_labels(projection_basis,yd)]
 
-    xLabels = _tools.basis_element_labels("pp",xd)
-    yLabels = _tools.basis_element_labels("pp",yd)
+    xLabels = _tools.basis_element_labels(projection_basis,xd)
+    yLabels = _tools.basis_element_labels(projection_basis,yd)
 
     table = _ReportTable(colHeadings,["Conversion"]+[None]*(len(colHeadings)-1))
     nRows = len(rowLabels)
@@ -1953,10 +1976,10 @@ def get_pauli_err_gen_projector_boxes_table(gateset_dim, projection_type,
 
         for j,xlabel in enumerate(xLabels):
             projector = lindbladMxs[iCur]; iCur += 1
-            projector = _tools.std_to_pp(projector) #now in pp basis ("pp" below)
+            projector = _tools.change_basis(projector,"std",projection_basis)
             m,M = -_np.max(_np.abs(projector)), _np.max(_np.abs(projector))
             fig = _plotting.gate_matrix_boxplot(
-                projector, None, m,M, save_to="", mxBasis="pp", mxBasisDims=d)
+                projector, None, m,M, save_to="", mxBasis=projection_basis, mxBasisDims=d)
 
             sz = min(projector.shape[0] * 0.5, maxFigSz)
             nm = figFilePrefix + "_%s_%s_projector" % (ylabel,xlabel)
@@ -2017,6 +2040,171 @@ def get_gaugeopt_params_table(gaugeOptArgs):
                            for k,v in gaugeOptArgs['itemWeights'].items()])), (None,None))
     if 'gauge_group' in gaugeOptArgs:
         table.addrow(("Gauge group", str(gaugeOptArgs['gauge_group'])), (None,None))
+
+    table.finish()
+    return table
+
+
+
+def get_metadata_table(gateset, result_options, result_params):
+    """
+    Create a table displaying the a Result object's options and parameters.
+
+    Parameters
+    ----------
+    gateset : GateSet
+        The gateset (usually the final estimate of a GST computation) to 
+        show information for (e.g. the types of its gates).
+
+    result_options: ResultOptions
+        The options to display
+
+    result_params: dict
+        A parameter dictionary to display
+
+    Returns
+    -------
+    ReportTable
+    """
+    colHeadings = ('Quantity','Value')
+    formatters = ('Bold','Bold')
+
+    #custom latex header for maximum width imposed on 2nd col
+    latex_head =  "\\begin{tabular}[l]{|c|p{3in}|}\n\hline\n"
+    latex_head += "\\textbf{Quantity} & \\textbf{Value} \\\\ \hline\n"
+    table = _ReportTable(colHeadings, formatters,
+                         customHeader={'latex': latex_head} )
+
+    table.addrow(("Long tables (option)", str(result_options.long_tables)), (None,'Verbatim'))
+    table.addrow(("Table class (option)", str(result_options.table_class)), (None,'Verbatim'))
+    table.addrow(("Template path (option)", str(result_options.template_path)), (None,'Verbatim'))
+    table.addrow(("Latex command (option)", str(result_options.latex_cmd)), (None,'Verbatim'))
+
+    for key in sorted(list(result_params.keys())):
+        if key in ['L,germ tuple base string dict', 'profiler']: continue #skip these
+        if key == 'gaugeOptParams':
+            if isinstance(result_params[key],dict):
+                val = result_params[key].copy()
+                if 'targetGateset' in val:
+                    del val['targetGateset'] #don't print this!
+                            
+            elif isinstance(result_params[key],list):
+                val = []
+                for go_param_dict in result_params[key]:
+                    if isinstance(go_param_dict,dict): #to ensure .copy() exists
+                        val.append(go_param_dict.copy())
+                        if 'targetGateset' in val[-1]:
+                            del val[-1]['targetGateset'] #don't print this!
+        else:
+            val = result_params[key]
+        table.addrow((key, str(val)), (None,'Verbatim'))
+
+
+    for lbl,vec in gateset.preps.items():
+        if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
+        elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
+        elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
+        else: paramTyp = "unknown"
+        table.addrow((lbl + " parameterization", paramTyp), (None,'Verbatim'))
+
+    for lbl,vec in gateset.effects.items():
+        if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
+        elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
+        elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
+        else: paramTyp = "unknown"
+        table.addrow((lbl + " parameterization", paramTyp), (None,'Verbatim'))
+
+    #Not displayed since the POVM identity is always fully parameterized,
+    # even through it doesn't contribute to the gate set parameters (a special case)
+    #if gateset.povm_identity is not None:
+    #    vec = gateset.povm_identity
+    #    if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
+    #    elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
+    #    elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
+    #    else: paramTyp = "unknown"
+    #    table.addrow(("POVM identity parameterization", paramTyp), (None,'Verbatim'))
+
+    for gl,gate in gateset.gates.items():
+        if isinstance(gate, _objs.StaticGate): paramTyp = "static"
+        elif isinstance(gate, _objs.FullyParameterizedGate): paramTyp = "full"
+        elif isinstance(gate, _objs.TPParameterizedGate): paramTyp = "TP"
+        elif isinstance(gate, _objs.LinearlyParameterizedGate): paramTyp = "linear"
+        elif isinstance(gate, _objs.EigenvalueParameterizedGate): paramTyp = "eigenvalue"
+        elif isinstance(gate, _objs.LindbladParameterizedGate):
+            paramTyp = "Lindblad"
+            if gate.cptp: paramTyp += " CPTP "
+            paramTyp += gate.nonHamTerms
+        else: paramTyp = "unknown"
+        table.addrow((gl + " parameterization", paramTyp), (None,'Verbatim'))
+        
+    
+    table.finish()
+    return table
+
+
+def get_software_environment_table():
+    """
+    Create a table displaying the software environment relevant to pyGSTi.
+
+    Returns
+    -------
+    ReportTable
+    """
+    import platform
+    
+    def get_version(moduleName):
+        if moduleName == "cvxopt":
+            #special case b/c cvxopt can be weird...
+            try:
+                mod = __import__("cvxopt.info")
+                return str(mod.info.version)
+            except Exception: pass #try the normal way below
+
+        try:
+            mod = __import__(moduleName)
+            return str(mod.__version__)
+        except ImportError:
+            return "missing"
+        except AttributeError:
+            return "ver?"
+        except Exception:
+            return "???"
+        
+    colHeadings = ('Quantity','Value')
+    formatters = ('Bold','Bold')
+
+    #custom latex header for maximum width imposed on 2nd col
+    latex_head =  "\\begin{tabular}[l]{|c|p{3in}|}\n\hline\n"
+    latex_head += "\\textbf{Quantity} & \\textbf{Value} \\\\ \hline\n"
+    table = _ReportTable(colHeadings, formatters,
+                         customHeader={'latex': latex_head} )
+    
+    #Python package information
+    from .._version import __version__ as pyGSTi_version
+    table.addrow(("pyGSTi version", str(pyGSTi_version)), (None,'Verbatim'))
+
+    packages = ['numpy','scipy','matplotlib','pyparsing','cvxopt','cvxpy',
+                'pptx','nose','PIL','psutil']
+    for pkg in packages:
+        table.addrow((pkg, get_version(pkg)), (None,'Verbatim'))
+
+    #Python information
+    table.addrow(("Python version", str(platform.python_version())), (None,'Verbatim'))
+    table.addrow(("Python type", str(platform.python_implementation())), (None,'Verbatim'))
+    table.addrow(("Python compiler", str(platform.python_compiler())), (None,'Verbatim'))
+    table.addrow(("Python build", str(platform.python_build())), (None,'Verbatim'))
+    table.addrow(("Python branch", str(platform.python_branch())), (None,'Verbatim'))
+    table.addrow(("Python revision", str(platform.python_revision())), (None,'Verbatim'))
+
+    #Platform information
+    (system, node, release, version, machine, processor) = platform.uname()
+    table.addrow(("Platform summary", str(platform.platform())), (None,'Verbatim'))
+    table.addrow(("System", str(system)), (None,'Verbatim'))
+    #table.addrow(("Sys Node", str(node)), (None,'Verbatim')) #seems unnecessary
+    table.addrow(("Sys Release", str(release)), (None,'Verbatim'))
+    table.addrow(("Sys Version", str(version)), (None,'Verbatim'))
+    table.addrow(("Machine", str(machine)), (None,'Verbatim'))
+    table.addrow(("Processor", str(processor)), (None,'Verbatim'))
 
     table.finish()
     return table

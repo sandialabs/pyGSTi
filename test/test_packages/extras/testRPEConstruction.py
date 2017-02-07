@@ -1,7 +1,8 @@
 from ..testutils import BaseTestCase, compare_files, temp_files
 from pygsti.objects import GateString
 
-import pygsti.construction.rpeconstruction as rc
+import pygsti.extras.rpe.rpeconstruction as rc
+from pygsti.extras.rpe.rpeconfig_GxPi2_GyPi2_UpDn import rpeconfig_GxPi2_GyPi2_UpDn
 import pygsti.construction as pc
 
 import unittest
@@ -13,6 +14,7 @@ class RPEConstructionTestCase(BaseTestCase):
     def setUp(self):
         super(RPEConstructionTestCase, self).setUp()
         self.lengths = [2, 4, 8, 16, 32]
+        self.rpeconfig_inst = rpeconfig_GxPi2_GyPi2_UpDn
 
     def build_lists(self, fids1, fids2, germ):
         lists = ([GateString(fids1 % (germ + str(length))) for length in self.lengths],
@@ -32,38 +34,40 @@ class RPEConstructionTestCase(BaseTestCase):
     # I'm assuming these angles are in radians, based on documentation.
     def test_make_parameterized_rpe_gateset(self):
         # These numbers have no significance
-        A = rc.make_parameterized_rpe_gate_set(1.57079632679, 1.57079632679, .78539816339, 0.001, 0.001)
-        B = rc.make_parameterized_rpe_gate_set(1.57079632679, 1.57079632679, .78539816339, 0.001, 0.001)
+        A = rc.make_parameterized_rpe_gate_set(1.57079632679, 1.57079632679, .78539816339, 0.001, 0.001, rpeconfig_inst=self.rpeconfig_inst)
+        B = rc.make_parameterized_rpe_gate_set(1.57079632679, 1.57079632679, .78539816339, 0.001, 0.001, rpeconfig_inst=self.rpeconfig_inst)
         self.assertEqual(A.frobeniusdist(B), 0.0)
 
         # Again, no significance in these numbers
-        C = rc.make_parameterized_rpe_gate_set(1.56079632679, 1.56079632679, .78539816339, 0.001, 0.001, True)
+        C = rc.make_parameterized_rpe_gate_set(1.56079632679, 1.56079632679, .78539816339, 0.001, 0.001, True, rpeconfig_inst=self.rpeconfig_inst)
         self.assertAlmostEqual(A.frobeniusdist(C), 0.0, 2)
 
     def test_make_rpe_alpha_str_lists_gx_gz(self): # At least we can be sure about what this function is doing
-        lists           = rc.make_rpe_alpha_str_lists_gx_gz(self.lengths)
+        
+        lists           = rc.make_rpe_angle_str_lists(self.lengths, "alpha", self.rpeconfig_inst)
         expected        = self.build_lists('GiGxGxGz%sGzGzGxGx', 'GxGxGzGz%sGzGzGzGxGx', 'Gz^')
         lists, expected = self.to_tuples(lists, expected)
         self.assertEqual(lists, expected)
 
     def test_rpe_epsilon_str_lists_gx_gz(self):
-        lists           = rc.make_rpe_epsilon_str_lists_gx_gz(self.lengths)
+        lists           = rc.make_rpe_angle_str_lists(self.lengths, "epsilon", self.rpeconfig_inst)
         expected        = self.build_lists('%sGxGxGxGx', 'GxGxGzGz%sGxGxGxGx', 'Gx^')
         lists, expected = self.to_tuples(lists, expected)
         self.assertEqual(lists, expected)
 
     def test_make_rpe_theta_str_lists_gx_gz(self):
-        lists           = rc.make_rpe_theta_str_lists_gx_gz(self.lengths)
+        lists           = rc.make_rpe_angle_str_lists(self.lengths, "theta", self.rpeconfig_inst)
         expected        = self.build_lists('%sGxGxGxGx', '(GxGxGzGz)%sGxGxGxGx', '(GzGxGxGxGxGzGzGxGxGxGxGz)^')
         lists, expected = self.to_tuples(lists, expected)
         self.assertEqual(lists, expected)
 
-    def test_make_rpe_string_list_d(self):
-        d = rc.make_rpe_string_list_d(3)
+    def test_make_rpe_string_list_dict(self):
+        stringListD = rc.make_rpe_angle_string_list_dict(2,self.rpeconfig_inst)
 
     def test_make_rpe_data_set(self):
-        A = rc.make_parameterized_rpe_gate_set(1.57079632679, 1.57079632679, .78539816339, 0.001, 0.001)
-        d = rc.make_rpe_string_list_d(3)
+        A = rc.make_parameterized_rpe_gate_set(1.57079632679, 1.57079632679, .78539816339, 0.001, 0.001,
+                                               rpeconfig_inst=self.rpeconfig_inst)
+        d = rc.make_rpe_angle_string_list_dict(3,self.rpeconfig_inst)
         rc.make_rpe_data_set(A, d, 1000)
 
     #def test_ensemble(self):

@@ -295,6 +295,11 @@ class Gate(object):
         """ Depolarize gate by the given amount. """
         raise NotImplementedError("This gate cannot be depolarize()'d")
 
+    def rotate(self, amount, mxBasis="gm"):
+        """ Rotate gate by the given amount. """
+        raise NotImplementedError("This gate cannot be rotate()'d")
+
+
     #Handled by derived classes
     #def __str__(self):
     #    s = "Gate with shape %s\n" % str(self.base.shape)
@@ -542,16 +547,53 @@ class StaticGate(Gate):
 
         Parameters
         ----------
-        amount : float
-            The amount to depolarize by.  In standard bases, this corresponds
-            to multiplying the non-identity diagonal elements of the gate
-            matrix by `1.0 - amount`.
+        amount : float or tuple
+            The amount to depolarize by.  If a tuple, it must have length
+            equal to one less than the dimension of the gate. In standard
+            bases, depolarization corresponds to multiplying the gate matrix
+            by a diagonal matrix whose first diagonal element (corresponding
+            to the identity) equals 1.0 and whose subsequent elements 
+            (corresponding to non-identity basis elements) equal
+            `1.0 - amount[i]` (or just `1.0 - amount` if `amount` is a
+            float).
 
         Returns
         -------
         None
         """
         raise ValueError("Cannot depolarize a StaticGate - it has no parameters!")
+
+
+    def rotate(self, amount, mxBasis="gm"):
+        """
+        Rotate this gate by the given `amount`.
+
+        Generally, the rotate function updates the *parameters* of 
+        the gate such that the resulting gate matrix is rotated.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        In this particular case *no* alterations are possible since a
+        StaticGate has no parameters to modify.  Thus, this function
+        *always* raises a ValueError.
+
+        Parameters
+        ----------
+        amount : float or tuple of floats, optional
+          If a single float, apply rotation of rotate radians along each of
+          the Pauli-product axes (X,Y,Z for 1-qubit). A tuple specifies separate
+          rotations along each of the non-identity Pauli-product axes.
+
+        mxBasis : {'std', 'gm','pp'}, optional
+          Which basis this gate is represented in.
+          Allowed options are Matrix-unit (std), Gell-Mann
+          (gm) and Pauli-product (pp).
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError("Cannot rotate a StaticGate - it has no parameters!")
 
 
     def compose(self, otherGate):
@@ -735,16 +777,57 @@ class FullyParameterizedGate(Gate):
 
         Parameters
         ----------
-        amount : float
-            The amount to depolarize by.  All but the first diagonal
-            element of the gate matrix is multiplied by `1.0 - amount`.
+        amount : float or tuple
+            The amount to depolarize by.  If a tuple, it must have length
+            equal to one less than the dimension of the gate. In standard
+            bases, depolarization corresponds to multiplying the gate matrix
+            by a diagonal matrix whose first diagonal element (corresponding
+            to the identity) equals 1.0 and whose subsequent elements 
+            (corresponding to non-identity basis elements) equal
+            `1.0 - amount[i]` (or just `1.0 - amount` if `amount` is a
+            float).
 
         Returns
         -------
         None
         """
-        D = _np.diag( [1]+[1-amount]*(self.dim-1) )
+        if isinstance(amount,float):
+            D = _np.diag( [1]+[1-amount]*(self.dim-1) )
+        else:
+            assert(len(amount) == self.dim-1)
+            D = _np.diag( [1]+list(1.0 - _np.array(amount,'d')) )
         self.set_matrix(_np.dot(D,self))
+
+
+    def rotate(self, amount, mxBasis="gm"):
+        """
+        Rotate this gate by the given `amount`.
+
+        Generally, the rotate function updates the *parameters* of 
+        the gate such that the resulting gate matrix is rotated.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float or tuple of floats, optional
+          If a single float, apply rotation of rotate radians along each of
+          the Pauli-product axes (X,Y,Z for 1-qubit). A tuple specifies separate
+          rotations along each of the non-identity Pauli-product axes.
+
+        mxBasis : {'std', 'gm','pp'}, optional
+          Which basis this gate is represented in.
+          Allowed options are Matrix-unit (std), Gell-Mann
+          (gm) and Pauli-product (pp).
+
+        Returns
+        -------
+        None
+        """
+        if isinstance(amount,float):
+            amount = (amount,)*(self.dim-1)
+        rotnMx = _gt.rotation_gate_mx(amount,mxBasis)
+        self.set_matrix(_np.dot(rotnMx,self))
 
 
     def __str__(self):
@@ -942,16 +1025,57 @@ class TPParameterizedGate(Gate):
 
         Parameters
         ----------
-        amount : float
-            The amount to depolarize by.  All but the first diagonal
-            element of the gate matrix is multiplied by `1.0 - amount`.
+        amount : float or tuple
+            The amount to depolarize by.  If a tuple, it must have length
+            equal to one less than the dimension of the gate. In standard
+            bases, depolarization corresponds to multiplying the gate matrix
+            by a diagonal matrix whose first diagonal element (corresponding
+            to the identity) equals 1.0 and whose subsequent elements 
+            (corresponding to non-identity basis elements) equal
+            `1.0 - amount[i]` (or just `1.0 - amount` if `amount` is a
+            float).
 
         Returns
         -------
         None
         """
-        D = _np.diag( [1]+[1-amount]*(self.dim-1) )
+        if isinstance(amount,float):
+            D = _np.diag( [1]+[1-amount]*(self.dim-1) )
+        else:
+            assert(len(amount) == self.dim-1)
+            D = _np.diag( [1]+list(1.0 - _np.array(amount,'d')) )
         self.set_matrix(_np.dot(D,self))
+
+
+    def rotate(self, amount, mxBasis="gm"):
+        """
+        Rotate this gate by the given `amount`.
+
+        Generally, the rotate function updates the *parameters* of 
+        the gate such that the resulting gate matrix is rotated.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float or tuple of floats, optional
+          If a single float, apply rotation of rotate radians along each of
+          the Pauli-product axes (X,Y,Z for 1-qubit). A tuple specifies separate
+          rotations along each of the non-identity Pauli-product axes.
+
+        mxBasis : {'std', 'gm','pp'}, optional
+          Which basis this gate is represented in.
+          Allowed options are Matrix-unit (std), Gell-Mann
+          (gm) and Pauli-product (pp).
+
+        Returns
+        -------
+        None
+        """
+        if isinstance(amount,float):
+            amount = (amount,)*(self.dim-1)
+        rotnMx = _gt.rotation_gate_mx(amount,mxBasis)
+        self.set_matrix(_np.dot(rotnMx,self))
 
 
     def compose(self, otherGate):
@@ -1247,16 +1371,50 @@ class LinearlyParameterizedGate(Gate):
 
         Parameters
         ----------
-        amount : float
-            The amount to depolarize by.  In standard bases, this corresponds
-            to multiplying the non-identity diagonal elements of the gate
-            matrix by `1.0 - amount`.
+        amount : float or tuple
+            The amount to depolarize by.  If a tuple, it must have length
+            equal to one less than the dimension of the gate. In standard
+            bases, depolarization corresponds to multiplying the gate matrix
+            by a diagonal matrix whose first diagonal element (corresponding
+            to the identity) equals 1.0 and whose subsequent elements 
+            (corresponding to non-identity basis elements) equal
+            `1.0 - amount[i]` (or just `1.0 - amount` if `amount` is a
+            float).
 
         Returns
         -------
         None
         """
         raise ValueError("Cannot depolarize a LinearlyParameterizedGate (no general procedure)!")
+
+
+    def rotate(self, amount, mxBasis="gm"):
+        """
+        Rotate this gate by the given `amount`.
+
+        Generally, the rotate function updates the *parameters* of 
+        the gate such that the resulting gate matrix is rotated.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float or tuple of floats, optional
+          If a single float, apply rotation of rotate radians along each of
+          the Pauli-product axes (X,Y,Z for 1-qubit). A tuple specifies separate
+          rotations along each of the non-identity Pauli-product axes.
+
+        mxBasis : {'std', 'gm','pp'}, optional
+          Which basis this gate is represented in.
+          Allowed options are Matrix-unit (std), Gell-Mann
+          (gm) and Pauli-product (pp).
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError("Cannot rotate a LinearlyParameterizedGate (no general procedure)!")
+
 
 
     def compose(self, otherGate):
@@ -1782,10 +1940,15 @@ class EigenvalueParameterizedGate(Gate):
 
         Parameters
         ----------
-        amount : float
-            The amount to depolarize by.  In standard bases, this corresponds
-            to multiplying the non-identity diagonal elements of the gate
-            matrix by `1.0 - amount`.
+        amount : float or tuple
+            The amount to depolarize by.  If a tuple, it must have length
+            equal to one less than the dimension of the gate. In standard
+            bases, depolarization corresponds to multiplying the gate matrix
+            by a diagonal matrix whose first diagonal element (corresponding
+            to the identity) equals 1.0 and whose subsequent elements 
+            (corresponding to non-identity basis elements) equal
+            `1.0 - amount[i]` (or just `1.0 - amount` if `amount` is a
+            float).
 
         Returns
         -------
@@ -1794,6 +1957,34 @@ class EigenvalueParameterizedGate(Gate):
         #TODO: maybe could do this if we wanted to get clever: if one eigenvector is the
         # identity we could reduce all the eigenvalues corresponding to *other* evecs.
         raise ValueError("Cannot depolarize a EigenvalueParameterizedGate")
+
+
+    def rotate(self, amount, mxBasis="gm"):
+        """
+        Rotate this gate by the given `amount`.
+
+        Generally, the rotate function updates the *parameters* of 
+        the gate such that the resulting gate matrix is rotated.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float or tuple of floats, optional
+          If a single float, apply rotation of rotate radians along each of
+          the Pauli-product axes (X,Y,Z for 1-qubit). A tuple specifies separate
+          rotations along each of the non-identity Pauli-product axes.
+
+        mxBasis : {'std', 'gm','pp'}, optional
+          Which basis this gate is represented in.
+          Allowed options are Matrix-unit (std), Gell-Mann
+          (gm) and Pauli-product (pp).
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError("Cannot rotate an EigenvalueParameterizedGate!")
 
 
     def compose(self, otherGate):
@@ -2346,16 +2537,63 @@ class LindbladParameterizedGate(Gate):
 
         Parameters
         ----------
-        amount : float
-            The amount to depolarize by.  All but the first diagonal
-            element of the gate matrix is multiplied by `1.0 - amount`.
+        amount : float or tuple
+            The amount to depolarize by.  If a tuple, it must have length
+            equal to one less than the dimension of the gate. In standard
+            bases, depolarization corresponds to multiplying the gate matrix
+            by a diagonal matrix whose first diagonal element (corresponding
+            to the identity) equals 1.0 and whose subsequent elements 
+            (corresponding to non-identity basis elements) equal
+            `1.0 - amount[i]` (or just `1.0 - amount` if `amount` is a
+            float).
 
         Returns
         -------
         None
         """
-        D = _np.diag( [1]+[1-amount]*(self.dim-1) )
+        if isinstance(amount,float):
+            D = _np.diag( [1]+[1-amount]*(self.dim-1) )
+        else:
+            assert(len(amount) == self.dim-1)
+            D = _np.diag( [1]+list(1.0 - _np.array(amount,'d')) )
         mx = _np.dot(D,self.base)
+        tGate = LindbladParameterizedGate(mx,self.unitary_prefactor,
+                                          self.cptp,self.nonHamTerms,
+                                          truncate=True)
+        #Note: truncate=True to be safe
+        self.paramvals[:] = tGate.paramvals[:]
+        self._construct_matrix()
+
+
+    def rotate(self, amount, mxBasis="gm"):
+        """
+        Rotate this gate by the given `amount`.
+
+        Generally, the rotate function updates the *parameters* of 
+        the gate such that the resulting gate matrix is rotated.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float or tuple of floats, optional
+          If a single float, apply rotation of rotate radians along each of
+          the Pauli-product axes (X,Y,Z for 1-qubit). A tuple specifies separate
+          rotations along each of the non-identity Pauli-product axes.
+
+        mxBasis : {'std', 'gm','pp'}, optional
+          Which basis this gate is represented in.
+          Allowed options are Matrix-unit (std), Gell-Mann
+          (gm) and Pauli-product (pp).
+
+        Returns
+        -------
+        None
+        """
+        if isinstance(amount,float):
+            amount = (amount,)*(self.dim-1)
+        rotnMx = _gt.rotation_gate_mx(amount,mxBasis)
+        mx = _np.dot(rotnMx,self.base)
         tGate = LindbladParameterizedGate(mx,self.unitary_prefactor,
                                           self.cptp,self.nonHamTerms,
                                           truncate=True)
