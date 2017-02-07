@@ -16,6 +16,7 @@ import time as _time
 
 from ..tools import matrixtools as _mt
 from ..tools import basistools as _bt
+from ..tools import gatetools as _gt
 from ..tools import likelihoodfns as _lf
 from ..tools import jamiolkowski as _jt
 
