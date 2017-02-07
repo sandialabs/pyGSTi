@@ -944,13 +944,13 @@ def lindblad_error_generators(dmbasis, normalize):
         `other_generators[i,j]` gives the matrix for O_ij.
     """
     mxs = dmbasis # list of basis matrices (assumed to be in std basis)
-    d2 = len(mxs)
-    d = int(_np.sqrt(d2))
-    assert(_np.isclose(d*d,d2)), "basis size  must be a perfect square"
+    nMxs = len(mxs) # usually == d2, but not necessary (e.g. w/maxWeight)
+    d = mxs[0].shape[0] 
+    d2 = d**2
     assert(_np.isclose(_np.linalg.norm(mxs[0]-_np.identity(d)/_np.sqrt(d)),0)),\
         "The first matrix in 'dmbasis' must be the identity"
 
-    hamLindbladTerms = _np.empty( (d2-1,d2,d2), 'complex' )
+    hamLindbladTerms = _np.empty( (nMxs-1,d2,d2), 'complex' )
     for i,B in enumerate(mxs[1:]): #don't include identity
         hamLindbladTerms[i] = _bt.hamiltonian_to_lindbladian(B) # in std basis
         if normalize:
@@ -960,7 +960,7 @@ def lindblad_error_generators(dmbasis, normalize):
                 assert(_np.isclose(_np.linalg.norm(hamLindbladTerms[i].flat),1.0))
 
 
-    otherLindbladTerms = _np.empty( (d2-1,d2-1,d2,d2), 'complex' )
+    otherLindbladTerms = _np.empty( (nMxs-1,nMxs-1,d2,d2), 'complex' )
     for i,Lm in enumerate(mxs[1:]): #don't include identity
         for j,Ln in enumerate(mxs[1:]): #don't include identity
             #print("DEBUG NONHAM LIND (%d,%d)" % (i,j)) #DEBUG!!!
@@ -1008,10 +1008,12 @@ def lindblad_error_generators(dmbasis, normalize):
 
 def lindblad_errgen_projections(errgen, projection_basis,
                                 mxBasis="gm", normalize=True, 
-                                return_generators=False):
+                                return_generators=False,
+                                maxWeight=None):
     """
     Compute the projections of a gate error generator onto generators
-    for the Lindblad-term errors when expressed in the pauli-product basis.
+    for the Lindblad-term errors when expressed in the given 
+    "projection basis".
 
     Parameters
     ----------
@@ -1036,6 +1038,13 @@ def lindblad_errgen_projections(errgen, projection_basis,
     return_generators : bool, optional
       If True, return the error generators projected against along with the
       projection values themseves.
+
+    maxWeight : int, optional
+      The maximum weight (i.e. number of non-identity single-qubit factors)
+      allowed in elements of the projection basis.  This currently only applies
+      to the case `projection_basis == "pp"`, as only elements of the
+      Pauli-product basis can be decomposed into single qubit factors.
+
 
     Returns
     -------
@@ -1066,12 +1075,12 @@ def lindblad_errgen_projections(errgen, projection_basis,
 
     #Get a list of the generators in corresspondence with the
     #  specified basis elements.
-    hamGens,otherGens = lindblad_error_generators(
-        _bt.basis_matrices(projection_basis, d), 
-        normalize) # in std basis
+    basisMxs = _bt.basis_matrices(projection_basis, d, maxWeight)
+    hamGens,otherGens = lindblad_error_generators(basisMxs,normalize) # in std basis
 
-    assert(hamGens.shape == (d2-1,d2,d2))
-    assert(otherGens.shape == (d2-1,d2-1,d2,d2))
+    bs = len(basisMxs) #basis size (not necessarily d2, e.g. w/maxWeight)
+    assert(hamGens.shape == (bs-1,d2,d2))
+    assert(otherGens.shape == (bs-1,bs-1,d2,d2))
     assert(_np.isclose(d*d,d2)) #d2 must be a perfect square
 
     #OLD: just lump hamiltonian generators in with the others, even though they
@@ -1105,13 +1114,13 @@ def lindblad_errgen_projections(errgen, projection_basis,
     
     #Do linear least squares soln to expressing errgen_std as a linear combo
     # of the lindblad generators
-    M = _np.concatenate( (hamGens.reshape((d2-1,d2**2)).T, otherGens.reshape(((d2-1)**2,d2**2)).T), axis=1)
+    M = _np.concatenate( (hamGens.reshape((bs-1,d2**2)).T, otherGens.reshape(((bs-1)**2,d2**2)).T), axis=1)
     assert(_np.linalg.matrix_rank(M,1e-7) == M.shape[1]) #check err gens are linearly independent
     Mdag = M.T.conjugate()
     projs = _np.dot(_np.linalg.inv(_np.dot(Mdag,M)),
                          _np.dot(Mdag,errgen_std.flatten()))
-    hamProjs = projs[0:(d2-1)]
-    otherProjs = projs[(d2-1):]
+    hamProjs = projs[0:(bs-1)]
+    otherProjs = projs[(bs-1):]
 
     hamProjs.shape = (hamGens.shape[0],)
     otherProjs.shape = (otherGens.shape[0],otherGens.shape[1])
