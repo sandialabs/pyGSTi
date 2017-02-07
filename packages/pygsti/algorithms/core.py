@@ -2674,7 +2674,13 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                                       useFreqWeightedChiSq, 0,printer-1, check,
                                       check, None, None, memLimit, comm,
                                       distributeMethod, profiler)
-                                       # Note maxLogL is really chi2 number here
+
+            #_, mleGateset = do_mlgst(dataset, mleGateset, stringsToEstimate,
+            #                         maxiter, maxfev, tol, cptp_penalty_factor,
+            #                         minProbClip, probClipInterval, radius,
+            #                         poissonPicture, printer-1, check, None,
+            #                         memLimit, comm, distributeMethod, profiler)
+
 
             tNxt = _time.time();
             profiler.add_time('do_iterative_mlgst: iter %d chi2-opt'%(i+1),tRef)
