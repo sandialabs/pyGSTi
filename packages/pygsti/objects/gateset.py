@@ -2808,9 +2808,7 @@ class GateSet(object):
 
         Apply a random unitary to each element of a gateset, and return the
         result, without modifying the original (this) gateset. This method
-        currently only works on single- and two-qubit gatesets, and *assumes*
-        that the gate matrices of this gateset are being interpreted in the
-        Pauli-product basis.
+        works on GateSet as long as the dimension is a perfect square.
 
         Parameters
         ----------
@@ -2833,39 +2831,32 @@ class GateSet(object):
         GateSet
             the randomized GateSet
         """
-        gs_pauli = self.copy() # assumes self is in the pauli-product basis!!
         if randState is None:
             rndm = _np.random.RandomState(seed)
         else:
             rndm = randState
 
-        gate_dim = gs_pauli.get_dimension()
-        if gate_dim == 4:
-            unitary_dim = 2
-        elif gate_dim == 16:
-            unitary_dim = 4
-        else: raise ValueError("Gateset dimension must be either 4"
-                               " (single-qubit) or 16 (two-qubit)")
+        gate_dim = self.get_dimension()
+        unitary_dim = int(round(_np.sqrt(gate_dim)))
+        assert( unitary_dim**2 == gate_dim ), \
+            "GateSet dimension must be a perfect square, %d is not" % gate_dim
 
-        for gateLabel in list(gs_pauli.gates.keys()):
+        gs_randomized = self.copy()
+        
+        for gateLabel,gate in self.gates.items():
             randMat = scale * (rndm.randn(unitary_dim,unitary_dim) \
                                    + 1j * rndm.randn(unitary_dim,unitary_dim))
-#            randMat = _np.dot(_np.transpose(_np.conjugate(randMat)),randMat)
             randMat = _np.transpose(_np.conjugate(randMat)) + randMat
-                        # make randMat Hermetian: (A_dag + A)^dag = (A_dag + A)
-            randU   = _scipy.linalg.expm(-1j*randMat)
+                  # make randMat Hermetian: (A_dag + A)^dag = (A_dag + A)
+            randUnitary   = _scipy.linalg.expm(-1j*randMat)
 
-            if unitary_dim == 2:
-                randUPP = _bt.unitary_to_pauligate_1q(randU)
-            elif unitary_dim == 4:
-                randUPP = _bt.unitary_to_pauligate_2q(randU)
-            # No else case needed, unitary_dim MUST be at either 2 or 4 at this point
-            #   (Redundant exception)
+            randGate = _gt.unitary_to_process_mx(randUnitary) #in std basis
+            randGate = _bt.change_basis(randGate, "std", self.get_basis_name())
 
-            gs_pauli.gates[gateLabel] = _gate.FullyParameterizedGate(
-                            _np.dot(randUPP,gs_pauli.gates[gateLabel]))
+            gs_randomized.gates[gateLabel] = _gate.FullyParameterizedGate(
+                            _np.dot(randGate,gate))
 
-        return gs_pauli
+        return gs_randomized
 
 
     def increase_dimension(self, newDimension):
