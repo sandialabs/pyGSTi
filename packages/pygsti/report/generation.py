@@ -901,7 +901,8 @@ def get_gateset_relative_eigenval_table(gateset, targetGateset,
     colHeadings = ('Gate','Relative Evals','Polar Plot') # ,'Hamiltonian'
     formatters = [None]*3
 
-    qtyNames = ('relative %s eigenvalues' % genType,)
+    #qtyNames = ('relative %s eigenvalues' % genType,)
+    qtyNames = ('relative eigenvalues',)
     qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames for gl in gateLabels ]
     qtys = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
                                             confidenceRegionInfo)
@@ -925,14 +926,13 @@ def get_gateset_relative_eigenval_table(gateset, targetGateset,
         figInfo = (fig,nm,sz,sz)
 
         if confidenceRegionInfo is None:
-            rel_evals = qtys['%s relative %s eigenvalues' 
-                             % (gl,genType)].get_value()
+            rel_evals = qtys['%s relative eigenvalues' % gl].get_value()
             try: rel_evals = rel_evals.reshape(rel_evals.size//2, 2)
             except: rel_evals = rel_evals.reshape(rel_evals.size, 1)
             rowData = [gl, (rel_evals,None), figInfo]
         else:
-            rel_evals, rel_evalsEB = qtys['%s relative %s eigenvalues' 
-                                         % (gl,genType)].get_value_and_err_bar()
+            rel_evals, rel_evalsEB = qtys['%s relative eigenvalues' 
+                                          % gl].get_value_and_err_bar()
             try: rel_evals = rel_evals.reshape(rel_evals.size//2, 2)
             except: rel_evals = rel_evals.reshape(rel_evals.size, 1)
             rowData = [gl, (rel_evals,rel_evalsEB), figInfo]
