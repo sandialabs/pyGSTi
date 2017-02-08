@@ -2115,6 +2115,9 @@ class LindbladParameterizedGate(Gate):
                 return_generators=True, maxWeight=maxWeight) # in std basis
 
         bs = self.hamGens.shape[0]+1 #projection-basis size (not nec. == d2)
+        self.max_weight = maxWeight
+        self.matrix_basis = mxBasis
+        self.projection_basis = projection_basis
         self.projection_basis_size = bs
         
         assert(self.hamGens.shape == (bs-1,d2,d2))
@@ -2510,7 +2513,9 @@ class LindbladParameterizedGate(Gate):
         """
         #Construct new gate with dummy identity mx
         newGate = LindbladParameterizedGate(None,self.unitary_prefactor,
-                                            self.cptp, self.nonHamTerms)
+                                            self.cptp, self.nonHamTerms, True,
+                                            self.projection_basis, self.matrix_basis,
+                                            self.max_weight)
         
         #Deep copy data
         newGate.paramvals = self.paramvals.copy()
@@ -2540,7 +2545,8 @@ class LindbladParameterizedGate(Gate):
             tMx = _np.dot(Uinv,_np.dot(self.base, U))
             tGate = LindbladParameterizedGate(tMx,self.unitary_prefactor,
                                               self.cptp,self.nonHamTerms,
-                                              truncate=True)
+                                              True, self.projection_basis,
+                                              self.matrix_basis,self.max_weight)
             #Note: truncate=True above because some unitary transforms seem to
             # modify the eigenvalues to be negative beyond the tolerances
             # checked when truncate == False.  I'm not sure why this occurs,
@@ -2585,7 +2591,8 @@ class LindbladParameterizedGate(Gate):
         mx = _np.dot(D,self.base)
         tGate = LindbladParameterizedGate(mx,self.unitary_prefactor,
                                           self.cptp,self.nonHamTerms,
-                                          truncate=True)
+                                          True, self.projection_basis,
+                                          self.matrix_basis,self.max_weight)
         #Note: truncate=True to be safe
         self.paramvals[:] = tGate.paramvals[:]
         self._construct_matrix()
@@ -2622,7 +2629,8 @@ class LindbladParameterizedGate(Gate):
         mx = _np.dot(rotnMx,self.base)
         tGate = LindbladParameterizedGate(mx,self.unitary_prefactor,
                                           self.cptp,self.nonHamTerms,
-                                          truncate=True)
+                                          True, self.projection_basis,
+                                          self.matrix_basis,self.max_weight)
         #Note: truncate=True to be safe
         self.paramvals[:] = tGate.paramvals[:]
         self._construct_matrix()
@@ -2650,8 +2658,11 @@ class LindbladParameterizedGate(Gate):
         assert(self.nonHamTerms == otherGate.nonHamTerms)
 
         composed_mx = _np.dot(self, otherGate)
-        return LindbladParameterizedGate(composed_mx, None, self.cptp,
-                                         self.nonHamTerms)
+        return LindbladParameterizedGate(composed_mx,None,
+                                          self.cptp,self.nonHamTerms,
+                                          True, self.projection_basis,
+                                          self.matrix_basis,self.max_weight)
+
 
     def __str__(self):
         s = "Lindblad Parameterized gate with shape %s, num params = %d\n" % \
