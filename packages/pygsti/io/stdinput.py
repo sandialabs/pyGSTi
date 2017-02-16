@@ -139,7 +139,7 @@ class StdInputParser(object):
         else:
             return int(op)
 
-    def parse_gatestring(self, s, lookup={}):
+    def parse_gatestring(self, s, lookup=None):
         """
         Parse a gate string (string in grammar)
 
@@ -157,6 +157,7 @@ class StdInputParser(object):
         tuple of gate labels
             Representing the gate string.
         """
+        if lookup is None: lookup = {}
         self.lookup = lookup
         self.exprStack = []
         try:
@@ -387,7 +388,8 @@ class StdInputParser(object):
                 if all([ (abs(v) < 1e-9) for v in list(countDict.values())]):
                     _warnings.warn( "Dataline for gateString '%s' has zero counts and will be ignored" % gateStringStr)
                     continue #skip lines in dataset file with zero counts (no experiments done)
-                dataset.add_count_dict(gateStringTuple, countDict) #Note: don't use gateStringStr since DataSet currently doesn't hold GateString objs (just tuples)
+                gateStr = _objs.GateString(gateStringTuple, gateStringStr, lookup=lookupDict)
+                dataset.add_count_dict(gateStr, countDict)
 
         dataset.done_adding_data()
         return dataset
@@ -533,13 +535,14 @@ class StdInputParser(object):
                 line = line.strip()
                 if len(line) == 0 or line[0] == '#': continue
                 try:
-                    gateStringTuple, _, valueList = self.parse_dataline(line, lookupDict, nDataCols)
+                    gateStringTuple, gateStringStr, valueList = self.parse_dataline(line, lookupDict, nDataCols)
                 except ValueError as e:
                     raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 
+                gateStr = _objs.GateString(gateStringTuple, gateStringStr, lookup=lookupDict)
                 self._fillMultiDataCountDicts(dsCountDicts, fillInfo, valueList)
-                for dsLabel, countDict in dsCountDicts.items():
-                    datasets[dsLabel].add_count_dict(gateStringTuple, countDict)
+                for dsLabel, countDict in dsCountDicts.items():                    
+                    datasets[dsLabel].add_count_dict(gateStr, countDict)
 
         mds = _objs.MultiDataSet(comment="\n".join(preamble_comments))
         for dsLabel,ds in datasets.items():
