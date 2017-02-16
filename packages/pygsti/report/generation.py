@@ -1074,7 +1074,8 @@ def get_dataset_overview_table(dataset, target, maxlen=10, fixedLists=None,
     return table
 
 
-def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset):
+def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset,
+                            gateLabelAliases=None):
     """
     Create a table showing how Chi2 changes with GST iteration.
 
@@ -1093,6 +1094,13 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset):
     dataset : DataSet
         The data set used in the GST iterations.
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
+
     Returns
     -------
     ReportTable
@@ -1109,7 +1117,8 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset):
 
     for L,gs,gstrs in zip(Ls,gatesetsByL,gateStringsByL):
         chi2 = _tools.chi2( dataset, gs, gstrs,
-                                     minProbClipForWeighting=1e-4)
+                            minProbClipForWeighting=1e-4,
+                            gateLabelAliases=gateLabelAliases )
         Ns = len(gstrs)
         Np = gs.num_nongauge_params()
 
@@ -1130,7 +1139,8 @@ def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset):
     return table
 
 
-def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset):
+def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset,
+                            gateLabelAliases=None):
     """
     Create a table showing how the log-likelihood changes with GST iteration.
 
@@ -1149,6 +1159,13 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset):
     dataset : DataSet
         The data set used in the GST iterations.
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
+
     Returns
     -------
     ReportTable
@@ -1164,8 +1181,8 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset):
     table = _ReportTable(colHeadings, None)
 
     for L,gs,gstrs in zip(Ls,gatesetsByL,gateStringsByL):
-        logL_upperbound = _tools.logl_max(dataset, gstrs)
-        logl = _tools.logl( gs, dataset, gstrs )
+        logL_upperbound = _tools.logl_max(dataset, gstrs, gateLabelAliases=gateLabelAliases)
+        logl = _tools.logl( gs, dataset, gstrs, gateLabelAliases=gateLabelAliases)
         if(logL_upperbound < logl):
             raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
         Ns = len(gstrs)*(len(dataset.get_spam_labels())-1) #number of independent parameters in dataset
@@ -1192,7 +1209,8 @@ def get_logl_progress_table(Ls, gatesetsByL, gateStringsByL, dataset):
 
 def get_logl_bygerm_table(gateset, dataset, germs, strs, max_lengths,
                           baseStr_dict, fidpair_filters=None,
-                          gatestring_filters=None):
+                          gatestring_filters=None,
+                          gateLabelAliases=None):
     """
     Create a table showing the log-likelihood on a by-germ basis.
 
@@ -1227,6 +1245,12 @@ def get_logl_bygerm_table(gateset, dataset, germs, strs, max_lengths,
         values are lists of GateString objects specifying which elements which
         are allowed to be included in the likelihood computation for that pair.
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
 
     Returns
     -------
@@ -1256,8 +1280,8 @@ def get_logl_bygerm_table(gateset, dataset, germs, strs, max_lengths,
 
         _tools.remove_duplicates_in_place(gstrs)
 
-        logL_upperbound = _tools.logl_max(dataset, gstrs)
-        logl = _tools.logl( gateset, dataset, gstrs )
+        logL_upperbound = _tools.logl_max(dataset, gstrs, gateLabelAliases=gateLabelAliases)
+        logl = _tools.logl( gateset, dataset, gstrs, gateLabelAliases=gateLabelAliases)
         if(logL_upperbound < logl):
             raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
         Ns = len(gstrs)*(len(dataset.get_spam_labels())-1) #number of independent parameters in dataset
@@ -1281,7 +1305,8 @@ def get_logl_bygerm_table(gateset, dataset, germs, strs, max_lengths,
 
 def get_logl_projected_err_gen_table(gateset, targetGateset,
                                      gatestrings, dataset, 
-                                     cptpGateset=None, genType="logG-logT"):
+                                     cptpGateset=None, genType="logG-logT",
+                                     gateLabelAliases=None):
     """
     Create a table showing the log-likelihood for different projections of the
     error generator.
@@ -1310,6 +1335,12 @@ def get_logl_projected_err_gen_table(gateset, targetGateset,
       
       - "logG-logT" : errgen = log(gate) - log(target_gate)
       - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
 
     Returns
@@ -1432,12 +1463,12 @@ def get_logl_projected_err_gen_table(gateset, targetGateset,
         gatesetTyps = ("Full","H + S","H","S","LND","CPTP","LND CPTP","H + S CPTP")
         Nps = (Nng, Np_HS, Np_H, Np_S, Np_LND, Nng, Np_LND, Np_HS)
 
-    logL_upperbound = _tools.logl_max(dataset, gatestrings)
+    logL_upperbound = _tools.logl_max(dataset, gatestrings, gateLabelAliases=gateLabelAliases)
     Ns = len(gatestrings)*(len(dataset.get_spam_labels())-1) 
      #number of independent parameters in dataset
 
     for typ,gs,Np in zip(gatesetTyps, gatesets, Nps):
-        logl = _tools.logl( gs, dataset, gatestrings )
+        logl = _tools.logl( gs, dataset, gatestrings, gateLabelAliases=gateLabelAliases)
         assert (logL_upperbound >= logl), "LogL upper bound violation!"
         k = max(Ns-Np,0) #expected 2*(logL_ub-logl) mean
         twoDeltaLogL = 2*(logL_upperbound - logl)
@@ -2216,7 +2247,8 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
                                gatestring_list=None, probClipInterval=(-1e6,1e6),
                                minProbClip=1e-4, radius=1e-4, hessianProjection="std",
                                regionType="std", comm=None, memLimit=None,
-                               cptp_penalty_factor=None, distributeMethod="deriv"):
+                               cptp_penalty_factor=None, distributeMethod="deriv",
+                               gateLabelAliases=None):
 
     """
     Constructs a ConfidenceRegion given a gateset and dataset using the log-likelihood Hessian.
@@ -2296,6 +2328,12 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
         The distribute-method used in MLGST when computing error bars via
         linear-response.
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
 
     Returns
     -------
@@ -2309,7 +2347,8 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
         vb = 3 if memLimit else 0 #only show details of hessian comp when there's a mem limit (a heuristic)
         hessian = _tools.logl_hessian(gateset, dataset, gatestring_list,
                                       minProbClip, probClipInterval, radius,
-                                      comm=comm, memLimit=memLimit, verbosity=vb)
+                                      comm=comm, memLimit=memLimit, verbosity=vb,
+                                      gateLabelAliases=gateLabelAliases)
         mlgst_args = None
     else: 
         hessian = None
@@ -2337,7 +2376,8 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
 
         MIN_NON_MARK_RADIUS = 1e-8 #must be >= 0
         nonMarkRadiusSq = max( 2*(_tools.logl_max(dataset)
-                                  - _tools.logl(gateset, dataset)) \
+                                  - _tools.logl(gateset, dataset,
+                                                gateLabelAliases=gateLabelAliases)) \
                                    - (nDataParams-nModelParams),
                                MIN_NON_MARK_RADIUS )
     else:
@@ -2363,7 +2403,8 @@ def get_logl_confidence_region(gateset, dataset, confidenceLevel,
 def get_chi2_confidence_region(gateset, dataset, confidenceLevel,
                                gatestring_list=None, probClipInterval=(-1e6,1e6),
                                minProbClipForWeighting=1e-4, hessianProjection="std",
-                               regionType='std', comm=None, memLimit=None):
+                               regionType='std', comm=None, memLimit=None,
+                               gateLabelAliases=None):
 
     """
     Constructs a ConfidenceRegion given a gateset and dataset using the Chi2 Hessian.
@@ -2432,6 +2473,12 @@ def get_chi2_confidence_region(gateset, dataset, confidenceLevel,
         A rough memory limit in bytes which restricts the amount of intermediate
         values that are computed and stored.
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
 
     Returns
     -------
@@ -2447,7 +2494,8 @@ def get_chi2_confidence_region(gateset, dataset, confidenceLevel,
     #Compute appropriate Hessian
     chi2, hessian = _tools.chi2(dataset, gateset, gatestring_list,
                                 False, True, minProbClipForWeighting,
-                                probClipInterval, memLimit=memLimit)
+                                probClipInterval, memLimit=memLimit,
+                                gateLabelAliases=gateLabelAliases)
 
     #Compute the non-Markovian "radius" if required
     if regionType == "std":

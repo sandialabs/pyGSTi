@@ -114,6 +114,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         - distributeMethod = "gatestrings" or "deriv" (default)
         - profile = int (default == 1)
         - check = True / False (default)
+        - gateLabelAliases = dict (default = None)
         - truncScheme = "whole germ powers" (default) or "truncated germ powers"
                         or "length as exponent"
     comm : mpi4py.MPI.Comm, optional
@@ -263,6 +264,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                                                    prep_labels=gs_target.get_prep_labels(),
                                                    effect_labels=gs_target.get_effect_labels())
             gs_start = _alg.do_lgst(ds, specs, gs_target, svdTruncateTo=gate_dim,
+                                    gateLabelAliases=advancedOptions.get('gateLabelAliases',None),
                                     verbosity=printer) # returns a gateset with the *same*
                                                        # parameterizations as gs_target
 
@@ -316,6 +318,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                 'probClipInterval',(-1e6,1e6)),
             returnAll=True, 
             gatestringWeightsDict=advancedOptions.get('gsWeights',None),
+            gateLabelAliases=advancedOptions.get('gateLabelAliases',None),
             verbosity=printer,
             memLimit=memLimit,
             useFreqWeightedChiSq=advancedOptions.get(
@@ -340,7 +343,9 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                 'useFreqWeightedChiSq',False), 
           distributeMethod=advancedOptions.get(
                 'distributeMethod',"deriv"),
-          check=advancedOptions.get('check',False))
+          check=advancedOptions.get('check',False),
+          gateLabelAliases=advancedOptions.get('gateLabelAliases',None)
+        )
     else:
         raise ValueError("Invalid longSequenceObjective: %s" % objective)
 
@@ -400,6 +405,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     ret.parameters['profile'] = advancedOptions.get('profile',1)
     ret.parameters['check'] = advancedOptions.get('check',False)
     ret.parameters['truncScheme'] = advancedOptions.get('truncScheme', "whole germ powers")
+    ret.parameters['gateLabelAliases'] = advancedOptions.get('gateLabelAliases',None)
 
     profiler.add_time('do_long_sequence_gst: results initialization',tRef)
     ret.parameters['profiler'] = profiler

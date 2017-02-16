@@ -104,6 +104,53 @@ def compute_occurance_indices(lst):
         ret.append( lookup[x] )
     return ret
 
+def find_replace_tuple(t,aliasDict):
+    """
+    Replace elements of t according to rules in `aliasDict`.
+
+    Parameters
+    ----------
+    t : tuple or list
+        The object to perform replacements upon.
+
+    aliasDict : dictionary
+        Dictionary whose keys are potential elements of `t` and whose values
+        are tuples corresponding to a sub-sequence that the given element should
+        be replaced with.  If None, no replacement is performed.
+
+    Returns
+    -------
+    tuple
+    """
+    t = tuple(t)
+    if aliasDict is None: return t
+    for label,expandedStr in aliasDict.items():
+        while label in tuple(t):
+            i = t.index(label)
+            t = t[:i] + tuple(expandedStr) + t[i+1:]
+    return t
+
+
+def find_replace_tuple_list(list_of_tuples,aliasDict):
+    """
+    Applies :func:`find_replace_tuple` on each element of `list_of_tuples`.
+
+    Parameters
+    ----------
+    list_of_tuples : list
+        A list of tuple objects to perform replacements upon.
+
+    aliasDict : dictionary
+        Dictionary whose keys are potential elements of `t` and whose values
+        are tuples corresponding to a sub-sequence that the given element should
+        be replaced with.  If None, no replacement is performed.
+
+    Returns
+    -------
+    list
+    """
+    return [ find_replace_tuple(t,aliasDict) for t in list_of_tuples ]
+
 
 
 # ------------------------------------------------------------------------------

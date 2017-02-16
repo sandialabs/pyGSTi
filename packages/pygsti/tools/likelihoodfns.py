@@ -11,6 +11,7 @@ import warnings as _warnings
 import itertools as _itertools
 #import time as _time
 from . import basistools as _bt
+from . import listtools as _lt
 from . import jamiolkowski as _jam
 from . import mpitools as _mpit
 from . import slicetools as _slct
@@ -171,7 +172,8 @@ def fill_count_vecs(mxToFill, spam_label_rows, dataset, gatestring_list):
 
 def logl(gateset, dataset, gatestring_list=None,
          minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
-         evalTree=None, countVecMx=None, poissonPicture=True, check=False):
+         evalTree=None, countVecMx=None, poissonPicture=True,
+         check=False, gateLabelAliases=None):
     """
     The log-likelihood function.
 
@@ -219,8 +221,15 @@ def logl(gateset, dataset, gatestring_list=None,
         in the returned logl value.
 
     check : boolean, optional
-      If True, perform extra checks within code to verify correctness.  Used
-      for testing, and runs much slower when True.
+        If True, perform extra checks within code to verify correctness.  Used
+        for testing, and runs much slower when True.
+
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
 
     Returns
     -------
@@ -231,13 +240,16 @@ def logl(gateset, dataset, gatestring_list=None,
     if gatestring_list is None:
         gatestring_list = list(dataset.keys())
 
+    ds_gatestring_list = _lt.find_replace_tuple_list(
+        gatestring_list, gateLabelAliases)
+
     spamLabels = gateset.get_spam_labels() #this list fixes the ordering of the spam labels
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
 
     probs = _np.empty( (len(spamLabels),len(gatestring_list)), 'd' )
     if countVecMx is None:
         countVecMx = _np.empty( (len(spamLabels),len(gatestring_list)), 'd' )
-        fill_count_vecs(countVecMx, spam_lbl_rows, dataset, gatestring_list)
+        fill_count_vecs(countVecMx, spam_lbl_rows, dataset, ds_gatestring_list)
 
     totalCntVec = _np.sum(countVecMx, axis=0)
 
@@ -286,7 +298,8 @@ def logl(gateset, dataset, gatestring_list=None,
 
 def logl_jacobian(gateset, dataset, gatestring_list=None,
                   minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
-                  evalTree=None, countVecMx=None, poissonPicture=True, check=False):
+                  evalTree=None, countVecMx=None, poissonPicture=True,
+                  check=False, gateLabelAliases=None):
     """
     The jacobian of the log-likelihood function.
 
@@ -336,6 +349,13 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
         If True, perform extra checks within code to verify correctness.  Used
         for testing, and runs much slower when True.
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
+
     Returns
     -------
     numpy array
@@ -348,12 +368,15 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
     if gatestring_list is None:
         gatestring_list = list(dataset.keys())
 
+    ds_gatestring_list = _lt.find_replace_tuple_list(
+        gatestring_list, gateLabelAliases)
+
     spamLabels = gateset.get_spam_labels() #this list fixes the ordering of the spam labels
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
 
     if countVecMx is None:
         countVecMx = _np.empty( (len(spamLabels),len(gatestring_list)), 'd' )
-        fill_count_vecs(countVecMx, spam_lbl_rows, dataset, gatestring_list)
+        fill_count_vecs(countVecMx, spam_lbl_rows, dataset, ds_gatestring_list)
 
     probs = _np.empty( (len(spamLabels),len(gatestring_list)), 'd' )
     dprobs = _np.empty( (len(spamLabels),len(gatestring_list),nP), 'd' )
@@ -413,7 +436,8 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
 
 def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
                  probClipInterval=(-1e6,1e6), radius=1e-4, poissonPicture=True,
-                 check=False, comm=None, memLimit=None, verbosity=0):
+                 check=False, comm=None, memLimit=None,
+                 gateLabelAliases=None, verbosity=0):
     """
     The hessian of the log-likelihood function.
 
@@ -459,6 +483,12 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
     memLimit : int, optional
         A rough memory limit in bytes which restricts the amount of intermediate
         values that are computed and stored.
+
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
     verbosity : int, optional
         How much detail to print to stdout.
@@ -613,8 +643,10 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
         probs  =  probs_mem[:,0:sub_nGateStrings]
 
         # Fill cntVecMx, totalCntVec
+        ds_subtree_gatestring_list = _lt.find_replace_tuple_list(
+            evalSubTree.generate_gatestring_list(), gateLabelAliases)
         fill_count_vecs(cntVecMx,spam_lbl_rows,dataset,
-                            evalSubTree.generate_gatestring_list())
+                            ds_subtree_gatestring_list)
         totalCntVec = _np.sum(cntVecMx, axis=0)
 
         #compute pos_probs separately
@@ -674,7 +706,8 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
     return final_hessian # (N,N)
 
 
-def logl_max(dataset, gatestring_list=None, countVecMx=None, poissonPicture=True, check=False):
+def logl_max(dataset, gatestring_list=None, countVecMx=None,
+             poissonPicture=True, check=False, gateLabelAliases=None):
     """
     The maximum log-likelihood possible for a DataSet.  That is, the
     log-likelihood obtained by a maximal model that can fit perfectly
@@ -704,6 +737,12 @@ def logl_max(dataset, gatestring_list=None, countVecMx=None, poissonPicture=True
         Whether additional check is performed which computes the max logl another
         way an compares to the faster method.
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
     Returns
     -------
     float
@@ -711,6 +750,9 @@ def logl_max(dataset, gatestring_list=None, countVecMx=None, poissonPicture=True
 
     if gatestring_list is None:
         gatestring_list = list(dataset.keys())
+    else:
+        gatestring_list = _lt.find_replace_tuple_list(
+            gatestring_list, gateLabelAliases)
 
     if countVecMx is None:
         spamLabels = dataset.get_spam_labels()

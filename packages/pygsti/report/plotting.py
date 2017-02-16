@@ -25,7 +25,7 @@ import time as _time  #DEBUG TIMER
 
 
 def get_gatestring_map(gateString, dataset, strs, fidpair_filter=None,
-                       gatestring_filter=None):
+                       gatestring_filter=None, gateLabelAliases=None):
     """ 
     Pre-compute a list of (i,j,gstr) tuples for use in other matrix-
     generation functions.  
@@ -60,6 +60,11 @@ def get_gatestring_map(gateString, dataset, strs, fidpair_filter=None,
         fidpair_filter and gatesetring_filter are non-None, gatestring_filter
         is given precedence.
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into when checking
+        for membership in the dataset.
+
 
     Returns
     -------
@@ -82,7 +87,8 @@ def get_gatestring_map(gateString, dataset, strs, fidpair_filter=None,
     for i,effectStr in enumerate(effectStrs):
         for j,prepStr in enumerate(prepStrs):
             gstr = prepStr + gateString + effectStr
-            if dataset is None or gstr in dataset:
+            ds_gstr = _tools.find_replace_tuple(gstr,gateLabelAliases)
+            if dataset is None or ds_gstr in dataset:
                 #Note: gatestring_filter trumps fidpair_filter
                 if gatestring_filter is None:
                     if fidpair_filter is None or (j,i) in fidpair_filter:
@@ -91,6 +97,43 @@ def get_gatestring_map(gateString, dataset, strs, fidpair_filter=None,
                     tuples.append((i,j,gstr))
 
     return tuples,len(effectStrs),len(prepStrs)
+
+def expand_aliases_in_map(gatestring_map, gateLabelAliases):
+    """
+    Returns a new gate string map whose strings have been 
+    modified to expand any aliases given by `gateLabelAliases`.
+
+    Parameters
+    ----------
+    gatestring_map : list of tuples
+        the original gate string map, typically obtained by 
+        calling :func:`get_gatestring_map`.
+
+    gateLabelAliases : dictionary
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into.
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
+    Returns
+    -------
+    list
+        A list of (i,j,gstr) tuples.
+    rows : int
+        The number of rows in resulting matrices
+    cols : int
+        The number of columns in resulting matrices
+    """    
+    if gateLabelAliases is None: return gatestring_map
+
+    gatestring_tuples, rows, cols = gatestring_map
+    
+    #find & replace aliased gate labels with their expanded form
+    new_gatestring_tuples = []
+    for (i,j,s) in gatestring_tuples:
+        new_gatestring_tuples.append(
+            (i,j, _tools.find_replace_tuple(s,gateLabelAliases)) )
+
+    return new_gatestring_tuples, rows, cols
 
 
 def total_count_matrix(gatestring_map, dataset):
@@ -209,19 +252,19 @@ def probability_matrices(gatestring_map, gateset, spamlabels,
     tuples,rows,cols = gatestring_map
     ret = _np.nan * _np.ones( (len(spamlabels),rows,cols), 'd')
     if probs_precomp_dict is None:
-        for i,j,gstr in tuples:
-            probs = gateset.probs(gstr)
-            ret[:,i,j] = [probs[sl] for sl in spamlabels]
+        if gateset is not None:
+            for i,j,gstr in tuples:
+                probs = gateset.probs(gstr)
+                ret[:,i,j] = [probs[sl] for sl in spamlabels]
     else:
         for i,j,gstr in tuples:
             probs = probs_precomp_dict[gstr]
             ret[:,i,j] = [probs[sl] for sl in spamlabels]
-
     return ret
 
 
 def chi2_matrix(gatestring_map, dataset, gateset, minProbClipForWeighting=1e-4,
-                probs_precomp_dict=None):
+                probs_precomp_dict=None, gateLabelAliases=None):
     """
     Computes the chi^2 matrix for a base gatestring.
 
@@ -244,6 +287,13 @@ def chi2_matrix(gatestring_map, dataset, gateset, minProbClipForWeighting=1e-4,
         and values are prob-dictionaries (as returned from GateSet.probs)
         corresponding to each gate string.
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
+
     Returns
     -------
     numpy array of shape ( len(effectStrs), len(prepStrs) )
@@ -251,18 +301,20 @@ def chi2_matrix(gatestring_map, dataset, gateset, minProbClipForWeighting=1e-4,
         gateString is sandwiched between the each prep-fiducial,
         effect-fiducial pair.
     """
+    ds_gatestring_map = expand_aliases_in_map(gatestring_map, gateLabelAliases)
+    
     spamlabels = gateset.get_spam_labels()
-    cntMxs  = total_count_matrix(   gatestring_map, dataset)[None,:,:]
+    cntMxs  = total_count_matrix(   ds_gatestring_map, dataset)[None,:,:]
     probMxs = probability_matrices( gatestring_map, gateset, spamlabels,
                                     probs_precomp_dict)
-    freqMxs = frequency_matrices(   gatestring_map, dataset, spamlabels)
+    freqMxs = frequency_matrices(   ds_gatestring_map, dataset, spamlabels)
     chiSqMxs= _tools.chi2fn( cntMxs, probMxs, freqMxs,
                                      minProbClipForWeighting)
     return chiSqMxs.sum(axis=0) # sum over spam labels
 
 
 def logl_matrix(gatestring_map, dataset, gateset, minProbClip=1e-6,
-                probs_precomp_dict=None):
+                probs_precomp_dict=None, gateLabelAliases=None):
     """
     Computes the log-likelihood matrix of 2*( log(L)_upperbound - log(L) )
     values for a base gatestring.
@@ -286,6 +338,12 @@ def logl_matrix(gatestring_map, dataset, gateset, minProbClip=1e-6,
         and values are prob-dictionaries (as returned from GateSet.probs)
         corresponding to each gate string.
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
 
     Returns
     -------
@@ -294,11 +352,13 @@ def logl_matrix(gatestring_map, dataset, gateset, minProbClip=1e-6,
         gateString is sandwiched between the each prep-fiducial,
         effect-fiducial pair.
     """
+    ds_gatestring_map = expand_aliases_in_map(gatestring_map, gateLabelAliases)
+    
     spamlabels = gateset.get_spam_labels()
-    cntMxs  = total_count_matrix(   gatestring_map, dataset)[None,:,:]
+    cntMxs  = total_count_matrix(   ds_gatestring_map, dataset)[None,:,:]
     probMxs = probability_matrices( gatestring_map, gateset, spamlabels,
                                     probs_precomp_dict)
-    freqMxs = frequency_matrices(   gatestring_map, dataset, spamlabels)
+    freqMxs = frequency_matrices(   ds_gatestring_map, dataset, spamlabels)
     logLMxs = _tools.two_delta_loglfn( cntMxs, probMxs, freqMxs, minProbClip)
     return logLMxs.sum(axis=0) # sum over spam labels
 
@@ -1017,7 +1077,8 @@ def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp):
     return n_boxes, dof_per_box
 
 def _computeGateStringMaps(xvals, yvals, xyGateStringDict, dataset,
-                           strs, fidpair_filters, gatestring_filters):
+                           strs, fidpair_filters, gatestring_filters,
+                           gateLabelAliases):
     """ 
     Return a dictionary of all the gatestring maps,
     indexed by base string. 
@@ -1031,7 +1092,8 @@ def _computeGateStringMaps(xvals, yvals, xyGateStringDict, dataset,
                                     fidpair_filters[(x,y)] 
                                     if fidpair_filters is not None else None,
                                     gatestring_filters[(x,y)] 
-                                    if gatestring_filters is not None else None)
+                                    if gatestring_filters is not None else None,
+                                    gateLabelAliases)
              for x in used_xvals for y in used_yvals }
     
 def _computeProbabilities(maps, gateset, dataset):
@@ -1364,7 +1426,8 @@ def chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
                   title='$\\chi^2$', linlg_pcntle=.05, sumUp=False,
                   boxLabels=True, histogram=False, histBins=50,
                   minProbClipForWeighting=1e-4, save_to=None, ticSize=20,
-                  invert=False, fidpair_filters=None, gatestring_filters=None):
+                  invert=False, fidpair_filters=None, gatestring_filters=None,
+                  gateLabelAliases=None):
     """
     Create a color box plot of chi^2 values.
 
@@ -1451,6 +1514,12 @@ def chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
         values are lists of GateString objects specifying which elements should
         be computed and displayed in the (x,y) sub-block of the plot.
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
 
     Returns
     -------
@@ -1468,12 +1537,13 @@ def chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
 
     #bulk-compute probabilities for performance
     maps = _computeGateStringMaps(xvals, yvals, xy_gatestring_dict, dataset,
-                                  strs, fidpair_filters, gatestring_filters)
+                                  strs, fidpair_filters, gatestring_filters,
+                                  gateLabelAliases)
     probs_precomp_dict = _computeProbabilities(maps, gateset, dataset)
 
     def mx_fn(gateStr,x,y):
         return chi2_matrix( maps[gateStr], dataset, gateset, minProbClipForWeighting,
-                            probs_precomp_dict)
+                            probs_precomp_dict, gateLabelAliases)
 
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
     stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=linlg_pcntle, dof=dof)
@@ -1487,7 +1557,8 @@ def logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
                   title='$\\log(\\mathcal{L})$', linlg_pcntle=.05, sumUp=False,
                   boxLabels=True, histogram=False, histBins=50,
                   minProbClipForWeighting=1e-4, save_to=None, ticSize=20,
-                  invert=False, fidpair_filters=None, gatestring_filters=None):
+                  invert=False, fidpair_filters=None, gatestring_filters=None,
+                  gateLabelAliases=None):
     """
     Create a color box plot of log-likelihood values.
 
@@ -1574,6 +1645,12 @@ def logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
         values are lists of GateString objects specifying which elements should
         be computed and displayed in the (x,y) sub-block of the plot.
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
 
     Returns
     -------
@@ -1590,12 +1667,13 @@ def logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset, gateset, strs,
     
     #bulk-compute probabilities for performance
     maps = _computeGateStringMaps(xvals, yvals, xy_gatestring_dict, dataset,
-                                  strs, fidpair_filters, gatestring_filters)
+                                  strs, fidpair_filters, gatestring_filters,
+                                  gateLabelAliases)
     probs_precomp_dict = _computeProbabilities(maps, gateset, dataset)
 
     def mx_fn(gateStr,x,y):
         return logl_matrix( maps[gateStr], dataset, gateset, minProbClipForWeighting,
-                            probs_precomp_dict)
+                            probs_precomp_dict, gateLabelAliases)
 
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
     stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=linlg_pcntle, dof=dof)
@@ -1772,8 +1850,9 @@ def small_eigval_err_rate_boxplot( xvals, yvals, xy_gatestring_dict, dataset, di
 
 def gateset_with_lgst_gatestring_estimates( gateStringsToEstimate, dataset, specs,
                                         targetGateset=None, includeTargetGates=True,
-                                        spamDict=None, guessGatesetForGauge=None,
-                                        gateStringLabels=None, svdTruncateTo=0, verbosity=0 ):
+                                        gateLabelAliases=None, spamDict=None,
+                                        guessGatesetForGauge=None, gateStringLabels=None,
+                                        svdTruncateTo=0, verbosity=0 ):
     """
     Constructs a gateset that contains LGST estimates for gateStringsToEstimate.
 
@@ -1798,6 +1877,12 @@ def gateset_with_lgst_gatestring_estimates( gateStringsToEstimate, dataset, spec
     includeTargetGates : bool, optional
         If True, the gate labels in targetGateset will be included in the
         returned gate set.
+
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
     spamDict : dict, optional
         Dictionary mapping (rhoVec_index,EVec_index) integer tuples to string spam labels.
@@ -1831,18 +1916,19 @@ def gateset_with_lgst_gatestring_estimates( gateStringsToEstimate, dataset, spec
         gate strings and possibly the gates in targetGateset.
     """
     gateLabels = [] #list of gate labels for LGST to estimate
-
+    if gateLabelAliases is None: aliases = { }
+    else: aliases = gateLabelAliases.copy()
+    
     #Add gate strings to estimate as aliases
-    aliases = { }
     if gateStringLabels is not None:
         assert(len(gateStringLabels) == len(gateStringsToEstimate))
         for gateLabel,gateStr in zip(gateStringLabels,gateStringsToEstimate):
-            aliases[gateLabel] = tuple(gateStr)
+            aliases[gateLabel] = _tools.find_replace_tuple(gateStr,gateLabelAliases)
             gateLabels.append(gateLabel)
     else:
         for gateStr in gateStringsToEstimate:
             newLabel = 'G'+'.'.join(tuple(gateStr))
-            aliases[newLabel] = tuple(gateStr) #use gatestring tuple as label
+            aliases[newLabel] = _tools.find_replace_tuple(gateStr,gateLabelAliases) #use gatestring tuple as label
             gateLabels.append(newLabel)
 
     #Add target gateset labels (not aliased) if requested
@@ -1855,7 +1941,8 @@ def gateset_with_lgst_gatestring_estimates( gateStringsToEstimate, dataset, spec
                spamDict, guessGatesetForGauge, svdTruncateTo, None, verbosity )
 
 def direct_lgst_gateset( gateStringToEstimate, gateStringLabel, dataset,
-                       specs, targetGateset, svdTruncateTo=0, verbosity=0 ):
+                         specs, targetGateset, gateLabelAliases=None,
+                         svdTruncateTo=0, verbosity=0 ):
     """
     Constructs a gateset of LGST estimates for target gates and gateStringToEstimate.
 
@@ -1877,6 +1964,12 @@ def direct_lgst_gateset( gateStringToEstimate, gateStringLabel, dataset,
     targetGateset : GateSet
         The target gate set used by LGST to extract gate labels and an initial gauge
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
     svdTruncateTo : int, optional
         The Hilbert space dimension to truncate the gate matrices to using
         a SVD to keep only the largest svdToTruncateTo singular values of
@@ -1892,9 +1985,11 @@ def direct_lgst_gateset( gateStringToEstimate, gateStringLabel, dataset,
         and the gates of targetGateset.
     """
     return gateset_with_lgst_gatestring_estimates( [gateStringToEstimate], dataset, specs, targetGateset,
-                                               True, None, None, [gateStringLabel], svdTruncateTo, verbosity )
+                                                   True, gateLabelAliases, None, None, [gateStringLabel],
+                                                   svdTruncateTo, verbosity )
 
-def direct_lgst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncateTo=0, verbosity=0):
+def direct_lgst_gatesets(gateStrings, dataset, specs, targetGateset,
+                         gateLabelAliases=None, svdTruncateTo=0, verbosity=0):
     """
     Constructs a dictionary with keys == gate strings and values == Direct-LGST GateSets.
 
@@ -1912,6 +2007,12 @@ def direct_lgst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncate
 
     targetGateset : GateSet
         The target gate set used by LGST to extract gate labels and an initial gauge
+
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
     svdTruncateTo : int, optional
         The Hilbert space dimension to truncate the gate matrices to using
@@ -1937,13 +2038,14 @@ def direct_lgst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncate
         for i,sigma in enumerate(gateStrings):
             printer.show_progress(i, len(gateStrings), prefix="--- Computing gateset for string -", suffix='---' )
             directLGSTgatesets[sigma] = direct_lgst_gateset( sigma, "GsigmaLbl", dataset, specs, targetGateset,
-                                                            svdTruncateTo, verbosity)
+                                                             gateLabelAliases, svdTruncateTo, verbosity)
     return directLGSTgatesets
 
 
 
-def direct_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs, targetGateset, svdTruncateTo=0,
-                        minProbClipForWeighting=1e-4, probClipInterval=(-1e6,1e6), verbosity=0 ):
+def direct_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs, targetGateset,
+                           gateLabelAliases=None, svdTruncateTo=0, minProbClipForWeighting=1e-4,
+                           probClipInterval=(-1e6,1e6), verbosity=0 ):
     """
     Constructs a gateset of LSGST estimates for target gates and gateStringToEstimate.
 
@@ -1977,6 +2079,12 @@ def direct_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs
     targetGateset : GateSet
         The target gate set used by LGST to extract gate labels and an initial gauge
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
     svdTruncateTo : int, optional
         The Hilbert space dimension to truncate the gate matrices to using
         a SVD to keep only the largest svdToTruncateTo singular values of
@@ -2000,7 +2108,8 @@ def direct_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs
         and the gates of targetGateset.
     """
     direct_lgst = gateset_with_lgst_gatestring_estimates( [gateStringToEstimate], dataset, specs, targetGateset,
-                                                      True, None, None, [gateStringLabel], svdTruncateTo, verbosity )
+                                                          True, gateLabelAliases, None, None, [gateStringLabel],
+                                                          svdTruncateTo, verbosity )
 
     prepStrs, effectStrs = _construction.get_spam_strs(specs)
 
@@ -2010,17 +2119,22 @@ def direct_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs
         gatestrings.extend( [ prepStr + _objs.GateString( (gateLabel,), bCheck=False) + effectStr
                               for prepStr in prepStrs for effectStr in effectStrs ] )
 
+    aliases = {} if (gateLabelAliases is None) else gateLabelAliases.copy()
+    aliases[gateStringLabel] = _tools.find_replace_tuple(gateStringToEstimate,gateLabelAliases)
+    
     _, direct_lsgst = _alg.do_mc2gst(
         dataset, direct_lgst, gatestrings,
         minProbClipForWeighting=minProbClipForWeighting,
         probClipInterval=probClipInterval, verbosity=verbosity,
-        gateLabelAliases={gateStringLabel: gateStringToEstimate} )
-                                         #opt_gates=[gateStringLabel])
+        gateLabelAliases=aliases )
+
     return direct_lsgst
 
 
-def direct_mc2gst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncateTo=0,
-                        minProbClipForWeighting=1e-4, probClipInterval=(-1e6,1e6), verbosity=0):
+def direct_mc2gst_gatesets(gateStrings, dataset, specs, targetGateset,
+                           gateLabelAliases=None, svdTruncateTo=0,
+                           minProbClipForWeighting=1e-4,
+                           probClipInterval=(-1e6,1e6), verbosity=0):
     """
     Constructs a dictionary with keys == gate strings and values == Direct-LSGST GateSets.
 
@@ -2038,6 +2152,12 @@ def direct_mc2gst_gatesets(gateStrings, dataset, specs, targetGateset, svdTrunca
 
     targetGateset : GateSet
         The target gate set used by LGST to extract gate labels and an initial gauge
+
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
     svdTruncateTo : int, optional
         The Hilbert space dimension to truncate the gate matrices to using
@@ -2070,13 +2190,14 @@ def direct_mc2gst_gatesets(gateStrings, dataset, specs, targetGateset, svdTrunca
         for i,sigma in enumerate(gateStrings):
             printer.show_progress(i, len(gateStrings), prefix="--- Computing gateset for string-", suffix='---')
             directLSGSTgatesets[sigma] = direct_mc2gst_gateset( sigma, "GsigmaLbl", dataset, specs, targetGateset,
-                                                            svdTruncateTo, minProbClipForWeighting,
-                                                            probClipInterval, verbosity)
+                                                                gateLabelAliases, svdTruncateTo, minProbClipForWeighting,
+                                                                probClipInterval, verbosity)
     return directLSGSTgatesets
 
 
-def direct_mlgst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs, targetGateset, svdTruncateTo=0,
-                        minProbClip=1e-6, probClipInterval=(-1e6,1e6), verbosity=0 ):
+def direct_mlgst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs, targetGateset,
+                          gateLabelAliases=None, svdTruncateTo=0, minProbClip=1e-6,
+                          probClipInterval=(-1e6,1e6), verbosity=0 ):
     """
     Constructs a gateset of MLEGST estimates for target gates and gateStringToEstimate.
 
@@ -2110,6 +2231,12 @@ def direct_mlgst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs,
     targetGateset : GateSet
         The target gate set used by LGST to extract gate labels and an initial gauge
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
     svdTruncateTo : int, optional
         The Hilbert space dimension to truncate the gate matrices to using
         a SVD to keep only the largest svdToTruncateTo singular values of
@@ -2133,7 +2260,8 @@ def direct_mlgst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs,
         and the gates of targetGateset.
     """
     direct_lgst = gateset_with_lgst_gatestring_estimates( [gateStringToEstimate], dataset, specs, targetGateset,
-                                                      True, None, None, [gateStringLabel], svdTruncateTo, verbosity )
+                                                          True, gateLabelAliases, None, None, [gateStringLabel],
+                                                          svdTruncateTo, verbosity )
 
     prepStrs, effectStrs = _construction.get_spam_strs(specs)
 
@@ -2143,15 +2271,19 @@ def direct_mlgst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs,
         gatestrings.extend( [ prepStr + _objs.GateString( (gateLabel,), bCheck=False) + effectStr
                               for prepStr in prepStrs for effectStr in effectStrs ] )
 
+    aliases = {} if (gateLabelAliases is None) else gateLabelAliases.copy()
+    aliases[gateStringLabel] = _tools.find_replace_tuple(gateStringToEstimate,gateLabelAliases)
+
     _, direct_mlegst = _alg.do_mlgst(
         dataset, direct_lgst, gatestrings, minProbClip=minProbClip,
         probClipInterval=probClipInterval, verbosity=verbosity,
-        gateLabelAliases={gateStringLabel: gateStringToEstimate} )
+        gateLabelAliases=aliases )
     return direct_mlegst
 
 
-def direct_mlgst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncateTo=0,
-                        minProbClip=1e-6, probClipInterval=(-1e6,1e6), verbosity=0):
+def direct_mlgst_gatesets(gateStrings, dataset, specs, targetGateset,
+                          gateLabelAliases=None, svdTruncateTo=0, minProbClip=1e-6,
+                          probClipInterval=(-1e6,1e6), verbosity=0):
     """
     Constructs a dictionary with keys == gate strings and values == Direct-MLEGST GateSets.
 
@@ -2169,6 +2301,12 @@ def direct_mlgst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncat
 
     targetGateset : GateSet
         The target gate set used by LGST to extract gate labels and an initial gauge
+
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
     svdTruncateTo : int, optional
         The Hilbert space dimension to truncate the gate matrices to using
@@ -2201,12 +2339,14 @@ def direct_mlgst_gatesets(gateStrings, dataset, specs, targetGateset, svdTruncat
         for i,sigma in enumerate(gateStrings):
             printer.show_progress(i, len(gateStrings), prefix="--- Computing gateset for string ", suffix="---")
             directMLEGSTgatesets[sigma] = direct_mlgst_gateset( sigma, "GsigmaLbl", dataset, specs, targetGateset,
-                                                            svdTruncateTo, minProbClip, probClipInterval, verbosity)
+                                                                gateLabelAliases, svdTruncateTo, minProbClip,
+                                                                probClipInterval, verbosity)
     return directMLEGSTgatesets
 
 
 def focused_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, specs, startGateset,
-                         minProbClipForWeighting=1e-4, probClipInterval=(-1e6,1e6), verbosity=0 ):
+                            gateLabelAliases=None, minProbClipForWeighting=1e-4,
+                            probClipInterval=(-1e6,1e6), verbosity=0 ):
     """
     Constructs a gateset containing a single LSGST estimate of gateStringToEstimate.
 
@@ -2233,6 +2373,12 @@ def focused_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, spec
     startGateset : GateSet
         The gate set to seed LSGST with. Often times obtained via LGST.
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
     minProbClipForWeighting : float, optional
         defines the clipping interval for the statistical weight used
         within the chi^2 function (see chi2fn).
@@ -2255,7 +2401,9 @@ def focused_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, spec
     _, focused_lsgst = _alg.do_mc2gst(
         dataset, startGateset, gatestrings,
         minProbClipForWeighting=minProbClipForWeighting,
-        probClipInterval=probClipInterval, verbosity=verbosity)
+        probClipInterval=probClipInterval,
+        gateLabelAliases=gateLabelAliases,
+        verbosity=verbosity)
 
     focused_lsgst.gates[gateStringLabel] = _objs.FullyParameterizedGate(
             focused_lsgst.product(gateStringToEstimate)) #add desired string as a separate labeled gate
@@ -2263,6 +2411,7 @@ def focused_mc2gst_gateset( gateStringToEstimate, gateStringLabel, dataset, spec
 
 
 def focused_mc2gst_gatesets(gateStrings, dataset, specs, startGateset,
+                            gateLabelAliases=None,
                             minProbClipForWeighting=1e-4,
                             probClipInterval=(-1e6,1e6), verbosity=0):
     """
@@ -2282,6 +2431,12 @@ def focused_mc2gst_gatesets(gateStrings, dataset, specs, startGateset,
 
     startGateset : GateSet
         The gate set to seed LSGST with. Often times obtained via LGST.
+
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
     minProbClipForWeighting : float, optional
         defines the clipping interval for the statistical weight used
@@ -2309,13 +2464,14 @@ def focused_mc2gst_gatesets(gateStrings, dataset, specs, startGateset,
         for i,sigma in enumerate(gateStrings):
             printer.show_progress(i, len(gateStrings), prefix="--- Computing gateset for string", suffix='---')
             focusedLSGSTgatesets[sigma] = focused_mc2gst_gateset( sigma, "GsigmaLbl", dataset, specs, startGateset,
-                                                               minProbClipForWeighting, probClipInterval, verbosity)
+                                                                  gateLabelAliases, minProbClipForWeighting,
+                                                                  probClipInterval, verbosity)
     return focusedLSGSTgatesets
 
 
 def direct_chi2_matrix(sigma, dataset, directGateset, strs,
                        minProbClipForWeighting=1e-4, fidpair_filter=None,
-                       gatestring_filter=None):
+                       gatestring_filter=None, gateLabelAliases=None):
     """
     Computes the Direct-X chi^2 matrix for a base gatestring sigma.
 
@@ -2351,6 +2507,12 @@ def direct_chi2_matrix(sigma, dataset, directGateset, strs,
         of the matrix should be computed.  Any matrix entry corresponding to
         an gate string *not* in this list is set to NaN.
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
 
     Returns
     -------
@@ -2360,12 +2522,14 @@ def direct_chi2_matrix(sigma, dataset, directGateset, strs,
     """
     spamlabels = dataset.get_spam_labels()
     gsmap = get_gatestring_map(sigma, dataset, strs, fidpair_filter,
-                               gatestring_filter)
-    gsmap_pr = get_gatestring_map(_objs.GateString( ("GsigmaLbl",) ), dataset,
-                                  strs, fidpair_filter, gatestring_filter)
-    cntMxs = total_count_matrix(gsmap, dataset)[None,:,:]
+                               gatestring_filter, gateLabelAliases)
+    gsmap_pr = get_gatestring_map(_objs.GateString( ("GsigmaLbl",) ),None,strs)
+                # set dataset == None & don't apply filter since they won't have GsigmaLbl
+    ds_gsmap = expand_aliases_in_map(gsmap, gateLabelAliases)
+    
+    cntMxs = total_count_matrix(ds_gsmap, dataset)[None,:,:]
     probMxs = probability_matrices( gsmap_pr, directGateset, spamlabels ) # no probs_precomp_dict
-    freqMxs = frequency_matrices( gsmap, dataset, spamlabels)
+    freqMxs = frequency_matrices( ds_gsmap, dataset, spamlabels)
     chiSqMxs= _tools.chi2fn( cntMxs, probMxs, freqMxs,
                                      minProbClipForWeighting)
     return chiSqMxs.sum(axis=0) # sum over spam labels
@@ -2377,7 +2541,8 @@ def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset,
                          boxLabels=True, histogram=False, histBins=50,
                          minProbClipForWeighting=1e-4, save_to=None, ticSize=20,
                          invert=False, fidpair_filters=None,
-                         gatestring_filters=None, linlg_pcntle=.05):
+                         gatestring_filters=None, linlg_pcntle=.05,
+                         gateLabelAliases=None):
     """
     Create a color box plot of Direct-X chi^2 values.
 
@@ -2466,6 +2631,12 @@ def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset,
     linlg_pcntle: float, optional
         Specifies the (1 - linlg_pcntle) percentile to compute for the boxplots
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
 
     Returns
     -------
@@ -2484,7 +2655,8 @@ def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset,
         return direct_chi2_matrix( gateStr, dataset, directGatesets.get(gateStr,None),
                                    strs, minProbClipForWeighting,
                                    fidpair_filters[(x,y)] if (fidpair_filters is not None) else None,
-                                   gatestring_filters[(x,y)] if (gatestring_filters is not None) else None)
+                                   gatestring_filters[(x,y)] if (gatestring_filters is not None) else None,
+                                   gateLabelAliases)
 
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
     stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=linlg_pcntle, dof=dof)
@@ -2497,7 +2669,7 @@ def direct_chi2_boxplot( xvals, yvals, xy_gatestring_dict, dataset,
 
 def direct_logl_matrix(sigma, dataset, directGateset, strs,
                        minProbClip=1e-6, fidpair_filter=None,
-                       gatestring_filter=None):
+                       gatestring_filter=None, gateLabelAliases=None):
     """
     Computes the Direct-X log-likelihood matrix, containing the values
      of 2*( log(L)_upperbound - log(L) ) for a base gatestring sigma.
@@ -2534,6 +2706,12 @@ def direct_logl_matrix(sigma, dataset, directGateset, strs,
         of the matrix should be computed.  Any matrix entry corresponding to
         an gate string *not* in this list is set to NaN.
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
 
     Returns
     -------
@@ -2543,12 +2721,13 @@ def direct_logl_matrix(sigma, dataset, directGateset, strs,
     """
     spamlabels = dataset.get_spam_labels()
     gsmap = get_gatestring_map(sigma, dataset, strs, fidpair_filter,
-                               gatestring_filter)
-    gsmap_pr = get_gatestring_map(_objs.GateString( ("GsigmaLbl",) ), dataset,
-                                  strs, fidpair_filter, gatestring_filter)
-    cntMxs = total_count_matrix(gsmap, dataset)[None,:,:]
+                               gatestring_filter, gateLabelAliases)
+    gsmap_pr = get_gatestring_map(_objs.GateString( ("GsigmaLbl",) ),None,strs)
+                # set dataset == None & don't apply filter since they won't have GsigmaLbl
+    ds_gsmap = expand_aliases_in_map(gsmap, gateLabelAliases)
+    cntMxs = total_count_matrix(ds_gsmap, dataset)[None,:,:]
     probMxs = probability_matrices( gsmap_pr, directGateset, spamlabels ) # no probs_precomp_dict
-    freqMxs = frequency_matrices( gsmap, dataset, spamlabels)
+    freqMxs = frequency_matrices( ds_gsmap, dataset, spamlabels)
     logLMxs = _tools.two_delta_loglfn( cntMxs, probMxs, freqMxs, minProbClip)
     return logLMxs.sum(axis=0) # sum over spam labels
 
@@ -2560,7 +2739,7 @@ def direct_logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset,
                          histBins=50, minProbClipForWeighting=1e-4, 
                          save_to=None, ticSize=20, invert=False,
                          fidpair_filters=None, gatestring_filters=None,
-                         linlg_pcntle=.05):
+                         linlg_pcntle=.05, gateLabelAliases=None):
     """
     Create a color box plot of Direct-X log-likelihood values.
 
@@ -2649,6 +2828,12 @@ def direct_logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset,
     linlg_pcntle: float, optional
         Specifies the (1 - linlg_pcntle) percentile to compute for the boxplots
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
 
     Returns
     -------
@@ -2666,7 +2851,8 @@ def direct_logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset,
         return direct_logl_matrix( gateStr, dataset, directGatesets.get(gateStr,None),
                                    strs, minProbClipForWeighting,
                                    fidpair_filters[(x,y)] if (fidpair_filters is not None) else None,
-                                   gatestring_filters[(x,y)] if (gatestring_filters is not None) else None)
+                                   gatestring_filters[(x,y)] if (gatestring_filters is not None) else None,
+                                   gateLabelAliases)
 
     xvals,yvals,subMxs,n_boxes,dof = _computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,sumUp)
     stdcmap = StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=linlg_pcntle, dof=dof)
@@ -2679,7 +2865,7 @@ def direct_logl_boxplot( xvals, yvals, xy_gatestring_dict, dataset,
 def direct2x_comp_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGatesets, strs, xlabel="", ylabel="",
                              m=None, M=None, scale=1.0, prec='compact', title="Direct 2x Chi^2 Comparison", sumUp=False,
                              boxLabels=True, histogram=False, histBins=50, minProbClipForWeighting=1e-4,
-                             save_to=None, ticSize=20, invert=False):
+                             save_to=None, ticSize=20, invert=False, gateLabelAliases=None):
     """
     Create a box plot indicating how well the Direct-X estimates of string s
     predict the data for 2s (the string repeated)
@@ -2767,6 +2953,13 @@ def direct2x_comp_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGate
         only when sumUp == False).  Use inner_x_labels and inner_y_labels to label
         the x and y axes.
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
+
     Returns
     -------
     rptFig : ReportFigure
@@ -2790,7 +2983,7 @@ def direct2x_comp_boxplot( xvals, yvals, xy_gatestring_dict, dataset, directGate
 
         try:
             gsmap = get_gatestring_map(gateStr*2, dataset, strs, None,
-                                       gatestring_filter)
+                                       gatestring_filter, gateLabelAliases)
             gsmap_pr = get_gatestring_map(_objs.GateString(
                     ("GsigmaLbl","GsigmaLbl") ), None,
                     strs, None, gatestring_filter) 
@@ -2946,7 +3139,8 @@ def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
                                boxLabels=True, histogram=False, histBins=50,
                                minProbClipForWeighting=1e-4, save_to=None, 
                                ticSize=20, whackWith=10.0, invert=False, 
-                               fidpair_filters=None, gatestring_filters=None):
+                               fidpair_filters=None, gatestring_filters=None,
+                               gateLabelAliases=None):
     """
     Create a box plot indicating how the chi^2 would change if the chi^2 of one
       base gate string blocks were forced to be smaller ("whacked").
@@ -3053,6 +3247,12 @@ def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
         values are lists of GateString objects specifying which elements should
         be computed and displayed in the (x,y) sub-block of the plot.
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
 
     Returns
     -------
@@ -3084,7 +3284,8 @@ def whack_a_chi2_mole_boxplot( gatestringToWhack, allGatestringsUsedInChi2Opt,
     probs  = _np.empty( (len(spamLabels),len(allGatestringsUsedInChi2Opt)) )
     dprobs = _np.empty( (len(spamLabels),len(allGatestringsUsedInChi2Opt),vec_gs_len) )
 
-    for (i,gateStr) in enumerate(allGatestringsUsedInChi2Opt):
+    ds_gatestrings = _tools.find_replace_tuple_list(allGatestringsUsedInChi2Opt,gateLabelAliases)
+    for (i,gateStr) in enumerate(ds_gatestrings):
         N[i] = float(dataset[gateStr].total())
         for k,sl in enumerate(spamLabels):
             f[k,i] = dataset[gateStr].fraction(sl)
@@ -3163,7 +3364,8 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
                                boxLabels=True, histogram=False, histBins=50,
                                minProbClipForWeighting=1e-4, save_to=None,
                                ticSize=20, whackWith=10.0, invert=False,
-                               fidpair_filters=None, gatestring_filters=None):
+                               fidpair_filters=None, gatestring_filters=None,
+                               gateLabelAliases=None):
     """
     Create a box plot indicating how the log-likelihood would change if the log(L)
       of one base gate string blocks were forced to be smaller ("whacked").
@@ -3269,6 +3471,12 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
         values are lists of GateString objects specifying which elements should
         be computed and displayed in the (x,y) sub-block of the plot.
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
 
     Returns
     -------
@@ -3301,7 +3509,8 @@ def whack_a_logl_mole_boxplot( gatestringToWhack, allGatestringsUsedInLogLOpt,
     probs  = _np.empty( (len(spamLabels),len(allGatestringsUsedInLogLOpt)) )
     dprobs = _np.empty( (len(spamLabels),len(allGatestringsUsedInLogLOpt),vec_gs_len) )
 
-    for (i,gateStr) in enumerate(allGatestringsUsedInLogLOpt):
+    ds_gatestrings = _tools.find_replace_tuple_list(allGatestringsUsedInLogLOpt,gateLabelAliases)
+    for (i,gateStr) in enumerate(ds_gatestrings):
         N[i] = float(dataset[gateStr].total())
         for k,sl in enumerate(spamLabels):
             f[k,i] = dataset[gateStr].fraction(sl)
