@@ -7,12 +7,13 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Chi-squared and related functions """
 
 import numpy as _np
+from . import listtools as _lt
 
 def chi2(dataset, gateset, gateStrings=None,
          returnGradient=False, returnHessian=False,
          minProbClipForWeighting=1e-4, clipTo=None,
          useFreqWeightedChiSq=False, check=False,
-         memLimit=None):
+         memLimit=None, gateLabelAliases=None):
     """
     Computes the total chi^2 for a set of gate strings.
 
@@ -55,6 +56,12 @@ def chi2(dataset, gateset, gateStrings=None,
         A rough memory limit in bytes which restricts the amount of intermediate
         values that are computed and stored.
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
 
     Returns
     -------
@@ -84,6 +91,9 @@ def chi2(dataset, gateset, gateStrings=None,
 
     if gateStrings is None:
         gateStrings = list(dataset.keys())
+
+    dsGateStrings = _lt.find_replace_tuple_list(
+            gateStrings, gateLabelAliases)
 
     nSpamLabels = len(spamLabels)
     nGateStrings = len(gateStrings)
@@ -141,7 +151,7 @@ def chi2(dataset, gateset, gateStrings=None,
     #  evTree.print_analysis()
 
 
-    for (i,gateStr) in enumerate(gateStrings):
+    for (i,gateStr) in enumerate(dsGateStrings):
         N[i] = float(dataset[gateStr].total())
         for k,sl in enumerate(spamLabels):
             f[k,i] = dataset[gateStr].fraction(sl)

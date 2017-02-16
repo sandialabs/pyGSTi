@@ -698,7 +698,8 @@ class Results(object):
             return _generation.get_chi2_progress_table(
                 self.parameters['max length list'],
                 self.gatesets['iteration estimates'],
-                self.gatestring_lists['iteration'], self.dataset)
+                self.gatestring_lists['iteration'], self.dataset,
+                self.parameters.get('gateLabelAliases',None))
         fns['chi2ProgressTable'] = (fn, validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
@@ -706,7 +707,8 @@ class Results(object):
             return _generation.get_logl_progress_table(
                 self.parameters['max length list'],
                 self.gatesets['iteration estimates'],
-                self.gatestring_lists['iteration'], self.dataset)
+                self.gatestring_lists['iteration'], self.dataset,
+                self.parameters.get('gateLabelAliases',None))
         fns['logLProgressTable'] = (fn, validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
@@ -715,12 +717,14 @@ class Results(object):
                 return _generation.get_logl_progress_table(
                     self.parameters['max length list'],
                     self.gatesets['iteration estimates'],
-                    self.gatestring_lists['iteration'], self.dataset)
+                    self.gatestring_lists['iteration'], self.dataset,
+                    self.parameters.get('gateLabelAliases',None))
             elif self.parameters['objective'] == "chi2":
                 return _generation.get_chi2_progress_table(
                     self.parameters['max length list'],
                     self.gatesets['iteration estimates'],
-                    self.gatestring_lists['iteration'], self.dataset)
+                    self.gatestring_lists['iteration'], self.dataset,
+                    self.parameters.get('gateLabelAliases',None))
             else: raise ValueError("Invalid Objective: %s" %
                                    self.parameters['objective'])
         fns['progressTable'] = (fn, validate_LsAndGerms)
@@ -752,7 +756,8 @@ class Results(object):
                 return _generation.get_logl_bygerm_table(
                     gsBest, self.dataset, germs, strs, Ls,
                     self.parameters['L,germ tuple base string dict'],
-                    fidpair_filters, gstr_filters)
+                    fidpair_filters, gstr_filters,
+                    self.parameters.get('gateLabelAliases',None))
             elif self.parameters['objective'] == "chi2":
                 raise NotImplementedError("byGermTable not implemented for chi2 objective")
             else: raise ValueError("Invalid Objective: %s" %
@@ -767,7 +772,8 @@ class Results(object):
             cptp_gateset = _contract(cptp_go_gateset, "CPTP")
             return _generation.get_logl_projected_err_gen_table(
                 gsBest, gsTgt, self.gatestring_lists['final'], self.dataset,
-                cptp_gateset, self.options.errgen_type)
+                cptp_gateset, self.options.errgen_type,
+                self.parameters.get('gateLabelAliases',None))
         fns['logLErrgenProjectionTable'] = (fn, validate_essential)
 
 
@@ -943,7 +949,8 @@ class Results(object):
                           fidpair_filters=fpr_filters,
                           gatestring_filters = gstr_filters,
                           linlg_pcntle=float(self.parameters['linlogPercentile']) / 100,
-                          minProbClipForWeighting=mpc, save_to="", ticSize=20)
+                          minProbClipForWeighting=mpc, save_to="", ticSize=20,
+                          gateLabelAliases=self.parameters.get('gateLabelAliases',None))
         fns["bestEstimateColorBoxPlot"] = (fn,validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
@@ -958,7 +965,7 @@ class Results(object):
                            gatestring_filters = gstr_filters,
                            linlg_pcntle=float(self.parameters['linlogPercentile']) / 100,
                            save_to="", ticSize=20, minProbClipForWeighting=mpc,
-                           invert=True)
+                           invert=True, gateLabelAliases=self.parameters.get('gateLabelAliases',None))
         fns["invertedBestEstimateColorBoxPlot"] = (fn,validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
@@ -974,7 +981,8 @@ class Results(object):
                            fidpair_filters=fpr_filters,
                            gatestring_filters = gstr_filters,
                            minProbClipForWeighting=mpc,
-                           save_to="", ticSize=14, linlg_pcntle=float(self.parameters['linlogPercentile']) / 100)
+                           save_to="", ticSize=14, linlg_pcntle=float(self.parameters['linlogPercentile']) / 100,
+                           gateLabelAliases=self.parameters.get('gateLabelAliases',None))
         fns["bestEstimateSummedColorBoxPlot"] = (fn,validate_LsAndGerms)
 
 
@@ -991,7 +999,8 @@ class Results(object):
                            fidpair_filters=fpr_filters,
                            gatestring_filters = gstr_filters,
                            linlg_pcntle=float(self.parameters['linlogPercentile']) / 100,
-                           save_to="", minProbClipForWeighting=mpc, ticSize=20)
+                           save_to="", minProbClipForWeighting=mpc, ticSize=20,
+                           gateLabelAliases=self.parameters.get('gateLabelAliases',None))
         def fn_validate(key):
             if not self._LsAndGermInfoSet: return []
 
@@ -1030,7 +1039,8 @@ class Results(object):
                                  minProbClipForWeighting=mpc,
                                  fidpair_filters= None,
                                  gatestring_filters = None, #don't use filters for direct plots
-                                 save_to="", ticSize=20, linlg_pcntle=float(self.parameters['linlogPercentile']) / 100)
+                                 save_to="", ticSize=20, linlg_pcntle=float(self.parameters['linlogPercentile']) / 100,
+                                 gateLabelAliases=self.parameters.get('gateLabelAliases',None))
         fns["directLGSTColorBoxPlot"] = (fn,validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
@@ -1045,7 +1055,8 @@ class Results(object):
                                  minProbClipForWeighting=mpc,
                                  fidpair_filters = None,
                                  gatestring_filters = None, #don't use filter_dict for direct plots
-                                 save_to="", ticSize=20, linlg_pcntle=float(self.parameters['linlogPercentile']) / 100)
+                                 save_to="", ticSize=20, linlg_pcntle=float(self.parameters['linlogPercentile']) / 100,
+                                 gateLabelAliases=self.parameters.get('gateLabelAliases',None))
         fns["directLongSeqGSTColorBoxPlot"] = (fn,validate_LsAndGerms)
 
         def fn(key, confidenceLevel, vb):
@@ -1095,7 +1106,8 @@ class Results(object):
                                     sumUp=False,title="",whackWith=hammerWeight,
                                     save_to="", minProbClipForWeighting=mpc,
                                     ticSize=20, fidpair_filters=fpr_filters,
-                                    gatestring_filters = gstr_filters)
+                                    gatestring_filters = gstr_filters,
+                                    gateLabelAliases=self.parameters.get('gateLabelAliases',None))
         def fn_validate(key):
             if not self._LsAndGermInfoSet: return []
 
@@ -1124,7 +1136,8 @@ class Results(object):
                                     sumUp=True, title="",whackWith=hammerWeight,
                                     save_to="", minProbClipForWeighting=mpc,
                                     ticSize=20, fidpair_filters=fpr_filters,
-                                    gatestring_filters = gstr_filters)
+                                    gatestring_filters = gstr_filters,
+                                    gateLabelAliases=self.parameters.get('gateLabelAliases',None))
 
         def fn_validate(key):
             if not self._LsAndGermInfoSet: return []
@@ -1410,6 +1423,7 @@ class Results(object):
 
             return _plotting.direct_lgst_gatesets(
                 baseStrs, self.dataset, direct_specs, self.gatesets['target'],
+                gateLabelAliases=self.parameters.get('gateLabelAliases',None),
                 svdTruncateTo=4, verbosity=0)
                 #TODO: svdTruncateTo set elegantly?
         fns["direct_lgst_gatesets"] = (fn, validate_LsAndGerms)
@@ -1439,6 +1453,7 @@ class Results(object):
                     svdTruncateTo=gsTarget.get_dimension(),
                     minProbClipForWeighting=mpc,
                     probClipInterval=self.parameters['probClipInterval'],
+                    gateLabelAliases=self.parameters.get('gateLabelAliases',None),
                     verbosity=0)
 
             elif self.parameters['objective'] == "logl":
@@ -1448,6 +1463,7 @@ class Results(object):
                     svdTruncateTo=gsTarget.get_dimension(),
                     minProbClip=mpc,
                     probClipInterval=self.parameters['probClipInterval'],
+                    gateLabelAliases=self.parameters.get('gateLabelAliases',None),
                     verbosity=0)
             else:
                 raise ValueError("Invalid Objective: %s" %
@@ -1506,7 +1522,8 @@ class Results(object):
                              fidpair_filters=fidpair_filters,
                              gatestring_filters = gstr_filters,
                              linlg_pcntle=float(self.parameters['linlogPercentile']) / 100,
-                             minProbClipForWeighting=mpc, save_to="", ticSize=20)
+                             minProbClipForWeighting=mpc, save_to="", ticSize=20,
+                             gateLabelAliases=self.parameters.get('gateLabelAliases',None))
                 figs.append(fig); n += maxGermsPerFig
 
             return figs
@@ -1648,7 +1665,8 @@ class Results(object):
                     regionType, self._comm,
                     self.parameters['memLimit'],
                     self.parameters['cptpPenaltyFactor'],
-                    self.parameters['distributeMethod'])
+                    self.parameters['distributeMethod'],
+                    self.parameters.get('gateLabelAliases',None))
             elif self.parameters['objective'] == "chi2":
                 cr = _generation.get_chi2_confidence_region(
                     self.gatesets['final estimate'], self.dataset,
@@ -1658,7 +1676,8 @@ class Results(object):
                     self.parameters['minProbClipForWeighting'],
                     self.parameters['hessianProjection'],
                     regionType, self._comm,
-                    self.parameters['memLimit'])
+                    self.parameters['memLimit'],
+                    self.parameters.get('gateLabelAliases',None))
             else:
                 raise ValueError("Invalid objective given in essential" +
                                  " info: %s" % self.parameters['objective'])

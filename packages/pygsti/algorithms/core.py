@@ -182,7 +182,7 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
     for i in range(trunc): Pj[i,i] = 1.0
     Pjt = _np.transpose(Pj)         # shape = (trunc, K)
 
-    ABMat = _constructAB(prepSpecs, effectSpecs, spamDict, dataset)  # shape = (nESpecs, nRhoSpecs)
+    ABMat = _constructAB(prepSpecs, effectSpecs, spamDict, dataset, gateLabelAliases)  # shape = (nESpecs, nRhoSpecs)
 
     U,s,V = _np.linalg.svd(ABMat, full_matrices=False)
     printer.log("Singular values of I_tilde (truncating to first %d of %d) = " % (trunc,len(s)), 2)
@@ -209,8 +209,7 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
     assert( len( (_np.isnan(invABMat_p)).nonzero()[0] ) == 0 )
 
     for gateLabel in gateLabelsToEstimate:
-        gateLabelTuple = gateLabelAliases.get(gateLabel, (gateLabel,))
-        X = _constructXMatrix(prepSpecs, effectSpecs, spamDict, gateLabelTuple, dataset)  # shape (nESpecs, nRhoSpecs)
+        X = _constructXMatrix(prepSpecs, effectSpecs, spamDict, (gateLabel,), dataset, gateLabelAliases)  # shape (nESpecs, nRhoSpecs)
         X2 = _np.dot(Ud, _np.dot(X, Vd)) # shape (K,K) this should be close to rank "svdTruncateTo" (which is <= K) -- TODO: check this
 
         #if svdTruncateTo > 0:
@@ -346,28 +345,30 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
     return lgstGateset
 
 
-def _constructAB(prepSpecs, effectSpecs, spamDict, dataset):
+def _constructAB(prepSpecs, effectSpecs, spamDict, dataset, gateLabelAliases=None):
     AB = _np.empty( (len(effectSpecs),len(prepSpecs)) )
     for i,espec in enumerate(effectSpecs):
         for j,rhospec in enumerate(prepSpecs):
             gateLabelString = rhospec.str + espec.str # LEXICOGRAPHICAL VS MATRIX ORDER
+            dsStr = _tools.find_replace_tuple(gateLabelString,gateLabelAliases)
             spamLabel = spamDict[ (rhospec.lbl,espec.lbl) ]
-            dsRow = dataset[gateLabelString]
+            dsRow = dataset[dsStr]
             AB[i,j] = dsRow.fraction(spamLabel)
             #print "DEBUG: AB[%d,%d] = (" % (i,j), espec + rhospec, ") = ", AB[i,j] #DEBUG
     return AB
 
-def _constructXMatrix(prepSpecs, effectSpecs, spamDict, gateLabelTuple, dataset):
+def _constructXMatrix(prepSpecs, effectSpecs, spamDict, gateLabelTuple, dataset, gateLabelAliases=None):
     X = _np.empty( (len(effectSpecs),len(prepSpecs)) )
     for i,espec in enumerate(effectSpecs):
         for j,rhospec in enumerate(prepSpecs):
             gateLabelString = rhospec.str + _objs.GateString(gateLabelTuple) + espec.str # LEXICOGRAPHICAL VS MATRIX ORDER
+            dsStr = _tools.find_replace_tuple(tuple(gateLabelString),gateLabelAliases)
             spamLabel = spamDict[ (rhospec.lbl,espec.lbl) ]
             try:
-                dsRow = dataset[gateLabelString]
+                dsRow = dataset[dsStr]
             except:
                 raise KeyError("Missing data needed to construct X matrix for " + str(gateLabelTuple) \
-                                   + ": gate string " + str(gateLabelString))
+                                   + ": gate string " + str(dsStr))
             X[i,j] = dsRow.fraction(spamLabel)
     return X
 
@@ -1405,12 +1406,12 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     return minErrVec, soln_gs
 
 def do_mc2gst_with_model_selection(
-  dataset, startGateset, dimDelta, gateStringsToUse,
-  maxiter=100000, maxfev=None, tol=1e-6,
-  cptp_penalty_factor=0, minProbClipForWeighting=1e-4, probClipInterval=(-1e6,1e6),
-  useFreqWeightedChiSq=False, regularizeFactor=0, verbosity=0,
-  check=False, check_jacobian=False, gatestringWeights=None, memLimit=None,
-  comm=None):
+        dataset, startGateset, dimDelta, gateStringsToUse,
+        maxiter=100000, maxfev=None, tol=1e-6,
+        cptp_penalty_factor=0, minProbClipForWeighting=1e-4, probClipInterval=(-1e6,1e6),
+        useFreqWeightedChiSq=False, regularizeFactor=0, verbosity=0,
+        check=False, check_jacobian=False, gatestringWeights=None,
+        gateLabelAliases=None, memLimit=None, comm=None):
     """
     Performs Least-Squares Gate Set Tomography on the dataset.
 
@@ -1484,6 +1485,12 @@ def do_mc2gst_with_model_selection(
         least-squares term of the corresponding gate string in gateStringsToUse.
         The default is no weight scaling at all.
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
     memLimit : int, optional
         A rough memory limit in bytes which restricts the amount of intermediate
         values that are computed and stored.
@@ -1519,7 +1526,7 @@ def do_mc2gst_with_model_selection(
                            maxfev, tol, cptp_penalty_factor,
                            minProbClipForWeighting, probClipInterval,
                            useFreqWeightedChiSq, regularizeFactor, printer-1,
-                           check, check_jacobian, gatestringWeights, None,
+                           check, check_jacobian, gatestringWeights, gateLabelAliases,
                            memLimit, comm)
     chiSqBest = sum([x**2 for x in minErr]) #using only gateStringsToUse
     nParamsBest = len(startGateset.to_vector())
@@ -1549,7 +1556,7 @@ def do_mc2gst_with_model_selection(
                                maxfev, tol, cptp_penalty_factor,
                                minProbClipForWeighting, probClipInterval,
                                useFreqWeightedChiSq, regularizeFactor, printer-1,
-                               check, check_jacobian, gatestringWeights, None,
+                               check, check_jacobian, gatestringWeights, gateLabelAliases,
                                memLimit, comm)
 
         chiSq = sum([x**2 for x in minErr]) #using only gateStringsToUse
@@ -1587,7 +1594,7 @@ def do_mc2gst_with_model_selection(
                                maxfev, tol, cptp_penalty_factor,
                                minProbClipForWeighting, probClipInterval,
                                useFreqWeightedChiSq, regularizeFactor, printer-1,
-                               check, check_jacobian, gatestringWeights, None,
+                               check, check_jacobian, gatestringWeights, gateLabelAliases,
                                memLimit, comm)
 
         chiSq = sum([x**2 for x in minErr]) #using only gateStringsToUse
@@ -1617,8 +1624,8 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
                         regularizeFactor=0, returnErrorVec=False,
                         returnAll=False, gateStringSetLabels=None, verbosity=0,
                         check=False, check_jacobian=False,
-                        gatestringWeightsDict=None, memLimit=None,
-                        profiler=None, comm=None, 
+                        gatestringWeightsDict=None, gateLabelAliases=None,
+                        memLimit=None, profiler=None, comm=None, 
                         distributeMethod = "gatestrings"):
     """
     Performs Iterative Minimum Chi^2 Gate Set Tomography on the dataset.
@@ -1699,6 +1706,12 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
         A dictionary with keys == gate strings and values == multiplicative scaling
         factor for the corresponding gate string. The default is no weight scaling at all.
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
     memLimit : int, optional
         A rough memory limit in bytes which restricts the amount of intermediate
         values that are computed and stored.
@@ -1768,7 +1781,7 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
                            minProbClipForWeighting, probClipInterval,
                            useFreqWeightedChiSq, regularizeFactor,
                            printer-1, check, check_jacobian,
-                           gatestringWeights, None, memLimit, comm,
+                           gatestringWeights, gateLabelAliases, memLimit, comm,
                            distributeMethod, profiler)
             if returnAll:
                 lsgstGatesets.append(lsgstGateset)
@@ -1791,12 +1804,13 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
 
 
 def do_iterative_mc2gst_with_model_selection(
-  dataset, startGateset, dimDelta, gateStringSetsToUseInEstimation,
-  maxiter=100000, maxfev=None, tol=1e-6,
-  cptp_penalty_factor=0, minProbClipForWeighting=1e-4, probClipInterval=(-1e6,1e6),
-  useFreqWeightedChiSq=False, regularizeFactor=0, returnErrorVec=False,
-  returnAll=False, gateStringSetLabels=None, verbosity=0, check=False,
-  check_jacobian=False, gatestringWeightsDict=None, memLimit=None, comm=None):
+        dataset, startGateset, dimDelta, gateStringSetsToUseInEstimation,
+        maxiter=100000, maxfev=None, tol=1e-6,
+        cptp_penalty_factor=0, minProbClipForWeighting=1e-4, probClipInterval=(-1e6,1e6),
+        useFreqWeightedChiSq=False, regularizeFactor=0, returnErrorVec=False,
+        returnAll=False, gateStringSetLabels=None, verbosity=0, check=False,
+        check_jacobian=False, gatestringWeightsDict=None,
+        gateLabelAliases=None, memLimit=None, comm=None):
     """
     Performs Iterative Minimum Chi^2 Gate Set Tomography on the dataset, and at
     each iteration tests the current gateset model against gateset models with
@@ -1882,6 +1896,12 @@ def do_iterative_mc2gst_with_model_selection(
         A dictionary with keys == gate strings and values == multiplicative scaling
         factor for the corresponding gate string. The default is no weight scaling at all.
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
     memLimit : int, optional
         A rough memory limit in bytes which restricts the amount of intermediate
         values that are computed and stored.
@@ -1936,7 +1956,8 @@ def do_iterative_mc2gst_with_model_selection(
               maxiter, maxfev, tol, cptp_penalty_factor,
               minProbClipForWeighting, probClipInterval,
               useFreqWeightedChiSq, regularizeFactor, printer-1,
-              check, check_jacobian, gatestringWeights, memLimit, comm)
+              check, check_jacobian, gatestringWeights,
+              gateLabelAliases, memLimit, comm)
 
             if returnAll:
                 lsgstGatesets.append(lsgstGateset)
@@ -2529,9 +2550,8 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                        minProbClip=1e-4, probClipInterval=(-1e6,1e6), radius=1e-4,
                        poissonPicture=True,returnMaxLogL=False,returnAll=False,
                        gateStringSetLabels=None, useFreqWeightedChiSq=False,
-                       verbosity=0, check=False, memLimit=None, 
-                       profiler=None, comm=None,
-                       distributeMethod = "gatestrings"):
+                       verbosity=0, check=False, gateLabelAliases=None, memLimit=None, 
+                       profiler=None, comm=None, distributeMethod = "gatestrings"):
     """
     Performs Iterative Maximum Liklihood Estimation Gate Set Tomography on the dataset.
 
@@ -2604,8 +2624,14 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
         How much detail to send to stdout.
 
     check : boolean, optional
-      If True, perform extra checks within code to verify correctness.  Used
-      for testing, and runs much slower when True.
+        If True, perform extra checks within code to verify correctness.  Used
+        for testing, and runs much slower when True.
+
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
     memLimit : int, optional
         A rough memory limit in bytes which restricts the amount of intermediate
@@ -2672,7 +2698,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                                       maxiter, maxfev, tol, cptp_penalty_factor,
                                       minProbClip, probClipInterval,
                                       useFreqWeightedChiSq, 0,printer-1, check,
-                                      check, None, None, memLimit, comm,
+                                      check, None, gateLabelAliases, memLimit, comm,
                                       distributeMethod, profiler)
 
             #_, mleGateset = do_mlgst(dataset, mleGateset, stringsToEstimate,
@@ -2686,9 +2712,9 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
             profiler.add_time('do_iterative_mlgst: iter %d chi2-opt'%(i+1),tRef)
             tRef2=tNxt
 
-            logL_ub = _tools.logl_max(dataset, stringsToEstimate, None, poissonPicture, check)
+            logL_ub = _tools.logl_max(dataset, stringsToEstimate, None, poissonPicture, check, gateLabelAliases)
             maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval,
-                              radius, None, None, poissonPicture, check)  #get maxLogL from chi2 estimate
+                                  radius, None, None, poissonPicture, check, gateLabelAliases)  #get maxLogL from chi2 estimate
 
             printer.log("2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL)),2)
 
@@ -2703,7 +2729,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
            #maxLogL, mleGateset = do_mlgst( dataset, mleGateset, stringsToEstimate,
            #                                maxiter, maxfev, tol,
            #                                minProbClip, probClipInterval, radius, poissonPicture,
-           #                                verbosity, check, None, memLimit, comm)
+           #                                verbosity, check, gateLabelAliases, memLimit, comm)
 
             if i == len(gateStringLists)-1: #on the last iteration, do ML
                 printer.log("Switching to ML objective (last iteration)",2)
@@ -2714,7 +2740,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                 maxLogL_p, mleGateset_p = do_mlgst(
                   dataset, mleGateset, stringsToEstimate, maxiter, maxfev, tol,
                   cptp_penalty_factor, minProbClip, probClipInterval, radius,
-                  poissonPicture, printer-1, check, None, memLimit, comm,
+                  poissonPicture, printer-1, check, gateLabelAliases, memLimit, comm,
                   distributeMethod, profiler)
 
                 printer.log("2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL_p)),2)
