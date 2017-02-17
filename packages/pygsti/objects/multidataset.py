@@ -25,9 +25,12 @@ class MultiDataSet_KeyValIterator(object):
 
     def __next__(self):
         datasetName = next(self.countsDictIter)
-        return datasetName, _DataSet(self.multidataset.countsDict[datasetName], gateStringIndices=self.multidataset.gsIndex,
-                                    spamLabelIndices=self.multidataset.slIndex, bStatic=True)
- 
+        return datasetName, _DataSet(self.multidataset.countsDict[datasetName], 
+                                     gateStringIndices=self.multidataset.gsIndex,
+                                     spamLabelIndices=self.multidataset.slIndex,
+                                     collisionAction=self.multidataset.collisionActions[datasetName],
+                                     bStatic=True)
+
     next = __next__
 
 
@@ -42,8 +45,10 @@ class MultiDataSet_ValIterator(object):
 
     def __next__(self):
         datasetName = next(self.countsDictIter)
-        return _DataSet(self.multidataset.countsDict[datasetName], gateStringIndices=self.multidataset.gsIndex,
-                        spamLabelIndices=self.multidataset.slIndex, bStatic=True)
+        return _DataSet(self.multidataset.countsDict[datasetName],
+                        gateStringIndices=self.multidataset.gsIndex,
+                        spamLabelIndices=self.multidataset.slIndex, bStatic=True,
+                        collisionAction=self.multidataset.collisionActions[datasetName],)
 
     next = __next__
 
@@ -60,7 +65,8 @@ class MultiDataSet(object):
     def __init__(self, countsDict=None,
                  gateStrings=None, gateStringIndices=None,
                  spamLabels=None, spamLabelIndices=None,
-                 fileToLoadFrom=None):
+                 fileToLoadFrom=None, collisionActions=None,
+                 comment=None):
         """
         Initialize a MultiDataSet.
 
@@ -94,6 +100,22 @@ class MultiDataSet(object):
         fileToLoadFrom : string or file object, optional
           Specify this argument and no others to create a MultiDataSet by loading
           from a file (just like using the load(...) function).
+
+        collisionActions : dictionary, optional
+            Specifies how duplicate gate sequences should be handled for the data
+            sets specified by `countsDict`.  Keys must match those of `countsDict`
+            and values are "aggregate" or "keepseparate".  See documentation for
+            `DataSet`.  If None, then "aggregate" is used for all sets by default.
+
+        comment : string, optional
+            A user-specified comment string that gets carried around with the 
+            data.  A common use for this field is to attache to the data details
+            regarding its collection.
+
+        Returns
+        -------
+        MultiDataSet
+           a new multi data set object.
         """
 
         #Optionally load from a file
@@ -129,13 +151,22 @@ class MultiDataSet(object):
         #                   ( keys = dataset names, values = 2D counts array of corresponding dataset )
         if countsDict is not None:
             self.countsDict = _OrderedDict( [ (name,counts) for name,counts in countsDict.items() ] ) #copy OrderedDict but share counts arrays
+            if collisionActions is None: collisionActions = {} #allow None to function as an empty dict
+            self.collisionActions = _OrderedDict( [ (name,collisionActions.get(name,"aggregate"))
+                                                    for name in self.countsDict.keys() ] )
+
             if self.gsIndex:  #Note: tests if not none and nonempty
-                minIndex = min(self.gsIndex.values())
+                #minIndex = min(self.gsIndex.values())
                 maxIndex = max(self.gsIndex.values())
-                for dsName,counts in self.countsDict.items():
+                for _,counts in self.countsDict.items():
                     assert( counts.shape[0] > maxIndex and counts.shape[1] == len(self.slIndex) )
         else:
             self.countsDict = _OrderedDict()
+            self.collisionActions = _OrderedDict()
+
+        # comment
+        self.comment = comment
+
 
     def get_spam_labels(self):
         """
@@ -162,7 +193,8 @@ class MultiDataSet(object):
     def __getitem__(self, datasetName):  #return a static DataSet
         return _DataSet(self.countsDict[datasetName],
                         gateStringIndices=self.gsIndex,
-                        spamLabelIndices=self.slIndex, bStatic=True)
+                        spamLabelIndices=self.slIndex, bStatic=True,
+                        collisionAction=self.collisionActions[datasetName])
 
     def __setitem__(self, datasetName, dataset):
         self.add_dataset(datasetName, dataset)
@@ -213,6 +245,7 @@ class MultiDataSet(object):
 
         return _DataSet(summedCounts, gateStringIndices=self.gsIndex,
                         spamLabelIndices=self.slIndex, bStatic=True)
+                        #leave collisionAction as default "aggregate"
 
     def add_dataset(self, datasetName, dataset):
         """
@@ -244,6 +277,7 @@ class MultiDataSet(object):
             assert( dataset.counts.shape[0] > maxIndex and dataset.counts.shape[1] == len(self.slIndex) )
 
         self.countsDict[datasetName] = dataset.counts
+        self.collisionActions[datasetName] = dataset.collisionAction
 
         if self.gsIndex is None:
             self.gsIndex = dataset.gsIndex
@@ -256,7 +290,8 @@ class MultiDataSet(object):
                 assert( min(self.slIndex.values()) >= 0)
 
 
-    def add_dataset_counts(self, datasetName, datasetCounts):
+    def add_dataset_counts(self, datasetName, datasetCounts,
+                           collisionAction="aggregate"):
         """
         Directly add a full set of counts for a specified dataset.
 
@@ -269,12 +304,20 @@ class MultiDataSet(object):
         datasetCounts: numpy array
             A 2D array with rows = gate strings and cols = spam labels, to this
             MultiDataSet.  The shape of dataSetCounts is checked for compatibility.
+
+        collisionAction : {"aggregate", "keepseparate"}
+            Specifies how duplicate gate sequences should be handled for this
+            data set.  This is applicable only if and when the dataset is copied
+            to a non-static one.  "aggregate" adds duplicate-sequence counts,
+            whereas "keepseparate" tags duplicate-sequence data with by appending
+            a final "#<number>" gate label to the duplicated gate sequence.
         """
 
         if self.gsIndex:  #Note: tests if not none and nonempty
             maxIndex = max(self.gsIndex.values())
             assert( datasetCounts.shape[0] > maxIndex and datasetCounts.shape[1] == len(self.slIndex) )
         self.countsDict[datasetName] = datasetCounts
+        self.collisionActions[datasetName] = collisionAction
 
     def __str__(self):
         s  = "MultiDataSet containing: %d datasets, each with %d strings\n" % (len(self), len(self.gsIndex) if self.gsIndex is not None else 0)
@@ -287,14 +330,16 @@ class MultiDataSet(object):
 
     def copy(self):
         """ Make a copy of this MultiDataSet """
-        return MultiDataSet(self.countsDict, gateStringIndices=self.gsIndex, spamLabelIndices=self.slIndex)
+        return MultiDataSet(self.countsDict, gateStringIndices=self.gsIndex, spamLabelIndices=self.slIndex,
+                            collisionActions=self.collisionActions)
 
 
     def __getstate__(self):
         toPickle = { 'gsIndexKeys': list(map(_gs.CompressedGateString, list(self.gsIndex.keys()))) if self.gsIndex else [],
                      'gsIndexVals': list(self.gsIndex.values()) if self.gsIndex else [],
                      'slIndex': self.slIndex,
-                     'countsDict': self.countsDict }
+                     'countsDict': self.countsDict,
+                     'collisionActions': self.collisionActions }
         return toPickle
 
     def __setstate__(self, state_dict):
@@ -302,6 +347,7 @@ class MultiDataSet(object):
         self.gsIndex = _OrderedDict( list(zip(gsIndexKeys, state_dict['gsIndexVals'])) )
         self.slIndex = state_dict['slIndex']
         self.countsDict = state_dict['countsDict']
+        self.collisionActions = state_dict['collisionActions']
 
     def save(self, fileOrFilename):
         """
@@ -317,7 +363,9 @@ class MultiDataSet(object):
         toPickle = { 'gsIndexKeys': list(map(_gs.CompressedGateString, list(self.gsIndex.keys()))) if self.gsIndex else [],
                      'gsIndexVals': list(self.gsIndex.values()) if self.gsIndex else [],
                      'slIndex': self.slIndex,
-                     'countsKeys': list(self.countsDict.keys()) }  #Don't pickle countsDict numpy data b/c it's inefficient
+                     'countsKeys': list(self.countsDict.keys()),
+                     'collisionActions' : self.collisionActions,
+                     'comment': self.comment }  #Don't pickle countsDict numpy data b/c it's inefficient
         # Compatability for unicode-literal filenames
         bOpen = not (hasattr(fileOrFilename, 'write'))
         if bOpen:
@@ -330,7 +378,7 @@ class MultiDataSet(object):
             f = fileOrFilename
 
         _pickle.dump(toPickle,f)
-        for key,data in self.countsDict.items():
+        for _,data in self.countsDict.items():
             _np.save(f, data)
         if bOpen: f.close()
 
@@ -369,6 +417,8 @@ class MultiDataSet(object):
         #gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]
         self.gsIndex = _OrderedDict( list(zip(gsIndexKeys, state_dict['gsIndexVals'])) )
         self.slIndex = state_dict['slIndex']
+        self.collisionActions = state_dict['collisionActions']
+        self.comment = state_dict["comment"]
         self.countsDict = _OrderedDict()
         for key in state_dict['countsKeys']:
             self.countsDict[key] = _np.lib.format.read_array(f) #np.load(f) doesn't play nice with gzip

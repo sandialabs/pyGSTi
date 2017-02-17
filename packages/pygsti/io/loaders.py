@@ -30,7 +30,8 @@ def load_parameter_file(filename):
         return _json.load(inputfile)
     # return _json.load( open(filename, "rb") )
 
-def load_dataset(filename, cache=False):
+def load_dataset(filename, cache=False, collisionAction="aggregate",
+                 verbosity=1):
     """
     Load a DataSet from a file.  First tries to load file as a
     saved DataSet object, then as a standard text-formatted DataSet.
@@ -47,15 +48,30 @@ def load_dataset(filename, cache=False):
         exists but it is older than filename, a cache file will be
         written after loading from filename.
 
+    collisionAction : {"aggregate", "keepseparate"}
+        Specifies how duplicate gate sequences should be handled.  "aggregate"
+        adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
+        sequence data with by appending a final "#<number>" gate label to the
+        duplicated gate sequence.
+
+    verbosity : int, optional
+        If zero, no output is shown.  If greater than zero,
+        loading progress is shown.
+
     Returns
     -------
     DataSet
     """
 
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
     try:
         # a saved Dataset object is ok
         ds = _objs.DataSet(fileToLoadFrom=filename)
     except:
+
+        #Parser functions don't take a VerbosityPrinter yet, and so
+        # always output to stdout (TODO)
+        bToStdout = (printer.verbosity > 0 and printer.filename is None)
 
         if cache:
             #bReadCache = False
@@ -63,27 +79,32 @@ def load_dataset(filename, cache=False):
             if _os.path.exists( cache_filename ) and \
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
                 try:
-                    print("Loading from cache file: ", cache_filename)
+                    printer.log("Loading from cache file: %s" % cache_filename)
                     ds = _objs.DataSet(fileToLoadFrom=cache_filename)
                     return ds
-                except: print("Failed to load from cache file")
+                except: print("WARNING: Failed to load from cache file")
             else:
-                print("Cache file not found or is tool old -- one will be created after loading is completed")
+                printer.log("Cache file not found or is tool old -- one will"
+                            + "be created after loading is completed")
 
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
-            ds = parser.parse_datafile(filename)
+            ds = parser.parse_datafile(filename, bToStdout,
+                                       collisionAction=collisionAction)
 
-            print("Writing cache file (to speed future loads): %s" % cache_filename)
+            printer.log("Writing cache file (to speed future loads): %s"
+                        % cache_filename)
             ds.save(cache_filename)
         else:
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
-            ds = parser.parse_datafile(filename)
+            ds = parser.parse_datafile(filename, bToStdout,
+                                       collisionAction=collisionAction)
         return ds
 
 
-def load_multidataset(filename, cache=False):
+def load_multidataset(filename, cache=False, collisionAction="aggregate",
+                      verbosity=1):
     """
     Load a MultiDataSet from a file.  First tries to load file as a
     saved MultiDataSet object, then as a standard text-formatted MultiDataSet.
@@ -100,39 +121,60 @@ def load_multidataset(filename, cache=False):
         exists but it is older than filename, a cache file will be
         written after loading from filename.
 
+    collisionAction : {"aggregate", "keepseparate"}
+        Specifies how duplicate gate sequences should be handled.  "aggregate"
+        adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
+        sequence data with by appending a final "#<number>" gate label to the
+        duplicated gate sequence.
+
+    verbosity : int, optional
+        If zero, no output is shown.  If greater than zero,
+        loading progress is shown.
+
+
     Returns
     -------
     MultiDataSet
     """
 
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
     try:
         # a saved MultiDataset object is ok
         mds = _objs.MultiDataSet(fileToLoadFrom=filename)
     except:
+
+        #Parser functions don't take a VerbosityPrinter yet, and so
+        # always output to stdout (TODO)
+        bToStdout = (printer.verbosity > 0 and printer.filename is None)
+
         if cache:
             # bReadCache = False
             cache_filename = filename + ".cache"
             if _os.path.exists( cache_filename ) and \
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
                 try:
-                    print("Loading from cache file: %s" % cache_filename)
+                    printer.log("Loading from cache file: %s" % cache_filename)
                     mds = _objs.MultiDataSet(fileToLoadFrom=cache_filename)
                     return mds
-                except: print("Failed to load from cache file")
+                except: print("WARNING: Failed to load from cache file")
             else:
-                print("Cache file not found or is too old -- one will be created after loading is completed")
+                printer.log("Cache file not found or is too old -- one will be"
+                            + "created after loading is completed")
 
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
-            mds = parser.parse_multidatafile(filename)
+            mds = parser.parse_multidatafile(filename, bToStdout,
+                                             collisionAction=collisionAction)
 
-            print("Writing cache file (to speed future loads): %s" % cache_filename)
+            printer.log("Writing cache file (to speed future loads): %s" 
+                        % cache_filename)
             mds.save(cache_filename)
 
         else:
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
-            mds = parser.parse_multidatafile(filename)
+            mds = parser.parse_multidatafile(filename, bToStdout,
+                                             collisionAction=collisionAction)
     return mds
 
 

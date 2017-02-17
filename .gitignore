@@ -3,9 +3,21 @@
 *.bak
 *.swp
 *.pkl
+*.out
+*.coverage*
+*.serial
 .ipynb_checkpoints
-test/temp_test_files/*
+test/test_packages/temp_test_files/*
 jupyter_notebooks/Tutorials/tutorial_files
+hooks/etc/permissions.yml
+*comm_output*.txt
+
+# Test Metadata #
+#################
+test/output/*
+test/output/pylint/*
+test/output/individual_coverage/*/*
+test/test_packages/.noseids # Used in running failed tests
 
 # Compiled source #
 ###################

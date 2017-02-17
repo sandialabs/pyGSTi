@@ -7,7 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Functions for writing GST objects to text files."""
 
 import json as _json
-from . import stdinput as _stdinput
+# from . import stdinput as _stdinput
 from .. import tools as _tools
 from .. import objects as _objs
 
@@ -105,7 +105,14 @@ def write_dataset(filename, dataset, gatestring_list=None, spamLabelOrder=None):
         assert(all( [sl in spamLabelOrder for sl in spamLabels] ))
         spamLabels = spamLabelOrder
 
-    headerString = '## Columns = ' + ", ".join( [ "%s count" % sl for sl in spamLabels ])
+    headerString = ""
+    if hasattr(dataset,'comment') and dataset.comment is not None:
+        for commentLine in dataset.comment.split('\n'):
+            if commentLine.startswith('#'):
+                headerString += commentLine + '\n'
+            else:
+                headerString += "# " + commentLine + '\n'
+    headerString += '## Columns = ' + ", ".join( [ "%s count" % sl for sl in spamLabels ])
     # parser = _stdinput.StdInputParser()
 
     with open(filename, 'w') as output:
@@ -150,9 +157,16 @@ def write_multidataset(filename, multidataset, gatestring_list=None, spamLabelOr
 
     dsLabels = list(multidataset.keys())
 
-    headerString = '## Columns = ' + ", ".join( [ "%s %s count" % (dsl,sl)
-                                                  for dsl in dsLabels
-                                                  for sl in spamLabels ])
+    headerString = ""
+    if hasattr(multidataset,'comment') and multidataset.comment is not None:
+        for commentLine in multidataset.comment.split('\n'):
+            if commentLine.startswith('#'):
+                headerString += commentLine + '\n'
+            else:
+                headerString += "# " + commentLine + '\n'
+    headerString += '## Columns = ' + ", ".join( [ "%s %s count" % (dsl,sl)
+                                                   for dsl in dsLabels
+                                                   for sl in spamLabels ])
     # parser = _stdinput.StdInputParser()
 
     with open(filename, 'w') as output:

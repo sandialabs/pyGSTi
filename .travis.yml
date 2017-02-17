@@ -1,23 +1,64 @@
 language: python
+
 python:
   - "2.7"
   - "3.5"
+
 branches:
   only:
     - master
+    - beta
     - develop
-# command to install dependencies
+
+env:
+    - Drivers=True  # All of drivers (Tends to take longer, put it first in the mx)
+    - Default=True  # construction, io, objects, tools, optimize, algorithms
+    - ReportA=True  # Only testReport.py (none of the other reports tests)
+    - ReportB=True  # test the other reports tests
+    - MPI=True  # All of MPI
+   
 before_install:
   - sudo apt-get -qq update
-  - sudo apt-get install -y gfortran libblas-dev liblapack-dev
+  - sudo apt-get -qq install gfortran libblas-dev liblapack-dev >/dev/null
+  - sudo apt-get -qq install openmpi-bin openmpi-common openssh-client openssh-server libopenmpi1.3 libopenmpi-dbg libopenmpi-dev >/dev/null
+  - sudo bash CI/install.sh # Only install texlive and extensions if we need them
   - "export DISPLAY=:99.0"
   - "sh -e /etc/init.d/xvfb start" #some tests require a display
   - sleep 3 # give xvfb some time to start
+
 install:
-  - pip install -r requirements.txt
-  - pip install cvxpy python-pptx
-  - pip install -e .
-# command to run tests
+  - travis_retry travis_wait pip install -r requirements.txt
+  - pip install --global-option=build_ext --global-option="-I/usr/include/suitesparse" cvxpy cvxopt >/dev/null
+  - pip install python-pptx mpi4py zmq coverage >/dev/null
+  - pip install -e . >/dev/null
+  
+cache:
+  pip: true
+  timeout: 1000
+
 script:
   - cd test
-  - python travisTests.py 
+  - travis_wait 50 python travisTests.py # Tests may take some time!
+  - cd ..
+
+after_script:
+    - |
+        declare exitCode
+        
+        curl -sSL https://raw.githubusercontent.com/alrra/travis-after-all/1.4.4/lib/travis-after-all.js | node
+        exitCode=$?
+
+        if [ $exitCode -eq 0 ]; then
+            python CI/deploy
+        fi
+
+        if [ $exitCode -eq 1 ]; then
+            echo "Build failed - not deploying!!!!!!"
+        fi
+
+notifications:
+    email:
+        on_success: change
+        on_failure: always
+
+

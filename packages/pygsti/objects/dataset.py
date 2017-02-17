@@ -28,7 +28,7 @@ class DataSet_KeyValIterator(object):
 
     def __next__(self): # Python 3: def __next__(self)
         return next(self.gsIter), DataSetRow(self.dataset, next(self.countIter))
-   
+
     next = __next__
 
 
@@ -125,7 +125,8 @@ class DataSet(object):
     """
 
     def __init__(self, counts=None, gateStrings=None, gateStringIndices=None,
-                 spamLabels=None, spamLabelIndices=None,  bStatic=False, fileToLoadFrom=None):
+                 spamLabels=None, spamLabelIndices=None,  bStatic=False, fileToLoadFrom=None,
+                 collisionAction="aggregate", comment=None):
         """
         Initialize a DataSet.
 
@@ -167,11 +168,23 @@ class DataSet(object):
             Specify this argument and no others to create a static DataSet by loading
             from a file (just like using the load(...) function).
 
+        collisionAction : {"aggregate","keepseparate"}
+            Specifies how duplicate gate sequences should be handled.  "aggregate"
+            adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
+            sequence data with by appending a final "#<number>" gate label to the
+            duplicated gate sequence, which can then be accessed via the
+            `get_row` and `set_row` functions.
+
+        comment : string, optional
+            A user-specified comment string that gets carried around with the 
+            data.  A common use for this field is to attache to the data details
+            regarding its collection.
+
+
         Returns
         -------
         DataSet
            a new data set object.
-
         """
 
         #Optionally load from a file
@@ -225,6 +238,13 @@ class DataSet(object):
         # self.bStatic
         self.bStatic = bStatic
 
+        # collision action
+        assert(collisionAction in ('aggregate','keepseparate'))
+        self.collisionAction = collisionAction
+
+        # comment
+        self.comment = comment
+
 
     def __iter__(self):
         return self.gsIndex.__iter__() #iterator over gate strings
@@ -233,25 +253,91 @@ class DataSet(object):
         return len(self.gsIndex)
 
     def __getitem__(self, gatestring):
-        return DataSetRow(self, self.counts[ self.gsIndex[gatestring] ])
+        return self.get_row(gatestring)
 
     def __setitem__(self, gatestring, countDict):
+        return self.set_row(gatestring, countDict)
+
+    def __contains__(self, gatestring):
+        return gatestring in self.gsIndex
+
+    def get_row(self, gatestring, occurance=0):
+        """
+        Get a row of data from this DataSet.  This gives the same
+        functionality as [ ] indexing except you can specify the
+        occurance number separately from the gate sequence.
+        
+        Parameters
+        ----------
+        gatestring : GateString or tuple
+            The gate sequence to extract data for.
+
+        occurance : int, optional
+            0-based occurance index, specifying which occurance of
+            a repeated gate sequence to extract data for.
+
+        Returns
+        -------
+        DataSetRow
+        """
+        if occurance > 0: 
+            gatestring = gatestring + _gs.GateString(("#%d" % occurance,))
+        return DataSetRow(self, self.counts[ self.gsIndex[gatestring] ])
+
+
+    def set_row(self, gatestring, countDict, occurance=0):
+        """
+        Set the counts for a row of this DataSet.  This gives the same
+        functionality as [ ] indexing except you can specify the
+        occurance number separately from the gate sequence.
+        
+        Parameters
+        ----------
+        gatestring : GateString or tuple
+            The gate sequence to extract data for.
+
+        countDict : dict
+            The dictionary of counts (data).
+
+        occurance : int, optional
+            0-based occurance index, specifying which occurance of
+            a repeated gate sequence to extract data for.
+        """
+        if occurance > 0: 
+            gatestring = gatestring + _gs.GateString(("#%d" % occurance,))
         if gatestring in self:
             row = DataSetRow(self, self.counts[ self.gsIndex[gatestring] ])
             for spamLabel,cnt in countDict.items():
                 row[spamLabel] = cnt
         else:
             self.add_count_dict(gatestring, countDict)
+        
 
-    def __contains__(self, gatestring):
-        return gatestring in self.gsIndex
+    def keys(self, stripOccuranceTags=False):
+        """
+        Returns the gate strings used as keys of this DataSet.
 
-    def keys(self):
+        Parameters
+        ----------
+        stripOccuranceTags : bool, optional
+            Only applicable if `collisionAction` has been set to
+            "keepseparate", when this argument is set to True
+            any final "#<number>" elements of (would-be dupilcate)
+            gate sequences are stripped so that the returned list
+            may have *duplicate* entries.
+
+        Returns
+        -------
+        list
+            A list of GateString objects which index the data
+            counts within this data set.            
         """
-        Returns the gate strings of this DataSet as tuples
-            of gate labels (not GateString objects).
-        """
-        return list(self.gsIndex.keys())
+        if stripOccuranceTags and self.collisionAction == "keepseparate":
+            return [ (gs[:-1] if (len(gs)>0 and gs[-1].startswith("#")) else gs) 
+                     for gs in self.gsIndex.keys() ]
+        else:
+            return list(self.gsIndex.keys())
+        
 
     def has_key(self, gatestring):
         """
@@ -368,8 +454,19 @@ class DataSet(object):
         countArray = _np.array(countList, 'd')
 
         if gateString in self.gsIndex:
-            gateStringIndx = self.gsIndex[gateString]
-            self.counts[ gateStringIndx ] += countArray
+            if self.collisionAction == "aggregate":
+                gateStringIndx = self.gsIndex[gateString]
+                self.counts[ gateStringIndx ] += countArray
+            elif self.collisionAction == "keepseparate":
+                #find next available gatestring:
+                i=0; tagged_gateString = gateString
+                while tagged_gateString in self.gsIndex:
+                    i+=1; tagged_gateString = gateString + _gs.GateString(("#%d" % i,))
+                #add data for a new (duplicate) gatestring
+                gateStringIndx = len(self.counts) #index of to-be-added gate string
+                self.counts.append( countArray )
+                self.gsIndex[ tagged_gateString ] = gateStringIndx
+                
         else:
             #add data for a new gatestring
             gateStringIndx = len(self.counts) #index of to-be-added gate string
@@ -401,7 +498,7 @@ class DataSet(object):
         if not isinstance(gateString, _gs.GateString):
             gateString = _gs.GateString(gateString) #make sure we have a GateString
 
-        if gateString in self.gsIndex: #gate label strings are keys
+        if gateString in self.gsIndex and self.collisionAction == "aggregate":
             current_dsRow = self[ gateString ]
             oldP = current_dsRow['plus'] / float( current_dsRow['plus'] + current_dsRow['minus'] )
             newP = nPlus / float(nPlus + nMinus)
@@ -495,16 +592,18 @@ class DataSet(object):
         if self.bStatic:
             return self # doesn't need to be copied since data can't change
         else:
-            copyOfMe = DataSet(spamLabels=self.get_spam_labels())
+            copyOfMe = DataSet(spamLabels=self.get_spam_labels(),
+                               collisionAction=self.collisionAction)
             copyOfMe.gsIndex = self.gsIndex.copy()
             copyOfMe.counts = [ el.copy() for el in self.counts ]
             return copyOfMe
 
 
-    def copy_nonstatic(self):
+    def copy_nonstatic(self, collisionAction=None):
         """ Make a non-static copy of this DataSet. """
         if self.bStatic:
-            copyOfMe = DataSet(spamLabels=self.get_spam_labels())
+            copyOfMe = DataSet(spamLabels=self.get_spam_labels(),
+                               collisionAction=self.collisionAction)
             copyOfMe.gsIndex = self.gsIndex.copy()
             copyOfMe.counts = [ el.copy() for el in self.counts ]
             return copyOfMe
@@ -528,11 +627,12 @@ class DataSet(object):
 
 
     def __getstate__(self):
-        toPickle = { 'gsIndexKeys': list(map(_gs.CompressedGateString, list(self.gsIndex.keys()))),
+        toPickle = { 'gsIndexKeys': [_gs.CompressedGateString(key) for key in self.gsIndex.keys()], #list(map(_gs.CompressedGateString, list(self.gsIndex.keys()))),
                      'gsIndexVals': list(self.gsIndex.values()),
                      'slIndex': self.slIndex,
                      'bStatic': self.bStatic,
-                     'counts': self.counts }
+                     'counts': self.counts,
+                     'collisionAction': self.collisionAction}
         return toPickle
 
     def __setstate__(self, state_dict):
@@ -541,6 +641,7 @@ class DataSet(object):
         self.slIndex = state_dict['slIndex']
         self.counts = state_dict['counts']
         self.bStatic = state_dict['bStatic']
+        self.collisionAction = state_dict.get('collisionAction',"aggregate") #backwards compatibility
 
 
     def save(self, fileOrFilename):
@@ -558,10 +659,13 @@ class DataSet(object):
         None
         """
 
-        toPickle = { 'gsIndexKeys': list(map(_gs.CompressedGateString, list(self.gsIndex.keys()))) if self.gsIndex else [],
+        toPickle = { 'gsIndexKeys': [_gs.CompressedGateString(key) for key in (self.gsIndex.keys() if self.gsIndex else [])],  #list(map(_gs.CompressedGateString, list(self.gsIndex.keys()))) if self.gsIndex else [],
                      'gsIndexVals': list(self.gsIndex.values()) if self.gsIndex else [],
                      'slIndex': self.slIndex,
-                     'bStatic': self.bStatic } #Don't pickle counts numpy data b/c it's inefficient
+                     'bStatic': self.bStatic,
+                     'collisionAction': self.collisionAction,
+                     'comment': self.comment } 
+                     #Don't pickle counts numpy data b/c it's inefficient
         if not self.bStatic: toPickle['nRows'] = len(self.counts)
 
         # Compatability for unicode-literal filenames
@@ -621,12 +725,14 @@ class DataSet(object):
         self.gsIndex = _OrderedDict( list(zip( gsIndexKeys, state_dict['gsIndexVals'])) )
         self.slIndex = state_dict['slIndex']
         self.bStatic = state_dict['bStatic']
+        self.collisionAction = state_dict.get("collisionAction","aggregate") #backward compatibility
+        self.comment = state_dict.get("comment",None) #backward compatibility
 
         if self.bStatic:
             self.counts = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
         else:
             self.counts = []
-            for i in range(state_dict['nRows']):
+            for i in range(state_dict['nRows']): #pylint: disable=unused-variable
                 self.counts.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
         if bOpen: f.close()
 

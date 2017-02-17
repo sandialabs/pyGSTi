@@ -14,3 +14,5 @@ from .grammatrix import *
 from .germselection import *
 from .fiducialpairreduction import *
 from .fiducialselection import *
+from .gaugeopt import *
+from .contract import *

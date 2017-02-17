@@ -20,6 +20,8 @@ from .gate import LinearlyParameterizedGate
 from .gate import FullyParameterizedGate
 from .gate import TPParameterizedGate
 from .gate import StaticGate
+from .gate import EigenvalueParameterizedGate
+from .gate import LindbladParameterizedGate
 from .spamvec import SPAMVec
 from .spamvec import FullyParameterizedSPAMVec
 from .spamvec import TPParameterizedSPAMVec
@@ -30,7 +32,13 @@ from .gatestring import GateString
 from .gatestring import WeightedGateString
 from .multidataset import MultiDataSet
 from .spamspec import SpamSpec
+from .profiler import Profiler
+from .profiler import DummyProfiler
 
+from .gaugegroup import FullGaugeGroup, TPGaugeGroup, \
+    DiagGaugeGroup, TPDiagGaugeGroup, UnitaryGaugeGroup
+
+#from gigateset import GaugeInvGateSet
 #Experimental only: don't import in production pyGSTi
 #from gigateset import GaugeInvGateSet
 

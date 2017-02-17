@@ -92,7 +92,7 @@ class StdInputParser(object):
         string  = _pp.Forward()
         expable = (gate | slcref | lpar + string + rpar | nop)
         expdstr = expable + _pp.ZeroOrMore( (expop + integer).setParseAction(push_first) )
-        string << expdstr + _pp.ZeroOrMore( (_pp.Optional("*") + expdstr).setParseAction(push_mult))
+        string << expdstr + _pp.ZeroOrMore( (_pp.Optional("*") + expdstr).setParseAction(push_mult)) #pylint: disable=expression-not-assigned
 
         #count = real.copy().setParseAction(push_count)
         #dataline = string + _pp.OneOrMore( count )
@@ -139,7 +139,7 @@ class StdInputParser(object):
         else:
             return int(op)
 
-    def parse_gatestring(self, s, lookup={}):
+    def parse_gatestring(self, s, lookup=None):
         """
         Parse a gate string (string in grammar)
 
@@ -157,6 +157,7 @@ class StdInputParser(object):
         tuple of gate labels
             Representing the gate string.
         """
+        if lookup is None: lookup = {}
         self.lookup = lookup
         self.exprStack = []
         try:
@@ -292,7 +293,7 @@ class StdInputParser(object):
                 lookupDict[ label ] = _objs.GateString(tup, s)
         return lookupDict
 
-    def parse_datafile(self, filename):
+    def parse_datafile(self, filename, showProgress=True, collisionAction="aggregate"):
         """
         Parse a data set file into a DataSet object.
 
@@ -300,6 +301,15 @@ class StdInputParser(object):
         ----------
         filename : string
             The file to parse.
+
+        showProgress : bool, optional
+            Whether or not progress should be displayed
+
+        collisionAction : {"aggregate", "keepseparate"}
+            Specifies how duplicate gate sequences should be handled.  "aggregate"
+            adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
+            sequence data with by appending a final "#<number>" gate label to the
+            duplicated gate sequence.
 
         Returns
         -------
@@ -309,6 +319,7 @@ class StdInputParser(object):
 
         #Parse preamble -- lines beginning with # or ## until first non-# line
         preamble_directives = { }
+        preamble_comments = []
         with open(filename, 'r') as datafile:
             for line in datafile:
                 line = line.strip()
@@ -317,6 +328,8 @@ class StdInputParser(object):
                     parts = line[len("## "):].split("=")
                     if len(parts) == 2: # key = value
                         preamble_directives[ parts[0].strip() ] = parts[1].strip()
+                elif line.startswith("#"):
+                    preamble_comments.append(line[1:].strip())
 
         #Process premble
         orig_cwd = _os.getcwd()
@@ -334,7 +347,8 @@ class StdInputParser(object):
             _os.chdir(orig_cwd)
 
         #Read data lines of data file
-        dataset = _objs.DataSet(spamLabels=spamLabels)
+        dataset = _objs.DataSet(spamLabels=spamLabels,collisionAction=collisionAction,
+                                comment="\n".join(preamble_comments))
         nLines  = 0
         with open(filename, 'r') as datafile:
             nLines = sum(1 for line in datafile)
@@ -345,7 +359,7 @@ class StdInputParser(object):
             import __main__ as main
             return not hasattr(main, '__file__')
 
-        if is_interactive():
+        if is_interactive() and showProgress:
             try:
                 import time
                 from IPython.display import clear_output
@@ -374,7 +388,8 @@ class StdInputParser(object):
                 if all([ (abs(v) < 1e-9) for v in list(countDict.values())]):
                     _warnings.warn( "Dataline for gateString '%s' has zero counts and will be ignored" % gateStringStr)
                     continue #skip lines in dataset file with zero counts (no experiments done)
-                dataset.add_count_dict(gateStringTuple, countDict) #Note: don't use gateStringStr since DataSet currently doesn't hold GateString objs (just tuples)
+                gateStr = _objs.GateString(gateStringTuple, gateStringStr, lookup=lookupDict)
+                dataset.add_count_dict(gateStr, countDict)
 
         dataset.done_adding_data()
         return dataset
@@ -426,7 +441,8 @@ class StdInputParser(object):
         return countDict
 
 
-    def parse_multidatafile(self, filename):
+    def parse_multidatafile(self, filename, showProgress=True,
+                            collisionAction="aggregate"):
         """
         Parse a multiple data set file into a MultiDataSet object.
 
@@ -434,6 +450,15 @@ class StdInputParser(object):
         ----------
         filename : string
             The file to parse.
+
+        showProgress : bool, optional
+            Whether or not progress should be displayed
+
+        collisionAction : {"aggregate", "keepseparate"}
+            Specifies how duplicate gate sequences should be handled.  "aggregate"
+            adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
+            sequence data with by appending a final "#<number>" gate label to the
+            duplicated gate sequence.
 
         Returns
         -------
@@ -443,6 +468,7 @@ class StdInputParser(object):
 
         #Parse preamble -- lines beginning with # or ## until first non-# line
         preamble_directives = { }
+        preamble_comments = []
         with open(filename, 'r') as multidatafile:
             for line in multidatafile:
                 line = line.strip()
@@ -451,6 +477,9 @@ class StdInputParser(object):
                     parts = line[len("## "):].split("=")
                     if len(parts) == 2: # key = value
                         preamble_directives[ parts[0].strip() ] = parts[1].strip()
+                elif line.startswith("#"):
+                    preamble_comments.append(line[1:].strip())
+
 
         #Process premble
         orig_cwd = _os.getcwd()
@@ -471,7 +500,8 @@ class StdInputParser(object):
         #Read data lines of data file
         datasets = _OrderedDict()
         for dsLabel,spamLabels in dsSpamLabels.items():
-            datasets[dsLabel] = _objs.DataSet(spamLabels=spamLabels)
+            datasets[dsLabel] = _objs.DataSet(spamLabels=spamLabels,
+                                              collisionAction=collisionAction)
 
         dsCountDicts = _OrderedDict()
         for dsLabel in dsSpamLabels: dsCountDicts[dsLabel] = {}
@@ -485,7 +515,7 @@ class StdInputParser(object):
             import __main__ as main
             return not hasattr(main, '__file__')
 
-        if is_interactive():
+        if is_interactive() and showProgress:
             try:
                 import time
                 from IPython.display import clear_output
@@ -505,15 +535,16 @@ class StdInputParser(object):
                 line = line.strip()
                 if len(line) == 0 or line[0] == '#': continue
                 try:
-                    gateStringTuple, _, valueList = self.parse_dataline(line, lookupDict, nDataCols)
+                    gateStringTuple, gateStringStr, valueList = self.parse_dataline(line, lookupDict, nDataCols)
                 except ValueError as e:
                     raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 
+                gateStr = _objs.GateString(gateStringTuple, gateStringStr, lookup=lookupDict)
                 self._fillMultiDataCountDicts(dsCountDicts, fillInfo, valueList)
-                for dsLabel, countDict in dsCountDicts.items():
-                    datasets[dsLabel].add_count_dict(gateStringTuple, countDict)
+                for dsLabel, countDict in dsCountDicts.items():                    
+                    datasets[dsLabel].add_count_dict(gateStr, countDict)
 
-        mds = _objs.MultiDataSet()
+        mds = _objs.MultiDataSet(comment="\n".join(preamble_comments))
         for dsLabel,ds in datasets.items():
             ds.done_adding_data()
             mds.add_dataset(dsLabel, ds)

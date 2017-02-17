@@ -1,8 +1,0 @@
-#!/usr/bin/python
-from __future__ import print_function
-import sys
-
-#print("I've created a test to harass you about committing:")
-#print("However, I'll let you commit anyways")
-
-sys.exit(0)

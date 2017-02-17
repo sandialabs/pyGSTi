@@ -125,7 +125,7 @@ class OrderedGateDict(PrefixOrderedDict):
         else:
             try:
                 d1 = len(M)
-                d2 = len(M[0])
+                d2 = len(M[0]) #pylint: disable=unused-variable
             except:
                 raise ValueError("%s doesn't look like a 2D array/list" % M)
             if any([len(row) != d1 for row in M]):
@@ -224,8 +224,12 @@ class OrderedSPAMLabelDict(_collections.OrderedDict):
                             + "spam labels.")
 
         # if inserted *value* already exists, clobber so values are unique
+        iToDel = None
         for k,v in self.items():
-            if val == v: del self[k]
+            if val == v:
+                iToDel = k; break
+        if iToDel is not None:
+            del self[iToDel] #can't do within loop in Python3
 
         #TODO: perhaps add checks that value == (prepLabel,effectLabel) labels exist
         # (would need to add a "parent" member to access the GateSet)

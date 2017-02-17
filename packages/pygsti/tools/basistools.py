@@ -35,12 +35,13 @@ Notes:
     constrained.  This makes gate matrix parameterization and optimization much more convenient
     in the "gm" or "pp" bases.
 """
+import itertools as _itertools
+import numbers as _numbers
+import collections as _collections
+
 import numpy as _np
 import scipy.linalg as _spl
-import itertools as _itertools
 from . import matrixtools as _mt
-
-
 
 ## Pauli basis matrices
 sqrt2 = _np.sqrt(2)
@@ -66,29 +67,6 @@ sigmazx = _np.kron(sigmaz,sigmax)
 sigmazy = _np.kron(sigmaz,sigmay)
 sigmazz = _np.kron(sigmaz,sigmaz)
 
-#sigmaVec = (id2x2/sqrt2, sigmax/sqrt2, sigmay/sqrt2, sigmaz/sqrt2)
-
-#sigmaVec_2Q = [ ]
-#for s in range(4):
-#    for t in range(4):
-#        sigmaVec_2Q.append( _np.kron(sigmaVec[s], sigmaVec[t]) )
-
-#mx to convert std basis to *normalized* Pauli basis (sigma mxs vectorized as columns)
-#PauliToStd = _np.array( [[ 1, 0,   0,  1 ],
-#                           [ 0, 1,  1j,  0 ],
-#                           [ 0, 1, -1j,  0 ],
-#                           [ 1, 0,   0, -1 ] ] )
-#StdToPauli = _np.linalg.inv(PauliToStd)
-#
-#PauliToStd_2Q = _np.empty( (16,16), 'complex' )
-#for col in range(16):
-#    for s1 in range(4):
-#        for s2 in range(4):
-#            row = 4*s1 + s2  #break row index into s1 and s2 for easy index into 4x4 sigmaVec_2Q elements
-#            PauliToStd_2Q[row,col] = sigmaVec_2Q[col][s1,s2] * 2.0 # 2 cancels the normalizing 1/sqrt(2) factors in sigmaVec_2Q
-#StdToPauli_2Q = _np.linalg.inv(PauliToStd_2Q)
-
-
 ##Matrix unit basis
 def _mut(i,j,N):
     mx = _np.zeros( (N,N), 'd'); mx[i,j] = 1.0
@@ -98,7 +76,6 @@ mxUnitVec_2Q = ( _mut(0,0,4), _mut(0,1,4), _mut(0,2,4), _mut(0,3,4),
                  _mut(1,0,4), _mut(1,1,4), _mut(1,2,4), _mut(1,3,4),
                  _mut(2,0,4), _mut(2,1,4), _mut(2,2,4), _mut(2,3,4),
                  _mut(3,0,4), _mut(3,1,4), _mut(3,2,4), _mut(3,3,4)  )
-
 
 
 def _processBlockDims(dimOrBlockDims):
@@ -140,14 +117,19 @@ def _processBlockDims(dimOrBlockDims):
         [ dimOrBlockDims ] : if dimOrBlockDims is a single int
           dimOrBlockDims   : otherwise
     """
-    if type(dimOrBlockDims) in (list,tuple):  #treat as state space dimensions
-        dmDim  = sum( [ blockDim    for blockDim in dimOrBlockDims] )  # *full* density matrix is dmDim x dmDim
-        gateDim = sum( [ blockDim**2 for blockDim in dimOrBlockDims] )  # gate matrices will be vecDim x vecDim
+    # treat as state space dimensions
+    if isinstance(dimOrBlockDims, _collections.Container):
+        # *full* density matrix is dmDim x dmDim
+        dmDim = sum([blockDim for blockDim in dimOrBlockDims])
+
+        # gate matrices will be vecDim x vecDim
+        gateDim = sum([blockDim**2 for blockDim in dimOrBlockDims])
+
         blockDims = dimOrBlockDims
-    elif type(dimOrBlockDims) == int:
+    elif isinstance(dimOrBlockDims, _numbers.Integral):
         dmDim = dimOrBlockDims
         gateDim = dimOrBlockDims**2
-        blockDims = [ dimOrBlockDims ]
+        blockDims = [dimOrBlockDims]
     else:
         raise ValueError("Invalid dimOrBlockDims = %s" % str(dimOrBlockDims))
 
@@ -180,10 +162,10 @@ def basis_longname(basis, dimOrBlockDims=None):
 
     Parameters
     ----------
-    basis : {'std', 'gm','pp'}
+    basis : {'std', 'gm', 'pp', 'qt'}
         Which basis the gateset is represented in.  Allowed
-        options are Matrix-unit (std), Gell-Mann (gm) and
-        Pauli-product (pp).
+        options are Matrix-unit (std), Gell-Mann (gm),
+        Pauli-product (pp), and Qutrit (qt).
 
     dimOrBlockDims : int or list, optional
         Dimension of basis matrices, to aid in creating a
@@ -206,10 +188,12 @@ def basis_longname(basis, dimOrBlockDims=None):
     elif basis == "pp":
         if dimOrBlockDims in (2,[2],(2,)): return "Pauli"
         else: return "Pauli-prod"
+    elif basis == "qt":
+        return "Qutrit"
     else: return "?Unknown?"
 
 
-def basis_element_labels(basis, dimOrBlockDims):
+def basis_element_labels(basis, dimOrBlockDims, maxWeight=None):
     """
     Returns a list of short labels corresponding to to the
     elements of the described basis.  These labels are
@@ -218,17 +202,21 @@ def basis_element_labels(basis, dimOrBlockDims):
 
     Parameters
     ----------
-    basis : {'std', 'gm','pp'}
+    basis : {'std', 'gm', 'pp', 'qt'}
         Which basis the gateset is represented in.  Allowed
-        options are Matrix-unit (std), Gell-Mann (gm) and
-        Pauli-product (pp).  If the basis is not known, then
-        an empty list is returned.
+        options are Matrix-unit (std), Gell-Mann (gm),
+        Pauli-product (pp) and Qutrit (qt).  If the basis is
+        not known, then an empty list is returned.
 
     dimOrBlockDims : int or list
         Dimension of basis matrices.  If a list of integers,
         then gives the dimensions of the terms in a
         direct-sum decomposition of the density
         matrix space acted on by the basis.
+
+    maxWeight : int, optional
+        Restrict the elements returned to those having weight <= `maxWeight`.
+        (see :func:`basis_matrices`)
 
 
     Returns
@@ -287,8 +275,9 @@ def basis_element_labels(basis, dimOrBlockDims):
             #Some extra checking, since list-of-dims not supported for pp matrices yet.
             def is_integer(x):
                 return bool( abs(x - round(x)) < 1e-6 )
-            if type(dimOrBlockDims) != int:
-                if type(dimOrBlockDims) in (list,tuple) and len(dimOrBlockDims) == 1:
+            if not isinstance(dimOrBlockDims, _numbers.Integral):
+                if (isinstance(dimOrBlockDims, _collections.Container)
+                        and len(dimOrBlockDims) == 1):
                     dimOrBlockDims = dimOrBlockDims[0]
                 else:
                     raise ValueError("Dimension for Pauli tensor product matrices must be an *integer* power of 2")
@@ -299,7 +288,13 @@ def basis_element_labels(basis, dimOrBlockDims):
 
             basisLblList = [ ['I','X','Y','Z'] ]*nQubits
             for sigmaLbls in _itertools.product(*basisLblList):
+                if maxWeight is not None:
+                    if sigmaLbls.count('I') < nQubits-maxWeight: continue
                 lblList.append( ''.join(sigmaLbls) )
+
+    elif basis == "qt":
+        assert(dimOrBlockDims == 3)
+        lblList = ['II', 'X+Y', 'X-Y', 'YZ', 'IX', 'IY', 'IZ', 'XY', 'XZ']
 
     else:
         lblList = [] #Unknown basis
@@ -374,7 +369,7 @@ def expand_from_std_direct_sum_mx(mxInStdBasis, dimOrBlockDims):
     """
     if dimOrBlockDims is None:
         return mxInStdBasis
-    elif type(dimOrBlockDims) == int:
+    elif isinstance(dimOrBlockDims, _numbers.Integral):
         assert(mxInStdBasis.shape == (dimOrBlockDims,dimOrBlockDims) )
         return mxInStdBasis
     else:
@@ -424,7 +419,7 @@ def contract_to_std_direct_sum_mx(mxInStdBasis, dimOrBlockDims):
     # TODO: should we check if the dimensions being projected out are the identity?
     if dimOrBlockDims is None:
         return mxInStdBasis
-    elif type(dimOrBlockDims) == int:
+    elif isinstance(dimOrBlockDims, _numbers.Integral):
         assert(mxInStdBasis.shape == (dimOrBlockDims,dimOrBlockDims) )
         return mxInStdBasis
     else:
@@ -482,6 +477,86 @@ def hamiltonian_to_lindbladian(hamiltonian):
 
 
 
+def stochastic_lindbladian(Q):
+    """
+    Construct the Lindbladian corresponding to stochastic Q-errors.
+
+    Mathematically, for a d-dimensional matrix Q, this routine 
+    constructs the d^2-dimension Lindbladian matrix L whose
+    action is given by L(rho) = Q*rho*Q^dag where rho is a density
+    matrix.  L is returned as a superoperator matrix that acts on a
+    vectorized density matrices.
+
+    Parameters
+    ----------
+    Q : ndarray
+      The matrix used to construct the Lindbladian.
+
+    Returns
+    -------
+    ndarray
+    """
+
+    #TODO: there's probably a fast & slick way to so this computation
+    #  using vectorization identities
+    assert(len(Q.shape) == 2)
+    assert(Q.shape[0] == Q.shape[1])
+    Qdag = _np.conjugate(_np.transpose(Q))
+    d = Q.shape[0]
+    lindbladian = _np.empty( (d**2,d**2), dtype=Q.dtype )
+
+    for i,rho0 in enumerate(std_matrices(d)): #rho0 == input density mx
+        rho1 = _np.dot(Q,_np.dot(rho0,Qdag))
+        lindbladian[:,i] = rho1.flatten()
+          # vectorize rho1 & set as linbladian column
+
+    return lindbladian
+
+
+def nonham_lindbladian(Lm,Ln):
+    """
+    Construct the Lindbladian corresponding to generalized
+    non-Hamiltonian (stochastic) errors.
+
+    Mathematically, for d-dimensional matrices Lm and Ln, this routine 
+    constructs the d^2-dimension Lindbladian matrix L whose action is
+    given by:
+
+    L(rho) = Ln*rho*Lm^dag - 1/2(rho*Lm^dag*Ln + Lm^dag*Ln*rho)
+
+    where rho is a density matrix.  L is returned as a superoperator
+    matrix that acts on a vectorized density matrices.
+
+    Parameters
+    ----------
+    Lm, Ln : ndarray
+      The matrices used to construct the Lindbladian.
+
+    Returns
+    -------
+    ndarray
+    """
+
+    #TODO: there's probably a fast & slick way to so this computation
+    #  using vectorization identities
+    assert(len(Lm.shape) == 2)
+    assert(Lm.shape[0] == Lm.shape[1])
+    Lm_dag = _np.conjugate(_np.transpose(Lm))
+    d = Lm.shape[0]
+    lindbladian = _np.empty( (d**2,d**2), dtype=Lm.dtype )
+
+#    print("BEGIN VERBOSE") #DEBUG!!!
+    for i,rho0 in enumerate(std_matrices(d)): #rho0 == input density mx
+        rho1 = _np.dot(Ln,_np.dot(rho0,Lm_dag)) - 0.5 * (
+            _np.dot(rho0,_np.dot(Lm_dag,Ln))+_np.dot(_np.dot(Lm_dag,Ln),rho0))
+#        print("rho0[%d] = \n" % i,rho0)
+#        print("rho1[%d] = \n" % i,rho1)
+        lindbladian[:,i] = rho1.flatten()
+          # vectorize rho1 & set as linbladian column
+#    print("FINAL = \n",lindbladian)
+#    print("END VERBOSE\n")
+
+    return lindbladian
 
 
 def _GetGellMannNonIdentityDiagMxs(dimension):
@@ -526,7 +601,7 @@ def gm_matrices_unnormalized(dimOrBlockDims):
         and N is the dimension of the density-matrix space,
         equal to sum( block_dim_i^2 ).
     """
-    if type(dimOrBlockDims) == int:
+    if isinstance(dimOrBlockDims, _numbers.Integral):
         d = dimOrBlockDims
 
         #Identity Mx
@@ -551,7 +626,7 @@ def gm_matrices_unnormalized(dimOrBlockDims):
         assert(len(listOfMxs) == d**2)
         return listOfMxs
 
-    elif type(dimOrBlockDims) in (list,tuple):
+    elif isinstance(dimOrBlockDims, _collections.Container):
         dmDim, gateDim, blockDims = _processBlockDims(dimOrBlockDims)
 
         listOfMxs = []; start = 0
@@ -738,7 +813,7 @@ def gm_to_std(mxInGellMannBasis, dimOrBlockDims=None):
     else: raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
 
 
-def pp_matrices(dim):
+def pp_matrices(dim, maxWeight=None):
     """
     Get the elements of the Pauil-product basis
     spanning the space of dim x dim density matrices
@@ -760,11 +835,19 @@ def pp_matrices(dim):
         Matrix-dimension of the density-matrix space.  Must be
         a power of 2.
 
+    maxWeight : int, optional
+        Restrict the elements returned to those having weight <= `maxWeight`. An
+        element's "weight" is defined as the number of non-identity single-qubit
+        factors of which it is comprised.  For example, if `dim == 4` and 
+        `maxWeight == 1` then the returned list is [II, IX, IY, IZ, XI, YI, ZI].
+
+
     Returns
     -------
     list
-        A list of N numpy arrays each of shape (dim, dim),
-        where N == dim^2, the dimension of the density-matrix space.
+        A list of N numpy arrays each of shape (dim, dim), where N == dim^2,
+        the dimension of the density-matrix space. (Exception: when maxWeight
+        is not None, the returned list may have fewer than N elements.)
 
     Notes
     -----
@@ -777,8 +860,8 @@ def pp_matrices(dim):
     def is_integer(x):
         return bool( abs(x - round(x)) < 1e-6 )
 
-    if type(dim) != int:
-        if type(dim) in (list,tuple) and len(dim) == 1:
+    if not isinstance(dim, _numbers.Integral):
+        if isinstance(dim, _collections.Container) and len(dim) == 1:
             dim = dim[0]
         else:
             raise ValueError("Dimension for Pauli tensor product matrices must be an *integer* power of 2")
@@ -794,6 +877,9 @@ def pp_matrices(dim):
     nQubits = int(round(nQubits))
     basisIndList = [ [0,1,2,3] ]*nQubits
     for sigmaInds in _itertools.product(*basisIndList):
+        if maxWeight is not None:
+            if sigmaInds.count(0) < nQubits-maxWeight: continue
+            
         M = _np.identity(1,'complex')
         for i in sigmaInds:
             M = _np.kron(M,sigmaVec[i])
@@ -945,6 +1031,191 @@ def pp_to_std(mxInPauliProdBasis, dimOrBlockDims=None):
     else: raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
 
 
+def qt_matrices(dim, selected_pp_indices=[0,5,10,11,1,2,3,6,7]):
+    """
+    Get the elements of a special basis spanning the density-matrix space of
+    a qutrit.
+
+    The returned matrices are given in the standard basis of the
+    density matrix space. These matrices form an orthonormal basis
+    under the trace inner product, i.e. Tr( dot(Mi,Mj) ) == delta_ij.
+
+    Parameters
+    ----------
+    dim : int
+        Matrix-dimension of the density-matrix space.  Must equal 3
+        (present just to maintain consistency which other routines)
+
+    Returns
+    -------
+    list
+        A list of 9 numpy arrays each of shape (3, 3).
+    """
+    assert(dim == 3)
+    A = _np.array( [[1,0,0,0],
+                   [0,1./_np.sqrt(2),1./_np.sqrt(2),0],
+                   [0,0,0,1]], 'd') #projector onto symmetric space
+    
+    def toQutritSpace(inputMat):
+        return _np.dot(A,_np.dot(inputMat,A.transpose()))
+
+    qt_mxs = []
+    pp_mxs = pp_matrices(4)
+    #selected_pp_indices = [0,5,10,11,1,2,3,6,7] #which pp mxs to project
+    # labels = ['II', 'XX', 'YY', 'YZ', 'IX', 'IY', 'IZ', 'XY', 'XZ']
+    qt_mxs = [toQutritSpace(pp_mxs[i]) for i in selected_pp_indices]
+
+    # Normalize so Tr(BiBj) = delta_ij (done by hand, since only 3x3 mxs)
+    qt_mxs[0] *= 1/_np.sqrt(0.75)
+    
+    #TAKE 2 (more symmetric = better?)
+    q1 = qt_mxs[1] - qt_mxs[0]*_np.sqrt(0.75)/3
+    q2 = qt_mxs[2] - qt_mxs[0]*_np.sqrt(0.75)/3
+    qt_mxs[1] = (q1 + q2)/_np.sqrt(2./3.)
+    qt_mxs[2] = (q1 - q2)/_np.sqrt(2)
+
+    #TAKE 1 (XX-II and YY-XX-II terms... not symmetric):
+    #qt_mxs[1] = (qt_mxs[1] - qt_mxs[0]*_np.sqrt(0.75)/3) / _np.sqrt(2.0/3.0)
+    #qt_mxs[2] = (qt_mxs[2] - qt_mxs[0]*_np.sqrt(0.75)/3 + qt_mxs[1]*_np.sqrt(2.0/3.0)/2) / _np.sqrt(0.5)
+
+    for i in range(3,9): qt_mxs[i] *= 1/ _np.sqrt(0.5)
+    
+    return qt_mxs
+
+
+def qt_to_std_transform_matrix(dimOrBlockDims):
+    """
+    Construct the matrix which transforms a gate matrix in
+    the Qutrit basis for a density matrix space to the
+    Standard basis (for the same space).
+
+    Parameters
+    ----------
+    dimOrBlockDims : int or list of ints
+        Structure of the density-matrix space.
+
+    Returns
+    -------
+    numpy array
+        An array of shape (N,N), where N is the dimension
+        of the density matrix space, i.e. sum( dimOrBlockDims_i^2 ).
+
+    Notes
+    -----
+        The returned matrix is block diagonal with one block
+        per term in the direct sum of the the density matrix space.
+        Each block is the transformation matrix for the corresponding
+        part of density matrix space, consisting of flattened Qutrit
+        basis matrices along it's columns.
+    """
+    #vectorize Gell Mann mxs and place appropriate elements into columns of a matrix
+    _, gateDim, blockDims = _processBlockDims(dimOrBlockDims)
+    gmToStd = _np.zeros( (gateDim,gateDim), 'complex' )
+
+    #Since a multi-block basis is just the direct sum of the individual block bases,
+    # transform mx is just the transfrom matrices of the individual blocks along the
+    # diagonal of the total basis transform matrix
+
+    start = 0
+    for blockDim in blockDims:
+        mxs = qt_matrices(blockDim)
+        assert( len(mxs) == blockDim**2 )
+
+        for j,mx in enumerate(mxs):
+            gmToStd[start:start+blockDim**2,start+j] = mx.flatten()
+
+        start += blockDim**2
+
+    assert(start == gateDim)
+    return gmToStd
+
+def std_to_qt(mxInStdBasis, dimOrBlockDims=None):
+    """
+    Convert a gate matrix in the Standard basis of a
+    density matrix space to the Qutrit basis (of the same space).
+
+    Parameters
+    ----------
+    mxInStdBasis : numpy array
+        The gate matrix, (a 2D square array)
+
+    dimOrBlockDims : int or list of ints, optional
+        Structure of the density-matrix space. If None, then assume
+        mxInStdBasis operates on a single-block density matrix space,
+        i.e. on K x K density matrices with K == sqrt( mxInStdBasis.shape[0] ).
+
+    Returns
+    -------
+    numpy array
+        The given gate matrix converted to the Qutrit basis.
+        Array size is the same as mxInStdBasis.
+    """
+    if dimOrBlockDims is None:
+        dimOrBlockDims = int(round(_np.sqrt(mxInStdBasis.shape[0])))
+        assert( dimOrBlockDims**2 == mxInStdBasis.shape[0] )
+
+    qtToStd = qt_to_std_transform_matrix(dimOrBlockDims)
+    stdToQT = _np.linalg.inv(qtToStd)
+
+    if len(mxInStdBasis.shape) == 2 and mxInStdBasis.shape[0] == mxInStdBasis.shape[1]:
+        qt = _np.dot( stdToQT, _np.dot( mxInStdBasis, qtToStd ) )
+        if _np.linalg.norm(_np.imag(qt)) > 1e-8:
+            raise ValueError("Qutrit matrix has non-zero imaginary part (%g)!" %
+                             _np.linalg.norm(_np.imag(qt)))
+        return _np.real(qt)
+
+    elif len(mxInStdBasis.shape) == 1 or \
+         (len(mxInStdBasis.shape) == 2 and mxInStdBasis.shape[1] == 1): # (really vecInStdBasis)
+        qt = _np.dot( stdToQT, mxInStdBasis )
+        if _np.linalg.norm(_np.imag(qt)) > 1e-8:
+            raise ValueError("Qutrit vector has non-zero imaginary part (%g)!" %
+                             _np.linalg.norm(_np.imag(qt)))
+        return _np.real(qt)
+
+    else: raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
+
+
+def qt_to_std(mxInQutritBasis, dimOrBlockDims=None):
+    """
+    Convert a gate matrix in the Qutrit basis of a
+    density matrix space to the Standard basis (of the same space).
+
+    Parameters
+    ----------
+    mxInQutritBasis : numpy array
+        The gate matrix, (a 2D square array)
+
+    dimOrBlockDims : int or list of ints, optional
+        Structure of the density-matrix space. If None, then assume
+        mxInQutritBasis operates on a single-block density matrix space,
+        i.e. on K x K density matrices with K == sqrt( mxInQutritBasis.shape[0] ).
+
+    Returns
+    -------
+    numpy array
+        The given gate matrix converted to the Standard basis.
+        Array size is the same as mxInQutritBasis.
+    """
+
+    if dimOrBlockDims is None:
+        dimOrBlockDims = int(round(_np.sqrt(mxInQutritBasis.shape[0])))
+        assert( dimOrBlockDims**2 == mxInQutritBasis.shape[0] )
+
+    qtToStd = qt_to_std_transform_matrix(dimOrBlockDims)
+    stdToQT = _np.linalg.inv(qtToStd)
+
+    if len(mxInQutritBasis.shape) == 2 and mxInQutritBasis.shape[0] == mxInQutritBasis.shape[1]:
+        return _np.dot( qtToStd, _np.dot( mxInQutritBasis, stdToQT ) )
+
+    elif len(mxInQutritBasis.shape) == 1 or \
+         (len(mxInQutritBasis.shape) == 2 and mxInQutritBasis.shape[1] == 1):
+        return _np.dot( qtToStd, mxInQutritBasis )
+
+    else: raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
+
+
+#Other permutations for conversions
+
 def gm_to_pp(mxInGellMannBasis, dimOrBlockDims=None):
     """
     Convert a gate matrix in the Gell-Mann basis of a
@@ -957,7 +1228,7 @@ def gm_to_pp(mxInGellMannBasis, dimOrBlockDims=None):
 
     dimOrBlockDims : int or list of ints, optional
         Structure of the density-matrix space. If None, then assume
-        mxInPauliProdBasis operates on a single-block density matrix space,
+        mxInGellMannBasis operates on a single-block density matrix space,
         i.e. on K x K density matrices with K == sqrt( mxInGellMannBasis.shape[0] ).
 
     Returns
@@ -967,6 +1238,31 @@ def gm_to_pp(mxInGellMannBasis, dimOrBlockDims=None):
         Array size is the same as mxInGellMannBasis.
     """
     return std_to_pp(gm_to_std(mxInGellMannBasis, dimOrBlockDims), dimOrBlockDims)
+
+
+def gm_to_qt(mxInGellMannBasis, dimOrBlockDims=None):
+    """
+    Convert a gate matrix in the Gell-Mann basis of a
+    density matrix space to the Qutrit basis (of the same space).
+
+    Parameters
+    ----------
+    mxInGellMannBasis : numpy array
+        The gate matrix, (a 2D square array)
+
+    dimOrBlockDims : int or list of ints, optional
+        Structure of the density-matrix space. If None, then assume
+        mxInGellMannBasis operates on a single-block density matrix space,
+        i.e. on K x K density matrices with K == sqrt( mxInGellMannBasis.shape[0] ).
+
+    Returns
+    -------
+    numpy array
+        The given gate matrix converted to the Qutrit basis.
+        Array size is the same as mxInGellMannBasis.
+    """
+    return std_to_qt(gm_to_std(mxInGellMannBasis, dimOrBlockDims), dimOrBlockDims)
+
 
 def pp_to_gm(mxInPauliProdBasis, dimOrBlockDims=None):
     """
@@ -992,7 +1288,244 @@ def pp_to_gm(mxInPauliProdBasis, dimOrBlockDims=None):
     return std_to_gm(pp_to_std(mxInPauliProdBasis, dimOrBlockDims), dimOrBlockDims)
 
 
+def pp_to_qt(mxInPauliProdBasis, dimOrBlockDims=None):
+    """
+    Convert a gate matrix in the Pauli-product basis of a
+    density matrix space to the Qutrit basis (of the same space).
 
+    Parameters
+    ----------
+    mxInPauliProdBasis : numpy array
+        The gate matrix, (a 2D square array)
+
+    dimOrBlockDims : int or list of ints, optional
+        Structure of the density-matrix space. If None, then assume
+        mxInPauliProdBasis operates on a single-block density matrix space,
+        i.e. on K x K density matrices with K == sqrt( mxInPauliProdBasis.shape[0] ).
+
+    Returns
+    -------
+    numpy array
+        The given gate matrix converted to the Qutrit basis.
+        Array size is the same as mxInPauliProdBasis.
+    """
+    return std_to_qt(pp_to_std(mxInPauliProdBasis, dimOrBlockDims), dimOrBlockDims)
+
+
+def qt_to_gm(mxInQutritBasis, dimOrBlockDims=None):
+    """
+    Convert a gate matrix in the Qutrit basis of a
+    density matrix space to the Gell-Mann basis (of the same space).
+
+    Parameters
+    ----------
+    mxInQutritBasis : numpy array
+        The gate matrix, (a 2D square array)
+
+    dimOrBlockDims : int or list of ints, optional
+        Structure of the density-matrix space. If None, then assume
+        mxInQutritBasis operates on a single-block density matrix space,
+        i.e. on K x K density matrices with K == sqrt( mxInQutritBasis.shape[0] ).
+
+    Returns
+    -------
+    numpy array
+        The given gate matrix converted to the Gell-Mann basis.
+        Array size is the same as mxInQutritBasis.
+    """
+    return std_to_gm(qt_to_std(mxInQutritBasis, dimOrBlockDims), dimOrBlockDims)
+
+
+def qt_to_pp(mxInQutritBasis, dimOrBlockDims=None):
+    """
+    Convert a gate matrix in the Qutrit basis of a
+    density matrix space to the Pauil-product basis (of the same space).
+
+    Parameters
+    ----------
+    mxInQutritBasis : numpy array
+        The gate matrix, (a 2D square array)
+
+    dimOrBlockDims : int or list of ints, optional
+        Structure of the density-matrix space. If None, then assume
+        mxInQutritBasis operates on a single-block density matrix space,
+        i.e. on K x K density matrices with K == sqrt( mxInQutritBasis.shape[0] ).
+
+    Returns
+    -------
+    numpy array
+        The given gate matrix converted to the Pauli-product basis.
+        Array size is the same as mxInQutritBasis.
+    """
+    return std_to_pp(qt_to_std(mxInQutritBasis, dimOrBlockDims), dimOrBlockDims)
+
+
+def basis_matrices(basis, dimOrBlockDims, maxWeight=None):
+    """
+    Get the elements of the specifed basis-type which
+    spans the density-matrix space given by dimOrBlockDims.
+
+    Parameters
+    ----------
+    basis : {'std', 'gm', 'pp', 'qt'}
+        The basis type.  Allowed values are Matrix-unit (std), Gell-Mann (gm),
+        Pauli-product (pp), and Qutrit (qt).
+
+    dimOrBlockDims : int or list of ints
+        Structure of the density-matrix space.
+
+    maxWeight : int, optional
+      Restrict the elements returned to those having weight <= `maxWeight`. An
+      element's "weight" is defined as the number of non-identity single-qubit
+      factors of which it is comprised.  As this notion of factors is only 
+      meaningful to the the Pauli-product basis, A non-None `maxWeight` can
+      only be used when `basis == "pp"`.
+
+    Returns
+    -------
+    list
+        A list of N numpy arrays each of shape (dmDim, dmDim),
+        where dmDim is the matrix-dimension of the overall
+        "embedding" density matrix (the sum of dimOrBlockDims)
+        and N is the dimension of the density-matrix space,
+        equal to sum( block_dim_i^2 ).
+    """
+    if maxWeight is not None:
+        assert(basis == "pp"),'Only the "pp" basis supports a non-None maxWeight'
+        
+    if basis == "std": return std_matrices(dimOrBlockDims)
+    if basis == "gm":  return gm_matrices(dimOrBlockDims)
+    if basis == "pp":  return pp_matrices(dimOrBlockDims,maxWeight)
+    if basis == "qt":  return qt_matrices(dimOrBlockDims)
+    raise ValueError("Invalid 'basis' argument: %s" % basis)
+    
+
+def basis_transform_matrix(from_basis, to_basis, dimOrBlockDims):
+    """
+    Get the matrix which transforms (coverts) from one density-matrix-space
+    basis to another.
+
+    Parameters
+    ----------
+    from_basis, to_basis: {'std', 'gm', 'pp', 'qt'}
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt).
+
+    dimOrBlockDims : int or list of ints
+        Structure of the density-matrix space.
+
+    Returns
+    -------
+    numpy array
+        The conversion matrix.
+    """
+    _, gateDim, _ = _processBlockDims(dimOrBlockDims)
+    I = _np.identity(gateDim,'d')
+    
+    if from_basis == "std":
+        if to_basis == "std":  m = I
+        elif to_basis == "gm": m = _np.linalg.inv(gm_to_std_transform_matrix(dimOrBlockDims))
+        elif to_basis == "pp": m = _np.linalg.inv(pp_to_std_transform_matrix(dimOrBlockDims))
+        elif to_basis == "qt": m = _np.linalg.inv(qt_to_std_transform_matrix(dimOrBlockDims))
+        else: raise ValueError("Invalid 'to_basis': %s" % to_basis)
+        
+    elif from_basis == "gm":
+        if to_basis == "std":
+            m = gm_to_std_transform_matrix(dimOrBlockDims)
+        elif to_basis == "gm": m = I
+        elif to_basis == "pp":
+            m = _np.dot(_np.linalg.inv(pp_to_std_transform_matrix(dimOrBlockDims)),
+                        gm_to_std_transform_matrix(dimOrBlockDims))
+        elif to_basis == "qt":
+            m = _np.dot(_np.linalg.inv(qt_to_std_transform_matrix(dimOrBlockDims)),
+                        gm_to_std_transform_matrix(dimOrBlockDims))                                                
+        else: raise ValueError("Invalid 'to_basis': %s" % to_basis)
+
+    elif from_basis == "pp":
+        if to_basis == "std":
+            m = pp_to_std_transform_matrix(dimOrBlockDims)
+        elif to_basis == "gm":
+            m = _np.dot(_np.linalg.inv(gm_to_std_transform_matrix(dimOrBlockDims)),
+                        pp_to_std_transform_matrix(dimOrBlockDims))
+        elif to_basis == "pp": m = I
+        elif to_basis == "qt":
+            m = _np.dot(_np.linalg.inv(qt_to_std_transform_matrix(dimOrBlockDims)),
+                        pp_to_std_transform_matrix(dimOrBlockDims))
+        else: raise ValueError("Invalid 'to_basis': %s" % to_basis)
+
+    elif from_basis == "qt":
+        if to_basis == "std":
+            m = qt_to_std_transform_matrix(dimOrBlockDims)
+        elif to_basis == "gm":
+            m = _np.dot(_np.linalg.inv(gm_to_std_transform_matrix(dimOrBlockDims)),
+                        qt_to_std_transform_matrix(dimOrBlockDims))
+        elif to_basis == "pp":
+            m = _np.dot(_np.linalg.inv(pp_to_std_transform_matrix(dimOrBlockDims)),
+                        qt_to_std_transform_matrix(dimOrBlockDims))
+        elif to_basis == "qt": m = I
+        else: raise ValueError("Invalid 'to_basis': %s" % to_basis)
+
+    else: raise ValueError("Invalid 'from_basis': %s" % from_basis)
+    return m
+
+
+def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
+    """
+    Convert a gate matrix from one basis of a density matrix space
+    to another.
+
+    Parameters
+    ----------
+    mx : numpy array
+        The gate matrix (a 2D square array) in the `from_basis` basis.
+
+    from_basis, to_basis: {'std', 'gm', 'pp', 'qt'}
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt).
+
+    dimOrBlockDims : int or list of ints, optional
+        Structure of the density-matrix space. If None, then assume
+        mx operates on a single-block density matrix space,
+        i.e. on K x K density matrices with K == sqrt( mx.shape[0] ).
+
+    Returns
+    -------
+    numpy array
+        The given gate matrix converted to the `to_basis` basis.
+        Array size is the same as `mx`.
+    """
+    if from_basis == "std":
+        if to_basis == "std": return mx.copy()
+        elif to_basis == "gm": fn = std_to_gm
+        elif to_basis == "pp": fn = std_to_pp
+        elif to_basis == "qt": fn = std_to_qt
+        else: raise ValueError("Invalid 'to_basis': %s" % to_basis)
+        
+    elif from_basis == "gm":
+        if to_basis == "std":  fn = gm_to_std
+        elif to_basis == "gm": return mx.copy()
+        elif to_basis == "pp": fn = gm_to_pp
+        elif to_basis == "qt": fn = gm_to_qt
+        else: raise ValueError("Invalid 'to_basis': %s" % to_basis)
+
+    elif from_basis == "pp":
+        if to_basis == "std":  fn = pp_to_std
+        elif to_basis == "gm": fn = pp_to_gm
+        elif to_basis == "pp": return mx.copy()
+        elif to_basis == "qt": fn = pp_to_qt
+        else: raise ValueError("Invalid 'to_basis': %s" % to_basis)
+
+    elif from_basis == "qt":
+        if to_basis == "std":  fn = qt_to_std
+        elif to_basis == "gm": fn = qt_to_gm
+        elif to_basis == "pp": fn = qt_to_pp
+        elif to_basis == "qt": return mx.copy()
+        else: raise ValueError("Invalid 'to_basis': %s" % to_basis)
+
+    else: raise ValueError("Invalid 'from_basis': %s" % from_basis)
+    return fn(mx, dimOrBlockDims)
 
 
 
@@ -1110,6 +1643,7 @@ def vec_to_stdmx(v, basis):
     if basis == "pp":   return ppvec_to_stdmx(v)
     elif basis == "gm": return gmvec_to_stdmx(v)
     elif basis == "std": return stdvec_to_stdmx(v)
+    elif basis == "qt": return qtvec_to_stdmx(v)
     else: raise ValueError("Invalid basis specifier: %s" % basis)
 
 
@@ -1140,7 +1674,7 @@ def ppvec_to_stdmx(v):
     return ret
 
 
-def gmvec_to_stdmx(v):
+def gmvec_to_stdmx(v,keep_complex=False):
     """
     Convert a vector in the Gell-Mann basis to a matrix
      in the standard basis.
@@ -1150,6 +1684,8 @@ def gmvec_to_stdmx(v):
     v : numpy array
         The vector (length must be a perfect square, e.g. 4, 9, 16, ...)
 
+    keep_complex : bool, optional
+        If set to true, retains complex information in v.
     Returns
     -------
     numpy array
@@ -1161,10 +1697,42 @@ def gmvec_to_stdmx(v):
 
     ret = _np.zeros( (dim,dim), 'complex' )
     for i,gmMx in enumerate(gmMxs):
-        ret += float(v[i])*gmMx
+        if keep_complex:
+            ret += v[i] * gmMx
+        else:
+            ret += float(v[i])*gmMx
     return ret
 
-def stdvec_to_stdmx(v):
+def qtvec_to_stdmx(v,keep_complex=False):
+    """
+    Convert a vector in the Qutrit basis to a matrix
+     in the standard basis.
+
+    Parameters
+    ----------
+    v : numpy array
+        The vector (length must equal 9)
+
+    keep_complex : bool, optional
+        If set to true, retains complex information in v.
+    Returns
+    -------
+    numpy array
+        The matrix, shape (3,3)
+    """
+    assert(len(v) == 9)
+    qtMxs = qt_matrices(3)
+
+    ret = _np.zeros( (3,3), 'complex' )
+    for i,qtMx in enumerate(qtMxs):
+        if keep_complex:
+            ret += v[i] * qtMx
+        else:
+            ret += float(v[i])*qtMx
+    return ret
+
+
+def stdvec_to_stdmx(v,keep_complex=False):
     """
     Convert a vector in the standard basis to a matrix
      in the standard basis.
@@ -1174,6 +1742,8 @@ def stdvec_to_stdmx(v):
     v : numpy array
         The vector, length 4 (1Q) or 16 (2Q)
 
+    keep_complex : bool, optional
+        If set to true, retains complex information in v.    
     Returns
     -------
     numpy array
@@ -1186,7 +1756,10 @@ def stdvec_to_stdmx(v):
 
     ret = _np.zeros( (dim,dim), 'complex' )
     for i,stdMx in enumerate(stdMxs):
-        ret += float(v[i])*stdMx
+        if keep_complex:
+            ret += v[i] * stdMx
+        else:
+            ret += float(v[i])*stdMx
     return ret
 
 

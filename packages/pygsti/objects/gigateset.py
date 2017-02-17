@@ -65,7 +65,7 @@ class GaugeInvGateSet(object):  #(_collections.OrderedDict):
 
 
         self.gateLabels = list(gateset.keys())
-        gl0 = self.gateLabels[0] #plays a special role
+        #gl0 = self.gateLabels[0] #plays a special role
 
         self.D_params = [None]*len(self.gateLabels)
         Y = [None]*len(self.gateLabels) #List of eigenvector mxs
@@ -401,7 +401,7 @@ def _get_delta0_diag(rho_tilde, E_tilde, D0_params, verbosity):
     #  delta0 = sqrt( |rho_tilde_element| / |corresponding_E_tilde_element|)
     # OLD inv(delta0) * inv(Y0) * rho = vector of ones
     for i in range(0,len(D0_params)-1,2):
-        a,b = D0_params[i:i+2]
+        _, b = D0_params[i:i+2]
         if b <= 0:
             # complex-conj pair at index i,i+1, so:
             assert(_np.isclose(rho_tilde[i],rho_tilde[i+1].conj()))
@@ -468,7 +468,7 @@ def _get_delta0_diag_mark2(rho_tilde, E_tilde, D0_params, fix, verbosity):
     #  delta0 = sqrt( |rho_tilde_element| / |corresponding_E_tilde_element|)
     # OLD inv(delta0) * inv(Y0) * rho = vector of ones
     for i in range(0,len(D0_params)-1,2):
-        a,b = D0_params[i:i+2]
+        _, b = D0_params[i:i+2]
         if b <= 0:
             # complex-conj pair at index i,i+1, so:
             assert(_np.isclose(rho_tilde[i],rho_tilde[i+1].conj()))
@@ -535,7 +535,7 @@ def _get_ET_params(ET_tilde, D0_params):
     E_params = _np.empty(len(ET_tilde),'d') #Note: *not* complex
 
     for i in range(0,len(D0_params)-1,2):
-        a,b = D0_params[i:i+2]
+        _, b = D0_params[i:i+2]
         if b <= 0:
             # complex-conj pair at index i,i+1, so:
             assert(_np.isclose(ET_tilde[i],ET_tilde[i+1].conj()))
@@ -560,7 +560,7 @@ def _get_ET_params(ET_tilde, D0_params):
 def _rowsum(ar, D_params): # for rows where b > 0
     s = 0
     for j in range(0,len(D_params)-1,2): #loop over col-pairs
-        a,b = D_params[j:j+2] #cols
+        _, b = D_params[j:j+2] #cols
         if b <= 0:
             # block is [ [a, a.C], [b, b.C] ], so add a.r + a.i
             s += ar[j].real + ar[j].imag
@@ -585,7 +585,7 @@ def _get_B_params(invYjY0, Dj_params, D0_params, verbosity):
     inv_deltaj_diag = _np.empty(invYjY0.shape[0],'complex')
 
     def abssum(ar):
-        return sum(map(abs,ar))
+        return sum(map(abs, ar))
     def anglesum(ar):
         return sum(_np.where( _np.absolute(ar) > SMALL, _np.angle(ar), 0) )
     def first_nonzero_angle(ar):
@@ -603,7 +603,7 @@ def _get_B_params(invYjY0, Dj_params, D0_params, verbosity):
 
     #get "sums" of invYjY0 rows => choose inv_deltaj_diag accordingly
     for i in range(0,len(Dj_params)-1,2):
-        a1,b1 = Dj_params[i:i+2] #rows
+        _, b1 = Dj_params[i:i+2] #rows
         if b1 <= 0:
             # sum(row i) should be the conjugate of sum(row i+1)
             abss = abssum(invYjY0[i,:])
@@ -678,9 +678,9 @@ def _get_B_params(invYjY0, Dj_params, D0_params, verbosity):
     L = len(Dj_params)-2 #starting index of final 2x2 block (if one *is* final)
     B0j_params = {} # a dictionary of lists, indexed by two "2x2 block" indices
     for i in range(0,len(Dj_params)-1,2): #loop over row-pairs
-        a1,b1 = Dj_params[i:i+2] #rows
+        _, b1 = Dj_params[i:i+2] #rows
         for j in range(0,len(D0_params)-1,2): #loop over col-pairs
-            a2,b2 = D0_params[j:j+2] #cols
+            _, b2 = D0_params[j:j+2] #cols
 
             #Each 2x2 square of B0j contains 4 real parameters (after
             # accounting for structure) *except* if j == L, in which case
@@ -745,7 +745,7 @@ def _get_B_params(invYjY0, Dj_params, D0_params, verbosity):
         M = len(Dj_params)//2 # index of unpaired block in B0j_params
         i = len(Dj_params)-1
         for j in range(0,len(D0_params)-1,2): #loop over col-pairs (final row)
-            a2,b2 = D0_params[j:j+2] #cols
+            _, b2 = D0_params[j:j+2] #cols
             # (note j can never equal L b/c unpaired col exists)
 
             if b2 <= 0:
@@ -767,7 +767,7 @@ def _get_B_params(invYjY0, Dj_params, D0_params, verbosity):
         j = len(D0_params)-1
         assert(j == i) #since D?_params are the same length
         for i in range(0,len(Dj_params)-1,2): #loop over row-pairs (final col)
-            a1,b1 = Dj_params[i:i+2] #cols
+            _, b1 = Dj_params[i:i+2] #cols
             # Note j is always the final column here - so the two parameters of
             # each block are set by 1.0-sum of the relevant column.  Thus, there
             # are *no* parameters to add for this final column.
@@ -838,7 +838,7 @@ def _get_rhoTilde_mark2(ETilde, D0_params):
     """ For rhoTilde[i] == ETilde[i] assumption """
     rho_tilde = _np.empty( (len(D0_params),1),'complex')
     for i in range(0,len(D0_params)-1,2):
-        a,b = D0_params[i:i+2]
+        _, b = D0_params[i:i+2]
         if b <= 0:
             # complex-conj pair at index i,i+1, so:
             rho_tilde[i] = ETilde[i]
@@ -864,9 +864,9 @@ def _deparameterize_real_gate_mx(Dj_params, D0_params, B0j_params,
     def anglesum(ar):
         return sum(_np.where( _np.absolute(ar) > SMALL, _np.angle(ar), 0) )
 
-    def rowsum(ar, ar_end):
-        full = list(ar) + list(ar_end)
-        return _rowsum(full, D0_params)
+    #def rowsum(ar, ar_end):
+     #   full = list(ar) + list(ar_end)
+      #  return _rowsum(full, D0_params)
 
     #Construct Dj
     Dj = _constructDj(Dj_params)
@@ -878,9 +878,9 @@ def _deparameterize_real_gate_mx(Dj_params, D0_params, B0j_params,
 
     k = 0 #running index into B0j_params
     for i in range(0,len(Dj_params)-1,2): #loop over row-pairs
-        a1,b1 = Dj_params[i:i+2] #rows
+        _, b1 = Dj_params[i:i+2] #rows
         for j in range(0,len(D0_params)-1,2): #loop over col-pairs
-            a2,b2 = D0_params[j:j+2] #cols
+            _, b2 = D0_params[j:j+2] #cols
 
             #Each 2x2 square of B0j is specified with 4 real parameters
             # *except* if j == L, in which case our deltaj-scaling has
@@ -955,7 +955,7 @@ def _deparameterize_real_gate_mx(Dj_params, D0_params, B0j_params,
     if len(Dj_params) % 2 == 1: #then there's an un-paired eigenvalue row
         i = len(Dj_params)-1
         for j in range(0,len(D0_params)-1,2): #loop over col-pairs
-            a2,b2 = D0_params[j:j+2] #cols
+            _, b2 = D0_params[j:j+2] #cols
             params = B0j_params[k:k+2]; k += 2 #always length 2 (j != L always)
 
             if b2 <= 0:
@@ -977,7 +977,7 @@ def _deparameterize_real_gate_mx(Dj_params, D0_params, B0j_params,
         j = len(D0_params)-1
         assert(j == i) #since D?_params are the same length
         for i in range(0,len(Dj_params)-1,2): #loop over row-pairs (final col)
-            a1,b1 = Dj_params[i:i+2] #cols
+            _, b1 = Dj_params[i:i+2] #cols
             # No params (j == last col, always) - all determined by
             #  rows-wsum-to-one scaling
 
@@ -1026,7 +1026,7 @@ def _get_ETilde_vector( E_params, D0_params ):
     E_tilde = _np.empty( (len(E_params),1),'complex')
 
     for i in range(0,len(D0_params)-1,2):
-        a,b = D0_params[i:i+2]
+        _, b = D0_params[i:i+2]
         if b <= 0:
             # complex-conj pair at index i,i+1, so:
             Er,Ei = E_params[i:i+2]

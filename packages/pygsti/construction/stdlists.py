@@ -62,12 +62,15 @@ def make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
         special behavior where LGST strings are included as the first
         returned list.
 
-    fidPairs : list of 2-tuples, optional
+    fidPairs : list of 2-tuples or dict, optional
         Specifies a subset of all fiducial string pairs (prepStr, effectStr)
-        to be used in the gate string lists.  Each element of fidPairs is a
-        (iPrepStr, iEffectStr) 2-tuple of integers, each indexing a string
-        within prepStrs and effectStrs, respectively, so that prepStr =
-        prepStrs[iPrepStr] and effectStr = effectStrs[iEffectStr].
+        to be used in the gate string lists.  If a list, each element of 
+        fidPairs is a (iPrepStr, iEffectStr) 2-tuple of integers, each 
+        indexing a string within prepStrs and effectStrs, respectively, so 
+        that prepStr = prepStrs[iPrepStr] and effectStr = 
+        effectStrs[iEffectStr].  If a dictionary, keys are germs (elements
+        of germList) and values are lists of 2-tuples specifying the pairs
+        to use for that germ.
 
     truncScheme : str, optional
         Truncation scheme used to interpret what the list of maximum lengths
@@ -93,8 +96,8 @@ def make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
         string.  The default includes all fiducial pairs.  Note that
         for each germ-power the selected pairs are *different* random
         sets of all possible pairs (unlike fidPairs, which specifies the
-        *same* fiduicial pairs for *all* germ-power base strings).  If
-        fidPairs is used in conjuction with keepFraction, the pairs 
+        *same* fiducial pairs for *all* same-germ base strings).  If
+        fidPairs is used in conjuction with keepFraction, the pairs
         specified by fidPairs are always selected, and any additional
         pairs are randomly selected.
 
@@ -120,11 +123,21 @@ def make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
         nPairsToKeep = int(round(float(keepFraction) * nPairs))
     else: rndm = None
 
-    if fidPairs is not None:
-        fiducialPairs = [ (prepStrs[i],effectStrs[j]) for (i,j) in fidPairs ]
+    if isinstance(fidPairs, dict) or hasattr(fidPairs, "keys"):
+        fiducialPairs = { germ: [ (prepStrs[i],effectStrs[j]) 
+                                  for (i,j) in fidPairs[germ] ]
+                          for germ in germList }
+        fidPairDict = fidPairs
     else:
-        fiducialPairs = list(_itertools.product(prepStrs, effectStrs))
+        if fidPairs is not None:   #assume fidPairs is a list
+            fidPairDict = { germ:fidPairs for germ in germList }
+            lst = [ (prepStrs[i],effectStrs[j]) for (i,j) in fidPairs ]
+        else:
+            fidPairDict = None
+            lst = list(_itertools.product(prepStrs, effectStrs))
+        fiducialPairs = { germ:lst for germ in germList }
 
+        
     if maxLengthList[0] == 0:
         lsgst_listOfLists = [ lgstStrings ]
         maxLengthList = maxLengthList[1:]
@@ -134,36 +147,39 @@ def make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
 
     for maxLen in maxLengthList:
 
-        if rndm is None:
-            fiducialPairsThisIter = fiducialPairs
+        lst = []
+        for germ in germList:
 
-        elif fidPairs is not None:
-            remainingPairs = [ (prepStrs[i],effectStrs[j])
-                               for i in range(len(prepStrs))
-                               for j in range(len(effectStrs))
-                               if (i,j) not in fidPairs ]
-            nPairsRemaining = len(remainingPairs)
-            nPairsToChoose = nPairsToKeep-len(fidPairs)
-            nPairsToChoose = max(0,min(nPairsToChoose,nPairsRemaining))
-            assert(0 <= nPairsToChoose <= nPairsRemaining)
-            # FUTURE: issue warnings when clipping nPairsToChoose?
+            if rndm is None:
+                fiducialPairsThisIter = fiducialPairs[germ]
 
-            fiducialPairsThisIter = fiducialPairs + \
-                [ remainingPairs[k] for k in 
-                  sorted(rndm.choice(nPairsRemaining,nPairsToChoose,
-                                     replace=False))]
+            elif fidPairDict is not None:
+                pair_indx_tups = fidPairDict[germ]
+                remainingPairs = [ (prepStrs[i],effectStrs[j])
+                                   for i in range(len(prepStrs))
+                                   for j in range(len(effectStrs))
+                                   if (i,j) not in pair_indx_tups ]
+                nPairsRemaining = len(remainingPairs)
+                nPairsToChoose = nPairsToKeep-len(pair_indx_tups)
+                nPairsToChoose = max(0,min(nPairsToChoose,nPairsRemaining))
+                assert(0 <= nPairsToChoose <= nPairsRemaining)
+                # FUTURE: issue warnings when clipping nPairsToChoose?
 
-        else: # rndm is not None and fidPairs is None
-            assert(nPairsToKeep <= nPairs) # keepFraction must be <= 1.0
-            fiducialPairsThisIter = \
-                [ fiducialPairs[k] for k in 
-                  sorted(rndm.choice(nPairs,nPairsToKeep,replace=False))]
+                fiducialPairsThisIter = fiducialPairs[germ] + \
+                    [ remainingPairs[k] for k in
+                      sorted(rndm.choice(nPairsRemaining,nPairsToChoose,
+                                         replace=False))]
 
+            else: # rndm is not None and fidPairDict is None
+                assert(nPairsToKeep <= nPairs) # keepFraction must be <= 1.0
+                fiducialPairsThisIter = \
+                    [ fiducialPairs[germ][k] for k in
+                      sorted(rndm.choice(nPairs,nPairsToKeep,replace=False))]
 
-        lst = _gsc.create_gatestring_list("f[0]+R(germ,N)+f[1]",
-                                          f=fiducialPairsThisIter,
-                                          germ=germList, N=maxLen,
-                                          R=Rfn, order=('germ','f'))
+            lst += _gsc.create_gatestring_list("f[0]+R(germ,N)+f[1]",
+                                              f=fiducialPairsThisIter,
+                                              germ=germ, N=maxLen,
+                                              R=Rfn, order=('f',))
         if nest:
             lsgst_list += lst #add new strings to running list
             lsgst_listOfLists.append( _lt.remove_duplicates(lgstStrings + lsgst_list) )
@@ -174,9 +190,10 @@ def make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
     return lsgst_listOfLists
 
 
-def make_lsgst_experiment_list(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
-                               fidPairs=None, truncScheme="whole germ powers",
-                               keepFraction=1, keepSeed=None):
+def make_lsgst_experiment_list(gateLabels, prepStrs, effectStrs, germList,
+                               maxLengthList, fidPairs=None,
+                               truncScheme="whole germ powers", keepFraction=1,
+                               keepSeed=None):
     """
     Create a list of all the gate strings (i.e. the experiments) required for
     long-sequence GST (LSGST) algorithms.
@@ -213,10 +230,13 @@ def make_lsgst_experiment_list(gateLabels, prepStrs, effectStrs, germList, maxLe
 
     fidPairs : list of 2-tuples, optional
         Specifies a subset of all fiducial string pairs (prepStr, effectStr)
-        to be used in the gate string lists.  Each element of fidPairs is a
-        (iPrepStr, iEffectStr) 2-tuple of integers, each indexing a string
-        within prepStrs and effectStrs, respectively, so that prepStr =
-        prepStrs[iPrepStr] and effectStr = effectStrs[iEffectStr].
+        to be used in the gate string lists.  If a list, each element of 
+        fidPairs is a (iPrepStr, iEffectStr) 2-tuple of integers, each 
+        indexing a string within prepStrs and effectStrs, respectively, so 
+        that prepStr = prepStrs[iPrepStr] and effectStr = 
+        effectStrs[iEffectStr].  If a dictionary, keys are germs (elements
+        of germList) and values are lists of 2-tuples specifying the pairs
+        to use for that germ.
 
     truncScheme : str, optional
         Truncation scheme used to interpret what the list of maximum lengths
@@ -234,8 +254,8 @@ def make_lsgst_experiment_list(gateLabels, prepStrs, effectStrs, germList, maxLe
         string.  The default includes all fiducial pairs.  Note that
         for each germ-power the selected pairs are *different* random
         sets of all possible pairs (unlike fidPairs, which specifies the
-        *same* fiduicial pairs for *all* germ-power base strings).  If
-        fidPairs is used in conjuction with keepFraction, the pairs 
+        *same* fiduicial pairs for *all* same-germ base strings).  If
+        fidPairs is used in conjuction with keepFraction, the pairs
         specified by fidPairs are always selected, and any additional
         pairs are randomly selected.
 

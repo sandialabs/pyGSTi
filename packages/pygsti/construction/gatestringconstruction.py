@@ -521,6 +521,58 @@ def gatestring_list( listOfGateLabelTuplesOrStrings ):
     return ret
 
 
+def translate_gatestring_list(gatestringList, aliasDict):
+    """
+    Creates a new list of GateString objects from an existing one by replacing
+    gate labels in `gatestringList` by (possibly multiple) new labels according
+    to `aliasDict`.
+
+    Parameters
+    ----------
+    gatestringList : list of GateStrings
+        The list of gate strings to use as the base for find & replace
+        operations.
+
+    aliasDict : dict
+        A dictionary whose keys are single gate labels and whose values are 
+        lists or tuples of the new gate labels that should replace that key.
+
+    Returns
+    -------
+    list of GateStrings
+    """
+    new_gatestrings = [ _gs.GateString(tuple(_itertools.chain(
+                *[aliasDict.get(lbl,lbl) for lbl in gs])))
+                        for gs in gatestringList ]
+    return new_gatestrings
+
+
+def compose_alias_dicts(aliasDict1, aliasDict2):
+    """
+    Composes two alias dicts.
+    
+    Assumes `aliasDict1` maps "A" labels to "B" labels and `aliasDict2` maps
+    "B" labels to "C" labels.  The returned dictionary then maps "A" labels
+    directly to "C" labels, and satisfies:
+
+    `returned[A_label] = aliasDict2[ aliasDict1[ A_label ] ]`
+    
+    Parameters
+    ----------
+    aliasDict1, aliasDict2 : dict
+        The two dictionaries to compose.
+
+    Returns
+    -------
+    dict
+    """
+    ret = {}
+    for A,Bs in aliasDict1.items():
+        ret[A] = list(_itertools.chain(*[aliasDict2[B] for B in Bs]))
+    return ret
+
+
+
 #Unneeded
 #def list_periodic_gatestrings(gateLabels, max_period, minlength, maxlength, left_bookends=[()], right_bookends=[()]):
 #    ret = [ ]
