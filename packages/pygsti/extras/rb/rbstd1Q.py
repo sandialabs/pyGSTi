@@ -53,21 +53,21 @@ clifford_to_canonical["Gc23"] = ['Gxp2','Gyp2','Gxmp2']
 # Mapping the "canonical" gate set onto the "primitive"
 # gate set containing Gi, Gx, Gy, using the natural
 # mapping
-canonical_to_XYI_primitive = _OrderedDict()
-canonical_to_XYI_primitive['Gi'] = ['Gi']
-canonical_to_XYI_primitive['Gxp2'] = ['Gx']
-canonical_to_XYI_primitive['Gxp'] = ['Gx','Gx']
-canonical_to_XYI_primitive['Gxmp2'] = ['Gx','Gx','Gx']
-canonical_to_XYI_primitive['Gyp2'] = ['Gy']
-canonical_to_XYI_primitive['Gyp'] = ['Gy','Gy']
-canonical_to_XYI_primitive['Gymp2'] = ['Gy','Gy','Gy']
+canonical_to_XYI = _OrderedDict()
+canonical_to_XYI['Gi'] = ['Gi']
+canonical_to_XYI['Gxp2'] = ['Gx']
+canonical_to_XYI['Gxp'] = ['Gx','Gx']
+canonical_to_XYI['Gxmp2'] = ['Gx','Gx','Gx']
+canonical_to_XYI['Gyp2'] = ['Gy']
+canonical_to_XYI['Gyp'] = ['Gy','Gy']
+canonical_to_XYI['Gymp2'] = ['Gy','Gy','Gy']
 
 # Mapping the Clifford gate set onto the "primitive"
 # gate set containing Gi, Gx, Gy, via the composition
 # of the clifford -> canonical and canonical ->
 # primitive maps
-clifford_to_XYI_primitive = _cnst.compose_alias_dicts(clifford_to_canonical,
-                                                      canonical_to_XYI_primitive)
+clifford_to_XYI = _cnst.compose_alias_dicts(clifford_to_canonical,
+                                                      canonical_to_XYI)
 
 # full 1Q Clifford gateset (24 gates)
 gs_clifford_target = _cnst.build_alias_gateset(gs_cliff_canonical,
