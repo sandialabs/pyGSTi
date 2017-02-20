@@ -883,7 +883,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
               regularizeFactor=0, verbosity=0, check=False,
               check_jacobian=False, gatestringWeights=None,
               gateLabelAliases=None, memLimit=None, comm=None,
-              distributeMethod = "gatestrings", profiler=None):
+              distributeMethod = "deriv", profiler=None):
     """
     Performs Least-Squares Gate Set Tomography on the dataset.
 
@@ -1626,7 +1626,7 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
                         check=False, check_jacobian=False,
                         gatestringWeightsDict=None, gateLabelAliases=None,
                         memLimit=None, profiler=None, comm=None, 
-                        distributeMethod = "gatestrings"):
+                        distributeMethod = "deriv"):
     """
     Performs Iterative Minimum Chi^2 Gate Set Tomography on the dataset.
 
@@ -2551,7 +2551,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                        poissonPicture=True,returnMaxLogL=False,returnAll=False,
                        gateStringSetLabels=None, useFreqWeightedChiSq=False,
                        verbosity=0, check=False, gateLabelAliases=None, memLimit=None, 
-                       profiler=None, comm=None, distributeMethod = "gatestrings"):
+                       profiler=None, comm=None, distributeMethod = "deriv"):
     """
     Performs Iterative Maximum Liklihood Estimation Gate Set Tomography on the dataset.
 
