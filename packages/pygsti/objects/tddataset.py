@@ -221,13 +221,7 @@ class TDDataSet(object):
     return TDDataSetRow(self, self.timeseries[ self.gsIndex[gatestring] ])
 
   def __setitem__(self, gatestring, spamLabelList):
-    if gatestring in self:
-      assert(len(spamLabelList) == len(self.timeseries[0])) #all time series must have the same length
-      row = TDDataSetRow(self, self.timeseries[ self.gsIndex[gatestring] ])
-      for i,spamLabel in enumerate(spamLabelList):
-        row[spamLabel] = cnt
-    else:
-      self.add_timeseries_list(gatestring, spamLabelList)
+    self.add_timeseries_list(gatestring, spamLabelList)
 
   def __contains__(self, gatestring):
     return gatestring in self.gsIndex
