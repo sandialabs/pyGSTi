@@ -34,7 +34,7 @@ from .verbosityprinter import VerbosityPrinter
 # should have just 0 and 1 eigenvalues, and thus a tolerace << 1.0 will work
 # well.
 P_RANK_TOL = 1e-7
-
+FLOATSIZE = 8 # in bytes: TODO: a better way
 
 class GateSet(object):
     """
@@ -1322,7 +1322,6 @@ class GateSet(object):
         num_params = self.num_params()
         dim = self._dim
         evt_cache = {} # cache of eval trees based on # min subtrees, to avoid re-computation
-        floatSize = 8 # in bytes: TODO: a better way
         C = 1.0/(1024.0**3)
 
         bNp2Matters = ("bulk_fill_hprobs" in subcalls) or ("bulk_hprobs_by_block" in subcalls)
@@ -1404,9 +1403,9 @@ class GateSet(object):
                     if (not fastCacheSz) else ""
                 printer.log(" mem(%d subtrees, %d,%d param-grps, %d proc-grps)"
                             % (ng, np1, np2, Ng) + " in %.0fs = %.2fGB%s"
-                            % (_time.time()-tm, mem*floatSize*C, fc_est_str))
+                            % (_time.time()-tm, mem*FLOATSIZE*C, fc_est_str))
             elif verb == 2:
-                printer.log(" Memory estimate = %.2fGB" % (mem*floatSize*C) +
+                printer.log(" Memory estimate = %.2fGB" % (mem*FLOATSIZE*C) +
                      " (cache=%d, wrtLen1=%d, wrtLen2=%d, subsPerProc=%d)." %
                             (cacheSize, wrtLen1, wrtLen2, nSubtreesPerProc))
                 #printer.log("  subcalls = %s" % str(subcalls))
@@ -1418,7 +1417,7 @@ class GateSet(object):
                 #                (8*cacheSize * wrtLen * dim * dim * C))
                 #    printer.log(" DB Detail: probs cache = %.2fGB" % 
                 #                (8*cacheSize * dim * dim * C))
-            return mem * floatSize
+            return mem * FLOATSIZE
 
 
         if distributeMethod == "gatestrings":
