@@ -1395,6 +1395,26 @@ class GateSet(object):
                     mem += cacheSize # scale cache
                     mem += cacheSize # scale vals
 
+                ## It doesn't make sense to include these since their required memory is fixed
+                ## (and dominated) by the output array size. Could throw more informative error?
+                #elif fnName == "bulk_product":
+                #    mem += cacheSize * dim * dim # product cache
+                #    mem += cacheSize # scale cache
+                #    mem += cacheSize # scale vals
+                #
+                #elif fnName == "bulk_dproduct":
+                #    mem += cacheSize * num_params * dim * dim # dproduct cache
+                #    mem += cacheSize * dim * dim # product cache
+                #    mem += cacheSize # scale cache
+                #    mem += cacheSize # scale vals
+                #
+                #elif fnName == "bulk_hproduct":
+                #    mem += cacheSize * num_params**2 * dim * dim # hproduct cache
+                #    mem += cacheSize * num_params * dim * dim # dproduct cache
+                #    mem += cacheSize * dim * dim # product cache
+                #    mem += cacheSize # scale cache
+                #    mem += cacheSize # scale vals
+
                 else:
                     raise ValueError("Unknown subcall name: %s" % fnName)
             
