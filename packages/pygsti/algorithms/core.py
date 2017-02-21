@@ -2061,6 +2061,9 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     poissonPicture : boolean, optional
         Whether the Poisson-picture log-likelihood should be used.
 
+    verbosity : int, optional
+        How much detail to send to stdout.
+
     check : boolean, optional
       If True, perform extra checks within code to verify correctness.  Used
       for testing, and runs much slower when True.
