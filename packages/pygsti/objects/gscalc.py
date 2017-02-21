@@ -248,6 +248,7 @@ class GateSetCalculator(object):
 
         # LEXICOGRAPHICAL VS MATRIX ORDER
         revGateLabelList = tuple(reversed(tuple(gatestring))) # we do matrix multiplication in this order (easier to think about)
+        N = len(revGateLabelList) # length of gate string
 
         #  prod = G1 * G2 * .... * GN , a matrix
         #  dprod/d(gateLabel)_ij   = sum_{L s.t. G(L) == gatelabel} [ G1 ... G(L-1) dG(L)/dij G(L+1) ... GN ] , a matrix for each given (i,j)
@@ -282,7 +283,7 @@ class GateSetCalculator(object):
                 lbl,k = wrtIndexToGatelableIndexPair[i]
                 fltr[lbl].append(k)
 
-        #Cache partial products
+        #Cache partial products (relatively little mem required)
         leftProds = [ ]
         G = _np.identity( dim ); leftProds.append(G)
         for gateLabel in revGateLabelList:
@@ -295,35 +296,30 @@ class GateSetCalculator(object):
             G = _np.dot(self.gates[gateLabel].base,G)
             rightProdsT.append( _np.transpose(G) )
 
-        # Initialize storage
-        dprod_dgateLabel = { }; dgate_dgateLabel = {}
+        # Allocate memory for the final result
+        num_deriv_cols =  self.tot_gate_params if (wrtFilter is None) else len(wrtFilter)
+        flattened_dprod = _np.zeros((dim**2, num_deriv_cols),'d')
+        k = 0 #offset to beginning of current gate's parameters
+        
+        # For each gate label, compute the derivative of the entire gate string
+        #  with respect to only that gate's parameters and fill the appropriate
+        #  columns of flattened_dprod.
         for gateLabel,gate in self.gates.items():
             iCols = fltr.get(gateLabel,None)
             nDerivCols = gate.num_params() if (iCols is None) else len(iCols)
-            dprod_dgateLabel[gateLabel] = _np.zeros((dim**2, nDerivCols))
-            dgate_dgateLabel[gateLabel] = gate.deriv_wrt_params(iCols)
-              # (dim**2, nParams[gateLabel])
+            dgate_dgateLabel = gate.deriv_wrt_params(iCols)
 
-            #Note: replace gate.num_params()  and .deriv_wrt_params() with something more
-            # general like parameterizer.get_num_params(gateLabel), etc, to allow for non-gate-local
-            # gatesets params? In this case, would expect output to be of shape (dim**2, nTotParams)
-            # and would *add* these together instead of concatenating below.
-
-        #Add contributions for each gate in list
-        N = len(revGateLabelList)
-        for (i,gateLabel) in enumerate(revGateLabelList):
-            dprod_dgate = _np.kron( leftProds[i], rightProdsT[N-1-i] )  # (dim**2, dim**2)
-            dprod_dgateLabel[gateLabel] += _np.dot( dprod_dgate, dgate_dgateLabel[gateLabel] ) # (dim**2, nParams[gateLabel])
-
-        #Concatenate per-gateLabel results to get final result
-        to_concat = [ dprod_dgateLabel[gateLabel] for gateLabel in self.gates ]
-        flattened_dprod = _np.concatenate( to_concat, axis=1 ) # axes = (vectorized_gate_el_index,gateset_parameter)
+            for (i,gl) in enumerate(revGateLabelList):
+                if gl != gateLabel: continue # loop over locations of gateLabel
+                LRproduct = _np.kron( leftProds[i], rightProdsT[N-1-i] )  # (dim**2, dim**2)
+                flattened_dprod[:,k:k+nDerivCols] += _np.dot( LRproduct, dgate_dgateLabel ) # (dim**2, nParams[gateLabel])
+                
+            k += nDerivCols
 
         if flat:
             return flattened_dprod
         else:
-            vec_gs_size = flattened_dprod.shape[1]
-            return _np.swapaxes( flattened_dprod, 0, 1 ).reshape( (vec_gs_size, dim, dim) ) # axes = (gate_ij, prod_row, prod_col)
+            return _np.swapaxes( flattened_dprod, 0, 1 ).reshape( (num_deriv_cols, dim, dim) ) # axes = (gate_ij, prod_row, prod_col)
 
 
     def hproduct(self, gatestring, flat=False, wrtFilter1=None, wrtFilter2=None):
@@ -393,7 +389,32 @@ class GateSetCalculator(object):
 
         dim = self.dim
 
-        #Cache partial products
+        #Create per-gate with-respect-to parameter filters, used to
+        # select a subset of all the derivative columns, essentially taking
+        # a derivative of only a *subset* of all the gate's parameters
+        fltr1 = {} #keys = gate labels, values = per-gate param indices
+        fltr2 = {} #keys = gate labels, values = per-gate param indices
+        if wrtFilter1 is not None or wrtFilter2 is not None:
+            wrtIndexToGatelableIndexPair = []
+            for lbl,g in self.gates.items():
+                for k in range(g.num_params()):
+                    wrtIndexToGatelableIndexPair.append((lbl,k))
+
+            if wrtFilter1 is not None:
+                for gateLabel in list(self.gates.keys()):
+                    fltr1[gateLabel] = []
+                for i in wrtFilter1:
+                    lbl,k = wrtIndexToGatelableIndexPair[i]
+                    fltr1[lbl].append(k)
+
+            if wrtFilter2 is not None:
+                for gateLabel in list(self.gates.keys()):
+                    fltr2[gateLabel] = []
+                for i in wrtFilter2:
+                    lbl,k = wrtIndexToGatelableIndexPair[i]
+                    fltr2[lbl].append(k)
+        
+        #Cache partial products (relatively little mem required)
         prods = {}
         ident = _np.identity( dim )
         for (i,gateLabel1) in enumerate(revGateLabelList): #loop over "starting" gate
@@ -404,68 +425,130 @@ class GateSetCalculator(object):
                 prods[ (i,j) ] = G
         prods[ (len(revGateLabelList),len(revGateLabelList)-1) ] = ident #product of no gates
 
-        # Initialize storage
-        dgate_dgateLabel = {}; nParams = {}
-        for gateLabel in set(gatesToVectorize1).union(gatesToVectorize2):
-            dgate_dgateLabel[gateLabel] = self.gates[gateLabel].deriv_wrt_params() # (dim**2, nParams[gateLabel])
-            nParams[gateLabel] = dgate_dgateLabel[gateLabel].shape[1]
+        #Also Cache gate jacobians (still relatively little mem required)
+        dgate_dgateLabel1 = {
+            gateLabel: gate.deriv_wrt_params( fltr1.get(gateLabel,None) )
+            for gateLabel,gate in self.gates.items() }
+        
+        if fltr1 == fltr2:
+            dgate_dgateLabel2 = dgate_dgateLabel1
+        else:
+            dgate_dgateLabel2 = {
+                gateLabel: gate.deriv_wrt_params( fltr2.get(gateLabel,None) )
+                for gateLabel,gate in self.gates.items() }
+            
 
-        d2prod_dgateLabels = { };
-        for gateLabel1 in gatesToVectorize1:
-            for gateLabel2 in gatesToVectorize2:
-                d2prod_dgateLabels[(gateLabel1,gateLabel2)] = _np.zeros( (dim**2, nParams[gateLabel1], nParams[gateLabel2]), 'd')
+        # Allocate memory for the final result
+        num_deriv_cols1 = self.tot_gate_params if (wrtFilter1 is None) else len(wrtFilter1)
+        num_deriv_cols2 = self.tot_gate_params if (wrtFilter2 is None) else len(wrtFilter2)
+        flattened_d2prod = _np.zeros((dim**2, num_deriv_cols1, num_deriv_cols2),'d')
+        cum1 = _np.cumsum([0] + [ dgate_dgateLabel1[gl].shape[1] for gl in self.gates ] )
+        cum2 = _np.cumsum([0] + [ dgate_dgateLabel2[gl].shape[1] for gl in self.gates ] )
+        gateLabels = list(self.gates.keys())
 
-        #Add contributions for each gate in list
+        # For each pair of gates in the string, compute the hessian of the entire
+        #  gate string with respect to only those two gates' parameters and fill
+        #  add the result to the appropriate block of flattened_d2prod.
+        
+        #NOTE: if we needed to perform a hessian calculation (i.e. for l==m) then
+        # it could make sense to iterate through the self.gates.keys() as in
+        # dproduct(...) and find the labels in the string which match the current
+        # gate (so we only need to compute this gate hessian once).  But since we're
+        # assuming that the gates are at most linear in their parameters, this
+        # isn't currently needed.
+        
         N = len(revGateLabelList)
         for m,gateLabel1 in enumerate(revGateLabelList):
-            #OLD shortcut: if gateLabel1 in gatesToVectorize1: (and indent below)
+            i1 = gateLabels.index(gateLabel1)
+            s1,e1 = cum1[i1:i1+2] #start and ending indices for gate1's parameters in (2nd index of) flattened_d2prod
+            nDerivCols1 = dgate_dgateLabel1[gateLabel1].shape[1]
+            
             for l,gateLabel2 in enumerate(revGateLabelList):
-                #OLD shortcut: if gateLabel2 in gatesToVectorize2: (and indent below)
+                i2 = gateLabels.index(gateLabel2)
+                s2,e2 = cum2[i2:i2+2] #start and ending indices for gate2's parameters in (3rd index of) flattened_d2prod
+                nDerivCols2 = dgate_dgateLabel2[gateLabel2].shape[1]
+                
                 # FUTURE: we could add logic that accounts for the symmetry of the Hessian, so that
                 # if gl1 and gl2 are both in gatesToVectorize1 and gatesToVectorize2 we only compute d2(prod)/d(gl1)d(gl2)
                 # and not d2(prod)/d(gl2)d(gl1) ...
+                
                 if m < l:
                     x0 = _np.kron(_np.transpose(prods[(0,m-1)]),prods[(m+1,l-1)])  # (dim**2, dim**2)
-                    x  = _np.dot( _np.transpose(dgate_dgateLabel[gateLabel1]), x0); xv = x.view() # (nParams[gateLabel1],dim**2)
-                    xv.shape = (nParams[gateLabel1], dim, dim) # (reshape without copying - throws error if copy is needed)
-                    y = _np.dot( _np.kron(xv, _np.transpose(prods[(l+1,N-1)])), dgate_dgateLabel[gateLabel2] )
-                    # above: (nParams1,dim**2,dim**2) * (dim**2,nParams[gateLabel2]) = (nParams1,dim**2,nParams2)
-                    d2prod_dgateLabels[(gateLabel1,gateLabel2)] += _np.swapaxes(y,0,1)
-                            # above: dim = (dim2, nParams1, nParams2); swapaxes takes (kl,vec_prod_indx,ij) => (vec_prod_indx,kl,ij)
+                    x  = _np.dot( _np.transpose(dgate_dgateLabel1[gateLabel1]), x0); xv = x.view() # (nDerivCols1,dim**2)
+                    xv.shape = (nDerivCols1, dim, dim) # (reshape without copying - throws error if copy is needed)
+                    y = _np.dot( _np.kron(xv, _np.transpose(prods[(l+1,N-1)])), dgate_dgateLabel2[gateLabel2] )
+                      # above: (nDerivCols1,dim**2,dim**2) * (dim**2,nDerivCols2) = (nDerivCols1,dim**2,nDerivCols2)
+                    flattened_d2prod[:,s1:e1,s2:e2] += _np.swapaxes(y,0,1)
+                      # above: dim = (dim2, nDerivCols1, nDerivCols2); swapaxes takes (kl,vec_prod_indx,ij) => (vec_prod_indx,kl,ij)
                 elif l < m:
                     x0 = _np.kron(_np.transpose(prods[(l+1,m-1)]),prods[(m+1,N-1)]) # (dim**2, dim**2)
-                    x  = _np.dot( _np.transpose(dgate_dgateLabel[gateLabel1]), x0); xv = x.view() # (nParams[gateLabel1],dim**2)
-                    xv.shape = (nParams[gateLabel1], dim, dim) # (reshape without copying - throws error if copy is needed)
+                    x  = _np.dot( _np.transpose(dgate_dgateLabel1[gateLabel1]), x0); xv = x.view() # (nDerivCols2,dim**2)
+                    xv.shape = (nDerivCols1, dim, dim) # (reshape without copying - throws error if copy is needed)
                     xv = _np.swapaxes(xv,1,2) # transposes each of the now un-vectorized dim x dim mxs corresponding to a single kl
-                    y = _np.dot( _np.kron(prods[(0,l-1)], xv), dgate_dgateLabel[gateLabel2] )
-# above: (nParams1,dim**2,dim**2) * (dim**2,nParams[gateLabel2]) = (nParams1,dim**2,nParams2)
-                    d2prod_dgateLabels[(gateLabel1,gateLabel2)] += _np.swapaxes(y,0,1)
-                    # above: dim = (dim2, nParams1, nParams2); swapaxes takes (kl,vec_prod_indx,ij) => (vec_prod_indx,kl,ij)
+                    y = _np.dot( _np.kron(prods[(0,l-1)], xv), dgate_dgateLabel2[gateLabel2] )
+                    # above: (nDerivCols1,dim**2,dim**2) * (dim**2,nDerivCols2) = (nDerivCols1,dim**2,nDerivCols2)
+                    
+                    flattened_d2prod[:,s1:e1,s2:e2] += _np.swapaxes(y,0,1)
+                      # above: dim = (dim2, nDerivCols1, nDerivCols2); swapaxes takes (kl,vec_prod_indx,ij) => (vec_prod_indx,kl,ij)
+
                #else l==m, in which case there's no contribution since we assume all gate elements are at most linear in the parameters
 
-        #Concatenate per-gateLabel results to get final result (Note: this is the lengthy step for 2Q hessian calcs)
-        to_concat = []
-        for gateLabel1 in gatesToVectorize1:
-            to_concat.append( _np.concatenate( [ d2prod_dgateLabels[(gateLabel1,gateLabel2)] for gateLabel2 in gatesToVectorize2 ], axis=2 ) ) #concat along ij (nParams2)
-        flattened_d2prod = _np.concatenate( to_concat, axis=1 ) # concat along kl (nParams1)
+#        d2prod_dgateLabels = { };
+#        for gateLabel1 in gatesToVectorize1:
+#            for gateLabel2 in gatesToVectorize2:
+#                d2prod_dgateLabels[(gateLabel1,gateLabel2)] = _np.zeros( (dim**2, nParams[gateLabel1], nParams[gateLabel2]), 'd')
+#
+#        #Add contributions for each gate in list
+#        N = len(revGateLabelList)
+#        for m,gateLabel1 in enumerate(revGateLabelList):
+#            #OLD shortcut: if gateLabel1 in gatesToVectorize1: (and indent below)
+#            for l,gateLabel2 in enumerate(revGateLabelList):
+#                #OLD shortcut: if gateLabel2 in gatesToVectorize2: (and indent below)
+#                # FUTURE: we could add logic that accounts for the symmetry of the Hessian, so that
+#                # if gl1 and gl2 are both in gatesToVectorize1 and gatesToVectorize2 we only compute d2(prod)/d(gl1)d(gl2)
+#                # and not d2(prod)/d(gl2)d(gl1) ...
+#                if m < l:
+#                    x0 = _np.kron(_np.transpose(prods[(0,m-1)]),prods[(m+1,l-1)])  # (dim**2, dim**2)
+#                    x  = _np.dot( _np.transpose(dgate_dgateLabel[gateLabel1]), x0); xv = x.view() # (nParams[gateLabel1],dim**2)
+#                    xv.shape = (nParams[gateLabel1], dim, dim) # (reshape without copying - throws error if copy is needed)
+#                    y = _np.dot( _np.kron(xv, _np.transpose(prods[(l+1,N-1)])), dgate_dgateLabel[gateLabel2] )
+#                    # above: (nParams1,dim**2,dim**2) * (dim**2,nParams[gateLabel2]) = (nParams1,dim**2,nParams2)
+#                    d2prod_dgateLabels[(gateLabel1,gateLabel2)] += _np.swapaxes(y,0,1)
+#                            # above: dim = (dim2, nParams1, nParams2); swapaxes takes (kl,vec_prod_indx,ij) => (vec_prod_indx,kl,ij)
+#                elif l < m:
+#                    x0 = _np.kron(_np.transpose(prods[(l+1,m-1)]),prods[(m+1,N-1)]) # (dim**2, dim**2)
+#                    x  = _np.dot( _np.transpose(dgate_dgateLabel[gateLabel1]), x0); xv = x.view() # (nParams[gateLabel1],dim**2)
+#                    xv.shape = (nParams[gateLabel1], dim, dim) # (reshape without copying - throws error if copy is needed)
+#                    xv = _np.swapaxes(xv,1,2) # transposes each of the now un-vectorized dim x dim mxs corresponding to a single kl
+#                    y = _np.dot( _np.kron(prods[(0,l-1)], xv), dgate_dgateLabel[gateLabel2] )
+## above: (nParams1,dim**2,dim**2) * (dim**2,nParams[gateLabel2]) = (nParams1,dim**2,nParams2)
+#                    d2prod_dgateLabels[(gateLabel1,gateLabel2)] += _np.swapaxes(y,0,1)
+#                    # above: dim = (dim2, nParams1, nParams2); swapaxes takes (kl,vec_prod_indx,ij) => (vec_prod_indx,kl,ij)
+#               #else l==m, in which case there's no contribution since we assume all gate elements are at most linear in the parameters
+#
+#        #Concatenate per-gateLabel results to get final result (Note: this is the lengthy step for 2Q hessian calcs)
+#        to_concat = []
+#        for gateLabel1 in gatesToVectorize1:
+#            to_concat.append( _np.concatenate( [ d2prod_dgateLabels[(gateLabel1,gateLabel2)] for gateLabel2 in gatesToVectorize2 ], axis=2 ) ) #concat along ij (nParams2)
+#        flattened_d2prod = _np.concatenate( to_concat, axis=1 ) # concat along kl (nParams1)
 
-        if wrtFilter1 is not None:
-            flattened_d2prod = flattened_d2prod.take(wrtFilter1, axis=1)
-              #take subset of 1st derivatives w.r.t. gateset parameter
-
-        if wrtFilter2 is not None:
-            flattened_d2prod = flattened_d2prod.take(wrtFilter2, axis=2)
-              #take subset of 2nd derivatives w.r.t. gateset parameter
-
-            # Alternate to take() above, but may be slow (no copyList precomputed) and
-            # this shouldn't be a mem bottleneck, so just use numpy.take :
-            #flattened_d2prod = inplace_take(flattened_d2prod, wrtFilter2, axis=2) 
+#        if wrtFilter1 is not None:
+#            flattened_d2prod = flattened_d2prod.take(wrtFilter1, axis=1)
+#              #take subset of 1st derivatives w.r.t. gateset parameter
+#
+#        if wrtFilter2 is not None:
+#            flattened_d2prod = flattened_d2prod.take(wrtFilter2, axis=2)
+#              #take subset of 2nd derivatives w.r.t. gateset parameter
+#
+#            # Alternate to take() above, but may be slow (no copyList precomputed) and
+#            # this shouldn't be a mem bottleneck, so just use numpy.take :
+#            #flattened_d2prod = inplace_take(flattened_d2prod, wrtFilter2, axis=2) 
 
 
         if flat:
             return flattened_d2prod # axes = (vectorized_gate_el_index, gateset_parameter1, gateset_parameter2)
         else:
-            vec_kl_size, vec_ij_size = flattened_d2prod.shape[1:3]
+            vec_kl_size, vec_ij_size = flattened_d2prod.shape[1:3] # == num_deriv_cols1, num_deriv_cols2
             return _np.rollaxis( flattened_d2prod, 0, 3 ).reshape( (vec_kl_size, vec_ij_size, dim, dim) )
             # axes = (gateset_parameter1, gateset_parameter2, gateset_element_row, gateset_element_col)
 
