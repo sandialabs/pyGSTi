@@ -542,7 +542,7 @@ class GateSet(object):
             the number of non-gauge gateset parameters.
         """
         P = self.get_nongauge_projector()
-        return _np.linalg.matrix_rank(P, P_RANK_TOL)
+        return self.num_params() - self.num_gauge_params()
 
 
     def num_gauge_params(self):
@@ -555,7 +555,9 @@ class GateSet(object):
         int
             the number of gauge gateset parameters.
         """
-        return self.num_params() - self.num_nongauge_params()
+        dPG = self._buildup_dPG()
+        gaugeDirs = _mt.nullspace_qr(dPG) #cols are gauge directions
+        return _np.linalg.matrix_rank(gaugeDirs[0:self.num_params(),:])
 
 
     def to_vector(self):
@@ -658,6 +660,64 @@ class GateSet(object):
 
         return deriv
 
+    def _buildup_dPG(self):
+        """ 
+        Helper function for building gauge/non-gauge projectors and 
+          for computing the number of gauge/non-gauge elements.
+
+        Returns the [ dP | dG ] matrix, i.e. np.concatenate( (dP,dG), axis=1 )
+        whose nullspace gives the gauge directions in parameter space.
+        """
+
+        # ** See comments at the beginning of get_nongauge_projector for explanation **
+        
+        #Use a GateSet object to hold & then vectorize the derivatives wrt each gauge transform basis element (each ij)
+        dim = self._dim
+        nParams = self.num_params()
+        nElements = self.num_elements()
+
+        #This was considered as optional behavior, but better to just delete qtys from GateSet
+        ##whether elements of the raw gateset matrices/SPAM vectors that are not
+        ## parameterized at all should be ignored.   By ignoring changes to such
+        ## elements, they are treated as not being a part of the "gateset"
+        #bIgnoreUnparameterizedEls = True
+
+        #Note: gateset object (gsDeriv) must have all elements of gate
+        # mxs and spam vectors as parameters (i.e. be "fully parameterized") in
+        # order to match deriv_wrt_params call, which gives derivatives wrt
+        # *all* elements of a gate set.
+        gsDeriv = GateSet("full", self.preps._prefix, self.effects._prefix,
+                          self.gates._prefix, self._remainderlabel,
+                          self._identitylabel)
+        for gateLabel in self.gates:
+            gsDeriv.gates[gateLabel] = _np.zeros((dim,dim),'d')
+        for prepLabel in self.preps:
+            gsDeriv.preps[prepLabel] = _np.zeros((dim,1),'d')
+        for effectLabel in self.effects:
+            gsDeriv.effects[effectLabel] = _np.zeros((dim,1),'d')
+
+        assert(gsDeriv.num_elements() == gsDeriv.num_params() == nElements)
+
+        dPG = _np.empty( (nElements, nParams + dim**2), 'd' )
+        for i in range(dim):      # always range over all rows: this is the
+            for j in range(dim):  # *generator* mx, not gauge mx itself
+                unitMx = _bt._mut(i,j,dim)
+                for lbl,rhoVec in self.preps.items():
+                    gsDeriv.preps[lbl] = _np.dot(unitMx, rhoVec)
+                for lbl,EVec in self.effects.items():
+                    gsDeriv.effects[lbl] =  -_np.dot(EVec.T, unitMx).T
+                for lbl,gate in self.gates.items():
+                    gsDeriv.gates[lbl] = _np.dot(unitMx,gate) - \
+                                         _np.dot(gate,unitMx)
+
+                #Note: vectorize all the parameters in this full-
+                # parameterization object, which gives a vector of length
+                # equal to the number of gateset *elements*.
+                dPG[:,nParams + i*dim+j] = gsDeriv.to_vector()
+
+        dPG[:, 0:nParams] = self.deriv_wrt_params()
+        return dPG
+
 
     def get_nongauge_projector(self, itemWeights=None, nonGaugeMixMx=None):
         """
@@ -755,58 +815,9 @@ class GateSet(object):
         #   Still, we just substitue these dParams_ij vectors (as many as the nullspace dimension) for dG_ij
         #   above to get the general case projector.
 
-
-        #Use a GateSet object to hold & then vectorize the derivatives wrt each gauge transform basis element (each ij)
-        dim = self._dim
         nParams = self.num_params()
         nElements = self.num_elements()
-
-        #This was considered as optional behavior, but better to just delete qtys from GateSet
-        ##whether elements of the raw gateset matrices/SPAM vectors that are not
-        ## parameterized at all should be ignored.   By ignoring changes to such
-        ## elements, they are treated as not being a part of the "gateset"
-        #bIgnoreUnparameterizedEls = True
-
-        #Note: gateset object (gsDeriv) must have all elements of gate
-        # mxs and spam vectors as parameters (i.e. be "fully parameterized") in
-        # order to match deriv_wrt_params call, which gives derivatives wrt
-        # *all* elements of a gate set.
-        gsDeriv = GateSet("full", self.preps._prefix, self.effects._prefix,
-                          self.gates._prefix, self._remainderlabel,
-                          self._identitylabel)
-        for gateLabel in self.gates:
-            gsDeriv.gates[gateLabel] = _np.zeros((dim,dim),'d')
-        for prepLabel in self.preps:
-            gsDeriv.preps[prepLabel] = _np.zeros((dim,1),'d')
-        for effectLabel in self.effects:
-            gsDeriv.effects[effectLabel] = _np.zeros((dim,1),'d')
-
-        assert(gsDeriv.num_elements() == gsDeriv.num_params() == nElements)
-
-        dPG = _np.empty( (nElements, nParams + dim**2), 'd' )
-        for i in range(dim):      # always range over all rows: this is the
-            for j in range(dim):  # *generator* mx, not gauge mx itself
-                unitMx = _bt._mut(i,j,dim)
-                for lbl,rhoVec in self.preps.items():
-                    gsDeriv.preps[lbl] = _np.dot(unitMx, rhoVec)
-                for lbl,EVec in self.effects.items():
-                    gsDeriv.effects[lbl] =  -_np.dot(EVec.T, unitMx).T
-                for lbl,gate in self.gates.items():
-                    gsDeriv.gates[lbl] = _np.dot(unitMx,gate) - \
-                                         _np.dot(gate,unitMx)
-
-                #Note: vectorize all the parameters in this full-
-                # parameterization object, which gives a vector of length
-                # equal to the number of gateset *elements*.
-                dPG[:,nParams + i*dim+j] = gsDeriv.to_vector()
-
-        dPG[:, 0:nParams] = self.deriv_wrt_params()
-
-        #if bIgnoreUnparameterizedEls:
-        #    for i in range(dP.shape[0]):
-        #        if _np.isclose( _np.linalg.norm(dP[i,:]), 0):
-        #            dG[i,:] = 0 #if i-th element not parameterized,
-        #                        # clear dG row corresponding to it.
+        dPG = self._buildup_dPG()
 
         #print("DB: shapes = ",dP.shape,dG.shape)
         #OLD: M = _np.concatenate( (dP,dG), axis=1 )
@@ -843,8 +854,8 @@ class GateSet(object):
 
             # BEGIN GAUGE MIX ----------------------------------------
             # nullspace of gen_dG^T (mx with gauge direction vecs as rows) gives non-gauge directions
-            #OLD: nonGaugeDirections = _mt.nullspace(gen_dG.T) #columns are non-gauge directions
-            nonGaugeDirections = _mt.nullspace_qr(gen_dG.T) #columns are non-gauge directions
+            #OLD: nonGaugeDirections = _mt.nullspace(gen_dG.T) #columns are non-gauge directions *orthogonal* to the gauge directions
+            nonGaugeDirections = _mt.nullspace_qr(gen_dG.T) #columns are the non-gauge directions *orthogonal* to the gauge directions
 
             #for each column of gen_dG, which is a gauge direction in gateset parameter space,
             # we add some amount of non-gauge direction, given by coefficients of the
@@ -885,6 +896,7 @@ class GateSet(object):
         else:
             #OLD: gen_ndG = _mt.nullspace(gen_dG.T) #cols are non-gauge directions
             gen_ndG = _mt.nullspace_qr(gen_dG.T) #cols are non-gauge directions
+            #print("DB: nullspace of gen_dG (shape = %s, rank=%d) = %s" % (str(gen_dG.shape),_np.linalg.matrix_rank(gen_dG),str(gen_ndG.shape)))
                 
 
         # ORIG WAY: use psuedo-inverse to normalize projector.  Ran into problems where
