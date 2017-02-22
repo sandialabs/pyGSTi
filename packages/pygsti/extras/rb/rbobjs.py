@@ -794,7 +794,7 @@ class RBResults(object):
         for gstyp in gstyp_list:
             Ns = _np.array(self.dicts[gstyp]['counts'])
             sigma_list = _np.sqrt(epsilon**2 + 1./Ns)
-            results = _curve_fit(_rbutils.standard_fitting_function,
+            results = _curve_fit(_rbutils.standard_fit_function,
                              self.dicts[gstyp]['lengths'],
                              self.dicts[gstyp]['successes'],
                              p0 = p0, 
