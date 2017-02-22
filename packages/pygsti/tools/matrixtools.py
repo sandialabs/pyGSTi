@@ -165,6 +165,39 @@ def nullspace(m, tol=1e-7):
     return vh[rank:].T.copy()
 
 
+def nullspace_qr(m, tol=1e-7):
+    """
+    Compute the nullspace of a matrix using the QR decomposition.
+
+    The QR decomposition is faster but less accurate than the SVD
+    used by :func:`nullspace`.
+
+    Parameters
+    ----------
+    m : numpy array
+       An matrix of shape (M,N) whose nullspace to compute.
+
+    tol : float (optional)
+       Nullspace tolerance, used when comparing diagonal values of R with zero.
+
+    Returns
+    -------
+    An matrix of shape (M,K) whose columns contain nullspace basis vectors.
+    """
+    M,N = m.shape
+    q,r = _np.linalg.qr(m.T,'complete') # q.shape == (N,N), r.shape = (N,M)
+    nullsp_mask = (_np.abs(_np.diagonal(r)) <= tol) #columns of q in nullspace
+    if N > M: #then mark last N-M cols of 'complete' q as nullspace vecs
+        nullsp_mask = _np.concatenate((nullsp_mask, _np.array([True]*(N-M))))
+
+    #DEBUG
+    #rank = (_np.abs(_np.diagonal(r)) > tol).sum()
+    #print("Rank QR = ",rank)
+    #print("Ret = ",ret.shape, " Q = ",q.shape, " R = ",r.shape)
+    
+    return q[:,nullsp_mask]
+
+
 def print_mx(mx, width=9, prec=4):
     """
     Print matrix in pretty format.

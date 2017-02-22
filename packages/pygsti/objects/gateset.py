@@ -783,7 +783,7 @@ class GateSet(object):
 
         assert(gsDeriv.num_elements() == gsDeriv.num_params() == nElements)
 
-        dG = _np.empty( (nElements, dim**2), 'd' )
+        dPG = _np.empty( (nElements, nParams + dim**2), 'd' )
         for i in range(dim):      # always range over all rows: this is the
             for j in range(dim):  # *generator* mx, not gauge mx itself
                 unitMx = _bt._mut(i,j,dim)
@@ -798,9 +798,9 @@ class GateSet(object):
                 #Note: vectorize all the parameters in this full-
                 # parameterization object, which gives a vector of length
                 # equal to the number of gateset *elements*.
-                dG[:,i*dim+j] = gsDeriv.to_vector()
+                dPG[:,nParams + i*dim+j] = gsDeriv.to_vector()
 
-        dP = self.deriv_wrt_params()
+        dPG[:, 0:nParams] = self.deriv_wrt_params()
 
         #if bIgnoreUnparameterizedEls:
         #    for i in range(dP.shape[0]):
@@ -808,8 +808,10 @@ class GateSet(object):
         #            dG[i,:] = 0 #if i-th element not parameterized,
         #                        # clear dG row corresponding to it.
 
-        M = _np.concatenate( (dP,dG), axis=1 )
-        nullsp = _mt.nullspace(M) #columns are nullspace basis vectors
+        #print("DB: shapes = ",dP.shape,dG.shape)
+        #OLD: M = _np.concatenate( (dP,dG), axis=1 )
+        #OLD: nullsp = _mt.nullspace(dPG) #columns are nullspace basis vectors
+        nullsp = _mt.nullspace_qr(dPG) #columns are nullspace basis vectors
         gen_dG = nullsp[0:nParams,:] #take upper (gate-param-segment) of vectors for basis
                                      # of subspace intersection in gate-parameter space
         #Note: gen_dG == "generalized dG", and is (nParams)x(nullSpaceDim==gaugeSpaceDim), so P
@@ -841,7 +843,8 @@ class GateSet(object):
 
             # BEGIN GAUGE MIX ----------------------------------------
             # nullspace of gen_dG^T (mx with gauge direction vecs as rows) gives non-gauge directions
-            nonGaugeDirections = _mt.nullspace(gen_dG.T) #columns are non-gauge directions
+            #OLD: nonGaugeDirections = _mt.nullspace(gen_dG.T) #columns are non-gauge directions
+            nonGaugeDirections = _mt.nullspace_qr(gen_dG.T) #columns are non-gauge directions
 
             #for each column of gen_dG, which is a gauge direction in gateset parameter space,
             # we add some amount of non-gauge direction, given by coefficients of the
@@ -877,9 +880,11 @@ class GateSet(object):
                 i,j = offsets[lbl]
                 metric_diag[i:j] = itemWeights.get(lbl, spamWeight)
             metric = _np.diag(metric_diag)
-            gen_ndG = _mt.nullspace(_np.dot(gen_dG.T,metric))
+            #OLD: gen_ndG = _mt.nullspace(_np.dot(gen_dG.T,metric))
+            gen_ndG = _mt.nullspace_qr(_np.dot(gen_dG.T,metric))
         else:
-            gen_ndG = _mt.nullspace(gen_dG.T) #cols are non-gauge directions
+            #OLD: gen_ndG = _mt.nullspace(gen_dG.T) #cols are non-gauge directions
+            gen_ndG = _mt.nullspace_qr(gen_dG.T) #cols are non-gauge directions
                 
 
         # ORIG WAY: use psuedo-inverse to normalize projector.  Ran into problems where
