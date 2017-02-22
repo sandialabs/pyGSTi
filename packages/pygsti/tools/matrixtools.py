@@ -7,6 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Matrix related utility functions """
 
 import numpy as _np
+import scipy.linalg as _spl
 import warnings as _warnings
 
 
@@ -185,17 +186,18 @@ def nullspace_qr(m, tol=1e-7):
     An matrix of shape (M,K) whose columns contain nullspace basis vectors.
     """
     M,N = m.shape
-    q,r = _np.linalg.qr(m.T,'complete') # q.shape == (N,N), r.shape = (N,M)
-    nullsp_mask = (_np.abs(_np.diagonal(r)) <= tol) #columns of q in nullspace
-    if N > M: #then mark last N-M cols of 'complete' q as nullspace vecs
-        nullsp_mask = _np.concatenate((nullsp_mask, _np.array([True]*(N-M))))
-
-    #DEBUG
-    #rank = (_np.abs(_np.diagonal(r)) > tol).sum()
-    #print("Rank QR = ",rank)
-    #print("Ret = ",ret.shape, " Q = ",q.shape, " R = ",r.shape)
+    q,r,p = _spl.qr(m.T,mode='full', pivoting=True)
+      # q.shape == (N,N), r.shape = (N,M), p.shape = (M,)
+      
+    #assert( _np.linalg.norm(_np.dot(q,r) - m.T[:,p]) < 1e-8) #check QR decomp
+    rank = (_np.abs(_np.diagonal(r)) > tol).sum()
     
-    return q[:,nullsp_mask]
+    #DEBUG
+    #print("Rank QR = ",rank)
+    #print('\n'.join(map(str,_np.abs(_np.diagonal(r)))))
+    #print("Ret = ", q[:,rank:].shape, " Q = ",q.shape, " R = ",r.shape)
+    
+    return q[:,rank:]
 
 
 def print_mx(mx, width=9, prec=4):
