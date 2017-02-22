@@ -1029,7 +1029,7 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
           # for calc_bulk_twirled_DDD
         memEstimate += FLOATSIZE*len(gatesetList)*len(germsList)* dim**2 * Np
           # for bulk_twirled_deriv sub-call
-        printer.log("Memory estimate of %.1f GB (%.f GB limit) for all-Jac mode." %
+        printer.log("Memory estimate of %.1f GB (%.1f GB limit) for all-Jac mode." %
                     (memEstimate / 1024.0**3, memLimit / 1024.0**3), 1)
 
         if memEstimate > memLimit:
