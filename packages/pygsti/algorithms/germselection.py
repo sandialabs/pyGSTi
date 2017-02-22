@@ -971,12 +971,12 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
     """
     if comm is not None and comm.Get_size() > 1:
         from mpi4py import MPI #not at top so pygsti doesn't require mpi4py
-    
+
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
 
     gatesetList = setup_gateset_list(gatesetList, randomize,
                                      randomizationStrength, numCopies, seed)
-
+    
     dim = gatesetList[0].dim
     #Np = gatesetList[0].num_params() #wrong:? includes spam...
     Np = sum([gate.num_params() for gate in gatesetList[0].gates.values()])
@@ -989,7 +989,6 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
     (reducedGatesetList,
      numGaugeParams,
      numNonGaugeParams, numGates) = get_gateset_params(gatesetList)
-
     germLengths = _np.array([len(germ) for germ in germsList], 'i')
 
     numGerms = len(germsList)
@@ -1069,7 +1068,7 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
                 printer.show_progress(i, len(loc_Indices), 
                                       prefix="Initial germ set computation",
                                       suffix=str(germsList[goodGermIdx]))
-                print("DB: Rank%d computing initil index %d" % (comm.Get_rank(),goodGermIdx))
+                #print("DB: Rank%d computing initial index %d" % (comm.Get_rank(),goodGermIdx))
 
                 for k,gateset in enumerate(gatesetList):
                     currentDDDList[k] += calc_twirled_DDD(
@@ -1120,7 +1119,7 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
                                       prefix="Inner iter over candidate germs",
                                       suffix=str(germsList[candidateGermIdx]))
 
-                print("DB: Rank%d computing index %d" % (comm.Get_rank(),candidateGermIdx))
+                #print("DB: Rank%d computing index %d" % (comm.Get_rank(),candidateGermIdx))
                 worstScore = _scoring.CompositeScore(1.0,1e8) # worst of all gatesets
 
                 # Loop over all gatesets
