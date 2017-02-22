@@ -1038,7 +1038,7 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
             memEstimate = FLOATSIZE*3*len(gatesetList)*Np**2 + \
                           FLOATSIZE*3*len(gatesetList)*dim**2*Np
               #Factor of 3 accounts for currentDDDs, testDDDs, and bestDDDs
-            printer.log("Memory estimate of %.1f GB (%.f GB limit) for single-Jac mode." %
+            printer.log("Memory estimate of %.1f GB (%.1f GB limit) for single-Jac mode." %
                     (memEstimate / 1024.0**3, memLimit / 1024.0**3), 1)
 
             if memEstimate > memLimit:
