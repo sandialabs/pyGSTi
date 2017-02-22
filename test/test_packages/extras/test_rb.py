@@ -69,10 +69,6 @@ class RBTestCase(BaseTestCase):
         gs_cliff_experimental = pygsti.construction.build_alias_gateset(
             gs_experimental,clifford_to_primitive)
 
-        analytic_rb_error_rate = rb.analytic_rb_clifford_gateset_error_rate(
-            gs_cliff_experimental, rb.std1Q.gs_clifford_target, rb.std1Q.clifford_group)
-
-        print("Analytic RB error rate:", analytic_rb_error_rate)
         print("Experimental RB error rate:", rb_results.dicts['clifford']['r'])
 
         rb_results.compute_bootstrap_error_bars(('clifford','primitive'),seed=0)

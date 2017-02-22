@@ -1375,7 +1375,7 @@ def get_logl_projected_err_gen_table(gateset, targetGateset,
             errgen, "stochastic", basisNm, basisNm, True)
         HProj, OProj, HGens, OGens = \
             _tools.lindblad_errgen_projections(
-                errgen, basisNm, basisNm, normalize=False,
+                errgen, basisNm, basisNm, basisNm, normalize=False,
                 return_generators=True)
 
         ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)

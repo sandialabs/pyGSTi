@@ -693,10 +693,9 @@ def do_rb_base(dataset, base_gatestrings, basename, weight_data=False,
 #        if C1 > 0.1 or C1 < -0.1:
 #            print("Warning: Additional parameter in first order fit is significantly non-zero")
             
-        return {'A': A,'B': Bs-A,'f': f, 'F_avg': _rbutils.f_to_F_avg(f,dim),
-                'r': _rbutils.f_to_r(f,dim), 'A1': A1, 'B1': B1s-A1, 'C1': C1,
-                'f1': f1, 'F_avg1': _rbutils.f_to_F_avg(f1,dim),
-                'r1': _rbutils.f_to_r(f1,dim)}
+        return {'A': A,'B': Bs-A,'f': f,'r': _rbutils.p_to_r(f,dim),
+                'A1': A1, 'B1': B1s-A1, 'C1': C1,
+                'f1': f1, 'r1': _rbutils.p_to_r(f1,dim)}
 
     result_dicts = {}
 
