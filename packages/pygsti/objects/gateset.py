@@ -541,7 +541,6 @@ class GateSet(object):
         int
             the number of non-gauge gateset parameters.
         """
-        P = self.get_nongauge_projector()
         return self.num_params() - self.num_gauge_params()
 
 

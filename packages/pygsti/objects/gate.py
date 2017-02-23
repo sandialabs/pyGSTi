@@ -2160,7 +2160,7 @@ class LindbladParameterizedGate(Gate):
                     otherC = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))
                     Lmx = _np.linalg.cholesky(otherC)
 
-                for i in range(bs-1):
+                for i in range(bsO-1):
                     assert(_np.isreal(Lmx[i,i]))
                     otherParams[i,i] = Lmx[i,i].real
                     for j in range(i):
@@ -2168,7 +2168,7 @@ class LindbladParameterizedGate(Gate):
                         otherParams[j,i] = Lmx[i,j].imag
 
             else: #otherParams mx stores otherC (hermitian) directly
-                for i in range(bs-1):
+                for i in range(bsO-1):
                     assert(_np.isreal(otherC[i,i]))
                     otherParams[i,i] = otherC[i,i].real
                     for j in range(i):
