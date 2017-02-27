@@ -163,7 +163,7 @@ class TestGateStringMethods(BaseTestCase):
         testFidPairs = [(0,1)]
 
         # LSGST
-        maxLens = [0,1,2]
+        maxLens = [1,2]
         lsgstLists = pygsti.construction.make_lsgst_lists(
             gateLabels, strs, strs, germs, maxLens, fidPairs=None,
             truncScheme="whole germ powers")
@@ -207,14 +207,14 @@ class TestGateStringMethods(BaseTestCase):
 
 
         # ELGST
-        maxLens = [0,1,2]
+        maxLens = [1,2]
         elgstLists = pygsti.construction.make_elgst_lists(
             gateLabels, germs, maxLens, truncScheme="whole germ powers")
 
         maxLens = [1,2]
         elgstLists2 = pygsti.construction.make_elgst_lists(
             gateLabels, germs, maxLens, truncScheme="whole germ powers",
-            nest=False)
+            nest=False, includeLGST=False)
 
         elgstExpLists = pygsti.construction.make_elgst_experiment_list(
             gateLabels, germs, maxLens, truncScheme="whole germ powers")

@@ -23,7 +23,7 @@ class TestRPEMethods(BaseTestCase):
         #Declare a variety of relevant parameters
         gs_target = Std1Q_XY.gs_target
         gs_target.set_all_parameterizations('TP')
-        maxLengths_1024 = [0,1,2,4,8,16,32,64,128,256,512,1024]
+        maxLengths_1024 = [1,2,4,8,16,32,64,128,256,512,1024]
         
         stringListsRPE = RPEConstr.make_rpe_angle_string_list_dict(10,rpeconfig_inst)
         

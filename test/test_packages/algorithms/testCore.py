@@ -23,7 +23,7 @@ class TestCoreMethods(BaseTestCase):
         self.gateLabels = list(self.gateset.gates.keys()) # also == std.gates
         self.lgstStrings = pygsti.construction.list_lgst_gatestrings(self.specs, self.gateLabels)
 
-        self.maxLengthList = [0,1,2,4,8]
+        self.maxLengthList = [1,2,4,8]
 
         self.elgstStrings = pygsti.construction.make_elgst_lists(
             self.gateLabels, self.germs, self.maxLengthList )
