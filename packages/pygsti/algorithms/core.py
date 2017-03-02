@@ -327,9 +327,10 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
                     _objs.spamvec.optimize_spamvec( new_vec, lgstGateset.effects[effectLabel])
                     lgstGateset.effects[ effectLabel ] = new_vec
 
-            #Also convey default gauge group from guessGatesetForGauge
+            #Also convey default gauge group & calc class from guessGatesetForGauge
             lgstGateset.default_gauge_group = \
                 guessGatesetForGauge.default_gauge_group
+            lgstGateset._calcClass = guessGatesetForGauge._calcClass
 
 
         #inv_BMat_p = _np.dot(invABMat_p, AMat_p) # should be equal to inv(BMat_p) when trunc == gsDim ?? check??
@@ -375,19 +376,38 @@ def _constructXMatrix(prepSpecs, effectSpecs, spamDict, gateLabelTuple, dataset,
 def _constructA(effectSpecs, gs):
     n = len(effectSpecs); dim = gs.get_dimension()
     A = _np.empty( (n,dim) )
+    st = _np.empty( dim, 'd')
+    basis_st = _np.zeros( (dim,1), 'd')
     for k,espec in enumerate(effectSpecs):
         #Build fiducial < E_k | := < EVec[ effectSpec[0] ] | Gatestring(effectSpec[1:])
-        st = _np.dot( _np.transpose( gs.effects[ espec.lbl ] ), gs.product(espec.str) ) # 1xN vector
-        A[k,:] = st[0,:] # E_k == kth row of A
+        #st = dot(Ek.T, Estr) = ( dot(Estr.T,Ek)  ).T
+        #OLD (matrix version only): st = _np.dot( _np.transpose(
+        #  gs.effects[ espec.lbl ] ), gs.product(espec.str) ) # 1xN vector
+        #A[k,:] = st[0,:] # E_k == kth row of A
+        for i in range(dim): # propagate each basis initial state
+            basis_st[i] = 1.0
+            custom_spamLabel = (basis_st, gs.effects[ espec.lbl ])
+            st[i] = gs.pr( custom_spamLabel, espec.str )
+            basis_st[i] = 0.0
+        A[k,:] = st # E_k == kth row of A
     return A
 
 def _constructB(prepSpecs, gs):
     n = len(prepSpecs); dim = gs.get_dimension()
     B = _np.empty( (dim,n) )
+    st = _np.empty( dim, 'd')
+    basis_st = _np.zeros( (dim,1), 'd')
     for k,rhospec in enumerate(prepSpecs):
         #Build fiducial | rho_k > := Gatestring(prepSpec[0:-1]) | rhoVec[ prepSpec[-1] ] >
-        st = _np.dot( gs.product(rhospec.str), gs.preps[ rhospec.lbl ] ) # Nx1 vector
-        B[:,k] = st[:,0] # rho_k == kth column of B
+        #OLD (matrix version only): st = _np.dot( gs.product(rhospec.str),
+        #                           gs.preps[ rhospec.lbl ] ) # Nx1 vector
+        # B[:,k] = st[:,0] # rho_k == kth column of B
+        for i in range(dim): # propagate each basis initial state
+            basis_st[i] = 1.0
+            custom_spamLabel = (gs.preps[ rhospec.lbl ], basis_st)
+            st[i] = gs.pr( custom_spamLabel, rhospec.str )
+            basis_st[i] = 0.0
+        B[:,k] = st # rho_k == kth column of B
     return B
 
 

@@ -16,6 +16,10 @@ from ..tools import gatetools as _gt
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from .profiler import DummyProfiler as _DummyProfiler
+from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from . import evaltree_matrix as _matrixevaltree
+from .gscalc import GateSetCalculator
+
 _dummy_profiler = _DummyProfiler()
 
 # Smallness tolerances, used internally for conditional scaling required
@@ -506,9 +510,7 @@ class GateMatrixCalculator(GateSetCalculator):
 
     def _pr_nr(self, spamLabel, gatestring, clipTo, bUseScaling):
         """ non-remainder version of pr(...) overridden by derived clases """
-        (rholabel,elabel) = self.spamdefs[spamLabel]
-        rho = self.preps[rholabel]
-        E   = _np.conjugate(_np.transpose(self._get_evec(elabel)))
+        rho,E = self._rhoE_from_spamLabel(spamLabel)
 
         if bUseScaling:
             old_err = _np.seterr(over='ignore')
@@ -558,9 +560,7 @@ class GateMatrixCalculator(GateSetCalculator):
         #  dpr/d(rho)_i = sum E_k prod_ki
         #  dpr/d(E)_i   = sum prod_il rho_l
 
-        (rholabel,elabel) = self.spamdefs[spamLabel]
-        rho = self.preps[rholabel]
-        E   = _np.conjugate(_np.transpose(self._get_evec(elabel)))
+        rho,E = self._rhoE_from_spamLabel(spamLabel)
 
         #Derivs wrt Gates
         old_err = _np.seterr(over='ignore')
@@ -616,9 +616,7 @@ class GateMatrixCalculator(GateSetCalculator):
         #  d2pr/d(E)_i d(E)_j            = 0
         #  d2pr/d(rho)_i d(rho)_j        = 0
 
-        (rholabel,elabel) = self.spamdefs[spamLabel]
-        rho = self.preps[rholabel]
-        E   = _np.conjugate(_np.transpose(self._get_evec(elabel)))
+        rho,E = self._rhoE_from_spamLabel(spamLabel)
 
         d2prod_dGates = self.hproduct(gatestring)
         vec_gs_size = d2prod_dGates.shape[0]
@@ -1041,6 +1039,117 @@ class GateMatrixCalculator(GateSetCalculator):
 
 ## END CACHE FUNCTIONS
 
+    def construct_evaltree(self):
+        """
+        Constructs an EvalTree object appropriate for this calculator.
+        """
+        return _matrixevaltree.MatrixEvalTree()
+
+    
+    def estimate_mem_usage(self, subcalls, cache_size, num_subtrees,
+                           num_subtree_proc_groups, num_param1_groups,
+                           num_param2_groups):
+        """
+        Estimate the memory required by a given set of subcalls to computation functions.
+
+        Parameters
+        ----------
+        subcalls : list of strs
+            A list of the names of the subcalls to estimate memory usage for.
+
+        cache_size : int
+            The size of the evaluation tree that will be passed to the
+            functions named by `subcalls`.
+
+        num_subtrees : int
+            The number of subtrees to split the full evaluation tree into.
+
+        num_subtree_proc_groups : int
+            The number of processor groups used to (in parallel) iterate through
+            the subtrees.  It can often be useful to have fewer processor groups
+            then subtrees (even == 1) in order to perform the parallelization
+            over the parameter groups.
+        
+        num_param1_groups : int
+            The number of groups to divide the first-derivative parameters into.
+            Computation will be automatically parallelized over these groups.
+
+        num_param2_groups : int
+            The number of groups to divide the second-derivative parameters into.
+            Computation will be automatically parallelized over these groups.
+        
+        Returns
+        -------
+        int
+            The memory estimate in bytes.
+        """
+        ng,Ng,np1,np2 = num_subtrees, num_subtree_proc_groups, num_param1_groups, num_param2_groups
+        tm = _time.time()
+        FLOATSIZE = 8 # in bytes: TODO: a better way
+
+        dim = self.dim
+        nspam = len(self.spamdefs)
+        wrtLen1 = (self.tot_params+np1-1) // np1 # ceiling(num_params / np1)
+        wrtLen2 = (self.tot_params+np2-1) // np2 # ceiling(num_params / np2)
+        #nSubtreesPerProc = (ng+Ng-1) // Ng # ceiling(ng / Ng)
+
+        mem = 0
+        for fnName in subcalls:
+            if fnName == "bulk_fill_probs":
+                mem += cache_size * dim * dim # product cache
+                mem += cache_size # scale cache (exps)
+                mem += cache_size # scale vals
+
+            elif fnName == "bulk_fill_dprobs":
+                mem += cache_size * wrtLen1 * dim * dim # dproduct cache
+                mem += cache_size * dim * dim # product cache
+                mem += cache_size # scale cache
+                mem += cache_size # scale vals
+
+            elif fnName == "bulk_fill_hprobs":
+                mem += cache_size * wrtLen1 * wrtLen2 * dim * dim # hproduct cache
+                mem += cache_size * (wrtLen1 + wrtLen2) * dim * dim # dproduct cache
+                mem += cache_size * dim * dim # product cache
+                mem += cache_size # scale cache
+                mem += cache_size # scale vals
+
+            elif fnName == "bulk_hprobs_by_block":
+                #Note: includes "results" memory since this is allocated within
+                # the generator and yielded, *not* allocated by the user.
+                mem += 2 * cache_size * nspam * wrtLen1 * wrtLen2 # hprobs & dprobs12 results
+                mem += cache_size * nspam * (wrtLen1 + wrtLen2) # dprobs1 & dprobs2
+                mem += cache_size * wrtLen1 * wrtLen2 * dim * dim # hproduct cache
+                mem += cache_size * (wrtLen1 + wrtLen2) * dim * dim # dproduct cache
+                mem += cache_size * dim * dim # product cache
+                mem += cache_size # scale cache
+                mem += cache_size # scale vals
+
+            ## It doesn't make sense to include these since their required memory is fixed
+            ## (and dominated) by the output array size. Could throw more informative error?
+            #elif fnName == "bulk_product":
+            #    mem += cache_size * dim * dim # product cache
+            #    mem += cache_size # scale cache
+            #    mem += cache_size # scale vals
+            #
+            #elif fnName == "bulk_dproduct":
+            #    mem += cache_size * num_params * dim * dim # dproduct cache
+            #    mem += cache_size * dim * dim # product cache
+            #    mem += cache_size # scale cache
+            #    mem += cache_size # scale vals
+            #
+            #elif fnName == "bulk_hproduct":
+            #    mem += cache_size * num_params**2 * dim * dim # hproduct cache
+            #    mem += cache_size * num_params * dim * dim # dproduct cache
+            #    mem += cache_size * dim * dim # product cache
+            #    mem += cache_size # scale cache
+            #    mem += cache_size # scale vals
+
+            else:
+                raise ValueError("Unknown subcall name: %s" % fnName)
+        
+        return mem * FLOATSIZE
+
+
 
     def bulk_product(self, evalTree, bScale=False, comm=None):
         """
@@ -1399,9 +1508,15 @@ class GateMatrixCalculator(GateSetCalculator):
 
 
     def _rhoE_from_spamLabel(self, spamLabel):
-        (rholabel,elabel) = self.spamdefs[spamLabel]
-        rho = self.preps[rholabel]
-        E   = _np.conjugate(_np.transpose(self._get_evec(elabel)))
+        if isinstance(spamLabel,str):
+            (rholabel,elabel) = self.spamdefs[spamLabel]
+            rho = self.preps[rholabel]
+            E   = _np.conjugate(_np.transpose(self._get_evec(elabel)))
+        else:
+            # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
+            #  objects: (prepVec, effectVec)
+            rho, Eraw = spamLabel
+            E   = _np.conjugate(_np.transpose(Eraw))
         return rho,E
 
     def _probs_from_rhoE(self, spamLabel, rho, E, Gs, scaleVals):
@@ -2639,116 +2754,9 @@ class GateMatrixCalculator(GateSetCalculator):
                 yield wrtSlice1, wrtSlice2, hprobs
 
         dProdCache1 = dGs1 = None #free mem
-                    
-
-    def frobeniusdist(self, otherCalc, transformMx=None,
-                      gateWeight=1.0, spamWeight=1.0, itemWeights=None,
-                      normalize=True):
-        """
-        Compute the weighted frobenius norm of the difference between two
-        gatesets.  Differences in each corresponding gate matrix and spam
-        vector element are squared, weighted (using gateWeight
-        or spamWeight as applicable), then summed.  The value returned is the
-        square root of this sum, or the square root of this sum divided by the
-        number of summands if normalize == True.
-
-        Parameters
-        ----------
-        otherCalc : GateSetCalculator
-            the other gate set calculator to difference against.
-
-        transformMx : numpy array, optional
-            if not None, transform this gateset by
-            G => inv(transformMx) * G * transformMx, for each gate matrix G
-            (and similar for rho and E vectors) before taking the difference.
-            This transformation is applied only for the difference and does
-            not alter the values stored in this gateset.
-
-        gateWeight : float, optional
-           weighting factor for differences between gate elements.
-
-        spamWeight : float, optional
-           weighting factor for differences between elements of spam vectors.
-
-        itemWeights : dict, optional
-           Dictionary of weighting factors for individual gates and spam
-           operators. Weights are applied multiplicatively to the squared
-           differences, i.e., (*before* the final square root is taken).  Keys
-           can be gate, state preparation, POVM effect, or spam labels.  Values
-           are floating point numbers.  By default, weights are set by
-           gateWeight and spamWeight.
-
-        normalize : bool, optional
-           if True (the default), the frobenius difference is defined by the
-           sum of weighted squared-differences divided by the number of
-           differences.  If False, this final division is not performed.
-
-        Returns
-        -------
-        float
-        """
-        d = 0; T = transformMx
-        nSummands = 0.0
-        if itemWeights is None: itemWeights = {}
-
-        if T is not None:
-            Ti = _nla.inv(T)
-            for gateLabel in self.gates:
-                wt = itemWeights.get(gateLabel, gateWeight)
-                d += wt * _gt.frobeniusdist2(_np.dot(
-                    Ti,_np.dot(self.gates[gateLabel],T)),
-                    otherCalc.gates[gateLabel] )
-                nSummands += wt * _np.size(self.gates[gateLabel])
-
-            for (lbl,rhoV) in self.preps.items():
-                wt = itemWeights.get(lbl, spamWeight)
-                d += wt * _gt.frobeniusdist2(_np.dot(Ti,rhoV),
-                                             otherCalc.preps[lbl])
-                nSummands += wt * _np.size(rhoV)
-
-            for (lbl,Evec) in self.effects.items():
-                wt = itemWeights.get(lbl, spamWeight)
-                d += wt * _gt.frobeniusdist2(_np.dot(
-                    _np.transpose(T),Evec),otherCalc.effects[lbl])
-                nSummands += wt * _np.size(Evec)
-
-            if self.povm_identity is not None:
-                wt = itemWeights.get(self._identityLabel, spamWeight)
-                d += wt * _gt.frobeniusdist2(_np.dot(
-                    _np.transpose(T),self.povm_identity),otherCalc.povm_identity)
-                nSummands += wt * _np.size(self.povm_identity)
-
-        else:
-            for gateLabel in self.gates:
-                wt = itemWeights.get(gateLabel, gateWeight)
-                d += wt * _gt.frobeniusdist2(self.gates[gateLabel],
-                                             otherCalc.gates[gateLabel])
-                nSummands += wt * _np.size(self.gates[gateLabel])
-
-            for (lbl,rhoV) in self.preps.items():
-                wt = itemWeights.get(lbl, spamWeight)
-                d += wt * _gt.frobeniusdist2(rhoV,
-                                             otherCalc.preps[lbl])
-                nSummands += wt *  _np.size(rhoV)
-
-            for (lbl,Evec) in self.effects.items():
-                wt = itemWeights.get(lbl, spamWeight)
-                d += wt * _gt.frobeniusdist2(Evec,otherCalc.effects[lbl])
-                nSummands += wt * _np.size(Evec)
-
-            if self.povm_identity is not None and \
-               otherCalc.povm_identity is not None:
-                wt = itemWeights.get(self._identityLabel, spamWeight)
-                d += wt * _gt.frobeniusdist2(self.povm_identity,
-                                             otherCalc.povm_identity)
-                nSummands += wt * _np.size(self.povm_identity)
-
-        if normalize and nSummands > 0:
-            return _np.sqrt( d / nSummands )
-        else:
-            return _np.sqrt(d)
 
 
+    #TODO: move this and diamonddist into base class using calc-independent constructions
     def jtracedist(self, otherCalc, transformMx=None):
         """
         Compute the Jamiolkowski trace distance between two

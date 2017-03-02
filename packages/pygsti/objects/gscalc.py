@@ -105,9 +105,10 @@ class GateSetCalculator(object):
         probabilities such that all SPAM label probabilities
         sum exactly to 1.0.
         """
+        if not isinstance(label,str): return False #b/c label could be a custom (rho,E) pair
         return bool(self.spamdefs[label] == (self._remainderLabel, self._remainderLabel))
 
-    def _get_remainder_row_index(spam_label_rows):
+    def _get_remainder_row_index(self, spam_label_rows):
         """ 
         Returns the index within the spam_label_rows dictionary
         of the remainder label, or None if the remainder label
@@ -556,7 +557,13 @@ class GateSetCalculator(object):
 
         return hprobs
 
+    def construct_evaltree(self):
+        """
+        Constructs an EvalTree object appropriate for this calculator.
+        """
+        raise NotImplementedError("construct_evaltree(...) is not implemented!")
 
+    
     def bulk_product(self, evalTree, bScale=False, comm=None):
         """
         Compute the products of many gate strings at once.
@@ -1622,7 +1629,63 @@ class GateSetCalculator(object):
         -------
         float
         """
-        raise NotImplementedError("frobeniusdist(...) is not implemented!")
+        d = 0; T = transformMx
+        nSummands = 0.0
+        if itemWeights is None: itemWeights = {}
+
+        if T is not None:
+            Ti = _nla.inv(T) #TODO: generalize inverse op (call T.inverse() if T were a "transform" object?)
+            for gateLabel,gate in self.gates.items():
+                wt = itemWeights.get(gateLabel, gateWeight)
+                d += wt * gate.frobeniusdist2(
+                    otherCalc.gates[gateLabel], T, Ti)                
+                nSummands += wt * (gate.dim)**2
+
+            for lbl,rhoV in self.preps.items():
+                wt = itemWeights.get(lbl, spamWeight)
+                d += wt * rhoV.frobeniusdist2(otherCalc.preps[lbl],
+                                              'prep', T, Ti)
+                nSummands += wt * rhoV.dim
+
+            for lbl,Evec in self.effects.items():
+                wt = itemWeights.get(lbl, spamWeight)
+                d += wt * Evec.frobeniusdist2(otherCalc.effects[lbl],
+                                              'effect', T, Ti)
+                nSummands += wt * Evec.dim
+
+            if self.povm_identity is not None:
+                wt = itemWeights.get(self._identityLabel, spamWeight)
+                d += wt * self.povm_identity.frobeniusdist2(
+                    otherCalc.povm_identity, 'effect', T, Ti)
+                nSummands += wt * self.povm_identity.dim
+
+        else:
+            for gateLabel,gate in self.gates.items():
+                wt = itemWeights.get(gateLabel, gateWeight)
+                d += wt * gate.frobeniusdist2(otherCalc.gates[gateLabel])
+                nSummands += wt * (gate.dim)**2
+
+            for lbl,rhoV in self.preps.items():
+                wt = itemWeights.get(lbl, spamWeight)
+                d += wt * rhoV.frobeniusdist2(otherCalc.preps[lbl],'prep')
+                nSummands += wt * rhoV.dim
+
+            for lbl,Evec in self.effects.items():
+                wt = itemWeights.get(lbl, spamWeight)
+                d += wt * Evec.frobeniusdist2(otherCalc.effects[lbl],'effect')
+                nSummands += wt * Evec.dim
+
+            if self.povm_identity is not None and \
+               otherCalc.povm_identity is not None:
+                wt = itemWeights.get(self._identityLabel, spamWeight)
+                d += wt * self.povm_identity.frobeniusdist2(
+                    otherCalc.povm_identity, 'effect')
+                nSummands += wt * self.povm_identity.dim
+
+        if normalize and nSummands > 0:
+            return _np.sqrt( d / nSummands )
+        else:
+            return _np.sqrt(d)
 
 
     def jtracedist(self, otherCalc, transformMx=None):
@@ -1647,7 +1710,55 @@ class GateSetCalculator(object):
         -------
         float
         """
-        raise NotImplementedError("jtracedist(...) is not implemented!")
+        T = transformMx
+        d = 0 #spam difference
+        nSummands = 0 # for spam terms
+        
+        if T is not None:
+            Ti = _nla.inv(T)
+            dists = [ gate.jtracedist(otherCalc.gates[gateLabel], T, Ti)
+                      for gate in self.gates.values() ]
+
+            #Just use frobenius distance between spam vecs, since jtracedist
+            # doesn't really make sense
+            for lbl,rhoV in self.preps.items():
+                d += rhoV.frobeniusdist2(otherCalc.preps[lbl],
+                                         'prep', T, Ti)
+                nSummands += rhoV.dim
+
+            for lbl,Evec in self.effects.items():
+                d += Evec.frobeniusdist2(otherCalc.effects[lbl],
+                                         'effect', T, Ti)
+                nSummands += Evec.dim
+
+            if self.povm_identity is not None:
+                d += self.povm_identity.frobeniusdist2(
+                    otherCalc.povm_identity, 'effect', T, Ti)
+                nSummands += self.povm_identity.dim
+                
+        else:
+            dists = [ gate.jtracedist(otherCalc.gates[gateLabel])
+                      for gate in self.gates.values() ]
+
+            #Just use frobenius distance between spam vecs, since jtracedist
+            # doesn't really make sense
+            for lbl,rhoV in self.preps.items():
+                d += rhoV.frobeniusdist2(otherCalc.preps[lbl],
+                                         'prep', T, Ti)
+                nSummands += rhoV.dim
+
+            for lbl,Evec in self.effects.items():
+                d += Evec.frobeniusdist2(otherCalc.effects[lbl],
+                                         'effect', T, Ti)
+                nSummands += Evec.dim
+
+            if self.povm_identity is not None:
+                d += self.povm_identity.frobeniusdist2(
+                    otherCalc.povm_identity, 'effect', T, Ti)
+                nSummands += self.povm_identity.dim
+
+        spamVal = _np.sqrt(d / nSummands) if (nSummands > 0) else 0
+        return max(dists) + spamVal
 
 
     def diamonddist(self, otherCalc, transformMx=None):
@@ -1673,4 +1784,52 @@ class GateSetCalculator(object):
         -------
         float
         """
-        raise NotImplementedError("diamonddist(...) is not implemented!")
+        T = transformMx
+        d = 0 #spam difference
+        nSummands = 0 # for spam terms
+        
+        if T is not None:
+            Ti = _nla.inv(T)
+            dists = [ gate.diamonddist(otherCalc.gates[gateLabel], T, Ti)
+                      for gate in self.gates.values() ]
+
+            #Just use frobenius distance between spam vecs, since jtracedist
+            # doesn't really make sense
+            for lbl,rhoV in self.preps.items():
+                d += rhoV.frobeniusdist2(otherCalc.preps[lbl],
+                                         'prep', T, Ti)
+                nSummands += rhoV.dim
+
+            for lbl,Evec in self.effects.items():
+                d += Evec.frobeniusdist2(otherCalc.effects[lbl],
+                                         'effect', T, Ti)
+                nSummands += Evec.dim
+
+            if self.povm_identity is not None:
+                d += self.povm_identity.frobeniusdist2(
+                    otherCalc.povm_identity, 'effect', T, Ti)
+                nSummands += self.povm_identity.dim
+                
+        else:
+            dists = [ gate.diamonddist(otherCalc.gates[gateLabel])
+                      for gate in self.gates.values() ]
+
+            #Just use frobenius distance between spam vecs, since jtracedist
+            # doesn't really make sense
+            for lbl,rhoV in self.preps.items():
+                d += rhoV.frobeniusdist2(otherCalc.preps[lbl],
+                                         'prep', T, Ti)
+                nSummands += rhoV.dim
+
+            for lbl,Evec in self.effects.items():
+                d += Evec.frobeniusdist2(otherCalc.effects[lbl],
+                                         'effect', T, Ti)
+                nSummands += Evec.dim
+
+            if self.povm_identity is not None:
+                d += self.povm_identity.frobeniusdist2(
+                    otherCalc.povm_identity, 'effect', T, Ti)
+                nSummands += self.povm_identity.dim
+
+        spamVal = _np.sqrt(d / nSummands) if (nSummands > 0) else 0
+        return max(dists) + spamVal
