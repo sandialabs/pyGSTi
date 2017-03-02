@@ -369,7 +369,8 @@ def _constructXMatrix(prepSpecs, effectSpecs, spamDict, gateLabelTuple, dataset,
                 dsRow = dataset[dsStr]
             except:
                 raise KeyError("Missing data needed to construct X matrix for " + str(gateLabelTuple) \
-                                   + ": gate string " + str(dsStr))
+                                   + ": gate string %s + %s + %s = %s" %
+                               (str(rhospec.str),str(gateLabelTuple), str(espec.str), str(dsStr)))
             X[i,j] = dsRow.fraction(spamLabel)
     return X
 
