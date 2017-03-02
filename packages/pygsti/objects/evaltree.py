@@ -163,7 +163,7 @@ class EvalTree(list):
             sl = [slice(None)] * a.ndim
             sl[axis] = slice(0,self.num_final_strings())
             ret = a[sl]
-            assert(ret.base is a) #check that what is returned is a view
+            assert(ret.base is a or ret.base is a.base) #check that what is returned is a view
             assert(ret.size == 0 or _np.may_share_memory(ret,a))
             return ret
 
