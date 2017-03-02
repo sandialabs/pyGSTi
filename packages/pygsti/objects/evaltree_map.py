@@ -100,7 +100,7 @@ class MapEvalTree(EvalTree):
             for i in range(k-1,-1,-1): #from k-1 -> 0
                 ic, candidate = sorted_strs[i]
                 Lc = len(candidate)
-                if L > Lc and gateString[0:Lc] == candidate:
+                if L > Lc > 0 and gateString[0:Lc] == candidate:
                     iStart = ic
                     remaining = gateString[Lc:]
                     break
