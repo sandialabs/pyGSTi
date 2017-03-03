@@ -819,7 +819,7 @@ class Results(object):
             if fidPairs is None: fidpair_filters = None
             elif isinstance(fidPairs,dict) or hasattr(fidPairs,"keys"):
                 #Assume fidPairs is a dict indexed by germ
-                fidpair_filters = { (x,y): fidPairs[germ] 
+                fidpair_filters = { (x,y): fidPairs[y] 
                                     for x in Ls for y in germs }
             else:
                 #Assume fidPairs is a list
@@ -984,7 +984,7 @@ class Results(object):
             if fidPairs is None: fidpair_filters = None
             elif isinstance(fidPairs,dict) or hasattr(fidPairs,"keys"):
                 #Assume fidPairs is a dict indexed by germ
-                fidpair_filters = { (x,y): fidPairs[germ] 
+                fidpair_filters = { (x,y): fidPairs[y] 
                                     for x in Ls[st:] for y in germs }
             else:
                 #Assume fidPairs is a list
@@ -1563,7 +1563,7 @@ class Results(object):
             if fidPairs is None: fidpair_filters = None
             elif isinstance(fidPairs,dict) or hasattr(fidPairs,"keys"):
                 #Assume fidPairs is a dict indexed by germ
-                fidpair_filters = { (x,y): fidPairs[germ] 
+                fidpair_filters = { (x,y): fidPairs[y] 
                                     for x in Ls[st:] for y in germs }
             else:
                 #Assume fidPairs is a list
