@@ -2126,7 +2126,8 @@ class LindbladParameterizedGate(Gate):
         assert(self.hamGens.shape == (bsH-1,d2,d2))
         if nonham_diagonal_only:
             assert(self.otherGens.shape == (bsO-1,d2,d2))
-            assert(_np.all(_np.isreal(otherC)))
+            assert(_np.isclose(_np.linalg.norm(_np.imag(otherC)),0))
+            #assert(_np.all(_np.isreal(otherC))) #sometimes fails even when imag to machine prec
 
             if cptp: #otherParams is a 1D vector of the sqrts of diagonal els
                 otherC = otherC.clip(1e-16,1e100) #must be positive

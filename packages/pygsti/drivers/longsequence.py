@@ -110,6 +110,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         - radius = float (default == 1e-4)
         - useFreqWeightedChiSq = True / False (default)
         - nestedGateStringLists = True (default) / False
+        - includeLGST = True / False (default is True if starting point == LGST)
         - distributeMethod = "gatestrings" or "deriv" (default)
         - profile = int (default == 1)
         - check = True / False (default)
@@ -239,21 +240,23 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         germs = _io.load_gatestring_list(germsListOrFilename)
     else: germs = germsListOrFilename
 
+    #Starting Point - compute on rank 0 and distribute
+    startingPt = advancedOptions.get('starting point',"LGST")
+    gate_dim = gs_target.get_dimension()
+
     #Construct gate sequences
     if lsgstLists is None:
         gateLabels = advancedOptions.get(
             'gateLabels', list(gs_target.gates.keys()))
         nest = advancedOptions.get('nestedGateStringLists',True)
+        includeLGST = advancedOptions.get('includeLGST', startingPt == "LGST")
         lsgstLists = _construction.stdlists.make_lsgst_lists(
             gateLabels, prepStrs, effectStrs, germs, maxLengths, fidPairs,
-            truncScheme, nest)
+            truncScheme, nest, includeLGST)
 
     tNxt = _time.time()
     profiler.add_time('do_long_sequence_gst: loading',tRef); tRef=tNxt
 
-    #Starting Point - compute on rank 0 and distribute
-    startingPt = advancedOptions.get('starting point',"LGST")
-    gate_dim = gs_target.get_dimension()
     if comm is None or comm.Get_rank() == 0:
 
         #Compute starting point
@@ -404,7 +407,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     ret.parameters['check'] = advancedOptions.get('check',False)
     ret.parameters['truncScheme'] = advancedOptions.get('truncScheme', "whole germ powers")
     ret.parameters['gateLabelAliases'] = advancedOptions.get('gateLabelAliases',None)
-
+    ret.parameters['includeLGST'] = advancedOptions.get('includeLGST', startingPt == "LGST")
+            
     profiler.add_time('do_long_sequence_gst: results initialization',tRef)
     ret.parameters['profiler'] = profiler
 

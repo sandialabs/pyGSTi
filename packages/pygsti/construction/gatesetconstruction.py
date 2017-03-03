@@ -12,6 +12,7 @@ import collections as _collections
 import scipy.linalg as _spl
 
 from ..tools import basistools as _bt
+from ..tools import gatetools as _gt
 from ..objects import gate as _gate
 from ..objects import gateset as _gateset
 from ..objects import gaugegroup as _gg
@@ -227,8 +228,7 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
                     if (b1[:K]+b1[K+1:]) == (b2[:K]+b2[K+1:]):   #if all part of tensor prod match except for qubit we're operating on
                         UcohBlk[i,j] = Ugate[ b1[K], b2[K] ] # then fill in element
 
-            UcohBlkc = UcohBlk.conjugate()
-            gateBlk = _np.kron(UcohBlk,UcohBlkc) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
+            gateBlk = _gt.unitary_to_process_mx(UcohBlk) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
 
             #Map gateBlk's basis into final gate basis
             mapBlk = []
@@ -278,8 +278,7 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
 
             #print "UcohBlk = \n",UcohBlk
 
-            UcohBlkc = UcohBlk.conjugate()
-            gateBlk = _np.kron(UcohBlk,UcohBlkc) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
+            gateBlk = _gt.unitary_to_process_mx(UcohBlk) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
 
             #Map gateBlk's basis into final gate basis
             mapBlk = []
@@ -307,8 +306,7 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
             Utot[ i2,i1 ] = Ugate[1,0]
             Utot[ i2,i2 ] = Ugate[1,1]
 
-            Utotc = Utot.conjugate()
-            gateBlk = _np.kron(Utot,Utotc) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
+            gateBlk = _gt.unitary_to_process_mx(Utot) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
 
             #Map gateBlk's basis (vectorized 2x2) into final gate basis
             mapBlk = [] #note: "start index" is effectively zero since we're mapping all the blocs
@@ -510,8 +508,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
                     UcohBlk[i,j] = Ugate[ gate_i, gate_j ] # fill in element
                     #FUTURE: could keep track of what Ugate <-> UcohBlk elements for parameterization here
 
-        UcohBlkc = UcohBlk.conjugate()
-        gateBlk = _np.kron(UcohBlk,UcohBlkc) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
+        gateBlk = _gt.unitary_to_process_mx(UcohBlk) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
 
         #print "DEBUG: Ugate = \n", Ugate
         #print "DEBUG: UcohBlk = \n", UcohBlk
@@ -771,11 +768,11 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
             elif gateName == 'Z': ex = -1j * theta*_bt.sigmaz/2
 
             Ugate = _spl.expm(ex) # 2x2 unitary matrix operating on single qubit in [0,1] basis
+            #print("CDBG Ugate = \n",Ugate)
             if unitaryEmbedding:
                 gateTermInFinalBasis = embed_gate_unitary(Ugate, (label,)) #Ugate assumed to be in std basis (really the only option)
             else:
-                Ugatec = Ugate.conjugate()
-                gateMx = _np.kron(Ugate,Ugatec) # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
+                gateMx = _gt.unitary_to_process_mx(Ugate) # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
                 pp_gateMx = _bt.std_to_pp(gateMx) # *real* 4x4 mx in Pauli-product basis -- better for parameterization
                 gateTermInFinalBasis = embed_gate(pp_gateMx, (label,), defaultI2P) # pp_gateMx assumed to be in the Pauli-product basis
 
@@ -792,8 +789,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
             if unitaryEmbedding:
                 gateTermInFinalBasis = embed_gate_unitary(Ugate, (label,)) #Ugate assumed to be in std basis (really the only option)
             else:
-                Ugatec = Ugate.conjugate()
-                gateMx = _np.kron(Ugate,Ugatec) # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
+                gateMx = _gt.unitary_to_process_mx(Ugate) # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
                 pp_gateMx = _bt.std_to_pp(gateMx) # *real* 4x4 mx in Pauli-product basis -- better for parameterization
                 gateTermInFinalBasis = embed_gate(pp_gateMx, (label,), defaultI2P) # pp_gateMx assumed to be in the Pauli-product basis
 
@@ -808,12 +804,12 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
             elif gateName == 'CZ': ex = -1j * theta*_bt.sigmaz/2.
             Utarget = _spl.expm(ex) # 2x2 unitary matrix operating on target qubit
             Ugate = _np.identity(4, 'complex'); Ugate[2:,2:] = Utarget #4x4 unitary matrix operating on isolated two-qubit space
+            #print("CDBG Ugate = \n",Ugate)
 
             if unitaryEmbedding:
                 gateTermInFinalBasis = embed_gate_unitary(Ugate, (label1,label2)) #Ugate assumed to be in std basis (really the only option)
             else:
-                Ugatec = Ugate.conjugate()
-                gateMx = _np.kron(Ugate,Ugatec) # complex 16x16 mx operating on vectorized 2Q densty matrix in std basis
+                gateMx = _gt.unitary_to_process_mx(Ugate) # complex 16x16 mx operating on vectorized 2Q densty matrix in std basis
                 pp_gateMx = _bt.std_to_pp(gateMx) # *real* 16x16 mx in Pauli-product basis -- better for parameterization
                 gateTermInFinalBasis = embed_gate(pp_gateMx, (label1,label2), defaultI2P) # pp_gateMx assumed to be in the Pauli-product basis
 
@@ -830,8 +826,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
             Utot[ i1,i2 ] = Ugate[0,1]
             Utot[ i2,i1 ] = Ugate[1,0]
             Utot[ i2,i2 ] = Ugate[1,1]
-            Utotc = Utot.conjugate()
-            gateTermInStdBasis = _np.kron(Utot,Utotc) # dmDim^2 x dmDim^2 mx operating on vectorized total densty matrix
+            gateTermInStdBasis = _gt.unitary_to_process_mx(Utot) # dmDim^2 x dmDim^2 mx operating on vectorized total densty matrix
             gateTermInReducedStdBasis = _bt.contract_to_std_direct_sum_mx(gateTermInStdBasis, blockDims)
 
             gateMxInFinalBasis = _bt.change_basis(gateTermInReducedStdBasis, "std", basis, blockDims)

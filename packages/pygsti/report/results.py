@@ -265,6 +265,83 @@ class Results(object):
                                         for L in Ls for germ in germs] )
         self._LsAndGermInfoSet = True
 
+
+    #EXPERIMENTAL - such an interface needs some more thought
+    #def reinit_gatestrings(self, germs, gateStringListByL,
+    #                       prepStrs, effectStrs, truncFn, fidPairs=None):
+    #
+    #    """
+    #    Re-initialize the gate sequences used by this Results object.
+    #
+    #    Parameters
+    #    ----------
+    #    germs : list of GateStrings
+    #        List of germ gate strings used in the objective optimization.
+    #
+    #    gateStringListByL : list of lists of GateStrings
+    #        The gate string list used at each L value.
+    #
+    #    prepStrs : list of GateStrings
+    #        The list of state preparation fiducial strings
+    #        in the objective optimization.
+    #
+    #    effectStrs : list of GateStrings
+    #        The list of measurement fiducial strings
+    #        in the objective optimization.
+    #
+    #    truncFn : function
+    #        The truncation function used, indicating how a
+    #        germ should be repeated "L times".  Function should
+    #        take parameters (germ, L) and return the repeated
+    #        gate string.  For example, see
+    #        pygsti.construction.repeat_with_max_length.
+    #
+    #    fidPairs : list or dict, optional
+    #        Specifies a subset of all prepStr,effectStr string pairs to be used in
+    #        reports.  If `fidPairs` is a list, each element of `fidPairs` is a
+    #        ``(iRhoStr, iEStr)`` 2-tuple of integers, which index a string within
+    #        the state preparation and measurement fiducial strings respectively. If
+    #        `fidPairs` is a dict, then the keys must be germ strings and values are
+    #        lists of 2-tuples as in the previous case.
+    #
+    #    Returns
+    #    -------
+    #    None
+    #    """
+    #
+    #    assert(self._bEssentialResultsSet and self._LsAndGermInfoSet)
+    #    
+    #    Ls = self.parameters['max length list']
+    #    assert(len(gateStringListByL) == len(Ls))
+    #
+    #    # Set essential info: gateset estimates(s) but no particular
+    #    # structure known about gateStringLists.
+    #    self.gatestring_lists['iteration'] = gateStringListByL
+    #    self.gatestring_lists['final'] = gateStringListByL[-1]
+    #    self.gatestring_lists['all'] = _lt.remove_duplicates(
+    #        list(_itertools.chain(*gateStringListByL)) )
+    #
+    #    running_lst = []; delta_lsts = []
+    #    for L,lst in zip(Ls,gateStringListByL):
+    #        delta_lst = [ x for x in lst if (x not in running_lst) ]
+    #        #if L != 0: running_lst += delta_lst # L=0 is special case - doesn't count in running list
+    #        delta_lsts.append(delta_lst)
+    #    self.gatestring_lists['iteration delta'] = delta_lsts # *added* at each iteration
+    #
+    #
+    #    #Set "Ls and germs" info: gives particular structure
+    #    # to the gateStringLists used to obtain estimates
+    #    self.gatestring_lists['prep fiducials'] = prepStrs
+    #    self.gatestring_lists['effect fiducials'] = effectStrs
+    #    self.gatestring_lists['germs'] = germs
+    #    self.parameters['max length list'] = Ls
+    #    self.parameters['fiducial pairs'] = fidPairs
+    #    self.parameters['L,germ tuple base string dict'] = \
+    #        _collections.OrderedDict( [ ( (L,germ), truncFn(germ,L) )
+    #                                    for L in Ls for germ in germs] )
+    #    self._LsAndGermInfoSet = True
+
+
     def reoptimize_gauge(self, gaugeOptParams, setparam=True):
         """
         Re-optimizes the gauge of the final gateset.
@@ -902,7 +979,7 @@ class Results(object):
             gsBest = self.gatesets['final estimate']
             fidPairs = self.parameters['fiducial pairs']
             Ls = self.parameters['max length list']
-            st = 1 if Ls[0] == 0 else 0 #start index: skip LGST column in plots
+            st = 0 # always start at first L value now (previously Ls[0] == 0 was ignored)
 
             if fidPairs is None: fidpair_filters = None
             elif isinstance(fidPairs,dict) or hasattr(fidPairs,"keys"):
@@ -1481,7 +1558,7 @@ class Results(object):
             gsBest = self.gatesets['final estimate']
             fidPairs = self.parameters['fiducial pairs']
             Ls = self.parameters['max length list']
-            st = 1 if Ls[0] == 0 else 0 #start index: skip LGST column in plots
+            st = 0 # always start at first L value now (previously Ls[0] == 0 was ignored)
 
             if fidPairs is None: fidpair_filters = None
             elif isinstance(fidPairs,dict) or hasattr(fidPairs,"keys"):
@@ -1715,8 +1792,7 @@ class Results(object):
         assert(self._LsAndGermInfoSet)
 
         baseStr_dict = _collections.OrderedDict()
-        st = 1 if self.parameters['max length list'][0] == 0 else 0
-          #start index: skips LGST column in report color box plots
+        st = 0 # always start at first L value now (previously Ls[0] == 0 was ignored)
 
         tmpRunningList = []
         fullDict = self.parameters['L,germ tuple base string dict']
@@ -2026,7 +2102,7 @@ class Results(object):
         #Chi2 or logl plots
         if self._LsAndGermInfoSet:
             Ls = self.parameters['max length list']
-            st = 1 if Ls[0] == 0 else 0 #start index: skip LGST column in plots
+            st = 0 # always start at first L value now (previously Ls[0] == 0 was ignored)
             nPlots = (len(Ls[st:])-1)+2 if pixelPlotAppendix else 2
 
             if self.parameters['objective'] == "chi2":
@@ -2362,7 +2438,7 @@ class Results(object):
         if self._LsAndGermInfoSet:
             baseStr_dict = self._getBaseStrDict()
             Ls = self.parameters['max length list']
-            st = 1 if Ls[0] == 0 else 0 #start index: skip LGST column in plots
+            st = 0 # always start at first L value now (previously Ls[0] == 0 was ignored)
             goodnessOfFitSection = True
         else:
             goodnessOfFitSection = False
@@ -2768,7 +2844,7 @@ class Results(object):
             baseStr_dict = self._getBaseStrDict()
 
             Ls = self.parameters['max length list']
-            st = 1 if Ls[0] == 0 else 0 #start index: skip LGST col in box plots
+            st = 0 # always start at first L value now (previously Ls[0] == 0 was ignored)
             nPlots = (len(Ls[st:])-1)+1 if pixelPlotAppendix else 1
 
             if self.parameters['objective'] == "chi2":
@@ -3171,7 +3247,7 @@ class Results(object):
             baseStr_dict = self._getBaseStrDict()
 
             Ls = self.parameters['max length list']
-            st = 1 if Ls[0] == 0 else 0 #start index: skip LGST col in box plots
+            st = 0 # always start at first L value now (previously Ls[0] == 0 was ignored)
             nPlots = (len(Ls[st:])-1)+1 if pixelPlotAppendix else 1
 
             if self.parameters['objective'] == "chi2":
@@ -3873,7 +3949,7 @@ class Results(object):
         #Chi2 or logl plots
         if self._LsAndGermInfoSet:
             Ls = self.parameters['max length list']
-            st = 1 if Ls[0] == 0 else 0 #start index: skip LGST column in plots
+            st = 0 # always start at first L value now (previously Ls[0] == 0 was ignored)
 
             if self.parameters['objective'] == "chi2":
                 plotFnName,plotFnLatex = "Chi2", "$\chi^2$"
