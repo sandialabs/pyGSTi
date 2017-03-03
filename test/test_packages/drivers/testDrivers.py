@@ -228,6 +228,19 @@ class TestDriversMethods(DriversTestCase):
                                       verbosity=2)
 
 
+    def test_longSequenceGST_wMapCalc(self):
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
+        ts = "whole germ powers"
+
+        gs_target = std.gs_target.copy()
+        gs_target._calcClass = pygsti.objects.gatemapcalc.GateMapCalc
+
+        maxLens = self.maxLens
+        result = self.runSilent(pygsti.do_long_sequence_gst,
+                                ds, gs_target, std.fiducials, std.fiducials,
+                                std.germs, maxLens, advancedOptions={'truncScheme': ts})
+
+
     def test_bootstrap(self):
         ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
         specs = self.runSilent(pygsti.construction.build_spam_specs, std.fiducials)

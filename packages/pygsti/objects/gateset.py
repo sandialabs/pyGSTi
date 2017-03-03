@@ -1364,7 +1364,8 @@ class GateSet(object):
             return factors
 
         def memEstimate(ng,np1,np2,Ng,fastCacheSz=False,verb=0):
-
+            tm = _time.time()
+            
             #Get cache size
             if not fastCacheSz:
                 #Slower (but more accurate way)
@@ -1381,7 +1382,7 @@ class GateSet(object):
             if verb == 1:
                 if (not fastCacheSz):
                     fast_estimate = calc.estimate_mem_usage(
-                        subcalls, gatestring_list, ng, Ng, np1, np2)
+                        subcalls, cacheSize, ng, Ng, np1, np2)
                     fc_est_str = " (%.2fGB fc)" % (fast_estimate*C)
                 else: fc_est_str = ""
 
@@ -1389,6 +1390,9 @@ class GateSet(object):
                             % (ng, np1, np2, Ng) + " in %.0fs = %.2fGB%s"
                             % (_time.time()-tm, mem*C, fc_est_str))
             elif verb == 2:
+                wrtLen1 = (num_params+np1-1) // np1 # ceiling(num_params / np1)
+                wrtLen2 = (num_params+np2-1) // np2 # ceiling(num_params / np2)
+                nSubtreesPerProc = (ng+Ng-1) // Ng # ceiling(ng / Ng)
                 printer.log(" Memory estimate = %.2fGB" % (mem*C) +
                      " (cache=%d, wrtLen1=%d, wrtLen2=%d, subsPerProc=%d)." %
                             (cacheSize, wrtLen1, wrtLen2, nSubtreesPerProc))

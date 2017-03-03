@@ -148,7 +148,7 @@ class GateMapCalc(GateCalc):
                 for i in range(Np):
                     vec = orig_vec.copy(); vec[i] += eps
                     dct[lbl].from_vector(vec)
-                    dp[kk] = (self.pr(spamLabel, gatestring, clipTo)-p)/eps
+                    dp[0,kk] = (self.pr(spamLabel, gatestring, clipTo)-p)/eps
                     kk += 1
                 dct[lbl].from_vector(orig_vec)
             return kk
@@ -379,7 +379,6 @@ class GateMapCalc(GateCalc):
             The memory estimate in bytes.
         """
         ng,Ng,np1,np2 = num_subtrees, num_subtree_proc_groups, num_param1_groups, num_param2_groups
-        tm = _time.time()
         FLOATSIZE = 8 # in bytes: TODO: a better way
 
         dim = self.dim

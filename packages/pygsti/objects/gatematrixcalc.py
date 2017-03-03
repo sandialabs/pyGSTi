@@ -1086,14 +1086,12 @@ class GateMatrixCalc(GateCalc):
             The memory estimate in bytes.
         """
         ng,Ng,np1,np2 = num_subtrees, num_subtree_proc_groups, num_param1_groups, num_param2_groups
-        tm = _time.time()
         FLOATSIZE = 8 # in bytes: TODO: a better way
 
         dim = self.dim
         nspam = len(self.spamdefs)
         wrtLen1 = (self.tot_params+np1-1) // np1 # ceiling(num_params / np1)
         wrtLen2 = (self.tot_params+np2-1) // np2 # ceiling(num_params / np2)
-        #nSubtreesPerProc = (ng+Ng-1) // Ng # ceiling(ng / Ng)
 
         mem = 0
         for fnName in subcalls:
