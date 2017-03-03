@@ -650,3 +650,7 @@ class MatrixEvalTree(EvalTree):
                                                 'xlabel': "Index Interval", 'ylabel': 'Index' }
 
         return analysis
+
+    def copy(self):
+        """ Create a copy of this evaluation tree. """
+        return self._copyBase( MatrixEvalTree(self[:]) )

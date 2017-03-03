@@ -425,3 +425,7 @@ class MapEvalTree(EvalTree):
         printer.log("EvalTree.split done second pass in %.0fs" %
                     (_time.time()-tm)); tm = _time.time()
         return
+
+    def copy(self):
+        """ Create a copy of this evaluation tree. """
+        return self._copyBase( MapEvalTree(self[:]) )

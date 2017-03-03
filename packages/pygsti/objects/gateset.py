@@ -25,8 +25,8 @@ from . import gate as _gate
 from . import spamvec as _sv
 from . import labeldicts as _ld
 from . import gaugegroup as _gg
-from .gscalc_matrix import GateMatrixCalculator as _GateMatrixCalculator
-from .gscalc_map import GateMapCalculator as _GateMapCalculator
+from .gatematrixcalc import GateMatrixCalc as _GateMatrixCalc
+from .gatemapcalc import GateMapCalc as _GateMapCalc
 
 from .verbosityprinter import VerbosityPrinter
 
@@ -111,8 +111,8 @@ class GateSet(object):
         self._identitylabel = identity_label
         self._default_gauge_group = None
 
-        self._calcClass = _GateMatrixCalculator
-        #self._calcClass = _GateMapCalculator
+        self._calcClass = _GateMatrixCalc
+        #self._calcClass = _GateMapCalc
 
         super(GateSet, self).__init__()
 

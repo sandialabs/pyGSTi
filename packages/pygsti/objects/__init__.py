@@ -14,7 +14,10 @@ from .confidenceregion import ConfidenceRegion
 from .dataset import DataSet
 from .exceptions import *
 from .evaltree import EvalTree
+from .matrixevaltree import MatrixEvalTree
+from .mapevaltree import MapEvalTree
 from .gate import Gate
+from .gate import GateMatrix
 from .gate import LinearlyParameterizedGate
 from .gate import FullyParameterizedGate
 from .gate import TPParameterizedGate

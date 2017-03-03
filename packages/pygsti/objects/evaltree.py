@@ -94,9 +94,8 @@ class EvalTree(list):
         raise NotImplementedError("initialize(...) must be implemented by a derived class") 
 
 
-    def copy(self):
-        """ Create a copy of this evaluation tree. """
-        newTree = EvalTree(self[:])
+    def _copyBase(self,newTree):
+        """ copy EvalTree members to a new tree (used by derived classes "copy" fns) """
         newTree.gateLabels = self.gateLabels[:]
         newTree.init_indices = self.init_indices[:]
         newTree.eval_order = self.eval_order[:]

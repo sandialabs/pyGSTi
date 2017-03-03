@@ -4,7 +4,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Defines the GateSetCalculator class"""
+""" Defines the GateMatrixCalc calculator class"""
 
 import warnings as _warnings
 import numpy as _np
@@ -17,8 +17,8 @@ from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from .profiler import DummyProfiler as _DummyProfiler
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from . import evaltree_matrix as _matrixevaltree
-from .gscalc import GateSetCalculator
+from .matrixevaltree import MatrixEvalTree as _MatrixEvalTree
+from .gatecalc import GateCalc
 
 _dummy_profiler = _DummyProfiler()
 
@@ -28,7 +28,7 @@ PSMALL = 1e-100
 DSMALL = 1e-100
 HSMALL = 1e-100
 
-class GateMatrixCalculator(GateSetCalculator):
+class GateMatrixCalc(GateCalc):
     """
     Encapsulates a calculation tool used by gate set objects to perform product
     and derivatives-of-product calculations.
@@ -42,7 +42,7 @@ class GateMatrixCalculator(GateSetCalculator):
     def __init__(self, dim, gates, preps, effects, povm_identity, spamdefs,
                  remainderLabel, identityLabel):
         """
-        Construct a new GateMatrixSetCalculator object.
+        Construct a new GateMatrixCalc object.
 
         Parameters
         ----------
@@ -76,7 +76,7 @@ class GateMatrixCalculator(GateSetCalculator):
         identityLabel : string
             The string used to designate the identity POVM vector.
         """
-        super(GateMatrixCalculator, self).__init__(
+        super(GateMatrixCalc, self).__init__(
             dim, gates, preps, effects, povm_identity, spamdefs,
             remainderLabel, identityLabel)
 
@@ -560,6 +560,7 @@ class GateMatrixCalculator(GateSetCalculator):
         #  dpr/d(rho)_i = sum E_k prod_ki
         #  dpr/d(E)_i   = sum prod_il rho_l
 
+        rholabel,elabel = self.spamdefs[spamLabel] #can't deal w/"custom" spam label...
         rho,E = self._rhoE_from_spamLabel(spamLabel)
 
         #Derivs wrt Gates
@@ -616,6 +617,7 @@ class GateMatrixCalculator(GateSetCalculator):
         #  d2pr/d(E)_i d(E)_j            = 0
         #  d2pr/d(rho)_i d(rho)_j        = 0
 
+        rholabel,elabel = self.spamdefs[spamLabel]
         rho,E = self._rhoE_from_spamLabel(spamLabel)
 
         d2prod_dGates = self.hproduct(gatestring)
@@ -1043,7 +1045,7 @@ class GateMatrixCalculator(GateSetCalculator):
         """
         Constructs an EvalTree object appropriate for this calculator.
         """
-        return _matrixevaltree.MatrixEvalTree()
+        return _MatrixEvalTree()
 
     
     def estimate_mem_usage(self, subcalls, cache_size, num_subtrees,

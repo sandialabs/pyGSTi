@@ -4,7 +4,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Defines the GateSetCalculator class"""
+""" Defines the GateCalc calculator class"""
 
 import warnings as _warnings
 import numpy as _np
@@ -18,13 +18,7 @@ from ..tools import slicetools as _slct
 from .profiler import DummyProfiler as _DummyProfiler
 _dummy_profiler = _DummyProfiler()
 
-# Smallness tolerances, used internally for conditional scaling required
-# to control bulk products, their gradients, and their Hessians.
-PSMALL = 1e-100
-DSMALL = 1e-100
-HSMALL = 1e-100
-
-class GateSetCalculator(object):
+class GateCalc(object):
     """
     Encapsulates a calculation tool used by gate set objects to perform product
     and derivatives-of-product calculations.
@@ -38,7 +32,7 @@ class GateSetCalculator(object):
     def __init__(self, dim, gates, preps, effects, povm_identity, spamdefs,
                  remainderLabel, identityLabel):
         """
-        Construct a new GateSetCalculator object.
+        Construct a new GateCalc object.
 
         Parameters
         ----------
@@ -1596,8 +1590,8 @@ class GateSetCalculator(object):
 
         Parameters
         ----------
-        otherCalc : GateSetCalculator
-            the other gate set calculator to difference against.
+        otherCalc : GateCalc
+            the other gate calculator to difference against.
 
         transformMx : numpy array, optional
             if not None, transform this gateset by
@@ -1696,7 +1690,7 @@ class GateSetCalculator(object):
 
         Parameters
         ----------
-        otherCalc : GateSetCalculator
+        otherCalc : GateCalc
             the other gate set to difference against.
 
         transformMx : numpy array, optional
@@ -1716,8 +1710,8 @@ class GateSetCalculator(object):
         
         if T is not None:
             Ti = _nla.inv(T)
-            dists = [ gate.jtracedist(otherCalc.gates[gateLabel], T, Ti)
-                      for gate in self.gates.values() ]
+            dists = [ gate.jtracedist(otherCalc.gates[lbl], T, Ti)
+                      for lbl,gate in self.gates.items() ]
 
             #Just use frobenius distance between spam vecs, since jtracedist
             # doesn't really make sense
@@ -1737,24 +1731,24 @@ class GateSetCalculator(object):
                 nSummands += self.povm_identity.dim
                 
         else:
-            dists = [ gate.jtracedist(otherCalc.gates[gateLabel])
-                      for gate in self.gates.values() ]
+            dists = [ gate.jtracedist(otherCalc.gates[lbl])
+                      for lbl,gate in self.gates.items() ]
 
             #Just use frobenius distance between spam vecs, since jtracedist
             # doesn't really make sense
             for lbl,rhoV in self.preps.items():
                 d += rhoV.frobeniusdist2(otherCalc.preps[lbl],
-                                         'prep', T, Ti)
+                                         'prep')
                 nSummands += rhoV.dim
 
             for lbl,Evec in self.effects.items():
                 d += Evec.frobeniusdist2(otherCalc.effects[lbl],
-                                         'effect', T, Ti)
+                                         'effect')
                 nSummands += Evec.dim
 
             if self.povm_identity is not None:
                 d += self.povm_identity.frobeniusdist2(
-                    otherCalc.povm_identity, 'effect', T, Ti)
+                    otherCalc.povm_identity, 'effect')
                 nSummands += self.povm_identity.dim
 
         spamVal = _np.sqrt(d / nSummands) if (nSummands > 0) else 0
@@ -1770,8 +1764,8 @@ class GateSetCalculator(object):
 
         Parameters
         ----------
-        otherCalc : GateSetCalculator
-            the other gate set calculator to difference against.
+        otherCalc : GateCalc
+            the other gate calculator to difference against.
 
         transformMx : numpy array, optional
             if not None, transform this gateset by
@@ -1790,8 +1784,8 @@ class GateSetCalculator(object):
         
         if T is not None:
             Ti = _nla.inv(T)
-            dists = [ gate.diamonddist(otherCalc.gates[gateLabel], T, Ti)
-                      for gate in self.gates.values() ]
+            dists = [ gate.diamonddist(otherCalc.gates[lbl], T, Ti)
+                      for lbl,gate in self.gates.items() ]
 
             #Just use frobenius distance between spam vecs, since jtracedist
             # doesn't really make sense
@@ -1811,24 +1805,24 @@ class GateSetCalculator(object):
                 nSummands += self.povm_identity.dim
                 
         else:
-            dists = [ gate.diamonddist(otherCalc.gates[gateLabel])
-                      for gate in self.gates.values() ]
+            dists = [ gate.diamonddist(otherCalc.gates[lbl])
+                      for lbl,gate in self.gates.items() ]
 
             #Just use frobenius distance between spam vecs, since jtracedist
             # doesn't really make sense
             for lbl,rhoV in self.preps.items():
                 d += rhoV.frobeniusdist2(otherCalc.preps[lbl],
-                                         'prep', T, Ti)
+                                         'prep')
                 nSummands += rhoV.dim
 
             for lbl,Evec in self.effects.items():
                 d += Evec.frobeniusdist2(otherCalc.effects[lbl],
-                                         'effect', T, Ti)
+                                         'effect')
                 nSummands += Evec.dim
 
             if self.povm_identity is not None:
                 d += self.povm_identity.frobeniusdist2(
-                    otherCalc.povm_identity, 'effect', T, Ti)
+                    otherCalc.povm_identity, 'effect')
                 nSummands += self.povm_identity.dim
 
         spamVal = _np.sqrt(d / nSummands) if (nSummands > 0) else 0

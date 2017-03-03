@@ -4,7 +4,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Defines the GateSetCalculator class"""
+""" Defines the GateMapCalc calculator class"""
 
 import warnings as _warnings
 import numpy as _np
@@ -17,21 +17,15 @@ from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from .profiler import DummyProfiler as _DummyProfiler
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from . import evaltree_map as _mapevaltree
-from .gscalc import GateSetCalculator
+from .mapevaltree import MapEvalTree as _MapEvalTree
+from .gatecalc import GateCalc
 
 _dummy_profiler = _DummyProfiler()
-
-# Smallness tolerances, used internally for conditional scaling required
-# to control bulk products, their gradients, and their Hessians.
-PSMALL = 1e-100
-DSMALL = 1e-100
-HSMALL = 1e-100
 
 #TODO:
 # Gate -> GateMatrix
 # New "Gate" base class, new "GateMap" class
-class GateMapCalculator(GateSetCalculator):
+class GateMapCalc(GateCalc):
     """
     Encapsulates a calculation tool used by gate set objects to perform product
     and derivatives-of-product calculations.
@@ -45,7 +39,7 @@ class GateMapCalculator(GateSetCalculator):
     def __init__(self, dim, gates, preps, effects, povm_identity, spamdefs,
                  remainderLabel, identityLabel):
         """
-        Construct a new GateSetCalculator object.
+        Construct a new GateMapCalc object.
 
         Parameters
         ----------
@@ -79,12 +73,12 @@ class GateMapCalculator(GateSetCalculator):
         identityLabel : string
             The string used to designate the identity POVM vector.
         """
-        super(GateMapCalculator, self).__init__(
+        super(GateMapCalc, self).__init__(
             dim, gates, preps, effects, povm_identity, spamdefs,
             remainderLabel, identityLabel)
 
 
-    #Same as GateMatrixCalculator, but not general enough to be in base class
+    #Same as GateMatrixCalc, but not general enough to be in base class
     def _rhoE_from_spamLabel(self, spamLabel):
         if isinstance(spamLabel,str):
             (rholabel,elabel) = self.spamdefs[spamLabel]
@@ -344,7 +338,7 @@ class GateMapCalculator(GateSetCalculator):
         """
         Constructs an EvalTree object appropriate for this calculator.
         """
-        return _mapevaltree.MapEvalTree()
+        return _MapEvalTree()
 
 
     def estimate_mem_usage(self, subcalls, cache_size, num_subtrees,
