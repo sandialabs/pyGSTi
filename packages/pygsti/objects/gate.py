@@ -2288,6 +2288,7 @@ class LindbladParameterizedGate(Gate):
 
         self.base = matrix.real
         self.base.flags.writeable = False
+        self.base_deriv = None
 
         ##TEST FOR CP: DEBUG!!!
         #from ..tools import jamiolkowski as _jt
@@ -2386,102 +2387,104 @@ class LindbladParameterizedGate(Gate):
         numpy array
             Array of derivatives, shape == (dimension^2, num_params)
         """
-        G = self.base
-        d2 = self.dim
-        bsH = self.ham_basis_size
-        bsO = self.other_basis_size
-        TERM_TOL = 1e-12
-
-        #Deriv wrt hamiltonian params
-        dHdp = _np.einsum("ik,akl,lj->ija", self.leftTrans, self.hamGens, self.rightTrans)
-        series = last_commutant = term = dHdp; i=2
-        while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
-            commutant = _np.einsum("ik,kja->ija",self.err_gen,last_commutant) - \
-                _np.einsum("ika,kj->ija",last_commutant,self.err_gen)
-            term = 1/_np.math.factorial(i) * commutant
-            series += term #1/_np.math.factorial(i) * commutant
-            last_commutant = commutant; i += 1
-        dH = _np.einsum('il,lka,kj->ija', self.unitary_prefactor, series, self.exp_err_gen)
-        dH = dH.reshape((d2**2,bsH-1)) # [iFlattenedGate,iHamParam]
-
-        #Deriv wrt other params
-        if self.nonham_diagonal_only:
-            otherParams = self.paramvals[bsH-1:]
-        
-            # Derivative of exponent wrt other param; shape == [d2,d2,bs-1]
-            if self.cptp:
-                dOdp  = _np.einsum('alj,a->lja', self.otherGens, 2*otherParams)
-            else:
-                dOdp  = _np.einsum('alj->lja', self.otherGens)
-        
-            #apply basis transform
-            dOdp  = _np.einsum('lk,kna,nj->lja', self.leftTrans, dOdp, self.rightTrans)
-            assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
-        
-            #take d(maxtrix-exp) using series approximation
-            series = last_commutant = term = dOdp; i=2
+        if self.base_deriv is None:
+            G = self.base
+            d2 = self.dim
+            bsH = self.ham_basis_size
+            bsO = self.other_basis_size
+            TERM_TOL = 1e-12
+    
+            #Deriv wrt hamiltonian params
+            dHdp = _np.einsum("ik,akl,lj->ija", self.leftTrans, self.hamGens, self.rightTrans)
+            series = last_commutant = term = dHdp; i=2
             while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
                 commutant = _np.einsum("ik,kja->ija",self.err_gen,last_commutant) - \
                     _np.einsum("ika,kj->ija",last_commutant,self.err_gen)
                 term = 1/_np.math.factorial(i) * commutant
                 series += term #1/_np.math.factorial(i) * commutant
                 last_commutant = commutant; i += 1
-            dO = _np.einsum('il,lka,kj->ija', self.unitary_prefactor, series, self.exp_err_gen) # dim [d2,d2,bs-1]
-            dO = dO.reshape(d2**2,bsO-1)
-        
-        
-        else: #all lindblad terms included
-        
-            if self.cptp:
-                L,Lbar = self.Lmx,self.Lmx.conjugate()
-                F1 = _np.tril(_np.ones((bsO-1,bsO-1),'d'))
-                F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
-        
-                  # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
-                dOdp  = _np.einsum('amlj,mb,ab->ljab', self.otherGens, Lbar, F1) #only a >= b nonzero (F1)
-                dOdp += _np.einsum('malj,mb,ab->ljab', self.otherGens, L, F1)    # ditto
-                dOdp += _np.einsum('bmlj,ma,ab->ljab', self.otherGens, Lbar, F2) #only b > a nonzero (F2)
-                dOdp += _np.einsum('mblj,ma,ab->ljab', self.otherGens, L, F2.conjugate()) # ditto
-            else:
-                F0 = _np.identity(bsO-1,'d')
-                F1 = _np.tril(_np.ones((bsO-1,bsO-1),'d'),-1)
-                F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
-        
-                  # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
-                dOdp  = _np.einsum('ablj,ab->ljab', self.otherGens, F0)  # a == b case
-                dOdp += _np.einsum('ablj,ab->ljab', self.otherGens, F1) + \
-                        _np.einsum('balj,ab->ljab', self.otherGens, F1) # a > b (F1)
-                dOdp += _np.einsum('balj,ab->ljab', self.otherGens, F2) - \
-                        _np.einsum('ablj,ab->ljab', self.otherGens, F2) # a < b (F2)
-        
-            #apply basis transform
-            dOdp  = _np.einsum('lk,knab,nj->ljab', self.leftTrans, dOdp, self.rightTrans)
-            assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
-        
-            #take d(maxtrix-exp) using series approximation
-            series = last_commutant = term = dOdp; i=2
-            while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
-                commutant = _np.einsum("ik,kjab->ijab",self.err_gen,last_commutant) - \
-                    _np.einsum("ikab,kj->ijab",last_commutant,self.err_gen)
-                term = 1/_np.math.factorial(i) * commutant
-                series += term #1/_np.math.factorial(i) * commutant
-                last_commutant = commutant; i += 1
-            dO = _np.einsum('il,lkab,kj->ijab', self.unitary_prefactor, series, self.exp_err_gen) # dim [d2,d2,bs-1,bs-1]
-            dO = dO.reshape(d2**2,(bsO-1)**2)
-        
-        
-        derivMx = _np.concatenate((dH,dO), axis=1)
-        assert(_np.linalg.norm(_np.imag(derivMx)) < IMAG_TOL)
-        derivMx = _np.real(derivMx)
+            dH = _np.einsum('il,lka,kj->ija', self.unitary_prefactor, series, self.exp_err_gen)
+            dH = dH.reshape((d2**2,bsH-1)) # [iFlattenedGate,iHamParam]
+    
+            #Deriv wrt other params
+            if self.nonham_diagonal_only:
+                otherParams = self.paramvals[bsH-1:]
+            
+                # Derivative of exponent wrt other param; shape == [d2,d2,bs-1]
+                if self.cptp:
+                    dOdp  = _np.einsum('alj,a->lja', self.otherGens, 2*otherParams)
+                else:
+                    dOdp  = _np.einsum('alj->lja', self.otherGens)
+            
+                #apply basis transform
+                dOdp  = _np.einsum('lk,kna,nj->lja', self.leftTrans, dOdp, self.rightTrans)
+                assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
+            
+                #take d(maxtrix-exp) using series approximation
+                series = last_commutant = term = dOdp; i=2
+                while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
+                    commutant = _np.einsum("ik,kja->ija",self.err_gen,last_commutant) - \
+                        _np.einsum("ika,kj->ija",last_commutant,self.err_gen)
+                    term = 1/_np.math.factorial(i) * commutant
+                    series += term #1/_np.math.factorial(i) * commutant
+                    last_commutant = commutant; i += 1
+                dO = _np.einsum('il,lka,kj->ija', self.unitary_prefactor, series, self.exp_err_gen) # dim [d2,d2,bs-1]
+                dO = dO.reshape(d2**2,bsO-1)
+            
+            
+            else: #all lindblad terms included
+            
+                if self.cptp:
+                    L,Lbar = self.Lmx,self.Lmx.conjugate()
+                    F1 = _np.tril(_np.ones((bsO-1,bsO-1),'d'))
+                    F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
+            
+                      # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
+                    dOdp  = _np.einsum('amlj,mb,ab->ljab', self.otherGens, Lbar, F1) #only a >= b nonzero (F1)
+                    dOdp += _np.einsum('malj,mb,ab->ljab', self.otherGens, L, F1)    # ditto
+                    dOdp += _np.einsum('bmlj,ma,ab->ljab', self.otherGens, Lbar, F2) #only b > a nonzero (F2)
+                    dOdp += _np.einsum('mblj,ma,ab->ljab', self.otherGens, L, F2.conjugate()) # ditto
+                else:
+                    F0 = _np.identity(bsO-1,'d')
+                    F1 = _np.tril(_np.ones((bsO-1,bsO-1),'d'),-1)
+                    F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
+            
+                      # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
+                    dOdp  = _np.einsum('ablj,ab->ljab', self.otherGens, F0)  # a == b case
+                    dOdp += _np.einsum('ablj,ab->ljab', self.otherGens, F1) + \
+                            _np.einsum('balj,ab->ljab', self.otherGens, F1) # a > b (F1)
+                    dOdp += _np.einsum('balj,ab->ljab', self.otherGens, F2) - \
+                            _np.einsum('ablj,ab->ljab', self.otherGens, F2) # a < b (F2)
+            
+                #apply basis transform
+                dOdp  = _np.einsum('lk,knab,nj->ljab', self.leftTrans, dOdp, self.rightTrans)
+                assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
+            
+                #take d(maxtrix-exp) using series approximation
+                series = last_commutant = term = dOdp; i=2
+                while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
+                    commutant = _np.einsum("ik,kjab->ijab",self.err_gen,last_commutant) - \
+                        _np.einsum("ikab,kj->ijab",last_commutant,self.err_gen)
+                    term = 1/_np.math.factorial(i) * commutant
+                    series += term #1/_np.math.factorial(i) * commutant
+                    last_commutant = commutant; i += 1
+                dO = _np.einsum('il,lkab,kj->ijab', self.unitary_prefactor, series, self.exp_err_gen) # dim [d2,d2,bs-1,bs-1]
+                dO = dO.reshape(d2**2,(bsO-1)**2)
+            
+            
+            derivMx = _np.concatenate((dH,dO), axis=1)
+            assert(_np.linalg.norm(_np.imag(derivMx)) < IMAG_TOL)
+            derivMx = _np.real(derivMx)
+            self.base_deriv = derivMx
 
-        #check_deriv_wrt_params(self, derivMx, eps=1e-7)
-        #fd_deriv = finite_difference_deriv_wrt_params(self, eps=1e-7)
-        #derivMx = fd_deriv
+            #check_deriv_wrt_params(self, derivMx, eps=1e-7)
+            #fd_deriv = finite_difference_deriv_wrt_params(self, eps=1e-7)
+            #derivMx = fd_deriv
 
         if wrtFilter is None:
-            return derivMx
+            return self.base_deriv
         else:
-            return _np.take( derivMx, wrtFilter, axis=1 )
+            return _np.take( self.base_deriv, wrtFilter, axis=1 )
 
 
     def copy(self):
