@@ -112,7 +112,8 @@ germs = _strc.gatestring_list(
      ])
 
 legacy_germs = _strc.gatestring_list(
-    [('Giy',),
+    [('Gii',),
+     ('Giy',),
      ('Gxi',),
      ('Gyi',),
      ('Gcnot',),
@@ -186,8 +187,8 @@ legacy_germs = _strc.gatestring_list(
 
 #Construct the target gateset
 gs_target = _setc.build_gateset(
-    [4], [('Q0','Q1')],['Gix','Giy','Gxi','Gyi'],
-    [  "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)"],
+    [4], [('Q0','Q1')],['Gii', 'Gix','Giy','Gxi','Gyi'],
+    [  "I(Q0):I(Q1)", "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)"],
     prepLabels=['rho0'], prepExpressions=["0"],
     effectLabels=['E0','E1','E2'], effectExpressions=["0","1","2"],
     spamdefs={'upup': ('rho0','E0'), 'updn': ('rho0','E1'),
