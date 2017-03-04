@@ -967,6 +967,8 @@ class GateSet(object):
 
 
     def _calc(self):
+        if not hasattr(self,"_calcClass"): #for backward compatibility
+            self._calcClass = _GateMatrixCalc
         return self._calcClass(self._dim, self.gates, self.preps,
                                self.effects, self.povm_identity,
                                self.spamdefs, self._remainderlabel,
