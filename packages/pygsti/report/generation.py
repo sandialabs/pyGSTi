@@ -1377,6 +1377,7 @@ def get_logl_projected_err_gen_table(gateset, targetGateset,
             _tools.lindblad_errgen_projections(
                 errgen, basisNm, basisNm, basisNm, normalize=False,
                 return_generators=True)
+            #Note: return values *can* be None if an empty/None basis is given
 
         ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)
         sto_error_gen = _np.einsum('i,ijk', stoProj, stoGens)
