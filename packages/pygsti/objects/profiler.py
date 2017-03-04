@@ -108,6 +108,9 @@ class Profiler(object):
         else:
             self.timers[name] = val
 
+        #if self.comm is None or self.comm.Get_rank() == 0:
+        #    print("TIME [%s] += %.2fs (total = %.2fs)" % (name,val,self.timers[name]))
+
 
     def add_count(self, name, inc=1, prefix=0):
         """

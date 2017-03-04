@@ -24,8 +24,9 @@ from . import evaltree as _evaltree
 from . import gate as _gate
 from . import spamvec as _sv
 from . import labeldicts as _ld
-from . import gscalc as _gscalc
 from . import gaugegroup as _gg
+from .gatematrixcalc import GateMatrixCalc as _GateMatrixCalc
+from .gatemapcalc import GateMapCalc as _GateMapCalc
 
 from .verbosityprinter import VerbosityPrinter
 
@@ -34,7 +35,6 @@ from .verbosityprinter import VerbosityPrinter
 # should have just 0 and 1 eigenvalues, and thus a tolerace << 1.0 will work
 # well.
 P_RANK_TOL = 1e-7
-FLOATSIZE = 8 # in bytes: TODO: a better way
 
 class GateSet(object):
     """
@@ -110,6 +110,9 @@ class GateSet(object):
         self._remainderlabel = remainder_label
         self._identitylabel = identity_label
         self._default_gauge_group = None
+
+        self._calcClass = _GateMatrixCalc
+        #self._calcClass = _GateMapCalc
 
         super(GateSet, self).__init__()
 
@@ -964,10 +967,12 @@ class GateSet(object):
 
 
     def _calc(self):
-        return _gscalc.GateSetCalculator(self._dim, self.gates, self.preps,
-                                         self.effects, self.povm_identity,
-                                         self.spamdefs, self._remainderlabel,
-                                         self._identitylabel)
+        if not hasattr(self,"_calcClass"): #for backward compatibility
+            self._calcClass = _GateMatrixCalc
+        return self._calcClass(self._dim, self.gates, self.preps,
+                               self.effects, self.povm_identity,
+                               self.spamdefs, self._remainderlabel,
+                               self._identitylabel)
 
     def product(self, gatestring, bScale=False):
         """
@@ -1333,13 +1338,12 @@ class GateSet(object):
 
         printer = VerbosityPrinter.build_printer(verbosity, comm)
 
-        nspam = len(self.get_spam_labels())
         nprocs = 1 if comm is None else comm.Get_size()
         num_params = self.num_params()
-        dim = self._dim
         evt_cache = {} # cache of eval trees based on # min subtrees, to avoid re-computation
         C = 1.0/(1024.0**3)
-
+        calc = self._calc()
+        
         bNp2Matters = ("bulk_fill_hprobs" in subcalls) or ("bulk_hprobs_by_block" in subcalls)
 
         if memLimit is not None:
@@ -1361,99 +1365,45 @@ class GateSet(object):
                 factors.append(n)
             return factors
 
-
         def memEstimate(ng,np1,np2,Ng,fastCacheSz=False,verb=0):
             tm = _time.time()
-
+            
             #Get cache size
             if not fastCacheSz:
                 #Slower (but more accurate way)
-                if ng not in evt_cache: evt_cache[ng] = self.bulk_evaltree(
-                    gatestring_list,minSubtrees=ng,verbosity=printer-1)
-                tstTree = evt_cache[ng]
-                cacheSize = max([len(s) for s in tstTree.get_sub_trees()])
+                if ng not in evt_cache:
+                    evt_cache[ng] = self.bulk_evaltree(
+                        gatestring_list, minSubtrees=ng, numSubtreeComms=Ng)
+                cacheSize = max([len(s) for s in evt_cache[ng].get_sub_trees()])
             else:
                 #heuristic (but fast)
                 cacheSize = int( 1.3 * len(gatestring_list) / ng )
 
-            wrtLen1 = (num_params+np1-1) // np1 # ceiling(num_params / np1)
-            wrtLen2 = (num_params+np2-1) // np2 # ceiling(num_params / np2)
-            nSubtreesPerProc = (ng+Ng-1) // Ng # ceiling(ng / Ng)
-
-            mem = 0
-            for fnName in subcalls:
-                if fnName == "bulk_fill_probs":
-                    mem += cacheSize * dim * dim # product cache
-                    mem += cacheSize # scale cache (exps)
-                    mem += cacheSize # scale vals
-
-                elif fnName == "bulk_fill_dprobs":
-                    mem += cacheSize * wrtLen1 * dim * dim # dproduct cache
-                    mem += cacheSize * dim * dim # product cache
-                    mem += cacheSize # scale cache
-                    mem += cacheSize # scale vals
-
-                elif fnName == "bulk_fill_hprobs":
-                    mem += cacheSize * wrtLen1 * wrtLen2 * dim * dim # hproduct cache
-                    mem += cacheSize * (wrtLen1 + wrtLen2) * dim * dim # dproduct cache
-                    mem += cacheSize * dim * dim # product cache
-                    mem += cacheSize # scale cache
-                    mem += cacheSize # scale vals
-
-                elif fnName == "bulk_hprobs_by_block":
-                    #Note: includes "results" memory since this is allocated within
-                    # the generator and yielded, *not* allocated by the user.
-                    mem += 2 * cacheSize * nspam * wrtLen1 * wrtLen2 # hprobs & dprobs12 results
-                    mem += cacheSize * nspam * (wrtLen1 + wrtLen2) # dprobs1 & dprobs2
-                    mem += cacheSize * wrtLen1 * wrtLen2 * dim * dim # hproduct cache
-                    mem += cacheSize * (wrtLen1 + wrtLen2) * dim * dim # dproduct cache
-                    mem += cacheSize * dim * dim # product cache
-                    mem += cacheSize # scale cache
-                    mem += cacheSize # scale vals
-
-                ## It doesn't make sense to include these since their required memory is fixed
-                ## (and dominated) by the output array size. Could throw more informative error?
-                #elif fnName == "bulk_product":
-                #    mem += cacheSize * dim * dim # product cache
-                #    mem += cacheSize # scale cache
-                #    mem += cacheSize # scale vals
-                #
-                #elif fnName == "bulk_dproduct":
-                #    mem += cacheSize * num_params * dim * dim # dproduct cache
-                #    mem += cacheSize * dim * dim # product cache
-                #    mem += cacheSize # scale cache
-                #    mem += cacheSize # scale vals
-                #
-                #elif fnName == "bulk_hproduct":
-                #    mem += cacheSize * num_params**2 * dim * dim # hproduct cache
-                #    mem += cacheSize * num_params * dim * dim # dproduct cache
-                #    mem += cacheSize * dim * dim # product cache
-                #    mem += cacheSize # scale cache
-                #    mem += cacheSize # scale vals
-
-                else:
-                    raise ValueError("Unknown subcall name: %s" % fnName)
+            mem = calc.estimate_mem_usage(subcalls,cacheSize,ng,Ng,np1,np2)
             
             if verb == 1:
-                fc_est_str = " (%.2fGB fc)" % (memEstimate(ng,np1,np2,Ng,True)*C)\
-                    if (not fastCacheSz) else ""
+                if (not fastCacheSz):
+                    fast_estimate = calc.estimate_mem_usage(
+                        subcalls, cacheSize, ng, Ng, np1, np2)
+                    fc_est_str = " (%.2fGB fc)" % (fast_estimate*C)
+                else: fc_est_str = ""
+
                 printer.log(" mem(%d subtrees, %d,%d param-grps, %d proc-grps)"
                             % (ng, np1, np2, Ng) + " in %.0fs = %.2fGB%s"
-                            % (_time.time()-tm, mem*FLOATSIZE*C, fc_est_str))
+                            % (_time.time()-tm, mem*C, fc_est_str))
             elif verb == 2:
-                printer.log(" Memory estimate = %.2fGB" % (mem*FLOATSIZE*C) +
+                wrtLen1 = (num_params+np1-1) // np1 # ceiling(num_params / np1)
+                wrtLen2 = (num_params+np2-1) // np2 # ceiling(num_params / np2)
+                nSubtreesPerProc = (ng+Ng-1) // Ng # ceiling(ng / Ng)
+                printer.log(" Memory estimate = %.2fGB" % (mem*C) +
                      " (cache=%d, wrtLen1=%d, wrtLen2=%d, subsPerProc=%d)." %
                             (cacheSize, wrtLen1, wrtLen2, nSubtreesPerProc))
                 #printer.log("  subcalls = %s" % str(subcalls))
                 #printer.log("  cacheSize = %d" % cacheSize)
                 #printer.log("  wrtLen = %d" % wrtLen)
                 #printer.log("  nSubtreesPerProc = %d" % nSubtreesPerProc)
-                #if "bulk_fill_dprobs" in subcalls:
-                #    printer.log(" DB Detail: dprobs cache = %.2fGB" % 
-                #                (8*cacheSize * wrtLen * dim * dim * C))
-                #    printer.log(" DB Detail: probs cache = %.2fGB" % 
-                #                (8*cacheSize * dim * dim * C))
-            return mem * FLOATSIZE
+
+            return mem
 
 
         if distributeMethod == "gatestrings":
@@ -1478,6 +1428,7 @@ class GateSet(object):
             else:
                 memEstimate(ng,np1,np2,Ng) # to compute & cache final EvalTree
 
+                
         elif distributeMethod == "deriv":
 
             #Set Ng, the number of subTree processor groups, such
@@ -1637,7 +1588,7 @@ class GateSet(object):
         """
         tm = _time.time()
         printer = VerbosityPrinter.build_printer(verbosity)
-        evalTree = _evaltree.EvalTree()
+        evalTree = self._calc().construct_evaltree()
         evalTree.initialize([""] + list(self.gates.keys()), gatestring_list, numSubtreeComms)
 
         printer.log("bulk_evaltree: created initial tree (%d strs) in %.0fs" %
@@ -2645,6 +2596,7 @@ class GateSet(object):
         newGateset._remainderlabel = self._remainderlabel
         newGateset._identitylabel = self._identitylabel
         newGateset._default_gauge_group = self._default_gauge_group
+        newGateset._calcClass = self._calcClass
         return newGateset
 
     def __str__(self):

@@ -271,24 +271,21 @@ def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
                          _np.linalg.norm(fd_deriv - deriv_to_check))
 
 
-
 class Gate(object):
-    """
-    Excapulates a parameterization of a gate matrix.  This class is the
-    common base class for all specific parameterizations of a gate.
-    """
-
-    def __init__(self, mx=None):
+    def __init__(self, dim):
         """ Initialize a new Gate """
-        self.base = mx
-        self.dim = self.base.shape[0]
+        self.dim = dim
 
     def get_dimension(self):
-        """ Return the dimension of the gate matrix. """
+        """ Return the dimension of the gate. """
         return self.dim
 
+    def acton(self, state):
+        """ Act this gate map on an input state """
+        raise NotImplementedError("acton(...) not implemented!")
+
     def transform(self, S):
-        """ Update gate matrix G with inv(S) * G * S."""
+        """ Update gate G with inv(S) * G * S."""
         raise NotImplementedError("This gate cannot be tranform()'d")
 
     def depolarize(self, amount):
@@ -299,18 +296,110 @@ class Gate(object):
         """ Rotate gate by the given amount. """
         raise NotImplementedError("This gate cannot be rotate()'d")
 
+    def frobeniusdist2(self, otherGate, transform=None, inv_transform=None):
+        """ 
+        Return the squared frobenius distance between this gate
+        and `otherGate`, optionally transforming this gate first
+        using `transform` and `inv_transform`.
+        """
+        raise NotImplementedError("frobeniusdist2(...) not implemented!")
+
+    def frobeniusdist(self, otherGate, transform=None, inv_transform=None):
+        """ 
+        Return the frobenius distance between this gate
+        and `otherGate`, optionally transforming this gate first
+        using `transform` and `inv_transform`.
+        """
+        return _np.sqrt(self.frobeniusdist(otherGate, transform, inv_transform))
+
+    def jtracedist(self, otherGate, transform=None, inv_transform=None):
+        """ 
+        Return the Jamiolkowski trace distance between this gate
+        and `otherGate`, optionally transforming this gate first
+        using `transform` and `inv_transform`.
+        """
+        raise NotImplementedError("jtracedist(...) not implemented!")
+
+    def diamonddist(self, otherGate, transform=None, inv_transform=None):
+        """ 
+        Return the diamon distance between this gate
+        and `otherGate`, optionally transforming this gate first
+        using `transform` and `inv_transform`.
+        """
+        raise NotImplementedError("diamonddist(...) not implemented!")
+
+    #Pickle plumbing
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+
+
+
+#class GateMap(Gate):
+#    def __init__(self, dim):
+#        """ Initialize a new Gate """
+#        super(GateMap, self).__init__(dim)
+
+    
+class GateMatrix(Gate):
+    """
+    Excapulates a parameterization of a gate matrix.  This class is the
+    common base class for all specific parameterizations of a gate.
+    """
+
+    def __init__(self, mx=None):
+        """ Initialize a new Gate """
+        self.base = mx
+        super(GateMatrix, self).__init__(self.base.shape[0])
+
+    def acton(self, state):
+        """ Act this gate matrix on an input state (left-multiply w/matrix) """
+        return _np.dot(self.base, state) #TODO: return a SPAMVec?
+
+    def frobeniusdist2(self, otherGate, transform=None, inv_transform=None):
+        """ 
+        Return the squared frobenius difference between this gate and
+        `otherGate`, optionally transforming this gate first using matrices
+        `transform` and `inv_transform`.
+        """
+        if transform is None and inv_transform is None:
+            return _gt.frobeniusdist2(self.base,otherGate)
+        else:
+            return _gt.frobeniusdist2(_np.dot(
+                    inv_transform,_np.dot(self.base,transform)),
+                    otherGate)
+
+    def jtracedist(self, otherGate, transform=None, inv_transform=None):
+        """ 
+        Return the Jamiolkowski trace distance between this gate
+        and `otherGate`, optionally transforming this gate first
+        using `transform` and `inv_transform`.
+        """
+        if transform is None and inv_transform is None:
+            return _gt.jtracedist(self.base,otherGate)
+        else:
+            return _gt.jtracedist(_np.dot(
+                    inv_transform,_np.dot(self.base,transform)),
+                    otherGate)
+
+    def diamonddist(self, otherGate, transform=None, inv_transform=None):
+        """ 
+        Return the diamon distance between this gate
+        and `otherGate`, optionally transforming this gate first
+        using `transform` and `inv_transform`.
+        """
+        if transform is None and inv_transform is None:
+            return _gt.diamonddist(self.base,otherGate)
+        else:
+            return _gt.diamonddist(_np.dot(
+                    inv_transform,_np.dot(self.base,transform)),
+                    otherGate)
+
 
     #Handled by derived classes
     #def __str__(self):
     #    s = "Gate with shape %s\n" % str(self.base.shape)
     #    s += _mt.mx_to_string(self.base, width=4, prec=2)
     #    return s
-
-
-    #Pickle plumbing
-    def __setstate__(self, state):
-        self.__dict__.update(state)
-
 
     #Access to underlying ndarray
     def __getitem__( self, key ):
@@ -398,7 +487,7 @@ class Gate(object):
 
 
 
-class StaticGate(Gate):
+class StaticGate(GateMatrix):
     """
     Encapsulates a gate matrix that is completely fixed, or "static", meaning
       that is contains no parameters.
@@ -414,7 +503,7 @@ class StaticGate(Gate):
             a square 2D array-like or Gate object representing the gate action.
             The shape of M sets the dimension of the gate.
         """
-        Gate.__init__(self, Gate.convert_to_matrix(M))
+        GateMatrix.__init__(self, GateMatrix.convert_to_matrix(M))
 
 
     def set_matrix(self, M):
@@ -432,7 +521,7 @@ class StaticGate(Gate):
         -------
         None
         """
-        mx = Gate.convert_to_matrix(M)
+        mx = GateMatrix.convert_to_matrix(M)
         if(mx.shape != (self.dim, self.dim)):
             raise ValueError("Argument must be a (%d,%d) matrix!"
                              % (self.dim,self.dim))
@@ -629,7 +718,7 @@ class StaticGate(Gate):
 
 
 
-class FullyParameterizedGate(Gate):
+class FullyParameterizedGate(GateMatrix):
     """
     Encapsulates a gate matrix that is fully parameterized, that is,
       each element of the gate matrix is an independent parameter.
@@ -645,8 +734,8 @@ class FullyParameterizedGate(Gate):
             a square 2D array-like or Gate object representing the gate action.
             The shape of M sets the dimension of the gate.
         """
-        M2 = Gate.convert_to_matrix(M)
-        Gate.__init__(self,M2)
+        M2 = GateMatrix.convert_to_matrix(M)
+        GateMatrix.__init__(self,M2)
 
     def set_matrix(self, M):
         """
@@ -663,7 +752,7 @@ class FullyParameterizedGate(Gate):
         -------
         None
         """
-        mx = Gate.convert_to_matrix(M)
+        mx = GateMatrix.convert_to_matrix(M)
         if(mx.shape != (self.dim, self.dim)):
             raise ValueError("Argument must be a (%d,%d) matrix!"
                              % (self.dim,self.dim))
@@ -862,7 +951,7 @@ class FullyParameterizedGate(Gate):
 
 
 
-class TPParameterizedGate(Gate):
+class TPParameterizedGate(GateMatrix):
     """
     Encapsulates a gate matrix that is fully parameterized except for
     the first row, which is frozen to be [1 0 ... 0] so that the action
@@ -881,12 +970,12 @@ class TPParameterizedGate(Gate):
             shape of this array sets the dimension of the gate.
         """
         #Gate.__init__(self, Gate.convert_to_matrix(M))
-        mx = Gate.convert_to_matrix(M)
+        mx = GateMatrix.convert_to_matrix(M)
         if not (_np.isclose(mx[0,0], 1.0) and \
                 _np.allclose(mx[0,1:], 0.0)):
             raise ValueError("Cannot create TPParameterizedGate: " +
                              "invalid form for 1st row!")
-        Gate.__init__(self, _ProtectedArray(mx,
+        GateMatrix.__init__(self, _ProtectedArray(mx,
                        indicesToProtect=(0, slice(None,None,None))))
 
 
@@ -905,7 +994,7 @@ class TPParameterizedGate(Gate):
         -------
         None
         """
-        mx = Gate.convert_to_matrix(M)
+        mx = GateMatrix.convert_to_matrix(M)
         if(mx.shape != (self.dim, self.dim)):
             raise ValueError("Argument must be a (%d,%d) matrix!"
                              % (self.dim,self.dim))
@@ -1118,7 +1207,7 @@ class LinearlyParameterizedElementTerm(object):
         return LinearlyParameterizedElementTerm(self.coeff, self.paramIndices)
 
 
-class LinearlyParameterizedGate(Gate):
+class LinearlyParameterizedGate(GateMatrix):
     """
     Encapsulates a gate matrix that is parameterized such that each
     element of the gate matrix depends only linearly on any parameter.
@@ -1165,7 +1254,7 @@ class LinearlyParameterizedGate(Gate):
             elements.
         """
 
-        baseMatrix = _np.array( Gate.convert_to_matrix(baseMatrix), 'complex')
+        baseMatrix = _np.array( GateMatrix.convert_to_matrix(baseMatrix), 'complex')
           #complex, even if passed all real base matrix
 
         elementExpressions = {}
@@ -1187,7 +1276,7 @@ class LinearlyParameterizedGate(Gate):
         self.enforceReal = real
         mx.flags.writeable = False # only _construct_matrix can change array
 
-        Gate.__init__(self, mx)
+        GateMatrix.__init__(self, mx)
         self._construct_matrix() # construct base from the parameters
 
 
@@ -1228,7 +1317,7 @@ class LinearlyParameterizedGate(Gate):
         -------
         None
         """
-        mx = Gate.convert_to_matrix(M)
+        mx = GateMatrix.convert_to_matrix(M)
         if(mx.shape != (self.dim, self.dim)):
             raise ValueError("Argument must be a (%d,%d) matrix!" % (self.dim,self.dim))
         raise ValueError("Currently, directly setting the matrix of a" +
@@ -1525,7 +1614,7 @@ class LinearlyParameterizedGate(Gate):
 
 
 #Or CommutantParameterizedGate(Gate): ?
-class EigenvalueParameterizedGate(Gate):
+class EigenvalueParameterizedGate(GateMatrix):
     """
     Encapsulates a real gate matrix that is parameterized only by its
     eigenvalues, which are assumed to be either real or to occur in
@@ -1761,7 +1850,7 @@ class EigenvalueParameterizedGate(Gate):
         #Finish Gate construction
         mx = _np.empty( matrix.shape, "d" )
         mx.flags.writeable = False # only _construct_matrix can change array
-        Gate.__init__(self, mx)
+        GateMatrix.__init__(self, mx)
         self._construct_matrix() # construct base from the parameters
 
 
@@ -1794,7 +1883,7 @@ class EigenvalueParameterizedGate(Gate):
         -------
         None
         """
-        mx = Gate.convert_to_matrix(M)
+        mx = GateMatrix.convert_to_matrix(M)
         if(mx.shape != (self.dim, self.dim)):
             raise ValueError("Argument must be a (%d,%d) matrix!" % (self.dim,self.dim))
         raise ValueError("Currently, directly setting the matrix of an" +
@@ -2022,7 +2111,7 @@ class EigenvalueParameterizedGate(Gate):
                 (_np.identity(self.dim,'d'),), self.__dict__)
 
 
-class LindbladParameterizedGate(Gate):
+class LindbladParameterizedGate(GateMatrix):
     """
     Encapsulates a gate matrix that is parameterized by a Lindblad-form
     expression, such that each parameter multiplies a particular term in
@@ -2198,7 +2287,7 @@ class LindbladParameterizedGate(Gate):
         #initialize intermediate storage for matrix and for deriv computation
         self.Lmx = _np.zeros((bsO-1,bsO-1),'complex')
 
-        Gate.__init__(self, self.unitary_prefactor)
+        GateMatrix.__init__(self, self.unitary_prefactor)
         self._construct_matrix() # construct base from the parameters
 
         if not truncate:
@@ -2289,6 +2378,7 @@ class LindbladParameterizedGate(Gate):
 
         self.base = matrix.real
         self.base.flags.writeable = False
+        self.base_deriv = None
 
         ##TEST FOR CP: DEBUG!!!
         #from ..tools import jamiolkowski as _jt
@@ -2325,7 +2415,7 @@ class LindbladParameterizedGate(Gate):
         -------
         None
         """
-        mx = Gate.convert_to_matrix(M)
+        mx = GateMatrix.convert_to_matrix(M)
         if(mx.shape != (self.dim, self.dim)):
             raise ValueError("Argument must be a (%d,%d) matrix!" % (self.dim,self.dim))
         raise ValueError("Currently, directly setting the matrix of an" +
@@ -2387,102 +2477,104 @@ class LindbladParameterizedGate(Gate):
         numpy array
             Array of derivatives, shape == (dimension^2, num_params)
         """
-        G = self.base
-        d2 = self.dim
-        bsH = self.ham_basis_size
-        bsO = self.other_basis_size
-        TERM_TOL = 1e-12
-
-        #Deriv wrt hamiltonian params
-        dHdp = _np.einsum("ik,akl,lj->ija", self.leftTrans, self.hamGens, self.rightTrans)
-        series = last_commutant = term = dHdp; i=2
-        while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
-            commutant = _np.einsum("ik,kja->ija",self.err_gen,last_commutant) - \
-                _np.einsum("ika,kj->ija",last_commutant,self.err_gen)
-            term = 1/_np.math.factorial(i) * commutant
-            series += term #1/_np.math.factorial(i) * commutant
-            last_commutant = commutant; i += 1
-        dH = _np.einsum('il,lka,kj->ija', self.unitary_prefactor, series, self.exp_err_gen)
-        dH = dH.reshape((d2**2,bsH-1)) # [iFlattenedGate,iHamParam]
-
-        #Deriv wrt other params
-        if self.nonham_diagonal_only:
-            otherParams = self.paramvals[bsH-1:]
-        
-            # Derivative of exponent wrt other param; shape == [d2,d2,bs-1]
-            if self.cptp:
-                dOdp  = _np.einsum('alj,a->lja', self.otherGens, 2*otherParams)
-            else:
-                dOdp  = _np.einsum('alj->lja', self.otherGens)
-        
-            #apply basis transform
-            dOdp  = _np.einsum('lk,kna,nj->lja', self.leftTrans, dOdp, self.rightTrans)
-            assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
-        
-            #take d(maxtrix-exp) using series approximation
-            series = last_commutant = term = dOdp; i=2
+        if self.base_deriv is None:
+            G = self.base
+            d2 = self.dim
+            bsH = self.ham_basis_size
+            bsO = self.other_basis_size
+            TERM_TOL = 1e-12
+    
+            #Deriv wrt hamiltonian params
+            dHdp = _np.einsum("ik,akl,lj->ija", self.leftTrans, self.hamGens, self.rightTrans)
+            series = last_commutant = term = dHdp; i=2
             while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
                 commutant = _np.einsum("ik,kja->ija",self.err_gen,last_commutant) - \
                     _np.einsum("ika,kj->ija",last_commutant,self.err_gen)
                 term = 1/_np.math.factorial(i) * commutant
                 series += term #1/_np.math.factorial(i) * commutant
                 last_commutant = commutant; i += 1
-            dO = _np.einsum('il,lka,kj->ija', self.unitary_prefactor, series, self.exp_err_gen) # dim [d2,d2,bs-1]
-            dO = dO.reshape(d2**2,bsO-1)
-        
-        
-        else: #all lindblad terms included
-        
-            if self.cptp:
-                L,Lbar = self.Lmx,self.Lmx.conjugate()
-                F1 = _np.tril(_np.ones((bsO-1,bsO-1),'d'))
-                F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
-        
-                  # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
-                dOdp  = _np.einsum('amlj,mb,ab->ljab', self.otherGens, Lbar, F1) #only a >= b nonzero (F1)
-                dOdp += _np.einsum('malj,mb,ab->ljab', self.otherGens, L, F1)    # ditto
-                dOdp += _np.einsum('bmlj,ma,ab->ljab', self.otherGens, Lbar, F2) #only b > a nonzero (F2)
-                dOdp += _np.einsum('mblj,ma,ab->ljab', self.otherGens, L, F2.conjugate()) # ditto
-            else:
-                F0 = _np.identity(bsO-1,'d')
-                F1 = _np.tril(_np.ones((bsO-1,bsO-1),'d'),-1)
-                F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
-        
-                  # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
-                dOdp  = _np.einsum('ablj,ab->ljab', self.otherGens, F0)  # a == b case
-                dOdp += _np.einsum('ablj,ab->ljab', self.otherGens, F1) + \
-                        _np.einsum('balj,ab->ljab', self.otherGens, F1) # a > b (F1)
-                dOdp += _np.einsum('balj,ab->ljab', self.otherGens, F2) - \
-                        _np.einsum('ablj,ab->ljab', self.otherGens, F2) # a < b (F2)
-        
-            #apply basis transform
-            dOdp  = _np.einsum('lk,knab,nj->ljab', self.leftTrans, dOdp, self.rightTrans)
-            assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
-        
-            #take d(maxtrix-exp) using series approximation
-            series = last_commutant = term = dOdp; i=2
-            while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
-                commutant = _np.einsum("ik,kjab->ijab",self.err_gen,last_commutant) - \
-                    _np.einsum("ikab,kj->ijab",last_commutant,self.err_gen)
-                term = 1/_np.math.factorial(i) * commutant
-                series += term #1/_np.math.factorial(i) * commutant
-                last_commutant = commutant; i += 1
-            dO = _np.einsum('il,lkab,kj->ijab', self.unitary_prefactor, series, self.exp_err_gen) # dim [d2,d2,bs-1,bs-1]
-            dO = dO.reshape(d2**2,(bsO-1)**2)
-        
-        
-        derivMx = _np.concatenate((dH,dO), axis=1)
-        assert(_np.linalg.norm(_np.imag(derivMx)) < IMAG_TOL)
-        derivMx = _np.real(derivMx)
+            dH = _np.einsum('il,lka,kj->ija', self.unitary_prefactor, series, self.exp_err_gen)
+            dH = dH.reshape((d2**2,bsH-1)) # [iFlattenedGate,iHamParam]
+    
+            #Deriv wrt other params
+            if self.nonham_diagonal_only:
+                otherParams = self.paramvals[bsH-1:]
+            
+                # Derivative of exponent wrt other param; shape == [d2,d2,bs-1]
+                if self.cptp:
+                    dOdp  = _np.einsum('alj,a->lja', self.otherGens, 2*otherParams)
+                else:
+                    dOdp  = _np.einsum('alj->lja', self.otherGens)
+            
+                #apply basis transform
+                dOdp  = _np.einsum('lk,kna,nj->lja', self.leftTrans, dOdp, self.rightTrans)
+                assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
+            
+                #take d(maxtrix-exp) using series approximation
+                series = last_commutant = term = dOdp; i=2
+                while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
+                    commutant = _np.einsum("ik,kja->ija",self.err_gen,last_commutant) - \
+                        _np.einsum("ika,kj->ija",last_commutant,self.err_gen)
+                    term = 1/_np.math.factorial(i) * commutant
+                    series += term #1/_np.math.factorial(i) * commutant
+                    last_commutant = commutant; i += 1
+                dO = _np.einsum('il,lka,kj->ija', self.unitary_prefactor, series, self.exp_err_gen) # dim [d2,d2,bs-1]
+                dO = dO.reshape(d2**2,bsO-1)
+            
+            
+            else: #all lindblad terms included
+            
+                if self.cptp:
+                    L,Lbar = self.Lmx,self.Lmx.conjugate()
+                    F1 = _np.tril(_np.ones((bsO-1,bsO-1),'d'))
+                    F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
+            
+                      # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
+                    dOdp  = _np.einsum('amlj,mb,ab->ljab', self.otherGens, Lbar, F1) #only a >= b nonzero (F1)
+                    dOdp += _np.einsum('malj,mb,ab->ljab', self.otherGens, L, F1)    # ditto
+                    dOdp += _np.einsum('bmlj,ma,ab->ljab', self.otherGens, Lbar, F2) #only b > a nonzero (F2)
+                    dOdp += _np.einsum('mblj,ma,ab->ljab', self.otherGens, L, F2.conjugate()) # ditto
+                else:
+                    F0 = _np.identity(bsO-1,'d')
+                    F1 = _np.tril(_np.ones((bsO-1,bsO-1),'d'),-1)
+                    F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
+            
+                      # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
+                    dOdp  = _np.einsum('ablj,ab->ljab', self.otherGens, F0)  # a == b case
+                    dOdp += _np.einsum('ablj,ab->ljab', self.otherGens, F1) + \
+                            _np.einsum('balj,ab->ljab', self.otherGens, F1) # a > b (F1)
+                    dOdp += _np.einsum('balj,ab->ljab', self.otherGens, F2) - \
+                            _np.einsum('ablj,ab->ljab', self.otherGens, F2) # a < b (F2)
+            
+                #apply basis transform
+                dOdp  = _np.einsum('lk,knab,nj->ljab', self.leftTrans, dOdp, self.rightTrans)
+                assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
+            
+                #take d(maxtrix-exp) using series approximation
+                series = last_commutant = term = dOdp; i=2
+                while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
+                    commutant = _np.einsum("ik,kjab->ijab",self.err_gen,last_commutant) - \
+                        _np.einsum("ikab,kj->ijab",last_commutant,self.err_gen)
+                    term = 1/_np.math.factorial(i) * commutant
+                    series += term #1/_np.math.factorial(i) * commutant
+                    last_commutant = commutant; i += 1
+                dO = _np.einsum('il,lkab,kj->ijab', self.unitary_prefactor, series, self.exp_err_gen) # dim [d2,d2,bs-1,bs-1]
+                dO = dO.reshape(d2**2,(bsO-1)**2)
+            
+            
+            derivMx = _np.concatenate((dH,dO), axis=1)
+            assert(_np.linalg.norm(_np.imag(derivMx)) < IMAG_TOL)
+            derivMx = _np.real(derivMx)
+            self.base_deriv = derivMx
 
-        #check_deriv_wrt_params(self, derivMx, eps=1e-7)
-        #fd_deriv = finite_difference_deriv_wrt_params(self, eps=1e-7)
-        #derivMx = fd_deriv
+            #check_deriv_wrt_params(self, derivMx, eps=1e-7)
+            #fd_deriv = finite_difference_deriv_wrt_params(self, eps=1e-7)
+            #derivMx = fd_deriv
 
         if wrtFilter is None:
-            return derivMx
+            return self.base_deriv
         else:
-            return _np.take( derivMx, wrtFilter, axis=1 )
+            return _np.take( self.base_deriv, wrtFilter, axis=1 )
 
 
     def copy(self):
