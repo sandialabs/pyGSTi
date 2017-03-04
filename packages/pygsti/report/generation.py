@@ -2053,6 +2053,9 @@ def get_gaugeopt_params_table(gaugeOptArgs):
         # gauge optimiziation, though in the future we could print
         # multiple columns, one for each optimization.
 
+    if gaugeOptArgs == False: #signals *no* gauge optimization
+        gaugeOptArgs = {'Method': "No gauge optimization was performed" }
+
     if 'method' in gaugeOptArgs:
         table.addrow(("Method", str(gaugeOptArgs['method'])), (None,None))
     if 'TPpenalty' in gaugeOptArgs:

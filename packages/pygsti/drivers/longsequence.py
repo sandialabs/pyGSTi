@@ -45,24 +45,30 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     object is returned, which encapsulates the input and outputs of this GST
     analysis, and can generate final end-user output such as reports and
     presentations.
+
     Parameters
     ----------
     dataFilenameOrSet : DataSet or string
         The data set object to use for the analysis, specified either directly
         or by the filename of a dataset file (in text format).
+
     targetGateFilenameOrSet : GateSet or string
         The target gate set, specified either directly or by the filename of a
         gateset file (text format).
+
     prepStrsListOrFilename : (list of GateStrings) or string
         The state preparation fiducial gate strings, specified either directly
         or by the filename of a gate string list file (text format).
+
     effectStrsListOrFilename : (list of GateStrings) or string or None
         The measurement fiducial gate strings, specified either directly or by
         the filename of a gate string list file (text format).  If ``None``,
         then use the same strings as specified by prepStrsListOrFilename.
+
     germsListOrFilename : (list of GateStrings) or string
         The germ gate strings, specified either directly or by the filename of a
         gate string list file (text format).
+
     maxLengths : list of ints
         List of integers, one per LSGST iteration, which set truncation lengths
         for repeated germ strings.  The list of gate strings for the i-th LSGST
@@ -78,9 +84,11 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         *can* be set, but is specified internally when it isn't.  If `None`,
         then the dictionary `{'itemWeights': {'gates':1.0, 'spam':0.001}}`
         is used.  If `False`, then then *no* gauge optimization is performed.
+
     objective : {'chi2', 'logl'}, optional
         Specifies which final objective function is used: the chi-squared or
         the log-likelihood.
+
     fidPairs : list of 2-tuples or dict, optional
         Specifies a subset of all prepStr,effectStr string pairs to be used in
         this analysis.  If `fidPairs` is a list, each element of `fidPairs` is a
@@ -88,10 +96,12 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         the state preparation and measurement fiducial strings respectively. If
         `fidPairs` is a dict, then the keys must be germ strings and values are
         lists of 2-tuples as in the previous case.
+
     lsgstLists : list of gate string lists, optional
         Provides explicit list of gate string lists to be used in analysis; to
         be given if the dataset uses "incomplete" or "reduced" sets of gate
         string.  Default is ``None``.
+
     advancedOptions : dict, optional
         Specifies advanced options most of which deal with numerical details of
         the objective function or expert-level functionality.  The allowed keys
@@ -120,9 +130,11 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     comm : mpi4py.MPI.Comm, optional
         When not ``None``, an MPI communicator for distributing the computation
         across multiple processors.
+
     memLimit : int or None, optional
         A rough memory limit in bytes which restricts the amount of memory 
         used (per core when run on multi-CPUs).
+
     verbosity : int, optional
        The 'verbosity' option is an integer specifying the level of 
        detail printed to stdout during the calculation.
@@ -133,6 +145,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
        - 4 -- also shows inner iterations of LM algorithm
        - 5 -- also shows detailed info from within jacobian
               and objective function calls.
+
     Returns
     -------
     Results
@@ -374,6 +387,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
 
         tNxt = _time.time()
         profiler.add_time('do_long_sequence_gst: gauge optimization',tRef); tRef=tNxt
+    else:
+        ordered_go_params_list = None
 
     truncFn = _construction.stdlists._getTruncFunction(truncScheme)
 

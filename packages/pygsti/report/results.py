@@ -377,6 +377,9 @@ class Results(object):
         """
         assert(self._bEssentialResultsSet)
 
+        if gaugeOptParams == False:
+            return #no gauge optimization(?) - just return
+
         if hasattr(gaugeOptParams,"keys"):
             go_params_list = [gaugeOptParams]
         else: go_params_list = gaugeOptParams
@@ -1466,7 +1469,9 @@ class Results(object):
             gsBestEstimate = self.gatesets['final estimate']
 
             #Heusistic parameters for CPTP gauge opt that doesn't take too long
-            if hasattr(self.parameters['gaugeOptParams'],"keys"):
+            if self.parameters['gaugeOptParams'] == False:
+                gaugeParams = {}
+            elif hasattr(self.parameters['gaugeOptParams'],"keys"):
                 gaugeParams = self.parameters['gaugeOptParams'].copy()
             else:
                 gaugeParams = self.parameters['gaugeOptParams'][0].copy()

@@ -118,6 +118,7 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon",lengthList=N
     angleTemp1 = None
     angleHatList = []
     genNum = len(angleSinStrs)
+
     if lengthList == None:
         lengthList = [2**k for k in range(genNum)]
     for i, length in enumerate(lengthList):
@@ -130,7 +131,6 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon",lengthList=N
         angleHatList.append(angleTemp1)
     return angleHatList
 
-    
 def sin_phi2_func(theta,Phi,epsilon,rpeconfig_inst=None):
     """
     Returns the function whose zero, for fixed Phi and epsilon, occurs at the
