@@ -161,6 +161,57 @@ class GateMatrixCalc(GateCalc):
     # vec( A * E(0,1) * B ) = vec( mx w/ col_i = A[col0] * B[0,1] ) = B^T tensor A * vec( E(0,1) )
     # In general: vec( A * X * B ) = B^T tensor A * vec( X )
 
+    def dgate(self, gateLabel, flat=False, wrtFilter=None):
+        """ Return the derivative of a length-1 (single-gate) sequence """
+        dim = self.dim
+
+        #Create per-gate with-respect-to parameter filters, used to
+        # select a subset of all the derivative columns, essentially taking
+        # a derivative of only a *subset* of all the gate's parameters
+        if wrtFilter is not None:
+            gate_wrtFilter = [] # values = per-gate param indices
+            gate_nParams = {gl: 0 for gl in self.gates} # number of parameters (after filtering) per gate
+
+            #TODO: move construction of wrtIndexToGatelableIndexPair to __init__??
+            wrtIndexToGatelableIndexPair = [] # maps all-gate-params-index => (gateLabel, gate-param-index) pairs
+            for lbl,g in self.gates.items():
+                for k in range(g.num_params()):
+                    wrtIndexToGatelableIndexPair.append((lbl,k))
+
+            for i in wrtFilter:
+                lbl,k = wrtIndexToGatelableIndexPair[i]
+                gate_nParams[lbl] += 1
+                if lbl == gateLabel: gate_wrtFilter.append(k)
+        else:
+            gate_wrtFilter = None
+            gate_nParams = { gl: G.num_params() for gl,G in self.gates.items()}
+
+        # Allocate memory for the final result
+        num_deriv_cols =  self.tot_gate_params if (wrtFilter is None) else len(wrtFilter)
+        flattened_dprod = _np.zeros((dim**2, num_deriv_cols),'d')
+
+        if gate_wrtFilter is None or len(gate_wrtFilter) > 0:
+            
+            #offsets to beginning & end of current gate's parameters within all-gate-params
+            iBegin = iEnd = 0 
+            for gl in self.gates:
+                if gl == gateLabel:
+                    iEnd = iBegin + gate_nParams[gl]; break
+                iBegin += gate_nParams[gl]
+            else: raise ValueError("Couldn't find gate label %s in gate set!" % gateLabel)
+                    
+            # Compute the derivative of the entire gate string with respect to the 
+            # gate's parameters and fill appropriate columns of flattened_dprod.
+            gate = self.gates[gateLabel]
+            flattened_dprod[:,iBegin:iEnd] = \
+                gate.deriv_wrt_params(gate_wrtFilter) # (dim**2, nParams[gateLabel])
+                
+        if flat:
+            return flattened_dprod
+        else:
+            return _np.swapaxes( flattened_dprod, 0, 1 ).reshape( (num_deriv_cols, dim, dim) ) # axes = (gate_ij, prod_row, prod_col)
+
+
     def dproduct(self, gatestring, flat=False, wrtFilter=None):
         """
         Compute the derivative of a specified sequence of gate labels.
@@ -226,6 +277,7 @@ class GateMatrixCalc(GateCalc):
         # a derivative of only a *subset* of all the gate's parameters
         fltr = {} #keys = gate labels, values = per-gate param indices
         if wrtFilter is not None:
+            #TODO: move construction of wrtIndexToGatelableIndexPair to __init__??
             wrtIndexToGatelableIndexPair = []
             for lbl,g in self.gates.items():
                 for k in range(g.num_params()):
@@ -859,7 +911,8 @@ class GateMatrixCalc(GateCalc):
             if gateLabel == "": #special case of empty label == no gate
                 dProdCache[i] = _np.zeros( deriv_shape )
             else:                
-                dgate = self.dproduct( (gateLabel,) , wrtFilter=wrtIndices)
+                #dgate = self.dproduct( (gateLabel,) , wrtFilter=wrtIndices)
+                dgate = self.dgate(gateLabel, wrtFilter=wrtIndices)
                 dProdCache[i] = dgate / _np.exp(scaleCache[i])
 
         #profiler.print_mem("DEBUGMEM: POINT1"); profiler.comm.barrier()
