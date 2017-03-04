@@ -1606,7 +1606,8 @@ class Results(object):
                              linlg_pcntle=float(self.parameters['linlogPercentile']) / 100,
                              minProbClipForWeighting=mpc, save_to="", ticSize=20,
                              gateLabelAliases=self.parameters.get('gateLabelAliases',None))
-                figs.append(fig); n += maxGermsPerFig
+                if fig is not None: figs.append(fig)
+                n += maxGermsPerFig
 
             return figs
 

@@ -1311,22 +1311,23 @@ def generate_boxplot( xvals, yvals, xyGateStringDict, subMxs, cmapFactory, xlabe
         rptFig = nested_color_boxplot(subMxs, cmapFactory, fig=fig, axes=ax, title=title, prec=prec,
                                       ylabels=val_filter(yvals), xlabels=val_filter(xvals), boxLabels=boxLabels,
                                       colorbar=False, ylabel=ylabel, xlabel=xlabel, ticSize=ticSize, grid=grid)
-        rptFig.save_to(save_to)
+        if rptFig is not None: #can be None if there's nothing to plot
+            rptFig.save_to(save_to)
 
-        if histogram:
-            fig = _plt.figure()
-            histdata = _np.concatenate( [ subMxs[iy][ix].flatten() for ix in range(nXs) for iy in range(nYs)] )
-            histdata_finite = _np.take(histdata, _np.where(_np.isfinite(histdata)))[0] #take gives back (1,N) shaped array (why?)
-            histMin = min( histdata_finite ) if cmapFactory.vmin is None else cmapFactory.vmin
-            histMax = max( histdata_finite ) if cmapFactory.vmax is None else cmapFactory.vmax
-            _plt.hist(_np.clip(histdata_finite,histMin,histMax), histBins,
-                      range=[histMin, histMax], facecolor='gray', align='mid')
-            if save_to is not None:
-                if len(save_to) > 0:
-                    _plt.savefig( _makeHistFilename(save_to) )
-                _plt.close(fig)
+            if histogram:
+                fig = _plt.figure()
+                histdata = _np.concatenate( [ subMxs[iy][ix].flatten() for ix in range(nXs) for iy in range(nYs)] )
+                histdata_finite = _np.take(histdata, _np.where(_np.isfinite(histdata)))[0] #take gives back (1,N) shaped array (why?)
+                histMin = min( histdata_finite ) if cmapFactory.vmin is None else cmapFactory.vmin
+                histMax = max( histdata_finite ) if cmapFactory.vmax is None else cmapFactory.vmax
+                _plt.hist(_np.clip(histdata_finite,histMin,histMax), histBins,
+                          range=[histMin, histMax], facecolor='gray', align='mid')
+                if save_to is not None:
+                    if len(save_to) > 0:
+                        _plt.savefig( _makeHistFilename(save_to) )
+                    _plt.close(fig)
 
-    if rptFig:
+    if rptFig is not None:
         rptFig.set_extra_info( { 'nUsedXs': len(xvals),
                                  'nUsedYs': len(yvals) } )
     # rptFig.check() #DEBUG - test that figure can unpickle correctly --
