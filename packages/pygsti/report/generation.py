@@ -1737,9 +1737,10 @@ def get_gates_vs_target_err_gen_boxes_table(gateset, targetGateset,
     stoProjs = {'M': []}
 
     def getMinMax(max_lst, M):
-        #return a [min,]max already in list if there's one within an order of magnitude
+        #return a [min,max] already in list if there's one within an order of magnitude
         for mx in max_lst:
-            if 0.9999 < mx/M < 10: return -mx,mx
+            if 0.9999 < mx/M < 10 or (abs(mx)<1e-6 and abs(M)<1e-6):
+                return -mx,mx
         return None
             
     def addMax(max_lst, M):
@@ -2168,7 +2169,7 @@ def get_metadata_table(gateset, result_options, result_params):
         elif isinstance(gate, _objs.LindbladParameterizedGate):
             paramTyp = "Lindblad"
             if gate.cptp: paramTyp += " CPTP "
-            paramTyp += gate.nonHamTerms
+            paramTyp += "(%d, %d params)" % (gate.ham_basis_size, gate.other_basis_size)
         else: paramTyp = "unknown"
         table.addrow((gl + " parameterization", paramTyp), (None,'Verbatim'))
         
