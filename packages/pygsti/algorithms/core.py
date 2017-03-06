@@ -19,6 +19,7 @@ from .. import objects  as _objs
 _dummy_profiler = _objs.profiler.DummyProfiler()
 
 CUSTOMLM = True
+FLOATSIZE = 8 #TODO: better way?
 #from .track_allocations import AllocationTracker
 
 #Note on where 4x4 or possibly other integral-qubit dimensions are needed:
@@ -1403,10 +1404,18 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         nGateStrings = len(gateStringsToUse)
         nDataParams  = nGateStrings*(len(dataset.get_spam_labels())-1) #number of independent parameters
                                                                      # in dataset (max. model # of params)
-        try:
-            nModelParams = gs.num_nongauge_params() #len(x0)
-        except: #numpy can throw a LinAlgError
-            printer.warning("Could not obtain number of *non-gauge* parameters - using total params instead")
+
+        #Don't compute num gauge params if it's expensive (>10% of mem limit)
+        memForNumGaugeParams = gs.num_elements() * (gs.num_params()+gs.dim**2) \
+            * FLOATSIZE # see GateSet._buildup_dPG (this is mem for dPG)
+        if memLimit is None or 0.1*memLimit < memForNumGaugeParams:
+            try:
+                nModelParams = gs.num_nongauge_params() #len(x0)
+            except: #numpy can throw a LinAlgError
+                printer.warning("Could not obtain number of *non-gauge* parameters - using total params instead")
+                nModelParams = gs.num_params()
+        else:
+            printer.log("Finding num_nongauge_params is too expensive: using total params.")
             nModelParams = gs.num_params() #just use total number of params
 
         totChi2 = sum([x**2 for x in minErrVec])
@@ -2508,10 +2517,18 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
             nGateStrings = len(gateStringsToUse)
             nDataParams  = nGateStrings*(len(dataset.get_spam_labels())-1) #number of independent parameters
                                                                          # in dataset (max. model # of params)
-            try:
-                nModelParams = gs.num_nongauge_params() #len(x0)
-            except: #numpy can throw a LinAlgError
-                printer.warning("Could not obtain number of *non-gauge* parameters - using total params instead")
+
+            #Don't compute num gauge params if it's expensive (>10% of mem limit)
+            memForNumGaugeParams = gs.num_elements() * (gs.num_params()+gs.dim**2) \
+                * FLOATSIZE # see GateSet._buildup_dPG (this is mem for dPG)
+            if memLimit is None or 0.1*memLimit < memForNumGaugeParams:
+                try:
+                    nModelParams = gs.num_nongauge_params() #len(x0)
+                except: #numpy can throw a LinAlgError
+                    printer.warning("Could not obtain number of *non-gauge* parameters - using total params instead")
+                    nModelParams = gs.num_params()
+            else:
+                printer.log("Finding num_nongauge_params is too expensive: using total params.")
                 nModelParams = gs.num_params() #just use total number of params
 
             pvalue = 1.0 - _stats.chi2.cdf(2*deltaLogL,nDataParams-nModelParams) # reject GST if p-value < threshold (~0.05?)
