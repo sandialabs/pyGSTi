@@ -14,6 +14,8 @@ from ..tools import mpitools as _mpit
 
 #constants
 MACH_PRECISION = 1e-12
+#MU_TOL1 = 1e10 # ??
+#MU_TOL2 = 1e3  # ??
 
 
 def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
@@ -78,6 +80,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         if k == 0:
             #mu = tau # initial damping element
             mu = tau * _np.max(undampled_JTJ_diag) # initial damping element
+            #mu = min(mu, MU_TOL1)
 
         #determing increment using adaptive damping
         while True:  #inner loop
@@ -103,7 +106,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 if verbosity > 1:
                     print("  - Inner Loop: mu=%g, norm_dx=%g" % (mu,norm_dx))
 
-                if norm_dx < (rel_xtol**2)*norm_x:
+                if norm_dx < (rel_xtol**2)*norm_x: # and mu < MU_TOL2:
                     msg = "Relative change in |x| is at most %g" % rel_xtol
                     converged = True; break
 
