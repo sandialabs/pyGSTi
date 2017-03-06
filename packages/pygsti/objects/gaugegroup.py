@@ -134,7 +134,7 @@ class UnitaryGaugeGroup(GateGaugeGroup):
     def __init__(self, dim):
         from . import gate as _gate #b/c gate.py imports gaugegroup
         gate = _gate.LindbladParameterizedGate(None, _np.identity(dim,'d'),
-                                               cptp=True, nonHamTerms="none")
+                                               cptp=True, nonham_basis=[])
         GateGaugeGroup.__init__(self, gate)
 
     class element(GateGaugeGroup.element):

@@ -946,59 +946,80 @@ def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
         An array of shape (d-1,d-1,d,d), where d is the size of the basis.
         `other_generators[i,j]` gives the matrix for O_ij.
     """
-    ham_mxs = dmbasis_ham # list of basis matrices (assumed to be in std basis)
-    ham_nMxs = len(ham_mxs) # usually == d2, but not necessary (e.g. w/maxWeight)
+    if dmbasis_ham is not None:
+        ham_mxs = dmbasis_ham # list of basis matrices (assumed to be in std basis)
+        ham_nMxs = len(ham_mxs) # usually == d2, but not necessary (e.g. w/maxWeight)
+    else:
+        ham_nMxs = 0
 
-    other_mxs = dmbasis_other # list of basis matrices (assumed to be in std basis)
-    other_nMxs = len(other_mxs) # usually == d2, but not necessary (e.g. w/maxWeight)
+    if dmbasis_other is not None:
+        other_mxs = dmbasis_other # list of basis matrices (assumed to be in std basis)
+        other_nMxs = len(other_mxs) # usually == d2, but not necessary (e.g. w/maxWeight)
+    else:
+        other_nMxs = 0
 
-    d = ham_mxs[0].shape[0] 
+    if ham_nMxs > 0:
+        d = ham_mxs[0].shape[0]
+    elif other_nMxs > 0:
+        d = other_mxs[0].shape[0]
+    else: 
+        d = 0 #will end up returning no generators
     d2 = d**2
 
-    assert(other_mxs[0].shape[0] == d), "Bases must have the same dimension!"
-    assert(_np.isclose(_np.linalg.norm(ham_mxs[0]-_np.identity(d)/_np.sqrt(d)),0)),\
-        "The first matrix in 'dmbasis_ham' must be the identity"
-    assert(_np.isclose(_np.linalg.norm(other_mxs[0]-_np.identity(d)/_np.sqrt(d)),0)),\
-        "The first matrix in 'dmbasis_other' must be the identity"
+    if ham_nMxs > 0 and other_nMxs > 0:
+        assert(other_mxs[0].shape[0] == ham_mxs[0].shape[0]), \
+            "Bases must have the same dimension!"
 
-    hamLindbladTerms = _np.empty( (ham_nMxs-1,d2,d2), 'complex' )
-    for i,B in enumerate(ham_mxs[1:]): #don't include identity
-        hamLindbladTerms[i] = _bt.hamiltonian_to_lindbladian(B) # in std basis
-        if normalize:
-            norm = _np.linalg.norm(hamLindbladTerms[i].flat)
-            if not _np.isclose(norm,0):
-                hamLindbladTerms[i] /= norm #normalize projector
-                assert(_np.isclose(_np.linalg.norm(hamLindbladTerms[i].flat),1.0))
+    if ham_nMxs > 0:
+        assert(_np.isclose(_np.linalg.norm(ham_mxs[0]-_np.identity(d)/_np.sqrt(d)),0)),\
+            "The first matrix in 'dmbasis_ham' must be the identity"
 
-
-    if other_diagonal_only:
-        otherLindbladTerms = _np.empty( (other_nMxs-1,d2,d2), 'complex' )
-        for i,Lm in enumerate(other_mxs[1:]): #don't include identity
-            otherLindbladTerms[i] = _bt.nonham_lindbladian(Lm,Lm)
+        hamLindbladTerms = _np.empty( (ham_nMxs-1,d2,d2), 'complex' )
+        for i,B in enumerate(ham_mxs[1:]): #don't include identity
+            hamLindbladTerms[i] = _bt.hamiltonian_to_lindbladian(B) # in std basis
             if normalize:
-                norm = _np.linalg.norm(otherLindbladTerms[i].flat)
+                norm = _np.linalg.norm(hamLindbladTerms[i].flat)
                 if not _np.isclose(norm,0):
-                    otherLindbladTerms[i] /= norm #normalize projector
-                    assert(_np.isclose(_np.linalg.norm(
-                        otherLindbladTerms[i].flat),1.0))
-    
+                    hamLindbladTerms[i] /= norm #normalize projector
+                    assert(_np.isclose(_np.linalg.norm(hamLindbladTerms[i].flat),1.0))
     else:
-        otherLindbladTerms = _np.empty( (other_nMxs-1,other_nMxs-1,d2,d2), 'complex' )
-        for i,Lm in enumerate(other_mxs[1:]): #don't include identity
-            for j,Ln in enumerate(other_mxs[1:]): #don't include identity
-                #print("DEBUG NONHAM LIND (%d,%d)" % (i,j)) #DEBUG!!!
-                otherLindbladTerms[i,j] = _bt.nonham_lindbladian(Lm,Ln)
+        hamLindbladTerms = None
+
+    if other_nMxs > 0:
+        assert(_np.isclose(_np.linalg.norm(other_mxs[0]-_np.identity(d)/_np.sqrt(d)),0)),\
+            "The first matrix in 'dmbasis_other' must be the identity"
+
+        if other_diagonal_only:
+            otherLindbladTerms = _np.empty( (other_nMxs-1,d2,d2), 'complex' )
+            for i,Lm in enumerate(other_mxs[1:]): #don't include identity
+                otherLindbladTerms[i] = _bt.nonham_lindbladian(Lm,Lm)
                 if normalize:
-                    norm = _np.linalg.norm(otherLindbladTerms[i,j].flat)
+                    norm = _np.linalg.norm(otherLindbladTerms[i].flat)
                     if not _np.isclose(norm,0):
-                        otherLindbladTerms[i,j] /= norm #normalize projector
+                        otherLindbladTerms[i] /= norm #normalize projector
                         assert(_np.isclose(_np.linalg.norm(
-                                    otherLindbladTerms[i,j].flat),1.0))
-                #I don't think this is true in general, but appears to be true for "pp" basis (why?)
-                #if j < i: # check that other[i,j] == other[j,i].C, i.e. other is Hermitian
-                #    assert(_np.isclose(_np.linalg.norm(
-                #                otherLindbladTerms[i,j]-
-                #                otherLindbladTerms[j,i].conjugate()),0))
+                            otherLindbladTerms[i].flat),1.0))
+        
+        else:
+            otherLindbladTerms = _np.empty( (other_nMxs-1,other_nMxs-1,d2,d2), 'complex' )
+            for i,Lm in enumerate(other_mxs[1:]): #don't include identity
+                for j,Ln in enumerate(other_mxs[1:]): #don't include identity
+                    #print("DEBUG NONHAM LIND (%d,%d)" % (i,j)) #DEBUG!!!
+                    otherLindbladTerms[i,j] = _bt.nonham_lindbladian(Lm,Ln)
+                    if normalize:
+                        norm = _np.linalg.norm(otherLindbladTerms[i,j].flat)
+                        if not _np.isclose(norm,0):
+                            otherLindbladTerms[i,j] /= norm #normalize projector
+                            assert(_np.isclose(_np.linalg.norm(
+                                        otherLindbladTerms[i,j].flat),1.0))
+                    #I don't think this is true in general, but appears to be true for "pp" basis (why?)
+                    #if j < i: # check that other[i,j] == other[j,i].C, i.e. other is Hermitian
+                    #    assert(_np.isclose(_np.linalg.norm(
+                    #                otherLindbladTerms[i,j]-
+                    #                otherLindbladTerms[j,i].conjugate()),0))
+    else:
+        otherLindbladTerms = None
+
 
 
     #Check for orthogonality - otherLindblad terms are *not* orthogonal!
@@ -1110,39 +1131,22 @@ def lindblad_errgen_projections(errgen, ham_basis,
     hamGens,otherGens = lindblad_error_generators(
         hamBasisMxs,otherBasisMxs,normalize,other_diagonal_only) # in std basis
 
-    bsH = len(hamBasisMxs) #basis size (not necessarily d2)
-    bsO = len(otherBasisMxs) #basis size (not necessarily d2)
+    if hamBasisMxs is not None:
+        bsH = len(hamBasisMxs) #basis size (not necessarily d2)
+    else: bsH = 0
+
+    if otherBasisMxs is not None:
+        bsO = len(otherBasisMxs) #basis size (not necessarily d2)
+    else: bsO = 0
 
     assert(_np.isclose(d*d,d2)) #d2 must be a perfect square
-    assert(hamGens.shape == (bsH-1,d2,d2))
-    if other_diagonal_only:
-        assert(otherGens.shape == (bsO-1,d2,d2))
-    else:
-        assert(otherGens.shape == (bsO-1,bsO-1,d2,d2))
-
-
-    #OLD: just lump hamiltonian generators in with the others, even though they
-    #   should be orthogonal to all the non-hamiltonian error generators.
-    #hamProjs = _np.empty( hamGens.shape[0], 'd' )
-    #for i,genMx in enumerate(hamGens):
-    #    hamProjs[i] = _np.real_if_close(_np.vdot( errgen_std.flatten(), genMx.flatten() ))
-    #    assert(_np.isreal(hamProjs[i]))
-
-    #OLD: doesn't work because otherGens are *not* orthogonal (but they are linearly independent)
-    #otherProjs = _np.empty( (otherGens.shape[0],otherGens.shape[1]), 'complex' )
-    #for i in range(otherGens.shape[0]):
-    #    for j in range(otherGens.shape[1]):
-    #        otherProjs[i,j] = _np.vdot( errgen_std.flatten(),
-    #                                    otherGens[i,j].flatten())
-    #        if i==j: 
-    #            otherProjs[i,j] = _np.real_if_close(otherProjs[i,j])
-    #            assert(_np.isreal(otherProjs[i,j]))
-    #        if i > j:
-    #            #print("DEBUG conjugates (%d,%d):" % (i,j)) #DEBUG!!!
-    #            #print("other[%d,%d] = \n" % (i,j), otherGens[i,j])
-    #            #print("other[%d,%d] = \n" % (j,i), otherGens[j,i])
-    #            assert(_np.isclose(otherProjs[i,j], otherProjs[j,i].conjugate())) 
-    #             #at least for "pp" basis, otherProjs is hermetian when computed this way...
+    if bsH > 0: 
+        assert(hamGens.shape == (bsH-1,d2,d2))
+    if bsO > 0:
+        if other_diagonal_only:
+            assert(otherGens.shape == (bsO-1,d2,d2))
+        else:
+            assert(otherGens.shape == (bsO-1,bsO-1,d2,d2))
 
     #Perform linear least squares solve to find "projections" onto each otherGens element - defined so that
     #  sum_i projection_i * otherGen_i = (errgen_std-ham_errgen) as well as possible.
@@ -1152,16 +1156,33 @@ def lindblad_errgen_projections(errgen, ham_basis,
     
     #Do linear least squares soln to expressing errgen_std as a linear combo
     # of the lindblad generators
-    H = hamGens.reshape((bsH-1,d2**2)).T #ham generators == columns
-    if other_diagonal_only:
-        O = otherGens.reshape((bsO-1,d2**2)).T # other generators == columns
-    else:
-        O = otherGens.reshape(((bsO-1)**2,d2**2)).T # other generators == columns
-    Hdag, Odag = H.T.conjugate(), O.T.conjugate()
+    if bsH > 0:
+        H = hamGens.reshape((bsH-1,d2**2)).T #ham generators == columns
+        Hdag = H.T.conjugate()
 
-    #Do linear least squares: this is what takes the bulk of the time
-    hamProjs   = _np.linalg.solve(_np.dot(Hdag,H), _np.dot(Hdag,errgen_std.flatten()))
-    otherProjs = _np.linalg.solve(_np.dot(Odag,O), _np.dot(Odag,errgen_std.flatten()))
+        #Do linear least squares: this is what takes the bulk of the time
+        hamProjs   = _np.linalg.solve(_np.dot(Hdag,H), _np.dot(Hdag,errgen_std.flatten()))
+        hamProjs.shape = (hamGens.shape[0],)
+    else:
+        hamProjs = None
+
+    if bsO > 0:
+        if other_diagonal_only:
+            O = otherGens.reshape((bsO-1,d2**2)).T # other generators == columns
+        else:
+            O = otherGens.reshape(((bsO-1)**2,d2**2)).T # other generators == columns
+        Odag = O.T.conjugate()
+
+        #Do linear least squares: this is what takes the bulk of the time
+        otherProjs = _np.linalg.solve(_np.dot(Odag,O), _np.dot(Odag,errgen_std.flatten()))
+
+        if other_diagonal_only:
+            otherProjs.shape = (otherGens.shape[0],)
+        else:
+            otherProjs.shape = (otherGens.shape[0],otherGens.shape[1])
+    else:
+        otherProjs = None
+
 
     #check err gens are linearly independent -- but can take a very long time, so comment out!
     #assert(_np.linalg.matrix_rank(H,1e-7) == H.shape[1])
@@ -1177,12 +1198,6 @@ def lindblad_errgen_projections(errgen, ham_basis,
     #    assert(_np.linalg.norm(hamProjs-hamProjs_chk) < 1e-6)
     #    assert(_np.linalg.norm(otherProjs-otherProjs_chk) < 1e-6)
     
-    hamProjs.shape = (hamGens.shape[0],)
-    if other_diagonal_only:
-        otherProjs.shape = (otherGens.shape[0],)
-    else:
-        otherProjs.shape = (otherGens.shape[0],otherGens.shape[1])
-
     if return_generators:
         return hamProjs, otherProjs, hamGens, otherGens
     else:
