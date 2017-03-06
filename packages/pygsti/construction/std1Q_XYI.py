@@ -16,6 +16,8 @@ description = "Idle, X(pi/2), and Y(pi/2) gates"
 gates = ['Gi','Gx','Gy']
 fiducials = _strc.gatestring_list( [ (), ('Gx',), ('Gy',), ('Gx','Gx'),
                                      ('Gx','Gx','Gx'), ('Gy','Gy','Gy') ] ) # for 1Q MUB
+prepStrs = effectStrs = fiducials
+
 germs = _strc.gatestring_list( [('Gx',), ('Gy',), ('Gi',), ('Gx', 'Gy'),
                                 ('Gx', 'Gy', 'Gi'), ('Gx', 'Gi', 'Gy'), ('Gx', 'Gi', 'Gi'), ('Gy', 'Gi', 'Gi'),
                                   ('Gx', 'Gx', 'Gi', 'Gy'), ('Gx', 'Gy', 'Gy', 'Gi'),
