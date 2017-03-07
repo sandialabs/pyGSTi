@@ -132,7 +132,7 @@ germs = _strc.gatestring_list(
       ('Gcnot', 'Gyi', 'Gxi', 'Gyi', 'Giy', 'Gyi', 'Gyi', 'Giy')
       ])
 
-germs_XYnested = _setc.gatestring_list(
+germs_XYnested = _strc.gatestring_list(
     [ ('Gii',),
       ('Gxi',),
       ('Gyi',),
