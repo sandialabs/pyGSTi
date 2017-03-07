@@ -2596,7 +2596,11 @@ class GateSet(object):
         newGateset._remainderlabel = self._remainderlabel
         newGateset._identitylabel = self._identitylabel
         newGateset._default_gauge_group = self._default_gauge_group
+        
+        if not hasattr(self,"_calcClass"): #for backward compatibility
+            self._calcClass = _GateMatrixCalc
         newGateset._calcClass = self._calcClass
+        
         return newGateset
 
     def __str__(self):
