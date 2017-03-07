@@ -12,6 +12,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #Import Objects at package level
 from .confidenceregion import ConfidenceRegion
 from .dataset import DataSet
+from .tddataset import TDDataSet
 from .exceptions import *
 from .evaltree import EvalTree
 from .matrixevaltree import MatrixEvalTree
