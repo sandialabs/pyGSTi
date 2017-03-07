@@ -643,14 +643,14 @@ class StdInputParser(object):
         orig_cwd = _os.getcwd()
         if len(_os.path.dirname(filename)) > 0: _os.chdir( _os.path.dirname(filename) ) #allow paths relative to datafile path
         try:
-            if preamble_directives.has_key('Lookup'): 
+            if 'Lookup' in preamble_directives: 
                 lookupDict = self.parse_dictfile( preamble_directives['Lookup'] )
             else: lookupDict = { }
         finally:
             _os.chdir(orig_cwd)
 
         spamLabelAbbrevs = _OrderedDict()
-        for key,val in preamble_directives.iteritems():
+        for key,val in preamble_directives.items():
             if key == "Lookup": continue 
             spamLabelAbbrevs[key] = val
         spamLabels = spamLabelAbbrevs.values()
@@ -659,7 +659,7 @@ class StdInputParser(object):
         dataset = _objs.TDDataSet(spamLabels=spamLabels)
         nLines = sum(1 for line in open(filename,'r'))
         nSkip = int(nLines / 100.0)
-	if nSkip == 0: nSkip = 1
+        if nSkip == 0: nSkip = 1
 
         def is_interactive():
             import __main__ as main
@@ -694,7 +694,8 @@ class StdInputParser(object):
                 raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 
             seriesList = [ spamLabelAbbrevs[abbrev] for abbrev in timeSeriesStr ] #iter over characters in str
-            dataset.add_timeseries_list(gateString, seriesList)
+            timesList = list(range(len(seriesList))) #FUTURE: specify an offset and step??
+            dataset.add_series_data(gateString, seriesList, timesList)
                 
         dataset.done_adding_data()
         return dataset
