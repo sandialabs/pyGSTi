@@ -614,6 +614,93 @@ class StdInputParser(object):
         return countDicts
 
 
+    def parse_tddatafile(self, filename):
+        """ 
+        Parse a data set file into a TDDataSet object.
+
+        Parameters
+        ----------
+        filename : string
+            The file to parse.
+
+        Returns
+        -------
+        TDDataSet
+            A static TDDataSet object.
+        """
+
+        #Parse preamble -- lines beginning with # or ## until first non-# line
+        preamble_directives = _OrderedDict()
+        for line in open(filename,'r'):
+            line = line.strip()
+            if len(line) == 0 or line[0] != '#': break
+            if line.startswith("## "):
+                parts = line[len("## "):].split("=")
+                if len(parts) == 2: # key = value
+                    preamble_directives[ parts[0].strip() ] = parts[1].strip()
+        
+        #Process premble
+        orig_cwd = _os.getcwd()
+        if len(_os.path.dirname(filename)) > 0: _os.chdir( _os.path.dirname(filename) ) #allow paths relative to datafile path
+        try:
+            if 'Lookup' in preamble_directives: 
+                lookupDict = self.parse_dictfile( preamble_directives['Lookup'] )
+            else: lookupDict = { }
+        finally:
+            _os.chdir(orig_cwd)
+
+        spamLabelAbbrevs = _OrderedDict()
+        for key,val in preamble_directives.items():
+            if key == "Lookup": continue 
+            spamLabelAbbrevs[key] = val
+        spamLabels = spamLabelAbbrevs.values()
+
+        #Read data lines of data file
+        dataset = _objs.TDDataSet(spamLabels=spamLabels)
+        nLines = sum(1 for line in open(filename,'r'))
+        nSkip = int(nLines / 100.0)
+        if nSkip == 0: nSkip = 1
+
+        def is_interactive():
+            import __main__ as main
+            return not hasattr(main, '__file__')
+
+        if is_interactive():
+            try:
+                import time
+                from IPython.display import clear_output
+                def display_progress(i,N): 
+                    time.sleep(0.001); clear_output()
+                    print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))
+                    _sys.stdout.flush()
+            except:
+                def display_progress(i,N): pass
+        else:
+            def display_progress(i,N): pass
+
+        for (iLine,line) in enumerate(open(filename,'r')):
+            if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines)
+
+            line = line.strip()
+            if len(line) == 0 or line[0] == '#': continue
+            try:
+                parts = line.split()
+                lastpart = parts[-1]
+                gateStringStr = line[:-len(lastpart)].strip()
+                gateStringTuple = self.parse_gatestring(gateStringStr, lookupDict)
+                gateString = _objs.GateString(gateStringTuple, gateStringStr)
+                timeSeriesStr = lastpart.strip()
+            except ValueError as e:
+                raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
+
+            seriesList = [ spamLabelAbbrevs[abbrev] for abbrev in timeSeriesStr ] #iter over characters in str
+            timesList = list(range(len(seriesList))) #FUTURE: specify an offset and step??
+            dataset.add_series_data(gateString, seriesList, timesList)
+                
+        dataset.done_adding_data()
+        return dataset
+
+
 
 def _evalElement(el, bComplex):
     myLocal = { 'pi': _np.pi, 'sqrt': _np.sqrt }
