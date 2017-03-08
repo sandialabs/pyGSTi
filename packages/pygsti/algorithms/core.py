@@ -1075,7 +1075,6 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     if gateLabelAliases is not None:
         #find & replace aliased gate labels with their expanded form
         dsGateStringsToUse = []
-        assert(None not in gateStringsToUse) #DEBUG
         for s in gateStringsToUse:
             for label,expandedStr in gateLabelAliases.items():
                 while label in tuple(s):
@@ -2045,7 +2044,8 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
              cptp_penalty_factor=0, minProbClip=1e-4,
              probClipInterval=(-1e6,1e6), radius=1e-4,
              poissonPicture=True, verbosity=0, check=False,
-             gateLabelAliases=None, memLimit=None, comm=None,
+             gatestringWeights=None, gateLabelAliases=None,
+             memLimit=None, comm=None,
              distributeMethod = "deriv", profiler=None):
 
     """
@@ -2098,6 +2098,11 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
       If True, perform extra checks within code to verify correctness.  Used
       for testing, and runs much slower when True.
 
+    gatestringWeights : numpy array, optional
+      An array of length len(gateStringsToUse).  Each element scales the
+      log-likelihood term of the corresponding gate string in gateStringsToUse.
+      The default is no weight scaling at all.
+
     gateLabelAliases : dictionary, optional
       Dictionary whose keys are gate label "aliases" and whose values are tuples
       corresponding to what that gate label should be expanded into before querying
@@ -2131,8 +2136,8 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     return _do_mlgst_base(dataset, startGateset, gateStringsToUse, maxiter,
                           maxfev, tol,cptp_penalty_factor, minProbClip,
                           probClipInterval, radius, poissonPicture, verbosity,
-                          check, gateLabelAliases, memLimit, comm,
-                          distributeMethod, profiler, None, None)
+                          check, gatestringWeights, gateLabelAliases, memLimit,
+                          comm, distributeMethod, profiler, None, None)
 
 
 def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
@@ -2140,7 +2145,8 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
                    cptp_penalty_factor=0, minProbClip=1e-4,
                    probClipInterval=(-1e6,1e6), radius=1e-4,
                    poissonPicture=True, verbosity=0, check=False,
-                   gateLabelAliases=None, memLimit=None, comm=None,
+                   gatestringWeights=None, gateLabelAliases=None,
+                   memLimit=None, comm=None,
                    distributeMethod = "deriv", profiler=None,
                    evaltree_cache=None, forcefn_grad=None,
                    shiftFctr=100):
@@ -2246,6 +2252,10 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
     # Note: cannot rely on order of gateStringsToUse above this point --
     #   (using len(gateStringsToUse) is fine though).
     gateStringsToUse = evTree.generate_gatestring_list(permute=False)
+    if gatestringWeights is not None:
+        gatestringWeights = \
+            evTree.permute_original_to_computation(gatestringWeights)
+    assert(None not in gateStringsToUse) #DEBUG
 
     #Expand gate label aliases used in DataSet lookups
     if gateLabelAliases is not None:
@@ -2280,6 +2290,13 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
 
     freqs = cntVecMx / totalCntVec[None,:]
     freqs_nozeros = _np.where(cntVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
+
+    if gatestringWeights is not None:
+        #From this point downward, scaling cntVecMx, totalCntVec and
+        # minusCntVecMx will scale the corresponding logL terms, as desired.
+        cntVecMx *= gatestringWeights[None,:] # dims K x M (K = nSpamLabels,
+        minusCntVecMx *= gatestringWeights[None,:] #        M = nGateStrings)
+        totalCntVec *= gatestringWeights #multiply N's by weights
 
     if poissonPicture:
         freqTerm = cntVecMx * ( _np.log(freqs_nozeros) - 1.0 )
@@ -2591,7 +2608,8 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                        minProbClip=1e-4, probClipInterval=(-1e6,1e6), radius=1e-4,
                        poissonPicture=True,returnMaxLogL=False,returnAll=False,
                        gateStringSetLabels=None, useFreqWeightedChiSq=False,
-                       verbosity=0, check=False, gateLabelAliases=None, memLimit=None, 
+                       verbosity=0, check=False, gatestringWeightsDict=None,
+                       gateLabelAliases=None, memLimit=None, 
                        profiler=None, comm=None, distributeMethod = "deriv"):
     """
     Performs Iterative Maximum Liklihood Estimation Gate Set Tomography on the dataset.
@@ -2668,6 +2686,10 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
         If True, perform extra checks within code to verify correctness.  Used
         for testing, and runs much slower when True.
 
+    gatestringWeightsDict : dictionary, optional
+        A dictionary with keys == gate strings and values == multiplicative scaling
+        factor for the corresponding gate string. The default is no weight scaling at all.
+
     gateLabelAliases : dictionary, optional
         Dictionary whose keys are gate label "aliases" and whose values are tuples
         corresponding to what that gate label should be expanded into before querying
@@ -2731,6 +2753,13 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
 
             if stringsToEstimate is None or len(stringsToEstimate) == 0: continue
 
+            if gatestringWeightsDict is not None:
+                gatestringWeights = _np.ones( len(stringsToEstimate), 'd')
+                for gatestr, weight in gatestringWeightsDict.items():
+                    if gatestr in stringsToEstimate:
+                        gatestringWeights[ stringsToEstimate.index(gatestr) ] = weight
+            else: gatestringWeights = None
+
             mleGateset.set_basis(startGateset.get_basis_name(),
                                    startGateset.get_basis_dimension()) 
               #set basis in case of CPTP constraints
@@ -2739,14 +2768,14 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                                       maxiter, maxfev, tol, cptp_penalty_factor,
                                       minProbClip, probClipInterval,
                                       useFreqWeightedChiSq, 0,printer-1, check,
-                                      check, None, gateLabelAliases, memLimit, comm,
-                                      distributeMethod, profiler)
+                                      check, gatestringWeights, gateLabelAliases,
+                                      memLimit, comm, distributeMethod, profiler)
 
             #_, mleGateset = do_mlgst(dataset, mleGateset, stringsToEstimate,
             #                         maxiter, maxfev, tol, cptp_penalty_factor,
             #                         minProbClip, probClipInterval, radius,
-            #                         poissonPicture, printer-1, check, None,
-            #                         memLimit, comm, distributeMethod, profiler)
+            #                         poissonPicture, printer-1, check, gatestringWeights,
+            #                         gateLabelAliases, memLimit, comm, distributeMethod, profiler)
 
 
             tNxt = _time.time();
@@ -2770,7 +2799,8 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
            #maxLogL, mleGateset = do_mlgst( dataset, mleGateset, stringsToEstimate,
            #                                maxiter, maxfev, tol,
            #                                minProbClip, probClipInterval, radius, poissonPicture,
-           #                                verbosity, check, gateLabelAliases, memLimit, comm)
+           #                                verbosity, check, gatestringWeights, gateLabelAliases,
+           #                                memLimit, comm)
 
             if i == len(gateStringLists)-1: #on the last iteration, do ML
                 printer.log("Switching to ML objective (last iteration)",2)
@@ -2781,8 +2811,8 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                 maxLogL_p, mleGateset_p = do_mlgst(
                   dataset, mleGateset, stringsToEstimate, maxiter, maxfev, tol,
                   cptp_penalty_factor, minProbClip, probClipInterval, radius,
-                  poissonPicture, printer-1, check, gateLabelAliases, memLimit, comm,
-                  distributeMethod, profiler)
+                  poissonPicture, printer-1, check, gatestringWeights, gateLabelAliases,
+                  memLimit, comm, distributeMethod, profiler)
 
                 printer.log("2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL_p)),2)
 
