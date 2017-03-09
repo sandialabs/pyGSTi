@@ -768,6 +768,18 @@ class TDDataSet(object):
 
 
   def create_dataset_at_time(self, timeval):
+    """ 
+    Creates a DataSet at time `timeval` via fourier-filtering this data.
+
+    Parameters
+    ----------
+    timeval : float or int
+        The time-stamp value at which to create a DataSet.
+
+    Returns
+    -------
+    DataSet
+    """
     ds = _ds.DataSet(spamLabelIndices=self.slIndex)
     for gateStr,i in self.gsIndex.items():
       ff_data_dict = self.ffdata[gateStr]
@@ -788,6 +800,44 @@ class TDDataSet(object):
       ds.add_count_dict(gateStr, count_dict)
     ds.done_adding_data()
     return ds
+
+  
+  def create_dataset_from_time_range(self, startTime, endTime):
+    """ 
+    Creates a DataSet by aggregating the counts within the
+    [`startTime`,`endTime`) interval.
+
+    Parameters
+    ----------
+    startTime, endTime : float or int
+        The time-stamps to use for the beginning (inclusive) and end
+        (exclusive) of the time interval.
+
+    Returns
+    -------
+    DataSet
+    """
+    tot = 0
+    ds = _ds.DataSet(spamLabelIndices=self.slIndex)
+    for gateStr,dsRow in self.iteritems():
+
+      if dsRow.reps is None:
+        reps = _np.ones(dsRow.sli.shape, self.repType)
+      else: reps = dsRow.reps
+
+      count_dict = {i: 0 for i in self.slIndex.values()}
+      for spamIndx, t, rep in zip(dsRow.sli, dsRow.time, reps):
+        if startTime <= t < endTime:
+          count_dict[spamIndx] += rep
+          tot += rep
+
+      ds.add_count_dict(gateStr,
+                        {self.sl[i]: cnt for i,cnt in count_dict.items()})
+
+    if tot == 0:
+      _warnings.warn("No counts in the requested time range: empty DataSet created")
+    ds.done_adding_data()                                                                                                           
+    return ds         
 
 
   def __getstate__(self):

@@ -495,6 +495,7 @@ Gx^4 20 80 0.2 100
         nStrs = len(ds)
         ds.compute_fourier_filtering(verbosity=5)
         dsT = ds.create_dataset_at_time(0.2)
+        dsT2 = ds.create_dataset_from_time_range(0,0.3)
 
         
     def test_tddataset_from_file(self):
