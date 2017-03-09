@@ -379,3 +379,17 @@ In the Whack-a-mole plots shown below, each of the longest base sequences is ind
 
 \putfield{whackamole_plot_figures}{Whack-a-mole plots for select gate sets will be placed here}
 }{}
+
+\iftoggle{puredataappendix}{
+\section{Direct analysis of raw data\label{appendix_pure_data}}
+
+This appendix shows the results of analysing the data set as directly as possible, often independently of the GST estimate.  Its purpose is to provide useful debugging information regarding the integrity of the data, raising intuitive and convincing ``red flags'' when warranted.  We hope and expect that the figures contained herein are of particular use when GST is unable to fit the data well, and one is wondering whether the parameter estimation failed for technical reasons or whether there is striking evidence that the data is unfitable.
+
+\begin{figure}
+\begin{center}
+\putfield{targetColorBoxPlot}{Box plot showing comparison with target gateset}
+\caption{\putfield{tt_targetColorBoxPlot}{}\textbf{$2\Delta\log(\mathcal{L})$ contributions for experiments \emph{relative to the ideal gates}}.  Similar to Fig.~\ref{bestEstimateColorBoxPlot}, but compares the data to the ideal (``target'') gate set.  Thus, the GST estimate is not used here: this is only a comparison between the raw data and the ideal gates.  If the deviation is large, this indicates that the expected and obtained probabilities differ significantly.\label{targetColorBoxPlot}}
+\end{center}
+\end{figure}
+
+}{}

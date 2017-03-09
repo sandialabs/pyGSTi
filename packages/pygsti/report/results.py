@@ -1093,6 +1093,22 @@ class Results(object):
 
         def fn(key, confidenceLevel, vb):
             noConfidenceLevelDependence(confidenceLevel)
+            plotFn = getPlotFn();  mpc = getMPC()
+            gsTarget = self.gatesets['target']
+            Ls,germs, _, fpr_filters, gstr_filters, _, _, baseStr_dict, strs, st = plot_setup()
+            return plotFn(Ls[st:], germs, baseStr_dict,
+                          self.dataset, gsTarget, strs,
+                          r"$L$", "germ", scale=1.0, sumUp=False,
+                          histogram=True, title="", 
+                          fidpair_filters=fpr_filters,
+                          gatestring_filters = gstr_filters,
+                          linlg_pcntle=float(self.parameters['linlogPercentile']) / 100,
+                          minProbClipForWeighting=mpc, save_to="", ticSize=20,
+                          gateLabelAliases=self.parameters.get('gateLabelAliases',None))
+        fns["targetColorBoxPlot"] = (fn,validate_LsAndGerms)
+
+        def fn(key, confidenceLevel, vb):
+            noConfidenceLevelDependence(confidenceLevel)
             Ls,germs, _, _, _, _, _, baseStr_dict, strs, st = plot_setup()
             return _plotting.blank_boxplot(
                 Ls[st:], germs, baseStr_dict, strs, r"$L$", "germ",
@@ -1818,7 +1834,8 @@ class Results(object):
                             title="auto", datasetLabel="auto", suffix="",
                             debugAidsAppendix=False, gaugeOptAppendix=False,
                             pixelPlotAppendix=False, whackamoleAppendix=False,
-                            m=0, M=10, tips=False, verbosity=0, comm=None):
+                            pureDataAppendix=False,  m=0, M=10, tips=False,
+                            verbosity=0, comm=None):
         """
         Create a "full" GST report.  This report is the most detailed of any of
         the GST reports, and includes background and explanation text to help
@@ -1872,8 +1889,13 @@ class Results(object):
 
         whackamoleAppendix : bool, optional
            Whether to include the "whack-a-mole" appendix, which contains
-           colr box plots showing the effect of reducing ("whacking") one
+           color box plots showing the effect of reducing ("whacking") one
            particular part of the overall goodness of fit box plot.
+
+        pureDataAppendix : bool, optional
+           Whether to include the "pure data" appendix, which contains
+           an analysis of the raw data helpful debugging when the GST
+           fit is poor.
 
         m, M : float, optional
            Minimum and Maximum values of the color scale used in the report's
@@ -1958,6 +1980,7 @@ class Results(object):
             debugAidsAppendix = False  # which depend on this structure
             pixelPlotAppendix = False
             whackamoleAppendix = False
+            pureDataAppendix = False
 
         qtys = {} # dictionary to store all latex strings
                   # to be inserted into report template
@@ -1975,6 +1998,8 @@ class Results(object):
             ("true" if pixelPlotAppendix else "false")
         qtys['settoggles'] += "\\toggle%s{whackamoleappendix}\n" % \
             ("true" if whackamoleAppendix else "false")
+        qtys['settoggles'] += "\\toggle%s{puredataappendix}\n" % \
+            ("true" if pureDataAppendix else "false")
         qtys['confidenceLevel'] = "%g" % \
             confidenceLevel if confidenceLevel is not None else "NOT-SET"
         qtys['linlg_pcntle'] = self.parameters['linlogPercentile']
@@ -2070,7 +2095,7 @@ class Results(object):
                            for key in goaTables }  )
             #TODO: tables[ref] and then tooltips?
 
-        elif any((debugAidsAppendix, pixelPlotAppendix, whackamoleAppendix)):
+        elif any((debugAidsAppendix, pixelPlotAppendix, whackamoleAppendix, pureDataAppendix)):
             goaTables = self._specials.get('blankGaugeOptAppendixTables',
                               verbosity=printer - 1)   # fill keys with blank tables
             qtys.update( { key : goaTables[key].render(
@@ -2284,6 +2309,24 @@ class Results(object):
         #Set template quantity (empty string if appendix disabled)
         qtys['whackamole_plot_figures'] = whackamoleplots
 
+
+        if pureDataAppendix:
+            printer.log(" -- Pure-data plots ", end='')
+            printer.log("(1):")
+
+            with printer.progress_logging(1):
+
+                printer.show_progress(0, 1, prefix='', end='')
+                fig = set_fig_qtys("targetColorBoxPlot",
+                               "target%sBoxes.pdf" % plotFnName, printer - 1)
+
+                printer.log('')
+        else:
+            #UNUSED: "directLGSTColorBoxPlot", "directLGSTDeviationColorBoxPlot"
+            for figkey in ["targetColorBoxPlot"]:
+                qtys[figkey] = qtys["tt_"+figkey] = ""
+
+
         if bWasInteractive:
             _matplotlib.pyplot.ion()
 
@@ -2307,7 +2350,7 @@ class Results(object):
                              % self.parameters['objective'])
 
         if any( (debugAidsAppendix, gaugeOptAppendix,
-                 pixelPlotAppendix, whackamoleAppendix) ):
+                 pixelPlotAppendix, whackamoleAppendix, pureDataAppendix) ):
             qtys['appendices'] = "\\input{%s}" % \
                 _os.path.basename(appendicesTexFilename)
             self._merge_template(qtys, appendicesTemplate,
