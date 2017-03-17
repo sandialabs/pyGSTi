@@ -160,6 +160,39 @@ class ReportTable(object):
 
             return ppt
 
+
+        #elif fmt in ('iplotly','plotly'):
+        #    from plotly.offline import plot, iplot
+        #    import plotly.figure_factory as ff
+        #
+        #    #in future, make a dataframe and display that? (maybe couldn't handle matrices in cells?)
+        #    if self._customHeadings is not None \
+        #            and 'plotly' in self._customHeadings:
+        #        raise ValueError("custom headers unsupported for plotly format")
+        #
+        #    if self._headingFormatters is not None:
+        #        colHeadings_formatted = \
+        #            formatSet.formatList(self._headings,
+        #                           self._headingFormatters, 'latex')
+        #    else: #headingFormatters is None => headings is dict w/formats
+        #        colHeadings_formatted = self._headings['text']
+        #
+        #    data_matrix = []
+        #    data_matrix.append( colHeadings_formatted )
+        #
+        #    for rowData,formatters in self._rows:
+        #        formatted_rowData = formatSet.formatList(rowData, formatters, 'latex')
+        #        print(formatted_rowData)
+        #        if len(formatted_rowData) > 0:
+        #            data_matrix.append( formatted_rowData )
+        #
+        #    plotly_table = ff.create_table(data_matrix)
+        #    if fmt == "iplotly":
+        #        iplot(plotly_table)
+        #    else:
+        #        plot(plotly_table)
+        #    return plotly_table #TODO: what to return? plotly JSON?
+        
         else:
             raise ValueError("Unknown format: %s" % fmt)
 
