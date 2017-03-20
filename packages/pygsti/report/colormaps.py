@@ -165,7 +165,7 @@ class DivergingColormap(Colormap):
             result = _np.ma.array(resdat, mask=result.mask, copy=False)
 
         if is_scalar:
-            result = result[0]
+            result = float(result)
         return result
 
 

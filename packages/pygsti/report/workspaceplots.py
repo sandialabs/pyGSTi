@@ -110,7 +110,7 @@ def color_boxplot(plt_data, colormap, colorbar=False, boxLabelSize=0,
                 if _np.isnan(plt_data[y, x]): continue
                 annotations.append(
                     dict(
-                        text=_eformat(plt_data[y, x], prec),
+                        text=_ph._eformat(plt_data[y, x], prec),
                         x= x, y= y,
                         xref='x1', yref='y1',
                         font=dict(size=boxLabelSize,
@@ -450,8 +450,8 @@ def generate_boxplot(subMxs,
         #update tickvals b/c color_boxplot doesn't do this (unlike nested_color_boxplot)
         fig['layout']['xaxis'].update(tickvals=list(range(nXs)))
         fig['layout']['yaxis'].update(tickvals=list(range(nYs)))
-        fig['layout'].update(width=100*nXs*scale,
-                             height=100*nYs*scale)
+        fig['layout'].update(width=100*(nXs+1)*scale,
+                             height=100*(nYs+1)*scale)
 
     else: #not summing up
                 
@@ -468,8 +468,8 @@ def generate_boxplot(subMxs,
         fig = nested_color_boxplot(subMxs, colormap, colorbar, boxLabelSize,
                                    prec, hoverLabelFn)
 
-        fig['layout'].update(width=30*nXs*nIXs*scale,
-                             height=30*nYs*nIYs*scale)
+        fig['layout'].update(width=30*(nXs*nIXs+1)*scale,
+                             height=30*(nYs*nIYs+1)*scale)
         
     if xlabel: fig['layout']['xaxis'].update(title=xlabel,
                                              titlefont={'size': 12*scale, 'color': "black"})
@@ -510,9 +510,9 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
                             sumUp, invert, save_to, scale)  #"$\\rho_i$","$\\E_i$"      
 
 
-def gatematrix_color_boxplot(m, M, mxBasis, mxBasisDims=None, xlabel=None,
-                             ylabel=None, boxLabels=False, prec=0,
-                             mxBasisDimsY=None, scale=1.0):
+def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis, mxBasisDims=None,
+                             mxBasisDimsY=None, xlabel=None, ylabel=None,
+                             boxLabels=False, prec=0, scale=1.0):
         
     def one_sigfig(x):
         if abs(x) < 1e-9: return 0
@@ -521,22 +521,28 @@ def gatematrix_color_boxplot(m, M, mxBasis, mxBasisDims=None, xlabel=None,
         trunc_x = _np.floor(x * 10**e)/ 10**e #truncate decimal to make sure it gets *smaller*
         return round(trunc_x, e) #round to truncation point just to be sure
 
-    xlabels=[("$%s$" % x) if len(x) else "" \
-             for x in _tools.basis_element_labels(mxBasis,mxBasisDims)]
-    ylabels=[("$%s$" % x) if len(x) else "" \
-             for x in _tools.basis_element_labels(mxBasis,mxBasisDimsY)] \
-                 if (mxBasisDimsY is not None) else xlabels
+    if mxBasis is not None and mxBasisDims is not None:
+        if mxBasisDimsY is None: mxBasisDimsY = mxBasisDims
+        xlabels=[("$%s$" % x) if len(x) else "" \
+                 for x in _tools.basis_element_labels(mxBasis,mxBasisDims)]
+        ylabels=[("$%s$" % x) if len(x) else "" \
+                 for x in _tools.basis_element_labels(mxBasis,mxBasisDimsY)]
+    else:
+        xlabels = [""] * gateMatrix.shape[1]
+        ylabels = [""] * gateMatrix.shape[0]
 
     colorscale = [[0, '#3D9970'], [0.75,'#ffffff'], [1, '#001f3f']]  # custom colorscale
     colormap = _colormaps.DivergingColormap(vmin=m, vmax=M)
 
-    trace = go.Heatmap(z=zvals, colorscale=colormap.get_colorscale(),
+    flipped_mx = _np.flipud(gateMatrix)  # FLIP so [0,0] matrix el is at *top* left
+    ylabels    = list(reversed(ylabels)) # FLIP y-labels to match
+    trace = go.Heatmap(z=flipped_mx, colorscale=colormap.get_colorscale(),
                        showscale=(not boxLabels))
     data = [trace]
     
     scale = 1.0
-    nX = len(xlabels)
-    nY = len(ylabels)
+    nX = gateMatrix.shape[1]
+    nY = gateMatrix.shape[0]
     
     gridlines = []
     
@@ -573,19 +579,19 @@ def gatematrix_color_boxplot(m, M, mxBasis, mxBasisDims=None, xlabel=None,
             for iy in range(nY):
                 annotations.append(
                     dict(
-                    text=_eformat(gateMatrix[iy,ix],prec),
-                    x=ix, y=iy, xref='x1', yref='y1',
+                    text=_ph._eformat(gateMatrix[iy,ix],prec),
+                    x=ix, y=nY-1-iy, xref='x1', yref='y1',
                     font=dict(size=scale*10,
                               color=colormap.besttxtcolor(gateMatrix[iy,ix])),
                         showarrow=False)
                 )
-    
+
     layout = go.Layout(
-        width = 50*gateMatrix.shape[1]*scale,
-        height = 50*gateMatrix.shape[0]*scale,
+        width = 80*(gateMatrix.shape[1]+1)*scale,
+        height = 80*(gateMatrix.shape[0]+1.5)*scale,
         xaxis=dict(
             side="top",
-            #title="Q2",
+            title=xlabel,
             showgrid=False,
             zeroline=False,
             showline=True,
@@ -600,7 +606,7 @@ def gatematrix_color_boxplot(m, M, mxBasis, mxBasisDims=None, xlabel=None,
             ),
         yaxis=dict(
             side="left",
-            #title="Q1",
+            title=ylabel,
             showgrid=False,
             zeroline=False,
             showline=True,
@@ -685,8 +691,8 @@ class BoxKeyPlot(WorkspacePlot):
             return formatted_vals
         
         layout = go.Layout(
-            width=70*scale*len(prepStrs),
-            height=70*scale*len(effectStrs),
+            width=70*scale*(len(prepStrs)+1),
+            height=70*scale*(len(effectStrs)+1),
             xaxis=dict(
                 side="bottom",
                 showgrid=False,
@@ -1085,16 +1091,16 @@ class GateMatrixPlot(WorkspacePlot):
     def __init__(self, ws, gateMatrix, m=-1.0, M=1.0,
                  mxBasis=None, mxBasisDims=None, xlabel=None, ylabel=None,
                  boxLabels=False, prec=0, mxBasisDimsY=None, scale=1.0):
-        super(GateMatrixPlot,self).__init__(ws, self._create, m, M,
+        super(GateMatrixPlot,self).__init__(ws, self._create, gateMatrix, m, M,
                                             mxBasis, mxBasisDims, xlabel, ylabel,
                                             boxLabels, prec, mxBasisDimsY, scale)
           
-    def _create(self, m, M,
+    def _create(self, gateMatrix, m, M, 
                 mxBasis, mxBasisDims, xlabel, ylabel,
                 boxLabels, prec, mxBasisDimsY, scale):
         return gatematrix_color_boxplot(
-            m, M, mxBasis, mxBasisDims, xlabel, ylabel,
-            boxLabels, prec, mxBasisDimsY, scale)
+            gateMatrix, m, M, mxBasis, mxBasisDims, mxBasisDimsY,
+            xlabel, ylabel, boxLabels, prec, scale)
 
 
     """
@@ -1168,7 +1174,7 @@ class PolarEigenvaluePlot(WorkspacePlot):
             color = colors[i] if (colors is not None) else "black"
             trace = go.Scatter(
                 r = _np.absolute(evals),
-                t = _np.angle(evals),
+                t = _np.angle(evals) * (180.0/_np.pi),
                 mode='markers',
                 marker=dict(
                     color=color,
@@ -1180,13 +1186,14 @@ class PolarEigenvaluePlot(WorkspacePlot):
                 ))
             if labels is not None:
                 trace.update(name=labels[i])
+            data.append(trace)
 
             #Add amplified eigenvalues
             if amp is not None:
                 amp_evals = evals**amp
                 trace = go.Scatter(
                     r = _np.absolute(amp_evals),
-                    t = _np.angle(amp_evals),
+                    t = _np.angle(amp_evals) * (180.0/_np.pi),
                     mode='markers',
                     marker=dict(
                         color=color,
@@ -1198,17 +1205,16 @@ class PolarEigenvaluePlot(WorkspacePlot):
                     ))
                 if labels is not None:
                     trace.update(name="%s^%g" % (labels[i],amp))
-
-            data.append(trace)
+                data.append(trace)
             
         layout = go.Layout(
             #title='Test Polar',
             #font=dict(size=15),
-            plot_bgcolor='rgb(223, 223, 223)',
+            plot_bgcolor='rgb(240, 240, 240)',
             radialaxis=dict(
                 range=[0,1.25]),
             angularaxis=dict(
-                tickcolor='rgb(253,253,253)',
+                tickcolor='rgb(180,180,180)',
                 #range=[0,2]
                 #ticktext=['A','B','C','D']
             ),
@@ -1313,8 +1319,8 @@ class ProjectionsBoxPlot(WorkspacePlot):
         yd = int(round(_np.sqrt(projections.shape[0]))) #y-basis-dim
     
         return gatematrix_color_boxplot(
-            m, M, projection_bais, xd, xlabel, ylabel,
-            boxLabels, prec, yd, scale)
+            projections, m, M, projection_basis, xd, yd,
+            xlabel, ylabel, boxLabels, prec,  scale)
 
 
 
@@ -1365,59 +1371,45 @@ class ProjectionsBoxPlot(WorkspacePlot):
 # xlabel="index", ylabel="Re[eigenvalue]", title=None
 # TODO: maybe a "postFormat" or "addToFigure" fn to add title & axis labels to any figure?
 class ChoiEigenvalueBarPlot(WorkspacePlot):
-    def __init__(self, ws, evals, errbars=None, barWidth=1):
+    def __init__(self, ws, evals, errbars=None):
         super(ChoiEigenvalueBarPlot,self).__init__(ws, self._create, evals,
-                                                   errbars, barWidth)
+                                                   errbars)
         
-    def _create(self, evals,
-                errbars, barWidth):
+    def _create(self, evals, errbars):
 
-        #TODO: plot.ly barplot
-        fig, axes = _plt.subplots()
-        fig.set_size_inches(size[0],size[1])
-    
-        if title is not None:
-            axes.set_title( title, fontsize=fontSize)
-        if xlabel is not None:
-            axes.set_xlabel( xlabel, fontsize=fontSize )
-        if ylabel is not None:
-            axes.set_ylabel( ylabel, fontsize=fontSize )
-    
-        evals = _np.asarray(evals)
-        ind = _np.arange(evals.size)
-    
-        if errbars is None:
-            pos_evals = _np.maximum(evals.flatten().real,0.0)
-            neg_evals = _np.abs(_np.minimum(evals.flatten().real,0.0))
-            rects = axes.bar(ind, pos_evals, barWidth, color=(0.5,0.5,0.5)) #pylint: disable=unused-variable
-            rects = axes.bar(ind, neg_evals, barWidth, color='r') #pylint: disable=unused-variable
-        else:
-            evalsEB = _np.asarray(errbars)
-            pos_evals = []; pos_err = []
-            neg_evals = []; neg_err = []
-            for val,eb in zip(evals.flatten().real, evalsEB.flatten().real):
-                if (val+eb) < 0.0: #if entire error interval is less than zero
-                    neg_evals.append(abs(val)); neg_err.append(eb)
-                    pos_evals.append(0);   pos_err.append(0)
-                else:
-                    pos_evals.append(abs(val)); pos_err.append(eb)
-                    neg_evals.append(0);   neg_err.append(0)
-            rects = axes.bar(ind, pos_evals, barWidth, color=(0.5,0.5,0.5),
-                             yerr=pos_err)
-            rects = axes.bar(ind, neg_evals, barWidth, color='r',yerr=neg_err)
-    
-        axes.set_yscale("log")
-        axes.set_xticks(ind + barWidth/2.0)
-        axes.set_xticklabels(list(map(str,list(range(len(ind))))))
-    
-        rptFig = _ReportFigure(axes)
-    
-        if save_to is not None:
-            if len(save_to) > 0: #So you can pass save_to="" and figure will be closed but not saved to a file
-                _plt.savefig(save_to, bbox_extra_artists=(axes,), bbox_inches='tight')
-            if fig is not None: _plt.close(fig) #close the figure if we're saving it to a file
-    
-        return rptFig
+        xs = list(range(evals.size))
+        ys = []; colors = []; texts=[]
+        for i,ev in enumerate(evals.flatten()):
+            ys.append( abs(ev.real) )
+            colors.append('rgb(200,200,200)' if ev.real > 0 else 'red')
+            if errbars is not None:
+                texts.append("%g +/- %g" % (ev.real,errbars.flatten()[i].real))
+            else:
+                texts.append("%g" % ev.real)
+                
+        trace = go.Bar(
+            x=xs, y=ys, text=texts,
+            marker=dict(color=colors)
+        )
+
+        log_ys = _np.log10(_np.array(ys,'d'))
+        minlog = _np.floor(min(log_ys))
+        maxlog = _np.ceil(max(log_ys))
+        
+        data = [trace]
+        layout = go.Layout(
+            xaxis = dict(
+                title="index",
+                tickvals=xs
+                ),
+            yaxis = dict(
+                type='log',
+                range=[minlog,maxlog]
+                ),
+            bargap=0.02
+        )
+        
+        return go.Figure(data=data, layout=layout)
 
 
 #Histograms??
