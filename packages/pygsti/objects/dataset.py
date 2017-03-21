@@ -244,6 +244,13 @@ class DataSet(object):
 
         # comment
         self.comment = comment
+        
+
+    def digest_hash(self):
+        if not bStatic:
+            raise TypeError("DataSet's must be static to create digests")
+        else:
+            return hash(self.counts.tostring())
 
 
     def __iter__(self):
@@ -709,6 +716,7 @@ class DataSet(object):
                 f = _gzip.open(fileOrFilename,"rb")
             else:
                 f = open(fileOrFilename,"rb")
+            self.file_origin = fileOrFilename
         else:
             f = fileOrFilename
 

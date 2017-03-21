@@ -49,13 +49,15 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 # gs.selected = 1
 # w.display([plot], "static") #if autodisplay is off? layout?
 import itertools as _itertools
+import collections as _collections
+import numpy as _np
 
 import ipywidgets as _widgets
 from IPython.display import display as _display
 from IPython.display import clear_output as _clear_output
 
 import plotly.graph_objs as go
-from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot
+from plotly.offline import plot, iplot, get_plotlyjs
 
 
 def _is_hashable(x):
@@ -72,7 +74,14 @@ def call_key(obj, args):
     for arg in args:
         if _is_hashable(arg):
             key.append( arg )
-        else: key.append( id(arg) ) #backup for un-hashable objects e.g. GateSet, DataSet, etc.
+        elif hasattr(arg, 'digest_hash'):
+            #Use a digest hash if one is available
+            key.append( arg.digest_hash() ) #backup for un-hashable objects e.g. GateSet, DataSet, etc.
+            #key.append( id(arg) ) #backup for un-hashable objects e.g. GateSet, DataSet, etc.
+        else: raise ValueError("Object of type %s is not " % str(type(arg))
+                               + "hashable, so cannot be used as an argument"
+                               + "in cached computation calls")
+
     return tuple(key) #so hashable
 
 
@@ -112,18 +121,21 @@ class Workspace(object):
         # "register" components
         from . import workspacetables as _wt
         from . import workspaceplots as _wp
+        self.WorkspaceValue = makefactory(WorkspaceValue)
         self.NamedValue = makefactory(NamedValue)
+        self.NamedWorkspaceValue = makefactory(NamedWorkspaceValue)
         self.Selector = makefactory(Selector)
-        self.TestLabel = makefactory(TestLabel, cache=True)
-        self.TestPlot = makefactory(TestPlot, cache=True)
-        self.BlankTable = makefactory(_wt.BlankTable, cache=True)
-        self.SpamTable = makefactory(_wt.SpamTable, cache=True)
-        self.ColorBoxPlot = makefactory(_wp.ColorBoxPlot, cache=True)
-        self.BoxKeyPlot = makefactory(_wp.BoxKeyPlot, cache=True)
-        self.GateMatrixPlot = makefactory(_wp.GateMatrixPlot, cache=True)
-        self.PolarEigenvaluePlot = makefactory(_wp.PolarEigenvaluePlot, cache=True)
-        self.ProjectionsBoxPlot = makefactory(_wp.ProjectionsBoxPlot, cache=True)
-        self.ChoiEigenvalueBarPlot = makefactory(_wp.ChoiEigenvalueBarPlot, cache=True)
+        self.Switchboard = makefactory(Switchboard)
+        self.TestLabel = makefactory(TestLabel, cache=False)
+        self.TestPlot = makefactory(TestPlot, cache=False)
+        self.BlankTable = makefactory(_wt.BlankTable, cache=False)
+        self.SpamTable = makefactory(_wt.SpamTable, cache=False)
+        self.ColorBoxPlot = makefactory(_wp.ColorBoxPlot, cache=False)
+        self.BoxKeyPlot = makefactory(_wp.BoxKeyPlot, cache=False)
+        self.GateMatrixPlot = makefactory(_wp.GateMatrixPlot, cache=False)
+        self.PolarEigenvaluePlot = makefactory(_wp.PolarEigenvaluePlot, cache=False)
+        self.ProjectionsBoxPlot = makefactory(_wp.ProjectionsBoxPlot, cache=False)
+        self.ChoiEigenvalueBarPlot = makefactory(_wp.ChoiEigenvalueBarPlot, cache=False)
 
 
     def cachedCompute(self, fn, *args):
@@ -137,12 +149,74 @@ class Workspace(object):
         curkey = call_key(fn, valArgs) # cache by call key
         
         if precomp:
-            valLists = [ arg.values if isinstance(arg,WorkspaceValue) else [arg]
-                         for arg in args ]
-            for valArgs in _itertools.product( *valLists ):
+            switchboards = []
+            sbVariableNames = []
+            sbArgIndices = []
+            
+            nonSwitchedArgs = []
+            nonSwitchedArgIndices = []
+            
+            for i,arg in enumerate(args):
+                if isinstance(arg,SwitchVariable):
+                    isb = None
+                    for j,sb in enumerate(switchboards):
+                        if arg.parent is sb:
+                            isb = j; break
+                    else:
+                        isb = len(switchboards)
+                        switchboards.append(arg.parent)
+                        sbArgIndices.append([])
+                        sbVariableNames.append([])
+                    assert(isb is not None)
+
+                    sbArgIndices[isb].append(i)
+                    sbVariableNames[isb].append(arg.groupname)
+                else:
+                    nonSwitchedArgs.append(arg)
+                    nonSwitchedArgIndices.append(i)
+
+            #print("DB: %d arguments" % len(args))
+            #print("DB: found %d switchboards" % len(switchboards))
+            #print("DB: sbArgIndices = ", sbArgIndices)
+            #print("DB: sbVariableNames = ", sbVariableNames)
+            #print("DB: nonSwitchedArgs = ", nonSwitchedArgs)
+            #print("DB: nsArgIndices = ",nonSwitchedArgIndices)
+                    
+            sbValueTups = []
+            for sb,variableNames in zip(switchboards,sbVariableNames):
+                sbValueTups.append( sb.get_value_tuples(variableNames) )
+                
+            for k,nswarg in zip(nonSwitchedArgIndices,nonSwitchedArgs): #treat each non-switched are like a separate switchboard
+                sbValueTups.append([(val,) for val in args[k].values] if isinstance(args[k],WorkspaceValue) else [(args[k],)])
+                sbArgIndices.append( (k,) )
+
+            #print("DB: sbValueTups:")
+            #for i,vals in enumerate(sbValueTups):
+            #    print(  "%d: len=%d, indices=%s, vals=%s" % (i,len(vals),str(sbArgIndices[i]),str(vals)))
+
+            #Notes:
+            # each el of sbValueTups is a list of (val1,val2,...) tuples associated with a single Switchboard (or non-switched arg)
+            # each el of sbArgIndices is a tuple  (i1, i2, ...) of integers giving the argument indices of the (va1,val2,...) values
+            #   associated with a single Switchboard (or non-switched arg)
+
+            for allValueTups in _itertools.product( *sbValueTups ):
+                valArgs = [None]*len(args)
+                for argIndices, valueTup in zip(sbArgIndices, allValueTups):
+                    for argIndex,val in zip(argIndices, valueTup):
+                        valArgs[argIndex] = val
+                
                 key = call_key(fn, valArgs) # cache by call key
                 if key not in self.compCache:
+                    #print("DB: computing with valArgs = ", valArgs)
                     self.compCache[key] = fn(*valArgs)
+
+            #OLD
+            #valLists = [ arg.values if isinstance(arg,WorkspaceValue) else [arg]
+            #             for arg in args ]
+            #for valArgs in _itertools.product( *valLists ):
+            #    key = call_key(fn, valArgs) # cache by call key
+            #    if key not in self.compCache:
+            #        self.compCache[key] = fn(*valArgs)
         else:
             if curkey not in self.compCache:
                 self.compCache[curkey] = fn(*valArgs)
@@ -173,10 +247,9 @@ class Workspace(object):
 
 class WorkspaceValue(object):
     """ 
-    An input that can be hashed to make a argument-list key for
-    WorspaceOutput object construction.  Wraps a one or more values
-    which are individually used by computational routines.  The
-    'value' member holds the "current" value of the WorkspaceValue.
+    An input that for WorspaceOutput object construction.  Wraps one
+    or more values which are individually used by computational routines.
+    The 'value' member holds the "current" value of the WorkspaceValue.
     When a computational routine is called, `Workspace.cachedCompute`
     takes care of caching results for *all* of a WorkspaceValue's
     values (including the "current" one) and returns the current one.
@@ -186,10 +259,11 @@ class WorkspaceValue(object):
         self.value = values[curindex] if len(values) > 0 else None
         self.curindex = curindex if len(values) > 0 else None
         self.ws = ws
-        
-    def __hash__(self):
-        raise TypeError #so this type is "unhashable" and will use id
-        # as desired (ideally GateSets and DataSets will do the same thing?)
+
+    #We never need to hash these objects, since only underlying 'values' are hashed (see cachedCompute)
+    #def __hash__(self):
+    #    raise TypeError #so this type is "unhashable" and will use id
+    #    # as desired (ideally GateSets and DataSets will do the same thing?)
 
     def update(self, new_curindex):
         self.curindex = new_curindex
@@ -224,6 +298,161 @@ class NamedValue(NamedWorkspaceValue):
                                          [name] if (name is not None) else None)
 
 
+
+#switchbd = SwitchBoard(switches=["Dataset","GaugeOptParam", "SomeOtherParam"],
+#                       labels=[["1","2"],["0","0.5","1.0"],['a','b']])
+#switchbd.addItem("gs",(0,1)) #OR
+#switchbd.addItem("gs",("Dataset","GaugeOptParam"))
+#switchbd.addItem("ds",(0,)) #OR
+#switchbd.addItem("ds",("Dataset",))
+#switchbd.gs["1",:] = gOptSets1 # gs marked as a "level 2" item, so if switch 1 or 2 moves it gets updated
+#switchbd.gs["2",:] = gOptSets2
+#switchbd.ds[:] = [ds1,ds2]  # a "level 1" item: only updates when switch 1 is moved
+#switchbd.addItem("other",(2,)) #OR
+#switchbd.addItem("other",("SomeOtherParam",))
+#switchbd.otherParams[:] = [Aval, Bval]
+
+class Switchboard(_collections.OrderedDict):
+    def __init__(self, ws, switches, positions, types, descriptions=None):
+        assert(len(switches) == len(positions))
+        self.ws = ws #Workspace
+        self.switchNames = switches
+        self.switchTypes = types
+        self.switchIDs = ["switch%d" % i for i in range(len(switches))]
+        self.positionLabels = positions
+        self.currentPositions = _np.array([0]*len(switches),'i')
+        self.variables = {}
+
+        self.descriptions = descriptions
+        self.widgets = None #[None]*len(switches) #don't build widget unless needed
+        super(Switchboard,self).__init__([])
+
+
+    def add(self, varname, dependencies):
+        super(Switchboard,self).__setitem__(varname, SwitchVariable(self.ws, self, varname, dependencies))
+
+    def get_value_tuples(self, variableNames):
+        """ Returns (val1,val2,...) tuples of *distinct* values for the variables corresponding to variableNames """
+        switches_to_iter_over = set()
+        for varname in variableNames:
+            switches_to_iter_over.update(self[varname].dependencies)
+        switches_to_iter_over = list(switches_to_iter_over) #so definite ordering
+            
+        #iterate over the switches that these values depend upon
+        value_tuples = []
+        ranges = [ list(range(len(self.positionLabels[i]))) for i in switches_to_iter_over ]
+        for switchVals in _itertools.product( *ranges ):
+            variableVals = []
+            for varname in variableNames:
+                varSwitchVals = [ switchVals[switches_to_iter_over.index(k)] for k in self[varname].dependencies ]
+                variableVals.append( self[varname][varSwitchVals] )
+            #OLD: variableVals = [ self[varname][switchVals] for varname in variableNames ]
+            tup = tuple(variableVals)
+            if tup not in value_tuples:
+                value_tuples.append(tup)
+                
+        return value_tuples
+
+    def __setitem__(self, key, val):
+        raise KeyError("Use add(...) to add an item to this swichboard")
+
+    def build_widgets(self):
+        self.widgets = []
+        for i,(name,typ,posLbls) in enumerate(zip(self.switchNames,
+                                                  self.switchTypes,
+                                                  self.positionLabels)):
+            if typ == "buttons":
+                wig = _widgets.ToggleButtons(
+                    options=posLbls,
+                    description=name,
+                    disabled=False,
+                    button_style='', # 'success', 'info', 'warning', 'danger' or ''
+                    tooltip=self.descriptions[i] if (self.descriptions is not None) else "",
+                    #     icon='check'
+                )
+            else:
+                raise ValueError("Unknown 'typ' argument: %s" % self.typ)
+            self.widgets.append(wig)
+
+    def display(self):
+        if self.widgets is None:
+            self.build_widgets()
+        for wig in self.widgets:
+            assert(wig is not None)
+            _display(wig)
+            
+            # - observes change event -> calls update on listeners to this variable?
+            wig.observe(self.on_update, 'value')
+
+    def on_update(self, change_dict):
+        print("DB: CALLBACK called : %s!" % change_dict)
+        if change_dict['type'] == "change":
+            pass
+            #iCur = self.names.index(change_dict['new'])
+            #self.update(iCur)
+            #self.ws.trigger_update(id(self))
+            
+            #print("DB: Selected option %d: %s (val=%s)" %
+            #      (self.curindex, self.name, str(self.value)))
+
+
+            
+#    def __getattr__(self, attr):
+#        ret = getattr(self.__dict__['base'],attr)
+#        if isinstance(ret, _np.ndarray) and ret.base is self.base:
+#            ret.flags.writeable = False
+#        return ret
+
+class SwitchVariable(NamedWorkspaceValue):
+    def __init__(self, ws, parent_switchboard, name, dependencies):
+        self.parent = parent_switchboard
+        self.dependencies = dependencies
+
+        Ns = [len(self.parent.positionLabels[i]) for i in dependencies]
+        totalAndFactors = list(reversed(_np.cumprod([1]+list(reversed(Ns)))))
+        total = totalAndFactors[0]
+        self.factors = totalAndFactors[1:]
+        super(SwitchVariable, self).__init__(ws, values=[None]*total, names=[""]*total,
+                                             groupname=name, curindex=0)
+
+    def __getitem__(self, currentSwitchPositionInds):
+        i = _np.dot(self.factors, _np.array(currentSwitchPositionInds))
+        return self.values[i]
+        
+    def __setitem__(self, inds, vals):
+        if isinstance(inds, tuple):
+            assert(len(inds) == len(self.dependencies))
+        else:
+            assert(1 == len(self.dependencies))
+            inds = (inds,)
+
+        valIndRanges = []
+        myIndRanges = []
+        for i,(sliceOrIndex,swIndex) in enumerate(zip(inds,self.dependencies)):
+            if isinstance(sliceOrIndex, slice):
+                assert(sliceOrIndex.start is None and sliceOrIndex.stop is None), \
+                    "Currently, only full support slices are supported"
+                myIndRanges.append(list(range(len(self.parent.positionLabels[swIndex]))))
+                valIndRanges.append(list(range(len(self.parent.positionLabels[swIndex]))))
+            else:
+                valIndRanges.append(
+                    [self.parent.positionLabels[swIndex].index(sliceOrIndex)])
+
+        def getval(vs, vis):
+            if len(vis) == 1: return vs[vis[0]]
+            else: return getval(vs[vis[0]], vis[1:])
+                
+        for myInds,valInds in zip(_itertools.product(*myIndRanges),_itertools.product(*valIndRanges)):
+            i = _np.dot(self.factors, _np.array(myInds))
+            self.values[i] = getval(vals,valInds)
+
+    def switch_update(self):
+        curpos = [ self.parent.currentPositions[k] for k in self.dependencies ]
+        i = _np.dot(self.factors, _np.array(curpos,'i') )
+        self.update(i)  # WorkspaceValue.update
+
+        
+        
 class Selector(NamedWorkspaceValue):
     def __init__(self, ws, values, names=None, groupname="Select:", curindex=0, 
                  description='', typ="buttons"):
@@ -278,8 +507,9 @@ class WorkspaceOutput(object):
     # other WorspaceOutput objects or computation functions - these objects
     # are cached using call_key.
 
-    #renders nothing by default
-    def render(self, typ):
+    def display(self):
+        """Create a new widget associated with this object and display it"""
+        #displays nothing by default
         pass
 
     
@@ -292,23 +522,29 @@ class WorkspaceTable(WorkspaceOutput):
         self.update()
 
     def update(self):
+        """
+        Update any widgets associated with this object.  Called when underlying
+        data is changed.
+        """
         self.table = self.ws.cachedCompute(self.tablefn, *self.initargs)
         if self.widget:
-            #_clear_output()
-            #self.table.render("iplotly") # make iplot([fig]) call
-            from IPython.display import HTML
             self.widget.value = self.table.render("html", tableclass="dataTable")
             #self.widget.value = "$$" + self.table.render("latex") + "$$"
-            
-    def render(self):
+
+    def display(self):
+        """Create a new widget associated with this object and display it"""
         if self.widget is None:
-            #self.widget = _widgets.Output()
             self.widget = _widgets.HTML(value="?",
                                         placeholder='Some LaTeX',
                                         description='Some LaTeX',
                                         disabled=False)
             self.update()
         _display(self.widget)
+
+
+    def render(self, typ):
+        """Renders a static version of this table"""
+        return self.table.render(typ, tableclass="dataTable")
 
 
 class WorkspacePlot(WorkspaceOutput):
@@ -320,17 +556,24 @@ class WorkspacePlot(WorkspaceOutput):
         self.update()
 
     def update(self):
+        """
+        Update any widgets associated with this object.  Called when underlying
+        data is changed.
+        """
         self.fig = self.ws.cachedCompute(self.plotfn, *self.initargs)
         if self.widget:
             _clear_output()
             iplot(self.fig) #basehtml = plot(fig, output_type='div', image_filename="test", image='png', auto_open=False)
-            
-    def render(self):
+
+    def display(self):
+        """Create a new widget associated with this object and display it"""
         if self.widget is None:
             self.widget = _widgets.Output()
             self.update()
         _display(self.widget)
-
+    
+    def render(self):
+        pass
 
 
 ## TEST ------------------------------------------------------------------------
