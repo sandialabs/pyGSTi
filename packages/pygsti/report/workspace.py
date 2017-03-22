@@ -128,13 +128,9 @@ class Workspace(object):
         # "register" components
         from . import workspacetables as _wt
         from . import workspaceplots as _wp
-        self.WorkspaceValue = makefactory(WorkspaceValue)
-        self.NamedValue = makefactory(NamedValue)
-        self.NamedWorkspaceValue = makefactory(NamedWorkspaceValue)
-        self.Selector = makefactory(Selector)
         self.Switchboard = makefactory(Switchboard)
-        self.TestLabel = makefactory(TestLabel, cache=False)
-        self.TestPlot = makefactory(TestPlot, cache=False)
+        #self.TestLabel = makefactory(TestLabel, cache=False)
+        #self.TestPlot = makefactory(TestPlot, cache=False)
         self.BlankTable = makefactory(_wt.BlankTable, cache=False)
         self.SpamTable = makefactory(_wt.SpamTable, cache=False)
         self.ColorBoxPlot = makefactory(_wp.ColorBoxPlot, cache=False)
@@ -148,10 +144,7 @@ class Workspace(object):
     def switchedCompute(self, fn, *args):
 
         # Computation functions get stripped-down *value* args
-        # (strip WorkspaceValue stuff away)
-
-        valArgs = [ arg.value if isinstance(arg,WorkspaceValue) else arg
-                    for arg in args ]
+        # (strip SwitchedValue stuff away)
 
         switchboards = []
         switchBdInfo = []
@@ -166,7 +159,7 @@ class Workspace(object):
         resultValues = []
         
         for i,arg in enumerate(args):
-            if isinstance(arg,SwitchVariable):
+            if isinstance(arg,SwitchValue):
                 isb = None
                 for j,sb in enumerate(switchboards):
                     if arg.parent is sb:
@@ -183,7 +176,7 @@ class Workspace(object):
                 info = switchBdInfo[isb]
                                         
                 info['argument indices'].append(i)
-                info['value names'].append(arg.groupname)
+                info['value names'].append(arg.name)
                 info['switch indices'].update(arg.dependencies)
             else:
                 nonSwitchedArgs.append( (i,arg) )
@@ -208,10 +201,7 @@ class Workspace(object):
               # used for the *single* board sb
             switch_positions.append( sb_switch_positions )
 
-        #for k,nswarg in zip(nonSwitchedArgIndices,nonSwitchedArgs): #treat each non-switched are like a separate switchboard
-        #    sbValueTups.append([(val,) for val in args[k].values] if isinstance(args[k],WorkspaceValue) else [(args[k],)])
-        #    sbArgIndices.append( (k,) )
-
+            
         #loop over all relevant switch configurations (across multiple switchboards)
         for pos in _itertools.product( *switch_positions ):
             # pos[i] gives the switch configuration for the i-th switchboard
@@ -227,18 +217,15 @@ class Workspace(object):
                     value_swpos = [ sw_pos[sis.index(k)] for k in sb[nm].dependencies ]
                       # potentially a subset of sw_pos, contains only the switch positions
                       # relevant to the particular SwitchedValue named nm (also the j-th argument)
-                    argVals[j] = sb[nm][value_swpos]
+                    argVals[j] = sb[nm][tuple(value_swpos)] # tuple needed for proper indexing
 
             #next, fill in the non-switched arguments
             for j,arg in nonSwitchedArgs:
-                argVals[j] = arg.value if isinstance(arg,WorkspaceValue) else arg
+                argVals[j] = arg
                 
-
             # argVals now contains all the arguments, so call the function if
             #  we need to and add result.
-
-            #TODO: maybe make this a call to worspace?
-            key = call_key(fn, argVals) # cache by call key            
+            key = call_key(fn, argVals) # cache by call key
             if key not in self.compCache:
                 #print("DB: computing with valArgs = ", valArgs)
                 self.compCache[key] = fn(*argVals)
@@ -256,179 +243,15 @@ class Workspace(object):
 
 
     def cachedCompute(self, fn, *args):
-
-        # Computation functions get stripped-down *value* args
-        # (strip WorkspaceValue stuff away)
-
-        precomp = True #do all precomputation up front
-        valArgs = [ arg.value if isinstance(arg,WorkspaceValue) else arg
-                    for arg in args ]
-        curkey = call_key(fn, valArgs) # cache by call key
+        curkey = call_key(fn, args) # cache by call key
         
-        if precomp:
-            switchboards = []
-            sbVariableNames = []
-            sbArgIndices = []
+        if curkey not in self.compCache:
+            self.compCache[curkey] = fn(*valArgs)
             
-            nonSwitchedArgs = []
-            nonSwitchedArgIndices = []
-            
-            for i,arg in enumerate(args):
-                if isinstance(arg,SwitchVariable):
-                    isb = None
-                    for j,sb in enumerate(switchboards):
-                        if arg.parent is sb:
-                            isb = j; break
-                    else:
-                        isb = len(switchboards)
-                        switchboards.append(arg.parent)
-                        sbArgIndices.append([])
-                        sbVariableNames.append([])
-                    assert(isb is not None)
-
-                    sbArgIndices[isb].append(i)
-                    sbVariableNames[isb].append(arg.groupname)
-                else:
-                    nonSwitchedArgs.append(arg)
-                    nonSwitchedArgIndices.append(i)
-
-            #print("DB: %d arguments" % len(args))
-            #print("DB: found %d switchboards" % len(switchboards))
-            #print("DB: sbArgIndices = ", sbArgIndices)
-            #print("DB: sbVariableNames = ", sbVariableNames)
-            #print("DB: nonSwitchedArgs = ", nonSwitchedArgs)
-            #print("DB: nsArgIndices = ",nonSwitchedArgIndices)
-                    
-            sbValueTups = []
-            for sb,variableNames in zip(switchboards,sbVariableNames):
-                sbValueTups.append( sb.get_value_tuples(variableNames) )
-                
-            for k,nswarg in zip(nonSwitchedArgIndices,nonSwitchedArgs): #treat each non-switched are like a separate switchboard
-                sbValueTups.append([(val,) for val in args[k].values] if isinstance(args[k],WorkspaceValue) else [(args[k],)])
-                sbArgIndices.append( (k,) )
-
-            #print("DB: sbValueTups:")
-            #for i,vals in enumerate(sbValueTups):
-            #    print(  "%d: len=%d, indices=%s, vals=%s" % (i,len(vals),str(sbArgIndices[i]),str(vals)))
-
-            #Notes:
-            # each el of sbValueTups is a list of (val1,val2,...) tuples associated with a single Switchboard (or non-switched arg)
-            # each el of sbArgIndices is a tuple  (i1, i2, ...) of integers giving the argument indices of the (va1,val2,...) values
-            #   associated with a single Switchboard (or non-switched arg)
-
-            for allValueTups in _itertools.product( *sbValueTups ):
-                valArgs = [None]*len(args)
-                for argIndices, valueTup in zip(sbArgIndices, allValueTups):
-                    for argIndex,val in zip(argIndices, valueTup):
-                        valArgs[argIndex] = val
-                
-                key = call_key(fn, valArgs) # cache by call key
-                if key not in self.compCache:
-                    #print("DB: computing with valArgs = ", valArgs)
-                    self.compCache[key] = fn(*valArgs)
-
-            #OLD
-            #valLists = [ arg.values if isinstance(arg,WorkspaceValue) else [arg]
-            #             for arg in args ]
-            #for valArgs in _itertools.product( *valLists ):
-            #    key = call_key(fn, valArgs) # cache by call key
-            #    if key not in self.compCache:
-            #        self.compCache[key] = fn(*valArgs)
-        else:
-            if curkey not in self.compCache:
-                self.compCache[curkey] = fn(*valArgs)
-
         return self.compCache[curkey]
 
     
-    def trigger_update(self, hashval):
-        #print("DB: update %s" % str(hashval))
-        
-        #clear anything dependent on hashval in computational cache
-        to_remove = []
-        for call_key_tuple in self.compCache:
-            if hashval in call_key_tuple:
-                to_remove.append(call_key_tuple)
-        #print("DB: to_remove = ", to_remove)
-        for k in to_remove: del self.compCache[k]
-
-        #update (recompute if needed) anything dependent on hashval in output cache
-        for call_key_tuple in self.outputObjs:
-            #print("DB: checking ", call_key_tuple)
-            if hashval in call_key_tuple:
-                #print("DB: recomputing ", call_key_tuple)
-                self.outputObjs[call_key_tuple].update()
-        
-                
-        
-
-class WorkspaceValue(object):
-    """ 
-    An input that for WorspaceOutput object construction.  Wraps one
-    or more values which are individually used by computational routines.
-    The 'value' member holds the "current" value of the WorkspaceValue.
-    When a computational routine is called, `Workspace.cachedCompute`
-    takes care of caching results for *all* of a WorkspaceValue's
-    values (including the "current" one) and returns the current one.
-    """
-    def __init__(self, ws, values, curindex=0):
-        self.values = values
-        self.value = values[curindex] if len(values) > 0 else None
-        self.curindex = curindex if len(values) > 0 else None
-        self.ws = ws
-
-    #We never need to hash these objects, since only underlying 'values' are hashed (see cachedCompute)
-    #def __hash__(self):
-    #    raise TypeError #so this type is "unhashable" and will use id
-    #    # as desired (ideally GateSets and DataSets will do the same thing?)
-
-    def update(self, new_curindex):
-        self.curindex = new_curindex
-        self.value = self.values[new_curindex]
-
-
-class NamedWorkspaceValue(WorkspaceValue):
-
-    def __init__(self, ws, values, names=None, groupname=None, curindex=0):
-        if names is not None:
-            assert(len(names) == len(values))
-        else:
-            names = [ str(v) for v in values ]
-            
-        if groupname is None:
-            groupname = names[0] if (len(names) == 1) else ""
-
-        self.groupname = groupname
-        self.names = names
-        self.name = names[curindex] if len(names) > 0 else None
-        super(NamedWorkspaceValue, self).__init__(ws, values, curindex)
-
-    def update(self, new_curindex):
-        super(NamedWorkspaceValue, self).update(new_curindex)
-        self.name = self.names[new_curindex]
-
-        
-class NamedValue(NamedWorkspaceValue):
-    """ just provides a single-value constructor to NamedWorkspaceValue """
-    def __init__(self, ws, value, name=None):
-        super(NamedValue, self).__init__(ws, [value],
-                                         [name] if (name is not None) else None)
-
-
-
-#switchbd = SwitchBoard(switches=["Dataset","GaugeOptParam", "SomeOtherParam"],
-#                       labels=[["1","2"],["0","0.5","1.0"],['a','b']])
-#switchbd.addItem("gs",(0,1)) #OR
-#switchbd.addItem("gs",("Dataset","GaugeOptParam"))
-#switchbd.addItem("ds",(0,)) #OR
-#switchbd.addItem("ds",("Dataset",))
-#switchbd.gs["1",:] = gOptSets1 # gs marked as a "level 2" item, so if switch 1 or 2 moves it gets updated
-#switchbd.gs["2",:] = gOptSets2
-#switchbd.ds[:] = [ds1,ds2]  # a "level 1" item: only updates when switch 1 is moved
-#switchbd.addItem("other",(2,)) #OR
-#switchbd.addItem("other",("SomeOtherParam",))
-#switchbd.otherParams[:] = [Aval, Bval]
-
+    
 class Switchboard(_collections.OrderedDict):
     def __init__(self, ws, switches, positions, types, initial_pos=None,
                  descriptions=None, ID=None):
@@ -454,29 +277,7 @@ class Switchboard(_collections.OrderedDict):
 
 
     def add(self, varname, dependencies):
-        super(Switchboard,self).__setitem__(varname, SwitchVariable(self.ws, self, varname, dependencies))
-
-    def get_value_tuples(self, variableNames):
-        """ Returns (val1,val2,...) tuples of *distinct* values for the variables corresponding to variableNames """
-        switches_to_iter_over = set()
-        for varname in variableNames:
-            switches_to_iter_over.update(self[varname].dependencies)
-        switches_to_iter_over = list(switches_to_iter_over) #so definite ordering
-            
-        #iterate over the switches that these values depend upon
-        value_tuples = []
-        ranges = [ list(range(len(self.positionLabels[i]))) for i in switches_to_iter_over ]
-        for switchVals in _itertools.product( *ranges ):
-            variableVals = []
-            for varname in variableNames:
-                varSwitchVals = [ switchVals[switches_to_iter_over.index(k)] for k in self[varname].dependencies ]
-                variableVals.append( self[varname][varSwitchVals] )
-            #OLD: variableVals = [ self[varname][switchVals] for varname in variableNames ]
-            tup = tuple(variableVals)
-            if tup not in value_tuples:
-                value_tuples.append(tup)
-                
-        return value_tuples
+        super(Switchboard,self).__setitem__(varname, SwitchValue(self.ws, self, varname, dependencies))
 
     def __setitem__(self, key, val):
         raise KeyError("Use add(...) to add an item to this swichboard")
@@ -536,8 +337,6 @@ class Switchboard(_collections.OrderedDict):
         else:
             raise ValueError("Unknown switch type: %s" % typ)
         
-
-
     def display(self):
         if self.widget is None:
             self.widget = _widgets.HTML(value="?",
@@ -548,107 +347,41 @@ class Switchboard(_collections.OrderedDict):
         content = "<script>\n" + js + "</script>" + html
         self.widget.value = content
         _display(self.widget)
+        
 
-            
-#    def __getattr__(self, attr):
-#        ret = getattr(self.__dict__['base'],attr)
-#        if isinstance(ret, _np.ndarray) and ret.base is self.base:
-#            ret.flags.writeable = False
-#        return ret
 
-class SwitchVariable(NamedWorkspaceValue):
+class SwitchValue(object):
     def __init__(self, ws, parent_switchboard, name, dependencies):
+        self.ws = ws #workset
         self.parent = parent_switchboard
+        self.name = name
         self.dependencies = dependencies
-
-        Ns = [len(self.parent.positionLabels[i]) for i in dependencies]
-        totalAndFactors = list(reversed(_np.cumprod([1]+list(reversed(Ns)))))
-        total = totalAndFactors[0]
-        self.factors = totalAndFactors[1:]
-        super(SwitchVariable, self).__init__(ws, values=[None]*total, names=[""]*total,
-                                             groupname=name, curindex=0)
-
-    def __getitem__(self, currentSwitchPositionInds):
-        i = _np.dot(self.factors, _np.array(currentSwitchPositionInds))
-        return self.values[i]
         
-    def __setitem__(self, inds, vals):
-        if isinstance(inds, tuple):
-            assert(len(inds) == len(self.dependencies))
-        else:
-            assert(1 == len(self.dependencies))
-            inds = (inds,)
+        shape = [len(self.parent.positionLabels[i]) for i in dependencies]
+        self.base = _np.empty(shape, dtype=_np.object)
 
-        valIndRanges = []
-        myIndRanges = []
-        for i,(sliceOrIndex,swIndex) in enumerate(zip(inds,self.dependencies)):
-            if isinstance(sliceOrIndex, slice):
-                assert(sliceOrIndex.start is None and sliceOrIndex.stop is None), \
-                    "Currently, only full support slices are supported"
-                myIndRanges.append(list(range(len(self.parent.positionLabels[swIndex]))))
-                valIndRanges.append(list(range(len(self.parent.positionLabels[swIndex]))))
-            else:
-                valIndRanges.append(
-                    [self.parent.positionLabels[swIndex].index(sliceOrIndex)])
+    #Access to underlying ndarray
+    def __getitem__( self, key ):
+        return self.base.__getitem__(key)
 
-        def getval(vs, vis):
-            if len(vis) == 1: return vs[vis[0]]
-            else: return getval(vs[vis[0]], vis[1:])
-                
-        for myInds,valInds in zip(_itertools.product(*myIndRanges),_itertools.product(*valIndRanges)):
-            i = _np.dot(self.factors, _np.array(myInds))
-            self.values[i] = getval(vals,valInds)
+    def __getslice__(self, i,j):
+        return self.__getitem__(slice(i,j)) #Called for A[:]
 
-    #def switch_update(self):
-    #    curpos = [ self.parent.currentPositions[k] for k in self.dependencies ]
-    #    i = _np.dot(self.factors, _np.array(curpos,'i') )
-    #    self.update(i)  # WorkspaceValue.update
+    def __setitem__(self, key, val):
+        return self.base.__setitem__(key,val)
 
+    def __getattr__(self, attr):
+        #use __dict__ so no chance for recursive __getattr__
+        return getattr(self.__dict__['base'],attr)
+
+    def __len__(self):         return len(self.base)
+    #Future - arithmetic ops should return a new SwitchValue
+    #def __add__(self,x):       return self.base + x
+    #def __sub__(self,x):       return self.base - x
+    #def __mul__(self,x):       return self.base * x
+    #def __truediv__(self, x):  return self.base / x
+            
         
-        
-class Selector(NamedWorkspaceValue):
-    def __init__(self, ws, values, names=None, groupname="Select:", curindex=0, 
-                 description='', typ="buttons"):
-        
-        self.typ = typ
-        self.description = description
-        self.widget = None #don't build widget unless needed
-
-        super(Selector, self).__init__(ws, values, names, groupname, curindex)
-
-    def build_widget(self):
-        if self.typ == "buttons":
-            wig = _widgets.ToggleButtons(
-                options=self.names,
-                description=self.groupname,
-                disabled=False,
-                button_style='', # 'success', 'info', 'warning', 'danger' or ''
-                tooltip=self.description,
-                #     icon='check'
-            )
-        else:
-            raise ValueError("Unknown 'typ' argument: %s" % self.typ)
-        self.widget = wig
-
-
-    #renders a select widget
-    def render(self):
-        if self.widget is None:
-            self.build_widget()            
-        _display(self.widget)
-
-        # - observes change event -> calls update on listeners to this variable?
-        self.widget.observe(self.on_update, 'value')
-
-    def on_update(self, change_dict):
-        #print("DB: CALLBACK called : %s!" % change_dict)
-        if change_dict['type'] == "change":
-            iCur = self.names.index(change_dict['new'])
-            self.update(iCur)
-            self.ws.trigger_update(id(self))
-            #print("DB: Selected option %d: %s (val=%s)" %
-            #      (self.curindex, self.name, str(self.value)))
-
 
 class WorkspaceOutput(object):
     """ An output that can be rendered """
@@ -710,17 +443,6 @@ class WorkspacePlot(WorkspaceOutput):
         self.figs,self.switchpos_map,self.switchboards,self.sbSwitchIndices = \
                     self.ws.switchedCompute(self.plotfn, *self.initargs)
 
-        #self.update()
-
-    #def update(self):
-    #    """
-    #    Update any widgets associated with this object.  Called when underlying
-    #    data is changed.
-    #    """
-    #    self.fig = self.ws.cachedCompute(self.plotfn, *self.initargs)
-    #    if self.widget:
-    #        _clear_output()
-    #        iplot(self.fig) #basehtml = plot(fig, output_type='div', image_filename="test", image='png', auto_open=False)
 
     def display(self):
         """Create a new widget associated with this object and display it"""
@@ -818,63 +540,61 @@ class WorkspacePlot(WorkspaceOutput):
                 
 
 
-## TEST ------------------------------------------------------------------------
-def add(a,b):
-    print("Adding(%d,%d)!" % (a,b))
-    return a + b
-
-class TestLabel(WorkspaceOutput):
-    def __init__(self, ws, val1, val2):
-        print("Constructing TestLabel(%s,%s)" % (str(val1),str(val2)) )
-        super(TestLabel, self).__init__(ws)        
-        self.initargs = (val1,val2)
-        self.widget = None #don't build until necessary
-        self.update()
-
-    def update(self):
-        val1,val2 = self.initargs
-        print("Updating TestLabel(%s,%s)" % (str(val1),str(val2)) )
-        self.html = self.ws.cachedCompute(add, val1, val2)
-
-        if self.widget:
-            self.widget.value = "Value: " + str(self.html)
-
-    def render(self):
-        if self.widget is None:
-            self.widget = _widgets.Label(value="Value: " + str(self.html),
-                                         placeholder='Some LaTeX',
-                                         description='Some LaTeX',
-                                         disabled=False)
-            self.update()
-        _display(self.widget)
-
-
-class TestPlot(WorkspaceOutput):
-    def __init__(self, ws, val1, val2):
-        print("Constructing TestPlot(%s,%s)" % (str(val1),str(val2)) )
-        super(TestPlot, self).__init__(ws)        
-        self.initargs = (val1,val2)
-        self.widget = None #don't build until necessary
-        self.update()
-
-    def update(self):
-        val1,val2 = self.initargs
-        print("Updating TestPlot(%s,%s)" % (str(val1),str(val2)) )
-        self.val = self.ws.cachedCompute(add, val1, val2)
-
-        if self.widget:
-            fig = go.Scatter(x=[1,2,3],y=[3, 1, self.val])
-            _clear_output()
-            iplot([fig])
-
-    def render(self):
-        if self.widget is None:
-            self.widget = _widgets.Output()
-            self.update()
-        _display(self.widget)
-## TEST ------------------------------------------------------------------------
-    
-    
+### TEST ------------------------------------------------------------------------
+#def add(a,b):
+#    print("Adding(%d,%d)!" % (a,b))
+#    return a + b
+#
+#class TestLabel(WorkspaceOutput):
+#    def __init__(self, ws, val1, val2):
+#        print("Constructing TestLabel(%s,%s)" % (str(val1),str(val2)) )
+#        super(TestLabel, self).__init__(ws)        
+#        self.initargs = (val1,val2)
+#        self.widget = None #don't build until necessary
+#        self.update()
+#
+#    def update(self):
+#        val1,val2 = self.initargs
+#        print("Updating TestLabel(%s,%s)" % (str(val1),str(val2)) )
+#        self.html = self.ws.cachedCompute(add, val1, val2)
+#
+#        if self.widget:
+#            self.widget.value = "Value: " + str(self.html)
+#
+#    def render(self):
+#        if self.widget is None:
+#            self.widget = _widgets.Label(value="Value: " + str(self.html),
+#                                         placeholder='Some LaTeX',
+#                                         description='Some LaTeX',
+#                                         disabled=False)
+#            self.update()
+#        _display(self.widget)
+#
+#
+#class TestPlot(WorkspaceOutput):
+#    def __init__(self, ws, val1, val2):
+#        print("Constructing TestPlot(%s,%s)" % (str(val1),str(val2)) )
+#        super(TestPlot, self).__init__(ws)        
+#        self.initargs = (val1,val2)
+#        self.widget = None #don't build until necessary
+#        self.update()
+#
+#    def update(self):
+#        val1,val2 = self.initargs
+#        print("Updating TestPlot(%s,%s)" % (str(val1),str(val2)) )
+#        self.val = self.ws.cachedCompute(add, val1, val2)
+#
+#        if self.widget:
+#            fig = go.Scatter(x=[1,2,3],y=[3, 1, self.val])
+#            _clear_output()
+#            iplot([fig])
+#
+#    def render(self):
+#        if self.widget is None:
+#            self.widget = _widgets.Output()
+#            self.update()
+#        _display(self.widget)
+#        
 #class MyPlot(WorkspaceOutput):
 #    def __init__(self, ws, gateset, dataset, filename, render=True):
 #
@@ -899,4 +619,5 @@ class TestPlot(WorkspaceOutput):
 #    def render(self):
 #        #plot self.logLMx within a widget?
 #        pass
+### TEST ------------------------------------------------------------------------
 
