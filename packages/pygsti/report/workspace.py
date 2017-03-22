@@ -490,7 +490,6 @@ class Switchboard(_collections.OrderedDict):
                                                           self.switchTypes,
                                                           self.positionLabels,
                                                           self.initialPositions)):
-            html = ""; js = ""
             if typ == "buttons":
                 html = "<fieldset id='%s'>\n" % ID
                 for k,lbl in enumerate(posLbls):
@@ -499,12 +498,14 @@ class Switchboard(_collections.OrderedDict):
                     html += "<input type='radio' name='%s' id='%s-%d' value=%d%s>\n" \
                                           % (ID,ID,k,k,checked)
                 html += "</fieldset>\n"
-                js = "$('#%s > input').checkboxradio({ icon: false });" % ID
+                js = "  $('#%s > input').checkboxradio({ icon: false });" % ID
 
             elif typ == "dropdown":
+                html = ""; js = ""
                 raise NotImplementedError()
             
             elif typ == "slider":
+                html = ""; js = ""
                 raise NotImplementedError()
                 
             else:
@@ -513,7 +514,10 @@ class Switchboard(_collections.OrderedDict):
             switch_html.append(html)
             switch_js.append(js)
 
-        return switch_html, switch_js
+        html = "\n".join(switch_html)
+        js = "$(document).ready(function() {\n" +\
+             "\n".join(switch_js) + "\n});"
+        return html, js
                 
 
     def get_switch_change_handlerjs(self, switchIndex):
@@ -541,7 +545,7 @@ class Switchboard(_collections.OrderedDict):
                                         description='Switch HTML',
                                         disabled=False)
         html, js = self.render("html")
-        content = "<script>\n" + "\n".join(js) + "</script>" + "\n".join(html)
+        content = "<script>\n" + js + "</script>" + html
         self.widget.value = content
         _display(self.widget)
 
@@ -729,7 +733,8 @@ class WorkspacePlot(WorkspaceOutput):
         content = "<script>\n%s\n</script>\n\n%s" % (js,html)
         self.widget.value = content
         #with open("debug.html","w") as f:
-        #    filecontent = "<html><script>%s</script> %s </html>" % (get_plotlyjs(),content)
+        #    jsincludes = '<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js">'
+        #    filecontent = "<html><head><script>\n%s\n</script>\n%s\n</head>\n<body> %s </body></html>" % (get_plotlyjs(),jsincludes,content)
         #    f.write(filecontent)
         #print("DB content:\n",content)
         _display(self.widget)
@@ -762,16 +767,18 @@ class WorkspacePlot(WorkspaceOutput):
 
 
         #build javascript to map switch positions to divIDs
-        #$(document).ready(function() {
+        #js  = "$(document).ready(function() {\n"
         js = "var switchmap_%s = new Array();\n" % containerID
+          #global varaiable -- do not put in on-ready handler
+        js += "$( function() {\n"
         for switchPositions, iFig in self.switchpos_map.items():
             #switchPositions is a tuple of tuples of position indices, one tuple per switchboard
             fig_divid = figDivIds[iFig]
             flatPositions = []
             for singleBoardSwitchPositions in switchPositions:
-                flatPositions.extend( singleBoardSwitchPositions )
-                
-            js += "switchmap_%s[ [%s] ] = '%s';\n" % (containerID, ",".join(map(str,flatPositions)), fig_divid)
+                flatPositions.extend( singleBoardSwitchPositions )                
+            js += "  switchmap_%s[ [%s] ] = '%s';\n" % \
+                    (containerID, ",".join(map(str,flatPositions)), fig_divid)
         js += "\n"
 
         
@@ -796,13 +803,13 @@ class WorkspacePlot(WorkspaceOutput):
                 handler_fns_js.append(handler_js)
 
                 # on document ready
-                js += sb.get_switch_change_handlerjs(switchIndex) + \
+                js += "  " + sb.get_switch_change_handlerjs(switchIndex) + \
                               "%s(); });\n" % fname
-                js += "%s();\n" % fname # call function to update visibility
+                js += "  %s();\n" % fname # call function to update visibility
 
         #once all visibility update are done, show parent container
         js += "$( '#%s' ).show()\n" % containerID
-        #js += "});\n\n" # end on-ready handler
+        js += "});\n\n" # end on-ready handler
         js += "\n".join(handler_fns_js)
 
         return html, js
