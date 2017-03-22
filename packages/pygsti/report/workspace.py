@@ -52,6 +52,7 @@ import itertools as _itertools
 import collections as _collections
 import numpy as _np
 import uuid as _uuid
+import random as _random
 
 import ipywidgets as _widgets
 from IPython.display import display as _display
@@ -85,6 +86,10 @@ def call_key(obj, args):
                                + "in cached computation calls")
 
     return tuple(key) #so hashable
+
+def randomID():
+    return str(int(10000*_random.random()))
+    #return str(_uuid.uuid4().hex) #alternative
 
 
 class Workspace(object):
@@ -425,15 +430,23 @@ class NamedValue(NamedWorkspaceValue):
 #switchbd.otherParams[:] = [Aval, Bval]
 
 class Switchboard(_collections.OrderedDict):
-    def __init__(self, ws, switches, positions, types, descriptions=None):
+    def __init__(self, ws, switches, positions, types, initial_pos=None,
+                 descriptions=None, ID=None):
+
         assert(len(switches) == len(positions))
+        
+        self.ID = randomID() if (ID is None) else ID
         self.ws = ws #Workspace
         self.switchNames = switches
         self.switchTypes = types
-        self.switchIDs = ["switch%d" % i for i in range(len(switches))]
+        self.switchIDs = ["switchbd%s_%d" % (self.ID,i)
+                          for i in range(len(switches))]
         self.positionLabels = positions
-        self.currentPositions = _np.array([0]*len(switches),'i')
-        self.variables = {}
+        if initial_pos is None:
+            self.initialPositions = _np.array([0]*len(switches),'i')
+        else:
+            assert(len(initial_pos) == len(switches))
+            self.initialPositions = _np.array(initial_pos,'i')
 
         self.descriptions = descriptions
         self.widget = None
@@ -722,7 +735,7 @@ class WorkspacePlot(WorkspaceOutput):
     def render(self, typ="html"):
         assert(typ == "html"), "Only HTML rendering supported currently"
 
-        containerID = "DEBUG1234" #_uuid.uuid4()
+        containerID = randomID()
 
         def getPlotlyDivID(html):
             #could make this more robust using lxml or something later...
@@ -746,7 +759,7 @@ class WorkspacePlot(WorkspaceOutput):
 
 
         #build javascript to map switch positions to divIDs
-        js = "var %s_switchmap = new Array();" % containerID
+        js = "var switchmap_%s = new Array();" % containerID
         for switchPositions, iFig in self.switchpos_map.items():
             #switchPositions is a tuple of tuples of position indices, one tuple per switchboard
             fig_divid = figDivIds[iFig]
@@ -754,7 +767,7 @@ class WorkspacePlot(WorkspaceOutput):
             for singleBoardSwitchPositions in switchPositions:
                 flatPositions.extend( singleBoardSwitchPositions )
                 
-            js += "%s_switchmap[ [%s] ] = '%s';\n" % (containerID, ",".join(map(str,flatPositions)), fig_divid)
+            js += "switchmap_%s[ [%s] ] = '%s';\n" % (containerID, ",".join(map(str,flatPositions)), fig_divid)
         js += "\n"
 
         
@@ -770,7 +783,7 @@ class WorkspacePlot(WorkspaceOutput):
                 for sb2, switchInds2 in zip(self.switchboards, self.sbSwitchIndices):
                     for switchIndex2 in switchInds2:
                         handler_js += "  curSwitchPos.push(%s);\n" % sb2.get_switch_valuejs(switchIndex2)
-                handler_js += "  var idToShow = %s_switchmap[ curSwitchPos ];\n" % containerID
+                handler_js += "  var idToShow = switchmap_%s[ curSwitchPos ];\n" % containerID
                 handler_js += "  $( '#%s' ).children().hide();\n" % containerID
                 handler_js += "  $( '#' + idToShow ).show();\n"
                 handler_js += "});\n"
