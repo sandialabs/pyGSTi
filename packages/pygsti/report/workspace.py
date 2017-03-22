@@ -485,17 +485,19 @@ class Switchboard(_collections.OrderedDict):
         assert(typ == "html"), "Can't render Switchboards as anything but HTML"
 
         switch_html = []; switch_js = []
-        for i,(name,ID,typ,posLbls) in enumerate(zip(self.switchNames,
-                                                     self.switchIDs,
-                                                     self.switchTypes,
-                                                     self.positionLabels)):
+        for i,(name,ID,typ,posLbls,ipos) in enumerate(zip(self.switchNames,
+                                                          self.switchIDs,
+                                                          self.switchTypes,
+                                                          self.positionLabels,
+                                                          self.initialPositions)):
             html = ""; js = ""
             if typ == "buttons":
                 html = "<fieldset id='%s'>\n" % ID
                 for k,lbl in enumerate(posLbls):
+                    checked = " checked='checked'" if k==ipos else ""
                     html += "<label for='%s-%d'>%s</label>\n" % (ID, k,lbl)
-                    html += "<input type='radio' name='%s' id='%s-%d' value=%d>\n" \
-                                          % (ID,ID,k,k)
+                    html += "<input type='radio' name='%s' id='%s-%d' value=%d%s>\n" \
+                                          % (ID,ID,k,k,checked)
                 html += "</fieldset>\n"
                 js = "$('#%s > input').checkboxradio({ icon: false });" % ID
 
@@ -593,10 +595,10 @@ class SwitchVariable(NamedWorkspaceValue):
             i = _np.dot(self.factors, _np.array(myInds))
             self.values[i] = getval(vals,valInds)
 
-    def switch_update(self):
-        curpos = [ self.parent.currentPositions[k] for k in self.dependencies ]
-        i = _np.dot(self.factors, _np.array(curpos,'i') )
-        self.update(i)  # WorkspaceValue.update
+    #def switch_update(self):
+    #    curpos = [ self.parent.currentPositions[k] for k in self.dependencies ]
+    #    i = _np.dot(self.factors, _np.array(curpos,'i') )
+    #    self.update(i)  # WorkspaceValue.update
 
         
         
@@ -727,7 +729,8 @@ class WorkspacePlot(WorkspaceOutput):
         content = "<script>\n%s\n</script>\n\n%s" % (js,html)
         self.widget.value = content
         #with open("debug.html","w") as f:
-        #    f.write(content)
+        #    filecontent = "<html><script>%s</script> %s </html>" % (get_plotlyjs(),content)
+        #    f.write(filecontent)
         #print("DB content:\n",content)
         _display(self.widget)
 
@@ -735,7 +738,7 @@ class WorkspacePlot(WorkspaceOutput):
     def render(self, typ="html"):
         assert(typ == "html"), "Only HTML rendering supported currently"
 
-        containerID = randomID()
+        containerID = "oobj_" + randomID()
 
         def getPlotlyDivID(html):
             #could make this more robust using lxml or something later...
@@ -748,7 +751,7 @@ class WorkspacePlot(WorkspaceOutput):
 
         
         #build HTML as container div containing one or more plot divs
-        html = "<div id='%s'>\n" % containerID
+        html = "<div id='%s' style='display: none'>\n" % containerID
 
         figDivIds = []
         for fig in self.figs:
@@ -759,7 +762,8 @@ class WorkspacePlot(WorkspaceOutput):
 
 
         #build javascript to map switch positions to divIDs
-        js = "var switchmap_%s = new Array();" % containerID
+        #$(document).ready(function() {
+        js = "var switchmap_%s = new Array();\n" % containerID
         for switchPositions, iFig in self.switchpos_map.items():
             #switchPositions is a tuple of tuples of position indices, one tuple per switchboard
             fig_divid = figDivIds[iFig]
@@ -772,13 +776,15 @@ class WorkspacePlot(WorkspaceOutput):
 
         
         #build change event listener javascript
+        handler_fns_js = []
         for sb, switchInds in zip(self.switchboards, self.sbSwitchIndices):
             # switchInds is a tuple containing the "used" switch indices of sb
             
             for switchIndex in switchInds:
                 #build a handler function to get all of the relevant switch positions,
                 # build a (flattened) position array, and perform the lookup.
-                handler_js = sb.get_switch_change_handlerjs(switchIndex) + "\n"
+                fname = "%s_onchange_%s_%d" % (containerID,sb.ID,switchIndex)
+                handler_js = "function %s() {\n" % fname 
                 handler_js += "  var curSwitchPos = new Array();\n"
                 for sb2, switchInds2 in zip(self.switchboards, self.sbSwitchIndices):
                     for switchIndex2 in switchInds2:
@@ -786,8 +792,18 @@ class WorkspacePlot(WorkspaceOutput):
                 handler_js += "  var idToShow = switchmap_%s[ curSwitchPos ];\n" % containerID
                 handler_js += "  $( '#%s' ).children().hide();\n" % containerID
                 handler_js += "  $( '#' + idToShow ).show();\n"
-                handler_js += "});\n"
-                js += handler_js
+                handler_js += "}\n"
+                handler_fns_js.append(handler_js)
+
+                # on document ready
+                js += sb.get_switch_change_handlerjs(switchIndex) + \
+                              "%s(); });\n" % fname
+                js += "%s();\n" % fname # call function to update visibility
+
+        #once all visibility update are done, show parent container
+        js += "$( '#%s' ).show()\n" % containerID
+        #js += "});\n\n" # end on-ready handler
+        js += "\n".join(handler_fns_js)
 
         return html, js
                 
