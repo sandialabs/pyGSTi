@@ -4,7 +4,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Defines the Dashboard class and supporting functionality."""
+""" Defines the Workspace class and supporting functionality."""
 
 #import os  as _os
 #import re  as _re
@@ -105,7 +105,6 @@ class Workspace(object):
         self.outputObjs = {} #cache of WorkspaceOutput objects (hashable by call_keys)
         self.compCache = {}  # cache of computation function results (hashable by call_keys)
 
-
         def makefactory(cls, cache=False):
             
             #TODO: set signature of factor_fn to cls.__init__
@@ -147,11 +146,7 @@ class Workspace(object):
         # (strip SwitchedValue stuff away)
 
         switchboards = []
-        switchBdInfo = []
-        
-        #sbVariableNames = []
-        #sbArgIndices = []
-        
+        switchBdInfo = []        
         nonSwitchedArgs = []
 
         switchpos_map = {}
@@ -183,10 +178,8 @@ class Workspace(object):
 
         #print("DB: %d arguments" % len(args))
         #print("DB: found %d switchboards" % len(switchboards))
-        #print("DB: sbArgIndices = ", sbArgIndices)
-        #print("DB: sbVariableNames = ", sbVariableNames)
+        #print("DB: switchBdInfo = ", switchBdInfo)
         #print("DB: nonSwitchedArgs = ", nonSwitchedArgs)
-        #print("DB: nsArgIndices = ",nonSwitchedArgIndices)
 
         #Gate a list of lists, each list holding all of the relevant switch positions for each board
         switch_positions = []
@@ -227,7 +220,7 @@ class Workspace(object):
             #  we need to and add result.
             key = call_key(fn, argVals) # cache by call key
             if key not in self.compCache:
-                #print("DB: computing with valArgs = ", valArgs)
+                #print("DB: computing with args = ", argsVals)
                 self.compCache[key] = fn(*argVals)
             result = self.compCache[key]
 
@@ -388,60 +381,16 @@ class WorkspaceOutput(object):
     
     def __init__(self, ws):
         self.ws = ws
+        self.widget = None #don't build until 1st display()
+
         
     # Note: hashing not needed because these objects are not *inputs* to
     # other WorspaceOutput objects or computation functions - these objects
     # are cached using call_key.
 
-    def display(self):
-        """Create a new widget associated with this object and display it"""
-        #displays nothing by default
-        pass
-
-    
-class WorkspaceTable(WorkspaceOutput):
-    def __init__(self, ws, fn, *args):
-        super(WorkspaceTable, self).__init__(ws)
-        self.tablefn = fn
-        self.initargs = args
-        self.widget = None #don't build until necessary
-        self.update()
-
-    def update(self):
-        """
-        Update any widgets associated with this object.  Called when underlying
-        data is changed.
-        """
-        self.table = self.ws.cachedCompute(self.tablefn, *self.initargs)
-        if self.widget:
-            self.widget.value = self.table.render("html", tableclass="dataTable")
-            #self.widget.value = "$$" + self.table.render("latex") + "$$"
-
-    def display(self):
-        """Create a new widget associated with this object and display it"""
-        if self.widget is None:
-            self.widget = _widgets.HTML(value="?",
-                                        placeholder='Some LaTeX',
-                                        description='Some LaTeX',
-                                        disabled=False)
-            self.update()
-        _display(self.widget)
-
-
-    def render(self, typ):
-        """Renders a static version of this table"""
-        return self.table.render(typ, tableclass="dataTable")
-
-
-class WorkspacePlot(WorkspaceOutput):
-    def __init__(self, ws, fn, *args):
-        super(WorkspacePlot, self).__init__(ws)
-        self.plotfn = fn
-        self.initargs = args
-        self.widget = None #don't build until necessary
-
-        self.figs,self.switchpos_map,self.switchboards,self.sbSwitchIndices = \
-                    self.ws.switchedCompute(self.plotfn, *self.initargs)
+    def render(self, typ="html"):
+        """Renders this object to the specifed format"""
+        raise NotImplementedError("Derived classes should implement render()")
 
 
     def display(self):
@@ -461,46 +410,54 @@ class WorkspacePlot(WorkspaceOutput):
         #print("DB content:\n",content)
         _display(self.widget)
 
-        
-    def render(self, typ="html"):
-        assert(typ == "html"), "Only HTML rendering supported currently"
+    def _render_html(self, ID, div_htmls, div_ids, switchpos_map,
+                     switchboards, switchIndices):
+        """
+        Helper rendering function
 
-        containerID = "oobj_" + randomID()
+        Parameters
+        ----------
+        ID: str
+            The identifier to use when constructing DOM ids.
 
-        def getPlotlyDivID(html):
-            #could make this more robust using lxml or something later...
-            iStart = html.index('div id="')
-            iEnd = html.index('"', iStart+8)
-            return html[iStart+8:iEnd]
+        div_htmls : list
+            A list of html "<div>...</div>" blocks.  This is the content that
+            is switched between.
 
-        self.figs,self.switchpos_map,self.switchboards,self.sbSwitchIndices = \
-                    self.ws.switchedCompute(self.plotfn, *self.initargs)
+        div_ids : list
+            A list giving the DOM ids for the div blocks given by `div_html`.
 
-        
+        switchpos_map : dict
+            A dictionary mapping switch positions to div-index.  Keys are switch
+            tuples of per-switchboard positions (i.e. a tuple of tuples), giving
+            the positions of each switch specified in `switchIndices`.  Values
+            are integer indices into `html_divs`.
+
+        switchboards: list
+            A list of relevant SwitchBoard objects.
+
+        switchIndices: list
+            A list of tuples, one per Switchboard object, giving the relevant
+            switch indices (integers) within that Switchboard.
+        """
+
         #build HTML as container div containing one or more plot divs
-        html = "<div id='%s' style='display: none'>\n" % containerID
+        html = "<div id='%s' style='display: none'>\n" % ID
+        html += "\n".join(div_htmls) + "\n</div>\n"
 
-        figDivIds = []
-        for fig in self.figs:
-            fig_html = plot(fig, include_plotlyjs=False, output_type='div')
-            html += fig_html + "\n"
-            figDivIds.append(getPlotlyDivID(fig_html))
-        html += "</div>\n"
-
-
-        #build javascript to map switch positions to divIDs
+        #build javascript to map switch positions to div_ids
         #js  = "$(document).ready(function() {\n"
-        js = "var switchmap_%s = new Array();\n" % containerID
+        js = "var switchmap_%s = new Array();\n" % ID
           #global varaiable -- do not put in on-ready handler
         js += "$( function() {\n"
-        for switchPositions, iFig in self.switchpos_map.items():
+        for switchPositions, iDiv in self.switchpos_map.items():
             #switchPositions is a tuple of tuples of position indices, one tuple per switchboard
-            fig_divid = figDivIds[iFig]
+            div_id = div_ids[iDiv]
             flatPositions = []
             for singleBoardSwitchPositions in switchPositions:
                 flatPositions.extend( singleBoardSwitchPositions )                
             js += "  switchmap_%s[ [%s] ] = '%s';\n" % \
-                    (containerID, ",".join(map(str,flatPositions)), fig_divid)
+                    (ID, ",".join(map(str,flatPositions)), div_id)
         js += "\n"
 
         
@@ -512,14 +469,14 @@ class WorkspacePlot(WorkspaceOutput):
             for switchIndex in switchInds:
                 #build a handler function to get all of the relevant switch positions,
                 # build a (flattened) position array, and perform the lookup.
-                fname = "%s_onchange_%s_%d" % (containerID,sb.ID,switchIndex)
+                fname = "%s_onchange_%s_%d" % (ID,sb.ID,switchIndex)
                 handler_js = "function %s() {\n" % fname 
                 handler_js += "  var curSwitchPos = new Array();\n"
                 for sb2, switchInds2 in zip(self.switchboards, self.sbSwitchIndices):
                     for switchIndex2 in switchInds2:
                         handler_js += "  curSwitchPos.push(%s);\n" % sb2.get_switch_valuejs(switchIndex2)
-                handler_js += "  var idToShow = switchmap_%s[ curSwitchPos ];\n" % containerID
-                handler_js += "  $( '#%s' ).children().hide();\n" % containerID
+                handler_js += "  var idToShow = switchmap_%s[ curSwitchPos ];\n" % ID
+                handler_js += "  $( '#%s' ).children().hide();\n" % ID
                 handler_js += "  $( '#' + idToShow ).show();\n"
                 handler_js += "}\n"
                 handler_fns_js.append(handler_js)
@@ -530,11 +487,75 @@ class WorkspacePlot(WorkspaceOutput):
                 js += "  %s();\n" % fname # call function to update visibility
 
         #once all visibility update are done, show parent container
-        js += "$( '#%s' ).show()\n" % containerID
+        js += "$( '#%s' ).show()\n" % ID
         js += "});\n\n" # end on-ready handler
         js += "\n".join(handler_fns_js)
 
         return html, js
+
+
+
+    
+class WorkspaceTable(WorkspaceOutput):
+    def __init__(self, ws, fn, *args):
+        super(WorkspaceTable, self).__init__(ws)
+        self.tablefn = fn
+        self.initargs = args
+        self.tables,self.switchpos_map,self.switchboards,self.sbSwitchIndices = \
+            self.ws.switchedCompute(self.tablefn, *self.initargs)
+
+        
+    def render(self, typ):
+        """Renders this table to the specifed format"""
+        if typ == "html":
+            tableID = "table_" + randomID()
+
+            divHTML = []
+            divIDs = []
+            for i,table in enumerate(self.tables):
+                tableDivID = tableID + "_%d" % i
+                table_html = "<div id='%s'>\n%s\n</div>\n" % (tableDivID,
+                                table.render("html", tableclass="dataTable"))
+                divHTML.append(table_html)
+                divIDs.append(tableDivID)
+                
+            return self._render_html(tableID, divHTML, divIDs, self.switchpos_map,
+                                     self.switchboards, self.sbSwitchIndices)
+        else:
+            assert(len(self.tables) == 1), \
+                "Can only render %s format for a non-switched table" % typ
+            return self.tables[0].render(typ)
+
+
+        
+class WorkspacePlot(WorkspaceOutput):
+    def __init__(self, ws, fn, *args):
+        super(WorkspacePlot, self).__init__(ws)
+        self.plotfn = fn
+        self.initargs = args
+        self.figs, self.switchpos_map, self.switchboards, self.sbSwitchIndices = \
+            self.ws.switchedCompute(self.plotfn, *self.initargs)
+
+    def render(self, typ="html"):
+        assert(typ == "html"), "Only HTML rendering supported currently"
+
+        plotID = "plot_" + randomID()
+
+        def getPlotlyDivID(html):
+            #could make this more robust using lxml or something later...
+            iStart = html.index('div id="')
+            iEnd = html.index('"', iStart+8)
+            return html[iStart+8:iEnd]
+
+        divHTML = []
+        divIDs = []
+        for fig in self.figs:
+            fig_html = plot(fig, include_plotlyjs=False, output_type='div')
+            divHTML.append(fig_html)
+            divIDs.append(getPlotlyDivID(fig_html))
+            
+        return self._render_html(plotID, divHTML, divIDs, self.switchpos_map,
+                                 self.switchboards, self.sbSwitchIndices)
                 
                     
                 
