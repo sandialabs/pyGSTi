@@ -50,18 +50,15 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 # w.display([plot], "static") #if autodisplay is off? layout?
 import itertools as _itertools
 import collections as _collections
+import os as _os
 import numpy as _np
 import uuid as _uuid
 import random as _random
 
-import ipywidgets as _widgets
-from IPython.display import display as _display
-from IPython.display import clear_output as _clear_output
-
-import plotly.graph_objs as go
-from plotly.offline import plot, iplot
-from plotly.offline.offline import get_plotlyjs
-
+import plotly.offline as _plotly_offline
+from .plotly_offline_fixed import plot_ex as _plot
+from plotly.offline.offline import get_plotlyjs as _get_plotlyjs
+#from IPython.display import clear_output as _clear_output
 
 def _is_hashable(x):
     try:
@@ -195,6 +192,60 @@ class Workspace(object):
         self.ProjectionsBoxPlot = makefactory(_wp.ProjectionsBoxPlot)
         self.ChoiEigenvalueBarPlot = makefactory(_wp.ChoiEigenvalueBarPlot)
 
+    def init_notebook_mode(self, connected=False):
+        try:
+            from IPython.core.display import display as _display
+            from IPython.core.display import HTML as _HTML
+        except ImportError:
+            raise ImportError('Only run `init_notebook_mode` from inside an IPython Notebook.')
+
+        global __PYGSTI_WORKSPACE_INITIALIZED
+            
+        # The polling here is to ensure that plotly.js has already been loaded before
+        # setting display alignment in order to avoid a race condition.
+        script = """
+            <script>
+            var waitForPlotly = setInterval( function() {
+            if( typeof(window.Plotly) !== "undefined" ){
+                MathJax.Hub.Config({ SVG: { font: "STIX-Web" }, displayAlign: "center" });
+                MathJax.Hub.Queue(["setRenderer", MathJax.Hub, "SVG"]);
+                clearInterval(waitForPlotly);
+            }}, 250 );
+            </script>"""        
+        _display(_HTML(script))
+
+        # Load style sheets for displaying tables
+        cssPath = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)),
+                                 "templates","css")
+        with open(_os.path.join(cssPath,"dataTable.css")) as f:
+            script = '<style>\n' + str(f.read()) + '</style>'
+            _display(_HTML(script1 + script))
+
+        # Update Mathjax config -- jupyter notebooks already have this so not needed
+        #script = '<script type="text/x-mathjax-config">\n' \
+        #        + '  MathJax.Hub.Config({ tex2jax: {inlineMath: [["$","$"], ["\\(","\\)"]]}\n' \
+        #        + '}); </script>' \
+        #        + '<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" ></script>'
+        #_display(_HTML(script))
+
+        #Tell require.js where jQueryUI is
+        script = """
+        <script>requirejs.config({paths: { 'jquery-ui': ['https://code.jquery.com/ui/1.12.1/jquery-ui.min']},});
+          require(['jquery-ui'],function(ui) {
+          window.jQueryUI=ui;});
+        </script>"""
+        _display(_HTML(script))
+
+
+        #MathJax (& jQuery) are already loaded in ipython notebooks
+        # '<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" ></script>'
+        
+        # Initialize Plotly libraries
+        _plotly_offline.init_notebook_mode(connected)
+        
+        __PYGSTI_WORKSPACE_INITIALIZED = True
+
+        
 
     def switchedCompute(self, fn, *args):
 
@@ -393,15 +444,21 @@ class Switchboard(_collections.OrderedDict):
             raise ValueError("Unknown switch type: %s" % typ)
         
     def display(self):
-        if self.widget is None:
-            self.widget = _widgets.HTML(value="?",
-                                        placeholder='Switch HTML',
-                                        description='Switch HTML',
-                                        disabled=False)
+        import ipywidgets as _widgets
+        from IPython.display import display as _display
+        from IPython.display import HTML as _HTML
+
+        #if self.widget is None:
+        #    self.widget = _widgets.HTMLMath(value="?",
+        #                                placeholder='Switch HTML',
+        #                                description='Switch HTML',
+        #                                disabled=False)
         html, js = self.render("html")
-        content = "<script>\n" + js + "</script>" + html
-        self.widget.value = content
-        _display(self.widget)
+        content = "<script>\n" + \
+                  "require(['jquery','jquery-ui'],function($,ui) {" + \
+                  js + " });</script>" + html
+        #self.widget.value = content
+        _display(_HTML(content)) #self.widget)
         
 
 
@@ -457,20 +514,29 @@ class WorkspaceOutput(object):
 
     def display(self):
         """Create a new widget associated with this object and display it"""
-        if self.widget is None:
-            self.widget = _widgets.HTML(value="?",
-                                        placeholder='Plot HTML',
-                                        description='Plot HTML',
-                                        disabled=False)
-        html, js = self.render("html")
-        content = "<script>\n%s\n</script>\n\n%s" % (js,html)
-        self.widget.value = content
+        import ipywidgets as _widgets
+        from IPython.display import display as _display
+        from IPython.display import HTML as _HTML
+
+        #if self.widget is None:
+        #    self.widget = _widgets.HTMLMath(value="?",
+        #                                placeholder='Plot HTML',
+        #                                description='Plot HTML',
+        #                                disabled=False)
+        html, js = self.render("html", global_requirejs=True) # b/c jupyter uses require.js
+        #OLD: content = "<script>\n%s\n</script>\n\n%s" % (js,html)
+        content = "<script>\n" + \
+                  "require(['jquery','jquery-ui'],function($,ui) {" + \
+                  js + " });</script>" + html
+
+        #self.widget.value = content
         #with open("debug.html","w") as f:
         #    jsincludes = '<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js">'
-        #    filecontent = "<html><head><script>\n%s\n</script>\n%s\n</head>\n<body> %s </body></html>" % (get_plotlyjs(),jsincludes,content)
+        #    filecontent = "<html><head><script>\n%s\n</script>\n%s\n</head>\n<body> %s </body></html>" % (_get_plotlyjs(),jsincludes,content)
         #    f.write(filecontent)
         #print("DB content:\n",content)
-        _display(self.widget)
+        #_display(self.widget)
+        _display(_HTML(content))
 
     def _render_html(self, ID, div_htmls, div_ids, switchpos_map,
                      switchboards, switchIndices):
@@ -567,7 +633,7 @@ class WorkspaceTable(WorkspaceOutput):
             self.ws.switchedCompute(self.tablefn, *self.initargs)
 
         
-    def render(self, typ):
+    def render(self, typ, global_requirejs=False):
         """Renders this table to the specifed format"""
         if typ == "html":
             tableID = "table_" + randomID()
@@ -598,7 +664,7 @@ class WorkspacePlot(WorkspaceOutput):
         self.figs, self.switchpos_map, self.switchboards, self.sbSwitchIndices = \
             self.ws.switchedCompute(self.plotfn, *self.initargs)
 
-    def render(self, typ="html"):
+    def render(self, typ="html", global_requirejs=False):
         assert(typ == "html"), "Only HTML rendering supported currently"
 
         plotID = "plot_" + randomID()
@@ -612,7 +678,8 @@ class WorkspacePlot(WorkspaceOutput):
         divHTML = []
         divIDs = []
         for fig in self.figs:
-            fig_html = plot(fig, include_plotlyjs=False, output_type='div')
+            fig_html = _plot(fig, include_plotlyjs=False, output_type='div',
+                             global_requirejs=global_requirejs)
             divHTML.append(fig_html)
             divIDs.append(getPlotlyDivID(fig_html))
             
@@ -668,7 +735,7 @@ class WorkspacePlot(WorkspaceOutput):
 #        self.val = self.ws.cachedCompute(add, val1, val2)
 #
 #        if self.widget:
-#            fig = go.Scatter(x=[1,2,3],y=[3, 1, self.val])
+#            fig = _go.Scatter(x=[1,2,3],y=[3, 1, self.val])
 #            _clear_output()
 #            iplot([fig])
 #
