@@ -228,6 +228,14 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
 
     # 3) populate template latex file => report latex file
     printer.log("*** Merging into template file ***")
+
+    #Add inline CSS
+    qtys['inlineCSS'] = ""
+    cssPath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                            "templates","css")
+    for cssFile in ("dataTable.css","pygsti_pub.css","pygsti_screen.css"):
+        with open(_os.path.join(cssPath,cssFile)) as f:
+            qtys['inlineCSS'] += '<style>\n' + str(f.read()) + '\n</style>\n'
     
     templateFile = "report_singlequbit.html"
     _merge_template(qtys, templateFile, filename)
@@ -364,6 +372,14 @@ def create_general_report(results, filename, confidenceLevel=None,
 
     # 3) populate template latex file => report latex file
     printer.log("*** Merging into template file ***")
+
+    #Add inline CSS
+    qtys['inlineCSS'] = ""
+    cssPath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                            "templates","css")
+    for cssFile in ("dataTable.css","pygsti_pub.css","pygsti_screen.css"):
+        with open(_os.path.join(cssPath,cssFile)) as f:
+            qtys['inlineCSS'] += '<style>\n' + str(f.read()) + '\n</style>\n'
     
     templateFile = "report_general.html"
     _merge_template(qtys, templateFile, filename)

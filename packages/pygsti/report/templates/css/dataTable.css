@@ -1,0 +1,119 @@
+	
+.dataTable td, .dataTable th {
+	/* appearance */
+	border: 2px solid #036;
+	
+	/* size */
+	padding: 5px;
+	}
+
+.dataTable {
+	/* text */
+	font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+
+	/* no space between cells */
+	border-spacing: 0px;
+	border-collapse: collapse;
+	}
+
+.dataTable a {
+	/* link text */
+	font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+	text-decoration: none;
+	color: #000000;
+	}
+.dataTable a:hover { color: #0000FF; }
+
+.dataTable tbody tr td {
+	/* appearance */
+	background-color: #ffffff;
+	background-image: -moz-linear-gradient(
+		top,
+		rgba(255,255,255,0.4) 0%,
+		rgba(255,255,255,0.2) 50%,
+		rgba(255,255,255,0.1) 51%,
+		rgba(255,255,255,0.0) 100%);
+	
+	background-image: -webkit-gradient(
+		linear, left top, left bottom,
+		color-stop(0%,rgba(255,255,255,0.4)),
+		color-stop(50%,rgba(255,255,255,0.2)),
+		color-stop(51%,rgba(255,255,255,0.1)),
+		color-stop(100%,rgba(255,255,255,0.0)));
+		
+	/* text */
+	color: #262c31;
+
+	/* font */
+	font-family: "Computer Modern Serif","times new roman",serif;
+
+	/* font-size: 90%; */
+	font-size: 10pt;
+
+	/* text alignment */
+	text-align: center;
+	vertical-align: middle;
+	}
+
+.dataTable tbody tr.odd td {
+	/* appearance */
+	background-color: #d6e0ef;
+	background-image: -moz-linear-gradient(
+		top,
+		rgba(255,255,255,0.4) 0%,
+		rgba(255,255,255,0.2) 50%,
+		rgba(255,255,255,0.1) 51%,
+		rgba(255,255,255,0.0) 100%);
+	
+	background-image: -webkit-gradient(
+		linear, left top, left bottom,
+		color-stop(0%,rgba(255,255,255,0.4)),
+		color-stop(50%,rgba(255,255,255,0.2)),
+		color-stop(51%,rgba(255,255,255,0.1)),
+		color-stop(100%,rgba(255,255,255,0.0)));
+	}
+
+.dataTable thead tr th,
+.dataTable tfoot tr td {
+	/* appearance */
+	background-color: #036;
+		
+	/* text */
+	color: #ffffff;
+	font-size: 12px;
+	font-weight: bold;
+	}
+
+/* OLD
+	background-image: -moz-linear-gradient(
+		top,
+		rgba(255,255,255,0.4) 0%,
+		rgba(255,255,255,0.2) 50%,
+		rgba(255,255,255,0.1) 51%,
+		rgba(255,255,255,0.0) 100%);
+	
+	background-image: -webkit-gradient(
+		linear, left top, left bottom,
+		color-stop(0%,rgba(255,255,255,0.4)),
+		color-stop(50%,rgba(255,255,255,0.2)),
+		color-stop(51%,rgba(255,255,255,0.1)),
+		color-stop(100%,rgba(255,255,255,0.0)));
+*/
+
+.dataTableHeading {
+	font-weight: bold;
+	color: #036;
+	margin-bottom: 5px;
+}
+
+.dataTableHeading > a {
+        text-decoration: none;
+	color: #036;
+}
+
+.dataTableHeading > a:hover {
+	color: #00CDF0;
+}
+
+	
+	
