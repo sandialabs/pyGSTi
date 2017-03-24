@@ -122,15 +122,15 @@ class LinlogColormap(Colormap):
 
 
 class DivergingColormap(Colormap):
-    def __init__(self, vmin, vmax, midpoint=0, color="RdBu"):
+    def __init__(self, vmin, vmax, midpoint=0.0, color="RdBu"):
         self.vmin = vmin
         self.vmax = vmax
         self.midpoint = midpoint
 
-        if color == "RdBu": # red -> white -> blue
-            rgb_colors = [ [0.0, (1.0,0.0,0.0)],
+        if color == "RdBu": # blue -> white -> red
+            rgb_colors = [ [0.0, (0.0,0.0,1.0)],
                            [0.5, (1.0,1.0,1.0)],
-                           [1.0, (0.0,0.0,1.0)] ]
+                           [1.0, (1.0,0.0,0.0)] ]
         else:
             raise ValueError("Unknown color: %s" % color)
 
@@ -138,35 +138,39 @@ class DivergingColormap(Colormap):
 
         
     def normalize(self, value):
-        vmin, vmax, midpoint = self.vmin, self.vmax, self.midpoint
+        #no normalization is done automatically by plotly,
+        # (using zmin and zmax values of heatmap)
+        return value
 
-        is_scalar = False
-        if isinstance(value, float) or isinstance(value, int):
-            is_scalar = True
-        result = _np.ma.array(value)
-        
-        if not (vmin < midpoint < vmax):
-            raise ValueError("midpoint must be between maxvalue and minvalue.")
-        elif vmin == vmax:
-            result.fill(0) # Or should it be all masked? Or 0.5?
-        elif vmin > vmax:
-            raise ValueError("maxvalue must be bigger than minvalue")
-        else:
-            # ma division is very slow; we can take a shortcut
-            resdat = result.filled(0) #masked entries to 0 to avoid nans
-
-            #First scale to -1 to 1 range, than to from 0 to 1.
-            resdat -= midpoint
-            resdat[resdat>0] /= abs(vmax - midpoint)
-            resdat[resdat<0] /= abs(vmin - midpoint)
-
-            resdat /= 2.
-            resdat += 0.5
-            result = _np.ma.array(resdat, mask=result.mask, copy=False)
-
-        if is_scalar:
-            result = float(result)
-        return result
+        #vmin, vmax, midpoint = self.vmin, self.vmax, self.midpoint
+        #
+        #is_scalar = False
+        #if isinstance(value, float) or isinstance(value, int):
+        #    is_scalar = True
+        #result = _np.ma.array(value)
+        #
+        #if not (vmin < midpoint < vmax):
+        #    raise ValueError("midpoint must be between maxvalue and minvalue.")
+        #elif vmin == vmax:
+        #    result.fill(0) # Or should it be all masked? Or 0.5?
+        #elif vmin > vmax:
+        #    raise ValueError("maxvalue must be bigger than minvalue")
+        #else:
+        #    # ma division is very slow; we can take a shortcut
+        #    resdat = result.filled(0) #masked entries to 0 to avoid nans
+        #
+        #    #First scale to -1 to 1 range, than to from 0 to 1.
+        #    resdat -= midpoint
+        #    resdat[resdat>0] /= abs(vmax - midpoint)
+        #    resdat[resdat<0] /= abs(vmin - midpoint)
+        #
+        #    resdat /= 2.
+        #    resdat += 0.5
+        #    result = _np.ma.array(resdat, mask=result.mask, copy=False)
+        #
+        #if is_scalar:
+        #    result = float(result)
+        #return result
 
 
         
@@ -177,31 +181,35 @@ class SequentialColormap(Colormap):
         self.vmax = vmax
 
         if color == "greys": # white -> black
-            rgb_colors = [ [0.0, (1.,1.,1.)], [1.0, (0.0,0.0,0.0)] ]
+            rgb_colors = [ [0, (1.,1.,1.)], [1.0, (0.0,0.0,0.0)] ]
         else:
             raise ValueError("Unknown color: %s" % color)
 
         super(SequentialColormap, self).__init__(rgb_colors)
 
     def normalize(self, value):
-        is_scalar = False
-        if isinstance(value, float) or isinstance(value, int):
-            is_scalar = True
+        #no normalization is done automatically by plotly,
+        # (using zmin and zmax values of heatmap)
+        return value
 
-        result = _np.ma.array(value)
-        
-        if self.vmin == self.vmax:
-            result.fill(0) # Or should it be all masked? Or 0.5?
-        elif self.vmin > self.vmax:
-            raise ValueError("maxvalue must be bigger than minvalue")
-        else:
-            resdat = result.filled(0) #masked entries to 0 to avoid nans
-            resdat = _vnorm(resdat, self.vmin, self.vmax)
-            result = _np.ma.array(resdat, mask=result.mask, copy=False)
-
-        if is_scalar:
-            result = result[0]
-        return result
+        #is_scalar = False
+        #if isinstance(value, float) or isinstance(value, int):
+        #    is_scalar = True
+        #
+        #result = _np.ma.array(value)
+        #
+        #if self.vmin == self.vmax:
+        #    result.fill(0) # Or should it be all masked? Or 0.5?
+        #elif self.vmin > self.vmax:
+        #    raise ValueError("maxvalue must be bigger than minvalue")
+        #else:
+        #    resdat = result.filled(0) #masked entries to 0 to avoid nans
+        #    resdat = _vnorm(resdat, self.vmin, self.vmax)
+        #    result = _np.ma.array(resdat, mask=result.mask, copy=False)
+        #
+        #if is_scalar:
+        #    result = result[0]
+        #return result
         
 
 

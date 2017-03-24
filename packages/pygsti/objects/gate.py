@@ -275,7 +275,7 @@ class Gate(object):
     def __init__(self, dim):
         """ Initialize a new Gate """
         self.dim = dim
-
+        
     def get_dimension(self):
         """ Return the dimension of the gate. """
         return self.dim
@@ -351,6 +351,9 @@ class GateMatrix(Gate):
         self.base = mx
         super(GateMatrix, self).__init__(self.base.shape[0])
 
+    def digest_hash(self):
+        return hash(self.base.tostring())
+        
     def acton(self, state):
         """ Act this gate matrix on an input state (left-multiply w/matrix) """
         return _np.dot(self.base, state) #TODO: return a SPAMVec?

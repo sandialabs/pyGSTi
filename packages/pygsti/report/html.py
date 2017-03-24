@@ -12,6 +12,7 @@ LatexUtil has for latex conversion.
 import numpy as _np
 import cmath
 from .. import objects as _objs
+from .latex import latex_vector, latex_matrix
 
 #Define basestring in python3 so unicode
 # strings can be tested for in python2 using
@@ -105,9 +106,10 @@ def html_list(l, brackets=False, precision=6, polarprecision=3, sciprecision=0):
     for el in l:
         lines.append( html(el, brackets, precision=precision,
                            polarprecision=polarprecision, sciprecision=sciprecision) )
-    return '<div class=math><table cellpadding="0" cellspacing="0" class=matrixbrak> <tr><td>' \
-        + '<table cellpadding="0" cellspacing="0" class="matrix"><tr><td>' \
-        + "</td></t><tr><td>".join(lines) + "</td></tr></table></td>" + '</tr></table></div>\n'
+    return "<br>".join(lines)
+    #return '<div class=math><table cellpadding="0" cellspacing="0" class=matrixbrak> <tr><td>' \
+    #    + '<table cellpadding="0" cellspacing="0" class="matrix"><tr><td>' \
+    #    + "</td></t><tr><td>".join(lines) + "</td></tr></table></td>" + '</tr></table></div>\n'
 
 
 def html_vector(v, brackets=False, precision=6,
@@ -139,20 +141,21 @@ def html_vector(v, brackets=False, precision=6,
     string
         html string for v.
     """
-
-    lines = [ ]
-    for el in v:
-        lines.append( html_value(el, precision=precision,
-                                 polarprecision=polarprecision,
-                                 sciprecision=sciprecision) )
-    if brackets:
-        return '<div class=math><table cellpadding="0" cellspacing="0" class=matrixbrak> <tr><td class="lbrak">&nbsp;</td><td>' \
-               + '<table cellpadding="0" cellspacing="0" class="matrix"><tr><td>' + "</td></t><tr><td>".join(lines) + "</td></tr></table></td>" \
-               + '<td class="rbrak">&nbsp;</td></tr></table></div>\n'
-    else:
-        return '<div class=math><table cellpadding="0" cellspacing="0" class=matrixbrak> <tr><td>' \
-               + '<table cellpadding="0" cellspacing="0" class="matrix"><tr><td>' + "</td></t><tr><td>".join(lines) + "</td></tr></table></td>" \
-               + '</tr></table></div>\n'
+    return latex_vector(v, brackets, precision,
+                        polarprecision, sciprecision)
+    
+    #for el in v:
+    #    lines.append( html_value(el, precision=precision,
+    #                             polarprecision=polarprecision,
+    #                             sciprecision=sciprecision) )
+    #if brackets:
+    #    return '<div class=math><table cellpadding="0" cellspacing="0" class=matrixbrak> <tr><td class="lbrak">&nbsp;</td><td>' \
+    #           + '<table cellpadding="0" cellspacing="0" class="matrix"><tr><td>' + "</td></t><tr><td>".join(lines) + "</td></tr></table></td>" \
+    #           + '<td class="rbrak">&nbsp;</td></tr></table></div>\n'
+    #else:
+    #    return '<div class=math><table cellpadding="0" cellspacing="0" class=matrixbrak> <tr><td>' \
+    #           + '<table cellpadding="0" cellspacing="0" class="matrix"><tr><td>' + "</td></t><tr><td>".join(lines) + "</td></tr></table></td>" \
+    #           + '</tr></table></div>\n'
 
 
 def html_matrix(m, fontsize=None, brackets=False, precision=6,
@@ -187,24 +190,26 @@ def html_matrix(m, fontsize=None, brackets=False, precision=6,
     string
         html string for m.
     """
-    lines = [ ]; prefix = ""
-    if fontsize is not None:
-        prefix += "" #unsupported currently
-
-    for r in range(m.shape[0]):
-        lines.append( "<tr><td>" + " </td><td> ".join(
-                [html_value(el, precision=precision,
-                            polarprecision=polarprecision,
-                            sciprecision=sciprecision) for el in m[r,:] ] ) + "</td></tr>" )
-
-    if brackets:
-        return '<div class=math><table cellpadding="0" cellspacing="0" class=matrixbrak> <tr><td class="lbrak">&nbsp;</td><td>' \
-               + '<table cellpadding="0" cellspacing="0" class="matrix">' + "\n".join(lines) + "</table></td>" \
-               + '<td class="rbrak">&nbsp;</td></tr></table></div>\n'
-    else:
-        return '<div class=math><table cellpadding="0" cellspacing="0" class=matrixbrak> <tr><td>' \
-               + '<table cellpadding="0" cellspacing="0" class="matrix">' + "\n".join(lines) + "</table></td>" \
-               + '</tr></table></div>\n'
+    return latex_matrix(m, fontsize, brackets, precision,
+                        polarprecision, sciprecision)
+    #lines = [ ]; prefix = ""
+    #if fontsize is not None:
+    #    prefix += "" #unsupported currently
+    #
+    #for r in range(m.shape[0]):
+    #    lines.append( "<tr><td>" + " </td><td> ".join(
+    #            [html_value(el, precision=precision,
+    #                        polarprecision=polarprecision,
+    #                        sciprecision=sciprecision) for el in m[r,:] ] ) + "</td></tr>" )
+    #
+    #if brackets:
+    #    return '<div class=math><table cellpadding="0" cellspacing="0" class=matrixbrak> <tr><td class="lbrak">&nbsp;</td><td>' \
+    #           + '<table cellpadding="0" cellspacing="0" class="matrix">' + "\n".join(lines) + "</table></td>" \
+    #           + '<td class="rbrak">&nbsp;</td></tr></table></div>\n'
+    #else:
+    #    return '<div class=math><table cellpadding="0" cellspacing="0" class=matrixbrak> <tr><td>' \
+    #           + '<table cellpadding="0" cellspacing="0" class="matrix">' + "\n".join(lines) + "</table></td>" \
+    #           + '</tr></table></div>\n'
 
 
 def html_value(el, precision=6, polarprecision=3,

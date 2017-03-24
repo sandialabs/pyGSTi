@@ -20,6 +20,7 @@ from . import plotting    as _plotting
 from .table import ReportTable as _ReportTable
 
 from .workspace import WorkspaceTable
+from . import workspaceplots as _wp
 
 class BlankTable(WorkspaceTable):
     def __init__(self, ws):
@@ -852,8 +853,6 @@ class RotationAxisTable(WorkspaceTable):
 #                                   confidenceRegionInfo=None):
 class EigenvalueTable(WorkspaceTable):
     def __init__(self, ws, gateset, targetGateset,
-                 figFilePrefix,
-                 maxWidth=6.5, maxHeight=8.0,
                  confidenceRegionInfo=None):
         """
         Create table which lists and plots the eigenvalues of a
@@ -886,13 +885,11 @@ class EigenvalueTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(EigenvalueTable,self).__init__(ws, self._create, gateset, targetGateset,
-                                             figFilePrefix,
-                                             maxWidth, maxHeight,
+        super(EigenvalueTable,self).__init__(ws, self._create, gateset,
+                                             targetGateset,
                                              confidenceRegionInfo)
         
-    def _create(self, gateset, targetGateset,
-                figFilePrefix, maxWidth, maxHeight,
+    def _create(self, gateset, targetGateset,               
                 confidenceRegionInfo):
         
         gateLabels = list(gateset.gates.keys())  # gate labels
@@ -907,22 +904,23 @@ class EigenvalueTable(WorkspaceTable):
         table = _ReportTable(colHeadings, formatters)
     
         formatters = (None, 'VecErrorBars', 'Figure')
-        nRows = len(gateLabels)
     
         for gl in gateLabels:
     
             gate = gateset.gates[gl]
             targetGate = targetGateset.gates[gl]
-    
-            fig = _plotting.polar_eigenval_plot(
-                gate, targetGate, title=gl, save_to="",
-                showNormal=True, showRelative=False)
-    
-            sz = min(0.95*(maxHeight/nRows), 0.95*0.75*(maxWidth - 0.5))
-            sz = min(sz, 2.0)
-            nm = figFilePrefix + "_" + gl
-            figInfo = (fig,nm,sz,sz)
-    
+
+            evals = _np.linalg.eigvals(gate)
+            target_evals = _np.linalg.eigvals(targetGate)
+            rel_gate = _np.dot(_np.linalg.inv(targetGate), gate) #TODO: function for this?
+            rel_evals = _np.linalg.eigvals(rel_gate)
+
+            fig = _wp.PolarEigenvaluePlot(self.ws,
+                                          [evals, target_evals, rel_evals],
+                                          ["red","green","blue"],
+                                          ["gate","target","relative"],
+                                          centerText=gl)
+        
             if confidenceRegionInfo is None:
                 evals = qtys['%s eigenvalues' % gl].get_value()
                 try: evals = evals.reshape(evals.size//2, 2) #assumes len(evals) is even!
@@ -933,126 +931,20 @@ class EigenvalueTable(WorkspaceTable):
                 try: evals = evals.reshape(evals.size//2, 2) #assumes len(evals) is even!
                 except: evals = evals.reshape(evals.size, 1)
     
-                rowData = [gl, (evals,evalsEB), figInfo]
+                rowData = [gl, (evals,evalsEB), fig]
     
             table.addrow(rowData, formatters)
     
         table.finish()
         return table
     
-    
-#    def get_gateset_relative_eigenval_table(gateset, targetGateset,
-#                                            figFilePrefix,
-#                                            maxWidth=6.5, maxHeight=8.0,
-#                                            confidenceRegionInfo=None,
-#                                            genType="logG-logT"):
-class RelativeEigenvalueTable(WorkspaceTable):
-    def __init__(self, ws, gateset, targetGateset,
-                 figFilePrefix, maxWidth=6.5, maxHeight=8.0,
-                 confidenceRegionInfo=None, genType="logG-logT"):
-        """
-        Create table which lists and plots the *relative* eigenvalues of a
-        gateset's gates.
-    
-        Relative eigenvalues are defined as the eigenvalues of
-        inv(G_target) * G.
-    
-        Parameters
-        ----------
-        gateset : GateSet
-            The GateSet
-    
-        targetGateset : GateSet
-            The target gate set used to compute eigenvalues of
-            gate*inv(target_gate).
-    
-        figFilePrefix : str
-            A filename prefix (not including any directories!) to use
-            when rendering figures as a part of rendering this table.
-    
-        maxWidth : float
-            The maximum width (in inches) of the entire figure.
-    
-        maxHeight : float
-            The maximum height (in inches) of the entire figure.
-    
-        confidenceRegionInfo : ConfidenceRegion, optional
-            If not None, specifies a confidence-region
-            used to display error intervals.
-    
-        genType : {"logG-logT", "logTiG"}
-          The type of error generator to compute.  Allowed values are:
-          
-          - "logG-logT" : errgen = log(gate) - log(target_gate)
-          - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
-    
-    
-        Returns
-        -------
-        ReportTable
-        """
-        super(RelativeEigenvalueTable,self).__init__(ws, self._create, gateset, targetGateset,
-                                                     figFilePrefix, maxWidth, maxHeight,
-                                                     confidenceRegionInfo, genType)
-    
-    def _create(self, gateset, targetGateset,
-                figFilePrefix, maxWidth, maxHeight,
-                confidenceRegionInfo, genType):
-    
-        gateLabels = list(gateset.gates.keys())  # gate labels
-    
-        colHeadings = ('Gate','Relative Evals','Polar Plot') # ,'Hamiltonian'
-        formatters = [None]*3
-    
-        #qtyNames = ('relative %s eigenvalues' % genType,)
-        qtyNames = ('relative eigenvalues',)
-        qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames for gl in gateLabels ]
-        qtys = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
-                                                confidenceRegionInfo)
-    
-        table = _ReportTable(colHeadings, formatters)
-    
-        formatters = (None, 'VecErrorBars', 'Figure')
-        nRows = len(gateLabels)
-    
-        for gl in gateLabels:
-            gate = gateset.gates[gl]
-            targetGate = targetGateset.gates[gl]
-    
-            fig = _plotting.polar_eigenval_plot(
-                gate, targetGate, title=gl, save_to="",
-                showNormal=False, showRelative=True)
-    
-            sz = min(0.95*(maxHeight/nRows), 0.95*0.75*(maxWidth - 0.5))
-            sz = min(sz, 2.0)
-            nm = figFilePrefix + "_" + gl
-            figInfo = (fig,nm,sz,sz)
-    
-            if confidenceRegionInfo is None:
-                rel_evals = qtys['%s relative eigenvalues' % gl].get_value()
-                try: rel_evals = rel_evals.reshape(rel_evals.size//2, 2)
-                except: rel_evals = rel_evals.reshape(rel_evals.size, 1)
-                rowData = [gl, (rel_evals,None), figInfo]
-            else:
-                rel_evals, rel_evalsEB = qtys['%s relative eigenvalues' 
-                                              % gl].get_value_and_err_bar()
-                try: rel_evals = rel_evals.reshape(rel_evals.size//2, 2)
-                except: rel_evals = rel_evals.reshape(rel_evals.size, 1)
-                rowData = [gl, (rel_evals,rel_evalsEB), figInfo]
-    
-            table.addrow(rowData, formatters)
-    
-        table.finish()
-        return table
     
     
 #    def get_gateset_choi_eigenval_table(gateset, figFilePrefix,
 #                                        maxWidth=6.5, maxHeight=8.0,
 #                                        confidenceRegionInfo=None):
 class ChoiEigenvalueTable(WorkspaceTable):
-    def __init__(self, ws, gateset, figFilePrefix,
-                 maxWidth=6.5, maxHeight=8.0,
-                 confidenceRegionInfo=None):
+    def __init__(self, ws, gateset, confidenceRegionInfo=None):
         """
         Create a table for the Choi matrices of a gateset's gates.
     
@@ -1079,11 +971,9 @@ class ChoiEigenvalueTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(ChoiEigenvalueTable,self).__init__(ws, self._create, gateset, figFilePrefix,
-                                                 maxWidth, maxHeight, confidenceRegionInfo)
+        super(ChoiEigenvalueTable,self).__init__(ws, self._create, gateset, confidenceRegionInfo)
     
-    def _create(self, gateset, figFilePrefix,
-                maxWidth, maxHeight, confidenceRegionInfo):
+    def _create(self, gateset, confidenceRegionInfo):
     
         gateLabels = list(gateset.gates.keys())  # gate labels
     
@@ -1097,10 +987,7 @@ class ChoiEigenvalueTable(WorkspaceTable):
         colHeadings = ('Gate','Eigenvalues','Eigenvalue Magnitudes')
         formatters = (None,None,None)
         table = _ReportTable(colHeadings, formatters)
-    
-        nRows = len(gateLabels)
-        sz = min(0.95*(maxHeight/nRows), 0.95*(maxWidth - 3.0))
-    
+        
         for gl in gateLabels:
     
             evals, evalsEB = qtys['%s choi eigenvalues' % gl].get_value_and_err_bar()
@@ -1108,19 +995,16 @@ class ChoiEigenvalueTable(WorkspaceTable):
                 evals = evals.reshape(evals.size//4, 4) #assumes len(evals) is multiple of 4!
             except: # if it isn't try 3 (qutrits)
                 evals = evals.reshape(evals.size//3, 3) #assumes len(evals) is multiple of 3!
-            nm = figFilePrefix + "_" + gl
     
             if confidenceRegionInfo is None:
-                fig = _plotting.choi_eigenvalue_barplot(evals, ylabel="")
-                figInfo = (fig,nm,sz,sz)
-                table.addrow((gl, evals, figInfo), (None, 'Normal', 'Figure'))
+                fig = _wp.ChoiEigenvalueBarPlot(self.ws, evals)
+                table.addrow((gl, evals, fig), (None, 'Normal', 'Figure'))
             else:
                 try:    evalsEB = evalsEB.reshape(evalsEB.size//4, 4)
                 except: evalsEB = evalsEB.reshape(evalsEB.size//3, 3)
-    
-                fig = _plotting.choi_eigenvalue_barplot(evals, evalsEB, ylabel="")
-                figInfo = (fig,nm,sz,sz)
-                table.addrow((gl, (evals,evalsEB), figInfo), (None, 'VecErrorBars', 'Figure'))
+
+                fig = _wp.ChoiEigenvalueBarPlot(self.ws, evals, evalsEB)
+                table.addrow((gl, (evals,evalsEB), fig), (None, 'VecErrorBars', 'Figure'))
     
         table.finish()
         return table
@@ -1733,12 +1617,12 @@ class GatestringMultiTable(WorkspaceTable):
             table = _ReportTable(colHeadings, formatters)
         else:
             table = "tabular"
-            colHeadings = ('\\#',) + tuple(titles)
+            colHeadings = ('#',) + tuple(titles)
             latex_head  = "\\begin{%s}[l]{%s}\n\hline\n" % (table, "|c" * len(colHeadings) + "|")
             latex_head += " & \multicolumn{%d}{c|}{%s} \\\\ \hline\n" % (len(titles),commonTitle)
             latex_head += "%s \\\\ \hline\n" % (" & ".join(colHeadings))
     
-            html_head = "<table><thead>"
+            html_head = "<table class=%(tableclass)s><thead>"
             html_head += '<tr><th></th><th colspan="%d">%s</th></tr>\n' % (len(titles),commonTitle)
             html_head += "<tr><th> %s </th></tr>" % (" </th><th> ".join(colHeadings))
             html_head += "</thead><tbody>"
@@ -1766,8 +1650,7 @@ class GatestringMultiTable(WorkspaceTable):
 #                                     maxWidth=6.5, maxHeight=8.0,
 #                                     confidenceRegionInfo=None):
 class GateBoxesTable(WorkspaceTable):
-    def __init__(self, ws, gatesets, figFilePrefixes, titles=None,
-                 maxWidth=6.5, maxHeight=8.0,
+    def __init__(self, ws, gatesets, titles=None,
                  confidenceRegionInfo=None):
         """
         Create a table for one or more gateset's gates, where each gate is a grid
@@ -1810,13 +1693,9 @@ class GateBoxesTable(WorkspaceTable):
         ReportTable
         """
         super(GateBoxesTable,self).__init__(ws, self._create, gatesets,
-                                            figFilePrefixes, titles,
-                                            maxWidth, maxHeight,
-                                            confidenceRegionInfo)
+                                            titles, confidenceRegionInfo)
     
-    def _create(self, gatesets,
-                figFilePrefixes, titles,
-                maxWidth, maxHeight,
+    def _create(self, gatesets, titles,
                 confidenceRegionInfo):
         
         gateLabels = list(gatesets[0].gates.keys()) #use labels of 1st gateset
@@ -1842,26 +1721,20 @@ class GateBoxesTable(WorkspaceTable):
             formatters = (None,)*(len(colHeadings)-1) + ('Conversion',)
     
         table = _ReportTable(colHeadings, formatters)
-        nRows = len(gatesets[0].gates)
-        maxFigSz = min(0.95*(maxHeight/nRows), 0.95*(maxWidth - 1.0))
     
         for gl in gateLabels:
             #Note: currently, we don't use confidence region...
             row_data = [gl]
             row_formatters = [None]
     
-            for gateset,prefix in zip(gatesets,figFilePrefixes):
+            for gateset in gatesets:
                 basisNm = gateset.get_basis_name()
                 basisDims = gateset.get_basis_dimension()
-    
-                fig = _plotting.gate_matrix_boxplot(
-                    gateset.gates[gl], save_to="",
-                    mxBasis=basisNm, mxBasisDims=basisDims)
-    
-                sz = min(gateset.gates[gl].shape[0] * 0.5, maxFigSz)
-                nm = prefix + "_" + gl
-                figInfo = (fig,nm,sz,sz)
-                row_data.append( figInfo )
+
+                fig = _wp.GateMatrixPlot(self.ws, gateset.gates[gl],
+                                         mxBasis=basisNm,
+                                         mxBasisDims=basisDims)
+                row_data.append( fig )
                 row_formatters.append( 'Figure' )
                 
             table.addrow(row_data, row_formatters)
@@ -1877,8 +1750,6 @@ class GateBoxesTable(WorkspaceTable):
 #                                                genType="logG-logT"):
 class ErrgenBoxesTable(WorkspaceTable):
     def __init__(self, ws, gateset, targetGateset,
-                 figFilePrefix, maxWidth=6.5,
-                 maxHeight=8.0, 
                  confidenceRegionInfo=None,
                  genType="logG-logT"):
         """
@@ -1914,17 +1785,11 @@ class ErrgenBoxesTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(ErrgenBoxesTable,self).__init__(ws, self._create, gateset, targetGateset,
-                                              figFilePrefix, maxWidth,
-                                              maxHeight, 
-                                              confidenceRegionInfo,
-                                              genType)
+        super(ErrgenBoxesTable,self).__init__(ws, self._create, gateset, targetGateset,                     
+                                              confidenceRegionInfo, genType)
     
     def _create(self, gateset, targetGateset,
-                figFilePrefix, maxWidth,
-                maxHeight, 
-                confidenceRegionInfo,
-                genType ):
+                confidenceRegionInfo, genType ):
     
         gateLabels = list(gateset.gates.keys())  # gate labels
         basisNm = gateset.get_basis_name()
@@ -1938,8 +1803,6 @@ class ErrgenBoxesTable(WorkspaceTable):
                        'Stochastic Projections')
     
         table = _ReportTable(colHeadings, (None,None,None,None))
-        nRows = len(gateset.gates)
-        #nCols = len(colHeadings)
     
         errgens = {'M': []}
         hamProjs = {'M': []}
@@ -1978,31 +1841,18 @@ class ErrgenBoxesTable(WorkspaceTable):
         for gl in gateLabels:
             
             m,M = getMinMax(errgens['M'],_np.max(_np.abs(errgens[gl])))
-            errgen_fig = _plotting.gate_matrix_boxplot(
-                errgens[gl], None, m,M, save_to="", mxBasis=basisNm,
-                mxBasisDims=basisDims)
+            errgen_fig =  _wp.GateMatrixPlot(self.ws, errgens[gl], m,M,
+                                             basisNm,basisDims)
     
             m,M = getMinMax(hamProjs['M'],_np.max(_np.abs(hamProjs[gl])))
-            hamdecomp_fig = _plotting.errgen_projection_boxplot(
-                hamProjs[gl], basisNm, m, M, save_to="", boxLabels=True)
+            hamdecomp_fig = _wp.ProjectionsBoxPlot(
+                self.ws, hamProjs[gl], basisNm, m, M, boxLabels=True)
     
             m,M = getMinMax(stoProjs['M'],_np.max(_np.abs(stoProjs[gl])))
-            stodecomp_fig = _plotting.errgen_projection_boxplot(
-                stoProjs[gl], basisNm, m, M, save_to="", boxLabels=True)
-    
-            maxFigSz = min(0.85*(maxHeight/nRows), 0.85*(2./3.)*(maxWidth-1.0))
-            sz = min(gateset.gates[gl].shape[0] * 0.5, maxFigSz)
-            nm = figFilePrefix + "_" + gl + "_errgen"
-            errgen_figInfo = (errgen_fig,nm,sz,sz)
-    
-            maxFigSz = min(0.85*(maxHeight/nRows), 0.85*(1./3.)*(maxWidth-1.0))
-            sz = min( (gateset.gates[gl].size/4) * 0.4, maxFigSz)
-            nm = figFilePrefix + "_" + gl + "_hamdecomp"
-            hamdecomp_figInfo = (hamdecomp_fig,nm,sz,sz)
-            nm = figFilePrefix + "_" + gl + "_stodecomp"
-            stodecomp_figInfo = (stodecomp_fig,nm,sz,sz)
-    
-            table.addrow((gl, errgen_figInfo, hamdecomp_figInfo, stodecomp_figInfo),
+            stodecomp_fig = _wp.ProjectionsBoxPlot(
+                self.ws, stoProjs[gl], basisNm, m, M, boxLabels=True)
+        
+            table.addrow((gl, errgen_fig, hamdecomp_fig, stodecomp_fig),
                          (None, 'Figure', 'Figure', 'Figure'))
         table.finish()
         return table
@@ -2115,7 +1965,6 @@ class ErrGenComparisonTable(WorkspaceTable):
     
         table = _ReportTable(colHeadings, formatters,
                              customHeader={'latex': latex_head} )
-        nRows = len(gateset.gates)
     
         for gl,vals in zip(gateLabels,infids):
             table.addrow((gl, vals['Full'], vals['H + S'], vals['H'], vals['S']),
@@ -2148,8 +1997,7 @@ class ErrGenComparisonTable(WorkspaceTable):
 #                                          maxWidth=6.5, maxHeight=8.0):
 class ErrgenProjectorBoxesTable(WorkspaceTable):
     def __init__(self, ws, gateset_dim, projection_type,
-                 projection_basis, figFilePrefix,
-                 maxWidth=6.5, maxHeight=8.0):
+                 projection_basis):
         """
         Create a table of gate error generators, where each is shown as grid of boxes.
     
@@ -2185,14 +2033,13 @@ class ErrgenProjectorBoxesTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(ErrgenProjectorBoxesTable,self).__init__(ws, self._create, gateset_dim, projection_type,
-                                                       projection_basis, figFilePrefix,
-                                                       maxWidth, maxHeight)
+        super(ErrgenProjectorBoxesTable,self).__init__(
+            ws, self._create, gateset_dim, projection_type,
+            projection_basis)
     
 
     def _create(self,  gateset_dim, projection_type,
-                projection_basis, figFilePrefix,
-                maxWidth, maxHeight):
+                projection_basis):
     
         d2 = gateset_dim # number of projections == dim of gate
         d = int(_np.sqrt(d2)) # dim of density matrix
@@ -2228,11 +2075,7 @@ class ErrgenProjectorBoxesTable(WorkspaceTable):
         yLabels = _tools.basis_element_labels(projection_basis,yd)
     
         table = _ReportTable(colHeadings,["Conversion"]+[None]*(len(colHeadings)-1))
-        nRows = len(rowLabels)
-        nCols = len(colHeadings)
-    
-        maxFigSz = min(0.85*(maxHeight/nRows), 0.85*(maxWidth/nCols))
-        
+            
         iCur = 0
         for i,ylabel  in enumerate(yLabels):
             rowData = [rowLabels[i]]
@@ -2242,14 +2085,10 @@ class ErrgenProjectorBoxesTable(WorkspaceTable):
                 projector = lindbladMxs[iCur]; iCur += 1
                 projector = _tools.change_basis(projector,"std",projection_basis)
                 m,M = -_np.max(_np.abs(projector)), _np.max(_np.abs(projector))
-                fig = _plotting.gate_matrix_boxplot(
-                    projector, None, m,M, save_to="", mxBasis=projection_basis, mxBasisDims=d)
+                fig = _wp.GateMatrixPlot(self.ws, projector, m,M,
+                                         projection_basis, d)
     
-                sz = min(projector.shape[0] * 0.5, maxFigSz)
-                nm = figFilePrefix + "_%s_%s_projector" % (ylabel,xlabel)
-                figInfo = (fig,nm,sz,sz)
-    
-                rowData.append(figInfo)
+                rowData.append(fig)
                 rowFormatters.append('Figure')
     
             table.addrow(rowData, rowFormatters)

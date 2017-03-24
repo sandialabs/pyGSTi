@@ -175,10 +175,10 @@ class GateString(object):
         return self.tup == tuple(x) #better than x.tup since x can be a tuple
 
     def __lt__(self,x):
-        return self.tup.__lt__(x)
+        return self.tup.__lt__(tuple(x))
 
     def __gt__(self,x):
-        return self.tup.__gt__(x)
+        return self.tup.__gt__(tuple(x))
 
     def __hash__(self):
         return self.tup.__hash__()
@@ -197,6 +197,8 @@ class GateString(object):
     def __setitem__(self, key, value):
         raise ValueError("Cannot set elements of GateString tuple (they're read-only)")
 
+    def digest_hash(self):
+        return hash(self.tup)
 
 
 class WeightedGateString(GateString):

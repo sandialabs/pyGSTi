@@ -20,6 +20,8 @@ import numbers as _numbers
 import re      as _re
 import os      as _os
 
+from plotly.offline import plot as _plot
+
 def _give_specs(formatter, specs):
     '''
     Pass parameters down to a formatter
@@ -261,6 +263,26 @@ class _PrecisionFormatter(_ParameterizedFormatter):
                                                  defaults, formatstring)
 
 
+#Special formatter added for now for new HTML reports
+class _HTMLFigureFormatter(_ParameterizedFormatter):
+    '''
+    Helper class that utilizes a scratchDir variable to render figures
+    '''
+    def __init__(self):
+        '''
+        Parameters
+        ---------
+        extension : string, optional. extension of the figure's image
+        formatstring : string, optional. Normally formatted with W, H, scratchDir, filename
+        '''
+        super(_HTMLFigureFormatter, self).__init__(_no_format, [])
+
+    # Override call method of Parameterized formatter
+    def __call__(self, fig):
+        fig_html,fig_js = fig.render("html")
+        return "<script>\n" + fig_js + "</script>" + fig_html
+
+        
 # Formatter class that requires a scratchDirectory from an instance of FormatSet for saving figures to
 class _FigureFormatter(_ParameterizedFormatter):
     '''
@@ -411,9 +433,9 @@ def _fmtCnv_html(x):
     x = x.replace("\\", "&#92"); #backslash
     x = x.replace("|"," ") #remove pipes=>newlines, since html wraps table text automatically
     x = x.replace("<STAR>","REPLACEWITHSTARCODE") #b/c cgi.escape would mangle <STAR> marker
-    x = _cgi.escape(x).encode("ascii","xmlcharrefreplace")
-    x = x.replace(b"REPLACEWITHSTARCODE", b'&#9733;') #replace new marker with HTML code
-    return x
+    #x = _cgi.escape(x).encode("ascii","xmlcharrefreplace")
+    x = x.replace("REPLACEWITHSTARCODE", '&#9733;') #replace new marker with HTML code
+    return str(x)
 
 def _fmtCnv_latex(x):
     x = x.replace("\\", "\\textbackslash")
@@ -511,8 +533,7 @@ FormatSet.formatDict['Pre'] = {
 
 
 FormatSet.formatDict['Figure'] = {
-    'html'  : _FigureFormatter(formatstring="<img width='%.2f' height='%.2f' src='%s/%s'>",
-                               extension='.png'),
+    'html'  : _HTMLFigureFormatter(),
     'latex' : _FigureFormatter(formatstring="\\vcenteredhbox{\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/%s}}",
                                extension='.pdf'),
     'text'  : lambda figInfo : figInfo[0],

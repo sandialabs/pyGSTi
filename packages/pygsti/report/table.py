@@ -87,7 +87,7 @@ class ReportTable(object):
 
             if self._customHeadings is not None \
                     and "html" in self._customHeadings:
-                html = self._customHeadings['html']
+                html = self._customHeadings['html'] % {'tableclass': tableclass}
             else:
                 if self._headingFormatters is not None:
                     colHeadings_formatted = \

@@ -513,7 +513,7 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
 def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis, mxBasisDims=None,
                              mxBasisDimsY=None, xlabel=None, ylabel=None,
                              boxLabels=False, prec=0, scale=1.0):
-        
+
     def one_sigfig(x):
         if abs(x) < 1e-9: return 0
         if x < 0: return -one_sigfig(-x)
@@ -521,23 +521,29 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis, mxBasisDims=None,
         trunc_x = _np.floor(x * 10**e)/ 10**e #truncate decimal to make sure it gets *smaller*
         return round(trunc_x, e) #round to truncation point just to be sure
 
+    xextra = 0. if ylabel is None else 1.5
+    yextra = 0. if xlabel is None else 1.5
+
     if mxBasis is not None and mxBasisDims is not None:
         if mxBasisDimsY is None: mxBasisDimsY = mxBasisDims
         xlabels=[("$%s$" % x) if len(x) else "" \
                  for x in _tools.basis_element_labels(mxBasis,mxBasisDims)]
         ylabels=[("$%s$" % x) if len(x) else "" \
                  for x in _tools.basis_element_labels(mxBasis,mxBasisDimsY)]
+        yextra += 1.5 if (mxBasisDims > 1) else 0
+        xextra += 1.5 if (mxBasisDimsY > 1) else 0
     else:
         xlabels = [""] * gateMatrix.shape[1]
         ylabels = [""] * gateMatrix.shape[0]
 
-    colorscale = [[0, '#3D9970'], [0.75,'#ffffff'], [1, '#001f3f']]  # custom colorscale
     colormap = _colormaps.DivergingColormap(vmin=m, vmax=M)
-
+    
     flipped_mx = _np.flipud(gateMatrix)  # FLIP so [0,0] matrix el is at *top* left
     ylabels    = list(reversed(ylabels)) # FLIP y-labels to match
-    trace = go.Heatmap(z=flipped_mx, colorscale=colormap.get_colorscale(),
-                       showscale=(not boxLabels))
+    trace = go.Heatmap(z=colormap.normalize(flipped_mx),
+                       colorscale=colormap.get_colorscale(),
+                       showscale=(not boxLabels), zmin=colormap.vmin,
+                       zmax=colormap.vmax, hoverinfo='z')
     data = [trace]
     
     scale = 1.0
@@ -585,10 +591,10 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis, mxBasisDims=None,
                               color=colormap.besttxtcolor(gateMatrix[iy,ix])),
                         showarrow=False)
                 )
-
+                
     layout = go.Layout(
-        width = 80*(gateMatrix.shape[1]+1)*scale,
-        height = 80*(gateMatrix.shape[0]+1.5)*scale,
+        width = 50*(gateMatrix.shape[1]+xextra)*scale,
+        height = 50*(gateMatrix.shape[0]+yextra)*scale,
         xaxis=dict(
             side="top",
             title=xlabel,
@@ -1098,6 +1104,7 @@ class GateMatrixPlot(WorkspacePlot):
     def _create(self, gateMatrix, m, M, 
                 mxBasis, mxBasisDims, xlabel, ylabel,
                 boxLabels, prec, mxBasisDimsY, scale):
+        
         return gatematrix_color_boxplot(
             gateMatrix, m, M, mxBasis, mxBasisDims, mxBasisDimsY,
             xlabel, ylabel, boxLabels, prec, scale)

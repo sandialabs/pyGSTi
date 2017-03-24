@@ -71,6 +71,19 @@ def _is_hashable(x):
     return True
 
 
+import json, collections
+class DigestEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, _np.ndarray):
+            return hash(o.tostring())
+        #if isinstance(o, dict) or isinstance(o,collections.OrderedDict):
+        #    pairs = tuple([(k,v) for k,v in dict.items()])
+        #    return json.JSONEncoder.default(self, pairs)
+        if hasattr(o, 'digest_hash'):
+            return o.digest_hash()
+        # Let the base class default method raise the TypeError
+        return json.JSONEncoder.default(self, o)
+
 def call_key(obj, args):
     """ obj can be either a function or a class """
     key = [obj.__name__]
@@ -81,9 +94,15 @@ def call_key(obj, args):
             #Use a digest hash if one is available
             key.append( arg.digest_hash() ) #backup for un-hashable objects e.g. GateSet, DataSet, etc.
             #key.append( id(arg) ) #backup for un-hashable objects e.g. GateSet, DataSet, etc.
-        else: raise ValueError("Object of type %s is not " % str(type(arg))
-                               + "hashable, so cannot be used as an argument"
-                               + "in cached computation calls")
+        else:
+            try:
+                json_hash = hash(json.dumps(arg, cls=DigestEncoder, sort_keys=True))
+                key.append(json_hash)
+            except:
+            #    print("WARNING: Object of type %s and val %s is not " % (str(type(arg)),str(arg))
+            #          + "hashable, so cannot be used as an argument"
+            #          + "in cached computation calls")
+                raise TypeError
 
     return tuple(key) #so hashable
 
@@ -105,21 +124,19 @@ class Workspace(object):
         self.outputObjs = {} #cache of WorkspaceOutput objects (hashable by call_keys)
         self.compCache = {}  # cache of computation function results (hashable by call_keys)
 
-        def makefactory(cls, cache=False):
-            
+        def makefactory(cls):
             #TODO: set signature of factor_fn to cls.__init__
-            if not cache:
-                def factory_fn(*args,**kwargs):
-                    factory_fn.__doc__ = cls.__init__.__doc__
-                    return cls(self, *args, **kwargs)
-
-            else:
-                def factory_fn(*args,**kwargs):
-                    key = call_key(cls, args) # cache by call key
-                    if key not in self.outputObjs:
-                        #print("DB: new call key = ",key)
-                        self.outputObjs[key] = cls(self, *args, **kwargs) #construct using *full* args
-                    return self.outputObjs[key]
+            def factory_fn(*args,**kwargs):
+                factory_fn.__doc__ = cls.__init__.__doc__
+                return cls(self, *args, **kwargs)
+            
+            #else:
+            #    def factory_fn(*args,**kwargs):
+            #        key = call_key(cls, args) # cache by call key
+            #        if key not in self.outputObjs:
+            #            #print("DB: new call key = ",key)
+            #            self.outputObjs[key] = cls(self, *args, **kwargs) #construct using *full* args
+            #        return self.outputObjs[key]
                 
             factory_fn.__doc__ = cls.__init__.__doc__
             return factory_fn
@@ -127,17 +144,56 @@ class Workspace(object):
         # "register" components
         from . import workspacetables as _wt
         from . import workspaceplots as _wp
+
         self.Switchboard = makefactory(Switchboard)
-        #self.TestLabel = makefactory(TestLabel, cache=False)
-        #self.TestPlot = makefactory(TestPlot, cache=False)
-        self.BlankTable = makefactory(_wt.BlankTable, cache=False)
-        self.SpamTable = makefactory(_wt.SpamTable, cache=False)
-        self.ColorBoxPlot = makefactory(_wp.ColorBoxPlot, cache=False)
-        self.BoxKeyPlot = makefactory(_wp.BoxKeyPlot, cache=False)
-        self.GateMatrixPlot = makefactory(_wp.GateMatrixPlot, cache=False)
-        self.PolarEigenvaluePlot = makefactory(_wp.PolarEigenvaluePlot, cache=False)
-        self.ProjectionsBoxPlot = makefactory(_wp.ProjectionsBoxPlot, cache=False)
-        self.ChoiEigenvalueBarPlot = makefactory(_wp.ChoiEigenvalueBarPlot, cache=False)
+
+        #Tables (consolidate?)
+        self.BlankTable = makefactory(_wt.BlankTable)
+        self.SpamTable = makefactory(_wt.SpamTable)
+        self.SpamParametersTable = makefactory(_wt.SpamParametersTable)
+        self.SpamVsTargetTable = makefactory(_wt.SpamVsTargetTable)
+
+        self.GatesTable= makefactory(_wt.GatesTable)
+        self.UnitaryGatesTable = makefactory(_wt.UnitaryGatesTable)
+        self.ChoiTable = makefactory(_wt.ChoiTable)
+        self.GatesVsTargetTable = makefactory(_wt.GatesVsTargetTable)
+        self.GateAnglesTable = makefactory(_wt.GateAnglesTable)
+        self.GateDecompTable = makefactory(_wt.GateDecompTable)
+        self.RotationAxisTable = makefactory(_wt.RotationAxisTable)        
+        self.CherryPickedGatesVsTargetTable = makefactory(_wt.CherryPickedGatesVsTargetTable)
+        #self.ClosestUnitaryTable = makefactory(_wt.ClosestUnitaryTable)
+
+        self.EigenvalueTable = makefactory(_wt.EigenvalueTable)
+        self.ChoiEigenvalueTable = makefactory(_wt.ChoiEigenvalueTable)
+        
+        self.ErrgenTable = makefactory(_wt.ErrgenTable)
+        
+        self.DataSetOverviewTable = makefactory(_wt.DataSetOverviewTable)
+        
+        self.Chi2ProgressTable = makefactory(_wt.Chi2ProgressTable)
+        self.LogLProgressTable = makefactory(_wt.LogLProgressTable)
+        self.LogLByGermTable = makefactory(_wt.LogLByGermTable)
+        self.LogLProjectedErrGenTable = makefactory(_wt.LogLProjectedErrGenTable)
+
+        self.GatestringTable = makefactory(_wt.GatestringTable)
+        self.GatestringMultiTable= makefactory(_wt.GatestringMultiTable)
+
+        self.GateBoxesTable = makefactory(_wt.GateBoxesTable)
+        self.ErrgenBoxesTable = makefactory(_wt.ErrgenBoxesTable)        
+        self.ErrGenComparisonTable = makefactory(_wt.ErrGenComparisonTable)
+        self.ErrgenProjectorBoxesTable = makefactory(_wt.ErrgenProjectorBoxesTable)
+
+        self.GaugeOptParamsTable = makefactory(_wt.GaugeOptParamsTable)
+        self.MetadataTable = makefactory(_wt.MetadataTable)
+        self.SoftwareEnvTable = makefactory(_wt.SoftwareEnvTable)
+
+        #Plots
+        self.ColorBoxPlot = makefactory(_wp.ColorBoxPlot)
+        self.BoxKeyPlot = makefactory(_wp.BoxKeyPlot)
+        self.GateMatrixPlot = makefactory(_wp.GateMatrixPlot)
+        self.PolarEigenvaluePlot = makefactory(_wp.PolarEigenvaluePlot)
+        self.ProjectionsBoxPlot = makefactory(_wp.ProjectionsBoxPlot)
+        self.ChoiEigenvalueBarPlot = makefactory(_wp.ChoiEigenvalueBarPlot)
 
 
     def switchedCompute(self, fn, *args):
@@ -218,16 +274,22 @@ class Workspace(object):
                 
             # argVals now contains all the arguments, so call the function if
             #  we need to and add result.
-            key = call_key(fn, argVals) # cache by call key
-            if key not in self.compCache:
+            try:
+                key = call_key(fn, argVals) # cache by call key
+                if key not in self.compCache:
+                    #print("DB: computing with args = ", argsVals)
+                    self.compCache[key] = fn(*argVals)
+                result = self.compCache[key]
+            except TypeError:
                 #print("DB: computing with args = ", argsVals)
-                self.compCache[key] = fn(*argVals)
-            result = self.compCache[key]
+                print("WARNING: unable to cache call to %s" % fn.__name__)
+                result = fn(*argVals)
+                key = randomID() #something unique so it get's it's own cache slot
 
             if key not in storedKeys:
                 switchpos_map[pos] = len(resultValues)
                 storedKeys[key] = len(resultValues)
-                resultValues.append( self.compCache[key] )
+                resultValues.append( result )
             else:
                 switchpos_map[pos] = storedKeys[key]
 

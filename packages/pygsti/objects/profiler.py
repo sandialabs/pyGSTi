@@ -383,6 +383,10 @@ class Profiler(object):
         self.__dict__.update(stateDict)
         self.comm = None # initialize to None upon unpickling
 
+    def digest_hash(self):
+        return 0 #don't need to distiguish different profilers
+
+
         
 
 
@@ -408,5 +412,4 @@ class DummyProfiler(object):
     def mem_check(self, name,printme=None):
         """Stub function that does nothing"""
         pass
-
     
