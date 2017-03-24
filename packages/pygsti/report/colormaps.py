@@ -94,7 +94,13 @@ class LinlogColormap(Colormap):
             # that has all it's entries masked (like value does)
             if return_value.shape==(): return return_value.item()
             else: return return_value.view(_np.ma.MaskedArray)
-        
+
+        #deal with numpy bug in handling masked nan values (nan still gives
+        # "invalid value" warnings/errors even when masked)
+        if _np.ma.is_masked(value):
+            value = _np.ma.array(value.filled(1e100),
+                                 mask=_np.ma.getmask(value))
+
         lin_norm_value = _vnorm(value, self.vmin, self.vmax)
         norm_trans = _vnorm(self.trans, self.vmin, self.vmax)
         log10_norm_trans = _np.ma.log10(norm_trans)
@@ -108,6 +114,13 @@ class LinlogColormap(Colormap):
             if _np.ma.is_masked(lin_norm_value):
                 lin_norm_value = _np.ma.array(lin_norm_value.filled(1e100),
                                               mask=_np.ma.getmask(lin_norm_value))
+
+            if norm_trans == 1.0:
+                #then transition is at highest possible normalized value (1.0)
+                # and the call to greater(...) below will always be True.
+                # To avoid the False-branch getting div-by-zero errors, set:
+                log10_norm_trans = 1.0 # because it's never used.
+                
             return_value = _np.ma.where(_np.ma.greater(norm_trans, lin_norm_value),
                                         lin_norm_value/(2*norm_trans),
                                         (log10_norm_trans -
