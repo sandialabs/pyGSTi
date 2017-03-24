@@ -219,7 +219,7 @@ class Workspace(object):
                                  "templates","css")
         with open(_os.path.join(cssPath,"dataTable.css")) as f:
             script = '<style>\n' + str(f.read()) + '</style>'
-            _display(_HTML(script1 + script))
+            _display(_HTML(script))
 
         # Update Mathjax config -- jupyter notebooks already have this so not needed
         #script = '<script type="text/x-mathjax-config">\n' \
@@ -399,6 +399,8 @@ class Switchboard(_collections.OrderedDict):
                                                           self.initialPositions)):
             if typ == "buttons":
                 html = "<fieldset id='%s'>\n" % ID
+                if name:
+                    html += "<legend>%s: </legend>" % name
                 for k,lbl in enumerate(posLbls):
                     checked = " checked='checked'" if k==ipos else ""
                     html += "<label for='%s-%d'>%s</label>\n" % (ID, k,lbl)
@@ -459,6 +461,12 @@ class Switchboard(_collections.OrderedDict):
                   js + " });</script>" + html
         #self.widget.value = content
         _display(_HTML(content)) #self.widget)
+
+    def __getattr__(self, attr):
+        if attr in self:
+            return self[attr]
+        return getattr(self.__dict__,attr)
+
         
 
 
