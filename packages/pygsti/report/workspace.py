@@ -679,7 +679,7 @@ class WorkspacePlot(WorkspaceOutput):
         divIDs = []
         for fig in self.figs:
             fig_html = _plot(fig, include_plotlyjs=False, output_type='div',
-                             global_requirejs=global_requirejs)
+                             show_link=False, global_requirejs=global_requirejs)
             divHTML.append(fig_html)
             divIDs.append(getPlotlyDivID(fig_html))
             

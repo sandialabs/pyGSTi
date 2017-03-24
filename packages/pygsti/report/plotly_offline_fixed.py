@@ -5,7 +5,7 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
          validate=True, output_type='file', include_plotlyjs=True,
          filename='temp-plot.html', auto_open=True, image=None,
          image_filename='plot_image', image_width=800, image_height=600,
-         global_requirejs=True):
+         global_requirejs=False):
     """ Create a plotly graph locally as an HTML document or string.
 
     Example:
