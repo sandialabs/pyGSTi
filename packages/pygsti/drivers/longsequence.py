@@ -394,9 +394,10 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
 
     ret = _report.Results()
     ret.init_Ls_and_germs(objective, gs_target, ds,
-                        gs_start, maxLengths, germs,
-                        go_gs_lsgst_list, lsgstLists, prepStrs, effectStrs,
-                        truncFn, fidPairs, gs_lsgst_list)
+                          gs_start, maxLengths, germs,
+                          go_gs_lsgst_list, lsgstLists, prepStrs, effectStrs,
+                          truncFn, fidPairs, gs_lsgst_list,
+                          advancedOptions.get('gateLabelAliases',None))
     ret.parameters['minProbClip'] = \
         advancedOptions.get('minProbClip',1e-4)
     ret.parameters['minProbClipForWeighting'] = \

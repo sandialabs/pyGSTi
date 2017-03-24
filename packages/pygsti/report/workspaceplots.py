@@ -94,7 +94,8 @@ def color_boxplot(plt_data, colormap, colorbar=False, boxLabelSize=0,
         The encapsulated matplotlib figure that was generated
     """
 
-    heatmapArgs = { 'z': colormap.normalize(plt_data),
+    masked_data = _np.ma.array(plt_data, mask=_np.isnan(plt_data))
+    heatmapArgs = { 'z': colormap.normalize(masked_data),
                     'colorscale': colormap.get_colorscale(),
                     'showscale': colorbar, 'hoverinfo': 'none',
                     'zmin':0, 'zmax': 1.0 } #so colormap normalization works as expected
@@ -504,7 +505,7 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
     TODO: docstring
     """
     g = gatestring_structure
-    return generate_boxplot(subMxs, g.used_maxLs, g.used_germs, g.prepfids, g.effectfids,
+    return generate_boxplot(subMxs, g.used_xvals, g.used_yvals, g.prepStrs, g.effectStrs,
                             "L","germ","rho_i","E_i", colormap,
                             colorbar, boxLabels, prec, hoverInfo,
                             sumUp, invert, save_to, scale)  #"$\\rho_i$","$\\E_i$"      
@@ -918,7 +919,7 @@ class ColorBoxPlot(WorkspacePlot):
                 colormapType = "trivial"
 
                 def mx_fn(gateStr,x,y):
-                    return _np.nan * _np.zeros( (len(gss.effectfids),len(gss.prepfids)), 'd')
+                    return _np.nan * _np.zeros( (len(gss.effectStrs),len(gss.prepStrs)), 'd')
 
             elif typ == "errorrate":
                 precomp=False
@@ -936,9 +937,8 @@ class ColorBoxPlot(WorkspacePlot):
                 def mx_fn(gateStr,x,y):
                     return _ph.direct_chi2_matrix(
                         gateStr, dataset, directGSTgatesets.get(gateStr,None),
-                        (gss.prepfids, gss.effectfids), minProbClipForWeighting,
-                        gss.fidpair_filters[(x,y)] if (gss.fidpair_filters is not None) else None,
-                        gss.gatestring_filters[(x,y)] if (gss.gatestring_filters is not None) else None,
+                        (gss.prepStrs, gss.effectStrs), minProbClipForWeighting,
+                        gss.get_fidpair_filter(x,y), gss.get_gatestring_filter(x,y),
                         gss.aliases)
 
             elif typ == "directlogl":
@@ -949,9 +949,8 @@ class ColorBoxPlot(WorkspacePlot):
                 def mx_fn(gateStr,x,y):
                     return _ph.direct_logl_matrix(
                         gateStr, dataset, directGSTgatesets.get(gateStr,None),
-                        (gss.prepfids, gss.effectfids), minProbClipForWeighting,
-                        gss.fidpair_filters[(x,y)] if (gss.fidpair_filters is not None) else None,
-                        gss.gatestring_filters[(x,y)] if (gss.gatestring_filters is not None) else None,
+                        (gss.prepStrs, gss.effectStrs), minProbClipForWeighting,
+                        gss.get_fidpair_filter(x,y), gss.get_gatestring_filter(x,y),
                         gss.aliases)
 
             else:
@@ -961,7 +960,7 @@ class ColorBoxPlot(WorkspacePlot):
                 probs_precomp_dict = _ph._computeProbabilities(maps, gateset, dataset)
 
             subMxs = _ph._computeSubMxs(gss,mx_fn,sumUp)
-            n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, gss.used_maxLs, gss.used_germs, sumUp)
+            n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, gss.used_xvals, gss.used_yvals, sumUp)
             dataMax = max( [ (_np.max(mx) if (mx is not None) else 0) for subMxRow in subMxs for mx in subMxRow] )
 
             if colormapType == "linlog":
@@ -973,8 +972,8 @@ class ColorBoxPlot(WorkspacePlot):
 
             elif colormapType == "seq":
                 max_abs = max([ _np.max(_np.abs(_np.nan_to_num(subMxs[iy][ix])))
-                                for ix in range(len(gss.used_maxLs))
-                                for iy in range(len(gss.used_germs)) ])
+                                for ix in range(len(gss.used_xvals))
+                                for iy in range(len(gss.used_yvals)) ])
                 if max_abs == 0: max_abs = 1e-6 # pick a nonzero value if all entries are zero or nan
                 colormap = _colormaps.SequentialColormap(vmin=0, vmax=max_abs)
 

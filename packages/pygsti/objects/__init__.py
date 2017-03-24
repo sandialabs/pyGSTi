@@ -33,6 +33,8 @@ from .spamvec import StaticSPAMVec
 from .gateset import GateSet
 from .gatestring import GateString
 from .gatestring import WeightedGateString
+from .gatestringstructure import GatestringStructure
+from .gatestringstructure import LsGermsStructure
 from .multidataset import MultiDataSet
 from .spamspec import SpamSpec
 from .profiler import Profiler

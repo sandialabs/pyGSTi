@@ -75,6 +75,7 @@ class Results(object):
         #Public API parameters
         self.gatesets = {}
         self.gatestring_lists = {}
+        self.gatestring_structs = {}
         self.dataset = None
         self.parameters = {}
         self.options = ResultOptions()
@@ -156,7 +157,7 @@ class Results(object):
     def init_Ls_and_germs(self, objective, targetGateset, dataset,
                           seedGateset, Ls, germs, gatesetsByL, gateStringListByL,
                           prepStrs, effectStrs, truncFn, fidPairs=None,
-                          gatesetsByL_noGaugeOpt=None):
+                          gatesetsByL_noGaugeOpt=None, gateLabelAliases=None):
 
         """
         Initialize this Results object from the inputs and outputs of
@@ -220,6 +221,13 @@ class Results(object):
             The value of the estimated gate sets *before* any gauge
             optimization was performed on it.
 
+        gateLabelAliases : dictionary, optional
+            Dictionary whose keys are gate label "aliases" and whose values are tuples
+            corresponding to what that gate label should be expanded into before querying
+            the dataset.
+            Defaults to the empty dictionary (no aliases defined)
+            e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
         Returns
         -------
         None
@@ -237,7 +245,7 @@ class Results(object):
         self.gatestring_lists['final'] = gateStringListByL[-1]
         self.gatestring_lists['all'] = _lt.remove_duplicates(
             list(_itertools.chain(*gateStringListByL)) )
-
+        
         running_lst = []; delta_lsts = []
         for L,lst in zip(Ls,gateStringListByL):
             delta_lst = [ x for x in lst if (x not in running_lst) ]
@@ -260,9 +268,18 @@ class Results(object):
         self.gatestring_lists['germs'] = germs
         self.parameters['max length list'] = Ls
         self.parameters['fiducial pairs'] = fidPairs
-        self.parameters['L,germ tuple base string dict'] = \
-            _collections.OrderedDict( [ ( (L,germ), truncFn(germ,L) )
-                                        for L in Ls for germ in germs] )
+
+        self.gatestring_structs['iteration'] = []
+        for i in range(len(Ls)):
+            self.gatestring_structs['iteration'].append(
+                _objs.LsGermsStructure(Ls[0:i+1], germs, prepStrs, effectStrs,
+                                 truncFn, fidPairs, gateStringListByL[0:i+1],
+                                 gateLabelAliases) )
+        self.gatestring_structs['final'] = self.gatestring_structs['iteration'][-1]
+        
+        #self.parameters['L,germ tuple base string dict'] = \
+        #    _collections.OrderedDict( [ ( (L,germ), truncFn(germ,L) )
+        #                                for L in Ls for germ in germs] )
         self._LsAndGermInfoSet = True
 
 

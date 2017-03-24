@@ -30,7 +30,6 @@ from ..objects      import VerbosityPrinter
 #
 #from .resultcache import ResultCache as _ResultCache
 
-from .gatestringstructure import GatestringStructure
 from .workspace import Workspace as _Workspace
 
 #ideas:
@@ -87,7 +86,7 @@ def _merge_template(qtys, templateFilename, outputFilename):
         if isinstance(val,str):
             qtys_html[key] = val
         else:
-            print("DB: rendering ",key)
+            #print("DB: rendering ",key)
             html, js = val.render("html")
             qtys_html[key] = "<script>\n%s\n</script>\n\n%s" % (js,html)
 
@@ -190,32 +189,8 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
         # 2) generate plots
         printer.log("*** Generating plots ***")
 
-        #Create a GatestringStructure (TODO: maybe move this within class?)
-        fidPairs = results.parameters['fiducial pairs']
-        if fidPairs is None: fidpair_filters = None
-        elif isinstance(fidPairs,dict) or hasattr(fidPairs,"keys"):
-            #Assume fidPairs is a dict indexed by germ
-            fidpair_filters = { (x,y): fidPairs[y] 
-                                for x in Ls[st:] for y in germs }
-        else:
-            #Assume fidPairs is a list
-            fidpair_filters = { (x,y): fidPairs
-                                for x in Ls[st:] for y in germs }
-
-        Ls = results.parameters['max length list']
-        germs = results.gatestring_lists['germs']
-        gstr_filters = { (x,y) : results.gatestring_lists['iteration'][i]
-                         for i,x in enumerate(Ls)
-                         for y in germs }
-
-        gss = GatestringStructure(results.parameters['max length list'],
-                                  results.gatestring_lists['germs'],
-                                  results.gatestring_lists['prep fiducials'],
-                                  results.gatestring_lists['effect fiducials'],
-                                  results._getBaseStrDict(),
-                                  fidpair_filters, gstr_filters,
-                                  results.parameters.get('gateLabelAliases',None))
-
+        gss = results.gatestring_structs['final']
+        
         qtys['colorBoxPlotKeyPlot'] = ws.BoxKeyPlot(tuple(results.gatestring_lists['prep fiducials']),
                                                     tuple(results.gatestring_lists['effect fiducials']))
         qtys['bestEstimateColorBoxPlot'] = ws.ColorBoxPlot(plotType, gss, ds, gsFinal,
@@ -239,6 +214,7 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     
     templateFile = "report_singlequbit.html"
     _merge_template(qtys, templateFile, filename)
+    printer.log("Output written to %s" % filename)
 
 
 
@@ -332,32 +308,8 @@ def create_general_report(results, filename, confidenceLevel=None,
         # 2) generate plots
         printer.log("*** Generating plots ***")
 
-        #Create a GatestringStructure (TODO: maybe move this within class?)
-        fidPairs = results.parameters['fiducial pairs']
-        if fidPairs is None: fidpair_filters = None
-        elif isinstance(fidPairs,dict) or hasattr(fidPairs,"keys"):
-            #Assume fidPairs is a dict indexed by germ
-            fidpair_filters = { (x,y): fidPairs[y] 
-                                for x in Ls[st:] for y in germs }
-        else:
-            #Assume fidPairs is a list
-            fidpair_filters = { (x,y): fidPairs
-                                for x in Ls[st:] for y in germs }
-
-        Ls = results.parameters['max length list']
-        germs = results.gatestring_lists['germs']
-        gstr_filters = { (x,y) : results.gatestring_lists['iteration'][i]
-                         for i,x in enumerate(Ls)
-                         for y in germs }
-
-        gss = GatestringStructure(results.parameters['max length list'],
-                                  results.gatestring_lists['germs'],
-                                  results.gatestring_lists['prep fiducials'],
-                                  results.gatestring_lists['effect fiducials'],
-                                  results._getBaseStrDict(),
-                                  fidpair_filters, gstr_filters,
-                                  results.parameters.get('gateLabelAliases',None))
-
+        gss = results.gatestring_structs['final']
+        
         qtys['colorBoxPlotKeyPlot'] = ws.BoxKeyPlot(tuple(results.gatestring_lists['prep fiducials']),
                                                     tuple(results.gatestring_lists['effect fiducials']))
         
@@ -383,3 +335,4 @@ def create_general_report(results, filename, confidenceLevel=None,
     
     templateFile = "report_general.html"
     _merge_template(qtys, templateFile, filename)
+    printer.log("Output written to %s" % filename)

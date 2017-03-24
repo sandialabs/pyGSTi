@@ -432,19 +432,11 @@ def _computeGateStringMaps(gss, dataset):
     Return a dictionary of all the gatestring maps,
     indexed by base string. 
     """
-    xvals, yvals = gss.maxLs, gss.germs
-    used_xvals = [x for x in xvals 
-                  if any([(gss.LgermDict[(x,y)] is not None) for y in yvals])]
-    used_yvals = [y for y in yvals 
-                  if any([(gss.LgermDict[(x,y)] is not None) for x in xvals])]
-    return { gss.LgermDict[(x,y)] :
-                 get_gatestring_map(gss.LgermDict[(x,y)], dataset, (gss.prepfids, gss.effectfids),
-                                    gss.fidpair_filters[(x,y)] 
-                                    if gss.fidpair_filters is not None else None,
-                                    gss.gatestring_filters[(x,y)] 
-                                    if gss.gatestring_filters is not None else None,
+    return { gss.gsDict[(x,y)] :
+                 get_gatestring_map(gss.gsDict[(x,y)], dataset, (gss.prepStrs, gss.effectStrs),
+                                    gss.get_fidpair_filter(x,y), gss.get_gatestring_filter(x,y),
                                     gss.aliases)
-             for x in used_xvals for y in used_yvals }
+             for x in gss.used_xvals for y in gss.used_yvals }
 
 def _num_non_nan(array):
     ixs = _np.where(_np.isnan(_np.array(array).flatten()) == False)[0]
@@ -517,8 +509,8 @@ def _computeProbabilities(maps, gateset, dataset):
     
 
 def _computeSubMxs(gss, subMxCreationFn, sumUp):
-    subMxs = [ [ subMxCreationFn(gss.LgermDict[(x,y)],x,y) for x in gss.used_maxLs ] 
-               for y in gss.used_germs]
+    subMxs = [ [ subMxCreationFn(gss.gsDict[(x,y)],x,y) for x in gss.used_xvals ] 
+               for y in gss.used_yvals]
     #Note: subMxs[y-index][x-index] is proper usage
     return subMxs #OLD:, n_boxes, dof_per_box
 
