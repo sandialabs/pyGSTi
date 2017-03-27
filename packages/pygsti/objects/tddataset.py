@@ -693,9 +693,9 @@ class TDDataSet(object):
 
         #first turn the data into an equally spaced sequence of data values
         try:
-          f = _interp1d(tdata, ydata, kind='cubic')
+          f = _interp1d(tdata, ydata, kind='cubic', assume_sorted=False)
         except _np.linalg.linalg.LinAlgError: #cubic can fail for few data points
-          f = _interp1d(tdata, ydata, kind='linear')
+          f = _interp1d(tdata, ydata, kind='linear', assume_sorted=False)
         ts = _np.linspace(tdata[0],tdata[-1], len(tdata)*resampleFactor)
         #delta = _np.mean([ tdata[i]-tdata[i-1] for i in range(1,len(tdata)) ])
         data  = _np.array([f(t) for t in ts],'d')
