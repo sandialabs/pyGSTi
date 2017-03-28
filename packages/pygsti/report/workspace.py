@@ -54,6 +54,8 @@ import os as _os
 import numpy as _np
 import uuid as _uuid
 import random as _random
+import inspect as _inspect
+import sys as _sys
 
 import plotly.offline as _plotly_offline
 from .plotly_offline_fixed import plot_ex as _plot
@@ -122,11 +124,51 @@ class Workspace(object):
         self.compCache = {}  # cache of computation function results (hashable by call_keys)
 
         def makefactory(cls):
-            #TODO: set signature of factor_fn to cls.__init__
-            def factory_fn(*args,**kwargs):
-                factory_fn.__doc__ = cls.__init__.__doc__
-                return cls(self, *args, **kwargs)
+
+            PY3 = bool(_sys.version_info > (3, 0))
+
+            #Manipulate argument list of cls.__init__
+            argspec = _inspect.getargspec(cls.__init__)
+            argnames = argspec[0]
+            assert(argnames[0] == 'self' and argnames[1] == 'ws'), \
+                "__init__ must begin with (self, ws, ...)"
+            factoryfn_argnames = argnames[2:] #strip off self & ws args
+            newargspec = (factoryfn_argnames,) + argspec[1:]
+
+            #Define a new factory function with appropriate signature
+            signature = _inspect.formatargspec(
+                formatvalue=lambda val: "", *newargspec)
+            signature = signature[1:-1] #strip off parenthesis from ends of "(signature)"
+            factory_func_def = (
+                    'def factoryfn(%(signature)s):\n' 
+                    '    return cls(self, %(signature)s)' % 
+                    {'signature':signature } )
+            #print("FACTORY FN DEF = \n",new_func)
+            exec_globals = {'cls' : cls, 'self': self}
+            if _sys.version_info > (3, 0):
+                exec(factory_func_def, exec_globals) #Python 3
+            else:
+                exec("""exec factory_func_def in exec_globals""") #Python 2
+            factoryfn = exec_globals['factoryfn']
+
+            #Copy cls.__init__ info over to factory function
+            factoryfn.__name__   = cls.__init__.__name__
+            factoryfn.__doc__    = cls.__init__.__doc__
+            factoryfn.__module__ = cls.__init__.__module__
+            factoryfn.__dict__   = cls.__init__.__dict__            
+            if PY3:
+                factoryfn.__defaults__ = cls.__init__.__defaults__
+            else:
+                factoryfn.func_defaults = cls.__init__.func_defaults
+                
+            return factoryfn
+
             
+            #TODO: set signature of factor_fn to cls.__init__
+            #def factory_fn(*args,**kwargs):
+            #    factory_fn.__doc__ = cls.__init__.__doc__
+            #    return cls(self, *args, **kwargs)
+            #
             #else:
             #    def factory_fn(*args,**kwargs):
             #        key = call_key(cls, args) # cache by call key
@@ -134,9 +176,9 @@ class Workspace(object):
             #            #print("DB: new call key = ",key)
             #            self.outputObjs[key] = cls(self, *args, **kwargs) #construct using *full* args
             #        return self.outputObjs[key]
-                
-            factory_fn.__doc__ = cls.__init__.__doc__
-            return factory_fn
+            #    
+            #factory_fn.__doc__ = cls.__init__.__doc__
+            #return factory_fn
 
         # "register" components
         from . import workspacetables as _wt
@@ -221,6 +263,10 @@ class Workspace(object):
             script = '<style>\n' + str(f.read()) + '</style>'
             _display(_HTML(script))
 
+        _display(_HTML('<link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">'))
+
+
+
         # Update Mathjax config -- jupyter notebooks already have this so not needed
         #script = '<script type="text/x-mathjax-config">\n' \
         #        + '  MathJax.Hub.Config({ tex2jax: {inlineMath: [["$","$"], ["\\(","\\)"]]}\n' \
@@ -230,8 +276,8 @@ class Workspace(object):
 
         #Tell require.js where jQueryUI is
         script = """
-        <script>requirejs.config({paths: { 'jquery-ui': ['https://code.jquery.com/ui/1.12.1/jquery-ui.min']},});
-          require(['jquery-ui'],function(ui) {
+        <script>requirejs.config({paths: { 'jquery-UI': ['https://code.jquery.com/ui/1.12.1/jquery-ui.min']},});
+          require(['jquery-UI'],function(ui) {
           window.jQueryUI=ui;});
         </script>"""
         _display(_HTML(script))
@@ -457,7 +503,7 @@ class Switchboard(_collections.OrderedDict):
         #                                disabled=False)
         html, js = self.render("html")
         content = "<script>\n" + \
-                  "require(['jquery','jquery-ui'],function($,ui) {" + \
+                  "require(['jquery','jquery-UI'],function($,ui) {" + \
                   js + " });</script>" + html
         #self.widget.value = content
         _display(_HTML(content)) #self.widget)
@@ -534,7 +580,7 @@ class WorkspaceOutput(object):
         html, js = self.render("html", global_requirejs=True) # b/c jupyter uses require.js
         #OLD: content = "<script>\n%s\n</script>\n\n%s" % (js,html)
         content = "<script>\n" + \
-                  "require(['jquery','jquery-ui'],function($,ui) {" + \
+                  "require(['jquery','jquery-UI'],function($,ui) {" + \
                   js + " });</script>" + html
 
         #self.widget.value = content
