@@ -1,15 +1,16 @@
 	
 .dataTable td, .dataTable th {
 	/* appearance */
-	border: 2px solid #036;
+	border: 2px solid #333;
 	
 	/* size */
 	padding: 5px;
 	}
 
 .dataTable {
-	/* text */
-	font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        /* text */
+        /*font-family: "Computer Modern Serif","times new roman",serif;*/
+	'Helvetica Neue', Helvetica, Arial, sans-serif;
 
 	/* no space between cells */
 	border-spacing: 0px;
@@ -76,15 +77,20 @@
 .dataTable thead tr th,
 .dataTable tfoot tr td {
 	/* appearance */
-	background-color: #036;
+        background-color: #333;	
 		
 	/* text */
 	color: #ffffff;
 	font-size: 12px;
 	font-weight: bold;
+	text-align: center;
 	}
 
 /* OLD
+background-color: #036;
+*/
+
+/* VERY OLD
 	background-image: -moz-linear-gradient(
 		top,
 		rgba(255,255,255,0.4) 0%,
@@ -102,13 +108,13 @@
 
 .dataTableHeading {
 	font-weight: bold;
-	color: #036;
+	color: #333;
 	margin-bottom: 5px;
 }
 
 .dataTableHeading > a {
         text-decoration: none;
-	color: #036;
+	color: #333;
 }
 
 .dataTableHeading > a:hover {
