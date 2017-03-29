@@ -446,7 +446,7 @@ class Switchboard(_collections.OrderedDict):
             if typ == "buttons":
                 html = "<fieldset id='%s'>\n" % ID
                 if name:
-                    html += "<legend>%s: </legend>" % name
+                    html += "<legend>%s: </legend>\n" % name
                 for k,lbl in enumerate(posLbls):
                     checked = " checked='checked'" if k==ipos else ""
                     html += "<label for='%s-%d'>%s</label>\n" % (ID, k,lbl)
@@ -456,12 +456,84 @@ class Switchboard(_collections.OrderedDict):
                 js = "  $('#%s > input').checkboxradio({ icon: false });" % ID
 
             elif typ == "dropdown":
-                html = ""; js = ""
-                raise NotImplementedError()
+                html = "<div style='margin:2px'><fieldset>\n"
+                if name:
+                    html += "<label for='%s'>%s</label>\n" % (ID,name)
+                html += "<select name='%s' id='%s'>\n" % (ID,ID)
+                for k,lbl in enumerate(posLbls):
+                    selected = " selected='selected'" if k==ipos else ""
+                    html += "<option value=%d%s>%s</option>\n" % (k,selected,lbl)
+                html += "</select>\n</fieldset></div>\n"
+                js = "  $('#%s').selectmenu();" % ID
             
             elif typ == "slider":
-                html = ""; js = ""
-                raise NotImplementedError()
+                
+                def is_number(x):
+                    try: float(x)
+                    except: return False
+                    return True
+
+                if all([is_number(v) for v in posLbls]):
+                    float_vals = list(map(float,posLbls))
+                    m,M = min(float_vals),max(float_vals)
+                else:
+                    float_vals = list(range(len(posLbls)))
+                    m,M = 0, len(posLbls)-1
+
+                ml = max(list(map(len,posLbls)))
+                w = 3.0 #1.0*ml
+
+                html = "<div id='%s-container' style='margin:2px'><fieldset>\n" % ID
+                if name:
+                    html += "<label for='%s' style='float:left'>%s</label>\n" % (ID,name)
+                html += "<div name='%s' id='%s' style='width:80%%;float:left'>\n" % (ID,ID)
+                html += "<div id='%s-handle' class='ui-slider-handle'></div>" % ID
+                html += "</div>\n</fieldset></div>\n"
+                #                    "       $('#%s-container').css({'margin-top':'%fem'});" % (ID,1.7/2),
+
+                js  = "var %s_float_values = [" % ID + \
+                            ",".join(map(str,float_vals)) + "];\n"
+                js += "var %s_str_values = [" % ID + \
+                            ",".join(["'%s'" % s for s in posLbls]) + "];\n"
+                    
+                js += "\n".join( (
+                    "  $('#%s').slider({" % ID,
+                    "     orientation: 'horizontal', range: false,",
+                    "     min: %f, max: %f, step: %f," % (m,M,(M-m)/100.0),
+                    "     create: function() {",
+                    "       $('#%s-handle').text('%s');" % (ID,posLbls[ipos]),
+                    "       $('#%s-handle').css({'width':'%fem','height':'%fem'});" % (ID,w,1.7),
+                    "       $('#%s-handle').css({'margin-left':'%fem','top':'%fem'});" % (ID,-w/2,-1.7/2+0.4),
+                    "       $('#%s-handle').css({'text-align':'center','line-height':'1.5em'});" % ID,
+                    "       $('#%s').css({'margin-left':'%fem', 'margin-top':'0.4em'});" % (ID,w/2),
+                    "     },",
+                    "     slide: function(event, ui) {",
+                    "        var includeLeft = event.keyCode != $.ui.keyCode.RIGHT;",
+                    "        var includeRight = event.keyCode != $.ui.keyCode.LEFT;",
+                    "        var iValue = findNearest(includeLeft, includeRight, ui.value);",
+                    "        $('#%s').slider('value', %s_float_values[iValue]);" % (ID,ID),
+                    "        $('#%s-handle').text(%s_str_values[iValue]);" % (ID,ID),
+                    "        return false;"
+                    "    },",
+                    "  });" ))
+                # $("#price-amount").html('$' + slider.slider('values', 0) + ' - $' + slider.slider('values', 1)
+
+                js += "\n".join( (
+                    "function findNearest(includeLeft, includeRight, value) {",
+                    "  var nearest = null;",
+                    "  var diff = null;",
+                    "  for (var i = 0; i < %s_float_values.length; i++) {" % ID,
+                    "    if ((includeLeft && %s_float_values[i] <= value) ||" % ID,
+                    "        (includeRight && %s_float_values[i] >= value)) {" % ID,
+                    "      var newDiff = Math.abs(value - %s_float_values[i]);" % ID,
+                    "      if (diff == null || newDiff < diff) {",
+                    "        nearest = i;",
+                    "        diff = newDiff;",
+                    "      }",
+                    "    }",
+                    "  }",
+                    "  return nearest;",
+                    "}" ))
                 
             else:
                 raise ValueError("Unknown switch type: %s" % typ)
@@ -480,6 +552,10 @@ class Switchboard(_collections.OrderedDict):
         typ = self.switchTypes[switchIndex]
         if typ == "buttons":
             return "$('#%s').on('change', function() {" % ID
+        elif typ == "dropdown":
+            return "$('#%s').on('selectmenuchange', function() {" % ID
+        elif typ == "slider":
+            return "$('#%s').on('slidechange', function() {" % ID
         else:
             raise ValueError("Unknown switch type: %s" % typ)
 
@@ -488,6 +564,10 @@ class Switchboard(_collections.OrderedDict):
         typ = self.switchTypes[switchIndex]
         if typ == "buttons":
             return "$(\"#%s > input[name='%s']:checked\").val()" % (ID,ID)
+        elif typ == "dropdown":
+            return "$('#%s').val()" % ID
+        elif typ == "slider":
+            return "$('#%s').slider('option', 'value')" % ID
         else:
             raise ValueError("Unknown switch type: %s" % typ)
         
