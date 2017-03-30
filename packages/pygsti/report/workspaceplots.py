@@ -4,7 +4,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Functions for generating plots """
+""" Classes corresponding to plots within a Workspace context."""
 
 import numpy             as _np
 import matplotlib.pyplot as _plt
@@ -32,38 +32,27 @@ from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot #D
 
 def color_boxplot(plt_data, colormap, colorbar=False, boxLabelSize=0,
                   prec=0, hoverLabelFn=None, hoverLabels=None):
-    """ TODO: docstring
+    """
     Create a color box plot.
 
-    Creates a figure composed of colored boxes and possibly labels.
+    Creates a plot.ly heatmap figure composed of colored boxes and
+    possibly labels.
 
     Parameters
     ----------
     plt_data : numpy array
-        A 2D array containing the values to be plotted.
+        A 2D array containing the values to be plotted.  None values will
+        show up as white.
 
-    cmapFactory: ColormapFactory class
-        An instance of a ColormapFactory class
-
-    title : string, optional
-        Plot title (latex can be used)
-
-    xlabels, ylabels : list of strings, optional
-        Tic labels for x and y axes.  If both are None, then tics are not drawn.
-
-    xtics, ytics : list or array of floats, optional
-        Values of x and y axis tics.  If None, then half-integers from 0.5 to
-        0.5 + (nCols-1) or 0.5 + (nRows-1) are used, respectively.
+    colormap : Colormap
+        The colormap used to determine box color.
 
     colorbar : bool, optional
-        Whether to display a colorbar or not.
+        Whether or not to show the color scale bar.
 
-    fig, axes : matplotlib figure and axes, optional
-        If non-None, use these figure and axes objects instead of creating new ones
-        via fig,axes = pyplot.supblots()
-
-    size : 2-tuple, optional
-        The width and heigh of the final figure in inches.
+    boxLabelSize : int, optional
+        If greater than 0, display static labels on each box with font
+        size equal to `boxLabelSize`.
 
     prec : int or {'compact','compacthp'}, optional
         Precision for box labels.  Allowed values are:
@@ -72,26 +61,19 @@ def color_boxplot(plt_data, colormap, colorbar=False, boxLabelSize=0,
           int >= 0 = fixed precision given by int
           int <  0 = number of significant figures given by -int
 
-    boxLabels : bool, optional
-        Whether box labels are displayed.  It takes much longer to
-        generate the figure when this is set to True.
+    hoverLabelFn : function, optional
+        A function with signature `f(z,i,j)` where `z ==plt_data[i,j]` which
+        computes the hover label for the each element of `plt_data`.  Cannot
+        be used with `hoverLabels`.
 
-    xlabel, ylabel : str, optional
-        X and Y axis labels
-
-    save_to : str, optional
-        save figure as this filename (usually ending in .pdf)
-
-    ticSize : int, optional
-        size of tic marks
-
-    grid : bool, optional
-        Whether or not grid lines should be displayed.
+    hoverLabels : list of lists, optional
+        Strings specifying the hover labels for each element of `plt_data`.
+        E.g. `hoverLabels[i,j]` is the string for the i-th row (y-value) 
+        and j-th column (x-value) of the plot.
 
     Returns
     -------
-    ReportFigure
-        The encapsulated matplotlib figure that was generated
+    plotly.Figure
     """
 
     masked_data = _np.ma.array(plt_data, mask=_np.isnan(plt_data))
@@ -168,10 +150,9 @@ def color_boxplot(plt_data, colormap, colorbar=False, boxLabelSize=0,
 def nested_color_boxplot(plt_data_list_of_lists, colormap, 
                          colorbar=False, boxLabelSize=0, prec=0,
                          hoverLabelFn=None):
-    """ TODO: docstring
-    Create a color box plot.
-
-    Creates a figure composed of colored boxes and possibly labels.
+    """
+    Creates a "nested" color box plot by tiling the plaquettes given
+    by `plt_data_list_of_lists` onto a single heatmap.
 
     Parameters
     ----------
@@ -179,55 +160,31 @@ def nested_color_boxplot(plt_data_list_of_lists, colormap,
         A complete square 2D list of lists, such that each element is a
         2D numpy array of the same size.
 
-    cmapFactory: instance of the ColormapFactory class
-
-    title : string, optional
-        Plot title (latex can be used)
-
-    xlabels, ylabels : list of strings, optional
-        Tic labels for x and y axes.  If both are None, then tics are not drawn.
-
-    xtics, ytics : list or array of floats, optional
-        Values of x and y axis tics.  If None, then half-integers from 0.5 to
-        0.5 + (nCols-1) or 0.5 + (nRows-1) are used, respectively.
+    colormap : Colormap
+        The colormap used to determine box color.
 
     colorbar : bool, optional
-        Whether to display a colorbar or not.
+        Whether or not to show the color scale bar.
 
-    fig, axes : matplotlib figure and axes, optional
-        If non-None, use these figure and axes objects instead of creating new ones
-        via fig,axes = pyplot.supblots()
+    boxLabelSize : int, optional
+        If greater than 0, display static labels on each box with font
+        size equal to `boxLabelSize`.
 
-    size : 2-tuple, optional
-        The width and heigh of the final figure in inches.
-
-    prec : int, optional
+    prec : int or {'compact','compacthp'}, optional
         Precision for box labels.  Allowed values are:
           'compact' = round to nearest whole number using at most 3 characters
           'compacthp' = show as much precision as possible using at most 3 characters
           int >= 0 = fixed precision given by int
           int <  0 = number of significant figures given by -int
 
-    boxLabels : bool, optional
-        Whether box labels are displayed.  It takes much longer to
-        generate the figure when this is set to True.
-
-    xlabel, ylabel : str, optional
-        X and Y axis labels
-
-    save_to : str, optional
-        save figure to this filename (usually ending in .pdf)
-
-    ticSize : int, optional
-        size of tic marks
-
-    grid : bool, optional
-        Whether or not grid lines should be displayed.
+    hoverLabelFn : function, optional
+        A function with signature `f(z,i,j)` where `z ==plt_data[i,j]` which
+        computes the hover label for the each element of `plt_data`.  Cannot
+        be used with `hoverLabels`.
 
     Returns
     -------
-    ReportFigure
-        The encapsulated matplotlib figure that was generated
+    plotly.Figure
     """
 
     #Assemble the single 2D grid to pass to color_boxplot
@@ -278,100 +235,69 @@ def generate_boxplot(subMxs,
                      xlabels, ylabels, inner_xlabels, inner_ylabels,
                      xlabel,  ylabel,  inner_xlabel,  inner_ylabel,
                      colormap, colorbar=False, boxLabels=True, prec=0, hoverInfo=True,
-                     sumUp=False, invert=False, save_to=None, scale=1.0):
-    """ TODO: docstring
-    Creates a view of nested box plot data (i.e. a matrix for each (x,y) pair).
+                     sumUp=False, invert=False, scale=1.0):
+    """
+    A helper function for generating typical nested color box plots used in pyGSTi.
 
-    Given lists of x and y values, a dictionary to convert (x,y) pairs into gate strings,
-    and a function to convert a "base" gate string into a matrix of floating point values,
-    this function computes (x,y) => matrix data and displays it in one of two ways:
-
-    1. As a full nested color box plot, showing all the matrix values individually
-    2. As a color box plot containing the sum of the elements in the (x,y) matrix as
-       the (x,y) box.
-
-    A histogram of the values can also be computed and displayed.
+    Given the list-of-lists, `subMxs`, along with x and y labels for both the "outer"
+    (i.e. the list-indices) and "inner" (i.e. the sub-matrix-indices) axes, this function
+    will produce a nested color box plot with the option of summing over the inner axes
+    or inverting (swapping) the inner and outer axes.
 
     Parameters
     ----------
-    xvals, yvals : list
-        List of x and y values. Elements can be any hashable quantity, and will be converted
-        into x and y tic labels.  Tuples of strings are converted specially for nice latex
-        rendering of gate strings.
-
-    xyGateStringDict : dict
-        Dictionary with keys == (x_value,y_value) tuples and values == gate strings, where
-        a gate string can either be a GateString object or a tuple of gate labels.  Provides
-        the mapping between x,y pairs and gate strings.  None values are allowed, and
-        indicate that there is not data for that x,y pair and nothing should be plotted.
-
     subMxs : list
         A list of lists of 2D numpy.ndarrays.  subMxs[iy][ix] specifies the matrix of values
         or sum (if sumUp == True) displayed in iy-th row and ix-th column of the plot.  NaNs
         indicate elements should not be displayed.
 
-    cmapFactory: instance of the ColormapFactory class
+    x_labels, y_labels : list
+        Labels for the outer x- and y-axis values.
 
-    xlabel, ylabel : str, optional
-        X and Y axis labels
+    inner_x_labels, inner_y_labels : list
+        Labels for the inner x- and y-axis values.
 
-    scale : float, optional
-        Scaling factor to adjust the size of the final figure.
+    xlabel, ylabel : str
+        Outer X and Y axis labels.
 
-    prec : int, optional
+    inner_xlabel, inner_ylabel : str
+        Inner X and Y axis labels.
+
+    colormap : Colormap
+        The colormap used to determine box color.
+
+    colorbar : bool, optional
+        Whether or not to show the color scale bar.
+
+    boxLabels : bool, optional
+        Whether to display static value-labels over each box.
+
+    prec : int or {'compact','compacthp'}, optional
         Precision for box labels.  Allowed values are:
           'compact' = round to nearest whole number using at most 3 characters
           'compacthp' = show as much precision as possible using at most 3 characters
           int >= 0 = fixed precision given by int
           int <  0 = number of significant figures given by -int
 
-    title : string, optional
-        Plot title (latex can be used)
+    hoverInfo : bool, optional
+        Whether to incude interactive hover labels.
 
     sumUp : bool, optional
         False displays each matrix element as it's own color box
         True sums the elements of each (x,y) matrix and displays
         a single color box for the sum.
 
-    boxLabels : bool, optional
-        Whether box labels are displayed.  It takes much longer to
-        generate the figure when this is set to True.
-
-    histogram : bool, optional
-        Whether a histogram of the matrix element values or summed matrix
-        values (depending on sumUp) should also be computed and displayed.
-
-    histBins : int, optional
-        The number of bins to use in the histogram.
-
-    save_to : str, optional
-        save figure to this filename (usually ending in .pdf)
-
-    ticSize : int, optional
-        size of tic marks
-
     invert : bool, optional
-        If True, invert the nesting order of the nested color box plot (applicable
-        only when sumUp == False).  Use inner_x_labels and inner_y_labels to label
-        the x and y axes.
+        If True, invert the nesting order of the nested color box plot
+        (applicable only when sumUp == False).  E.g. use inner_x_labels and
+        inner_y_labels to label the x and y axes.
 
-    inner_x_labels, inner_y_labels : list, optional
-        Similar to xvals, yvals but labels for the columns and rows of the (x,y) matrices
-        computed by subMxCreationFn.  Used when invert == True.
-
-    grid : bool, optional
-        Whether or not grid lines should be displayed.
+    scale : float, optional
+        Scaling factor to adjust the size of the final figure.
 
     Returns
     -------
-    rptFig : ReportFigure
-        The encapsulated matplotlib figure that was generated.  Note that
-        figure extra info is a dict with keys:
-
-        nUsedXs : int
-            The number of used X-values, proportional to the overall final figure width
-        nUsedYs : int
-            The number of used Y-values, proportional to the overall final figure height
+    plotly.Figure
     """
     nYs = len(subMxs)
     nXs = len(subMxs[0]) if nYs>0 else 0
@@ -394,7 +320,8 @@ def generate_boxplot(subMxs,
             for iny in range(nIYs):
                 invertedSubMxs.append( [] )
                 for inx in range(nIXs):
-                    mx = _np.array( [[ subMxs[iy][ix][iny,inx] for ix in range(nXs) ] for iy in range(nYs)],  'd' )
+                    mx = _np.array( [[ subMxs[iy][ix][iny,inx] for ix in range(nXs) ]
+                                     for iy in range(nYs)],  'd' )
                     invertedSubMxs[-1].append( mx )
 
             # flip the now-inverted mxs to counteract the flip that will occur upon
@@ -407,7 +334,7 @@ def generate_boxplot(subMxs,
                          inner_xlabels, inner_ylabels,
                          xlabels, ylabels, inner_xlabel,  inner_ylabel,  xlabel,  ylabel,
                          colormap, colorbar, boxLabels, prec, hoverInfo,
-                         sumUp, False, save_to, scale)
+                         sumUp, False, scale)
                                 
 
     def val_filter(vals):  #filter to latex-ify gate strings.  Later add filter as a possible parameter
@@ -497,23 +424,117 @@ def generate_boxplot(subMxs,
     #                             'nUsedYs': len(yvals) } )
     return fig
 
+
 def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
                              colorbar=False, boxLabels=True, prec='compact', hoverInfo=True,
-                             invert=False,sumUp=False,save_to=None,scale=1.0):
+                             sumUp=False,invert=False,scale=1.0):
     """
-    Creates a color boxplot for a structured set of gate strings.
-    TODO: docstring
+    A wrapper around :func:`generate_boxplot` for creating color box plots
+    when the structure of the gate strings is contained in  a
+    `GatestringStructure` object.
+
+    Parameters
+    ----------
+    gatestring_structure : GatestringStructure
+        Specifies a set of gate sequences along with their outer and inner x,y
+        structure, e.g. fiducials, germs, and maximum lengths.
+
+    subMxs : list
+        A list of lists of 2D numpy.ndarrays.  subMxs[iy][ix] specifies the matrix of values
+        or sum (if sumUp == True) displayed in iy-th row and ix-th column of the plot.  NaNs
+        indicate elements should not be displayed.
+
+    colormap : Colormap
+        The colormap used to determine box color.
+
+    colorbar : bool, optional
+        Whether or not to show the color scale bar.
+
+    boxLabels : bool, optional
+        Whether to display static value-labels over each box.
+
+    prec : int or {'compact','compacthp'}, optional
+        Precision for box labels.  Allowed values are:
+          'compact' = round to nearest whole number using at most 3 characters
+          'compacthp' = show as much precision as possible using at most 3 characters
+          int >= 0 = fixed precision given by int
+          int <  0 = number of significant figures given by -int
+
+    hoverInfo : bool, optional
+        Whether to incude interactive hover labels.
+
+    sumUp : bool, optional
+        False displays each matrix element as it's own color box
+        True sums the elements of each (x,y) matrix and displays
+        a single color box for the sum.
+
+    invert : bool, optional
+        If True, invert the nesting order of the nested color box plot
+        (applicable only when sumUp == False).  E.g. use inner_x_labels and
+        inner_y_labels to label the x and y axes.
+
+    scale : float, optional
+        Scaling factor to adjust the size of the final figure.
+
+    Returns
+    -------
+    plotly.Figure
     """
     g = gatestring_structure
     return generate_boxplot(subMxs, g.used_xvals, g.used_yvals, g.prepStrs, g.effectStrs,
                             "L","germ","rho_i","E_i", colormap,
                             colorbar, boxLabels, prec, hoverInfo,
-                            sumUp, invert, save_to, scale)  #"$\\rho_i$","$\\E_i$"      
+                            sumUp, invert, scale)  #"$\\rho_i$","$\\E_i$"      
 
 
-def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis, mxBasisDims=None,
+def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
                              mxBasisDimsY=None, xlabel=None, ylabel=None,
                              boxLabels=False, prec=0, scale=1.0):
+    """
+    Creates a color box plot for visualizing a single matrix.
+
+    Parameters
+    ----------
+    gateMatrix : numpy array
+        The matrix to visualize.
+
+    m, M : float
+        Minimum and maximum of the color scale.
+
+    mxBasis : str
+      The name abbreviation for the basis. Typically in {"pp","gm","std","qt"}.
+      Used to label the rows & columns.  If you don't want labels, set to None.
+
+    mxBasisDims, mxBasisDimsY : int or list, optional
+      The dimension of the density matrix space, or a list specifying the
+      dimensions of terms in a direct-sum decomposition of the density matrix
+      space, for the X and Y axes (columns and rows).  Used to label the 
+      columns and rows, respectively.  If `myBasisDimsY` is None if will 
+      default to `mxBasisDims`.
+
+    xlabel, ylabel : str, optional
+      Axis labels for the plot.
+
+    boxLabels : bool, optional
+        Whether box labels are displayed.  If False, then a colorbar is
+        displayed to the right of the box plot.
+
+    prec : int or {'compact','compacthp'}, optional
+        Precision for box labels.  Only relevant when boxLabels == True. Allowed
+        values are:
+
+        - 'compact' = round to nearest whole number using at most 3 characters
+        - 'compacthp' = show as much precision as possible using at most 3 characters
+        - int >= 0 = fixed precision given by int
+        - int <  0 = number of significant figures given by -int
+
+    scale : float, optional
+        Scaling factor to adjust the size of the final figure.
+
+    Returns
+    -------
+    plotly.Figure
+    """
 
     def one_sigfig(x):
         if abs(x) < 1e-9: return 0
@@ -627,54 +648,29 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis, mxBasisDims=None,
             ),
         shapes = gridlines,
         annotations = annotations
-    )
-            
+    )            
     return go.Figure(data=data, layout=layout)
 
 
 
-
-
-
-
-
-
-
-
-    """
-    Create a plot showing the layout of a single sub-block of a goodness-of-fit
-    box plot (such as those produced by chi2_boxplot or logl_boxplot).
-
-    Parameters
-    ----------
-    strs : 2-tuple
-        A (prepStrs,effectStrs) tuple usually generated by calling get_spam_strs(...)
-
-    xlabel, ylabel : str, optional
-        X and Y axis labels
-
-    title : string, optional
-        Plot title (latex can be used)
-
-    size : tuple, optional
-      The (width,height) figure size in inches.  None
-      enables automatic calculation based on gateMatrix
-      size.
-
-    save_to : str, optional
-        save figure to this filename (usually ending in .pdf)
-
-    ticSize : int, optional
-        size of tic marks
-
-    Returns
-    -------
-    rptFig : ReportFigure
-        The encapsulated matplotlib figure that was generated.
-    """
 class BoxKeyPlot(WorkspacePlot):
     def __init__(self, ws, prepStrs, effectStrs,
                  xlabel="$\\rho_i$", ylabel="$E_i$", scale=1.0):
+        """
+        Create a plot showing the layout of a single sub-block of a goodness-of-fit
+        box plot (such as those produced by ColorBoxPlot)
+    
+        Parameters
+        ----------
+        prepStrs, effectStrs : list of GateStrings
+            Preparation and measurement fiducials.
+    
+        xlabel, ylabel : str, optional
+            X and Y axis labels
+    
+        scale : float, optional
+            Scaling factor to adjust the size of the final figure.
+        """
         # separate in rendering/saving: save_to=None, ticSize=20, scale=1.0 (?)
         super(BoxKeyPlot,self).__init__(ws, self._create, prepStrs, effectStrs,
                                          xlabel, ylabel, scale)
@@ -766,126 +762,77 @@ class BoxKeyPlot(WorkspacePlot):
         return fig
 
 
-        
-    """
-    Create a color box plot of chi^2 values.
-
-    Parameters
-    ----------
-    xvals, yvals : list
-        List of x and y values. Elements can be any hashable quantity, and will be converted
-        into x and y tic labels.  Tuples of strings are converted specially for nice latex
-        rendering of gate strings.
-
-    xy_gatestring_dict : dict
-        Dictionary with keys == (x_value,y_value) tuples and values == gate strings, where
-        a gate string can either be a GateString object or a tuple of gate labels.  Provides
-        the mapping between x,y pairs and gate strings.  None values are allowed, and
-        indicate that there is not data for that x,y pair and nothing should be plotted.
-
-    dataset : DataSet
-        The data used to specify frequencies and counts
-
-    gateset : GateSet
-        The gate set used to specify the probabilities and SPAM labels
-
-    strs : 2-tuple
-        A (prepStrs,effectStrs) tuple usually generated by calling get_spam_strs(...)
-
-    xlabel, ylabel : str, optional
-        X and Y axis labels
-
-    scale : float, optional
-        Scaling factor to adjust the size of the final figure.
-
-    prec : int, optional
-        Precision for box labels.  Allowed values are:
-          'compact' = round to nearest whole number using at most 3 characters
-          'compacthp' = show as much precision as possible using at most 3 characters
-          int >= 0 = fixed precision given by int
-          int <  0 = number of significant figures given by -int
-
-    title : string, optional
-        Plot title (latex can be used)
-
-    linlg_pcntle: float, optional
-        Specifies the (1 - linlg_pcntle) percentile to compute for the boxplots
-
-    sumUp : bool, optional
-        False displays each matrix element as it's own color box
-        True sums the elements of each (x,y) matrix and displays
-        a single color box for the sum.
-
-    boxLabels : bool, optional
-        Whether box labels are displayed.  It takes much longer to
-        generate the figure when this is set to True.
-
-    histogram : bool, optional
-        Whether a histogram of the matrix element values or summed matrix
-        values (depending on sumUp) should also be computed and displayed.
-
-    histBins : int, optional
-        The number of bins to use in the histogram.
-
-    minProbClipForWeighting : float, optional
-        defines the clipping interval for the statistical weight used
-        within the chi^2 function (see chi2fn).
-
-    save_to : str, optional
-        save figure to this filename (usually ending in .pdf)
-
-    ticSize : int, optional
-        size of tic marks
-
-    invert : bool, optional
-        If True, invert the nesting order of the nested color box plot (applicable
-        only when sumUp == False).  Use inner_x_labels and inner_y_labels to label
-        the x and y axes.
-
-    fidpair_filters : dict, optional
-        If not None, a dictionary whose keys are (x,y) tuples and whose values
-        are lists of (iRhoStr,iEStr) tuples specifying a subset of all the
-        prepStr,effectStr pairs to include in the plot for each particular
-        (x,y) sub-block.
-
-    gatestring_filters : dict, optional
-        If not None, a dictionary whose keys are (x,y) tuples and whose
-        values are lists of GateString objects specifying which elements should
-        be computed and displayed in the (x,y) sub-block of the plot.
-
-    gateLabelAliases : dictionary, optional
-        Dictionary whose keys are gate label "aliases" and whose values are tuples
-        corresponding to what that gate label should be expanded into before querying
-        the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
-
-
-    Returns
-    -------
-    rptFig : ReportFigure
-        The encapsulated matplotlib figure that was generated.  Extra figure
-        info is a dict with keys:
-
-        nUsedXs : int
-            The number of used X-values, proportional to the overall final figure width
-        nUsedYs : int
-            The number of used Y-values, proportional to the overall final figure height
-    """
-
+    
 class ColorBoxPlot(WorkspacePlot):
     def __init__(self, ws, plottype, gss, dataset, gateset,
-                 prec='compact', title='', sumUp=False,
-                 boxLabels=True, hoverInfo=True, invert=False,
-                 linlg_pcntle=.05, minProbClipForWeighting=1e-4,
-                 directGSTgatesets=None): 
+                 sumUp=False, boxLabels=True, hoverInfo=True, invert=False,
+                 prec='compact', linlg_pcntle=.05, minProbClipForWeighting=1e-4,
+                 directGSTgatesets=None):
+        """
+        Create a plot displaying the value of per-gatestring quantities.
+
+        Values are shown on a grid of colored boxes, organized according to
+        the structure of the gate strings (e.g. by germ and "L").
+    
+        Parameters
+        ----------
+        plottype : {"chi2","logl","blank","errorrate","directchi2","directlogl"}
+            Specifies the type of plot. "errorate", "directchi2" and
+            "directlogl" require that `directGSTgatesets` be set.
+
+        gss : GatestringStructure
+            Specifies the set of gate strings along with their structure, e.g.
+            fiducials, germs, and maximum lengths.
+    
+        dataset : DataSet
+            The data used to specify frequencies and counts.
+    
+        gateset : GateSet
+            The gate set used to specify the probabilities and SPAM labels.
+                
+        sumUp : bool, optional
+            False displays each matrix element as it's own color box
+            True sums the elements of each (x,y) matrix and displays
+            a single color box for the sum.
+    
+        boxLabels : bool, optional
+            Whether box labels are displayed.  It takes much longer to
+            generate the figure when this is set to True.
+
+        hoverInfo : bool, optional
+            Whether to incude interactive hover labels.
+
+        invert : bool, optional
+            If True, invert the nesting order of the color box plot (applicable
+            only when sumUp == False).
+
+        prec : int, optional
+            Precision for box labels.  Allowed values are:
+              'compact' = round to nearest whole number using at most 3 characters
+              'compacthp' = show as much precision as possible using at most 3 characters
+              int >= 0 = fixed precision given by int
+              int <  0 = number of significant figures given by -int
+
+        linlg_pcntle : float, optional
+            Specifies the (1 - linlg_pcntle) percentile to compute for the boxplots    
+    
+        minProbClipForWeighting : float, optional
+            Defines a clipping point for the statistical weight used
+            within the chi^2 or logl functions.
+
+        directGSTgatesets : dict, optional
+            A dictionary of "direct" Gatesets used when displaying certain plot
+            types.  Keys are gate strings and values are corresponding gate
+            sets (see `plottype` above).        
+        """
         # separate in rendering/saving: save_to=None, ticSize=20, scale=1.0 (?)
         super(ColorBoxPlot,self).__init__(ws, self._create, plottype, gss, dataset, gateset,
-                                          prec, title, sumUp, boxLabels, hoverInfo,
+                                          prec, sumUp, boxLabels, hoverInfo,
                                           invert, linlg_pcntle, minProbClipForWeighting,
                                           directGSTgatesets)
 
     def _create(self, plottypes, gss, dataset, gateset,
-                prec, title, sumUp, boxLabels, hoverInfo,
+                prec, sumUp, boxLabels, hoverInfo,
                 invert, linlg_pcntle, minProbClipForWeighting,
                 directGSTgatesets):
 
@@ -981,7 +928,7 @@ class ColorBoxPlot(WorkspacePlot):
             
             newfig = gatestring_color_boxplot(gss, subMxs, colormap,
                                               False, boxLabels, prec,
-                                              hoverInfo, invert,sumUp)
+                                              hoverInfo, sumUp, invert)
             if fig is None:
                 fig = newfig
             else:
@@ -1012,7 +959,7 @@ class ColorBoxPlot(WorkspacePlot):
 
         #colormap2 = _colormaps.LinlogColormap(0, dataMax, n_boxes, linlg_pcntle, dof_per_box, "blue")
         #fig2 = gatestring_color_boxplot(gss, subMxs, colormap2,
-        #                                False, boxLabels, prec, hoverInfo, invert,sumUp)
+        #                                False, boxLabels, prec, hoverInfo, sumUp, invert)
         #fig['data'].append(fig2['data'][0])
         #fig['layout'].update(
         #    )
@@ -1023,79 +970,63 @@ class ColorBoxPlot(WorkspacePlot):
 #                        save_to=None, fontSize=20, mxBasis=None,
 #                        mxBasisDims=None, xlabel=None, ylabel=None,
 #                        title=None, boxLabels=False, prec=0, mxBasisDimsY=None):
-    """
-    Creates a color box plot of a gate matrix using a diverging color map.
-
-    This can be a useful way to display large matrices which have so many
-    entries that their entries cannot easily fit within the width of a page.
-
-    Parameters
-    ----------
-    gateMatrix : ndarray
-      The gate matrix data to display.
-
-    size : tuple, optional
-      The (width,height) figure size in inches.  None
-      enables automatic calculation based on gateMatrix
-      size.
-
-    m, M : float, optional
-      Min and max values of the color scale.
-
-    save_to : str, optional
-      save figure as this filename (usually ending in .pdf)
-
-    fontSize : int, optional
-      size of font for title
-
-    mxBasis : str, optional
-      The name abbreviation for the basis. Typically in {"pp","gm","std","qt"}.
-      Used to label the rows & columns.  If you don't want labels, leave as
-      None.
-
-    mxBasisDims : int or list, optional
-      The dimension of the density matrix space this basis spans, or a
-      list specifying the dimensions of terms in a direct-sum
-      decomposition of the density matrix space.  Used to label the
-      rows & columns.  If you don't want labels, leave as None.
-
-    xlabel : str, optional
-      An x-axis label for the plot.
-
-    ylabel : str, optional
-      A y-axis label for the plot.
-
-    title : str, optional
-      A title for the plot.
-
-    boxLabels : bool, optional
-        Whether box labels are displayed.  If False, then a colorbar is
-        displayed to the right of the box plot.
-
-    prec : int or {'compact','compacthp'}, optional
-        Precision for box labels.  Only relevant when boxLabels == True. Allowed
-        values are:
-
-        - 'compact' = round to nearest whole number using at most 3 characters
-        - 'compacthp' = show as much precision as possible using at most 3 characters
-        - int >= 0 = fixed precision given by int
-        - int <  0 = number of significant figures given by -int
-
-    mxBasisDimsY : int or list, optional
-        Specifies the dimension of the basis along the Y-axis direction
-        if and when this is *different* from the X-axis direction.  If
-        the two are the same, this parameter can be set to None.
-
-
-    Returns
-    -------
-    ReportFigure
-    """
 class GateMatrixPlot(WorkspacePlot):
     # separate in rendering/saving: size=None,fontSize=20, save_to=None, title=None, scale
     def __init__(self, ws, gateMatrix, m=-1.0, M=1.0,
                  mxBasis=None, mxBasisDims=None, xlabel=None, ylabel=None,
                  boxLabels=False, prec=0, mxBasisDimsY=None, scale=1.0):
+        """
+        Creates a color box plot of a gate matrix using a diverging color map.
+    
+        This can be a useful way to display large matrices which have so many
+        entries that their entries cannot easily fit within the width of a page.
+    
+        Parameters
+        ----------
+        gateMatrix : ndarray
+          The gate matrix data to display.
+        
+        m, M : float, optional
+          Min and max values of the color scale.
+    
+        mxBasis : str, optional
+          The name abbreviation for the basis. Typically in {"pp","gm","std","qt"}.
+          Used to label the rows & columns.  If you don't want labels, leave as
+          None.
+    
+        mxBasisDims : int or list, optional
+          The dimension of the density matrix space this basis spans, or a
+          list specifying the dimensions of terms in a direct-sum
+          decomposition of the density matrix space.  Used to label the
+          rows & columns.  If you don't want labels, leave as None.
+    
+        xlabel : str, optional
+          An x-axis label for the plot.
+    
+        ylabel : str, optional
+          A y-axis label for the plot.
+        
+        boxLabels : bool, optional
+            Whether box labels are displayed.  If False, then a colorbar is
+            displayed to the right of the box plot.
+    
+        prec : int or {'compact','compacthp'}, optional
+            Precision for box labels.  Only relevant when boxLabels == True. Allowed
+            values are:
+    
+            - 'compact' = round to nearest whole number using at most 3 characters
+            - 'compacthp' = show as much precision as possible using at most 3 characters
+            - int >= 0 = fixed precision given by int
+            - int <  0 = number of significant figures given by -int
+    
+        mxBasisDimsY : int or list, optional
+            Specifies the dimension of the basis along the Y-axis direction
+            if and when this is *different* from the X-axis direction.  If
+            the two are the same, this parameter can be set to None.
+
+        scale : float, optional
+            Scaling factor to adjust the size of the final figure.
+        """
         super(GateMatrixPlot,self).__init__(ws, self._create, gateMatrix, m, M,
                                             mxBasis, mxBasisDims, xlabel, ylabel,
                                             boxLabels, prec, mxBasisDimsY, scale)
@@ -1109,46 +1040,6 @@ class GateMatrixPlot(WorkspacePlot):
             xlabel, ylabel, boxLabels, prec, scale)
 
 
-    """
-    Creates a color box plot of a the error generator of a gate matrix.
-
-    The error generator is given by log( inv(targetMatrix) * gateMatrix ).
-    This can be a useful way to display large matrices which have so many
-    entries that their entries cannot easily fit within the width of a page.
-
-    Parameters
-    ----------
-    gate : ndarray
-      The gate matrix data used when constructing the generator.
-
-    targetGate : ndarray
-      The target gate matrix data to use when constructing the the
-      generator.
-
-    size : tuple, optional
-      The (width,height) figure size in inches.
-
-    title : str, optional
-      A title for the plot.
-
-    save_to : str, optional
-      save figure as this filename (usually ending in .pdf)
-
-    fontSize : int, optional
-      size of font for title
-
-    showNormal : bool, optional
-      whether to display the actual eigenvalues of the gate
-      and the target gate on the plot.
-
-    showRelative : bool, optional
-      whether to display the relative eigenvalues of the gate
-      relative to the target gate on the plot.
-
-    Returns
-    -------
-    ReportFigure
-    """
 
 #    evals = _np.linalg.eigvals(gate)
 #    target_evals = _np.linalg.eigvals(targetGate)
@@ -1159,6 +1050,37 @@ class GateMatrixPlot(WorkspacePlot):
 class PolarEigenvaluePlot(WorkspacePlot):
     def __init__(self, ws, evals_list, colors, labels=None, scale=1.0, amp=10,
                  centerText=None):
+        """
+        Creates a polar plot of one or more sets of eigenvalues (or any complex #s).
+    
+        Parameters
+        ----------
+        evals_list : list
+            A list of eigenvalue arrays to display.
+
+        colors : list
+            A corresponding list of color names to use for arrays given
+            by `evals_list` (must have `len(colors) == len(evals_list)`).
+            Colors can be standard names, e.g. `"blue"`, or rgb strings
+            such as `"rgb(23,92,64)"`.
+
+        labels : list, optional
+            A list of labels, one for each element of `evals_list` to be
+            placed in the plot legend.
+
+        scale : float, optional
+            Scaling factor to adjust the size of the final figure.
+
+        amp : float, optional
+            An amount to amplify (raise to the exponent `amp`) each set of
+            eigenvalues.  (Amplified eigenvalues are shown in the same color
+            but with smaller markers.) If `amp` is None, no amplification is
+            performed.
+
+        centerText : str, optional
+            Text to be placed at the very center of the polar plot (sometimes 
+            useful to use as a title).
+        """
         super(PolarEigenvaluePlot,self).__init__(ws, self._create, evals_list,
                                                  colors, labels, scale, amp,
                                                  centerText)
@@ -1232,65 +1154,51 @@ class PolarEigenvaluePlot(WorkspacePlot):
 
 
 
-    """
-    Creates a color box plot displaying the projections of a gate error
-    generator onto generators corresponding to a set of standard error
-    generators constructed from the given basis.  Typically `projections`
-    is obtained by calling :func:`std_errgen_projections`.
-
-    Parameters
-    ----------
-    projections : ndarray
-      A 1-dimensional array of length equal to the numer of elements in
-      the given basis (usually equal to the gate dimension).  Ordering of
-      the values is assumed to correspond to the ordering given by the 
-      routines in `pygsti.tools`, (e.g. :func:`pp_matrices` when 
-      `projection_basis` equals "pp").
-
-    projection_basis : {'std', 'gm', 'pp', 'qt'}
-      The basis is used to construct the error generators onto which
-      the gate  error generator is projected.  Allowed values are
-      Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp) and Qutrit (qt).
-
-    m,M : float, optional
-      Color scale min and max values, respectivey.  If None, then computed
-      automatically from the data range.
-
-    size : tuple, optional
-      The (width,height) figure size in inches.  None
-      enables automatic calculation based on gateMatrix
-      size.
-
-    title : str, optional
-      A title for the plot.
-
-    save_to : str, optional
-      save figure as this filename (usually ending in .pdf)
-
-    fontSize : int, optional
-        size of font for title
-
-    boxLabels : bool, optional
-        Whether box labels are displayed.  If False, then a colorbar is
-        displayed to the right of the box plot.
-
-    prec : int or {'compact','compacthp'}, optional
-        Precision for box labels.  Only relevant when boxLabels == True. Allowed
-        values are:
-
-        - 'compact' = round to nearest whole number using at most 3 characters
-        - 'compacthp' = show as much precision as possible using at most 3 characters
-        - int >= 0 = fixed precision given by int
-        - int <  0 = number of significant figures given by -int
-
-
-    Returns
-    -------
-    ReportFigure
-    """
 class ProjectionsBoxPlot(WorkspacePlot):
     def __init__(self, ws, projections, projection_basis, m=None, M=None,
                  boxLabels=False, prec="compacthp", scale=1.0):
+        """
+        Creates a color box plot displaying projections.
+
+        Typically `projections` is obtained by calling
+        :func:`std_errgen_projections`, and so holds the projections of a gate
+        error generator onto the generators corresponding to a set of standard
+        errors constructed from the given basis.  
+    
+        Parameters
+        ----------
+        projections : ndarray
+          A 1-dimensional array of length equal to the numer of elements in
+          the given basis (usually equal to the gate dimension).  Ordering of
+          the values is assumed to correspond to the ordering given by the 
+          routines in `pygsti.tools`, (e.g. :func:`pp_matrices` when 
+          `projection_basis` equals "pp").
+    
+        projection_basis : {'std', 'gm', 'pp', 'qt'}
+          The basis is used to construct the error generators onto which
+          the gate  error generator is projected.  Allowed values are
+          Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp) and Qutrit (qt).
+    
+        m,M : float, optional
+          Color scale min and max values, respectivey.  If None, then computed
+          automatically from the data range.
+    
+        boxLabels : bool, optional
+            Whether box labels are displayed.  If False, then a colorbar is
+            displayed to the right of the box plot.
+    
+        prec : int or {'compact','compacthp'}, optional
+            Precision for box labels.  Only relevant when boxLabels == True. Allowed
+            values are:
+    
+            - 'compact' = round to nearest whole number using at most 3 characters
+            - 'compacthp' = show as much precision as possible using at most 3 characters
+            - int >= 0 = fixed precision given by int
+            - int <  0 = number of significant figures given by -int
+
+        scale : float, optional
+            Scaling factor to adjust the size of the final figure.
+        """
         super(ProjectionsBoxPlot,self).__init__(ws, self._create, projections,
                                                  projection_basis, m, M,
                                                  boxLabels, prec, scale)
@@ -1330,46 +1238,6 @@ class ProjectionsBoxPlot(WorkspacePlot):
 
 
 
-    """
-    Creates a bar plot showing the real parts of each of the eigenvalues
-    given.  This is useful for plotting the eigenvalues of Choi matrices,
-    since all elements are positive for a CPTP map.
-
-    Parameters
-    ----------
-    evals : ndarray
-       An array containing the eigenvalues to plot.
-
-    errbars : ndarray, optional
-       An array containing the lengths of the error bars
-       to place on each bar of the plot.
-
-    size : tuple, optional
-      The (width,height) figure size in inches.
-
-    barWidth : float, optional
-      The width of the bars in the plot.
-
-    save_to : str, optional
-      save figure as this filename (usually ending in .pdf)
-
-    fontSize : int, optional
-      size of font for title
-
-    xlabel : str, optional
-      An x-axis label for the plot.
-
-    ylabel : str, optional
-      A y-axis label for the plot.
-
-    title : str, optional
-      A title for the plot.
-
-    Returns
-    -------
-    ReportFigure
-    """
-
 #    def choi_eigenvalue_barplot(evals, errbars=None, size=(8,5), barWidth=1,
 #                            save_to=None, fontSize=15, xlabel="index",
 #                            ylabel="Re[eigenvalue]", title=None):
@@ -1378,6 +1246,20 @@ class ProjectionsBoxPlot(WorkspacePlot):
 # TODO: maybe a "postFormat" or "addToFigure" fn to add title & axis labels to any figure?
 class ChoiEigenvalueBarPlot(WorkspacePlot):
     def __init__(self, ws, evals, errbars=None):
+        """
+        Creates a bar plot showing the real parts of each of the eigenvalues
+        given.  This is useful for plotting the eigenvalues of Choi matrices,
+        since all elements are positive for a CPTP map.
+    
+        Parameters
+        ----------
+        evals : ndarray
+           An array containing the eigenvalues to plot.
+    
+        errbars : ndarray, optional
+           An array containing the lengths of the error bars
+           to place on each bar of the plot.        
+        """
         super(ChoiEigenvalueBarPlot,self).__init__(ws, self._create, evals,
                                                    errbars)
         

@@ -104,8 +104,15 @@ class ReportTable(object):
             for rowData,formatters in self._rows:
                 formatted_rowData = formatSet.formatList(rowData, formatters, "html")
                 if len(formatted_rowData) > 0:
-                    html += "<tr><td>" + \
-                        "</td><td>".join(formatted_rowData) + "</td></tr>\n"
+                    html += "<tr>"
+                    for formatted_cell in formatted_rowData:
+                        if formatted_cell is None:
+                            pass #don't add anything -- not even td tags (this
+                                 # allows signals *not* to include a cell)
+                        elif formatted_cell.startswith("<td"):
+                            html += formatted_cell #assume format includes td tags
+                        else: html += "<td>" + formatted_cell + "</td>"
+                    html += "</tr>"
 
             html += "</tbody></table>"
             return html

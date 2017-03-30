@@ -153,52 +153,50 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     qtys['bestGatesetSpamParametersTable'] = ws.SpamParametersTable(gsFinal, cri)
     qtys['bestGatesetGaugeOptParamsTable'] = ws.GaugeOptParamsTable(tuple(results.parameters['gaugeOptParams']))
     qtys['bestGatesetGatesTable'] = ws.GatesTable(gsFinal, cri)
-    qtys['bestGatesetChoiTable'] = ws.ChoiTable(gsFinal, cri)
+    qtys['bestGatesetChoiTable'] = ws.ChoiTable(gsFinal, None, cri, display=('matrix','eigenvalues'))
     qtys['bestGatesetDecompTable'] = ws.GateDecompTable(gsFinal, cri)
     qtys['bestGatesetRotnAxisTable'] = ws.RotationAxisTable(gsFinal, cri, True)
     qtys['bestGatesetVsTargetTable'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
-    qtys['bestGatesetErrorGenTable'] = ws.ErrgenTable(gsFinal, gsTgt, cri, results.options.errgen_type)
+    qtys['bestGatesetErrorGenTable'] = ws.ErrgenTable(gsFinal, gsTgt, cri, ("errgen",),
+                                                      "numbers", results.options.errgen_type)
     qtys['metadataTable'] = ws.MetadataTable(gsFinal, results.options, results.parameters)
     qtys['softwareEnvTable'] = ws.SoftwareEnvTable()
 
     # if Ls and germs available
     if results._LsAndGermInfoSet: #TODO: better way?
-        qtys['fiducialListTable'] = ws.GatestringMultiTable(strs, ["Prep.","Measure"], "Fiducials")
-        qtys['prepStrListTable'] = ws.GatestringTable(tuple(results.gatestring_lists['prep fiducials']), "Preparation Fiducials")
-        qtys['effectStrListTable'] = ws.GatestringTable(tuple(results.gatestring_lists['effect fiducials']), "Measurement Fiducials")
-        qtys['germListTable'] = ws.GatestringTable(tuple(results.gatestring_lists['germs']), "Germ")
-        
-        if results.parameters['objective'] == "logl":
-            qtys['progressTable'] = ws.LogLProgressTable(
-                results.parameters['max length list'],
-                results.gatesets['iteration estimates'],
-                results.gatestring_lists['iteration'], ds,
-                results.parameters.get('gateLabelAliases',None))
-            plotType = "logl"
-            mpc = results.parameters['minProbClip']
-        else:
-            qtys['progressTable'] = ws.Chi2ProgressTable(
-                results.parameters['max length list'],
-                results.gatesets['iteration estimates'],
-                results.gatestring_lists['iteration'], ds,
-                results.parameters.get('gateLabelAliases',None))
-            plotType = "chi2"
-            mpc = results.parameters['minProbClipForWeighting']
-
+        qtys['fiducialListTable'] = ws.GatestringTable(strs, ["Prep.","Measure"], commonTitle="Fiducials")
+        qtys['prepStrListTable'] = ws.GatestringTable(results.gatestring_lists['prep fiducials'],
+                                                      "Preparation Fiducials")
+        qtys['effectStrListTable'] = ws.GatestringTable(results.gatestring_lists['effect fiducials'],
+                                                        "Measurement Fiducials")
+        qtys['germListTable'] = ws.GatestringTable(results.gatestring_lists['germs'], "Germ")        
+        qtys['progressTable'] = ws.FitComparisonTable(
+            results.parameters['max length list'],
+            results.gatestring_structs['iteration'],
+            results.gatesets['iteration estimates'],
+            ds, results.parameters['objective'], 'L')
 
         # 2) generate plots
         printer.log("*** Generating plots ***")
 
         gss = results.gatestring_structs['final']
+
+        if results.parameters['objective'] == "logl":
+            mpc = results.parameters['minProbClip']
+        else:
+            mpc = results.parameters['minProbClipForWeighting']
         
         qtys['colorBoxPlotKeyPlot'] = ws.BoxKeyPlot(tuple(results.gatestring_lists['prep fiducials']),
                                                     tuple(results.gatestring_lists['effect fiducials']))
-        qtys['bestEstimateColorBoxPlot'] = ws.ColorBoxPlot(plotType, gss, ds, gsFinal,
-                    linlg_pcntle=float(results.parameters['linlogPercentile']) / 100,
-                    minProbClipForWeighting=mpc)
-        qtys['invertedBestEstimateColorBoxPlot'] = ws.ColorBoxPlot(plotType, gss, ds, gsFinal,
-                    linlg_pcntle=float(results.parameters['linlogPercentile']) / 100,
-                    minProbClipForWeighting=mpc, invert=True)
+        
+        qtys['bestEstimateColorBoxPlot'] = ws.ColorBoxPlot(
+            results.parameters['objective'], gss, ds, gsFinal,
+            linlg_pcntle=float(results.parameters['linlogPercentile']) / 100,
+            minProbClipForWeighting=mpc)
+        qtys['invertedBestEstimateColorBoxPlot'] = ws.ColorBoxPlot(
+            results.parameters['objective'], gss, ds, gsFinal,
+            linlg_pcntle=float(results.parameters['linlogPercentile']) / 100,
+            minProbClipForWeighting=mpc, invert=True)
     
 
     # 3) populate template latex file => report latex file
@@ -265,62 +263,61 @@ def create_general_report(results, filename, confidenceLevel=None,
 
 
     qtys['targetSpamBriefTable'] = ws.SpamTable(gsTgt, includeHSVec=False)
-    qtys['targetGatesBoxTable'] = ws.GateBoxesTable([gsTgt])
+    qtys['targetGatesBoxTable'] = ws.GatesTable(gsTgt, display_as="boxes")
     qtys['datasetOverviewTable'] = ws.DataSetOverviewTable(ds, gsTgt, 10, strs)
-    qtys['bestGatesetSpamBriefTable'] = ws.SpamTable(gsFinal, gsTgt, cri, includeHSVec=False)
+    qtys['bestGatesetSpamBriefTable'] = ws.SpamTable([gsTgt, gsFinal], ['Target','Estimated'],
+                                                     cri, includeHSVec=False)
     qtys['bestGatesetSpamParametersTable'] = ws.SpamParametersTable(gsFinal, cri)
     qtys['bestGatesetSpamVsTargetTable'] = ws.SpamVsTargetTable(gsFinal, gsTgt, cri)
     qtys['bestGatesetGaugeOptParamsTable'] = ws.GaugeOptParamsTable(tuple(results.parameters['gaugeOptParams']))
-    qtys['bestGatesetGatesBoxTable'] = ws.GateBoxesTable([gsTgt,gsFinal], ['Target','Estimated'], cri)
-    qtys['bestGatesetChoiEvalTable'] = ws.ChoiEigenvalueTable(gsFinal, cri)
-    qtys['bestGatesetEvalTable'] = ws.EigenvalueTable(gsFinal, gsTgt, cri)
+    qtys['bestGatesetGatesBoxTable'] = ws.GatesTable([gsTgt,gsFinal], ['Target','Estimated'], "boxes", cri)
+    qtys['bestGatesetChoiEvalTable'] = ws.ChoiTable(gsFinal, None, cri, display=("eigenvalues","barplot"))
+    qtys['bestGatesetEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri)
 #    qtys['bestGatesetRelEvalTable'] = OUT!
     qtys['bestGatesetVsTargetTable'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
-    qtys['bestGatesetErrGenBoxTable'] = ws.ErrgenBoxesTable(gsFinal, gsTgt, cri, results.options.errgen_type)
+    qtys['bestGatesetErrGenBoxTable'] = ws.ErrgenTable(gsFinal, gsTgt, cri, ("errgen","H","S"),
+                                                       "boxes", results.options.errgen_type)
     qtys['metadataTable'] = ws.MetadataTable(gsFinal, results.options, results.parameters)
     qtys['softwareEnvTable'] = ws.SoftwareEnvTable()
 
     # if Ls and germs available
     if results._LsAndGermInfoSet: #TODO: better way?
-        qtys['fiducialListTable'] = ws.GatestringMultiTable(strs, ["Prep.","Measure"], "Fiducials")
-        qtys['prepStrListTable'] = ws.GatestringTable(tuple(results.gatestring_lists['prep fiducials']), "Preparation Fiducials")
-        qtys['effectStrListTable'] = ws.GatestringTable(tuple(results.gatestring_lists['effect fiducials']), "Measurement Fiducials")
-        qtys['germList2ColTable'] = ws.GatestringTable(tuple(results.gatestring_lists['germs']), "Germ", nCols=2)
-        
-        if results.parameters['objective'] == "logl":
-            qtys['progressTable'] = ws.LogLProgressTable(
-                results.parameters['max length list'],
-                results.gatesets['iteration estimates'],
-                results.gatestring_lists['iteration'], ds,
-                results.parameters.get('gateLabelAliases',None))
-            plotType = "logl"
-            mpc = results.parameters['minProbClip']
-        else:
-            qtys['progressTable'] = ws.Chi2ProgressTable(
-                results.parameters['max length list'],
-                results.gatesets['iteration estimates'],
-                results.gatestring_lists['iteration'], ds,
-                results.parameters.get('gateLabelAliases',None))
-            plotType = "chi2"
-            mpc = results.parameters['minProbClipForWeighting']
-
+        qtys['fiducialListTable'] = ws.GatestringTable(strs, ["Prep.","Measure"], commonTitle="Fiducials")
+        qtys['prepStrListTable'] = ws.GatestringTable(results.gatestring_lists['prep fiducials'],
+                                                      "Preparation Fiducials")
+        qtys['effectStrListTable'] = ws.GatestringTable(results.gatestring_lists['effect fiducials'],
+                                                        "Measurement Fiducials")
+        qtys['germList2ColTable'] = ws.GatestringTable(results.gatestring_lists['germs'], "Germ", nCols=2)
+        qtys['progressTable'] = ws.FitComparisonTable(
+            results.parameters['max length list'],
+            results.gatestring_structs['iteration'],
+            results.gatesets['iteration estimates'],
+            ds, results.parameters['objective'], 'L')
 
         # 2) generate plots
         printer.log("*** Generating plots ***")
 
         gss = results.gatestring_structs['final']
         
+        if results.parameters['objective'] == "logl":
+            mpc = results.parameters['minProbClip']
+        else:
+            mpc = results.parameters['minProbClipForWeighting']
+                
+        
         qtys['colorBoxPlotKeyPlot'] = ws.BoxKeyPlot(tuple(results.gatestring_lists['prep fiducials']),
                                                     tuple(results.gatestring_lists['effect fiducials']))
         
-        qtys['bestEstimateSummedColorBoxPlot'] = ws.ColorBoxPlot(plotType, gss, ds, gsFinal,
-                    linlg_pcntle=float(results.parameters['linlogPercentile']) / 100,
-                    minProbClipForWeighting=mpc, sumUp=True)
+        qtys['bestEstimateSummedColorBoxPlot'] = ws.ColorBoxPlot(
+            results.parameters['objective'], gss, ds, gsFinal,
+            linlg_pcntle=float(results.parameters['linlogPercentile']) / 100,
+            minProbClipForWeighting=mpc, sumUp=True)
 
         #Not pagniated currently... just set to same full plot
-        qtys['bestEstimateColorBoxPlotPages'] = ws.ColorBoxPlot(plotType, gss, ds, gsFinal,
-                    linlg_pcntle=float(results.parameters['linlogPercentile']) / 100,
-                    minProbClipForWeighting=mpc)   
+        qtys['bestEstimateColorBoxPlotPages'] = ws.ColorBoxPlot(
+            results.parameters['objective'], gss, ds, gsFinal,
+            linlg_pcntle=float(results.parameters['linlogPercentile']) / 100,
+            minProbClipForWeighting=mpc)   
 
     # 3) populate template latex file => report latex file
     printer.log("*** Merging into template file ***")
@@ -336,3 +333,93 @@ def create_general_report(results, filename, confidenceLevel=None,
     templateFile = "report_general.html"
     _merge_template(qtys, templateFile, filename)
     printer.log("Output written to %s" % filename)
+
+
+##Scratch: SAVE!!! this code generates "projected" gatesets which can be sent to
+## FitComparisonTable (with the same gss for each) to make a nice comparison plot.
+#        gateLabels = list(gateset.gates.keys())  # gate labels
+#        basisNm = gateset.get_basis_name()
+#        basisDims = gateset.get_basis_dimension()
+#    
+#        if basisNm != targetGateset.get_basis_name():
+#            raise ValueError("Basis mismatch between gateset (%s) and target (%s)!"\
+#                                 % (basisNm, targetGateset.get_basis_name()))
+#    
+#        #Do computation first
+#        # Note: set to "full" parameterization so we can set the gates below
+#        #  regardless of what to fo parameterization the original gateset had.
+#        gsH = gateset.copy(); gsH.set_all_parameterizations("full"); Np_H = 0
+#        gsS = gateset.copy(); gsS.set_all_parameterizations("full"); Np_S = 0
+#        gsHS = gateset.copy(); gsHS.set_all_parameterizations("full"); Np_HS = 0
+#        gsLND = gateset.copy(); gsLND.set_all_parameterizations("full"); Np_LND = 0
+#        #gsHSCP = gateset.copy()
+#        gsLNDCP = gateset.copy(); gsLNDCP.set_all_parameterizations("full")
+#        for gl in gateLabels:
+#            gate = gateset.gates[gl]
+#            targetGate = targetGateset.gates[gl]
+#    
+#            errgen = _tools.error_generator(gate, targetGate, genType)
+#            hamProj, hamGens = _tools.std_errgen_projections(
+#                errgen, "hamiltonian", basisNm, basisNm, True)
+#            stoProj, stoGens = _tools.std_errgen_projections(
+#                errgen, "stochastic", basisNm, basisNm, True)
+#            HProj, OProj, HGens, OGens = \
+#                _tools.lindblad_errgen_projections(
+#                    errgen, basisNm, basisNm, basisNm, normalize=False,
+#                    return_generators=True)
+#                #Note: return values *can* be None if an empty/None basis is given
+#    
+#            ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)
+#            sto_error_gen = _np.einsum('i,ijk', stoProj, stoGens)
+#            lnd_error_gen = _np.einsum('i,ijk', HProj, HGens) + \
+#                _np.einsum('ij,ijkl', OProj, OGens)
+#    
+#            ham_error_gen = _tools.change_basis(ham_error_gen,"std",basisNm)
+#            sto_error_gen = _tools.change_basis(sto_error_gen,"std",basisNm)
+#            lnd_error_gen = _tools.change_basis(lnd_error_gen,"std",basisNm)
+#    
+#            gsH.gates[gl]  = _tools.gate_from_error_generator(
+#                ham_error_gen, targetGate, genType)
+#            gsS.gates[gl]  = _tools.gate_from_error_generator(
+#                sto_error_gen, targetGate, genType)
+#            gsHS.gates[gl] = _tools.gate_from_error_generator(
+#                ham_error_gen+sto_error_gen, targetGate, genType)
+#            gsLND.gates[gl] = _tools.gate_from_error_generator(
+#                lnd_error_gen, targetGate, genType)
+#
+#            #CPTP projection
+#    
+#            #Removed attempt to contract H+S to CPTP by removing positive stochastic projections,
+#            # but this doesn't always return the gate to being CPTP (maybe b/c of normalization)...
+#            #sto_error_gen_cp = _np.einsum('i,ijk', stoProj.clip(None,0), stoGens) #only negative stochastic projections OK
+#            #sto_error_gen_cp = _tools.std_to_pp(sto_error_gen_cp)
+#            #gsHSCP.gates[gl] = _tools.gate_from_error_generator(
+#            #    ham_error_gen, targetGate, genType) #+sto_error_gen_cp
+#    
+#            evals,U = _np.linalg.eig(OProj)
+#            pos_evals = evals.clip(0,1e100) #clip negative eigenvalues to 0
+#            OProj_cp = _np.dot(U,_np.dot(_np.diag(pos_evals),_np.linalg.inv(U))) #OProj_cp is now a pos-def matrix
+#            lnd_error_gen_cp = _np.einsum('i,ijk', HProj, HGens) + \
+#                _np.einsum('ij,ijkl', OProj_cp, OGens)
+#            lnd_error_gen_cp = _tools.change_basis(lnd_error_gen_cp,"std",basisNm)
+#    
+#            gsLNDCP.gates[gl] = _tools.gate_from_error_generator(
+#                lnd_error_gen_cp, targetGate, genType)
+#    
+#            Np_H += len(hamProj)
+#            Np_S += len(stoProj)
+#            Np_HS += len(hamProj) + len(stoProj)
+#            Np_LND += HProj.size + OProj.size
+#    
+#        #DEBUG!!!
+#        #print("DEBUG: BEST sum neg evals = ",_tools.sum_of_negative_choi_evals(gateset))
+#        #print("DEBUG: LNDCP sum neg evals = ",_tools.sum_of_negative_choi_evals(gsLNDCP))
+#    
+#        #Check for CPTP where expected
+#        #assert(_tools.sum_of_negative_choi_evals(gsHSCP) < 1e-6)
+#        assert(_tools.sum_of_negative_choi_evals(gsLNDCP) < 1e-6)
+#
+#        # ...
+#        gatesets = (gateset, gsHS, gsH, gsS, gsLND, cptpGateset, gsLNDCP, gsHSCPTP)
+#        gatesetTyps = ("Full","H + S","H","S","LND","CPTP","LND CPTP","H + S CPTP")
+#        Nps = (Nng, Np_HS, Np_H, Np_S, Np_LND, Nng, Np_LND, Np_HS)

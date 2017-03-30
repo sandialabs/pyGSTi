@@ -83,9 +83,23 @@ class DigestEncoder(json.JSONEncoder):
         # Let the base class default method raise the TypeError
         return json.JSONEncoder.default(self, o)
 
-def call_key(obj, args):
-    """ obj can be either a function or a class """
-    key = [obj.__name__]
+def call_key(fn, args):
+    """ 
+    Returns a hashable key for caching the result of a function call.
+
+    Parameters
+    ----------
+    fn : function
+       The function itself
+
+    args : list or tuple
+       The function's arguments.
+
+    Returns
+    -------
+    tuple
+    """
+    key = [fn.__name__]
     for arg in args:
         if _is_hashable(arg):
             key.append( arg )
@@ -106,13 +120,23 @@ def call_key(obj, args):
     return tuple(key) #so hashable
 
 def randomID():
+    """ Returns a random DOM ID """
     return str(int(10000*_random.random()))
     #return str(_uuid.uuid4().hex) #alternative
 
 
 class Workspace(object):
     """
-    Encapsulates XXX
+    Central to data analysis, Workspace objects facilitate the building
+    of reports and dashboards.  In particular, they serve as a:
+
+    - factory for tables, plots, and other types of output
+    - cache manager to optimize the construction of such output
+    - serialization manager for saving and loading analysis variables
+
+    Workspace objects are typically used either 1) within an ipython 
+    notebook to interactively build a report/dashboard, or 2) within
+    a script to build a hardcoded ("fixed") report/dashboard.
     """
 
     def __init__(self):
@@ -186,42 +210,35 @@ class Workspace(object):
 
         self.Switchboard = makefactory(Switchboard)
 
-        #Tables (consolidate?)
-        self.BlankTable = makefactory(_wt.BlankTable)
+        #Tables
+          # Gate sequences
+        self.GatestringTable = makefactory(_wt.GatestringTable)
+        
+          # Spam & Gates
         self.SpamTable = makefactory(_wt.SpamTable)
         self.SpamParametersTable = makefactory(_wt.SpamParametersTable)
-        self.SpamVsTargetTable = makefactory(_wt.SpamVsTargetTable)
-
         self.GatesTable= makefactory(_wt.GatesTable)
-        self.UnitaryGatesTable = makefactory(_wt.UnitaryGatesTable)
         self.ChoiTable = makefactory(_wt.ChoiTable)
+
+          # Spam & Gates vs. a target
+        self.SpamVsTargetTable = makefactory(_wt.SpamVsTargetTable)
         self.GatesVsTargetTable = makefactory(_wt.GatesVsTargetTable)
-        self.GateAnglesTable = makefactory(_wt.GateAnglesTable)
-        self.GateDecompTable = makefactory(_wt.GateDecompTable)
-        self.RotationAxisTable = makefactory(_wt.RotationAxisTable)        
-        self.CherryPickedGatesVsTargetTable = makefactory(_wt.CherryPickedGatesVsTargetTable)
-        #self.ClosestUnitaryTable = makefactory(_wt.ClosestUnitaryTable)
-
-        self.EigenvalueTable = makefactory(_wt.EigenvalueTable)
-        self.ChoiEigenvalueTable = makefactory(_wt.ChoiEigenvalueTable)
-        
+        self.GatesSingleMetricTable = makefactory(_wt.GatesSingleMetricTable)
+        self.GateEigenvalueTable = makefactory(_wt.GateEigenvalueTable)
         self.ErrgenTable = makefactory(_wt.ErrgenTable)
-        
+        self.StandardErrgenTable = makefactory(_wt.StandardErrgenTable)
+
+          # Specific to 1Q gates
+        self.GateDecompTable = makefactory(_wt.GateDecompTable)
+        self.RotationAxisTable = makefactory(_wt.RotationAxisTable)
+        self.RotationAxisVsTargetTable = makefactory(_wt.RotationAxisVsTargetTable)
+
+          # goodness of fit
+        self.FitComparisonTable = makefactory(_wt.FitComparisonTable)
+
+          #Specifically designed for reports
+        self.BlankTable = makefactory(_wt.BlankTable)
         self.DataSetOverviewTable = makefactory(_wt.DataSetOverviewTable)
-        
-        self.Chi2ProgressTable = makefactory(_wt.Chi2ProgressTable)
-        self.LogLProgressTable = makefactory(_wt.LogLProgressTable)
-        self.LogLByGermTable = makefactory(_wt.LogLByGermTable)
-        self.LogLProjectedErrGenTable = makefactory(_wt.LogLProjectedErrGenTable)
-
-        self.GatestringTable = makefactory(_wt.GatestringTable)
-        self.GatestringMultiTable= makefactory(_wt.GatestringMultiTable)
-
-        self.GateBoxesTable = makefactory(_wt.GateBoxesTable)
-        self.ErrgenBoxesTable = makefactory(_wt.ErrgenBoxesTable)        
-        self.ErrGenComparisonTable = makefactory(_wt.ErrGenComparisonTable)
-        self.ErrgenProjectorBoxesTable = makefactory(_wt.ErrgenProjectorBoxesTable)
-
         self.GaugeOptParamsTable = makefactory(_wt.GaugeOptParamsTable)
         self.MetadataTable = makefactory(_wt.MetadataTable)
         self.SoftwareEnvTable = makefactory(_wt.SoftwareEnvTable)
@@ -235,6 +252,24 @@ class Workspace(object):
         self.ChoiEigenvalueBarPlot = makefactory(_wp.ChoiEigenvalueBarPlot)
 
     def init_notebook_mode(self, connected=False):
+        """
+        Initialize this Workspace for use in an iPython notebook environment.
+
+        This function should be called prior to using the Workspace when
+        working within an iPython notebook.
+
+        Parameters
+        ----------
+        connected : bool (optional)
+           Whether you are connected to the internet.  If you are, then
+           setting this to `True` allows initialization to rely on web-
+           hosted resources which will reduce the overall size of your
+           notebook.
+
+        Returns
+        -------
+        None
+        """
         try:
             from IPython.core.display import display as _display
             from IPython.core.display import HTML as _HTML
@@ -294,7 +329,48 @@ class Workspace(object):
         
 
     def switchedCompute(self, fn, *args):
+        """
+        Computes a function, given its name and arguments, when some or all of
+        those arguments are SwitchedValue objects.
 
+        Caching is employed to avoid duplicating function evaluations which have
+        the same arguments.  Note that the function itself doesn't need to deal 
+        with SwitchValue objects, as this routine resolves such objects into a
+        series of function evaluations using the underlying value(s) within the
+        SwitchValue.  This routine is primarily used internally for the
+        computation of tables and plots.
+
+        Parameters
+        ----------
+        fn : function
+            The function to evaluate
+
+        args : list
+            The function's arguments
+
+        Returns
+        -------
+        fn_values : list
+            The function return values for all relevant sets of arguments.
+            Denote the length of this list by N.
+        switchboards : list
+            A list of all the relevant Switchboards used during the function
+            evaluation.  Denote the length of this list by M.
+        switchboard_switch_indices : list
+            A list of length M whose elements are tuples containing the 0-based
+            indices of the relevant switches (i.e. those used by any of the
+            arguments) for each switchboard (element of `switchboards`).
+        switchpos_map : dict
+            A dictionary whose keys are switch positions, and whose values are
+            integers between 0 and N which index the element of `fn_values`
+            corresponding to the given switch positions.  Each 
+            "switch positions" key is a tuple of length M whose elements (one
+            per switchboard) are tuples of 0-based switch-position indices
+            indicating the position of the relevant switches of that
+            switchboard.  Thus, 
+            `len(key[i]) = len(switchboard_switch_indices[i])`, where `key`
+            is a dictionary key.
+        """
         # Computation functions get stripped-down *value* args
         # (strip SwitchedValue stuff away)
 
@@ -391,10 +467,30 @@ class Workspace(object):
                 switchpos_map[pos] = storedKeys[key]
 
         switchboard_switch_indices = [ info['switch indices'] for info in switchBdInfo ]
-        return resultValues, switchpos_map, switchboards, switchboard_switch_indices
+        return resultValues, switchboards, switchboard_switch_indices, switchpos_map
 
 
     def cachedCompute(self, fn, *args):
+        """
+        Call a function with the given arguments (if needed).
+
+        If the function has already been called with the given arguments then
+        the cached return value is returned.  Otherwise, the function is
+        evaluated and the result is stored in this Workspace's cache.
+
+        Parameters
+        ----------
+        fn : function
+            The function to evaluate
+
+        args : list
+            The function's arguments
+
+        Returns
+        -------
+        object
+            Whether `fn` returns.
+        """
         curkey = call_key(fn, args) # cache by call key
         
         if curkey not in self.compCache:
@@ -403,11 +499,55 @@ class Workspace(object):
         return self.compCache[curkey]
 
     
-    
 class Switchboard(_collections.OrderedDict):
+    """
+    Encapsulates a render-able set of user-interactive switches
+    for controlling visualized output.
+
+    Outwardly a Switchboard looks like a dictionary of SwitchValue
+    objects, which in turn look like appropriately sized numpy arrays
+    of values for some quantity.  Different switch positions select
+    different values and thereby what data is visualized in various
+    outputs (e.g. tables and plots).
+    """
+    
     def __init__(self, ws, switches, positions, types, initial_pos=None,
                  descriptions=None, ID=None):
+        """
+        Create a new Switchboard.
 
+        Parameters
+        ----------
+        switches : list
+            A list of switch names.  The length of this list is 
+            the number of switches.
+
+        positions : list
+            Elements are lists of position labels, one per switch.
+            Length must be equal to `len(switches)`.
+
+        types : list of {'buttons','dropdown','slider'}
+            A list of switch-type strings specifying what type of switch
+            each switch is.  
+
+            - 'buttons': a set of toggle buttons
+            - 'dropdown': a drop-down (or combo-box)
+            - 'slider': a horizontal slider
+
+        initial_pos : list or None (optional)
+            A list of 0-based integer indices giving the initial
+            position of each of the `len(switches)` switches.  None
+            defaults to the first (0-th) position for each switch.
+
+        descriptions : list (optional)
+            A string description for each of the `len(switches)` switches.
+
+        ID : str (optional) 
+            A DOM identifier to use when rendering this Switchboard to HTML.
+            Usually leaving this value as `None` is best, in which case a
+            random identifier is created.
+        """
+        # Note: intentionally leave off ws argument desc. in docstring
         assert(len(switches) == len(positions))
         
         self.ID = randomID() if (ID is None) else ID
@@ -429,12 +569,52 @@ class Switchboard(_collections.OrderedDict):
 
 
     def add(self, varname, dependencies):
-        super(Switchboard,self).__setitem__(varname, SwitchValue(self.ws, self, varname, dependencies))
+        """
+        Adds a new switched-value to this Switchboard.
+
+        Parameters
+        ----------
+        varname : str
+            A name for the variable being added.  This name will be used to
+            access the new variable (as either a dictionary key or as an 
+            object member).
+
+        dependencies : list or tuple
+            The (0-based) switch-indices specifying which switch positions
+            the new variable is dependent on.  For example, if the Switchboard
+            has two switches, one for "amplitude" and one for "frequencey", and
+            this value is only dependent on frequency, then `dependencies`
+            should be set to `(1,)` or `[1]`.
+        
+        Returns
+        -------
+        None
+        """
+        super(Switchboard,self).__setitem__(varname, SwitchValue(self, varname, dependencies))
 
     def __setitem__(self, key, val):
         raise KeyError("Use add(...) to add an item to this swichboard")
 
     def render(self, typ="html"):
+        """
+        Render this Switchboard into the requested format.
+
+        The returned string(s) are intended to be used to embedded a 
+        visualization of this object within a larger document.
+
+        Parameters
+        ----------
+        typ : {"html"}
+            The format to render as.  Currently only HTML is supported.
+
+        Returns
+        -------
+        dict
+            A dictionary of strings whose keys indicate which portion of
+            the embeddable output the value is.  Keys will vary for different
+            `typ`.  For `"html"`, keys are `"html"` and `"js"` for HTML and
+            and Javascript code, respectively.
+        """
         assert(typ == "html"), "Can't render Switchboards as anything but HTML"
 
         switch_html = []; switch_js = []
@@ -544,10 +724,23 @@ class Switchboard(_collections.OrderedDict):
         html = "\n".join(switch_html)
         js = "$(document).ready(function() {\n" +\
              "\n".join(switch_js) + "\n});"
-        return html, js
+        return {'html':html, 'js':js}
                 
 
     def get_switch_change_handlerjs(self, switchIndex):
+        """
+        Returns the Javascript needed to begin an on-change handler
+        for a particular switch.
+
+        Parameters
+        ----------
+        switchIndex : int
+            The 0-based index of which switch to get handler JS for.
+
+        Returns
+        -------
+        str
+        """
         ID = self.switchIDs[switchIndex]
         typ = self.switchTypes[switchIndex]
         if typ == "buttons":
@@ -559,7 +752,20 @@ class Switchboard(_collections.OrderedDict):
         else:
             raise ValueError("Unknown switch type: %s" % typ)
 
+        
     def get_switch_valuejs(self, switchIndex):
+        """
+        Returns the Javascript needed to get the value of a particular switch.
+
+        Parameters
+        ----------
+        switchIndex : int
+            The 0-based index of which switch to get value-extracting JS for.
+
+        Returns
+        -------
+        str
+        """
         ID = self.switchIDs[switchIndex]
         typ = self.switchTypes[switchIndex]
         if typ == "buttons":
@@ -572,7 +778,17 @@ class Switchboard(_collections.OrderedDict):
             raise ValueError("Unknown switch type: %s" % typ)
         
     def display(self):
-        import ipywidgets as _widgets
+        """
+        Display this switchboard within an iPython notebook.
+
+        Calling this function requires that you are in an
+        iPython environment, and really only makes sense 
+        within a notebook.
+
+        Returns
+        -------
+        None
+        """
         from IPython.display import display as _display
         from IPython.display import HTML as _HTML
 
@@ -581,10 +797,10 @@ class Switchboard(_collections.OrderedDict):
         #                                placeholder='Switch HTML',
         #                                description='Switch HTML',
         #                                disabled=False)
-        html, js = self.render("html")
+        out = self.render("html")
         content = "<script>\n" + \
                   "require(['jquery','jquery-UI'],function($,ui) {" + \
-                  js + " });</script>" + html
+                  out['js'] + " });</script>" + out['html']
         #self.widget.value = content
         _display(_HTML(content)) #self.widget)
 
@@ -597,8 +813,41 @@ class Switchboard(_collections.OrderedDict):
 
 
 class SwitchValue(object):
-    def __init__(self, ws, parent_switchboard, name, dependencies):
-        self.ws = ws #workset
+    """
+    Encapsulates a "switched value", which is essentially a value (i.e. some
+    quantity, usually one used as an argument to visualization functions) that
+    is controlled by the switches of a single Switchboard.
+
+    The paradigm is one of a Switchboard being a collection of switches along
+    with a dictionary of SwitchValues, whereby each SwitchValue is a mapping
+    of switch positions to values.  For efficiency, a SwitchValue need only map
+    a "subspace" of the switch positions, that is, the position-space spanned
+    by only a subset of the switches.  Which switch-positions are mapped is
+    given by the "dependencies" of a SwitchValue.
+
+    SwitchValue behaves much like a numpy array of values in terms of
+    element access.
+    """
+    
+    def __init__(self, parent_switchboard, name, dependencies):
+        """
+        Creates a new SwitchValue.
+
+        Parameters
+        ----------
+        parent_switchboard : Switchboard
+            The switch board this value is associated with.
+
+        name : str
+            The name of this value, which is also the key or member
+            name used to access this value from its parent `Switchboard`.
+
+        dependencies : iterable
+            The 0-based indices identifying which switches this value
+            depends upon, and correspondingly, which switch positions
+            the different axes of the new `SwitchValue` correspond to.
+        """
+        self.ws = parent_switchboard.ws #workspace
         self.parent = parent_switchboard
         self.name = name
         self.dependencies = dependencies
@@ -630,11 +879,26 @@ class SwitchValue(object):
         
 
 class WorkspaceOutput(object):
-    """ An output that can be rendered """
+    """ 
+    Base class for all forms of data-visualization within a `Workspace` context.
+
+    WorkspaceOutput sets a common interface for performing data visualization
+    using a Workspace.  In particular, `render` is used to create embeddable 
+    output in various formats, and `display` is used to show the object within
+    an iPython notebook.
+    """
     
     def __init__(self, ws):
+        """
+        Create a new WorkspaceOutput object.  Usually not called directly.
+        
+        Parameters
+        ----------
+        ws : Workspace
+            The workspace containing the new object.
+        """
         self.ws = ws
-        self.widget = None #don't build until 1st display()
+        #self.widget = None #don't build until 1st display()
 
         
     # Note: hashing not needed because these objects are not *inputs* to
@@ -642,26 +906,45 @@ class WorkspaceOutput(object):
     # are cached using call_key.
 
     def render(self, typ="html"):
-        """Renders this object to the specifed format"""
-        raise NotImplementedError("Derived classes should implement render()")
+        """
+        Renders this object into the specifed format, specifically for
+        embedding it within a larger document.
+
+        Parameters
+        ----------
+        typ : str
+            The format to render as.  Currently `"html"` is widely supported
+            and `"latex"` is supported for tables.
+
+        Returns
+        -------
+        dict
+            A dictionary of strings whose keys indicate which portion of
+            the embeddable output the value is.  Keys will vary for different
+            `typ`.  For `"html"`, keys are `"html"` and `"js"` for HTML and
+            and Javascript code, respectively.
+        """
+        raise NotImplementedError("Derived classes must implement their own render()")
 
 
     def display(self):
-        """Create a new widget associated with this object and display it"""
-        import ipywidgets as _widgets
+        """
+        Display this object within an iPython notebook.
+        """
         from IPython.display import display as _display
         from IPython.display import HTML as _HTML
 
+        #import ipywidgets as _widgets
         #if self.widget is None:
         #    self.widget = _widgets.HTMLMath(value="?",
         #                                placeholder='Plot HTML',
         #                                description='Plot HTML',
         #                                disabled=False)
-        html, js = self.render("html", global_requirejs=True) # b/c jupyter uses require.js
+        out = self.render("html", global_requirejs=True) # b/c jupyter uses require.js
         #OLD: content = "<script>\n%s\n</script>\n\n%s" % (js,html)
         content = "<script>\n" + \
                   "require(['jquery','jquery-UI'],function($,ui) {" + \
-                  js + " });</script>" + html
+                  out['js'] + " });</script>" + out['html']
 
         #self.widget.value = content
         #with open("debug.html","w") as f:
@@ -675,7 +958,11 @@ class WorkspaceOutput(object):
     def _render_html(self, ID, div_htmls, div_ids, switchpos_map,
                      switchboards, switchIndices):
         """
-        Helper rendering function
+        Helper rendering function, which takes care of the (complex)
+        common logic which take a series of HTML div blocks corresponding
+        to the results of a Workspace.switchedCompute(...) call and 
+        builds the HTML and JS necessary for toggling the visibility of
+        these divs in response to changes in switch position(s).
 
         Parameters
         ----------
@@ -701,6 +988,12 @@ class WorkspaceOutput(object):
         switchIndices: list
             A list of tuples, one per Switchboard object, giving the relevant
             switch indices (integers) within that Switchboard.
+
+        Returns
+        -------
+        dict
+            A dictionary of strings whose keys indicate which portion of
+            the embeddable output the value is.  Keys are `"html"` and `"js"`.
         """
 
         #build HTML as container div containing one or more plot divs
@@ -712,7 +1005,7 @@ class WorkspaceOutput(object):
         js = "var switchmap_%s = new Array();\n" % ID
           #global varaiable -- do not put in on-ready handler
         js += "$( function() {\n"
-        for switchPositions, iDiv in self.switchpos_map.items():
+        for switchPositions, iDiv in switchpos_map.items():
             #switchPositions is a tuple of tuples of position indices, one tuple per switchboard
             div_id = div_ids[iDiv]
             flatPositions = []
@@ -725,7 +1018,7 @@ class WorkspaceOutput(object):
         
         #build change event listener javascript
         handler_fns_js = []
-        for sb, switchInds in zip(self.switchboards, self.sbSwitchIndices):
+        for sb, switchInds in zip(switchboards, switchIndices):
             # switchInds is a tuple containing the "used" switch indices of sb
             
             for switchIndex in switchInds:
@@ -734,7 +1027,7 @@ class WorkspaceOutput(object):
                 fname = "%s_onchange_%s_%d" % (ID,sb.ID,switchIndex)
                 handler_js = "function %s() {\n" % fname 
                 handler_js += "  var curSwitchPos = new Array();\n"
-                for sb2, switchInds2 in zip(self.switchboards, self.sbSwitchIndices):
+                for sb2, switchInds2 in zip(switchboards, switchIndices):
                     for switchIndex2 in switchInds2:
                         handler_js += "  curSwitchPos.push(%s);\n" % sb2.get_switch_valuejs(switchIndex2)
                 handler_js += "  var idToShow = switchmap_%s[ curSwitchPos ];\n" % ID
@@ -753,22 +1046,61 @@ class WorkspaceOutput(object):
         js += "});\n\n" # end on-ready handler
         js += "\n".join(handler_fns_js)
 
-        return html, js
+        return {'html':html, 'js':js}
 
 
 
     
 class WorkspaceTable(WorkspaceOutput):
+    """
+    Encapsulates a table within a `Workspace` context.
+
+    A base class which provides the logic required to take a
+    single table-generating function and make it into a legitimate
+    `WorkspaceOutput` object for using within workspaces.
+    """
+    
     def __init__(self, ws, fn, *args):
+        """
+        Create a new WorkspaceTable.  Usually not called directly.
+
+        Parameters
+        ----------
+        ws : Workspace
+            The workspace containing the new object.
+
+        fn : function
+            A table-creating function.
+
+        args : various
+            The arguments to `fn`.
+        """
         super(WorkspaceTable, self).__init__(ws)
         self.tablefn = fn
         self.initargs = args
-        self.tables,self.switchpos_map,self.switchboards,self.sbSwitchIndices = \
+        self.tables,self.switchboards,self.sbSwitchIndices,self.switchpos_map = \
             self.ws.switchedCompute(self.tablefn, *self.initargs)
 
         
     def render(self, typ, global_requirejs=False):
-        """Renders this table to the specifed format"""
+        """
+        Renders this object into the specifed format, specifically for
+        embedding it within a larger document.
+
+        Parameters
+        ----------
+        typ : str
+            The format to render as.  Currently `"html"` is supported in 
+            all cases, and `"latex"` is supported for non-switched tables
+            (those which don't depend on any switched values).
+
+        Returns
+        -------
+        dict
+            A dictionary of strings giving the different portions of the
+            embeddable output.  For `"html"`, keys are `"html"` and `"js"`.
+            For `"latex"`, there is a single key `"latex"`.
+        """
         if typ == "html":
             tableID = "table_" + randomID()
 
@@ -786,19 +1118,57 @@ class WorkspaceTable(WorkspaceOutput):
         else:
             assert(len(self.tables) == 1), \
                 "Can only render %s format for a non-switched table" % typ
-            return self.tables[0].render(typ)
+            return {typ: self.tables[0].render(typ)}
 
 
         
 class WorkspacePlot(WorkspaceOutput):
+    """
+    Encapsulates a plot within a `Workspace` context.
+
+    A base class which provides the logic required to take a
+    single plot.ly figure-generating function and make it into a
+    legitimate `WorkspaceOutput` object for using within workspaces.
+    """
+
     def __init__(self, ws, fn, *args):
+        """
+        Create a new WorkspaceTable.  Usually not called directly.
+
+        Parameters
+        ----------
+        ws : Workspace
+            The workspace containing the new object.
+
+        fn : function
+            A table-creating function.
+
+        args : various
+            The arguments to `fn`.
+        """
         super(WorkspacePlot, self).__init__(ws)
         self.plotfn = fn
         self.initargs = args
-        self.figs, self.switchpos_map, self.switchboards, self.sbSwitchIndices = \
+        self.figs, self.switchboards, self.sbSwitchIndices, self.switchpos_map = \
             self.ws.switchedCompute(self.plotfn, *self.initargs)
 
+        
     def render(self, typ="html", global_requirejs=False):
+        """
+        Renders this object into the specifed format, specifically for
+        embedding it within a larger document.
+
+        Parameters
+        ----------
+        typ : str
+            The format to render as.  Currently only `"html"` is supported.
+
+        Returns
+        -------
+        dict
+            A dictionary of strings giving the HTML and Javascript portions
+            of the embeddable output.  Keys are `"html"` and `"js"`.
+        """
         assert(typ == "html"), "Only HTML rendering supported currently"
 
         plotID = "plot_" + randomID()
