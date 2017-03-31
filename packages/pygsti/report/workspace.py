@@ -20,6 +20,8 @@ from .plotly_offline_fixed import plot_ex as _plot
 from plotly.offline.offline import get_plotlyjs as _get_plotlyjs
 #from IPython.display import clear_output as _clear_output
 
+_PYGSTI_WORKSPACE_INITIALIZED = False
+
 def _is_hashable(x):
     try:
         dct = { x: 0 }
@@ -57,7 +59,12 @@ def call_key(fn, args):
     -------
     tuple
     """
-    key = [fn.__name__]
+    if hasattr(fn,"__self__"):
+        # hash on ClassName.methodName to avoid collisions, e.g. w/ "_create"
+        key = [ fn.__self__.__class__.__name__ + "." + fn.__name__ ]
+    else:
+        key = [ fn.__name__ ]
+        
     for arg in args:
         if _is_hashable(arg):
             key.append( arg )
@@ -104,7 +111,12 @@ class Workspace(object):
 
         self.outputObjs = {} #cache of WorkspaceOutput objects (hashable by call_keys)
         self.compCache = {}  # cache of computation function results (hashable by call_keys)
+        self._register_components(False)
 
+
+
+    def _register_components(self, autodisplay):
+        
         def makefactory(cls):
 
             PY3 = bool(_sys.version_info > (3, 0))
@@ -121,10 +133,18 @@ class Workspace(object):
             signature = _inspect.formatargspec(
                 formatvalue=lambda val: "", *newargspec)
             signature = signature[1:-1] #strip off parenthesis from ends of "(signature)"
-            factory_func_def = (
-                    'def factoryfn(%(signature)s):\n' 
-                    '    return cls(self, %(signature)s)' % 
-                    {'signature':signature } )
+            
+            if autodisplay:
+                factory_func_def = (
+                        'def factoryfn(%(signature)s):\n' 
+                        '    ret = cls(self, %(signature)s); ret.display(); return ret' % 
+                        {'signature':signature } )
+            else:
+                factory_func_def = (
+                        'def factoryfn(%(signature)s):\n' 
+                        '    return cls(self, %(signature)s)' % 
+                        {'signature':signature } )
+
             #print("FACTORY FN DEF = \n",new_func)
             exec_globals = {'cls' : cls, 'self': self}
             if _sys.version_info > (3, 0):
@@ -144,8 +164,7 @@ class Workspace(object):
                 factoryfn.func_defaults = cls.__init__.func_defaults
                 
             return factoryfn
-
-
+        
         # "register" components
         from . import workspacetables as _wt
         from . import workspaceplots as _wp
@@ -193,7 +212,8 @@ class Workspace(object):
         self.ProjectionsBoxPlot = makefactory(_wp.ProjectionsBoxPlot)
         self.ChoiEigenvalueBarPlot = makefactory(_wp.ChoiEigenvalueBarPlot)
 
-    def init_notebook_mode(self, connected=False):
+        
+    def init_notebook_mode(self, connected=False, autodisplay=False):
         """
         Initialize this Workspace for use in an iPython notebook environment.
 
@@ -203,10 +223,14 @@ class Workspace(object):
         Parameters
         ----------
         connected : bool (optional)
-           Whether you are connected to the internet.  If you are, then
-           setting this to `True` allows initialization to rely on web-
-           hosted resources which will reduce the overall size of your
-           notebook.
+            Whether to assume you are connected to the internet.  If you are,
+            then setting this to `True` allows initialization to rely on web-
+            hosted resources which will reduce the overall size of your
+            notebook.
+
+        autodisplay : bool (optional)
+            Whether to automatically display workspace objects after they are
+            created.
 
         Returns
         -------
@@ -218,56 +242,59 @@ class Workspace(object):
         except ImportError:
             raise ImportError('Only run `init_notebook_mode` from inside an IPython Notebook.')
 
-        global __PYGSTI_WORKSPACE_INITIALIZED
-            
-        # The polling here is to ensure that plotly.js has already been loaded before
-        # setting display alignment in order to avoid a race condition.
-        script = """
-            <script>
-            var waitForPlotly = setInterval( function() {
-            if( typeof(window.Plotly) !== "undefined" ){
-                MathJax.Hub.Config({ SVG: { font: "STIX-Web" }, displayAlign: "center" });
-                MathJax.Hub.Queue(["setRenderer", MathJax.Hub, "SVG"]);
-                clearInterval(waitForPlotly);
-            }}, 250 );
-            </script>"""        
-        _display(_HTML(script))
+        global _PYGSTI_WORKSPACE_INITIALIZED
 
-        # Load style sheets for displaying tables
-        cssPath = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)),
-                                 "templates","css")
-        with open(_os.path.join(cssPath,"dataTable.css")) as f:
-            script = '<style>\n' + str(f.read()) + '</style>'
+        if not _PYGSTI_WORKSPACE_INITIALIZED:
+            # The polling here is to ensure that plotly.js has already been loaded before
+            # setting display alignment in order to avoid a race condition.
+            script = """
+                <script>
+                var waitForPlotly = setInterval( function() {
+                if( typeof(window.Plotly) !== "undefined" ){
+                    MathJax.Hub.Config({ SVG: { font: "STIX-Web" }, displayAlign: "center" });
+                    MathJax.Hub.Queue(["setRenderer", MathJax.Hub, "SVG"]);
+                    clearInterval(waitForPlotly);
+                }}, 250 );
+                </script>"""        
             _display(_HTML(script))
+    
+            # Load style sheets for displaying tables
+            cssPath = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)),
+                                     "templates","css")
+            with open(_os.path.join(cssPath,"dataTable.css")) as f:
+                script = '<style>\n' + str(f.read()) + '</style>'
+                _display(_HTML(script))
+    
+            _display(_HTML('<link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">'))
+    
+    
+    
+            # Update Mathjax config -- jupyter notebooks already have this so not needed
+            #script = '<script type="text/x-mathjax-config">\n' \
+            #        + '  MathJax.Hub.Config({ tex2jax: {inlineMath: [["$","$"], ["\\(","\\)"]]}\n' \
+            #        + '}); </script>' \
+            #        + '<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" ></script>'
+            #_display(_HTML(script))
+    
+            #Tell require.js where jQueryUI is
+            script = """
+            <script>requirejs.config({paths: { 'jquery-UI': ['https://code.jquery.com/ui/1.12.1/jquery-ui.min']},});
+              require(['jquery-UI'],function(ui) {
+              window.jQueryUI=ui;});
+            </script>"""
+            _display(_HTML(script))
+    
+    
+            #MathJax (& jQuery) are already loaded in ipython notebooks
+            # '<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" ></script>'
+            
+            # Initialize Plotly libraries
+            _plotly_offline.init_notebook_mode(connected)
+            
+            _PYGSTI_WORKSPACE_INITIALIZED = True
 
-        _display(_HTML('<link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">'))
-
-
-
-        # Update Mathjax config -- jupyter notebooks already have this so not needed
-        #script = '<script type="text/x-mathjax-config">\n' \
-        #        + '  MathJax.Hub.Config({ tex2jax: {inlineMath: [["$","$"], ["\\(","\\)"]]}\n' \
-        #        + '}); </script>' \
-        #        + '<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" ></script>'
-        #_display(_HTML(script))
-
-        #Tell require.js where jQueryUI is
-        script = """
-        <script>requirejs.config({paths: { 'jquery-UI': ['https://code.jquery.com/ui/1.12.1/jquery-ui.min']},});
-          require(['jquery-UI'],function(ui) {
-          window.jQueryUI=ui;});
-        </script>"""
-        _display(_HTML(script))
-
-
-        #MathJax (& jQuery) are already loaded in ipython notebooks
-        # '<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" ></script>'
-        
-        # Initialize Plotly libraries
-        _plotly_offline.init_notebook_mode(connected)
-        
-        __PYGSTI_WORKSPACE_INITIALIZED = True
-
+        self._register_components(autodisplay)
+        return
         
 
     def switchedCompute(self, fn, *args):
@@ -939,7 +966,8 @@ class WorkspaceOutput(object):
         """
 
         #build HTML as container div containing one or more plot divs
-        html = "<div id='%s' style='display: none'>\n" % ID
+        # Note: 'display: none' doesn't always work in firefox... (polar plots in ptic)
+        html = "<div id='%s' style='display: hidden'>\n" % ID
         html += "\n".join(div_htmls) + "\n</div>\n"
 
         #build javascript to map switch positions to div_ids

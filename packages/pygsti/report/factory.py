@@ -7,29 +7,10 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Defines report factories. """
 
 import os  as _os
-#import re  as _re
-#import time as _time
-#import subprocess  as _subprocess
+import time as _time
 import collections as _collections
-#import matplotlib  as _matplotlib
-#import itertools   as _itertools
-#import copy as _copy
-#
-#from ..             import objects              as _objs
-#from ..objects      import gatestring           as _gs
-from ..objects      import VerbosityPrinter
-#from ..construction import spamspecconstruction as _ssc
-#from ..algorithms   import gaugeopt_to_target   as _optimizeGauge
-#from ..algorithms   import contract             as _contract
-#from ..tools        import listtools            as _lt
-#from ..             import _version
-#
-#from . import latex      as _latex
-#from . import generation as _generation
-#from . import plotting   as _plotting
-#
-#from .resultcache import ResultCache as _ResultCache
 
+from ..objects      import VerbosityPrinter
 from .workspace import Workspace as _Workspace
 
 #ideas:
@@ -87,8 +68,8 @@ def _merge_template(qtys, templateFilename, outputFilename):
             qtys_html[key] = val
         else:
             #print("DB: rendering ",key)
-            html, js = val.render("html")
-            qtys_html[key] = "<script>\n%s\n</script>\n\n%s" % (js,html)
+            out = val.render("html") # a dictionary of rendered portions
+            qtys_html[key] = "<script>\n%(js)s\n</script>\n\n%(html)s" % out
 
     #DEBUG
     #testtmp = "%(targetSpamTable)s" % qtys_html
@@ -102,16 +83,66 @@ def _merge_template(qtys, templateFilename, outputFilename):
 
 
 def create_single_qubit_report(results, filename, confidenceLevel=None,
-                               title="GST report", datasetLabel="$\\mathcal{D}$",
+                               title="auto", datasetLabel="$\\mathcal{D}$",
                                verbosity=0, comm=None, ws=None):
-    """TODO: docstring """
+
+    """
+    Create a "full" single-qubit GST report.  This report gives a detailed and
+    analysis that is intended to be applied to `results` of single-qubit GST.
+    The report includes background and explanation text to help the user
+    interpret the contained results.
+
+    Parameters
+    ----------
+    results : Results
+        A set of GST results, typically obtained from running
+        :func:`do_long_sequence_gst`.
+
+    filename : string, optional
+       The output filename where the report file(s) will be saved.
+
+    confidenceLevel : float, optional
+       If not None, then the confidence level (between 0 and 100) used in
+       the computation of confidence regions/intervals. If None, no
+       confidence regions or intervals are computed.
+
+    title : string, optional
+       The title of the report.  "auto" uses a default title which
+       specifyies the label of the dataset as well.
+
+    datasetLabel : string, optional
+       A label given to the dataset.
+
+    verbosity : int, optional
+       How much detail to send to stdout.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    ws : Workspace, optional
+        The workspace used as a scratch space for performing the calculations
+        and visualizations required for this report.  If you're creating
+        multiple reports with similar tables, plots, etc., it may boost
+        performance to use a single Workspace for all the report generation.
+    
+
+    Returns
+    -------
+    None
+    """
     printer = VerbosityPrinter.build_printer(verbosity, comm=comm)
     if ws is None:
         ws = _Workspace()
 
+    if title == "auto":
+        title = "GST report for %s" % datasetLabel
+
     # dictionary to store all strings to be inserted into report template
     qtys = {}
-      
+
+    qtys['title'] = title
+    qtys['date'] = _time.strftime("%B %d, %Y")
     qtys['confidenceLevel'] = "%g" % \
         confidenceLevel if confidenceLevel is not None else "NOT-SET"
     qtys['linlg_pcntle'] = str(results.parameters['linlogPercentile'])
@@ -152,7 +183,7 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     qtys['bestGatesetSpamTable'] = ws.SpamTable(gsFinal, cri)
     qtys['bestGatesetSpamParametersTable'] = ws.SpamParametersTable(gsFinal, cri)
     qtys['bestGatesetGaugeOptParamsTable'] = ws.GaugeOptParamsTable(tuple(results.parameters['gaugeOptParams']))
-    qtys['bestGatesetGatesTable'] = ws.GatesTable(gsFinal, cri)
+    qtys['bestGatesetGatesTable'] = ws.GatesTable(gsFinal, display_as="numbers", confidenceRegionInfo=cri)
     qtys['bestGatesetChoiTable'] = ws.ChoiTable(gsFinal, None, cri, display=('matrix','eigenvalues'))
     qtys['bestGatesetDecompTable'] = ws.GateDecompTable(gsFinal, cri)
     qtys['bestGatesetRotnAxisTable'] = ws.RotationAxisTable(gsFinal, cri, True)
@@ -209,8 +240,10 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     for cssFile in ("dataTable.css","pygsti_pub.css","pygsti_screen.css"):
         with open(_os.path.join(cssPath,cssFile)) as f:
             qtys['inlineCSS'] += '<style>\n' + str(f.read()) + '\n</style>\n'
-    
+
     templateFile = "report_singlequbit.html"
+    #print("DB inserting choi:\n",qtys['bestGatesetChoiTable'].render("html"))
+    #print("DB inserting decomp:\n",qtys['bestGatesetDecompTable'].render("html"))
     _merge_template(qtys, templateFile, filename)
     printer.log("Output written to %s" % filename)
 
@@ -218,16 +251,64 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
 
 
 def create_general_report(results, filename, confidenceLevel=None,
-                          title="GST report", datasetLabel="$\\mathcal{D}$",
+                          title="auto", datasetLabel="$\\mathcal{D}$",
                           verbosity=0, comm=None, ws=None):
-    """TODO: docstring """
+    """
+    Create a "general" GST report.  This report is "general" in that it is
+    suited to display results for any number of qubits/qutrits.  Along with
+    the results, it includes background and explanation text.
+
+    Parameters
+    ----------
+    results : Results
+        A set of GST results, typically obtained from running
+        :func:`do_long_sequence_gst`.
+
+    filename : string, optional
+       The output filename where the report file(s) will be saved.
+
+    confidenceLevel : float, optional
+       If not None, then the confidence level (between 0 and 100) used in
+       the computation of confidence regions/intervals. If None, no
+       confidence regions or intervals are computed.
+
+    title : string, optional
+       The title of the report.  "auto" uses a default title which
+       specifyies the label of the dataset as well.
+
+    datasetLabel : string, optional
+       A label given to the dataset.
+
+    verbosity : int, optional
+       How much detail to send to stdout.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    ws : Workspace, optional
+        The workspace used as a scratch space for performing the calculations
+        and visualizations required for this report.  If you're creating
+        multiple reports with similar tables, plots, etc., it may boost
+        performance to use a single Workspace for all the report generation.
+    
+
+    Returns
+    -------
+    None
+    """
     printer = VerbosityPrinter.build_printer(verbosity, comm=comm)
     if ws is None:
         ws = _Workspace()
+        
+    if title == "auto":
+        title = "GST report for %s" % datasetLabel
 
     # dictionary to store all strings to be inserted into report template
     qtys = {}
-      
+
+    qtys['title'] = title
+    qtys['date'] = _time.strftime("%B %d, %Y")
     qtys['confidenceLevel'] = "%g" % \
         confidenceLevel if confidenceLevel is not None else "NOT-SET"
     qtys['linlg_pcntle'] = str(results.parameters['linlogPercentile'])

@@ -1106,7 +1106,7 @@ class PolarEigenvaluePlot(WorkspacePlot):
                 mode='markers',
                 marker=dict(
                     color=color,
-                    size=110,
+                    size=90,
                     line=dict(
                         color='white'
                     ),
@@ -1122,22 +1122,25 @@ class PolarEigenvaluePlot(WorkspacePlot):
                 trace = go.Scatter(
                     r = _np.absolute(amp_evals),
                     t = _np.angle(amp_evals) * (180.0/_np.pi),
+                    showlegend=False,
                     mode='markers',
                     marker=dict(
                         color=color,
-                        size=50,
+                        size=45,
                         line=dict(
                             color='white'
                         ),
                         opacity=0.5
                     ))
-                if labels is not None:
-                    trace.update(name="%s^%g" % (labels[i],amp))
+                #if labels is not None:
+                #    trace.update(name="%s^%g" % (labels[i],amp))
                 data.append(trace)
             
         layout = go.Layout(
+            width = 300*scale,
+            height = 300*scale,
             #title='Test Polar',
-            #font=dict(size=15),
+            #font=dict(size=10),
             plot_bgcolor='rgb(240, 240, 240)',
             radialaxis=dict(
                 range=[0,1.25]),
@@ -1245,7 +1248,7 @@ class ProjectionsBoxPlot(WorkspacePlot):
 # xlabel="index", ylabel="Re[eigenvalue]", title=None
 # TODO: maybe a "postFormat" or "addToFigure" fn to add title & axis labels to any figure?
 class ChoiEigenvalueBarPlot(WorkspacePlot):
-    def __init__(self, ws, evals, errbars=None):
+    def __init__(self, ws, evals, errbars=None, scale=1.0):
         """
         Creates a bar plot showing the real parts of each of the eigenvalues
         given.  This is useful for plotting the eigenvalues of Choi matrices,
@@ -1259,11 +1262,14 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
         errbars : ndarray, optional
            An array containing the lengths of the error bars
            to place on each bar of the plot.        
+
+        scale : float, optional
+            Scaling factor to adjust the size of the final figure.
         """
         super(ChoiEigenvalueBarPlot,self).__init__(ws, self._create, evals,
-                                                   errbars)
+                                                   errbars, scale)
         
-    def _create(self, evals, errbars):
+    def _create(self, evals, errbars, scale):
 
         xs = list(range(evals.size))
         ys = []; colors = []; texts=[]
@@ -1277,7 +1283,8 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
                 
         trace = go.Bar(
             x=xs, y=ys, text=texts,
-            marker=dict(color=colors)
+            marker=dict(color=colors),
+            hoverinfo='text'
         )
 
         log_ys = _np.log10(_np.array(ys,'d'))
@@ -1286,6 +1293,8 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
         
         data = [trace]
         layout = go.Layout(
+            width = 400*scale,
+            height = 300*scale,
             xaxis = dict(
                 title="index",
                 tickvals=xs

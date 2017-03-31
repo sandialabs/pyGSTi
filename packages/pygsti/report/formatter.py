@@ -279,8 +279,8 @@ class _HTMLFigureFormatter(_ParameterizedFormatter):
 
     # Override call method of Parameterized formatter
     def __call__(self, fig):
-        fig_html,fig_js = fig.render("html")
-        return "<script>\n" + fig_js + "</script>" + fig_html
+        render_out = fig.render("html")
+        return "<script>\n %(js)s \n</script>\n %(html)s" % render_out
 
         
 # Formatter class that requires a scratchDirectory from an instance of FormatSet for saving figures to

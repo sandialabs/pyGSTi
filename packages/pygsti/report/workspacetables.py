@@ -421,7 +421,7 @@ class ChoiTable(WorkspaceTable):
                     for gateset in gatesets:
                         for gateset,qtys in zip(gatesets,qtysList):
                             evals, evalsEB = qtys['%s choi eigenvalues' % gl].get_value_and_err_bar()
-                                
+
                             if confidenceRegionInfo is None:
                                 fig = _wp.ChoiEigenvalueBarPlot(self.ws, evals)
                             else:
@@ -429,7 +429,9 @@ class ChoiTable(WorkspaceTable):
                                 
                             row_data.append(fig)
                             row_formatters.append('Figure')
-     
+                            
+            table.addrow(row_data, row_formatters)
+    
         table.finish()
         return table
     
@@ -684,6 +686,8 @@ class ErrgenTable(WorkspaceTable):
                     else:
                         row_data.append(stoProjs[gl])
                         row_formatters.append('Brackets')
+
+            table.addrow(row_data, row_formatters)
     
         table.finish()
         return table
@@ -769,7 +773,7 @@ class GateDecompTable(WorkspaceTable):
 
         
     def _create(self, gateset, confidenceRegionInfo):
-    
+
         gateLabels = list(gateset.gates.keys())  # gate labels
         colHeadings = ('Gate','Eigenvalues','Fixed pt','Rotn. axis','Diag. decay','Off-diag. decay')
         formatters = [None]*6
@@ -785,7 +789,7 @@ class GateDecompTable(WorkspaceTable):
         table = _ReportTable(colHeadings, formatters)
     
         formatters = (None, 'VecErrorBars', 'Normal', 'Normal', 'ErrorBars', 'ErrorBars')
-    
+
         for gl in gateLabels:
             decomp, decompEB = qtys['%s decomposition' % gl].get_value_and_err_bar()
     
@@ -926,11 +930,11 @@ class GateEigenvalueTable(WorkspaceTable):
         ReportTable
         """
         super(GateEigenvalueTable,self).__init__(ws, self._create, gateset,
-                                             targetGateset,
-                                             confidenceRegionInfo)
+                                                 targetGateset,
+                                                 confidenceRegionInfo, display)
         
     def _create(self, gateset, targetGateset,               
-                confidenceRegionInfo):
+                confidenceRegionInfo, display):
         
         gateLabels = list(gateset.gates.keys())  # gate labels
 
@@ -939,12 +943,12 @@ class GateEigenvalueTable(WorkspaceTable):
             if disp == "evals":
                 colHeadings.append('Eigenvalues')
             elif disp == "rel":
-                if(targetGateSet is not None): #silently ignore
+                if(targetGateset is not None): #silently ignore
                     colHeadings.append('Rel. Evals')
             elif disp == "polar":
                 colHeadings.append('Eigenvalues')
             elif disp == "relpolar":
-                if(targetGateSet is not None): #silently ignore
+                if(targetGateset is not None): #silently ignore
                     colHeadings.append('Rel. Evals')
             else:
                 raise ValueError("Invalid display element: %s" % disp)
@@ -984,7 +988,7 @@ class GateEigenvalueTable(WorkspaceTable):
                     row_data.append( (evals,evalsEB) )
                     row_formatters.append( 'VecErrorBars' )
 
-                elif disp == "rel" and targetGateSet is not None:
+                elif disp == "rel" and targetGateset is not None:
                     rel_evals,_ = format_evals(rel_evals,None)
                     row_data.append( (rel_evals,None) )
                     row_formatters.append( 'VecErrorBars' )
@@ -1000,9 +1004,9 @@ class GateEigenvalueTable(WorkspaceTable):
                     row_data.append( fig )
                     row_formatters.append( 'Figure' )
 
-                elif disp == "relpolar" and targetGateSet is not None:
+                elif disp == "relpolar" and targetGateset is not None:
                     fig = _wp.PolarEigenvaluePlot(
-                        self.ws,[rel_evals],["red"],centerText=gl)
+                        self.ws,[rel_evals],["red"],["rel"],centerText=gl)
                     row_data.append( fig )
                     row_formatters.append( 'Figure' )
     
