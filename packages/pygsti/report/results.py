@@ -154,11 +154,10 @@ class Results(object):
         self._bEssentialResultsSet = True
 
 
-    def init_Ls_and_germs(self, objective, targetGateset, dataset,
-                          seedGateset, Ls, germs, gatesetsByL, gateStringListByL,
-                          prepStrs, effectStrs, truncFn, fidPairs=None,
-                          gatesetsByL_noGaugeOpt=None, gateLabelAliases=None):
-
+    def init_Ls_and_germs(self, objective, dataset, targetGateset,
+                          seedGateset, gatesetsByIter,
+                          gatesetsByIter_noGaugeOpt,
+                          gateStringStructsByIter):
         """
         Initialize this Results object from the inputs and outputs of
         an iterative GST method based on gate string lists containing
@@ -171,112 +170,83 @@ class Results(object):
             Whether gateset was obtained by minimizing chi^2 or
             maximizing the log-likelihood.
 
-        targetGateset : GateSet
-            The target gateset used when optimizing the objective.
-
         dataset : DataSet
             The dataset used when optimizing the objective.
+
+        targetGateset : GateSet
+            The target gateset used when optimizing the objective.
 
         seedGateset : GateSet
             The initial gateset used to seed the iterative part
             of the objective optimization.  Typically this is
             obtained via LGST.
 
-        Ls : list of ints
-            List of maximum-L values used in the iterations.
+        gatesetsByIter : list of GateSets
+            The estimated gateset at each GST iteration.
 
-        germs : list of GateStrings
-            List of germ gate strings used in the objective optimization.
-
-        gatesetsByL : list of GateSets
-            The estimated gateset at each L value.
-
-        gateStringListByL : list of lists of GateStrings
-            The gate string list used at each L value.
-
-        prepStrs : list of GateStrings
-            The list of state preparation fiducial strings
-            in the objective optimization.
-
-        effectStrs : list of GateStrings
-            The list of measurement fiducial strings
-            in the objective optimization.
-
-        truncFn : function
-            The truncation function used, indicating how a
-            germ should be repeated "L times".  Function should
-            take parameters (germ, L) and return the repeated
-            gate string.  For example, see
-            pygsti.construction.repeat_with_max_length.
-
-        fidPairs : list or dict, optional
-            Specifies a subset of all prepStr,effectStr string pairs to be used in
-            reports.  If `fidPairs` is a list, each element of `fidPairs` is a
-            ``(iRhoStr, iEStr)`` 2-tuple of integers, which index a string within
-            the state preparation and measurement fiducial strings respectively. If
-            `fidPairs` is a dict, then the keys must be germ strings and values are
-            lists of 2-tuples as in the previous case.
-
-        gatesetsByL_noGaugeOpt : list of GateSets, optional
+        gatesetsByIter_noGaugeOpt : list of GateSets
             The value of the estimated gate sets *before* any gauge
-            optimization was performed on it.
+            optimization was performed on it (can be set to None).
 
-        gateLabelAliases : dictionary, optional
-            Dictionary whose keys are gate label "aliases" and whose values are tuples
-            corresponding to what that gate label should be expanded into before querying
-            the dataset.
-            Defaults to the empty dictionary (no aliases defined)
-            e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+        gateStringStructsByIter : list of lists or LsGermsStructs
+            The gate string list or structure used at each iteration.
 
         Returns
         -------
         None
         """
 
-        assert(len(gateStringListByL) == len(gatesetsByL) == len(Ls))
+        assert(len(gateStringStructsByIter) == len(gatesetsByIter))
 
-        # Set essential info: gateset estimates(s) but no particular
-        # structure known about gateStringLists.
+        #Set gatesets
         self.gatesets['target'] = targetGateset
         self.gatesets['seed'] = seedGateset
-        self.gatesets['iteration estimates'] = gatesetsByL
-        self.gatesets['final estimate'] = gatesetsByL[-1]
-        self.gatestring_lists['iteration'] = gateStringListByL
-        self.gatestring_lists['final'] = gateStringListByL[-1]
+        self.gatesets['iteration estimates'] = gatesetsByIter
+        self.gatesets['final estimate'] = gatesetsByIter[-1]
+
+        #Set gatestring structures
+        self.gatestring_structs['iteration'] = []
+        for gss in gateStringStructsByIter:
+            if isinstance(gss, _objs.LsGermsStructure):
+                self.gatestring_structs['iteration'].append(gss)
+            else: #assume gss is a raw list of GateStrings
+                unindexed_gss = _objs.LsGermsStructure([],[],[],[],None)
+                unindexed_gss.add_unindexed(gss)
+                self.gatestring_structs['iteration'].append(unindexed_gss)
+                
+        self.gatestring_structs['final'] = \
+                self.gatestring_structs['iteration'][-1]
+
+        #Extract raw gatestring lists from structs
+        self.gatestring_lists['iteration'] = \
+                [ gss.allstrs for gss in self.gatestring_structs['iteration'] ]
+        self.gatestring_lists['final'] = self.gatestring_lists['iteration'][-1]
         self.gatestring_lists['all'] = _lt.remove_duplicates(
-            list(_itertools.chain(*gateStringListByL)) )
+            list(_itertools.chain(*self.gatestring_lists['iteration'])) )
         
         running_lst = []; delta_lsts = []
-        for L,lst in zip(Ls,gateStringListByL):
+        for lst in self.gatestring_lists['iteration']:
             delta_lst = [ x for x in lst if (x not in running_lst) ]
-            #if L != 0: running_lst += delta_lst # L=0 is special case - doesn't count in running list
-            delta_lsts.append(delta_lst)
+            delta_lsts.append(delta_lst); running_lst.extend(delta_lst) 
         self.gatestring_lists['iteration delta'] = delta_lsts # *added* at each iteration
 
         self.dataset = dataset
         self.parameters['objective'] = objective
-        if gatesetsByL_noGaugeOpt is not None:
+        if gatesetsByIter_noGaugeOpt is not None:
             self.gatesets['iteration estimates pre gauge opt'] = \
-                gatesetsByL_noGaugeOpt
+                gatesetsByIter_noGaugeOpt
 
         self._bEssentialResultsSet = True
 
         #Set "Ls and germs" info: gives particular structure
         # to the gateStringLists used to obtain estimates
-        self.gatestring_lists['prep fiducials'] = prepStrs
-        self.gatestring_lists['effect fiducials'] = effectStrs
-        self.gatestring_lists['germs'] = germs
-        self.parameters['max length list'] = Ls
-        self.parameters['fiducial pairs'] = fidPairs
-
-        self.gatestring_structs['iteration'] = []
-        for i in range(len(Ls)):
-            self.gatestring_structs['iteration'].append(
-                _objs.LsGermsStructure(Ls[0:i+1], germs, prepStrs, effectStrs,
-                                 truncFn, fidPairs, gateStringListByL[0:i+1],
-                                 gateLabelAliases) )
-        self.gatestring_structs['final'] = self.gatestring_structs['iteration'][-1]
+        finalStruct = self.gatestring_structs['final']
+        self.gatestring_lists['prep fiducials'] = finalStruct.prepStrs
+        self.gatestring_lists['effect fiducials'] = finalStruct.effectStrs
+        self.gatestring_lists['germs'] = finalStruct.germs
+        self.parameters['max length list'] = finalStruct.Ls
         
+        # OLD: self.parameters['fiducial pairs'] = fidPairs        
         #self.parameters['L,germ tuple base string dict'] = \
         #    _collections.OrderedDict( [ ( (L,germ), truncFn(germ,L) )
         #                                for L in Ls for germ in germs] )

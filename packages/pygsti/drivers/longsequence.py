@@ -22,12 +22,13 @@ from .. import io as _io
 def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                          prepStrsListOrFilename, effectStrsListOrFilename,
                          germsListOrFilename, maxLengths, gaugeOptParams=None,
-                         objective="logl", fidPairs=None, lsgstLists=None,
+                         objective="logl", fidPairs=None,
                          advancedOptions=None, comm=None, memLimit=None,
                          verbosity=2):
     """
     Perform end-to-end GST analysis using Ls and germs, with L as a maximum
     length.
+
     Constructs gate strings by repeating germ strings an integer number of
     times such that the length of the repeated germ is less than or equal to
     the maximum length set in maxLengths.  The LGST estimate of the gates is
@@ -96,11 +97,6 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         the state preparation and measurement fiducial strings respectively. If
         `fidPairs` is a dict, then the keys must be germ strings and values are
         lists of 2-tuples as in the previous case.
-
-    lsgstLists : list of gate string lists, optional
-        Provides explicit list of gate string lists to be used in analysis; to
-        be given if the dataset uses "incomplete" or "reduced" sets of gate
-        string.  Default is ``None``.
 
     advancedOptions : dict, optional
         Specifies advanced options most of which deal with numerical details of
@@ -190,9 +186,132 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     #    - ``'length as exponent'`` -- max. length is instead interpreted
     #      as the germ exponent (the number of germ repetitions).
 
+    if advancedOptions is None: advancedOptions = {}
+
+    #Get/load fiducials
+    if isinstance(prepStrsListOrFilename, str):
+        prepStrs = _io.load_gatestring_list(prepStrsListOrFilename)
+    else: prepStrs = prepStrsListOrFilename
+
+    if effectStrsListOrFilename is None:
+        effectStrs = prepStrs #use same strings for effectStrs if effectStrsListOrFilename is None
+    else:
+        if isinstance(effectStrsListOrFilename, str):
+            effectStrs = _io.load_gatestring_list(effectStrsListOrFilename)
+        else: effectStrs = effectStrsListOrFilename
+
+    #Get/load germs
+    if isinstance(germsListOrFilename, str):
+        germs = _io.load_gatestring_list(germsListOrFilename)
+    else: germs = germsListOrFilename
+
+    #Get/load target gateset
+    if isinstance(targetGateFilenameOrSet, str):
+        gs_target = _io.load_gateset(targetGateFilenameOrSet)
+    else:
+        gs_target = targetGateFilenameOrSet #assume a GateSet object
+
+    #Get starting point (so we know whether to include LGST strings)
+    LGSTcompatibleGates = all([(isinstance(g,_objs.FullyParameterizedGate) or
+                                isinstance(g,_objs.TPParameterizedGate))
+                               for g in gs_target.gates.values()])
+    if  LGSTcompatibleGates:
+        startingPt = advancedOptions.get('starting point',"LGST")
+    else:
+        startingPt = advancedOptions.get('starting point',"target")
+    truncScheme = advancedOptions.get('truncScheme',"whole germ powers")
+
+    #Construct gate sequences
+    gateLabels = advancedOptions.get(
+        'gateLabels', list(gs_target.gates.keys()))
+    nest = advancedOptions.get('nestedGateStringLists',True)
+    aliases = advancedOptions.get('gateLabelAliases',None)
+    includeLGST = advancedOptions.get('includeLGST', startingPt == "LGST")
+    lsgstLists = _construction.stdlists.make_lsgst_structs(
+        gateLabels, prepStrs, effectStrs, germs, maxLengths, fidPairs,
+        truncScheme, nest, includeLGST, aliases)
+    
+    assert(len(maxLengths) == len(lsgstLists))
+    
+    return do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
+                              lsgstLists, gaugeOptParams, objective,
+                              advancedOptions, comm, memLimit, verbosity)
 
 
 
+
+
+def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
+                              lsgstLists, gaugeOptParams=None, objective="logl",
+                              advancedOptions=None, comm=None, memLimit=None,
+                              verbosity=2):
+    """
+    A more fundamental interface for performing end-to-end GST.
+
+    Similar to :func:`do_long_sequence_gst` except this function takes 
+    `lsgstLists`, a list of either raw gate string lists or of `LsGermsStruct`
+    gate-string-structure objects to define which gate seqences are used on
+    each GST iteration.
+
+    Parameters
+    ----------
+    dataFilenameOrSet : DataSet or string
+        The data set object to use for the analysis, specified either directly
+        or by the filename of a dataset file (in text format).
+
+    targetGateFilenameOrSet : GateSet or string
+        The target gate set, specified either directly or by the filename of a
+        gateset file (text format).
+
+    lsgstLists : list of lists or of LsGermsStructs
+        An explicit list of either the raw gate string lists to be used in
+        the analysis or of LsGermsStruct objects, which additionally contain
+        the max-L, germ, and fiducial pair structure of a set of gate strings.
+        
+    gaugeOptParams : dict, optional
+        A dictionary of arguments to :func:`gaugeopt_to_target`, specifying
+        how the final gauge optimization should be performed.  The keys and
+        values of this dictionary may correspond to any of the arguments
+        of :func:`gaugeopt_to_target` *except* for the first `gateset` 
+        argument, which is specified internally.  The `targetGateset` argument,
+        *can* be set, but is specified internally when it isn't.  If `None`,
+        then the dictionary `{'itemWeights': {'gates':1.0, 'spam':0.001}}`
+        is used.  If `False`, then then *no* gauge optimization is performed.
+
+    objective : {'chi2', 'logl'}, optional
+        Specifies which final objective function is used: the chi-squared or
+        the log-likelihood.
+
+    advancedOptions : dict, optional
+        Specifies advanced options most of which deal with numerical details of
+        the objective function or expert-level functionality.  See 
+        :func:`do_long_sequence_gst` for a list of the allowed keys, with the
+        exception  "nestedGateStringLists", "gateLabelAliases",
+        "includeLGST", and "truncScheme".
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    memLimit : int or None, optional
+        A rough memory limit in bytes which restricts the amount of memory 
+        used (per core when run on multi-CPUs).
+
+    verbosity : int, optional
+       The 'verbosity' option is an integer specifying the level of 
+       detail printed to stdout during the calculation.
+       - 0 -- prints nothing
+       - 1 -- shows progress bar for entire iterative GST
+       - 2 -- show summary details about each individual iteration
+       - 3 -- also shows outer iterations of LM algorithm
+       - 4 -- also shows inner iterations of LM algorithm
+       - 5 -- also shows detailed info from within jacobian
+              and objective function calls.
+
+    Returns
+    -------
+    Results
+    """
 
     tRef = _time.time()
 
@@ -203,7 +322,6 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         gaugeOptParams = {'itemWeights': {'gates':1.0, 'spam':0.001}}
 
     profile = advancedOptions.get('profile',1)
-    truncScheme = advancedOptions.get('truncScheme',"whole germ powers")
 
     if profile == 0: profiler = _objs.DummyProfiler()
     elif profile == 1: profiler = _objs.Profiler(comm,False)
@@ -236,49 +354,33 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         ds = dataFilenameOrSet #assume a Dataset object
         default_dir = default_base = None
 
-    #Get/load fiducials
-    if isinstance(prepStrsListOrFilename, str):
-        prepStrs = _io.load_gatestring_list(prepStrsListOrFilename)
-    else: prepStrs = prepStrsListOrFilename
-
-    if effectStrsListOrFilename is None:
-        effectStrs = prepStrs #use same strings for effectStrs if effectStrsListOrFilename is None
-    else:
-        if isinstance(effectStrsListOrFilename, str):
-            effectStrs = _io.load_gatestring_list(effectStrsListOrFilename)
-        else: effectStrs = effectStrsListOrFilename
-
-    #Get/load germs
-    if isinstance(germsListOrFilename, str):
-        germs = _io.load_gatestring_list(germsListOrFilename)
-    else: germs = germsListOrFilename
-
-    #Starting Point - compute on rank 0 and distribute
-    startingPt = advancedOptions.get('starting point',"LGST")
     gate_dim = gs_target.get_dimension()
-
-    #Construct gate sequences
-    if lsgstLists is None:
-        gateLabels = advancedOptions.get(
-            'gateLabels', list(gs_target.gates.keys()))
-        nest = advancedOptions.get('nestedGateStringLists',True)
-        includeLGST = advancedOptions.get('includeLGST', startingPt == "LGST")
-        lsgstLists = _construction.stdlists.make_lsgst_lists(
-            gateLabels, prepStrs, effectStrs, germs, maxLengths, fidPairs,
-            truncScheme, nest, includeLGST)
 
     tNxt = _time.time()
     profiler.add_time('do_long_sequence_gst: loading',tRef); tRef=tNxt
 
+    
+    #Starting Point - compute on rank 0 and distribute
+    LGSTcompatibleGates = all([(isinstance(g,_objs.FullyParameterizedGate) or
+                                isinstance(g,_objs.TPParameterizedGate))
+                               for g in gs_target.gates.values()])
+    if isinstance(lsgstLists[0],_objs.LsGermsStructure) and LGSTcompatibleGates:
+        startingPt = advancedOptions.get('starting point',"LGST")
+    else:
+        startingPt = advancedOptions.get('starting point',"target")
+        
     if comm is None or comm.Get_rank() == 0:
 
         #Compute starting point
         if startingPt == "LGST":
-            specs = _construction.build_spam_specs(prepStrs=prepStrs, effectStrs=effectStrs,
+            assert(isinstance(lsgstLists[0], _objs.LsGermsStructure)), \
+                   "Cannot run LGST: fiducials not specified!"
+            specs = _construction.build_spam_specs(prepStrs=lsgstLists[0].prepStrs,
+                                                   effectStrs=lsgstLists[0].effectStrs,
                                                    prep_labels=gs_target.get_prep_labels(),
                                                    effect_labels=gs_target.get_effect_labels())
             gs_start = _alg.do_lgst(ds, specs, gs_target, svdTruncateTo=gate_dim,
-                                    gateLabelAliases=advancedOptions.get('gateLabelAliases',None),
+                                    gateLabelAliases=lsgstLists[0].aliases,
                                     verbosity=printer) # returns a gateset with the *same*
                                                        # parameterizations as gs_target
 
@@ -309,7 +411,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         if advancedOptions.get('contractStartToCPTP',False):
             gs_start = _alg.contract(gs_start, "CPTP")
         if advancedOptions.get('depolarizeStart',0) > 0:
-            gs_start = gs_start.depolarize(gate_noise=advancedOptions['depolarizeStart'])
+            gs_start = gs_start.depolarize(gate_noise=advancedOptions.get('depolarizeStart',0))
     
         if comm is not None: #broadcast starting gate set
             comm.bcast(gs_start, root=0)
@@ -319,10 +421,20 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     tNxt = _time.time()
     profiler.add_time('do_long_sequence_gst: Prep Initial seed',tRef); tRef=tNxt
 
+    # lsgstLists can hold either gatestring lists or structures - get
+    # just the lists for calling core gst routines (structure is used only
+    # for LGST and post-analysis).
+    rawLists = [ l.allstrs if isinstance(l,_objs.LsGermsStructure) else l
+                 for l in lsgstLists ]
+    
+    aliases = lsgstLists[-1].aliases if isinstance(
+        lsgstLists[-1], _objs.LsGermsStructure) else None
+    aliases = advancedOptions.get('gateLabelAliases',aliases)
+    
     #Run Long-sequence GST on data
     if objective == "chi2":
         gs_lsgst_list = _alg.do_iterative_mc2gst(
-            ds, gs_start, lsgstLists,
+            ds, gs_start, rawLists,
             tol = advancedOptions.get('tolerance',1e-6),
             cptp_penalty_factor = advancedOptions.get('cptpPenaltyFactor',0),
             maxiter = advancedOptions.get('maxIterations',100000),
@@ -332,7 +444,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                 'probClipInterval',(-1e6,1e6)),
             returnAll=True, 
             gatestringWeightsDict=advancedOptions.get('gsWeights',None),
-            gateLabelAliases=advancedOptions.get('gateLabelAliases',None),
+            gateLabelAliases=aliases,
             verbosity=printer,
             memLimit=memLimit,
             useFreqWeightedChiSq=advancedOptions.get(
@@ -344,7 +456,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
 
     elif objective == "logl":
         gs_lsgst_list = _alg.do_iterative_mlgst(
-          ds, gs_start, lsgstLists,
+          ds, gs_start, rawLists,
           tol = advancedOptions.get('tolerance',1e-6),
           cptp_penalty_factor = advancedOptions.get('cptpPenaltyFactor',0),
           maxiter = advancedOptions.get('maxIterations',100000),
@@ -358,7 +470,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
           distributeMethod=advancedOptions.get(
                 'distributeMethod',"deriv"),
           check=advancedOptions.get('check',False),
-          gateLabelAliases=advancedOptions.get('gateLabelAliases',None)
+          gateLabelAliases=aliases
         )
     else:
         raise ValueError("Invalid longSequenceObjective: %s" % objective)
@@ -390,14 +502,22 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     else:
         ordered_go_params_list = None
 
-    truncFn = _construction.stdlists._getTruncFunction(truncScheme)
+    #OLD: truncFn = _construction.stdlists._getTruncFunction(truncScheme)
 
     ret = _report.Results()
-    ret.init_Ls_and_germs(objective, gs_target, ds,
-                          gs_start, maxLengths, germs,
-                          go_gs_lsgst_list, lsgstLists, prepStrs, effectStrs,
-                          truncFn, fidPairs, gs_lsgst_list,
-                          advancedOptions.get('gateLabelAliases',None))
+    ret.init_Ls_and_germs(objective, ds, gs_target,
+                          gs_start, go_gs_lsgst_list,
+                          gs_lsgst_list, lsgstLists)
+                   
+      #set parameters
+    ret.parameters['defaultDirectory'] = default_dir
+    ret.parameters['defaultBasename'] = default_base
+    ret.parameters['memLimit'] = memLimit
+    ret.parameters['gaugeOptParams'] = ordered_go_params_list
+    ret.parameters['starting point'] = startingPt
+    ret.parameters['profiler'] = profiler
+
+      #from advanced options
     ret.parameters['minProbClip'] = \
         advancedOptions.get('minProbClip',1e-4)
     ret.parameters['minProbClipForWeighting'] = \
@@ -406,13 +526,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         advancedOptions.get('probClipInterval',(-1e6,1e6))
     ret.parameters['radius'] = advancedOptions.get('radius',1e-4)
     ret.parameters['weights'] = advancedOptions.get('gsWeights',None)
-    ret.parameters['defaultDirectory'] = default_dir
-    ret.parameters['defaultBasename'] = default_base
-    ret.parameters['memLimit'] = memLimit
-    ret.parameters['gaugeOptParams'] = ordered_go_params_list
     ret.parameters['cptpPenaltyFactor'] = advancedOptions.get('cptpPenaltyFactor',0)
     ret.parameters['distributeMethod'] = advancedOptions.get('distributeMethod','deriv')
-    ret.parameters['starting point'] = startingPt
     ret.parameters['depolarizeStart'] = advancedOptions.get('depolarizeStart',0)
     ret.parameters['contractStartToCPTP'] = advancedOptions.get('contractStartToCPTP',False)
     ret.parameters['tolerance'] = advancedOptions.get('tolerance',1e-6)
@@ -426,7 +541,6 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     ret.parameters['includeLGST'] = advancedOptions.get('includeLGST', startingPt == "LGST")
             
     profiler.add_time('do_long_sequence_gst: results initialization',tRef)
-    ret.parameters['profiler'] = profiler
 
-    assert( len(maxLengths) == len(lsgstLists) == len(go_gs_lsgst_list) )
+    assert( len(lsgstLists) == len(go_gs_lsgst_list) )
     return ret

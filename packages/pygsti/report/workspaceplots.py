@@ -481,7 +481,8 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
     plotly.Figure
     """
     g = gatestring_structure
-    return generate_boxplot(subMxs, g.used_xvals, g.used_yvals, g.prepStrs, g.effectStrs,
+    return generate_boxplot(subMxs, g.used_xvals(), g.used_yvals(),
+                            g.minor_xvals(), g.minor_yvals(),
                             "L","germ","rho_i","E_i", colormap,
                             colorbar, boxLabels, prec, hoverInfo,
                             sumUp, invert, scale)  #"$\\rho_i$","$\\E_i$"      
@@ -836,7 +837,7 @@ class ColorBoxPlot(WorkspacePlot):
                 invert, linlg_pcntle, minProbClipForWeighting,
                 directGSTgatesets):
 
-        maps = _ph._computeGateStringMaps(gss, dataset)
+        #OLD: maps = _ph._computeGateStringMaps(gss, dataset)
         probs_precomp_dict = None
         fig = None
         
@@ -849,65 +850,64 @@ class ColorBoxPlot(WorkspacePlot):
                 colormapType = "linlog"
                 linlog_color = "red"
                 
-                def mx_fn(gateStr,x,y):
-                    return _ph.chi2_matrix( maps[gateStr], dataset, gateset, minProbClipForWeighting,
-                                            probs_precomp_dict, gss.aliases)
+                def mx_fn(plaq,x,y):
+                    return _ph.chi2_matrix( plaq, dataset, gateset, minProbClipForWeighting,
+                                            probs_precomp_dict)
             elif typ == "logl":
                 precomp=True
                 colormapType = "linlog"
                 linlog_color = "green"
                 
-                def mx_fn(gateStr,x,y):
-                    return _ph.logl_matrix( maps[gateStr], dataset, gateset, minProbClipForWeighting,
-                                            probs_precomp_dict, gss.aliases)
+                def mx_fn(plaq,x,y):
+                    return _ph.logl_matrix( plaq, dataset, gateset, minProbClipForWeighting,
+                                            probs_precomp_dict)
 
             elif typ == "blank":
                 precomp=False
                 colormapType = "trivial"
 
-                def mx_fn(gateStr,x,y):
-                    return _np.nan * _np.zeros( (len(gss.effectStrs),len(gss.prepStrs)), 'd')
+                def mx_fn(plaq,x,y):
+                    return _np.nan * _np.zeros( (len(gss.minor_yvals()),
+                                                 len(gss.minor_xvals())), 'd')
 
             elif typ == "errorrate":
                 precomp=False
                 colormapType = "seq"
 
                 assert(sumUp == True),"Can only use 'errorrate' plot with sumUp == True"
-                def mx_fn(gateStr,x,y): #error rate as 1x1 matrix which we have plotting function sum up
-                    return _np.array( [[ _ph.small_eigval_err_rate(gateStr, dataset, directGSTgatesets) ]] )
+                def mx_fn(plaq,x,y): #error rate as 1x1 matrix which we have plotting function sum up
+                    return _np.array( [[ _ph.small_eigval_err_rate(plaq.base, dataset, directGSTgatesets) ]] )
 
             elif typ == "directchi2":
                 precomp=False
                 colormapType = "linlog"
                 linlog_color = "blue"
                 
-                def mx_fn(gateStr,x,y):
+                def mx_fn(plaq,x,y):
                     return _ph.direct_chi2_matrix(
-                        gateStr, dataset, directGSTgatesets.get(gateStr,None),
-                        (gss.prepStrs, gss.effectStrs), minProbClipForWeighting,
-                        gss.get_fidpair_filter(x,y), gss.get_gatestring_filter(x,y),
-                        gss.aliases)
+                        plaq, gss, dataset,
+                        directGSTgatesets.get(plaq.base,None),
+                        minProbClipForWeighting)
 
             elif typ == "directlogl":
                 precomp=False
                 colormapType = "linlog"
                 linlog_color = "yellow"
                 
-                def mx_fn(gateStr,x,y):
+                def mx_fn(plaq,x,y):
                     return _ph.direct_logl_matrix(
-                        gateStr, dataset, directGSTgatesets.get(gateStr,None),
-                        (gss.prepStrs, gss.effectStrs), minProbClipForWeighting,
-                        gss.get_fidpair_filter(x,y), gss.get_gatestring_filter(x,y),
-                        gss.aliases)
+                        plaq, gss, dataset,
+                        directGSTgatesets.get(plaq.base,None),
+                        minProbClipForWeighting)
 
             else:
                 raise ValueError("Invalid plot type: %s" % typ)
 
             if precomp and probs_precomp_dict is None: #bulk-compute probabilities for performance
-                probs_precomp_dict = _ph._computeProbabilities(maps, gateset, dataset)
+                probs_precomp_dict = _ph._computeProbabilities(gss, gateset, dataset)
 
             subMxs = _ph._computeSubMxs(gss,mx_fn,sumUp)
-            n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, gss.used_xvals, gss.used_yvals, sumUp)
+            n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, gss.used_xvals(), gss.used_yvals(), sumUp)
             dataMax = max( [ (_np.max(mx) if (mx is not None) else 0) for subMxRow in subMxs for mx in subMxRow] )
 
             if colormapType == "linlog":
@@ -919,8 +919,8 @@ class ColorBoxPlot(WorkspacePlot):
 
             elif colormapType == "seq":
                 max_abs = max([ _np.max(_np.abs(_np.nan_to_num(subMxs[iy][ix])))
-                                for ix in range(len(gss.used_xvals))
-                                for iy in range(len(gss.used_yvals)) ])
+                                for ix in range(len(gss.used_xvals()))
+                                for iy in range(len(gss.used_yvals())) ])
                 if max_abs == 0: max_abs = 1e-6 # pick a nonzero value if all entries are zero or nan
                 colormap = _colormaps.SequentialColormap(vmin=0, vmax=max_abs)
 

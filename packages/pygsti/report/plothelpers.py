@@ -126,14 +126,16 @@ def expand_aliases_in_map(gatestring_map, gateLabelAliases):
     return new_gatestring_tuples, rows, cols
 
 
-def total_count_matrix(gatestring_map, dataset):
+def total_count_matrix(gsplaq, dataset):
     """
     Computes the total count matrix for a base gatestring.
 
     Parameters
     ----------
-    gatestring_map : tuple of (tuples, rows, cols)
-        A tuple specifying how to map gate strings to matrix indices.
+    gsplaq : GatestringPlaquette
+        Obtained via :method:`GatestringStructure.get_plaquette`, this object
+        specifies which matrix indices should be computed and which gate strings
+        they correspond to.
 
     dataset : DataSet
         The data used to specify the counts
@@ -146,21 +148,22 @@ def total_count_matrix(gatestring_map, dataset):
         between the specified set of N prep-fiducial and M effect-fiducial
         gate strings.
     """
-    tuples,rows,cols = gatestring_map
-    ret = _np.nan * _np.ones( (rows,cols), 'd')
-    for i,j,gstr in tuples:
+    ret = _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
+    for i,j,gstr in gsplaq:
         ret[i,j] = dataset[ gstr ].total()
     return ret
 
 
-def count_matrices(gatestring_map, dataset, spamlabels):
+def count_matrices(gsplaq, dataset, spamlabels):
     """
     Computes spamLabel's count matrix for a base gatestring.
 
     Parameters
     ----------
-    gatestring_map : tuple of (tuples, rows, cols)
-        A tuple specifying how to map gate strings to matrix indices.
+    gsplaq : GatestringPlaquette
+        Obtained via :method:`GatestringStructure.get_plaquette`, this object
+        specifies which matrix indices should be computed and which gate strings
+        they correspond to.
 
     dataset : DataSet
         The data used to specify the counts
@@ -175,22 +178,23 @@ def count_matrices(gatestring_map, dataset, spamlabels):
         where gateString is sandwiched between the each prep-fiducial and
         effect-fiducial pair.
     """
-    tuples,rows,cols = gatestring_map
-    ret = _np.nan * _np.ones( (len(spamlabels),rows,cols), 'd')
-    for i,j,gstr in tuples:
+    ret = _np.nan * _np.ones( (len(spamlabels),gsplaq.rows,gsplaq.cols), 'd')
+    for i,j,gstr in gsplaq:
         datarow = dataset[ gstr ]
         ret[:,i,j] = [datarow[sl] for sl in spamlabels]
     return ret
 
 
-def frequency_matrices(gatestring_map, dataset, spamlabels):
+def frequency_matrices(gsplaq, dataset, spamlabels):
     """
     Computes spamLabel's frequency matrix for a base gatestring.
 
     Parameters
     ----------
-    gatestring_map : tuple of (tuples, rows, cols)
-        A tuple specifying how to map gate strings to matrix indices.
+    gsplaq : GatestringPlaquette
+        Obtained via :method:`GatestringStructure.get_plaquette`, this object
+        specifies which matrix indices should be computed and which gate strings
+        they correspond to.
 
     dataset : DataSet
         The data used to specify the frequencies
@@ -206,20 +210,22 @@ def frequency_matrices(gatestring_map, dataset, spamlabels):
         where gateString is sandwiched between the each prep-fiducial,
         effect-fiducial pair.
     """
-    return count_matrices(gatestring_map, dataset, spamlabels) \
-           / total_count_matrix( gatestring_map, dataset)[None,:,:]
+    return count_matrices(gsplaq, dataset, spamlabels) \
+           / total_count_matrix( gsplaq, dataset)[None,:,:]
 
 
 
-def probability_matrices(gatestring_map, gateset, spamlabels,
+def probability_matrices(gsplaq, gateset, spamlabels,
                          probs_precomp_dict=None):
     """
     Computes spamLabel's probability matrix for a base gatestring.
 
     Parameters
     ----------
-    gatestring_map : tuple of (tuples, rows, cols)
-        A tuple specifying how to map gate strings to matrix indices.
+    gsplaq : GatestringPlaquette
+        Obtained via :method:`GatestringStructure.get_plaquette`, this object
+        specifies which matrix indices should be computed and which gate strings
+        they correspond to.
 
     gateset : GateSet
         The gate set used to specify the probabilities
@@ -239,29 +245,30 @@ def probability_matrices(gatestring_map, gateset, spamlabels,
         where gateString is sandwiched between the each prep-fiducial, 
         effect-fiducial pair.
     """
-    tuples,rows,cols = gatestring_map
-    ret = _np.nan * _np.ones( (len(spamlabels),rows,cols), 'd')
+    ret = _np.nan * _np.ones( (len(spamlabels),gsplaq.rows,gsplaq.cols), 'd')
     if probs_precomp_dict is None:
         if gateset is not None:
-            for i,j,gstr in tuples:
+            for i,j,gstr in gsplaq:
                 probs = gateset.probs(gstr)
                 ret[:,i,j] = [probs[sl] for sl in spamlabels]
     else:
-        for i,j,gstr in tuples:
+        for i,j,gstr in gsplaq:
             probs = probs_precomp_dict[gstr]
             ret[:,i,j] = [probs[sl] for sl in spamlabels]
     return ret
 
 
-def chi2_matrix(gatestring_map, dataset, gateset, minProbClipForWeighting=1e-4,
-                probs_precomp_dict=None, gateLabelAliases=None):
+def chi2_matrix(gsplaq, dataset, gateset, minProbClipForWeighting=1e-4,
+                probs_precomp_dict=None):
     """
     Computes the chi^2 matrix for a base gatestring.
 
     Parameters
     ----------
-    gatestring_map : tuple of (tuples, rows, cols)
-        A tuple specifying how to map gate strings to matrix indices.
+    gsplaq : GatestringPlaquette
+        Obtained via :method:`GatestringStructure.get_plaquette`, this object
+        specifies which matrix indices should be computed and which gate strings
+        they correspond to.
 
     dataset : DataSet
         The data used to specify frequencies and counts
@@ -277,13 +284,6 @@ def chi2_matrix(gatestring_map, dataset, gateset, minProbClipForWeighting=1e-4,
         and values are prob-dictionaries (as returned from GateSet.probs)
         corresponding to each gate string.
 
-    gateLabelAliases : dictionary, optional
-        Dictionary whose keys are gate label "aliases" and whose values are tuples
-        corresponding to what that gate label should be expanded into before querying
-        the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
-
-
     Returns
     -------
     numpy array of shape ( len(effectStrs), len(prepStrs) )
@@ -291,28 +291,29 @@ def chi2_matrix(gatestring_map, dataset, gateset, minProbClipForWeighting=1e-4,
         gateString is sandwiched between the each prep-fiducial,
         effect-fiducial pair.
     """
-    ds_gatestring_map = expand_aliases_in_map(gatestring_map, gateLabelAliases)
-    
+    gsplaq_ds = gsplaq.expand_aliases(dataset)
     spamlabels = gateset.get_spam_labels()
-    cntMxs  = total_count_matrix(   ds_gatestring_map, dataset)[None,:,:]
-    probMxs = probability_matrices( gatestring_map, gateset, spamlabels,
+    cntMxs  = total_count_matrix(gsplaq_ds, dataset)[None,:,:]
+    probMxs = probability_matrices(gsplaq, gateset, spamlabels,
                                     probs_precomp_dict)
-    freqMxs = frequency_matrices(   ds_gatestring_map, dataset, spamlabels)
+    freqMxs = frequency_matrices(gsplaq_ds, dataset, spamlabels)
     chiSqMxs= _tools.chi2fn( cntMxs, probMxs, freqMxs,
                                      minProbClipForWeighting)
     return chiSqMxs.sum(axis=0) # sum over spam labels
 
 
-def logl_matrix(gatestring_map, dataset, gateset, minProbClip=1e-6,
-                probs_precomp_dict=None, gateLabelAliases=None):
+def logl_matrix(gsplaq, dataset, gateset, minProbClip=1e-6,
+                probs_precomp_dict=None):
     """
     Computes the log-likelihood matrix of 2*( log(L)_upperbound - log(L) )
     values for a base gatestring.
 
     Parameters
     ----------
-    gatestring_map : tuple of (tuples, rows, cols)
-        A tuple specifying how to map gate strings to matrix indices.
+    gsplaq : GatestringPlaquette
+        Obtained via :method:`GatestringStructure.get_plaquette`, this object
+        specifies which matrix indices should be computed and which gate strings
+        they correspond to.
 
     dataset : DataSet
         The data used to specify frequencies and counts
@@ -328,12 +329,6 @@ def logl_matrix(gatestring_map, dataset, gateset, minProbClip=1e-6,
         and values are prob-dictionaries (as returned from GateSet.probs)
         corresponding to each gate string.
 
-    gateLabelAliases : dictionary, optional
-        Dictionary whose keys are gate label "aliases" and whose values are tuples
-        corresponding to what that gate label should be expanded into before querying
-        the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
-
 
     Returns
     -------
@@ -342,13 +337,13 @@ def logl_matrix(gatestring_map, dataset, gateset, minProbClip=1e-6,
         gateString is sandwiched between the each prep-fiducial,
         effect-fiducial pair.
     """
-    ds_gatestring_map = expand_aliases_in_map(gatestring_map, gateLabelAliases)
+    gsplaq_ds = gsplaq.expand_aliases(dataset)
     
     spamlabels = gateset.get_spam_labels()
-    cntMxs  = total_count_matrix(   ds_gatestring_map, dataset)[None,:,:]
-    probMxs = probability_matrices( gatestring_map, gateset, spamlabels,
+    cntMxs  = total_count_matrix(   gsplaq_ds, dataset)[None,:,:]
+    probMxs = probability_matrices( gsplaq, gateset, spamlabels,
                                     probs_precomp_dict)
-    freqMxs = frequency_matrices(   ds_gatestring_map, dataset, spamlabels)
+    freqMxs = frequency_matrices(   gsplaq_ds, dataset, spamlabels)
     logLMxs = _tools.two_delta_loglfn( cntMxs, probMxs, freqMxs, minProbClip)
     return logLMxs.sum(axis=0) # sum over spam labels
 
@@ -423,20 +418,20 @@ def _eformat(f, prec):
     else:
         return "%g" % f #fallback to general format
 
-
-def _computeGateStringMaps(gss, dataset):
-#    xvals, yvals, xyGateStringDict
-#    strs, fidpair_filters, gatestring_filters,
-#                           gateLabelAliases
-    """ 
-    Return a dictionary of all the gatestring maps,
-    indexed by base string. 
-    """
-    return { gss.gsDict[(x,y)] :
-                 get_gatestring_map(gss.gsDict[(x,y)], dataset, (gss.prepStrs, gss.effectStrs),
-                                    gss.get_fidpair_filter(x,y), gss.get_gatestring_filter(x,y),
-                                    gss.aliases)
-             for x in gss.used_xvals for y in gss.used_yvals }
+#OLD
+#def _computeGateStringMaps(gss, dataset):
+##    xvals, yvals, xyGateStringDict
+##    strs, fidpair_filters, gatestring_filters,
+##                           gateLabelAliases
+#    """ 
+#    Return a dictionary of all the gatestring maps,
+#    indexed by base string. 
+#    """
+#    return { gss.gsDict[(x,y)] :
+#                 get_gatestring_map(gss.gsDict[(x,y)], dataset, (gss.prepStrs, gss.effectStrs),
+#                                    gss.get_fidpair_filter(x,y), gss.get_gatestring_filter(x,y),
+#                                    gss.aliases)
+#             for x in gss.used_xvals for y in gss.used_yvals }
 
 def _num_non_nan(array):
     ixs = _np.where(_np.isnan(_np.array(array).flatten()) == False)[0]
@@ -486,16 +481,12 @@ def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp):
     return n_boxes, dof_per_box
 
     
-def _computeProbabilities(maps, gateset, dataset):
+def _computeProbabilities(gss, gateset, dataset):
     """ 
-    Returns a dictionary of probabilities for each gate sequence in any of
-    the maps contained in `maps` (a dict of gatestring maps as returned by
-    _computeGateStringMaps).
+    Returns a dictionary of probabilities for each gate sequence in
+    GatestringStructure `gss`.
     """
-    #concatenate all gatestrings in maps
-    gatestringList = [] 
-    for m in maps.values():
-        gatestringList.extend( [tup[2] for tup in m[0]] )
+    gatestringList = gss.allstrs
 
     #compute probabilities
     spamLabels = dataset.get_spam_labels()
@@ -509,15 +500,14 @@ def _computeProbabilities(maps, gateset, dataset):
     
 
 def _computeSubMxs(gss, subMxCreationFn, sumUp):
-    subMxs = [ [ subMxCreationFn(gss.gsDict[(x,y)],x,y) for x in gss.used_xvals ] 
-               for y in gss.used_yvals]
+    subMxs = [ [ subMxCreationFn(gss.get_plaquette(x,y),x,y)
+                 for x in gss.used_xvals() ] for y in gss.used_yvals()]
     #Note: subMxs[y-index][x-index] is proper usage
-    return subMxs #OLD:, n_boxes, dof_per_box
+    return subMxs
 
 
-def direct_chi2_matrix(sigma, dataset, directGateset, strs,
-                       minProbClipForWeighting=1e-4, fidpair_filter=None,
-                       gatestring_filter=None, gateLabelAliases=None):
+def direct_chi2_matrix(gsplaq, gss, dataset, directGateset,
+                       minProbClipForWeighting=1e-4):
     """
     Computes the Direct-X chi^2 matrix for a base gatestring sigma.
 
@@ -528,8 +518,15 @@ def direct_chi2_matrix(sigma, dataset, directGateset, strs,
 
     Parameters
     ----------
-    sigma : GateString or tuple of gate labels
-        The gate sequence that is sandwiched between each prepStr and effectStr
+    gsplaq : GatestringPlaquette
+        Obtained via :method:`GatestringStructure.get_plaquette`, this object
+        specifies which matrix indices should be computed and which gate strings
+        (for accessing the dataset) they correspond to.  
+
+    gss : GatestringStructure
+        The gate string structure object containing `gsplaq`.  The structure is
+        neede to create a special plaquette for computing probabilities from the
+        direct gateset containing a "GsigmaLbl" gate.
 
     dataset : DataSet
         The data used to specify frequencies and counts
@@ -538,26 +535,8 @@ def direct_chi2_matrix(sigma, dataset, directGateset, strs,
         GateSet which contains an estimate of sigma stored
         under the gate label "GsigmaLbl".
 
-    strs : 2-tuple
-        A (prepStrs,effectStrs) tuple usually generated by calling get_spam_strs(...)
-
     minProbClipForWeighting : float, optional
         defines the clipping interval for the statistical weight (see chi2fn).
-
-    fidpair_filter : list, optional
-        A list of (iRhoStr,iEStr) tuples specifying a subset of all the prepStr,effectStr
-        pairs to include in the matrix.
-
-    gatestring_filter : list, optional
-        If not None, a list of GateString objects specifying which elements
-        of the matrix should be computed.  Any matrix entry corresponding to
-        an gate string *not* in this list is set to NaN.
-
-    gateLabelAliases : dictionary, optional
-        Dictionary whose keys are gate label "aliases" and whose values are tuples
-        corresponding to what that gate label should be expanded into before querying
-        the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
 
     Returns
@@ -567,24 +546,20 @@ def direct_chi2_matrix(sigma, dataset, directGateset, strs,
         gateString is sandwiched between the each (effectStr,prepStr) pair.
     """
     spamlabels = dataset.get_spam_labels()
-    gsmap = get_gatestring_map(sigma, dataset, strs, fidpair_filter,
-                               gatestring_filter, gateLabelAliases)
-    gsmap_pr = get_gatestring_map(_objs.GateString( ("GsigmaLbl",) ),None,strs)
-                # set dataset == None & don't apply filter since they won't have GsigmaLbl
-    ds_gsmap = expand_aliases_in_map(gsmap, gateLabelAliases)
+    plaq_ds = gsplaq.expand_aliases(dataset)
+    plaq_pr = gss.create_plaquette( _objs.GateString( ("GsigmaLbl",) ) )
     
-    cntMxs = total_count_matrix(ds_gsmap, dataset)[None,:,:]
-    probMxs = probability_matrices( gsmap_pr, directGateset, spamlabels ) # no probs_precomp_dict
-    freqMxs = frequency_matrices( ds_gsmap, dataset, spamlabels)
+    cntMxs = total_count_matrix(plaq_ds, dataset)[None,:,:]
+    probMxs = probability_matrices( plaq_pr, directGateset, spamlabels ) # no probs_precomp_dict
+    freqMxs = frequency_matrices( plaq_ds, dataset, spamlabels)
     chiSqMxs= _tools.chi2fn( cntMxs, probMxs, freqMxs,
                                      minProbClipForWeighting)
     return chiSqMxs.sum(axis=0) # sum over spam labels
 
 
 
-def direct_logl_matrix(sigma, dataset, directGateset, strs,
-                       minProbClip=1e-6, fidpair_filter=None,
-                       gatestring_filter=None, gateLabelAliases=None):
+def direct_logl_matrix(gsplaq, gss, dataset, directGateset,
+                       minProbClip=1e-6):
     """
     Computes the Direct-X log-likelihood matrix, containing the values
      of 2*( log(L)_upperbound - log(L) ) for a base gatestring sigma.
@@ -596,8 +571,15 @@ def direct_logl_matrix(sigma, dataset, directGateset, strs,
 
     Parameters
     ----------
-    sigma : GateString or tuple of gate labels
-        The gate sequence that is sandwiched between each prepStr and effectStr
+    gsplaq : GatestringPlaquette
+        Obtained via :method:`GatestringStructure.get_plaquette`, this object
+        specifies which matrix indices should be computed and which gate strings
+        (for accessing the dataset) they correspond to.  
+
+    gss : GatestringStructure
+        The gate string structure object containing `gsplaq`.  The structure is
+        neede to create a special plaquette for computing probabilities from the
+        direct gateset containing a "GsigmaLbl" gate.
 
     dataset : DataSet
         The data used to specify frequencies and counts
@@ -606,42 +588,21 @@ def direct_logl_matrix(sigma, dataset, directGateset, strs,
         GateSet which contains an estimate of sigma stored
         under the gate label "GsigmaLbl".
 
-    strs : 2-tuple
-        A (prepStrs,effectStrs) tuple usually generated by calling get_spam_strs(...)
-
     minProbClip : float, optional
         defines the minimum probability clipping.
-
-    fidpair_filter : list, optional
-        A list of (iRhoStr,iEStr) tuples specifying a subset of all the prepStr,effectStr
-        pairs to include in the matrix.  Other elements are set to NaN.
-
-    gatestring_filter : list, optional
-        If not None, a list of GateString objects specifying which elements
-        of the matrix should be computed.  Any matrix entry corresponding to
-        an gate string *not* in this list is set to NaN.
-
-    gateLabelAliases : dictionary, optional
-        Dictionary whose keys are gate label "aliases" and whose values are tuples
-        corresponding to what that gate label should be expanded into before querying
-        the dataset. Defaults to the empty dictionary (no aliases defined)
-        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
-
 
     Returns
     -------
     numpy array of shape ( len(effectStrs), len(prepStrs) )
-        Direct-X chi^2 values corresponding to gate sequences where
+        Direct-X logL values corresponding to gate sequences where
         gateString is sandwiched between the each (effectStr,prepStr) pair.
     """
     spamlabels = dataset.get_spam_labels()
-    gsmap = get_gatestring_map(sigma, dataset, strs, fidpair_filter,
-                               gatestring_filter, gateLabelAliases)
-    gsmap_pr = get_gatestring_map(_objs.GateString( ("GsigmaLbl",) ),None,strs)
-                # set dataset == None & don't apply filter since they won't have GsigmaLbl
-    ds_gsmap = expand_aliases_in_map(gsmap, gateLabelAliases)
-    cntMxs = total_count_matrix(ds_gsmap, dataset)[None,:,:]
-    probMxs = probability_matrices( gsmap_pr, directGateset, spamlabels ) # no probs_precomp_dict
-    freqMxs = frequency_matrices( ds_gsmap, dataset, spamlabels)
+    plaq_ds = gsplaq.expand_aliases(dataset)
+    plaq_pr = gss.create_plaquette( _objs.GateString( ("GsigmaLbl",) ) )
+
+    cntMxs = total_count_matrix(plaq_ds, dataset)[None,:,:]
+    probMxs = probability_matrices( plaq_pr, directGateset, spamlabels ) # no probs_precomp_dict
+    freqMxs = frequency_matrices( plaq_ds, dataset, spamlabels)
     logLMxs = _tools.two_delta_loglfn( cntMxs, probMxs, freqMxs, minProbClip)
     return logLMxs.sum(axis=0) # sum over spam labels

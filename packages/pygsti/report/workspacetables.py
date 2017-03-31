@@ -1428,7 +1428,7 @@ class FitComparisonTable(WorkspaceTable):
         table = _ReportTable(colHeadings, None)
         
         for X,gs,gss,Np in zip(Xs,gatesetByX,gssByX,NpByX):
-            gstrs = gss.get_all_strings()
+            gstrs = gss.allstrs
             
             if objective == "chi2":
                 fitQty = _tools.chi2( dataset, gs, gstrs,
