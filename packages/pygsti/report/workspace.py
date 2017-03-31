@@ -6,48 +6,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Defines the Workspace class and supporting functionality."""
 
-#import os  as _os
-#import re  as _re
-#import time as _time
-#import subprocess  as _subprocess
-#import collections as _collections
-#import matplotlib  as _matplotlib
-#import itertools   as _itertools
-#import copy as _copy
-#
-#from ..             import objects              as _objs
-#from ..objects      import gatestring           as _gs
-#from ..objects      import VerbosityPrinter
-#from ..construction import spamspecconstruction as _ssc
-#from ..algorithms   import gaugeopt_to_target   as _optimizeGauge
-#from ..algorithms   import contract             as _contract
-#from ..tools        import listtools            as _lt
-#from ..             import _version
-#
-#from . import latex      as _latex
-#from . import generation as _generation
-#from . import plotting   as _plotting
-#
-#from .resultcache import ResultCache as _ResultCache
-
-#TODO:
-# convert plots & tables -> plot.ly
-# separate plot calculation from rendering
-# move table and plot *calculation* fns to Workspace (?) and use a calc-cache of some sort
-# remove caching & frills from Results object
-# add Report classes which use Workspace to construct std reports
-# move any new classes to "objects/" ?
-
-#Example:
-# w = Workspace( options, autodisplay="widgets" )
-# ds = w.load_dataset("file")
-# gs = w.Selector([gs1,gs2,gs3], "slider")
-# tab = w.MyTable(gs)
-# plot = w.MyPlot(gs, ds)
-# w.display([gs,plot], "widgets") #if autodisplay is off? layout?
-# OR
-# gs.selected = 1
-# w.display([plot], "static") #if autodisplay is off? layout?
 import itertools as _itertools
 import collections as _collections
 import os as _os
@@ -187,22 +145,6 @@ class Workspace(object):
                 
             return factoryfn
 
-            
-            #TODO: set signature of factor_fn to cls.__init__
-            #def factory_fn(*args,**kwargs):
-            #    factory_fn.__doc__ = cls.__init__.__doc__
-            #    return cls(self, *args, **kwargs)
-            #
-            #else:
-            #    def factory_fn(*args,**kwargs):
-            #        key = call_key(cls, args) # cache by call key
-            #        if key not in self.outputObjs:
-            #            #print("DB: new call key = ",key)
-            #            self.outputObjs[key] = cls(self, *args, **kwargs) #construct using *full* args
-            #        return self.outputObjs[key]
-            #    
-            #factory_fn.__doc__ = cls.__init__.__doc__
-            #return factory_fn
 
         # "register" components
         from . import workspacetables as _wt
@@ -1191,87 +1133,3 @@ class WorkspacePlot(WorkspaceOutput):
                                  self.switchboards, self.sbSwitchIndices)
                 
                     
-                
-
-
-### TEST ------------------------------------------------------------------------
-#def add(a,b):
-#    print("Adding(%d,%d)!" % (a,b))
-#    return a + b
-#
-#class TestLabel(WorkspaceOutput):
-#    def __init__(self, ws, val1, val2):
-#        print("Constructing TestLabel(%s,%s)" % (str(val1),str(val2)) )
-#        super(TestLabel, self).__init__(ws)        
-#        self.initargs = (val1,val2)
-#        self.widget = None #don't build until necessary
-#        self.update()
-#
-#    def update(self):
-#        val1,val2 = self.initargs
-#        print("Updating TestLabel(%s,%s)" % (str(val1),str(val2)) )
-#        self.html = self.ws.cachedCompute(add, val1, val2)
-#
-#        if self.widget:
-#            self.widget.value = "Value: " + str(self.html)
-#
-#    def render(self):
-#        if self.widget is None:
-#            self.widget = _widgets.Label(value="Value: " + str(self.html),
-#                                         placeholder='Some LaTeX',
-#                                         description='Some LaTeX',
-#                                         disabled=False)
-#            self.update()
-#        _display(self.widget)
-#
-#
-#class TestPlot(WorkspaceOutput):
-#    def __init__(self, ws, val1, val2):
-#        print("Constructing TestPlot(%s,%s)" % (str(val1),str(val2)) )
-#        super(TestPlot, self).__init__(ws)        
-#        self.initargs = (val1,val2)
-#        self.widget = None #don't build until necessary
-#        self.update()
-#
-#    def update(self):
-#        val1,val2 = self.initargs
-#        print("Updating TestPlot(%s,%s)" % (str(val1),str(val2)) )
-#        self.val = self.ws.cachedCompute(add, val1, val2)
-#
-#        if self.widget:
-#            fig = _go.Scatter(x=[1,2,3],y=[3, 1, self.val])
-#            _clear_output()
-#            iplot([fig])
-#
-#    def render(self):
-#        if self.widget is None:
-#            self.widget = _widgets.Output()
-#            self.update()
-#        _display(self.widget)
-#        
-#class MyPlot(WorkspaceOutput):
-#    def __init__(self, ws, gateset, dataset, filename, render=True):
-#
-#        key = ("MyPlot",gateset.key,dataset.key,filename.key)
-#
-#        # use ws as cache for (myID, myArgs) value
-#        if ws is not None and key in ws:
-#            self.__dict__ = ws[key].__dict__.copy() #copy?
-#        else:
-#            #compute plot data; deal with gateset & dataset being WorkspaceValues that contain mulitple values
-#            # - use ws as cache for calculations
-#            gs = gateset.value
-#            ds = dataset.value
-#            #self.logLMx = ws.BoxPlotData("logl", gs, ds, sumUp=False) #will check cache
-#            
-#            if ws is not None:
-#                ws[key] = self
-#
-#        if render: self.render()
-#        super(MyPlot, self).__init__(ws)
-#
-#    def render(self):
-#        #plot self.logLMx within a widget?
-#        pass
-### TEST ------------------------------------------------------------------------
-
