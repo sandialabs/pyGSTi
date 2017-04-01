@@ -765,7 +765,7 @@ class BoxKeyPlot(WorkspacePlot):
     
 class ColorBoxPlot(WorkspacePlot):
     def __init__(self, ws, plottype, gss, dataset, gateset,
-                 sumUp=False, boxLabels=True, hoverInfo=True, invert=False,
+                 sumUp=False, boxLabels=False, hoverInfo=True, invert=False,
                  prec='compact', linlg_pcntle=.05, minProbClipForWeighting=1e-4,
                  directGSTgatesets=None, scale=1.0):
         """
