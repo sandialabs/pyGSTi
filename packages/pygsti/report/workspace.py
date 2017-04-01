@@ -644,7 +644,18 @@ class Switchboard(_collections.OrderedDict):
                             ",".join(map(str,float_vals)) + "];\n"
                 js += "var %s_str_values = [" % ID + \
                             ",".join(["'%s'" % s for s in posLbls]) + "];\n"
-                    
+                js += "window.%s_float_values = %s_float_values;\n" % (ID,ID) #declare globally
+
+                #js += "\n".join( (
+                #    "  function %s_snapper(event, ui) {" % ID,
+                #    "        var includeLeft = event.keyCode != $.ui.keyCode.RIGHT;",
+                #    "        var includeRight = event.keyCode != $.ui.keyCode.LEFT;",
+                #    "        var iValue = findNearest(includeLeft, includeRight, ui.value);",
+                #    "        $('#%s').slider('value', %s_float_values[iValue]);" % (ID,ID),
+                #    "        $('#%s-handle').text(%s_str_values[iValue]);" % (ID,ID),
+                #    "        return false;"
+                #    "    }" ) )
+                
                 js += "\n".join( (
                     "  $('#%s').slider({" % ID,
                     "     orientation: 'horizontal', range: false,",
@@ -682,7 +693,8 @@ class Switchboard(_collections.OrderedDict):
                     "    }",
                     "  }",
                     "  return nearest;",
-                    "}" ))
+                    "}",
+                    "window.findNearest_%s = findNearest;\n" % ID))
                 
             else:
                 raise ValueError("Unknown switch type: %s" % typ)
@@ -717,7 +729,8 @@ class Switchboard(_collections.OrderedDict):
         elif typ == "dropdown":
             return "$('#%s').on('selectmenuchange', function() {" % ID
         elif typ == "slider":
-            return "$('#%s').on('slidechange', function() {" % ID
+            #return "$('#%s').on('slidechange', function() {" % ID #only when slider stops
+            return "$('#%s').on('slide', function() {" % ID #only when slider stops
         else:
             raise ValueError("Unknown switch type: %s" % typ)
 
@@ -742,7 +755,8 @@ class Switchboard(_collections.OrderedDict):
         elif typ == "dropdown":
             return "$('#%s').val()" % ID
         elif typ == "slider":
-            return "$('#%s').slider('option', 'value')" % ID
+            #return "%s_float_values.indexOf($('#%s').slider('option', 'value'))" % (ID,ID)
+            return "findNearest_%s(true,true,$('#%s').slider('option', 'value'))" % (ID,ID)
         else:
             raise ValueError("Unknown switch type: %s" % typ)
         
@@ -972,9 +986,8 @@ class WorkspaceOutput(object):
 
         #build javascript to map switch positions to div_ids
         #js  = "$(document).ready(function() {\n"
-        js = "var switchmap_%s = new Array();\n" % ID
-          #global varaiable -- do not put in on-ready handler
-        js += "$( function() {\n"
+        js  = "$( function() {\n"
+        js += "  var switchmap_%s = new Array();\n" % ID
         for switchPositions, iDiv in switchpos_map.items():
             #switchPositions is a tuple of tuples of position indices, one tuple per switchboard
             div_id = div_ids[iDiv]
@@ -983,6 +996,8 @@ class WorkspaceOutput(object):
                 flatPositions.extend( singleBoardSwitchPositions )                
             js += "  switchmap_%s[ [%s] ] = '%s';\n" % \
                     (ID, ",".join(map(str,flatPositions)), div_id)
+
+        js += "  window.switchmap_%s = switchmap_%s;\n" % (ID,ID) #make a *global* variable
         js += "\n"
 
         
@@ -1001,6 +1016,7 @@ class WorkspaceOutput(object):
                     for switchIndex2 in switchInds2:
                         handler_js += "  curSwitchPos.push(%s);\n" % sb2.get_switch_valuejs(switchIndex2)
                 handler_js += "  var idToShow = switchmap_%s[ curSwitchPos ];\n" % ID
+                #DEBUG: handler_js += "  alert('%s: idToShow = ' + idToShow);\n" % ID
                 handler_js += "  $( '#%s' ).children().hide();\n" % ID
                 handler_js += "  $( '#' + idToShow ).show();\n"
                 handler_js += "}\n"

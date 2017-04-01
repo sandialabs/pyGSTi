@@ -195,11 +195,11 @@ class LsGermsStructure(GatestringStructure):
         aliases : dict
             Gate label aliases to be propagated to all plaquettes.
         """
-        self.Ls = Ls
-        self.germs = germs
-        self.prepStrs = prepStrs
-        self.effectStrs = effectStrs
-        self.aliases = aliases
+        self.Ls = Ls[:]
+        self.germs = germs[:]
+        self.prepStrs = prepStrs[:]
+        self.effectStrs = effectStrs[:]
+        self.aliases = aliases.copy() if (aliases is not None) else None
 
         self.allstrs = []
         self._plaquettes = {}

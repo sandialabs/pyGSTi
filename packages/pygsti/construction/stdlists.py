@@ -415,6 +415,8 @@ def make_lsgst_structs(gateLabels, prepStrs, effectStrs, germList, maxLengthList
         gss.done_adding_strings()
         lsgst_listOfStructs.append( gss )
 
+    for i,(maxL,struct) in enumerate(zip(maxLengthList,lsgst_listOfStructs)):
+        assert(struct.Ls == maxLengthList[0:i+1]) #Make sure lengths are correct!
     return lsgst_listOfStructs
 
 

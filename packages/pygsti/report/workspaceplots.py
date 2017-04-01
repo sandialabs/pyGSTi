@@ -80,7 +80,7 @@ def color_boxplot(plt_data, colormap, colorbar=False, boxLabelSize=0,
     heatmapArgs = { 'z': colormap.normalize(masked_data),
                     'colorscale': colormap.get_colorscale(),
                     'showscale': colorbar, 'hoverinfo': 'none',
-                    'zmin':0, 'zmax': 1.0 } #so colormap normalization works as expected
+                    'zmin': colormap.hmin, 'zmax': colormap.hmax }
     
     #if xlabels is not None: heatmapArgs['x'] = xlabels
     #if ylabels is not None: heatmapArgs['y'] = ylabels
@@ -378,8 +378,8 @@ def generate_boxplot(subMxs,
         #update tickvals b/c color_boxplot doesn't do this (unlike nested_color_boxplot)
         fig['layout']['xaxis'].update(tickvals=list(range(nXs)))
         fig['layout']['yaxis'].update(tickvals=list(range(nYs)))
-        fig['layout'].update(width=100*(nXs+1)*scale,
-                             height=100*(nYs+1)*scale)
+        fig['layout'].update(width=80*(nXs+3)*scale,
+                             height=80*(nYs+3)*scale)
 
     else: #not summing up
                 
@@ -396,8 +396,8 @@ def generate_boxplot(subMxs,
         fig = nested_color_boxplot(subMxs, colormap, colorbar, boxLabelSize,
                                    prec, hoverLabelFn)
 
-        fig['layout'].update(width=30*(nXs*nIXs+1)*scale,
-                             height=30*(nYs*nIYs+1)*scale)
+        fig['layout'].update(width=30*(nXs*nIXs+5)*scale,
+                             height=30*(nYs*nIYs+5)*scale)
         
     if xlabel: fig['layout']['xaxis'].update(title=xlabel,
                                              titlefont={'size': 12*scale, 'color': "black"})
@@ -565,11 +565,10 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
     ylabels    = list(reversed(ylabels)) # FLIP y-labels to match
     trace = go.Heatmap(z=colormap.normalize(flipped_mx),
                        colorscale=colormap.get_colorscale(),
-                       showscale=(not boxLabels), zmin=colormap.vmin,
-                       zmax=colormap.vmax, hoverinfo='z')
+                       showscale=(not boxLabels), zmin=colormap.hmin,
+                       zmax=colormap.hmax, hoverinfo='z')
     data = [trace]
     
-    scale = 1.0
     nX = gateMatrix.shape[1]
     nY = gateMatrix.shape[0]
     
@@ -768,7 +767,7 @@ class ColorBoxPlot(WorkspacePlot):
     def __init__(self, ws, plottype, gss, dataset, gateset,
                  sumUp=False, boxLabels=True, hoverInfo=True, invert=False,
                  prec='compact', linlg_pcntle=.05, minProbClipForWeighting=1e-4,
-                 directGSTgatesets=None):
+                 directGSTgatesets=None, scale=1.0):
         """
         Create a plot displaying the value of per-gatestring quantities.
 
@@ -825,17 +824,20 @@ class ColorBoxPlot(WorkspacePlot):
             A dictionary of "direct" Gatesets used when displaying certain plot
             types.  Keys are gate strings and values are corresponding gate
             sets (see `plottype` above).        
+
+        scale : float, optional
+            Scaling factor to adjust the size of the final figure.
         """
         # separate in rendering/saving: save_to=None, ticSize=20, scale=1.0 (?)
         super(ColorBoxPlot,self).__init__(ws, self._create, plottype, gss, dataset, gateset,
                                           prec, sumUp, boxLabels, hoverInfo,
                                           invert, linlg_pcntle, minProbClipForWeighting,
-                                          directGSTgatesets)
+                                          directGSTgatesets, scale)
 
     def _create(self, plottypes, gss, dataset, gateset,
                 prec, sumUp, boxLabels, hoverInfo,
                 invert, linlg_pcntle, minProbClipForWeighting,
-                directGSTgatesets):
+                directGSTgatesets, scale):
 
         #OLD: maps = _ph._computeGateStringMaps(gss, dataset)
         probs_precomp_dict = None
@@ -928,7 +930,8 @@ class ColorBoxPlot(WorkspacePlot):
             
             newfig = gatestring_color_boxplot(gss, subMxs, colormap,
                                               False, boxLabels, prec,
-                                              hoverInfo, sumUp, invert)
+                                              hoverInfo, sumUp, invert,
+                                              scale)
             if fig is None:
                 fig = newfig
             else:
@@ -1112,7 +1115,9 @@ class PolarEigenvaluePlot(WorkspacePlot):
                     ),
                     opacity=0.7
                 ))
-            if labels is not None:
+            if labels is None or len(labels[i]) == 0:
+                trace.update(showlegend=False)
+            else:
                 trace.update(name=labels[i])
             data.append(trace)
 

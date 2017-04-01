@@ -16,15 +16,17 @@ def _vnorm(x, vmin, vmax):
 
 
 class Colormap(object):
-    def __init__(self, rgb_colors):
+    def __init__(self, rgb_colors, hmin, hmax):
         self.rgb_colors = rgb_colors
+        self.hmin = hmin
+        self.hmax = hmax
         
     def _brightness(self,R,G,B):
         # Perceived brightness calculation from http://alienryderflex.com/hsp.html
         return _np.sqrt(0.299*R**2 + 0.587*G**2 + 0.114*B**2)
 
     def besttxtcolor(self, value):
-        z = self.normalize(value) # norm_value <=> color
+        z = _vnorm( self.normalize(value), self.hmin, self.hmax) # norm_value <=> color
         for i in range(1,len(self.rgb_colors)):
             if z < self.rgb_colors[i][0]:
                 z1,rgb1 = self.rgb_colors[i-1]
@@ -36,6 +38,7 @@ class Colormap(object):
 
         # Perceived brightness calculation from http://alienryderflex.com/hsp.html
         P = self._brightness(R,G,B)
+        #print("DB: value = %f (%s), RGB = %f,%f,%f, P=%f (%s)" % (value,z,R,G,B,P,"black" if 0.5 <= P else "white"))
         return "black" if 0.5 <= P else "white"
 
     def get_colorscale(self):
@@ -54,6 +57,9 @@ class LinlogColormap(Colormap):
         self.dof = dof_per_box
         self.vmin = vmin
         self.vmax = vmax
+        hmin = 0  #we'll normalize all values to [0,1] and then
+        hmax = 1  # plot.ly will map this range linearly to (also) [0,1]
+                  # range of our (and every) colorscale.
         
         N = max(self.N,1) #don't divide by N == 0 (if there are no boxes)
         self.trans = _np.ceil(_chi2.ppf(1 - self.percentile / N, self.dof))
@@ -80,10 +86,21 @@ class LinlogColormap(Colormap):
 
         super(LinlogColormap, self).__init__(
             [ [0.0, (1.,1.,1.)], [0.499999999, gray],
-              [0.5, c], [1.0, mx] ] )
+              [0.5, c], [1.0, mx] ], hmin,hmax)
 
 
     def normalize(self, value):
+        """ 
+        Scale value to a value between self.hmin and self.hmax (heatmap endpoints).
+
+        Parameters
+        ----------
+        value : float or ndarray
+
+        Returns
+        -------
+        float or ndarray
+        """
         #Safety stuff -- needed anymore? TODO
         if isinstance(value, _np.ma.MaskedArray) and value.count() == 0:
             # no unmasked elements, in which case a matplotlib bug causes the
@@ -136,9 +153,9 @@ class LinlogColormap(Colormap):
 
 class DivergingColormap(Colormap):
     def __init__(self, vmin, vmax, midpoint=0.0, color="RdBu"):
-        self.vmin = vmin
-        self.vmax = vmax
-        self.midpoint = midpoint
+        hmin = vmin
+        hmax = vmax
+        self.midpoint = midpoint #midpoint doesn't work yet!
 
         if color == "RdBu": # blue -> white -> red
             rgb_colors = [ [0.0, (0.0,0.0,1.0)],
@@ -147,7 +164,7 @@ class DivergingColormap(Colormap):
         else:
             raise ValueError("Unknown color: %s" % color)
 
-        super(DivergingColormap, self).__init__(rgb_colors)
+        super(DivergingColormap, self).__init__(rgb_colors, hmin, hmax)
 
         
     def normalize(self, value):
@@ -190,15 +207,15 @@ class DivergingColormap(Colormap):
 
 class SequentialColormap(Colormap):
     def __init__(self, vmin, vmax, color="greys" ):
-        self.vmin = vmin
-        self.vmax = vmax
+        hmin = vmin
+        hmax = vmax
 
         if color == "greys": # white -> black
             rgb_colors = [ [0, (1.,1.,1.)], [1.0, (0.0,0.0,0.0)] ]
         else:
             raise ValueError("Unknown color: %s" % color)
 
-        super(SequentialColormap, self).__init__(rgb_colors)
+        super(SequentialColormap, self).__init__(rgb_colors, hmin,hmax)
 
     def normalize(self, value):
         #no normalization is done automatically by plotly,
