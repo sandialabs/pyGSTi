@@ -9,6 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import os  as _os
 import time as _time
 import collections as _collections
+import webbrowser as _webbrowser
 
 from ..objects      import VerbosityPrinter
 from .workspace import Workspace as _Workspace
@@ -84,7 +85,7 @@ def _merge_template(qtys, templateFilename, outputFilename):
 
 def create_single_qubit_report(results, filename, confidenceLevel=None,
                                title="auto", datasetLabel="$\\mathcal{D}$",
-                               verbosity=0, comm=None, ws=None):
+                               verbosity=0, comm=None, ws=None, auto_open=False):
 
     """
     Create a "full" single-qubit GST report.  This report gives a detailed and
@@ -125,6 +126,10 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
         and visualizations required for this report.  If you're creating
         multiple reports with similar tables, plots, etc., it may boost
         performance to use a single Workspace for all the report generation.
+
+    auto_open : bool, optional
+        If True, automatically open the report in a web browser after it
+        has been generated.
     
 
     Returns
@@ -247,12 +252,17 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     _merge_template(qtys, templateFile, filename)
     printer.log("Output written to %s" % filename)
 
+    url = 'file://' + _os.path.abspath(filename)
+    if auto_open:
+        printer.log("Opening %s..." % filename)
+        _webbrowser.open(url)
+
 
 
 
 def create_general_report(results, filename, confidenceLevel=None,
                           title="auto", datasetLabel="$\\mathcal{D}$",
-                          verbosity=0, comm=None, ws=None):
+                          verbosity=0, comm=None, ws=None, auto_open=False):
     """
     Create a "general" GST report.  This report is "general" in that it is
     suited to display results for any number of qubits/qutrits.  Along with
@@ -291,6 +301,10 @@ def create_general_report(results, filename, confidenceLevel=None,
         and visualizations required for this report.  If you're creating
         multiple reports with similar tables, plots, etc., it may boost
         performance to use a single Workspace for all the report generation.
+
+    auto_open : bool, optional
+        If True, automatically open the report in a web browser after it
+        has been generated.
     
 
     Returns
@@ -414,6 +428,12 @@ def create_general_report(results, filename, confidenceLevel=None,
     templateFile = "report_general.html"
     _merge_template(qtys, templateFile, filename)
     printer.log("Output written to %s" % filename)
+
+    url = 'file://' + _os.path.abspath(filename)
+    if auto_open:
+        printer.log("Opening %s..." % filename)
+        _webbrowser.open(url)
+
 
 
 ##Scratch: SAVE!!! this code generates "projected" gatesets which can be sent to
