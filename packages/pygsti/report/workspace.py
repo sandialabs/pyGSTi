@@ -14,6 +14,7 @@ import uuid as _uuid
 import random as _random
 import inspect as _inspect
 import sys as _sys
+import hashlib as _hashlib
 
 import plotly.offline as _plotly_offline
 from .plotly_offline_fixed import plot_ex as _plot
@@ -22,6 +23,42 @@ from plotly.offline.offline import get_plotlyjs as _get_plotlyjs
 
 _PYGSTI_WORKSPACE_INITIALIZED = False
 
+
+def digest(obj):
+    """Returns an MD5 digest of an arbitary Python object, `obj`."""
+
+    # a function to recursively serialize 'v' into an md5 object
+    def add(md5, v):
+        """Add `v` to the hash, recursively if needed."""
+        md5.update(str(type(v)).encode('utf-8'))
+        if isinstance(v, bytes):
+            md5.update(v)  #can add bytes directly
+        elif isinstance(v, (str, int, float)): #long in 2.7?
+            md5.update(str(v).encode('utf-8')) #need to encode strings
+        elif isinstance(v, _np.ndarray):
+            md5.update(v.tostring()) # numpy gives us bytes
+        elif isinstance(v, (tuple, list)):
+            for el in v:  add(md5,el)
+        elif isinstance(v, dict):
+            keys = list(v.keys())
+            for k in sorted(keys):
+                add(md5,k)
+                add(md5,v[k])
+        else:
+            #print("Encoding type: ",str(type(v)))
+            attribs = list(sorted(dir(v)))
+            for k in attribs:
+                if k.startswith('__'): continue
+                a = getattr(v, k)
+                if _inspect.isroutine(a): continue
+                add(md5,k)
+                add(md5,a)
+        return
+
+    M = _hashlib.md5()
+    add(M, obj)
+    return M.digest() #return the MD5 digest
+
 def _is_hashable(x):
     try:
         dct = { x: 0 }
@@ -29,19 +66,6 @@ def _is_hashable(x):
         return False
     return True
 
-
-import json, collections
-class DigestEncoder(json.JSONEncoder):
-    def default(self, o):
-        if isinstance(o, _np.ndarray):
-            return hash(o.tostring())
-        #if isinstance(o, dict) or isinstance(o,collections.OrderedDict):
-        #    pairs = tuple([(k,v) for k,v in dict.items()])
-        #    return json.JSONEncoder.default(self, pairs)
-        if hasattr(o, 'digest_hash'):
-            return o.digest_hash()
-        # Let the base class default method raise the TypeError
-        return json.JSONEncoder.default(self, o)
 
 def call_key(fn, args):
     """ 
@@ -61,28 +85,11 @@ def call_key(fn, args):
     """
     if hasattr(fn,"__self__"):
         # hash on ClassName.methodName to avoid collisions, e.g. w/ "_create"
-        key = [ fn.__self__.__class__.__name__ + "." + fn.__name__ ]
+        fnName = fn.__self__.__class__.__name__ + "." + fn.__name__
     else:
-        key = [ fn.__name__ ]
-        
-    for arg in args:
-        if _is_hashable(arg):
-            key.append( arg )
-        elif hasattr(arg, 'digest_hash'):
-            #Use a digest hash if one is available
-            key.append( arg.digest_hash() ) #backup for un-hashable objects e.g. GateSet, DataSet, etc.
-            #key.append( id(arg) ) #backup for un-hashable objects e.g. GateSet, DataSet, etc.
-        else:
-            try:
-                json_hash = hash(json.dumps(arg, cls=DigestEncoder, sort_keys=True))
-                key.append(json_hash)
-            except:
-            #    print("WARNING: Object of type %s and val %s is not " % (str(type(arg)),str(arg))
-            #          + "hashable, so cannot be used as an argument"
-            #          + "in cached computation calls")
-                raise TypeError
+        fnName = fn.__name__
+    return (fnName,) + tuple(map(digest,args))
 
-    return tuple(key) #so hashable
 
 def randomID():
     """ Returns a random DOM ID """
@@ -416,17 +423,11 @@ class Workspace(object):
                 
             # argVals now contains all the arguments, so call the function if
             #  we need to and add result.
-            try:
-                key = call_key(fn, argVals) # cache by call key
-                if key not in self.compCache:
-                    #print("DB: computing with args = ", argsVals)
-                    self.compCache[key] = fn(*argVals)
-                result = self.compCache[key]
-            except TypeError:
+            key = call_key(fn, argVals) # cache by call key
+            if key not in self.compCache:
                 #print("DB: computing with args = ", argsVals)
-                print("WARNING: unable to cache call to %s" % fn.__name__)
-                result = fn(*argVals)
-                key = randomID() #something unique so it get's it's own cache slot
+                self.compCache[key] = fn(*argVals)
+            result = self.compCache[key]
 
             if key not in storedKeys:
                 switchpos_map[pos] = len(resultValues)

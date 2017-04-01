@@ -246,13 +246,6 @@ class DataSet(object):
         self.comment = comment
         
 
-    def digest_hash(self):
-        if not bStatic:
-            raise TypeError("DataSet's must be static to create digests")
-        else:
-            return hash(self.counts.tostring())
-
-
     def __iter__(self):
         return self.gsIndex.__iter__() #iterator over gate strings
 

@@ -197,9 +197,6 @@ class GateString(object):
     def __setitem__(self, key, value):
         raise ValueError("Cannot set elements of GateString tuple (they're read-only)")
 
-    def digest_hash(self):
-        return hash(self.tup)
-
 
 class WeightedGateString(GateString):
     """

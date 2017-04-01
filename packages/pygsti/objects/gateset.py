@@ -117,10 +117,6 @@ class GateSet(object):
         super(GateSet, self).__init__()
 
 
-    def digest_hash(self):
-        #TODO: include gate types, etc in hashing, as this could have unwanted collisions
-        return hash(self.to_vector().tostring())        
-
     @property
     def povm_identity(self):
         return self._povm_identity
