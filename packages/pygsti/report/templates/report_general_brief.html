@@ -162,12 +162,11 @@
     <h1>Overview</h1>
     <section>
       <p>This report presents a brief gate-set tomography (GST) analysis of a dataset called $(datasetLabel)s.   It is intended for folks who are already familiar with GST output tables and plots.  If this isn't you, you should have set <code>brief=False</code> when you generated this report.</p>
-
     </section>
 
     <section id="secGoodness">
       <h1>Goodness-of-model Analysis</h1>
-      Table <a href="#progressTable" class="table"></a> shows how well GST was able to fit you data through its iterations, and <a href="#bestEstimateColorBoxPlot" class="figure"></a> displays the more detailed goodness-of-fit contributions from each individual gate sequence.
+      <p>Table <a href="#progressTable" class="table"></a> shows how well GST was able to fit you data through its iterations, and <a href="#bestEstimateColorBoxPlot" class="figure"></a> displays the more detailed goodness-of-fit contributions from each individual gate sequence.</p>
 
     <table id="progressTable">
       <caption><strong>Comparison between the computed and expected maximum $\log(\mathcal{L})$ for different values of $L$</strong>.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively.  The quantity $2\Delta\log(\mathcal{L})$ measures the goodness of fit of the GST model (small is better) and is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $N_\sigma = (2\Delta\log(\mathcal{L})-k)/\sqrt{2k}$ is the number of standard deviations from the mean (a $p$-value can be straightforwardly derived from $N_\sigma$).  The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.</caption>
