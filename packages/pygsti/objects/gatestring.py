@@ -7,6 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Defines the GateString class and derived classes which represent gate strings."""
 
 import numpy as _np
+from ..tools import compattools as _compat
 
 def _gateSeqToStr(seq):
     if len(seq) == 0: return "{}" #special case of empty gate string
@@ -161,7 +162,7 @@ class GateString(object):
         return GateString(self.tup + x.tup, s, bCheck=False)
 
     def __mul__(self,x):
-        assert( (isinstance(x,int) or _np.issubdtype(x,int)) and x >= 0)
+        assert( (_compat.isint(x) or _np.issubdtype(x,int)) and x >= 0)
         if x > 1: s = "(%s)^%d" % (self.str,x)
         elif x == 1: s = "(%s)" % self.str
         else: s = "{}"

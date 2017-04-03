@@ -18,6 +18,7 @@ from .. import algorithms as _alg
 from .. import construction as _construction
 from .. import objects as _objs
 from .. import io as _io
+from ..tools import compattools as _compat
 
 def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                          prepStrsListOrFilename, effectStrsListOrFilename,
@@ -189,24 +190,24 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     if advancedOptions is None: advancedOptions = {}
 
     #Get/load fiducials
-    if isinstance(prepStrsListOrFilename, str):
+    if _compat.isstr(prepStrsListOrFilename):
         prepStrs = _io.load_gatestring_list(prepStrsListOrFilename)
     else: prepStrs = prepStrsListOrFilename
 
     if effectStrsListOrFilename is None:
         effectStrs = prepStrs #use same strings for effectStrs if effectStrsListOrFilename is None
     else:
-        if isinstance(effectStrsListOrFilename, str):
+        if _compat.isstr(effectStrsListOrFilename):
             effectStrs = _io.load_gatestring_list(effectStrsListOrFilename)
         else: effectStrs = effectStrsListOrFilename
 
     #Get/load germs
-    if isinstance(germsListOrFilename, str):
+    if _compat.isstr(germsListOrFilename):
         germs = _io.load_gatestring_list(germsListOrFilename)
     else: germs = germsListOrFilename
 
     #Get/load target gateset
-    if isinstance(targetGateFilenameOrSet, str):
+    if _compat.isstr(targetGateFilenameOrSet):
         gs_target = _io.load_gateset(targetGateFilenameOrSet)
     else:
         gs_target = targetGateFilenameOrSet #assume a GateSet object
@@ -340,13 +341,13 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
 
     #Get/load target gateset
-    if isinstance(targetGateFilenameOrSet, str):
+    if _compat.isstr(targetGateFilenameOrSet):
         gs_target = _io.load_gateset(targetGateFilenameOrSet)
     else:
         gs_target = targetGateFilenameOrSet #assume a GateSet object
 
     #Get/load dataset
-    if isinstance(dataFilenameOrSet, str):
+    if _compat.isstr(dataFilenameOrSet):
         ds = _io.load_dataset(dataFilenameOrSet, True, "aggregate", printer)
         default_dir = _os.path.dirname(dataFilenameOrSet) #default directory for reports, etc
         default_base = _os.path.splitext( _os.path.basename(dataFilenameOrSet) )[0]

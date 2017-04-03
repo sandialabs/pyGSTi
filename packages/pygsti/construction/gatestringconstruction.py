@@ -11,6 +11,7 @@ import numpy as _np
 import numpy.random as _rndm
 
 from ..tools import listtools as _lt
+from ..tools import compattools as _compat
 from ..objects import gatestring as _gs
 from .spamspecconstruction import get_spam_strs as _get_spam_strs
 
@@ -91,7 +92,7 @@ def create_gatestring_list(*args,**kwargs):
                 gateStr = result
             elif isinstance(result,list) or isinstance(result,tuple):
                 gateStr = _gs.GateString(result)
-            elif isinstance(result,str):
+            elif _compat.isstr(result):
                 gateStr = _gs.GateString(None, result)
             lst.append(gateStr)
 
@@ -514,7 +515,7 @@ def gatestring_list( listOfGateLabelTuplesOrStrings ):
             ret.append(x)
         elif isinstance(x,tuple) or isinstance(x,list):
             ret.append( _gs.GateString(x) )
-        elif isinstance(x,str):
+        elif _compat.isstr(x):
             ret.append( _gs.GateString(None, x) )
         else:
             raise ValueError("Cannot convert type %s into a GateString" % str(type(x)))

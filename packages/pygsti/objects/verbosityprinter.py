@@ -1,9 +1,10 @@
 from __future__ import division, print_function, absolute_import, unicode_literals
-import numbers as _numbers
 from contextlib import contextmanager as _contextmanager
 from copy       import deepcopy as _dc
 import sys         as _sys
 import math        as _math # used for digit formatting
+
+from ..tools import compattools as _compat
 
 def _num_digits(n):
     return int(_math.log10(n)) + 1 if n > 0 else 1
@@ -183,7 +184,7 @@ class VerbosityPrinter():
           The printer object, constructed from either an integer or another printer
 
         '''
-        if isinstance(verbosity, _numbers.Integral):
+        if _compat.isint(verbosity):
             printer = VerbosityPrinter(verbosity, comm=comm)
         else:
             printer = verbosity.clone() # deepcopy the printer object if it has been passed as a verbosity

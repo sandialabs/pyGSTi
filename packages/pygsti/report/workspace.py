@@ -16,6 +16,8 @@ import inspect as _inspect
 import sys as _sys
 import hashlib as _hashlib
 
+from ..tools import compattools as _compat
+
 import plotly.offline as _plotly_offline
 from .plotly_offline_fixed import plot_ex as _plot
 from plotly.offline.offline import get_plotlyjs as _get_plotlyjs
@@ -26,6 +28,12 @@ _PYGSTI_WORKSPACE_INITIALIZED = False
 
 def digest(obj):
     """Returns an MD5 digest of an arbitary Python object, `obj`."""
+    if _sys.version_info > (3, 0): # Python3?
+        longT = int      # define long and unicode
+        unicodeT = str   #  types to mimic Python2
+    else:
+        longT = long
+        unicodeT = unicode
 
     # a function to recursively serialize 'v' into an md5 object
     def add(md5, v):
@@ -33,7 +41,7 @@ def digest(obj):
         md5.update(str(type(v)).encode('utf-8'))
         if isinstance(v, bytes):
             md5.update(v)  #can add bytes directly
-        elif isinstance(v, (str, int, float)): #long in 2.7?
+        elif isinstance(v, float) or _compat.isstr(v) or _compat.isint(v):
             md5.update(str(v).encode('utf-8')) #need to encode strings
         elif isinstance(v, _np.ndarray):
             md5.update(v.tostring()) # numpy gives us bytes
@@ -121,60 +129,61 @@ class Workspace(object):
         self._register_components(False)
 
 
+    def _makefactory(self,cls,autodisplay):
 
-    def _register_components(self, autodisplay):
+        PY3 = bool(_sys.version_info > (3, 0))
+
+        #Manipulate argument list of cls.__init__
+        argspec = _inspect.getargspec(cls.__init__)
+        argnames = argspec[0]
+        assert(argnames[0] == 'self' and argnames[1] == 'ws'), \
+            "__init__ must begin with (self, ws, ...)"
+        factoryfn_argnames = argnames[2:] #strip off self & ws args
+        newargspec = (factoryfn_argnames,) + argspec[1:]
+
+        #Define a new factory function with appropriate signature
+        signature = _inspect.formatargspec(
+            formatvalue=lambda val: "", *newargspec)
+        signature = signature[1:-1] #strip off parenthesis from ends of "(signature)"
         
-        def makefactory(cls):
+        if autodisplay:
+            factory_func_def = (
+                    'def factoryfn(%(signature)s):\n' 
+                    '    ret = cls(self, %(signature)s); ret.display(); return ret' % 
+                    {'signature':signature } )
+        else:
+            factory_func_def = (
+                    'def factoryfn(%(signature)s):\n' 
+                    '    return cls(self, %(signature)s)' % 
+                    {'signature':signature } )
 
-            PY3 = bool(_sys.version_info > (3, 0))
+        #print("FACTORY FN DEF = \n",new_func)
+        exec_globals = {'cls' : cls, 'self': self}
+        if _sys.version_info > (3, 0):
+            exec(factory_func_def, exec_globals) #Python 3
+        else:
+            exec("""exec factory_func_def in exec_globals""") #Python 2
+        factoryfn = exec_globals['factoryfn']
 
-            #Manipulate argument list of cls.__init__
-            argspec = _inspect.getargspec(cls.__init__)
-            argnames = argspec[0]
-            assert(argnames[0] == 'self' and argnames[1] == 'ws'), \
-                "__init__ must begin with (self, ws, ...)"
-            factoryfn_argnames = argnames[2:] #strip off self & ws args
-            newargspec = (factoryfn_argnames,) + argspec[1:]
-
-            #Define a new factory function with appropriate signature
-            signature = _inspect.formatargspec(
-                formatvalue=lambda val: "", *newargspec)
-            signature = signature[1:-1] #strip off parenthesis from ends of "(signature)"
+        #Copy cls.__init__ info over to factory function
+        factoryfn.__name__   = cls.__init__.__name__
+        factoryfn.__doc__    = cls.__init__.__doc__
+        factoryfn.__module__ = cls.__init__.__module__
+        factoryfn.__dict__   = cls.__init__.__dict__            
+        if PY3:
+            factoryfn.__defaults__ = cls.__init__.__defaults__
+        else:
+            factoryfn.func_defaults = cls.__init__.func_defaults
             
-            if autodisplay:
-                factory_func_def = (
-                        'def factoryfn(%(signature)s):\n' 
-                        '    ret = cls(self, %(signature)s); ret.display(); return ret' % 
-                        {'signature':signature } )
-            else:
-                factory_func_def = (
-                        'def factoryfn(%(signature)s):\n' 
-                        '    return cls(self, %(signature)s)' % 
-                        {'signature':signature } )
+        return factoryfn
 
-            #print("FACTORY FN DEF = \n",new_func)
-            exec_globals = {'cls' : cls, 'self': self}
-            if _sys.version_info > (3, 0):
-                exec(factory_func_def, exec_globals) #Python 3
-            else:
-                exec("""exec factory_func_def in exec_globals""") #Python 2
-            factoryfn = exec_globals['factoryfn']
 
-            #Copy cls.__init__ info over to factory function
-            factoryfn.__name__   = cls.__init__.__name__
-            factoryfn.__doc__    = cls.__init__.__doc__
-            factoryfn.__module__ = cls.__init__.__module__
-            factoryfn.__dict__   = cls.__init__.__dict__            
-            if PY3:
-                factoryfn.__defaults__ = cls.__init__.__defaults__
-            else:
-                factoryfn.func_defaults = cls.__init__.func_defaults
-                
-            return factoryfn
+    def _register_components(self, autodisplay):        
         
         # "register" components
         from . import workspacetables as _wt
         from . import workspaceplots as _wp
+        makefactory = lambda cls: self._makefactory(cls,autodisplay)
 
         self.Switchboard = makefactory(Switchboard)
 
@@ -271,10 +280,17 @@ class Workspace(object):
             with open(_os.path.join(cssPath,"dataTable.css")) as f:
                 script = '<style>\n' + str(f.read()) + '</style>'
                 _display(_HTML(script))
-    
-            _display(_HTML('<link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">'))
-    
-    
+
+            #jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css"
+            jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css"
+            _display(_HTML('<link rel="stylesheet" href="%s">' % jQueryUI_CSS))
+
+            #To fix the UI tooltips within Jupyter (b/c they use an old/custom JQueryUI css file)
+            imgURL = "https://code.jquery.com/ui/1.12.1/themes/smoothness/images/ui-icons_222222_256x240.png"
+            _display(_HTML("<style>\n" +
+                           ".tooltipbuttons .ui-button { padding: 0; border: 0; background: transparent; }\n" +
+                           ".tooltipbuttons .ui-icon { background-image: url(\"%s\"); margin-top: 0; }\n" % imgURL +
+                           "</style>"))
     
             # Update Mathjax config -- jupyter notebooks already have this so not needed
             #script = '<script type="text/x-mathjax-config">\n' \
@@ -1069,7 +1085,7 @@ class WorkspaceTable(WorkspaceOutput):
             self.ws.switchedCompute(self.tablefn, *self.initargs)
 
         
-    def render(self, typ, global_requirejs=False):
+    def render(self, typ, global_requirejs=False, precision=None):
         """
         Renders this object into the specifed format, specifically for
         embedding it within a larger document.
@@ -1081,6 +1097,19 @@ class WorkspaceTable(WorkspaceOutput):
             all cases, and `"latex"` is supported for non-switched tables
             (those which don't depend on any switched values).
 
+        global_requirejs : bool, optional
+            Whether the table is going to be embedded in an environment
+            with a globally defined RequireJS library.  If True, then
+            rendered output will make use of RequireJS.
+
+        precision : int or dict
+            The amount of precision to display.  A dictionary with keys
+            "polar", "sci", and "normal" can separately specify the 
+            precision for complex angles, numbers in scientific notation, and 
+            everything else, respectively.  If an integer is given, it this
+            same value is taken for all precision types.  If None, then
+            `{'normal': 6, 'polar': 3, 'sci': 0}` is used.
+
         Returns
         -------
         dict
@@ -1088,6 +1117,17 @@ class WorkspaceTable(WorkspaceOutput):
             embeddable output.  For `"html"`, keys are `"html"` and `"js"`.
             For `"latex"`, there is a single key `"latex"`.
         """
+        if precision is None:
+            precDict = {'normal': 6, 'polar': 3, 'sci': 0}
+        elif _compat.isint(precDict):
+            precDict = {'normal':precision, 'polar':precision, 'sci':precision}
+        else:
+            assert('normal' in precDict), "Must at least specify 'normal' precision"
+            p = precision['normal']
+            precDict = { 'normal': p,
+                         'polar': precision.get(['polar'],p),
+                         'sci': precision.get(['sci'],p) }
+        
         if typ == "html":
             tableID = "table_" + randomID()
 
@@ -1096,7 +1136,10 @@ class WorkspaceTable(WorkspaceOutput):
             for i,table in enumerate(self.tables):
                 tableDivID = tableID + "_%d" % i
                 table_html = "<div id='%s'>\n%s\n</div>\n" % (tableDivID,
-                                table.render("html", tableclass="dataTable"))
+                                table.render("html", tableclass="dataTable",
+                                             precision=precDict['normal'],
+                                             polarprecision=precDict['polar'],
+                                             sciprecision=precDict['sci']))
                 divHTML.append(table_html)
                 divIDs.append(tableDivID)
                 
@@ -1149,6 +1192,11 @@ class WorkspacePlot(WorkspaceOutput):
         ----------
         typ : str
             The format to render as.  Currently only `"html"` is supported.
+
+        global_requirejs : bool, optional
+            Whether the table is going to be embedded in an environment
+            with a globally defined RequireJS library.  If True, then
+            rendered output will make use of RequireJS.
 
         Returns
         -------

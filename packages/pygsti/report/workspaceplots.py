@@ -341,7 +341,7 @@ def generate_boxplot(subMxs,
         formatted_vals = []
         for val in vals:
             if (isinstance(val,tuple) or isinstance(val,_objs.GateString)) \
-               and all([isinstance(el,str) for el in val]):
+               and all([_tools.isstr(el) for el in val]):
                 if len(val) == 0:
                     formatted_vals.append(r"$\{\}$")
                 else:
@@ -481,8 +481,9 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
     plotly.Figure
     """
     g = gatestring_structure
-    return generate_boxplot(subMxs, g.used_xvals(), g.used_yvals(),
-                            g.minor_xvals(), g.minor_yvals(),
+    return generate_boxplot(subMxs,
+                            list(map(str,g.used_xvals())), list(map(str,g.used_yvals())),
+                            list(map(str,g.minor_xvals())), list(map(str,g.minor_yvals())),
                             "L","germ","rho_i","E_i", colormap,
                             colorbar, boxLabels, prec, hoverInfo,
                             sumUp, invert, scale)  #"$\\rho_i$","$\\E_i$"      
@@ -683,7 +684,7 @@ class BoxKeyPlot(WorkspacePlot):
         def val_filter(vals):  #filter to latex-ify gate strings.  Later add filter as a possible parameter
             formatted_vals = []
             for val in vals:
-                if type(val) in (tuple,_objs.GateString) and all([type(el) == str for el in val]):
+                if isinstance(val, (tuple,_objs.GateString)) and all([_tools.isstr(el) for el in val]):
                     if len(val) == 0:
                         formatted_vals.append(r"$\{\}$")
                     else:
@@ -842,10 +843,10 @@ class ColorBoxPlot(WorkspacePlot):
         #OLD: maps = _ph._computeGateStringMaps(gss, dataset)
         probs_precomp_dict = None
         fig = None
-        
-        if isinstance(plottypes,str):
+
+        if _tools.isstr(plottypes):
             plottypes = [plottypes]
-            
+
         for typ in plottypes:
             if typ == "chi2":
                 precomp=True

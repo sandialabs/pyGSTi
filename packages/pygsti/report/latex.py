@@ -12,14 +12,7 @@ HtmlUtil has for HTML conversion.
 import numpy as _np
 import cmath
 from .. import objects as _objs
-
-#Define basestring in python3 so unicode
-# strings can be tested for in python2 using
-# python2's built-in basestring type.
-# When removing __future__ imports, remove
-# this and change basestring => str below.
-try:  basestring
-except NameError: basestring = str
+from ..tools import compattools as _compat
 
 
 def latex(x, brackets=False, precision=6,
@@ -66,7 +59,7 @@ def latex(x, brackets=False, precision=6,
         return latex_list(x, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
     elif type(x) in (float,int,complex,_np.float64,_np.int64):
         return latex_value(x, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
-    elif isinstance(x,basestring):
+    elif _compat.isstr(x):
         return latex_escaped(x)
     else:
         print("Warning: %s not specifically converted to latex" % str(type(x)))
@@ -256,7 +249,7 @@ def latex_value(el, precision=6, polarprecision=3,
             if s.endswith("."): s = s[:-1]
         return s
 
-    if isinstance(el,basestring):
+    if _compat.isstr(el):
         return el
     if type(el) in (int,_np.int64):
         return "%d" % el

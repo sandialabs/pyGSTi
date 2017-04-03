@@ -1228,10 +1228,10 @@ class GatestringTable(WorkspaceTable):
     def _create(self, gsLists, titles, nCols, commonTitle):
 
         if isinstance(gsLists[0], _objs.GateString) or \
-           (isinstance(gsLists[0], tuple) and isinstance(gsLists[0][0],str)):
+           (isinstance(gsLists[0], tuple) and _tools.isstr(gsLists[0][0])):
             gsLists = [ gsLists ]
 
-        if isinstance(titles, str): titles = [ titles ]*len(gsLists)
+        if _tools.isstr(titles): titles = [ titles ]*len(gsLists)
             
         colHeadings = (('#',) + tuple(titles))*nCols
         formatters = (('Conversion',) + ('Normal',)*len(titles))*nCols

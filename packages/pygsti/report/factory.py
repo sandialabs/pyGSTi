@@ -4,58 +4,39 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Defines report factories. """
+""" Report generation functions. """
 
 import os  as _os
+import sys as _sys
 import time as _time
 import collections as _collections
 import webbrowser as _webbrowser
 
 from ..objects      import VerbosityPrinter
+from ..tools        import compattools as _compat
 from .workspace import Workspace as _Workspace
 
-#ideas:
-# - need to separate computation from plotting, as plotting will always be needed in regen
-#   but computation may be "precomputed"
-# - check plot.ly:  ability to set colors of heatmap (or custom colormap?)
-#                   
-#
-# Workspace object:
-#   - caches, imports Results objects,
-#   - holds data sources, controls, and figures (plots/tables) each labeled by a string
-#   - keeps dependency graph for interactive updates
-#   - data sources = gatesets, datasets, arrays of datasets, etc -- maybe Result objects too? (for params, etc)
-#   - examples: ws.makeLogLBoxPlot("LogLPlot1", "myData1", "targetGS")
-#           OR  ws.figures["LogLPlot1"] = ws.makeLogLBoxPlot("myData1", "targetGS") #returns a WorkSpaceFigure object?
-#               ws.gatesets["varyingGS"] = createGatesetDepolSliderControl(ws.gatesets["target"], 0, 0.1, precomp=False) #returns a WorkspaceControl object?
-#               ws.gatesets["v2GS"] = createGatesetGaugeOptSliderControl(ws.gatesets["best"], "spamWeight", 0, 1, nPrecompSamples=10)
-#               ws.show() #shows all workspace figures & controls
-#     WorkspaceObject as base class: inputs and outputs = arrays holding refs to other WorkspaceObjects
-#     WorkspaceData objects only have outputs
-#     WorkspaceFigure objects only have inputs
-#   - when a control changes, "onupdate" needs to regen everything that depends on the control.
-#   - maybe WorkSpaceObject needs a "regen" method?
-#   - functions for each plot vs. strings -- fns better b/c clearer args, but what about generation.py replication?
-#   - functions take gateset, dataset etc. params but could be arrays of such params -- object type for this?
-#   - generation.py /plotting.py fns *compute* & return table or figure that can later be *rendered*; Workspace fns compute
-#     only if necessary & render (if auto-render is on) and deal with arrays of params.
-#   - calculator object to cache calculations
-#
-# Results object:
-#   - only holds dataset(s), gatesets, CRs, gatestring_structure(s), parameters, etc.
-#
-# Report object (?):
-#   - used to generate a report (PDF file) -- uses latex template and externally or
-#     internally (optional param to creation fn) uses a Workspace to create all the
-#     static figures needed to produce the report.  Caches tables & figures, but
-#     doesn't need to "smart cache" them, as Workspace handles this, e.g. if another
-#     report object is given the same Workspace and asks for the same plot the
-#     Workspace shouldn't regenerate it.
-#  - inherits ResultOptions members like latex cmd, etc.
-#  - maybe can generate HTML & Latex (?)
 
+def _merge_template(qtys, templateFilename, outputFilename, auto_open=False,
+                    inlineCSSnames=("dataTable.css","pygsti_pub.css","pygsti_screen.css"),
+                    verbosity=0):
 
-def _merge_template(qtys, templateFilename, outputFilename):
+    printer = VerbosityPrinter.build_printer(verbosity)
+
+    #Add inline CSS
+    if 'inlineCSS' not in qtys:
+        qtys['inlineCSS'] = ""
+        cssPath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                                "templates","css")
+        for cssFile in inlineCSSnames:
+            with open(_os.path.join(cssPath,cssFile)) as f:
+                contents = f.read()
+                try: # to convert to unicode since we're using unicode literals below
+                    contents = contents.decode('utf-8')
+                except AttributeError: pass #Python3 case when unicode is read in natively (no need to decode)
+                qtys['inlineCSS'] += '<style>\n%s</style>\n' % contents
+
+    #Insert qtys into template file
     templateFilename = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)),
                                       "templates", templateFilename )
 
@@ -63,29 +44,52 @@ def _merge_template(qtys, templateFilename, outputFilename):
     with open(templateFilename, 'r') as templatefile:
         template = templatefile.read()
         
+    try: # convert to unicode if Python2 
+        template = template.decode('utf-8')
+    except AttributeError: pass #Python3 case
+        
     qtys_html = _collections.defaultdict(lambda x=0: "BLANK")
     for key,val in qtys.items():
-        if isinstance(val,str):
+        if _compat.isstr(val):
             qtys_html[key] = val
         else:
             #print("DB: rendering ",key)
             out = val.render("html") # a dictionary of rendered portions
             qtys_html[key] = "<script>\n%(js)s\n</script>\n\n%(html)s" % out
 
-    #DEBUG
-    #testtmp = "%(targetSpamTable)s" % qtys_html
-    #print("TEST = \n",qtys_html['targetSpamTable'])
-    #print("TEST2 = \n",testtmp)
-            
+    #Do actual fill -- everything needs to be unicode at this point.
     filled_template = template % qtys_html
       #.format_map(qtys_html) #need python 3.2+
+      
+    if _sys.version_info <= (3, 0): # Python2: need to re-encode for write(...)
+        filled_template = filled_template.encode('utf-8')
+        
     with open(outputFilename, 'w') as outputfile:
         outputfile.write(filled_template)
 
+    printer.log("Output written to %s" % outputFilename)
+
+    if auto_open:
+        url = 'file://' + _os.path.abspath(outputFilename)
+        printer.log("Opening %s..." % outputFilename)
+        _webbrowser.open(url)
+
+
+        
+def _errgen_formula(errgen_type):
+    if errgen_type == "logTiG":
+        return "$\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$"
+    elif errgen_type == "logG-logT":
+        return "$\hat{G} = e^{\mathbb{L} + \log G_{\mathrm{target}}}$"
+    else:
+        return "???"
+
+    
 
 def create_single_qubit_report(results, filename, confidenceLevel=None,
                                title="auto", datasetLabel="$\\mathcal{D}$",
-                               verbosity=0, comm=None, ws=None, auto_open=False):
+                               linlogPercentile=5, errgen_type="logTiG",
+                               comm=None, ws=None, auto_open=False, verbosity=0):
 
     """
     Create a "full" single-qubit GST report.  This report gives a detailed and
@@ -114,8 +118,17 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     datasetLabel : string, optional
        A label given to the dataset.
 
-    verbosity : int, optional
-       How much detail to send to stdout.
+    linlogPercentile : float, optional
+        Specifies the colorscale transition point for any logL or chi2 color
+        box plots.  The lower `(100 - linlogPercentile)` percentile of the
+        expected chi2 distribution is shown in a linear grayscale, and the 
+        top `linlogPercentile` is shown on a logarithmic colored scale.
+
+    errgen_type: {"logG-logT", "logTiG"}
+      The type of error generator to compute.  Allowed values are:
+      
+      - "logG-logT" : errgen = log(gate) - log(target_gate)
+      - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -130,6 +143,9 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     auto_open : bool, optional
         If True, automatically open the report in a web browser after it
         has been generated.
+
+    verbosity : int, optional
+       How much detail to send to stdout.
     
 
     Returns
@@ -137,54 +153,40 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     None
     """
     printer = VerbosityPrinter.build_printer(verbosity, comm=comm)
-    if ws is None:
-        ws = _Workspace()
+    if ws is None: ws = _Workspace()
 
     if title == "auto":
         title = "GST report for %s" % datasetLabel
-
-    # dictionary to store all strings to be inserted into report template
-    qtys = {}
-
+    
+    qtys = {} # stores strings to be inserted into report template
     qtys['title'] = title
     qtys['date'] = _time.strftime("%B %d, %Y")
     qtys['confidenceLevel'] = "%g" % \
         confidenceLevel if confidenceLevel is not None else "NOT-SET"
-    qtys['linlg_pcntle'] = str(results.parameters['linlogPercentile'])
+    qtys['linlg_pcntle'] = "%d" % round(linlogPercentile) #to nearest %
     qtys['datasetLabel'] = datasetLabel
-
-    if results.options.errgen_type == "logTiG":
-        qtys['errorgenformula'] = "$\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$"
-    elif results.options.errgen_type == "logG-logT":
-        qtys['errorgenformula'] = "$\hat{G} = e^{\mathbb{L} + \log G_{\mathrm{target}}}$"
-    else:
-        qtys['errorgenformula'] = "???"
+    qtys['errorgenformula'] = _errgen_formula(errgen_type)
         
     if confidenceLevel is not None:
         cri = results._get_confidence_region(confidenceLevel) #TODO
-        qtys['confidenceIntervalScaleFctr'] = \
-                    "%.3g" % cri.intervalScaling
-        qtys['confidenceIntervalNumNonGaugeParams'] = \
-                    "%d" % cri.nNonGaugeParams
-    else:
-        cri = None
-        qtys['confidenceIntervalScaleFctr'] = "NOT-SET"
-        qtys['confidenceIntervalNumNonGaugeParams'] = "NOT-SET"
+        qtys['confidenceIntervalScaleFctr'] = "%.3g" % cri.intervalScaling
+        qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % cri.nNonGaugeParams
+    else: cri = None
 
 
-    # 1) get latex tables
+    # Generate Tables
     printer.log("*** Generating tables ***")
 
     gsTgt = results.gatesets['target']
     gsFinal = results.gatesets['final estimate']
     ds = results.dataset
-    strs = ( tuple(results.gatestring_lists['prep fiducials']),
-             tuple(results.gatestring_lists['effect fiducials']) )
-
+    prepStrs = results.gatestring_lists['prep fiducials']
+    effectStrs = results.gatestring_lists['effect fiducials']
+    germs = results.gatestring_lists['germs']
 
     qtys['targetSpamTable'] = ws.SpamTable(gsTgt)
     qtys['targetGatesTable'] = ws.GatesTable(gsTgt)
-    qtys['datasetOverviewTable'] = ws.DataSetOverviewTable(ds, gsTgt, 10, strs)
+    qtys['datasetOverviewTable'] = ws.DataSetOverviewTable(ds, gsTgt, 10, (prepStrs,effectStrs))
     qtys['bestGatesetSpamTable'] = ws.SpamTable(gsFinal, cri)
     qtys['bestGatesetSpamParametersTable'] = ws.SpamParametersTable(gsFinal, cri)
     qtys['bestGatesetGaugeOptParamsTable'] = ws.GaugeOptParamsTable(tuple(results.parameters['gaugeOptParams']))
@@ -194,75 +196,56 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     qtys['bestGatesetRotnAxisTable'] = ws.RotationAxisTable(gsFinal, cri, True)
     qtys['bestGatesetVsTargetTable'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
     qtys['bestGatesetErrorGenTable'] = ws.ErrgenTable(gsFinal, gsTgt, cri, ("errgen",),
-                                                      "numbers", results.options.errgen_type)
+                                                      "numbers", errgen_type)
     qtys['metadataTable'] = ws.MetadataTable(gsFinal, results.options, results.parameters)
     qtys['softwareEnvTable'] = ws.SoftwareEnvTable()
 
     # if Ls and germs available
     if results._LsAndGermInfoSet: #TODO: better way?
-        qtys['fiducialListTable'] = ws.GatestringTable(strs, ["Prep.","Measure"], commonTitle="Fiducials")
-        qtys['prepStrListTable'] = ws.GatestringTable(results.gatestring_lists['prep fiducials'],
-                                                      "Preparation Fiducials")
-        qtys['effectStrListTable'] = ws.GatestringTable(results.gatestring_lists['effect fiducials'],
-                                                        "Measurement Fiducials")
-        qtys['germListTable'] = ws.GatestringTable(results.gatestring_lists['germs'], "Germ")        
+        qtys['fiducialListTable'] = ws.GatestringTable((prepStrs,effectStrs),
+                                                       ["Prep.","Measure"], commonTitle="Fiducials")
+        qtys['prepStrListTable'] = ws.GatestringTable(prepStrs,"Preparation Fiducials")
+        qtys['effectStrListTable'] = ws.GatestringTable(effectStrs,"Measurement Fiducials")
+        qtys['germListTable'] = ws.GatestringTable(germs, "Germ")
         qtys['progressTable'] = ws.FitComparisonTable(
             results.parameters['max length list'],
             results.gatestring_structs['iteration'],
             results.gatesets['iteration estimates'],
             ds, results.parameters['objective'], 'L')
 
-        # 2) generate plots
+        # Generate plots
         printer.log("*** Generating plots ***")
 
         gss = results.gatestring_structs['final']
-
         if results.parameters['objective'] == "logl":
             mpc = results.parameters['minProbClip']
         else:
             mpc = results.parameters['minProbClipForWeighting']
         
-        qtys['colorBoxPlotKeyPlot'] = ws.BoxKeyPlot(tuple(results.gatestring_lists['prep fiducials']),
-                                                    tuple(results.gatestring_lists['effect fiducials']))
-        
+        qtys['colorBoxPlotKeyPlot'] = ws.BoxKeyPlot(prepStrs, effectStrs)
         qtys['bestEstimateColorBoxPlot'] = ws.ColorBoxPlot(
             results.parameters['objective'], gss, ds, gsFinal,
-            linlg_pcntle=float(results.parameters['linlogPercentile']) / 100,
+            linlg_pcntle=float(linlogPercentile) / 100,
             minProbClipForWeighting=mpc)
         qtys['invertedBestEstimateColorBoxPlot'] = ws.ColorBoxPlot(
             results.parameters['objective'], gss, ds, gsFinal,
-            linlg_pcntle=float(results.parameters['linlogPercentile']) / 100,
+            linlg_pcntle=float(linlogPercentile) / 100,
             minProbClipForWeighting=mpc, invert=True)
     
-
-    # 3) populate template latex file => report latex file
+    # Populate template latex file => report latex file
     printer.log("*** Merging into template file ***")
-
-    #Add inline CSS
-    qtys['inlineCSS'] = ""
-    cssPath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                            "templates","css")
-    for cssFile in ("dataTable.css","pygsti_pub.css","pygsti_screen.css"):
-        with open(_os.path.join(cssPath,cssFile)) as f:
-            qtys['inlineCSS'] += '<style>\n' + str(f.read()) + '\n</style>\n'
 
     templateFile = "report_singlequbit.html"
     #print("DB inserting choi:\n",qtys['bestGatesetChoiTable'].render("html"))
     #print("DB inserting decomp:\n",qtys['bestGatesetDecompTable'].render("html"))
-    _merge_template(qtys, templateFile, filename)
-    printer.log("Output written to %s" % filename)
+    _merge_template(qtys, templateFile, filename, auto_open, verbosity=printer)
 
-    url = 'file://' + _os.path.abspath(filename)
-    if auto_open:
-        printer.log("Opening %s..." % filename)
-        _webbrowser.open(url)
-
-
-
+    
 
 def create_general_report(results, filename, confidenceLevel=None,
                           title="auto", datasetLabel="$\\mathcal{D}$",
-                          verbosity=0, comm=None, ws=None, auto_open=False):
+                          linlogPercentile=5, errgen_type="logTiG",
+                          comm=None, ws=None, auto_open=False, verbosity=0):
     """
     Create a "general" GST report.  This report is "general" in that it is
     suited to display results for any number of qubits/qutrits.  Along with
@@ -289,8 +272,17 @@ def create_general_report(results, filename, confidenceLevel=None,
     datasetLabel : string, optional
        A label given to the dataset.
 
-    verbosity : int, optional
-       How much detail to send to stdout.
+    linlogPercentile : float, optional
+        Specifies the colorscale transition point for any logL or chi2 color
+        box plots.  The lower `(100 - linlogPercentile)` percentile of the
+        expected chi2 distribution is shown in a linear grayscale, and the 
+        top `linlogPercentile` is shown on a logarithmic colored scale.
+
+    errgen_type: {"logG-logT", "logTiG"}
+      The type of error generator to compute.  Allowed values are:
+      
+      - "logG-logT" : errgen = log(gate) - log(target_gate)
+      - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -305,6 +297,9 @@ def create_general_report(results, filename, confidenceLevel=None,
     auto_open : bool, optional
         If True, automatically open the report in a web browser after it
         has been generated.
+
+    verbosity : int, optional
+       How much detail to send to stdout.
     
 
     Returns
@@ -312,54 +307,40 @@ def create_general_report(results, filename, confidenceLevel=None,
     None
     """
     printer = VerbosityPrinter.build_printer(verbosity, comm=comm)
-    if ws is None:
-        ws = _Workspace()
+    if ws is None: ws = _Workspace()
         
     if title == "auto":
         title = "GST report for %s" % datasetLabel
 
-    # dictionary to store all strings to be inserted into report template
-    qtys = {}
-
+    qtys = {} # stores strings to be inserted into report template
     qtys['title'] = title
     qtys['date'] = _time.strftime("%B %d, %Y")
     qtys['confidenceLevel'] = "%g" % \
         confidenceLevel if confidenceLevel is not None else "NOT-SET"
-    qtys['linlg_pcntle'] = str(results.parameters['linlogPercentile'])
+    qtys['linlg_pcntle'] = "%d" % round(linlogPercentile) #to nearest %
     qtys['datasetLabel'] = datasetLabel
-
-    if results.options.errgen_type == "logTiG":
-        qtys['errorgenformula'] = "$\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$"
-    elif results.options.errgen_type == "logG-logT":
-        qtys['errorgenformula'] = "$\hat{G} = e^{\mathbb{L} + \log G_{\mathrm{target}}}$"
-    else:
-        qtys['errorgenformula'] = "???"
+    qtys['errorgenformula'] = _errgen_formula(errgen_type)
         
     if confidenceLevel is not None:
         cri = results._get_confidence_region(confidenceLevel) #TODO
-        qtys['confidenceIntervalScaleFctr'] = \
-                    "%.3g" % cri.intervalScaling
-        qtys['confidenceIntervalNumNonGaugeParams'] = \
-                    "%d" % cri.nNonGaugeParams
-    else:
-        cri = None
-        qtys['confidenceIntervalScaleFctr'] = "NOT-SET"
-        qtys['confidenceIntervalNumNonGaugeParams'] = "NOT-SET"
+        qtys['confidenceIntervalScaleFctr'] = "%.3g" % cri.intervalScaling
+        qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % cri.nNonGaugeParams
+    else: cri = None
 
 
-    # 1) get latex tables
+    # Generate Tables
     printer.log("*** Generating tables ***")
 
     gsTgt = results.gatesets['target']
     gsFinal = results.gatesets['final estimate']
     ds = results.dataset
-    strs = ( tuple(results.gatestring_lists['prep fiducials']),
-             tuple(results.gatestring_lists['effect fiducials']) )
-
+    prepStrs = results.gatestring_lists['prep fiducials']
+    effectStrs = results.gatestring_lists['effect fiducials']
+    germs = results.gatestring_lists['germs']
 
     qtys['targetSpamBriefTable'] = ws.SpamTable(gsTgt, includeHSVec=False)
     qtys['targetGatesBoxTable'] = ws.GatesTable(gsTgt, display_as="boxes")
-    qtys['datasetOverviewTable'] = ws.DataSetOverviewTable(ds, gsTgt, 10, strs)
+    qtys['datasetOverviewTable'] = ws.DataSetOverviewTable(ds, gsTgt, 10, (prepStrs,effectStrs))
     qtys['bestGatesetSpamBriefTable'] = ws.SpamTable([gsTgt, gsFinal], ['Target','Estimated'],
                                                      cri, includeHSVec=False)
     qtys['bestGatesetSpamParametersTable'] = ws.SpamParametersTable(gsFinal, cri)
@@ -368,71 +349,50 @@ def create_general_report(results, filename, confidenceLevel=None,
     qtys['bestGatesetGatesBoxTable'] = ws.GatesTable([gsTgt,gsFinal], ['Target','Estimated'], "boxes", cri)
     qtys['bestGatesetChoiEvalTable'] = ws.ChoiTable(gsFinal, None, cri, display=("eigenvalues","barplot"))
     qtys['bestGatesetEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri)
-#    qtys['bestGatesetRelEvalTable'] = OUT!
     qtys['bestGatesetVsTargetTable'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
     qtys['bestGatesetErrGenBoxTable'] = ws.ErrgenTable(gsFinal, gsTgt, cri, ("errgen","H","S"),
-                                                       "boxes", results.options.errgen_type)
+                                                       "boxes", errgen_type)
     qtys['metadataTable'] = ws.MetadataTable(gsFinal, results.options, results.parameters)
     qtys['softwareEnvTable'] = ws.SoftwareEnvTable()
 
     # if Ls and germs available
     if results._LsAndGermInfoSet: #TODO: better way?
-        qtys['fiducialListTable'] = ws.GatestringTable(strs, ["Prep.","Measure"], commonTitle="Fiducials")
-        qtys['prepStrListTable'] = ws.GatestringTable(results.gatestring_lists['prep fiducials'],
-                                                      "Preparation Fiducials")
-        qtys['effectStrListTable'] = ws.GatestringTable(results.gatestring_lists['effect fiducials'],
-                                                        "Measurement Fiducials")
-        qtys['germList2ColTable'] = ws.GatestringTable(results.gatestring_lists['germs'], "Germ", nCols=2)
+        qtys['fiducialListTable'] = ws.GatestringTable((prepStrs,effectStrs),
+                                                       ["Prep.","Measure"], commonTitle="Fiducials")
+        qtys['prepStrListTable'] = ws.GatestringTable(prepStrs,"Preparation Fiducials")
+        qtys['effectStrListTable'] = ws.GatestringTable(effectStrs,"Measurement Fiducials")
+        qtys['germList2ColTable'] = ws.GatestringTable(germs, "Germ", nCols=2)
         qtys['progressTable'] = ws.FitComparisonTable(
             results.parameters['max length list'],
             results.gatestring_structs['iteration'],
             results.gatesets['iteration estimates'],
             ds, results.parameters['objective'], 'L')
 
-        # 2) generate plots
+        # Generate plots
         printer.log("*** Generating plots ***")
 
         gss = results.gatestring_structs['final']
-        
         if results.parameters['objective'] == "logl":
             mpc = results.parameters['minProbClip']
         else:
             mpc = results.parameters['minProbClipForWeighting']
-                
-        
-        qtys['colorBoxPlotKeyPlot'] = ws.BoxKeyPlot(tuple(results.gatestring_lists['prep fiducials']),
-                                                    tuple(results.gatestring_lists['effect fiducials']))
-        
+
+        qtys['colorBoxPlotKeyPlot'] = ws.BoxKeyPlot(prepStrs, effectStrs)        
         qtys['bestEstimateSummedColorBoxPlot'] = ws.ColorBoxPlot(
             results.parameters['objective'], gss, ds, gsFinal,
-            linlg_pcntle=float(results.parameters['linlogPercentile']) / 100,
+            linlg_pcntle=float(linlogPercentile) / 100,
             minProbClipForWeighting=mpc, sumUp=True)
 
         #Not pagniated currently... just set to same full plot
         qtys['bestEstimateColorBoxPlotPages'] = ws.ColorBoxPlot(
             results.parameters['objective'], gss, ds, gsFinal,
-            linlg_pcntle=float(results.parameters['linlogPercentile']) / 100,
+            linlg_pcntle=float(linlogPercentile) / 100,
             minProbClipForWeighting=mpc)   
 
     # 3) populate template latex file => report latex file
     printer.log("*** Merging into template file ***")
-
-    #Add inline CSS
-    qtys['inlineCSS'] = ""
-    cssPath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                            "templates","css")
-    for cssFile in ("dataTable.css","pygsti_pub.css","pygsti_screen.css"):
-        with open(_os.path.join(cssPath,cssFile)) as f:
-            qtys['inlineCSS'] += '<style>\n' + str(f.read()) + '\n</style>\n'
-    
-    templateFile = "report_general.html"
-    _merge_template(qtys, templateFile, filename)
-    printer.log("Output written to %s" % filename)
-
-    url = 'file://' + _os.path.abspath(filename)
-    if auto_open:
-        printer.log("Opening %s..." % filename)
-        _webbrowser.open(url)
+    _merge_template(qtys, "report_general.html", filename, auto_open,
+                    verbosity=printer)
 
 
 

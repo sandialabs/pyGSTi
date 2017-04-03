@@ -175,7 +175,7 @@ class DivergingColormap(Colormap):
         #vmin, vmax, midpoint = self.vmin, self.vmax, self.midpoint
         #
         #is_scalar = False
-        #if isinstance(value, float) or isinstance(value, int):
+        #if isinstance(value, float) or _compat.isint(value, int):
         #    is_scalar = True
         #result = _np.ma.array(value)
         #
@@ -223,7 +223,7 @@ class SequentialColormap(Colormap):
         return value
 
         #is_scalar = False
-        #if isinstance(value, float) or isinstance(value, int):
+        #if isinstance(value, float) or _compat.isint(value, int):
         #    is_scalar = True
         #
         #result = _np.ma.array(value)

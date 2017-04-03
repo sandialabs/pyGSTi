@@ -13,6 +13,7 @@ import warnings as _warnings
 from . import jamiolkowski as _jam
 from . import matrixtools as _mt
 from . import basistools as _bt
+from . import compattools as _compat
 
 def _hack_sqrtm(A):
     return _spl.sqrtm(A) #Travis found this scipy function
@@ -1120,11 +1121,11 @@ def lindblad_errgen_projections(errgen, ham_basis,
     
     #Get a list of the generators in corresspondence with the
     #  specified basis elements.
-    if isinstance(ham_basis,str) or isinstance(ham_basis,unicode):
+    if _compat.isstr(ham_basis):
         hamBasisMxs = _bt.basis_matrices(ham_basis, d)
     else: hamBasisMxs = ham_basis
         
-    if isinstance(other_basis,str) or isinstance(other_basis,unicode):
+    if _compat.isstr(other_basis):
         otherBasisMxs = _bt.basis_matrices(other_basis, d)
     else: otherBasisMxs = other_basis
     
