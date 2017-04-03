@@ -1102,7 +1102,7 @@ class WorkspaceTable(WorkspaceOutput):
             with a globally defined RequireJS library.  If True, then
             rendered output will make use of RequireJS.
 
-        precision : int or dict
+        precision : int or dict, optional
             The amount of precision to display.  A dictionary with keys
             "polar", "sci", and "normal" can separately specify the 
             precision for complex angles, numbers in scientific notation, and 

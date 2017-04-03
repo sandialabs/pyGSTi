@@ -15,9 +15,9 @@ import webbrowser as _webbrowser
 from ..objects      import VerbosityPrinter
 from ..tools        import compattools as _compat
 from .workspace import Workspace as _Workspace
+from .workspace import WorkspaceTable as _WorkspaceTable
 
-
-def _merge_template(qtys, templateFilename, outputFilename, auto_open=False,
+def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision,
                     inlineCSSnames=("dataTable.css","pygsti_pub.css","pygsti_screen.css"),
                     verbosity=0):
 
@@ -52,9 +52,14 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open=False,
     for key,val in qtys.items():
         if _compat.isstr(val):
             qtys_html[key] = val
+
         else:
             #print("DB: rendering ",key)
-            out = val.render("html") # a dictionary of rendered portions
+            if isinstance(val,_WorkspaceTable):
+                #supply precision argument
+                out = val.render("html",precision=precision)
+            else:
+                out = val.render("html") # a dictionary of rendered portions
             qtys_html[key] = "<script>\n%(js)s\n</script>\n\n%(html)s" % out
 
     #Do actual fill -- everything needs to be unicode at this point.
@@ -89,6 +94,7 @@ def _errgen_formula(errgen_type):
 def create_single_qubit_report(results, filename, confidenceLevel=None,
                                title="auto", datasetLabel="$\\mathcal{D}$",
                                linlogPercentile=5, errgen_type="logTiG",
+                               precision=None, brief=False,
                                comm=None, ws=None, auto_open=False, verbosity=0):
 
     """
@@ -129,6 +135,20 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
       
       - "logG-logT" : errgen = log(gate) - log(target_gate)
       - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+
+    precision : int or dict, optional
+        The amount of precision to display.  A dictionary with keys
+        "polar", "sci", and "normal" can separately specify the 
+        precision for complex angles, numbers in scientific notation, and 
+        everything else, respectively.  If an integer is given, it this
+        same value is taken for all precision types.  If None, then
+        `{'normal': 6, 'polar': 3, 'sci': 0}` is used.
+
+    brief : boolean, optional
+        If True, then an alternate version of the report is created which 
+        removes much of the expanatory text and re-orders the content to
+        be more useful for to users who are familiar with the report's
+        tables and figures.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -234,17 +254,18 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     
     # Populate template latex file => report latex file
     printer.log("*** Merging into template file ***")
-
-    templateFile = "report_singlequbit.html"
     #print("DB inserting choi:\n",qtys['bestGatesetChoiTable'].render("html"))
     #print("DB inserting decomp:\n",qtys['bestGatesetDecompTable'].render("html"))
-    _merge_template(qtys, templateFile, filename, auto_open, verbosity=printer)
+    template = "report_singlequbit_brief.html" if brief else "report_singlequbit.html"
+    _merge_template(qtys, template, filename, auto_open, precision,
+                    verbosity=printer)
 
     
 
 def create_general_report(results, filename, confidenceLevel=None,
                           title="auto", datasetLabel="$\\mathcal{D}$",
                           linlogPercentile=5, errgen_type="logTiG",
+                          precision=None, brief=False,
                           comm=None, ws=None, auto_open=False, verbosity=0):
     """
     Create a "general" GST report.  This report is "general" in that it is
@@ -279,10 +300,24 @@ def create_general_report(results, filename, confidenceLevel=None,
         top `linlogPercentile` is shown on a logarithmic colored scale.
 
     errgen_type: {"logG-logT", "logTiG"}
-      The type of error generator to compute.  Allowed values are:
-      
-      - "logG-logT" : errgen = log(gate) - log(target_gate)
-      - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+        The type of error generator to compute.  Allowed values are:
+        
+        - "logG-logT" : errgen = log(gate) - log(target_gate)
+        - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+
+    precision : int or dict, optional
+        The amount of precision to display.  A dictionary with keys
+        "polar", "sci", and "normal" can separately specify the 
+        precision for complex angles, numbers in scientific notation, and 
+        everything else, respectively.  If an integer is given, it this
+        same value is taken for all precision types.  If None, then
+        `{'normal': 6, 'polar': 3, 'sci': 0}` is used.
+
+    brief : boolean, optional
+        If True, then an alternate version of the report is created which 
+        removes much of the expanatory text and re-orders the content to
+        be more useful for to users who are familiar with the report's
+        tables and figures.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -391,8 +426,9 @@ def create_general_report(results, filename, confidenceLevel=None,
 
     # 3) populate template latex file => report latex file
     printer.log("*** Merging into template file ***")
-    _merge_template(qtys, "report_general.html", filename, auto_open,
-                    verbosity=printer)
+    template = "report_general_brief.html" if brief else "report_general.html"
+    _merge_template(qtys, template, filename, auto_open,
+                    precision, verbosity=printer)
 
 
 
