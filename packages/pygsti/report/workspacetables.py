@@ -13,9 +13,7 @@ import scipy.stats        as _stats
 from .. import algorithms as _alg
 from .. import tools      as _tools
 from .. import objects    as _objs
-
 from . import reportables as _cr
-from . import plotting    as _plotting
 
 from .table import ReportTable as _ReportTable
 

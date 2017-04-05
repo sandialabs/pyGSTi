@@ -7,8 +7,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Classes corresponding to plots within a Workspace context."""
 
 import numpy             as _np
-import matplotlib.pyplot as _plt
-import matplotlib        as _matplotlib
 import os                as _os
 import warnings          as _warnings
 
@@ -16,8 +14,6 @@ from .. import algorithms   as _alg
 from .. import tools        as _tools
 from .. import construction as _construction
 from .. import objects      as _objs
-
-from .figure import ReportFigure as _ReportFigure
 
 from .workspace import WorkspacePlot
 from . import colormaps as _colormaps
