@@ -1485,8 +1485,8 @@ class GaugeOptParamsTable(WorkspaceTable):
     
         Parameters
         ----------
-        gaugeOptArgs : list of dicts
-            A list of dictionaries, each specifying values for zero or more of the
+        gaugeOptArgs : dict
+            A dictionary specifying values for zero or more of the
             *arguments* of pyGSTi's :func:`gaugeopt_to_target` function.
     
         Returns
@@ -1501,13 +1501,7 @@ class GaugeOptParamsTable(WorkspaceTable):
         formatters = ('Bold','Bold')
     
         table = _ReportTable(colHeadings, formatters)
-    
-        if isinstance(gaugeOptArgs,list) or isinstance(gaugeOptArgs,tuple):
-            gaugeOptArgs = gaugeOptArgs[-1]
-            #for now, just print the params of the *last*
-            # gauge optimiziation, though in the future we could print
-            # multiple columns, one for each optimization.
-    
+        
         if gaugeOptArgs == False: #signals *no* gauge optimization
             gaugeOptArgs = {'Method': "No gauge optimization was performed" }
     
@@ -1537,7 +1531,7 @@ class GaugeOptParamsTable(WorkspaceTable):
     
 #    def get_metadata_table(gateset, result_options, result_params):
 class MetadataTable(WorkspaceTable):
-    def __init__(self, ws, gateset, result_options, result_params):
+    def __init__(self, ws, gateset, params):
         """
         Create a table of parameters and options from a `Results` object.
     
@@ -1547,19 +1541,16 @@ class MetadataTable(WorkspaceTable):
             The gateset (usually the final estimate of a GST computation) to 
             show information for (e.g. the types of its gates).
     
-        result_options: ResultOptions
-            The options to display
-    
-        result_params: dict
+        params: dict
             A parameter dictionary to display
     
         Returns
         -------
         ReportTable
         """
-        super(MetadataTable,self).__init__(ws, self._create, gateset, result_options, result_params)
+        super(MetadataTable,self).__init__(ws, self._create, gateset, params)
     
-    def _create(self, gateset, result_options, result_params):
+    def _create(self, gateset, params_dict):
     
         colHeadings = ('Quantity','Value')
         formatters = ('Bold','Bold')
@@ -1569,29 +1560,24 @@ class MetadataTable(WorkspaceTable):
         latex_head += "\\textbf{Quantity} & \\textbf{Value} \\\\ \hline\n"
         table = _ReportTable(colHeadings, formatters,
                              customHeader={'latex': latex_head} )
-    
-        table.addrow(("Long tables (option)", str(result_options.long_tables)), (None,'Verbatim'))
-        table.addrow(("Table class (option)", str(result_options.table_class)), (None,'Verbatim'))
-        table.addrow(("Template path (option)", str(result_options.template_path)), (None,'Verbatim'))
-        table.addrow(("Latex command (option)", str(result_options.latex_cmd)), (None,'Verbatim'))
-    
-        for key in sorted(list(result_params.keys())):
+        
+        for key in sorted(list(params_dict.keys())):
             if key in ['L,germ tuple base string dict', 'profiler']: continue #skip these
             if key == 'gaugeOptParams':
-                if isinstance(result_params[key],dict):
-                    val = result_params[key].copy()
+                if isinstance(params_dict[key],dict):
+                    val = params_dict[key].copy()
                     if 'targetGateset' in val:
                         del val['targetGateset'] #don't print this!
                                 
-                elif isinstance(result_params[key],list):
+                elif isinstance(params_dict[key],list):
                     val = []
-                    for go_param_dict in result_params[key]:
+                    for go_param_dict in params_dict[key]:
                         if isinstance(go_param_dict,dict): #to ensure .copy() exists
                             val.append(go_param_dict.copy())
                             if 'targetGateset' in val[-1]:
                                 del val[-1]['targetGateset'] #don't print this!
             else:
-                val = result_params[key]
+                val = params_dict[key]
             table.addrow((key, str(val)), (None,'Verbatim'))
     
     

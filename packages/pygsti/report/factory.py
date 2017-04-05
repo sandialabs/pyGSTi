@@ -112,7 +112,7 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     filename : string, optional
        The output filename where the report file(s) will be saved.
 
-    confidenceLevel : float, optional
+    confidenceLevel : int, optional
        If not None, then the confidence level (between 0 and 100) used in
        the computation of confidence regions/intervals. If None, no
        confidence regions or intervals are computed.
@@ -181,14 +181,14 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     qtys = {} # stores strings to be inserted into report template
     qtys['title'] = title
     qtys['date'] = _time.strftime("%B %d, %Y")
-    qtys['confidenceLevel'] = "%g" % \
+    qtys['confidenceLevel'] = "%d" % \
         confidenceLevel if confidenceLevel is not None else "NOT-SET"
     qtys['linlg_pcntle'] = "%d" % round(linlogPercentile) #to nearest %
     qtys['datasetLabel'] = datasetLabel
     qtys['errorgenformula'] = _errgen_formula(errgen_type)
         
     if confidenceLevel is not None:
-        cri = results._get_confidence_region(confidenceLevel) #TODO
+        cri = results.get_confidence_region("go0","final",confidenceLevel, comm=comm)
         qtys['confidenceIntervalScaleFctr'] = "%.3g" % cri.intervalScaling
         qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % cri.nNonGaugeParams
     else: cri = None
@@ -198,7 +198,7 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     printer.log("*** Generating tables ***")
 
     gsTgt = results.gatesets['target']
-    gsFinal = results.gatesets['final estimate']
+    gsFinal = results.gatesets['go0']
     ds = results.dataset
     prepStrs = results.gatestring_lists['prep fiducials']
     effectStrs = results.gatestring_lists['effect fiducials']
@@ -209,7 +209,7 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     qtys['datasetOverviewTable'] = ws.DataSetOverviewTable(ds, gsTgt, 10, (prepStrs,effectStrs))
     qtys['bestGatesetSpamTable'] = ws.SpamTable(gsFinal, cri)
     qtys['bestGatesetSpamParametersTable'] = ws.SpamParametersTable(gsFinal, cri)
-    qtys['bestGatesetGaugeOptParamsTable'] = ws.GaugeOptParamsTable(tuple(results.parameters['gaugeOptParams']))
+    qtys['bestGatesetGaugeOptParamsTable'] = ws.GaugeOptParamsTable(results.goparameters['go0'])
     qtys['bestGatesetGatesTable'] = ws.GatesTable(gsFinal, display_as="numbers", confidenceRegionInfo=cri)
     qtys['bestGatesetChoiTable'] = ws.ChoiTable(gsFinal, None, cri, display=('matrix','eigenvalues'))
     qtys['bestGatesetDecompTable'] = ws.GateDecompTable(gsFinal, cri)
@@ -217,40 +217,39 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     qtys['bestGatesetVsTargetTable'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
     qtys['bestGatesetErrorGenTable'] = ws.ErrgenTable(gsFinal, gsTgt, cri, ("errgen",),
                                                       "numbers", errgen_type)
-    qtys['metadataTable'] = ws.MetadataTable(gsFinal, results.options, results.parameters)
+    qtys['metadataTable'] = ws.MetadataTable(gsFinal, results.parameters)
     qtys['softwareEnvTable'] = ws.SoftwareEnvTable()
 
-    # if Ls and germs available
-    if results._LsAndGermInfoSet: #TODO: better way?
-        qtys['fiducialListTable'] = ws.GatestringTable((prepStrs,effectStrs),
-                                                       ["Prep.","Measure"], commonTitle="Fiducials")
-        qtys['prepStrListTable'] = ws.GatestringTable(prepStrs,"Preparation Fiducials")
-        qtys['effectStrListTable'] = ws.GatestringTable(effectStrs,"Measurement Fiducials")
-        qtys['germListTable'] = ws.GatestringTable(germs, "Germ")
-        qtys['progressTable'] = ws.FitComparisonTable(
-            results.parameters['max length list'],
-            results.gatestring_structs['iteration'],
-            results.gatesets['iteration estimates'],
-            ds, results.parameters['objective'], 'L')
+    # Ls and germs specific
+    qtys['fiducialListTable'] = ws.GatestringTable((prepStrs,effectStrs),
+                                                   ["Prep.","Measure"], commonTitle="Fiducials")
+    qtys['prepStrListTable'] = ws.GatestringTable(prepStrs,"Preparation Fiducials")
+    qtys['effectStrListTable'] = ws.GatestringTable(effectStrs,"Measurement Fiducials")
+    qtys['germListTable'] = ws.GatestringTable(germs, "Germ")
+    qtys['progressTable'] = ws.FitComparisonTable(
+        results.parameters['max length list'],
+        results.gatestring_structs['iteration'],
+        results.gatesets['iteration estimates'],
+        ds, results.parameters['objective'], 'L')
 
-        # Generate plots
-        printer.log("*** Generating plots ***")
+    # Generate plots
+    printer.log("*** Generating plots ***")
 
-        gss = results.gatestring_structs['final']
-        if results.parameters['objective'] == "logl":
-            mpc = results.parameters['minProbClip']
-        else:
-            mpc = results.parameters['minProbClipForWeighting']
-        
-        qtys['colorBoxPlotKeyPlot'] = ws.BoxKeyPlot(prepStrs, effectStrs)
-        qtys['bestEstimateColorBoxPlot'] = ws.ColorBoxPlot(
-            results.parameters['objective'], gss, ds, gsFinal,
-            linlg_pcntle=float(linlogPercentile) / 100,
-            minProbClipForWeighting=mpc)
-        qtys['invertedBestEstimateColorBoxPlot'] = ws.ColorBoxPlot(
-            results.parameters['objective'], gss, ds, gsFinal,
-            linlg_pcntle=float(linlogPercentile) / 100,
-            minProbClipForWeighting=mpc, invert=True)
+    gss = results.gatestring_structs['final']
+    if results.parameters['objective'] == "logl":
+        mpc = results.parameters['minProbClip']
+    else:
+        mpc = results.parameters['minProbClipForWeighting']
+    
+    qtys['colorBoxPlotKeyPlot'] = ws.BoxKeyPlot(prepStrs, effectStrs)
+    qtys['bestEstimateColorBoxPlot'] = ws.ColorBoxPlot(
+        results.parameters['objective'], gss, ds, gsFinal,
+        linlg_pcntle=float(linlogPercentile) / 100,
+        minProbClipForWeighting=mpc)
+    qtys['invertedBestEstimateColorBoxPlot'] = ws.ColorBoxPlot(
+        results.parameters['objective'], gss, ds, gsFinal,
+        linlg_pcntle=float(linlogPercentile) / 100,
+        minProbClipForWeighting=mpc, invert=True)
     
     # Populate template latex file => report latex file
     printer.log("*** Merging into template file ***")
@@ -281,7 +280,7 @@ def create_general_report(results, filename, confidenceLevel=None,
     filename : string, optional
        The output filename where the report file(s) will be saved.
 
-    confidenceLevel : float, optional
+    confidenceLevel : int, optional
        If not None, then the confidence level (between 0 and 100) used in
        the computation of confidence regions/intervals. If None, no
        confidence regions or intervals are computed.
@@ -350,14 +349,14 @@ def create_general_report(results, filename, confidenceLevel=None,
     qtys = {} # stores strings to be inserted into report template
     qtys['title'] = title
     qtys['date'] = _time.strftime("%B %d, %Y")
-    qtys['confidenceLevel'] = "%g" % \
+    qtys['confidenceLevel'] = "%d" % \
         confidenceLevel if confidenceLevel is not None else "NOT-SET"
     qtys['linlg_pcntle'] = "%d" % round(linlogPercentile) #to nearest %
     qtys['datasetLabel'] = datasetLabel
     qtys['errorgenformula'] = _errgen_formula(errgen_type)
         
     if confidenceLevel is not None:
-        cri = results._get_confidence_region(confidenceLevel) #TODO
+        cri = results.get_confidence_region("go0","final",confidenceLevel, comm=comm)
         qtys['confidenceIntervalScaleFctr'] = "%.3g" % cri.intervalScaling
         qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % cri.nNonGaugeParams
     else: cri = None
@@ -367,7 +366,7 @@ def create_general_report(results, filename, confidenceLevel=None,
     printer.log("*** Generating tables ***")
 
     gsTgt = results.gatesets['target']
-    gsFinal = results.gatesets['final estimate']
+    gsFinal = results.gatesets['go0']
     ds = results.dataset
     prepStrs = results.gatestring_lists['prep fiducials']
     effectStrs = results.gatestring_lists['effect fiducials']
@@ -380,49 +379,48 @@ def create_general_report(results, filename, confidenceLevel=None,
                                                      cri, includeHSVec=False)
     qtys['bestGatesetSpamParametersTable'] = ws.SpamParametersTable(gsFinal, cri)
     qtys['bestGatesetSpamVsTargetTable'] = ws.SpamVsTargetTable(gsFinal, gsTgt, cri)
-    qtys['bestGatesetGaugeOptParamsTable'] = ws.GaugeOptParamsTable(tuple(results.parameters['gaugeOptParams']))
+    qtys['bestGatesetGaugeOptParamsTable'] = ws.GaugeOptParamsTable(results.goparameters['go0'])
     qtys['bestGatesetGatesBoxTable'] = ws.GatesTable([gsTgt,gsFinal], ['Target','Estimated'], "boxes", cri)
     qtys['bestGatesetChoiEvalTable'] = ws.ChoiTable(gsFinal, None, cri, display=("eigenvalues","barplot"))
     qtys['bestGatesetEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri)
     qtys['bestGatesetVsTargetTable'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
     qtys['bestGatesetErrGenBoxTable'] = ws.ErrgenTable(gsFinal, gsTgt, cri, ("errgen","H","S"),
                                                        "boxes", errgen_type)
-    qtys['metadataTable'] = ws.MetadataTable(gsFinal, results.options, results.parameters)
+    qtys['metadataTable'] = ws.MetadataTable(gsFinal, results.parameters)
     qtys['softwareEnvTable'] = ws.SoftwareEnvTable()
 
-    # if Ls and germs available
-    if results._LsAndGermInfoSet: #TODO: better way?
-        qtys['fiducialListTable'] = ws.GatestringTable((prepStrs,effectStrs),
-                                                       ["Prep.","Measure"], commonTitle="Fiducials")
-        qtys['prepStrListTable'] = ws.GatestringTable(prepStrs,"Preparation Fiducials")
-        qtys['effectStrListTable'] = ws.GatestringTable(effectStrs,"Measurement Fiducials")
-        qtys['germList2ColTable'] = ws.GatestringTable(germs, "Germ", nCols=2)
-        qtys['progressTable'] = ws.FitComparisonTable(
-            results.parameters['max length list'],
+    #Ls and Germs specific
+    qtys['fiducialListTable'] = ws.GatestringTable((prepStrs,effectStrs),
+                                                   ["Prep.","Measure"], commonTitle="Fiducials")
+    qtys['prepStrListTable'] = ws.GatestringTable(prepStrs,"Preparation Fiducials")
+    qtys['effectStrListTable'] = ws.GatestringTable(effectStrs,"Measurement Fiducials")
+    qtys['germList2ColTable'] = ws.GatestringTable(germs, "Germ", nCols=2)
+    qtys['progressTable'] = ws.FitComparisonTable(
+        results.parameters['max length list'],
             results.gatestring_structs['iteration'],
-            results.gatesets['iteration estimates'],
-            ds, results.parameters['objective'], 'L')
-
-        # Generate plots
-        printer.log("*** Generating plots ***")
-
-        gss = results.gatestring_structs['final']
-        if results.parameters['objective'] == "logl":
-            mpc = results.parameters['minProbClip']
-        else:
-            mpc = results.parameters['minProbClipForWeighting']
-
-        qtys['colorBoxPlotKeyPlot'] = ws.BoxKeyPlot(prepStrs, effectStrs)        
-        qtys['bestEstimateSummedColorBoxPlot'] = ws.ColorBoxPlot(
-            results.parameters['objective'], gss, ds, gsFinal,
-            linlg_pcntle=float(linlogPercentile) / 100,
-            minProbClipForWeighting=mpc, sumUp=True)
-
-        #Not pagniated currently... just set to same full plot
-        qtys['bestEstimateColorBoxPlotPages'] = ws.ColorBoxPlot(
-            results.parameters['objective'], gss, ds, gsFinal,
-            linlg_pcntle=float(linlogPercentile) / 100,
-            minProbClipForWeighting=mpc)   
+        results.gatesets['iteration estimates'],
+        ds, results.parameters['objective'], 'L')
+    
+    # Generate plots
+    printer.log("*** Generating plots ***")
+        
+    gss = results.gatestring_structs['final']
+    if results.parameters['objective'] == "logl":
+        mpc = results.parameters['minProbClip']
+    else:
+        mpc = results.parameters['minProbClipForWeighting']
+        
+    qtys['colorBoxPlotKeyPlot'] = ws.BoxKeyPlot(prepStrs, effectStrs)        
+    qtys['bestEstimateSummedColorBoxPlot'] = ws.ColorBoxPlot(
+        results.parameters['objective'], gss, ds, gsFinal,
+        linlg_pcntle=float(linlogPercentile) / 100,
+        minProbClipForWeighting=mpc, sumUp=True)
+    
+    #Not pagniated currently... just set to same full plot
+    qtys['bestEstimateColorBoxPlotPages'] = ws.ColorBoxPlot(
+        results.parameters['objective'], gss, ds, gsFinal,
+        linlg_pcntle=float(linlogPercentile) / 100,
+        minProbClipForWeighting=mpc)   
 
     # 3) populate template latex file => report latex file
     printer.log("*** Merging into template file ***")

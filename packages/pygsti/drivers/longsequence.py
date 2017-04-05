@@ -427,7 +427,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     # for LGST and post-analysis).
     rawLists = [ l.allstrs if isinstance(l,_objs.LsGermsStructure) else l
                  for l in lsgstLists ]
-    
+
     aliases = lsgstLists[-1].aliases if isinstance(
         lsgstLists[-1], _objs.LsGermsStructure) else None
     aliases = advancedOptions.get('gateLabelAliases',aliases)
@@ -479,42 +479,29 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     tNxt = _time.time()
     profiler.add_time('do_long_sequence_gst: total long-seq. opt.',tRef); tRef=tNxt
 
-    #Do final gauge optimization.  gaugeOptParams can be a dict or a list of
-    # dicts, each specifying a successive "stage" of gauge optimization.
+    ret = _report.Results()
+    ret.init_Ls_and_germs(objective, ds, gs_target,
+                          gs_start, gs_lsgst_list,
+                          lsgstLists)
+
+    #Do final gauge optimization to *final* iteration result only
     go_gs_lsgst_list = gs_lsgst_list
     if gaugeOptParams != False:
-        if hasattr(gaugeOptParams,"keys"):
-            go_params_list = [gaugeOptParams]
-        else: go_params_list = gaugeOptParams
+        gaugeOptParams = gaugeOptParams.copy() #so we don't modify the caller's dict
+        if "targetGateset" not in gaugeOptParams:
+            gaugeOptParams["targetGateset"] = gs_target
 
-        ordered_go_params_list = []
-        for go_params in go_params_list:
-            if "targetGateset" not in go_params:
-                go_params["targetGateset"] = gs_target
-
-            ordered_go_params_list.append( _collections.OrderedDict( 
-                [(k,go_params[k]) for k in sorted(list(go_params.keys()))]))
-
-            go_gs_lsgst_list = [ _alg.gaugeopt_to_target(gs,**go_params)
-                                 for gs in go_gs_lsgst_list]
+        go_gs_final = _alg.gaugeopt_to_target(gs_lsgst_list[-1],**gaugeOptParams)
+        ret.add_gaugeoptimized(gaugeOptParams, go_gs_final)
 
         tNxt = _time.time()
         profiler.add_time('do_long_sequence_gst: gauge optimization',tRef); tRef=tNxt
-    else:
-        ordered_go_params_list = None
 
-    #OLD: truncFn = _construction.stdlists._getTruncFunction(truncScheme)
-
-    ret = _report.Results()
-    ret.init_Ls_and_germs(objective, ds, gs_target,
-                          gs_start, go_gs_lsgst_list,
-                          gs_lsgst_list, lsgstLists)
                    
       #set parameters
     ret.parameters['defaultDirectory'] = default_dir
     ret.parameters['defaultBasename'] = default_base
     ret.parameters['memLimit'] = memLimit
-    ret.parameters['gaugeOptParams'] = ordered_go_params_list
     ret.parameters['starting point'] = startingPt
     ret.parameters['profiler'] = profiler
 
