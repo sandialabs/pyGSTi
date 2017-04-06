@@ -207,7 +207,7 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     qtys['targetSpamTable'] = ws.SpamTable(gsTgt)
     qtys['targetGatesTable'] = ws.GatesTable(gsTgt)
     qtys['datasetOverviewTable'] = ws.DataSetOverviewTable(ds, gsTgt, 10, (prepStrs,effectStrs))
-    qtys['bestGatesetSpamTable'] = ws.SpamTable(gsFinal, cri)
+    qtys['bestGatesetSpamTable'] = ws.SpamTable(gsFinal, None, cri)
     qtys['bestGatesetSpamParametersTable'] = ws.SpamParametersTable(gsFinal, cri)
     qtys['bestGatesetGaugeOptParamsTable'] = ws.GaugeOptParamsTable(results.goparameters['go0'])
     qtys['bestGatesetGatesTable'] = ws.GatesTable(gsFinal, display_as="numbers", confidenceRegionInfo=cri)
@@ -372,7 +372,7 @@ def create_general_report(results, filename, confidenceLevel=None,
     effectStrs = results.gatestring_lists['effect fiducials']
     germs = results.gatestring_lists['germs']
 
-    qtys['targetSpamBriefTable'] = ws.SpamTable(gsTgt, includeHSVec=False)
+    qtys['targetSpamBriefTable'] = ws.SpamTable(gsTgt, None, includeHSVec=False)
     qtys['targetGatesBoxTable'] = ws.GatesTable(gsTgt, display_as="boxes")
     qtys['datasetOverviewTable'] = ws.DataSetOverviewTable(ds, gsTgt, 10, (prepStrs,effectStrs))
     qtys['bestGatesetSpamBriefTable'] = ws.SpamTable([gsTgt, gsFinal], ['Target','Estimated'],

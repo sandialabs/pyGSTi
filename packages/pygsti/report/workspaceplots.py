@@ -187,6 +187,7 @@ def nested_color_boxplot(plt_data_list_of_lists, colormap,
     # (assume a complete 2D rectangular list of lists, and that
     #  each element is a numpy array of the same size)
     if len(plt_data_list_of_lists) == 0 or len(plt_data_list_of_lists[0]) == 0: return
+    
     elRows,elCols = plt_data_list_of_lists[0][0].shape #nE,nr
     nRows = len(plt_data_list_of_lists)
     nCols = len(plt_data_list_of_lists[0])
@@ -391,7 +392,8 @@ def generate_boxplot(subMxs,
         boxLabelSize = 8*scale if boxLabels else 0
         fig = nested_color_boxplot(subMxs, colormap, colorbar, boxLabelSize,
                                    prec, hoverLabelFn)
-
+        assert(fig is not None), "No data to display!"
+        
         fig['layout'].update(width=30*(nXs*nIXs+5)*scale,
                              height=30*(nYs*nIYs+5)*scale)
         
@@ -907,7 +909,10 @@ class ColorBoxPlot(WorkspacePlot):
 
             subMxs = _ph._computeSubMxs(gss,mx_fn,sumUp)
             n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, gss.used_xvals(), gss.used_yvals(), sumUp)
-            dataMax = max( [ (_np.max(mx) if (mx is not None) else 0) for subMxRow in subMxs for mx in subMxRow] )
+            if len(subMxs) > 0:
+                dataMax = max( [ (_np.max(mx) if (mx is not None) else 0)
+                                 for subMxRow in subMxs for mx in subMxRow] )
+            else: dataMax = 0
 
             if colormapType == "linlog":
                 colormap = _colormaps.LinlogColormap(0, dataMax, n_boxes,

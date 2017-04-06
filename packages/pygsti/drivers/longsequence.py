@@ -230,7 +230,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     includeLGST = advancedOptions.get('includeLGST', startingPt == "LGST")
     lsgstLists = _construction.stdlists.make_lsgst_structs(
         gateLabels, prepStrs, effectStrs, germs, maxLengths, fidPairs,
-        truncScheme, nest, includeLGST, aliases)
+        truncScheme, nest, 1, includeLGST, aliases)
     
     assert(len(maxLengths) == len(lsgstLists))
     

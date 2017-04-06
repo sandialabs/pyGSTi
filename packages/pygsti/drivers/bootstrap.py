@@ -7,8 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Functions for generating bootstrapped error bars """
 import numpy as _np
 #import matplotlib as _mpl #REMOVED
-from .longsequence import do_long_sequence_gst as _do_long_sequence_gst
-
+from . import longsequence as _longseq
 from .. import objects as _obj
 from .. import algorithms as _alg
 from .. import tools as _tools
@@ -203,10 +202,15 @@ def make_bootstrap_gatesets(numGateSets, inputDataSet, generationMethod,
     print("Creating GateSets: ")
     for run in range(numGateSets):
         print("Running MLGST Iteration %d " % run)
-        results = _do_long_sequence_gst(
-            datasetList[run], targetGateSet, fiducialPrep, fiducialMeasure,
-            germs, maxLengths, lsgstLists=lsgstLists, verbosity=verbosity)
-        gatesetList.append(results.gatesets['final estimate'])
+        if lsgstLists is not None:
+            results = _longseq.do_long_sequence_gst_base(
+                datasetList[run], targetGateSet, lsgstLists, verbosity=verbosity)
+        else:
+            results = _longseq.do_long_sequence_gst(
+                datasetList[run], targetGateSet,
+                fiducialPrep, fiducialMeasure, germs, maxLengths,
+                verbosity=verbosity)
+        gatesetList.append(results.gatesets['go0'])
 
     if not returnData:
         return gatesetList

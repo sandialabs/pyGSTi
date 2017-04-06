@@ -398,7 +398,7 @@ def make_lsgst_structs(gateLabels, prepStrs, effectStrs, germList, maxLengthList
                     assert(0 <= nPairsToChoose <= nPairsRemaining)
                     # FUTURE: issue warnings when clipping nPairsToChoose?
     
-                    fiducialPairsThisIter = fidPairsDict[germ] + \
+                    fiducialPairsThisIter = fidPairDict[germ] + \
                         [ remainingPairs[k] for k in
                           sorted(rndm.choice(nPairsRemaining,nPairsToChoose,
                                              replace=False))]

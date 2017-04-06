@@ -550,7 +550,7 @@ class SpamVsTargetTable(WorkspaceTable):
 class ErrgenTable(WorkspaceTable):
     def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None,
                  display=("errgen","H","S"), display_as="boxes",
-                 genType="logG-logT"):
+                 genType="logG-logT"):  #TODO: change default
                  
         """
         Create a table listing the error generators obtained by
@@ -1409,7 +1409,7 @@ class StandardErrgenTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(ErrgenProjectorBoxesTable,self).__init__(
+        super(StandardErrgenTable,self).__init__(
             ws, self._create, gateset_dim, projection_type,
             projection_basis)
     

@@ -326,7 +326,7 @@ class Results(object):
 
         This function is essentailly a wrapper which maps values from the
         `parameters` dictionary of this object to the arguments of 
-        :func:`get_logl_confidence_region` or :func:`get_chi2_confidence_region`
+        :func:`logl_confidence_region` or :func:`chi2_confidence_region`
         based on the value of `parameters['objective']`.  Namely, the values of
         'objective', 'probClipInterval', 'minProbClip', 'minProbClipForWeighting',
         'radius', 'hessianProjection', 'memlimit', 'cptpPentaltyFactor', and 
@@ -396,7 +396,7 @@ class Results(object):
                 regionType = "std"
 
             if self.parameters['objective'] == "logl":
-                cr = _generation.get_logl_confidence_region(
+                cr = _const.logl_confidence_region(
                     gateset, self.dataset, actual_confidenceLevel, gatestrings,
                     self.parameters.get('probClipInterval',(-1e6,1e6)),
                     self.parameters.get('minProbClip',1e-4),
@@ -407,7 +407,7 @@ class Results(object):
                     self.parameters.get('distributeMethod','deriv'),
                     aliases)
             elif self.parameters['objective'] == "chi2":
-                cr = _generation.get_chi2_confidence_region(
+                cr = _const.chi2_confidence_region(
                     gateset, self.dataset, actual_confidenceLevel, gatestrings,
                     self.parameters.get('probClipInterval',(-1e6,1e6)),
                     self.parameters.get('minProbClipForWeighting',1e-4),
