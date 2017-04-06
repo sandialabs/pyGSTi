@@ -5,16 +5,18 @@
 
     <script>
         var waitForPlotly = setInterval( function() {
-          if( typeof(window.Plotly) !== "undefined" ){
+	  if( typeof(window.Plotly) !== "undefined" && typeof(window.MathJax) !== "undefined" ){
             MathJax.Hub.Config({ SVG: { font: "STIX-Web" }, displayAlign: "center" });
             MathJax.Hub.Queue(["setRenderer", MathJax.Hub, "SVG"]);
             clearInterval(waitForPlotly);
           }}, 250 );
     </script>
-    
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
-    <!-- <script src="https://cdn.plot.ly/plotly-latest.min.js"></script> -->
-    <script src="https://cdn.plot.ly/plotly-latest.js"></script>
+
+    %(jqueryLIB)s
+    %(jqueryUILIB)s
+
+    <!-- PLOTLY STARTS HERE -->
+    %(plotlyLIB)s
 
     <!-- <link rel="stylesheet" type="text/css" href="Example_report.css" /> -->
     <!-- <link rel="stylesheet" type="text/css" href="css/dataTable.css" /> -->
@@ -134,16 +136,7 @@
 
     <!-- <link rel="stylesheet" href="fonts/Serif/cmun-serif.css"></link> -->
     
-    
-    <script type="text/x-mathjax-config">
-      MathJax.Hub.Config({
-      tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}
-      });
-    </script>
-    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" ></script> 
-    <style type="text/css"> 
-      .MathJax_MathML {text-indent: 0;} 
-    </style> 
+    %(mathjaxLIB)s
   </head>
   
   <body>

@@ -19,10 +19,69 @@ from .workspace import WorkspaceTable as _WorkspaceTable
 
 def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision,
                     inlineCSSnames=("dataTable.css","pygsti_pub.css","pygsti_screen.css"),
-                    verbosity=0):
+                    connected=True, verbosity=0):
 
     printer = VerbosityPrinter.build_printer(verbosity)
+    jsPath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                            "templates","js")
 
+    def read_contents(filename):
+        contents = None
+        with open(filename) as f:
+            contents = f.read()
+            try: # to convert to unicode since we're using unicode literals below
+                contents = contents.decode('utf-8')
+            except AttributeError: pass #Python3 case when unicode is read in natively (no need to decode)
+        return contents
+
+            
+    #Add inline or CDN javascript    
+    if 'jqueryLIB' not in qtys:
+        if connected:
+            qtys['jqueryLIB'] = ('<script  '
+                                 'src="https://code.jquery.com/jquery-3.2.1.min.js"  '
+                                 'integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="  '
+                                 'crossorigin="anonymous"></script>')
+        else:
+            qtys['jqueryLIB'] = '<script type="text/javascript"> %s </script>' % \
+                                               read_contents(_os.path.join(jsPath,"jquery-3.2.1.min.js"))
+
+    if 'jqueryUILIB' not in qtys:
+        if connected:
+            qtys['jqueryUILIB'] = ('<script   '
+                                   'src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"   '
+                                   'integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU="   '
+                                   'crossorigin="anonymous"></script>')
+        else:
+            qtys['jqueryUILIB'] = '<script type="text/javascript"> %s </script>' % \
+                                               read_contents(_os.path.join(jsPath,"jquery-ui.min.js"))
+
+        
+    if 'plotlyLIB' not in qtys:
+        if connected:
+            qtys['plotlyLIB'] = '<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>'
+        else:
+            qtys['plotlyLIB'] = '<script type="text/javascript"> %s </script>' % \
+                                               read_contents(_os.path.join(jsPath,"plotly-latest.js"))
+
+
+    if 'mathjaxLIB' not in qtys:
+        if True: #connected:
+            src = ('<script type="text/javascript" '
+                   'src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" >'
+                   '</script> ')
+        #else:
+        #    src = '<script type="text/javascript"> %s </script>' % \
+        #                         read_contents(_os.path.join(jsPath,"MathJax.js"))
+        
+        qtys['mathjaxLIB'] = '<script type="text/x-mathjax-config"> MathJax.Hub.Config({ ' + \
+                             'tex2jax: {inlineMath: [["$","$"], ["\\(","\\)"]]} ' + \
+                             '}); </script>' + src + \
+                             '<style type="text/css"> ' + \
+                             '.MathJax_MathML {text-indent: 0;} ' + \
+                             '</style>'
+        
+    
     #Add inline CSS
     if 'inlineCSS' not in qtys:
         qtys['inlineCSS'] = ""
@@ -95,7 +154,8 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
                                title="auto", datasetLabel="$\\mathcal{D}$",
                                linlogPercentile=5, errgen_type="logTiG",
                                precision=None, brief=False,
-                               comm=None, ws=None, auto_open=False, verbosity=0):
+                               comm=None, ws=None, auto_open=False,
+                               connected=True, verbosity=0):
 
     """
     Create a "full" single-qubit GST report.  This report gives a detailed and
@@ -163,6 +223,12 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     auto_open : bool, optional
         If True, automatically open the report in a web browser after it
         has been generated.
+
+    connected : bool, optional
+        Whether output HTML should assume an active internet connection.  If
+        True, then the resulting HTML file size will be reduced because it
+        will link to web resources (e.g. CDN libraries) instead of embedding
+        them.
 
     verbosity : int, optional
        How much detail to send to stdout.
@@ -257,7 +323,7 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     #print("DB inserting decomp:\n",qtys['bestGatesetDecompTable'].render("html"))
     template = "report_singlequbit_brief.html" if brief else "report_singlequbit.html"
     _merge_template(qtys, template, filename, auto_open, precision,
-                    verbosity=printer)
+                    connected=connected, verbosity=printer)
 
     
 
@@ -265,7 +331,8 @@ def create_general_report(results, filename, confidenceLevel=None,
                           title="auto", datasetLabel="$\\mathcal{D}$",
                           linlogPercentile=5, errgen_type="logTiG",
                           precision=None, brief=False,
-                          comm=None, ws=None, auto_open=False, verbosity=0):
+                          comm=None, ws=None, auto_open=False,
+                          connected=True, verbosity=0):
     """
     Create a "general" GST report.  This report is "general" in that it is
     suited to display results for any number of qubits/qutrits.  Along with
@@ -331,6 +398,12 @@ def create_general_report(results, filename, confidenceLevel=None,
     auto_open : bool, optional
         If True, automatically open the report in a web browser after it
         has been generated.
+
+    connected : bool, optional
+        Whether output HTML should assume an active internet connection.  If
+        True, then the resulting HTML file size will be reduced because it
+        will link to web resources (e.g. CDN libraries) instead of embedding
+        them.
 
     verbosity : int, optional
        How much detail to send to stdout.
@@ -426,7 +499,7 @@ def create_general_report(results, filename, confidenceLevel=None,
     printer.log("*** Merging into template file ***")
     template = "report_general_brief.html" if brief else "report_general.html"
     _merge_template(qtys, template, filename, auto_open,
-                    precision, verbosity=printer)
+                    precision, connected=connected, verbosity=printer)
 
 
 
