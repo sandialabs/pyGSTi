@@ -5,7 +5,9 @@
   }
 
   body {
-    max-width: 600px;
+    min-width: 400px;
+    max-width: 1000px;
+    width: 80%;
     margin: 3em auto 6em;
     -webkit-column-count: 1;
        -moz-column-count: 1;

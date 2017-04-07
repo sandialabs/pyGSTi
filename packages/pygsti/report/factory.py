@@ -75,11 +75,12 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
         #                         read_contents(_os.path.join(jsPath,"MathJax.js"))
         
         qtys['mathjaxLIB'] = '<script type="text/x-mathjax-config"> MathJax.Hub.Config({ ' + \
-                             'tex2jax: {inlineMath: [["$","$"], ["\\(","\\)"]]} ' + \
+                             'tex2jax: {inlineMath: [["$","$"] ]} ' + \
                              '}); </script>' + src + \
                              '<style type="text/css"> ' + \
                              '.MathJax_MathML {text-indent: 0;} ' + \
                              '</style>'
+        # removed ,["\\(","\\)"] from inlineMath so parentheses work in html
         
     
     #Add inline CSS

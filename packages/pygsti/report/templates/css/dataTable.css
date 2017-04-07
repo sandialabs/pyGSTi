@@ -15,6 +15,11 @@
 	/* no space between cells */
 	border-spacing: 0px;
 	border-collapse: collapse;
+
+	/* auto-size columns & center table in it's parent div */
+	width: auto;
+	margin: auto;
+	margin-top: 5px;
 	}
 
 .dataTable a {

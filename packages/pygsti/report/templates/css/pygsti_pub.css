@@ -100,8 +100,10 @@ q > q:after {
   content: "’";
 }
 table {
-  width: 100%;
-  margin: 1.667em 0 1em;
+  width: 80%;
+  /*margin: 1.667em 0 1em; */
+  margin: auto; /*center tables*/
+  margin-top: 10px; /*give space above table caption*/
   border-collapse: collapse;
 }
 th,
