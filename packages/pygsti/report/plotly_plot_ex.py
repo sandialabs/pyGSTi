@@ -5,7 +5,7 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
          validate=True, output_type='file', include_plotlyjs=True,
          filename='temp-plot.html', auto_open=True, image=None,
          image_filename='plot_image', image_width=800, image_height=600,
-         global_requirejs=False):
+            global_requirejs=False, aspect_ratio=None):
     """ Create a plotly graph locally as an HTML document or string.
 
     Example:
@@ -82,17 +82,45 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
 
     plot_html, plotdivid, width, height = _plot_html(
         figure_or_data, config, validate,
-        '100%', '100%', global_requirejs=global_requirejs)
+        '100%', '100%', global_requirejs=global_requirejs) #EGN adds global_requirejs argument & plumbing
 
     resize_script = ''
     if width == '100%' or height == '100%':
+        if aspect_ratio is None: #EGN adds aspect_ratio (width/height) argument & effect
+            aspect_ratio_style = ""
+        elif aspect_ratio >= 1.0:
+            aspect_ratio_style = '\ndocument.getElementById("%s")' % plotdivid + \
+                                 '.style["padding-bottom"] = "%.2f%%";  ' % (100.0/aspect_ratio)
+        else:
+            aspect_ratio_style = '\ndocument.getElementById("%s")' % plotdivid + \
+                                 '.style["width"] = "%.2fvh";  ' % (100.0*aspect_ratio)
+
+#            aspect_ratio_style = '\nvar parent = document.getElementById("%s").parentNode;' % plotdivid + \
+#                                 'parent.style["padding-bottom"] = "100%";' + \
+#                                 '\ndocument.getElementById("%s")' % plotdivid + \
+#                                 '.style["padding-right"] = "%.2f%%";  ' % (100.0*aspect_ratio)
+
+            
+#            aspect_ratio_style = '\ndocument.getElementById("%s")' % plotdivid + \
+#                                 '.style["padding-bottom"] = "%.2f%%";  ' % (100.0/aspect_ratio)
+
+#            aspect_ratio_style = '\nvar pdiv = document.getElementById("%s");' % plotdivid + \
+#                                 'var div = document.createElement("div");' + \
+#                                 'div.style["padding-bottom"] = "100%";' + \
+#                                 'div.innerHTML = pdiv.outerHTML;' + \
+#                                 'pdiv.parentNode.insertBefore(div, pdiv);' + \
+#                                 'pdiv.remove();' + \
+#                                 '\ndocument.getElementById("%s")' % plotdivid + \
+#                                 '.style["padding-right"] = "%.2f%%";  ' % (100.0*aspect_ratio)
+
         resize_script = (
             ''
-            '<script type="text/javascript">'
+            '<script type="text/javascript">{aspect}' #EGN added {aspect}
             'window.addEventListener("resize", function(){{'
             'Plotly.Plots.resize(document.getElementById("{id}"));}});'
+            'console.log("Resizing {id}");'
             '</script>'
-        ).format(id=plotdivid)
+        ).format(id=plotdivid, aspect=aspect_ratio_style)
 
     if output_type == 'file':
         with open(filename, 'w') as f:
@@ -139,6 +167,7 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
         return url
 
     elif output_type == 'div':
+        #EGN adds resize_script to 'div' case
         if include_plotlyjs:
             return ''.join([
                 '<div>',
@@ -146,7 +175,10 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
                 get_plotlyjs(),
                 '</script>',
                 plot_html,
+                resize_script,  #EGN added
                 '</div>'
             ])
         else:
-            return plot_html
+            #ORIGINAL Plotly: return plot_html
+            return "<div>" + plot_html + resize_script + "</div>" # EGN added
+

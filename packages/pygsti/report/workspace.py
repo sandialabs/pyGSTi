@@ -19,7 +19,7 @@ import hashlib as _hashlib
 from ..tools import compattools as _compat
 
 import plotly.offline as _plotly_offline
-from .plotly_offline_fixed import plot_ex as _plot
+from .plotly_plot_ex import plot_ex as _plot # a slightly modified offline.plot function
 from plotly.offline.offline import get_plotlyjs as _get_plotlyjs
 #from IPython.display import clear_output as _clear_output
 
@@ -1217,8 +1217,26 @@ class WorkspacePlot(WorkspaceOutput):
         divHTML = []
         divIDs = []
         for fig in self.figs:
+
+            # Use constructed dimensions to get aspect ratio for fluid layout
+            native_width = native_height = None
+            
+            if 'width' in fig['layout']:
+                native_width = fig['layout']['width']
+                del fig['layout']['width']
+
+            if 'height' in fig['layout']:
+                native_height = fig['layout']['height']
+                del fig['layout']['height']
+            
+            fig['layout']['autosize'] = True # so resize handler is created in _plot
+            if native_width and native_height:
+                aspectRatio = native_width/native_height
+            else: aspectRatio = None
+            
             fig_html = _plot(fig, include_plotlyjs=False, output_type='div',
-                             show_link=False, global_requirejs=global_requirejs)
+                             show_link=False, global_requirejs=global_requirejs,
+                             aspect_ratio = aspectRatio)
             divHTML.append(fig_html)
             divIDs.append(getPlotlyDivID(fig_html))
             
