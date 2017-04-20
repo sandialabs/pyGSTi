@@ -14,7 +14,7 @@ description = "X(pi/4) and Z(pi/2) gates"
 
 gates = ['Gx','Gz']
 
-prepFiducials = _strc.gatestring_list([(),
+prepStrs = _strc.gatestring_list([(),
                                        ('Gx','Gx',),
                                        ('Gx','Gx','Gz'),
                                        ('Gx','Gx','Gx','Gx'),
@@ -22,7 +22,7 @@ prepFiducials = _strc.gatestring_list([(),
                                        ('Gx','Gx','Gz','Gz','Gz')])
 
 
-measFiducials = _strc.gatestring_list([(),
+effectStrs = _strc.gatestring_list([(),
                                        ('Gx','Gx',),
                                        ('Gz','Gx','Gx'),
                                        ('Gx','Gx','Gx','Gx'),

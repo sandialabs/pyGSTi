@@ -125,6 +125,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         - profile = int (default == 1)
         - check = True / False (default)
         - gateLabelAliases = dict (default = None)
+        - alwaysPerformMLE = bool (default = False)
         - truncScheme = "whole germ powers" (default) or "truncated germ powers"
                         or "length as exponent"
     comm : mpi4py.MPI.Comm, optional
@@ -358,7 +359,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
           distributeMethod=advancedOptions.get(
                 'distributeMethod',"deriv"),
           check=advancedOptions.get('check',False),
-          gateLabelAliases=advancedOptions.get('gateLabelAliases',None)
+          gateLabelAliases=advancedOptions.get('gateLabelAliases',None),
+          alwaysPerformMLE=advancedOptions.get('alwaysPerformMLE',False)
         )
     else:
         raise ValueError("Invalid longSequenceObjective: %s" % objective)
