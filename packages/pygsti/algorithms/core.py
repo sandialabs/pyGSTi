@@ -2610,7 +2610,8 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                        gateStringSetLabels=None, useFreqWeightedChiSq=False,
                        verbosity=0, check=False, gatestringWeightsDict=None,
                        gateLabelAliases=None, memLimit=None, 
-                       profiler=None, comm=None, distributeMethod = "deriv"):
+                       profiler=None, comm=None, distributeMethod = "deriv",
+                       alwaysPerformMLE=False):
     """
     Performs Iterative Maximum Liklihood Estimation Gate Set Tomography on the dataset.
 
@@ -2712,6 +2713,11 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
         when comm is not None).  "gatestrings" will divide the list of
         gatestrings; "deriv" will divide the columns of the jacobian matrix.
 
+    alwaysPerformMLE : bool, optional
+        When True, perform a maximum-likelihood estimate after *every* iteration,
+        not just the final one.  When False, chi2 minimization is used for all
+        except the final iteration (for improved numerical stability).
+
 
     Returns
     -------
@@ -2771,11 +2777,12 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                                       check, gatestringWeights, gateLabelAliases,
                                       memLimit, comm, distributeMethod, profiler)
 
-            #_, mleGateset = do_mlgst(dataset, mleGateset, stringsToEstimate,
-            #                         maxiter, maxfev, tol, cptp_penalty_factor,
-            #                         minProbClip, probClipInterval, radius,
-            #                         poissonPicture, printer-1, check, gatestringWeights,
-            #                         gateLabelAliases, memLimit, comm, distributeMethod, profiler)
+            if alwaysPerformMLE:
+                _, mleGateset = do_mlgst(dataset, mleGateset, stringsToEstimate,
+                                         maxiter, maxfev, tol, cptp_penalty_factor,
+                                         minProbClip, probClipInterval, radius,
+                                         poissonPicture, printer-1, check, gatestringWeights,
+                                         gateLabelAliases, memLimit, comm, distributeMethod, profiler)
 
 
             tNxt = _time.time();
@@ -2794,15 +2801,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
             printer.log('',2) #extra newline
             tRef=tNxt
 
-
-           #OLD: do MLGST for all iterations
-           #maxLogL, mleGateset = do_mlgst( dataset, mleGateset, stringsToEstimate,
-           #                                maxiter, maxfev, tol,
-           #                                minProbClip, probClipInterval, radius, poissonPicture,
-           #                                verbosity, check, gatestringWeights, gateLabelAliases,
-           #                                memLimit, comm)
-
-            if i == len(gateStringLists)-1: #on the last iteration, do ML
+            if i == len(gateStringLists)-1 and not alwaysPerformMLE: #on the last iteration, do ML
                 printer.log("Switching to ML objective (last iteration)",2)
 
                 mleGateset.set_basis(startGateset.get_basis_name(),
