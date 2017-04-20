@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import time as _time
 import numpy as _np
+import scipy as _scipy
 #from scipy.optimize import OptimizeResult as _optResult 
 
 from ..tools import mpitools as _mpit
@@ -93,9 +94,12 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 if profiler: profiler.mem_check("custom_leastsq: before linsolve")
                 tm = _time.time()
                 success = True
-                dx = _np.linalg.solve(JTJ, -JTf) 
+                #dx = _np.linalg.solve(JTJ, -JTf) 
+                #NEW scipy: dx = _scipy.linalg.solve(JTJ, -JTf, assume_a='pos') #or 'sym' 
+                dx = _scipy.linalg.solve(JTJ, -JTf, sym_pos=True)
                 if profiler: profiler.add_time("custom_leastsq: linsolve",tm)
-            except _np.linalg.LinAlgError:
+            #except _np.linalg.LinAlgError:
+            except _scipy.linalg.LinAlgError:
                 success = False
             
             if profiler: profiler.mem_check("custom_leastsq: after linsolve")
@@ -151,8 +155,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     #    ord=_np.inf),0.02 * _np.linalg.norm(new_f)))
 
                     break # exit inner loop normally
-            #else:
-            #    print("LinSolve Failure!!")
+            else:
+                if verbosity > 1: print("LinSolve Failure!!")
 
             # if this point is reached, either the linear solve failed
             # or the error did not reduce.  In either case, reject increment.
