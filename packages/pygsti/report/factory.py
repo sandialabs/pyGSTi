@@ -52,9 +52,15 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
                                    'src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"   '
                                    'integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU="   '
                                    'crossorigin="anonymous"></script>')
+            jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css"
+            qtys['jqueryUILIB'] += '\n<link rel="stylesheet" href="%s">' % jQueryUI_CSS
         else:
             qtys['jqueryUILIB'] = '<script type="text/javascript"> %s </script>' % \
                                                read_contents(_os.path.join(jsPath,"jquery-ui.min.js"))
+            #TODO get inline jqueryUI
+            jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css"
+            qtys['jqueryUILIB'] += '\n<link rel="stylesheet" href="%s">' % jQueryUI_CSS
+
 
         
     if 'plotlyLIB' not in qtys:

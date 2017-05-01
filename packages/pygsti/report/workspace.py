@@ -19,7 +19,7 @@ import hashlib as _hashlib
 from ..tools import compattools as _compat
 
 import plotly.offline as _plotly_offline
-from .plotly_plot_ex import plot_ex as _plot # a slightly modified offline.plot function
+from .plotly_plot_ex import plot_ex as _plot_ex # a slightly modified offline.plot function
 from plotly.offline.offline import get_plotlyjs as _get_plotlyjs
 #from IPython.display import clear_output as _clear_output
 
@@ -998,7 +998,7 @@ class WorkspaceOutput(object):
 
         #build HTML as container div containing one or more plot divs
         # Note: 'display: none' doesn't always work in firefox... (polar plots in ptic)
-        html = "<div id='%s' style='display: hidden'>\n" % ID
+        html = "<div id='%s' class='pygsti-wsoutput-group' style='display: hidden'>\n" % ID
         html += "\n".join(div_htmls) + "\n</div>\n"
 
         #build javascript to map switch positions to div_ids
@@ -1217,26 +1217,10 @@ class WorkspacePlot(WorkspaceOutput):
         divHTML = []
         divIDs = []
         for fig in self.figs:
-
-            # Use constructed dimensions to get aspect ratio for fluid layout
-            native_width = native_height = None
-            
-            if 'width' in fig['layout']:
-                native_width = fig['layout']['width']
-                del fig['layout']['width']
-
-            if 'height' in fig['layout']:
-                native_height = fig['layout']['height']
-                del fig['layout']['height']
-            
-            fig['layout']['autosize'] = True # so resize handler is created in _plot
-            if native_width and native_height:
-                aspectRatio = native_width/native_height
-            else: aspectRatio = None
-            
-            fig_html = _plot(fig, include_plotlyjs=False, output_type='div',
-                             show_link=False, global_requirejs=global_requirejs,
-                             aspect_ratio = aspectRatio)
+            #use auto-sizing (fluid layout)
+            fig_html = _plot_ex(fig, include_plotlyjs=False, output_type='div',
+                                show_link=False, global_requirejs=global_requirejs,
+                                autosize=False, resizable=True, lock_aspect_ratio=True)
             divHTML.append(fig_html)
             divIDs.append(getPlotlyDivID(fig_html))
             

@@ -1,11 +1,12 @@
-from plotly.offline.offline import *
+from plotly import tools as _plotlytools
+#from plotly.offline.offline import *
 from plotly.offline.offline import _plot_html
 
 def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
-         validate=True, output_type='file', include_plotlyjs=True,
-         filename='temp-plot.html', auto_open=True, image=None,
-         image_filename='plot_image', image_width=800, image_height=600,
-            global_requirejs=False, aspect_ratio=None):
+            validate=True, output_type='file', include_plotlyjs=True,
+            filename='temp-plot.html', auto_open=True, image=None,
+            image_filename='plot_image', image_width=800, image_height=600,
+            global_requirejs=False, resizable=False, autosize=False, lock_aspect_ratio=False):
     """ Create a plotly graph locally as an HTML document or string.
 
     Example:
@@ -76,52 +77,134 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
             "Adding .html to the end of your file.")
         filename += '.html'
 
+    #BEGIN block added by EGN: processing to enable automatic-resizing & aspect ratio locking
+    fig = _plotlytools.return_figure_from_figure_or_data(
+        figure_or_data, False)
+    orig_width = fig.get('layout', {}).get('width', None)
+    orig_height = fig.get('layout', {}).get('height', None)
+
+    if lock_aspect_ratio and orig_width and orig_height:
+        aspect_ratio = orig_width / orig_height
+    else: aspect_ratio = None
+
+    if autosize or resizable:
+        #Remove original dimensions of plot default of 100% is used below
+        # (and triggers resize-script creation)
+        if orig_width: del fig['layout']['width']
+        if orig_height: del fig['layout']['height']
+    # END block added by EGN
+
     config = {}
     config['showLink'] = show_link
     config['linkText'] = link_text
 
+    #Note (by EGN): removing width and height from layout above causes default values to
+    # be used (the '100%'s hardcoded below) which subsequently trigger adding a resize script.
     plot_html, plotdivid, width, height = _plot_html(
         figure_or_data, config, validate,
-        '100%', '100%', global_requirejs=global_requirejs) #EGN adds global_requirejs argument & plumbing
+        '100%', '100%', global_requirejs=global_requirejs) #EGN added global_requirejs argument & plumbing
 
     resize_script = ''
-    if width == '100%' or height == '100%':
-        if aspect_ratio is None: #EGN adds aspect_ratio (width/height) argument & effect
-            aspect_ratio_style = ""
-        elif aspect_ratio >= 1.0:
-            aspect_ratio_style = '\ndocument.getElementById("%s")' % plotdivid + \
-                                 '.style["padding-bottom"] = "%.2f%%";  ' % (100.0/aspect_ratio)
+    if resizable: # EGN added this entire block
+        if aspect_ratio:
+            #'    var plotdiv = $("#{id}").closest(".pygsti-wsoutput-group");\n' Maybe use this element later,
+            #  instead of real plotdiv so that all plots resize at the same time -- but we'd need some way of
+            #  creating the JQueryUI resizable from the workspace group and not here, since doing it here would
+            #  create multiple resizable widgets on the same wsoutput-group element (one per plotly figure).
+            resize_script = (  #very similar to script below except for plotdiv -> el and Math.min call (TODO: COMBINE?)
+                '<script type="text/javascript">\n'
+                '    var plotdiv = $("#{id}");'
+                '    var box = null;'  #take as reference first parent with max-height or max-width set
+                '    plotdiv.parents().each(function(i,el) {{'
+    	        '      if(box == null && ($(el).css("max-height") != "none"'
+                '         || $(el).css("max-width") != "none")) {{ box=$(el) }} }});'
+                '    var w, h;'
+                '    if(box == null) {{' #just use original dimensions
+                '      plotdiv.css("width", {ow});'
+                '      plotdiv.css("height",{oh});'
+                '    }} else {{'
+                '      w = Math.min(box.width(),{ow})\n;' # w < max-width (just add *min*)
+                '      h = w / {ratio};\n' # but h may be > max-height
+                '      plotdiv.css("width", w);\n' # adjust plotdiv based (*same* as original height)
+                '      plotdiv.css("height",h);\n' # on box width
+                '      if(box.height() < h) {{\n' # (due to max-height restriction)
+                '        h = box.height();\n'
+                '        w = h * {ratio};\n'
+                '        plotdiv.css("width", w);\n' # adjust plotdiv based
+                '        plotdiv.css("height",h);\n' # on (max) box height
+                '      }}\n'
+                '     box.css("max-width","none");\n'  # so plot can be resized
+                '     box.css("max-height","none");\n' #  larger if desired
+                '    }}\n'
+                '    plotdiv.resizable({{\n'
+                '      aspectRatio: {ratio},\n'
+                '      resize: function( event, ui ) {{\n'
+                '        var plotdiv = document.getElementById("{id}");\n'
+                '        Plotly.Plots.resize(plotdiv); }}\n'
+                '    }});\n'
+                '$( document ).ready(function() {{\n'
+                '   Plotly.Plots.resize(document.getElementById("{id}"));\n'
+                '   console.log("Initial Resizing {id}");\n'
+                '}});</script>\n'
+            ).format(id=plotdivid, ratio=aspect_ratio, ow=orig_width, oh=orig_height)
         else:
-            aspect_ratio_style = '\ndocument.getElementById("%s")' % plotdivid + \
-                                 '.style["width"] = "%.2fvh";  ' % (100.0*aspect_ratio)
-
-#            aspect_ratio_style = '\nvar parent = document.getElementById("%s").parentNode;' % plotdivid + \
-#                                 'parent.style["padding-bottom"] = "100%";' + \
-#                                 '\ndocument.getElementById("%s")' % plotdivid + \
-#                                 '.style["padding-right"] = "%.2f%%";  ' % (100.0*aspect_ratio)
-
-            
-#            aspect_ratio_style = '\ndocument.getElementById("%s")' % plotdivid + \
-#                                 '.style["padding-bottom"] = "%.2f%%";  ' % (100.0/aspect_ratio)
-
-#            aspect_ratio_style = '\nvar pdiv = document.getElementById("%s");' % plotdivid + \
-#                                 'var div = document.createElement("div");' + \
-#                                 'div.style["padding-bottom"] = "100%";' + \
-#                                 'div.innerHTML = pdiv.outerHTML;' + \
-#                                 'pdiv.parentNode.insertBefore(div, pdiv);' + \
-#                                 'pdiv.remove();' + \
-#                                 '\ndocument.getElementById("%s")' % plotdivid + \
-#                                 '.style["padding-right"] = "%.2f%%";  ' % (100.0*aspect_ratio)
+            resize_script = (  #very similar to script below except for plotdiv -> el and Math.min call (TODO: COMBINE?)
+                '<script type="text/javascript">\n'
+                '    var el = $("#{id}").closest(".pygsti-wsoutput-group");\n'
+                '   el.resizable({{\n'
+                '     aspectRatio: {ratio},\n'
+                '     resize: function( event, ui ) {{\n'
+                '       var plotdiv = document.getElementById("{id}");\n'
+                '       Plotly.Plots.resize(plotdiv); }}\n'
+                '   }});\n'
+            ).format(id=plotdivid)
+        
+    elif autosize:
+    # OLD (original plotly) if width == '100%' or height == '100%':
+    # EGN note: don't allow %'s layout yet - assume they're all pixels
+        
+        #EGN adds aspect_ratio (width/height) argument & effect
+        if aspect_ratio is None: 
+            aspect_ratio_js = ""
+        else:
+            #Alter width & height of plotdiv based on size of "box" (reference div)
+            # Note that "box" div's width & height change dynamically and are unaltered.
+            aspect_ratio_js = (
+                '    var plotdiv = $("#{id}");'
+                '    var box = null;'  #take as reference first parent with max-height or max-width set
+                '    plotdiv.parents().each(function(i,el) {{'
+	        '      if(box == null && ($(el).css("max-height") != "none"'
+                '         || $(el).css("max-width") != "none")) {{ box=$(el) }} }});'
+                '    if(box == null) box = plotdiv.parent();'
+                '    var w = box.width();' # w < max-width
+                '    var h = w / {ratio};' # but h may be > max-height
+                '    plotdiv.css("width", w);' # adjust plotdiv based
+                '    plotdiv.css("height",h);' # on box width
+                '    if(box.height() < h) {{ ' # (due to max-height restriction)
+                '      h = box.height();'
+                '      w = h * {ratio};'
+                '      plotdiv.css("width", w);' # adjust plotdiv based
+                '      plotdiv.css("height",h);' # on (max) box height
+                '    }}'
+                '    console.log("Resize to " + w + ", " + h + " (ratio {ratio})");'
+                ).format(id=plotdivid, ratio=aspect_ratio)
 
         resize_script = (
-            ''
-            '<script type="text/javascript">{aspect}' #EGN added {aspect}
+            '<script type="text/javascript">'
+            'function {resizeFn}() {{\n'
+            '  {aspectjs}\n'
+            '  Plotly.Plots.resize(document.getElementById("{id}"));\n'
+            '}}\n'
             'window.addEventListener("resize", function(){{'
-            'Plotly.Plots.resize(document.getElementById("{id}"));}});'
-            'console.log("Resizing {id}");'
+            '  {resizeFn}(); }});'
+            '$( document ).ready(function() {{'
+            '  {resizeFn}();' #resize initially
+            '  console.log("Initial Resizing {id}");}});'
             '</script>'
-        ).format(id=plotdivid, aspect=aspect_ratio_style)
-
+        ).format(id=plotdivid,
+                 resizeFn="resize_%s" % str(plotdivid).replace('-',''),
+                 aspectjs=aspect_ratio_js)
+    
     if output_type == 'file':
         with open(filename, 'w') as f:
             if include_plotlyjs:
@@ -170,7 +253,7 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
         #EGN adds resize_script to 'div' case
         if include_plotlyjs:
             return ''.join([
-                '<div>',
+                '<div>'
                 '<script type="text/javascript">',
                 get_plotlyjs(),
                 '</script>',
@@ -178,7 +261,9 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
                 resize_script,  #EGN added
                 '</div>'
             ])
+        #'<div id="box%s" class="pygsti-plotly-box">' % plotdivid, #EGN added attributes
+        #  id="box%s" 
         else:
             #ORIGINAL Plotly: return plot_html
-            return "<div>" + plot_html + resize_script + "</div>" # EGN added
+            return  '<div>' + plot_html + resize_script + "</div>" # EGN added
 

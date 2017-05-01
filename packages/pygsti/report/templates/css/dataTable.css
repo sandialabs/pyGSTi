@@ -128,3 +128,18 @@ background-color: #036;
 
 	
 	
+/* For now, also include plotly style additions here too */
+.plotly-graph-div {
+    margin: auto; /*to center plots*/
+}
+
+.pygsti-wsoutput-group {
+}
+
+/* maximum sizes for fluid report figures (enable if we use this)*/
+figure > div {
+    max-height: 1000px;
+    max-width: 100%%;
+}
+
+
