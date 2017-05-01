@@ -262,13 +262,14 @@ class DataSet(object):
         self.comment = comment
 
         # measurement gates & labels
-        self.measurementGates = measurementGates
         if measurementGates is not None:
+            self.measurementGates = measurementGates.copy()
             self.measurementLabels = {}
             for mlbl,gateLbls in measurementGates.items():
                 self.measurementLabels.update( {g: mlbl for g in gateLbls} )
             self.totals = {}
         else:
+            self.measurementGates = None
             self.measurementLabels = None
             self.totals = None
 
@@ -641,7 +642,7 @@ class DataSet(object):
         else:
             copyOfMe = DataSet(spamLabels=self.get_spam_labels(),
                                collisionAction=self.collisionAction,
-                               measurementGates = self.measurementGates.copy())
+                               measurementGates = self.measurementGates)
             copyOfMe.gsIndex = self.gsIndex.copy()
             copyOfMe.counts = [ el.copy() for el in self.counts ]
             if self.totals is not None:
@@ -654,7 +655,7 @@ class DataSet(object):
         if self.bStatic:
             copyOfMe = DataSet(spamLabels=self.get_spam_labels(),
                                collisionAction=self.collisionAction,
-                               measurementGates = self.measurementGates.copy())
+                               measurementGates = self.measurementGates)
             copyOfMe.gsIndex = self.gsIndex.copy()
             copyOfMe.counts = [ el.copy() for el in self.counts ]
             if self.totals is not None:
